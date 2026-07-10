@@ -19,6 +19,9 @@ use manuk_page::{fetch_html, Link, Page};
 
 /// §4b — HTML form model (find form, read fields, build a GET submission URL).
 pub mod forms;
+
+/// G-d — deterministic replay / provenance event log.
+pub mod replay;
 use manuk_text::FontContext;
 
 /// Re-exports so downstream drivers (E4's BiDi remote end) need not depend on the
@@ -784,7 +787,26 @@ pub async fn run_task(
     task: &str,
     config: &AgentConfig,
 ) -> Result<AgentOutcome> {
+    let mut log = replay::EventLog::new();
+    run_task_recorded(browser, backend, task, config, &mut log).await
+}
+
+/// As [`run_task`], but appends a G-d provenance record of everything the agent saw,
+/// the model's raw replies, and every action taken. Replay the run with
+/// [`replay::ReplayBackend`] + [`replay::check_step`].
+pub async fn run_task_recorded(
+    browser: &mut AgentBrowser,
+    backend: &dyn InferenceBackend,
+    task: &str,
+    config: &AgentConfig,
+    log: &mut replay::EventLog,
+) -> Result<AgentOutcome> {
     let mut outcome = AgentOutcome::default();
+    log.push(replay::Event::Start {
+        task: task.to_string(),
+        backend: backend.name(),
+        max_steps: config.max_steps,
+    });
     // Conversation memory: (observation_text, action_json) per prior step.
     let mut history: Vec<(String, String)> = Vec::new();
 
@@ -792,6 +814,16 @@ pub async fn run_task(
         outcome.steps = step + 1;
         let obs = browser.observe()?;
         let obs_text = obs.to_prompt(config.text_budget);
+        // G-d: record what the agent perceived, before it decides anything.
+        let shot = if config.send_screenshots && backend.supports_images() {
+            browser.screenshot_png().ok()
+        } else {
+            None
+        };
+        log.push(replay::Event::Observed {
+            step,
+            observation: Box::new(replay::ObservationRecord::of(&obs, shot.as_deref())),
+        });
 
         // Rebuild messages: system, prior turns (text only), then the current
         // observation (with a screenshot if enabled + supported).
@@ -809,10 +841,10 @@ pub async fn run_task(
             "OBSERVATION (step {}):\n{obs_text}\nRespond with the next action as JSON.",
             step + 1
         ))];
-        if config.send_screenshots && backend.supports_images() {
-            if let Ok(png) = browser.screenshot_png() {
-                current.push(Content::ImagePng(png));
-            }
+        // Reuse the render already taken for the G-d provenance record; painting twice
+        // would double the per-step cost for a byte-identical image.
+        if let Some(png) = shot {
+            current.push(Content::ImagePng(png));
         }
         messages.push(Message {
             role: Role::User,
@@ -822,6 +854,11 @@ pub async fn run_task(
         let reply = complete_with_retry(backend, &messages, config)
             .await
             .with_context(|| format!("inference failed at step {}", step + 1))?;
+        // G-d: the model is the non-reproducible part, so its reply is stored verbatim.
+        log.push(replay::Event::Model {
+            step,
+            raw: reply.clone(),
+        });
 
         let action = match parse_action(&reply) {
             Ok(a) => a,
@@ -849,13 +886,26 @@ pub async fn run_task(
                     "  BLOCKED (needs human confirmation): {reason}. Choose a safe action."
                 );
                 outcome.transcript.push(note.clone());
+                log.push(replay::Event::Blocked {
+                    step,
+                    reason: reason.to_string(),
+                });
                 history.push((obs_text, format!("{action_json}\n{note}")));
                 continue;
             }
         }
 
+        log.push(replay::Event::Acted {
+            step,
+            action: replay::action_repr(&action),
+        });
+
         match action {
             Action::Finish { answer } => {
+                log.push(replay::Event::Finished {
+                    steps: outcome.steps,
+                    answer: Some(answer.clone()),
+                });
                 outcome.answer = Some(answer);
                 return Ok(outcome);
             }
@@ -923,6 +973,10 @@ pub async fn run_task(
         history.push((obs_text, action_json));
     }
 
+    log.push(replay::Event::Finished {
+        steps: outcome.steps,
+        answer: outcome.answer.clone(),
+    });
     Ok(outcome)
 }
 
@@ -1226,6 +1280,138 @@ mod tests {
             &bad
         )
         .is_sensitive());
+    }
+
+    /// A backend that returns a fixed script of replies, one per call.
+    struct ScriptedBackend {
+        replies: std::sync::Mutex<std::collections::VecDeque<String>>,
+    }
+    impl ScriptedBackend {
+        fn new(r: &[&str]) -> Self {
+            ScriptedBackend {
+                replies: std::sync::Mutex::new(r.iter().map(|s| s.to_string()).collect()),
+            }
+        }
+    }
+    #[async_trait::async_trait]
+    impl InferenceBackend for ScriptedBackend {
+        async fn complete(&self, _m: &[Message]) -> Result<String> {
+            self.replies
+                .lock()
+                .unwrap()
+                .pop_front()
+                .context("scripted backend exhausted")
+        }
+        fn name(&self) -> String {
+            "scripted".into()
+        }
+        fn supports_images(&self) -> bool {
+            false // keep the test off the raster path
+        }
+    }
+
+    /// G-d headline acceptance: a recorded run **replays byte-identically** in strict
+    /// mode. The model's replies come from the log (models are not reproducible); every
+    /// observation the replay computes must match what was recorded.
+    #[tokio::test]
+    async fn a_recorded_run_replays_identically_in_strict_mode() {
+        let page = data_url("<title>Shop</title><body><h1>Widgets</h1><p>Price: 42</p></body>");
+        let cfg = AgentConfig {
+            max_steps: 3,
+            send_screenshots: false,
+            ..AgentConfig::default()
+        };
+
+        // --- record
+        let mut b = AgentBrowser::new(400, 300);
+        b.navigate(&page).await.unwrap();
+        let backend = ScriptedBackend::new(&[
+            r#"{"action":"scroll","dy":0}"#,
+            r#"{"action":"finish","answer":"42"}"#,
+        ]);
+        let mut log = replay::EventLog::new();
+        let outcome = run_task_recorded(&mut b, &backend, "find the price", &cfg, &mut log)
+            .await
+            .unwrap();
+        assert_eq!(outcome.answer.as_deref(), Some("42"));
+
+        // The log records both model replies and both actions, plus Start/Finished.
+        assert_eq!(log.model_replies().len(), 2);
+        assert!(matches!(log.events()[0], replay::Event::Start { .. }));
+        assert!(matches!(log.events().last(), Some(replay::Event::Finished { .. })));
+
+        // It survives a JSONL round trip (this is what gets written to disk).
+        let log = replay::EventLog::from_jsonl(&log.to_jsonl()).unwrap();
+
+        // --- replay: same starting page, model replies fed back from the log
+        let mut b2 = AgentBrowser::new(400, 300);
+        b2.navigate(&page).await.unwrap();
+        let replay_backend = replay::ReplayBackend::from_log(&log);
+        let mut log2 = replay::EventLog::new();
+        let outcome2 = run_task_recorded(&mut b2, &replay_backend, "find the price", &cfg, &mut log2)
+            .await
+            .unwrap();
+
+        assert_eq!(outcome2.answer, outcome.answer);
+        assert_eq!(replay_backend.remaining(), 0, "every recorded reply was consumed");
+
+        // Strict divergence check: every observation matches the recording.
+        let mut report = replay::ReplayReport::default();
+        for step in 0..outcome2.steps {
+            let fresh = log2.observation(step).expect("replay recorded its own obs");
+            replay::check_step(&log, step, fresh, replay::ReplayMode::Strict, &mut report)
+                .expect("strict replay must not diverge");
+        }
+        assert!(report.is_identical());
+        assert_eq!(report.steps_checked, outcome2.steps);
+    }
+
+    /// The screenshot digest is stable across renders — the property that makes the
+    /// CPU raster tier a reproducibility asset rather than a limitation.
+    #[tokio::test]
+    async fn cpu_raster_screenshot_digest_is_stable_across_identical_renders() {
+        let mut b = AgentBrowser::new(200, 150);
+        b.navigate(&data_url("<body><h1>Stable</h1></body>")).await.unwrap();
+        let a = replay::digest(&b.screenshot_png().unwrap());
+        let c = replay::digest(&b.screenshot_png().unwrap());
+        assert_eq!(a, c, "the same page must render to the same bytes");
+
+        // A different page must not collide.
+        b.navigate(&data_url("<body><h1>Different</h1></body>")).await.unwrap();
+        assert_ne!(a, replay::digest(&b.screenshot_png().unwrap()));
+    }
+
+    /// A page that changed under the agent is reported, not silently accepted — the
+    /// log proves what was seen; it does not resurrect the server.
+    #[tokio::test]
+    async fn replaying_against_a_changed_page_diverges() {
+        let cfg = AgentConfig {
+            max_steps: 1,
+            send_screenshots: false,
+            ..AgentConfig::default()
+        };
+        let mut b = AgentBrowser::new(400, 300);
+        b.navigate(&data_url("<body><h1>Original</h1></body>")).await.unwrap();
+        let backend = ScriptedBackend::new(&[r#"{"action":"finish","answer":"ok"}"#]);
+        let mut log = replay::EventLog::new();
+        run_task_recorded(&mut b, &backend, "t", &cfg, &mut log).await.unwrap();
+
+        // Replay against a *different* page.
+        let mut b2 = AgentBrowser::new(400, 300);
+        b2.navigate(&data_url("<body><h1>Changed</h1></body>")).await.unwrap();
+        let rb = replay::ReplayBackend::from_log(&log);
+        let mut log2 = replay::EventLog::new();
+        run_task_recorded(&mut b2, &rb, "t", &cfg, &mut log2).await.unwrap();
+
+        let err = replay::check_step(
+            &log,
+            0,
+            log2.observation(0).unwrap(),
+            replay::ReplayMode::Strict,
+            &mut replay::ReplayReport::default(),
+        )
+        .unwrap_err();
+        assert!(format!("{err:#}").contains("diverged at step 0"));
     }
 
     #[test]
