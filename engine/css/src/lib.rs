@@ -54,7 +54,23 @@ pub enum Display {
     InlineBlock,
     Flex,
     Grid,
+    Table,
+    TableRowGroup,
+    TableRow,
+    TableCell,
+    TableCaption,
+    TableColumn,
+    TableColumnGroup,
     None,
+}
+
+/// `table-layout` (CSS2 §17.5.2): fixed uses the first row / explicit widths; auto
+/// sizes columns to content.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum TableLayout {
+    #[default]
+    Auto,
+    Fixed,
 }
 
 /// `float`, which pulls a box out of normal flow to one side (CSS2 §9.5).
@@ -148,6 +164,9 @@ pub struct ComputedStyle {
     pub inset: Sides<Dim>,
     /// `z-index`; `None` = `auto`.
     pub z_index: Option<i32>,
+    pub table_layout: TableLayout,
+    /// `border-spacing` (px) between table cells in the separated-borders model.
+    pub border_spacing: f32,
 }
 
 impl ComputedStyle {
@@ -175,6 +194,8 @@ impl ComputedStyle {
             position: Position::Static,
             inset: Sides::all(Dim::Auto),
             z_index: None,
+            table_layout: TableLayout::Auto,
+            border_spacing: 0.0,
         }
     }
 
@@ -641,6 +662,14 @@ fn apply_ua_defaults(s: &mut ComputedStyle, tag: &str) {
         "pre" => (Block, 1.0, 400, 1.0),
         "hr" => (Block, 0.5, 400, 1.0),
         "b" | "strong" => (Inline, 0.0, 700, 1.0),
+        "table" => (Table, 0.0, 400, 1.0),
+        "thead" | "tbody" | "tfoot" => (TableRowGroup, 0.0, 400, 1.0),
+        "tr" => (TableRow, 0.0, 400, 1.0),
+        "td" => (TableCell, 0.0, 400, 1.0),
+        "th" => (TableCell, 0.0, 700, 1.0),
+        "caption" => (TableCaption, 0.0, 400, 1.0),
+        "colgroup" => (TableColumnGroup, 0.0, 400, 1.0),
+        "col" => (TableColumn, 0.0, 400, 1.0),
         "head" | "title" | "meta" | "link" | "script" | "style" | "base" | "noscript" => {
             (None, 0.0, 400, 1.0)
         }
@@ -682,6 +711,15 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 "inline-block" => Display::InlineBlock,
                 "flex" => Display::Flex,
                 "grid" => Display::Grid,
+                "table" | "inline-table" => Display::Table,
+                "table-row-group" | "table-header-group" | "table-footer-group" => {
+                    Display::TableRowGroup
+                }
+                "table-row" => Display::TableRow,
+                "table-cell" => Display::TableCell,
+                "table-caption" => Display::TableCaption,
+                "table-column" => Display::TableColumn,
+                "table-column-group" => Display::TableColumnGroup,
                 "none" => Display::None,
                 _ => s.display,
             }
@@ -774,6 +812,22 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         "bottom" => s.inset.bottom = values::parse_dim(v, s.font_size),
         "left" => s.inset.left = values::parse_dim(v, s.font_size),
         "z-index" => s.z_index = if v == "auto" { None } else { v.parse().ok() },
+        "table-layout" => {
+            s.table_layout = match v {
+                "fixed" => TableLayout::Fixed,
+                _ => TableLayout::Auto,
+            }
+        }
+        "border-spacing" => {
+            // Only the first (horizontal) length is used in this slice.
+            if let Some(px) = v
+                .split_whitespace()
+                .next()
+                .and_then(|t| values::parse_length_px(t, s.font_size))
+            {
+                s.border_spacing = px;
+            }
+        }
         _ => {}
     }
 }
@@ -894,6 +948,37 @@ mod tests {
         assert_eq!(s.inset.left, Dim::Percent(5.0));
         assert_eq!(s.inset.right, Dim::Auto); // unset stays auto
         assert_eq!(s.z_index, Some(3));
+    }
+
+    #[test]
+    fn table_display_and_properties_parse() {
+        let (dom, map) = styled("p { display: table; table-layout: fixed; border-spacing: 4px }");
+        let p = dom.find_first("p").unwrap();
+        let s = &map[&p];
+        assert_eq!(s.display, Display::Table);
+        assert_eq!(s.table_layout, TableLayout::Fixed);
+        assert_eq!(s.border_spacing, 4.0);
+    }
+
+    #[test]
+    fn table_ua_defaults() {
+        // Build a tiny table DOM and confirm UA display defaults.
+        let mut dom = Dom::new();
+        let root = dom.root();
+        let table = dom.create_element("table");
+        let tr = dom.create_element("tr");
+        let td = dom.create_element("td");
+        let th = dom.create_element("th");
+        dom.append_child(root, table);
+        dom.append_child(table, tr);
+        dom.append_child(tr, td);
+        dom.append_child(tr, th);
+        let map = MinimalCascade.cascade(&dom, &[]);
+        assert_eq!(map[&table].display, Display::Table);
+        assert_eq!(map[&tr].display, Display::TableRow);
+        assert_eq!(map[&td].display, Display::TableCell);
+        assert_eq!(map[&th].display, Display::TableCell);
+        assert_eq!(map[&th].font_weight, 700, "th is bold by default");
     }
 
     #[test]

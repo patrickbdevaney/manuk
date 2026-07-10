@@ -4,13 +4,14 @@
 //! table, positioned, and float layout verified against WPT layout reftests. This
 //! implements the formatting contexts that carry the web — **block** (normal-flow
 //! vertical stacking with adjacent-sibling margin collapsing), **inline**
-//! (line-breaking of text that flows around floats), and **floats** (a BFC-aware
-//! [`FloatContext`] doing left/right placement, clearance, and shrink-to-fit) — and
-//! routes `display:flex` through `taffy` (see [`flex`]).
+//! (line-breaking of text that flows around floats), **floats** (a BFC-aware
+//! [`FloatContext`] doing left/right placement, clearance, and shrink-to-fit),
+//! **positioning** (relative/absolute/fixed against the containing-block chain), and
+//! **tables** (`display:table` with fixed/auto column algorithms) — and routes
+//! `display:flex` through `taffy` (see [`flex`]).
 //!
-//! Abs/fixed positioning and tables are the documented next reftests (D1 sub-features
-//! 2–3). The output is a **fragment tree** ([`LayoutBox`]) with absolute px rects
-//! that paint consumes.
+//! The output is a **fragment tree** ([`LayoutBox`]) with absolute px rects that
+//! paint consumes.
 //!
 //! Known simplifications (documented, not silent — CLAUDE.md § verification):
 //! - Margin collapsing covers adjacent siblings only; parent↔first/last-child
@@ -19,6 +20,9 @@
 //!   final pass against the containing-block chain); `sticky` and true *static
 //!   position* for inset-less abs boxes are not (such boxes are left unplaced),
 //!   and `z-index` stacking follows DOM order.
+//! - Tables use the separated-borders model (`border-spacing`) with fixed/auto
+//!   column sizing but no `colspan`/`rowspan`, `border-collapse`, captions, or
+//!   `<col>` width hints (see [`Ctx::layout_table`]).
 //! - Percentage heights resolve only against definite containers.
 //! - A line's float band is queried using the first word's height as the estimate
 //!   (exact for uniform-size text).
@@ -189,7 +193,7 @@ fn is_block_level(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
     if let NodeData::Element(_) = dom.data(node) {
         matches!(
             styles.get(&node).map(|s| s.display),
-            Some(Display::Block | Display::Flex | Display::Grid)
+            Some(Display::Block | Display::Flex | Display::Grid | Display::Table)
         )
     } else {
         false
@@ -464,6 +468,12 @@ impl Ctx<'_> {
         floats: &mut FloatContext,
     ) -> BlockResult {
         let s = self.styles[&node].clone();
+
+        // Tables size their own width (shrink-to-columns when auto), so they run a
+        // dedicated formatter rather than the generic block width algorithm.
+        if s.display == Display::Table {
+            return self.layout_table(node, cw, x, y, prev_margin);
+        }
 
         let mut ml = s.margin.left.resolve(cw, 0.0);
         let mr = s.margin.right.resolve(cw, 0.0);
@@ -780,6 +790,304 @@ impl Ctx<'_> {
         let (content, _h) = self.layout_children(node, 0.0, 0.0, 1.0e6, &mut fc);
         let pref = content_right_extent(&content, self.fonts);
         pref.min(avail).max(0.0)
+    }
+
+    /// Lay out a `display:table` box (CSS2 §17), separated-borders model. Sequence:
+    /// gather rows (flattening row groups) → per-column intrinsic min/max widths →
+    /// distribute the table width across columns (fixed or auto) → lay out cells,
+    /// stretching each to its row height → stack rows.
+    ///
+    /// Documented interpretations where CSS2 §17 is ambiguous / this slice is bounded
+    /// (working-agreement requirement): **no `colspan`/`rowspan`** (each cell one
+    /// grid slot); **no `border-collapse`** (separated model with `border-spacing`
+    /// only); **captions, `<col>`/`<colgroup>` width hints, and `position:relative`
+    /// on the table box are ignored**; anonymous-box fixup is minimal (only
+    /// `TableRow`/`TableRowGroup`→rows and `TableCell`→cells are recognized).
+    fn layout_table(&self, node: NodeId, cw: f32, x: f32, y: f32, prev_margin: f32) -> BlockResult {
+        let s = self.styles[&node].clone();
+        let ml = s.margin.left.resolve(cw, 0.0);
+        let mt = s.margin.top.resolve(cw, 0.0);
+        let mb = s.margin.bottom.resolve(cw, 0.0);
+        let (pl, pr) = (
+            s.padding.left.resolve(cw, 0.0),
+            s.padding.right.resolve(cw, 0.0),
+        );
+        let (pt, pb) = (
+            s.padding.top.resolve(cw, 0.0),
+            s.padding.bottom.resolve(cw, 0.0),
+        );
+        let (bl, br) = (s.border_width.left, s.border_width.right);
+        let (bt, bb) = (s.border_width.top, s.border_width.bottom);
+
+        let border_x = x + ml;
+        let border_y = y + collapse_margins(prev_margin, mt);
+        let content_x = border_x + bl + pl;
+        let content_y = border_y + bt + pt;
+
+        let spacing = s.border_spacing;
+        let rows = self.collect_table_rows(node);
+        let ncols = rows.iter().map(|r| r.len()).max().unwrap_or(0);
+
+        // Column widths.
+        let spacing_total = spacing * (ncols as f32 + 1.0);
+        let table_specified = match s.width {
+            Dim::Auto => None,
+            other => Some(other.resolve(cw, (cw - ml).max(0.0)).max(0.0)),
+        };
+        let avail_content = table_specified.unwrap_or((cw - ml).max(0.0)) - pl - pr;
+        let avail_cols = (avail_content - spacing_total).max(0.0);
+
+        let widths = if ncols == 0 {
+            Vec::new()
+        } else if s.table_layout == manuk_css::TableLayout::Fixed {
+            self.fixed_col_widths(&rows, ncols, avail_cols)
+        } else {
+            self.auto_col_widths(&rows, ncols, avail_cols, table_specified.is_some())
+        };
+        let cols_used: f32 = widths.iter().sum();
+        let content_w = cols_used + spacing_total;
+
+        // Column x offsets (separated model insets each column by `spacing`).
+        let mut col_x = Vec::with_capacity(ncols);
+        let mut acc = content_x + spacing;
+        for &w in &widths {
+            col_x.push(acc);
+            acc += w + spacing;
+        }
+
+        // Lay out rows and cells.
+        let mut row_boxes = Vec::new();
+        let mut cur_y = content_y + spacing;
+        for row in &rows {
+            let mut cells = Vec::new();
+            let mut row_h = 0.0f32;
+            for (c, &cell) in row.iter().enumerate() {
+                if c >= ncols {
+                    break;
+                }
+                let (cbox, bh) = self.layout_cell(cell, col_x[c], cur_y, widths[c]);
+                row_h = row_h.max(bh);
+                cells.push(cbox);
+            }
+            // Stretch every cell to the row height (CSS2 §17.5.3 vertical sizing).
+            for cbox in &mut cells {
+                cbox.rect.height = row_h;
+            }
+            row_boxes.push(LayoutBox {
+                rect: Rect {
+                    x: content_x,
+                    y: cur_y,
+                    width: content_w,
+                    height: row_h,
+                },
+                background: None,
+                node: None,
+                content: BoxContent::Block(cells),
+            });
+            cur_y += row_h + spacing;
+        }
+
+        let content_height = (cur_y - content_y).max(0.0);
+        let content_height = match s.height {
+            Dim::Auto => content_height,
+            other => other.resolve(0.0, content_height).max(content_height),
+        };
+
+        let border_box_w = bl + pl + content_w + pr + br;
+        let border_box_h = bt + pt + content_height + pb + bb;
+        let boxx = LayoutBox {
+            rect: Rect {
+                x: border_x,
+                y: border_y,
+                width: border_box_w,
+                height: border_box_h,
+            },
+            background: s.background_color,
+            node: Some(node),
+            content: BoxContent::Block(row_boxes),
+        };
+        BlockResult {
+            boxx,
+            margin_top: mt,
+            margin_bottom: mb,
+            flow_bottom: border_y + border_box_h,
+        }
+    }
+
+    /// Gather a table's rows (each a list of cell nodes), flattening row groups.
+    fn collect_table_rows(&self, table: NodeId) -> Vec<Vec<NodeId>> {
+        let mut rows = Vec::new();
+        for child in self.dom.children(table) {
+            if !is_rendered(self.dom, self.styles, child) || !self.dom.is_element(child) {
+                continue;
+            }
+            match self.styles[&child].display {
+                Display::TableRow => rows.push(self.collect_cells(child)),
+                Display::TableRowGroup => {
+                    for gr in self.dom.children(child) {
+                        if is_rendered(self.dom, self.styles, gr)
+                            && self.dom.is_element(gr)
+                            && self.styles[&gr].display == Display::TableRow
+                        {
+                            rows.push(self.collect_cells(gr));
+                        }
+                    }
+                }
+                _ => {} // caption / column / colgroup / stray content: skipped
+            }
+        }
+        rows
+    }
+
+    fn collect_cells(&self, row: NodeId) -> Vec<NodeId> {
+        self.dom
+            .children(row)
+            .filter(|&c| {
+                is_rendered(self.dom, self.styles, c)
+                    && self.dom.is_element(c)
+                    && self.styles[&c].display == Display::TableCell
+            })
+            .collect()
+    }
+
+    /// A cell's intrinsic `(min-content, max-content)` border-box widths.
+    fn cell_intrinsic(&self, cell: NodeId) -> (f32, f32) {
+        let s = &self.styles[&cell];
+        let frame = s.padding.left.resolve(0.0, 0.0)
+            + s.padding.right.resolve(0.0, 0.0)
+            + s.border_width.left
+            + s.border_width.right;
+        // If the cell has a definite width, both intrinsics collapse to it.
+        if let Dim::Px(w) = s.width {
+            return (w + frame, w + frame);
+        }
+        let mut fc_max = FloatContext::new(0.0, 1.0e6);
+        let (cmax, _) = self.layout_children(cell, 0.0, 0.0, 1.0e6, &mut fc_max);
+        let max = content_right_extent(&cmax, self.fonts);
+        let mut fc_min = FloatContext::new(0.0, 0.0);
+        let (cmin, _) = self.layout_children(cell, 0.0, 0.0, 0.0, &mut fc_min);
+        let min = content_right_extent(&cmin, self.fonts);
+        (min + frame, max + frame)
+    }
+
+    /// Auto table layout (CSS2 §17.5.2.2): distribute `avail` across columns using
+    /// per-column min/max content widths.
+    fn auto_col_widths(
+        &self,
+        rows: &[Vec<NodeId>],
+        ncols: usize,
+        avail: f32,
+        table_has_width: bool,
+    ) -> Vec<f32> {
+        let mut col_min = vec![0.0f32; ncols];
+        let mut col_max = vec![0.0f32; ncols];
+        for row in rows {
+            for (c, &cell) in row.iter().enumerate() {
+                if c >= ncols {
+                    break;
+                }
+                let (mn, mx) = self.cell_intrinsic(cell);
+                col_min[c] = col_min[c].max(mn);
+                col_max[c] = col_max[c].max(mx);
+            }
+        }
+        let sum_min: f32 = col_min.iter().sum();
+        let sum_max: f32 = col_max.iter().sum();
+
+        // Shrink-to-fit table (auto width): use max-content but never exceed avail.
+        if !table_has_width && sum_max <= avail {
+            return col_max;
+        }
+        if sum_max <= avail {
+            // Definite, roomy table: grow columns proportionally to max-content.
+            if sum_max <= 0.0 {
+                return vec![avail / ncols as f32; ncols];
+            }
+            let extra = avail - sum_max;
+            return col_max.iter().map(|&m| m + extra * (m / sum_max)).collect();
+        }
+        if sum_min <= avail {
+            // Between min and max: distribute the slack over (max - min).
+            let denom = sum_max - sum_min;
+            if denom <= 0.0 {
+                return vec![avail / ncols as f32; ncols];
+            }
+            let extra = avail - sum_min;
+            return col_min
+                .iter()
+                .zip(&col_max)
+                .map(|(&mn, &mx)| mn + extra * ((mx - mn) / denom))
+                .collect();
+        }
+        // Overflow: columns take their min-content and the table exceeds avail.
+        col_min
+    }
+
+    /// Fixed table layout (CSS2 §17.5.2.1): first-row cells' specified widths set the
+    /// columns; auto columns split the remainder equally.
+    fn fixed_col_widths(&self, rows: &[Vec<NodeId>], ncols: usize, avail: f32) -> Vec<f32> {
+        let mut set: Vec<Option<f32>> = vec![None; ncols];
+        if let Some(first) = rows.first() {
+            for (c, &cell) in first.iter().enumerate() {
+                if c >= ncols {
+                    break;
+                }
+                set[c] = match self.styles[&cell].width {
+                    Dim::Auto => None,
+                    other => Some(other.resolve(avail, 0.0).max(0.0)),
+                };
+            }
+        }
+        let assigned: f32 = set.iter().flatten().sum();
+        let autos = set.iter().filter(|o| o.is_none()).count();
+        let each = if autos > 0 {
+            (avail - assigned).max(0.0) / autos as f32
+        } else {
+            0.0
+        };
+        set.iter().map(|o| o.unwrap_or(each)).collect()
+    }
+
+    /// Lay out one table cell as a block-level BFC at `(x, y)` with column width
+    /// `col_w`. Returns the cell box and its border-box height.
+    fn layout_cell(&self, cell: NodeId, x: f32, y: f32, col_w: f32) -> (LayoutBox, f32) {
+        let s = self.styles[&cell].clone();
+        let (pl, pr) = (
+            s.padding.left.resolve(col_w, 0.0),
+            s.padding.right.resolve(col_w, 0.0),
+        );
+        let (pt, pb) = (
+            s.padding.top.resolve(col_w, 0.0),
+            s.padding.bottom.resolve(col_w, 0.0),
+        );
+        let (bl, br) = (s.border_width.left, s.border_width.right);
+        let (bt, bb) = (s.border_width.top, s.border_width.bottom);
+
+        let content_w = (col_w - pl - pr - bl - br).max(0.0);
+        let content_x = x + bl + pl;
+        let content_y = y + bt + pt;
+        let mut floats = FloatContext::new(content_x, content_x + content_w);
+        let (content, ch) =
+            self.layout_children(cell, content_x, content_y, content_w, &mut floats);
+        let content_height = match s.height {
+            Dim::Auto => ch,
+            other => other.resolve(0.0, ch).max(ch),
+        };
+        let border_box_h = bt + pt + content_height + pb + bb;
+        (
+            LayoutBox {
+                rect: Rect {
+                    x,
+                    y,
+                    width: col_w,
+                    height: border_box_h,
+                },
+                background: s.background_color,
+                node: Some(cell),
+                content,
+            },
+            border_box_h,
+        )
     }
 
     /// Place `absolute`/`fixed` boxes in a final pass (CSS2 §9.6). They were skipped
@@ -1400,6 +1708,106 @@ mod tests {
         let mut out = None;
         rec(root, dom, tag, &mut out);
         out
+    }
+
+    /// Collect every cell box (DOM tag td/th) as rects, in tree order.
+    fn cell_rects(root: &LayoutBox, dom: &Dom) -> Vec<Rect> {
+        let mut out = Vec::new();
+        root.walk(&mut |b| {
+            if let Some(n) = b.node {
+                if dom.element(n).map(|e| e.name == "td" || e.name == "th") == Some(true) {
+                    out.push(b.rect);
+                }
+            }
+        });
+        out
+    }
+
+    #[test]
+    fn table_fixed_layout_splits_columns_evenly() {
+        // table-layout:fixed, width 600, 3 auto columns → ~200 each (no spacing).
+        let (dom, root) = layout_html(
+            "<body style='margin:0'><table style='table-layout:fixed;width:600px;border-spacing:0'>\
+             <tr><td>a</td><td>b</td><td>c</td></tr></table></body>",
+            "",
+            800.0,
+        );
+        let cells = cell_rects(&root, &dom);
+        assert_eq!(cells.len(), 3);
+        for c in &cells {
+            assert!(
+                (c.width - 200.0).abs() < 0.5,
+                "each col ~200, got {}",
+                c.width
+            );
+        }
+        // Columns are laid left to right, non-overlapping.
+        assert!(cells[1].x >= cells[0].x + cells[0].width - 0.5);
+        assert!(cells[2].x >= cells[1].x + cells[1].width - 0.5);
+    }
+
+    #[test]
+    fn table_rows_stack_and_cells_align_in_columns() {
+        let (dom, root) = layout_html(
+            "<body style='margin:0'><table style='table-layout:fixed;width:400px;border-spacing:0'>\
+             <tr><td style='height:20px'>a</td><td>b</td></tr>\
+             <tr><td>c</td><td style='height:30px'>d</td></tr></table></body>",
+            "",
+            800.0,
+        );
+        let cells = cell_rects(&root, &dom);
+        assert_eq!(cells.len(), 4);
+        // Same column ⇒ same x; row 2 below row 1.
+        assert!((cells[0].x - cells[2].x).abs() < 0.5, "col 0 aligned");
+        assert!((cells[1].x - cells[3].x).abs() < 0.5, "col 1 aligned");
+        assert!(
+            cells[2].y >= cells[0].y + cells[0].height - 0.5,
+            "row 2 below row 1"
+        );
+        // Cells in a row share the row height (max of the two).
+        assert!((cells[0].height - cells[1].height).abs() < 0.5);
+        assert!((cells[2].height - cells[3].height).abs() < 0.5);
+        assert!(
+            cells[2].height >= 30.0 - 0.5,
+            "row 2 height driven by the 30px cell"
+        );
+    }
+
+    #[test]
+    fn table_auto_layout_sizes_columns_to_content() {
+        // Auto layout, no table width → shrink to content; the wider column is wider.
+        let (dom, root) = layout_html(
+            "<body style='margin:0'><table style='border-spacing:0'>\
+             <tr><td>x</td><td>a much longer cell of text here</td></tr></table></body>",
+            "",
+            800.0,
+        );
+        let cells = cell_rects(&root, &dom);
+        assert_eq!(cells.len(), 2);
+        assert!(
+            cells[1].width > cells[0].width,
+            "content-heavy column should be wider: {} vs {}",
+            cells[1].width,
+            cells[0].width
+        );
+    }
+
+    #[test]
+    fn table_border_spacing_separates_cells() {
+        let (dom, root) = layout_html(
+            "<body style='margin:0'><table style='table-layout:fixed;width:410px;border-spacing:10px'>\
+             <tr><td>a</td><td>b</td></tr></table></body>",
+            "",
+            800.0,
+        );
+        let cells = cell_rects(&root, &dom);
+        assert_eq!(cells.len(), 2);
+        // Gap between the two cells equals border-spacing (10px).
+        let gap = cells[1].x - (cells[0].x + cells[0].width);
+        assert!(
+            (gap - 10.0).abs() < 0.5,
+            "inter-cell gap should be 10, got {gap}"
+        );
     }
 
     #[test]

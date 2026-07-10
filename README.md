@@ -130,16 +130,26 @@ in; **Build** = written from scratch, to be verified against WPT.
 #### `engine/layout` — layout · *Build (+ taffy for flex)*
 - **Does:** builds a fragment tree of absolutely-positioned boxes from DOM +
   computed styles. Implements **block** formatting (normal-flow vertical stacking,
-  the box model, `auto` width fill, `auto`-margin centering) and **inline**
-  formatting (greedy line-breaking with real font measurement, per-line vertical
-  metrics, text-align). `display:flex` routes through `taffy`.
+  the box model, `auto` width fill, `auto`-margin centering, **adjacent-sibling
+  margin collapsing**), **inline** formatting (greedy line-breaking with real font
+  measurement, per-line vertical metrics, text-align, **flow-around floats**),
+  **floats** (a BFC-aware `FloatContext`: left/right placement, horizontal
+  stacking + band-drop, `clear`, shrink-to-fit), **positioning**
+  (`relative`/`absolute`/`fixed` against the containing-block chain), and **tables**
+  (`display:table` with fixed/auto column algorithms + `border-spacing`).
+  `display:flex` routes through `taffy`.
 - **Uses:** `taffy` 0.12; consumes `manuk-text` for measurement.
-- **Works:** stacking, wrapping, centering, document height, flex rows (6 tests).
-- **Documented simplifications:** no margin collapsing; percentage heights only
-  against definite containers; inline is Latin/LTR and inserts an inter-word space
-  between adjacent tokens.
-- **Not yet:** floats, tables, absolute/relative/fixed positioning, grid,
-  writing-modes, bidi.
+- **Works:** stacking, wrapping, centering, document height, flex rows, margin
+  collapse, float placement/clear/flow-around, relative/absolute/fixed positioning,
+  fixed/auto table layout (21 tests + an end-to-end table PNG render).
+- **Documented simplifications:** margin collapse is adjacent-sibling only
+  (no parent↔child); positioning has no `sticky`, no `z-index` ordering, and leaves
+  inset-less (static-position) abs boxes unplaced; tables use the separated model
+  (no `colspan`/`rowspan`, `border-collapse`, or captions); percentage heights only
+  against definite containers; inline is Latin/LTR with an inter-word space between
+  adjacent tokens.
+- **Not yet:** `sticky`, grid (native), writing-modes, bidi, `border-collapse`,
+  table spanning.
 
 #### `engine/text` — text · *Reuse*
 - **Does:** `FontContext` discovers system fonts, resolves faces by
