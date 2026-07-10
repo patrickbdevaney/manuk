@@ -269,13 +269,17 @@ mod tests {
 
         // A class selector sets color via a custom property; children inherit it.
         let sheet = Stylesheet::parse(
-            ":root { --brand: rgb(10, 20, 30); } .lead { color: var(--brand); font-weight: 700; }",
+            ":root { --brand: rgb(10, 20, 30); }              .lead { color: var(--brand); font-weight: 700; width: 200px; margin-top: 10px;                      display: block; padding: 4px; }",
         );
         let map = cascade_via_stylo(&dom, std::slice::from_ref(&sheet), 800.0, 600.0);
 
         let ps = &map[&p];
         assert_eq!(ps.color, Rgba::new(10, 20, 30, 255), "var() resolved on .lead");
         assert_eq!(ps.font_weight, 700, "author weight applied");
+        assert_eq!(ps.width, crate::Dim::Px(200.0), "width mapped through the cascade");
+        assert_eq!(ps.margin.top, crate::Dim::Px(10.0), "margin-top mapped");
+        assert_eq!(ps.padding.left, crate::Dim::Px(4.0), "padding shorthand mapped");
+        assert_eq!(ps.display, crate::Display::Block, "display mapped");
         // Both color and font-weight are inherited CSS properties, so <em> gets them
         // from .lead even though no rule targets <em> directly.
         let ems = &map[&em];

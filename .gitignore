@@ -14,3 +14,5 @@ agent/src/bin/agent-run.rs
 # Local render/debug output.
 /*.png
 !docs/*.png
+
+mozjs/
