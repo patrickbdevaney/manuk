@@ -42,13 +42,14 @@ use stylo::device::Device;
 use stylo::font_metrics::FontMetrics;
 use stylo::media_queries::{MediaList, MediaType};
 use stylo::properties::style_structs::Font;
+use stylo::properties::declaration_block::parse_style_attribute;
 use stylo::properties::{ComputedValues, PropertyDeclarationBlock};
 use stylo::queries::values::PrefersColorScheme;
 use stylo::servo_arc::Arc as ServoArc;
 use stylo::shared_lock::{SharedRwLock, SharedRwLockReadGuard, StylesheetGuards};
 use stylo::stylesheets::{
-    AllowImportRules, CssRule, DocumentStyleSheet, Origin, Stylesheet as StyloStylesheet,
-    UrlExtraData,
+    AllowImportRules, CssRule, CssRuleType, DocumentStyleSheet, Origin,
+    Stylesheet as StyloStylesheet, UrlExtraData,
 };
 use stylo::stylist::Stylist;
 use stylo::values::computed::font::GenericFontFamily;
@@ -60,21 +61,22 @@ use crate::stylo_dom::{ElementDataStore, StyloElement};
 use crate::stylo_map::to_computed_style;
 use crate::{MinimalCascade, StyleEngine, StyleMap, Stylesheet};
 
-/// Stylo cascade adapter.
+/// Stylo cascade adapter — a **real** [`StyleEngine`] backed by Stylo's cascade.
 ///
-/// [`Self::cascade`] still delegates to [`MinimalCascade`] so the default styling
-/// (UA-default display, inline `style=`, etc.) is applied while the Stylo path is
-/// completed. [`cascade_via_stylo`] is the real Stylo value cascade over author sheets —
-/// wall + matching + `compute_for_declarations` + `ComputedValues` mapping, end to end —
-/// and is exercised by the tests. The remaining wiring (a UA stylesheet + inline-style
-/// blocks fed through Stylo, then swapping the delegation) is tracked in
-/// `docs/parity/STYLO-CASCADE-PLAN.md`.
+/// [`Self::cascade`] runs [`cascade_via_stylo`] (UA sheet + author sheets + inline
+/// `style=`, matched with Stylo's selector engine, computed with
+/// `compute_for_declarations`, mapped to [`ComputedStyle`]) at a default viewport. This is
+/// what gives real `var()` / `@media` / spec-complete-selector / `font-family` styling.
+/// [`MinimalCascade`] remains the crate default (no heavy build, hand-tuned to the parity
+/// harness); Stylo is selected under `--features stylo` by callers that opt in.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct StyloEngine;
 
 impl StyleEngine for StyloEngine {
     fn cascade(&self, dom: &Dom, sheets: &[Stylesheet]) -> StyleMap {
-        MinimalCascade.cascade(dom, sheets)
+        // The trait carries no viewport; use a standard one (only affects `@media` /
+        // viewport-relative units). Callers with a real viewport use `cascade_via_stylo`.
+        cascade_via_stylo(dom, sheets, 1024.0, 768.0)
     }
 }
 
@@ -112,6 +114,34 @@ fn make_device(width: f32, height: f32) -> Device {
     )
 }
 
+/// A minimal user-agent stylesheet (CSS text, parsed by Stylo like any sheet). Prepended
+/// to the author sheets so type selectors get the browser defaults (block/inline/table
+/// display, heading sizes, list/table padding) — the Stylo-side analogue of the minimal
+/// engine's `apply_ua_defaults`. Author rules win by specificity/order (UA selectors are
+/// low-specificity type selectors, parsed first).
+const UA_CSS: &str = r#"
+html, body, div, section, article, header, footer, nav, main, aside, figure,
+figcaption, address, p, blockquote, ul, ol, li, dd, dt, pre, hr, h1, h2, h3, h4, h5, h6,
+form, fieldset, table, caption { display: block; }
+head, title, meta, link, script, style, base, noscript { display: none; }
+p, blockquote { margin: 1em 0; }
+h1 { font-size: 2em; font-weight: bold; margin: 0.67em 0; }
+h2 { font-size: 1.5em; font-weight: bold; margin: 0.75em 0; }
+h3 { font-size: 1.17em; font-weight: bold; margin: 0.83em 0; }
+h4 { font-weight: bold; margin: 1.12em 0; }
+h5 { font-size: 0.83em; font-weight: bold; margin: 1.5em 0; }
+h6 { font-size: 0.75em; font-weight: bold; margin: 1.67em 0; }
+b, strong, th { font-weight: bold; }
+ul, ol { padding-left: 40px; }
+table { display: table; }
+thead, tbody, tfoot { display: table-row-group; }
+tr { display: table-row; }
+td, th { display: table-cell; padding: 1px; }
+caption { display: table-caption; }
+pre { font-family: monospace; }
+code, kbd, samp { font-family: monospace; }
+"#;
+
 /// The real Stylo value cascade over `sheets`' author rules: build a `Stylist`, and for
 /// each element match rules with Stylo's selector matcher (via our `selectors::Element`),
 /// merge the winning declarations, compute `ComputedValues` with `compute_for_declarations`
@@ -129,9 +159,12 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
     // iterate their compiled rules for matching.
     let mut stylo_sheets: Vec<ServoArc<StyloStylesheet>> = Vec::new();
     let mut stylist = Stylist::new(make_device(vw, vh), QuirksMode::NoQuirks);
+    // The UA sheet is matched first (lowest priority); author rules override it.
+    let ua_sheet = Stylesheet::parse(UA_CSS);
+    let all_sheets: Vec<&Stylesheet> = std::iter::once(&ua_sheet).chain(sheets.iter()).collect();
     {
         let guard = lock.read();
-        for sheet in sheets {
+        for sheet in &all_sheets {
             let media = ServoArc::new(lock.wrap(MediaList::empty()));
             let parsed = StyloStylesheet::from_str(
                 sheet.source(),
@@ -171,7 +204,7 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
         }
         let el = StyloElement::new(dom, node, &store);
         let cv = cascade_one_element(
-            &stylist, &stylo_sheets, &lock, &guard, &guards, &el, node, &parent_cv,
+            &stylist, &stylo_sheets, &lock, &url_data, &guard, &guards, &el, node, &parent_cv,
         );
         map.insert(node, to_computed_style(&cv));
         parent_cv.insert(node, cv);
@@ -185,6 +218,7 @@ fn cascade_one_element(
     stylist: &Stylist,
     stylo_sheets: &[ServoArc<StyloStylesheet>],
     lock: &SharedRwLock,
+    url_data: &UrlExtraData,
     guard: &SharedRwLockReadGuard<'_>,
     guards: &StylesheetGuards<'_>,
     el: &StyloElement<'_>,
@@ -226,6 +260,19 @@ fn cascade_one_element(
             merged.push(decl.clone(), importance);
         }
     }
+    // Inline `style=` wins over all matched rules — append its declarations last.
+    if let Some(inline) = el.dom.element(node).and_then(|e| e.attr("style")) {
+        let block = parse_style_attribute(
+            inline,
+            url_data,
+            None,
+            selectors::context::QuirksMode::NoQuirks,
+            CssRuleType::Style,
+        );
+        for (decl, importance) in block.declaration_importance_iter() {
+            merged.push(decl.clone(), importance);
+        }
+    }
     let merged_arc = ServoArc::new(lock.wrap(merged));
 
     // Inherit from the nearest element ancestor's ComputedValues (already computed, since
@@ -263,6 +310,7 @@ mod tests {
         let p = dom.create_element("p");
         dom.set_attr(p, "class", "lead");
         let em = dom.create_element("em");
+        dom.set_attr(em, "style", "color: rgb(0, 128, 0)");
         dom.append_child(dom.root(), body);
         dom.append_child(body, p);
         dom.append_child(p, em);
@@ -280,10 +328,15 @@ mod tests {
         assert_eq!(ps.margin.top, crate::Dim::Px(10.0), "margin-top mapped");
         assert_eq!(ps.padding.left, crate::Dim::Px(4.0), "padding shorthand mapped");
         assert_eq!(ps.display, crate::Display::Block, "display mapped");
+        // UA defaults flow through Stylo: <body> is block even with no author rule; the
+        // inline <em> stays inline (CSS initial).
+        assert_eq!(map[&body].display, crate::Display::Block, "UA default: body is block");
+        assert_eq!(map[&em].display, crate::Display::Inline, "em stays inline");
         // Both color and font-weight are inherited CSS properties, so <em> gets them
         // from .lead even though no rule targets <em> directly.
         let ems = &map[&em];
-        assert_eq!(ems.color, Rgba::new(10, 20, 30, 255), "color inherited by <em>");
+        // Inline style on <em> overrides the inherited color; weight still inherits.
+        assert_eq!(ems.color, Rgba::new(0, 128, 0, 255), "inline style= overrides inherited color");
         assert_eq!(ems.font_weight, 700, "font-weight inherited by <em>");
     }
 }
