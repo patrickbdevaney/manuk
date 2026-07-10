@@ -234,6 +234,45 @@ impl LayoutBox {
         }
     }
 
+    /// Apply an **absolute** affine matrix `m = [a,b,c,d,e,f]` (`x' = a·x + c·y + e`,
+    /// `y' = b·x + d·y + f`) to this box's whole subtree, in place. Each box's rect becomes
+    /// the axis-aligned bounding box of its transformed corners (exact for translate/scale;
+    /// the transformed AABB for rotate/skew — what `getBoundingClientRect` reports).
+    fn transform_affine(&mut self, m: &[f32; 6]) {
+        let [a, b, c, d, e, f] = *m;
+        let tp = |x: f32, y: f32| (a * x + c * y + e, b * x + d * y + f);
+        let r = self.rect;
+        let corners = [
+            tp(r.x, r.y),
+            tp(r.x + r.width, r.y),
+            tp(r.x, r.y + r.height),
+            tp(r.x + r.width, r.y + r.height),
+        ];
+        let minx = corners.iter().map(|p| p.0).fold(f32::INFINITY, f32::min);
+        let maxx = corners.iter().map(|p| p.0).fold(f32::NEG_INFINITY, f32::max);
+        let miny = corners.iter().map(|p| p.1).fold(f32::INFINITY, f32::min);
+        let maxy = corners.iter().map(|p| p.1).fold(f32::NEG_INFINITY, f32::max);
+        self.rect = Rect { x: minx, y: miny, width: maxx - minx, height: maxy - miny };
+        match &mut self.content {
+            BoxContent::Block(kids) => {
+                for k in kids {
+                    k.transform_affine(m);
+                }
+            }
+            BoxContent::Inline(frags) => {
+                let sx = (a * a + b * b).sqrt(); // x-axis scale magnitude, for run width
+                for fr in frags {
+                    let (nx, ntop) = tp(fr.x, fr.line_top);
+                    let (_, nbase) = tp(fr.x, fr.baseline);
+                    fr.x = nx;
+                    fr.line_top = ntop;
+                    fr.baseline = nbase;
+                    fr.width *= sx;
+                }
+            }
+        }
+    }
+
     /// The full document height this box occupies (max bottom edge in its subtree).
     pub fn content_bottom(&self) -> f32 {
         let mut max = self.rect.y + self.rect.height;
@@ -296,6 +335,46 @@ pub fn layout_document(
 }
 
 /// Is `node` a block-level box in its parent's formatting context?
+/// Compose a `transform` function list into an **absolute** affine matrix applied around
+/// `origin` (the transform-origin, default the box center). `w`/`h` resolve `translate` `%`.
+fn resolve_transform(fns: &[manuk_css::TransformFn], w: f32, h: f32, origin: (f32, f32)) -> [f32; 6] {
+    use manuk_css::TransformFn as T;
+    // Local matrix = product of the functions in source order (first is outermost).
+    let mut local = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+    for f in fns {
+        let m = match *f {
+            T::Translate(tx, ty) => [1.0, 0.0, 0.0, 1.0, tx.resolve(w, 0.0), ty.resolve(h, 0.0)],
+            T::Scale(sx, sy) => [sx, 0.0, 0.0, sy, 0.0, 0.0],
+            T::Rotate(rad) => {
+                let (s, c) = rad.sin_cos();
+                [c, s, -s, c, 0.0, 0.0]
+            }
+            T::Skew(ax, ay) => [1.0, ay.tan(), ax.tan(), 1.0, 0.0, 0.0],
+            T::Matrix(m) => m,
+        };
+        local = affine_mul(&local, &m);
+    }
+    // Absolute = T(origin) · local · T(-origin).
+    let (ox, oy) = origin;
+    let to = [1.0, 0.0, 0.0, 1.0, ox, oy];
+    let from = [1.0, 0.0, 0.0, 1.0, -ox, -oy];
+    affine_mul(&affine_mul(&to, &local), &from)
+}
+
+/// Multiply two 2×3 affine matrices (`[a,b,c,d,e,f]`, column-vector convention).
+fn affine_mul(m1: &[f32; 6], m2: &[f32; 6]) -> [f32; 6] {
+    let [a1, b1, c1, d1, e1, f1] = *m1;
+    let [a2, b2, c2, d2, e2, f2] = *m2;
+    [
+        a1 * a2 + c1 * b2,
+        b1 * a2 + d1 * b2,
+        a1 * c2 + c1 * d2,
+        b1 * c2 + d1 * d2,
+        a1 * e2 + c1 * f2 + e1,
+        b1 * e2 + d1 * f2 + f1,
+    ]
+}
+
 /// The paintable border of a styled box, or `None` when every edge is zero-width.
 fn border_of(s: &ComputedStyle) -> Option<Border> {
     let w = s.border_width;
@@ -774,14 +853,15 @@ impl Ctx<'_> {
             }
         }
 
-        // `transform: translate(...)` — a visual offset of the box + subtree that does not
-        // affect flow. Percentages resolve against the box's own border-box size.
-        if let Some((tx, ty)) = s.transform_translate {
-            let dx = tx.resolve(border_box_w, 0.0);
-            let dy = ty.resolve(border_box_h, 0.0);
-            if dx != 0.0 || dy != 0.0 {
-                boxx.translate(dx, dy);
-            }
+        // `transform` — a visual affine map of the box + subtree that does not affect flow.
+        // Resolved around the transform-origin (box center) into an absolute matrix and
+        // baked into the subtree's coordinates. Exact for translate/scale (axis-aligned);
+        // rotate/skew map each box to its transformed bounding box (matching
+        // getBoundingClientRect), which the CPU raster then paints upright.
+        if !s.transform.is_empty() {
+            let origin = (rect.x + border_box_w / 2.0, rect.y + border_box_h / 2.0);
+            let m = resolve_transform(&s.transform, border_box_w, border_box_h, origin);
+            boxx.transform_affine(&m);
         }
 
         BlockResult {
@@ -1566,6 +1646,12 @@ impl Ctx<'_> {
                     f.baseline += oy;
                 }
             }
+        }
+        // `transform` applies to absolutely-positioned boxes too (around the box center).
+        if !s.transform.is_empty() {
+            let origin = (bx + border_box_w / 2.0, by + border_box_h / 2.0);
+            let m = resolve_transform(&s.transform, border_box_w, border_box_h, origin);
+            boxx.transform_affine(&m);
         }
         boxx
     }

@@ -171,6 +171,20 @@ pub enum FlexWrap {
     WrapReverse,
 }
 
+/// A single `transform` function. Resolved to an affine matrix by layout (the `Translate`
+/// dimensions may be percentages of the box's own size).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum TransformFn {
+    Translate(Dim, Dim),
+    Scale(f32, f32),
+    /// Rotation in radians.
+    Rotate(f32),
+    /// Skew angles (x, y) in radians.
+    Skew(f32, f32),
+    /// A raw `matrix(a,b,c,d,e,f)`.
+    Matrix([f32; 6]),
+}
+
 /// One CSS Grid track size (`grid-template-columns`/`-rows` entry).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum TrackSize {
@@ -254,10 +268,10 @@ pub struct ComputedStyle {
     pub flex_basis: Dim,
     /// `align-self` (item); `None` = `auto` (defer to the container's `align-items`).
     pub align_self: Option<AlignItems>,
-    /// `transform: translate(...)` — a visual (tx, ty) offset. Only the translate functions
-    /// are modeled; other transforms (scale/rotate/matrix) are ignored. `%` resolves against
-    /// the box's own border-box size.
-    pub transform_translate: Option<(Dim, Dim)>,
+    /// `transform` — an ordered list of transform functions (translate/scale/rotate/skew/
+    /// matrix), resolved to an affine matrix at layout time (translate `%` is the box's own
+    /// size). Empty = `none`.
+    pub transform: Vec<TransformFn>,
     /// `grid-template-columns` / `-rows` (container). Empty = none.
     pub grid_template_columns: Vec<TrackSize>,
     pub grid_template_rows: Vec<TrackSize>,
@@ -305,7 +319,7 @@ impl ComputedStyle {
             flex_shrink: 1.0,
             flex_basis: Dim::Auto,
             align_self: None,
-            transform_translate: None,
+            transform: Vec::new(),
             grid_template_columns: Vec::new(),
             grid_template_rows: Vec::new(),
         }
@@ -1323,7 +1337,7 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         "order" => {} // parsed but not yet used in layout
         "grid-template-columns" => s.grid_template_columns = parse_track_list(v, s.font_size),
         "grid-template-rows" => s.grid_template_rows = parse_track_list(v, s.font_size),
-        "transform" => s.transform_translate = parse_translate(v, s.font_size),
+        "transform" => s.transform = parse_transform(v, s.font_size),
         // The `border` family. Widths feed the box model; the color feeds paint; the line
         // style is not tracked (only presence, since `none`/`hidden` zero the width).
         "border" => {
@@ -1409,28 +1423,66 @@ fn parse_border_shorthand(v: &str, fs: f32) -> (Option<f32>, Option<Rgba>) {
     (width, color)
 }
 
-/// Parse the translate functions of a `transform` value (`translate`/`translateX`/
-/// `translateY`) into a `(tx, ty)` pair. Other transform functions are ignored.
-fn parse_translate(v: &str, fs: f32) -> Option<(Dim, Dim)> {
-    let low = v.to_ascii_lowercase();
-    let take = |name: &str| -> Option<Vec<Dim>> {
-        let i = low.find(name)?;
-        let after = &v[i + name.len()..];
-        let end = after.find(')')?;
-        Some(after[..end].split(',').map(|a| values::parse_dim(a.trim(), fs)).collect())
-    };
-    if let Some(args) = take("translatex(") {
-        return Some((args.first().copied().unwrap_or(Dim::Px(0.0)), Dim::Px(0.0)));
+/// Parse a `transform` value into an ordered list of [`TransformFn`]s (translate/scale/
+/// rotate/skew/matrix, and the axis variants). Unknown functions are skipped.
+fn parse_transform(v: &str, fs: f32) -> Vec<TransformFn> {
+    let mut out = Vec::new();
+    let mut rest = v.trim();
+    while let Some(open) = rest.find('(') {
+        let name = rest[..open].trim().to_ascii_lowercase();
+        let Some(close) = rest[open..].find(')') else { break };
+        let args_str = &rest[open + 1..open + close];
+        let nums: Vec<&str> = args_str.split(',').map(str::trim).filter(|s| !s.is_empty()).collect();
+        let angle = |s: &str| parse_angle_rad(s);
+        let f = |i: usize| nums.get(i).and_then(|s| s.parse::<f32>().ok());
+        let dim = |i: usize| nums.get(i).map(|s| values::parse_dim(s, fs)).unwrap_or(Dim::Px(0.0));
+        match name.as_str() {
+            "translate" => out.push(TransformFn::Translate(dim(0), nums.get(1).map(|s| values::parse_dim(s, fs)).unwrap_or(Dim::Px(0.0)))),
+            "translatex" => out.push(TransformFn::Translate(dim(0), Dim::Px(0.0))),
+            "translatey" => out.push(TransformFn::Translate(Dim::Px(0.0), dim(0))),
+            "scale" => out.push(TransformFn::Scale(f(0).unwrap_or(1.0), f(1).or(f(0)).unwrap_or(1.0))),
+            "scalex" => out.push(TransformFn::Scale(f(0).unwrap_or(1.0), 1.0)),
+            "scaley" => out.push(TransformFn::Scale(1.0, f(0).unwrap_or(1.0))),
+            "rotate" => out.push(TransformFn::Rotate(nums.first().and_then(|s| angle(s)).unwrap_or(0.0))),
+            "skew" => out.push(TransformFn::Skew(
+                nums.first().and_then(|s| angle(s)).unwrap_or(0.0),
+                nums.get(1).and_then(|s| angle(s)).unwrap_or(0.0),
+            )),
+            "skewx" => out.push(TransformFn::Skew(nums.first().and_then(|s| angle(s)).unwrap_or(0.0), 0.0)),
+            "skewy" => out.push(TransformFn::Skew(0.0, nums.first().and_then(|s| angle(s)).unwrap_or(0.0))),
+            "matrix" => {
+                if nums.len() == 6 {
+                    let mut m = [0.0f32; 6];
+                    let mut ok = true;
+                    for (k, n) in nums.iter().enumerate() {
+                        match n.parse::<f32>() {
+                            Ok(val) => m[k] = val,
+                            Err(_) => ok = false,
+                        }
+                    }
+                    if ok {
+                        out.push(TransformFn::Matrix(m));
+                    }
+                }
+            }
+            _ => {}
+        }
+        rest = &rest[open + close + 1..];
     }
-    if let Some(args) = take("translatey(") {
-        return Some((Dim::Px(0.0), args.first().copied().unwrap_or(Dim::Px(0.0))));
-    }
-    if let Some(args) = take("translate(") {
-        let x = args.first().copied().unwrap_or(Dim::Px(0.0));
-        let y = args.get(1).copied().unwrap_or(Dim::Px(0.0));
-        return Some((x, y));
-    }
-    None
+    out
+}
+
+/// Parse an `<angle>` (`deg`/`rad`/`grad`/`turn`, default deg) to radians.
+fn parse_angle_rad(s: &str) -> Option<f32> {
+    let s = s.trim();
+    let (num, unit) = s.find(|c: char| c.is_ascii_alphabetic()).map_or((s, ""), |i| s.split_at(i));
+    let n: f32 = num.trim().parse().ok()?;
+    Some(match unit.to_ascii_lowercase().as_str() {
+        "rad" => n,
+        "grad" => n * std::f32::consts::PI / 200.0,
+        "turn" => n * std::f32::consts::TAU,
+        _ => n * std::f32::consts::PI / 180.0, // deg (default)
+    })
 }
 
 /// Parse a `grid-template-columns`/`-rows` track list, expanding a single-track

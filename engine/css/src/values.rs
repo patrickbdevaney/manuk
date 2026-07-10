@@ -73,38 +73,188 @@ pub fn parse_dim(input: &str, font_size: f32) -> Dim {
     .unwrap_or(Dim::Auto)
 }
 
-/// Evaluate the **additive** form of `calc()` — a sum/difference of lengths and percentages
-/// (which CSS requires be written with spaces around `+`/`-`). Multiplication/division and
-/// nested `calc()` are not handled (returns `None`, falling back to the token parser).
+/// Evaluate a `calc()` expression: numbers, lengths, and percentages combined with
+/// `+ - * /`, parentheses, and nested `calc()`. The result is the linear form
+/// `px + pct% of the reference` (CSS forbids the non-linear combinations, e.g. `%*%`).
 fn parse_calc(input: &str, font_size: f32) -> Option<Dim> {
-    let low = input.to_ascii_lowercase();
-    let inner = low.strip_prefix("calc(")?.strip_suffix(')')?;
-    let mut px = 0.0f32;
-    let mut pct = 0.0f32;
-    let mut sign = 1.0f32;
-    for tok in inner.split_whitespace() {
-        match tok {
-            "+" => sign = 1.0,
-            "-" => sign = -1.0,
-            t => {
-                if let Some(p) = t.strip_suffix('%').and_then(|n| n.parse::<f32>().ok()) {
-                    pct += sign * p;
-                } else if let Some(v) = parse_length_px(t, font_size) {
-                    px += sign * v;
-                } else {
-                    return None; // an unsupported term (`*`, `/`, nested calc, a bare number)
-                }
-                sign = 1.0;
+    let low = input.trim().to_ascii_lowercase();
+    let inner = low.strip_prefix("calc(")?;
+    let inner = inner.strip_suffix(')')?;
+    let toks = tokenize_calc(inner, font_size)?;
+    let mut p = CalcParser { toks: &toks, i: 0 };
+    let v = p.expr()?;
+    if p.i != p.toks.len() {
+        return None;
+    }
+    #[allow(clippy::redundant_guards)] // float literal patterns are not valid
+    Some(match v {
+        CalcVal::Num(n) => Dim::Px(n),
+        CalcVal::Dim { px, pct } if pct == 0.0 => Dim::Px(px),
+        CalcVal::Dim { px, pct } if px == 0.0 => Dim::Percent(pct),
+        CalcVal::Dim { px, pct } => Dim::Calc { px, pct },
+    })
+}
+
+/// A `calc()` operand: a dimensionless number or a length+percentage.
+#[derive(Clone, Copy)]
+enum CalcVal {
+    Num(f32),
+    Dim { px: f32, pct: f32 },
+}
+
+impl CalcVal {
+    fn add(self, o: CalcVal, sub: bool) -> Option<CalcVal> {
+        let s = if sub { -1.0 } else { 1.0 };
+        match (self, o) {
+            (CalcVal::Num(a), CalcVal::Num(b)) => Some(CalcVal::Num(a + s * b)),
+            (CalcVal::Dim { px, pct }, CalcVal::Dim { px: p2, pct: c2 }) => {
+                Some(CalcVal::Dim { px: px + s * p2, pct: pct + s * c2 })
             }
+            _ => None, // number ± dimension is invalid
         }
     }
-    Some(if pct == 0.0 {
-        Dim::Px(px)
-    } else if px == 0.0 {
-        Dim::Percent(pct)
-    } else {
-        Dim::Calc { px, pct }
-    })
+    fn mul(self, o: CalcVal) -> Option<CalcVal> {
+        match (self, o) {
+            (CalcVal::Num(a), CalcVal::Num(b)) => Some(CalcVal::Num(a * b)),
+            (CalcVal::Num(n), CalcVal::Dim { px, pct })
+            | (CalcVal::Dim { px, pct }, CalcVal::Num(n)) => {
+                Some(CalcVal::Dim { px: px * n, pct: pct * n })
+            }
+            _ => None, // dimension * dimension is invalid
+        }
+    }
+    fn div(self, o: CalcVal) -> Option<CalcVal> {
+        let CalcVal::Num(d) = o else { return None }; // may only divide by a number
+        if d == 0.0 {
+            return None;
+        }
+        Some(match self {
+            CalcVal::Num(a) => CalcVal::Num(a / d),
+            CalcVal::Dim { px, pct } => CalcVal::Dim { px: px / d, pct: pct / d },
+        })
+    }
+}
+
+#[derive(Clone, Copy)]
+enum CalcTok {
+    Val(CalcVal),
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    LParen,
+    RParen,
+}
+
+/// Tokenize a calc() body. Handles unit-suffixed numbers, `%`, operators, parens, and a
+/// transparent nested `calc(`.
+fn tokenize_calc(s: &str, fs: f32) -> Option<Vec<CalcTok>> {
+    let b = s.as_bytes();
+    let mut i = 0;
+    let mut out = Vec::new();
+    while i < b.len() {
+        let c = b[i] as char;
+        if c.is_whitespace() {
+            i += 1;
+        } else if c == '+' {
+            out.push(CalcTok::Plus);
+            i += 1;
+        } else if c == '-' {
+            out.push(CalcTok::Minus);
+            i += 1;
+        } else if c == '*' {
+            out.push(CalcTok::Star);
+            i += 1;
+        } else if c == '/' {
+            out.push(CalcTok::Slash);
+            i += 1;
+        } else if c == '(' {
+            out.push(CalcTok::LParen);
+            i += 1;
+        } else if c == ')' {
+            out.push(CalcTok::RParen);
+            i += 1;
+        } else if s[i..].starts_with("calc(") {
+            out.push(CalcTok::LParen); // nested calc is transparent
+            i += 5;
+        } else if c.is_ascii_digit() || c == '.' {
+            // A number, optionally with a unit or `%`.
+            let start = i;
+            while i < b.len() && ((b[i] as char).is_ascii_digit() || b[i] == b'.') {
+                i += 1;
+            }
+            let num: f32 = s[start..i].parse().ok()?;
+            let ustart = i;
+            while i < b.len() && ((b[i] as char).is_ascii_alphabetic() || b[i] == b'%') {
+                i += 1;
+            }
+            let unit = &s[ustart..i];
+            let val = if unit.is_empty() {
+                CalcVal::Num(num)
+            } else if unit == "%" {
+                CalcVal::Dim { px: 0.0, pct: num }
+            } else {
+                CalcVal::Dim { px: dimension_to_px(num, unit, fs)?, pct: 0.0 }
+            };
+            out.push(CalcTok::Val(val));
+        } else {
+            return None;
+        }
+    }
+    Some(out)
+}
+
+struct CalcParser<'a> {
+    toks: &'a [CalcTok],
+    i: usize,
+}
+
+impl CalcParser<'_> {
+    fn peek(&self) -> Option<CalcTok> {
+        self.toks.get(self.i).copied()
+    }
+    fn expr(&mut self) -> Option<CalcVal> {
+        let mut v = self.term()?;
+        while let Some(op @ (CalcTok::Plus | CalcTok::Minus)) = self.peek() {
+            self.i += 1;
+            let rhs = self.term()?;
+            v = v.add(rhs, matches!(op, CalcTok::Minus))?;
+        }
+        Some(v)
+    }
+    fn term(&mut self) -> Option<CalcVal> {
+        let mut v = self.factor()?;
+        while let Some(op @ (CalcTok::Star | CalcTok::Slash)) = self.peek() {
+            self.i += 1;
+            let rhs = self.factor()?;
+            v = if matches!(op, CalcTok::Star) { v.mul(rhs)? } else { v.div(rhs)? };
+        }
+        Some(v)
+    }
+    fn factor(&mut self) -> Option<CalcVal> {
+        match self.peek()? {
+            CalcTok::Minus => {
+                self.i += 1;
+                self.factor()?.mul(CalcVal::Num(-1.0))
+            }
+            CalcTok::Plus => {
+                self.i += 1;
+                self.factor()
+            }
+            CalcTok::LParen => {
+                self.i += 1;
+                let v = self.expr()?;
+                matches!(self.peek(), Some(CalcTok::RParen)).then_some(())?;
+                self.i += 1;
+                Some(v)
+            }
+            CalcTok::Val(v) => {
+                self.i += 1;
+                Some(v)
+            }
+            _ => None,
+        }
+    }
 }
 
 /// Parse a `<length>` to px (no percent/auto). Used for line-height etc.
@@ -286,5 +436,27 @@ mod tests {
         assert_eq!(parse_dim("0", 16.0), Dim::Px(0.0));
         assert_eq!(resolve_font_size("150%", 16.0), Some(24.0));
         assert_eq!(resolve_font_size("large", 16.0), Some(18.0));
+    }
+}
+
+#[cfg(test)]
+mod calc_tests {
+    use super::*;
+    #[test]
+    fn calc_full_evaluator() {
+        // additive
+        assert_eq!(parse_dim("calc(100% - 60px)", 16.0), Dim::Calc { px: -60.0, pct: 100.0 });
+        // multiplication / division by a number
+        assert_eq!(parse_dim("calc(100% / 3)", 16.0), Dim::Percent(100.0 / 3.0));
+        assert_eq!(parse_dim("calc(50px * 2)", 16.0), Dim::Px(100.0));
+        assert_eq!(parse_dim("calc(2 * 30px)", 16.0), Dim::Px(60.0));
+        // parens + precedence
+        assert_eq!(parse_dim("calc((100% - 20px) / 2)", 16.0), Dim::Calc { px: -10.0, pct: 50.0 });
+        // nested calc
+        assert_eq!(parse_dim("calc(100% - calc(10px + 10px))", 16.0), Dim::Calc { px: -20.0, pct: 100.0 });
+        // unary minus
+        assert_eq!(parse_dim("calc(-5px + 10px)", 16.0), Dim::Px(5.0));
+        // em units inside calc
+        assert_eq!(parse_dim("calc(2em + 8px)", 16.0), Dim::Px(40.0));
     }
 }
