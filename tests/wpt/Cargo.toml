@@ -20,4 +20,6 @@ manuk-html.workspace = true
 manuk-css.workspace = true
 manuk-layout.workspace = true
 manuk-text.workspace = true
+manuk-page.workspace = true
+manuk-paint.workspace = true
 anyhow.workspace = true

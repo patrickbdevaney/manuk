@@ -2344,6 +2344,8 @@ dependencies = [
  "manuk-dom",
  "manuk-html",
  "manuk-layout",
+ "manuk-page",
+ "manuk-paint",
  "manuk-text",
 ]
 

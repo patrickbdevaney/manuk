@@ -13,6 +13,8 @@
 
 use std::path::PathBuf;
 
+pub mod reftest;
+
 use manuk_css::{MinimalCascade, StyleEngine, Stylesheet};
 use manuk_layout::{layout_document, BoxContent, LayoutBox};
 use manuk_text::FontContext;
