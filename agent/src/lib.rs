@@ -683,6 +683,72 @@ pub enum Action {
     Forward,
     /// Scroll the named element into view.
     ScrollTo { role: String, name: String },
+
+    // ---- §5 / H3 tab-control actions (shared surface with the headful UI) ----
+    /// Close a **set** of tabs — by domain, by title substring, or by explicit indices.
+    /// One criterion is used, in that precedence; naming none is a reported no-op. Executed
+    /// only when the run has a [`TabController`] (the shell); the headless single-page agent
+    /// reports "no tab context" and continues.
+    CloseTabs {
+        #[serde(default)]
+        domain: Option<String>,
+        #[serde(default)]
+        title: Option<String>,
+        #[serde(default)]
+        indices: Option<Vec<usize>>,
+    },
+    /// Open a tab for a URL **from the session's history** (the controller refuses a URL not
+    /// already known, so this cannot be steered to an arbitrary destination).
+    OpenTab { url: String },
+    /// Open a new tab searching for `query` via the configured default search engine.
+    SearchTab { query: String },
+}
+
+/// Which set of tabs a [`Action::CloseTabs`] targets — the **shared** selector the headful
+/// UI (`shell`) and the agent action schema both use (research item H3). Pure data: the
+/// front-end that owns the tabs resolves it against its own tab set.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TabSelector {
+    /// All tabs on this host (case-insensitive, `www.` ignored).
+    Domain(String),
+    /// All tabs whose title contains this substring (case-insensitive).
+    Title(String),
+    /// An explicit list of tab indices in the current order.
+    Indices(Vec<usize>),
+}
+
+impl Action {
+    /// For [`Action::CloseTabs`], resolve the flat JSON fields into a [`TabSelector`], with
+    /// precedence domain → title → indices. `None` for any other action or when no non-empty
+    /// criterion was given (a `close_tabs` with nothing to match is a no-op, not a wildcard).
+    pub fn tab_selector(&self) -> Option<TabSelector> {
+        let Action::CloseTabs { domain, title, indices } = self else {
+            return None;
+        };
+        if let Some(d) = domain.as_ref().filter(|d| !d.is_empty()) {
+            return Some(TabSelector::Domain(d.clone()));
+        }
+        if let Some(t) = title.as_ref().filter(|t| !t.is_empty()) {
+            return Some(TabSelector::Title(t.clone()));
+        }
+        if let Some(ix) = indices.as_ref().filter(|ix| !ix.is_empty()) {
+            return Some(TabSelector::Indices(ix.clone()));
+        }
+        None
+    }
+}
+
+/// The seam through which an agent run drives a **multi-tab session** (H3). The shell
+/// implements it over its tab model; the headless single-page agent supplies none, so a tab
+/// action then reports "no tab context" and the run continues rather than erroring.
+pub trait TabController {
+    /// Close every tab matching `selector`; returns how many were closed.
+    fn close_tabs(&mut self, selector: &TabSelector) -> usize;
+    /// Open a tab for `url` **iff it is already in the session's history**; returns whether a
+    /// tab was opened. Refusing unknown URLs is what keeps this action un-steerable.
+    fn open_tab_from_history(&mut self, url: &str) -> bool;
+    /// Open a new tab searching for `query`; returns the URL that was opened.
+    fn open_search(&mut self, query: &str) -> String;
 }
 
 /// Parse an action's `role` string into an a11y role, defaulting to `button` — the
@@ -764,6 +830,17 @@ pub fn assess_action(action: &Action, obs: &Observation) -> ActionRisk {
         Action::ClickAt { .. } => {
             ActionRisk::Sensitive("clicking a raw coordinate cannot be checked against a target")
         }
+
+        // §5/H3 tab control. Closing tabs is destructive — it discards their live state, and
+        // a page-injected instruction that closed the user's tabs would be a real nuisance —
+        // so it needs confirmation. Opening a tab from *known history* transmits nothing and
+        // cannot reach a page-chosen destination (the controller refuses unknown URLs), so it
+        // is Safe. A search goes to the user's *configured* engine (a fixed, trusted
+        // destination, not a page-chosen one), so it is Safe too.
+        Action::CloseTabs { .. } => {
+            ActionRisk::Sensitive("closing tabs discards their live state")
+        }
+        Action::OpenTab { .. } | Action::SearchTab { .. } => ActionRisk::Safe,
     }
 }
 
@@ -874,9 +951,14 @@ Available actions:
   {\"action\":\"submit\",\"field\":\"Search\"}        - submit the form holding that field
   {\"action\":\"back\"} / {\"action\":\"forward\"}     - traverse history
   {\"action\":\"scroll_to\",\"role\":\"heading\",\"name\":\"Pricing\"} - bring an element into view
+  {\"action\":\"close_tabs\",\"domain\":\"ads.example\"}  - close a set of tabs (or \"title\":\"...\", or \"indices\":[0,2])
+  {\"action\":\"open_tab\",\"url\":\"https://...\"}       - open a tab from your history (known URLs only)
+  {\"action\":\"search_tab\",\"query\":\"rust browser\"}  - open a new tab searching for a query
   {\"action\":\"finish\",\"answer\":\"...\"}           - end the task with your answer
 
-The ACCESSIBILITY TREE lists each on-screen element as `role \"name\" @(x,y)`. Prefer \
+The tab actions apply only when a tab session is available; otherwise they are reported as \
+unavailable and you should choose another action. The ACCESSIBILITY TREE lists each \
+on-screen element as `role \"name\" @(x,y)`. Prefer \
 click_text (role + name) over click_at; use the printed coordinates only when no name \
 is available.
 
@@ -966,6 +1048,32 @@ pub async fn run_task_recorded(
     task: &str,
     config: &AgentConfig,
     log: &mut replay::EventLog,
+) -> Result<AgentOutcome> {
+    run_loop(browser, backend, task, config, log, None).await
+}
+
+/// As [`run_task`], but the agent can also drive a **multi-tab session** through `tabs`
+/// (H3): `close_tabs` / `open_tab` / `search_tab` execute against the caller's tab model
+/// (the shell implements [`TabController`] over its `Browser`). Without this, those actions
+/// report "no tab context" and the run continues.
+pub async fn run_task_with_tabs(
+    browser: &mut AgentBrowser,
+    backend: &dyn InferenceBackend,
+    task: &str,
+    config: &AgentConfig,
+    tabs: &mut dyn TabController,
+) -> Result<AgentOutcome> {
+    let mut log = replay::EventLog::new();
+    run_loop(browser, backend, task, config, &mut log, Some(tabs)).await
+}
+
+async fn run_loop(
+    browser: &mut AgentBrowser,
+    backend: &dyn InferenceBackend,
+    task: &str,
+    config: &AgentConfig,
+    log: &mut replay::EventLog,
+    mut tabs: Option<&mut dyn TabController>,
 ) -> Result<AgentOutcome> {
     let mut outcome = AgentOutcome::default();
     log.push(replay::Event::Start {
@@ -1146,6 +1254,45 @@ pub async fn run_task_recorded(
                     outcome.transcript.push(format!("  scroll_to error: {e:#}"));
                 }
             }
+
+            // ---- §5/H3 tab control (executed only when the run has a TabController) ----
+            Action::CloseTabs { .. } => {
+                let sel = action.tab_selector();
+                match (tabs.as_deref_mut(), sel) {
+                    (Some(tc), Some(sel)) => {
+                        let n = tc.close_tabs(&sel);
+                        outcome.transcript.push(format!("  close_tabs {sel:?} -> closed {n}"));
+                    }
+                    (Some(_), None) => outcome
+                        .transcript
+                        .push("  close_tabs: no domain/title/indices given".to_string()),
+                    (None, _) => outcome
+                        .transcript
+                        .push("  close_tabs: no tab context in this run".to_string()),
+                }
+            }
+            Action::OpenTab { url } => match tabs.as_deref_mut() {
+                Some(tc) => {
+                    let opened = tc.open_tab_from_history(&url);
+                    outcome.transcript.push(if opened {
+                        format!("  open_tab -> {url}")
+                    } else {
+                        format!("  open_tab: {url} is not in history (refused)")
+                    });
+                }
+                None => outcome
+                    .transcript
+                    .push("  open_tab: no tab context in this run".to_string()),
+            },
+            Action::SearchTab { query } => match tabs.as_deref_mut() {
+                Some(tc) => {
+                    let url = tc.open_search(&query);
+                    outcome.transcript.push(format!("  search_tab {query:?} -> {url}"));
+                }
+                None => outcome
+                    .transcript
+                    .push("  search_tab: no tab context in this run".to_string()),
+            },
         }
 
         history.push((obs_text, action_json));
@@ -1881,5 +2028,148 @@ mod tests {
         assert_eq!(obs.links[0].href, "https://e.test/x");
         let png = b.screenshot_png().unwrap();
         assert_eq!(&png[..4], &[0x89, b'P', b'N', b'G']);
+    }
+
+    // ---- §5/H3 tab-control actions ----
+
+    /// The three tab actions parse from the model's JSON, and `close_tabs` resolves its flat
+    /// fields to a selector with domain → title → indices precedence.
+    #[test]
+    fn tab_actions_parse_and_close_tabs_resolves_a_selector() {
+        let a = parse_action(r#"{"action":"close_tabs","domain":"ads.example"}"#).unwrap();
+        assert_eq!(a.tab_selector(), Some(TabSelector::Domain("ads.example".into())));
+
+        let a = parse_action(r#"{"action":"close_tabs","title":"Invoice"}"#).unwrap();
+        assert_eq!(a.tab_selector(), Some(TabSelector::Title("Invoice".into())));
+
+        let a = parse_action(r#"{"action":"close_tabs","indices":[0,2]}"#).unwrap();
+        assert_eq!(a.tab_selector(), Some(TabSelector::Indices(vec![0, 2])));
+
+        // Precedence, and "nothing named" is a no-op selector, not a wildcard.
+        let a = parse_action(r#"{"action":"close_tabs","domain":"d","title":"t"}"#).unwrap();
+        assert_eq!(a.tab_selector(), Some(TabSelector::Domain("d".into())));
+        assert_eq!(parse_action(r#"{"action":"close_tabs"}"#).unwrap().tab_selector(), None);
+
+        assert!(matches!(
+            parse_action(r#"{"action":"open_tab","url":"https://x.test/"}"#).unwrap(),
+            Action::OpenTab { .. }
+        ));
+        assert!(matches!(
+            parse_action(r#"{"action":"search_tab","query":"rust"}"#).unwrap(),
+            Action::SearchTab { .. }
+        ));
+    }
+
+    /// Risk: closing tabs is Sensitive (destructive); opening from history and searching are
+    /// Safe (no page-chosen destination).
+    #[test]
+    fn tab_action_risk_is_calibrated() {
+        let obs = Observation {
+            url: "https://x.test/".into(),
+            title: "T".into(),
+            text: String::new(),
+            links: vec![],
+            semantics: vec![],
+            scroll_y: 0.0,
+            content_height: 0.0,
+            viewport: (800, 600),
+        };
+        assert!(assess_action(&Action::CloseTabs { domain: Some("a".into()), title: None, indices: None }, &obs).is_sensitive());
+        assert_eq!(assess_action(&Action::OpenTab { url: "https://x.test/".into() }, &obs), ActionRisk::Safe);
+        assert_eq!(assess_action(&Action::SearchTab { query: "q".into() }, &obs), ActionRisk::Safe);
+    }
+
+    /// A minimal in-memory [`TabController`] for the execution test.
+    #[derive(Default)]
+    struct FakeTabs {
+        open: Vec<String>,
+        history: Vec<String>,
+        closed_calls: Vec<TabSelector>,
+    }
+    impl TabController for FakeTabs {
+        fn close_tabs(&mut self, selector: &TabSelector) -> usize {
+            self.closed_calls.push(selector.clone());
+            // Model closing "by domain": drop matching open tabs.
+            let before = self.open.len();
+            if let TabSelector::Domain(d) = selector {
+                self.open.retain(|u| !u.contains(d.as_str()));
+            }
+            before - self.open.len()
+        }
+        fn open_tab_from_history(&mut self, url: &str) -> bool {
+            if self.history.iter().any(|u| u == url) {
+                self.open.push(url.to_string());
+                true
+            } else {
+                false
+            }
+        }
+        fn open_search(&mut self, query: &str) -> String {
+            let url = format!("https://search.test/?q={query}");
+            self.open.push(url.clone());
+            url
+        }
+    }
+
+    /// End-to-end: a scripted agent run drives real tab actions through `run_task_with_tabs`
+    /// — closing a set, refusing an unknown open, opening a known one, and searching — then
+    /// finishes. This is the H3 seam actually executing, not just parsing.
+    #[tokio::test]
+    async fn run_task_with_tabs_executes_tab_actions_through_the_controller() {
+        use replay::ReplayBackend;
+
+        let mut browser = AgentBrowser::new(400, 300);
+        browser.navigate("data:text/html,<title>hub</title><body>hub</body>").await.unwrap();
+
+        let mut tabs = FakeTabs {
+            open: vec!["https://ads.example/1".into(), "https://keep.test/".into()],
+            history: vec!["https://known.test/page".into()],
+            closed_calls: vec![],
+        };
+
+        let backend = ReplayBackend::new(vec![
+            r#"{"action":"close_tabs","domain":"ads.example"}"#.into(),
+            r#"{"action":"open_tab","url":"https://evil.test/"}"#.into(), // not in history -> refused
+            r#"{"action":"open_tab","url":"https://known.test/page"}"#.into(),
+            r#"{"action":"search_tab","query":"rust"}"#.into(),
+            r#"{"action":"finish","answer":"done"}"#.into(),
+        ]);
+
+        // Tab actions must be granted and auto-runnable (close_tabs is Sensitive).
+        let cfg = AgentConfig {
+            max_steps: 6,
+            send_screenshots: false,
+            allow_sensitive_actions: true,
+            ..AgentConfig::default()
+        };
+        let outcome = run_task_with_tabs(&mut browser, &backend, "manage tabs", &cfg, &mut tabs)
+            .await
+            .unwrap();
+
+        assert_eq!(outcome.answer.as_deref(), Some("done"));
+        // The ads.example tab was closed; keep.test survived.
+        assert_eq!(tabs.open.iter().filter(|u| u.contains("ads.example")).count(), 0);
+        assert!(tabs.open.iter().any(|u| u == "https://keep.test/"));
+        // The unknown open was refused; the known one and the search opened.
+        assert!(tabs.open.iter().any(|u| u == "https://known.test/page"));
+        assert!(!tabs.open.iter().any(|u| u == "https://evil.test/"));
+        assert!(tabs.open.iter().any(|u| u.starts_with("https://search.test/?q=rust")));
+    }
+
+    /// Without a controller, the plain `run_task` reports tab actions as unavailable and the
+    /// run continues (no panic, no error).
+    #[tokio::test]
+    async fn tab_actions_without_a_controller_are_reported_unavailable() {
+        use replay::ReplayBackend;
+        let mut browser = AgentBrowser::new(400, 300);
+        browser.navigate("data:text/html,<title>t</title><body>t</body>").await.unwrap();
+        let backend = ReplayBackend::new(vec![
+            r#"{"action":"search_tab","query":"x"}"#.into(),
+            r#"{"action":"finish","answer":"ok"}"#.into(),
+        ]);
+        let cfg = AgentConfig { max_steps: 4, send_screenshots: false, ..AgentConfig::default() };
+        let outcome = run_task(&mut browser, &backend, "t", &cfg).await.unwrap();
+        assert_eq!(outcome.answer.as_deref(), Some("ok"));
+        assert!(outcome.transcript.iter().any(|l| l.contains("no tab context")));
     }
 }

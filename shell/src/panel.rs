@@ -86,6 +86,24 @@ impl PanelScope {
         }
     }
 
+    /// The **assistant** grant used by the headful Ctrl+J agent: read-only *page* actions
+    /// (look, scroll, traverse, answer — never mutate the page or leave it) **plus** the H3
+    /// tab-control actions (close a set / open from history / search). Sensitive actions are
+    /// permitted here because this is a user-initiated, supervised invocation (the keypress
+    /// and typed task are the consent) and the only sensitive action granted is `close_tabs`.
+    pub fn assistant() -> Self {
+        use ActionKind::*;
+        let caps = Capabilities::with_actions([
+            Scroll, ScrollTo, Back, Forward, Finish, // read-only page
+            CloseTabs, OpenTab, SearchTab,           // tab management (H3)
+        ]);
+        PanelScope {
+            caps,
+            allow_sensitive: true,
+            label: "assistant (read-only page + tab control)",
+        }
+    }
+
     /// An explicit, caller-built grant for uses the presets don't cover. Naming it `custom`
     /// keeps the two safe presets as the obvious defaults.
     pub fn custom(caps: Capabilities) -> Self {
@@ -228,6 +246,29 @@ impl AgentPanel {
         };
         manuk_agent::run_task(browser, backend, task, &config).await
     }
+
+    /// As [`run`](Self::run), but the agent can also drive the multi-tab session through
+    /// `tabs` (H3): `close_tabs` / `open_tab` / `search_tab` execute against the caller's tab
+    /// model. Pair with [`PanelScope::assistant`], which grants those actions.
+    pub async fn run_with_tabs(
+        &mut self,
+        backend: &dyn InferenceBackend,
+        task: &str,
+        tabs: &mut dyn manuk_agent::TabController,
+    ) -> Result<AgentOutcome> {
+        let browser = self
+            .browser
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("panel has no adopted session; call take_over first"))?;
+        let config = AgentConfig {
+            capabilities: self.scope.caps.clone(),
+            allow_sensitive_actions: self.scope.allow_sensitive,
+            max_steps: 6,
+            send_screenshots: false,
+            ..AgentConfig::default()
+        };
+        manuk_agent::run_task_with_tabs(browser, backend, task, &config, tabs).await
+    }
 }
 
 /// Which inference backend the **headful** panel should use, decided purely from the
@@ -366,6 +407,41 @@ mod tests {
             "the submit must be blocked by the read-only scope: {:?}",
             outcome.transcript
         );
+    }
+
+    /// The assistant scope grants tab control, and `run_with_tabs` drives it: a scripted run
+    /// opens a search tab through the controller while the page stays read-only.
+    #[tokio::test]
+    async fn the_assistant_panel_drives_tab_control() {
+        #[derive(Default)]
+        struct FakeTabs {
+            opened: Vec<String>,
+        }
+        impl manuk_agent::TabController for FakeTabs {
+            fn close_tabs(&mut self, _s: &manuk_agent::TabSelector) -> usize {
+                0
+            }
+            fn open_tab_from_history(&mut self, _u: &str) -> bool {
+                false
+            }
+            fn open_search(&mut self, query: &str) -> String {
+                let url = format!("https://s.test/?q={query}");
+                self.opened.push(url.clone());
+                url
+            }
+        }
+
+        let mut panel = AgentPanel::new(PanelScope::assistant(), 1024, 768);
+        panel.take_over(handoff_for("<title>Hub</title><h1>Hub</h1>"), HandoffConsent::user_approved());
+        let backend = ReplayBackend::new(vec![
+            r#"{"action":"search_tab","query":"rust"}"#.to_string(),
+            r#"{"action":"finish","answer":"opened a search tab"}"#.to_string(),
+        ]);
+        let mut tabs = FakeTabs::default();
+        let outcome = panel.run_with_tabs(&backend, "search for rust", &mut tabs).await.unwrap();
+
+        assert_eq!(outcome.answer.as_deref(), Some("opened a search tab"));
+        assert_eq!(tabs.opened, vec!["https://s.test/?q=rust".to_string()]);
     }
 
     /// The headful backend precedence: a configured local server wins over a Groq key, and

@@ -374,13 +374,39 @@ impl App {
 
     // ---- §3 in-browser agent panel ----
 
-    /// Run one read-only agent task over the current page, then hand the session back.
+    /// URLs the agent may reopen via `open_tab`: the current tabs plus the persisted session
+    /// and any saved collections. Constrains `open_tab` to places the user has actually been.
+    fn known_history(&self) -> Vec<crate::session::TabRecord> {
+        let mut known: Vec<crate::session::TabRecord> = self
+            .browser
+            .tabs()
+            .iter()
+            .map(|t| crate::session::TabRecord::new(t.url.clone(), t.title.clone(), t.is_pinned()))
+            .collect();
+        if let Some(store) = &self.store {
+            if let Ok(Some(s)) = store.load_session() {
+                known.extend(s.tabs);
+            }
+            if let Ok(names) = store.list_collections() {
+                for n in names {
+                    if let Ok(Some(tabs)) = store.load_collection(&n) {
+                        known.extend(tabs);
+                    }
+                }
+            }
+        }
+        known
+    }
+
+    /// Run one agent task over the current page — and, via the H3 tab-control seam, over the
+    /// whole tab set — then hand the page back.
     ///
     /// The Ctrl+J keypress that opened the prompt **is** the consent gesture (E6/G-a): the
-    /// live page moves into an [`AgentPanel`] under a **read-only** scope (it may look and
-    /// scroll and answer, never mutate the page or navigate away), the task runs, and the
-    /// page is handed straight back. Page content stays untrusted throughout — the panel
-    /// reuses `run_task`, whose observation fence is unconditional.
+    /// live page moves into an [`AgentPanel`] under the **assistant** scope (read-only *page*
+    /// actions plus `close_tabs`/`open_tab`/`search_tab`); the task runs against both the page
+    /// and a [`crate::session::BrowserTabs`] controller over the live `Browser`; the page is
+    /// handed straight back. Page content stays untrusted throughout — the panel reuses
+    /// `run_task`, whose observation fence is unconditional.
     fn run_agent(&mut self, task: &str) {
         let Some(page) = self.page.take() else {
             tracing::warn!("agent: no page loaded");
@@ -413,7 +439,7 @@ impl App {
             scroll_y: self.scroll_y,
             history: self.history.entries().to_vec(),
         };
-        let mut panel = AgentPanel::new(PanelScope::read_only(), w, h);
+        let mut panel = AgentPanel::new(PanelScope::assistant(), w, h);
         panel.take_over(handoff, HandoffConsent::user_approved());
 
         let rt = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
@@ -427,8 +453,14 @@ impl App {
                 return;
             }
         };
-        tracing::info!(backend = ?kind, task, "agent: running (read-only)");
-        match rt.block_on(panel.run(&backend, task)) {
+        let known = self.known_history();
+        let settings = self.settings.clone();
+        tracing::info!(backend = ?kind, task, "agent: running (assistant: read-only page + tab control)");
+        let result = {
+            let mut tabs = crate::session::BrowserTabs::new(&mut self.browser, known, settings);
+            rt.block_on(panel.run_with_tabs(&backend, task, &mut tabs))
+        };
+        match result {
             Ok(outcome) => {
                 let answer = outcome.answer.unwrap_or_else(|| "(no answer)".to_string());
                 tracing::info!(steps = outcome.steps, "agent answer: {answer}");
@@ -610,7 +642,7 @@ impl App {
                 "j" | "J" => {
                     self.agent_open = true;
                     self.agent_input.clear();
-                    tracing::info!("agent (read-only): type a task about this page, Enter to run, Esc to cancel");
+                    tracing::info!("agent: type a task (reads this page; can also open/close/search tabs), Enter to run, Esc to cancel");
                     true
                 }
                 // §5 — tab management.

@@ -201,56 +201,82 @@ pub fn restore_into(browser: &mut Browser, session: &Session) -> Option<manuk_co
 }
 
 // ---------------------------------------------------------------------------
-// Agent-driven tab control (H3 surface — the operations; JSON-schema exposure follows H3)
+// Agent-driven tab control (H3 — the shared surface between the headful UI and the agent's
+// JSON action schema). The selector type is the agent's `TabSelector` so the *same* value the
+// model emits in `{"action":"close_tabs",...}` is executed here; `BrowserTabs` implements the
+// agent's `TabController` trait, which `manuk_agent::run_task_with_tabs` drives.
 // ---------------------------------------------------------------------------
 
-/// How to select a *set* of tabs to close — the directive's "needs a selector, not just an
-/// index".
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TabSelector {
-    /// All tabs whose URL host equals this (case-insensitive, `www.` ignored).
-    Domain(String),
-    /// All tabs whose title contains this substring (case-insensitive).
-    TitleContains(String),
-    /// An explicit list of tab indices (positions in the current order).
-    Indices(Vec<usize>),
-}
+/// The shared selector, re-exported from the agent crate (H3): one type spans the model's
+/// JSON schema and this executor.
+pub use manuk_agent::TabSelector;
 
-impl TabSelector {
-    /// The ids in `browser` this selector matches, in current tab order.
-    pub fn matches(&self, browser: &Browser) -> Vec<manuk_compositor::TabId> {
-        let tabs = browser.tabs();
-        match self {
-            TabSelector::Domain(d) => {
-                let want = normalize_host(d);
-                tabs.iter()
-                    .filter(|t| host_of(&t.url).map(|h| normalize_host(&h) == want).unwrap_or(false))
-                    .map(|t| t.id)
-                    .collect()
-            }
-            TabSelector::TitleContains(s) => {
-                let needle = s.to_ascii_lowercase();
-                tabs.iter()
-                    .filter(|t| t.title.to_ascii_lowercase().contains(&needle))
-                    .map(|t| t.id)
-                    .collect()
-            }
-            TabSelector::Indices(ix) => ix
-                .iter()
-                .filter_map(|&i| tabs.get(i).map(|t| t.id))
-                .collect(),
+/// The tab ids in `browser` a selector matches, in current tab order.
+pub fn tabs_matching(browser: &Browser, selector: &TabSelector) -> Vec<manuk_compositor::TabId> {
+    let tabs = browser.tabs();
+    match selector {
+        TabSelector::Domain(d) => {
+            let want = normalize_host(d);
+            tabs.iter()
+                .filter(|t| host_of(&t.url).map(|h| normalize_host(&h) == want).unwrap_or(false))
+                .map(|t| t.id)
+                .collect()
         }
+        TabSelector::Title(s) => {
+            let needle = s.to_ascii_lowercase();
+            tabs.iter()
+                .filter(|t| t.title.to_ascii_lowercase().contains(&needle))
+                .map(|t| t.id)
+                .collect()
+        }
+        TabSelector::Indices(ix) => ix
+            .iter()
+            .filter_map(|&i| tabs.get(i).map(|t| t.id))
+            .collect(),
     }
 }
 
 /// Close every tab matching `selector`. Returns how many were closed.
 pub fn close_matching(browser: &mut Browser, selector: &TabSelector) -> usize {
-    let ids = selector.matches(browser);
+    let ids = tabs_matching(browser, selector);
     let n = ids.len();
     for id in ids {
         browser.close(id);
     }
     n
+}
+
+/// The shell's [`manuk_agent::TabController`]: the executor that binds the agent's tab
+/// actions to the real tab model. It borrows the live `Browser`, the URLs the agent may open
+/// (persisted history), and the search settings — so `open_tab` cannot reach a URL the user
+/// never visited, and `search_tab` uses the configured engine.
+pub struct BrowserTabs<'a> {
+    pub browser: &'a mut Browser,
+    /// URLs the agent is allowed to reopen (from the session / a collection).
+    pub known: Vec<TabRecord>,
+    pub settings: Settings,
+}
+
+impl<'a> BrowserTabs<'a> {
+    pub fn new(browser: &'a mut Browser, known: Vec<TabRecord>, settings: Settings) -> Self {
+        BrowserTabs { browser, known, settings }
+    }
+}
+
+impl manuk_agent::TabController for BrowserTabs<'_> {
+    fn close_tabs(&mut self, selector: &TabSelector) -> usize {
+        close_matching(self.browser, selector)
+    }
+
+    fn open_tab_from_history(&mut self, url: &str) -> bool {
+        open_from_saved(self.browser, &self.known, url).is_some()
+    }
+
+    fn open_search(&mut self, query: &str) -> String {
+        let url = chrome::search_url(query, &self.settings);
+        self.browser.open_restored(url.clone(), format!("Search: {query}"), false);
+        url
+    }
 }
 
 /// **Open a tab from persisted history.** Depends on the store existing (the sequencing
@@ -566,7 +592,7 @@ mod tests {
         load(&mut b, t1, "https://b.test/");
         b.set_loaded(t1, "https://b.test/".into(), "Dashboard".into(), 0.0);
 
-        assert_eq!(close_matching(&mut b, &TabSelector::TitleContains("invoice".into())), 1);
+        assert_eq!(close_matching(&mut b, &TabSelector::Title("invoice".into())), 1);
         assert_eq!(b.tabs().len(), 1);
         assert_eq!(close_matching(&mut b, &TabSelector::Indices(vec![0])), 1);
         assert!(b.tabs().is_empty());
@@ -585,6 +611,58 @@ mod tests {
         let id = open_from_saved(&mut b, &known, "https://known.test/page").unwrap();
         assert_eq!(b.tabs().len(), 1);
         assert!(b.tab(id).unwrap().page().is_none(), "opened hibernated");
+    }
+
+    /// The H3 seam end-to-end: a scripted agent run drives `close_tabs` / `open_tab` /
+    /// `search_tab` through the real `BrowserTabs` controller and `run_task_with_tabs`, and
+    /// the live `Browser` reflects every action. This is the whole point — the same JSON the
+    /// model emits mutates the actual tab set.
+    #[tokio::test]
+    async fn browser_tabs_controller_executes_agent_tab_actions() {
+        use manuk_agent::replay::ReplayBackend;
+        use manuk_agent::{run_task_with_tabs, AgentBrowser, AgentConfig};
+
+        let mut b = Browser::new(8);
+        let a1 = b.open("https://ads.test/1");
+        load(&mut b, a1, "https://ads.test/1");
+        let keep = b.open("https://keep.test/");
+        load(&mut b, keep, "https://keep.test/");
+
+        let known = vec![TabRecord::new("https://known.test/p", "Known", false)];
+        let settings = default_search_settings(); // Google template
+
+        let mut agent_browser = AgentBrowser::new(400, 300);
+        agent_browser
+            .navigate("data:text/html,<title>hub</title><body>hub</body>")
+            .await
+            .unwrap();
+
+        let backend = ReplayBackend::new(vec![
+            r#"{"action":"close_tabs","domain":"ads.test"}"#.into(),
+            r#"{"action":"open_tab","url":"https://known.test/p"}"#.into(),
+            r#"{"action":"search_tab","query":"rust"}"#.into(),
+            r#"{"action":"finish","answer":"ok"}"#.into(),
+        ]);
+        let cfg = AgentConfig {
+            max_steps: 6,
+            send_screenshots: false,
+            allow_sensitive_actions: true, // close_tabs is Sensitive
+            ..AgentConfig::default()
+        };
+
+        let outcome = {
+            let mut tabs = BrowserTabs::new(&mut b, known, settings);
+            run_task_with_tabs(&mut agent_browser, &backend, "manage tabs", &cfg, &mut tabs)
+                .await
+                .unwrap()
+        };
+        assert_eq!(outcome.answer.as_deref(), Some("ok"));
+
+        let urls: Vec<&str> = b.tabs().iter().map(|t| t.url.as_str()).collect();
+        assert!(!urls.iter().any(|u| u.contains("ads.test")), "ads.test closed: {urls:?}");
+        assert!(urls.iter().any(|u| *u == "https://keep.test/"), "keep.test survived");
+        assert!(urls.iter().any(|u| *u == "https://known.test/p"), "known url opened");
+        assert!(urls.iter().any(|u| u.contains("google.com/search")), "search tab opened via default engine");
     }
 
     #[test]

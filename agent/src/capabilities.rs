@@ -49,6 +49,9 @@ pub enum ActionKind {
     Back,
     Forward,
     ScrollTo,
+    CloseTabs,
+    OpenTab,
+    SearchTab,
 }
 
 impl ActionKind {
@@ -65,6 +68,9 @@ impl ActionKind {
             Action::Back => ActionKind::Back,
             Action::Forward => ActionKind::Forward,
             Action::ScrollTo { .. } => ActionKind::ScrollTo,
+            Action::CloseTabs { .. } => ActionKind::CloseTabs,
+            Action::OpenTab { .. } => ActionKind::OpenTab,
+            Action::SearchTab { .. } => ActionKind::SearchTab,
         }
     }
 
@@ -81,6 +87,9 @@ impl ActionKind {
             ActionKind::Back => "back",
             ActionKind::Forward => "forward",
             ActionKind::ScrollTo => "scroll_to",
+            ActionKind::CloseTabs => "close_tabs",
+            ActionKind::OpenTab => "open_tab",
+            ActionKind::SearchTab => "search_tab",
         }
     }
 }
@@ -113,7 +122,7 @@ impl Capabilities {
         Capabilities {
             allowed: [
                 Navigate, Click, Scroll, Finish, Type, ClickText, ClickAt, Submit, Back,
-                Forward, ScrollTo,
+                Forward, ScrollTo, CloseTabs, OpenTab, SearchTab,
             ]
             .into_iter()
             .collect(),
@@ -249,6 +258,8 @@ pub fn check(action: &Action, obs: &Observation, caps: &Capabilities) -> Result<
 fn action_target(action: &Action, obs: &Observation) -> Option<String> {
     match action {
         Action::Navigate { url } => Some(url.clone()),
+        // Opening a tab lands on a real URL, so the origin allowlist governs it too.
+        Action::OpenTab { url } => Some(url.clone()),
         Action::Click { index } => obs.links.get(*index).map(|l| l.href.clone()),
         Action::ClickText { role, name } => {
             // Only a link names a destination; a button's target is not knowable here.

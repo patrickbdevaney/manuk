@@ -408,7 +408,12 @@ One store outside the repo (XDG state dir), distinct keys per concern:
   and of each other.
 - **Agent-driven tab control.** Close a *set* of tabs by domain / title / index; open a tab
   only from persisted history (can't be steered to an arbitrary URL); open a search tab via
-  the configurable search template (default Google).
+  the configurable search template (default Google). These are first-class agent `Action`s
+  (`close_tabs`/`open_tab`/`search_tab`) — parse-able, permission-gated, risk-assessed —
+  executed through a `TabController` seam (`run_task_with_tabs`); the shell's `BrowserTabs`
+  binds them to the live tab model. In the GUI, `Ctrl+J` runs the agent under the assistant
+  scope (read-only page + tab control); verified live driving a local model to open real
+  search tabs.
 - **URL sensitivity.** Credentials in userinfo and secret-bearing query params
   (`access_token`, `token`, …) are redacted before anything is written to the plaintext
   store — URLs are not assumed uniformly low-stakes.
