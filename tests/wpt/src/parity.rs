@@ -288,7 +288,7 @@ mod tests {
         let report = run_parity(&corpus, 800, 600, DEFAULT_TOL, None, &fonts);
 
         for page in &report.pages {
-            if ["block-flow", "positioning", "box-model"].contains(&page.name.as_str()) {
+            if ["block-flow", "positioning", "box-model", "flex-row"].contains(&page.name.as_str()) {
                 assert!(page.have_reference, "{} should have a Chrome reference", page.name);
                 assert_eq!(
                     page.within(report.tol),

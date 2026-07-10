@@ -127,6 +127,27 @@ pub enum BoxSizing {
     BorderBox,
 }
 
+/// `justify-content` — main-axis distribution of flex items.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JustifyContent {
+    FlexStart,
+    FlexEnd,
+    Center,
+    SpaceBetween,
+    SpaceAround,
+    SpaceEvenly,
+}
+
+/// `align-items` — cross-axis alignment of flex items.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AlignItems {
+    Stretch,
+    FlexStart,
+    FlexEnd,
+    Center,
+    Baseline,
+}
+
 /// Four-sided box values (margin, padding, border widths).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Sides<T> {
@@ -177,6 +198,10 @@ pub struct ComputedStyle {
     pub border_spacing: f32,
     /// `box-sizing` — whether `width`/`height` measure the content box or the border box.
     pub box_sizing: BoxSizing,
+    /// `justify-content` — flex main-axis distribution (only meaningful on a flex container).
+    pub justify_content: JustifyContent,
+    /// `align-items` — flex cross-axis alignment (only meaningful on a flex container).
+    pub align_items: AlignItems,
 }
 
 impl ComputedStyle {
@@ -207,6 +232,8 @@ impl ComputedStyle {
             table_layout: TableLayout::Auto,
             border_spacing: 0.0,
             box_sizing: BoxSizing::ContentBox,
+            justify_content: JustifyContent::FlexStart,
+            align_items: AlignItems::Stretch,
         }
     }
 
@@ -1090,6 +1117,25 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 BoxSizing::BorderBox
             } else {
                 BoxSizing::ContentBox
+            };
+        }
+        "justify-content" => {
+            s.justify_content = match v.trim() {
+                "center" => JustifyContent::Center,
+                "flex-end" | "end" | "right" => JustifyContent::FlexEnd,
+                "space-between" => JustifyContent::SpaceBetween,
+                "space-around" => JustifyContent::SpaceAround,
+                "space-evenly" => JustifyContent::SpaceEvenly,
+                _ => JustifyContent::FlexStart,
+            };
+        }
+        "align-items" => {
+            s.align_items = match v.trim() {
+                "center" => AlignItems::Center,
+                "flex-end" | "end" => AlignItems::FlexEnd,
+                "flex-start" | "start" => AlignItems::FlexStart,
+                "baseline" => AlignItems::Baseline,
+                _ => AlignItems::Stretch,
             };
         }
         // The `border` family. Widths feed the box model; the color feeds paint; the line

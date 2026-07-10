@@ -717,7 +717,7 @@ impl Ctx<'_> {
 
         // Flex containers route through taffy.
         if display == Display::Flex {
-            return self.layout_flex(cx, cy, cw, &kids);
+            return self.layout_flex(node, cx, cy, cw, &kids);
         }
 
         // Floated / out-of-flow children never count toward the "has block" decision.
@@ -1462,7 +1462,7 @@ impl Ctx<'_> {
 
     /// Lay out flex children as a row using taffy for main-axis sizing/positioning.
     /// Each child is then laid out as a block within its taffy-assigned slot.
-    fn layout_flex(&self, cx: f32, cy: f32, cw: f32, kids: &[NodeId]) -> (BoxContent, f32) {
+    fn layout_flex(&self, node: NodeId, cx: f32, cy: f32, cw: f32, kids: &[NodeId]) -> (BoxContent, f32) {
         let block_kids: Vec<NodeId> = kids
             .iter()
             .copied()
@@ -1488,16 +1488,18 @@ impl Ctx<'_> {
                 }
             })
             .collect();
-        let slots = flex::solve_row(cw, &items);
+        let cs = &self.styles[&node];
+        let slots = flex::solve_row(cw, &items, cs.justify_content, cs.align_items);
 
         let mut boxes = Vec::new();
         let mut max_h = 0.0f32;
         for (&k, slot) in block_kids.iter().zip(slots.iter()) {
-            // Each flex item establishes an independent formatting context.
+            // Each flex item establishes an independent formatting context. `slot.y` carries
+            // the cross-axis (align-items) offset within the line.
             let mut item_floats = FloatContext::new(cx + slot.x, cx + slot.x + slot.width);
-            let r = self.layout_block(k, slot.width, cx + slot.x, cy, 0.0, &mut item_floats);
-            // Flex item advance = its full margin box height.
-            let adv = r.margin_top + (r.boxx.rect.height) + r.margin_bottom;
+            let r = self.layout_block(k, slot.width, cx + slot.x, cy + slot.y, 0.0, &mut item_floats);
+            // The line's height is the tallest item's margin box, measured from the line top.
+            let adv = slot.y + r.margin_top + r.boxx.rect.height + r.margin_bottom;
             max_h = max_h.max(adv);
             boxes.push(r.boxx);
         }
