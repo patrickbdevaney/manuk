@@ -14,6 +14,7 @@
 
 mod chrome;
 mod find;
+mod panel;
 mod tab;
 
 #[cfg(feature = "gui")]

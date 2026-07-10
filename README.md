@@ -353,6 +353,25 @@ Measured on this harness (Linux, 8 GB GPU, auto-fit offload) — **not rounded**
 Both gated entries clear the baseline the cloud model set. The other two stay selectable
 but are labeled unverified — presence in the manifest is not validation.
 
+### In-browser agent panel (INFERENCE.MD §3 — `shell::panel`)
+
+The headful UI and the headless agent are the **same core** (`engine/page` +
+`Observation` + `run_task`) with different front-ends, so the panel is glue, not a second
+engine. Three constraints, each enforced structurally:
+
+- **Task-scoped permissions.** A `PanelScope` lowers to an N5 `Capabilities`; the default
+  is **read-only** (look/scroll/answer). Widening (`browse_within(origins)`, `custom`) is
+  an explicit choice, enforced at the *same* `capabilities::check` point the headless
+  binary uses.
+- **Page content is untrusted.** The only trusted instruction channel is the user's typed
+  task; page text reaches the model solely through the E6 UNTRUSTED-PAGE-CONTENT fence
+  (`run_task` is reused verbatim, never re-concatenating page text into the user turn).
+- **Handoff is explicit + consented.** Opening the panel does not touch the page; moving a
+  live session in/out (`take_over`/`hand_back`) each require a `HandoffConsent` token whose
+  only constructor is `user_approved()`. The moved value is a `manuk_agent::Handoff` — the
+  same type the standalone agent adopts/releases — so a logged-in DOM or half-filled form
+  travels between front-ends with no re-fetch.
+
 ## The JS-engine modification boundary
 
 Per CLAUDE.md's most important section: `engine/js` **configures and binds to**

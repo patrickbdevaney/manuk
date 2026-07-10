@@ -35,6 +35,7 @@ manuk-js.workspace = true
 manuk-paint.workspace = true
 manuk-compositor.workspace = true
 manuk-page.workspace = true
+manuk-agent.workspace = true
 
 anyhow.workspace = true
 tracing.workspace = true

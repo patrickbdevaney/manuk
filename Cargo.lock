@@ -2988,6 +2988,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytemuck",
+ "manuk-agent",
  "manuk-compositor",
  "manuk-css",
  "manuk-dom",
