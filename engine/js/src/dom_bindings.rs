@@ -59,6 +59,133 @@ thread_local! {
     /// `element.getBoundingClientRect()`. Set by [`run_scripts`] for the current document.
     static LAYOUT_RECTS: std::cell::RefCell<std::collections::HashMap<NodeId, [f32; 4]>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
+
+    /// Pre-script computed styles (`NodeId` → `ComputedStyle`) exposed to
+    /// `getComputedStyle(el)`. Set by [`run_scripts`] for the current document.
+    static STYLES: std::cell::RefCell<std::collections::HashMap<NodeId, manuk_css::ComputedStyle>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// A `Dim` as a CSS string.
+fn dim_css(d: &manuk_css::Dim) -> String {
+    match d {
+        manuk_css::Dim::Auto => "auto".to_string(),
+        manuk_css::Dim::Px(v) => format!("{v}px"),
+        manuk_css::Dim::Percent(p) => format!("{p}%"),
+        manuk_css::Dim::Calc { px, pct } => format!("calc({px}px + {pct}%)"),
+    }
+}
+
+/// An `Rgba` as a CSS color string.
+fn rgba_css(c: &manuk_css::Rgba) -> String {
+    if c.a == 255 {
+        format!("rgb({}, {}, {})", c.r, c.g, c.b)
+    } else {
+        format!("rgba({}, {}, {}, {})", c.r, c.g, c.b, c.a as f32 / 255.0)
+    }
+}
+
+/// Serialize a `ComputedStyle` to a JS object-literal source (camelCase CSS properties →
+/// CSS value strings) for `getComputedStyle`.
+fn computed_style_js(cs: &manuk_css::ComputedStyle) -> String {
+    use manuk_css::{Display, GenericFamily, Overflow, Position, TextAlign};
+    let display = match cs.display {
+        Display::Block => "block",
+        Display::Inline => "inline",
+        Display::InlineBlock => "inline-block",
+        Display::Flex => "flex",
+        Display::Grid => "grid",
+        Display::Table => "table",
+        Display::TableRow => "table-row",
+        Display::TableRowGroup => "table-row-group",
+        Display::TableCell => "table-cell",
+        Display::TableCaption => "table-caption",
+        Display::TableColumn => "table-column",
+        Display::TableColumnGroup => "table-column-group",
+        Display::None => "none",
+    };
+    let position = match cs.position {
+        Position::Static => "static",
+        Position::Relative => "relative",
+        Position::Absolute => "absolute",
+        Position::Fixed => "fixed",
+        Position::Sticky => "sticky",
+    };
+    let text_align = match cs.text_align {
+        TextAlign::Left => "left",
+        TextAlign::Center => "center",
+        TextAlign::Right => "right",
+        TextAlign::Justify => "justify",
+    };
+    let family = match cs.font_family {
+        GenericFamily::SansSerif => "sans-serif",
+        GenericFamily::Serif => "serif",
+        GenericFamily::Monospace => "monospace",
+    };
+    let overflow = match cs.overflow {
+        Overflow::Visible => "visible",
+        Overflow::Hidden => "hidden",
+        Overflow::Scroll => "scroll",
+        Overflow::Auto => "auto",
+        Overflow::Clip => "clip",
+    };
+    let q = js_string_literal;
+    format!(
+        "({{color:{}, backgroundColor:{}, fontSize:{}, fontWeight:{}, fontStyle:{}, \
+          fontFamily:{}, lineHeight:{}, textAlign:{}, display:{}, position:{}, overflow:{}, \
+          width:{}, height:{}, marginTop:{}, marginRight:{}, marginBottom:{}, marginLeft:{}, \
+          paddingTop:{}, paddingRight:{}, paddingBottom:{}, paddingLeft:{}, \
+          top:{}, right:{}, bottom:{}, left:{}, zIndex:{}, getPropertyValue:function(p){{\
+          var m={{'background-color':'backgroundColor','font-size':'fontSize',\
+          'font-weight':'fontWeight','font-style':'fontStyle','font-family':'fontFamily',\
+          'line-height':'lineHeight','text-align':'textAlign','margin-top':'marginTop',\
+          'margin-right':'marginRight','margin-bottom':'marginBottom','margin-left':'marginLeft',\
+          'padding-top':'paddingTop','padding-right':'paddingRight','padding-bottom':'paddingBottom',\
+          'padding-left':'paddingLeft','z-index':'zIndex'}};return this[m[p]||p];}}}})",
+        q(&rgba_css(&cs.color)),
+        q(&cs.background_color.map(|c| rgba_css(&c)).unwrap_or_else(|| "rgba(0, 0, 0, 0)".into())),
+        q(&format!("{}px", cs.font_size)),
+        q(&cs.font_weight.to_string()),
+        q(if cs.italic { "italic" } else { "normal" }),
+        q(family),
+        q(&format!("{}px", cs.line_height)),
+        q(text_align),
+        q(display),
+        q(position),
+        q(overflow),
+        q(&dim_css(&cs.width)),
+        q(&dim_css(&cs.height)),
+        q(&dim_css(&cs.margin.top)),
+        q(&dim_css(&cs.margin.right)),
+        q(&dim_css(&cs.margin.bottom)),
+        q(&dim_css(&cs.margin.left)),
+        q(&dim_css(&cs.padding.top)),
+        q(&dim_css(&cs.padding.right)),
+        q(&dim_css(&cs.padding.bottom)),
+        q(&dim_css(&cs.padding.left)),
+        q(&dim_css(&cs.inset.top)),
+        q(&dim_css(&cs.inset.right)),
+        q(&dim_css(&cs.inset.bottom)),
+        q(&dim_css(&cs.inset.left)),
+        q(&cs.z_index.map(|z| z.to_string()).unwrap_or_else(|| "auto".into())),
+    )
+}
+
+/// `getComputedStyle(element)` → a snapshot style object (camelCase props + a
+/// `getPropertyValue("kebab-case")` accessor). Reads the pre-script computed styles.
+unsafe extern "C" fn window_get_computed_style(
+    cx: *mut RawJSContext,
+    argc: u32,
+    vp: *mut Value,
+) -> bool {
+    let node = arg_object(vp, argc, 0).and_then(|o| node_and_dom(o).map(|(_, n)| n));
+    let js = node.and_then(|n| STYLES.with(|s| s.borrow().get(&n).map(computed_style_js)));
+    let src = js.unwrap_or_else(|| "({})".to_string());
+    match eval_in_current_global(cx, &src) {
+        Some(v) => *vp = v,
+        None => *vp = NullValue(),
+    }
+    true
 }
 
 // Reserved-slot layout on every DOM reflector.
@@ -1060,6 +1187,14 @@ pub unsafe fn install(
         2,
         0,
     );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"getComputedStyle".as_ptr(),
+        Some(window_get_computed_style),
+        1,
+        0,
+    );
     let platform = format!("{} {}", std::env::consts::OS, std::env::consts::ARCH);
     let prelude = WINDOW_PRELUDE
         .replace("%UA%", &honest_user_agent())
@@ -1079,13 +1214,16 @@ pub fn run_scripts(
     runtime: &mut Runtime,
     dom: &mut Dom,
     layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
 ) -> Result<usize, String> {
     let scripts = collect_inline_scripts(dom);
     if scripts.is_empty() {
         return Ok(0);
     }
-    // Publish the pre-script layout snapshot for `getBoundingClientRect`.
+    // Publish the pre-script layout + style snapshots for getBoundingClientRect /
+    // getComputedStyle.
     LAYOUT_RECTS.with(|l| *l.borrow_mut() = layout.clone());
+    STYLES.with(|s| *s.borrow_mut() = styles.clone());
 
     let options = RealmOptions::default();
     rooted!(&in(runtime.cx()) let global = unsafe {

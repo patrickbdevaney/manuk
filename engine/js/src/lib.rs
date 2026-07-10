@@ -136,6 +136,7 @@ pub mod bindings {
 pub fn run_document_scripts(
     dom: &mut manuk_dom::Dom,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
 ) -> Result<usize, JsError> {
     use std::cell::RefCell;
     use std::mem::ManuallyDrop;
@@ -152,7 +153,7 @@ pub fn run_document_scripts(
             *slot = Some(ManuallyDrop::new(Runtime::new(handle)));
         }
         let rt: &mut Runtime = &mut *slot.as_mut().expect("runtime just initialized");
-        dom_bindings::run_scripts(rt, dom, layout).map_err(|message| JsError { message })
+        dom_bindings::run_scripts(rt, dom, layout, styles).map_err(|message| JsError { message })
     })
 }
 
@@ -161,6 +162,7 @@ pub fn run_document_scripts(
 pub fn run_document_scripts(
     _dom: &mut manuk_dom::Dom,
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
 ) -> Result<usize, JsError> {
     Ok(0)
 }

@@ -363,7 +363,7 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
-        match manuk_js::run_document_scripts(&mut dom, &rects) {
+        match manuk_js::run_document_scripts(&mut dom, &rects, &styles) {
             Ok(n) if n > 0 => {
                 tracing::debug!(scripts = n, "executed page scripts");
                 let sheets2: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&dom);
