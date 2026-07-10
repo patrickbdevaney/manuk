@@ -218,6 +218,9 @@ struct BlockResult {
     /// This block's bottom margin — the parent collapses it with the next sibling's
     /// top margin (or applies it fully before non-collapsible content).
     margin_bottom: f32,
+    /// The border-bottom edge in **normal flow** (before any `position:relative`
+    /// shift), which the parent uses to stack the next sibling.
+    flow_bottom: f32,
 }
 
 /// One placed float's **margin box** plus which side it hugs, in absolute coords.
@@ -519,16 +522,46 @@ impl Ctx<'_> {
             width: border_box_w,
             height: border_box_h,
         };
+        // In-flow bottom is fixed before any relative shift, so siblings stack
+        // against the box's *normal-flow* position (CSS2 §9.4.3).
+        let flow_bottom = border_y + border_box_h;
+
+        let mut boxx = LayoutBox {
+            rect,
+            background: s.background_color,
+            node: Some(node),
+            content,
+        };
+
+        // `position: relative` offsets the box (and its subtree) visually without
+        // affecting the flow. `left`/`top` win over `right`/`bottom`; percentages
+        // resolve against the containing block (width for x; height unknown here, so
+        // percentage y resolves against 0 — documented).
+        if s.position == Position::Relative {
+            let dx = if !s.inset.left.is_auto() {
+                s.inset.left.resolve(cw, 0.0)
+            } else if !s.inset.right.is_auto() {
+                -s.inset.right.resolve(cw, 0.0)
+            } else {
+                0.0
+            };
+            let dy = if !s.inset.top.is_auto() {
+                s.inset.top.resolve(0.0, 0.0)
+            } else if !s.inset.bottom.is_auto() {
+                -s.inset.bottom.resolve(0.0, 0.0)
+            } else {
+                0.0
+            };
+            if dx != 0.0 || dy != 0.0 {
+                boxx.translate(dx, dy);
+            }
+        }
 
         BlockResult {
-            boxx: LayoutBox {
-                rect,
-                background: s.background_color,
-                node: Some(node),
-                content,
-            },
+            boxx,
             margin_top: mt,
             margin_bottom: mb,
+            flow_bottom,
         }
     }
 
@@ -626,7 +659,8 @@ impl Ctx<'_> {
                     }
                 }
                 let r = self.layout_block(k, cw, cx, cur_y, prev_margin, floats);
-                cur_y = r.boxx.rect.y + r.boxx.rect.height;
+                // Stack against the normal-flow bottom (relative shifts are visual).
+                cur_y = r.flow_bottom;
                 prev_margin = r.margin_bottom;
                 boxes.push(r.boxx);
             } else {
@@ -1138,6 +1172,41 @@ mod tests {
         let mut out = None;
         rec(root, dom, tag, &mut out);
         out
+    }
+
+    #[test]
+    fn relative_position_shifts_visually_not_flow() {
+        // The relpos div moves +20x/+15y but the following block stays where the
+        // *un-shifted* div left it (relpos does not affect flow).
+        let (dom, root) = layout_html(
+            "<body style='margin:0'>\
+             <div id=r style='position:relative;left:20px;top:15px;height:30px'></div>\
+             <div id=n style='height:10px'></div></body>",
+            "",
+            800.0,
+        );
+        let mut rel = None;
+        let mut nxt = None;
+        root.walk(&mut |b| {
+            if let Some(n) = b.node {
+                match dom.element(n).and_then(|e| e.id()) {
+                    Some("r") => rel = Some(b.rect),
+                    Some("n") => nxt = Some(b.rect),
+                    _ => {}
+                }
+            }
+        });
+        let rel = rel.unwrap();
+        let nxt = nxt.unwrap();
+        assert_eq!(rel.x, 20.0, "relpos shifts x by left");
+        assert_eq!(rel.y, 15.0, "relpos shifts y by top");
+        // The next block sits at the relpos box's IN-FLOW bottom (0 + 30 = 30), not
+        // the shifted bottom (15 + 30 = 45).
+        assert!(
+            (nxt.y - 30.0).abs() < 0.01,
+            "sibling stacks against un-shifted flow bottom, got y={}",
+            nxt.y
+        );
     }
 
     #[test]
