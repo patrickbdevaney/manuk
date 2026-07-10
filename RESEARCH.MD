@@ -260,6 +260,62 @@ host-only; and that dynamic `import()` inherits the promise-job-queue blocker.
 `html/semantics/scripting-1/the-script-element/module/` (module scripts, post-spike).
 Current pass count: **0** for both.
 
+### PASS-2 findings (2026-07-10) — N7 research pass: the promise job queue (unblocks dynamic `import()`)
+
+Executed as IMPLEMENTATION.md N7 specifies: **research only, no implementation.** Its three
+questions are now answered, two of them by direct experiment against the code in-tree.
+
+**(a) Does a newer `mozjs` fix the `RustJobQueue` crash? — NO, and the recorded diagnosis
+was incomplete.**
+*Experiment:* a probe calling `mozjs::rust::wrappers2::UseInternalJobQueues(cx)` on a
+`Runtime::new(...)` context **SIGSEGVs inside the call**, reproducing the D3 note.
+*Root cause (primary source — `mozjs-0.18.0/src/rust.rs:355-390`):* `Runtime::create` runs
+`JS_NewContext` → … → **`InitSelfHostedCode`** unconditionally, and SpiderMonkey requires
+`js::UseInternalJobQueues(cx)` to be called **before** self-hosted code is initialized (the
+promise machinery captures the queue at that point). mozjs exposes **no hook between the
+two**, so the call always arrives too late. This is an **API-shape** problem, not a version
+bug: `mozjs` `main`'s `rust.rs` still calls `InitSelfHostedCode` in `Runtime::create`, and
+0.18.1 is unchanged. Bumping the version cannot fix it. *The wrapper signature is fine* —
+raw jsapi and the safe wrapper agree on `fn(*mut JSContext) -> bool` — so the earlier
+"wrapper segfaults" framing was a symptom, not the cause.
+
+**(b) Can we implement a custom `JobQueue` from Rust? — YES, and it is the right path.**
+*Primary source:* `mozjs_sys-140.12.0-1/src/jsglue.cpp:45` defines `struct JobQueueTraps`
+(`getHostDefinedData`, `enqueuePromiseJob`, `runJobs`, `empty`, plus the interrupt-queue
+trio) and `class RustJobQueue : public JS::JobQueue`, with factory functions
+`CreateJobQueue` / `DeleteJobQueue` (`jsglue.cpp:1153`). `mozjs::rust::wrappers2::SetJobQueue(cx, *mut JobQueue)`
+is in the safe wrapper list.
+*Verified by compilation, not assumption:* `mozjs::glue::JobQueueTraps: Default` and
+`mozjs::glue::CreateJobQueue: unsafe extern "C" fn(*const JobQueueTraps, *const c_void, *mut c_void) -> *mut JobQueue`
+both resolve and type-check from safe Rust today.
+*Boundary check (CLAUDE.md, non-negotiable):* this is `mozjs_sys`'s **embedding glue** and
+the public `JS::JobQueue` interface — the **same hook every browser uses** to integrate
+promise jobs into its own event loop. It does **not** touch SpiderMonkey's JIT, GC, or
+sandbox, and requires no patch to SpiderMonkey. It is therefore inside the boundary, in the
+same class as `JS_DefineFunction`.
+
+**(c) Does `mozjs` expose the module hooks? — YES, all of them.**
+`SetModuleResolveHook`, `SetModuleDynamicImportHook`, `SetModulePrivate`,
+`GetModuleRequestSpecifier`, `FinishDynamicModuleImport` are present in the generated raw
+`jsapi` (the sanctioned unsafe embedding surface); `CompileModule` / `CompileModule1`,
+`ModuleLink`, and `ModuleEvaluate` are in `mozjs`'s **safe** wrapper list
+(`jsapi2_wrappers.in.rs:251-256`). `ModuleEvaluate` takes the top-level-await
+`MutableHandleValue` out-parameter, as the JSAPI docs describe.
+
+**Disposition — the blocker is lifted, and the order is now determined.**
+1. **Implement a custom `JobQueue`** (`JobQueueTraps` + `CreateJobQueue` + `SetJobQueue`)
+   whose `enqueuePromiseJob` pushes onto the microtask queue `engine/js::event_loop`
+   already owns, and whose `runJobs` is our existing drain. This **also retires the
+   standing D3 gap** that native `Promise.prototype.then` reactions are not routed through
+   our loop — a strictly larger win than dynamic `import()` alone.
+2. **Then** `<script type="module">` (compile → link → evaluate, with a resolve hook over
+   the fetch layer).
+3. **Then** dynamic `import()` (`SetModuleDynamicImportHook` + `FinishDynamicModuleImport`),
+   which needs (1) because it resolves a Promise.
+
+Recorded as **N9** in IMPLEMENTATION.md. N7 is **closed**: its acceptance was a written
+disposition backed by a primary source, and no implementation was performed under it.
+
 ## Axis E — User-facing features (headful parity + polish)
 
 For each, the research question is the same shape: **what's the leanest correct

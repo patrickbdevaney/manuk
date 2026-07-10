@@ -744,23 +744,53 @@ research-first plan entries, not build tasks.
   drop the fence). Assert the rendered prompt respects `token_budget` (approximate
   chars/token). No WPT target.
 
-#### N7 — ⏳ Dynamic `import()` — RESEARCH FIRST (blocked, do not implement)
-- **Follow-up research required (this is the entry, not a build step):** dynamic `import()`
-  resolves a **Promise**, and `JS::ModuleEvaluate` returns one; our D3 work already recorded
-  that **mozjs 0.18's promise job-queue wrapper (`JS::UseInternalJobQueues`/`RunJobs`)
-  segfaults on call**, which is why native `Promise.prototype.then` reactions are not routed
-  through our event loop. Determine, in order: (a) does a newer `mozjs` fix the
-  `RustJobQueue` crash; (b) if not, can we implement custom `JobQueueTraps` from the Rust
-  side using only sanctioned JSAPI; (c) only then, does `mozjs` expose
-  `SetModuleDynamicImportHook` safely.
-- **Hard boundary:** if (b) would require patching SpiderMonkey's JIT/GC/sandbox internals,
-  **stop and return to the human** — that is CLAUDE.md's non-negotiable boundary, not a
-  "do it carefully" case.
-- **Depends on:** answering the above. **No implementation until then.**
-- **Platform:** n/a (research).
-- **Acceptance of the research pass:** a written disposition (fix / traps / defer) with the
-  primary source that settles it. Static `<script type="module">` is a *separate* spike and
-  is **not** authorized by this entry.
+#### N7 — ✅ CLOSED (2026-07-10): research pass done; the blocker is lifted
+- **Outcome:** the three questions are answered (full disposition in RESEARCH.MD § PASS-2).
+  (a) **A newer `mozjs` does not fix it.** `Runtime::create` calls `InitSelfHostedCode`
+  unconditionally, and SpiderMonkey needs `js::UseInternalJobQueues` *before* that; mozjs
+  offers no hook in between, so the call always arrives too late. Reproduced by probe
+  (SIGSEGV inside the call) and confirmed against `mozjs` `main`. An API-shape problem, not
+  a version bug. (b) **A custom `JobQueue` is implementable from safe Rust today** —
+  `mozjs::glue::{JobQueueTraps, CreateJobQueue}` + `SetJobQueue` resolve and type-check
+  (compile-verified). This is `mozjs_sys` embedding glue and the public `JS::JobQueue`
+  interface — the same hook browsers use — so it is **inside CLAUDE.md's boundary**: no
+  JIT/GC/sandbox is touched and SpiderMonkey needs no patch. (c) All module hooks are
+  exposed (`SetModuleResolveHook`, `SetModuleDynamicImportHook`, `FinishDynamicModuleImport`
+  in raw jsapi; `CompileModule`/`ModuleLink`/`ModuleEvaluate` in the safe wrappers).
+- **No implementation was performed under this entry**, as it specified. The work it
+  unblocks is **N9**.
+
+#### N9 — Custom `JobQueue` → module scripts → dynamic `import()` (unblocked by N7)
+- **Change, in three steps, in this order:**
+  1. **Custom `JobQueue`.** Implement `JobQueueTraps` whose `enqueuePromiseJob` pushes onto
+     the microtask queue `engine/js::event_loop` already owns and whose `runJobs` is our
+     existing drain; install it with `CreateJobQueue` + `SetJobQueue`. This **also retires
+     the standing D3 gap** that native `Promise.prototype.then` reactions bypass our event
+     loop — a strictly larger win than dynamic `import()` alone, and the reason it is first.
+  2. **`<script type="module">`.** `CompileModule` → `ModuleLink` → `ModuleEvaluate`, with a
+     `SetModuleResolveHook` that resolves specifiers against the page URL through the
+     existing fetch layer. `ModuleEvaluate`'s top-level-await `MutableHandleValue` out-param
+     is a Promise, so it depends on step 1.
+  3. **Dynamic `import()`.** `SetModuleDynamicImportHook` + `FinishDynamicModuleImport`.
+     Depends on step 1 (it resolves a Promise) and step 2 (it needs the module loader).
+- **Seam:** `engine/js::event_loop` (queues), `engine/js::modules` (new), `engine/net` (fetch
+  for the resolve hook). Feature-gated behind `_sm`, like every other SpiderMonkey binding.
+- **Depends on:** N7 (done). **Boundary:** sanctioned embedding API only — `JS::JobQueue`,
+  `SetJobQueue`, the module hooks. **If any step would require patching SpiderMonkey's
+  JIT/GC/sandbox, stop and return to the human.**
+- **Platform:** [XP] logic; the SpiderMonkey bindings are
+  *engineered-for-portability-unverified-elsewhere* (SpiderMonkey builds verified on Linux
+  only in this environment).
+- **Acceptance:**
+  1. `Promise.resolve(1).then(...)` runs its reaction when our event loop drains — through
+     the **native** promise machinery, not the `queueMicrotask` shim. This is the assertion
+     the current D3 note says we cannot make.
+  2. `<script type="module">import {x} from "./m.js"; globalThis.ok = x;</script>` evaluates
+     with the resolve hook serving `./m.js`, and `ok` is set.
+  3. `import("./m.js").then(m => globalThis.ok = m.x)` resolves after a loop drain.
+  4. WPT `html/semantics/scripting-1/the-script-element/module/` @ `7cbfe0be` recorded as a
+     target. **State the measured pass count honestly** — it is `0` until the P0.3 upstream
+     runner is integrated, and no number may be claimed before then.
 
 #### N8 — ⏳ Imperative Custom Elements + attenuated capabilities — RESEARCH/DEFERRED
 - **Follow-up research required:** (a) `customElements.define()` / `Element.attachShadow()`
