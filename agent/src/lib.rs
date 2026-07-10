@@ -112,9 +112,9 @@ pub struct AgentBrowser {
     height: u32,
     page: Option<Page>,
     scroll_y: f32,
-    /// §4b — the per-tab navigation stack. `hist_pos` indexes the current entry.
-    history: Vec<String>,
-    hist_pos: usize,
+    /// §4b/N1 — the per-tab navigation stack. One shared `SessionHistory` model, the
+    /// same type the shell and BiDi's `traverseHistory` drive.
+    history: manuk_page::history::SessionHistory,
 }
 
 /// G-a — a **live browsing session** moving between the human front-end and the agent.
@@ -229,8 +229,7 @@ impl AgentBrowser {
             height: height.max(1),
             page: None,
             scroll_y: 0.0,
-            history: Vec::new(),
-            hist_pos: 0,
+            history: manuk_page::history::SessionHistory::new(),
         }
     }
 
@@ -253,17 +252,19 @@ impl AgentBrowser {
     pub async fn navigate(&mut self, url: &str) -> Result<()> {
         self.load_url(url).await?;
         let landed = self.page.as_ref().expect("just loaded").final_url.clone();
-        if !self.history.is_empty() {
-            self.history.truncate(self.hist_pos + 1);
-        }
         self.history.push(landed);
-        self.hist_pos = self.history.len() - 1;
         Ok(())
     }
 
     /// The history stack (oldest first) and the index of the current entry.
     pub fn history(&self) -> (&[String], usize) {
-        (&self.history, self.hist_pos)
+        (self.history.entries(), self.history.index())
+    }
+
+    /// N1 — the shared session-history model, for callers that need `go(delta)`
+    /// (BiDi's `browsingContext.traverseHistory`, N2's `history.go`).
+    pub fn session_history(&self) -> &manuk_page::history::SessionHistory {
+        &self.history
     }
 
     /// The currently loaded URL, or `None` before the first navigation.
@@ -295,9 +296,8 @@ impl AgentBrowser {
         let Handoff { page, scroll_y, history } = handoff;
         self.page = Some(page);
         self.scroll_y = scroll_y;
-        if !history.is_empty() {
-            self.hist_pos = history.len() - 1;
-            self.history = history;
+        for url in history {
+            self.history.push(url);
         }
         // The adopted page was laid out for the human's viewport; re-lay-out for ours.
         let (w, zoom) = (self.width as f32, self.page.as_ref().map(|p| p.zoom()).unwrap_or(1.0));
@@ -314,8 +314,7 @@ impl AgentBrowser {
     pub fn release(&mut self) -> Option<Handoff> {
         let page = self.page.take()?;
         let scroll_y = std::mem::take(&mut self.scroll_y);
-        let history = std::mem::take(&mut self.history);
-        self.hist_pos = 0;
+        let history = std::mem::take(&mut self.history).entries().to_vec();
         Some(Handoff {
             page,
             scroll_y,
@@ -335,32 +334,37 @@ impl AgentBrowser {
     }
 
     pub fn can_go_back(&self) -> bool {
-        !self.history.is_empty() && self.hist_pos > 0
+        self.history.can_go_back()
     }
 
     pub fn can_go_forward(&self) -> bool {
-        !self.history.is_empty() && self.hist_pos + 1 < self.history.len()
+        self.history.can_go_forward()
     }
 
     /// §4b — traverse back one entry. Errors (rather than silently no-op'ing) when
     /// there is nowhere to go, so the agent gets a fact instead of a mystery.
     pub async fn back(&mut self) -> Result<()> {
-        if !self.can_go_back() {
-            anyhow::bail!("no earlier page in history");
-        }
-        let url = self.history[self.hist_pos - 1].clone();
-        self.load_url(&url).await?;
-        self.hist_pos -= 1;
-        Ok(())
+        self.traverse(-1).await.context("no earlier page in history")
     }
 
     pub async fn forward(&mut self) -> Result<()> {
-        if !self.can_go_forward() {
-            anyhow::bail!("no later page in history");
-        }
-        let url = self.history[self.hist_pos + 1].clone();
+        self.traverse(1).await.context("no later page in history")
+    }
+
+    /// N1 — `history.go(delta)` / BiDi `browsingContext.traverseHistory`. A delta landing
+    /// outside the stack moves nowhere and errors, rather than clamping to an end the
+    /// caller never asked for.
+    pub async fn traverse(&mut self, delta: i64) -> Result<()> {
+        let url = {
+            let mut probe = self.history.clone();
+            match probe.traverse(delta) {
+                Some(u) => u.to_string(),
+                None => anyhow::bail!("history traversal by {delta} is out of range"),
+            }
+        };
         self.load_url(&url).await?;
-        self.hist_pos += 1;
+        // Only commit the traversal once the load succeeded.
+        self.history.traverse(delta);
         Ok(())
     }
 

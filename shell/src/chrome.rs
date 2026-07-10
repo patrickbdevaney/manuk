@@ -6,81 +6,12 @@
 
 use std::collections::HashMap;
 
-/// A per-tab navigation stack. `pos` indexes the current entry.
+/// A per-tab navigation stack.
 ///
-/// Mirrors real browser semantics: navigating after going *back* discards the forward
-/// entries, and navigating to the URL you are already on does not create a duplicate
-/// entry (so `back` doesn't appear to do nothing).
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct History {
-    entries: Vec<String>,
-    pos: usize,
-}
-
-impl History {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn current(&self) -> Option<&str> {
-        self.entries.get(self.pos).map(String::as_str)
-    }
-
-    pub fn entries(&self) -> &[String] {
-        &self.entries
-    }
-
-    /// Index of the current entry within [`Self::entries`]. Used by tests and by the
-    /// (not-yet-rendered) history dropdown.
-    #[allow(dead_code)]
-    pub fn position(&self) -> usize {
-        self.pos
-    }
-
-    #[allow(dead_code)]
-    pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
-    }
-
-    /// Record a navigation. Returns false if it was a no-op (same URL as current).
-    pub fn push(&mut self, url: impl Into<String>) -> bool {
-        let url = url.into();
-        if self.current() == Some(url.as_str()) {
-            return false;
-        }
-        if !self.entries.is_empty() {
-            self.entries.truncate(self.pos + 1);
-        }
-        self.entries.push(url);
-        self.pos = self.entries.len() - 1;
-        true
-    }
-
-    pub fn can_go_back(&self) -> bool {
-        !self.entries.is_empty() && self.pos > 0
-    }
-
-    pub fn can_go_forward(&self) -> bool {
-        !self.entries.is_empty() && self.pos + 1 < self.entries.len()
-    }
-
-    /// Step back one entry, returning the URL to load.
-    pub fn back(&mut self) -> Option<&str> {
-        if !self.can_go_back() {
-            return None;
-        }
-        self.pos -= 1;
-        self.current()
-    }
-
-    pub fn forward(&mut self) -> Option<&str> {
-        if !self.can_go_forward() {
-            return None;
-        }
-        self.pos += 1;
-        self.current()
-    }
-}
+/// N1: this is now the **one** [`manuk_page::history::SessionHistory`] model, shared with
+/// the agent and with BiDi's `browsingContext.traverseHistory`. The alias keeps the
+/// shell's local name; `position` is the spec's `index`.
+pub use manuk_page::history::SessionHistory as History;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Bookmark {

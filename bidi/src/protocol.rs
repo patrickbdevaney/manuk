@@ -426,15 +426,12 @@ impl Session {
             "browsingContext.traverseHistory" => {
                 let ctx = str_param(p, "context")?;
                 let delta = p.get("delta").and_then(Value::as_i64).unwrap_or(0);
-                let browser = self.browser_mut(&ctx)?;
-                let res = if delta < 0 {
-                    browser.back().await
-                } else if delta > 0 {
-                    browser.forward().await
-                } else {
-                    Ok(())
-                };
-                res.map_err(|e| BidiError::new(ErrorCode::UnknownError, format!("{e:#}")))?;
+                // N1: one shared `SessionHistory`, so a delta of any magnitude works and a
+                // delta past either end is rejected rather than clamped.
+                self.browser_mut(&ctx)?
+                    .traverse(delta)
+                    .await
+                    .map_err(|e| BidiError::new(ErrorCode::UnknownError, format!("{e:#}")))?;
                 Ok(Reply::plain(json!({})))
             }
 

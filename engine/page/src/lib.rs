@@ -5,6 +5,9 @@
 //! agent** both drive these functions and diverge only at how they consume the
 //! output — the shell presents to a window, the agent screenshots + reads it.
 
+/// N1 — the one session-history model, shared by the shell, the agent, and BiDi.
+pub mod history;
+
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
