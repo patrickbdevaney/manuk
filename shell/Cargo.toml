@@ -16,6 +16,9 @@ path = "src/main.rs"
 # needs no display/GPU — useful for CI and this environment.
 default = ["gui"]
 gui = ["dep:winit", "dep:wgpu", "dep:pollster", "dep:bytemuck", "dep:raw-window-handle"]
+# Link SpiderMonkey and expose `manuk eval <expr>` — real JS execution. Heavy: this is
+# what the C2 binary-size measurement compares against the JS-less baseline.
+spidermonkey = ["manuk-js/spidermonkey"]
 
 [dependencies]
 manuk-net.workspace = true

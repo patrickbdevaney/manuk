@@ -13,11 +13,31 @@ Headless release binary (`manuk`, `--no-default-features`, LTO + `panic=abort` +
 
 | Build | Size |
 |---|---|
-| `manuk` headless (linux-gnu, stripped) | **4.1 MB** (4,278,888 bytes) |
+| `manuk` headless (linux-gnu, stripped) | **5.1 MB** (5,347,184 bytes) |
+| `manuk` + `--features spidermonkey` (JS engine linked) | **38.0 MB** (39,797,944 bytes) |
 
 Re-measure: `cargo build --release -p manuk-shell --no-default-features && stat -c%s
 target/release/manuk`. CI reports this on the static-binary job. Per-target sizes
-(musl/win/mac) land once those binaries build in CI (PLATFORM.md).
+(musl/win/mac) land once those binaries build in CI (PLATFORM.md). *(The 4.1 MB → 5.1
+MB baseline growth is this session's added engine surface — streaming, tab
+model/compositor accounting, incremental relayout, etc.)*
+
+**C2 measurement (2026-07-10) — SpiderMonkey binary-size contribution.** The number the
+ICU-trim decision is gated on:
+
+| Component | Size |
+|---|---|
+| SpiderMonkey adds to the binary (38.0 − 5.1) | **~32.9 MB** |
+| — of which **ICU data** (`icu_data.o`, all-locales) | **~14.3 MB** (15,032,552 B) |
+
+`Intl.*` is functional in the built binary (`manuk eval 'new Intl.NumberFormat("en-US")
+.format(1234567.89)'` evaluates without error). **Decision:** the en-only ICU data
+filter (ICU 64+ `--with-data-filter`, keeping `Intl`) targets that ~14.3 MB → an
+estimated **~12–13 MB saving** (English ICU data ≈ 1–2 MB), i.e. a **~1/3 binary
+reduction** — this clearly justifies the trim (the plan expected only single-digit MB;
+the measured target is larger). The *realization* is engineering-gated: a
+`MOZJS_FROM_SOURCE=1` per-OS from-source build + baked `MOZJS_ARCHIVE` (the prebuilt is
+full-ICU), strictly build/config — never JIT/GC/sandbox. Tracked as C2's build step.
 
 ## 2. Click-to-navigate latency — WIRED ✅ (render proxy)
 

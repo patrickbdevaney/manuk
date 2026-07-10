@@ -37,6 +37,8 @@ fn main() -> Result<()> {
     match args.first().map(String::as_str) {
         Some("render") => cmd_render(&args[1..]),
         Some("browse") => cmd_browse(&args[1..]),
+        #[cfg(feature = "spidermonkey")]
+        Some("eval") => cmd_eval(&args[1..]),
         Some("version") | Some("--version") | Some("-V") => {
             println!("manuk {}", env!("CARGO_PKG_VERSION"));
             Ok(())
@@ -137,6 +139,24 @@ fn cmd_render(args: &[String]) -> Result<()> {
     }
     println!("  wrote:  {out}");
     Ok(())
+}
+
+/// `manuk eval <expr>` — evaluate JavaScript via SpiderMonkey and print the result.
+/// Present only under the `spidermonkey` feature; also the link anchor for the C2
+/// binary-size measurement (it keeps the JS engine from being dead-stripped).
+#[cfg(feature = "spidermonkey")]
+fn cmd_eval(args: &[String]) -> Result<()> {
+    let Some(expr) = positional(args) else {
+        bail!("eval: missing <expr>");
+    };
+    let mut rt = manuk_js::new_runtime();
+    match rt.eval(expr, "eval") {
+        Ok(v) => {
+            println!("{v:?}");
+            Ok(())
+        }
+        Err(e) => bail!("{e}"),
+    }
 }
 
 #[cfg(feature = "gui")]
