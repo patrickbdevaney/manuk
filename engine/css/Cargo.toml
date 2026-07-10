@@ -11,7 +11,7 @@ default = []
 # Stylo (Servo/Firefox production CSS engine) is the reuse target per CLAUDE.md.
 # It is heavy to build, so it is opt-in. The default build uses the minimal
 # from-scratch cascade so the workspace compiles and runs without it.
-stylo = ["dep:stylo", "dep:url", "dep:euclid", "dep:selectors"]
+stylo = ["dep:stylo", "dep:url", "dep:euclid", "dep:selectors", "dep:stylo_dom", "dep:app_units"]
 
 [dependencies]
 manuk-dom.workspace = true
@@ -27,6 +27,10 @@ euclid = { version = "0.22", optional = true }
 # The selector-matching trait (`selectors::Element`) our arena handle implements so
 # Stylo's real matcher runs over the arena DOM. Version pinned to stylo 0.19's.
 selectors = { version = "0.39", optional = true }
+# `ElementState` (named in the TElement wall's `state()` signature) lives in the
+# `stylo_dom` crate that stylo depends on; `app_units::Au` appears in a wall signature.
+stylo_dom = { version = "0.19", optional = true }
+app_units = { version = "0.7", optional = true }
 
 [dev-dependencies]
 # N4 tests parse real HTML (declarative shadow DOM) to build the tree they scope over.

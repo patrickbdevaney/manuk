@@ -2914,6 +2914,7 @@ dependencies = [
 name = "manuk-css"
 version = "0.1.0"
 dependencies = [
+ "app_units",
  "cssparser 0.34.0",
  "euclid",
  "manuk-dom",
@@ -2921,6 +2922,7 @@ dependencies = [
  "selectors",
  "smallvec",
  "stylo",
+ "stylo_dom",
  "tracing",
  "url",
 ]

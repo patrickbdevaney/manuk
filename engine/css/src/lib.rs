@@ -2333,6 +2333,11 @@ pub mod stylo_dom;
 #[cfg(feature = "stylo")]
 pub mod stylo_map;
 
+/// D2: the Stylo DOM trait wall (`TDocument`/`TNode`/`TShadowRoot`/`TElement`) that lets
+/// the cascade name a `TElement` type; matching still uses the real `selectors::Element`.
+#[cfg(feature = "stylo")]
+pub mod stylo_traits;
+
 #[cfg(test)]
 mod tests {
     use super::*;

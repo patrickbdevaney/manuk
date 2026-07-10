@@ -175,7 +175,7 @@ impl<'a> StyloElement<'a> {
 
 /// The previous sibling of `node` (the arena exposes next/first but this walk needs
 /// prev — derive it from the parent's child list).
-fn prev_sibling(dom: &Dom, node: NodeId) -> Option<NodeId> {
+pub(crate) fn prev_sibling(dom: &Dom, node: NodeId) -> Option<NodeId> {
     let parent = dom.parent(node)?;
     let mut prev = None;
     let mut cur = dom.first_child(parent);
