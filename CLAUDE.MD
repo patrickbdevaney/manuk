@@ -104,7 +104,85 @@ Roughly in priority order, each behind an existing seam:
 - **Real reuse integrations**: wire Stylo's cascade behind the existing `StyleEngine` adapter; wire Vello GPU paint behind the existing `Painter` trait for the focused tab.
 - **JS/DOM**: grow the Web API binding surface (`engine/js::bindings`) projecting the DOM into SpiderMonkey, WebIDL-driven, WPT-verified per API.
 - **Agent**: viewport-clipped text observation (so scrolling matters to the text channel, not just the screenshot), richer actions (typing, form submit, back/forward), and multi-tab agent sessions.
-- **Conformance**: the upstream WPT runner (`$WPT_DIR`), folding real `css/`/`dom/` results into the existing `Report`.
+- **Conformance**: the upstream WPT runner (`$WPT_DIR`), folding real `css`/`dom` results into the existing `Report`.
+
+---
+
+The above is the near-term list; the comprehensive, objective-organized roadmap
+follows. Reviewed and re-prioritized periodically. The north star is a
+**disruptively good single-machine browser**: fast, versatile across the real web,
+and lightweight — measured, not merely "acceptable." Each item sits behind an
+existing seam so it is additive.
+
+### 1. Performance (single machine)
+- **Click-to-navigate latency:** wire the incremental path already positioned —
+  stream socket bytes into the html5ever sink, build DOM/layout as bytes arrive
+  instead of after full buffering; speculative preconnect/DNS-prefetch on link
+  hover; connection reuse/pooling (currently one connection per request).
+- **Frame timing + rendering quality:** land the **Vello** GPU-compute tier behind
+  the existing `Painter` trait for the focused tab; treat frame time and visual
+  fidelity as first-class measured metrics.
+- **Per-tab memory:** realize hibernation for real — freeze background JS, evict
+  rasterized tiles to disk, drop background tabs to Vello-CPU/no-renderer; share
+  SpiderMonkey startup snapshots across isolates.
+- **Incrementality:** damage-driven relayout + repaint (the compositor already
+  tracks damage) instead of full-page passes; dirty-subtree style invalidation.
+- **Caching:** HTTP cache, decoded-image cache, shaped-run cache.
+
+### 2. Web-traversal versatility (compatibility breadth)
+Broadest real-world site set (excluding the hostile/bot-walled tier), WPT-verified.
+- **Layout:** floats, tables, absolute/relative/fixed/sticky positioning, margin
+  collapsing, CSS grid (via `taffy`), overflow/scroll containers, writing-modes, bidi.
+- **CSS depth:** wire **Stylo**'s real cascade behind the `StyleEngine` adapter;
+  media queries, `@font-face`, the full selector grammar, custom properties,
+  `calc()`, transforms, transitions/animations, gradients.
+- **JS + DOM:** grow the Web API bindings (`engine/js::bindings`) projecting the DOM
+  into SpiderMonkey, WebIDL-driven, WPT-verified per API; event loop + timers;
+  `fetch`/`XHR`; events; DOM mutation.
+- **Loading:** external stylesheets/scripts/images; gzip/br/deflate decoding;
+  charset sniffing; data/blob URLs.
+- **Protocols:** activate **HTTP/2** (ALPN `h2`, already compiled), add **HTTP/3**
+  (`quinn`), WebSocket (`tokio-tungstenite`), cookies.
+- **Forms + navigation:** form submission, history (back/forward), fragment nav.
+
+### 3. Lightweightness (binary size + footprint)
+- Verify + measure the **musl static** Linux and **static-CRT** Windows builds;
+  report binary size before/after size-affecting changes.
+- Strip unused SpiderMonkey features (WASM, debugger, unused ICU locale data) via
+  build config — size wins that do **not** cross the JS modification boundary.
+- Dependency hygiene: dedupe heavy/duplicate crates (e.g. two `tiny-skia`/
+  `cssparser` versions currently resolve), prefer `default-features = false`.
+- Minimize per-tab baseline resident memory; measure it.
+
+### 4. Agentic capability (headless phase)
+- **Observation:** viewport-clipped text; an accessibility/semantic tree; element
+  bounding boxes so the agent can click by coordinate, not only by link index.
+- **Actions:** typing, form submit, back/forward, wait-for-load, scroll-to-element,
+  tab management.
+- **Reliability/cost:** structured tool-calling where supported; retry/rate-limit
+  handling; screenshot/response caching; token budgeting; deterministic replay.
+- **Backend breadth:** the `InferenceBackend` trait is provider-agnostic — add local
+  (llama.cpp/Ollama) and other cloud backends without touching `run_task`.
+
+### 5. Correctness & conformance
+- Stand up the **upstream WPT runner** (`$WPT_DIR`); grow the built-in reftests.
+- Secondary real-site screenshot diffing vs a real Chrome render.
+- Property/fuzz testing of parsers + layout — but **never** the JIT/GC fuzzing that
+  would tempt crossing the SpiderMonkey boundary; that stays vendored.
+
+### 6. Portability
+- Keep Linux/macOS/Windows co-equal: verify builds + rendering on all three (only
+  Linux is exercised so far); no platform-primary; `io_uring` stays out of the GUI.
+
+### 7. Security & process model
+- Move toward isolate/compartment-per-tab multiplexed over a small number of OS
+  processes (not one-per-tab); site isolation for untrusted content; keep untrusted
+  JS inside the vendored SpiderMonkey sandbox; TLS stays `rustls`.
+
+### 8. Measurement (cross-cutting)
+The targets are only real if measured. Stand up benchmarks/CI for binary size,
+per-tab baseline memory, click-to-navigate latency, and frame timing — so every
+change can report before/after numbers as the working agreements require.
 
 ## Suggested crate layout
 
@@ -129,3 +207,5 @@ Roughly in priority order, each behind an existing seam:
 - Any change touching binary size or per-tab memory should report before/after numbers.
 - Treat SpiderMonkey as a vendored dependency you configure and bind against, not a codebase you patch internals of — see Modification boundaries above.
 - When in doubt about whether a site belongs in the "broadest possible, excluding hostile" target set or the excluded tier, default to excluding rather than building bot-evasion logic into the core engine.
+- **Documentation is part of "done."** On every major change — a new crate, a new capability, a wired feature seam, or a changed public API — update **both** `README.md` and this file in the same change. `README.md` must describe the stack *as it actually is* (no aspirational claims in the per-crate status; move aspirations to "Directions of improvement" below). Re-read and re-prioritize the "Current state" and "Directions of improvement" sections here periodically.
+- The agent's inference is provider-agnostic: keep it behind the `InferenceBackend` trait (Groq is one implementation). Never commit API keys, `.env`, or the local-only development harness.
