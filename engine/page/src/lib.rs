@@ -186,6 +186,23 @@ impl Page {
         Page::from_dom(manuk_html::parse(html), final_url, fonts, viewport_width)
     }
 
+    /// As [`load`](Self::load), but first **fetches external `<script src>`** so they run
+    /// alongside inline scripts (only under the `spidermonkey` feature; otherwise identical to
+    /// `load`). Callers on the async fetch path (shell/render) use this so a page's real
+    /// scripts execute.
+    pub async fn load_async(
+        html: &str,
+        final_url: &str,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> Page {
+        #[allow(unused_mut)]
+        let mut dom = manuk_html::parse(html);
+        #[cfg(feature = "spidermonkey")]
+        fetch_external_scripts(&mut dom, final_url).await;
+        Page::from_dom(dom, final_url, fonts, viewport_width)
+    }
+
     /// Build a page from an already-parsed [`Dom`] (shared by [`load`](Self::load) and
     /// [`load_streaming`](Self::load_streaming)).
     pub fn from_dom(
@@ -194,17 +211,29 @@ impl Page {
         fonts: &FontContext,
         viewport_width: f32,
     ) -> Page {
-        // Run the document's inline scripts (mutating the DOM in place) *before* styling and
-        // layout, so script-built content is styled and laid out. A no-op unless the
-        // `spidermonkey` feature is on; scripts that throw are logged and the rest continue.
-        match manuk_js::run_document_scripts(&mut dom) {
-            Ok(n) if n > 0 => tracing::debug!(scripts = n, "executed page scripts"),
+        // Style + lay out once, then run the document's inline scripts against that layout
+        // snapshot (so `getBoundingClientRect` works), letting them mutate the DOM. If they
+        // did, re-style and re-lay-out so script-built content is rendered. All a no-op unless
+        // the `spidermonkey` feature is on; scripts that throw are logged and the rest run.
+        let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&dom);
+        let mut styles = MinimalCascade.cascade(&dom, &sheets);
+        let mut root_box = layout_document(&dom, &styles, fonts, viewport_width);
+
+        let rects: std::collections::HashMap<manuk_dom::NodeId, [f32; 4]> = root_box
+            .node_rects(&dom)
+            .into_iter()
+            .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+            .collect();
+        match manuk_js::run_document_scripts(&mut dom, &rects) {
+            Ok(n) if n > 0 => {
+                tracing::debug!(scripts = n, "executed page scripts");
+                let sheets2: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&dom);
+                styles = MinimalCascade.cascade(&dom, &sheets2);
+                root_box = layout_document(&dom, &styles, fonts, viewport_width);
+            }
             Ok(_) => {}
             Err(e) => tracing::warn!("page scripts: {e}"),
         }
-
-        let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&dom);
-        let styles = MinimalCascade.cascade(&dom, &sheets);
 
         let title = dom
             .find_first("title")
@@ -217,7 +246,6 @@ impl Page {
             .filter(|t| !t.is_empty())
             .unwrap_or_else(|| final_url.to_string());
 
-        let root_box = layout_document(&dom, &styles, fonts, viewport_width);
         let content_height = root_box.content_bottom();
         // The tree is now laid out and clean; later mutations mark fresh dirtiness.
         dom.clear_all_dirty();
@@ -618,7 +646,10 @@ pub async fn fetch_streaming_page(
 ) -> Result<(Page, Option<LayoutBox>)> {
     if !(url.starts_with("http://") || url.starts_with("https://")) {
         let (html, final_url) = fetch_html(url).await?;
-        return Ok((Page::load(&html, &final_url, fonts, viewport_width), None));
+        return Ok((
+            Page::load_async(&html, &final_url, fonts, viewport_width).await,
+            None,
+        ));
     }
 
     let mut sp = manuk_html::StreamParser::new();
@@ -643,6 +674,34 @@ pub async fn fetch_streaming_page(
 /// Fetch a document's HTML. Supports `http(s)://` (via `manuk-net`, with WHATWG
 /// charset decoding), `data:` URLs (RFC 2397), `file://`, and bare local paths.
 /// Returns `(html, final_url_after_redirects)`.
+/// Fetch every external `<script src>` in `dom` (resolved against `base`) and inline its
+/// content as the script node's text, dropping the `src`, so the from_dom script pass runs it.
+/// External scripts fetch sequentially in document order (the classic-script model).
+#[cfg(feature = "spidermonkey")]
+async fn fetch_external_scripts(dom: &mut Dom, base: &str) {
+    let mut targets = Vec::new();
+    for n in dom.descendants(dom.root()) {
+        if dom.tag_name(n) == Some("script") {
+            if let Some(src) = dom.element(n).and_then(|e| e.attr("src")) {
+                if let Ok(u) = Url::parse(base).and_then(|b| b.join(src)) {
+                    targets.push((n, u.to_string()));
+                }
+            }
+        }
+    }
+    for (node, url) in targets {
+        match fetch_html(&url).await {
+            Ok((js, _)) => {
+                dom.remove_attr(node, "src");
+                let text = dom.create_text(js);
+                dom.append_child(node, text);
+                tracing::debug!(%url, "fetched external script");
+            }
+            Err(e) => tracing::warn!(%url, "external script fetch failed: {e:#}"),
+        }
+    }
+}
+
 pub async fn fetch_html(url: &str) -> Result<(String, String)> {
     if url.starts_with("http://") || url.starts_with("https://") {
         let resp = manuk_net::fetch(url)

@@ -44,6 +44,8 @@ tokio.workspace = true
 url.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+# Only used to exit hard past SpiderMonkey's crashing static/atexit teardown.
+libc = "0.2"
 
 winit = { workspace = true, optional = true }
 wgpu = { workspace = true, optional = true }

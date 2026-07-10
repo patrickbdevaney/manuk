@@ -2989,6 +2989,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytemuck",
+ "libc",
  "manuk-agent",
  "manuk-compositor",
  "manuk-css",

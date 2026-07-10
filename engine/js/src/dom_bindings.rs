@@ -54,6 +54,13 @@ use mozjs::rust::{evaluate_script, CompileOptionsWrapper, RealmOptions, Runtime,
 
 use manuk_dom::{Dom, NodeId};
 
+thread_local! {
+    /// Pre-script layout snapshot (`NodeId` → `[x, y, width, height]`) exposed to
+    /// `element.getBoundingClientRect()`. Set by [`run_scripts`] for the current document.
+    static LAYOUT_RECTS: std::cell::RefCell<std::collections::HashMap<NodeId, [f32; 4]>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
 // Reserved-slot layout on every DOM reflector.
 const SLOT_NODE: u32 = 0; // NodeId, as Int32
 const SLOT_DOM: u32 = 1; // *mut Dom, as PrivateValue
@@ -249,6 +256,7 @@ unsafe fn define_members(
         def(c"querySelectorAll", doc_query_all, 1);
         def(c"addEventListener", el_add_event_listener, 2);
         def(c"dispatchEvent", el_dispatch_event, 1);
+        def(c"getBoundingClientRect", el_get_bounding_rect, 0);
         // Accessor properties (jQuery-core read/write surface).
         prop(
             c"textContent",
@@ -340,6 +348,25 @@ unsafe extern "C" fn el_set_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut
         (*dom).set_attr(node, name, value);
     }
     *vp = UndefinedValue();
+    true
+}
+
+/// `element.getBoundingClientRect()` → a DOMRect-shaped object from the pre-script layout
+/// snapshot (`{x, y, width, height, top, right, bottom, left}`), or all-zero if unlaid-out.
+unsafe extern "C" fn el_get_bounding_rect(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let node = this_node(vp).map(|(_, n)| n);
+    let [x, y, w, h] = node
+        .and_then(|n| LAYOUT_RECTS.with(|l| l.borrow().get(&n).copied()))
+        .unwrap_or([0.0, 0.0, 0.0, 0.0]);
+    let js = format!(
+        "({{x:{x},y:{y},width:{w},height:{h},left:{x},top:{y},right:{r},bottom:{b}}})",
+        r = x + w,
+        b = y + h
+    );
+    match eval_in_current_global(cx, &js) {
+        Some(v) => *vp = v,
+        None => *vp = NullValue(),
+    }
     true
 }
 
@@ -613,11 +640,17 @@ pub unsafe fn install(
 /// One global per document (the navigation model); the `Runtime` is reused across documents
 /// by the caller (the process-global runtime), never re-created — that is what keeps
 /// SpiderMonkey's single-Runtime-per-process rule.
-pub fn run_scripts(runtime: &mut Runtime, dom: &mut Dom) -> Result<usize, String> {
+pub fn run_scripts(
+    runtime: &mut Runtime,
+    dom: &mut Dom,
+    layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+) -> Result<usize, String> {
     let scripts = collect_inline_scripts(dom);
     if scripts.is_empty() {
         return Ok(0);
     }
+    // Publish the pre-script layout snapshot for `getBoundingClientRect`.
+    LAYOUT_RECTS.with(|l| *l.borrow_mut() = layout.clone());
 
     let options = RealmOptions::default();
     rooted!(&in(runtime.cx()) let global = unsafe {

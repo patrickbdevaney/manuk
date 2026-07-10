@@ -60,15 +60,17 @@ fn main() -> Result<()> {
         }
     };
 
-    // With SpiderMonkey linked, exit **hard**: mozjs's global static destructors abort at
-    // process teardown (the documented multi-Runtime/engine teardown issue). We are done
-    // and everything is flushed, so skip destructors entirely rather than crash on exit.
+    // With SpiderMonkey linked, exit **hard** past its teardown: mozjs's C++ static
+    // destructors / atexit handlers abort at process shutdown (the documented engine
+    // teardown issue). `libc::_exit` skips atexit handlers entirely (unlike
+    // `std::process::exit`, which runs them), so the correct, fully-flushed output stands
+    // without a spurious crash on exit.
     #[cfg(feature = "_sm")]
     {
         use std::io::Write as _;
         let _ = std::io::stdout().flush();
         let _ = std::io::stderr().flush();
-        std::process::exit(if result.is_ok() { 0 } else { 1 });
+        unsafe { libc::_exit(if result.is_ok() { 0 } else { 1 }) };
     }
     #[allow(unreachable_code)]
     result

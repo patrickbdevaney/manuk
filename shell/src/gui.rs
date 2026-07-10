@@ -411,7 +411,10 @@ impl App {
         };
         match rt.block_on(fetch_html(&self.url)) {
             Ok((html, final_url)) => {
-                let page = Page::load(&html, &final_url, &self.fonts, width as f32);
+                // `load_async` also fetches external `<script src>` (under the spidermonkey
+                // feature) so a page's real scripts run.
+                let page =
+                    rt.block_on(Page::load_async(&html, &final_url, &self.fonts, width as f32));
                 if let Some(w) = &self.window {
                     w.set_title(&format!("{} — manuk", page.title));
                 }
