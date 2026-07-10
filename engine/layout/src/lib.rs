@@ -15,13 +15,18 @@
 //! Known simplifications (documented, not silent — CLAUDE.md § verification):
 //! - Margin collapsing covers adjacent siblings only; parent↔first/last-child
 //!   collapsing is not yet modeled.
-//! - `absolute`/`fixed` boxes are skipped in normal flow (positioned pass pending).
+//! - `relative`/`absolute`/`fixed` positioning is implemented (abs/fixed via a
+//!   final pass against the containing-block chain); `sticky` and true *static
+//!   position* for inset-less abs boxes are not (such boxes are left unplaced),
+//!   and `z-index` stacking follows DOM order.
 //! - Percentage heights resolve only against definite containers.
 //! - A line's float band is queried using the first word's height as the estimate
 //!   (exact for uniform-size text).
 //! - Inline layout is Latin/LTR and inserts an inter-word space between adjacent
 //!   tokens (so `a<b>b</b>` gains a space it should not); Parley-grade segmentation
 //!   is the upgrade.
+
+use std::collections::HashMap;
 
 use manuk_css::{Clear, ComputedStyle, Dim, Display, Float, Position, Rgba, StyleMap, TextAlign};
 use manuk_dom::{Dom, NodeData, NodeId};
@@ -162,8 +167,13 @@ pub fn layout_document(
             // The initial containing block is itself a BFC root; `layout_block` gives
             // the root element its own context, so this outer one is just a seed.
             let mut floats = FloatContext::new(0.0, viewport_width);
-            ctx.layout_block(el, viewport_width, 0.0, 0.0, 0.0, &mut floats)
-                .boxx
+            let mut root = ctx
+                .layout_block(el, viewport_width, 0.0, 0.0, 0.0, &mut floats)
+                .boxx;
+            // Absolute/fixed boxes were skipped in flow; place them in a final pass
+            // against their containing blocks (CSS2 §9.6).
+            ctx.position_absolutes(el, &mut root, viewport_width);
+            root
         }
         None => LayoutBox {
             rect: Rect::ZERO,
@@ -772,6 +782,224 @@ impl Ctx<'_> {
         pref.min(avail).max(0.0)
     }
 
+    /// Place `absolute`/`fixed` boxes in a final pass (CSS2 §9.6). They were skipped
+    /// in normal flow; each is now sized and positioned against its containing block —
+    /// the padding box of its nearest positioned DOM ancestor for `absolute`, the
+    /// viewport for `fixed` (or the initial CB when no positioned ancestor exists) —
+    /// and appended to the root's children so it paints above in-flow content.
+    ///
+    /// Documented simplifications: the *static position* used when neither inset on an
+    /// axis is set is approximated as the containing block's start edge (true CSS
+    /// tracks the box's would-be flow position); `z-index` stacking is not yet ordered
+    /// (DOM order); scroll-based offsets and `sticky` are out of scope here.
+    fn position_absolutes(&self, root_el: NodeId, root: &mut LayoutBox, viewport_w: f32) {
+        // Border-box rect of every element currently in the fragment tree.
+        let mut rects: HashMap<NodeId, Rect> = HashMap::new();
+        root.walk(&mut |b| {
+            if let Some(n) = b.node {
+                rects.insert(n, b.rect);
+            }
+        });
+        let doc_h = root.content_bottom();
+        let viewport = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: viewport_w,
+            height: doc_h,
+        };
+
+        // Gather positioned elements in DOM pre-order so an abs ancestor is placed
+        // (and recorded) before an abs descendant that uses it as containing block.
+        let mut positioned = Vec::new();
+        self.collect_positioned(root_el, &mut positioned);
+
+        let mut new_boxes = Vec::new();
+        for node in positioned {
+            let s = &self.styles[&node];
+            // A box with no inset on any edge is at its *static position* (its
+            // would-be in-flow spot). Computing that needs in-flow tracking we don't
+            // have yet, so such boxes are left unplaced (documented) rather than
+            // dropped at the CB origin, which would render them in the wrong place.
+            if s.inset.left.is_auto()
+                && s.inset.right.is_auto()
+                && s.inset.top.is_auto()
+                && s.inset.bottom.is_auto()
+            {
+                continue;
+            }
+            let cb = if s.position == Position::Fixed {
+                viewport
+            } else {
+                self.abs_containing_block(node, &rects, viewport)
+            };
+            let b = self.layout_abs(node, cb);
+            rects.insert(node, b.rect); // enable nested abs to use it as CB
+            new_boxes.push(b);
+        }
+
+        if new_boxes.is_empty() {
+            return;
+        }
+        match &mut root.content {
+            BoxContent::Block(kids) => kids.extend(new_boxes),
+            BoxContent::Inline(frags) => {
+                // Root had only inline (or only out-of-flow) content: fold the inline
+                // fragments into an anonymous block so the abs boxes can join as
+                // siblings.
+                let mut kids = Vec::new();
+                if !frags.is_empty() {
+                    kids.push(LayoutBox {
+                        rect: root.rect,
+                        background: None,
+                        node: None,
+                        content: BoxContent::Inline(std::mem::take(frags)),
+                    });
+                }
+                kids.extend(new_boxes);
+                root.content = BoxContent::Block(kids);
+            }
+        }
+    }
+
+    /// Collect rendered `absolute`/`fixed` element nodes in `node`'s subtree, DOM
+    /// pre-order.
+    fn collect_positioned(&self, node: NodeId, out: &mut Vec<NodeId>) {
+        for k in self.dom.children(node) {
+            if !is_rendered(self.dom, self.styles, k) {
+                continue;
+            }
+            if self.dom.is_element(k) && is_out_of_flow_positioned(&self.styles[&k]) {
+                out.push(k);
+            }
+            self.collect_positioned(k, out);
+        }
+    }
+
+    /// The absolute containing block for `node`: the padding box of the nearest
+    /// positioned ancestor with a laid-out box, else the viewport/initial CB.
+    fn abs_containing_block(
+        &self,
+        node: NodeId,
+        rects: &HashMap<NodeId, Rect>,
+        viewport: Rect,
+    ) -> Rect {
+        let mut cur = self.dom.parent(node);
+        while let Some(anc) = cur {
+            if self.dom.is_element(anc) {
+                let s = &self.styles[&anc];
+                if s.position != Position::Static {
+                    if let Some(r) = rects.get(&anc) {
+                        // Padding box = border box inset by the border widths.
+                        return Rect {
+                            x: r.x + s.border_width.left,
+                            y: r.y + s.border_width.top,
+                            width: (r.width - s.border_width.left - s.border_width.right).max(0.0),
+                            height: (r.height - s.border_width.top - s.border_width.bottom)
+                                .max(0.0),
+                        };
+                    }
+                }
+            }
+            cur = self.dom.parent(anc);
+        }
+        viewport
+    }
+
+    /// Lay out one `absolute`/`fixed` box against containing block `cb`.
+    fn layout_abs(&self, node: NodeId, cb: Rect) -> LayoutBox {
+        let s = self.styles[&node].clone();
+        let cw = cb.width;
+        let ml = s.margin.left.resolve(cw, 0.0);
+        let mr = s.margin.right.resolve(cw, 0.0);
+        let mt = s.margin.top.resolve(cw, 0.0);
+        let mb = s.margin.bottom.resolve(cw, 0.0);
+        let (pl, pr) = (
+            s.padding.left.resolve(cw, 0.0),
+            s.padding.right.resolve(cw, 0.0),
+        );
+        let (pt, pb) = (
+            s.padding.top.resolve(cw, 0.0),
+            s.padding.bottom.resolve(cw, 0.0),
+        );
+        let (bl, br) = (s.border_width.left, s.border_width.right);
+        let (bt, bb) = (s.border_width.top, s.border_width.bottom);
+
+        let left = (!s.inset.left.is_auto()).then(|| s.inset.left.resolve(cw, 0.0));
+        let right = (!s.inset.right.is_auto()).then(|| s.inset.right.resolve(cw, 0.0));
+        let top = (!s.inset.top.is_auto()).then(|| s.inset.top.resolve(cb.height, 0.0));
+        let bottom = (!s.inset.bottom.is_auto()).then(|| s.inset.bottom.resolve(cb.height, 0.0));
+
+        let frame = ml + mr + pl + pr + bl + br;
+        // Width: definite wins; else if both left+right are set the box stretches to
+        // fill between them; else shrink-to-fit.
+        let content_w = match s.width {
+            Dim::Auto => match (left, right) {
+                (Some(l), Some(r)) => (cw - l - r - frame).max(0.0),
+                _ => self.shrink_to_fit(node, (cw - frame).max(0.0)),
+            },
+            other => other.resolve(cw, (cw - frame).max(0.0)).max(0.0),
+        };
+
+        // Lay out content at a provisional origin, then re-origin once placed.
+        let mut inner = FloatContext::new(0.0, content_w);
+        let (content, ch) = self.layout_children(node, 0.0, 0.0, content_w, &mut inner);
+        let content_height = match s.height {
+            Dim::Auto => ch.max(inner.lowest_bottom().max(0.0)),
+            other => other.resolve(cb.height, ch),
+        };
+
+        let border_box_w = bl + pl + content_w + pr + br;
+        let border_box_h = bt + pt + content_height + pb + bb;
+
+        // Border-box top-left. `left`/`top` win; else offset from the far edge; else
+        // the containing block's start edge (static-position approximation).
+        let bx = if let Some(l) = left {
+            cb.x + l + ml
+        } else if let Some(r) = right {
+            cb.x + cb.width - r - mr - border_box_w
+        } else {
+            cb.x + ml
+        };
+        let by = if let Some(t) = top {
+            cb.y + t + mt
+        } else if let Some(b) = bottom {
+            cb.y + cb.height - b - mb - border_box_h
+        } else {
+            cb.y + mt
+        };
+
+        let mut boxx = LayoutBox {
+            rect: Rect {
+                x: bx,
+                y: by,
+                width: border_box_w,
+                height: border_box_h,
+            },
+            background: s.background_color,
+            node: Some(node),
+            content,
+        };
+        // Content was laid out at (0,0); shift *only the content* to the abs box's
+        // content origin (the box rect is already placed).
+        let ox = bx + bl + pl;
+        let oy = by + bt + pt;
+        match &mut boxx.content {
+            BoxContent::Block(kids) => {
+                for k in kids {
+                    k.translate(ox, oy);
+                }
+            }
+            BoxContent::Inline(frags) => {
+                for f in frags {
+                    f.x += ox;
+                    f.line_top += oy;
+                    f.baseline += oy;
+                }
+            }
+        }
+        boxx
+    }
+
     /// Turn a pending run of inline-level siblings into an anonymous block box.
     /// Returns the updated `(cur_y, prev_margin)`: a whitespace-only run produces no
     /// box and preserves the pending block margin (so `<p>a</p>\n<p>b</p>` still
@@ -1172,6 +1400,99 @@ mod tests {
         let mut out = None;
         rec(root, dom, tag, &mut out);
         out
+    }
+
+    #[test]
+    fn absolute_positioned_against_relative_ancestor() {
+        // The abs box's containing block is the relatively-positioned parent's
+        // padding box; top/left place it there, out of normal flow.
+        let (dom, root) = layout_html(
+            "<body style='margin:0'>\
+             <div id=cb style='position:relative;left:0;top:0;margin-left:50px;\
+             width:200px;height:200px'>\
+             <div id=a style='position:absolute;top:10px;left:20px;width:30px;height:40px'></div>\
+             </div></body>",
+            "",
+            800.0,
+        );
+        let mut cb = None;
+        let mut a = None;
+        root.walk(&mut |b| {
+            if let Some(n) = b.node {
+                match dom.element(n).and_then(|e| e.id()) {
+                    Some("cb") => cb = Some(b.rect),
+                    Some("a") => a = Some(b.rect),
+                    _ => {}
+                }
+            }
+        });
+        let cb = cb.unwrap();
+        let a = a.unwrap();
+        // cb is at x=50 (its margin-left). The abs box sits at cb padding-box + inset.
+        assert!(
+            (a.x - (cb.x + 20.0)).abs() < 0.01,
+            "abs left offset from CB, got {}",
+            a.x
+        );
+        assert!(
+            (a.y - (cb.y + 10.0)).abs() < 0.01,
+            "abs top offset from CB, got {}",
+            a.y
+        );
+        assert_eq!(a.width, 30.0);
+        assert_eq!(a.height, 40.0);
+    }
+
+    #[test]
+    fn absolute_with_no_positioned_ancestor_uses_viewport() {
+        let (dom, root) = layout_html(
+            "<body style='margin:0'>\
+             <div id=a style='position:absolute;right:0;top:0;width:40px;height:40px'></div>\
+             </body>",
+            "",
+            800.0,
+        );
+        let mut a = None;
+        root.walk(&mut |b| {
+            if let Some(n) = b.node {
+                if dom.element(n).and_then(|e| e.id()) == Some("a") {
+                    a = Some(b.rect);
+                }
+            }
+        });
+        let a = a.unwrap();
+        // right:0 against the 800px viewport → right edge at 800.
+        assert!(
+            (a.x + a.width - 800.0).abs() < 0.01,
+            "abs right:0 hits viewport right, got x={}",
+            a.x
+        );
+        assert!(a.y.abs() < 0.01, "abs top:0 at viewport top");
+    }
+
+    #[test]
+    fn absolute_is_removed_from_flow() {
+        // A block after an abs box takes the abs box's would-be space (abs is out of
+        // flow), so it sits at the top, not below.
+        let (dom, root) = layout_html(
+            "<body style='margin:0'>\
+             <div id=a style='position:absolute;top:0;left:0;height:100px'></div>\
+             <div id=n style='height:10px'></div></body>",
+            "",
+            800.0,
+        );
+        let mut n = None;
+        root.walk(&mut |b| {
+            if let Some(node) = b.node {
+                if dom.element(node).and_then(|e| e.id()) == Some("n") {
+                    n = Some(b.rect);
+                }
+            }
+        });
+        assert!(
+            n.unwrap().y.abs() < 0.01,
+            "in-flow block ignores the abs box"
+        );
     }
 
     #[test]
