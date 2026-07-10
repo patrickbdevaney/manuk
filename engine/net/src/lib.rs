@@ -554,7 +554,7 @@ fn content_encoding(resp: &hyper::Response<Incoming>) -> Option<String> {
 
 /// Build an `AsyncBufRead` over a hyper body's data frames (dropping trailers).
 /// `Box::pin` makes the async-`filter_map` stream `Unpin`, which the decoders need.
-fn body_reader(body: Incoming) -> impl tokio::io::AsyncBufRead {
+fn body_reader(body: Incoming) -> impl tokio::io::AsyncBufRead + Send {
     let data = Box::pin(BodyStream::new(body).filter_map(|frame| async move {
         match frame {
             Ok(f) => f.into_data().ok().map(Ok),
@@ -566,10 +566,10 @@ fn body_reader(body: Incoming) -> impl tokio::io::AsyncBufRead {
 
 /// Wrap `reader` in the right `Content-Encoding` decoder (gzip/br/deflate/identity),
 /// as a boxed `AsyncRead`.
-fn wrap_decoder<R: tokio::io::AsyncBufRead + Unpin + 'static>(
+fn wrap_decoder<R: tokio::io::AsyncBufRead + Unpin + Send + 'static>(
     reader: R,
     encoding: Option<&str>,
-) -> std::pin::Pin<Box<dyn tokio::io::AsyncRead>> {
+) -> std::pin::Pin<Box<dyn tokio::io::AsyncRead + Send>> {
     use async_compression::tokio::bufread as ac;
     match encoding {
         Some("gzip") | Some("x-gzip") => Box::pin(ac::GzipDecoder::new(reader)),
