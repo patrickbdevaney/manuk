@@ -21,8 +21,8 @@ gui = ["dep:winit", "dep:wgpu", "dep:pollster", "dep:bytemuck", "dep:raw-window-
 # `_sm` is the internal code marker (shared by both variants); `spidermonkey-noicu` is
 # the C2 ICU-trimmed build (from-source, no `intl`/ICU — see engine/js/Cargo.toml).
 _sm = []
-spidermonkey = ["_sm", "manuk-js/spidermonkey"]
-spidermonkey-noicu = ["_sm", "manuk-js/spidermonkey-noicu"]
+spidermonkey = ["_sm", "manuk-js/spidermonkey", "manuk-page/spidermonkey"]
+spidermonkey-noicu = ["_sm", "manuk-js/spidermonkey-noicu", "manuk-page/spidermonkey-noicu"]
 
 [dependencies]
 manuk-net.workspace = true

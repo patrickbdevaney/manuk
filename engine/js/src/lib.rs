@@ -119,6 +119,43 @@ pub mod bindings {
     }
 }
 
+/// Run a document's inline `<script>`s against its DOM, mutating the arena in place, using a
+/// **process/thread-global** SpiderMonkey runtime created once on first use.
+///
+/// The runtime is intentionally leaked (never dropped): dropping and re-creating a
+/// SpiderMonkey `Runtime` in one process is unsupported and crashes on teardown, so a
+/// single long-lived runtime is both the correct model and the way to avoid that. Each
+/// document gets a fresh global (the navigation model). Returns how many scripts ran.
+///
+/// A no-op returning `Ok(0)` when built without the `spidermonkey` feature (the default),
+/// so the parse/layout path is unchanged for JS-less builds.
+#[cfg(feature = "_sm")]
+pub fn run_document_scripts(dom: &mut manuk_dom::Dom) -> Result<usize, JsError> {
+    use std::cell::RefCell;
+    use std::mem::ManuallyDrop;
+
+    use mozjs::rust::Runtime;
+
+    thread_local! {
+        static RUNTIME: RefCell<Option<ManuallyDrop<Runtime>>> = const { RefCell::new(None) };
+    }
+    RUNTIME.with(|cell| {
+        let mut slot = cell.borrow_mut();
+        if slot.is_none() {
+            let handle = spidermonkey::engine_handle()?;
+            *slot = Some(ManuallyDrop::new(Runtime::new(handle)));
+        }
+        let rt: &mut Runtime = &mut *slot.as_mut().expect("runtime just initialized");
+        dom_bindings::run_scripts(rt, dom).map_err(|message| JsError { message })
+    })
+}
+
+/// The JS-less build: `<script>`s are parsed into the DOM but not executed.
+#[cfg(not(feature = "_sm"))]
+pub fn run_document_scripts(_dom: &mut manuk_dom::Dom) -> Result<usize, JsError> {
+    Ok(0)
+}
+
 #[cfg(feature = "_sm")]
 pub mod spidermonkey;
 

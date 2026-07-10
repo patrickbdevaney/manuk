@@ -47,8 +47,10 @@ use mozjs::jsval::{
 use mozjs::rooted;
 use mozjs::rust::wrappers2::{
     CurrentGlobalOrNull, JS_DefineFunction, JS_DefineProperty, JS_DefineProperty1, JS_NewObject,
-    JS_SetElement1, JS_SetProperty, NewArrayObject1,
+    JS_NewGlobalObject, JS_SetElement1, JS_SetProperty, NewArrayObject1,
 };
+use mozjs::jsapi::OnNewGlobalHookOption;
+use mozjs::rust::{evaluate_script, CompileOptionsWrapper, RealmOptions, Runtime, SIMPLE_GLOBAL_CLASS};
 
 use manuk_dom::{Dom, NodeId};
 
@@ -603,6 +605,80 @@ pub unsafe fn install(
     let _ = eval_in_current_global(cx, LISTENER_PRELUDE);
 }
 
+/// Run every inline `<script>` in `dom` against a **fresh global** in `runtime`, mutating the
+/// arena DOM in place through the reflectors. Returns how many scripts executed. External
+/// (`src`) scripts are skipped (network loading is the caller's concern), and a script that
+/// throws is logged and the rest continue — exactly as a browser runs a page's scripts.
+///
+/// One global per document (the navigation model); the `Runtime` is reused across documents
+/// by the caller (the process-global runtime), never re-created — that is what keeps
+/// SpiderMonkey's single-Runtime-per-process rule.
+pub fn run_scripts(runtime: &mut Runtime, dom: &mut Dom) -> Result<usize, String> {
+    let scripts = collect_inline_scripts(dom);
+    if scripts.is_empty() {
+        return Ok(0);
+    }
+
+    let options = RealmOptions::default();
+    rooted!(&in(runtime.cx()) let global = unsafe {
+        JS_NewGlobalObject(
+            runtime.cx(),
+            &SIMPLE_GLOBAL_CLASS,
+            ptr::null_mut(),
+            OnNewGlobalHookOption::FireOnNewGlobalHook,
+            &*options,
+        )
+    });
+    let raw_cx = unsafe { runtime.cx().raw_cx() };
+    let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+    unsafe { install(raw_cx, &global, dom as *mut Dom) };
+    crate::event_loop::install(runtime, global.handle())?;
+
+    let mut ran = 0usize;
+    for src in &scripts {
+        rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
+        let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"inline.js".to_owned(), 1);
+        match evaluate_script(runtime.cx(), global.handle(), src, rval.handle_mut(), opts) {
+            Ok(()) => {}
+            Err(()) => tracing::warn!("a page <script> threw; continuing with the rest"),
+        }
+        ran += 1;
+    }
+
+    // Drain microtasks (Promise reactions) and macrotasks (setTimeout) the scripts queued.
+    crate::event_loop::run(runtime, global.handle())?;
+    Ok(ran)
+}
+
+/// The inline JavaScript sources of a document, in tree order. Skips `src=` scripts and
+/// non-JS `type`s (e.g. `application/json`).
+fn collect_inline_scripts(dom: &Dom) -> Vec<String> {
+    let mut out = Vec::new();
+    for n in dom.descendants(dom.root()) {
+        if dom.tag_name(n) != Some("script") {
+            continue;
+        }
+        if let Some(el) = dom.element(n) {
+            if el.attr("src").is_some() {
+                continue;
+            }
+            let ty = el.attr("type").unwrap_or("").trim();
+            let is_js = ty.is_empty()
+                || ty.eq_ignore_ascii_case("text/javascript")
+                || ty.eq_ignore_ascii_case("application/javascript")
+                || ty.eq_ignore_ascii_case("module");
+            if !is_js {
+                continue;
+            }
+        }
+        let src = dom.text_content(n);
+        if !src.trim().is_empty() {
+            out.push(src);
+        }
+    }
+    out
+}
+
 /// The listener registry + helpers backing `addEventListener`/`dispatchEvent`.
 /// Listeners are keyed by `"<nodeId>:<type>"` and kept GC-alive via the global
 /// `__listeners` map.
@@ -666,6 +742,12 @@ mod tests {
             .map_err(|()| "evaluate_script failed".to_string())?;
         Ok(rval.get())
     }
+
+    // `run_scripts` is verified end-to-end through the render pipeline (a real HTML page
+    // whose inline script builds content renders that content) — see the shell's
+    // spidermonkey render path. A manual-DOM unit test here would need its own Runtime,
+    // which collides with `dom_methods_over_arena` (one Runtime per process) and adds no
+    // coverage the E2E path lacks.
 
     // ONE test / ONE Runtime: SpiderMonkey does not support multiple Runtime
     // create/destroy cycles per process, so both the prototype and this test use a

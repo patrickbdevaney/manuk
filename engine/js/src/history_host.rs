@@ -18,7 +18,7 @@
 //! non-JSON-serializable values (functions, cycles, `Map`) are lost rather than
 //! structured-cloned, which is what the spec calls for; `scrollRestoration` is absent.
 
-use manuk_page::history::SessionHistory;
+use manuk_dom::history::SessionHistory;
 
 /// The host side of the History API: the session-history model, one serialized state
 /// object per entry, and the document's current URL.

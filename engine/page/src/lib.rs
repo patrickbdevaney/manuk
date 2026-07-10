@@ -6,7 +6,9 @@
 //! output — the shell presents to a window, the agent screenshots + reads it.
 
 /// N1 — the one session-history model, shared by the shell, the agent, and BiDi.
-pub mod history;
+/// Re-export the shared session-history model (moved to `manuk-dom` to break the
+/// page↔js dependency cycle). `manuk_page::history::SessionHistory` still resolves.
+pub use manuk_dom::history;
 
 use std::collections::HashMap;
 
@@ -192,6 +194,15 @@ impl Page {
         fonts: &FontContext,
         viewport_width: f32,
     ) -> Page {
+        // Run the document's inline scripts (mutating the DOM in place) *before* styling and
+        // layout, so script-built content is styled and laid out. A no-op unless the
+        // `spidermonkey` feature is on; scripts that throw are logged and the rest continue.
+        match manuk_js::run_document_scripts(&mut dom) {
+            Ok(n) if n > 0 => tracing::debug!(scripts = n, "executed page scripts"),
+            Ok(_) => {}
+            Err(e) => tracing::warn!("page scripts: {e}"),
+        }
+
         let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&dom);
         let styles = MinimalCascade.cascade(&dom, &sheets);
 

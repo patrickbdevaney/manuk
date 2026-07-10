@@ -13,6 +13,11 @@
 
 use std::fmt::Write as _;
 
+/// N1 — the shared session-history (navigation stack) model. Lives in this leaf crate so
+/// both `manuk-page` and `manuk-js` (the History API host) can use it without a dependency
+/// cycle. It has no DOM dependency itself.
+pub mod history;
+
 /// Index of a node within a [`Dom`] arena. Stable for the life of the tree.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct NodeId(pub usize);

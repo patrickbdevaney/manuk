@@ -15,10 +15,17 @@ manuk-css.workspace = true
 manuk-layout.workspace = true
 manuk-text.workspace = true
 manuk-paint.workspace = true
+manuk-js.workspace = true
 anyhow.workspace = true
 url.workspace = true
 tracing.workspace = true
 base64.workspace = true
+
+[features]
+# Execute page <script> via SpiderMonkey (forwarded to manuk-js). Off by default:
+# run_document_scripts is a no-op without it, so the parse/layout path is unchanged.
+spidermonkey = ["manuk-js/spidermonkey"]
+spidermonkey-noicu = ["manuk-js/spidermonkey-noicu"]
 
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
