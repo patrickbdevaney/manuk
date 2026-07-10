@@ -18,7 +18,6 @@ mod tab;
 mod gui;
 
 use anyhow::{bail, Result};
-use manuk_page::{fetch_html, Page};
 use manuk_text::FontContext;
 
 const DEFAULT_WIDTH: u32 = 1024;
@@ -96,13 +95,21 @@ fn cmd_render(args: &[String]) -> Result<()> {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
-    let (html, final_url) = rt.block_on(fetch_html(url))?;
-
     let fonts = FontContext::new();
     if fonts.face_count() == 0 {
         eprintln!("warning: no system fonts found; text will not render");
     }
-    let mut page = Page::load(&html, &final_url, &fonts, width as f32);
+
+    // Streaming load with a first-paint checkpoint (http(s)); buffered for data:/file.
+    let (mut page, first_paint) =
+        rt.block_on(manuk_page::fetch_streaming_page(url, &fonts, width as f32))?;
+    if let Some(fp) = &first_paint {
+        println!(
+            "  first-paint: {:.0}px at the head-complete checkpoint (before full load)",
+            fp.content_bottom()
+        );
+    }
+    let final_url = page.final_url.clone();
     // Fetch + apply render-blocking external stylesheets (<link rel=stylesheet>).
     let sheets = rt.block_on(page.fetch_and_apply_stylesheets(&fonts, width as f32));
     if sheets > 0 {

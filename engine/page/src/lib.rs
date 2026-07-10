@@ -431,6 +431,45 @@ fn collapse_ws(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// **Streaming page load with a first-paint checkpoint (B-latency, end to end).**
+/// For `http(s)` URLs, streams the body via [`manuk_net::fetch_streaming`] into an
+/// incremental [`manuk_html::StreamParser`], laying out the partial DOM at the
+/// head-complete checkpoint (the **first paint**, available before the tail arrives).
+/// Returns the finished [`Page`] and that first-paint layout (if the checkpoint was
+/// reached). Non-`http(s)` URLs (`data:`/`file:`/local) fall back to a buffered load.
+///
+/// Input is treated as UTF-8 (matching the parser); streaming transcode for legacy
+/// charsets is a follow-on. External stylesheets are still applied via
+/// [`Page::fetch_and_apply_stylesheets`] by the caller.
+pub async fn fetch_streaming_page(
+    url: &str,
+    fonts: &FontContext,
+    viewport_width: f32,
+) -> Result<(Page, Option<LayoutBox>)> {
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        let (html, final_url) = fetch_html(url).await?;
+        return Ok((Page::load(&html, &final_url, fonts, viewport_width), None));
+    }
+
+    let mut sp = manuk_html::StreamParser::new();
+    let mut first_paint: Option<LayoutBox> = None;
+    let meta = manuk_net::fetch_streaming(url, |bytes| {
+        sp.feed_bytes(bytes);
+        if first_paint.is_none() && sp.body_started() {
+            // Lay out the DOM-so-far (inline styles only) — the first paint.
+            let partial = sp.snapshot();
+            let sheets = MinimalCascade::collect_style_elements(&partial);
+            let styles = MinimalCascade.cascade(&partial, &sheets);
+            first_paint = Some(layout_document(&partial, &styles, fonts, viewport_width));
+        }
+    })
+    .await
+    .with_context(|| format!("streaming fetch of {url}"))?;
+
+    let page = Page::from_dom(sp.finish(), meta.final_url.as_str(), fonts, viewport_width);
+    Ok((page, first_paint))
+}
+
 /// Fetch a document's HTML. Supports `http(s)://` (via `manuk-net`, with WHATWG
 /// charset decoding), `data:` URLs (RFC 2397), `file://`, and bare local paths.
 /// Returns `(html, final_url_after_redirects)`.

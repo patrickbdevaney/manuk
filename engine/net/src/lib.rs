@@ -19,7 +19,7 @@ use bytes::Bytes;
 use futures_util::StreamExt;
 use http_body_util::{BodyStream, Full};
 use hyper::body::Incoming;
-use hyper::header::{ACCEPT, ACCEPT_ENCODING, CONTENT_ENCODING, USER_AGENT};
+use hyper::header::{ACCEPT, ACCEPT_ENCODING, CONTENT_ENCODING, LOCATION, USER_AGENT};
 use hyper::Request;
 use hyper_rustls::HttpsConnector;
 use hyper_util::client::legacy::connect::HttpConnector;
@@ -230,6 +230,65 @@ pub async fn fetch(url: &str) -> Result<Response> {
     bail!("too many redirects (>{MAX_REDIRECTS}) starting at {url}")
 }
 
+/// Metadata for a [`fetch_streaming`] response (everything but the body, which was
+/// delivered chunk-by-chunk to the sink).
+#[derive(Clone, Debug)]
+pub struct ResponseMeta {
+    pub status: u16,
+    pub headers: Vec<(String, String)>,
+    pub final_url: Url,
+    pub http_version: HttpVersion,
+}
+
+impl ResponseMeta {
+    /// Case-insensitive response header lookup.
+    pub fn header(&self, name: &str) -> Option<&str> {
+        self.headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+/// **Streaming fetch** (the B-latency enabler): GET `url`, follow redirects, and
+/// deliver the `Content-Encoding`-decoded body to `on_chunk` **as chunks arrive** off
+/// the socket — never buffering the whole body. Feed each chunk to a
+/// [`manuk_html::StreamParser`](../manuk_html/struct.StreamParser.html) for a
+/// first-paint checkpoint before the tail lands. Returns the response metadata once
+/// the body completes.
+pub async fn fetch_streaming<F: FnMut(&[u8])>(url: &str, mut on_chunk: F) -> Result<ResponseMeta> {
+    let mut current = Url::parse(url).with_context(|| format!("invalid URL: {url}"))?;
+    for _ in 0..=MAX_REDIRECTS {
+        let resp = send_raw("GET", &current, &[], Bytes::new()).await?;
+        let status = resp.status().as_u16();
+
+        // Follow 3xx (its body is dropped unconsumed when `resp` goes out of scope).
+        if (300..400).contains(&status) {
+            if let Some(loc) = resp.headers().get(LOCATION).and_then(|v| v.to_str().ok()) {
+                let next = current
+                    .join(loc)
+                    .with_context(|| format!("bad redirect target: {loc}"))?;
+                tracing::debug!(%current, %next, status, "following redirect (streaming)");
+                current = next;
+                continue;
+            }
+        }
+
+        // Final response: stream its decoded body to the sink.
+        let http_version = resp.version().into();
+        let headers = collect_headers(&resp);
+        let encoding = content_encoding(&resp);
+        stream_body_decoded(resp.into_body(), encoding.as_deref(), &mut on_chunk).await?;
+        return Ok(ResponseMeta {
+            status,
+            headers,
+            final_url: current,
+            http_version,
+        });
+    }
+    bail!("too many redirects (>{MAX_REDIRECTS}) starting at {url}")
+}
+
 /// A general single request (no redirect following): any method, extra headers, and
 /// a request body. Used for API calls (e.g. `POST` JSON to an LLM endpoint).
 pub async fn request(
@@ -248,6 +307,31 @@ async fn send_once(
     headers: &[(&str, &str)],
     body: Bytes,
 ) -> Result<Response> {
+    let resp = send_raw(method, url, headers, body).await?;
+    let status = resp.status().as_u16();
+    let http_version = resp.version().into();
+    let headers_vec = collect_headers(&resp);
+    let encoding = content_encoding(&resp);
+
+    let decoded = read_body_decoded(resp.into_body(), encoding.as_deref()).await?;
+
+    Ok(Response {
+        status,
+        headers: headers_vec,
+        body: decoded,
+        final_url: url.clone(),
+        http_version,
+    })
+}
+
+/// Build and send one request, returning the raw hyper response with its body
+/// **unconsumed** (so callers can either buffer it or stream it).
+async fn send_raw(
+    method: &str,
+    url: &Url,
+    headers: &[(&str, &str)],
+    body: Bytes,
+) -> Result<hyper::Response<Incoming>> {
     match url.scheme() {
         "http" | "https" => {}
         other => bail!("unsupported URL scheme: {other}"),
@@ -271,65 +355,79 @@ async fn send_once(
     }
     let req = builder.body(Full::new(body)).context("building request")?;
 
-    let resp = client()
+    client()
         .request(req)
         .await
-        .with_context(|| format!("request to {url} failed"))?;
-
-    let status = resp.status().as_u16();
-    let http_version = resp.version().into();
-    let headers_vec: Vec<(String, String)> = resp
-        .headers()
-        .iter()
-        .map(|(k, v)| (k.as_str().to_owned(), v.to_str().unwrap_or("").to_owned()))
-        .collect();
-    let encoding = resp
-        .headers()
-        .get(CONTENT_ENCODING)
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.trim().to_ascii_lowercase());
-
-    let decoded = read_body_decoded(resp.into_body(), encoding.as_deref()).await?;
-
-    Ok(Response {
-        status,
-        headers: headers_vec,
-        body: decoded,
-        final_url: url.clone(),
-        http_version,
-    })
+        .with_context(|| format!("request to {url} failed"))
 }
 
-/// Stream the response body and decode `Content-Encoding` on the fly.
-async fn read_body_decoded(body: Incoming, encoding: Option<&str>) -> Result<Bytes> {
-    // Body frames → a stream of data-chunk `Bytes` as io::Result (drop trailers).
-    // Box::pin makes the (async-`filter_map`) stream `Unpin`, which the decoders need.
+fn collect_headers(resp: &hyper::Response<Incoming>) -> Vec<(String, String)> {
+    resp.headers()
+        .iter()
+        .map(|(k, v)| (k.as_str().to_owned(), v.to_str().unwrap_or("").to_owned()))
+        .collect()
+}
+
+fn content_encoding(resp: &hyper::Response<Incoming>) -> Option<String> {
+    resp.headers()
+        .get(CONTENT_ENCODING)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.trim().to_ascii_lowercase())
+}
+
+/// Build an `AsyncBufRead` over a hyper body's data frames (dropping trailers).
+/// `Box::pin` makes the async-`filter_map` stream `Unpin`, which the decoders need.
+fn body_reader(body: Incoming) -> impl tokio::io::AsyncBufRead {
     let data = Box::pin(BodyStream::new(body).filter_map(|frame| async move {
         match frame {
             Ok(f) => f.into_data().ok().map(Ok),
             Err(e) => Some(Err(std::io::Error::other(e))),
         }
     }));
-    let reader = tokio::io::BufReader::new(StreamReader::new(data));
+    tokio::io::BufReader::new(StreamReader::new(data))
+}
 
+/// Wrap `reader` in the right `Content-Encoding` decoder (gzip/br/deflate/identity),
+/// as a boxed `AsyncRead`.
+fn wrap_decoder<R: tokio::io::AsyncBufRead + Unpin + 'static>(
+    reader: R,
+    encoding: Option<&str>,
+) -> std::pin::Pin<Box<dyn tokio::io::AsyncRead>> {
     use async_compression::tokio::bufread as ac;
-    let mut out = Vec::new();
     match encoding {
-        Some("gzip") | Some("x-gzip") => {
-            ac::GzipDecoder::new(reader).read_to_end(&mut out).await?;
-        }
-        Some("br") => {
-            ac::BrotliDecoder::new(reader).read_to_end(&mut out).await?;
-        }
-        Some("deflate") => {
-            ac::ZlibDecoder::new(reader).read_to_end(&mut out).await?;
-        }
-        _ => {
-            // identity (or unknown) — read as-is.
-            let mut r = reader;
-            r.read_to_end(&mut out).await?;
-        }
+        Some("gzip") | Some("x-gzip") => Box::pin(ac::GzipDecoder::new(reader)),
+        Some("br") => Box::pin(ac::BrotliDecoder::new(reader)),
+        Some("deflate") => Box::pin(ac::ZlibDecoder::new(reader)),
+        _ => Box::pin(reader), // identity / unknown
     }
+}
+
+/// Stream the response body, decode `Content-Encoding` on the fly, and hand each
+/// decoded chunk to `on_chunk` (never buffering the whole body).
+async fn stream_body_decoded<F: FnMut(&[u8])>(
+    body: Incoming,
+    encoding: Option<&str>,
+    on_chunk: &mut F,
+) -> Result<()> {
+    let mut decoded = wrap_decoder(body_reader(body), encoding);
+    let mut buf = vec![0u8; 16 * 1024];
+    loop {
+        let n = decoded.read(&mut buf).await?;
+        if n == 0 {
+            break;
+        }
+        on_chunk(&buf[..n]);
+    }
+    Ok(())
+}
+
+/// Buffer the whole response body, decoding `Content-Encoding` on the fly. (The
+/// streaming counterpart is [`stream_body_decoded`]; both share [`body_reader`] +
+/// [`wrap_decoder`].)
+async fn read_body_decoded(body: Incoming, encoding: Option<&str>) -> Result<Bytes> {
+    let mut decoded = wrap_decoder(body_reader(body), encoding);
+    let mut out = Vec::new();
+    decoded.read_to_end(&mut out).await?;
     Ok(Bytes::from(out))
 }
 
@@ -385,6 +483,33 @@ mod tests {
         assert!(resp.text().to_lowercase().contains("example domain"));
         // example.com offers h2 via ALPN.
         assert_eq!(resp.http_version, HttpVersion::Http2, "expected HTTP/2");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires network access"]
+    async fn streaming_fetch_reassembles_body() {
+        // Stream example.com and reassemble the chunks; the result must equal the
+        // buffered fetch's body (proves the chunked path decodes identically), and it
+        // should arrive in one or more chunks.
+        let mut chunks = 0usize;
+        let mut assembled = Vec::new();
+        let meta = fetch_streaming("https://example.com/", |c| {
+            chunks += 1;
+            assembled.extend_from_slice(c);
+        })
+        .await
+        .unwrap();
+        assert_eq!(meta.status, 200);
+        assert!(chunks >= 1, "body delivered in at least one chunk");
+        let text = String::from_utf8_lossy(&assembled);
+        assert!(text.to_lowercase().contains("example domain"));
+
+        let buffered = fetch("https://example.com/").await.unwrap();
+        assert_eq!(
+            assembled,
+            buffered.body.as_ref(),
+            "streamed body must match the buffered body"
+        );
     }
 
     #[tokio::test]

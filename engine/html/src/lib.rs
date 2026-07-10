@@ -12,7 +12,8 @@
 
 use std::rc::Rc;
 
-use html5ever::tendril::{StrTendril, TendrilSink};
+use html5ever::tendril::stream::Utf8LossyDecoder;
+use html5ever::tendril::{ByteTendril, TendrilSink};
 use html5ever::{parse_document, ParseOpts, Parser};
 use manuk_dom::{Dom, NodeData, NodeId};
 use markup5ever_rcdom::{Handle, NodeData as RcNodeData, RcDom};
@@ -57,8 +58,12 @@ pub fn parse_bytes(bytes: &[u8]) -> Dom {
 /// The trick: we clone the `RcDom`'s document `Handle` (an `Rc<Node>`) before handing
 /// the `RcDom` to the parser; the tree builder mutates that same node in place, so the
 /// clone always reflects current progress.
+///
+/// Feeds **bytes** through html5ever's UTF-8 lossy decoder, so network chunks that
+/// split a multi-byte character across a boundary are handled correctly (input is
+/// treated as UTF-8, matching [`parse`]).
 pub struct StreamParser {
-    parser: Parser<RcDom>,
+    sink: Utf8LossyDecoder<Parser<RcDom>>,
     document: Handle,
 }
 
@@ -73,13 +78,19 @@ impl StreamParser {
     pub fn new() -> Self {
         let rcdom = RcDom::default();
         let document = Rc::clone(&rcdom.document);
-        let parser = parse_document(rcdom, ParseOpts::default());
-        StreamParser { parser, document }
+        let sink = parse_document(rcdom, ParseOpts::default()).from_utf8();
+        StreamParser { sink, document }
     }
 
-    /// Feed the next chunk of document text (as it arrives off the network).
+    /// Feed the next chunk of document **bytes** (as they arrive off the socket).
+    /// UTF-8 sequences split across chunk boundaries are handled by the decoder.
+    pub fn feed_bytes(&mut self, bytes: &[u8]) {
+        self.sink.process(ByteTendril::from_slice(bytes));
+    }
+
+    /// Feed the next chunk of document text.
     pub fn feed(&mut self, chunk: &str) {
-        self.parser.process(StrTendril::from(chunk));
+        self.feed_bytes(chunk.as_bytes());
     }
 
     /// Walk the **parsed-so-far** tree into an arena [`Dom`] (a partial document).
@@ -89,7 +100,7 @@ impl StreamParser {
 
     /// Finish parsing and return the complete [`Dom`].
     pub fn finish(self) -> Dom {
-        let rc = self.parser.finish();
+        let rc = self.sink.finish();
         // `rc.document` is the same node the running `self.document` aliased.
         rcdom_to_dom(&rc.document)
     }

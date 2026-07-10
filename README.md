@@ -94,6 +94,9 @@ in; **Build** = written from scratch, to be verified against WPT.
   on example.com); **connection pooling** (sequential same-origin fetches reuse the
   socket); **gzip/br/deflate decoding** (verified on httpbin.org/gzip); redirects;
   the Groq client reuses the same stack for outbound LLM calls.
+- **Streaming fetch** (`fetch_streaming`): delivers the decoded body as chunks arrive
+  (16 KB, no buffering) → fed to `StreamParser` for a first-paint checkpoint;
+  `manuk_page::fetch_streaming_page` + the shell `render` use it end to end.
 - **External subresources:** `<link rel=stylesheet>` is fetched and applied before
   paint (render-blocking; `Page::fetch_and_apply_stylesheets`, wired into shell
   `render`); `<script src>`/`<img src>` are enumerated with `defer`/`async` semantics
