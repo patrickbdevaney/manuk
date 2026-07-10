@@ -968,6 +968,11 @@ pub mod stylo_engine;
 #[cfg(feature = "stylo")]
 pub mod stylo_probe;
 
+/// D2 impedance resolution: the per-element `AtomicRefCell<ElementData>` store + the
+/// `(&Dom, NodeId)` handle the Stylo DOM trait wall attaches to.
+#[cfg(feature = "stylo")]
+pub mod stylo_dom;
+
 #[cfg(test)]
 mod tests {
     use super::*;
