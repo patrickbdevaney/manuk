@@ -76,6 +76,11 @@ pub struct Node {
     pub prev_sibling: Option<NodeId>,
     pub next_sibling: Option<NodeId>,
     pub data: NodeData,
+    /// Incremental-layout (A2) double dirty-bit. `dirty` = this node changed and needs
+    /// restyle/relayout; `dirty_descendants` = a descendant is dirty (the summary bit
+    /// that lets a traversal skip any subtree whose summary bit is clear).
+    dirty: bool,
+    dirty_descendants: bool,
 }
 
 impl Node {
@@ -87,6 +92,9 @@ impl Node {
             prev_sibling: None,
             next_sibling: None,
             data,
+            // Freshly-created nodes start dirty: they have never been laid out.
+            dirty: true,
+            dirty_descendants: false,
         }
     }
 }
@@ -177,6 +185,63 @@ impl Dom {
                     value: value.into(),
                 });
             }
+            self.mark_dirty(id);
+        }
+    }
+
+    // -- Incremental-layout dirty tracking (A2) -----------------------------
+
+    /// Mark `node` dirty and propagate the summary bit
+    /// ([`has_dirty_descendants`](Self::has_dirty_descendants)) up its ancestor chain,
+    /// stopping as soon as an ancestor already carries it. This is the double-dirty-bit
+    /// model: a later traversal restyles/relayouts only dirty nodes and descends only
+    /// into subtrees whose summary bit is set.
+    pub fn mark_dirty(&mut self, node: NodeId) {
+        if node.0 >= self.nodes.len() {
+            return;
+        }
+        self.nodes[node.0].dirty = true;
+        let mut cur = self.nodes[node.0].parent;
+        while let Some(p) = cur {
+            if self.nodes[p.0].dirty_descendants {
+                break;
+            }
+            self.nodes[p.0].dirty_descendants = true;
+            cur = self.nodes[p.0].parent;
+        }
+    }
+
+    /// Has `node` itself changed since the last clean pass?
+    pub fn is_dirty(&self, node: NodeId) -> bool {
+        self.nodes.get(node.0).is_some_and(|n| n.dirty)
+    }
+
+    /// Does `node`'s subtree contain a dirty node (the skip-this-subtree summary bit)?
+    pub fn has_dirty_descendants(&self, node: NodeId) -> bool {
+        self.nodes.get(node.0).is_some_and(|n| n.dirty_descendants)
+    }
+
+    /// Is `node` clean *and* free of dirty descendants — i.e. a traversal may skip its
+    /// whole subtree and reuse cached layout/paint?
+    pub fn subtree_clean(&self, node: NodeId) -> bool {
+        self.nodes
+            .get(node.0)
+            .is_some_and(|n| !n.dirty && !n.dirty_descendants)
+    }
+
+    /// Clear both dirty bits on a single node (call after processing it).
+    pub fn clear_dirty(&mut self, node: NodeId) {
+        if let Some(n) = self.nodes.get_mut(node.0) {
+            n.dirty = false;
+            n.dirty_descendants = false;
+        }
+    }
+
+    /// Clear every dirty bit in the tree (call after a full clean layout pass).
+    pub fn clear_all_dirty(&mut self) {
+        for n in &mut self.nodes {
+            n.dirty = false;
+            n.dirty_descendants = false;
         }
     }
 
@@ -196,6 +261,8 @@ impl Dom {
                 self.nodes[parent.0].last_child = Some(child);
             }
         }
+        // Structural change: the child (and thus the parent's subtree) is dirty.
+        self.mark_dirty(child);
     }
 
     /// Remove `child` from its parent, leaving it a detached root of its subtree.
@@ -222,6 +289,10 @@ impl Dom {
         n.parent = None;
         n.prev_sibling = None;
         n.next_sibling = None;
+        // The old parent's child set changed: its subtree needs relayout.
+        if let Some(par) = parent {
+            self.mark_dirty(par);
+        }
     }
 
     pub fn first_child(&self, id: NodeId) -> Option<NodeId> {
@@ -384,6 +455,62 @@ mod tests {
         assert_eq!(dom.children(body).count(), 1);
         // html, body, p, text
         assert_eq!(dom.descendants(dom.root()).count(), 4);
+    }
+
+    #[test]
+    fn double_dirty_bit_propagates_and_clears() {
+        // Build html > body > p > text, then start clean.
+        let mut dom = Dom::new();
+        let html = dom.create_element("html");
+        let body = dom.create_element("body");
+        let p = dom.create_element("p");
+        let sib = dom.create_element("div"); // a clean sibling of p under body
+        dom.append_child(dom.root(), html);
+        dom.append_child(html, body);
+        dom.append_child(body, p);
+        dom.append_child(body, sib);
+        dom.clear_all_dirty();
+        assert!(dom.subtree_clean(dom.root()), "tree clean after clear");
+
+        // Mutate p: it goes dirty, and every ancestor gets the summary bit.
+        dom.set_attr(p, "class", "highlight");
+        assert!(dom.is_dirty(p));
+        assert!(dom.has_dirty_descendants(body));
+        assert!(dom.has_dirty_descendants(html));
+        assert!(dom.has_dirty_descendants(dom.root()));
+        // p itself carries no descendant dirtiness; the sibling subtree stays clean.
+        assert!(!dom.has_dirty_descendants(p));
+        assert!(
+            dom.subtree_clean(sib),
+            "unrelated sibling subtree stays clean"
+        );
+        // body changed style but not structure → body itself is not `dirty`.
+        assert!(!dom.is_dirty(body));
+
+        // Clearing p's bits and the summary chain returns the tree to clean.
+        dom.clear_all_dirty();
+        assert!(dom.subtree_clean(dom.root()));
+    }
+
+    #[test]
+    fn structural_mutation_marks_parent_dirty() {
+        let mut dom = Dom::new();
+        let body = dom.create_element("body");
+        let a = dom.create_element("a");
+        dom.append_child(dom.root(), body);
+        dom.append_child(body, a);
+        dom.clear_all_dirty();
+
+        // Appending a new child marks the child dirty + body's summary bit.
+        let b = dom.create_element("b");
+        dom.append_child(body, b);
+        assert!(dom.is_dirty(b));
+        assert!(dom.has_dirty_descendants(body));
+
+        dom.clear_all_dirty();
+        // Detaching marks the (old) parent dirty for relayout.
+        dom.detach(a);
+        assert!(dom.is_dirty(body), "detach dirties the old parent");
     }
 
     #[test]

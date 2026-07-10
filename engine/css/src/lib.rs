@@ -217,6 +217,59 @@ impl ComputedStyle {
 /// Map from DOM node to its computed style. Text nodes inherit their parent's.
 pub type StyleMap = HashMap<NodeId, ComputedStyle>;
 
+/// How much work a style change forces (A2 incremental-layout damage taxonomy,
+/// Servo's `RestyleDamage` idea). Ordered least→most expensive; a subtree's damage is
+/// the max of its own and its children's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub enum RestyleDamage {
+    /// Styles are identical — reuse the cached box and paint.
+    #[default]
+    None,
+    /// Only paint-affecting properties changed (color/background/border-color/
+    /// z-index) — reuse layout, repaint the box.
+    Repaint,
+    /// Geometry-affecting properties changed — re-lay-out this box (its box-tree
+    /// structure is unchanged).
+    Reflow,
+    /// The generated box structure changes (`display` outer type) — rebuild the box.
+    Rebuild,
+}
+
+/// Diff two computed styles into the [`RestyleDamage`] their change forces.
+pub fn diff_style(old: &ComputedStyle, new: &ComputedStyle) -> RestyleDamage {
+    if old == new {
+        return RestyleDamage::None;
+    }
+    // A `display` outer-type change alters which boxes are generated.
+    if old.display != new.display {
+        return RestyleDamage::Rebuild;
+    }
+    // Geometry-affecting properties → re-lay-out this box.
+    let reflow = old.width != new.width
+        || old.height != new.height
+        || old.margin != new.margin
+        || old.padding != new.padding
+        || old.border_width != new.border_width
+        || old.font_size != new.font_size
+        || old.font_weight != new.font_weight
+        || old.italic != new.italic
+        || old.line_height != new.line_height
+        || old.text_align != new.text_align
+        || old.white_space != new.white_space
+        || old.float != new.float
+        || old.clear != new.clear
+        || old.position != new.position
+        || old.inset != new.inset
+        || old.table_layout != new.table_layout
+        || old.border_spacing != new.border_spacing;
+    if reflow {
+        RestyleDamage::Reflow
+    } else {
+        // Everything remaining is paint-only (color/background/border-color/z-index).
+        RestyleDamage::Repaint
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Selectors
 // ---------------------------------------------------------------------------
@@ -985,6 +1038,35 @@ mod tests {
         assert_eq!(s.inset.left, Dim::Percent(5.0));
         assert_eq!(s.inset.right, Dim::Auto); // unset stays auto
         assert_eq!(s.z_index, Some(3));
+    }
+
+    #[test]
+    fn restyle_damage_classifies_changes() {
+        let base = ComputedStyle::initial();
+
+        // Identical → None.
+        assert_eq!(diff_style(&base, &base.clone()), RestyleDamage::None);
+
+        // color-only → Repaint.
+        let mut paint = base.clone();
+        paint.color = Rgba::new(1, 2, 3, 255);
+        assert_eq!(diff_style(&base, &paint), RestyleDamage::Repaint);
+
+        // width change → Reflow.
+        let mut reflow = base.clone();
+        reflow.width = Dim::Px(100.0);
+        assert_eq!(diff_style(&base, &reflow), RestyleDamage::Reflow);
+
+        // display change → Rebuild (and it dominates a simultaneous color change).
+        let mut rebuild = base.clone();
+        rebuild.display = Display::Flex;
+        rebuild.color = Rgba::new(9, 9, 9, 255);
+        assert_eq!(diff_style(&base, &rebuild), RestyleDamage::Rebuild);
+
+        // Damage is ordered least→most expensive.
+        assert!(RestyleDamage::None < RestyleDamage::Repaint);
+        assert!(RestyleDamage::Repaint < RestyleDamage::Reflow);
+        assert!(RestyleDamage::Reflow < RestyleDamage::Rebuild);
     }
 
     #[test]
