@@ -10,11 +10,17 @@
 //! implemented — the `blitz-dom` pattern (`atomic_refcell` + Stylo), without adopting
 //! Servo's heavier machinery.
 //!
-//! **Status:** this is the store + handle foundation (compiles + tested). The ~126
-//! trait-body methods (`TElement` 76, `TNode` 20, `selectors::Element` 30) that drive
-//! Stylo's matcher/cascade over these handles — including bridging our plain-`String`
-//! names to Servo's interned-atom `SelectorImpl` — are the dedicated multi-session
-//! fill-in tracked in CLAUDE.md § D2. Step-0 (`stylo_probe`) already proved the
+//! **Status:** the store + handle foundation and the **`selectors::Element` wall
+//! (30 methods) are landed and tested** — Stylo's *real* selector matcher
+//! (`selectors::matching::matches_selector`), fed a Servo-parsed selector over
+//! Servo's interned-atom `SelectorImpl`, matches against our arena DOM end-to-end
+//! (type/id/class/attr operators, descendant + child combinators, `:empty`; see
+//! `stylo_selector_matcher_runs_over_arena_dom`). The plain-`String` arena names
+//! bridge to the interned atoms via deref-to-`str` at each comparison. Remaining for
+//! the full cascade: the `TNode` (20) + `TElement` (76) wall and a
+//! `ComputedValues`→`ComputedStyle` mapping — tracked in CLAUDE.md § D2. Pseudo-
+//! classes, shadow DOM, `::part`, and custom state in `selectors::Element` return
+//! `false`/`None` for now (documented in the impl). Step-0 (`stylo_probe`) proved the
 //! non-DOM half (Device + parser + Stylist).
 
 use std::collections::HashMap;
@@ -110,6 +116,251 @@ impl<'a> StyloElement<'a> {
     pub fn data(&self) -> Option<AtomicRef<'a, ElementData>> {
         self.store.borrow(self.node)
     }
+
+    fn tag(&self) -> &'a str {
+        self.dom.tag_name(self.node).unwrap_or("")
+    }
+
+    fn attr(&self, name: &str) -> Option<&'a str> {
+        self.dom.element(self.node).and_then(|e| e.attr(name))
+    }
+
+    fn with(&self, node: NodeId) -> StyloElement<'a> {
+        StyloElement::new(self.dom, node, self.store)
+    }
+
+    fn prev_element_sibling(&self) -> Option<StyloElement<'a>> {
+        let mut cur = prev_sibling(self.dom, self.node);
+        while let Some(n) = cur {
+            if self.dom.is_element(n) {
+                return Some(self.with(n));
+            }
+            cur = prev_sibling(self.dom, n);
+        }
+        None
+    }
+
+    fn next_element_sibling(&self) -> Option<StyloElement<'a>> {
+        let mut cur = self.dom.next_sibling(self.node);
+        while let Some(n) = cur {
+            if self.dom.is_element(n) {
+                return Some(self.with(n));
+            }
+            cur = self.dom.next_sibling(n);
+        }
+        None
+    }
+
+    fn first_element_child(&self) -> Option<StyloElement<'a>> {
+        let mut cur = self.dom.first_child(self.node);
+        while let Some(n) = cur {
+            if self.dom.is_element(n) {
+                return Some(self.with(n));
+            }
+            cur = self.dom.next_sibling(n);
+        }
+        None
+    }
+}
+
+/// The previous sibling of `node` (the arena exposes next/first but this walk needs
+/// prev — derive it from the parent's child list).
+fn prev_sibling(dom: &Dom, node: NodeId) -> Option<NodeId> {
+    let parent = dom.parent(node)?;
+    let mut prev = None;
+    let mut cur = dom.first_child(parent);
+    while let Some(n) = cur {
+        if n == node {
+            return prev;
+        }
+        prev = Some(n);
+        cur = dom.next_sibling(n);
+    }
+    None
+}
+
+impl std::fmt::Debug for StyloElement<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<{} #{}>", self.tag(), self.node.0)
+    }
+}
+
+// -- The selector-matching trait wall (D2): Stylo's real matcher over the arena DOM.
+// Reuses Servo's `SelectorImpl` (interned atoms); our plain-`String` names bridge via
+// deref-to-`str`. Pseudo-classes/elements, shadow DOM, `::part`, and custom state are
+// not modelled yet (return `false`/`None`) — a documented, well-bounded first tranche.
+mod selector_impl {
+    use super::{prev_sibling, StyloElement};
+    use selectors::attr::{AttrSelectorOperation, CaseSensitivity, NamespaceConstraint};
+    use selectors::bloom::BloomFilter;
+    use selectors::matching::{ElementSelectorFlags, MatchingContext};
+    use selectors::{Element, OpaqueElement};
+    use stylo::selector_parser::SelectorImpl;
+
+    /// Compare `a` and `b` under the requested case sensitivity.
+    fn eq_case(a: &str, b: &str, case: CaseSensitivity) -> bool {
+        match case {
+            CaseSensitivity::CaseSensitive => a == b,
+            CaseSensitivity::AsciiCaseInsensitive => a.eq_ignore_ascii_case(b),
+        }
+    }
+
+    impl<'a> Element for StyloElement<'a> {
+        type Impl = SelectorImpl;
+
+        fn opaque(&self) -> OpaqueElement {
+            // A stable per-element identity for the duration of a (read-only) match:
+            // the arena `Node`'s address (the Vec does not reallocate while matching).
+            OpaqueElement::new(self.dom.node(self.node))
+        }
+
+        fn parent_element(&self) -> Option<Self> {
+            StyloElement::parent_element(self)
+        }
+
+        fn parent_node_is_shadow_root(&self) -> bool {
+            false
+        }
+
+        fn containing_shadow_host(&self) -> Option<Self> {
+            None
+        }
+
+        fn is_pseudo_element(&self) -> bool {
+            false
+        }
+
+        fn prev_sibling_element(&self) -> Option<Self> {
+            self.prev_element_sibling()
+        }
+
+        fn next_sibling_element(&self) -> Option<Self> {
+            self.next_element_sibling()
+        }
+
+        fn first_element_child(&self) -> Option<Self> {
+            StyloElement::first_element_child(self)
+        }
+
+        fn is_html_element_in_html_document(&self) -> bool {
+            true // the arena DOM models HTML documents
+        }
+
+        fn has_local_name(
+            &self,
+            name: &<SelectorImpl as ::selectors::SelectorImpl>::BorrowedLocalName,
+        ) -> bool {
+            self.tag() == &**name
+        }
+
+        fn has_namespace(
+            &self,
+            _ns: &<SelectorImpl as ::selectors::SelectorImpl>::BorrowedNamespaceUrl,
+        ) -> bool {
+            // Single (HTML) namespace: an explicit-namespace selector matches it.
+            true
+        }
+
+        fn is_same_type(&self, other: &Self) -> bool {
+            self.tag() == other.tag()
+        }
+
+        fn attr_matches(
+            &self,
+            _ns: &NamespaceConstraint<&stylo::Namespace>,
+            local_name: &stylo::LocalName,
+            operation: &AttrSelectorOperation<&stylo::values::AtomString>,
+        ) -> bool {
+            let value = self.attr(local_name);
+            match operation {
+                AttrSelectorOperation::Exists => value.is_some(),
+                AttrSelectorOperation::WithValue { .. } => {
+                    value.is_some_and(|v| operation.eval_str(v))
+                }
+            }
+        }
+
+        fn match_non_ts_pseudo_class(
+            &self,
+            _pc: &stylo::selector_parser::NonTSPseudoClass,
+            _context: &mut MatchingContext<'_, SelectorImpl>,
+        ) -> bool {
+            false // pseudo-classes (:hover/:focus/:link…) not modelled yet
+        }
+
+        fn match_pseudo_element(
+            &self,
+            _pe: &stylo::selector_parser::PseudoElement,
+            _context: &mut MatchingContext<'_, SelectorImpl>,
+        ) -> bool {
+            false
+        }
+
+        fn apply_selector_flags(&self, _flags: ElementSelectorFlags) {
+            // Invalidation/nth-child bookkeeping — a no-op for one-shot matching.
+        }
+
+        fn is_link(&self) -> bool {
+            matches!(self.tag(), "a" | "area" | "link") && self.attr("href").is_some()
+        }
+
+        fn is_html_slot_element(&self) -> bool {
+            false
+        }
+
+        fn has_id(&self, id: &stylo::values::AtomIdent, case: CaseSensitivity) -> bool {
+            self.attr("id").is_some_and(|v| eq_case(v, id, case))
+        }
+
+        fn has_class(&self, name: &stylo::values::AtomIdent, case: CaseSensitivity) -> bool {
+            let name: &str = name;
+            self.dom
+                .element(self.node)
+                .map(|e| e.classes().any(|c| eq_case(c, name, case)))
+                .unwrap_or(false)
+        }
+
+        fn has_custom_state(&self, _name: &stylo::values::AtomIdent) -> bool {
+            false
+        }
+
+        fn imported_part(
+            &self,
+            _name: &stylo::values::AtomIdent,
+        ) -> Option<stylo::values::AtomIdent> {
+            None
+        }
+
+        fn is_part(&self, _name: &stylo::values::AtomIdent) -> bool {
+            false
+        }
+
+        fn is_empty(&self) -> bool {
+            // No child elements and no non-whitespace text.
+            self.dom.children(self.node).all(|c| {
+                if self.dom.is_element(c) {
+                    return false;
+                }
+                self.dom.text_content(c).trim().is_empty()
+            })
+        }
+
+        fn is_root(&self) -> bool {
+            // The root element (<html>) whose parent is the Document node.
+            match self.dom.parent(self.node) {
+                Some(p) => p == self.dom.root() && self.dom.is_element(self.node),
+                None => false,
+            }
+        }
+
+        fn add_element_unique_hashes(&self, _filter: &mut BloomFilter) -> bool {
+            false // opt out of the ancestor bloom-filter fast path
+        }
+    }
+
+    // Keep `prev_sibling` reachable from this module for the sibling walks above.
+    #[allow(unused_imports)]
+    use prev_sibling as _prev_sibling;
 }
 
 #[cfg(test)]
@@ -151,5 +402,79 @@ mod tests {
 
         store.clear(p);
         assert!(store.borrow(p).is_none());
+    }
+
+    /// End-to-end proof: Stylo's *real* selector matcher (`selectors::matching::
+    /// matches_selector`), driven by Servo's `SelectorImpl` and a Servo-parsed
+    /// selector, runs over our arena DOM through the `selectors::Element` impl.
+    #[test]
+    fn stylo_selector_matcher_runs_over_arena_dom() {
+        use selectors::context::{
+            MatchingContext, MatchingForInvalidation, MatchingMode, NeedsSelectorFlags,
+            QuirksMode, SelectorCaches,
+        };
+        use selectors::matching::matches_selector;
+        use stylo::selector_parser::SelectorParser;
+        use stylo::servo_arc::Arc as ServoArc;
+        use stylo::stylesheets::UrlExtraData;
+
+        // <body><div id="main" class="box wide"><a href="/x">hi</a></div><p></p></body>
+        let mut dom = Dom::new();
+        let body = dom.create_element("body");
+        let div = dom.create_element("div");
+        dom.set_attr(div, "id", "main");
+        dom.set_attr(div, "class", "box wide");
+        let a = dom.create_element("a");
+        dom.set_attr(a, "href", "/x");
+        let txt = dom.create_text("hi");
+        let p = dom.create_element("p");
+        dom.append_child(dom.root(), body);
+        dom.append_child(body, div);
+        dom.append_child(div, a);
+        dom.append_child(a, txt);
+        dom.append_child(body, p);
+
+        let store = ElementDataStore::new();
+        let url = ::url::Url::parse("about:manuk-match").unwrap();
+        let url_data = UrlExtraData(ServoArc::new(url));
+
+        // Match one selector string against one arena node, expecting `want`.
+        let check = |sel: &str, node: NodeId, want: bool| {
+            let list =
+                SelectorParser::parse_author_origin_no_namespace(sel, &url_data).unwrap();
+            let el = StyloElement::new(&dom, node, &store);
+            let mut caches = SelectorCaches::default();
+            let mut ctx = MatchingContext::new(
+                MatchingMode::Normal,
+                None,
+                &mut caches,
+                QuirksMode::NoQuirks,
+                NeedsSelectorFlags::No,
+                MatchingForInvalidation::No,
+            );
+            let got = list
+                .slice()
+                .iter()
+                .any(|s| matches_selector(s, 0, None, &el, &mut ctx));
+            assert_eq!(got, want, "selector {sel:?} on node {node:?}");
+        };
+
+        // Type, id, class, attribute, descendant, child, and negative cases.
+        check("div", div, true);
+        check("p", div, false);
+        check("#main", div, true);
+        check("#other", div, false);
+        check(".box", div, true);
+        check(".wide.box", div, true);
+        check(".missing", div, false);
+        check("div#main.box", div, true);
+        check("a[href]", a, true);
+        check("a[href=\"/x\"]", a, true);
+        check("a[href=\"/y\"]", a, false);
+        check("body div a", a, true); // descendant combinator walks parents
+        check("div > a", a, true); // child combinator
+        check("body > a", a, false); // a is not a direct child of body
+        check("p:empty", p, true); // structural pseudo over the arena
+        check("div:empty", div, false);
     }
 }

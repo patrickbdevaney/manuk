@@ -11,7 +11,7 @@ default = []
 # Stylo (Servo/Firefox production CSS engine) is the reuse target per CLAUDE.md.
 # It is heavy to build, so it is opt-in. The default build uses the minimal
 # from-scratch cascade so the workspace compiles and runs without it.
-stylo = ["dep:stylo", "dep:url", "dep:euclid", "dep:atomic_refcell"]
+stylo = ["dep:stylo", "dep:url", "dep:euclid", "dep:atomic_refcell", "dep:selectors"]
 
 [dependencies]
 manuk-dom.workspace = true
@@ -26,3 +26,6 @@ url = { version = "2", optional = true }
 euclid = { version = "0.22", optional = true }
 # Per-element `ElementData` store — Stylo's own thread-safe cell (D2 impedance answer).
 atomic_refcell = { version = "0.1", optional = true }
+# The selector-matching trait (`selectors::Element`) our arena handle implements so
+# Stylo's real matcher runs over the arena DOM. Version pinned to stylo 0.19's.
+selectors = { version = "0.39", optional = true }

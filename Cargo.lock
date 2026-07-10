@@ -2789,6 +2789,7 @@ dependencies = [
  "cssparser 0.34.0",
  "euclid",
  "manuk-dom",
+ "selectors",
  "smallvec",
  "stylo",
  "tracing",
