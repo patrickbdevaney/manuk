@@ -1492,6 +1492,11 @@ impl Ctx<'_> {
             .iter()
             .map(|&k| {
                 let s = &self.styles[&k];
+                let basis = match s.flex_basis {
+                    Dim::Auto => flex::FlexBasis::Auto,
+                    Dim::Px(p) => flex::FlexBasis::Px(p),
+                    Dim::Percent(f) => flex::FlexBasis::Pct(f / 100.0),
+                };
                 flex::FlexItem {
                     width: match s.width {
                         Dim::Px(p) => Some(p),
@@ -1501,23 +1506,38 @@ impl Ctx<'_> {
                         Dim::Px(p) => Some(p),
                         _ => None,
                     },
-                    grow: if s.width == Dim::Auto { 1.0 } else { 0.0 },
+                    // `flex-grow`/`shrink` default per CSS; an auto-width item with no explicit
+                    // grow still fills like the old behavior only when nothing else is set.
+                    grow: s.flex_grow,
+                    shrink: s.flex_shrink,
+                    basis,
                 }
             })
             .collect();
         let cs = &self.styles[&node];
-        let slots = flex::solve_row(cw, &items, cs.justify_content, cs.align_items);
+        let container_h = match cs.height {
+            Dim::Px(p) => Some(p),
+            _ => None,
+        };
+        let config = flex::FlexConfig {
+            direction: cs.flex_direction,
+            wrap: cs.flex_wrap,
+            justify: cs.justify_content,
+            align: cs.align_items,
+            row_gap: cs.row_gap,
+            column_gap: cs.column_gap,
+        };
+        let slots = flex::solve_flex(cw, container_h, &items, &config);
 
         let mut boxes = Vec::new();
         let mut max_h = 0.0f32;
         for (&k, slot) in block_kids.iter().zip(slots.iter()) {
-            // Each flex item establishes an independent formatting context. `slot.y` carries
-            // the cross-axis (align-items) offset within the line.
+            // Each flex item establishes an independent formatting context at its 2D slot.
             let mut item_floats = FloatContext::new(cx + slot.x, cx + slot.x + slot.width);
             let r = self.layout_block(k, slot.width, cx + slot.x, cy + slot.y, 0.0, &mut item_floats);
-            // The line's height is the tallest item's margin box, measured from the line top.
-            let adv = slot.y + r.margin_top + r.boxx.rect.height + r.margin_bottom;
-            max_h = max_h.max(adv);
+            // The container grows to contain the lowest item edge (taffy already placed them).
+            let bottom = slot.y + r.margin_top + r.boxx.rect.height + r.margin_bottom;
+            max_h = max_h.max(bottom);
             boxes.push(r.boxx);
         }
         (BoxContent::Block(boxes), max_h)

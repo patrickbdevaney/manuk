@@ -148,6 +148,23 @@ pub enum AlignItems {
     Baseline,
 }
 
+/// `flex-direction` — the flex main axis.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FlexDirection {
+    Row,
+    RowReverse,
+    Column,
+    ColumnReverse,
+}
+
+/// `flex-wrap` — whether flex items wrap onto multiple lines.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FlexWrap {
+    NoWrap,
+    Wrap,
+    WrapReverse,
+}
+
 /// Four-sided box values (margin, padding, border widths).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Sides<T> {
@@ -202,6 +219,18 @@ pub struct ComputedStyle {
     pub justify_content: JustifyContent,
     /// `align-items` — flex cross-axis alignment (only meaningful on a flex container).
     pub align_items: AlignItems,
+    /// `flex-direction` (container).
+    pub flex_direction: FlexDirection,
+    /// `flex-wrap` (container).
+    pub flex_wrap: FlexWrap,
+    /// `row-gap` / `column-gap` (container), px.
+    pub row_gap: f32,
+    pub column_gap: f32,
+    /// `flex-grow` / `flex-shrink` (item).
+    pub flex_grow: f32,
+    pub flex_shrink: f32,
+    /// `flex-basis` (item); `Dim::Auto` = `auto`.
+    pub flex_basis: Dim,
 }
 
 impl ComputedStyle {
@@ -234,6 +263,13 @@ impl ComputedStyle {
             box_sizing: BoxSizing::ContentBox,
             justify_content: JustifyContent::FlexStart,
             align_items: AlignItems::Stretch,
+            flex_direction: FlexDirection::Row,
+            flex_wrap: FlexWrap::NoWrap,
+            row_gap: 0.0,
+            column_gap: 0.0,
+            flex_grow: 0.0,
+            flex_shrink: 1.0,
+            flex_basis: Dim::Auto,
         }
     }
 
@@ -1138,6 +1174,54 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 _ => AlignItems::Stretch,
             };
         }
+        "flex-direction" => {
+            s.flex_direction = match v.trim() {
+                "column" => FlexDirection::Column,
+                "column-reverse" => FlexDirection::ColumnReverse,
+                "row-reverse" => FlexDirection::RowReverse,
+                _ => FlexDirection::Row,
+            };
+        }
+        "flex-wrap" => {
+            s.flex_wrap = match v.trim() {
+                "wrap" => FlexWrap::Wrap,
+                "wrap-reverse" => FlexWrap::WrapReverse,
+                _ => FlexWrap::NoWrap,
+            };
+        }
+        "gap" => {
+            // `gap: <row> [<column>]`.
+            let parts: Vec<f32> = v
+                .split_whitespace()
+                .filter_map(|t| values::parse_length_px(t, s.font_size))
+                .collect();
+            match parts.as_slice() {
+                [r] => {
+                    s.row_gap = *r;
+                    s.column_gap = *r;
+                }
+                [r, c] => {
+                    s.row_gap = *r;
+                    s.column_gap = *c;
+                }
+                _ => {}
+            }
+        }
+        "row-gap" => {
+            if let Some(px) = values::parse_length_px(v.trim(), s.font_size) {
+                s.row_gap = px;
+            }
+        }
+        "column-gap" => {
+            if let Some(px) = values::parse_length_px(v.trim(), s.font_size) {
+                s.column_gap = px;
+            }
+        }
+        "flex-grow" => s.flex_grow = v.trim().parse().unwrap_or(0.0),
+        "flex-shrink" => s.flex_shrink = v.trim().parse().unwrap_or(1.0),
+        "flex-basis" => s.flex_basis = values::parse_dim(v, s.font_size),
+        "flex" => parse_flex_shorthand(s, v),
+        "order" => {} // parsed but not yet used in layout
         // The `border` family. Widths feed the box model; the color feeds paint; the line
         // style is not tracked (only presence, since `none`/`hidden` zero the width).
         "border" => {
@@ -1221,6 +1305,55 @@ fn parse_border_shorthand(v: &str, fs: f32) -> (Option<f32>, Option<Rgba>) {
         width = Some(3.0);
     }
     (width, color)
+}
+
+/// Parse the `flex` shorthand (`flex: <grow> <shrink>? <basis>?`, plus the `none`/`auto`/
+/// `initial` keywords). A bare number is grow (then shrink); a length/percent/`auto` is basis.
+/// A single number defaults basis to `0` (the common `flex: 1` case), matching CSS.
+fn parse_flex_shorthand(s: &mut ComputedStyle, v: &str) {
+    match v.trim() {
+        "none" => {
+            s.flex_grow = 0.0;
+            s.flex_shrink = 0.0;
+            s.flex_basis = Dim::Auto;
+            return;
+        }
+        "auto" => {
+            s.flex_grow = 1.0;
+            s.flex_shrink = 1.0;
+            s.flex_basis = Dim::Auto;
+            return;
+        }
+        "initial" => {
+            s.flex_grow = 0.0;
+            s.flex_shrink = 1.0;
+            s.flex_basis = Dim::Auto;
+            return;
+        }
+        _ => {}
+    }
+    let mut nums = Vec::new();
+    let mut basis = None;
+    for t in v.split_whitespace() {
+        if let Ok(n) = t.parse::<f32>() {
+            nums.push(n);
+        } else {
+            basis = Some(values::parse_dim(t, s.font_size));
+        }
+    }
+    match nums.as_slice() {
+        [g] => {
+            s.flex_grow = *g;
+            s.flex_shrink = 1.0;
+        }
+        [g, sh] => {
+            s.flex_grow = *g;
+            s.flex_shrink = *sh;
+        }
+        _ => {}
+    }
+    // An explicit basis wins; otherwise a numeric `flex` sets basis 0 (not auto).
+    s.flex_basis = basis.unwrap_or(if nums.is_empty() { Dim::Auto } else { Dim::Px(0.0) });
 }
 
 /// Expand a 1–4 value `border-width` shorthand (same edge order as `margin`).
