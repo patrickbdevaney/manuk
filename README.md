@@ -323,6 +323,11 @@ work (see [CLAUDE.md frontiers](./CLAUDE.md)).
   (links), `--all-features` (all together).
 - `cargo run -p manuk-wpt` — built-in layout reftests; `$WPT_DIR` is the hook for
   the upstream WPT runner.
+- **CI** (`.github/workflows/ci.yml`): build+test on Linux/macOS/Windows, fmt+clippy,
+  and static-release binaries (musl / static-CRT / macOS framework) that each smoke-
+  render a PNG to prove they *run*. Cross-platform verification status is tracked in
+  [`PLATFORM.md`](./PLATFORM.md) — Linux is verified locally; macOS/Windows are
+  engineered-for-portability and gated in CI (await first green run).
 
 ## Deviations
 
