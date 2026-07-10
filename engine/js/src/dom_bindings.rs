@@ -718,6 +718,22 @@ pub unsafe fn install(
 
     // The JS-side event-listener registry that addEventListener/dispatchEvent drive.
     let _ = eval_in_current_global(cx, LISTENER_PRELUDE);
+
+    // Tier-0 BOM globals (window/self/console/navigator). Register the native console
+    // sink, then install the JS shim with the honest UA + platform substituted in.
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__hostLog".as_ptr(),
+        Some(host_log),
+        2,
+        0,
+    );
+    let platform = format!("{} {}", std::env::consts::OS, std::env::consts::ARCH);
+    let prelude = WINDOW_PRELUDE
+        .replace("%UA%", &honest_user_agent())
+        .replace("%PLATFORM%", &platform);
+    let _ = eval_in_current_global(cx, &prelude);
 }
 
 /// Run every inline `<script>` in `dom` against a **fresh global** in `runtime`, mutating the
@@ -818,6 +834,76 @@ const LISTENER_PRELUDE: &str = r#"
         return true;
     };
 "#;
+
+/// Tier-0 window/BOM globals. A modern bundle caches `window`/`self`/`console`/`navigator`
+/// eagerly at load; a single missing one is a `ReferenceError` that aborts the whole
+/// `<script>` before any DOM API is reached. Defining them (self-referential `window`,
+/// a `console` that routes to the host log, an honest `navigator`) converts that whole
+/// class of instant aborts into "runs". `%UA%`/`%PLATFORM%` are substituted at install.
+const WINDOW_PRELUDE: &str = r#"
+    (function () {
+        var g = globalThis;
+        if (typeof g.window === 'undefined') g.window = g;
+        if (typeof g.self === 'undefined') g.self = g;
+        var mk = function (level) {
+            return function () {
+                var parts = [];
+                for (var i = 0; i < arguments.length; i++) {
+                    try { parts.push(String(arguments[i])); } catch (e) { parts.push('?'); }
+                }
+                try { g.__hostLog(level, parts.join(' ')); } catch (e) {}
+            };
+        };
+        g.console = g.console || {};
+        var methods = ['log','info','debug','warn','error','trace','dir','table',
+                       'group','groupCollapsed','groupEnd','assert','count','time','timeEnd'];
+        for (var i = 0; i < methods.length; i++) {
+            var m = methods[i];
+            if (typeof g.console[m] !== 'function') {
+                g.console[m] = mk(m === 'error' ? 'error' : (m === 'warn' ? 'warn' : 'log'));
+            }
+        }
+        g.navigator = g.navigator || {
+            userAgent: "%UA%",
+            appName: "Netscape", appCodeName: "Mozilla", appVersion: "5.0",
+            product: "Gecko", platform: "%PLATFORM%",
+            language: "en-US", languages: ["en-US", "en"],
+            onLine: true, cookieEnabled: false, doNotTrack: null
+        };
+    })();
+"#;
+
+/// `__hostLog(level, message)` — native sink behind the `console.*` shim; routes page
+/// logs to `tracing` (stderr) so they surface instead of vanishing, and so a page that
+/// calls `console.log` neither throws nor is silently dropped.
+unsafe extern "C" fn host_log(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let level = arg_string(cx, vp, argc, 0).unwrap_or_else(|| "log".to_string());
+    let msg = arg_string(cx, vp, argc, 1).unwrap_or_default();
+    match level.as_str() {
+        "error" => tracing::error!(target: "page.console", "{msg}"),
+        "warn" => tracing::warn!(target: "page.console", "{msg}"),
+        _ => tracing::info!(target: "page.console", "{msg}"),
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// The honest `navigator.userAgent` — same form as the network `User-Agent` (Axis F:
+/// truthful, never competitor mimicry), built locally to avoid a dep on `manuk-net`.
+fn honest_user_agent() -> String {
+    let os = match std::env::consts::OS {
+        "linux" => "X11; Linux",
+        "macos" => "Macintosh; macOS",
+        "windows" => "Windows NT",
+        other => other,
+    };
+    format!(
+        "Mozilla/5.0 ({}; {}) Manuk/{} (+standards)",
+        os,
+        std::env::consts::ARCH,
+        env!("CARGO_PKG_VERSION")
+    )
+}
 
 #[cfg(test)]
 mod tests {
@@ -932,6 +1018,15 @@ mod tests {
             var newApis = byTag && byStar && byClass && byBoth &&
                           afterRemove && attrPresent && attrGone;
 
+            // Tier-0 BOM globals: window/self identity, a callable console (must not
+            // throw), and an honest navigator.userAgent.
+            console.log("bom probe", 1, {a: 2});   // must not throw
+            var bomOk = (window === globalThis) && (self === globalThis) &&
+                        (typeof console.log === 'function') &&
+                        (typeof navigator.userAgent === 'string') &&
+                        (navigator.userAgent.indexOf('Manuk') >= 0) &&
+                        (navigator.language === 'en-US');
+
             // Events: register a listener, dispatch synchronously, and schedule a
             // dispatch through the event loop.
             globalThis.clicks = 0;
@@ -949,7 +1044,7 @@ mod tests {
               (parent.className === "box active") &&
               (parent.getAttribute("data-k") === "v") &&
               (Array.isArray(all)) && (all.length === 1) && (all[0].tagName === "P") &&
-              newApis &&
+              newApis && bomOk &&
               (document.querySelector("span") === null) &&  // detached, not in tree
               (immediate === true) && (noListener === false) && (clicks === 1);
         "#;
