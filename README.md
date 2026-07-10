@@ -372,6 +372,26 @@ engine. Three constraints, each enforced structurally:
   same type the standalone agent adopts/releases — so a logged-in DOM or half-filled form
   travels between front-ends with no re-fetch.
 
+### Agent-scale traversal (INFERENCE.MD §4 — `agent::{cache,triage,concurrency}`)
+
+Three additive modules for traversing/scraping at scale — the lever is avoiding redundant
+work, not making one fetch faster:
+
+- **Content-addressed freshness cache.** Keyed by a digest of *extracted* content (not raw
+  HTML, which churns on ads/nonces/timestamps). Each URL learns a volatility that decays on
+  unchanged re-fetches and rises on changes; `Freshness::Adaptive` scales the caller's base
+  max-age by that stability, so a stable reference page earns a long TTL and a live feed a
+  short one. Deterministic (time passed in), in-memory (digests + metadata, not bodies).
+- **Page-triage fast path.** One parse + DOM walk (no layout, no JS) decides whether a
+  page's content is already in the server-rendered HTML (the common case → skip JS) or lives
+  behind an empty SPA shell (`<div id=root>`, `<noscript>enable JavaScript`, script-only
+  body → needs JS). Pre-rendered SSR mounts are correctly treated as content; every decision
+  carries its signals.
+- **Two-tier concurrency.** Network fetch (I/O-bound) and JS execution (CPU-bound) get
+  *separate* semaphores — never one conflated limit. `ConcurrencyLimits::for_machine` sets
+  net = 16×cores, js = cores; the JS tier stays near the core count while the fetch tier runs
+  wide.
+
 ## The JS-engine modification boundary
 
 Per CLAUDE.md's most important section: `engine/js` **configures and binds to**

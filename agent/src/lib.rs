@@ -50,6 +50,19 @@ pub mod local;
 /// INFERENCE.MD §2 — the bundled-local-model manifest (a menu, not a download list).
 pub mod model_manifest;
 
+/// INFERENCE.MD §4 — content-addressed freshness cache (key by extracted content, learn
+/// per-URL volatility). The primary lever for traversal at scale: not fetching a page at
+/// all when nothing that matters has changed.
+pub mod cache;
+
+/// INFERENCE.MD §4 — page-triage fast path (does this page's content need a JS pass, or is
+/// it already in the server-rendered HTML?).
+pub mod triage;
+
+/// INFERENCE.MD §4 — two-tier traversal concurrency (wide I/O-bound fetch tier, narrow
+/// CPU-bound JS-execution tier — never one conflated limit).
+pub mod concurrency;
+
 /// Default model — a Groq-hosted multimodal model (overridable via `GROQ_MODEL`).
 pub const DEFAULT_MODEL: &str = "qwen/qwen3.6-27b";
 
