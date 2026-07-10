@@ -197,25 +197,6 @@ impl App {
         }
     }
 
-    /// The absolute URL of a link under the given **document** point (window y already
-    /// offset by scroll), if any. Hit-tests the a11y tree, then walks up the DOM to the
-    /// nearest `<a href>` and resolves it against the page URL.
-    fn link_at(&self, doc_x: f32, doc_y: f32) -> Option<String> {
-        let page = self.page.as_ref()?;
-        let hit = page.a11y_tree().hit_test(doc_x, doc_y).map(|n| n.node)?;
-        let dom = page.dom();
-        let mut cur = Some(hit);
-        while let Some(n) = cur {
-            if dom.tag_name(n) == Some("a") {
-                if let Some(href) = dom.element(n).and_then(|e| e.attr("href")) {
-                    return resolve_href(&page.final_url, href);
-                }
-            }
-            cur = dom.parent(n);
-        }
-        None
-    }
-
     /// Handle a left click at the current cursor: chrome (toolbar) if it lands in the band,
     /// else follow a link under it on the page.
     fn handle_click(&mut self) {
