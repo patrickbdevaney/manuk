@@ -149,6 +149,9 @@ Broadest real-world site set (excluding the hostile/bot-walled tier), WPT-verifi
   (`quinn`), WebSocket (`tokio-tungstenite`), cookies.
 - **Forms + navigation:** form submission, history (back/forward), fragment nav.
 
+**Research dispositions (2026-07):**
+- **B3 HTTP/2, HTTP/3, compression.** *Finding:* **h2** negotiates over TLS ALPN — advertising `h2` in the rustls connector lets hyper/hyper-util pick it automatically; multiplexing's win is real only with many same-origin **subresources**, so it is gated on external-resource loading (D4) — top-level-document-only fetch gains little over h1 keep-alive (B2). **h3** = `quinn` + hyperium `h3`/`h3-quinn` (h3-quinn still 0.0.x); browsers discover h3 via **Alt-Svc**/HTTPS-RR then **fall back to h2** if UDP/certs fail — so it needs an initial h1/h2 connection, Alt-Svc caching, a UDP path, and fallback logic (crates.io/h3-quinn, RFC 9114). **Compression**: `async-compression` exposes feature-gated tokio `AsyncRead` decoders for gzip/deflate/br/zstd (wrapping miniz_oxide/brotli), composing with B1's streaming body (github.com/Nullus157/async-compression). *Disposition:* **reuse** — (1) flip ALPN to `h2,http/1.1` once B2's pooled client lands, **defer the payoff** to D4; (2) **reuse** `quinn`+`h3` but **defer** h3 behind Alt-Svc discovery + h2 fallback (marginal win, pre-1.0); (3) **reuse** `async-compression` for `Content-Encoding` decode now (send `Accept-Encoding: gzip, deflate, br`), higher priority than h3 since real sites gzip/br regardless — brotli's static-dictionary size is tracked under C3. *Roadmap:* §2 "Protocols" resolves to h2-first (ALPN flip, D4-gated payoff) then deferred h3; add compression to §2 "Loading". No WPT target.
+
 ### 3. Lightweightness (binary size + footprint)
 - Verify + measure the **musl static** Linux and **static-CRT** Windows builds;
   report binary size before/after size-affecting changes.
