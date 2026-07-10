@@ -65,6 +65,19 @@ pub enum NodeData {
     Element(ElementData),
     Text(String),
     Comment(String),
+    /// N3 — a shadow root. It is **not** a child of its host: it is the root of a separate
+    /// tree, reachable via [`Dom::shadow_root`]. Its `parent` link points at the host so
+    /// upward walks work, but the host's `children()` never yields it.
+    ShadowRoot { mode: ShadowRootMode },
+    /// A `DocumentFragment` — a `<template>`'s contents. Also not a child of the template.
+    Fragment,
+}
+
+/// `<template shadowrootmode>` / `attachShadow({mode})`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ShadowRootMode {
+    Open,
+    Closed,
 }
 
 /// A node and its links. Links are `Option<NodeId>` into the owning arena.
@@ -76,6 +89,11 @@ pub struct Node {
     pub prev_sibling: Option<NodeId>,
     pub next_sibling: Option<NodeId>,
     pub data: NodeData,
+    /// N3 — the shadow root attached to this element, if any. Deliberately *not* a child
+    /// link: shadow content lives in its own tree and only appears in the **flat tree**.
+    shadow_root: Option<NodeId>,
+    /// N3 — a `<template>`'s contents fragment, if any. Also not a child link.
+    template_contents: Option<NodeId>,
     /// Incremental-layout (A2) double dirty-bit. `dirty` = this node changed and needs
     /// restyle/relayout; `dirty_descendants` = a descendant is dirty (the summary bit
     /// that lets a traversal skip any subtree whose summary bit is clear).
@@ -92,6 +110,8 @@ impl Node {
             prev_sibling: None,
             next_sibling: None,
             data,
+            shadow_root: None,
+            template_contents: None,
             // Freshly-created nodes start dirty: they have never been laid out.
             dirty: true,
             dirty_descendants: false,
@@ -177,6 +197,139 @@ impl Dom {
 
     pub fn create_doctype(&mut self, name: impl Into<String>) -> NodeId {
         self.alloc(NodeData::Doctype { name: name.into() })
+    }
+
+    // ---- N3: shadow DOM ----
+
+    /// Attach a shadow root to `host`, returning it. Idempotent: a host that already has
+    /// one keeps it (the spec throws; we return the existing root, which is what a parser
+    /// wants when a second `<template shadowrootmode>` appears).
+    ///
+    /// The shadow root is **not** a child of the host — `children(host)` never yields it.
+    /// It only appears in the [flat tree](Self::flat_children).
+    pub fn attach_shadow(&mut self, host: NodeId, mode: ShadowRootMode) -> NodeId {
+        if let Some(existing) = self.nodes[host.0].shadow_root {
+            return existing;
+        }
+        let sr = self.alloc(NodeData::ShadowRoot { mode });
+        self.nodes[sr.0].parent = Some(host);
+        self.nodes[host.0].shadow_root = Some(sr);
+        self.structure_changed = true;
+        self.mark_dirty(host);
+        sr
+    }
+
+    pub fn shadow_root(&self, host: NodeId) -> Option<NodeId> {
+        self.nodes[host.0].shadow_root
+    }
+
+    pub fn is_shadow_root(&self, id: NodeId) -> bool {
+        matches!(self.nodes[id.0].data, NodeData::ShadowRoot { .. })
+    }
+
+    pub fn shadow_root_mode(&self, id: NodeId) -> Option<ShadowRootMode> {
+        match self.nodes[id.0].data {
+            NodeData::ShadowRoot { mode } => Some(mode),
+            _ => None,
+        }
+    }
+
+    /// The element hosting this shadow root.
+    pub fn shadow_host(&self, shadow_root: NodeId) -> Option<NodeId> {
+        if self.is_shadow_root(shadow_root) {
+            self.nodes[shadow_root.0].parent
+        } else {
+            None
+        }
+    }
+
+    /// Create (or fetch) a `<template>`'s contents fragment. Also not a child link.
+    pub fn template_contents(&mut self, template: NodeId) -> NodeId {
+        if let Some(f) = self.nodes[template.0].template_contents {
+            return f;
+        }
+        let frag = self.alloc(NodeData::Fragment);
+        self.nodes[frag.0].parent = Some(template);
+        self.nodes[template.0].template_contents = Some(frag);
+        frag
+    }
+
+    pub fn get_template_contents(&self, template: NodeId) -> Option<NodeId> {
+        self.nodes[template.0].template_contents
+    }
+
+    /// Point a `<template>`'s contents at `node`.
+    ///
+    /// The declarative-shadow-DOM parse aims a template's contents **at the shadow root**,
+    /// so everything the parser inserts into the template lands directly in the shadow
+    /// tree. (The tree builder attaches the shadow root at the *start* tag, then keeps
+    /// inserting into `get_template_contents`; without this the shadow root would stay
+    /// empty.)
+    pub fn set_template_contents(&mut self, template: NodeId, node: NodeId) {
+        self.nodes[template.0].template_contents = Some(node);
+    }
+
+    fn is_slot(&self, id: NodeId) -> bool {
+        self.tag_name(id) == Some("slot")
+    }
+
+    /// The light-DOM children of `host` assigned to `slot`, per the slot-assignment
+    /// algorithm: a child's `slot` attribute names its slot; the unnamed `<slot>` takes
+    /// the children with no `slot` attribute.
+    pub fn assigned_nodes(&self, slot: NodeId) -> Vec<NodeId> {
+        let Some(shadow) = self.enclosing_shadow_root(slot) else {
+            return Vec::new();
+        };
+        let Some(host) = self.shadow_host(shadow) else {
+            return Vec::new();
+        };
+        let slot_name = self
+            .element(slot)
+            .and_then(|e| e.attr("name"))
+            .unwrap_or("");
+        self.children(host)
+            .filter(|&c| {
+                let child_slot = self.element(c).and_then(|e| e.attr("slot")).unwrap_or("");
+                child_slot == slot_name
+            })
+            .collect()
+    }
+
+    /// The shadow root that `node` lives inside, if any (walks up the node tree).
+    pub fn enclosing_shadow_root(&self, node: NodeId) -> Option<NodeId> {
+        let mut cur = Some(node);
+        while let Some(n) = cur {
+            if self.is_shadow_root(n) {
+                return Some(n);
+            }
+            cur = self.nodes[n.0].parent;
+        }
+        None
+    }
+
+    /// **The flat tree** — what layout, style, and the a11y tree actually walk.
+    ///
+    /// * A host with a shadow root yields the shadow root's children, not its own.
+    /// * A `<slot>` yields its **assigned** light-DOM nodes, or its fallback children when
+    ///   nothing is assigned.
+    /// * Everything else yields its ordinary children.
+    ///
+    /// The light-DOM children of a host remain its children in the *node* tree; they are
+    /// merely rendered where the slot is. Those are two different trees, and conflating
+    /// them is the classic shadow-DOM bug.
+    pub fn flat_children(&self, node: NodeId) -> Vec<NodeId> {
+        if let Some(sr) = self.shadow_root(node) {
+            return self.children(sr).collect();
+        }
+        if self.is_slot(node) {
+            let assigned = self.assigned_nodes(node);
+            if !assigned.is_empty() {
+                return assigned;
+            }
+            // Fallback content: the slot's own children.
+            return self.children(node).collect();
+        }
+        self.children(node).collect()
     }
 
     /// Remove an attribute, returning whether it was present. Needed to *unset*
@@ -347,6 +500,43 @@ impl Dom {
         self.nodes[id.0].next_sibling
     }
 
+    pub fn last_child(&self, id: NodeId) -> Option<NodeId> {
+        self.nodes[id.0].last_child
+    }
+
+    pub fn prev_sibling(&self, id: NodeId) -> Option<NodeId> {
+        self.nodes[id.0].prev_sibling
+    }
+
+    /// If `id` is a text node, append `text` to it and report `true`. Used by the parser
+    /// to merge adjacent text runs — two sibling text nodes would otherwise produce two
+    /// inline runs for what is one string.
+    pub fn append_text_to(&mut self, id: NodeId, text: &str) -> bool {
+        if let NodeData::Text(t) = &mut self.nodes[id.0].data {
+            t.push_str(text);
+            self.mark_dirty(id);
+            return true;
+        }
+        false
+    }
+
+    /// Insert `new_node` into `parent`'s child list immediately before `sibling`.
+    pub fn insert_before(&mut self, parent: NodeId, new_node: NodeId, sibling: NodeId) {
+        debug_assert_eq!(self.nodes[sibling.0].parent, Some(parent));
+        self.detach(new_node);
+        let prev = self.nodes[sibling.0].prev_sibling;
+        self.nodes[new_node.0].parent = Some(parent);
+        self.nodes[new_node.0].prev_sibling = prev;
+        self.nodes[new_node.0].next_sibling = Some(sibling);
+        self.nodes[sibling.0].prev_sibling = Some(new_node);
+        match prev {
+            Some(p) => self.nodes[p.0].next_sibling = Some(new_node),
+            None => self.nodes[parent.0].first_child = Some(new_node),
+        }
+        self.structure_changed = true;
+        self.mark_dirty(new_node);
+    }
+
     pub fn parent(&self, id: NodeId) -> Option<NodeId> {
         self.nodes[id.0].parent
     }
@@ -427,6 +617,10 @@ impl Dom {
                 }
                 out.push('>');
             }
+            NodeData::ShadowRoot { mode } => {
+                let _ = write!(out, "#shadow-root ({mode:?})");
+            }
+            NodeData::Fragment => out.push_str("#document-fragment"),
             NodeData::Text(t) => {
                 let trimmed = t.trim();
                 let _ = write!(out, "#text {trimmed:?}");

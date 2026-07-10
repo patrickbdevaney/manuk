@@ -9,6 +9,5 @@ description = "HTML parsing via html5ever, producing a manuk-dom tree."
 [dependencies]
 manuk-dom.workspace = true
 html5ever.workspace = true
-markup5ever_rcdom.workspace = true
 tendril.workspace = true
 tracing.workspace = true

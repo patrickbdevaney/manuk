@@ -2,7 +2,7 @@
 //!
 //! Per CLAUDE.md we *reuse* `html5ever` (Servo's spec-compliant, streaming HTML
 //! tokenizer/tree-builder) rather than hand-rolling a parser. This crate drives
-//! html5ever into an `RcDom` and then walks that into our arena-based
+//! html5ever directly into our arena-based
 //! [`manuk_dom::Dom`], which is the representation the rest of the engine consumes.
 //!
 //! Streaming (CLAUDE.md § click-to-navigate latency): [`parse`] handles a fully-
@@ -10,13 +10,16 @@
 //! chunks off the socket and snapshotting the parsed-so-far tree, so the shell can
 //! first-paint `<head>` + above-the-fold before the tail arrives (B-latency).
 
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use html5ever::tendril::stream::Utf8LossyDecoder;
 use html5ever::tendril::{ByteTendril, TendrilSink};
 use html5ever::{parse_document, ParseOpts, Parser};
 use manuk_dom::{Dom, NodeData, NodeId};
-use markup5ever_rcdom::{Handle, NodeData as RcNodeData, RcDom};
+/// N3 — our `TreeSink` directly over the arena DOM (enables Declarative Shadow DOM).
+pub mod sink;
+
 
 /// HTML **void elements** (no closing tag, no children) — used by serialization.
 const VOID_ELEMENTS: &[&str] = &[
@@ -35,36 +38,27 @@ pub fn parse(html: &str) -> Dom {
 /// for now input is treated as UTF-8, matching the common case for the target site
 /// set.
 pub fn parse_bytes(bytes: &[u8]) -> Dom {
-    let rc: RcDom = parse_document(RcDom::default(), ParseOpts::default())
+    // N3: parse straight into the arena. html5ever's tree builder drives our `ArenaSink`,
+    // so `<template shadowrootmode>` reaches `attach_declarative_shadow` and a real shadow
+    // root is attached. (The previous `RcDom` intermediate could not: that hook defaults to
+    // `false` and `markup5ever_rcdom` never overrides it.)
+    parse_document(sink::ArenaSink::new(), ParseOpts::default())
         .from_utf8()
         .read_from(&mut std::io::Cursor::new(bytes))
-        .expect("RcDom parsing is infallible for in-memory input");
-
-    let mut dom = Dom::new();
-    let root = dom.root();
-    // The RcDom `Document` handle mirrors our `Document` root: walk its children.
-    for child in rc.document.children.borrow().iter() {
-        walk(child, &mut dom, root);
-    }
-    dom
+        .expect("parsing is infallible for in-memory input")
 }
 
-/// An **incremental** HTML parser (B-latency first-paint checkpoint). html5ever is
-/// itself a streaming [`TendrilSink`]: [`feed`](StreamParser::feed) pushes bytes as
-/// they arrive off the socket, and [`snapshot`](StreamParser::snapshot) walks the
-/// parsed-so-far tree into an arena [`Dom`] at any point — so the shell can lay out
-/// and paint `<head>` + early `<body>` before the rest of the document streams in.
+/// B-latency — an **incremental** parse driven by bytes as they arrive off the socket.
 ///
-/// The trick: we clone the `RcDom`'s document `Handle` (an `Rc<Node>`) before handing
-/// the `RcDom` to the parser; the tree builder mutates that same node in place, so the
-/// clone always reflects current progress.
+/// `feed`/`feed_bytes` push chunks (UTF-8 sequences split across a boundary are handled by
+/// the decoder); [`snapshot`](StreamParser::snapshot) reads the parsed-so-far tree so a
+/// first paint can happen before the tail arrives.
 ///
-/// Feeds **bytes** through html5ever's UTF-8 lossy decoder, so network chunks that
-/// split a multi-byte character across a boundary are handled correctly (input is
-/// treated as UTF-8, matching [`parse`]).
+/// N3: this now streams into the arena directly, sharing the sink's `Rc<RefCell<Dom>>`
+/// rather than snapshotting an `RcDom` and re-walking it on every call.
 pub struct StreamParser {
-    sink: Utf8LossyDecoder<Parser<RcDom>>,
-    document: Handle,
+    sink: Utf8LossyDecoder<Parser<sink::ArenaSink>>,
+    dom: Rc<RefCell<Dom>>,
 }
 
 impl Default for StreamParser {
@@ -74,107 +68,39 @@ impl Default for StreamParser {
 }
 
 impl StreamParser {
-    /// Start a streaming parse.
     pub fn new() -> Self {
-        let rcdom = RcDom::default();
-        let document = Rc::clone(&rcdom.document);
-        let sink = parse_document(rcdom, ParseOpts::default()).from_utf8();
-        StreamParser { sink, document }
+        let arena = sink::ArenaSink::new();
+        let dom = arena.dom_handle();
+        let sink = parse_document(arena, ParseOpts::default()).from_utf8();
+        StreamParser { sink, dom }
     }
 
     /// Feed the next chunk of document **bytes** (as they arrive off the socket).
-    /// UTF-8 sequences split across chunk boundaries are handled by the decoder.
     pub fn feed_bytes(&mut self, bytes: &[u8]) {
         self.sink.process(ByteTendril::from_slice(bytes));
     }
 
-    /// Feed the next chunk of document text.
     pub fn feed(&mut self, chunk: &str) {
         self.feed_bytes(chunk.as_bytes());
     }
 
-    /// Walk the **parsed-so-far** tree into an arena [`Dom`] (a partial document).
+    /// The **parsed-so-far** tree (a partial document).
     pub fn snapshot(&self) -> Dom {
-        rcdom_to_dom(&self.document)
+        self.dom.borrow().clone()
     }
 
     /// Finish parsing and return the complete [`Dom`].
     pub fn finish(self) -> Dom {
-        let rc = self.sink.finish();
-        // `rc.document` is the same node the running `self.document` aliased.
-        rcdom_to_dom(&rc.document)
+        self.sink.finish()
     }
 
-    /// Has the `<body>` been reached — i.e. `<head>` (and its render-blocking `<link>`/
-    /// `<style>`) is parsed, the point at which a first paint is worthwhile?
+    /// Whether `<body>` has been opened yet — the head is complete, so a first paint of
+    /// the partial document is meaningful.
     pub fn body_started(&self) -> bool {
-        fn find_body(handle: &Handle) -> bool {
-            for child in handle.children.borrow().iter() {
-                if let RcNodeData::Element { name, .. } = &child.data {
-                    if name.local.as_ref() == "body" {
-                        return true;
-                    }
-                }
-                if find_body(child) {
-                    return true;
-                }
-            }
-            false
-        }
-        find_body(&self.document)
+        self.dom.borrow().find_first("body").is_some()
     }
 }
 
-/// Walk an RcDom `document` handle's children into a fresh arena [`Dom`].
-fn rcdom_to_dom(document: &Handle) -> Dom {
-    let mut dom = Dom::new();
-    let root = dom.root();
-    for child in document.children.borrow().iter() {
-        walk(child, &mut dom, root);
-    }
-    dom
-}
-
-/// Recursively convert an RcDom node and its subtree, appending under `parent`.
-fn walk(handle: &Handle, dom: &mut Dom, parent: NodeId) {
-    let new_id = match &handle.data {
-        RcNodeData::Document => {
-            // Nested documents don't occur here; treat as transparent.
-            for child in handle.children.borrow().iter() {
-                walk(child, dom, parent);
-            }
-            return;
-        }
-        RcNodeData::Doctype { name, .. } => Some(dom.create_doctype(name.to_string())),
-        RcNodeData::Text { contents } => Some(dom.create_text(contents.borrow().to_string())),
-        RcNodeData::Comment { contents } => Some(dom.create_comment(contents.to_string())),
-        RcNodeData::Element { name, attrs, .. } => {
-            let id = dom.create_element(name.local.to_string());
-            for attr in attrs.borrow().iter() {
-                dom.set_attr(id, attr.name.local.to_string(), attr.value.to_string());
-            }
-            Some(id)
-        }
-        // Processing instructions have no rendered representation.
-        RcNodeData::ProcessingInstruction { .. } => None,
-    };
-
-    if let Some(id) = new_id {
-        dom.append_child(parent, id);
-        for child in handle.children.borrow().iter() {
-            walk(child, dom, id);
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Serialization + fragment grafting (backs `Element.innerHTML`)
-// ---------------------------------------------------------------------------
-
-/// Serialize `node`'s **children** back to an HTML string (the `innerHTML` getter).
-/// Void elements are emitted without a closing tag; text and attribute values are
-/// entity-escaped. Not a full HTML-serialization conformance target (no
-/// `<template>`/CDATA/foreign-content special cases) — the documented common case.
 pub fn serialize_inner(dom: &Dom, node: NodeId) -> String {
     let mut out = String::new();
     for child in dom.children(node) {
@@ -186,6 +112,9 @@ pub fn serialize_inner(dom: &Dom, node: NodeId) -> String {
 /// Serialize a single node (including itself) into `out`.
 fn serialize_node(dom: &Dom, node: NodeId, out: &mut String) {
     match dom.data(node) {
+        // A shadow root / template fragment is a separate tree: `innerHTML` of the host
+        // never includes it (that is `getHTML({serializableShadowRoots})`, out of scope).
+        NodeData::ShadowRoot { .. } | NodeData::Fragment => {}
         NodeData::Element(el) => {
             out.push('<');
             out.push_str(&el.name);
@@ -383,5 +312,153 @@ mod tests {
         assert_eq!(dom.tag_name(kids[1]), Some("b"));
         // Round-trips through serialization.
         assert_eq!(serialize_inner(&dom, host), "<span>new</span><b>bold</b>");
+    }
+}
+
+#[cfg(test)]
+mod shadow_tests {
+    use super::*;
+    use manuk_dom::ShadowRootMode;
+
+    /// N3's headline acceptance. `<template shadowrootmode="open">` must produce a real
+    /// shadow root; the `<p>` must remain a **light-DOM child of the host** in the node
+    /// tree while being **slotted into the shadow tree** in the flat tree. Those are two
+    /// different trees, and conflating them is the classic shadow-DOM bug.
+    #[test]
+    fn declarative_shadow_root_attaches_and_the_slot_fills_in_the_flat_tree() {
+        let dom = parse(
+            r#"<body><div id="host">
+                 <template shadowrootmode="open"><span>before</span><slot></slot></template>
+                 <p>light</p>
+               </div></body>"#,
+        );
+
+        let host = dom.find_first("div").expect("host exists");
+
+        // 1. A real shadow root is attached (this is what RcDom silently dropped).
+        let shadow = dom.shadow_root(host).expect("shadow root attached");
+        assert_eq!(dom.shadow_root_mode(shadow), Some(ShadowRootMode::Open));
+        assert_eq!(dom.shadow_host(shadow), Some(host));
+
+        // 2. The shadow root is NOT a child of the host in the node tree.
+        assert!(
+            !dom.children(host).any(|c| c == shadow),
+            "the shadow root must not appear among the host's children"
+        );
+
+        // 3. The <p> IS still a light-DOM child of the host in the node tree.
+        let p = dom.find_first("p").unwrap();
+        assert_eq!(dom.parent(p), Some(host));
+
+        // 4. The template's contents moved into the shadow root...
+        let shadow_kids: Vec<&str> = dom
+            .children(shadow)
+            .filter_map(|c| dom.tag_name(c))
+            .collect();
+        assert_eq!(shadow_kids, vec!["span", "slot"]);
+
+        // 5. ...and the FLAT tree of the host yields the shadow content, with the <slot>
+        //    filled by the light-DOM <p>.
+        let flat = dom.flat_children(host);
+        let flat_tags: Vec<&str> = flat.iter().filter_map(|&c| dom.tag_name(c)).collect();
+        assert_eq!(flat_tags, vec!["span", "slot"]);
+
+        let slot = flat[1];
+        assert_eq!(dom.tag_name(slot), Some("slot"));
+        // The slot is filled by the host's light-DOM children. Whitespace text nodes are
+        // slottable too (per spec), so compare the *element* view.
+        let slotted = dom.flat_children(slot);
+        assert!(slotted.contains(&p), "the slot must be filled by the light-DOM <p>");
+        let slotted_elems: Vec<NodeId> = slotted.iter().copied().filter(|&n| dom.is_element(n)).collect();
+        assert_eq!(slotted_elems, vec![p]);
+    }
+
+    #[test]
+    fn a_closed_shadow_root_is_recorded_as_closed() {
+        let dom = parse(r#"<div><template shadowrootmode="closed"><b>x</b></template></div>"#);
+        let host = dom.find_first("div").unwrap();
+        let sr = dom.shadow_root(host).unwrap();
+        assert_eq!(dom.shadow_root_mode(sr), Some(ShadowRootMode::Closed));
+    }
+
+    /// A `<template>` WITHOUT `shadowrootmode` must stay an ordinary template — its
+    /// contents live in a fragment, not in the light DOM, and no shadow root appears.
+    #[test]
+    fn a_plain_template_is_not_a_shadow_root_and_its_contents_are_not_rendered() {
+        let dom = parse(r#"<div><template><b>hidden</b></template><i>shown</i></div>"#);
+        let host = dom.find_first("div").unwrap();
+        assert!(dom.shadow_root(host).is_none(), "no shadowrootmode => no shadow root");
+
+        let tpl = dom.find_first("template").unwrap();
+        let frag = dom.get_template_contents(tpl).expect("template has contents");
+        let inner: Vec<&str> = dom.children(frag).filter_map(|c| dom.tag_name(c)).collect();
+        assert_eq!(inner, vec!["b"], "contents live in the fragment, not the light DOM");
+
+        // The template's contents are NOT children of the template in the node tree.
+        assert_eq!(dom.children(tpl).count(), 0);
+        // ...so the visible text of the div is only the <i>.
+        assert!(!dom.text_content(host).contains("hidden"));
+        assert!(dom.text_content(host).contains("shown"));
+    }
+
+    /// Named slots: a light child's `slot` attribute picks its slot; unnamed children go
+    /// to the default slot. A slot with nothing assigned renders its fallback children.
+    #[test]
+    fn named_slots_and_fallback_content() {
+        let dom = parse(
+            r#"<div id="h">
+                 <template shadowrootmode="open">
+                   <slot name="title"></slot>
+                   <slot></slot>
+                   <slot name="empty">fallback</slot>
+                 </template>
+                 <h1 slot="title">T</h1>
+                 <p>body</p>
+               </div>"#,
+        );
+        let host = dom.find_first("div").unwrap();
+        let flat = dom.flat_children(host);
+        let slots: Vec<NodeId> = flat.iter().copied().filter(|&n| dom.tag_name(n) == Some("slot")).collect();
+        assert_eq!(slots.len(), 3);
+
+        let h1 = dom.find_first("h1").unwrap();
+        let p = dom.find_first("p").unwrap();
+
+        // named slot gets the h1; default slot gets the p (plus the source's whitespace
+        // text nodes, which are slottable per spec — hence the element-only view).
+        let elems = |n: NodeId| -> Vec<NodeId> {
+            dom.flat_children(n).into_iter().filter(|&c| dom.is_element(c)).collect()
+        };
+        assert_eq!(elems(slots[0]), vec![h1]);
+        assert_eq!(elems(slots[1]), vec![p]);
+
+        // The unassigned named slot renders its fallback content instead.
+        let fallback = dom.flat_children(slots[2]);
+        assert_eq!(fallback.len(), 1);
+        assert_eq!(dom.text_content(fallback[0]).trim(), "fallback");
+    }
+
+    /// Text nodes are slottables too — a bare string child of the host renders through
+    /// the default slot. Asserting this keeps the behavior deliberate rather than
+    /// incidental.
+    #[test]
+    fn text_children_of_the_host_are_slotted() {
+        let dom = parse(r#"<div><template shadowrootmode="open"><slot></slot></template>hello</div>"#);
+        let host = dom.find_first("div").unwrap();
+        let slot = dom.flat_children(host)[0];
+        assert_eq!(dom.tag_name(slot), Some("slot"));
+        let slotted = dom.flat_children(slot);
+        assert_eq!(slotted.len(), 1);
+        assert_eq!(dom.text_content(slotted[0]), "hello");
+    }
+
+    /// The parser must merge adjacent text runs; two text nodes for one string would
+    /// produce two inline runs in layout.
+    #[test]
+    fn adjacent_text_is_merged_into_one_node() {
+        let dom = parse("<p>a&amp;b</p>");
+        let p = dom.find_first("p").unwrap();
+        assert_eq!(dom.children(p).count(), 1, "one text node, not three");
+        assert_eq!(dom.text_content(p), "a&b");
     }
 }
