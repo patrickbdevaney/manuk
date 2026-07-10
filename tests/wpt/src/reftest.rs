@@ -21,6 +21,35 @@ use crate::Report;
 const VW: u32 = 800;
 const VH: u32 = 600;
 
+/// Screenshot-diff harness (P0.6): fraction (0.0..=1.0) of RGBA pixels that differ
+/// between two equal-size buffers. Used for tolerance-based visual comparison —
+/// e.g. a real page vs a real Chrome render.
+///
+/// Note: supplying the Chrome reference needs a headless-Chrome step (in CI or
+/// locally); this crate provides the *comparison*, and `render_page_rgba` produces
+/// the Manuk side. The Chrome-capture wiring is a follow-up (no Chrome in the dev
+/// sandbox).
+pub fn pixel_delta(a: &[u8], b: &[u8]) -> f64 {
+    if a.is_empty() || a.len() != b.len() {
+        return 1.0;
+    }
+    let total = a.len() / 4;
+    let diff = a
+        .chunks_exact(4)
+        .zip(b.chunks_exact(4))
+        .filter(|(p, q)| p != q)
+        .count();
+    diff as f64 / total.max(1) as f64
+}
+
+/// Render a page's RGBA (the Manuk side of a screenshot diff).
+pub fn render_page_rgba(html: &str, url: &str, fonts: &FontContext, w: u32, h: u32) -> Vec<u8> {
+    Page::load(html, url, fonts, w as f32)
+        .paint(fonts, w, h)
+        .rgba_bytes()
+        .to_vec()
+}
+
 /// Run every reftest under `wpt_dir/subdir`, returning a [`Report`].
 pub fn run_reftests(wpt_dir: &Path, subdir: &str, fonts: &FontContext) -> Report {
     let mut report = Report::default();
@@ -156,5 +185,24 @@ fn collect_html(dir: &Path, out: &mut Vec<PathBuf>) {
                 out.push(p);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pixel_delta_and_render() {
+        let fonts = FontContext::new();
+        let a = render_page_rgba("<body><h1>A</h1></body>", "x", &fonts, 200, 100);
+        let a2 = render_page_rgba("<body><h1>A</h1></body>", "x", &fonts, 200, 100);
+        let b = render_page_rgba("<body><h1>B different</h1></body>", "x", &fonts, 200, 100);
+        assert_eq!(pixel_delta(&a, &a2), 0.0, "identical renders → 0 delta");
+        assert!(
+            pixel_delta(&a, &b) > 0.0,
+            "different renders → nonzero delta"
+        );
+        assert_eq!(pixel_delta(&a, &[]), 1.0, "size mismatch → full delta");
     }
 }
