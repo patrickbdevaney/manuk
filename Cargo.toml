@@ -21,6 +21,7 @@ members = [
     "engine/page",
     "shell",
     "agent",
+    "store",
     "tests/wpt",
 ]
 

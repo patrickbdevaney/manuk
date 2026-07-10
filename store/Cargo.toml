@@ -1,0 +1,28 @@
+[package]
+name = "manuk-store"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Local encrypted password store + origin-scoped autofill (E2). Audited crates only, zero hand-rolled crypto."
+
+[features]
+default = []
+# OS secret store (DPAPI/Keychain/Secret Service) for the at-rest key. Needs a
+# platform keyring service at runtime (DBus Secret Service on Linux), so it is opt-in;
+# the default build uses the Argon2id primary-password path, which is fully portable.
+os-keyring = ["dep:keyring"]
+
+[dependencies]
+anyhow.workspace = true
+url.workspace = true
+serde = { workspace = true }
+serde_json.workspace = true
+# Audited crypto — RustCrypto AEAD (NCC-audited) + Argon2id (PHC winner). No
+# hand-rolled primitives (E2 hard rule).
+chacha20poly1305 = "0.10"
+argon2 = "0.5"
+# eTLD+1 (Public Suffix List) for related-domain scoping.
+psl = "2"
+# OS secret store wrapper (audited), feature-gated.
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"], optional = true }

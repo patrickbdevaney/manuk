@@ -69,6 +69,7 @@ engine/
   page/        the shared pipeline: bytes -> DOM -> style -> layout -> paint
 shell/         headful GUI: `render` (headless PNG) + `browse` (winit/wgpu window)
 agent/         headless agentic browser: driver + backend-agnostic loop + Groq
+store/         local encrypted password store + origin-scoped autofill (E2)
 tests/wpt/     Web Platform Tests harness + results tracking
 docs/          sample page + rendered screenshots
 ```
