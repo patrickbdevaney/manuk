@@ -2785,7 +2785,6 @@ dependencies = [
 name = "manuk-css"
 version = "0.1.0"
 dependencies = [
- "atomic_refcell",
  "cssparser 0.34.0",
  "euclid",
  "manuk-dom",

@@ -25,16 +25,22 @@
 
 use std::collections::HashMap;
 
-use atomic_refcell::{AtomicRef, AtomicRefCell, AtomicRefMut};
 use manuk_dom::{Dom, NodeId};
-use stylo::data::ElementData;
+use stylo::data::{ElementDataMut, ElementDataRef, ElementDataWrapper};
 
-/// A `NodeId`-indexed side-table of Stylo's per-element `AtomicRefCell<ElementData>`.
-/// Only element nodes get an entry (text/comment nodes have no style state), so a
-/// `HashMap` (not a dense `Vec`) avoids bloating on non-element nodes.
+/// A `NodeId`-indexed side-table of Stylo's per-element style state.
+///
+/// The cell is Stylo's own **`ElementDataWrapper`** (an `UnsafeCell<ElementData>` +
+/// a debug-only thread-safety check) — the *exact* type whose `borrow()`/`borrow_mut()`
+/// produce the `ElementDataRef`/`ElementDataMut` that `TElement::borrow_data`/
+/// `mutate_data` must return (those handles have private fields and are constructible
+/// only through the wrapper). Storing the wrapper here — rather than a bare
+/// `AtomicRefCell<ElementData>` — is what lets our arena satisfy `TElement`'s data
+/// contract with Servo's genuine types. Only element nodes get an entry (text/comment
+/// nodes have no style state), so a `HashMap` (not a dense `Vec`) avoids bloat.
 #[derive(Default)]
 pub struct ElementDataStore {
-    data: HashMap<NodeId, AtomicRefCell<ElementData>>,
+    data: HashMap<NodeId, ElementDataWrapper>,
 }
 
 impl ElementDataStore {
@@ -46,18 +52,22 @@ impl ElementDataStore {
 
     /// Ensure `node` has an `ElementData` cell (idempotent) — Stylo's `ensure_data`.
     pub fn ensure(&mut self, node: NodeId) {
-        self.data
-            .entry(node)
-            .or_insert_with(|| AtomicRefCell::new(ElementData::default()));
+        self.data.entry(node).or_default();
+    }
+
+    /// Whether `node` has style state attached (Stylo's `has_data`).
+    pub fn has_data(&self, node: NodeId) -> bool {
+        self.data.contains_key(&node)
     }
 
     /// Runtime-checked shared borrow of a node's `ElementData` (Stylo's `borrow_data`).
-    pub fn borrow(&self, node: NodeId) -> Option<AtomicRef<'_, ElementData>> {
+    /// Returns Stylo's own `ElementDataRef` — the exact `TElement::borrow_data` type.
+    pub fn borrow(&self, node: NodeId) -> Option<ElementDataRef<'_>> {
         self.data.get(&node).map(|c| c.borrow())
     }
 
-    /// Runtime-checked mutable borrow (Stylo's `mutate_data`).
-    pub fn borrow_mut(&self, node: NodeId) -> Option<AtomicRefMut<'_, ElementData>> {
+    /// Runtime-checked mutable borrow (Stylo's `mutate_data`), yielding `ElementDataMut`.
+    pub fn borrow_mut(&self, node: NodeId) -> Option<ElementDataMut<'_>> {
         self.data.get(&node).map(|c| c.borrow_mut())
     }
 
@@ -113,7 +123,7 @@ impl<'a> StyloElement<'a> {
     }
 
     /// This element's `ElementData`, if it has been `ensure`d.
-    pub fn data(&self) -> Option<AtomicRef<'a, ElementData>> {
+    pub fn data(&self) -> Option<ElementDataRef<'a>> {
         self.store.borrow(self.node)
     }
 
