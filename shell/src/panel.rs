@@ -230,6 +230,50 @@ impl AgentPanel {
     }
 }
 
+/// Which inference backend the **headful** panel should use, decided purely from the
+/// environment so the choice is testable without touching the network. Precedence: an
+/// explicitly configured **local** llama-server wins (it is free, private, and no key leaves
+/// the machine), otherwise a Groq key from the environment / `.env`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PanelBackendKind {
+    LocalLlama(u16),
+    Groq,
+}
+
+/// Resolve the panel backend from environment signals. `None` means no backend is available
+/// — the GUI then tells the user how to configure one rather than failing opaquely.
+pub fn resolve_panel_backend(
+    llama_port: Option<u16>,
+    groq_key_present: bool,
+) -> Option<PanelBackendKind> {
+    if let Some(port) = llama_port {
+        return Some(PanelBackendKind::LocalLlama(port));
+    }
+    if groq_key_present {
+        return Some(PanelBackendKind::Groq);
+    }
+    None
+}
+
+/// Construct the concrete backend for a resolved [`PanelBackendKind`]. Returns `None` for
+/// `Groq` if the key vanished between resolution and construction (a race with `.env`).
+pub fn build_panel_backend(
+    kind: &PanelBackendKind,
+) -> Option<manuk_agent::local::OpenAiCompatBackend> {
+    match kind {
+        PanelBackendKind::LocalLlama(port) => {
+            Some(manuk_agent::local::OpenAiCompatBackend::local_llama(*port))
+        }
+        PanelBackendKind::Groq => {
+            let key = manuk_agent::env::single_key()?;
+            Some(manuk_agent::groq::groq_with_model(
+                key,
+                manuk_agent::env::model(),
+            ))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -322,6 +366,16 @@ mod tests {
             "the submit must be blocked by the read-only scope: {:?}",
             outcome.transcript
         );
+    }
+
+    /// The headful backend precedence: a configured local server wins over a Groq key, and
+    /// with neither there is no backend (the GUI reports that, rather than failing opaquely).
+    #[test]
+    fn panel_backend_prefers_local_then_groq_then_none() {
+        assert_eq!(resolve_panel_backend(Some(8080), true), Some(PanelBackendKind::LocalLlama(8080)));
+        assert_eq!(resolve_panel_backend(Some(8080), false), Some(PanelBackendKind::LocalLlama(8080)));
+        assert_eq!(resolve_panel_backend(None, true), Some(PanelBackendKind::Groq));
+        assert_eq!(resolve_panel_backend(None, false), None);
     }
 
     /// Constraint 1: widening the scope is deliberate. `browse_within` permits navigation

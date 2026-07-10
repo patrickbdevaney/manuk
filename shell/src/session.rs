@@ -448,6 +448,45 @@ mod tests {
 
     // -- persistence round-trips ---------------------------------------------
 
+    /// The exact save→restore cycle the GUI performs on quit/relaunch: `session_of` a live
+    /// browser → store → a fresh browser → `restore_into`. The restored set matches, order
+    /// and pinned/focus survive, and every restored tab is hibernated.
+    #[test]
+    fn the_gui_save_restore_cycle_preserves_the_tab_set_hibernated() {
+        let dir = tmpdir("gui-cycle");
+        let store = SessionStore::with_dir(&dir);
+
+        // A live browser with three loaded tabs; focus the middle one, pin the first.
+        let mut live = Browser::new(8);
+        let ids: Vec<_> = ["https://a.test/", "https://b.test/", "https://c.test/"]
+            .iter()
+            .map(|u| {
+                let id = live.open(*u);
+                load(&mut live, id, u);
+                id
+            })
+            .collect();
+        live.set_pinned(ids[0], true);
+        live.focus(ids[1]);
+
+        // Save exactly what the GUI saves.
+        store.save_session(&session_of(&live)).unwrap();
+
+        // Next launch: a brand-new browser restored from disk.
+        let mut relaunched = Browser::new(8);
+        let restored = restore_into(&mut relaunched, &store.load_session().unwrap().unwrap());
+
+        assert_eq!(relaunched.tabs().len(), 3);
+        let urls: Vec<&str> = relaunched.tabs().iter().map(|t| t.url.as_str()).collect();
+        assert_eq!(urls, vec!["https://a.test/", "https://b.test/", "https://c.test/"]);
+        assert!(relaunched.tabs()[0].is_pinned(), "pinned survived");
+        // The middle tab was focused, so it is the one restored active.
+        assert_eq!(relaunched.active(), restored);
+        assert_eq!(relaunched.tab(restored.unwrap()).unwrap().url, "https://b.test/");
+        // Every tab comes back hibernated — no eager page loads on restore.
+        assert!(relaunched.tabs().iter().all(|t| t.page().is_none()));
+    }
+
     #[test]
     fn session_round_trips_through_the_store() {
         let store = SessionStore::with_dir(tmpdir("session-roundtrip"));

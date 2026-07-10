@@ -22,7 +22,10 @@ use winit::window::{Window, WindowId};
 
 use crate::chrome::{self, Bookmarks, History, Settings};
 use crate::find::{self, FindSession};
+use crate::panel::{self, AgentPanel, HandoffConsent, PanelScope};
+use crate::session::{self, SessionStore};
 use crate::tab::Browser;
+use manuk_agent::Handoff;
 use manuk_compositor::TabId;
 use manuk_page::{fetch_html, Page};
 
@@ -93,14 +96,51 @@ struct App {
     /// tracked follow-up.
     omnibox_open: bool,
     omnibox_input: String,
+
+    // ---- §5 session persistence ----
+    /// The on-disk tab store (session + collections), outside the repo. `None` if the state
+    /// directory could not be resolved — persistence is then silently disabled.
+    store: Option<SessionStore>,
+
+    // ---- §3 in-browser agent panel ----
+    /// Ctrl+J opens a task prompt; typed text goes to the agent, not the page.
+    agent_open: bool,
+    agent_input: String,
 }
 
 impl App {
     fn new(url: String, width: u32, measure_frames: Option<usize>) -> Self {
-        // One window == one tab for now, but the tab/tier model is wired so
-        // multi-tab is an additive change (CLAUDE.md § per-tab memory).
         let mut browser = Browser::new(8);
-        let tab_id = browser.open(url.clone());
+
+        // §5 — restore the prior session **hibernated** (no fetches), unless this is a
+        // `--frames` benchmark run (which must not inherit or clobber a real session).
+        let store = if measure_frames.is_none() {
+            SessionStore::open().ok()
+        } else {
+            None
+        };
+        if let Some(store) = &store {
+            match store.load_session() {
+                Ok(Some(prior)) => {
+                    let n = prior.tabs.len();
+                    session::restore_into(&mut browser, &prior);
+                    tracing::info!(tabs = n, "restored prior session (hibernated; only the focused tab loads)");
+                }
+                Ok(None) => {}
+                Err(e) => tracing::warn!("session restore skipped: {e:#}"),
+            }
+        }
+
+        // The CLI target is the active, eagerly-loaded tab: reuse a restored tab with the
+        // same URL if present, else open a fresh focused one.
+        let existing = browser.tabs().iter().find(|t| t.url == url).map(|t| t.id);
+        let tab_id = match existing {
+            Some(id) => {
+                browser.focus(id);
+                id
+            }
+            None => browser.open(url.clone()),
+        };
         App {
             url,
             width,
@@ -125,6 +165,9 @@ impl App {
             find_session: FindSession::default(),
             omnibox_open: false,
             omnibox_input: String::new(),
+            store,
+            agent_open: false,
+            agent_input: String::new(),
         }
     }
 
@@ -263,11 +306,190 @@ impl App {
         self.rerender();
     }
 
+    // ---- §5 session persistence + multi-tab navigation ----
+
+    /// Persist the current tab set so the next launch can restore it. Best-effort: a write
+    /// failure is logged, never fatal. The active tab's URL/title are already current in the
+    /// `Browser` (kept in sync by `load_page`), and secret-bearing URLs are redacted by the
+    /// store on save.
+    fn save_session(&mut self) {
+        if let Some(store) = &self.store {
+            let sess = session::session_of(&self.browser);
+            match store.save_session(&sess) {
+                Ok(()) => tracing::info!(tabs = sess.tabs.len(), "session saved"),
+                Err(e) => tracing::warn!("session save failed: {e:#}"),
+            }
+        }
+    }
+
+    /// Focus a tab and **wake it on focus**: a hibernated (restored/background) tab holds no
+    /// `Page`, so switching to it eagerly loads its URL now — exactly the hibernation model.
+    fn focus_tab(&mut self, id: TabId) {
+        self.browser.focus(id);
+        self.tab_id = id;
+        if let Some(url) = self.browser.tab(id).map(|t| t.url.clone()) {
+            // Not a navigation (no history push); just realize the focused tab's page.
+            self.goto_no_history(&url);
+        }
+    }
+
+    /// Cycle the focused tab by `delta` (+1 next, -1 previous), wrapping.
+    fn cycle_tab(&mut self, delta: i32) {
+        let ids: Vec<TabId> = self.browser.tabs().iter().map(|t| t.id).collect();
+        if ids.len() < 2 {
+            return;
+        }
+        let cur = ids.iter().position(|&i| i == self.tab_id).unwrap_or(0);
+        let next = (cur as i32 + delta).rem_euclid(ids.len() as i32) as usize;
+        let id = ids[next];
+        self.focus_tab(id);
+        tracing::info!(tab = next + 1, of = ids.len(), url = %self.url, "switched tab");
+    }
+
+    /// Open a new tab and drop into the omnibox to type its destination.
+    fn new_tab(&mut self) {
+        let id = self.browser.open("about:blank");
+        self.tab_id = id;
+        self.url = "about:blank".to_string();
+        self.page = None;
+        self.omnibox_open = true;
+        self.omnibox_input.clear();
+        tracing::info!("new tab: type a URL or search, Enter to go");
+        self.rerender();
+    }
+
+    /// Close the focused tab. Closing the last tab saves and exits.
+    fn close_tab(&mut self, event_loop: &ActiveEventLoop) {
+        if self.browser.tabs().len() <= 1 {
+            self.save_session();
+            event_loop.exit();
+            return;
+        }
+        let closing = self.tab_id;
+        self.browser.close(closing);
+        if let Some(id) = self.browser.active() {
+            self.focus_tab(id);
+        }
+    }
+
+    // ---- §3 in-browser agent panel ----
+
+    /// Run one read-only agent task over the current page, then hand the session back.
+    ///
+    /// The Ctrl+J keypress that opened the prompt **is** the consent gesture (E6/G-a): the
+    /// live page moves into an [`AgentPanel`] under a **read-only** scope (it may look and
+    /// scroll and answer, never mutate the page or navigate away), the task runs, and the
+    /// page is handed straight back. Page content stays untrusted throughout — the panel
+    /// reuses `run_task`, whose observation fence is unconditional.
+    fn run_agent(&mut self, task: &str) {
+        let Some(page) = self.page.take() else {
+            tracing::warn!("agent: no page loaded");
+            return;
+        };
+        // Resolve a backend from the environment; if none, tell the user how to get one.
+        let llama_port = std::env::var("MANUK_LLAMA_PORT").ok().and_then(|s| s.parse().ok());
+        manuk_agent::env::load_dotenv();
+        let groq_present = manuk_agent::env::single_key().is_some();
+        let Some(kind) = panel::resolve_panel_backend(llama_port, groq_present) else {
+            tracing::warn!(
+                "agent: no backend configured. Set MANUK_LLAMA_PORT to a local llama-server, \
+                 or put GROQ_API_KEY in .env"
+            );
+            self.page = Some(page); // hand the page straight back, untouched
+            return;
+        };
+        let Some(backend) = panel::build_panel_backend(&kind) else {
+            tracing::warn!("agent: backend key disappeared");
+            self.page = Some(page);
+            return;
+        };
+
+        let (w, h) = match &self.gpu {
+            Some(g) => (g.config.width, g.config.height),
+            None => (self.width, 768),
+        };
+        let handoff = Handoff {
+            page,
+            scroll_y: self.scroll_y,
+            history: self.history.entries().to_vec(),
+        };
+        let mut panel = AgentPanel::new(PanelScope::read_only(), w, h);
+        panel.take_over(handoff, HandoffConsent::user_approved());
+
+        let rt = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
+            Ok(rt) => rt,
+            Err(e) => {
+                tracing::error!("agent runtime: {e}");
+                // Recover the page from the panel so the user is not left blank.
+                if let Some(h) = panel.hand_back(HandoffConsent::user_approved()) {
+                    self.page = Some(h.page);
+                }
+                return;
+            }
+        };
+        tracing::info!(backend = ?kind, task, "agent: running (read-only)");
+        match rt.block_on(panel.run(&backend, task)) {
+            Ok(outcome) => {
+                let answer = outcome.answer.unwrap_or_else(|| "(no answer)".to_string());
+                tracing::info!(steps = outcome.steps, "agent answer: {answer}");
+                println!("\n[agent] {answer}\n");
+                if let Some(w) = &self.window {
+                    w.set_title(&format!("[agent] {} — manuk", truncate(&answer, 60)));
+                }
+            }
+            Err(e) => tracing::error!("agent task failed: {e:#}"),
+        }
+
+        // Hand the live session back and resume the human view on the same page.
+        if let Some(h) = panel.hand_back(HandoffConsent::user_approved()) {
+            self.scroll_y = h.scroll_y;
+            let mut page = h.page;
+            page.relayout_zoomed(&self.fonts, w as f32, self.zoom);
+            self.viewport.content_height = page.content_height;
+            self.page = Some(page);
+            self.clamp_scroll();
+            self.rerender();
+        }
+    }
+
     /// E1 keyboard chrome. Returns true when the key was consumed.
     fn handle_key(&mut self, key: &Key, event_loop: &ActiveEventLoop) -> bool {
         let ctrl = self.modifiers.control_key();
         let alt = self.modifiers.alt_key();
         let shift = self.modifiers.shift_key();
+
+        // The agent prompt captures typed text while open — this is the trusted instruction
+        // channel; it never touches the page.
+        if self.agent_open {
+            match key {
+                Key::Named(NamedKey::Escape) => {
+                    self.agent_open = false;
+                    self.agent_input.clear();
+                    return true;
+                }
+                Key::Named(NamedKey::Enter) => {
+                    let task = std::mem::take(&mut self.agent_input);
+                    self.agent_open = false;
+                    if !task.trim().is_empty() {
+                        self.run_agent(task.trim());
+                    }
+                    return true;
+                }
+                Key::Named(NamedKey::Backspace) => {
+                    self.agent_input.pop();
+                    return true;
+                }
+                Key::Character(c) if !ctrl && !alt => {
+                    self.agent_input.push_str(c);
+                    return true;
+                }
+                Key::Named(NamedKey::Space) if !ctrl && !alt => {
+                    self.agent_input.push(' ');
+                    return true;
+                }
+                _ => {}
+            }
+        }
 
         // The omnibox captures typed text while open.
         if self.omnibox_open {
@@ -384,6 +606,22 @@ impl App {
                     tracing::info!("omnibox: type a URL or a search, Enter to go, Esc to cancel");
                     true
                 }
+                // §3 — open the in-browser agent panel over the current page.
+                "j" | "J" => {
+                    self.agent_open = true;
+                    self.agent_input.clear();
+                    tracing::info!("agent (read-only): type a task about this page, Enter to run, Esc to cancel");
+                    true
+                }
+                // §5 — tab management.
+                "t" | "T" => {
+                    self.new_tab();
+                    true
+                }
+                "w" | "W" => {
+                    self.close_tab(event_loop);
+                    true
+                }
                 "d" => {
                     let title = self
                         .page
@@ -401,11 +639,17 @@ impl App {
                     true
                 }
                 "q" => {
+                    self.save_session();
                     event_loop.exit();
                     true
                 }
                 _ => false,
             },
+            // §5 — Ctrl+Tab / Ctrl+Shift+Tab cycle tabs (wake on focus).
+            Key::Named(NamedKey::Tab) if ctrl => {
+                self.cycle_tab(if shift { -1 } else { 1 });
+                true
+            }
             Key::Named(NamedKey::ArrowLeft) if alt => {
                 if let Some(u) = self.history.back().map(str::to_string) {
                     self.goto_no_history(&u);
@@ -492,7 +736,10 @@ impl ApplicationHandler for App {
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
-            WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::CloseRequested => {
+                self.save_session();
+                event_loop.exit();
+            }
             WindowEvent::ModifiersChanged(m) => self.modifiers = m.state(),
             WindowEvent::KeyboardInput { event, .. } => {
                 if event.state == ElementState::Pressed {
@@ -569,6 +816,18 @@ impl ApplicationHandler for App {
             }
             _ => {}
         }
+    }
+}
+
+/// Truncate a string to `max` chars for a window-title summary, adding an ellipsis.
+fn truncate(s: &str, max: usize) -> String {
+    let s = s.split_whitespace().collect::<Vec<_>>().join(" ");
+    if s.chars().count() <= max {
+        s
+    } else {
+        let mut t: String = s.chars().take(max).collect();
+        t.push('…');
+        t
     }
 }
 

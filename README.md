@@ -372,6 +372,10 @@ engine. Three constraints, each enforced structurally:
   same type the standalone agent adopts/releases — so a logged-in DOM or half-filled form
   travels between front-ends with no re-fetch.
 
+**In the GUI:** `Ctrl+J` opens the read-only agent prompt over the current tab (backend from
+`MANUK_LLAMA_PORT` or Groq `.env`). Verified end-to-end: synthesized keystrokes drove a live
+local model to answer over example.com.
+
 ### Agent-scale traversal (INFERENCE.MD §4 — `agent::{cache,triage,concurrency}`)
 
 Three additive modules for traversing/scraping at scale — the lever is avoiding redundant
@@ -408,6 +412,10 @@ One store outside the repo (XDG state dir), distinct keys per concern:
 - **URL sensitivity.** Credentials in userinfo and secret-bearing query params
   (`access_token`, `token`, …) are redacted before anything is written to the plaintext
   store — URLs are not assumed uniformly low-stakes.
+
+**In the GUI:** the window restores the prior session (hibernated) on launch and saves it on
+close; `Ctrl+Tab`/`Ctrl+Shift+Tab` cycle tabs (wake-on-focus), `Ctrl+T`/`Ctrl+W` open/close.
+Verified end-to-end: a real window-close saved the session and a relaunch restored it.
 
 ## The JS-engine modification boundary
 
