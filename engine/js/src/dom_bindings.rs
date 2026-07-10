@@ -340,7 +340,7 @@ mod tests {
                 OnNewGlobalHookOption::FireOnNewGlobalHook, &*options)
         });
         let raw_cx = unsafe { runtime.cx().raw_cx() };
-        let _ar = unsafe { mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get()) };
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
         unsafe { install(raw_cx, &global, dom as *mut Dom) };
 
         rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
