@@ -83,7 +83,12 @@ impl Default for Settings {
     fn default() -> Self {
         Settings {
             home_url: "about:blank".to_string(),
-            search_template: "https://duckduckgo.com/?q=%s".to_string(),
+            // The no-JS "lite" endpoint: renders real, clickable results without
+            // requiring a script engine, so a typed search term actually follows
+            // through and displays results. The JS-heavy `duckduckgo.com/?q=` /
+            // `google.com/search?q=` pages render blank without a full JS runtime.
+            // Configurable — this is only the default.
+            search_template: "https://lite.duckduckgo.com/lite/?q=%s".to_string(),
             default_zoom: 1.0,
             block_trackers: true,
             zoom_by_origin: HashMap::new(),
@@ -406,7 +411,7 @@ mod tests {
         let s = Settings::default();
         match omnibox_intent("rust & c++", &s) {
             OmniboxIntent::Search(u) => {
-                assert_eq!(u, "https://duckduckgo.com/?q=rust+%26+c%2B%2B");
+                assert_eq!(u, "https://lite.duckduckgo.com/lite/?q=rust+%26+c%2B%2B");
             }
             other => panic!("expected a search, got {other:?}"),
         }

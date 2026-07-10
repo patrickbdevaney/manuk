@@ -222,6 +222,26 @@ impl LayoutBox {
         map
     }
 
+    /// Where a text field's value glyphs actually sit, for placing a caret **on the
+    /// text** rather than centered in the box: `(end_x, line_top, line_height)` — the
+    /// right edge of the run, its line-box top, and its line height (all absolute page
+    /// coords). `None` when the field has no value run yet (empty field), so callers
+    /// fall back to the box's content edge.
+    pub fn value_run(&self, node: NodeId) -> Option<(f32, f32, f32)> {
+        let mut found = None;
+        self.walk(&mut |b| {
+            if b.node == Some(node) {
+                if let BoxContent::Inline(frags) = &b.content {
+                    // The synthetic value is a single run owned by the field node.
+                    if let Some(f) = frags.iter().find(|f| f.node == Some(node)) {
+                        found = Some((f.x + f.width, f.line_top, f.style.line_height));
+                    }
+                }
+            }
+        });
+        found
+    }
+
     /// Shift this box and its whole subtree by `(dx, dy)` (absolute coords). Used to
     /// re-origin a float's content once its final position is known.
     fn translate(&mut self, dx: f32, dy: f32) {

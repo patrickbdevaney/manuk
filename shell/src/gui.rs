@@ -482,15 +482,27 @@ impl App {
         let Some(page) = self.page.as_ref() else { return };
         let rects = page.root_box.node_rects(page.dom());
         let Some(r) = rects.get(&node) else { return };
-        let value = page.dom().element(node).and_then(|e| e.attr("value")).unwrap_or("");
-        let key = FontKey { family: FontFamily::SansSerif, bold: false, italic: false };
-        // 20px is the form-control default font size; measure the value to place the caret.
-        let font_size = 16.0;
-        let tw = self.fonts.measure(value, key, font_size);
-        let caret_x = (r.x + 7.0 + tw).min(r.x + r.width - 3.0);
-        let top = r.y + CHROME_HEIGHT - self.scroll_y + 4.0;
-        let h = (r.height - 8.0).max(10.0);
         const INK: Rgba = Rgba { r: 30, g: 30, b: 30, a: 255 };
+        // Page content is drawn shifted down by the chrome band and up by the scroll.
+        let dy = CHROME_HEIGHT - self.scroll_y;
+
+        // Prefer the field's actual value run: the caret sits at the end of the glyphs,
+        // spanning the text's own line box, so it tracks the text baseline instead of the
+        // box centre (which diverge — the value is top-aligned in the content box, not
+        // box-centred). Fall back to the content edge for an empty field.
+        let (caret_x, top, h) = match page.root_box.value_run(node) {
+            Some((end_x, line_top, line_h)) => {
+                let caret_x = end_x.min(r.x + r.width - 3.0);
+                let h = (line_h - 2.0).max(10.0);
+                (caret_x, line_top + 1.0 + dy, h)
+            }
+            None => {
+                // Empty field: a short caret near the content top-left, box-centred.
+                let h = 14.0_f32.min((r.height - 6.0).max(10.0));
+                let caret_x = r.x + 6.0;
+                (caret_x, r.y + (r.height - h) / 2.0 + dy, h)
+            }
+        };
         canvas.fill_rect(caret_x, top, 1.5, h, INK);
     }
 
