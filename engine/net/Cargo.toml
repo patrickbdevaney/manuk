@@ -6,6 +6,12 @@ rust-version.workspace = true
 license.workspace = true
 description = "Networking layer: hyper/rustls/tokio HTTP(S) fetch. See CLAUDE.md."
 
+[features]
+default = []
+# Native content-blocking (E5) via Brave's `adblock` crate (EasyList/uBO syntax).
+# Opt-in — it is a sizeable dep, and blocking is a privacy feature, not core net.
+adblock = ["dep:adblock"]
+
 [dependencies]
 anyhow.workspace = true
 thiserror.workspace = true
@@ -29,6 +35,9 @@ chardetng.workspace = true
 # Calling the connector's `Service<Uri>` directly for speculative preconnect (warm
 # TCP+TLS without an HTTP request). Already in the tree transitively.
 tower-service = "0.3"
+# Native content-blocking (E5), feature-gated. Brave's audited adblock engine.
+# Keep default features (embedded-domain-resolver, full-regex-handling).
+adblock = { version = "0.13", optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "macros"] }

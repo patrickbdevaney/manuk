@@ -29,6 +29,10 @@ use tokio::io::AsyncReadExt;
 use tokio_util::io::StreamReader;
 use url::Url;
 
+/// E5 native content-blocking (feature `adblock`).
+#[cfg(feature = "adblock")]
+pub mod blocker;
+
 /// Identifies the engine truthfully — no competitor impersonation (CLAUDE.md Axis F).
 const USER_AGENT_STR: &str = concat!("Manuk/", env!("CARGO_PKG_VERSION"), " (+standards)");
 
