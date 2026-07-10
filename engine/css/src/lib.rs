@@ -898,6 +898,16 @@ struct Rule {
 #[derive(Clone, Debug, Default)]
 pub struct Stylesheet {
     rules: Vec<Rule>,
+    /// The original CSS source, retained so the Stylo engine can re-parse it with
+    /// Stylo's own (spec-complete) parser. Empty for programmatically-built sheets.
+    source: String,
+}
+
+impl Stylesheet {
+    /// The raw CSS text this sheet was parsed from (for the Stylo cascade path).
+    pub fn source(&self) -> &str {
+        &self.source
+    }
 }
 
 impl Stylesheet {
@@ -952,7 +962,10 @@ impl Stylesheet {
                 });
             }
         }
-        Stylesheet { rules }
+        Stylesheet {
+            rules,
+            source: src,
+        }
     }
 }
 
