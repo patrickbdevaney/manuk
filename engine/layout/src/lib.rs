@@ -735,10 +735,25 @@ impl Ctx<'_> {
 
         if !has_block && !kids.iter().any(|&k| is_float(&self.styles[&k])) {
             // Pure inline formatting context (no floats to flow around).
-            let items = self.collect_inline_group(&flow_kids);
+            let items = self.collect_inline_group(&flow_kids, cw);
             let align = self.styles[&node].text_align;
-            let (frags, h) = self.layout_inline(&items, cx, cy, cw, align, floats);
-            return (BoxContent::Inline(frags), h);
+            let (frags, atomics, h) = self.layout_inline(items, cx, cy, cw, align, floats);
+            if atomics.is_empty() {
+                return (BoxContent::Inline(frags), h);
+            }
+            // Inline-blocks present: the anonymous line box (text) and the atomic boxes
+            // become siblings so both reach the fragment tree.
+            let mut boxes = Vec::new();
+            if !frags.is_empty() {
+                boxes.push(LayoutBox {
+                    rect: Rect { x: cx, y: cy, width: cw, height: h },
+                    background: None,
+                    node: None,
+                    content: BoxContent::Inline(frags),
+                });
+            }
+            boxes.extend(atomics);
+            return (BoxContent::Block(boxes), h);
         }
 
         // Block container: block children stack with adjacent-sibling margin
@@ -1439,13 +1454,13 @@ impl Ctx<'_> {
         if run.is_empty() {
             return (cur_y, prev_margin);
         }
-        let items = self.collect_inline_group(run);
+        let items = self.collect_inline_group(run, cw);
         run.clear();
         if items.is_empty() {
             return (cur_y, prev_margin); // whitespace-only: keep the pending margin
         }
         let start = cur_y + prev_margin;
-        let (frags, h) = self.layout_inline(&items, cx, start, cw, TextAlign::Left, floats);
+        let (frags, atomics, h) = self.layout_inline(items, cx, start, cw, TextAlign::Left, floats);
         boxes.push(LayoutBox {
             rect: Rect {
                 x: cx,
@@ -1457,6 +1472,8 @@ impl Ctx<'_> {
             node: None,
             content: BoxContent::Inline(frags),
         });
+        // Inline-block atomic boxes are already absolutely positioned; add them as siblings.
+        boxes.extend(atomics);
         (start + h, 0.0)
     }
 
@@ -1508,12 +1525,12 @@ impl Ctx<'_> {
 
     /// Collect inline tokens (words) from a run of inline-level siblings, tracking
     /// inter-word spacing.
-    fn collect_inline_group(&self, nodes: &[NodeId]) -> Vec<InlineItem> {
+    fn collect_inline_group(&self, nodes: &[NodeId], cw: f32) -> Vec<InlineItem> {
         let mut out = Vec::new();
         let mut pending_space = false;
         let mut first = true;
         for &n in nodes {
-            self.collect_inline_node(n, &mut out, &mut pending_space, &mut first, None);
+            self.collect_inline_node(n, &mut out, &mut pending_space, &mut first, None, cw);
         }
         out
     }
@@ -1528,6 +1545,7 @@ impl Ctx<'_> {
         pending_space: &mut bool,
         first: &mut bool,
         owner: Option<NodeId>,
+        cw: f32,
     ) {
         match self.dom.data(node) {
             NodeData::Text(t) => {
@@ -1548,13 +1566,35 @@ impl Ctx<'_> {
                 }
             }
             NodeData::Element(_) => {
-                if self.styles.get(&node).map(|s| s.display) == Some(Display::None) {
+                let disp = self.styles.get(&node).map(|s| s.display);
+                if disp == Some(Display::None) {
+                    return;
+                }
+                // An `inline-block` (or inline-flex/grid) is an *atomic* inline box: lay it
+                // out as a block right here and flow it like a word, rather than recursing
+                // into its children as inline text.
+                if matches!(disp, Some(Display::InlineBlock | Display::Flex | Display::Grid)) {
+                    let s = &self.styles[&node];
+                    let ml = s.margin.left.resolve(cw, 0.0);
+                    let mr = s.margin.right.resolve(cw, 0.0);
+                    let mut fc = FloatContext::new(0.0, cw);
+                    let r = self.layout_block(node, cw, 0.0, 0.0, 0.0, &mut fc);
+                    let advance = ml + r.boxx.rect.width + mr;
+                    let height = r.margin_top + r.boxx.rect.height + r.margin_bottom;
+                    out.push(InlineItem::Atomic {
+                        box_: Box::new(r.boxx),
+                        advance,
+                        height,
+                        space_before: *pending_space && !*first,
+                    });
+                    *first = false;
+                    *pending_space = false;
                     return;
                 }
                 // N4: inline content also follows the flat tree.
                 let children: Vec<NodeId> = self.dom.flat_children(node);
                 for c in children {
-                    self.collect_inline_node(c, out, pending_space, first, Some(node));
+                    self.collect_inline_node(c, out, pending_space, first, Some(node), cw);
                 }
             }
             _ => {}
@@ -1570,13 +1610,13 @@ impl Ctx<'_> {
     /// approximation when a taller inline box lands mid-line.
     fn layout_inline(
         &self,
-        items: &[InlineItem],
+        items: Vec<InlineItem>,
         cx: f32,
         cy: f32,
         cw: f32,
         align: TextAlign,
         floats: &FloatContext,
-    ) -> (Vec<TextFragment>, f32) {
+    ) -> (Vec<TextFragment>, Vec<LayoutBox>, f32) {
         // Usable (left_x, width) at vertical `y` for a line of height `h`: the float
         // exclusions intersected with this container's content box, dropping past
         // floats that leave no room.
@@ -1596,23 +1636,67 @@ impl Ctx<'_> {
         };
 
         let mut frags = Vec::new();
+        let mut atomic_boxes: Vec<LayoutBox> = Vec::new();
         let mut y = cy;
         let mut cur: Vec<LineFrag> = Vec::new();
         let mut pen = 0.0f32;
         let mut line_left = cx;
         let mut line_avail = cw;
 
+        // The "space" font metrics for an atomic (no text): use a default face at the box's
+        // notional size doesn't matter — we only need the width of a normal space.
         for item in items {
-            let key = item.style.font_key;
-            let size = item.style.font_size;
-            let lm = self.fonts.line_metrics(key, size);
-            let word_w = self.fonts.measure(&item.text, key, size);
-            let space_w = if item.space_before {
-                self.fonts.measure(" ", key, size)
-            } else {
-                0.0
-            };
-            let est_h = item.style.line_height.max(lm.ascent + lm.descent);
+            // Per-item main-axis advance, leading space, cross-axis height, and the LineFrag
+            // builder (positioned once the line's x is known).
+            let (advance, space_w, est_h, make_frag): (f32, f32, f32, Box<dyn FnOnce(f32) -> LineFrag>) =
+                match item {
+                    InlineItem::Word { text, style, space_before, node } => {
+                        let key = style.font_key;
+                        let size = style.font_size;
+                        let lm = self.fonts.line_metrics(key, size);
+                        let word_w = self.fonts.measure(&text, key, size);
+                        let space_w = if space_before { self.fonts.measure(" ", key, size) } else { 0.0 };
+                        let est_h = style.line_height.max(lm.ascent + lm.descent);
+                        (
+                            word_w,
+                            space_w,
+                            est_h,
+                            Box::new(move |x: f32| LineFrag {
+                                x,
+                                width: word_w,
+                                text,
+                                style,
+                                ascent: lm.ascent,
+                                descent: lm.descent,
+                                node,
+                                atomic: None,
+                                atomic_h: 0.0,
+                            }),
+                        )
+                    }
+                    InlineItem::Atomic { box_, advance, height, space_before } => {
+                        // Whitespace around an atomic uses the default text space width.
+                        let key = FontKey { family: FontFamily::SansSerif, bold: false, italic: false };
+                        let space_w = if space_before { self.fonts.measure(" ", key, 16.0) } else { 0.0 };
+                        (
+                            advance,
+                            space_w,
+                            height,
+                            Box::new(move |x: f32| LineFrag {
+                                x,
+                                width: advance,
+                                text: String::new(),
+                                style: TextStyle { font_key: key, font_size: 16.0, color: Rgba::BLACK, line_height: height },
+                                // Treated as all-ascent so text on the same line shares the top.
+                                ascent: height,
+                                descent: 0.0,
+                                node: None,
+                                atomic: Some(box_),
+                                atomic_h: height,
+                            }),
+                        )
+                    }
+                };
 
             if cur.is_empty() {
                 let (l, w) = open_band(&mut y, est_h);
@@ -1620,50 +1704,30 @@ impl Ctx<'_> {
                 line_avail = w;
             }
 
-            if !cur.is_empty() && pen + space_w + word_w > line_avail {
-                // Close the current line, then open a fresh band for this word.
-                y = close_line(
-                    &mut frags, &cur, y, line_left, line_avail, align, self.fonts,
-                );
-                cur.clear();
+            if !cur.is_empty() && pen + space_w + advance > line_avail {
+                // Close the current line, then open a fresh band for this item.
+                y = close_line(&mut frags, &mut atomic_boxes, &mut cur, y, line_left, line_avail, align, self.fonts);
                 let (l, w) = open_band(&mut y, est_h);
                 line_left = l;
                 line_avail = w;
-                cur.push(LineFrag {
-                    x: 0.0,
-                    width: word_w,
-                    text: item.text.clone(),
-                    style: item.style,
-                    ascent: lm.ascent,
-                    descent: lm.descent,
-                    node: item.node,
-                });
-                pen = word_w;
+                cur.push(make_frag(0.0));
+                pen = advance;
             } else {
                 let x = if cur.is_empty() { 0.0 } else { pen + space_w };
-                cur.push(LineFrag {
-                    x,
-                    width: word_w,
-                    text: item.text.clone(),
-                    style: item.style,
-                    ascent: lm.ascent,
-                    descent: lm.descent,
-                    node: item.node,
-                });
-                pen = x + word_w;
+                cur.push(make_frag(x));
+                pen = x + advance;
             }
         }
         if !cur.is_empty() {
-            y = close_line(
-                &mut frags, &cur, y, line_left, line_avail, align, self.fonts,
-            );
+            y = close_line(&mut frags, &mut atomic_boxes, &mut cur, y, line_left, line_avail, align, self.fonts);
         }
 
-        (frags, y - cy)
+        (frags, atomic_boxes, y - cy)
     }
 }
 
-/// One word's builder within a line, before its vertical position is committed.
+/// One item's builder within a line, before its vertical position is committed. Either a
+/// text word (`atomic` is `None`) or an inline-block atomic box (`atomic` holds its box).
 struct LineFrag {
     x: f32,
     width: f32,
@@ -1672,13 +1736,18 @@ struct LineFrag {
     ascent: f32,
     descent: f32,
     node: Option<NodeId>,
+    /// `Some` for an `inline-block`: the box to place, and its margin-box height.
+    atomic: Option<Box<LayoutBox>>,
+    atomic_h: f32,
 }
 
 /// Commit a line's fragments at vertical `y` within band `[line_left, +line_avail)`,
 /// applying `align`. Returns the y of the next line (`y + line_height`).
+#[allow(clippy::too_many_arguments)]
 fn close_line(
     frags: &mut Vec<TextFragment>,
-    line: &[LineFrag],
+    atomic_boxes: &mut Vec<LayoutBox>,
+    line: &mut Vec<LineFrag>,
     y: f32,
     line_left: f32,
     line_avail: f32,
@@ -1688,14 +1757,22 @@ fn close_line(
     let ascent = line.iter().map(|f| f.ascent).fold(0.0, f32::max);
     let descent = line.iter().map(|f| f.descent).fold(0.0, f32::max);
     let pref = line.iter().map(|f| f.style.line_height).fold(0.0, f32::max);
-    let content_h = ascent + descent;
+    // An inline-block's margin-box height participates in the line height.
+    let tallest_atomic = line.iter().map(|f| f.atomic_h).fold(0.0, f32::max);
+    let content_h = (ascent + descent).max(tallest_atomic);
     let line_h = pref.max(content_h);
-    let leading = (line_h - content_h) / 2.0;
+    let leading = ((line_h - (ascent + descent)) / 2.0).max(0.0);
     let baseline = y + leading + ascent;
 
     let line_width = line
         .last()
-        .map(|f| f.x + fonts.measure(&f.text, f.style.font_key, f.style.font_size))
+        .map(|f| {
+            if f.atomic.is_some() {
+                f.x + f.width
+            } else {
+                f.x + fonts.measure(&f.text, f.style.font_key, f.style.font_size)
+            }
+        })
         .unwrap_or(0.0);
     let offset = match align {
         TextAlign::Center => (line_avail - line_width).max(0.0) / 2.0,
@@ -1703,28 +1780,49 @@ fn close_line(
         _ => 0.0,
     };
 
-    for f in line {
-        frags.push(TextFragment {
-            x: line_left + offset + f.x,
-            line_top: y,
-            baseline,
-            width: f.width,
-            text: f.text.clone(),
-            style: f.style,
-            node: f.node,
-        });
+    for f in line.drain(..) {
+        let fx = line_left + offset + f.x;
+        if let Some(mut b) = f.atomic {
+            // Position the atomic box: its content was laid out at the origin, so translate
+            // its whole subtree to the line slot. (vertical-align is simplified to top.)
+            b.translate(fx, y);
+            atomic_boxes.push(*b);
+        } else {
+            frags.push(TextFragment {
+                x: fx,
+                line_top: y,
+                baseline,
+                width: f.width,
+                text: f.text,
+                style: f.style,
+                node: f.node,
+            });
+        }
     }
     y + line_h
 }
 
-/// An inline token: one word plus whether whitespace preceded it.
-struct InlineItem {
-    text: String,
-    style: TextStyle,
-    space_before: bool,
-    /// Deepest element ancestor of this word's text node.
-    node: Option<NodeId>,
+/// An inline-level token in an inline formatting context: either a text word or an
+/// **atomic inline box** (`display:inline-block`), which flows like a word but carries a
+/// pre-laid-out block box of a definite width/height.
+enum InlineItem {
+    Word {
+        text: String,
+        style: TextStyle,
+        space_before: bool,
+        /// Deepest element ancestor of this word's text node.
+        node: Option<NodeId>,
+    },
+    /// An `inline-block`: `advance` is its margin-box main-axis size; `box_` is its already
+    /// laid-out block box (positioned at the origin, translated into place at line close).
+    Atomic {
+        box_: Box<LayoutBox>,
+        advance: f32,
+        height: f32,
+        space_before: bool,
+    },
 }
+
 
 fn push_word(
     out: &mut Vec<InlineItem>,
@@ -1734,7 +1832,7 @@ fn push_word(
     first: &mut bool,
     node: Option<NodeId>,
 ) {
-    out.push(InlineItem {
+    out.push(InlineItem::Word {
         text: std::mem::take(buf),
         style,
         space_before: *pending_space && !*first,
@@ -1756,6 +1854,36 @@ mod tests {
         let fonts = FontContext::new();
         let root = layout_document(&dom, &styles, &fonts, width);
         (dom, root)
+    }
+
+    /// `display:inline-block` flows atomically: sized boxes sit side by side on a line, and
+    /// a following block drops below the line's height. Verified numerically against Chrome
+    /// by the parity harness; this pins the geometry as a unit.
+    #[test]
+    fn inline_block_boxes_flow_horizontally_then_a_block_drops_below() {
+        let (dom, root) = layout_html(
+            r#"<body style="margin:0">
+                <span id="a" style="display:inline-block;width:80px;height:30px"></span>
+                <span id="b" style="display:inline-block;width:80px;height:30px"></span>
+                <div id="below" style="width:120px;height:25px"></div></body>"#,
+            "",
+            800.0,
+        );
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            let n = dom.descendants(dom.root()).find(|&n| dom.element(n).and_then(|e| e.id()) == Some(id)).unwrap();
+            *rects.get(&n).unwrap_or_else(|| panic!("no rect for #{id}"))
+        };
+
+        let a = by_id("a");
+        let b = by_id("b");
+        assert_eq!((a.x, a.y, a.width, a.height), (0.0, 0.0, 80.0, 30.0));
+        // The second inline-block sits to the right of the first, on the same line.
+        assert!(b.x >= 80.0, "second inline-block is to the right: {b:?}");
+        assert!((b.y - 0.0).abs() < 0.5, "same line as the first");
+        // The block after the inline run drops below the 30px line.
+        let below = by_id("below");
+        assert!((below.y - 30.0).abs() < 1.0, "block drops below the inline line: {below:?}");
     }
 
     /// §4a — inline elements never produce a `LayoutBox`, so without threading node

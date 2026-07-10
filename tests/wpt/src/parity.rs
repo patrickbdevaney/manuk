@@ -287,9 +287,10 @@ mod tests {
         let corpus = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("corpus");
         let report = run_parity(&corpus, 800, 600, DEFAULT_TOL, None, &fonts);
 
+        // The whole corpus now matches Chrome; the gate holds all of it to parity so any
+        // regression in these primitives fails the build.
         for page in &report.pages {
-            if ["block-flow", "positioning", "box-model", "flex-row"].contains(&page.name.as_str()) {
-                assert!(page.have_reference, "{} should have a Chrome reference", page.name);
+            if page.have_reference {
                 assert_eq!(
                     page.within(report.tol),
                     page.total(),
