@@ -151,6 +151,15 @@ pub struct LayoutBox {
     pub content: BoxContent,
 }
 
+/// A table cell placed on the row/column grid (CSS2 §17.5 colspan/rowspan).
+struct PlacedCell {
+    cell: NodeId,
+    row: usize,
+    col: usize,
+    colspan: usize,
+    rowspan: usize,
+}
+
 /// A box's painted border: per-edge widths (top, right, bottom, left) and a single color.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Border {
@@ -1173,9 +1182,40 @@ impl Ctx<'_> {
         let content_x = border_x + bl + pl;
         let content_y = border_y + bt + pt;
 
-        let spacing = s.border_spacing;
+        // `border-collapse` drops the inter-cell spacing (cells share borders).
+        let spacing = if s.border_collapse { 0.0 } else { s.border_spacing };
         let rows = self.collect_table_rows(node);
-        let ncols = rows.iter().map(|r| r.len()).max().unwrap_or(0);
+
+        // Placement grid: each cell claims the next free slot in its row, spanning
+        // colspan columns × rowspan rows and marking those slots occupied (so cells below a
+        // rowspan and to the right of a colspan shift over). CSS2 §17.5.
+        let mut placed: Vec<PlacedCell> = Vec::new();
+        let mut occ: Vec<Vec<bool>> = Vec::new();
+        let mut ncols = 0usize;
+        for (r, row) in rows.iter().enumerate() {
+            let mut col = 0usize;
+            for &cell in row {
+                while occ.get(r).and_then(|o| o.get(col)).copied().unwrap_or(false) {
+                    col += 1;
+                }
+                let cs = self.cell_span(cell, "colspan");
+                let rs = self.cell_span(cell, "rowspan");
+                for rr in r..r + rs {
+                    while occ.len() <= rr {
+                        occ.push(Vec::new());
+                    }
+                    for cc in col..col + cs {
+                        while occ[rr].len() <= cc {
+                            occ[rr].push(false);
+                        }
+                        occ[rr][cc] = true;
+                    }
+                }
+                placed.push(PlacedCell { cell, row: r, col, colspan: cs, rowspan: rs });
+                ncols = ncols.max(col + cs);
+                col += cs;
+            }
+        }
 
         // Column widths.
         let spacing_total = spacing * (ncols as f32 + 1.0);
@@ -1204,38 +1244,66 @@ impl Ctx<'_> {
             acc += w + spacing;
         }
 
-        // Lay out rows and cells.
-        let mut row_boxes = Vec::new();
-        let mut cur_y = content_y + spacing;
-        for row in &rows {
-            let mut cells = Vec::new();
-            let mut row_h = 0.0f32;
-            for (c, &cell) in row.iter().enumerate() {
-                if c >= ncols {
-                    break;
+        let nrows = rows.len();
+        // The pixel width a cell spanning `cs` columns from `col` occupies (its columns plus
+        // the spacing between them).
+        let span_w = |col: usize, cs: usize| -> f32 {
+            let end = (col + cs).min(widths.len());
+            let sum: f32 = widths.get(col..end).map(|w| w.iter().sum()).unwrap_or(0.0);
+            sum + spacing * cs.saturating_sub(1) as f32
+        };
+
+        // Lay out each placed cell; record its natural height. Single-row cells set their
+        // row's height; rowspan cells' overflow is added to their last spanned row.
+        let mut laid: Vec<(usize, LayoutBox, f32)> = Vec::new();
+        let mut row_h = vec![0.0f32; nrows.max(1)];
+        for (pi, p) in placed.iter().enumerate() {
+            let cx = col_x.get(p.col).copied().unwrap_or(content_x);
+            let (cbox, bh) = self.layout_cell(p.cell, cx, 0.0, span_w(p.col, p.colspan));
+            if p.rowspan == 1 {
+                row_h[p.row] = row_h[p.row].max(bh);
+            }
+            laid.push((pi, cbox, bh));
+        }
+        for (pi, _, bh) in &laid {
+            let p = &placed[*pi];
+            if p.rowspan > 1 {
+                let last = (p.row + p.rowspan - 1).min(nrows.saturating_sub(1));
+                let spanned: f32 = (p.row..=last).map(|r| row_h[r]).sum::<f32>()
+                    + spacing * (p.rowspan - 1) as f32;
+                if *bh > spanned {
+                    row_h[last] += *bh - spanned;
                 }
-                let (cbox, bh) = self.layout_cell(cell, col_x[c], cur_y, widths[c]);
-                row_h = row_h.max(bh);
-                cells.push(cbox);
             }
-            // Stretch every cell to the row height (CSS2 §17.5.3 vertical sizing).
-            for cbox in &mut cells {
-                cbox.rect.height = row_h;
-            }
+        }
+        // Row y positions.
+        let mut row_y = vec![content_y + spacing; nrows.max(1)];
+        let mut yy = content_y + spacing;
+        for r in 0..nrows {
+            row_y[r] = yy;
+            yy += row_h[r] + spacing;
+        }
+        // Position each cell at its start row and stretch it over its spanned rows.
+        let mut row_cells: Vec<Vec<LayoutBox>> = vec![Vec::new(); nrows.max(1)];
+        for (pi, mut cbox, _) in laid {
+            let p = &placed[pi];
+            let last = (p.row + p.rowspan - 1).min(nrows.saturating_sub(1));
+            let dy = row_y[p.row] - cbox.rect.y;
+            cbox.translate(0.0, dy);
+            cbox.rect.height = (row_y[last] + row_h[last]) - row_y[p.row];
+            row_cells[p.row].push(cbox);
+        }
+        let mut row_boxes = Vec::new();
+        for r in 0..nrows {
             row_boxes.push(LayoutBox {
-                rect: Rect {
-                    x: content_x,
-                    y: cur_y,
-                    width: content_w,
-                    height: row_h,
-                },
+                rect: Rect { x: content_x, y: row_y[r], width: content_w, height: row_h[r] },
                 background: None,
                 border: None,
                 node: None,
-                content: BoxContent::Block(cells),
+                content: BoxContent::Block(std::mem::take(&mut row_cells[r])),
             });
-            cur_y += row_h + spacing;
         }
+        let cur_y = yy;
 
         let content_height = (cur_y - content_y).max(0.0);
         let content_height = match s.height {
@@ -1263,6 +1331,16 @@ impl Ctx<'_> {
             margin_bottom: mb,
             flow_bottom: border_y + border_box_h,
         }
+    }
+
+    /// A cell's `colspan`/`rowspan` attribute value (≥ 1).
+    fn cell_span(&self, cell: NodeId, attr: &str) -> usize {
+        self.dom
+            .element(cell)
+            .and_then(|e| e.attr(attr))
+            .and_then(|v| v.trim().parse::<usize>().ok())
+            .unwrap_or(1)
+            .max(1)
     }
 
     /// Gather a table's rows (each a list of cell nodes), flattening row groups.

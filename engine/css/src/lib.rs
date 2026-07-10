@@ -287,6 +287,8 @@ pub struct ComputedStyle {
     pub table_layout: TableLayout,
     /// `border-spacing` (px) between table cells in the separated-borders model.
     pub border_spacing: f32,
+    /// `border-collapse: collapse` — cells share borders (no border-spacing).
+    pub border_collapse: bool,
     /// `box-sizing` — whether `width`/`height` measure the content box or the border box.
     pub box_sizing: BoxSizing,
     /// `justify-content` — flex main-axis distribution (only meaningful on a flex container).
@@ -352,6 +354,7 @@ impl ComputedStyle {
             z_index: None,
             table_layout: TableLayout::Auto,
             border_spacing: 0.0,
+            border_collapse: false,
             box_sizing: BoxSizing::ContentBox,
             justify_content: JustifyContent::FlexStart,
             align_items: AlignItems::Stretch,
@@ -1166,6 +1169,10 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
     if matches!(tag, "ul" | "ol") {
         s.padding.left = Dim::Px(40.0);
     }
+    // UA default: table cells have 1px padding (Chrome/Firefox), which affects row heights.
+    if matches!(tag, "td" | "th") {
+        s.padding = Sides::all(Dim::Px(1.0));
+    }
 }
 
 /// Apply one declaration onto a computed style. Unknown properties/values are
@@ -1291,6 +1298,7 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 _ => TableLayout::Auto,
             }
         }
+        "border-collapse" => s.border_collapse = v.trim() == "collapse",
         "border-spacing" => {
             // Only the first (horizontal) length is used in this slice.
             if let Some(px) = v
