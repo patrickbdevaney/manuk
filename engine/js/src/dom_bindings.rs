@@ -232,7 +232,10 @@ unsafe fn new_reflector(cx: *mut RawJSContext, dom: *mut Dom, node: NodeId) -> *
         JS_SetProperty(&mut wrap_cx(cx), g.handle(), c"__pending_node".as_ptr(), ov.handle());
         let _ = eval_in_current_global(
             cx,
-            &format!("(globalThis.__nodes||(globalThis.__nodes={{}}))[{id}]=__pending_node"),
+            &format!(
+                "(globalThis.__nodes||(globalThis.__nodes={{}}))[{id}]=__pending_node;\
+                 __pending_node.__nodeId={id}"
+            ),
         );
     }
     obj.get()
@@ -272,6 +275,10 @@ unsafe fn define_members(
         def(c"createTextNode", doc_create_text_node, 1);
         def(c"getElementsByTagName", el_get_by_tag, 1);
         def(c"getElementsByClassName", el_get_by_class, 1);
+        // Document-level (delegated) events.
+        def(c"addEventListener", el_add_event_listener, 2);
+        def(c"removeEventListener", el_remove_event_listener, 2);
+        def(c"dispatchEvent", el_dispatch_event, 1);
     } else {
         def(c"appendChild", el_append_child, 1);
         def(c"setAttribute", el_set_attribute, 2);
@@ -284,6 +291,7 @@ unsafe fn define_members(
         def(c"querySelector", doc_query, 1);
         def(c"querySelectorAll", doc_query_all, 1);
         def(c"addEventListener", el_add_event_listener, 2);
+        def(c"removeEventListener", el_remove_event_listener, 2);
         def(c"dispatchEvent", el_dispatch_event, 1);
         def(c"getBoundingClientRect", el_get_bounding_rect, 0);
         // DOM tree mutation + cloning.
@@ -761,6 +769,12 @@ unsafe extern "C" fn el_add_event_listener(
         *vp = UndefinedValue();
         return true;
     }
+    // Third arg: a boolean `true` selects the capture phase (an options object defaults to
+    // bubble here; `{capture:true}` parsing is a follow-on).
+    let capture = argc >= 3 && {
+        let opt = *vp.add(4);
+        opt.is_boolean() && opt.to_boolean()
+    };
     // Stash the handler (arg 1) on the global, then register it via the helper.
     let global = CurrentGlobalOrNull(&wrap_cx(cx));
     if !global.is_null() {
@@ -773,9 +787,49 @@ unsafe extern "C" fn el_add_event_listener(
             fnval.handle(),
         );
         let script = format!(
-            "__addEventListener({}, {}, __pending_fn)",
+            "__addEventListener({}, {}, __pending_fn, {})",
             node.0,
-            js_string_literal(&ty)
+            js_string_literal(&ty),
+            capture
+        );
+        let _ = eval_in_current_global(cx, &script);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `element.removeEventListener(type, handler[, capture])`.
+unsafe extern "C" fn el_remove_event_listener(
+    cx: *mut RawJSContext,
+    argc: u32,
+    vp: *mut Value,
+) -> bool {
+    let Some((_, node)) = this_node(vp) else {
+        *vp = UndefinedValue();
+        return true;
+    };
+    let Some(ty) = arg_string(cx, vp, argc, 0) else {
+        *vp = UndefinedValue();
+        return true;
+    };
+    if argc < 2 {
+        *vp = UndefinedValue();
+        return true;
+    }
+    let capture = argc >= 3 && {
+        let opt = *vp.add(4);
+        opt.is_boolean() && opt.to_boolean()
+    };
+    let global = CurrentGlobalOrNull(&wrap_cx(cx));
+    if !global.is_null() {
+        rooted!(in(cx) let g = global);
+        rooted!(in(cx) let fnval = *vp.add(3));
+        JS_SetProperty(&mut wrap_cx(cx), g.handle(), c"__pending_fn".as_ptr(), fnval.handle());
+        let script = format!(
+            "__removeEventListener({}, {}, __pending_fn, {})",
+            node.0,
+            js_string_literal(&ty),
+            capture
         );
         let _ = eval_in_current_global(cx, &script);
     }
@@ -979,6 +1033,22 @@ pub unsafe fn install(
 
     // The JS-side event-listener registry that addEventListener/dispatchEvent drive.
     let _ = eval_in_current_global(cx, LISTENER_PRELUDE);
+    // Seed the identity cache with the document (id = root) so event bubbling to
+    // document-level (delegated) listeners resolves its node id.
+    JS_SetProperty(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__pending_node".as_ptr(),
+        doc_val.handle(),
+    );
+    let _ = eval_in_current_global(
+        cx,
+        &format!(
+            "(globalThis.__nodes||(globalThis.__nodes={{}}))[{id}]=__pending_node;\
+             document.__nodeId={id}",
+            id = root.0
+        ),
+    );
 
     // Tier-0 BOM globals (window/self/console/navigator). Register the native console
     // sink, then install the JS shim with the honest UA + platform substituted in.
@@ -1082,17 +1152,52 @@ fn collect_inline_scripts(dom: &Dom) -> Vec<String> {
 /// `__listeners` map.
 const LISTENER_PRELUDE: &str = r#"
     globalThis.__listeners = {};
-    globalThis.__addEventListener = function(nid, type, fn) {
+    globalThis.__addEventListener = function(nid, type, fn, capture) {
         if (typeof fn !== 'function') return;
-        var k = nid + ':' + type;
+        var k = nid + ':' + type + ':' + (capture ? 'c' : 'b');
         (__listeners[k] || (__listeners[k] = [])).push(fn);
     };
+    globalThis.__removeEventListener = function(nid, type, fn, capture) {
+        var k = nid + ':' + type + ':' + (capture ? 'c' : 'b');
+        var arr = __listeners[k];
+        if (!arr) return;
+        var i = arr.indexOf(fn);
+        if (i >= 0) arr.splice(i, 1);
+    };
+    // A real Event with capture/bubble propagation, target/currentTarget, preventDefault
+    // and stopPropagation. Returns false iff preventDefault was called (so the engine can
+    // decide whether to run the default action).
     globalThis.__dispatchEvent = function(nid, type) {
-        var arr = __listeners[nid + ':' + type];
-        if (!arr || arr.length === 0) return false;
-        var ev = { type: type };
-        for (var i = 0; i < arr.length; i++) { arr[i](ev); }
-        return true;
+        var target = (globalThis.__nodes && __nodes[nid]) || null;
+        // Ancestor path: target, parent, ... root.
+        var path = [];
+        for (var cur = target; cur; cur = cur.parentNode) path.push(cur);
+        var ev = {
+            type: type, target: target, currentTarget: null, eventPhase: 0,
+            bubbles: true, cancelable: true, defaultPrevented: false, _stop: false,
+            preventDefault: function () { this.defaultPrevented = true; },
+            stopPropagation: function () { this._stop = true; },
+            stopImmediatePropagation: function () { this._stop = true; }
+        };
+        var invoke = function (node, phase) {
+            if (!node || ev._stop) return;
+            var arr = __listeners[node.__nodeId + ':' + type + ':' + phase];
+            if (!arr) return;
+            ev.currentTarget = node;
+            for (var i = 0; i < arr.length && !ev._stop; i++) {
+                try { arr[i].call(node, ev); } catch (e) {}
+            }
+        };
+        // Capture: root → target's parent.
+        ev.eventPhase = 1;
+        for (var i = path.length - 1; i >= 1; i--) invoke(path[i], 'c');
+        // At target (both capture- and bubble-registered).
+        ev.eventPhase = 2;
+        invoke(path[0], 'c'); invoke(path[0], 'b');
+        // Bubble: target's parent → root.
+        ev.eventPhase = 3;
+        if (ev.bubbles) for (var i = 1; i < path.length; i++) invoke(path[i], 'b');
+        return !ev.defaultPrevented;
     };
 "#;
 
@@ -1319,8 +1424,19 @@ mod tests {
             globalThis.clicks = 0;
             var btn = document.createElement("button");
             btn.addEventListener("click", function(ev){ if (ev.type === "click") clicks += 1; });
-            var immediate = btn.dispatchEvent("click");   // sync → clicks = 1, true
-            var noListener = btn.dispatchEvent("hover");   // no listener → false
+            var immediate = btn.dispatchEvent("click");   // sync → clicks = 1, returns true
+            var noListener = btn.dispatchEvent("hover");   // no listener → not prevented → true
+
+            // Capture → target → bubble ordering, event.target, and preventDefault.
+            var outer = document.createElement("div");
+            var inner = document.createElement("span");
+            outer.appendChild(inner);
+            globalThis.evlog = [];
+            outer.addEventListener("click", function(ev){ evlog.push("bubble:" + (ev.target === inner)); });
+            outer.addEventListener("click", function(ev){ evlog.push("capture"); }, true);
+            inner.addEventListener("click", function(ev){ evlog.push("target"); ev.preventDefault(); });
+            var notPrevented = inner.dispatchEvent("click");
+            var evOk = (evlog.join(",") === "capture,target,bubble:true") && (notPrevented === false);
             setTimeout(function(){ btn.dispatchEvent("click"); });  // via the loop → clicks = 2
 
             globalThis.dom_ok =
@@ -1333,7 +1449,7 @@ mod tests {
               (Array.isArray(all)) && (all.length === 1) && (all[0].tagName === "P") &&
               newApis && bomOk && domApis2 &&
               (document.querySelector("span") === null) &&  // detached, not in tree
-              (immediate === true) && (noListener === false) && (clicks === 1);
+              (immediate === true) && (noListener === true) && (clicks === 1) && evOk;
         "#;
         // `body_query` helper avoids relying on a `body` global.
         let setup = format!(
