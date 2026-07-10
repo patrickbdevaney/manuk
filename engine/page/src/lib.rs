@@ -75,6 +75,75 @@ fn resolve_url(base: &str, href: &str) -> String {
         .unwrap_or_else(|| href.to_string())
 }
 
+/// Fetch + decode every `<img src>` in the tree into a node→bitmap map. Failures are
+/// skipped (the element keeps its box, empty of pixels). Natural sizing is applied by the
+/// caller from each [`DecodedImage`]'s dimensions.
+async fn fetch_images(
+    dom: &Dom,
+    base: &str,
+) -> std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>> {
+    use std::rc::Rc;
+    let mut out = std::collections::HashMap::new();
+    let targets: Vec<(manuk_dom::NodeId, String)> = dom
+        .descendants(dom.root())
+        .filter(|&n| dom.tag_name(n) == Some("img"))
+        .filter_map(|n| {
+            let src = dom.element(n)?.attr("src")?.trim().to_string();
+            if src.is_empty() {
+                None
+            } else {
+                Some((n, resolve_url(base, &src)))
+            }
+        })
+        .collect();
+    for (node, url) in targets {
+        let Some(bytes) = fetch_image_bytes(&url).await else {
+            continue;
+        };
+        let Ok(decoded) = image::load_from_memory(&bytes) else {
+            continue;
+        };
+        let rgba = decoded.to_rgba8();
+        let (w, h) = rgba.dimensions();
+        if w == 0 || h == 0 {
+            continue;
+        }
+        out.insert(
+            node,
+            Rc::new(manuk_paint::DecodedImage {
+                width: w,
+                height: h,
+                rgba: rgba.into_raw(),
+            }),
+        );
+    }
+    out
+}
+
+/// Fetch the raw bytes of an image URL: `data:` (base64 or literal), `http(s)://`, or a
+/// local `file://`/path (for the render CLI on local pages).
+async fn fetch_image_bytes(url: &str) -> Option<Vec<u8>> {
+    if let Some(rest) = url.strip_prefix("data:") {
+        let comma = rest.find(',')?;
+        let data = &rest[comma + 1..];
+        return if rest[..comma].contains("base64") {
+            use base64::Engine;
+            base64::engine::general_purpose::STANDARD.decode(data).ok()
+        } else {
+            Some(data.as_bytes().to_vec())
+        };
+    }
+    if url.starts_with("http://") || url.starts_with("https://") {
+        let resp = manuk_net::fetch(url).await.ok()?;
+        if resp.status >= 400 {
+            return None;
+        }
+        return Some(resp.body.to_vec());
+    }
+    let path = url.strip_prefix("file://").unwrap_or(url);
+    std::fs::read(path).ok()
+}
+
 /// Collect the page's stylesheet sources (inline + external) in document order.
 fn collect_style_sources(dom: &Dom, base: &str) -> Vec<StyleSource> {
     let mut out = Vec::new();
@@ -174,6 +243,8 @@ pub struct Page {
     /// repeated zooming never compounds.
     styles: StyleMap,
     zoom: f32,
+    /// Decoded raster images keyed by their `<img>` node, painted into each element's box.
+    images: std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
 }
 
 /// E1 full-page zoom bounds (matching what mainstream browsers offer).
@@ -200,7 +271,41 @@ impl Page {
         let mut dom = manuk_html::parse(html);
         #[cfg(feature = "spidermonkey")]
         fetch_external_scripts(&mut dom, final_url).await;
-        Page::from_dom(dom, final_url, fonts, viewport_width)
+        let mut page = Page::from_dom(dom, final_url, fonts, viewport_width);
+        page.fetch_and_apply_images(fonts, viewport_width).await;
+        page
+    }
+
+    /// Fetch + decode this page's `<img>` resources and paint them. An image without an
+    /// explicit width/height (attribute or CSS) is sized to its natural pixel dimensions;
+    /// then the page is re-laid-out so the boxes are correct. Returns how many images
+    /// decoded. Safe to call after stylesheets are applied (it patches only auto sizes and
+    /// does not re-cascade, so external CSS is preserved).
+    pub async fn fetch_and_apply_images(
+        &mut self,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> usize {
+        let images = fetch_images(&self.dom, &self.final_url).await;
+        if images.is_empty() {
+            return 0;
+        }
+        // Natural sizing: fill in only dimensions the cascade left auto (explicit
+        // attr/CSS width/height already resolved to a definite value and must win).
+        for (&node, img) in &images {
+            if let Some(style) = self.styles.get_mut(&node) {
+                if style.width == manuk_css::Dim::Auto {
+                    style.width = manuk_css::Dim::Px(img.width as f32);
+                }
+                if style.height == manuk_css::Dim::Auto {
+                    style.height = manuk_css::Dim::Px(img.height as f32);
+                }
+            }
+        }
+        let count = images.len();
+        self.images = images;
+        self.relayout(fonts, viewport_width);
+        count
     }
 
     /// Build a page from an already-parsed [`Dom`] (shared by [`load`](Self::load) and
@@ -258,6 +363,7 @@ impl Page {
             dom,
             styles,
             zoom: 1.0,
+            images: std::collections::HashMap::new(),
         }
     }
 
@@ -499,7 +605,7 @@ impl Page {
 
     /// Rasterize the whole page to a canvas of the given pixel size (CPU tier).
     pub fn paint(&self, fonts: &FontContext, width: u32, height: u32) -> Canvas {
-        CpuPainter::new(fonts).render(&self.root_box, width, height, Rgba::WHITE)
+        CpuPainter::with_images(fonts, &self.images).render(&self.root_box, width, height, Rgba::WHITE)
     }
 
     /// Rasterize the visible viewport with the content scrolled up by `scroll_y`.
@@ -510,7 +616,13 @@ impl Page {
         height: u32,
         scroll_y: f32,
     ) -> Canvas {
-        CpuPainter::new(fonts).render_scrolled(&self.root_box, width, height, Rgba::WHITE, scroll_y)
+        CpuPainter::with_images(fonts, &self.images).render_scrolled(
+            &self.root_box,
+            width,
+            height,
+            Rgba::WHITE,
+            scroll_y,
+        )
     }
 
     /// All `<a href>` links, in document order, with hrefs resolved absolute.

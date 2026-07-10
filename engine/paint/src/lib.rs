@@ -22,6 +22,14 @@ pub struct DisplayList {
     pub items: Vec<DisplayItem>,
 }
 
+/// A decoded raster image: non-premultiplied RGBA8, row-major.
+#[derive(Clone, Debug)]
+pub struct DecodedImage {
+    pub width: u32,
+    pub height: u32,
+    pub rgba: Vec<u8>,
+}
+
 /// One paint operation.
 #[derive(Clone, Debug)]
 pub enum DisplayItem {
@@ -34,6 +42,11 @@ pub enum DisplayItem {
         text: String,
         style: TextStyle,
     },
+    /// A decoded image scaled into `rect` (a replaced `<img>`'s content box).
+    Image {
+        rect: Rect,
+        image: std::rc::Rc<DecodedImage>,
+    },
 }
 
 impl DisplayList {
@@ -41,6 +54,16 @@ impl DisplayList {
     /// then text, in document order — a correct back-to-front order for normal
     /// flow without z-index).
     pub fn build(root: &LayoutBox) -> DisplayList {
+        Self::build_with_images(root, &std::collections::HashMap::new())
+    }
+
+    /// Like [`build`], but emits an [`DisplayItem::Image`] for any box whose DOM node has a
+    /// decoded image in `images` (a replaced `<img>`), painted over its box after its
+    /// background so the bitmap fills the element.
+    pub fn build_with_images(
+        root: &LayoutBox,
+        images: &std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<DecodedImage>>,
+    ) -> DisplayList {
         let mut items = Vec::new();
         root.walk(&mut |b| {
             if let Some(bg) = b.background {
@@ -68,6 +91,15 @@ impl DisplayList {
                 edge(r.x, r.y + r.height - bb, r.width, bb); // bottom
                 edge(r.x, r.y, l, r.height); // left
                 edge(r.x + r.width - rr, r.y, rr, r.height); // right
+            }
+            // Replaced image content: fill the box with the decoded bitmap.
+            if let Some(node) = b.node {
+                if let Some(img) = images.get(&node) {
+                    items.push(DisplayItem::Image {
+                        rect: b.rect,
+                        image: img.clone(),
+                    });
+                }
             }
             if let BoxContent::Inline(frags) = &b.content {
                 for f in frags {
@@ -211,11 +243,23 @@ pub trait Painter {
 /// blitting for text. Deterministic and headless — no GPU/display required.
 pub struct CpuPainter<'a> {
     fonts: &'a FontContext,
+    images: Option<&'a std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<DecodedImage>>>,
 }
 
 impl<'a> CpuPainter<'a> {
     pub fn new(fonts: &'a FontContext) -> Self {
-        CpuPainter { fonts }
+        CpuPainter { fonts, images: None }
+    }
+
+    /// A painter that also blits decoded images for replaced `<img>` nodes.
+    pub fn with_images(
+        fonts: &'a FontContext,
+        images: &'a std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<DecodedImage>>,
+    ) -> Self {
+        CpuPainter {
+            fonts,
+            images: Some(images),
+        }
     }
 }
 
@@ -246,7 +290,8 @@ impl CpuPainter<'_> {
             background.a,
         ));
 
-        let list = DisplayList::build(root);
+        let empty = std::collections::HashMap::new();
+        let list = DisplayList::build_with_images(root, self.images.unwrap_or(&empty));
         for item in &list.items {
             match item {
                 DisplayItem::Rect { rect, color } => {
@@ -260,6 +305,11 @@ impl CpuPainter<'_> {
                     text,
                     style,
                 } => self.draw_text(&mut pixmap, *x, *baseline - scroll_y, text, style),
+                DisplayItem::Image { rect, image } => {
+                    let mut r = *rect;
+                    r.y -= scroll_y;
+                    blit_image(&mut pixmap, image, r);
+                }
             }
         }
 
@@ -314,6 +364,37 @@ fn fill_rect(pixmap: &mut tiny_skia::Pixmap, rect: Rect, color: Rgba) {
     paint.set_color_rgba8(color.r, color.g, color.b, color.a);
     paint.anti_alias = true;
     pixmap.fill_rect(r, &paint, tiny_skia::Transform::identity(), None);
+}
+
+/// Scale a decoded (straight-alpha) RGBA image into `rect` and blit it onto the pixmap
+/// with bilinear filtering.
+fn blit_image(pixmap: &mut tiny_skia::Pixmap, image: &DecodedImage, rect: Rect) {
+    if rect.width <= 0.0 || rect.height <= 0.0 || image.width == 0 || image.height == 0 {
+        return;
+    }
+    // Build a source pixmap, premultiplying each pixel (tiny-skia stores premultiplied).
+    let Some(mut src) = tiny_skia::Pixmap::new(image.width, image.height) else {
+        return;
+    };
+    let dst_px = src.pixels_mut();
+    for (i, px) in dst_px.iter_mut().enumerate() {
+        let o = i * 4;
+        let (r, g, b, a) = (
+            image.rgba[o],
+            image.rgba[o + 1],
+            image.rgba[o + 2],
+            image.rgba[o + 3],
+        );
+        *px = tiny_skia::ColorU8::from_rgba(r, g, b, a).premultiply();
+    }
+    let sx = rect.width / image.width as f32;
+    let sy = rect.height / image.height as f32;
+    let transform = tiny_skia::Transform::from_row(sx, 0.0, 0.0, sy, rect.x, rect.y);
+    let paint = tiny_skia::PixmapPaint {
+        quality: tiny_skia::FilterQuality::Bilinear,
+        ..Default::default()
+    };
+    pixmap.draw_pixmap(0, 0, src.as_ref(), &paint, transform, None);
 }
 
 /// Alpha-blit an 8-bit coverage bitmap in `color` onto the (opaque) pixmap.

@@ -450,13 +450,8 @@ impl App {
         // The page is painted **below** the chrome band: shifting the scroll by
         // -CHROME_HEIGHT moves page content down so its top sits just under the toolbar.
         let mut canvas = match &self.page {
-            Some(page) => CpuPainter::new(&self.fonts).render_scrolled(
-                &page.root_box,
-                w,
-                h,
-                Rgba::WHITE,
-                self.scroll_y - CHROME_HEIGHT,
-            ),
+            // Route through the page's own painter so decoded <img> bitmaps are blitted.
+            Some(page) => page.paint_scrolled(&self.fonts, w, h, self.scroll_y - CHROME_HEIGHT),
             None => Canvas::new(w, h, Rgba::WHITE),
         };
 

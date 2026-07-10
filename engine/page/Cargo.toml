@@ -20,6 +20,8 @@ anyhow.workspace = true
 url.workspace = true
 tracing.workspace = true
 base64.workspace = true
+# Raster image decoding (pure-Rust formats). AVIF (C dav1d) is intentionally left off.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp", "ico"] }
 
 [features]
 # Execute page <script> via SpiderMonkey (forwarded to manuk-js). Off by default:

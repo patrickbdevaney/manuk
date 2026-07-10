@@ -143,6 +143,11 @@ fn cmd_render(args: &[String]) -> Result<()> {
     if sheets > 0 {
         println!("  styles: {sheets} external stylesheet(s) applied");
     }
+    // Fetch + decode + paint images (and size undimensioned ones to natural).
+    let imgs = rt.block_on(page.fetch_and_apply_images(&fonts, width as f32));
+    if imgs > 0 {
+        println!("  images: {imgs} decoded");
+    }
 
     let height: u32 = flag_value(args, &["--height", "-h"])
         .and_then(|s| s.parse().ok())
