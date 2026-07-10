@@ -123,8 +123,9 @@ fn collapse_ws(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// Fetch a document's HTML. Supports `http(s)://` (via `manuk-net`), `file://`, and
-/// bare local paths. Returns `(html, final_url_after_redirects)`.
+/// Fetch a document's HTML. Supports `http(s)://` (via `manuk-net`, with WHATWG
+/// charset decoding), `data:` URLs (RFC 2397), `file://`, and bare local paths.
+/// Returns `(html, final_url_after_redirects)`.
 pub async fn fetch_html(url: &str) -> Result<(String, String)> {
     if url.starts_with("http://") || url.starts_with("https://") {
         let resp = manuk_net::fetch(url)
@@ -133,12 +134,59 @@ pub async fn fetch_html(url: &str) -> Result<(String, String)> {
         if resp.status >= 400 {
             anyhow::bail!("server returned HTTP {} for {}", resp.status, url);
         }
-        Ok((resp.text(), resp.final_url.to_string()))
+        // WHATWG charset sniff (D4) instead of lossy UTF-8.
+        Ok((resp.decoded_text(), resp.final_url.to_string()))
+    } else if let Some(rest) = url.strip_prefix("data:") {
+        Ok((decode_data_url(rest)?, url.to_string()))
     } else {
         let path = url.strip_prefix("file://").unwrap_or(url);
         let html =
             std::fs::read_to_string(path).with_context(|| format!("reading local file {path}"))?;
         Ok((html, url.to_string()))
+    }
+}
+
+/// Decode an RFC 2397 `data:` URL body (`[<mediatype>][;base64],<data>`).
+fn decode_data_url(rest: &str) -> Result<String> {
+    let (meta, data) = rest
+        .split_once(',')
+        .context("malformed data: URL (no comma)")?;
+    let bytes = if meta.trim_end().to_ascii_lowercase().ends_with(";base64") {
+        use base64::Engine as _;
+        base64::engine::general_purpose::STANDARD
+            .decode(data.trim())
+            .context("bad base64 in data: URL")?
+    } else {
+        percent_decode(data)
+    };
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// Minimal percent-decoding for non-base64 `data:` payloads.
+fn percent_decode(s: &str) -> Vec<u8> {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' && i + 2 < b.len() {
+            if let (Some(h), Some(l)) = (hex(b[i + 1]), hex(b[i + 2])) {
+                out.push(h * 16 + l);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    out
+}
+
+fn hex(c: u8) -> Option<u8> {
+    match c {
+        b'0'..=b'9' => Some(c - b'0'),
+        b'a'..=b'f' => Some(c - b'a' + 10),
+        b'A'..=b'F' => Some(c - b'A' + 10),
+        _ => None,
     }
 }
 
@@ -163,6 +211,21 @@ mod tests {
         assert_eq!(links[0].href, "http://example.test/about");
         assert_eq!(links[0].text, "About us");
         assert_eq!(links[1].href, "https://other.test/x");
+    }
+
+    #[tokio::test]
+    async fn data_url_loads() {
+        let (html, _) = fetch_html("data:text/html,<title>D</title><p>hello</p>")
+            .await
+            .unwrap();
+        assert!(html.contains("hello") && html.contains("<title>D</title>"));
+
+        use base64::Engine as _;
+        let b64 = base64::engine::general_purpose::STANDARD.encode("<p>b64 body</p>");
+        let (html2, _) = fetch_html(&format!("data:text/html;base64,{b64}"))
+            .await
+            .unwrap();
+        assert!(html2.contains("b64 body"));
     }
 
     #[test]

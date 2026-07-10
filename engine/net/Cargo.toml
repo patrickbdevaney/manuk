@@ -24,6 +24,8 @@ rustls-pki-types.workspace = true
 async-compression.workspace = true
 tokio-util.workspace = true
 futures-util.workspace = true
+encoding_rs.workspace = true
+chardetng.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "macros"] }

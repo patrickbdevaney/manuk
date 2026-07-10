@@ -17,9 +17,11 @@ manuk-paint.workspace = true
 anyhow.workspace = true
 url.workspace = true
 tracing.workspace = true
+base64.workspace = true
 
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
+tokio = { workspace = true, features = ["rt", "macros"] }
 
 [[bench]]
 name = "pipeline"

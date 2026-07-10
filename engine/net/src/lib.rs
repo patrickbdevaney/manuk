@@ -99,9 +99,113 @@ impl Response {
             .map(|(_, v)| v.as_str())
     }
 
-    /// Body decoded as UTF-8 (lossy), for HTML/text/JSON.
+    /// Body decoded as UTF-8 (lossy), for JSON/text where the charset is known-UTF-8.
     pub fn text(&self) -> String {
         String::from_utf8_lossy(&self.body).into_owned()
+    }
+
+    /// Body decoded to a `String` using the **WHATWG charset sniff** (D4):
+    /// BOM → HTTP `Content-Type` charset → `<meta>` prescan (first 1024 bytes) →
+    /// `chardetng` detector → UTF-8 default. Use this for HTML documents.
+    pub fn decoded_text(&self) -> String {
+        let ct = self.header("content-type");
+        charset::decode_html(&self.body, ct)
+    }
+}
+
+/// Charset detection + decoding per the WHATWG Encoding Standard (reuses
+/// `encoding_rs` for decode and `chardetng` for the legacy fallback detector).
+pub mod charset {
+    use encoding_rs::{Encoding, UTF_8};
+
+    /// Decode HTML `bytes` to a `String` following the WHATWG sniff order.
+    pub fn decode_html(bytes: &[u8], content_type: Option<&str>) -> String {
+        let enc = sniff(bytes, content_type);
+        let (text, _, _) = enc.decode(bytes);
+        text.into_owned()
+    }
+
+    /// Pick the encoding: BOM → Content-Type charset → `<meta>` prescan → detector.
+    pub fn sniff(bytes: &[u8], content_type: Option<&str>) -> &'static Encoding {
+        // 1. BOM.
+        if let Some((enc, _)) = Encoding::for_bom(bytes) {
+            return enc;
+        }
+        // 2. HTTP Content-Type charset.
+        if let Some(label) = content_type.and_then(charset_from_content_type) {
+            if let Some(enc) = Encoding::for_label(label.as_bytes()) {
+                return enc;
+            }
+        }
+        // 3. <meta> prescan of the first 1024 bytes.
+        if let Some(enc) = meta_prescan(&bytes[..bytes.len().min(1024)]) {
+            return enc;
+        }
+        // 4. chardetng detector fallback.
+        let mut det = chardetng::EncodingDetector::new();
+        det.feed(bytes, true);
+        let guess = det.guess(None, true);
+        if guess != UTF_8 {
+            return guess;
+        }
+        // 5. Default.
+        UTF_8
+    }
+
+    fn charset_from_content_type(ct: &str) -> Option<String> {
+        ct.split(';').find_map(|part| {
+            let part = part.trim();
+            let rest = part.strip_prefix("charset=").or_else(|| {
+                part.to_ascii_lowercase()
+                    .starts_with("charset=")
+                    .then(|| &part[8..])
+            })?;
+            Some(rest.trim().trim_matches('"').to_string())
+        })
+    }
+
+    /// Minimal `<meta charset>` / `<meta http-equiv=content-type>` prescan.
+    fn meta_prescan(head: &[u8]) -> Option<&'static Encoding> {
+        let text = String::from_utf8_lossy(head).to_ascii_lowercase();
+        let mut search = text.as_str();
+        while let Some(pos) = search.find("<meta") {
+            let tag_end = search[pos..]
+                .find('>')
+                .map(|e| pos + e)
+                .unwrap_or(search.len());
+            let tag = &search[pos..tag_end];
+            // <meta charset="...">
+            if let Some(cs) = attr_value(tag, "charset") {
+                if let Some(enc) = Encoding::for_label(cs.as_bytes()) {
+                    return Some(enc);
+                }
+            }
+            // <meta http-equiv="content-type" content="...; charset=...">
+            if tag.contains("http-equiv") {
+                if let Some(content) = attr_value(tag, "content") {
+                    if let Some(label) = charset_from_content_type(&content) {
+                        if let Some(enc) = Encoding::for_label(label.as_bytes()) {
+                            return Some(enc);
+                        }
+                    }
+                }
+            }
+            search = &search[tag_end.min(search.len())..];
+        }
+        None
+    }
+
+    fn attr_value(tag: &str, attr: &str) -> Option<String> {
+        let idx = tag.find(&format!("{attr}="))? + attr.len() + 1;
+        let rest = tag[idx..].trim_start();
+        let val = if let Some(q) = rest.strip_prefix('"') {
+            q.split('"').next()?
+        } else if let Some(q) = rest.strip_prefix('\'') {
+            q.split('\'').next()?
+        } else {
+            rest.split([' ', '/', '>']).next()?
+        };
+        Some(val.trim().to_string())
     }
 }
 
@@ -244,6 +348,32 @@ mod tests {
     fn rejects_unknown_scheme() {
         let err = rt().block_on(fetch("ftp://example.com/")).unwrap_err();
         assert!(err.to_string().contains("scheme"), "got: {err}");
+    }
+
+    #[test]
+    fn charset_via_content_type() {
+        // 0xE9 is `é` in windows-1252.
+        let s = charset::decode_html(
+            b"<html>caf\xe9</html>",
+            Some("text/html; charset=windows-1252"),
+        );
+        assert!(s.contains("café"), "got: {s}");
+    }
+
+    #[test]
+    fn charset_via_meta_prescan() {
+        let s = charset::decode_html(b"<meta charset=\"windows-1252\"><p>caf\xe9</p>", None);
+        assert!(s.contains("café"), "got: {s}");
+    }
+
+    #[test]
+    fn charset_bom_wins_over_content_type() {
+        // UTF-8 BOM must override a conflicting Content-Type charset.
+        let s = charset::decode_html(
+            "\u{feff}<p>über</p>".as_bytes(),
+            Some("text/html; charset=windows-1252"),
+        );
+        assert!(s.contains("über"), "got: {s}");
     }
 
     // Live network tests — run with `cargo test -p manuk-net -- --ignored`.

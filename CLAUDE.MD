@@ -147,8 +147,9 @@ Broadest real-world site set (excluding the hostile/bot-walled tier), WPT-verifi
 - **JS + DOM:** grow the Web API bindings (`engine/js::bindings`) projecting the DOM
   into SpiderMonkey, WebIDL-driven, WPT-verified per API; event loop + timers;
   `fetch`/`XHR`; events; DOM mutation.
-- **Loading:** external stylesheets/scripts/images; gzip/br/deflate decoding;
-  charset sniffing; data/blob URLs.
+- **Loading:** external stylesheets/scripts/images (*the large remaining D4 part*);
+  ✅ gzip/br/deflate decoding (P0.4); ✅ charset sniffing (`encoding_rs`+`chardetng`,
+  WHATWG order — D4 pt.1); ✅ `data:` URLs (D4 pt.1); `blob:` on D3.
 - **Protocols:** ✅ **HTTP/2 active** (ALPN, P0.4) + gzip/br/deflate decode; add **HTTP/3**
   (`quinn`), WebSocket (`tokio-tungstenite`), cookies.
 - **Forms + navigation:** form submission, history (back/forward), fragment nav.
