@@ -254,6 +254,16 @@ impl<T: Copy> Sides<T> {
     }
 }
 
+/// Generic font family we can actually resolve (via fontdb's generic queries). Named
+/// families in a `font-family` list that we can't map are skipped in favour of the first
+/// recognizable generic; the property is inherited.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GenericFamily {
+    SansSerif,
+    Serif,
+    Monospace,
+}
+
 /// The fully-resolved style of one element, as consumed by layout and paint.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ComputedStyle {
@@ -262,6 +272,7 @@ pub struct ComputedStyle {
     pub background_color: Option<Rgba>,
     pub font_size: f32,
     pub font_weight: u16,
+    pub font_family: GenericFamily,
     pub italic: bool,
     pub line_height: f32,
     pub text_align: TextAlign,
@@ -333,6 +344,7 @@ impl ComputedStyle {
             background_color: None,
             font_size: 16.0,
             font_weight: 400,
+            font_family: GenericFamily::SansSerif,
             italic: false,
             line_height: 16.0 * 1.2,
             text_align: TextAlign::Left,
@@ -382,6 +394,7 @@ impl ComputedStyle {
         s.color = parent.color;
         s.font_size = parent.font_size;
         s.font_weight = parent.font_weight;
+        s.font_family = parent.font_family;
         s.italic = parent.italic;
         s.line_height = parent.line_height;
         s.text_align = parent.text_align;
@@ -478,6 +491,7 @@ pub fn diff_style(old: &ComputedStyle, new: &ComputedStyle) -> RestyleDamage {
         || old.border_width != new.border_width
         || old.font_size != new.font_size
         || old.font_weight != new.font_weight
+        || old.font_family != new.font_family
         || old.italic != new.italic
         || old.line_height != new.line_height
         || old.text_align != new.text_align
@@ -1166,6 +1180,10 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
     if tag == "pre" {
         s.white_space = WhiteSpace::Pre;
     }
+    // UA default: monospace for the code/teletype families.
+    if matches!(tag, "pre" | "code" | "kbd" | "samp" | "tt" | "var") {
+        s.font_family = GenericFamily::Monospace;
+    }
     if matches!(tag, "ul" | "ol") {
         s.padding.left = Dim::Px(40.0);
     }
@@ -1223,6 +1241,11 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             }
         }
         "font-style" => s.italic = v == "italic" || v == "oblique",
+        "font-family" => {
+            if let Some(f) = parse_font_family(v) {
+                s.font_family = f;
+            }
+        }
         "line-height" => {
             if let Ok(n) = v.parse::<f32>() {
                 s.line_height = n * s.font_size; // unitless multiplier
@@ -1468,6 +1491,45 @@ fn border_len(tok: &str, fs: f32) -> f32 {
         "thick" => 5.0,
         t => values::parse_length_px(t, fs).unwrap_or(0.0),
     }
+}
+
+/// Resolve a `font-family` list to a generic family we can render. Walks the prioritized
+/// list and returns the first token we recognize — a generic keyword, or a well-known
+/// named family mapped to its generic (so `"Courier New"` → monospace, `Georgia` → serif).
+/// Named families we don't know are skipped (we can't load them), falling through to the
+/// next candidate; `None` if nothing is recognized (caller keeps the inherited family).
+fn parse_font_family(v: &str) -> Option<GenericFamily> {
+    for raw in v.split(',') {
+        let t = raw.trim().trim_matches(['"', '\'']).to_ascii_lowercase();
+        let g = match t.as_str() {
+            "serif" | "cursive" | "fantasy" | "ui-serif" => Some(GenericFamily::Serif),
+            "sans-serif" | "system-ui" | "ui-sans-serif" | "-apple-system" | "blinkmacsystemfont" => {
+                Some(GenericFamily::SansSerif)
+            }
+            "monospace" | "ui-monospace" => Some(GenericFamily::Monospace),
+            named => {
+                // Map common named families to their generic so real pages get the right
+                // shape even though we only load generics.
+                if named.contains("mono") || named.contains("courier") || named.contains("consol")
+                    || named.contains("menlo") || named.contains("code") || named.contains("merc")
+                {
+                    Some(GenericFamily::Monospace)
+                } else if named.contains("times") || named.contains("georgia")
+                    || named.contains("garamond") || named.contains("cambria")
+                    || named.contains("serif") || named.contains("minion")
+                    || named.contains("book antiqua") || named.contains("palatino")
+                {
+                    Some(GenericFamily::Serif)
+                } else {
+                    None // unknown named font — try the next candidate
+                }
+            }
+        };
+        if g.is_some() {
+            return g;
+        }
+    }
+    None
 }
 
 /// Parse the `border`/`border-<side>` shorthand into an optional width and color. The line
@@ -2127,5 +2189,30 @@ mod shadow_scoping_tests {
         // Default box-sizing is content-box.
         let (dom, map) = cascade_of(r#"<p style="width:10px"></p>"#);
         assert_eq!(map[&dom.find_first("p").unwrap()].box_sizing, BoxSizing::ContentBox);
+    }
+
+    #[test]
+    fn font_family_resolves_generics_named_and_ua() {
+        // Generic keyword after an unavailable named font falls through to the generic.
+        assert_eq!(parse_font_family("Arial, sans-serif"), Some(GenericFamily::SansSerif));
+        assert_eq!(parse_font_family("Georgia, serif"), Some(GenericFamily::Serif));
+        assert_eq!(parse_font_family("'Courier New', monospace"), Some(GenericFamily::Monospace));
+        // Named families we know map to their generic even without a following keyword.
+        assert_eq!(parse_font_family("Times New Roman"), Some(GenericFamily::Serif));
+        assert_eq!(parse_font_family("Menlo"), Some(GenericFamily::Monospace));
+        // Wholly-unknown named font → None (caller keeps the inherited family).
+        assert_eq!(parse_font_family("Wingdings"), None);
+
+        // Cascade: an author family applies and is inherited; UA gives <code> monospace.
+        let (dom, map) = cascade_of(
+            r#"<div style="font-family:monospace">a<code>b</code></div>"#,
+        );
+        let div = dom.find_first("div").unwrap();
+        assert_eq!(map[&div].font_family, GenericFamily::Monospace);
+        assert_eq!(map[&dom.find_first("code").unwrap()].font_family, GenericFamily::Monospace);
+
+        // A bare <pre> is monospace by UA default even without an author rule.
+        let (dom, map) = cascade_of("<pre>x</pre>");
+        assert_eq!(map[&dom.find_first("pre").unwrap()].font_family, GenericFamily::Monospace);
     }
 }

@@ -493,7 +493,11 @@ fn is_rendered(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
 fn text_style(cs: &ComputedStyle) -> TextStyle {
     TextStyle {
         font_key: FontKey {
-            family: FontFamily::SansSerif,
+            family: match cs.font_family {
+                manuk_css::GenericFamily::SansSerif => FontFamily::SansSerif,
+                manuk_css::GenericFamily::Serif => FontFamily::Serif,
+                manuk_css::GenericFamily::Monospace => FontFamily::Monospace,
+            },
             bold: cs.font_weight >= 600,
             italic: cs.italic,
         },
