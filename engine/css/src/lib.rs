@@ -1609,6 +1609,31 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
     if matches!(tag, "td" | "th") {
         s.padding = Sides::all(Dim::Px(1.0));
     }
+    // Replaced elements: an <img>/<canvas>/<video> is an atomic inline-block box sized by
+    // its presentational width/height attributes (author CSS width/height still overrides,
+    // as those are applied after UA defaults). Natural (intrinsic) sizing from the decoded
+    // bitmap is layered on in the image pipeline.
+    if matches!(tag, "img" | "canvas" | "video" | "svg" | "object" | "embed") {
+        s.display = Display::InlineBlock;
+        if let Some(w) = el.attr("width").and_then(parse_dimension_attr) {
+            s.width = Dim::Px(w);
+        }
+        if let Some(h) = el.attr("height").and_then(parse_dimension_attr) {
+            s.height = Dim::Px(h);
+        }
+    }
+}
+
+/// Parse an HTML presentational length attribute (`width="272"` or `width="272px"`) into
+/// pixels. Percentages and other units are ignored (returns `None`).
+fn parse_dimension_attr(v: &str) -> Option<f32> {
+    let v = v.trim().trim_end_matches("px").trim();
+    let n: f32 = v.parse().ok()?;
+    if n.is_finite() && n >= 0.0 {
+        Some(n)
+    } else {
+        None
+    }
 }
 
 /// Apply one declaration onto a computed style. Unknown properties/values are
