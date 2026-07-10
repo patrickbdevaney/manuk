@@ -818,3 +818,55 @@ Navigation API (`navigation.navigate`); Set-of-Marks screenshot annotation.
    is the fallback if the subset balloons. See CLAUDE.md D3 "Step-0 outcome".
 3. **C2** — still open: ship the trimmed SpiderMonkey archive only if the measured
    size delta justifies the per-OS bake friction (bring the number first).
+
+---
+
+## Known-limitations ledger (honest closure state, 2026-07-10)
+
+The rendering/interactivity foundation was driven to Chrome parity measurement-first
+via the layout-parity harness (`manuk-wpt parity`, 70/70 probes across 29 pages). This
+ledger records what is **closed**, what is **inherent** (cannot be closed without
+changing the premise), and what is **bounded-but-deferred** — so nothing reads as
+"done" that isn't. No item here is silently claimed as passing.
+
+### Closed and verified vs Chrome (±3px box geometry)
+Block flow; box model (`box-sizing`, borders, margins incl. negative + auto-centering);
+flexbox (direction/wrap/gap/grow/shrink/basis/justify/align-items/align-self/nesting);
+CSS grid (`grid-template-*` px/fr/%/auto + `repeat()`, gap); sizing (`min/max-*`,
+percentage width/height, recursive `calc()` with `+ - * / ()`); positioning (relative +
+absolute incl. left+right / top+bottom stretch); inline-block; inline padding/border;
+`white-space:nowrap`; `transform` (translate/scale/rotate/skew/matrix, origin-composed);
+`vertical-align` (top/bottom exact); **tables** (fixed layout, colspan/rowspan occupancy,
+border-collapse, default cell padding). Interactivity (links, form-control focus/caret,
+text entry, checkbox/radio incl. name-group exclusivity, form submit, omnibox
+search-vs-URL) verified through the real GUI binary via synthesized X11 input.
+
+### Inherent — cannot be "closed", characterized precisely instead
+- **Exact text width/height vs Chrome.** Manuk rasterizes with the *system* font stack;
+  Chrome ships its own default faces. Identical text therefore measures a few px
+  differently — this is a font-availability fact, **not a layout defect**. The harness
+  isolates it by preferring explicitly-sized probes and measuring layout *consequences*
+  (a following block's position) rather than raw glyph runs. Closing it would mean
+  bundling and force-matching Chrome's exact metrics, which is neither desirable nor the
+  goal. `vertical-align:baseline`/`middle` inherit this same font-baseline variance and
+  are documented as such (top/bottom, which don't, are exact-tested).
+
+### Bounded but unbounded-in-aggregate — narrowed, explicitly not complete
+- **DOM/BOM/CSSOM surface.** This is the entire web platform (thousands of APIs) — it is
+  *definitionally* not closeable by enumeration; a "complete" surface is Servo/Chromium
+  scope. Implemented the high-frequency core: `getElementById`, `querySelector[All]`,
+  `getElementsByTagName`/`ClassName`, `createElement`/`appendChild`/`remove`,
+  get/set/remove/hasAttribute, `textContent`/`innerHTML`/`tagName`/`id`/`className`,
+  `getBoundingClientRect`, `addEventListener`/`dispatchEvent`, `setTimeout`/event loop.
+  **Not yet present** (representative, not exhaustive): live `HTMLCollection`s (current
+  collections are static Arrays), a full CSSOM `element.style` object, `classList`
+  `DOMTokenList`, `Event` constructor (dispatch takes a type string), `dataset`,
+  DOM traversal props (`parentNode`/`children`/`nextSibling`), `getComputedStyle`.
+
+### Bounded-and-deferred smaller items (recorded, not closed)
+`history.state` serializes via JSON rather than StructuredClone; cookies are not carried
+in the agent hand-off; no session response-body cache; per-tab JS heap size always
+reports `None`; SOCKS4 / HTTP `CONNECT` proxying absent (SOCKS5/HTTP proxy present);
+`aria-labelledby` and `translate` attributes unmodeled; hit-testing ignores occlusion
+(z-order overlap); table auto column sizing does not redistribute a colspan cell's
+intrinsic width, and border-collapse does not run per-edge conflict resolution.

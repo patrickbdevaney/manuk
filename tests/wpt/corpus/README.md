@@ -31,8 +31,10 @@ grow/shrink/basis, justify-content, align-items/self, nesting), **CSS grid**
 (`grid-template-columns/rows` with px/fr/%/auto + `repeat()`, gap), sizing
 (`min/max-width/height`, percentage width/height, additive `calc()`),
 positioning (relative, absolute incl. left+right / top+bottom stretch),
-inline-block, inline padding/border, `white-space:nowrap`, and
-`transform:translate`.
+inline-block, inline padding/border, `white-space:nowrap`,
+`transform` (translate/scale/rotate/skew/matrix), `vertical-align`, and
+**tables** (fixed layout, `colspan`/`rowspan` occupancy, `border-collapse`,
+default cell padding).
 
 Known font-metric limit: exact text *width/height* vs Chrome depends on the font
 stack (Manuk uses system fonts, Chrome its own default), so text-sized probes
