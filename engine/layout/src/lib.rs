@@ -32,7 +32,9 @@
 
 use std::collections::HashMap;
 
-use manuk_css::{Clear, ComputedStyle, Dim, Display, Float, Position, Rgba, StyleMap, TextAlign};
+use manuk_css::{
+    BoxSizing, Clear, ComputedStyle, Dim, Display, Float, Position, Rgba, StyleMap, TextAlign,
+};
 use manuk_dom::{Dom, NodeData, NodeId};
 use manuk_text::{FontContext, FontFamily, FontKey};
 
@@ -590,6 +592,11 @@ impl Ctx<'_> {
             Dim::Auto => (cw - extra).max(0.0),
             other => other.resolve(cw, (cw - extra).max(0.0)),
         };
+        // `box-sizing:border-box` — the specified width is the border box, so the content
+        // width is that minus padding + border. (`auto` already resolves to content width.)
+        if s.box_sizing == BoxSizing::BorderBox && s.width != Dim::Auto {
+            width -= pl + pr + bl + br;
+        }
         width = width.max(0.0);
 
         // Horizontal auto-margin centering when width is definite. Only the left
@@ -625,7 +632,15 @@ impl Ctx<'_> {
         };
         let content_height = match s.height {
             Dim::Auto => content_height,
-            other => other.resolve(0.0, content_height),
+            other => {
+                let h = other.resolve(0.0, content_height);
+                // Under border-box, the specified height includes padding + border.
+                if s.box_sizing == BoxSizing::BorderBox {
+                    (h - (pt + pb + bt + bb)).max(0.0)
+                } else {
+                    h
+                }
+            }
         };
 
         let border_box_w = bl + pl + width + pr + br;

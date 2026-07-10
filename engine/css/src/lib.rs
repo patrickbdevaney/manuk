@@ -119,6 +119,14 @@ pub enum WhiteSpace {
     Pre,
 }
 
+/// `box-sizing`: whether `width`/`height` size the content box (CSS default) or the
+/// border box (padding + border counted inside the given dimension).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BoxSizing {
+    ContentBox,
+    BorderBox,
+}
+
 /// Four-sided box values (margin, padding, border widths).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Sides<T> {
@@ -167,6 +175,8 @@ pub struct ComputedStyle {
     pub table_layout: TableLayout,
     /// `border-spacing` (px) between table cells in the separated-borders model.
     pub border_spacing: f32,
+    /// `box-sizing` — whether `width`/`height` measure the content box or the border box.
+    pub box_sizing: BoxSizing,
 }
 
 impl ComputedStyle {
@@ -196,6 +206,7 @@ impl ComputedStyle {
             z_index: None,
             table_layout: TableLayout::Auto,
             border_spacing: 0.0,
+            box_sizing: BoxSizing::ContentBox,
         }
     }
 
@@ -1074,6 +1085,112 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 s.border_spacing = px;
             }
         }
+        "box-sizing" => {
+            s.box_sizing = if v.trim() == "border-box" {
+                BoxSizing::BorderBox
+            } else {
+                BoxSizing::ContentBox
+            };
+        }
+        // The `border` family. Widths feed the box model; the color feeds paint; the line
+        // style is not tracked (only presence, since `none`/`hidden` zero the width).
+        "border" => {
+            let (w, c) = parse_border_shorthand(v, s.font_size);
+            if let Some(w) = w {
+                s.border_width = Sides::all(w);
+            }
+            if let Some(c) = c {
+                s.border_color = c;
+            }
+        }
+        "border-top" | "border-right" | "border-bottom" | "border-left" => {
+            let (w, c) = parse_border_shorthand(v, s.font_size);
+            if let Some(w) = w {
+                match d.name.as_str() {
+                    "border-top" => s.border_width.top = w,
+                    "border-right" => s.border_width.right = w,
+                    "border-bottom" => s.border_width.bottom = w,
+                    _ => s.border_width.left = w,
+                }
+            }
+            if let Some(c) = c {
+                s.border_color = c;
+            }
+        }
+        "border-width" => set_border_widths(&mut s.border_width, v, s.font_size),
+        "border-top-width" => s.border_width.top = border_len(v, s.font_size),
+        "border-right-width" => s.border_width.right = border_len(v, s.font_size),
+        "border-bottom-width" => s.border_width.bottom = border_len(v, s.font_size),
+        "border-left-width" => s.border_width.left = border_len(v, s.font_size),
+        "border-color" => {
+            if let Some(c) = values::parse_color(v) {
+                s.border_color = c;
+            }
+        }
+        "border-style" => {
+            // `none`/`hidden` remove the border; other styles keep whatever width is set.
+            if matches!(v.trim(), "none" | "hidden") {
+                s.border_width = Sides::all(0.0);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// A `border-width` keyword or length to px. `thin`/`medium`/`thick` per CSS2 §8.
+fn border_len(tok: &str, fs: f32) -> f32 {
+    match tok.trim() {
+        "thin" => 1.0,
+        "medium" => 3.0,
+        "thick" => 5.0,
+        t => values::parse_length_px(t, fs).unwrap_or(0.0),
+    }
+}
+
+/// Parse the `border`/`border-<side>` shorthand into an optional width and color. The line
+/// style is consumed but not stored; `none`/`hidden` force width 0.
+fn parse_border_shorthand(v: &str, fs: f32) -> (Option<f32>, Option<Rgba>) {
+    let mut width = None;
+    let mut color = None;
+    let mut saw_visible_style = false;
+    for tok in v.split_whitespace() {
+        match tok {
+            "none" | "hidden" => width = Some(0.0),
+            "solid" | "dashed" | "dotted" | "double" | "groove" | "ridge" | "inset"
+            | "outset" => saw_visible_style = true,
+            "thin" => width = Some(1.0),
+            "medium" => width = Some(3.0),
+            "thick" => width = Some(5.0),
+            t => {
+                if let Some(px) = values::parse_length_px(t, fs) {
+                    width = Some(px);
+                } else if let Some(c) = values::parse_color(t) {
+                    color = Some(c);
+                }
+            }
+        }
+    }
+    // A visible line style with no explicit width defaults to `medium` (3px).
+    if width.is_none() && saw_visible_style {
+        width = Some(3.0);
+    }
+    (width, color)
+}
+
+/// Expand a 1–4 value `border-width` shorthand (same edge order as `margin`).
+fn set_border_widths(sides: &mut Sides<f32>, v: &str, fs: f32) {
+    let vals: Vec<f32> = v.split_whitespace().map(|t| border_len(t, fs)).collect();
+    match vals.as_slice() {
+        [a] => *sides = Sides::all(*a),
+        [a, b] => {
+            *sides = Sides { top: *a, bottom: *a, right: *b, left: *b };
+        }
+        [a, b, c] => {
+            *sides = Sides { top: *a, right: *b, left: *b, bottom: *c };
+        }
+        [a, b, c, d] => {
+            *sides = Sides { top: *a, right: *b, bottom: *c, left: *d };
+        }
         _ => {}
     }
 }
@@ -1422,5 +1539,34 @@ mod shadow_scoping_tests {
         // flat-tree, not scoped -- only *matching* is scoped).
         assert_eq!(map[&host].color, Rgba::new(0x12, 0x34, 0x56, 255));
         assert_eq!(map[&em].color, Rgba::new(0x12, 0x34, 0x56, 255));
+    }
+
+    #[test]
+    fn border_shorthand_and_box_sizing_parse() {
+        let (dom, map) = cascade_of(
+            r#"<p style="border:5px solid #333;box-sizing:border-box"></p>"#,
+        );
+        let s = &map[&dom.find_first("p").unwrap()];
+        assert_eq!(s.border_width, Sides::all(5.0), "border shorthand sets all widths");
+        assert_eq!(s.border_color, Rgba::new(0x33, 0x33, 0x33, 255));
+        assert_eq!(s.box_sizing, BoxSizing::BorderBox);
+
+        // Per-side + keyword widths; a visible style with no length defaults to medium (3px).
+        let (dom, map) = cascade_of(
+            r#"<p style="border-width:1px 2px 3px 4px;border-left:dashed red;border-top-width:thick"></p>"#,
+        );
+        let s = &map[&dom.find_first("p").unwrap()];
+        assert_eq!(s.border_width.right, 2.0);
+        assert_eq!(s.border_width.bottom, 3.0);
+        assert_eq!(s.border_width.left, 3.0, "border-left: dashed -> medium 3px");
+        assert_eq!(s.border_width.top, 5.0, "border-top-width: thick -> 5px");
+
+        // `border-style: none` zeroes the width set by an earlier `border`.
+        let (dom, map) = cascade_of(r#"<p style="border:10px solid;border-style:none"></p>"#);
+        assert_eq!(map[&dom.find_first("p").unwrap()].border_width, Sides::all(0.0));
+
+        // Default box-sizing is content-box.
+        let (dom, map) = cascade_of(r#"<p style="width:10px"></p>"#);
+        assert_eq!(map[&dom.find_first("p").unwrap()].box_sizing, BoxSizing::ContentBox);
     }
 }
