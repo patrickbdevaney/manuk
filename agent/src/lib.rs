@@ -20,6 +20,10 @@ use manuk_page::{fetch_html, Link, Page};
 /// §4b — HTML form model (find form, read fields, build a GET submission URL).
 pub mod forms;
 
+/// N5 — per-invocation permission scoping (capability value, enforced at the
+/// action boundary alongside the E6 risk heuristic).
+pub mod capabilities;
+
 /// G-d — deterministic replay / provenance event log.
 pub mod replay;
 
@@ -606,7 +610,7 @@ pub enum Action {
 
 /// Parse an action's `role` string into an a11y role, defaulting to `button` — the
 /// role a model most often means when it says "click X".
-fn parse_role(s: &str) -> manuk_a11y::Role {
+pub(crate) fn parse_role(s: &str) -> manuk_a11y::Role {
     manuk_a11y::Role::parse(s).unwrap_or(manuk_a11y::Role::Button)
 }
 
@@ -740,6 +744,11 @@ pub struct AgentConfig {
     /// conversation. Older turns are dropped so a long run cannot grow the prompt
     /// without bound.
     pub history_turns: usize,
+    /// N5 — what this invocation is authorized to do (which action kinds, which origins).
+    /// The E6 panel constructs a narrower grant than the headless binary; both are enforced
+    /// at the same point. `allow_sensitive_actions` above remains the single source of
+    /// truth for the confirmation gate and is copied onto the grant at check time.
+    pub capabilities: capabilities::Capabilities,
 }
 
 impl Default for AgentConfig {
@@ -752,6 +761,7 @@ impl Default for AgentConfig {
             max_retries: 3,
             retry_base_delay_ms: 500,
             history_turns: 6,
+            capabilities: capabilities::Capabilities::default(),
         }
     }
 }
@@ -953,15 +963,20 @@ pub async fn run_task_recorded(
         // E6 Action-Guard: refuse a sensitive/irreversible action in autonomous mode
         // (so a page-injected instruction can't silently trigger one). The refusal is
         // fed back so the model can choose a different, safe action.
-        if !config.allow_sensitive_actions {
-            if let ActionRisk::Sensitive(reason) = assess_action(&action, &obs) {
-                let note = format!(
-                    "  BLOCKED (needs human confirmation): {reason}. Choose a safe action."
-                );
+        // N5 — the single enforcement point: authority (was this ever granted?) then the
+        // E6 risk heuristic (does this target look dangerous?). Both must pass.
+        {
+            let caps = config
+                .capabilities
+                .clone()
+                .allow_sensitive(config.allow_sensitive_actions);
+            if let Err(denial) = capabilities::check(&action, &obs, &caps) {
+                let reason = denial.to_string();
+                let note = format!("  BLOCKED: {reason}. Choose a different action.");
                 outcome.transcript.push(note.clone());
                 log.push(replay::Event::Blocked {
                     step,
-                    reason: reason.to_string(),
+                    reason: reason.clone(),
                 });
                 history.push((obs_text, format!("{action_json}\n{note}")));
                 continue;
@@ -1545,6 +1560,78 @@ mod tests {
 
         // Releasing twice yields nothing, rather than a stale duplicate session.
         assert!(agent.release().is_none());
+    }
+
+    /// N5's run-loop acceptance: an action outside the grant is **refused with a reason**
+    /// and **the run continues** — the model gets the refusal back and can pick something
+    /// it is allowed to do.
+    #[tokio::test]
+    async fn an_ungranted_action_is_refused_and_the_run_continues() {
+        use capabilities::{ActionKind, Capabilities};
+
+        let mut b = AgentBrowser::new(400, 300);
+        b.navigate("data:text/html,<body><form><input name=q></form></body>")
+            .await
+            .unwrap();
+
+        // The model first tries to submit (not granted), then finishes (granted).
+        let backend = ScriptedBackend::new(&[
+            r#"{"action":"submit"}"#,
+            r#"{"action":"finish","answer":"gave up on submitting"}"#,
+        ]);
+        let cfg = AgentConfig {
+            max_steps: 4,
+            send_screenshots: false,
+            capabilities: Capabilities::with_actions([
+                ActionKind::Navigate,
+                ActionKind::Scroll,
+                ActionKind::Finish,
+            ]),
+            ..AgentConfig::default()
+        };
+
+        let outcome = run_task(&mut b, &backend, "submit the form", &cfg).await.unwrap();
+
+        // The run did not abort: it reached the finish on step 2.
+        assert_eq!(outcome.answer.as_deref(), Some("gave up on submitting"));
+        assert_eq!(outcome.steps, 2);
+
+        // The refusal is in the transcript, naming the action.
+        let blocked = outcome
+            .transcript
+            .iter()
+            .find(|t| t.contains("BLOCKED"))
+            .expect("the refusal is reported");
+        assert!(blocked.contains("submit"), "refusal must name the action: {blocked}");
+    }
+
+    /// The origin allowlist is enforced by the real loop, not just the check function.
+    #[tokio::test]
+    async fn the_origin_allowlist_is_enforced_by_the_run_loop() {
+        use capabilities::Capabilities;
+
+        let mut b = AgentBrowser::new(400, 300);
+        b.navigate("data:text/html,<body>x</body>").await.unwrap();
+
+        let backend = ScriptedBackend::new(&[
+            r#"{"action":"navigate","url":"https://evil.org/"}"#,
+            r#"{"action":"finish","answer":"blocked"}"#,
+        ]);
+        let cfg = AgentConfig {
+            max_steps: 4,
+            send_screenshots: false,
+            capabilities: Capabilities::all_actions().allow_origins(["https://example.com"]),
+            ..AgentConfig::default()
+        };
+
+        let outcome = run_task(&mut b, &backend, "go to evil.org", &cfg).await.unwrap();
+        assert_eq!(outcome.answer.as_deref(), Some("blocked"));
+        // The browser never left the original page -- the refusal happened before the act.
+        assert!(b.current_url().unwrap().starts_with("data:"));
+        assert!(outcome
+            .transcript
+            .iter()
+            .any(|t| t.contains("outside the granted origins")));
     }
 
     #[test]
