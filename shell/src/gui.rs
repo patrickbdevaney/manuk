@@ -73,6 +73,12 @@ struct App {
     window: Option<Arc<Window>>,
     gpu: Option<Gpu>,
     fonts: FontContext,
+    /// One process-lifetime async runtime, shared by every navigation and agent run.
+    /// Rebuilding a runtime per navigation (the old behaviour) dropped the hyper
+    /// connection pool, DNS cache, and TLS session cache on every load — so each
+    /// navigation paid a cold DNS + TCP + TLS handshake. Keeping one runtime alive lets
+    /// the process-global pooled client actually reuse warm connections.
+    rt: tokio::runtime::Runtime,
     page: Option<Page>,
     viewport: Viewport,
     scroll_y: f32,
@@ -173,6 +179,10 @@ impl App {
             window: None,
             gpu: None,
             fonts: FontContext::new(),
+            rt: tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .expect("failed to build the shared async runtime"),
             page: None,
             viewport: Viewport::new(width as f32, 768.0),
             scroll_y: 0.0,
@@ -399,22 +409,13 @@ impl App {
             }
             return;
         }
-        let rt = match tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-        {
-            Ok(rt) => rt,
-            Err(e) => {
-                tracing::error!("tokio runtime: {e}");
-                return;
-            }
-        };
-        match rt.block_on(fetch_html(&self.url)) {
+        match self.rt.block_on(fetch_html(&self.url)) {
             Ok((html, final_url)) => {
                 // `load_async` also fetches external `<script src>` (under the spidermonkey
                 // feature) so a page's real scripts run.
-                let page =
-                    rt.block_on(Page::load_async(&html, &final_url, &self.fonts, width as f32));
+                let page = self
+                    .rt
+                    .block_on(Page::load_async(&html, &final_url, &self.fonts, width as f32));
                 if let Some(w) = &self.window {
                     w.set_title(&format!("{} — manuk", page.title));
                 }
@@ -758,23 +759,12 @@ impl App {
         let mut panel = AgentPanel::new(PanelScope::assistant(), w, h);
         panel.take_over(handoff, HandoffConsent::user_approved());
 
-        let rt = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
-            Ok(rt) => rt,
-            Err(e) => {
-                tracing::error!("agent runtime: {e}");
-                // Recover the page from the panel so the user is not left blank.
-                if let Some(h) = panel.hand_back(HandoffConsent::user_approved()) {
-                    self.page = Some(h.page);
-                }
-                return;
-            }
-        };
         let known = self.known_history();
         let settings = self.settings.clone();
         tracing::info!(backend = ?kind, task, "agent: running (assistant: read-only page + tab control)");
         let result = {
             let mut tabs = crate::session::BrowserTabs::new(&mut self.browser, known, settings);
-            rt.block_on(panel.run_with_tabs(&backend, task, &mut tabs))
+            self.rt.block_on(panel.run_with_tabs(&backend, task, &mut tabs))
         };
         match result {
             Ok(outcome) => {
