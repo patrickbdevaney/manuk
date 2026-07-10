@@ -691,9 +691,12 @@ impl Ctx<'_> {
         floats: &mut FloatContext,
     ) -> (BoxContent, f32) {
         let display = self.styles[&node].display;
+        // N4: the FLAT tree — a shadow host lays out its shadow content, and a `<slot>`
+        // lays out the light-DOM nodes assigned to it.
         let kids: Vec<NodeId> = self
             .dom
-            .children(node)
+            .flat_children(node)
+            .into_iter()
             .filter(|&k| is_rendered(self.dom, self.styles, k))
             .collect();
 
@@ -1531,7 +1534,8 @@ impl Ctx<'_> {
                 if self.styles.get(&node).map(|s| s.display) == Some(Display::None) {
                     return;
                 }
-                let children: Vec<NodeId> = self.dom.children(node).collect();
+                // N4: inline content also follows the flat tree.
+                let children: Vec<NodeId> = self.dom.flat_children(node);
                 for c in children {
                     self.collect_inline_node(c, out, pending_space, first, Some(node));
                 }

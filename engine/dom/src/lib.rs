@@ -295,6 +295,26 @@ impl Dom {
             .collect()
     }
 
+    /// The `<slot>` a light-DOM child of a shadow host is assigned to, if any. The
+    /// inverse of [`Self::assigned_nodes`], and what `::slotted()` matches on.
+    pub fn assigned_slot(&self, node: NodeId) -> Option<NodeId> {
+        let host = self.parent(node)?;
+        let shadow = self.shadow_root(host)?;
+        let want = self.element(node).and_then(|e| e.attr("slot")).unwrap_or("");
+        self.descendants(shadow).find(|&s| {
+            self.tag_name(s) == Some("slot")
+                && self.element(s).and_then(|e| e.attr("name")).unwrap_or("") == want
+        })
+    }
+
+    /// Every shadow root in the arena, in creation order.
+    pub fn all_shadow_roots(&self) -> Vec<NodeId> {
+        (0..self.nodes.len())
+            .map(NodeId)
+            .filter(|&n| self.is_shadow_root(n))
+            .collect()
+    }
+
     /// The shadow root that `node` lives inside, if any (walks up the node tree).
     pub fn enclosing_shadow_root(&self, node: NodeId) -> Option<NodeId> {
         let mut cur = Some(node);

@@ -229,11 +229,15 @@ mod selector_impl {
         }
 
         fn parent_node_is_shadow_root(&self) -> bool {
-            false
+            self.dom
+                .parent(self.node)
+                .is_some_and(|p| self.dom.is_shadow_root(p))
         }
 
         fn containing_shadow_host(&self) -> Option<Self> {
-            None
+            let shadow = self.dom.enclosing_shadow_root(self.node)?;
+            let host = self.dom.shadow_host(shadow)?;
+            Some(self.with(host))
         }
 
         fn is_pseudo_element(&self) -> bool {
@@ -315,7 +319,7 @@ mod selector_impl {
         }
 
         fn is_html_slot_element(&self) -> bool {
-            false
+            self.tag() == "slot"
         }
 
         fn has_id(&self, id: &stylo::values::AtomIdent, case: CaseSensitivity) -> bool {
@@ -328,6 +332,10 @@ mod selector_impl {
                 .element(self.node)
                 .map(|e| e.classes().any(|c| eq_case(c, name, case)))
                 .unwrap_or(false)
+        }
+
+        fn assigned_slot(&self) -> Option<Self> {
+            self.dom.assigned_slot(self.node).map(|s| self.with(s))
         }
 
         fn has_custom_state(&self, _name: &stylo::values::AtomIdent) -> bool {

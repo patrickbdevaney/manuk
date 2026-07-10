@@ -27,3 +27,7 @@ euclid = { version = "0.22", optional = true }
 # The selector-matching trait (`selectors::Element`) our arena handle implements so
 # Stylo's real matcher runs over the arena DOM. Version pinned to stylo 0.19's.
 selectors = { version = "0.39", optional = true }
+
+[dev-dependencies]
+# N4 tests parse real HTML (declarative shadow DOM) to build the tree they scope over.
+manuk-html.workspace = true

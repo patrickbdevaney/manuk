@@ -498,12 +498,24 @@ impl Page {
 
     /// The page's visible text (body, whitespace-collapsed) — the agent's textual
     /// observation channel alongside the screenshot.
+    /// The text a reader actually sees.
+    ///
+    /// Read from the **fragment tree**, not `Node.textContent`: that is what makes it
+    /// respect `display:none`, `<head>` content, **shadow DOM**, and slot assignment for
+    /// free. (`textContent` is a node-tree API and would miss shadow content entirely
+    /// while including unrendered light-DOM children.)
     pub fn visible_text(&self) -> String {
-        let node = self
-            .dom
-            .find_first("body")
-            .unwrap_or_else(|| self.dom.root());
-        collapse_ws(&self.dom.text_content(node))
+        let mut words: Vec<String> = Vec::new();
+        self.root_box.walk(&mut |b| {
+            if let BoxContent::Inline(frags) = &b.content {
+                for f in frags {
+                    if !f.text.is_empty() {
+                        words.push(f.text.clone());
+                    }
+                }
+            }
+        });
+        words.join(" ")
     }
 }
 
@@ -780,6 +792,30 @@ mod tests {
         assert_eq!(page.zoom(), MAX_ZOOM);
         page.relayout_zoomed(&fonts, 400.0, 0.0001);
         assert_eq!(page.zoom(), MIN_ZOOM);
+    }
+
+    /// N3+N4 end-to-end: declarative shadow content, and light-DOM content slotted into
+    /// it, both reach LAYOUT through the flat tree — not merely the style map.
+    #[test]
+    fn shadow_and_slotted_content_reach_layout() {
+        let fonts = FontContext::new();
+        let html = r#"<body><div id="host">
+              <template shadowrootmode="open"><h1>ShadowTitle</h1><slot></slot></template>
+              <p>SlottedBody</p>
+            </div></body>"#;
+        let page = Page::load(html, "http://x.test/", &fonts, 800.0);
+
+        // Both strings are visible: one from the shadow tree, one slotted from the light DOM.
+        let text = page.visible_text();
+        assert!(text.contains("ShadowTitle"), "shadow content must render: {text:?}");
+        assert!(text.contains("SlottedBody"), "slotted content must render: {text:?}");
+
+        // And both produced real geometry.
+        let tree = page.a11y_tree();
+        let h1 = tree
+            .find(&manuk_a11y::Role::Heading { level: 1 }, "ShadowTitle")
+            .expect("shadow <h1> is in the a11y tree");
+        assert!(h1.bbox.expect("laid out").height > 0.0);
     }
 
     #[test]

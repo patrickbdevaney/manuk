@@ -336,6 +336,10 @@ struct Compound {
 #[derive(Clone, Debug, PartialEq)]
 struct Selector {
     parts: Vec<Compound>,
+    /// N4 — `::slotted(<compound>)`. The subject compound is the *inner* selector, and it
+    /// matches a **light-DOM** element assigned to a slot inside this sheet's shadow root.
+    /// That is the one selector that deliberately reaches across the shadow boundary.
+    slotted: bool,
 }
 
 impl Selector {
@@ -380,6 +384,50 @@ fn compound_matches(c: &Compound, dom: &Dom, node: NodeId) -> bool {
 /// Does `node` match the CSS selector string `sel` (comma-separated list)? Reuses
 /// the cascade's own selector engine, so `querySelector`-style APIs and the cascade
 /// agree. Supports the documented subset (tag/id/class/`*` + descendant combinator).
+/// N4 — a stylesheet plus the **tree scope** it belongs to.
+///
+/// `scope == None` is the document; `scope == Some(shadow_root)` is that shadow tree.
+/// Encapsulation is exactly this: a sheet only sees elements in its own scope. The single
+/// deliberate exception is `::slotted()`, which reaches out to the light-DOM nodes slotted
+/// into the sheet's own shadow tree.
+#[derive(Clone, Debug)]
+pub struct ScopedSheet {
+    pub scope: Option<NodeId>,
+    pub sheet: Stylesheet,
+}
+
+/// Whether a sheet scoped to `scope` may style `node` at all (before selector matching).
+fn scope_allows(dom: &Dom, node: NodeId, scope: Option<NodeId>) -> bool {
+    dom.enclosing_shadow_root(node) == scope
+}
+
+/// `::slotted(x)` from shadow root `S` matches `node` when `node` is a light-DOM element
+/// assigned to a slot **inside `S`**, and `x` matches it.
+fn slotted_matches(dom: &Dom, node: NodeId, scope: Option<NodeId>, subject: &Compound) -> bool {
+    let Some(shadow) = scope else {
+        // `::slotted()` outside a shadow tree never matches anything.
+        return false;
+    };
+    let Some(slot) = dom.assigned_slot(node) else {
+        return false;
+    };
+    dom.enclosing_shadow_root(slot) == Some(shadow) && compound_matches(subject, dom, node)
+}
+
+/// Match `sel` against `node` for a sheet in `scope`.
+fn selector_matches_scoped(
+    sel: &Selector,
+    dom: &Dom,
+    node: NodeId,
+    scope: Option<NodeId>,
+) -> bool {
+    if sel.slotted {
+        let subject = sel.parts.last().expect("::slotted has one compound");
+        return slotted_matches(dom, node, scope, subject);
+    }
+    scope_allows(dom, node, scope) && selector_matches(sel, dom, node)
+}
+
 pub fn matches_selector(dom: &Dom, node: NodeId, sel: &str) -> bool {
     dom.is_element(node)
         && parse_selector_list(sel)
@@ -569,9 +617,30 @@ fn parse_selector_list(text: &str) -> Vec<Selector> {
 }
 
 fn parse_selector(text: &str) -> Option<Selector> {
+    let text = text.trim();
     if text.is_empty() {
         return None;
     }
+
+    // N4 — `::slotted(<compound>)`. Only the standalone form is supported (no ancestor
+    // chain), which is what shadow stylesheets actually write. Anything else is dropped
+    // rather than mis-matched.
+    if let Some(rest) = text.strip_prefix("::slotted(") {
+        let inner = rest.strip_suffix(')')?.trim();
+        if inner.is_empty() {
+            return None;
+        }
+        let compound = parse_compound(inner)?;
+        return Some(Selector {
+            parts: vec![compound],
+            slotted: true,
+        });
+    }
+    // A pseudo-element we do not model must not silently match its subject.
+    if text.contains("::") {
+        return None;
+    }
+
     let mut parts = Vec::new();
     for token in text.split_whitespace() {
         // Combinators like > + ~ are not in the subset; bail so we don't
@@ -584,7 +653,10 @@ fn parse_selector(text: &str) -> Option<Selector> {
     if parts.is_empty() {
         None
     } else {
-        Some(Selector { parts })
+        Some(Selector {
+            parts,
+            slotted: false,
+        })
     }
 }
 
@@ -697,23 +769,58 @@ pub struct MinimalCascade;
 
 impl StyleEngine for MinimalCascade {
     fn cascade(&self, dom: &Dom, sheets: &[Stylesheet]) -> StyleMap {
-        let mut map = StyleMap::new();
-        let root = dom.root();
-        // The document root is an anonymous initial containing block.
-        for child in dom.children(root) {
-            self.cascade_node(dom, child, &ComputedStyle::initial(), sheets, &mut map);
-        }
-        map
+        // Document-scoped sheets, plus every shadow root's own `<style>` elements.
+        let mut scoped: Vec<ScopedSheet> = sheets
+            .iter()
+            .cloned()
+            .map(|sheet| ScopedSheet { scope: None, sheet })
+            .collect();
+        scoped.extend(MinimalCascade::collect_shadow_stylesheets(dom));
+        self.cascade_scoped(dom, &scoped)
     }
 }
 
 impl MinimalCascade {
     /// Gather author stylesheets embedded in the document's `<style>` elements.
+    ///
+    /// Shadow roots are **not** descendants of the document root, so their `<style>`
+    /// elements are correctly excluded here — they are collected by
+    /// [`collect_shadow_stylesheets`](Self::collect_shadow_stylesheets) with their scope.
     pub fn collect_style_elements(dom: &Dom) -> Vec<Stylesheet> {
         dom.descendants(dom.root())
             .filter(|&n| dom.tag_name(n) == Some("style"))
             .map(|n| Stylesheet::parse(&dom.text_content(n)))
             .collect()
+    }
+
+    /// N4 — every shadow root's `<style>` elements, each tagged with its scope.
+    pub fn collect_shadow_stylesheets(dom: &Dom) -> Vec<ScopedSheet> {
+        let mut out = Vec::new();
+        for sr in dom.all_shadow_roots() {
+            for n in dom.descendants(sr) {
+                if dom.tag_name(n) == Some("style") {
+                    out.push(ScopedSheet {
+                        scope: Some(sr),
+                        sheet: Stylesheet::parse(&dom.text_content(n)),
+                    });
+                }
+            }
+        }
+        out
+    }
+
+    /// N4 — cascade over the **flat tree** with tree-scoped matching.
+    ///
+    /// Walking the flat tree is what makes shadow content styled and laid out at all, and
+    /// it is also what makes inheritance correct: a slotted element inherits from the
+    /// slot's flat-tree ancestors, not from its node-tree parent.
+    pub fn cascade_scoped(&self, dom: &Dom, sheets: &[ScopedSheet]) -> StyleMap {
+        let mut map = StyleMap::new();
+        let root = dom.root();
+        for child in dom.flat_children(root) {
+            self.cascade_node(dom, child, &ComputedStyle::initial(), sheets, &mut map);
+        }
+        map
     }
 
     // `self` (a unit struct) threads through the recursion for call-site symmetry
@@ -724,7 +831,7 @@ impl MinimalCascade {
         dom: &Dom,
         node: NodeId,
         parent_style: &ComputedStyle,
-        sheets: &[Stylesheet],
+        sheets: &[ScopedSheet],
         map: &mut StyleMap,
     ) {
         let style = match dom.data(node) {
@@ -735,12 +842,12 @@ impl MinimalCascade {
                 // Author rules, ordered by (specificity, source order).
                 let mut matched: Vec<(u32, usize, &Declaration)> = Vec::new();
                 let mut order = 0usize;
-                for sheet in sheets {
-                    for rule in &sheet.rules {
+                for scoped in sheets {
+                    for rule in &scoped.sheet.rules {
                         if let Some(spec) = rule
                             .selectors
                             .iter()
-                            .filter(|sel| selector_matches(sel, dom, node))
+                            .filter(|sel| selector_matches_scoped(sel, dom, node, scoped.scope))
                             .map(|sel| sel.specificity())
                             .max()
                         {
@@ -773,7 +880,10 @@ impl MinimalCascade {
         };
 
         map.insert(node, style.clone());
-        for child in dom.children(node) {
+        // Recurse over the FLAT tree: shadow content is styled, slotted light-DOM nodes
+        // are visited once (through their slot), and unslotted light children are skipped
+        // because they do not render.
+        for child in dom.flat_children(node) {
             self.cascade_node(dom, child, &style, sheets, map);
         }
     }
@@ -1178,5 +1288,139 @@ mod tests {
         let map = MinimalCascade.cascade(&dom, &[Stylesheet::parse("p{color:red}")]);
         assert_eq!(map[&p].color, Rgba::new(1, 2, 3, 255));
         assert_eq!(map[&p].width, Dim::Percent(50.0));
+    }
+}
+
+#[cfg(test)]
+mod shadow_scoping_tests {
+    use super::*;
+
+    fn cascade_of(html: &str) -> (manuk_dom::Dom, StyleMap) {
+        let dom = manuk_html::parse(html);
+        let sheets = MinimalCascade::collect_style_elements(&dom);
+        let map = MinimalCascade.cascade(&dom, &sheets);
+        (dom, map)
+    }
+
+    /// N4's headline acceptance, direction 1: a **document** rule must not reach inside a
+    /// shadow root. `p { color: red }` in the light DOM must not paint the shadow's `<p>`.
+    #[test]
+    fn a_document_rule_does_not_match_inside_a_shadow_root() {
+        let (dom, map) = cascade_of(
+            r#"<style>p { color: #ff0000 }</style>
+               <div id="host"><template shadowrootmode="open"><p id="inner">shadow</p></template></div>
+               <p id="outer">light</p>"#,
+        );
+        let outer = dom.find_first("p").expect("light-DOM p");
+        assert_eq!(dom.element(outer).unwrap().attr("id"), Some("outer"));
+        assert_eq!(map[&outer].color, Rgba::new(255, 0, 0, 255), "the light-DOM p is red");
+
+        // The shadow <p> is a different <p>; find it through the shadow root.
+        let host = dom.find_first("div").unwrap();
+        let shadow = dom.shadow_root(host).unwrap();
+        let inner = dom.descendants(shadow).find(|&n| dom.tag_name(n) == Some("p")).unwrap();
+        assert_ne!(inner, outer);
+        assert_ne!(
+            map[&inner].color,
+            Rgba::new(255, 0, 0, 255),
+            "a document rule must NOT cross the shadow boundary"
+        );
+    }
+
+    /// Direction 2: a rule **inside** a shadow root must not escape it.
+    #[test]
+    fn a_shadow_rule_does_not_match_a_light_dom_element() {
+        let (dom, map) = cascade_of(
+            r#"<div id="host">
+                 <template shadowrootmode="open">
+                   <style>p { color: #00ff00 }</style>
+                   <p id="inner">shadow</p>
+                 </template>
+               </div>
+               <p id="outer">light</p>"#,
+        );
+        let host = dom.find_first("div").unwrap();
+        let shadow = dom.shadow_root(host).unwrap();
+        let inner = dom.descendants(shadow).find(|&n| dom.tag_name(n) == Some("p")).unwrap();
+        assert_eq!(map[&inner].color, Rgba::new(0, 255, 0, 255), "the shadow p is green");
+
+        // The light-DOM <p> is the one that is NOT inside the shadow root.
+        let outer = dom
+            .descendants(dom.root())
+            .find(|&n| dom.tag_name(n) == Some("p"))
+            .unwrap();
+        assert_ne!(outer, inner);
+        assert_ne!(
+            map[&outer].color,
+            Rgba::new(0, 255, 0, 255),
+            "a shadow rule must NOT escape the shadow boundary"
+        );
+    }
+
+    /// `::slotted(p)` is the one selector that deliberately reaches across the boundary:
+    /// from inside the shadow tree, it styles the **light-DOM** nodes slotted into it.
+    #[test]
+    fn slotted_matches_a_slotted_light_dom_element() {
+        let (dom, map) = cascade_of(
+            r#"<div id="host">
+                 <template shadowrootmode="open">
+                   <style>::slotted(p) { color: #0000ff }</style>
+                   <slot></slot>
+                 </template>
+                 <p id="slotted">light</p>
+                 <span id="also">span</span>
+               </div>"#,
+        );
+        let p = dom.find_first("p").unwrap();
+        assert_eq!(map[&p].color, Rgba::new(0, 0, 255, 255), "::slotted(p) styles the slotted p");
+
+        // ...but not the slotted <span>: the compound must still match.
+        let span = dom.find_first("span").unwrap();
+        assert_ne!(map[&span].color, Rgba::new(0, 0, 255, 255));
+    }
+
+    /// `::slotted()` must not match an element that is not slotted at all, and a
+    /// document-level `::slotted()` matches nothing.
+    #[test]
+    fn slotted_does_not_match_unslotted_or_document_elements() {
+        let (dom, map) = cascade_of(
+            r#"<style>::slotted(p) { color: #0000ff }</style>
+               <p id="plain">nobody slots me</p>"#,
+        );
+        let p = dom.find_first("p").unwrap();
+        assert_ne!(
+            map[&p].color,
+            Rgba::new(0, 0, 255, 255),
+            "::slotted() outside a shadow tree matches nothing"
+        );
+    }
+
+    /// An unmodelled pseudo-element must not silently match its subject — dropping the
+    /// rule is right; applying it to the bare `p` is not.
+    #[test]
+    fn an_unmodelled_pseudo_element_selector_is_dropped_not_mismatched() {
+        let (dom, map) = cascade_of(
+            r#"<style>p::before { color: #ff0000 } p::first-line { color: #ff0000 }</style>
+               <p>x</p>"#,
+        );
+        let p = dom.find_first("p").unwrap();
+        assert_ne!(map[&p].color, Rgba::new(255, 0, 0, 255));
+    }
+
+    /// Shadow content is styled at all — it is reached through the flat tree, and it
+    /// inherits from its flat-tree ancestors.
+    #[test]
+    fn shadow_content_is_styled_and_inherits_through_the_flat_tree() {
+        let (dom, map) = cascade_of(
+            r#"<style>#host { color: #123456 }</style>
+               <div id="host"><template shadowrootmode="open"><em id="deep">x</em></template></div>"#,
+        );
+        let host = dom.find_first("div").unwrap();
+        let shadow = dom.shadow_root(host).unwrap();
+        let em = dom.descendants(shadow).find(|&n| dom.tag_name(n) == Some("em")).unwrap();
+        // `color` inherits from the host across the shadow boundary (inheritance is
+        // flat-tree, not scoped -- only *matching* is scoped).
+        assert_eq!(map[&host].color, Rgba::new(0x12, 0x34, 0x56, 255));
+        assert_eq!(map[&em].color, Rgba::new(0x12, 0x34, 0x56, 255));
     }
 }

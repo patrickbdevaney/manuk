@@ -396,6 +396,9 @@ pub fn role_of(dom: &Dom, node: NodeId) -> Option<Role> {
                 _ => Role::Image,
             }
         }
+        // N4 — a `<slot>` is a rendering hole, not a semantic node: its assigned nodes
+        // take its place in the flat tree, so it exposes no a11y node of its own.
+        "slot" => return None,
         "ul" | "ol" => Role::List,
         "li" => Role::ListItem,
         "table" => Role::Table,
@@ -615,7 +618,9 @@ fn build_children(
     rects: &HashMap<NodeId, Rect>,
 ) -> Vec<A11yNode> {
     let mut out = Vec::new();
-    for child in dom.children(parent).collect::<Vec<_>>() {
+    // N3/N4 — the FLAT tree: a shadow host exposes its shadow content, and a `<slot>`
+    // exposes the light-DOM nodes assigned to it. That is what a screen reader reads.
+    for child in dom.flat_children(parent) {
         if !dom.is_element(child) {
             continue; // text nodes contribute to names, not to tree nodes
         }
