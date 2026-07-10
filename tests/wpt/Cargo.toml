@@ -23,3 +23,4 @@ manuk-text.workspace = true
 manuk-page.workspace = true
 manuk-paint.workspace = true
 anyhow.workspace = true
+serde_json.workspace = true

@@ -13,6 +13,8 @@
 
 use std::path::PathBuf;
 
+pub mod chrome;
+pub mod parity;
 pub mod reftest;
 
 use manuk_css::{MinimalCascade, StyleEngine, Stylesheet};

@@ -3048,6 +3048,7 @@ dependencies = [
  "manuk-page",
  "manuk-paint",
  "manuk-text",
+ "serde_json",
 ]
 
 [[package]]
