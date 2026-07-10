@@ -80,6 +80,9 @@ jobs:
           [ -f "$BIN.exe" ] && BIN="$BIN.exe"
           "$BIN" render "file://$PWD/ci.html" -o ci.png --width 320
           test -s ci.png && echo "OK: rendered ci.png ($(wc -c < ci.png) bytes)"
+          echo "binary size ($MATRIX_TARGET): $(wc -c < "$BIN") bytes"   # P0.2 size metric
+        env:
+          MATRIX_TARGET: ${{ matrix.target }}
 
   # Verify the heavy feature builds on Linux CI (per P0.5). macOS/Windows feature
   # builds rely on servo/mozjs prebuilt archives (documented); tracked in P0.5.
