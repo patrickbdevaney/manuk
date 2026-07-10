@@ -11,7 +11,7 @@ default = []
 # Stylo (Servo/Firefox production CSS engine) is the reuse target per CLAUDE.md.
 # It is heavy to build, so it is opt-in. The default build uses the minimal
 # from-scratch cascade so the workspace compiles and runs without it.
-stylo = ["dep:stylo"]
+stylo = ["dep:stylo", "dep:url", "dep:euclid"]
 
 [dependencies]
 manuk-dom.workspace = true
@@ -21,3 +21,6 @@ tracing.workspace = true
 
 # Feature-gated. Pulled only with --features stylo. Name/version adjusted on wiring.
 stylo = { package = "stylo", version = "0.19", optional = true }
+# Needed to construct Stylo's UrlExtraData + servo Device (versions match stylo 0.19).
+url = { version = "2", optional = true }
+euclid = { version = "0.22", optional = true }

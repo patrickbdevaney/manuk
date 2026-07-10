@@ -878,6 +878,10 @@ fn set_shorthand(sides: &mut Sides<Dim>, v: &str, fs: f32, allow_auto: bool) {
 #[cfg(feature = "stylo")]
 pub mod stylo_engine;
 
+/// D2 Step-0 probe: drive real Stylo (Device + parser + Stylist) end to end.
+#[cfg(feature = "stylo")]
+pub mod stylo_probe;
+
 #[cfg(test)]
 mod tests {
     use super::*;

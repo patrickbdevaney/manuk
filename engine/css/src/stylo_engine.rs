@@ -9,6 +9,14 @@
 //! feature/trait wiring is correct) and delegates to [`MinimalCascade`] so behavior
 //! is well-defined. Replacing the delegation body with a real Stylist run is a
 //! change contained entirely to this file — no caller sees the difference.
+//!
+//! D2 Step-0 (see [`crate::stylo_probe`]) has already proven the *non-DOM half* of
+//! that run works here — building a `Device`, parsing with Stylo's own parser, and
+//! compiling selectors through a `Stylist`. What this adapter still needs before it
+//! can stop delegating is the `TElement`/`TNode`/`selectors::Element` trait wall
+//! (~126 methods) over `(&Dom, NodeId)` so Stylo can *match* against our arena DOM,
+//! plus a `NodeId`-indexed `AtomicRefCell<ElementData>` store — a dedicated
+//! multi-session effort tracked in CLAUDE.md § D2.
 
 // Link the Stylo crate so the feature genuinely pulls it in. The real adapter will
 // replace this with concrete `stylo::…` usage.

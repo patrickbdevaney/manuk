@@ -2295,10 +2295,12 @@ name = "manuk-css"
 version = "0.1.0"
 dependencies = [
  "cssparser 0.34.0",
+ "euclid",
  "manuk-dom",
  "smallvec",
  "stylo",
  "tracing",
+ "url",
 ]
 
 [[package]]
