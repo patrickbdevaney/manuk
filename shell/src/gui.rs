@@ -68,6 +68,8 @@ struct App {
     scroll_y: f32,
     browser: Browser,
     tab_id: TabId,
+    /// Rolling GPU-present frame timer (§8 metric #4) — real on-screen frames.
+    frame: manuk_compositor::FrameTimer,
 }
 
 impl App {
@@ -87,6 +89,7 @@ impl App {
             scroll_y: 0.0,
             browser,
             tab_id,
+            frame: manuk_compositor::FrameTimer::new(120),
         }
     }
 
@@ -207,8 +210,21 @@ impl ApplicationHandler for App {
             }
             WindowEvent::RedrawRequested => {
                 if let Some(gpu) = &mut self.gpu {
+                    self.frame.begin();
                     if let Err(e) = gpu.draw() {
                         tracing::warn!("draw: {e:?}");
+                    }
+                    self.frame.end();
+                    // Log frame stats once per window of frames.
+                    if self.frame.len() == 120 {
+                        if let (Some(avg), Some(fps)) = (self.frame.average(), self.frame.fps()) {
+                            tracing::debug!(
+                                frame_ms = avg.as_secs_f64() * 1000.0,
+                                fps,
+                                janky = self.frame.janky(manuk_compositor::FRAME_BUDGET_60FPS),
+                                "gpu present frame stats (120-frame window)"
+                            );
+                        }
                     }
                 }
             }

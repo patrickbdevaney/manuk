@@ -48,6 +48,99 @@ pub mod mem {
     }
 }
 
+/// Rolling frame-time instrument (CLAUDE.md §8 metric #4). Records per-frame
+/// durations over a sliding window and reports last / average / p95 / FPS / jank —
+/// so the present loop (or the headless raster loop) can surface smoothness.
+///
+/// The **GPU present** time needs a display (the shell's `gui` feature); this
+/// instrument is display-agnostic — the headless `render` path times the CPU raster,
+/// the current stand-in for per-frame paint cost.
+pub struct FrameTimer {
+    samples: std::collections::VecDeque<std::time::Duration>,
+    cap: usize,
+    frame_start: Option<std::time::Instant>,
+}
+
+impl FrameTimer {
+    /// A timer keeping the last `window` frames (min 1).
+    pub fn new(window: usize) -> Self {
+        FrameTimer {
+            samples: std::collections::VecDeque::new(),
+            cap: window.max(1),
+            frame_start: None,
+        }
+    }
+
+    /// Mark the start of a frame.
+    pub fn begin(&mut self) {
+        self.frame_start = Some(std::time::Instant::now());
+    }
+
+    /// Mark the end of a frame; records elapsed since [`begin`](Self::begin) and
+    /// returns it (`None` if `begin` wasn't called).
+    pub fn end(&mut self) -> Option<std::time::Duration> {
+        let d = self.frame_start.take()?.elapsed();
+        self.record(d);
+        Some(d)
+    }
+
+    /// Record a pre-measured frame duration (evicting the oldest past the window).
+    pub fn record(&mut self, dur: std::time::Duration) {
+        if self.samples.len() == self.cap {
+            self.samples.pop_front();
+        }
+        self.samples.push_back(dur);
+    }
+
+    pub fn last(&self) -> Option<std::time::Duration> {
+        self.samples.back().copied()
+    }
+
+    /// Mean frame duration over the window.
+    pub fn average(&self) -> Option<std::time::Duration> {
+        if self.samples.is_empty() {
+            return None;
+        }
+        let sum: std::time::Duration = self.samples.iter().sum();
+        Some(sum / self.samples.len() as u32)
+    }
+
+    /// 95th-percentile frame duration (the tail that causes visible jank).
+    pub fn p95(&self) -> Option<std::time::Duration> {
+        if self.samples.is_empty() {
+            return None;
+        }
+        let mut v: Vec<_> = self.samples.iter().copied().collect();
+        v.sort_unstable();
+        let idx = ((v.len() as f64 * 0.95).ceil() as usize).saturating_sub(1);
+        Some(v[idx.min(v.len() - 1)])
+    }
+
+    /// Frames per second implied by the average frame duration.
+    pub fn fps(&self) -> Option<f64> {
+        self.average()
+            .filter(|d| !d.is_zero())
+            .map(|d| 1.0 / d.as_secs_f64())
+    }
+
+    /// Number of frames that missed a `budget` (e.g. 16.67 ms for 60 fps) — the jank
+    /// count over the window.
+    pub fn janky(&self, budget: std::time::Duration) -> usize {
+        self.samples.iter().filter(|&&d| d > budget).count()
+    }
+
+    pub fn len(&self) -> usize {
+        self.samples.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.samples.is_empty()
+    }
+}
+
+/// A 60-fps frame budget (~16.67 ms), the usual smoothness target.
+pub const FRAME_BUDGET_60FPS: std::time::Duration = std::time::Duration::from_micros(16_667);
+
 /// Render/JS tier of a tab, from heaviest (focused) to lightest (hibernated).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RenderTier {
@@ -311,6 +404,40 @@ mod tests {
         assert!(!tm.tier(TabId(4)).unwrap().js_frozen());
         assert!(tm.tier(TabId(0)).unwrap().js_frozen());
         assert!(tm.tier(TabId(0)).unwrap().is_evicted());
+    }
+
+    #[test]
+    fn frame_timer_stats_and_jank() {
+        use std::time::Duration;
+        let mut ft = FrameTimer::new(4); // window of 4 frames
+                                         // Feed 8ms, 12ms, 40ms (jank), 8ms.
+        for ms in [8u64, 12, 40, 8] {
+            ft.record(Duration::from_millis(ms));
+        }
+        assert_eq!(ft.len(), 4);
+        assert_eq!(ft.last(), Some(Duration::from_millis(8)));
+        // average = (8+12+40+8)/4 = 17ms.
+        assert_eq!(ft.average(), Some(Duration::from_millis(17)));
+        // p95 over these 4 → the max (40ms) at the tail.
+        assert_eq!(ft.p95(), Some(Duration::from_millis(40)));
+        // One frame (40ms) missed the 60fps budget.
+        assert_eq!(ft.janky(FRAME_BUDGET_60FPS), 1);
+        // ~1/0.017s ≈ 58.8 fps.
+        assert!(
+            (ft.fps().unwrap() - 58.8).abs() < 1.0,
+            "fps ~58.8, got {:?}",
+            ft.fps()
+        );
+
+        // The window evicts oldest: a 5th frame drops the first 8ms sample.
+        ft.record(Duration::from_millis(20));
+        assert_eq!(ft.len(), 4);
+
+        // begin/end times a real interval (non-zero, small).
+        let mut t2 = FrameTimer::new(1);
+        t2.begin();
+        let d = t2.end().unwrap();
+        assert!(d < Duration::from_secs(1));
     }
 
     #[test]

@@ -122,7 +122,12 @@ fn cmd_render(args: &[String]) -> Result<()> {
         .and_then(|s| s.parse().ok())
         .unwrap_or_else(|| (page.content_height.ceil() as u32).clamp(1, MAX_RENDER_HEIGHT));
 
+    // Time the CPU raster — the §8 frame-time metric's headless stand-in (the GPU
+    // present time needs a display, via the `gui` feature).
+    let mut frame = manuk_compositor::FrameTimer::new(1);
+    frame.begin();
     let canvas = page.paint(&fonts, width, height);
+    let frame_ms = frame.end().map(|d| d.as_secs_f64() * 1000.0);
     canvas.save_png(out)?;
 
     println!("Rendered: {}", page.title);
@@ -131,6 +136,9 @@ fn cmd_render(args: &[String]) -> Result<()> {
         "  size:   {width}x{height}px  (content height {:.0}px)",
         page.content_height
     );
+    if let Some(ms) = frame_ms {
+        println!("  frame:  {ms:.1} ms (CPU raster; GPU present needs a display)");
+    }
     if let Some(rss) = manuk_compositor::mem::process_rss_bytes() {
         println!(
             "  rss:    {:.1} MB (process resident)",

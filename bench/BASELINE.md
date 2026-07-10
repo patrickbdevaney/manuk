@@ -85,8 +85,22 @@ directly separable — the shared-process self-attribution wrinkle from G-e). C1
 the *retained-heap* drops on discard; whether RSS follows depends on the allocator
 returning freed pages to the OS.
 
-## 4. Frame time — SLOT RESERVED, NOT YET WIRED 🔧
+## 4. Frame time — WIRED (CPU raster) ✅ / GPU present 🔧
 
-Requires the GPU present loop (`shell` `gui` feature) and is hard to measure in
-headless CI. Wire when the Vello tier (A1) or a headful frame-timing hook lands; the
-CPU raster time above is the current stand-in for paint cost.
+`manuk_compositor::FrameTimer` is a rolling per-frame instrument (last / average /
+p95 / FPS / jank vs a `FRAME_BUDGET_60FPS` ~16.67 ms budget). The headless `render`
+times the CPU raster (`begin`/`end` around `Page::paint`) and prints `frame: N ms`.
+
+| Frame (CPU raster) | Time |
+|---|---|
+| `paint_frame_800x600` (SAMPLE page, re-paint) | **~675 µs** |
+| live example.com render (800×143, incl. first paint) | ~3.2 ms |
+
+Both are well under the 16.67 ms 60-fps budget — the CPU raster tier is not the frame
+bottleneck for representative pages. **GPU present time** (the actual on-screen frame
+under the shell `gui` feature) needs a display and is not measured headlessly; the
+`FrameTimer` is display-agnostic, so wrapping the winit/wgpu present loop with the
+same `begin`/`end` records real GPU frames when a headful session runs. The Vello GPU
+tier (A1) is monitor-upstream.
+
+Re-measure: `cargo bench -p manuk-page --bench pipeline -- paint_frame`.

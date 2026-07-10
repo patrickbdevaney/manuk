@@ -73,6 +73,16 @@ fn bench_pipeline(c: &mut Criterion) {
             black_box(p.content_height)
         })
     });
+
+    // §8 metric #4 (frame time): the per-frame CPU raster cost in isolation (page laid
+    // out once, then re-painted each iteration — a repaint, the compositor's frame).
+    let page = Page::load(SAMPLE, "http://bench.local/", &fonts, 800.0);
+    c.bench_function("paint_frame_800x600 (CPU raster only)", |b| {
+        b.iter(|| {
+            let canvas = page.paint(&fonts, 800, 600);
+            black_box(canvas.width())
+        })
+    });
 }
 
 criterion_group!(benches, bench_pipeline);
