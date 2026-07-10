@@ -17,7 +17,7 @@ The common engine core (networking, parsing, CSS, DOM/JS, layout, text) is reali
 
 A working foundation, not a finished browser. What exists and is verified:
 
-- **Networking** (`engine/net`): HTTP/1.1 over TLS (`hyper` + `rustls`, no OpenSSL), redirects, and a general `request` (POST) reused by the agent's Groq client. Live-fetches real sites.
+- **Networking** (`engine/net`): pooled `hyper-util` client over a `hyper-rustls` connector (no OpenSSL), **HTTP/2 auto-negotiated** (ALPN), **connection reuse**, **gzip/br/deflate decoding** (`async-compression`), redirects, and a general `request` (POST) reused by the agent's Groq client. Live-fetches real sites. *(P0.4 landed.)*
 - **Parse → render pipeline** (`engine/{html,dom,css,layout,text,paint}` via `engine/page`): `html5ever` → arena DOM → minimal CSS cascade (selectors/specificity/inheritance) → from-scratch block + inline layout (wrapping, centering; `taffy` for flex) → `fontdb`/`fontdue` text → `tiny-skia` CPU raster to PNG. Renders real pages (example.com and local pages) end to end.
 - **JS** (`engine/js`): `JsRuntime` trait with a no-op default; **SpiderMonkey** (`mozjs`) behind `--features spidermonkey` **actually evaluates JS**. Process-global engine, shared across isolates. Modification boundary respected (see below).
 - **CSS engine seam** (`engine/css`): minimal cascade default; **Stylo** behind `--features stylo` (links and builds; adapter currently delegates).
@@ -149,7 +149,7 @@ Broadest real-world site set (excluding the hostile/bot-walled tier), WPT-verifi
   `fetch`/`XHR`; events; DOM mutation.
 - **Loading:** external stylesheets/scripts/images; gzip/br/deflate decoding;
   charset sniffing; data/blob URLs.
-- **Protocols:** activate **HTTP/2** (ALPN `h2`, already compiled), add **HTTP/3**
+- **Protocols:** ✅ **HTTP/2 active** (ALPN, P0.4) + gzip/br/deflate decode; add **HTTP/3**
   (`quinn`), WebSocket (`tokio-tungstenite`), cookies.
 - **Forms + navigation:** form submission, history (back/forward), fragment nav.
 

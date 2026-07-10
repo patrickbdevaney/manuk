@@ -51,12 +51,16 @@ async-trait = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "macros", "sync", "time"] }
 hyper = { version = "1", features = ["client", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "http2", "tokio"] }
+hyper-rustls = { version = "0.27", default-features = false, features = ["http1", "http2", "ring", "webpki-roots", "tls12"] }
 http = "1"
 http-body-util = "0.1"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
-tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
 webpki-roots = "0.26"
 rustls-pki-types = "1"
+# Streaming body decode (Content-Encoding) — feature-gated, pulls only what we use.
+async-compression = { version = "0.4", default-features = false, features = ["tokio", "gzip", "brotli", "deflate", "zlib"] }
+tokio-util = { version = "0.7", features = ["io"] }
+futures-util = { version = "0.3", default-features = false }
 
 # --- HTML parsing (Reuse) ---
 html5ever = "0.39"

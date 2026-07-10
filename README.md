@@ -84,16 +84,18 @@ in; **Build** = written from scratch, to be verified against WPT.
 
 #### `engine/net` — networking · *Reuse*
 - **Does:** `fetch(url)` (GET + redirect following) and a general
-  `request(method, url, headers, body)` (POST etc.). Returns status, headers, and a
-  `Bytes` body.
-- **Uses:** `hyper` 1 (HTTP/1.1; the http2 feature is compiled), `rustls` 0.23
-  (pure-Rust TLS via `ring` — no OpenSSL), `webpki-roots` for trust anchors,
-  `tokio` runtime, `hyper-util` I/O glue.
-- **Works:** live HTTPS fetches of real sites; redirects; the Groq client reuses
-  the same stack for outbound LLM calls.
-- **Not yet:** HTTP/2 is compiled but the connection path is HTTP/1.1 only;
-  HTTP/3/QUIC (`quinn`) is a target, not yet a dependency; no gzip/br decoding
-  (requests advertise identity); no cookies/cache.
+  `request(method, url, headers, body)` (POST etc.). Returns status, headers, a
+  (Content-Encoding-decoded) `Bytes` body, and the negotiated `HttpVersion`.
+- **Uses:** a process-global pooled `hyper-util` `legacy::Client` over a
+  `hyper-rustls` `HttpsConnector` (ALPN `h2,http/1.1`), `rustls` 0.23 (pure-Rust TLS
+  via `ring` — no OpenSSL), `webpki-roots`, `async-compression` (gzip/deflate/br)
+  over the streaming body, `tokio`.
+- **Works:** live HTTPS fetches of real sites; **HTTP/2 auto-negotiated** (verified
+  on example.com); **connection pooling** (sequential same-origin fetches reuse the
+  socket); **gzip/br/deflate decoding** (verified on httpbin.org/gzip); redirects;
+  the Groq client reuses the same stack for outbound LLM calls.
+- **Not yet:** HTTP/3/QUIC (`quinn`) is a target, not yet a dependency; speculative
+  preconnect on hover; cookies/cache.
 
 #### `engine/html` — HTML parsing · *Reuse*
 - **Does:** `parse(html) -> Dom`, walking `html5ever`'s spec-compliant tree builder
