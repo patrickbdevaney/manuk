@@ -20,6 +20,7 @@ spidermonkey = ["dep:mozjs"]
 [dependencies]
 manuk-dom.workspace = true
 manuk-css.workspace = true
+manuk-html.workspace = true
 tracing.workspace = true
 
 # Feature-gated. Pulled only with --features spidermonkey. Triggers the SpiderMonkey

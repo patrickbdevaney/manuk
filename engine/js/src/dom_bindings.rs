@@ -209,6 +209,7 @@ unsafe fn define_members(
             el_get_text_content,
             Some(el_set_text_content),
         );
+        prop(c"innerHTML", el_get_inner_html, Some(el_set_inner_html));
         prop(c"tagName", el_get_tag_name, None); // read-only
         prop(c"id", el_get_id, Some(el_set_id));
         prop(c"className", el_get_class_name, Some(el_set_class_name));
@@ -368,6 +369,28 @@ unsafe extern "C" fn el_set_text_content(cx: *mut RawJSContext, argc: u32, vp: *
         }
         let text = (*dom).create_text(value);
         (*dom).append_child(node, text);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `element.innerHTML` getter → the element's children serialized to HTML.
+unsafe extern "C" fn el_get_inner_html(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    match this_node(vp) {
+        Some((dom, node)) => {
+            let html = manuk_html::serialize_inner(&*dom, node);
+            return_string(cx, vp, &html);
+        }
+        None => *vp = NullValue(),
+    }
+    true
+}
+
+/// `element.innerHTML = s` setter → parse `s` and replace the element's children.
+unsafe extern "C" fn el_set_inner_html(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let value = arg_string(cx, vp, argc, 0).unwrap_or_default();
+        manuk_html::set_inner_html(&mut *dom, node, &value);
     }
     *vp = UndefinedValue();
     true
@@ -542,9 +565,15 @@ mod tests {
             parent.className = "box active";
             parent.setAttribute("data-k", "v");
 
+            // innerHTML: parse a fragment into the element, then read it back.
+            parent.innerHTML = "<em>hi</em><i>yo</i>";
+            var inner_ok = (parent.innerHTML === "<em>hi</em><i>yo</i>") &&
+                           (parent.querySelectorAll("em").length === 1) &&
+                           (parent.textContent === "hiyo");
+
             var all = document.querySelectorAll("p");   // NodeList (JS Array)
 
-            (g !== null) && (scoped !== null) &&
+            (g !== null) && (scoped !== null) && inner_ok &&
               (g.textContent === "hello world") &&
               (g.tagName === "P") && (parent.tagName === "DIV") &&
               (g.id === "greeting") && (parent.id === "made-in-js") &&

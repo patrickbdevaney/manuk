@@ -174,12 +174,13 @@ in; **Build** = written from scratch, to be verified against WPT.
   `document.getElementById`/`querySelector`/`querySelectorAll`/`createElement`,
   `element.appendChild`/`setAttribute`/`getAttribute`/`querySelector`/
   `querySelectorAll`. **Accessor properties:** `textContent` (get+set), `tagName`,
-  `id` (get+set), `className` (get+set). `querySelectorAll` returns a real JS array
+  `id` (get+set), `className` (get+set), `innerHTML` (get+set, re-parses a
+  fragment into the arena DOM). `querySelectorAll` returns a real JS array
   NodeList. JS mutates the real arena DOM; validated end-to-end
   (`engine/js::dom_bindings`, isolated test).
 - **Boundary:** this crate only *configures and binds to* SpiderMonkey — never
   patches JIT/GC or the sandbox. See [the modification boundary](#the-js-engine-modification-boundary).
-- **Not yet:** `innerHTML`, events (`addEventListener` + event loop), `fetch`/XHR —
+- **Not yet:** events (`addEventListener` + event loop), `fetch`/XHR —
   the documented next binding tranches.
 
 #### `engine/paint` — rasterization · *Reuse target (Vello), Build (CPU tier)*
