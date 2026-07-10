@@ -127,6 +127,11 @@ pub mod spidermonkey;
 pub mod bindings_prototype;
 
 /// D3 hand-written DOM binding subset (jQuery-core methods) over the arena DOM.
+/// N9 — a custom promise job queue, so native `Promise` reactions run through our
+/// event loop (the embedder `JS::JobQueue` hook; no SpiderMonkey internals).
+#[cfg(feature = "_sm")]
+pub mod job_queue;
+
 #[cfg(feature = "_sm")]
 pub mod dom_bindings;
 

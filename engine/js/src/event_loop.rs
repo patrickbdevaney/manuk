@@ -97,7 +97,26 @@ const NEXT_PENDING: &str =
 /// Install the event-loop host surface onto `global` (the queues + schedulers). Call
 /// once, inside the global's realm.
 pub fn install(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<(), String> {
+    // N9: route SpiderMonkey's native promise jobs into this loop. Installed once per
+    // process; `SetJobQueue` has no ordering constraint (unlike `UseInternalJobQueues`,
+    // which must precede `InitSelfHostedCode` and therefore cannot be used with mozjs's
+    // `Runtime::new` — see the N7 research note).
+    let raw_cx = unsafe { rt.cx().raw_cx() };
+    unsafe { crate::job_queue::install_once(raw_cx) }?;
     eval(rt, global, PRELUDE, "event_loop_prelude.js").map(|_| ())
+}
+
+/// A **microtask checkpoint**: drain the host `queueMicrotask` queue *and* SpiderMonkey's
+/// native promise-job queue. Both must run, and both must run to quiescence — a job may
+/// enqueue another job.
+fn microtask_checkpoint(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<(), String> {
+    eval(rt, global, DRAIN_MICRO, "event_loop_micro.js")?;
+    let raw_cx = unsafe { rt.cx().raw_cx() };
+    unsafe { crate::job_queue::drain(raw_cx) };
+    // A native reaction may have called `queueMicrotask`; drain again so the checkpoint is
+    // a fixed point rather than one pass.
+    eval(rt, global, DRAIN_MICRO, "event_loop_micro.js")?;
+    Ok(())
 }
 
 /// Run the event loop to quiescence with **no network** (pending `fetch`/XHR requests,
@@ -122,7 +141,7 @@ where
 {
     let mut count = 0u32;
     loop {
-        eval(rt, global, DRAIN_MICRO, "event_loop_micro.js")?; // checkpoint
+        microtask_checkpoint(rt, global)?;
 
         // Perform all currently-pending network requests.
         let mut did_io = false;
@@ -152,7 +171,7 @@ where
             eval(rt, global, &deliver, "event_loop_deliver.js")?;
         }
 
-        eval(rt, global, DRAIN_MICRO, "event_loop_micro.js")?; // delivery may queue micro
+        microtask_checkpoint(rt, global)?; // delivery may queue micro/promise jobs
 
         let ran = eval(rt, global, NEXT_TASK, "event_loop_tick.js")?;
         let ran = ran.is_boolean() && ran.to_boolean();
@@ -165,7 +184,7 @@ where
         }
         break;
     }
-    eval(rt, global, DRAIN_MICRO, "event_loop_micro.js")?; // final checkpoint
+    microtask_checkpoint(rt, global)?; // final checkpoint
     Ok(count)
 }
 
