@@ -130,7 +130,7 @@ pub fn layout_document(
         .or_else(|| dom.children(dom.root()).find(|&n| dom.is_element(n)));
 
     match root_el {
-        Some(el) => ctx.layout_block(el, viewport_width, 0.0, 0.0).0,
+        Some(el) => ctx.layout_block(el, viewport_width, 0.0, 0.0, 0.0).boxx,
         None => LayoutBox {
             rect: Rect::ZERO,
             background: None,
@@ -175,11 +175,41 @@ fn text_style(cs: &ComputedStyle) -> TextStyle {
     }
 }
 
+/// The pieces a parent needs to stack a block child with margin collapsing.
+struct BlockResult {
+    boxx: LayoutBox,
+    /// This block's top margin (already applied to `boxx.rect.y`, reported so a
+    /// parent-child collapse could use it later).
+    margin_top: f32,
+    /// This block's bottom margin — the parent collapses it with the next sibling's
+    /// top margin (or applies it fully before non-collapsible content).
+    margin_bottom: f32,
+}
+
+/// Collapse two adjoining vertical margins (CSS2 §8.3.1): positive margins take the
+/// max, negative margins take the min (most negative), mixed signs sum. Passing `0`
+/// for one side yields the other unchanged, so the first-in-flow block "collapses"
+/// with a zero and keeps its own margin.
+fn collapse_margins(a: f32, b: f32) -> f32 {
+    if a >= 0.0 && b >= 0.0 {
+        a.max(b)
+    } else if a < 0.0 && b < 0.0 {
+        a.min(b)
+    } else {
+        a + b
+    }
+}
+
 impl Ctx<'_> {
-    /// Lay out a block box whose margin box starts at `(x, y)` in a containing
-    /// block of `cw` px. Returns the positioned box and the total vertical advance
-    /// (margin-box height) the parent should add.
-    fn layout_block(&self, node: NodeId, cw: f32, x: f32, y: f32) -> (LayoutBox, f32) {
+    /// Lay out a block box in a containing block of `cw` px. `y` is the border-bottom
+    /// edge of the preceding in-flow sibling (or the container's content-top for the
+    /// first child); `prev_margin` is that sibling's trailing collapsible margin (0
+    /// if none). The block's top margin collapses with `prev_margin` to decide its
+    /// border-box top. Returns the positioned box and its own top/bottom margins.
+    ///
+    /// Simplification (documented, CLAUDE.md § verification): parent↔first/last-child
+    /// margin collapsing is not yet modeled — only adjacent-sibling collapsing is.
+    fn layout_block(&self, node: NodeId, cw: f32, x: f32, y: f32, prev_margin: f32) -> BlockResult {
         let s = self.styles[&node].clone();
 
         let mut ml = s.margin.left.resolve(cw, 0.0);
@@ -218,7 +248,9 @@ impl Ctx<'_> {
         let _ = mr; // right margin does not affect downstream positioning here
 
         let border_x = x + ml;
-        let border_y = y + mt;
+        // Collapse this block's top margin with the preceding sibling's trailing
+        // margin to place the border-box top.
+        let border_y = y + collapse_margins(prev_margin, mt);
         let content_x = border_x + bl + pl;
         let content_y = border_y + bt + pt;
 
@@ -237,16 +269,16 @@ impl Ctx<'_> {
             height: border_box_h,
         };
 
-        let advance = mt + border_box_h + mb;
-        (
-            LayoutBox {
+        BlockResult {
+            boxx: LayoutBox {
                 rect,
                 background: s.background_color,
                 node: Some(node),
                 content,
             },
-            advance,
-        )
+            margin_top: mt,
+            margin_bottom: mb,
+        }
     }
 
     /// Lay out the children of a container whose content box starts at `(cx, cy)`
@@ -275,49 +307,62 @@ impl Ctx<'_> {
             return (BoxContent::Inline(frags), h);
         }
 
-        // Block container: block children stack; runs of inline siblings become
-        // anonymous block boxes.
+        // Block container: block children stack with adjacent-sibling margin
+        // collapsing; runs of inline siblings become anonymous block boxes. `cur_y`
+        // tracks the border-bottom of the last in-flow block (its trailing margin
+        // held in `prev_margin` so the next sibling can collapse against it).
         let mut boxes = Vec::new();
         let mut cur_y = cy;
+        let mut prev_margin = 0.0f32;
         let mut inline_run: Vec<NodeId> = Vec::new();
 
         for &k in &kids {
             if is_block_level(self.dom, self.styles, k) {
-                cur_y = self.flush_inline_run(&mut inline_run, &mut boxes, cx, cur_y, cw);
-                let (b, adv) = self.layout_block(k, cw, cx, cur_y);
-                boxes.push(b);
-                cur_y += adv;
+                (cur_y, prev_margin) =
+                    self.flush_inline_run(&mut inline_run, &mut boxes, cx, cur_y, prev_margin, cw);
+                let r = self.layout_block(k, cw, cx, cur_y, prev_margin);
+                cur_y = r.boxx.rect.y + r.boxx.rect.height;
+                prev_margin = r.margin_bottom;
+                boxes.push(r.boxx);
             } else {
                 inline_run.push(k);
             }
         }
-        cur_y = self.flush_inline_run(&mut inline_run, &mut boxes, cx, cur_y, cw);
+        (cur_y, prev_margin) =
+            self.flush_inline_run(&mut inline_run, &mut boxes, cx, cur_y, prev_margin, cw);
 
-        (BoxContent::Block(boxes), cur_y - cy)
+        // The last in-flow block's trailing margin still occupies the container.
+        (BoxContent::Block(boxes), cur_y + prev_margin - cy)
     }
 
     /// Turn a pending run of inline-level siblings into an anonymous block box.
+    /// Returns the updated `(cur_y, prev_margin)`: a whitespace-only run produces no
+    /// box and preserves the pending block margin (so `<p>a</p>\n<p>b</p>` still
+    /// collapses); real inline content is not collapsible, so the pending margin is
+    /// committed before it.
     fn flush_inline_run(
         &self,
         run: &mut Vec<NodeId>,
         boxes: &mut Vec<LayoutBox>,
         cx: f32,
         cur_y: f32,
+        prev_margin: f32,
         cw: f32,
-    ) -> f32 {
+    ) -> (f32, f32) {
         if run.is_empty() {
-            return cur_y;
+            return (cur_y, prev_margin);
         }
         let items = self.collect_inline_group(run);
         run.clear();
         if items.is_empty() {
-            return cur_y; // whitespace-only: no anonymous box
+            return (cur_y, prev_margin); // whitespace-only: keep the pending margin
         }
-        let (frags, h) = self.layout_inline(&items, cx, cur_y, cw, TextAlign::Left);
+        let start = cur_y + prev_margin;
+        let (frags, h) = self.layout_inline(&items, cx, start, cw, TextAlign::Left);
         boxes.push(LayoutBox {
             rect: Rect {
                 x: cx,
-                y: cur_y,
+                y: start,
                 width: cw,
                 height: h,
             },
@@ -325,7 +370,7 @@ impl Ctx<'_> {
             node: None,
             content: BoxContent::Inline(frags),
         });
-        cur_y + h
+        (start + h, 0.0)
     }
 
     /// Lay out flex children as a row using taffy for main-axis sizing/positioning.
@@ -361,9 +406,11 @@ impl Ctx<'_> {
         let mut boxes = Vec::new();
         let mut max_h = 0.0f32;
         for (&k, slot) in block_kids.iter().zip(slots.iter()) {
-            let (b, adv) = self.layout_block(k, slot.width, cx + slot.x, cy);
+            let r = self.layout_block(k, slot.width, cx + slot.x, cy, 0.0);
+            // Flex item advance = its full margin box height.
+            let adv = r.margin_top + (r.boxx.rect.height) + r.margin_bottom;
             max_h = max_h.max(adv);
-            boxes.push(b);
+            boxes.push(r.boxx);
         }
         (BoxContent::Block(boxes), max_h)
     }
@@ -571,6 +618,48 @@ mod tests {
         assert_eq!(children[1].rect.height, 30.0);
         // Second div starts below the first.
         assert!(children[1].rect.y >= children[0].rect.y + 50.0);
+    }
+
+    #[test]
+    fn adjacent_sibling_margins_collapse() {
+        // bottom:20 meets top:30 → the gap is max(20,30)=30, not 50.
+        let (_dom, root) = layout_html(
+            "<body><div style='height:10px;margin:0 0 20px 0'></div>\
+             <div style='height:10px;margin:30px 0 0 0'></div></body>",
+            "",
+            800.0,
+        );
+        let BoxContent::Block(children) = &root.content else {
+            panic!("expected block content");
+        };
+        assert_eq!(children.len(), 2);
+        let gap = children[1].rect.y - (children[0].rect.y + children[0].rect.height);
+        assert!(
+            (gap - 30.0).abs() < 0.01,
+            "collapsed gap should be 30, got {gap}"
+        );
+    }
+
+    #[test]
+    fn margins_do_not_collapse_across_inline_content() {
+        // A text line between two blocks blocks the collapse; both margins apply.
+        let (_dom, root) = layout_html(
+            "<body><div style='height:10px;margin-bottom:20px'></div>hi\
+             <div style='height:10px;margin-top:30px'></div></body>",
+            "",
+            800.0,
+        );
+        let BoxContent::Block(children) = &root.content else {
+            panic!("expected block content");
+        };
+        // div, anonymous(inline "hi"), div
+        assert_eq!(children.len(), 3);
+        // The trailing 20px margin is committed before the inline box.
+        let after_first = children[0].rect.y + children[0].rect.height;
+        assert!(
+            children[1].rect.y >= after_first + 20.0 - 0.01,
+            "inline box should sit below the first div's full bottom margin"
+        );
     }
 
     #[test]
