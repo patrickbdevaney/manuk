@@ -268,7 +268,7 @@ pub fn layout_document(
             // the root element its own context, so this outer one is just a seed.
             let mut floats = FloatContext::new(0.0, viewport_width);
             let mut root = ctx
-                .layout_block(el, viewport_width, 0.0, 0.0, 0.0, &mut floats)
+                .layout_block(el, viewport_width, None, 0.0, 0.0, 0.0, &mut floats)
                 .boxx;
             // Absolute/fixed boxes were skipped in flow; place them in a final pass
             // against their containing blocks (CSS2 §9.6).
@@ -558,6 +558,7 @@ impl Ctx<'_> {
         &self,
         node: NodeId,
         cw: f32,
+        pch: Option<f32>,
         x: f32,
         y: f32,
         prev_margin: f32,
@@ -630,32 +631,36 @@ impl Ctx<'_> {
         let content_x = border_x + bl + pl;
         let content_y = border_y + bt + pt;
 
+        // This block's own **definite** content height, if any — the reference a
+        // percentage-height *child* resolves against (CSS2 §10.5). Computed before laying
+        // out children so their `height:%` works; `None` (auto height) means a percent-height
+        // child falls back to its content height.
+        let bs_extra_h = if s.box_sizing == BoxSizing::BorderBox { pt + pb + bt + bb } else { 0.0 };
+        let own_definite_h: Option<f32> = match s.height {
+            Dim::Px(p) => Some((p - bs_extra_h).max(0.0)),
+            Dim::Percent(pct) => pch.map(|h| (h * pct / 100.0 - bs_extra_h).max(0.0)),
+            Dim::Calc { .. } => pch.map(|h| (s.height.resolve(h, 0.0) - bs_extra_h).max(0.0)),
+            Dim::Auto => None,
+        };
+
         // A BFC root gets a fresh float context spanning its own content box; a plain
         // block shares its parent's so floats affect content across nested blocks.
         let mut own_bfc;
         let (content, content_height) = if establishes_bfc(&s) {
             own_bfc = FloatContext::new(content_x, content_x + width);
-            let (c, h) = self.layout_children(node, content_x, content_y, width, &mut own_bfc);
+            let (c, h) = self.layout_children(node, content_x, content_y, width, own_definite_h, &mut own_bfc);
             // A BFC root grows to contain its floats (CSS2 §10.6.7 auto-height case).
             let float_h = (own_bfc.lowest_bottom() - content_y).max(0.0);
             (c, h.max(float_h))
         } else {
-            self.layout_children(node, content_x, content_y, width, floats)
+            self.layout_children(node, content_x, content_y, width, own_definite_h, floats)
         };
-        let bs_extra_h = if s.box_sizing == BoxSizing::BorderBox { pt + pb + bt + bb } else { 0.0 };
-        let mut content_height = match s.height {
-            Dim::Auto => content_height,
-            other => {
-                let h = other.resolve(0.0, content_height);
-                // Under border-box, the specified height includes padding + border.
-                (h - bs_extra_h).max(0.0)
-            }
-        };
+        let mut content_height = own_definite_h.unwrap_or(content_height);
         // min-height / max-height clamp (content-box).
-        let min_h = (s.min_height.resolve(0.0, 0.0) - bs_extra_h).max(0.0);
+        let min_h = (s.min_height.resolve(pch.unwrap_or(0.0), 0.0) - bs_extra_h).max(0.0);
         let max_h = match s.max_height {
             Dim::Auto => f32::INFINITY,
-            other => (other.resolve(0.0, f32::INFINITY) - bs_extra_h).max(0.0),
+            other => (other.resolve(pch.unwrap_or(0.0), f32::INFINITY) - bs_extra_h).max(0.0),
         };
         if max_h.is_finite() {
             content_height = content_height.min(max_h);
@@ -722,6 +727,7 @@ impl Ctx<'_> {
         cx: f32,
         cy: f32,
         cw: f32,
+        pch: Option<f32>,
         floats: &mut FloatContext,
     ) -> (BoxContent, f32) {
         let display = self.styles[&node].display;
@@ -827,7 +833,7 @@ impl Ctx<'_> {
                         prev_margin = 0.0;
                     }
                 }
-                let r = self.layout_block(k, cw, cx, cur_y, prev_margin, floats);
+                let r = self.layout_block(k, cw, pch, cx, cur_y, prev_margin, floats);
                 // Stack against the normal-flow bottom (relative shifts are visual).
                 cur_y = r.flow_bottom;
                 prev_margin = r.margin_bottom;
@@ -888,7 +894,7 @@ impl Ctx<'_> {
 
         // Lay out content at a provisional origin (0,0) in the float's own BFC.
         let mut inner = FloatContext::new(0.0, width);
-        let (content, ch) = self.layout_children(node, 0.0, 0.0, width, &mut inner);
+        let (content, ch) = self.layout_children(node, 0.0, 0.0, width, None, &mut inner);
         let content_height = match s.height {
             Dim::Auto => ch.max((inner.lowest_bottom()).max(0.0)),
             other => other.resolve(0.0, ch),
@@ -936,7 +942,7 @@ impl Ctx<'_> {
     /// lay the content out unconstrained to get its preferred width, then clamp.
     fn shrink_to_fit(&self, node: NodeId, avail: f32) -> f32 {
         let mut fc = FloatContext::new(0.0, 1.0e6);
-        let (content, _h) = self.layout_children(node, 0.0, 0.0, 1.0e6, &mut fc);
+        let (content, _h) = self.layout_children(node, 0.0, 0.0, 1.0e6, None, &mut fc);
         let pref = content_right_extent(&content, self.fonts);
         pref.min(avail).max(0.0)
     }
@@ -1111,10 +1117,10 @@ impl Ctx<'_> {
             return (w + frame, w + frame);
         }
         let mut fc_max = FloatContext::new(0.0, 1.0e6);
-        let (cmax, _) = self.layout_children(cell, 0.0, 0.0, 1.0e6, &mut fc_max);
+        let (cmax, _) = self.layout_children(cell, 0.0, 0.0, 1.0e6, None, &mut fc_max);
         let max = content_right_extent(&cmax, self.fonts);
         let mut fc_min = FloatContext::new(0.0, 0.0);
-        let (cmin, _) = self.layout_children(cell, 0.0, 0.0, 0.0, &mut fc_min);
+        let (cmin, _) = self.layout_children(cell, 0.0, 0.0, 0.0, None, &mut fc_min);
         let min = content_right_extent(&cmin, self.fonts);
         (min + frame, max + frame)
     }
@@ -1217,7 +1223,7 @@ impl Ctx<'_> {
         let content_y = y + bt + pt;
         let mut floats = FloatContext::new(content_x, content_x + content_w);
         let (content, ch) =
-            self.layout_children(cell, content_x, content_y, content_w, &mut floats);
+            self.layout_children(cell, content_x, content_y, content_w, None, &mut floats);
         let content_height = match s.height {
             Dim::Auto => ch,
             other => other.resolve(0.0, ch).max(ch),
@@ -1399,7 +1405,7 @@ impl Ctx<'_> {
 
         // Lay out content at a provisional origin, then re-origin once placed.
         let mut inner = FloatContext::new(0.0, content_w);
-        let (content, ch) = self.layout_children(node, 0.0, 0.0, content_w, &mut inner);
+        let (content, ch) = self.layout_children(node, 0.0, 0.0, content_w, None, &mut inner);
         let frame_v = mt + mb + pt + pb + bt + bb;
         // Height: definite wins; else if both top+bottom are set the box stretches to fill
         // between them; else it is content height (CSS2 §10.6.4).
@@ -1619,7 +1625,7 @@ impl Ctx<'_> {
         let mut max_h = 0.0f32;
         for (&k, slot) in block_kids.iter().zip(slots.iter()) {
             let mut item_floats = FloatContext::new(cx + slot.x, cx + slot.x + slot.width);
-            let r = self.layout_block(k, slot.width, cx + slot.x, cy + slot.y, 0.0, &mut item_floats);
+            let r = self.layout_block(k, slot.width, Some(slot.height), cx + slot.x, cy + slot.y, 0.0, &mut item_floats);
             let bottom = slot.y + r.margin_top + r.boxx.rect.height + r.margin_bottom;
             max_h = max_h.max(bottom);
             boxes.push(r.boxx);
@@ -1682,7 +1688,7 @@ impl Ctx<'_> {
                     let ml = s.margin.left.resolve(cw, 0.0);
                     let mr = s.margin.right.resolve(cw, 0.0);
                     let mut fc = FloatContext::new(0.0, cw);
-                    let r = self.layout_block(node, cw, 0.0, 0.0, 0.0, &mut fc);
+                    let r = self.layout_block(node, cw, None, 0.0, 0.0, 0.0, &mut fc);
                     let advance = ml + r.boxx.rect.width + mr;
                     let height = r.margin_top + r.boxx.rect.height + r.margin_bottom;
                     out.push(InlineItem::Atomic {
