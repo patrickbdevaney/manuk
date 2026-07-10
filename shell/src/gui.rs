@@ -394,6 +394,12 @@ impl App {
                     tracing::info!(bookmarked = on, url = %self.url, "bookmark toggled");
                     true
                 }
+                // G-e: instant per-tab resource honesty (task manager).
+                "m" | "M" => {
+                    let report = self.browser.resource_report();
+                    println!("\n{}", report.to_table());
+                    true
+                }
                 "q" => {
                     event_loop.exit();
                     true

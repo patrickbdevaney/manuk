@@ -325,3 +325,203 @@ mod tests {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// G-e — instant per-tab resource honesty
+// ---------------------------------------------------------------------------
+
+/// What a tab is currently costing, and why.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TabResource {
+    pub id: TabId,
+    pub url: String,
+    pub title: String,
+    pub tier: RenderTier,
+    pub state: TabState,
+    /// Retained bytes this tab would return if it were discarded. A **proxy**, not an
+    /// RSS reading: it is the `Page`'s estimated heap plus the retained source HTML.
+    pub retained_bytes: usize,
+    /// Per-tab JS heap. Always `None` today — see the note on [`resource_report`].
+    pub js_heap_bytes: Option<usize>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TabState {
+    /// Focused or otherwise fully live.
+    Active,
+    /// Live, but its JS timer/task queue is throttled.
+    Frozen,
+    /// The `Page` was dropped; a wake re-lays-out from the retained source.
+    Discarded,
+}
+
+impl std::fmt::Display for TabState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            TabState::Active => "active",
+            TabState::Frozen => "frozen",
+            TabState::Discarded => "discarded",
+        })
+    }
+}
+
+/// A whole-process snapshot: every tab, plus the real resident-set size.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ResourceReport {
+    pub tabs: Vec<TabResource>,
+    /// Sum of the per-tab proxies. **Not** the process's memory: shared allocations
+    /// (fonts, the JS runtime, wgpu) are counted once by the OS and not at all here.
+    pub total_retained_bytes: usize,
+    /// The process's real RSS, when the OS exposes it (Linux `/proc/self/status`).
+    pub process_rss_bytes: Option<usize>,
+}
+
+impl Browser {
+    /// G-e — an honest, instant accounting of what each tab costs.
+    ///
+    /// "Honest" is the whole point of the item, so the numbers are labelled for what
+    /// they are: `retained_bytes` is a **proxy** (what a discard would reclaim), while
+    /// `process_rss_bytes` is the OS's real figure for the whole process. They do not
+    /// sum to each other and the report says so rather than implying a false precision.
+    ///
+    /// **Documented gap (not faked):** `js_heap_bytes` is always `None`. Per-tab JS heap
+    /// needs SpiderMonkey's per-compartment memory reporters, which in turn needs one JS
+    /// realm per tab (the C1/§7 model). That is engine work, not accounting work, and
+    /// reporting a fabricated number here would be exactly the dishonesty this item
+    /// exists to avoid.
+    pub fn resource_report(&self) -> ResourceReport {
+        let tabs: Vec<TabResource> = self
+            .tabs()
+            .iter()
+            .map(|t| TabResource {
+                id: t.id,
+                url: t.url.clone(),
+                title: t.title.clone(),
+                tier: self.tier(t.id).unwrap_or(RenderTier::Hibernated),
+                state: if t.is_discarded() {
+                    TabState::Discarded
+                } else if t.is_frozen() {
+                    TabState::Frozen
+                } else {
+                    TabState::Active
+                },
+                retained_bytes: self.tab_mem(t.id),
+                js_heap_bytes: None,
+            })
+            .collect();
+
+        ResourceReport {
+            total_retained_bytes: tabs.iter().map(|t| t.retained_bytes).sum(),
+            process_rss_bytes: manuk_compositor::mem::process_rss_bytes(),
+            tabs,
+        }
+    }
+}
+
+impl ResourceReport {
+    /// A task-manager rendering, one line per tab.
+    pub fn to_table(&self) -> String {
+        use std::fmt::Write as _;
+        let mb = |b: usize| b as f64 / (1024.0 * 1024.0);
+        let mut s = String::new();
+        let _ = writeln!(
+            s,
+            "{:<4} {:<10} {:<14} {:>10}  TITLE / URL",
+            "TAB", "STATE", "TIER", "RETAINED"
+        );
+        for t in &self.tabs {
+            let _ = writeln!(
+                s,
+                "{:<4} {:<10} {:<14} {:>9.2}M  {}",
+                t.id.0,
+                t.state.to_string(),
+                format!("{:?}", t.tier),
+                mb(t.retained_bytes),
+                if t.title.is_empty() { &t.url } else { &t.title }
+            );
+        }
+        let _ = writeln!(s, "\nretained (proxy, sums the column above): {:.2} MB", mb(self.total_retained_bytes));
+        match self.process_rss_bytes {
+            Some(rss) => {
+                let _ = writeln!(s, "process RSS (real, OS-reported):        {:.2} MB", mb(rss));
+            }
+            None => {
+                let _ = writeln!(s, "process RSS: unavailable on this platform");
+            }
+        }
+        let _ = writeln!(
+            s,
+            "per-tab JS heap: not reported (needs SpiderMonkey per-compartment reporters)"
+        );
+        s
+    }
+}
+
+#[cfg(test)]
+mod resource_tests {
+    use super::*;
+    use manuk_text::FontContext;
+
+    fn page(html: &str, fonts: &FontContext) -> Page {
+        Page::load(html, "https://ex.test/", fonts, 800.0)
+    }
+
+    /// G-e acceptance: every tab is accounted for, states are reported truthfully, and
+    /// discarding a tab is visible as reclaimed retained bytes.
+    #[test]
+    fn the_report_tells_the_truth_about_each_tab() {
+        let fonts = FontContext::new();
+        let mut b = Browser::new(8);
+
+        let a = b.open("https://a.test/");
+        b.load(a, page("<title>A</title><body><p>aaa</p></body>", &fonts), "<p>aaa</p>".into());
+        let c = b.open("https://c.test/");
+        b.load(c, page("<title>C</title><body><p>ccc</p></body>", &fonts), "<p>ccc</p>".into());
+        b.focus(a);
+
+        let r = b.resource_report();
+        assert_eq!(r.tabs.len(), 2);
+        assert!(r.tabs.iter().all(|t| t.retained_bytes > 0), "live tabs cost something");
+        assert_eq!(r.total_retained_bytes, r.tabs.iter().map(|t| t.retained_bytes).sum::<usize>());
+
+        // The focused tab is active; the JS heap is honestly absent.
+        let ta = r.tabs.iter().find(|t| t.id == a).unwrap();
+        assert_eq!(ta.state, TabState::Active);
+        assert_eq!(ta.tier, RenderTier::FocusedGpu);
+        assert_eq!(ta.js_heap_bytes, None, "we do not invent a JS heap figure");
+
+        // Discarding a tab must show up as reclaimed memory, not as a silent no-op.
+        let before = b.resource_report();
+        let c_before = before.tabs.iter().find(|t| t.id == c).unwrap().retained_bytes;
+        b.discard(c);
+        let after = b.resource_report();
+        let tc = after.tabs.iter().find(|t| t.id == c).unwrap();
+        assert_eq!(tc.state, TabState::Discarded);
+        assert!(
+            tc.retained_bytes < c_before,
+            "a discard must reclaim: {c_before} -> {}",
+            tc.retained_bytes
+        );
+        assert!(after.total_retained_bytes < before.total_retained_bytes);
+    }
+
+    #[test]
+    fn the_table_labels_the_proxy_and_the_real_rss_separately() {
+        let fonts = FontContext::new();
+        let mut b = Browser::new(8);
+        let a = b.open("https://a.test/");
+        b.load(a, page("<title>A</title><body>x</body>", &fonts), "x".into());
+
+        let table = b.resource_report().to_table();
+        assert!(table.contains("RETAINED"));
+        assert!(table.contains("proxy"), "the proxy must be labelled as such");
+        assert!(
+            table.contains("process RSS"),
+            "the real OS figure must be reported separately"
+        );
+        assert!(
+            table.contains("per-tab JS heap: not reported"),
+            "the missing JS heap must be stated, not hidden"
+        );
+    }
+}

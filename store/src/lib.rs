@@ -28,6 +28,9 @@
 //! - **no scheme downgrade**: an `https`-saved credential is never offered to an
 //!   `http` field.
 
+/// G-b — local-first searchable history (encrypted at rest, LEANN-style recompute).
+pub mod history_index;
+
 use anyhow::{anyhow, Context, Result};
 use argon2::Argon2;
 use chacha20poly1305::aead::{Aead, KeyInit, OsRng};

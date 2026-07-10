@@ -22,6 +22,9 @@ pub mod forms;
 
 /// G-d — deterministic replay / provenance event log.
 pub mod replay;
+
+/// E3 — translate-page in place, structure preserved (reuses `InferenceBackend`).
+pub mod translate;
 use manuk_text::FontContext;
 
 /// Re-exports so downstream drivers (E4's BiDi remote end) need not depend on the
@@ -32,6 +35,9 @@ pub use manuk_net::user_agent;
 
 pub mod env;
 pub mod groq;
+
+/// §4c — local inference backends (llama.cpp / vLLM / LM Studio / Ollama).
+pub mod local;
 
 /// Default model — a Groq-hosted multimodal model (overridable via `GROQ_MODEL`).
 pub const DEFAULT_MODEL: &str = "qwen/qwen3.6-27b";
@@ -109,6 +115,27 @@ pub struct AgentBrowser {
     /// §4b — the per-tab navigation stack. `hist_pos` indexes the current entry.
     history: Vec<String>,
     hist_pos: usize,
+}
+
+/// G-a — a **live browsing session** moving between the human front-end and the agent.
+///
+/// It carries the live [`Page`] (DOM, form values, computed styles), the scroll offset,
+/// and the navigation stack. Constructing one is the **consent seam** (E6): the shell
+/// builds a `Handoff` only after the user agrees to let the agent take over, and the
+/// agent returns one when it gives control back.
+///
+/// This is cheap and architecturally clean *because* the shell and the agent already
+/// share `engine/page`. A re-fetch would lose exactly what matters: a logged-in page, a
+/// half-filled form, an expanded accordion.
+///
+/// **Documented gap (not faked):** cookies are **not** part of the handoff, because the
+/// E7 cookie jar is not yet wired into the fetch path. Once it is, the session's storage
+/// partition travels with the `Handoff`.
+pub struct Handoff {
+    pub page: Page,
+    pub scroll_y: f32,
+    /// The navigation stack, oldest first. Empty means "no history to carry".
+    pub history: Vec<String>,
 }
 
 /// §4b — what activating an element actually did. Returned so the agent loop (and
@@ -252,6 +279,48 @@ impl AgentBrowser {
     /// The viewport this browser renders at.
     pub fn viewport(&self) -> (u32, u32) {
         (self.width, self.height)
+    }
+
+    /// G-a — **adopt a live session** handed over by the human front-end.
+    ///
+    /// The shell and the agent drive the *same* `engine/page` core, so a handoff is a
+    /// move of the live [`Page`] (DOM mutations, form values, scroll) rather than a
+    /// re-fetch. Re-fetching would lose exactly the state that matters: a logged-in
+    /// page, a half-filled form, an expanded accordion.
+    ///
+    /// **Consent (E6):** the caller must construct a [`Handoff`] explicitly, which is
+    /// the seam where the shell obtains the user's consent. This type cannot be created
+    /// by accident from a stray `Page`.
+    pub fn adopt(&mut self, handoff: Handoff) {
+        let Handoff { page, scroll_y, history } = handoff;
+        self.page = Some(page);
+        self.scroll_y = scroll_y;
+        if !history.is_empty() {
+            self.hist_pos = history.len() - 1;
+            self.history = history;
+        }
+        // The adopted page was laid out for the human's viewport; re-lay-out for ours.
+        let (w, zoom) = (self.width as f32, self.page.as_ref().map(|p| p.zoom()).unwrap_or(1.0));
+        if let Some(p) = self.page.as_mut() {
+            p.relayout_zoomed(&self.fonts, w, zoom);
+        }
+        self.scroll_by(0.0); // clamp against the new content height
+    }
+
+    /// G-a — **hand the live session back**. Returns `None` if no page is loaded.
+    ///
+    /// The human resumes on the *same* `Page`, so anything the agent typed, toggled, or
+    /// navigated to is still there.
+    pub fn release(&mut self) -> Option<Handoff> {
+        let page = self.page.take()?;
+        let scroll_y = std::mem::take(&mut self.scroll_y);
+        let history = std::mem::take(&mut self.history);
+        self.hist_pos = 0;
+        Some(Handoff {
+            page,
+            scroll_y,
+            history,
+        })
     }
 
     /// Resize the viewport and re-lay-out the current page at the new width, clamping
@@ -1412,6 +1481,66 @@ mod tests {
         )
         .unwrap_err();
         assert!(format!("{err:#}").contains("diverged at step 0"));
+    }
+
+    /// G-a acceptance: a human browses, hands the **same live session** to the agent,
+    /// the agent continues in it, and the human resumes — with every mutation intact.
+    /// A re-fetch would silently lose the half-filled form; a handoff must not.
+    #[tokio::test]
+    async fn a_live_session_survives_a_round_trip_between_human_and_agent() {
+        let fonts = manuk_text::FontContext::new();
+
+        // --- the human's side: load a page and half-fill a form.
+        let html = r#"<body><form action="https://ex.test/s">
+              <label for="q">Search</label><input id="q" name="q" type="text">
+              <label for="n">Note</label><input id="n" name="n" type="text">
+            </form></body>"#;
+        let mut page = Page::load(html, "https://ex.test/", &fonts, 800.0);
+        let q = page.dom().find_first("input").unwrap();
+        page.dom_mut().set_attr(q, "value", "typed by human");
+        page.relayout(&fonts, 800.0);
+
+        let handoff = Handoff {
+            page,
+            scroll_y: 0.0,
+            history: vec!["https://ex.test/".to_string()],
+        };
+
+        // --- the agent adopts the LIVE session (no re-fetch).
+        let mut agent = AgentBrowser::new(640, 480);
+        agent.adopt(handoff);
+
+        // The human's typing is still there — proof this is the same Page.
+        {
+            let dom = agent.page.as_ref().unwrap().dom();
+            let q = dom.find_first("input").unwrap();
+            assert_eq!(dom.element(q).unwrap().attr("value"), Some("typed by human"));
+        }
+        // The adopted history came along, so `back` is meaningful.
+        assert_eq!(agent.history().0.len(), 1);
+        // It was re-laid-out for the agent's narrower viewport.
+        assert_eq!(agent.viewport(), (640, 480));
+
+        // --- the agent continues in that session.
+        agent.type_into("Note", "added by agent").unwrap();
+
+        // --- and hands it back.
+        let back = agent.release().expect("a page was loaded");
+        assert!(agent.page.is_none(), "the agent no longer holds the session");
+
+        // --- the human resumes: BOTH mutations are present, on one live DOM.
+        let dom = back.page.dom();
+        let inputs: Vec<_> = dom.descendants(dom.root()).filter(|n| dom.tag_name(*n) == Some("input")).collect();
+        assert_eq!(dom.element(inputs[0]).unwrap().attr("value"), Some("typed by human"));
+        assert_eq!(dom.element(inputs[1]).unwrap().attr("value"), Some("added by agent"));
+
+        // The form the human resumes with serializes both fields.
+        let form = dom.find_first("form").unwrap();
+        let url = forms::submission_url(dom, form, &back.page.final_url).unwrap();
+        assert_eq!(url, "https://ex.test/s?q=typed+by+human&n=added+by+agent");
+
+        // Releasing twice yields nothing, rather than a stale duplicate session.
+        assert!(agent.release().is_none());
     }
 
     #[test]

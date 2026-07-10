@@ -272,6 +272,23 @@ impl Dom {
 
     /// Append `child` as the last child of `parent`, unlinking it from any old
     /// position first.
+    /// Detach `child` from `parent`, returning whether it was actually a child.
+    ///
+    /// The node stays in the arena (its `NodeId` remains valid) but is unlinked from the
+    /// tree, so a caller can re-attach it elsewhere — which is exactly what E3's
+    /// translation re-injection does when it rebuilds a block around its original inline
+    /// elements. Removing a node that is *not* a child of `parent` is a no-op returning
+    /// `false`, never a silent detach from somewhere else.
+    pub fn remove_child(&mut self, parent: NodeId, child: NodeId) -> bool {
+        if self.nodes[child.0].parent != Some(parent) {
+            return false;
+        }
+        self.detach(child);
+        self.structure_changed = true;
+        self.mark_dirty(parent);
+        true
+    }
+
     pub fn append_child(&mut self, parent: NodeId, child: NodeId) {
         self.detach(child);
         self.nodes[child.0].parent = Some(parent);
