@@ -34,6 +34,7 @@ use std::collections::HashMap;
 
 use manuk_css::{
     BoxSizing, Clear, ComputedStyle, Dim, Display, Float, Position, Rgba, StyleMap, TextAlign,
+    WhiteSpace,
 };
 use manuk_dom::{Dom, NodeData, NodeId};
 use manuk_text::{FontContext, FontFamily, FontKey};
@@ -554,6 +555,7 @@ impl Ctx<'_> {
     ///
     /// Simplification (documented, CLAUDE.md § verification): parent↔first/last-child
     /// margin collapsing is not yet modeled — only adjacent-sibling collapsing is.
+    #[allow(clippy::too_many_arguments)]
     fn layout_block(
         &self,
         node: NodeId,
@@ -705,6 +707,16 @@ impl Ctx<'_> {
             } else {
                 0.0
             };
+            if dx != 0.0 || dy != 0.0 {
+                boxx.translate(dx, dy);
+            }
+        }
+
+        // `transform: translate(...)` — a visual offset of the box + subtree that does not
+        // affect flow. Percentages resolve against the box's own border-box size.
+        if let Some((tx, ty)) = s.transform_translate {
+            let dx = tx.resolve(border_box_w, 0.0);
+            let dy = ty.resolve(border_box_h, 0.0);
             if dx != 0.0 || dy != 0.0 {
                 boxx.translate(dx, dy);
             }
@@ -1659,12 +1671,16 @@ impl Ctx<'_> {
     ) {
         match self.dom.data(node) {
             NodeData::Text(t) => {
-                let style = text_style(&self.styles[&node]);
+                let cs = &self.styles[&node];
+                let style = text_style(cs);
+                // `white-space` is inherited, so the text node carries it. `nowrap` and `pre`
+                // both suppress wrapping between words.
+                let no_wrap = matches!(cs.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre);
                 let mut buf = String::new();
                 for ch in t.chars() {
                     if ch.is_whitespace() {
                         if !buf.is_empty() {
-                            push_word(out, &mut buf, style, pending_space, first, owner);
+                            push_word(out, &mut buf, style, pending_space, first, owner, no_wrap);
                         }
                         *pending_space = true;
                     } else {
@@ -1672,7 +1688,7 @@ impl Ctx<'_> {
                     }
                 }
                 if !buf.is_empty() {
-                    push_word(out, &mut buf, style, pending_space, first, owner);
+                    push_word(out, &mut buf, style, pending_space, first, owner, no_wrap);
                 }
             }
             NodeData::Element(_) => {
@@ -1736,6 +1752,7 @@ impl Ctx<'_> {
     /// Approximation (documented): a line's float band is queried using the *first*
     /// word's line height as the height estimate — exact for uniform-size text, an
     /// approximation when a taller inline box lands mid-line.
+    #[allow(clippy::type_complexity)]
     fn layout_inline(
         &self,
         items: Vec<InlineItem>,
@@ -1773,12 +1790,14 @@ impl Ctx<'_> {
 
         // The "space" font metrics for an atomic (no text): use a default face at the box's
         // notional size doesn't matter — we only need the width of a normal space.
+        // Tracks whether the item most recently placed on the line forbids a wrap after it.
+        let mut prev_no_wrap = false;
         for item in items {
             // Per-item main-axis advance, leading space, cross-axis height, and the LineFrag
             // builder (positioned once the line's x is known).
-            let (advance, space_w, est_h, make_frag): (f32, f32, f32, Box<dyn FnOnce(f32) -> LineFrag>) =
+            let (advance, space_w, est_h, no_wrap, make_frag): (f32, f32, f32, bool, Box<dyn FnOnce(f32) -> LineFrag>) =
                 match item {
-                    InlineItem::Word { text, style, space_before, node } => {
+                    InlineItem::Word { text, style, space_before, node, no_wrap } => {
                         let key = style.font_key;
                         let size = style.font_size;
                         let lm = self.fonts.line_metrics(key, size);
@@ -1789,6 +1808,7 @@ impl Ctx<'_> {
                             word_w,
                             space_w,
                             est_h,
+                            no_wrap,
                             Box::new(move |x: f32| LineFrag {
                                 x,
                                 width: word_w,
@@ -1810,6 +1830,7 @@ impl Ctx<'_> {
                             advance,
                             space_w,
                             height,
+                            false,
                             Box::new(move |x: f32| LineFrag {
                                 x,
                                 width: advance,
@@ -1833,6 +1854,7 @@ impl Ctx<'_> {
                             width,
                             space_w,
                             0.0,
+                            true, // padding never introduces a break within its element
                             Box::new(move |x: f32| LineFrag {
                                 x,
                                 width,
@@ -1854,7 +1876,10 @@ impl Ctx<'_> {
                 line_avail = w;
             }
 
-            if !cur.is_empty() && pen + space_w + advance > line_avail {
+            // A break before this item is forbidden when both it and the previous item are
+            // `nowrap` (the break would fall *within* a nowrap run — CSS `white-space`).
+            let breakable = !(no_wrap && prev_no_wrap);
+            if !cur.is_empty() && breakable && pen + space_w + advance > line_avail {
                 // Close the current line, then open a fresh band for this item.
                 y = close_line(&mut frags, &mut atomic_boxes, &mut cur, y, line_left, line_avail, align, self.fonts);
                 let (l, w) = open_band(&mut y, est_h);
@@ -1867,6 +1892,7 @@ impl Ctx<'_> {
                 cur.push(make_frag(x));
                 pen = x + advance;
             }
+            prev_no_wrap = no_wrap;
         }
         if !cur.is_empty() {
             y = close_line(&mut frags, &mut atomic_boxes, &mut cur, y, line_left, line_avail, align, self.fonts);
@@ -1962,6 +1988,8 @@ enum InlineItem {
         space_before: bool,
         /// Deepest element ancestor of this word's text node.
         node: Option<NodeId>,
+        /// `white-space:nowrap` — no line break may occur before this word within its run.
+        no_wrap: bool,
     },
     /// An `inline-block`: `advance` is its margin-box main-axis size; `box_` is its already
     /// laid-out block box (positioned at the origin, translated into place at line close).
@@ -1989,12 +2017,14 @@ fn push_word(
     pending_space: &mut bool,
     first: &mut bool,
     node: Option<NodeId>,
+    no_wrap: bool,
 ) {
     out.push(InlineItem::Word {
         text: std::mem::take(buf),
         style,
         space_before: *pending_space && !*first,
         node,
+        no_wrap,
     });
     *first = false;
     *pending_space = false;

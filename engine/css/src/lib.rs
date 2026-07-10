@@ -254,6 +254,10 @@ pub struct ComputedStyle {
     pub flex_basis: Dim,
     /// `align-self` (item); `None` = `auto` (defer to the container's `align-items`).
     pub align_self: Option<AlignItems>,
+    /// `transform: translate(...)` — a visual (tx, ty) offset. Only the translate functions
+    /// are modeled; other transforms (scale/rotate/matrix) are ignored. `%` resolves against
+    /// the box's own border-box size.
+    pub transform_translate: Option<(Dim, Dim)>,
     /// `grid-template-columns` / `-rows` (container). Empty = none.
     pub grid_template_columns: Vec<TrackSize>,
     pub grid_template_rows: Vec<TrackSize>,
@@ -301,6 +305,7 @@ impl ComputedStyle {
             flex_shrink: 1.0,
             flex_basis: Dim::Auto,
             align_self: None,
+            transform_translate: None,
             grid_template_columns: Vec::new(),
             grid_template_rows: Vec::new(),
         }
@@ -1272,6 +1277,7 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         "order" => {} // parsed but not yet used in layout
         "grid-template-columns" => s.grid_template_columns = parse_track_list(v, s.font_size),
         "grid-template-rows" => s.grid_template_rows = parse_track_list(v, s.font_size),
+        "transform" => s.transform_translate = parse_translate(v, s.font_size),
         // The `border` family. Widths feed the box model; the color feeds paint; the line
         // style is not tracked (only presence, since `none`/`hidden` zero the width).
         "border" => {
@@ -1355,6 +1361,30 @@ fn parse_border_shorthand(v: &str, fs: f32) -> (Option<f32>, Option<Rgba>) {
         width = Some(3.0);
     }
     (width, color)
+}
+
+/// Parse the translate functions of a `transform` value (`translate`/`translateX`/
+/// `translateY`) into a `(tx, ty)` pair. Other transform functions are ignored.
+fn parse_translate(v: &str, fs: f32) -> Option<(Dim, Dim)> {
+    let low = v.to_ascii_lowercase();
+    let take = |name: &str| -> Option<Vec<Dim>> {
+        let i = low.find(name)?;
+        let after = &v[i + name.len()..];
+        let end = after.find(')')?;
+        Some(after[..end].split(',').map(|a| values::parse_dim(a.trim(), fs)).collect())
+    };
+    if let Some(args) = take("translatex(") {
+        return Some((args.first().copied().unwrap_or(Dim::Px(0.0)), Dim::Px(0.0)));
+    }
+    if let Some(args) = take("translatey(") {
+        return Some((Dim::Px(0.0), args.first().copied().unwrap_or(Dim::Px(0.0))));
+    }
+    if let Some(args) = take("translate(") {
+        let x = args.first().copied().unwrap_or(Dim::Px(0.0));
+        let y = args.get(1).copied().unwrap_or(Dim::Px(0.0));
+        return Some((x, y));
+    }
+    None
 }
 
 /// Parse a `grid-template-columns`/`-rows` track list, expanding a single-track
