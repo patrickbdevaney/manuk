@@ -64,8 +64,23 @@ impl DisplayList {
         root: &LayoutBox,
         images: &std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<DecodedImage>>,
     ) -> DisplayList {
-        let mut items = Vec::new();
+        Self::build_layered(root, images, &std::collections::HashMap::new())
+    }
+
+    /// Like [`build_with_images`], but paints in **stacking order**: each box's items are
+    /// grouped and the groups are stably sorted by the box's effective z-index (`z_index`,
+    /// keyed by node — negative behind, positive in front, tree order within a layer). A
+    /// positioned element with an explicit z-index applies its layer to its whole subtree
+    /// (an approximation of CSS stacking contexts), so overlays/modals paint on top.
+    pub fn build_layered(
+        root: &LayoutBox,
+        images: &std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<DecodedImage>>,
+        z_index: &std::collections::HashMap<manuk_dom::NodeId, i32>,
+    ) -> DisplayList {
+        // One group of paint items per box, tagged with its layer (effective z).
+        let mut groups: Vec<(i32, Vec<DisplayItem>)> = Vec::new();
         root.walk(&mut |b| {
+            let mut items = Vec::new();
             if let Some(bg) = b.background {
                 if bg.a > 0 {
                     items.push(DisplayItem::Rect {
@@ -74,7 +89,6 @@ impl DisplayList {
                     });
                 }
             }
-            // Borders: four edge rects over the border box (top, right, bottom, left).
             if let Some(border) = &b.border {
                 let r = b.rect;
                 let [t, rr, bb, l] = border.widths;
@@ -92,7 +106,6 @@ impl DisplayList {
                 edge(r.x, r.y, l, r.height); // left
                 edge(r.x + r.width - rr, r.y, rr, r.height); // right
             }
-            // Replaced image content: fill the box with the decoded bitmap.
             if let Some(node) = b.node {
                 if let Some(img) = images.get(&node) {
                     items.push(DisplayItem::Image {
@@ -111,8 +124,16 @@ impl DisplayList {
                     });
                 }
             }
+            if !items.is_empty() {
+                let z = b.node.and_then(|n| z_index.get(&n)).copied().unwrap_or(0);
+                groups.push((z, items));
+            }
         });
-        DisplayList { items }
+        // Stable sort keeps tree (document) order within each layer.
+        groups.sort_by_key(|(z, _)| *z);
+        DisplayList {
+            items: groups.into_iter().flat_map(|(_, it)| it).collect(),
+        }
     }
 }
 
@@ -240,24 +261,44 @@ pub trait Painter {
 
 /// The CPU rasterization tier: `tiny-skia` for fills, `fontdue` glyph coverage
 /// blitting for text. Deterministic and headless — no GPU/display required.
+type NodeImages<'a> = std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<DecodedImage>>;
+type ZIndexMap<'a> = std::collections::HashMap<manuk_dom::NodeId, i32>;
+
 pub struct CpuPainter<'a> {
     fonts: &'a FontContext,
-    images: Option<&'a std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<DecodedImage>>>,
+    images: Option<&'a NodeImages<'a>>,
+    z_index: Option<&'a ZIndexMap<'a>>,
 }
 
 impl<'a> CpuPainter<'a> {
     pub fn new(fonts: &'a FontContext) -> Self {
-        CpuPainter { fonts, images: None }
+        CpuPainter {
+            fonts,
+            images: None,
+            z_index: None,
+        }
     }
 
     /// A painter that also blits decoded images for replaced `<img>` nodes.
-    pub fn with_images(
+    pub fn with_images(fonts: &'a FontContext, images: &'a NodeImages<'a>) -> Self {
+        CpuPainter {
+            fonts,
+            images: Some(images),
+            z_index: None,
+        }
+    }
+
+    /// A painter that blits images **and** paints in stacking order per the effective
+    /// z-index of each node.
+    pub fn with_images_and_z(
         fonts: &'a FontContext,
-        images: &'a std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<DecodedImage>>,
+        images: &'a NodeImages<'a>,
+        z_index: &'a ZIndexMap<'a>,
     ) -> Self {
         CpuPainter {
             fonts,
             images: Some(images),
+            z_index: Some(z_index),
         }
     }
 }
@@ -290,7 +331,12 @@ impl CpuPainter<'_> {
         ));
 
         let empty = std::collections::HashMap::new();
-        let list = DisplayList::build_with_images(root, self.images.unwrap_or(&empty));
+        let empty_z = std::collections::HashMap::new();
+        let list = DisplayList::build_layered(
+            root,
+            self.images.unwrap_or(&empty),
+            self.z_index.unwrap_or(&empty_z),
+        );
         for item in &list.items {
             match item {
                 DisplayItem::Rect { rect, color } => {

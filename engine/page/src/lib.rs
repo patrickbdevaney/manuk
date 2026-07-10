@@ -637,9 +637,32 @@ impl Page {
         count
     }
 
+    /// Effective z-index per node for stacking-ordered paint: a positioned element with an
+    /// explicit `z-index` establishes a layer that applies to its whole subtree (an
+    /// approximation of CSS stacking contexts). Non-positioned / `z-index:auto` inherit the
+    /// nearest such ancestor's layer (0 at the root).
+    fn z_index_map(&self) -> HashMap<manuk_dom::NodeId, i32> {
+        use manuk_css::Position;
+        let mut map = HashMap::new();
+        let mut stack = vec![(self.dom.root(), 0i32)];
+        while let Some((node, parent_z)) = stack.pop() {
+            let z = match self.styles.get(&node) {
+                Some(s) if s.position != Position::Static => s.z_index.unwrap_or(parent_z),
+                _ => parent_z,
+            };
+            map.insert(node, z);
+            for c in self.dom.children(node) {
+                stack.push((c, z));
+            }
+        }
+        map
+    }
+
     /// Rasterize the whole page to a canvas of the given pixel size (CPU tier).
     pub fn paint(&self, fonts: &FontContext, width: u32, height: u32) -> Canvas {
-        CpuPainter::with_images(fonts, &self.images).render(&self.root_box, width, height, Rgba::WHITE)
+        let z = self.z_index_map();
+        CpuPainter::with_images_and_z(fonts, &self.images, &z)
+            .render(&self.root_box, width, height, Rgba::WHITE)
     }
 
     /// Rasterize the visible viewport with the content scrolled up by `scroll_y`.
@@ -650,7 +673,8 @@ impl Page {
         height: u32,
         scroll_y: f32,
     ) -> Canvas {
-        CpuPainter::with_images(fonts, &self.images).render_scrolled(
+        let z = self.z_index_map();
+        CpuPainter::with_images_and_z(fonts, &self.images, &z).render_scrolled(
             &self.root_box,
             width,
             height,
