@@ -38,7 +38,7 @@ fn main() -> Result<()> {
         .init();
 
     let args: Vec<String> = std::env::args().skip(1).collect();
-    match args.first().map(String::as_str) {
+    let result = match args.first().map(String::as_str) {
         Some("render") => cmd_render(&args[1..]),
         Some("browse") => cmd_browse(&args[1..]),
         #[cfg(feature = "_sm")]
@@ -58,7 +58,20 @@ fn main() -> Result<()> {
             print_usage();
             Ok(())
         }
+    };
+
+    // With SpiderMonkey linked, exit **hard**: mozjs's global static destructors abort at
+    // process teardown (the documented multi-Runtime/engine teardown issue). We are done
+    // and everything is flushed, so skip destructors entirely rather than crash on exit.
+    #[cfg(feature = "_sm")]
+    {
+        use std::io::Write as _;
+        let _ = std::io::stdout().flush();
+        let _ = std::io::stderr().flush();
+        std::process::exit(if result.is_ok() { 0 } else { 1 });
     }
+    #[allow(unreachable_code)]
+    result
 }
 
 fn print_usage() {

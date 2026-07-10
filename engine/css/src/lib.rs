@@ -16,7 +16,7 @@
 
 use std::collections::HashMap;
 
-use manuk_dom::{Dom, NodeData, NodeId};
+use manuk_dom::{Dom, ElementData, NodeData, NodeId};
 
 pub mod values;
 
@@ -949,7 +949,7 @@ impl MinimalCascade {
         let style = match dom.data(node) {
             NodeData::Element(el) => {
                 let mut s = ComputedStyle::inherit_from(parent_style);
-                apply_ua_defaults(&mut s, &el.name);
+                apply_ua_defaults(&mut s, el);
 
                 // Author rules, ordered by (specificity, source order).
                 let mut matched: Vec<(u32, usize, &Declaration)> = Vec::new();
@@ -1003,8 +1003,9 @@ impl MinimalCascade {
 
 /// The user-agent default stylesheet, reduced to what the layout slice needs:
 /// which elements are block vs inline vs display:none, and their default margins.
-fn apply_ua_defaults(s: &mut ComputedStyle, tag: &str) {
+fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
     use Display::*;
+    let tag = el.name.as_str();
     let (display, top_bottom_em, weight, scale): (Display, f32, u16, f32) = match tag {
         "html" | "body" | "div" | "section" | "article" | "header" | "footer" | "nav" | "main"
         | "aside" | "figure" | "figcaption" | "address" => (Block, 0.0, 400, 1.0),
@@ -1031,10 +1032,55 @@ fn apply_ua_defaults(s: &mut ComputedStyle, tag: &str) {
         "head" | "title" | "meta" | "link" | "script" | "style" | "base" | "noscript" => {
             (None, 0.0, 400, 1.0)
         }
+        // Form controls render as replaced-ish inline-block boxes (styled below).
+        "input" | "button" | "textarea" | "select" => (InlineBlock, 0.0, 400, 1.0),
         // Default for unknown/other elements is inline (per CSS).
         _ => (Inline, 0.0, 400, 1.0),
     };
     s.display = display;
+    // Form-control default appearance (UA stylesheet): a bordered, padded box. A text input
+    // gets a default width; buttons hug their label. This is what makes fields visible.
+    if matches!(tag, "input" | "button" | "textarea" | "select") {
+        s.border_width = Sides::all(1.0);
+        s.border_color = Rgba::new(118, 118, 118, 255);
+        s.padding = Sides {
+            top: Dim::Px(2.0),
+            bottom: Dim::Px(3.0),
+            left: Dim::Px(6.0),
+            right: Dim::Px(6.0),
+        };
+        s.box_sizing = BoxSizing::BorderBox;
+        if matches!(tag, "button") {
+            s.background_color = Some(Rgba::new(239, 239, 239, 255));
+            s.padding.left = Dim::Px(10.0);
+            s.padding.right = Dim::Px(10.0);
+        } else {
+            s.background_color = Some(Rgba::WHITE);
+        }
+        if tag == "textarea" {
+            s.width = Dim::Px(180.0);
+            s.height = Dim::Px(48.0);
+        }
+        if tag == "input" {
+            match el.attr("type").unwrap_or("text").to_ascii_lowercase().as_str() {
+                // Button-like inputs hug their label (like <button>).
+                "submit" | "reset" | "button" => {
+                    s.background_color = Some(Rgba::new(239, 239, 239, 255));
+                    s.padding.left = Dim::Px(10.0);
+                    s.padding.right = Dim::Px(10.0);
+                }
+                // Checkbox / radio: a small square (no text, no default text width).
+                "checkbox" | "radio" => {
+                    s.width = Dim::Px(13.0);
+                    s.height = Dim::Px(13.0);
+                    s.padding = Sides::all(Dim::Px(0.0));
+                }
+                "hidden" => s.display = None,
+                // Text-like inputs get a default field width.
+                _ => s.width = Dim::Px(180.0),
+            }
+        }
+    }
     if weight != 400 {
         s.font_weight = weight;
     }

@@ -51,6 +51,24 @@ impl DisplayList {
                     });
                 }
             }
+            // Borders: four edge rects over the border box (top, right, bottom, left).
+            if let Some(border) = &b.border {
+                let r = b.rect;
+                let [t, rr, bb, l] = border.widths;
+                let c = border.color;
+                let mut edge = |x: f32, y: f32, w: f32, h: f32| {
+                    if w > 0.0 && h > 0.0 {
+                        items.push(DisplayItem::Rect {
+                            rect: Rect { x, y, width: w, height: h },
+                            color: c,
+                        });
+                    }
+                };
+                edge(r.x, r.y, r.width, t); // top
+                edge(r.x, r.y + r.height - bb, r.width, bb); // bottom
+                edge(r.x, r.y, l, r.height); // left
+                edge(r.x + r.width - rr, r.y, rr, r.height); // right
+            }
             if let BoxContent::Inline(frags) = &b.content {
                 for f in frags {
                     items.push(DisplayItem::Text {

@@ -144,9 +144,18 @@ pub struct LayoutBox {
     /// Border box in absolute coordinates.
     pub rect: Rect,
     pub background: Option<Rgba>,
+    /// Border edge widths (top, right, bottom, left) + color, when any edge is non-zero.
+    pub border: Option<Border>,
     /// The DOM node this box came from, if any (anonymous boxes are `None`).
     pub node: Option<NodeId>,
     pub content: BoxContent,
+}
+
+/// A box's painted border: per-edge widths (top, right, bottom, left) and a single color.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Border {
+    pub widths: [f32; 4],
+    pub color: Rgba,
 }
 
 impl LayoutBox {
@@ -279,6 +288,7 @@ pub fn layout_document(
         None => LayoutBox {
             rect: Rect::ZERO,
             background: None,
+            border: None,
             node: None,
             content: BoxContent::Block(vec![]),
         },
@@ -286,6 +296,53 @@ pub fn layout_document(
 }
 
 /// Is `node` a block-level box in its parent's formatting context?
+/// The paintable border of a styled box, or `None` when every edge is zero-width.
+fn border_of(s: &ComputedStyle) -> Option<Border> {
+    let w = s.border_width;
+    if w.top == 0.0 && w.right == 0.0 && w.bottom == 0.0 && w.left == 0.0 {
+        None
+    } else {
+        Some(Border {
+            widths: [w.top, w.right, w.bottom, w.left],
+            color: s.border_color,
+        })
+    }
+}
+
+/// The synthetic text a form control renders (its value / label), or `None` for controls
+/// that render no text (`<button>` uses its real children; checkbox/radio are boxes). A
+/// text input returns `Some("")` when empty so it still lays out with a line's height.
+fn form_control_text(dom: &Dom, node: NodeId) -> Option<String> {
+    let el = dom.element(node)?;
+    match dom.tag_name(node)? {
+        "input" => match el.attr("type").unwrap_or("text").to_ascii_lowercase().as_str() {
+            "submit" => Some(el.attr("value").unwrap_or("Submit").to_string()),
+            "reset" => Some(el.attr("value").unwrap_or("Reset").to_string()),
+            "button" => Some(el.attr("value").unwrap_or("").to_string()),
+            "checkbox" | "radio" | "hidden" | "file" | "image" | "range" | "color" => None,
+            "password" => {
+                let n = el.attr("value").map(|v| v.chars().count()).unwrap_or(0);
+                Some("\u{2022}".repeat(n))
+            }
+            // Text-like: the current value, else the placeholder, else empty.
+            _ => Some(
+                el.attr("value")
+                    .filter(|v| !v.is_empty())
+                    .or_else(|| el.attr("placeholder"))
+                    .unwrap_or("")
+                    .to_string(),
+            ),
+        },
+        // A textarea's value is a typed `value` attr if present, else its text children.
+        "textarea" => Some(
+            el.attr("value")
+                .map(str::to_string)
+                .unwrap_or_else(|| dom.text_content(node)),
+        ),
+        _ => None,
+    }
+}
+
 fn is_block_level(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
     if let NodeData::Element(_) = dom.data(node) {
         matches!(
@@ -589,9 +646,13 @@ impl Ctx<'_> {
         let (bl, br) = (s.border_width.left, s.border_width.right);
         let (bt, bb) = (s.border_width.top, s.border_width.bottom);
 
-        // Resolve width. `auto` fills the available inline space.
+        // Resolve width. `auto` fills the available inline space — except an inline-block
+        // (an atomic inline box) shrinks to fit its content, so a `<button>` hugs its label.
         let extra = ml + mr + pl + pr + bl + br;
         let mut width = match s.width {
+            Dim::Auto if s.display == Display::InlineBlock => {
+                self.shrink_to_fit(node, (cw - extra).max(0.0))
+            }
             Dim::Auto => (cw - extra).max(0.0),
             other => other.resolve(cw, (cw - extra).max(0.0)),
         };
@@ -684,6 +745,7 @@ impl Ctx<'_> {
         let mut boxx = LayoutBox {
             rect,
             background: s.background_color,
+            border: border_of(&s),
             node: Some(node),
             content,
         };
@@ -743,6 +805,26 @@ impl Ctx<'_> {
         floats: &mut FloatContext,
     ) -> (BoxContent, f32) {
         let display = self.styles[&node].display;
+
+        // Form controls render their *value*/label as synthetic text (an `<input>` has no
+        // child nodes; a `<button>` uses its real children so it is not handled here).
+        if let Some(text) = form_control_text(self.dom, node) {
+            let style = text_style(&self.styles[&node]);
+            if text.is_empty() {
+                // An empty field still occupies one line's height.
+                return (BoxContent::Inline(vec![]), style.line_height);
+            }
+            let items = vec![InlineItem::Word {
+                text,
+                style,
+                space_before: false,
+                node: Some(node),
+                no_wrap: true,
+            }];
+            let (frags, _atomics, h) = self.layout_inline(items, cx, cy, cw, TextAlign::Left, floats);
+            return (BoxContent::Inline(frags), h);
+        }
+
         // N4: the FLAT tree — a shadow host lays out its shadow content, and a `<slot>`
         // lays out the light-DOM nodes assigned to it.
         let kids: Vec<NodeId> = self
@@ -788,6 +870,7 @@ impl Ctx<'_> {
                 boxes.push(LayoutBox {
                     rect: Rect { x: cx, y: cy, width: cw, height: h },
                     background: None,
+                    border: None,
                     node: None,
                     content: BoxContent::Inline(frags),
                 });
@@ -930,6 +1013,7 @@ impl Ctx<'_> {
                 height: border_box_h,
             },
             background: s.background_color,
+            border: border_of(&s),
             node: Some(node),
             content,
         };
@@ -1048,6 +1132,7 @@ impl Ctx<'_> {
                     height: row_h,
                 },
                 background: None,
+                border: None,
                 node: None,
                 content: BoxContent::Block(cells),
             });
@@ -1070,6 +1155,7 @@ impl Ctx<'_> {
                 height: border_box_h,
             },
             background: s.background_color,
+            border: border_of(&s),
             node: Some(node),
             content: BoxContent::Block(row_boxes),
         };
@@ -1250,6 +1336,7 @@ impl Ctx<'_> {
                     height: border_box_h,
                 },
                 background: s.background_color,
+                border: border_of(&s),
                 node: Some(cell),
                 content,
             },
@@ -1326,6 +1413,7 @@ impl Ctx<'_> {
                     kids.push(LayoutBox {
                         rect: root.rect,
                         background: None,
+                        border: None,
                         node: None,
                         content: BoxContent::Inline(std::mem::take(frags)),
                     });
@@ -1457,6 +1545,7 @@ impl Ctx<'_> {
                 height: border_box_h,
             },
             background: s.background_color,
+            border: border_of(&s),
             node: Some(node),
             content,
         };
@@ -1515,6 +1604,7 @@ impl Ctx<'_> {
                 height: h,
             },
             background: None,
+            border: None,
             node: None,
             content: BoxContent::Inline(frags),
         });
