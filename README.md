@@ -176,11 +176,15 @@ in; **Build** = written from scratch, to be verified against WPT.
   `querySelectorAll`. **Accessor properties:** `textContent` (get+set), `tagName`,
   `id` (get+set), `className` (get+set), `innerHTML` (get+set, re-parses a
   fragment into the arena DOM). `querySelectorAll` returns a real JS array
-  NodeList. JS mutates the real arena DOM; validated end-to-end
-  (`engine/js::dom_bindings`, isolated test).
+  NodeList. **Events:** `addEventListener`/`dispatchEvent` (synchronous dispatch +
+  dispatch scheduled through the event loop). **Event loop:** `setTimeout`
+  macrotasks + `queueMicrotask` microtasks with spec-correct ordering
+  (`engine/js::event_loop`). JS mutates the real arena DOM; validated end-to-end
+  (isolated tests).
 - **Boundary:** this crate only *configures and binds to* SpiderMonkey — never
   patches JIT/GC or the sandbox. See [the modification boundary](#the-js-engine-modification-boundary).
-- **Not yet:** events (`addEventListener` + event loop), `fetch`/XHR —
+- **Not yet:** an `Event` object + capture/bubble propagation, `fetch`/XHR,
+  and native-`Promise`-queue integration (blocked on a crashing mozjs-0.18 wrapper) —
   the documented next binding tranches.
 
 #### `engine/paint` — rasterization · *Reuse target (Vello), Build (CPU tier)*

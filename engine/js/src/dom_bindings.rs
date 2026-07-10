@@ -41,11 +41,13 @@ use mozjs::glue::JS_GetReservedSlot;
 use mozjs::jsapi::{
     JSClass, JSContext as RawJSContext, JSObject, JS_SetReservedSlot, Value, JSPROP_ENUMERATE,
 };
-use mozjs::jsval::{Int32Value, NullValue, ObjectValue, PrivateValue, UndefinedValue};
+use mozjs::jsval::{
+    BooleanValue, Int32Value, NullValue, ObjectValue, PrivateValue, UndefinedValue,
+};
 use mozjs::rooted;
 use mozjs::rust::wrappers2::{
-    JS_DefineFunction, JS_DefineProperty, JS_DefineProperty1, JS_NewObject, JS_SetElement1,
-    NewArrayObject1,
+    CurrentGlobalOrNull, JS_DefineFunction, JS_DefineProperty, JS_DefineProperty1, JS_NewObject,
+    JS_SetElement1, JS_SetProperty, NewArrayObject1,
 };
 
 use manuk_dom::{Dom, NodeId};
@@ -132,6 +134,46 @@ unsafe fn arg_object(vp: *mut Value, argc: u32, i: u32) -> Option<*mut JSObject>
     }
 }
 
+/// Escape a Rust string as a JS double-quoted string literal (for embedding a value
+/// into a script snippet).
+fn js_string_literal(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            _ => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// Evaluate `script` in the current global and return its value (or `None` on error).
+/// Used by the event methods to drive the JS-side listener registry.
+unsafe fn eval_in_current_global(cx: *mut RawJSContext, script: &str) -> Option<Value> {
+    use mozjs::rust::{evaluate_script, CompileOptionsWrapper};
+    let global = CurrentGlobalOrNull(&wrap_cx(cx));
+    if global.is_null() {
+        return None;
+    }
+    rooted!(in(cx) let g = global);
+    rooted!(in(cx) let mut rval = UndefinedValue());
+    let opts = CompileOptionsWrapper::new(&wrap_cx(cx), c"dom_event.js".to_owned(), 1);
+    evaluate_script(
+        &mut wrap_cx(cx),
+        g.handle(),
+        script,
+        rval.handle_mut(),
+        opts,
+    )
+    .ok()?;
+    Some(rval.get())
+}
+
 /// Set the native return value (`vp[0]`) to a JS string.
 unsafe fn return_string(cx: *mut RawJSContext, vp: *mut Value, s: &str) {
     rooted!(in(cx) let mut out = UndefinedValue());
@@ -203,6 +245,8 @@ unsafe fn define_members(
         def(c"getAttribute", el_get_attribute, 1);
         def(c"querySelector", doc_query, 1);
         def(c"querySelectorAll", doc_query_all, 1);
+        def(c"addEventListener", el_add_event_listener, 2);
+        def(c"dispatchEvent", el_dispatch_event, 1);
         // Accessor properties (jQuery-core read/write surface).
         prop(
             c"textContent",
@@ -315,6 +359,71 @@ unsafe extern "C" fn el_get_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut
         Some(v) => return_string(cx, vp, &v),
         None => *vp = NullValue(),
     }
+    true
+}
+
+/// `element.addEventListener(type, handler)` — register `handler` for `type` on this
+/// node in the JS-side listener registry (keyed by the node's arena id). The handler
+/// is stashed on the global, then a helper appends it — keeping it GC-rooted via the
+/// registry. Requires [`install`]'s registry prelude.
+unsafe extern "C" fn el_add_event_listener(
+    cx: *mut RawJSContext,
+    argc: u32,
+    vp: *mut Value,
+) -> bool {
+    let Some((_, node)) = this_node(vp) else {
+        *vp = UndefinedValue();
+        return true;
+    };
+    let Some(ty) = arg_string(cx, vp, argc, 0) else {
+        *vp = UndefinedValue();
+        return true;
+    };
+    if argc < 2 {
+        *vp = UndefinedValue();
+        return true;
+    }
+    // Stash the handler (arg 1) on the global, then register it via the helper.
+    let global = CurrentGlobalOrNull(&wrap_cx(cx));
+    if !global.is_null() {
+        rooted!(in(cx) let g = global);
+        rooted!(in(cx) let fnval = *vp.add(3));
+        JS_SetProperty(
+            &mut wrap_cx(cx),
+            g.handle(),
+            c"__pending_fn".as_ptr(),
+            fnval.handle(),
+        );
+        let script = format!(
+            "__addEventListener({}, {}, __pending_fn)",
+            node.0,
+            js_string_literal(&ty)
+        );
+        let _ = eval_in_current_global(cx, &script);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `element.dispatchEvent(type)` — synchronously invoke this node's listeners for
+/// `type` (each gets an `{type}` event object). Returns whether any listener ran.
+/// (Simplified: takes a type string rather than an `Event` object — no `Event`
+/// constructor yet.) Runs synchronously, but can be *called from* a `setTimeout`
+/// task, i.e. driven through the event loop.
+unsafe extern "C" fn el_dispatch_event(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((_, node)) = this_node(vp) else {
+        *vp = BooleanValue(false);
+        return true;
+    };
+    let Some(ty) = arg_string(cx, vp, argc, 0) else {
+        *vp = BooleanValue(false);
+        return true;
+    };
+    let script = format!("__dispatchEvent({}, {})", node.0, js_string_literal(&ty));
+    let ran = eval_in_current_global(cx, &script)
+        .map(|v| v.is_boolean() && v.to_boolean())
+        .unwrap_or(false);
+    *vp = BooleanValue(ran);
     true
 }
 
@@ -489,7 +598,29 @@ pub unsafe fn install(
         doc_val.handle(),
         0,
     );
+
+    // The JS-side event-listener registry that addEventListener/dispatchEvent drive.
+    let _ = eval_in_current_global(cx, LISTENER_PRELUDE);
 }
+
+/// The listener registry + helpers backing `addEventListener`/`dispatchEvent`.
+/// Listeners are keyed by `"<nodeId>:<type>"` and kept GC-alive via the global
+/// `__listeners` map.
+const LISTENER_PRELUDE: &str = r#"
+    globalThis.__listeners = {};
+    globalThis.__addEventListener = function(nid, type, fn) {
+        if (typeof fn !== 'function') return;
+        var k = nid + ':' + type;
+        (__listeners[k] || (__listeners[k] = [])).push(fn);
+    };
+    globalThis.__dispatchEvent = function(nid, type) {
+        var arr = __listeners[nid + ':' + type];
+        if (!arr || arr.length === 0) return false;
+        var ev = { type: type };
+        for (var i = 0; i < arr.length; i++) { arr[i](ev); }
+        return true;
+    };
+"#;
 
 #[cfg(test)]
 mod tests {
@@ -500,9 +631,9 @@ mod tests {
         evaluate_script, CompileOptionsWrapper, RealmOptions, Runtime, SIMPLE_GLOBAL_CLASS,
     };
 
-    /// Evaluate `script` against a global with `document` installed over `dom`,
-    /// returning the boolean result.
-    fn eval_bool(dom: &mut Dom, script: &str) -> Result<bool, String> {
+    /// Evaluate `script`, returning its boolean value, against a global with `dom`,
+    /// the event loop, and (if `run_loop`) a drained event loop afterward.
+    fn eval_scene(dom: &mut Dom, setup: &str, run_loop: bool, check: &str) -> Result<bool, String> {
         let handle = crate::spidermonkey::engine_handle().map_err(|e| e.message)?;
         let mut runtime = Runtime::new(handle);
         let options = RealmOptions::default();
@@ -513,21 +644,27 @@ mod tests {
         let raw_cx = unsafe { runtime.cx().raw_cx() };
         let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
         unsafe { install(raw_cx, &global, dom as *mut Dom) };
+        crate::event_loop::install(&mut runtime, global.handle())?;
 
-        rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
-        let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"dom.js".to_owned(), 1);
-        evaluate_script(
-            runtime.cx(),
-            global.handle(),
-            script,
-            rval.handle_mut(),
-            opts,
-        )
-        .map_err(|()| "evaluate_script failed".to_string())?;
-        if !rval.get().is_boolean() {
-            return Err("result not boolean".to_string());
+        eval_val(&mut runtime, global.handle(), setup)?;
+        if run_loop {
+            crate::event_loop::run(&mut runtime, global.handle())?;
         }
-        Ok(rval.get().to_boolean())
+        let r = eval_val(&mut runtime, global.handle(), check)?;
+        Ok(r.is_boolean() && r.to_boolean())
+    }
+
+    /// Evaluate `src` in `global`, returning its value.
+    fn eval_val(
+        rt: &mut Runtime,
+        global: mozjs::rust::HandleObject,
+        src: &str,
+    ) -> Result<mozjs::jsapi::Value, String> {
+        rooted!(&in(rt.cx()) let mut rval = UndefinedValue());
+        let opts = CompileOptionsWrapper::new(rt.cx_no_gc(), c"dom.js".to_owned(), 1);
+        evaluate_script(rt.cx(), global, src, rval.handle_mut(), opts)
+            .map_err(|()| "evaluate_script failed".to_string())?;
+        Ok(rval.get())
     }
 
     // ONE test / ONE Runtime: SpiderMonkey does not support multiple Runtime
@@ -573,23 +710,33 @@ mod tests {
 
             var all = document.querySelectorAll("p");   // NodeList (JS Array)
 
-            (g !== null) && (scoped !== null) && inner_ok &&
+            // Events: register a listener, dispatch synchronously, and schedule a
+            // dispatch through the event loop.
+            globalThis.clicks = 0;
+            var btn = document.createElement("button");
+            btn.addEventListener("click", function(ev){ if (ev.type === "click") clicks += 1; });
+            var immediate = btn.dispatchEvent("click");   // sync → clicks = 1, true
+            var noListener = btn.dispatchEvent("hover");   // no listener → false
+            setTimeout(function(){ btn.dispatchEvent("click"); });  // via the loop → clicks = 2
+
+            globalThis.dom_ok =
+              (g !== null) && (scoped !== null) && inner_ok &&
               (g.textContent === "hello world") &&
               (g.tagName === "P") && (parent.tagName === "DIV") &&
               (g.id === "greeting") && (parent.id === "made-in-js") &&
               (parent.className === "box active") &&
               (parent.getAttribute("data-k") === "v") &&
               (Array.isArray(all)) && (all.length === 1) && (all[0].tagName === "P") &&
-              (document.querySelector("span") === null)   // detached, not in tree
+              (document.querySelector("span") === null) &&  // detached, not in tree
+              (immediate === true) && (noListener === false) && (clicks === 1);
         "#;
         // `body_query` helper avoids relying on a `body` global.
-        let script = format!(
+        let setup = format!(
             "function body_query() {{ return document.querySelector('body').querySelector('p'); }}\n{script}"
         );
-        assert!(
-            eval_bool(&mut dom, &script).expect("eval"),
-            "DOM script mismatch"
-        );
+        // After the loop runs, the scheduled dispatch has fired → clicks === 2.
+        let ok = eval_scene(&mut dom, &setup, true, "dom_ok && clicks === 2").expect("eval");
+        assert!(ok, "DOM + events scene mismatch");
         // The textContent setter wrote a real text node into the arena DOM.
         assert_eq!(dom.text_content(p), "hello world");
         // createElement + the text node grew the arena DOM.
