@@ -248,10 +248,17 @@ unsafe fn define_members(
         def(c"querySelector", doc_query, 1);
         def(c"querySelectorAll", doc_query_all, 1);
         def(c"createElement", doc_create_element, 1);
+        def(c"getElementsByTagName", el_get_by_tag, 1);
+        def(c"getElementsByClassName", el_get_by_class, 1);
     } else {
         def(c"appendChild", el_append_child, 1);
         def(c"setAttribute", el_set_attribute, 2);
         def(c"getAttribute", el_get_attribute, 1);
+        def(c"removeAttribute", el_remove_attribute, 1);
+        def(c"hasAttribute", el_has_attribute, 1);
+        def(c"remove", el_remove, 0);
+        def(c"getElementsByTagName", el_get_by_tag, 1);
+        def(c"getElementsByClassName", el_get_by_class, 1);
         def(c"querySelector", doc_query, 1);
         def(c"querySelectorAll", doc_query_all, 1);
         def(c"addEventListener", el_add_event_listener, 2);
@@ -389,6 +396,87 @@ unsafe extern "C" fn el_get_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut
         None => *vp = NullValue(),
     }
     true
+}
+
+/// `element.removeAttribute(name)`.
+unsafe extern "C" fn el_remove_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        if let Some(name) = arg_string(cx, vp, argc, 0) {
+            (*dom).remove_attr(node, &name);
+        }
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `element.hasAttribute(name)` → boolean.
+unsafe extern "C" fn el_has_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let has = match (this_node(vp), arg_string(cx, vp, argc, 0)) {
+        (Some((dom, node)), Some(name)) => {
+            (*dom).element(node).and_then(|e| e.attr(&name)).is_some()
+        }
+        _ => false,
+    };
+    *vp = BooleanValue(has);
+    true
+}
+
+/// `element.remove()` — detach this node from its parent (DOM Living Standard `ChildNode`).
+unsafe extern "C" fn el_remove(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        (*dom).detach(node);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `getElementsByTagName(tag)` — live-ish collection (returned here as a static Array, like
+/// `querySelectorAll`). `"*"` matches every descendant element. Installed on both document
+/// and elements; delegates to the selector engine using the tag as a type selector.
+unsafe extern "C" fn el_get_by_tag(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, root)) = this_node(vp) else {
+        *vp = NullValue();
+        return true;
+    };
+    let tag = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    let matches = manuk_css::query_selector_all(&*dom, root, &tag);
+    node_array(cx, vp, dom, &matches);
+    true
+}
+
+/// `getElementsByClassName(name)` — descendants carrying every space-separated class in
+/// `name`. Returned as a static Array. Delegates to the selector engine via a `.class`
+/// compound selector.
+unsafe extern "C" fn el_get_by_class(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, root)) = this_node(vp) else {
+        *vp = NullValue();
+        return true;
+    };
+    let raw = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    // "a b" → ".a.b" (all classes must be present), matching the DOM semantics.
+    let sel: String = raw
+        .split_whitespace()
+        .map(|c| format!(".{c}"))
+        .collect();
+    let matches = if sel.is_empty() {
+        Vec::new()
+    } else {
+        manuk_css::query_selector_all(&*dom, root, &sel)
+    };
+    node_array(cx, vp, dom, &matches);
+    true
+}
+
+/// Build a JS `Array` of element reflectors for `nodes` and store it in `*vp`.
+unsafe fn node_array(cx: *mut RawJSContext, vp: *mut Value, dom: *mut Dom, nodes: &[NodeId]) {
+    let arr_ptr = NewArrayObject1(&mut wrap_cx(cx), nodes.len());
+    rooted!(in(cx) let arr = arr_ptr);
+    for (i, &n) in nodes.iter().enumerate() {
+        let refl = new_reflector(cx, dom, n);
+        rooted!(in(cx) let robj = refl);
+        JS_SetElement1(&mut wrap_cx(cx), arr.handle(), i as u32, robj.handle());
+    }
+    *vp = ObjectValue(arr.get());
 }
 
 /// `element.addEventListener(type, handler)` — register `handler` for `type` on this
@@ -825,6 +913,25 @@ mod tests {
 
             var all = document.querySelectorAll("p");   // NodeList (JS Array)
 
+            // Collections + attribute-presence + removal (ChildNode.remove).
+            var col = document.createElement("div");
+            var c1 = document.createElement("b"); c1.className = "hit x";
+            var c2 = document.createElement("b"); c2.className = "hit";
+            var c3 = document.createElement("i"); c3.className = "hit";
+            col.appendChild(c1); col.appendChild(c2); col.appendChild(c3);
+            var byTag   = col.getElementsByTagName("b").length === 2;
+            var byStar  = col.getElementsByTagName("*").length === 3;
+            var byClass = col.getElementsByClassName("hit").length === 3;
+            var byBoth  = col.getElementsByClassName("hit x").length === 1;
+            c2.remove();                                  // detach middle <b>
+            var afterRemove = col.getElementsByTagName("b").length === 1;
+            c1.setAttribute("k", "v");
+            var attrPresent = c1.hasAttribute("k") === true && c1.hasAttribute("nope") === false;
+            c1.removeAttribute("k");
+            var attrGone = c1.hasAttribute("k") === false;
+            var newApis = byTag && byStar && byClass && byBoth &&
+                          afterRemove && attrPresent && attrGone;
+
             // Events: register a listener, dispatch synchronously, and schedule a
             // dispatch through the event loop.
             globalThis.clicks = 0;
@@ -842,6 +949,7 @@ mod tests {
               (parent.className === "box active") &&
               (parent.getAttribute("data-k") === "v") &&
               (Array.isArray(all)) && (all.length === 1) && (all[0].tagName === "P") &&
+              newApis &&
               (document.querySelector("span") === null) &&  // detached, not in tree
               (immediate === true) && (noListener === false) && (clicks === 1);
         "#;
