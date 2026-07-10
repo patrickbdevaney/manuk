@@ -1,0 +1,111 @@
+# Manuk — a browser engine, from first principles in Rust.
+# Workspace root. See CLAUDE.md for the governing directive (scope, architecture,
+# and the JS-engine modification boundary that must not be crossed without sign-off).
+#
+# Phase: human-operator GUI browser only. The engine core (net/html/dom/css/
+# layout/js/text) is kept free of GUI-only assumptions so the eventual headless
+# split diverges only at the paint/compositor layer.
+
+[workspace]
+resolver = "2"
+members = [
+    "engine/net",
+    "engine/dom",
+    "engine/html",
+    "engine/css",
+    "engine/layout",
+    "engine/text",
+    "engine/js",
+    "engine/paint",
+    "engine/compositor",
+    "engine/page",
+    "shell",
+    "agent",
+    "tests/wpt",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+license = "MPL-2.0"
+repository = "https://example.invalid/manuk"
+
+# Central version pinning so every crate agrees. Reuse mature components per the
+# CLAUDE.md stack table; build-from-scratch layers depend only on these.
+[workspace.dependencies]
+# --- shared infra ---
+anyhow = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+bytes = "1"
+url = "2"
+smallvec = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+async-trait = "0.1"
+
+# --- networking (Reuse) ---
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "macros", "sync", "time"] }
+hyper = { version = "1", features = ["client", "http1", "http2"] }
+hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "http2", "tokio"] }
+http = "1"
+http-body-util = "0.1"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+webpki-roots = "0.26"
+rustls-pki-types = "1"
+
+# --- HTML parsing (Reuse) ---
+html5ever = "0.39"
+markup5ever_rcdom = "0.39"
+tendril = "0.4"
+
+# --- CSS (Reuse target: Stylo; feature-gated). Fallback cascade uses cssparser. ---
+cssparser = "0.34"
+
+# --- layout (Reuse + build) ---
+taffy = "0.12"
+
+# --- text (Reuse) ---
+fontdb = "0.23"
+fontdue = "0.9"
+
+# --- paint / raster ---
+tiny-skia = "0.12"
+
+# --- GPU / windowing (Reuse) ---
+wgpu = "27"
+winit = "0.30"
+pollster = "0.4"
+bytemuck = { version = "1", features = ["derive"] }
+raw-window-handle = "0.6"
+
+# --- internal crates ---
+manuk-net = { path = "engine/net" }
+manuk-dom = { path = "engine/dom" }
+manuk-html = { path = "engine/html" }
+manuk-css = { path = "engine/css" }
+manuk-layout = { path = "engine/layout" }
+manuk-text = { path = "engine/text" }
+manuk-js = { path = "engine/js" }
+manuk-paint = { path = "engine/paint" }
+manuk-compositor = { path = "engine/compositor" }
+manuk-page = { path = "engine/page" }
+
+# Performance targets (CLAUDE.md § Performance targets):
+# static linking + LTO + stripped symbols; panic = "abort" in release.
+# musl (Linux) / static-CRT (Windows) are selected per-target in .cargo/config.toml
+# and are NOT forced here so the default host build stays simple.
+[profile.release]
+opt-level = "s"     # size-biased; binary-size is a first-class target
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# A dev profile that still builds the heavy dependency graph quickly.
+[profile.dev]
+opt-level = 0

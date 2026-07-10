@@ -1,0 +1,42 @@
+[package]
+name = "manuk-shell"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Human-operator GUI shell: window, tabs, navigation, and the page pipeline."
+
+[[bin]]
+name = "manuk"
+path = "src/main.rs"
+
+[features]
+# The interactive GPU window (winit + wgpu). On by default. Disable it
+# (`--no-default-features`) to build just the headless `render` pipeline, which
+# needs no display/GPU — useful for CI and this environment.
+default = ["gui"]
+gui = ["dep:winit", "dep:wgpu", "dep:pollster", "dep:bytemuck", "dep:raw-window-handle"]
+
+[dependencies]
+manuk-net.workspace = true
+manuk-html.workspace = true
+manuk-dom.workspace = true
+manuk-css.workspace = true
+manuk-layout.workspace = true
+manuk-text.workspace = true
+manuk-js.workspace = true
+manuk-paint.workspace = true
+manuk-compositor.workspace = true
+manuk-page.workspace = true
+
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tokio.workspace = true
+url.workspace = true
+
+winit = { workspace = true, optional = true }
+wgpu = { workspace = true, optional = true }
+pollster = { workspace = true, optional = true }
+bytemuck = { workspace = true, optional = true }
+raw-window-handle = { workspace = true, optional = true }

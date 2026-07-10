@@ -1,0 +1,12 @@
+[package]
+name = "manuk-compositor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Layer compositing, scroll, damage tracking, and tab hibernation logic."
+
+[dependencies]
+manuk-paint.workspace = true
+manuk-layout.workspace = true
+tracing.workspace = true

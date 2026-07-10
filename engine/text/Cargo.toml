@@ -1,0 +1,17 @@
+[package]
+name = "manuk-text"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Text shaping + font discovery. fontdb + fontdue (swash/Parley family)."
+
+# CLAUDE.md names Parley + swash + fontdb. This first pass uses fontdb (discovery)
+# + fontdue (metrics + glyph rasterization) — the same lower layers Parley composes —
+# for a robust, headless-verifiable Latin text path. Parley's higher-level line
+# breaker / bidi is the drop-in upgrade behind the TextShaper API.
+
+[dependencies]
+fontdb.workspace = true
+fontdue.workspace = true
+tracing.workspace = true

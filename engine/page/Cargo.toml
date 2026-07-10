@@ -1,0 +1,19 @@
+[package]
+name = "manuk-page"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The shared page pipeline: bytes -> DOM -> style -> layout -> paint. Used by the headful shell and the headless agent."
+
+[dependencies]
+manuk-net.workspace = true
+manuk-html.workspace = true
+manuk-dom.workspace = true
+manuk-css.workspace = true
+manuk-layout.workspace = true
+manuk-text.workspace = true
+manuk-paint.workspace = true
+anyhow.workspace = true
+url.workspace = true
+tracing.workspace = true

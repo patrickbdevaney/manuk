@@ -1,0 +1,23 @@
+[package]
+name = "manuk-css"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Style engine. Trait boundary + minimal cascade fallback; Stylo feature-gated."
+
+[features]
+default = []
+# Stylo (Servo/Firefox production CSS engine) is the reuse target per CLAUDE.md.
+# It is heavy to build, so it is opt-in. The default build uses the minimal
+# from-scratch cascade so the workspace compiles and runs without it.
+stylo = ["dep:stylo"]
+
+[dependencies]
+manuk-dom.workspace = true
+cssparser.workspace = true
+smallvec.workspace = true
+tracing.workspace = true
+
+# Feature-gated. Pulled only with --features stylo. Name/version adjusted on wiring.
+stylo = { package = "stylo", version = "0.19", optional = true }

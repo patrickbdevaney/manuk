@@ -1,0 +1,31 @@
+[package]
+name = "manuk-agent"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Headless agentic browser: a page driver + inference-backend-agnostic agent loop. Agent logic is decoupled from both the harness and the LLM backend."
+
+[lib]
+path = "src/lib.rs"
+
+# Committed runner: drives the agent with a SINGLE GROQ_API_KEY.
+[[bin]]
+name = "agent-run"
+path = "src/bin/agent-run.rs"
+
+[dependencies]
+manuk-page.workspace = true
+manuk-paint.workspace = true
+manuk-net.workspace = true
+manuk-text.workspace = true
+
+anyhow.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+bytes.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+base64.workspace = true
+async-trait.workspace = true
+tracing-subscriber.workspace = true

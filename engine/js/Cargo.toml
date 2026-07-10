@@ -1,0 +1,26 @@
+[package]
+name = "manuk-js"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "JS runtime boundary + Web API bindings. SpiderMonkey (mozjs) feature-gated."
+
+[features]
+default = []
+# SpiderMonkey via mozjs, the same integration path Servo uses. NOT V8.
+# Heavy C++ build, so opt-in. Default build uses NoScriptRuntime (no-op), which is
+# spec-correct for the "no LLM/agent, GUI-only" phase and for tests.
+#
+# MODIFICATION BOUNDARY (CLAUDE.md §): this crate configures and BINDS to
+# SpiderMonkey. It must never patch JIT/GC internals or the JS sandbox. That is a
+# "come back to the human" boundary, not a "do it carefully" one.
+spidermonkey = ["dep:mozjs"]
+
+[dependencies]
+manuk-dom.workspace = true
+tracing.workspace = true
+
+# Feature-gated. Pulled only with --features spidermonkey. Triggers the SpiderMonkey
+# C++ build. Version adjusted on wiring.
+mozjs = { version = "0.18", optional = true }

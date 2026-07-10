@@ -1,0 +1,131 @@
+# CLAUDE.md — Browser Engine Project
+
+Project directive for Claude Code. Read this in full before making changes. This file governs scope, architecture, and — critically — which parts of this codebase are safe to modify freely versus which require explicit human sign-off regardless of how confident the change looks.
+
+## Current phase: shared engine core, with both front-ends live
+
+Two front-ends now sit on one shared engine core:
+
+1. **Headful, human-facing browser** (`shell`) — a GUI app with tabs, navigation, and rendering (headless `render` to PNG + interactive `winit`/`wgpu` `browse` window).
+2. **Headless agentic browser** (`agent`) — a page driver an LLM can operate (navigate / click / scroll / screenshot / observe), driven by a provider-agnostic inference backend. This phase was explicitly authorized and is now in an initial, working form.
+
+The common engine core (networking, parsing, CSS, DOM/JS, layout, text) is realized in the `engine/*` crates and the shared `engine/page` pipeline; the two front-ends diverge only at how they consume a rendered page (window present vs. screenshot+read). Keep that split clean — do not wire front-end-only assumptions into the parse/layout/JS layers.
+
+`.env` holds `GROQ_API_KEY` variables for the agent phase; `.env` is gitignored. The committed agent runner uses a **single** `GROQ_API_KEY` (falling back to `GROQ_API_KEY`); the local-only development harness is a **local-only, gitignored** test tool. The agent's inference backend is decoupled behind an `InferenceBackend` trait — Groq is one implementation, not a hard dependency of the agent logic.
+
+## Current state (implemented)
+
+A working foundation, not a finished browser. What exists and is verified:
+
+- **Networking** (`engine/net`): HTTP/1.1 over TLS (`hyper` + `rustls`, no OpenSSL), redirects, and a general `request` (POST) reused by the agent's Groq client. Live-fetches real sites.
+- **Parse → render pipeline** (`engine/{html,dom,css,layout,text,paint}` via `engine/page`): `html5ever` → arena DOM → minimal CSS cascade (selectors/specificity/inheritance) → from-scratch block + inline layout (wrapping, centering; `taffy` for flex) → `fontdb`/`fontdue` text → `tiny-skia` CPU raster to PNG. Renders real pages (example.com and local pages) end to end.
+- **JS** (`engine/js`): `JsRuntime` trait with a no-op default; **SpiderMonkey** (`mozjs`) behind `--features spidermonkey` **actually evaluates JS**. Process-global engine, shared across isolates. Modification boundary respected (see below).
+- **CSS engine seam** (`engine/css`): minimal cascade default; **Stylo** behind `--features stylo` (links and builds; adapter currently delegates).
+- **Compositor** (`engine/compositor`): tab render/memory tiers (focused-GPU / background-CPU / hibernated), damage tracking, scroll.
+- **Headful shell** (`shell`): `render <url>` (headless PNG) and `browse <url>` (winit/wgpu window presenting the CPU raster).
+- **Headless agent** (`agent`): `AgentBrowser` driver, `InferenceBackend` trait (multimodal), `run_task` loop, `GroqBackend`. Live-tested on Groq `qwen/qwen3.6-27b`: text extraction, link comprehension, link navigation, and multimodal screenshot reading all pass.
+- **Conformance** (`tests/wpt`): built-in layout reftests run today; the upstream WPT runner is the growth path. 40 workspace tests pass; zero warnings.
+
+## Mission
+
+Build a browser engine, from first principles in Rust, that:
+- Targets the **broadest possible set of real-world websites**, with the explicit exception of the smallest tier of adversarially hostile sites (aggressive bot-wall/fingerprint-gated sites like LinkedIn, X, Indeed — these are out of scope for the core engine and would be handled by narrow, separate adapters in a different phase, never by chasing generic compatibility with their defenses).
+- Is verified against **Web Platform Tests (WPT)**, not against matching Chromium's specific undocumented quirks. Standards compliance is the compatibility target. Do not write code whose purpose is to replicate a Chromium-specific non-standard behavior — if a target site depends on that, it's in the excluded hostile/non-standard tier.
+- Is optimized from first principles for binary size, per-tab memory, GPU-quality rendering, and click-to-navigate latency — not merely "acceptable," but genuinely disruptive relative to Chromium/Firefox on these dimensions for the sites in scope.
+- Runs identically on Linux, macOS, and Windows with no platform serving as the "primary" target and others as afterthoughts.
+
+## Architecture — the stack
+
+Reuse mature components where reinventing them adds security/correctness risk with no differentiation value. Build from scratch, verified against WPT, where the target site set is bounded and a from-scratch build is both tractable and gives real performance upside. Do not blur this line without discussion — see "Modification boundaries" below.
+
+| Layer | Approach | Components |
+|---|---|---|
+| Networking | Reuse | `hyper` (HTTP/1.1, HTTP/2), `quinn` (HTTP/3/QUIC), `tokio-tungstenite` (WebSocket), `rustls` (TLS — pure Rust, no OpenSSL system dependency), `tokio` async runtime |
+| HTML parsing | Reuse | `html5ever` |
+| CSS parsing + cascade | Reuse | Stylo (Servo's/Firefox's production CSS engine) |
+| Layout | Reuse + build | `taffy` for flexbox/grid; custom block, inline, table, positioned, and float layout built from scratch, verified against WPT layout reftests |
+| DOM + Web API surface | Build | Custom, spec-driven (WebIDL), verified per-API against its WPT test suite. This is the largest-volume component — budget accordingly |
+| JS engine | Reuse, do not reimplement | SpiderMonkey, embedded via `mozjs` / `mozjs-sys` Rust bindings (the same integration path Servo uses). **Not V8.** SpiderMonkey is C++ and Rust (Rust in the parser layer only — the JIT and GC are C++); this is not a "pure Rust" engine, it is a mature C++ engine with a proven Rust FFI layer |
+| Text shaping | Reuse | Parley + swash + fontdb |
+| Paint / rasterization | Reuse | Vello — GPU-compute renderer via `wgpu`, with Vello CPU / Vello Hybrid as lighter fallback tiers for background/hibernated tabs. **Currently alpha upstream** — prototype against actual target rendering needs (gradients, blur, complex clips) before committing further |
+| GPU abstraction | Reuse | `wgpu` — Vulkan (Linux/Windows), Metal (macOS), DX12 (Windows). No Linux-desktop or specific graphics-package assumptions |
+| Windowing / event loop | Reuse | `winit` |
+| Compositor | Build | Layer compositing, scroll, damage tracking, animations — built on Vello + wgpu |
+| Concurrency/process model | Build | Isolate/compartment-per-tab (SpiderMonkey compartments) multiplexed across a small number of OS processes — not one OS process per tab. Share startup snapshots across isolates to cut per-tab baseline memory |
+
+## Compatibility verification methodology
+
+- Ground truth is **WPT (Web Platform Tests)** — the cross-browser conformance suite used by Chromium, Firefox, WebKit, and Servo themselves. Every layout, CSS, and DOM/API feature you implement should be checked against the relevant WPT subset before being considered done.
+- Do not hand-roll a compatibility test corpus from scratch as the primary verification method — WPT already exists and is comprehensive. Use targeted real-site screenshot diffing (against a real Chrome render) as a secondary check for visual fidelity, not as the primary conformance signal.
+- When a feature is ambiguous or under-specified even in WPT (this happens — floats and table layout are notorious), document the interpretation chosen and why, rather than silently picking one.
+
+## Modification boundaries — read before touching the JS engine
+
+This is the most important section in this file. Violating it is the one mistake in this project with real security consequences.
+
+**Safe to modify, verify by benchmark or binary size:**
+- SpiderMonkey build configuration and feature flags (stripping unused WASM support, the debugger/inspector protocol, unused ICU locale data — all legitimate binary-size wins)
+- The FFI/binding layer between Rust and SpiderMonkey (`mozjs` usage, custom bindings) — this is well-specified, low-blast-radius, and the correct place for iteration
+- Startup snapshot tuning (shared heap contents for fast isolate startup)
+
+**Do not modify without dedicated fuzzing infrastructure and explicit sign-off:**
+- SpiderMonkey's JIT compiler internals (WarpMonkey/IonMonkey) or garbage collector internals
+- Any change to how untrusted JavaScript is sandboxed or isolated
+
+Reasoning, so this isn't just an arbitrary rule: JIT miscompilation bugs — incorrect type or escape-analysis assumptions in the optimizing compiler — are historically the largest single source of exploitable browser RCE vulnerabilities. The reason SpiderMonkey and V8 are trustworthy today isn't just that the code is correct, it's that the code has survived years of adversarial fuzzing (OSS-Fuzz/ClusterFuzz) that this project has no equivalent of. Faster code generation does not substitute for that calendar-bound adversarial exposure. If a task seems to require touching this layer, stop and flag it rather than proceeding — this is a "come back to the human" boundary, not a "do it carefully" one.
+
+## Performance targets
+
+- **Binary size**: static linking + LTO + stripped symbols; `panic = "abort"` in release profile; musl target on Linux for a fully static binary with no dynamic-link bloat; static CRT linking on Windows to avoid requiring a redistributable runtime.
+- **Per-tab memory**: isolate-based tabs, not process-based. Background/hibernated tabs should freeze JS execution and evict to disk, dropping to Vello CPU or no active renderer at all — full Vello GPU + active JS is reserved for the focused tab only.
+- **Click-to-navigate latency**: streaming/incremental parse and layout (begin building the DOM and layout tree as bytes arrive, don't wait for the full response); zero-copy handoff from socket buffer to tokenizer where feasible; speculative preconnect/DNS-prefetch on link hover.
+- **Rendering quality**: Vello + wgpu is the graphics-quality lever — this is a from-scratch, GPU-compute-first architecture, not a CPU/GPU hybrid retrofit. Treat visual fidelity and frame timing as first-class, measured metrics, not an afterthought to functional correctness.
+
+## Portability
+
+- Default async I/O path (`tokio`'s standard reactor) must work identically on Linux, macOS, and Windows. Do not introduce Linux-only dependencies into the core engine.
+- `io_uring`-based optimization (`tokio-uring` or similar) is Linux-only and is a *future, optional* fast path relevant to the eventual agent/headless phase, not this one. Do not add it to the human-operator GUI codebase now — the concurrency profile doesn't need it here.
+- No Linux-desktop assumptions (no GTK/Qt bindings, no specific display-server assumptions) — `winit` and `wgpu` already abstract this; keep it that way.
+
+## Non-goals
+
+- No adapters for LinkedIn, X, Indeed, or other bot-walled sites; no bot-evasion in the core engine.
+- No pixel-parity chase with Chromium beyond what WPT compliance already gets you.
+- No DRM/EME.
+- No horizontal multi-node scaling concerns — this is single-binary, single-machine scope.
+- The agent must not couple to a specific inference provider — Groq is one `InferenceBackend`, not a dependency of the agent logic. Do not commit the local-only development harness or any API keys.
+
+## Next frontiers
+
+Roughly in priority order, each behind an existing seam:
+
+- **Layout**: floats, tables, absolute/relative positioning, margin collapsing — the from-scratch WPT-verified work called out above.
+- **Loading**: external `<link rel=stylesheet>` + image fetching, gzip/br decoding, encoding sniffing, HTTP/2+3 activation (ALPN `h2`, `quinn`).
+- **Real reuse integrations**: wire Stylo's cascade behind the existing `StyleEngine` adapter; wire Vello GPU paint behind the existing `Painter` trait for the focused tab.
+- **JS/DOM**: grow the Web API binding surface (`engine/js::bindings`) projecting the DOM into SpiderMonkey, WebIDL-driven, WPT-verified per API.
+- **Agent**: viewport-clipped text observation (so scrolling matters to the text channel, not just the screenshot), richer actions (typing, form submit, back/forward), and multi-tab agent sessions.
+- **Conformance**: the upstream WPT runner (`$WPT_DIR`), folding real `css/`/`dom/` results into the existing `Report`.
+
+## Suggested crate layout
+
+```
+/engine
+  /net        — hyper, quinn, tokio-tungstenite, rustls integration
+  /html       — html5ever integration
+  /css        — Stylo integration
+  /layout     — taffy + custom block/inline/table/positioned/float layout, WPT-verified
+  /js         — mozjs bindings, DOM/Web API surface, WPT-verified per API
+  /text       — Parley, swash, fontdb
+  /paint      — Vello integration (GPU/CPU/Hybrid tiers)
+  /compositor — layer compositing, damage tracking, hibernation logic
+/shell        — winit-based GUI: window, tabs, navigation, chrome
+/tests
+  /wpt        — WPT test harness and results tracking
+```
+
+## Working agreements
+
+- Any change touching `/engine/layout`, `/engine/css`, or `/engine/js` should be checked against the relevant WPT subset before being considered complete — cite which tests were run.
+- Any change touching binary size or per-tab memory should report before/after numbers.
+- Treat SpiderMonkey as a vendored dependency you configure and bind against, not a codebase you patch internals of — see Modification boundaries above.
+- When in doubt about whether a site belongs in the "broadest possible, excluding hostile" target set or the excluded tier, default to excluding rather than building bot-evasion logic into the core engine.

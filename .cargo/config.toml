@@ -1,0 +1,19 @@
+# Target-specific build configuration for the CLAUDE.md performance targets.
+# These apply ONLY when you explicitly build for the given target, so the default
+# host build (`cargo build`) is unaffected and needs no extra toolchain.
+#
+#   Linux, fully-static musl binary (no dynamic-link bloat):
+#     rustup target add x86_64-unknown-linux-musl
+#     cargo build --release --target x86_64-unknown-linux-musl
+#
+#   Windows, static CRT (no redistributable runtime required):
+#     cargo build --release --target x86_64-pc-windows-msvc
+
+[target.x86_64-unknown-linux-musl]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

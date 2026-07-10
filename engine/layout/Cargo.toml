@@ -1,0 +1,18 @@
+[package]
+name = "manuk-layout"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Layout: taffy for flex/grid + from-scratch block/inline layout, WPT-verified."
+
+[dependencies]
+manuk-dom.workspace = true
+manuk-css.workspace = true
+manuk-text.workspace = true
+taffy.workspace = true
+smallvec.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+manuk-html.workspace = true

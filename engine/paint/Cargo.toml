@@ -1,0 +1,26 @@
+[package]
+name = "manuk-paint"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Paint: display list + rasterization tiers. CPU tier (tiny-skia) default; Vello GPU tier is the focused-tab target."
+
+# CLAUDE.md § Paint: Vello (GPU-compute via wgpu) is the focused-tab quality lever,
+# with Vello CPU / Hybrid as lighter fallback tiers for background/hibernated tabs.
+# Vello is alpha upstream. This pass implements the CPU fallback tier for real
+# (headless-verifiable render-to-PNG) behind a Painter trait; the Vello GPU tier
+# slots in behind the same trait without touching layout/compositor.
+
+[dependencies]
+anyhow.workspace = true
+manuk-layout.workspace = true
+manuk-text.workspace = true
+manuk-dom.workspace = true
+manuk-css.workspace = true
+tiny-skia.workspace = true
+fontdue.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+manuk-html.workspace = true

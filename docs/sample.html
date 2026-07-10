@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head><title>Manuk Test Page</title>
+<style>
+  body { background: white; color: #222; }
+  h1 { color: rebeccapurple; }
+  .box { background: #dde7ff; padding: 10px; }
+  .note { color: #b00; font-style: italic; }
+</style></head>
+<body>
+  <h1>Hello from Manuk</h1>
+  <p class="box">This is a paragraph rendered by a from-scratch browser engine
+     in Rust. It fetches over HTTPS, parses HTML with html5ever, cascades a
+     minimal CSS subset, lays out block and inline boxes, and rasterizes text
+     with fontdue onto a tiny-skia canvas.</p>
+  <p class="note">Floats, tables, and Vello GPU paint are the next milestones.</p>
+</body>
+</html>

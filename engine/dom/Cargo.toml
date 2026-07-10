@@ -1,0 +1,17 @@
+[package]
+name = "manuk-dom"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "DOM tree + node arena. Shared engine core (consumed by html/css/layout/js)."
+
+# NOTE (deviation from CLAUDE.md suggested layout, documented intentionally):
+# The suggested layout groups "DOM + Web API surface" under /engine/js. DOM types
+# are consumed by html parsing, style, and layout — none of which should depend on
+# the JS engine. So the pure DOM tree lives in this standalone crate, and /engine/js
+# holds the *Web API bindings* that project this DOM into the JS runtime. This keeps
+# the JS-engine feature gate out of the parse/layout path.
+
+[dependencies]
+smallvec.workspace = true

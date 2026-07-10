@@ -1,0 +1,16 @@
+# Secrets — never commit API keys.
+.env
+.env.*
+!.env.example
+
+# Rust build artifacts.
+/target
+**/*.rs.bk
+
+# The parallel multi-key test harness is a local-only tool (see CLAUDE.md /
+# README): only the single-GROQ_API_KEY runner is committed.
+agent/src/bin/agent-run.rs
+
+# Local render/debug output.
+/*.png
+!docs/*.png
