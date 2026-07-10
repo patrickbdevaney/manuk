@@ -165,8 +165,15 @@ pub struct Page {
     pub content_height: f32,
     pub root_box: LayoutBox,
     dom: Dom,
+    /// The **base** cascade at 100% zoom. Zoomed layouts always derive from this, so
+    /// repeated zooming never compounds.
     styles: StyleMap,
+    zoom: f32,
 }
+
+/// E1 full-page zoom bounds (matching what mainstream browsers offer).
+pub const MIN_ZOOM: f32 = 0.25;
+pub const MAX_ZOOM: f32 = 5.0;
 
 impl Page {
     /// Parse + style + lay out `html` for a viewport of `viewport_width` px.
@@ -208,6 +215,7 @@ impl Page {
             root_box,
             dom,
             styles,
+            zoom: 1.0,
         }
     }
 
@@ -242,7 +250,29 @@ impl Page {
 
     /// Re-run layout at a new viewport width (reuses the DOM + computed styles).
     pub fn relayout(&mut self, fonts: &FontContext, viewport_width: f32) {
-        self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+        self.relayout_zoomed(fonts, viewport_width, self.zoom);
+    }
+
+    /// The current full-page zoom factor (1.0 = 100%).
+    pub fn zoom(&self) -> f32 {
+        self.zoom
+    }
+
+    /// E1 **full-page zoom**: re-lay-out at `zoom`, scaling every *absolute* length
+    /// (including `font_size`, hence **crisp** text) rather than magnifying a bitmap.
+    ///
+    /// The scaled styles are always derived from the **base** cascade, so calling this
+    /// repeatedly never compounds. `zoom` is clamped to a usable range.
+    pub fn relayout_zoomed(&mut self, fonts: &FontContext, viewport_width: f32, zoom: f32) {
+        self.zoom = zoom.clamp(MIN_ZOOM, MAX_ZOOM);
+        let scaled;
+        let styles = if (self.zoom - 1.0).abs() < 1e-6 {
+            &self.styles
+        } else {
+            scaled = manuk_css::zoom_styles(&self.styles, self.zoom);
+            &scaled
+        };
+        self.root_box = layout_document(&self.dom, styles, fonts, viewport_width);
         self.content_height = self.root_box.content_bottom();
         self.dom.clear_all_dirty();
     }
@@ -689,6 +719,64 @@ mod tests {
             .to_viewport_lines(vp)
             .iter()
             .any(|l| l.starts_with("button \"Sign in\" @(")));
+    }
+
+    /// E1 acceptance: Ctrl+/− **reflows** rather than magnifying a bitmap. Zooming in
+    /// must scale `font_size` (so glyphs rasterize larger — crisp) and therefore grow
+    /// the content, while zooming out shrinks it. Repeated calls must not compound.
+    #[test]
+    fn full_page_zoom_reflows_crisply_and_does_not_compound() {
+        let fonts = FontContext::new();
+        let html = "<body><p>Some text that wraps a little at narrow widths.</p></body>";
+        let mut page = Page::load(html, "http://x.test/", &fonts, 400.0);
+        assert_eq!(page.zoom(), 1.0);
+        let base_h = page.content_height;
+
+        let font_size_at = |p: &Page| -> f32 {
+            let mut fs = 0.0f32;
+            p.root_box.walk(&mut |b| {
+                if let manuk_layout::BoxContent::Inline(frags) = &b.content {
+                    for f in frags {
+                        fs = fs.max(f.style.font_size);
+                    }
+                }
+            });
+            fs
+        };
+        let base_fs = font_size_at(&page);
+
+        // Zoom in: text is laid out larger, so the document gets taller.
+        page.relayout_zoomed(&fonts, 400.0, 2.0);
+        assert_eq!(page.zoom(), 2.0);
+        let big_h = page.content_height;
+        assert!(big_h > base_h, "zoom-in must grow content: {base_h} -> {big_h}");
+
+        // The *font size* really changed — that is what makes it crisp rather than a
+        // scaled bitmap.
+        let big_fs = font_size_at(&page);
+        assert!((big_fs - base_fs * 2.0).abs() < 0.01, "font_size must scale with zoom");
+
+        // Returning to 100% restores the original layout exactly (no compounding).
+        page.relayout_zoomed(&fonts, 400.0, 1.0);
+        assert_eq!(page.zoom(), 1.0);
+        assert!((page.content_height - base_h).abs() < 0.01);
+        assert!((font_size_at(&page) - base_fs).abs() < 0.01);
+
+        // Zooming twice in a row derives from the base each time, never compounding.
+        page.relayout_zoomed(&fonts, 400.0, 2.0);
+        let once = page.content_height;
+        page.relayout_zoomed(&fonts, 400.0, 2.0);
+        assert!((page.content_height - once).abs() < 0.01, "zoom compounded");
+
+        // Zoom out shrinks it.
+        page.relayout_zoomed(&fonts, 400.0, 0.5);
+        assert!(page.content_height < base_h);
+
+        // Out-of-range factors clamp rather than producing a degenerate layout.
+        page.relayout_zoomed(&fonts, 400.0, 1000.0);
+        assert_eq!(page.zoom(), MAX_ZOOM);
+        page.relayout_zoomed(&fonts, 400.0, 0.0001);
+        assert_eq!(page.zoom(), MIN_ZOOM);
     }
 
     #[test]

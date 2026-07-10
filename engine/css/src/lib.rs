@@ -217,6 +217,56 @@ impl ComputedStyle {
 /// Map from DOM node to its computed style. Text nodes inherit their parent's.
 pub type StyleMap = HashMap<NodeId, ComputedStyle>;
 
+/// E1 **full-page zoom** — scale every *absolute* length in `style` by `k`.
+///
+/// Percentages and `auto` are deliberately left alone: they resolve against a
+/// containing block that has itself been scaled, so scaling them too would compound.
+/// This is what makes browser zoom *reflow* (and therefore stay crisp) rather than
+/// magnify a bitmap: `font_size` grows, so glyphs are rasterized at the larger size.
+pub fn scale_style(style: &ComputedStyle, k: f32) -> ComputedStyle {
+    fn dim(d: Dim, k: f32) -> Dim {
+        match d {
+            Dim::Px(v) => Dim::Px(v * k),
+            // Percent / Auto resolve against an already-scaled reference.
+            other => other,
+        }
+    }
+    fn sides_dim(s: Sides<Dim>, k: f32) -> Sides<Dim> {
+        Sides {
+            top: dim(s.top, k),
+            right: dim(s.right, k),
+            bottom: dim(s.bottom, k),
+            left: dim(s.left, k),
+        }
+    }
+    fn sides_px(s: Sides<f32>, k: f32) -> Sides<f32> {
+        Sides {
+            top: s.top * k,
+            right: s.right * k,
+            bottom: s.bottom * k,
+            left: s.left * k,
+        }
+    }
+    ComputedStyle {
+        font_size: style.font_size * k,
+        line_height: style.line_height * k,
+        margin: sides_dim(style.margin, k),
+        padding: sides_dim(style.padding, k),
+        border_width: sides_px(style.border_width, k),
+        width: dim(style.width, k),
+        height: dim(style.height, k),
+        inset: sides_dim(style.inset, k),
+        border_spacing: style.border_spacing * k,
+        ..style.clone()
+    }
+}
+
+/// Scale a whole [`StyleMap`] for full-page zoom. Always derive from the *base* map;
+/// scaling an already-scaled map compounds.
+pub fn zoom_styles(styles: &StyleMap, k: f32) -> StyleMap {
+    styles.iter().map(|(n, s)| (*n, scale_style(s, k))).collect()
+}
+
 /// How much work a style change forces (A2 incremental-layout damage taxonomy,
 /// Servo's `RestyleDamage` idea). Ordered least→most expensive; a subtree's damage is
 /// the max of its own and its children's.

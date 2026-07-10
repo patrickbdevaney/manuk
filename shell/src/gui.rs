@@ -15,10 +15,13 @@ use manuk_paint::CpuPainter;
 use manuk_text::FontContext;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
-use winit::event::{MouseScrollDelta, WindowEvent};
+use winit::event::{ElementState, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
+use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::{Window, WindowId};
 
+use crate::chrome::{self, Bookmarks, History, Settings};
+use crate::find::{self, FindSession};
 use crate::tab::Browser;
 use manuk_compositor::TabId;
 use manuk_page::{fetch_html, Page};
@@ -73,6 +76,23 @@ struct App {
     /// If set, render this many frames back-to-back, print GPU stats, then exit.
     measure_frames: Option<usize>,
     frames_done: usize,
+
+    // ---- E1 chrome UI state ----
+    modifiers: ModifiersState,
+    history: History,
+    bookmarks: Bookmarks,
+    settings: Settings,
+    zoom: f32,
+    /// Find-in-page. `find_open` drives whether typed characters go to the find bar.
+    find_open: bool,
+    find_query: String,
+    find_session: FindSession,
+    /// Keyboard-driven address bar (Ctrl+L). There is no chrome *widget* yet — the
+    /// query and its suggestions are surfaced through `tracing` — but the resolution,
+    /// suggestion ranking, and navigation are real. The rendered widget is the
+    /// tracked follow-up.
+    omnibox_open: bool,
+    omnibox_input: String,
 }
 
 impl App {
@@ -95,6 +115,16 @@ impl App {
             frame: manuk_compositor::FrameTimer::new(240),
             measure_frames,
             frames_done: 0,
+            modifiers: ModifiersState::empty(),
+            history: History::new(),
+            bookmarks: Bookmarks::new(),
+            settings: Settings::default(),
+            zoom: 1.0,
+            find_open: false,
+            find_query: String::new(),
+            find_session: FindSession::default(),
+            omnibox_open: false,
+            omnibox_input: String::new(),
         }
     }
 
@@ -133,16 +163,282 @@ impl App {
         let (Some(gpu), Some(page)) = (&mut self.gpu, &self.page) else {
             return;
         };
-        let canvas = CpuPainter::new(&self.fonts).render_scrolled(
+        let mut canvas = CpuPainter::new(&self.fonts).render_scrolled(
             &page.root_box,
             gpu.config.width,
             gpu.config.height,
             Rgba::WHITE,
             self.scroll_y,
         );
+
+        // E1 find-in-page: highlights are an **overlay** composited after paint, so
+        // finding text never mutates the DOM or triggers a relayout.
+        if self.find_open && !self.find_session.is_empty() {
+            const HIGHLIGHT: Rgba = Rgba { r: 255, g: 235, b: 59, a: 110 };
+            const ACTIVE: Rgba = Rgba { r: 255, g: 145, b: 0, a: 255 };
+            for r in self.find_session.all_rects() {
+                canvas.fill_rect_blended(r.x, r.y - self.scroll_y, r.width, r.height, HIGHLIGHT);
+            }
+            if let Some(m) = self.find_session.active_match() {
+                let b = m.bounds();
+                canvas.stroke_rect(b.x, b.y - self.scroll_y, b.width, b.height, ACTIVE, 2.0);
+            }
+        }
+
         gpu.upload(&canvas);
         if let Some(w) = &self.window {
             w.request_redraw();
+        }
+    }
+
+    /// Re-run find over the current fragment tree (after a query edit, zoom, or resize).
+    fn refresh_find(&mut self) {
+        self.find_session = match &self.page {
+            Some(p) => find::find(&p.root_box, &self.find_query, false),
+            None => FindSession::default(),
+        };
+        self.scroll_to_active_match();
+    }
+
+    fn scroll_to_active_match(&mut self) {
+        if let Some(m) = self.find_session.active_match() {
+            let b = m.bounds();
+            self.scroll_y = b.y - self.viewport.height / 3.0;
+            self.clamp_scroll();
+        }
+    }
+
+    /// Rank and surface omnibox suggestions for the current input.
+    fn log_suggestions(&self) {
+        let s = chrome::suggestions(
+            &self.omnibox_input,
+            self.history.entries(),
+            &self.bookmarks,
+            6,
+        );
+        if s.is_empty() {
+            tracing::info!(input = %self.omnibox_input, "omnibox: no suggestions");
+        } else {
+            for (i, sug) in s.iter().enumerate() {
+                tracing::info!("omnibox {}: [{:?}] {} — {}", i + 1, sug.source, sug.url, sug.title);
+            }
+        }
+    }
+
+    /// E1 full-page zoom: re-lay-out at the new factor (crisp), not a bitmap scale.
+    fn apply_zoom(&mut self, zoom: f32) {
+        self.zoom = zoom;
+        let width = self.viewport.width;
+        if let Some(page) = &mut self.page {
+            page.relayout_zoomed(&self.fonts, width, zoom);
+            self.viewport.content_height = page.content_height;
+        }
+        self.clamp_scroll();
+        // Rects moved, so any find highlights must be recomputed.
+        if self.find_open {
+            self.refresh_find();
+        }
+        self.rerender();
+    }
+
+    /// Navigate to `url`, recording it in the history stack.
+    fn goto(&mut self, url: &str) {
+        self.goto_no_history(url);
+        self.history.push(url.to_string());
+    }
+
+    /// Load `url` without touching the history stack (used by back/forward).
+    fn goto_no_history(&mut self, url: &str) {
+        let (w, h) = match &self.gpu {
+            Some(g) => (g.config.width, g.config.height),
+            None => (self.width, 768),
+        };
+        self.url = url.to_string();
+        self.load_page(w, h);
+        if let Some(page) = &mut self.page {
+            page.relayout_zoomed(&self.fonts, w as f32, self.zoom);
+            self.viewport.content_height = page.content_height;
+        }
+        self.scroll_y = 0.0;
+        self.rerender();
+    }
+
+    /// E1 keyboard chrome. Returns true when the key was consumed.
+    fn handle_key(&mut self, key: &Key, event_loop: &ActiveEventLoop) -> bool {
+        let ctrl = self.modifiers.control_key();
+        let alt = self.modifiers.alt_key();
+        let shift = self.modifiers.shift_key();
+
+        // The omnibox captures typed text while open.
+        if self.omnibox_open {
+            match key {
+                Key::Named(NamedKey::Escape) => {
+                    self.omnibox_open = false;
+                    self.omnibox_input.clear();
+                    return true;
+                }
+                Key::Named(NamedKey::Enter) => {
+                    let intent = chrome::omnibox_intent(&self.omnibox_input, &self.settings);
+                    tracing::info!(input = %self.omnibox_input, resolved = %intent.url(),
+                                   search = matches!(intent, chrome::OmniboxIntent::Search(_)),
+                                   "omnibox");
+                    let url = intent.url().to_string();
+                    self.omnibox_open = false;
+                    self.omnibox_input.clear();
+                    self.goto(&url);
+                    return true;
+                }
+                Key::Named(NamedKey::Backspace) => {
+                    self.omnibox_input.pop();
+                    self.log_suggestions();
+                    return true;
+                }
+                Key::Character(c) if !ctrl && !alt => {
+                    self.omnibox_input.push_str(c);
+                    self.log_suggestions();
+                    return true;
+                }
+                Key::Named(NamedKey::Space) if !ctrl && !alt => {
+                    self.omnibox_input.push(' ');
+                    self.log_suggestions();
+                    return true;
+                }
+                _ => {}
+            }
+        }
+
+        // While the find bar is open, most keys edit the query.
+        if self.find_open {
+            match key {
+                Key::Named(NamedKey::Escape) => {
+                    self.find_open = false;
+                    self.find_query.clear();
+                    self.find_session = FindSession::default();
+                    self.rerender();
+                    return true;
+                }
+                Key::Named(NamedKey::Enter) => {
+                    if shift {
+                        self.find_session.prev();
+                    } else {
+                        self.find_session.next();
+                    }
+                    self.scroll_to_active_match();
+                    self.rerender();
+                    tracing::info!(
+                        "find: {} / {}",
+                        self.find_session.active_index(),
+                        self.find_session.len()
+                    );
+                    return true;
+                }
+                Key::Named(NamedKey::Backspace) => {
+                    self.find_query.pop();
+                    self.refresh_find();
+                    self.rerender();
+                    return true;
+                }
+                Key::Character(c) if !ctrl && !alt => {
+                    self.find_query.push_str(c);
+                    self.refresh_find();
+                    self.rerender();
+                    tracing::info!(
+                        "find {:?}: {} match(es)",
+                        self.find_query,
+                        self.find_session.len()
+                    );
+                    return true;
+                }
+                _ => {}
+            }
+        }
+
+        match key {
+            Key::Character(c) if ctrl => match c.as_str() {
+                "f" => {
+                    self.find_open = true;
+                    self.find_query.clear();
+                    self.find_session = FindSession::default();
+                    tracing::info!("find-in-page: type to search, Enter/Shift+Enter to cycle, Esc to close");
+                    true
+                }
+                // Ctrl+'+' arrives as '=' on most layouts.
+                "=" | "+" => {
+                    self.apply_zoom(chrome::zoom_in(self.zoom));
+                    tracing::info!(zoom = self.zoom, "zoom in");
+                    true
+                }
+                "-" => {
+                    self.apply_zoom(chrome::zoom_out(self.zoom));
+                    tracing::info!(zoom = self.zoom, "zoom out");
+                    true
+                }
+                "0" => {
+                    self.apply_zoom(chrome::zoom_reset());
+                    tracing::info!("zoom reset");
+                    true
+                }
+                "l" => {
+                    self.omnibox_open = true;
+                    self.omnibox_input.clear();
+                    tracing::info!("omnibox: type a URL or a search, Enter to go, Esc to cancel");
+                    true
+                }
+                "d" => {
+                    let title = self
+                        .page
+                        .as_ref()
+                        .map(|p| p.title.clone())
+                        .unwrap_or_default();
+                    let on = self.bookmarks.toggle(&self.url.clone(), &title);
+                    tracing::info!(bookmarked = on, url = %self.url, "bookmark toggled");
+                    true
+                }
+                "q" => {
+                    event_loop.exit();
+                    true
+                }
+                _ => false,
+            },
+            Key::Named(NamedKey::ArrowLeft) if alt => {
+                if let Some(u) = self.history.back().map(str::to_string) {
+                    self.goto_no_history(&u);
+                    tracing::info!(url = %u, "back");
+                }
+                true
+            }
+            Key::Named(NamedKey::ArrowRight) if alt => {
+                if let Some(u) = self.history.forward().map(str::to_string) {
+                    self.goto_no_history(&u);
+                    tracing::info!(url = %u, "forward");
+                }
+                true
+            }
+            Key::Named(NamedKey::ArrowDown) => {
+                self.scroll_y += 48.0;
+                self.clamp_scroll();
+                self.rerender();
+                true
+            }
+            Key::Named(NamedKey::ArrowUp) => {
+                self.scroll_y -= 48.0;
+                self.clamp_scroll();
+                self.rerender();
+                true
+            }
+            Key::Named(NamedKey::PageDown) => {
+                self.scroll_y += self.viewport.height * 0.9;
+                self.clamp_scroll();
+                self.rerender();
+                true
+            }
+            Key::Named(NamedKey::PageUp) => {
+                self.scroll_y -= self.viewport.height * 0.9;
+                self.clamp_scroll();
+                self.rerender();
+                true
+            }
+            _ => false,
         }
     }
 
@@ -184,24 +480,35 @@ impl ApplicationHandler for App {
             }
         }
         self.load_page(size.width.max(1), size.height.max(1));
+        self.history.push(self.url.clone());
         self.rerender();
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::ModifiersChanged(m) => self.modifiers = m.state(),
+            WindowEvent::KeyboardInput { event, .. } => {
+                if event.state == ElementState::Pressed {
+                    self.handle_key(&event.logical_key, event_loop);
+                }
+            }
             WindowEvent::Resized(size) => {
                 let (w, h) = (size.width.max(1), size.height.max(1));
                 if let Some(gpu) = &mut self.gpu {
                     gpu.resize(w, h);
                 }
                 if let Some(page) = &mut self.page {
-                    page.relayout(&self.fonts, w as f32);
+                    page.relayout_zoomed(&self.fonts, w as f32, self.zoom);
                     self.viewport.width = w as f32;
                     self.viewport.height = h as f32;
                     self.viewport.content_height = page.content_height;
                 }
                 self.clamp_scroll();
+                // Reflow moved every rect, so recompute the highlights.
+                if self.find_open {
+                    self.refresh_find();
+                }
                 self.rerender();
             }
             WindowEvent::MouseWheel { delta, .. } => {

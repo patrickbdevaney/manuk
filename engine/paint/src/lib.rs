@@ -91,6 +91,42 @@ impl Canvas {
         std::fs::write(path, self.encode_png()?)?;
         Ok(())
     }
+
+    /// E1 — composite a translucent rect **on top** of the already-rendered page.
+    ///
+    /// This is the find-in-page highlight primitive. It is deliberately an overlay
+    /// applied after paint: highlighting must never mutate the DOM or trigger a
+    /// relayout. Coordinates are viewport pixels (the caller subtracts the scroll).
+    /// Rects outside the canvas are clipped, not an error.
+    pub fn fill_rect_blended(&mut self, x: f32, y: f32, width: f32, height: f32, color: Rgba) {
+        let Some(rect) = tiny_skia::Rect::from_xywh(x, y, width, height) else {
+            return; // non-finite or non-positive extent
+        };
+        let mut paint = tiny_skia::Paint::default();
+        paint.set_color_rgba8(color.r, color.g, color.b, color.a);
+        paint.anti_alias = false;
+        // `SourceOver` = alpha-composite over what is already drawn.
+        paint.blend_mode = tiny_skia::BlendMode::SourceOver;
+        self.pixmap
+            .fill_rect(rect, &paint, tiny_skia::Transform::identity(), None);
+    }
+
+    /// Stroke a rect outline (used to mark the *active* find match).
+    pub fn stroke_rect(&mut self, x: f32, y: f32, width: f32, height: f32, color: Rgba, w: f32) {
+        let Some(rect) = tiny_skia::Rect::from_xywh(x, y, width, height) else {
+            return;
+        };
+        let path = tiny_skia::PathBuilder::from_rect(rect);
+        let mut paint = tiny_skia::Paint::default();
+        paint.set_color_rgba8(color.r, color.g, color.b, color.a);
+        paint.anti_alias = true;
+        let stroke = tiny_skia::Stroke {
+            width: w,
+            ..Default::default()
+        };
+        self.pixmap
+            .stroke_path(&path, &paint, &stroke, tiny_skia::Transform::identity(), None);
+    }
 }
 
 /// A rasterization backend. The CPU tier is [`CpuPainter`]; a Vello GPU tier will

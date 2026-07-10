@@ -12,6 +12,8 @@
 //!
 //! `<url>` may be `http(s)://…`, `file://…`, or a local path.
 
+mod chrome;
+mod find;
 mod tab;
 
 #[cfg(feature = "gui")]
@@ -178,7 +180,11 @@ fn cmd_browse(args: &[String]) -> Result<()> {
     // `--frames N` renders N GPU frames back-to-back, reports frame time, then exits
     // (the §8 metric #4 headful measurement).
     let frames = flag_value(args, &["--frames"]).and_then(|s| s.parse().ok());
-    gui::run(url.to_string(), width, frames)
+    // E1: the argument goes through the same omnibox resolution the in-window address
+    // bar uses, so `manuk browse rust-lang.org` navigates and `manuk browse "rust lang"`
+    // searches.
+    let intent = chrome::omnibox_intent(url, &chrome::Settings::default());
+    gui::run(intent.url().to_string(), width, frames)
 }
 
 #[cfg(not(feature = "gui"))]
