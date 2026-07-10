@@ -16,6 +16,9 @@
 
 use anyhow::{anyhow, Context, Result};
 use manuk_page::{fetch_html, Link, Page};
+
+/// §4b — HTML form model (find form, read fields, build a GET submission URL).
+pub mod forms;
 use manuk_text::FontContext;
 
 pub mod env;
@@ -94,6 +97,23 @@ pub struct AgentBrowser {
     height: u32,
     page: Option<Page>,
     scroll_y: f32,
+    /// §4b — the per-tab navigation stack. `hist_pos` indexes the current entry.
+    history: Vec<String>,
+    hist_pos: usize,
+}
+
+/// §4b — what activating an element actually did. Returned so the agent loop (and
+/// the replay log, G-d) records a *fact* rather than an assumption.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Activation {
+    /// Followed a link to this absolute URL.
+    Navigated(String),
+    /// Submitted the enclosing form, navigating to this absolute URL.
+    Submitted(String),
+    /// Toggled a checkbox/radio; the bool is its new checked state.
+    Toggled(bool),
+    /// The element carries no activation behavior (e.g. a heading).
+    Inert,
 }
 
 /// What the agent perceives after an action: the textual channel plus enough
@@ -173,6 +193,8 @@ impl AgentBrowser {
             height: height.max(1),
             page: None,
             scroll_y: 0.0,
+            history: Vec::new(),
+            hist_pos: 0,
         }
     }
 
@@ -180,12 +202,204 @@ impl AgentBrowser {
         self.fonts.face_count() > 0
     }
 
-    /// Load `url` (http(s)/file/path) and lay it out at the current width.
-    pub async fn navigate(&mut self, url: &str) -> Result<()> {
+    /// Fetch + lay out `url`, without touching the history stack.
+    async fn load_url(&mut self, url: &str) -> Result<()> {
         let (html, final_url) = fetch_html(url).await?;
         let page = Page::load(&html, &final_url, &self.fonts, self.width as f32);
         self.scroll_y = 0.0;
         self.page = Some(page);
+        Ok(())
+    }
+
+    /// Load `url` (http(s)/data/file/path), lay it out, and push it onto the history
+    /// stack. As in a real browser, navigating after going back **truncates** the
+    /// forward entries.
+    pub async fn navigate(&mut self, url: &str) -> Result<()> {
+        self.load_url(url).await?;
+        let landed = self.page.as_ref().expect("just loaded").final_url.clone();
+        if !self.history.is_empty() {
+            self.history.truncate(self.hist_pos + 1);
+        }
+        self.history.push(landed);
+        self.hist_pos = self.history.len() - 1;
+        Ok(())
+    }
+
+    /// The history stack (oldest first) and the index of the current entry.
+    pub fn history(&self) -> (&[String], usize) {
+        (&self.history, self.hist_pos)
+    }
+
+    pub fn can_go_back(&self) -> bool {
+        !self.history.is_empty() && self.hist_pos > 0
+    }
+
+    pub fn can_go_forward(&self) -> bool {
+        !self.history.is_empty() && self.hist_pos + 1 < self.history.len()
+    }
+
+    /// §4b — traverse back one entry. Errors (rather than silently no-op'ing) when
+    /// there is nowhere to go, so the agent gets a fact instead of a mystery.
+    pub async fn back(&mut self) -> Result<()> {
+        if !self.can_go_back() {
+            anyhow::bail!("no earlier page in history");
+        }
+        let url = self.history[self.hist_pos - 1].clone();
+        self.load_url(&url).await?;
+        self.hist_pos -= 1;
+        Ok(())
+    }
+
+    pub async fn forward(&mut self) -> Result<()> {
+        if !self.can_go_forward() {
+            anyhow::bail!("no later page in history");
+        }
+        let url = self.history[self.hist_pos + 1].clone();
+        self.load_url(&url).await?;
+        self.hist_pos += 1;
+        Ok(())
+    }
+
+    /// The page's §4a accessibility tree (with geometry).
+    pub fn a11y_tree(&self) -> Result<manuk_a11y::A11yNode> {
+        Ok(self.page.as_ref().context("no page loaded")?.a11y_tree())
+    }
+
+    /// Resolve a `role` + accessible `name` to a DOM node (substring, case-insensitive).
+    fn resolve(&self, role: &manuk_a11y::Role, name: &str) -> Result<manuk_dom::NodeId> {
+        let tree = self.a11y_tree()?;
+        tree.find_containing(role, name)
+            .map(|n| n.node)
+            .with_context(|| format!("no {} named {name:?} on this page", role.as_str()))
+    }
+
+    /// §4b — type `text` into the text field with accessible name `field`.
+    ///
+    /// This mutates the arena DOM (`value`) and relayouts, so a later
+    /// [`Self::submit`] serializes what was typed. Typing is **local**: nothing leaves
+    /// the machine until a submit or navigation.
+    pub fn type_into(&mut self, field: &str, text: &str) -> Result<()> {
+        let node = self.resolve(&manuk_a11y::Role::TextBox, field)?;
+        let page = self.page.as_mut().expect("resolve proved a page exists");
+        page.dom_mut().set_attr(node, "value", text);
+        page.relayout(&self.fonts, self.width as f32);
+        Ok(())
+    }
+
+    /// §4b — submit the form containing the control named `near` (or the document's
+    /// first form when `near` is `None`).
+    pub async fn submit(&mut self, near: Option<(&manuk_a11y::Role, &str)>) -> Result<Activation> {
+        let anchor = match near {
+            Some((role, name)) => self.resolve(role, name)?,
+            None => {
+                let page = self.page.as_ref().context("no page loaded")?;
+                page.dom().find_first("form").context("page has no <form>")?
+            }
+        };
+        self.submit_form_at(anchor).await
+    }
+
+    async fn submit_form_at(&mut self, anchor: manuk_dom::NodeId) -> Result<Activation> {
+        let url = {
+            let page = self.page.as_ref().context("no page loaded")?;
+            let form = forms::owning_form(page.dom(), anchor)
+                .ok_or_else(|| anyhow!("{}", forms::SubmitError::NoForm))?;
+            forms::submission_url(page.dom(), form, &page.final_url).map_err(|e| anyhow!("{e}"))?
+        };
+        self.navigate(&url).await?;
+        Ok(Activation::Submitted(url))
+    }
+
+    /// §4b — activate a DOM node the way a click would: follow a link, submit a form,
+    /// or toggle a checkbox/radio. Anything else is [`Activation::Inert`].
+    pub async fn activate(&mut self, node: manuk_dom::NodeId) -> Result<Activation> {
+        enum Kind {
+            Link(String),
+            Submit,
+            Toggle,
+            Inert,
+        }
+        let kind = {
+            let page = self.page.as_ref().context("no page loaded")?;
+            let dom = page.dom();
+            let tag = dom.tag_name(node).unwrap_or("").to_string();
+            let el = dom.element(node);
+            let ty = el
+                .and_then(|e| e.attr("type"))
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            match tag.as_str() {
+                "a" | "area" => match el.and_then(|e| e.attr("href")) {
+                    Some(h) => Kind::Link(h.to_string()),
+                    None => Kind::Inert,
+                },
+                // A <button> with no type (or type=submit) submits; type=button/reset does not.
+                "button" if ty.is_empty() || ty == "submit" => Kind::Submit,
+                "input" if matches!(ty.as_str(), "submit" | "image") => Kind::Submit,
+                "input" if matches!(ty.as_str(), "checkbox" | "radio") => Kind::Toggle,
+                _ => Kind::Inert,
+            }
+        };
+
+        match kind {
+            Kind::Link(href) => {
+                let page = self.page.as_ref().expect("page exists");
+                let abs = url::Url::parse(&page.final_url)
+                    .ok()
+                    .and_then(|b| b.join(&href).ok())
+                    .map(|u| u.to_string())
+                    .unwrap_or(href);
+                self.navigate(&abs).await?;
+                Ok(Activation::Navigated(abs))
+            }
+            Kind::Submit => self.submit_form_at(node).await,
+            Kind::Toggle => {
+                let page = self.page.as_mut().expect("page exists");
+                let was = page
+                    .dom()
+                    .element(node)
+                    .is_some_and(|e| e.attr("checked").is_some());
+                if was {
+                    page.dom_mut().remove_attr(node, "checked");
+                } else {
+                    page.dom_mut().set_attr(node, "checked", "");
+                }
+                page.relayout(&self.fonts, self.width as f32);
+                Ok(Activation::Toggled(!was))
+            }
+            Kind::Inert => Ok(Activation::Inert),
+        }
+    }
+
+    /// §4b — click the element with this role + accessible name.
+    pub async fn click_by_name(&mut self, role: &manuk_a11y::Role, name: &str) -> Result<Activation> {
+        let node = self.resolve(role, name)?;
+        self.activate(node).await
+    }
+
+    /// §4b — click at an absolute document coordinate (the coordinates
+    /// `Observation::semantics` prints), hit-testing the a11y tree.
+    pub async fn click_at(&mut self, x: f32, y: f32) -> Result<Activation> {
+        let node = {
+            let tree = self.a11y_tree()?;
+            tree.hit_test(x, y)
+                .map(|n| n.node)
+                .with_context(|| format!("nothing at ({x}, {y})"))?
+        };
+        self.activate(node).await
+    }
+
+    /// §4b — scroll the named element into view (positioned a third down the viewport).
+    pub fn scroll_to(&mut self, role: &manuk_a11y::Role, name: &str) -> Result<()> {
+        let bbox = {
+            let tree = self.a11y_tree()?;
+            tree.find_containing(role, name)
+                .and_then(|n| n.bbox)
+                .with_context(|| format!("no {} named {name:?} with geometry", role.as_str()))?
+        };
+        let target = bbox.y - self.height as f32 / 3.0;
+        self.scroll_y = 0.0;
+        self.scroll_by(target);
         Ok(())
     }
 
@@ -262,6 +476,30 @@ pub enum Action {
         #[serde(default)]
         answer: String,
     },
+
+    // ---- §4b actions ----
+    /// Type into the text field with this accessible name. Purely local.
+    Type { field: String, text: String },
+    /// Click the element with this role + accessible name (substring match).
+    ClickText { role: String, name: String },
+    /// Click at an absolute document coordinate (as printed by the a11y tree).
+    ClickAt { x: f32, y: f32 },
+    /// Submit the form containing `field` (or the page's first form).
+    Submit {
+        #[serde(default)]
+        field: Option<String>,
+    },
+    /// Traverse the navigation stack.
+    Back,
+    Forward,
+    /// Scroll the named element into view.
+    ScrollTo { role: String, name: String },
+}
+
+/// Parse an action's `role` string into an a11y role, defaulting to `button` — the
+/// role a model most often means when it says "click X".
+fn parse_role(s: &str) -> manuk_a11y::Role {
+    manuk_a11y::Role::parse(s).unwrap_or(manuk_a11y::Role::Button)
 }
 
 /// E6 Action-Guard verdict — is a proposed action safe to auto-run, or does it need a
@@ -294,6 +532,49 @@ pub fn assess_action(action: &Action, obs: &Observation) -> ActionRisk {
             Some(link) => classify_target(&link.href),
             None => ActionRisk::Safe,
         },
+
+        // §4b. The organizing principle: an action that can transmit page-derived or
+        // typed data to a **page-chosen destination** is an exfiltration channel, and
+        // is exactly what a hidden injected instruction would reach for.
+        //
+        // Typing is purely local — nothing leaves the machine until a submit or a
+        // navigation — so it is Safe. Reading the stack (back/forward), scrolling to
+        // an element, and scrolling are Safe.
+        Action::Type { .. } | Action::Back | Action::Forward | Action::ScrollTo { .. } => {
+            ActionRisk::Safe
+        }
+
+        // Submitting a form sends its fields (possibly credentials the user typed, or
+        // content the agent scraped) to a URL the *page* chose.
+        Action::Submit { .. } => {
+            ActionRisk::Sensitive("submits a form, transmitting page/typed data off-machine")
+        }
+
+        // Activating a button can submit a form, so it inherits the same risk. Links
+        // only issue a GET to their href, so they are judged by that href as before.
+        Action::ClickText { role, name } => {
+            let role = parse_role(role);
+            if role == manuk_a11y::Role::Link {
+                match obs
+                    .links
+                    .iter()
+                    .find(|l| l.text.to_ascii_lowercase().contains(&name.to_ascii_lowercase()))
+                {
+                    Some(link) => classify_target(&link.href),
+                    None => ActionRisk::Safe,
+                }
+            } else if role == manuk_a11y::Role::Button {
+                ActionRisk::Sensitive("activating a button can submit a form")
+            } else {
+                ActionRisk::Safe
+            }
+        }
+
+        // A raw coordinate cannot be checked against any target before it is clicked,
+        // so it cannot be cleared. Models should prefer `click_text`.
+        Action::ClickAt { .. } => {
+            ActionRisk::Sensitive("clicking a raw coordinate cannot be checked against a target")
+        }
     }
 }
 
@@ -342,6 +623,15 @@ pub struct AgentConfig {
     pub send_screenshots: bool,
     /// Max characters of page text per observation.
     pub text_budget: usize,
+    /// §4b — total attempts per inference call (1 = no retry). Transient failures
+    /// (429/5xx/timeouts) are retried with exponential backoff; permanent ones are not.
+    pub max_retries: usize,
+    /// Initial backoff before the first retry; doubles each attempt.
+    pub retry_base_delay_ms: u64,
+    /// §4b token budgeting — how many prior (observation, action) turns to keep in the
+    /// conversation. Older turns are dropped so a long run cannot grow the prompt
+    /// without bound.
+    pub history_turns: usize,
 }
 
 impl Default for AgentConfig {
@@ -351,6 +641,9 @@ impl Default for AgentConfig {
             max_steps: 8,
             send_screenshots: true,
             text_budget: 2000,
+            max_retries: 3,
+            retry_base_delay_ms: 500,
+            history_turns: 6,
         }
     }
 }
@@ -374,10 +667,81 @@ Available actions:
   {\"action\":\"navigate\",\"url\":\"https://...\"}   - load a URL
   {\"action\":\"click\",\"index\":N}                  - click link N from the observation
   {\"action\":\"scroll\",\"dy\":600}                  - scroll down (or negative to go up)
+  {\"action\":\"click_text\",\"role\":\"button\",\"name\":\"Sign in\"} - click by role + name
+  {\"action\":\"click_at\",\"x\":120,\"y\":340}       - click a coordinate (prefer click_text)
+  {\"action\":\"type\",\"field\":\"Search\",\"text\":\"rust\"} - type into a named text field
+  {\"action\":\"submit\",\"field\":\"Search\"}        - submit the form holding that field
+  {\"action\":\"back\"} / {\"action\":\"forward\"}     - traverse history
+  {\"action\":\"scroll_to\",\"role\":\"heading\",\"name\":\"Pricing\"} - bring an element into view
   {\"action\":\"finish\",\"answer\":\"...\"}           - end the task with your answer
 
-Finish as soon as you can answer the task. Do not invent links; only click indices \
-that appear in the observation.";
+The ACCESSIBILITY TREE lists each on-screen element as `role \"name\" @(x,y)`. Prefer \
+click_text (role + name) over click_at; use the printed coordinates only when no name \
+is available.
+
+Finish as soon as you can answer the task. Do not invent links or element names; only \
+use indices and names that appear in the observation.";
+
+/// §4b reliability — whether an inference error is worth retrying.
+///
+/// Hosted inference fails transiently far more often than permanently: rate limits
+/// (429), gateway hiccups (5xx), and dropped connections. Permanent failures (401,
+/// 400, a bad model name) must NOT be retried — retrying them burns the budget and
+/// hides the real error. The classification is a string heuristic over the backend's
+/// error chain, because [`InferenceBackend`] is provider-agnostic and deliberately
+/// does not expose HTTP status codes.
+pub fn is_transient_inference_error(err: &anyhow::Error) -> bool {
+    let s = format!("{err:#}").to_ascii_lowercase();
+    const TRANSIENT: &[&str] = &[
+        "429",
+        "rate limit",
+        "too many requests",
+        " 500",
+        " 502",
+        " 503",
+        " 504",
+        "timeout",
+        "timed out",
+        "connection reset",
+        "connection closed",
+        "temporarily unavailable",
+        "overloaded",
+    ];
+    const PERMANENT: &[&str] = &[
+        "401",
+        "403",
+        "invalid api key",
+        "unauthorized",
+        "model_not_found",
+        "does not exist",
+    ];
+    if PERMANENT.iter().any(|k| s.contains(k)) {
+        return false;
+    }
+    TRANSIENT.iter().any(|k| s.contains(k))
+}
+
+/// Call the backend, retrying transient failures with exponential backoff.
+async fn complete_with_retry(
+    backend: &dyn InferenceBackend,
+    messages: &[Message],
+    config: &AgentConfig,
+) -> Result<String> {
+    let attempts = config.max_retries.max(1);
+    let mut delay = std::time::Duration::from_millis(config.retry_base_delay_ms);
+    for attempt in 1..=attempts {
+        match backend.complete(messages).await {
+            Ok(reply) => return Ok(reply),
+            Err(e) if attempt < attempts && is_transient_inference_error(&e) => {
+                tracing::warn!(attempt, error = %e, "transient inference error; retrying");
+                tokio::time::sleep(delay).await;
+                delay *= 2;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    unreachable!("loop returns on the final attempt")
+}
 
 /// Run `task` to completion (or `max_steps`) with the given backend + browser.
 ///
@@ -403,7 +767,9 @@ pub async fn run_task(
             Message::text(Role::System, SYSTEM_PROMPT),
             Message::text(Role::User, format!("TASK: {task}")),
         ];
-        for (past_obs, past_act) in &history {
+        // §4b token budgeting: keep only the most recent `history_turns` exchanges.
+        let kept = history.len().saturating_sub(config.history_turns);
+        for (past_obs, past_act) in &history[kept..] {
             messages.push(Message::text(Role::User, past_obs.clone()));
             messages.push(Message::text(Role::Assistant, past_act.clone()));
         }
@@ -421,8 +787,7 @@ pub async fn run_task(
             content: current,
         });
 
-        let reply = backend
-            .complete(&messages)
+        let reply = complete_with_retry(backend, &messages, config)
             .await
             .with_context(|| format!("inference failed at step {}", step + 1))?;
 
@@ -481,6 +846,46 @@ pub async fn run_task(
                 }
             }
             Action::Scroll { dy } => browser.scroll_by(dy),
+
+            // ---- §4b ----
+            Action::Type { field, text } => match browser.type_into(&field, &text) {
+                Ok(()) => outcome.transcript.push(format!("  typed into {field:?}")),
+                Err(e) => outcome.transcript.push(format!("  type error: {e:#}")),
+            },
+            Action::ClickText { role, name } => {
+                let r = parse_role(&role);
+                match browser.click_by_name(&r, &name).await {
+                    Ok(act) => outcome.transcript.push(format!("  click_text -> {act:?}")),
+                    Err(e) => outcome.transcript.push(format!("  click_text error: {e:#}")),
+                }
+            }
+            Action::ClickAt { x, y } => match browser.click_at(x, y).await {
+                Ok(act) => outcome.transcript.push(format!("  click_at -> {act:?}")),
+                Err(e) => outcome.transcript.push(format!("  click_at error: {e:#}")),
+            },
+            Action::Submit { field } => {
+                let target = field.as_deref().map(|f| (&manuk_a11y::Role::TextBox, f));
+                match browser.submit(target).await {
+                    Ok(act) => outcome.transcript.push(format!("  submit -> {act:?}")),
+                    Err(e) => outcome.transcript.push(format!("  submit error: {e:#}")),
+                }
+            }
+            Action::Back => {
+                if let Err(e) = browser.back().await {
+                    outcome.transcript.push(format!("  back error: {e:#}"));
+                }
+            }
+            Action::Forward => {
+                if let Err(e) = browser.forward().await {
+                    outcome.transcript.push(format!("  forward error: {e:#}"));
+                }
+            }
+            Action::ScrollTo { role, name } => {
+                let r = parse_role(&role);
+                if let Err(e) = browser.scroll_to(&r, &name) {
+                    outcome.transcript.push(format!("  scroll_to error: {e:#}"));
+                }
+            }
         }
 
         history.push((obs_text, action_json));
@@ -564,6 +969,245 @@ mod tests {
     fn strips_think_blocks() {
         let r = "<think>let me reason\nabout it</think> {\"action\":\"finish\"}";
         assert_eq!(strip_think(r).trim(), "{\"action\":\"finish\"}");
+    }
+
+    /// A `data:` URL for `html` — lets §4b tests drive the *real* navigate path with
+    /// no network and no disk.
+    fn data_url(html: &str) -> String {
+        format!("data:text/html,{html}")
+    }
+
+    async fn browser_with(html: &str) -> AgentBrowser {
+        let mut b = AgentBrowser::new(800, 600);
+        b.navigate(&data_url(html)).await.unwrap();
+        b
+    }
+
+    #[tokio::test]
+    async fn typing_updates_the_dom_and_submit_builds_a_get_url() {
+        let mut b = browser_with(
+            r#"<body><form action="https://ex.test/search">
+                 <label for="q">Search</label>
+                 <input id="q" name="q" type="text">
+               </form></body>"#,
+        )
+        .await;
+
+        b.type_into("Search", "rust lang").unwrap();
+
+        // The typed value is really in the arena DOM.
+        let page = b.page.as_ref().unwrap();
+        let input = page.dom().find_first("input").unwrap();
+        assert_eq!(page.dom().element(input).unwrap().attr("value"), Some("rust lang"));
+
+        // Submitting serializes it into the action URL (and percent-encodes the space).
+        let form = page.dom().find_first("form").unwrap();
+        let url = forms::submission_url(page.dom(), form, &page.final_url).unwrap();
+        assert_eq!(url, "https://ex.test/search?q=rust+lang");
+    }
+
+    #[tokio::test]
+    async fn activating_a_checkbox_toggles_it_both_ways() {
+        let mut b = browser_with(r#"<body><input id="c" type="checkbox" name="c"></body>"#).await;
+        let node = b.page.as_ref().unwrap().dom().find_first("input").unwrap();
+
+        assert_eq!(b.activate(node).await.unwrap(), Activation::Toggled(true));
+        assert!(b
+            .page
+            .as_ref()
+            .unwrap()
+            .dom()
+            .element(node)
+            .unwrap()
+            .attr("checked")
+            .is_some());
+
+        // Toggling back must *remove* the attribute — `checked=""` is still "checked".
+        assert_eq!(b.activate(node).await.unwrap(), Activation::Toggled(false));
+        assert!(b
+            .page
+            .as_ref()
+            .unwrap()
+            .dom()
+            .element(node)
+            .unwrap()
+            .attr("checked")
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn a_heading_is_inert_and_a_type_button_does_not_submit() {
+        let mut b = browser_with(
+            r#"<body><h1>Title</h1><form><button type="button">Nope</button></form></body>"#,
+        )
+        .await;
+        let dom = b.page.as_ref().unwrap().dom();
+        let h1 = dom.find_first("h1").unwrap();
+        let btn = dom.find_first("button").unwrap();
+        assert_eq!(b.activate(h1).await.unwrap(), Activation::Inert);
+        // type="button" must NOT submit the enclosing form.
+        assert_eq!(b.activate(btn).await.unwrap(), Activation::Inert);
+    }
+
+    #[tokio::test]
+    async fn history_back_forward_and_truncation() {
+        let a = data_url("<body><h1>A</h1></body>");
+        let bb = data_url("<body><h1>B</h1></body>");
+        let c = data_url("<body><h1>C</h1></body>");
+
+        let mut br = AgentBrowser::new(800, 600);
+        br.navigate(&a).await.unwrap();
+        br.navigate(&bb).await.unwrap();
+        assert!(br.can_go_back() && !br.can_go_forward());
+
+        br.back().await.unwrap();
+        assert_eq!(br.history().1, 0);
+        assert!(br.can_go_forward());
+        assert!(br.observe().unwrap().text.contains('A'));
+
+        br.forward().await.unwrap();
+        assert!(br.observe().unwrap().text.contains('B'));
+
+        // Navigating after a `back` truncates the forward entries (as browsers do).
+        br.back().await.unwrap();
+        br.navigate(&c).await.unwrap();
+        assert!(!br.can_go_forward(), "forward entries must be discarded");
+        let (stack, pos) = br.history();
+        assert_eq!(stack.len(), 2);
+        assert_eq!(pos, 1);
+
+        // Going back past the start is an error, not a silent no-op.
+        br.back().await.unwrap();
+        assert!(br.back().await.is_err());
+    }
+
+    #[tokio::test]
+    async fn scroll_to_brings_an_offscreen_element_into_view() {
+        let mut b = browser_with(
+            r#"<body><h1>Top</h1><div style="height:3000px"></div><h2>Pricing</h2></body>"#,
+        )
+        .await;
+        assert_eq!(b.scroll_y, 0.0);
+        b.scroll_to(&manuk_a11y::Role::Heading { level: 2 }, "Pricing")
+            .unwrap();
+
+        // The heading must now intersect the viewport.
+        let tree = b.a11y_tree().unwrap();
+        let h2 = tree.find(&manuk_a11y::Role::Heading { level: 2 }, "Pricing").unwrap();
+        let bb = h2.bbox.unwrap();
+        assert!(
+            bb.y >= b.scroll_y && bb.y < b.scroll_y + b.height as f32,
+            "heading at {} not inside viewport [{}, {})",
+            bb.y,
+            b.scroll_y,
+            b.scroll_y + b.height as f32
+        );
+
+        // An element that does not exist is an error, not a silent no-op.
+        assert!(b.scroll_to(&manuk_a11y::Role::Button, "Nonexistent").is_err());
+    }
+
+    /// Fully hermetic link click: the href is another `data:` URL, so the navigation
+    /// really happens with no network, and we can assert we landed on the new page.
+    #[tokio::test]
+    async fn click_by_name_follows_a_link_to_the_new_page() {
+        let dest = data_url("<body><h1>Landed</h1></body>");
+        let html = format!(r#"<body><a href="{dest}">Read the docs</a></body>"#);
+        let mut b = browser_with(&html).await;
+
+        let act = b
+            .click_by_name(&manuk_a11y::Role::Link, "read the docs")
+            .await
+            .unwrap();
+        assert_eq!(act, Activation::Navigated(dest.clone()));
+        assert!(b.observe().unwrap().text.contains("Landed"));
+        // The click pushed a history entry, so `back` returns to the first page.
+        assert!(b.can_go_back());
+        b.back().await.unwrap();
+        assert!(b.observe().unwrap().text.contains("Read the docs"));
+    }
+
+    #[tokio::test]
+    async fn click_at_hit_tests_the_button_under_the_coordinate() {
+        let mut b =
+            browser_with(r#"<body><form action="https://ex.test/go"><button>Go</button></form></body>"#)
+                .await;
+        let tree = b.a11y_tree().unwrap();
+        let btn = tree.find(&manuk_a11y::Role::Button, "Go").unwrap();
+        let (x, y) = btn.bbox.expect("button has geometry").center();
+
+        // The coordinate resolves to the button, not to some ancestor.
+        assert_eq!(tree.hit_test(x, y).map(|n| n.node), Some(btn.node));
+
+        // Activating it builds the form's GET submission URL (the navigation to
+        // ex.test then fails offline, which is fine — the URL is the assertion).
+        let err = b.click_at(x, y).await.unwrap_err();
+        assert!(
+            format!("{err:#}").contains("ex.test/go"),
+            "click_at should have submitted the form; got: {err:#}"
+        );
+
+        // A coordinate off the page hits nothing.
+        assert!(b.click_at(99_000.0, 99_000.0).await.is_err());
+    }
+
+    /// §4b Action-Guard: the new actions are classified by whether they can transmit
+    /// data to a page-chosen destination.
+    #[test]
+    fn guard_classifies_the_new_actions_by_exfiltration_risk() {
+        let obs = obs_with_links(vec![("Docs", "https://ex.test/docs")]);
+
+        // Local-only or read-only: safe.
+        assert!(!assess_action(
+            &Action::Type { field: "q".into(), text: "x".into() },
+            &obs
+        )
+        .is_sensitive());
+        assert!(!assess_action(&Action::Back, &obs).is_sensitive());
+        assert!(!assess_action(&Action::Forward, &obs).is_sensitive());
+        assert!(!assess_action(
+            &Action::ScrollTo { role: "heading".into(), name: "x".into() },
+            &obs
+        )
+        .is_sensitive());
+
+        // Submitting transmits field values to a page-chosen URL.
+        assert!(assess_action(&Action::Submit { field: None }, &obs).is_sensitive());
+        // A button can submit, so it inherits that risk.
+        assert!(assess_action(
+            &Action::ClickText { role: "button".into(), name: "Go".into() },
+            &obs
+        )
+        .is_sensitive());
+        // A raw coordinate cannot be checked against any target.
+        assert!(assess_action(&Action::ClickAt { x: 1.0, y: 2.0 }, &obs).is_sensitive());
+
+        // A link is judged by its href, exactly like `click`.
+        assert!(!assess_action(
+            &Action::ClickText { role: "link".into(), name: "Docs".into() },
+            &obs
+        )
+        .is_sensitive());
+        let bad = obs_with_links(vec![("Wipe", "https://ex.test/account/close")]);
+        assert!(assess_action(
+            &Action::ClickText { role: "link".into(), name: "Wipe".into() },
+            &bad
+        )
+        .is_sensitive());
+    }
+
+    #[test]
+    fn transient_errors_retry_but_permanent_ones_do_not() {
+        assert!(is_transient_inference_error(&anyhow!("HTTP 429 rate limit exceeded")));
+        assert!(is_transient_inference_error(&anyhow!("upstream returned 503")));
+        assert!(is_transient_inference_error(&anyhow!("operation timed out")));
+        // Permanent: retrying burns budget and hides the real error.
+        assert!(!is_transient_inference_error(&anyhow!("401 unauthorized")));
+        assert!(!is_transient_inference_error(&anyhow!("invalid api key")));
+        // A 401 mentioning a timeout in prose is still permanent (permanent wins).
+        assert!(!is_transient_inference_error(&anyhow!(
+            "401 unauthorized after timeout"
+        )));
     }
 
     fn obs_with_links(links: Vec<(&str, &str)>) -> Observation {

@@ -179,6 +179,19 @@ impl Dom {
         self.alloc(NodeData::Doctype { name: name.into() })
     }
 
+    /// Remove an attribute, returning whether it was present. Needed to *unset*
+    /// boolean content attributes (`checked`, `hidden`) — setting them to `""` still
+    /// counts as present, per HTML.
+    pub fn remove_attr(&mut self, id: NodeId, name: &str) -> bool {
+        if let NodeData::Element(el) = &mut self.nodes[id.0].data {
+            if let Some(i) = el.attrs.iter().position(|a| a.name == name) {
+                el.attrs.remove(i);
+                return true;
+            }
+        }
+        false
+    }
+
     pub fn set_attr(&mut self, id: NodeId, name: impl Into<String>, value: impl Into<String>) {
         if let NodeData::Element(el) = &mut self.nodes[id.0].data {
             let name = name.into();

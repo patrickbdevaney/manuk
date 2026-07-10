@@ -2814,6 +2814,8 @@ dependencies = [
  "base64",
  "bytes",
  "manuk-a11y",
+ "manuk-dom",
+ "manuk-html",
  "manuk-net",
  "manuk-page",
  "manuk-paint",
@@ -2823,6 +2825,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]

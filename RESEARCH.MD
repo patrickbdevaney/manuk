@@ -113,6 +113,23 @@ contribution of each top-level dep.
 
 ## Axis D — Compatibility breadth (the long pole)
 
+**Note on framework rendering (React, Next.js, Angular, Svelte, vanilla, PHP-
+rendered, and all other frontend/backend stack variants):** this is not
+separate scope from D1-D4. No framework invents its own HTML/CSS/JS
+semantics — they compile to standard DOM manipulation, CSSOM, and Web APIs,
+so a spec-compliant engine renders all of them correctly as a consequence of
+D1-D4 landing, not as a per-framework target. Do not treat "support React" /
+"support Svelte" as distinct work items — verify against WPT and real pages,
+not against a framework list. Two things genuinely aren't covered by general
+DOM/CSS work and are worth naming explicitly rather than assumed included:
+Custom Elements + Shadow DOM (a distinct spec area many design systems and
+some frameworks rely on for component encapsulation), and SSR/hydration
+mechanics specifically — `<script type="module">`, dynamic `import()`, and
+the History API (`pushState`/`replaceState` for client-side routing),
+load-bearing for Next.js/SvelteKit-style frameworks and worth prioritizing
+explicitly within D3 rather than falling wherever alphabetical API coverage
+happens to land.
+
 **D1. Layout: floats, tables, positioning, margin collapsing.**
 Decision it feeds: the from-scratch layout roadmap, per-feature.
 Investigate, per feature: the relevant WPT subdirectory and pass count as a target;
@@ -224,6 +241,50 @@ Investigate: for sites that hard-wall non-mainstream engines, what the *respectf
 fallback is (clear user-facing "this site blocks this browser" rather than an
 escalating evasion arms race). This reframes the "hostile tier" from an engineering
 problem to a UX-honesty problem.
+
+## Axis H — Unified automation/tool surface (headful panel + headless agent)
+
+One canonical action/tool schema, consumed by both the headless `agent`
+binary's `run_task` loop and the shell's in-browser agent panel (Axis E6) —
+the panel applies a permission filter on top of the same primitives rather
+than defining a second schema. This consolidates several items already
+scattered separately in CLAUDE.md's agent frontiers (viewport-clipped
+observation, richer actions, an accessibility/semantic tree) into one
+coherent design rather than landing them as independent, potentially
+inconsistent additions.
+
+**H1. Targeting mechanism.**
+Decision it feeds: how `observe()`/`click` generalize beyond link-index-only.
+Investigate: extending the indexed-element set to all interactive elements
+(buttons, form fields), not just anchors — and its direct overlap with an
+accessibility/semantic tree (one investment, two payoffs: agent grounding and
+real human a11y). Also scope coordinate-based clicking as a *second*, not
+replacement, targeting mode — some multimodal models are trained specifically
+for pixel/visual grounding from a screenshot and shouldn't be forced into an
+indexed-list convention that fits smaller models better.
+
+**H2. Observation richness scaling by model capability.**
+Decision it feeds: whether observation detail is a fixed schema or a
+harness-set parameter.
+Investigate: what a small model (Axis E2's Gemma-4-E4B/Qwen3.5-4B tier) needs
+versus what a larger, more capable model could productively consume (fuller
+a11y tree, less-clipped screenshot) without degrading reliability at the small
+end. Same underlying engine data, different serialization depth depending on
+what's driving it — not two implementations.
+
+**H3. Action-set completeness.**
+Decision it feeds: which actions beyond `navigate`/`click`/`scroll`/`finish`
+are load-bearing enough to prioritize first.
+Investigate, per candidate action: typing into form fields, form submission,
+back/forward, wait-for-load/wait-for-element, tab management (new/close/
+switch) — the last of which is also directly relevant to Axis E1's headful
+tab UI, another point of shared surface worth building once.
+
+**H4. Permission-scoping mechanism (panel-specific).**
+Decision it feeds: how the shell panel's "task-scoped, not the full agent
+action space" constraint (Axis E6) is actually implemented — an allowlist
+per invocation, a capability token, something else. Must compose cleanly with
+H1-H3 rather than becoming a second schema.
 
 ## Axis G — Blue-ocean capabilities (novel to both front-ends)
 

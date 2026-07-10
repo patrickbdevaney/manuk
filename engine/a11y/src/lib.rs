@@ -156,6 +156,24 @@ impl Role {
         }
     }
 
+    /// Parse a role token (`"button"`, `"link"`, `"heading"`, …). Used both for
+    /// explicit `role="…"` attributes and by callers naming a role (e.g. an agent
+    /// action `{"action":"click_text","role":"button","name":"Sign in"}`).
+    /// A bare `"heading"` has no level, so it parses as level 2 — see [`Role::matches`]
+    /// for level-insensitive comparison.
+    pub fn parse(tok: &str) -> Option<Role> {
+        Role::from_aria_token(&tok.trim().to_ascii_lowercase())
+    }
+
+    /// Role equality that ignores a heading's level, so `parse("heading")` matches an
+    /// `<h1>`. Exact `Role` equality (`==`) still compares levels.
+    pub fn matches(&self, other: &Role) -> bool {
+        match (self, other) {
+            (Role::Heading { .. }, Role::Heading { .. }) => true,
+            (a, b) => a == b,
+        }
+    }
+
     /// Parse an explicit `role="…"` token (first valid token wins, per ARIA).
     fn from_aria_token(tok: &str) -> Option<Role> {
         Some(match tok {
@@ -260,10 +278,19 @@ impl A11yNode {
 
     /// The first node matching `role` whose accessible name equals `name`
     /// (case-insensitive). This is how an agent says "click the *Sign in* button"
-    /// without needing a CSS selector.
+    /// without needing a CSS selector. Heading levels are ignored (see [`Role::matches`]).
     pub fn find(&self, role: &Role, name: &str) -> Option<&A11yNode> {
         self.iter()
-            .find(|n| &n.role == role && n.name.eq_ignore_ascii_case(name))
+            .find(|n| n.role.matches(role) && n.name.eq_ignore_ascii_case(name))
+    }
+
+    /// As [`Self::find`], but matches any node whose name *contains* `name`
+    /// (case-insensitive) — models are imprecise about exact label text.
+    pub fn find_containing(&self, role: &Role, name: &str) -> Option<&A11yNode> {
+        let needle = name.trim().to_ascii_lowercase();
+        self.iter().find(|n| {
+            n.role.matches(role) && n.name.to_ascii_lowercase().contains(needle.as_str())
+        })
     }
 
     /// The deepest node whose `bbox` contains `(x, y)` — hit-testing for click-by-
@@ -274,8 +301,13 @@ impl A11yNode {
             let Some(b) = n.bbox else { continue };
             if x >= b.x && x < b.right() && y >= b.y && y < b.bottom() {
                 let area = b.width * b.height;
-                // Smallest containing box == deepest meaningful element.
-                if best.is_none_or(|(_, a)| area < a) {
+                // Smallest containing box == deepest meaningful element. On a TIE
+                // (a wrapper exactly as large as its only child, e.g. `<form>` around
+                // a lone `<button>`) the deeper node must win — and since `iter()` is
+                // pre-order, "deeper" is "seen later", so `<=` is what selects it.
+                // (`map_or(true, …)` rather than `is_none_or`, which needs Rust 1.82
+                // while this workspace's MSRV is 1.80.)
+                if best.map_or(true, |(_, a)| area <= a) {
                     best = Some((n, area));
                 }
             }
@@ -977,6 +1009,32 @@ mod tests {
         assert_eq!(tree.hit_test(500.0, 500.0).map(|n| n.role.clone()), Some(Role::Main));
         // Outside everything.
         assert!(tree.hit_test(5000.0, 5000.0).is_none());
+    }
+
+    /// A wrapper exactly as large as its only child (`<form>` around a lone `<button>`)
+    /// produces an area tie. The deeper element must win, or an agent clicking a button
+    /// would "hit" the form.
+    #[test]
+    fn hit_test_breaks_area_ties_in_favor_of_the_deeper_element() {
+        let dom = dom_with(|d, body| {
+            let form = d.create_element("form");
+            let btn = d.create_element("button");
+            let t = d.create_text("Go");
+            d.append_child(btn, t);
+            d.append_child(form, btn);
+            d.append_child(body, form);
+        });
+        let body = dom.children(dom.children(dom.root()).next().unwrap()).next().unwrap();
+        let form = dom.children(body).next().unwrap();
+        let btn = dom.children(form).next().unwrap();
+
+        let mut rects = HashMap::new();
+        let same = rect(0.0, 0.0, 100.0, 20.0);
+        rects.insert(form, same);
+        rects.insert(btn, same);
+
+        let tree = build_tree_with_rects(&dom, &rects);
+        assert_eq!(tree.hit_test(50.0, 10.0).map(|n| n.node), Some(btn));
     }
 
     #[test]
