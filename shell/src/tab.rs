@@ -38,6 +38,8 @@ pub struct Tab {
     pub url: String,
     pub title: String,
     pub content_height: f32,
+    /// §5 — user-pinned. Persisted across a session save/restore; UI-only otherwise.
+    pinned: bool,
     /// Source HTML retained across a discard, so a wake can re-lay-out without a
     /// re-fetch. (A deeper reclaim would drop this too and re-fetch from `url`.)
     source: String,
@@ -68,6 +70,11 @@ impl Tab {
             Retained::Discarded => None,
         }
     }
+
+    /// §5 — whether the user pinned this tab.
+    pub fn is_pinned(&self) -> bool {
+        self.pinned
+    }
 }
 
 /// The set of open tabs plus tier management + C1 hibernation.
@@ -97,12 +104,43 @@ impl Browser {
             url: url.into(),
             title: "…".to_string(),
             content_height: 0.0,
+            pinned: false,
             source: String::new(),
             retained: Retained::Discarded,
         });
         self.manager.add_tab(id);
         self.focus(id);
         id
+    }
+
+    /// §5 — **restore a tab hibernated**, from a persisted session or collection. The tab
+    /// is created `Discarded` (no `Page`, no fetch) with its saved title/pinned metadata,
+    /// and is **not** focused — the caller focuses exactly the one tab that should load
+    /// eagerly. Reopening a 40-tab session this way costs 40 URLs' worth of metadata, not 40
+    /// page loads, which is the whole point of hibernation-by-default.
+    pub fn open_restored(&mut self, url: impl Into<String>, title: impl Into<String>, pinned: bool) -> TabId {
+        let id = TabId(self.next_id);
+        self.next_id += 1;
+        self.tabs.push(Tab {
+            id,
+            url: url.into(),
+            title: title.into(),
+            content_height: 0.0,
+            pinned,
+            source: String::new(),
+            retained: Retained::Discarded,
+        });
+        self.manager.add_tab(id);
+        // Deliberately no focus() here: the caller chooses the single eager tab.
+        self.apply_tiers();
+        id
+    }
+
+    /// §5 — set a tab's pinned flag.
+    pub fn set_pinned(&mut self, id: TabId, pinned: bool) {
+        if let Some(t) = self.tabs.iter_mut().find(|t| t.id == id) {
+            t.pinned = pinned;
+        }
     }
 
     /// Record navigation metadata only (the single-window `browse` UI owns its `Page`

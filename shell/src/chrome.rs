@@ -172,9 +172,16 @@ pub fn omnibox_intent(input: &str, settings: &Settings) -> OmniboxIntent {
     }
 }
 
-fn search_url(q: &str, settings: &Settings) -> String {
+/// Turn a query into a search URL via the configured `search_template`. Public so §5's
+/// agent-driven "open a tab with a search query" reuses the same configurable engine setting
+/// rather than hardcoding a provider.
+pub fn search_url(q: &str, settings: &Settings) -> String {
     settings.search_template.replace("%s", &encode_query(q))
 }
+
+/// The directive's default search engine for the agent's open-with-search action. The
+/// template stays configurable (via [`Settings::search_template`]); this is only the default.
+pub const GOOGLE_SEARCH_TEMPLATE: &str = "https://www.google.com/search?q=%s";
 
 /// One omnibox dropdown row.
 #[derive(Clone, Debug, PartialEq, Eq)]

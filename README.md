@@ -392,6 +392,23 @@ work, not making one fetch faster:
   net = 16×cores, js = cores; the JS tier stays near the core count while the fetch tier runs
   wide.
 
+### Tab persistence, collections, agent tab control (INFERENCE.MD §5 — `shell::session`)
+
+One store outside the repo (XDG state dir), distinct keys per concern:
+
+- **Session restore, hibernated.** The tab set (URL, order, title, pinned) persists and
+  reopens with **every tab discarded** — no `Page`, no fetch — and only the previously
+  focused tab loads eagerly. Reopening 40 tabs costs 40 URLs of metadata, not 40 page loads,
+  preserving the hibernation-by-default memory model.
+- **Named collections.** Explicit "save these tabs as `<name>`", independent of the session
+  and of each other.
+- **Agent-driven tab control.** Close a *set* of tabs by domain / title / index; open a tab
+  only from persisted history (can't be steered to an arbitrary URL); open a search tab via
+  the configurable search template (default Google).
+- **URL sensitivity.** Credentials in userinfo and secret-bearing query params
+  (`access_token`, `token`, …) are redacted before anything is written to the plaintext
+  store — URLs are not assumed uniformly low-stakes.
+
 ## The JS-engine modification boundary
 
 Per CLAUDE.md's most important section: `engine/js` **configures and binds to**
