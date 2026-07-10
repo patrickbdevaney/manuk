@@ -100,24 +100,57 @@ async fn fetch_images(
         let Some(bytes) = fetch_image_bytes(&url).await else {
             continue;
         };
-        let Ok(decoded) = image::load_from_memory(&bytes) else {
-            continue;
+        // Try raster decode; fall back to SVG (usvg/resvg) for vector sources.
+        let decoded = match image::load_from_memory(&bytes) {
+            Ok(img) => {
+                let rgba = img.to_rgba8();
+                let (w, h) = rgba.dimensions();
+                Some(manuk_paint::DecodedImage {
+                    width: w,
+                    height: h,
+                    rgba: rgba.into_raw(),
+                })
+            }
+            Err(_) => decode_svg(&bytes, &url),
         };
-        let rgba = decoded.to_rgba8();
-        let (w, h) = rgba.dimensions();
-        if w == 0 || h == 0 {
-            continue;
+        if let Some(img) = decoded {
+            if img.width > 0 && img.height > 0 {
+                out.insert(node, Rc::new(img));
+            }
         }
-        out.insert(
-            node,
-            Rc::new(manuk_paint::DecodedImage {
-                width: w,
-                height: h,
-                rgba: rgba.into_raw(),
-            }),
-        );
     }
     out
+}
+
+/// Rasterize an SVG document to a [`DecodedImage`] (non-premultiplied RGBA) at its
+/// intrinsic size via usvg + resvg. `None` if the bytes are not valid SVG.
+fn decode_svg(bytes: &[u8], url: &str) -> Option<manuk_paint::DecodedImage> {
+    // Quick reject non-SVG-looking bytes (unless the URL says .svg) to avoid the parse cost.
+    let looks_svg = url.ends_with(".svg")
+        || bytes.windows(4).take(512).any(|w| w == b"<svg")
+        || bytes.starts_with(b"<?xml");
+    if !looks_svg {
+        return None;
+    }
+    let tree = resvg::usvg::Tree::from_data(bytes, &resvg::usvg::Options::default()).ok()?;
+    let size = tree.size();
+    let (w, h) = (size.width().ceil() as u32, size.height().ceil() as u32);
+    if w == 0 || h == 0 || w > 8192 || h > 8192 {
+        return None;
+    }
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(w, h)?;
+    resvg::render(&tree, resvg::tiny_skia::Transform::identity(), &mut pixmap.as_mut());
+    // resvg output is premultiplied; store straight-alpha RGBA for our blitter.
+    let mut rgba = Vec::with_capacity((w * h * 4) as usize);
+    for px in pixmap.pixels() {
+        let c = px.demultiply();
+        rgba.extend_from_slice(&[c.red(), c.green(), c.blue(), c.alpha()]);
+    }
+    Some(manuk_paint::DecodedImage {
+        width: w,
+        height: h,
+        rgba,
+    })
 }
 
 /// Fetch the raw bytes of an image URL: `data:` (base64 or literal), `http(s)://`, or a
@@ -130,7 +163,8 @@ async fn fetch_image_bytes(url: &str) -> Option<Vec<u8>> {
             use base64::Engine;
             base64::engine::general_purpose::STANDARD.decode(data).ok()
         } else {
-            Some(data.as_bytes().to_vec())
+            // Non-base64 data URLs are percent-encoded (e.g. `%23` for `#` in inline SVG).
+            Some(percent_decode(data))
         };
     }
     if url.starts_with("http://") || url.starts_with("https://") {
