@@ -2,21 +2,28 @@
 //!
 //! Per CLAUDE.md: `taffy` for flexbox/grid, plus **from-scratch** block, inline,
 //! table, positioned, and float layout verified against WPT layout reftests. This
-//! first pass implements the two formatting contexts that carry the web —
-//! **block** (normal-flow vertical stacking) and **inline** (line-breaking of text
-//! and inline boxes) — and routes `display:flex` through `taffy` (see [`flex`]).
+//! implements the formatting contexts that carry the web — **block** (normal-flow
+//! vertical stacking with adjacent-sibling margin collapsing), **inline**
+//! (line-breaking of text that flows around floats), and **floats** (a BFC-aware
+//! [`FloatContext`] doing left/right placement, clearance, and shrink-to-fit) — and
+//! routes `display:flex` through `taffy` (see [`flex`]).
 //!
-//! Table / floats / abs-positioning are the documented next reftests. The output is
-//! a **fragment tree** ([`LayoutBox`]) with absolute px rects that paint consumes.
+//! Abs/fixed positioning and tables are the documented next reftests (D1 sub-features
+//! 2–3). The output is a **fragment tree** ([`LayoutBox`]) with absolute px rects
+//! that paint consumes.
 //!
 //! Known simplifications (documented, not silent — CLAUDE.md § verification):
-//! - Vertical margins do not collapse yet.
+//! - Margin collapsing covers adjacent siblings only; parent↔first/last-child
+//!   collapsing is not yet modeled.
+//! - `absolute`/`fixed` boxes are skipped in normal flow (positioned pass pending).
 //! - Percentage heights resolve only against definite containers.
+//! - A line's float band is queried using the first word's height as the estimate
+//!   (exact for uniform-size text).
 //! - Inline layout is Latin/LTR and inserts an inter-word space between adjacent
 //!   tokens (so `a<b>b</b>` gains a space it should not); Parley-grade segmentation
 //!   is the upgrade.
 
-use manuk_css::{ComputedStyle, Dim, Display, Rgba, StyleMap, TextAlign};
+use manuk_css::{Clear, ComputedStyle, Dim, Display, Float, Position, Rgba, StyleMap, TextAlign};
 use manuk_dom::{Dom, NodeData, NodeId};
 use manuk_text::{FontContext, FontFamily, FontKey};
 
@@ -91,6 +98,27 @@ impl LayoutBox {
         }
     }
 
+    /// Shift this box and its whole subtree by `(dx, dy)` (absolute coords). Used to
+    /// re-origin a float's content once its final position is known.
+    fn translate(&mut self, dx: f32, dy: f32) {
+        self.rect.x += dx;
+        self.rect.y += dy;
+        match &mut self.content {
+            BoxContent::Block(kids) => {
+                for k in kids {
+                    k.translate(dx, dy);
+                }
+            }
+            BoxContent::Inline(frags) => {
+                for f in frags {
+                    f.x += dx;
+                    f.line_top += dy;
+                    f.baseline += dy;
+                }
+            }
+        }
+    }
+
     /// The full document height this box occupies (max bottom edge in its subtree).
     pub fn content_bottom(&self) -> f32 {
         let mut max = self.rect.y + self.rect.height;
@@ -130,7 +158,13 @@ pub fn layout_document(
         .or_else(|| dom.children(dom.root()).find(|&n| dom.is_element(n)));
 
     match root_el {
-        Some(el) => ctx.layout_block(el, viewport_width, 0.0, 0.0, 0.0).boxx,
+        Some(el) => {
+            // The initial containing block is itself a BFC root; `layout_block` gives
+            // the root element its own context, so this outer one is just a seed.
+            let mut floats = FloatContext::new(0.0, viewport_width);
+            ctx.layout_block(el, viewport_width, 0.0, 0.0, 0.0, &mut floats)
+                .boxx
+        }
         None => LayoutBox {
             rect: Rect::ZERO,
             background: None,
@@ -186,6 +220,204 @@ struct BlockResult {
     margin_bottom: f32,
 }
 
+/// One placed float's **margin box** plus which side it hugs, in absolute coords.
+#[derive(Clone, Copy)]
+struct PlacedFloat {
+    rect: Rect,
+    side: Float,
+}
+
+/// Float state for one **block formatting context** (CSS2 §9.4.1). Because the whole
+/// engine lays out in absolute document px, a single context can be threaded down
+/// through nested non-BFC blocks and their line boxes unchanged. Servo's
+/// `layout_2020` keeps an analogous `FloatContext`/`PlacementAmongFloats`.
+struct FloatContext {
+    /// Content-left / content-right of the BFC root, the edges floats hug.
+    left_edge: f32,
+    right_edge: f32,
+    floats: Vec<PlacedFloat>,
+}
+
+/// Does the float/query band `[y, y+h)` intersect `rect`'s vertical extent? A
+/// zero-height query still tests the point `y`.
+fn band_overlaps(rect: Rect, y: f32, h: f32) -> bool {
+    rect.height > 0.0 && rect.y < y + h.max(0.01) && rect.y + rect.height > y
+}
+
+impl FloatContext {
+    fn new(left_edge: f32, right_edge: f32) -> Self {
+        FloatContext {
+            left_edge,
+            right_edge,
+            floats: Vec::new(),
+        }
+    }
+
+    /// Rightmost right-edge among left floats overlapping band `[y, y+h)`.
+    fn left_offset(&self, y: f32, h: f32) -> f32 {
+        let mut x = self.left_edge;
+        for f in &self.floats {
+            if f.side == Float::Left && band_overlaps(f.rect, y, h) {
+                x = x.max(f.rect.x + f.rect.width);
+            }
+        }
+        x
+    }
+
+    /// Leftmost left-edge among right floats overlapping band `[y, y+h)`.
+    fn right_offset(&self, y: f32, h: f32) -> f32 {
+        let mut x = self.right_edge;
+        for f in &self.floats {
+            if f.side == Float::Right && band_overlaps(f.rect, y, h) {
+                x = x.min(f.rect.x);
+            }
+        }
+        x
+    }
+
+    /// Available `(left_x, width)` for in-flow / line content in band `[y, y+h)`.
+    fn available(&self, y: f32, h: f32) -> (f32, f32) {
+        let l = self.left_offset(y, h);
+        let r = self.right_offset(y, h);
+        (l, (r - l).max(0.0))
+    }
+
+    /// The next float bottom strictly below `y`, if any (a candidate drop position).
+    fn next_bottom_below(&self, y: f32) -> Option<f32> {
+        self.floats
+            .iter()
+            .map(|f| f.rect.y + f.rect.height)
+            .filter(|&b| b > y + 0.01)
+            .fold(None, |acc, b| Some(acc.map_or(b, |a: f32| a.min(b))))
+    }
+
+    /// Place a float of margin-box size `(w, h)` on `side`, no higher than `top`.
+    /// Scans downward to the first band where `w` fits between opposing floats
+    /// (CSS2 §9.5.1), records the margin box, and returns it.
+    fn place(&mut self, side: Float, top: f32, w: f32, h: f32) -> Rect {
+        let full = self.right_edge - self.left_edge;
+        let mut y = top;
+        loop {
+            let (l, avail) = self.available(y, h);
+            if w <= avail || avail >= full {
+                let x = if side == Float::Right {
+                    self.right_offset(y, h) - w
+                } else {
+                    l
+                };
+                let rect = Rect {
+                    x,
+                    y,
+                    width: w,
+                    height: h,
+                };
+                self.floats.push(PlacedFloat { rect, side });
+                return rect;
+            }
+            match self.next_bottom_below(y) {
+                Some(ny) => y = ny,
+                None => {
+                    // Nothing opposing fits anywhere lower: hug the edge here.
+                    let x = if side == Float::Right {
+                        self.right_edge - w
+                    } else {
+                        self.left_edge
+                    };
+                    let rect = Rect {
+                        x,
+                        y,
+                        width: w,
+                        height: h,
+                    };
+                    self.floats.push(PlacedFloat { rect, side });
+                    return rect;
+                }
+            }
+        }
+    }
+
+    /// The y at/below `y` clear of the requested side(s) (CSS2 §9.5.2).
+    fn clear_to(&self, clear: Clear, y: f32) -> f32 {
+        let mut out = y;
+        for f in &self.floats {
+            let clears = matches!(
+                (clear, f.side),
+                (Clear::Both, _) | (Clear::Left, Float::Left) | (Clear::Right, Float::Right)
+            );
+            if clears {
+                out = out.max(f.rect.y + f.rect.height);
+            }
+        }
+        out
+    }
+
+    /// Lowest bottom edge of any float (so a BFC root can grow to contain them).
+    fn lowest_bottom(&self) -> f32 {
+        self.floats
+            .iter()
+            .map(|f| f.rect.y + f.rect.height)
+            .fold(f32::MIN, f32::max)
+    }
+}
+
+/// Does this element pull out of flow to one side?
+fn is_float(s: &ComputedStyle) -> bool {
+    s.float != Float::None
+}
+
+/// Is this box positioned out of normal flow (absolute/fixed)? Such boxes are
+/// collected and laid out in a later pass (D1 sub-feature 2).
+fn is_out_of_flow_positioned(s: &ComputedStyle) -> bool {
+    matches!(s.position, Position::Absolute | Position::Fixed)
+}
+
+/// Does this element establish a new block formatting context (CSS2 §9.4.1)? Such a
+/// box does not share its parent's float context — its own floats stay inside and it
+/// does not overlap outer floats. (`overflow` is not modeled yet.)
+fn establishes_bfc(s: &ComputedStyle) -> bool {
+    is_float(s)
+        || is_out_of_flow_positioned(s)
+        || matches!(
+            s.display,
+            Display::Flex | Display::Grid | Display::InlineBlock
+        )
+}
+
+/// The max right extent of already-laid-out content (used for shrink-to-fit).
+fn content_right_extent(content: &BoxContent, fonts: &FontContext) -> f32 {
+    let mut max_r = 0.0f32;
+    fn visit(b: &LayoutBox, fonts: &FontContext, max_r: &mut f32) {
+        *max_r = max_r.max(b.rect.x + b.rect.width);
+        match &b.content {
+            BoxContent::Block(kids) => {
+                for k in kids {
+                    visit(k, fonts, max_r);
+                }
+            }
+            BoxContent::Inline(frags) => {
+                for f in frags {
+                    let w = fonts.measure(&f.text, f.style.font_key, f.style.font_size);
+                    *max_r = max_r.max(f.x + w);
+                }
+            }
+        }
+    }
+    match content {
+        BoxContent::Block(kids) => {
+            for k in kids {
+                visit(k, fonts, &mut max_r);
+            }
+        }
+        BoxContent::Inline(frags) => {
+            for f in frags {
+                let w = fonts.measure(&f.text, f.style.font_key, f.style.font_size);
+                max_r = max_r.max(f.x + w);
+            }
+        }
+    }
+    max_r
+}
+
 /// Collapse two adjoining vertical margins (CSS2 §8.3.1): positive margins take the
 /// max, negative margins take the min (most negative), mixed signs sum. Passing `0`
 /// for one side yields the other unchanged, so the first-in-flow block "collapses"
@@ -209,7 +441,15 @@ impl Ctx<'_> {
     ///
     /// Simplification (documented, CLAUDE.md § verification): parent↔first/last-child
     /// margin collapsing is not yet modeled — only adjacent-sibling collapsing is.
-    fn layout_block(&self, node: NodeId, cw: f32, x: f32, y: f32, prev_margin: f32) -> BlockResult {
+    fn layout_block(
+        &self,
+        node: NodeId,
+        cw: f32,
+        x: f32,
+        y: f32,
+        prev_margin: f32,
+        floats: &mut FloatContext,
+    ) -> BlockResult {
         let s = self.styles[&node].clone();
 
         let mut ml = s.margin.left.resolve(cw, 0.0);
@@ -254,7 +494,18 @@ impl Ctx<'_> {
         let content_x = border_x + bl + pl;
         let content_y = border_y + bt + pt;
 
-        let (content, content_height) = self.layout_children(node, content_x, content_y, width);
+        // A BFC root gets a fresh float context spanning its own content box; a plain
+        // block shares its parent's so floats affect content across nested blocks.
+        let mut own_bfc;
+        let (content, content_height) = if establishes_bfc(&s) {
+            own_bfc = FloatContext::new(content_x, content_x + width);
+            let (c, h) = self.layout_children(node, content_x, content_y, width, &mut own_bfc);
+            // A BFC root grows to contain its floats (CSS2 §10.6.7 auto-height case).
+            let float_h = (own_bfc.lowest_bottom() - content_y).max(0.0);
+            (c, h.max(float_h))
+        } else {
+            self.layout_children(node, content_x, content_y, width, floats)
+        };
         let content_height = match s.height {
             Dim::Auto => content_height,
             other => other.resolve(0.0, content_height),
@@ -282,8 +533,16 @@ impl Ctx<'_> {
     }
 
     /// Lay out the children of a container whose content box starts at `(cx, cy)`
-    /// with content width `cw`. Returns the content and its height.
-    fn layout_children(&self, node: NodeId, cx: f32, cy: f32, cw: f32) -> (BoxContent, f32) {
+    /// with content width `cw`, within the block formatting context `floats`. Returns
+    /// the content and its height.
+    fn layout_children(
+        &self,
+        node: NodeId,
+        cx: f32,
+        cy: f32,
+        cw: f32,
+        floats: &mut FloatContext,
+    ) -> (BoxContent, f32) {
         let display = self.styles[&node].display;
         let kids: Vec<NodeId> = self
             .dom
@@ -296,31 +555,77 @@ impl Ctx<'_> {
             return self.layout_flex(cx, cy, cw, &kids);
         }
 
-        let has_block = kids
+        // Floated / out-of-flow children never count toward the "has block" decision.
+        let flow_kids: Vec<NodeId> = kids
+            .iter()
+            .copied()
+            .filter(|&k| {
+                let s = &self.styles[&k];
+                !is_float(s) && !is_out_of_flow_positioned(s)
+            })
+            .collect();
+        let has_block = flow_kids
             .iter()
             .any(|&k| is_block_level(self.dom, self.styles, k));
-        if !has_block {
-            // Pure inline formatting context.
-            let items = self.collect_inline_group(&kids);
+
+        if !has_block && !kids.iter().any(|&k| is_float(&self.styles[&k])) {
+            // Pure inline formatting context (no floats to flow around).
+            let items = self.collect_inline_group(&flow_kids);
             let align = self.styles[&node].text_align;
-            let (frags, h) = self.layout_inline(&items, cx, cy, cw, align);
+            let (frags, h) = self.layout_inline(&items, cx, cy, cw, align, floats);
             return (BoxContent::Inline(frags), h);
         }
 
         // Block container: block children stack with adjacent-sibling margin
-        // collapsing; runs of inline siblings become anonymous block boxes. `cur_y`
-        // tracks the border-bottom of the last in-flow block (its trailing margin
-        // held in `prev_margin` so the next sibling can collapse against it).
+        // collapsing; floats are pulled out to the sides; runs of inline siblings
+        // become anonymous block boxes that flow around floats. `cur_y` tracks the
+        // border-bottom of the last in-flow block (its trailing margin held in
+        // `prev_margin` so the next sibling can collapse against it).
         let mut boxes = Vec::new();
         let mut cur_y = cy;
         let mut prev_margin = 0.0f32;
         let mut inline_run: Vec<NodeId> = Vec::new();
 
         for &k in &kids {
-            if is_block_level(self.dom, self.styles, k) {
-                (cur_y, prev_margin) =
-                    self.flush_inline_run(&mut inline_run, &mut boxes, cx, cur_y, prev_margin, cw);
-                let r = self.layout_block(k, cw, cx, cur_y, prev_margin);
+            let ks = &self.styles[&k];
+            if is_float(ks) {
+                // Floats attach at the current flow position without advancing it.
+                // Flush pending inline content first so it wraps around this float.
+                (cur_y, prev_margin) = self.flush_inline_run(
+                    &mut inline_run,
+                    &mut boxes,
+                    cx,
+                    cur_y,
+                    prev_margin,
+                    cw,
+                    floats,
+                );
+                let fbox = self.layout_float(k, cw, cur_y + prev_margin.max(0.0), floats);
+                boxes.push(fbox);
+            } else if is_out_of_flow_positioned(ks) {
+                // Absolutely/fixed positioned: skipped here, handled in D1 sub-feature
+                // 2. Leaving them out keeps normal flow correct in the meantime.
+                continue;
+            } else if is_block_level(self.dom, self.styles, k) {
+                (cur_y, prev_margin) = self.flush_inline_run(
+                    &mut inline_run,
+                    &mut boxes,
+                    cx,
+                    cur_y,
+                    prev_margin,
+                    cw,
+                    floats,
+                );
+                // Clearance pushes the block below the relevant floats.
+                if ks.clear != Clear::None {
+                    let base = cur_y + prev_margin;
+                    let cleared = floats.clear_to(ks.clear, base);
+                    if cleared > base {
+                        cur_y = cleared;
+                        prev_margin = 0.0;
+                    }
+                }
+                let r = self.layout_block(k, cw, cx, cur_y, prev_margin, floats);
                 cur_y = r.boxx.rect.y + r.boxx.rect.height;
                 prev_margin = r.margin_bottom;
                 boxes.push(r.boxx);
@@ -328,11 +633,109 @@ impl Ctx<'_> {
                 inline_run.push(k);
             }
         }
-        (cur_y, prev_margin) =
-            self.flush_inline_run(&mut inline_run, &mut boxes, cx, cur_y, prev_margin, cw);
+        (cur_y, prev_margin) = self.flush_inline_run(
+            &mut inline_run,
+            &mut boxes,
+            cx,
+            cur_y,
+            prev_margin,
+            cw,
+            floats,
+        );
 
         // The last in-flow block's trailing margin still occupies the container.
         (BoxContent::Block(boxes), cur_y + prev_margin - cy)
+    }
+
+    /// Lay out a floated element: size it (explicit width or shrink-to-fit), lay out
+    /// its content in its own BFC at a provisional origin, then place its margin box
+    /// via `floats` and re-origin the content to the placed position.
+    fn layout_float(
+        &self,
+        node: NodeId,
+        cw: f32,
+        top: f32,
+        floats: &mut FloatContext,
+    ) -> LayoutBox {
+        let s = self.styles[&node].clone();
+        let ml = s.margin.left.resolve(cw, 0.0);
+        let mr = s.margin.right.resolve(cw, 0.0);
+        let mt = s.margin.top.resolve(cw, 0.0);
+        let mb = s.margin.bottom.resolve(cw, 0.0);
+        let (pl, pr) = (
+            s.padding.left.resolve(cw, 0.0),
+            s.padding.right.resolve(cw, 0.0),
+        );
+        let (pt, pb) = (
+            s.padding.top.resolve(cw, 0.0),
+            s.padding.bottom.resolve(cw, 0.0),
+        );
+        let (bl, br) = (s.border_width.left, s.border_width.right);
+        let (bt, bb) = (s.border_width.top, s.border_width.bottom);
+
+        // A cleared float starts below the floats it clears.
+        let top = floats.clear_to(s.clear, top);
+
+        let non_content = ml + mr + pl + pr + bl + br;
+        let avail = (cw - non_content).max(0.0);
+        let width = match s.width {
+            Dim::Auto => self.shrink_to_fit(node, avail),
+            other => other.resolve(cw, avail).max(0.0),
+        };
+
+        // Lay out content at a provisional origin (0,0) in the float's own BFC.
+        let mut inner = FloatContext::new(0.0, width);
+        let (content, ch) = self.layout_children(node, 0.0, 0.0, width, &mut inner);
+        let content_height = match s.height {
+            Dim::Auto => ch.max((inner.lowest_bottom()).max(0.0)),
+            other => other.resolve(0.0, ch),
+        };
+
+        let border_box_w = bl + pl + width + pr + br;
+        let border_box_h = bt + pt + content_height + pb + bb;
+        let margin_box_w = ml + border_box_w + mr;
+        let margin_box_h = mt + border_box_h + mb;
+
+        let side = s.float;
+        let margin_rect = floats.place(side, top, margin_box_w, margin_box_h);
+        let border_x = margin_rect.x + ml;
+        let border_y = margin_rect.y + mt;
+
+        let mut boxx = LayoutBox {
+            rect: Rect {
+                x: border_x,
+                y: border_y,
+                width: border_box_w,
+                height: border_box_h,
+            },
+            background: s.background_color,
+            node: Some(node),
+            content,
+        };
+        // Content was laid out at (0,0); shift it to the float's content origin.
+        let content_origin_x = border_x + bl + pl;
+        let content_origin_y = border_y + bt + pt;
+        if let BoxContent::Block(kids) = &mut boxx.content {
+            for k in kids {
+                k.translate(content_origin_x, content_origin_y);
+            }
+        } else if let BoxContent::Inline(frags) = &mut boxx.content {
+            for f in frags {
+                f.x += content_origin_x;
+                f.line_top += content_origin_y;
+                f.baseline += content_origin_y;
+            }
+        }
+        boxx
+    }
+
+    /// Shrink-to-fit width (CSS2 §10.3.5, approximated as `min(max-content, avail)`):
+    /// lay the content out unconstrained to get its preferred width, then clamp.
+    fn shrink_to_fit(&self, node: NodeId, avail: f32) -> f32 {
+        let mut fc = FloatContext::new(0.0, 1.0e6);
+        let (content, _h) = self.layout_children(node, 0.0, 0.0, 1.0e6, &mut fc);
+        let pref = content_right_extent(&content, self.fonts);
+        pref.min(avail).max(0.0)
     }
 
     /// Turn a pending run of inline-level siblings into an anonymous block box.
@@ -340,6 +743,7 @@ impl Ctx<'_> {
     /// box and preserves the pending block margin (so `<p>a</p>\n<p>b</p>` still
     /// collapses); real inline content is not collapsible, so the pending margin is
     /// committed before it.
+    #[allow(clippy::too_many_arguments)]
     fn flush_inline_run(
         &self,
         run: &mut Vec<NodeId>,
@@ -348,6 +752,7 @@ impl Ctx<'_> {
         cur_y: f32,
         prev_margin: f32,
         cw: f32,
+        floats: &FloatContext,
     ) -> (f32, f32) {
         if run.is_empty() {
             return (cur_y, prev_margin);
@@ -358,7 +763,7 @@ impl Ctx<'_> {
             return (cur_y, prev_margin); // whitespace-only: keep the pending margin
         }
         let start = cur_y + prev_margin;
-        let (frags, h) = self.layout_inline(&items, cx, start, cw, TextAlign::Left);
+        let (frags, h) = self.layout_inline(&items, cx, start, cw, TextAlign::Left, floats);
         boxes.push(LayoutBox {
             rect: Rect {
                 x: cx,
@@ -406,7 +811,9 @@ impl Ctx<'_> {
         let mut boxes = Vec::new();
         let mut max_h = 0.0f32;
         for (&k, slot) in block_kids.iter().zip(slots.iter()) {
-            let r = self.layout_block(k, slot.width, cx + slot.x, cy, 0.0);
+            // Each flex item establishes an independent formatting context.
+            let mut item_floats = FloatContext::new(cx + slot.x, cx + slot.x + slot.width);
+            let r = self.layout_block(k, slot.width, cx + slot.x, cy, 0.0, &mut item_floats);
             // Flex item advance = its full margin box height.
             let adv = r.margin_top + (r.boxx.rect.height) + r.margin_bottom;
             max_h = max_h.max(adv);
@@ -465,8 +872,13 @@ impl Ctx<'_> {
         }
     }
 
-    /// Greedy line-breaking of inline items across `cw` px. Returns fragments (with
-    /// absolute positions) and the total inline block height.
+    /// Greedy line-breaking of inline items. Each line's usable band is intersected
+    /// with `floats`, so text flows around floats (CSS2 §9.5). Returns fragments with
+    /// absolute positions and the total inline block height.
+    ///
+    /// Approximation (documented): a line's float band is queried using the *first*
+    /// word's line height as the height estimate — exact for uniform-size text, an
+    /// approximation when a taller inline box lands mid-line.
     fn layout_inline(
         &self,
         items: &[InlineItem],
@@ -474,18 +886,32 @@ impl Ctx<'_> {
         cy: f32,
         cw: f32,
         align: TextAlign,
+        floats: &FloatContext,
     ) -> (Vec<TextFragment>, f32) {
-        // Build lines as fragment-builders, deferring y until line metrics are known.
-        struct FB {
-            x: f32,
-            text: String,
-            style: TextStyle,
-            ascent: f32,
-            descent: f32,
-        }
-        let mut lines: Vec<Vec<FB>> = Vec::new();
-        let mut cur: Vec<FB> = Vec::new();
+        // Usable (left_x, width) at vertical `y` for a line of height `h`: the float
+        // exclusions intersected with this container's content box, dropping past
+        // floats that leave no room.
+        let open_band = |y: &mut f32, h: f32| -> (f32, f32) {
+            loop {
+                let l = floats.left_offset(*y, h).max(cx);
+                let r = floats.right_offset(*y, h).min(cx + cw);
+                let w = (r - l).max(0.0);
+                if w > 0.0 {
+                    return (l, w);
+                }
+                match floats.next_bottom_below(*y) {
+                    Some(ny) if ny > *y => *y = ny,
+                    _ => return (cx, cw),
+                }
+            }
+        };
+
+        let mut frags = Vec::new();
+        let mut y = cy;
+        let mut cur: Vec<LineFrag> = Vec::new();
         let mut pen = 0.0f32;
+        let mut line_left = cx;
+        let mut line_avail = cw;
 
         for item in items {
             let key = item.style.font_key;
@@ -497,72 +923,101 @@ impl Ctx<'_> {
             } else {
                 0.0
             };
+            let est_h = item.style.line_height.max(lm.ascent + lm.descent);
 
-            if !cur.is_empty() && pen + space_w + word_w > cw {
-                lines.push(std::mem::take(&mut cur));
-                pen = 0.0;
-                cur.push(FB {
+            if cur.is_empty() {
+                let (l, w) = open_band(&mut y, est_h);
+                line_left = l;
+                line_avail = w;
+            }
+
+            if !cur.is_empty() && pen + space_w + word_w > line_avail {
+                // Close the current line, then open a fresh band for this word.
+                y = close_line(
+                    &mut frags, &cur, y, line_left, line_avail, align, self.fonts,
+                );
+                cur.clear();
+                let (l, w) = open_band(&mut y, est_h);
+                line_left = l;
+                line_avail = w;
+                cur.push(LineFrag {
                     x: 0.0,
                     text: item.text.clone(),
                     style: item.style,
                     ascent: lm.ascent,
                     descent: lm.descent,
                 });
-                pen += word_w;
+                pen = word_w;
             } else {
-                cur.push(FB {
-                    x: pen + space_w,
+                let x = if cur.is_empty() { 0.0 } else { pen + space_w };
+                cur.push(LineFrag {
+                    x,
                     text: item.text.clone(),
                     style: item.style,
                     ascent: lm.ascent,
                     descent: lm.descent,
                 });
-                pen += space_w + word_w;
+                pen = x + word_w;
             }
         }
         if !cur.is_empty() {
-            lines.push(cur);
-        }
-
-        let mut frags = Vec::new();
-        let mut y = cy;
-        for line in &lines {
-            let ascent = line.iter().map(|f| f.ascent).fold(0.0, f32::max);
-            let descent = line.iter().map(|f| f.descent).fold(0.0, f32::max);
-            let pref = line.iter().map(|f| f.style.line_height).fold(0.0, f32::max);
-            let content_h = ascent + descent;
-            let line_h = pref.max(content_h);
-            let leading = (line_h - content_h) / 2.0;
-            let baseline = y + leading + ascent;
-
-            let line_width = line
-                .last()
-                .map(|f| {
-                    f.x + self
-                        .fonts
-                        .measure(&f.text, f.style.font_key, f.style.font_size)
-                })
-                .unwrap_or(0.0);
-            let offset = match align {
-                TextAlign::Center => (cw - line_width).max(0.0) / 2.0,
-                TextAlign::Right => (cw - line_width).max(0.0),
-                _ => 0.0,
-            };
-
-            for f in line {
-                frags.push(TextFragment {
-                    x: cx + offset + f.x,
-                    line_top: y,
-                    baseline,
-                    text: f.text.clone(),
-                    style: f.style,
-                });
-            }
-            y += line_h;
+            y = close_line(
+                &mut frags, &cur, y, line_left, line_avail, align, self.fonts,
+            );
         }
 
         (frags, y - cy)
     }
+}
+
+/// One word's builder within a line, before its vertical position is committed.
+struct LineFrag {
+    x: f32,
+    text: String,
+    style: TextStyle,
+    ascent: f32,
+    descent: f32,
+}
+
+/// Commit a line's fragments at vertical `y` within band `[line_left, +line_avail)`,
+/// applying `align`. Returns the y of the next line (`y + line_height`).
+fn close_line(
+    frags: &mut Vec<TextFragment>,
+    line: &[LineFrag],
+    y: f32,
+    line_left: f32,
+    line_avail: f32,
+    align: TextAlign,
+    fonts: &FontContext,
+) -> f32 {
+    let ascent = line.iter().map(|f| f.ascent).fold(0.0, f32::max);
+    let descent = line.iter().map(|f| f.descent).fold(0.0, f32::max);
+    let pref = line.iter().map(|f| f.style.line_height).fold(0.0, f32::max);
+    let content_h = ascent + descent;
+    let line_h = pref.max(content_h);
+    let leading = (line_h - content_h) / 2.0;
+    let baseline = y + leading + ascent;
+
+    let line_width = line
+        .last()
+        .map(|f| f.x + fonts.measure(&f.text, f.style.font_key, f.style.font_size))
+        .unwrap_or(0.0);
+    let offset = match align {
+        TextAlign::Center => (line_avail - line_width).max(0.0) / 2.0,
+        TextAlign::Right => (line_avail - line_width).max(0.0),
+        _ => 0.0,
+    };
+
+    for f in line {
+        frags.push(TextFragment {
+            x: line_left + offset + f.x,
+            line_top: y,
+            baseline,
+            text: f.text.clone(),
+            style: f.style,
+        });
+    }
+    y + line_h
 }
 
 /// An inline token: one word plus whether whitespace preceded it.
@@ -659,6 +1114,140 @@ mod tests {
         assert!(
             children[1].rect.y >= after_first + 20.0 - 0.01,
             "inline box should sit below the first div's full bottom margin"
+        );
+    }
+
+    /// Find the first box whose DOM node has the given id-ish tag by walking.
+    fn first_box_of_tag<'a>(root: &'a LayoutBox, dom: &Dom, tag: &str) -> Option<&'a LayoutBox> {
+        fn rec<'a>(b: &'a LayoutBox, dom: &Dom, tag: &str, out: &mut Option<&'a LayoutBox>) {
+            if out.is_some() {
+                return;
+            }
+            if let Some(n) = b.node {
+                if dom.element(n).map(|e| e.name.eq_ignore_ascii_case(tag)) == Some(true) {
+                    *out = Some(b);
+                    return;
+                }
+            }
+            if let BoxContent::Block(kids) = &b.content {
+                for k in kids {
+                    rec(k, dom, tag, out);
+                }
+            }
+        }
+        let mut out = None;
+        rec(root, dom, tag, &mut out);
+        out
+    }
+
+    #[test]
+    fn left_float_hugs_left_edge() {
+        let (dom, root) = layout_html(
+            "<body style='margin:0'><div style='float:left;width:100px;height:40px'></div>\
+             <p style='margin:0'>text after the float</p></body>",
+            "",
+            800.0,
+        );
+        let f = first_box_of_tag(&root, &dom, "div").unwrap();
+        assert_eq!(f.rect.x, 0.0, "left float hugs the left content edge");
+        assert_eq!(f.rect.width, 100.0);
+    }
+
+    #[test]
+    fn right_float_hugs_right_edge() {
+        let (dom, root) = layout_html(
+            "<body style='margin:0'><div style='float:right;width:100px;height:40px'></div></body>",
+            "",
+            800.0,
+        );
+        let f = first_box_of_tag(&root, &dom, "div").unwrap();
+        // right edge of the float == container right (800).
+        assert!(
+            (f.rect.x + f.rect.width - 800.0).abs() < 0.01,
+            "right float's right edge should meet the container right, got x={}",
+            f.rect.x
+        );
+    }
+
+    #[test]
+    fn two_left_floats_stack_horizontally_then_wrap() {
+        // Two 300px floats fit side by side in 800px; a third drops below them.
+        let (dom, root) = layout_html(
+            "<body style='margin:0'>\
+             <div class=f style='float:left;width:300px;height:40px'></div>\
+             <div class=f style='float:left;width:300px;height:40px'></div>\
+             <div class=g style='float:left;width:300px;height:40px'></div></body>",
+            "",
+            800.0,
+        );
+        let mut floats = Vec::new();
+        root.walk(&mut |b| {
+            if let Some(n) = b.node {
+                if dom.element(n).map(|e| e.name == "div") == Some(true) {
+                    floats.push(b.rect);
+                }
+            }
+        });
+        assert_eq!(floats.len(), 3);
+        // First two share the top band; third wraps below.
+        assert!((floats[0].y - floats[1].y).abs() < 0.01);
+        assert!(
+            (floats[1].x - 300.0).abs() < 0.01,
+            "second float sits right of first"
+        );
+        assert!(
+            floats[2].y >= 40.0 - 0.01,
+            "third float drops to the next band"
+        );
+        assert!(
+            (floats[2].x).abs() < 0.01,
+            "third float returns to the left edge"
+        );
+    }
+
+    #[test]
+    fn clear_pushes_block_below_float() {
+        let (dom, root) = layout_html(
+            "<body style='margin:0'><div style='float:left;width:100px;height:60px'></div>\
+             <div id=c style='clear:left;height:10px'></div></body>",
+            "",
+            800.0,
+        );
+        // The cleared block must start at or below the float's bottom (60).
+        let mut cleared_y = None;
+        root.walk(&mut |b| {
+            if let Some(n) = b.node {
+                if dom.element(n).and_then(|e| e.id()) == Some("c") {
+                    cleared_y = Some(b.rect.y);
+                }
+            }
+        });
+        assert!(
+            cleared_y.unwrap() >= 60.0 - 0.01,
+            "clear:left block should sit below the 60px float, got {cleared_y:?}"
+        );
+    }
+
+    #[test]
+    fn text_flows_around_left_float() {
+        // A tall left float narrows the line band; text starts right of the float.
+        let (_dom, root) = layout_html(
+            "<body style='margin:0'><div style='float:left;width:100px;height:200px'></div>\
+             <p style='margin:0'>hello</p></body>",
+            "",
+            800.0,
+        );
+        let mut first_x = None;
+        root.walk(&mut |b| {
+            if let BoxContent::Inline(frags) = &b.content {
+                if let Some(f) = frags.first() {
+                    first_x.get_or_insert(f.x);
+                }
+            }
+        });
+        assert!(
+            first_x.unwrap() >= 100.0 - 0.01,
+            "text should start to the right of the 100px float, got x={first_x:?}"
         );
     }
 
