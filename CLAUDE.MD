@@ -129,6 +129,9 @@ existing seam so it is additive.
   tracks damage) instead of full-page passes; dirty-subtree style invalidation.
 - **Caching:** HTTP cache, decoded-image cache, shaped-run cache.
 
+**Research dispositions (2026-07, primary sources cited inline):**
+- **B1 streaming parse→layout.** *Finding:* html5ever's `parse_document` returns a `Parser: TendrilSink` already exposing `process(chunk)`/`finish()` (push-incremental — docs.rs/html5ever); browsers additionally run a *secondary preload scanner* over raw bytes for `<img>/<link>/<script>` while the main parser blocks on sync scripts/CSS, and CSS is render-blocking so first paint is gated on `<head>` CSS (web.dev/preload-scanner; MDN speculative parsing). *Disposition:* **reuse** html5ever's incremental sink; **hand-roll** the first-paint checkpoint (small engine glue); **defer** the preload scanner until external-resource fetch (D4) exists. Prereq: a chunked-body stream in `engine/net` (today `BodyExt::collect` buffers the whole body). *Roadmap:* the §1 "Click-to-navigate latency" bullet's "stream socket bytes into the html5ever sink" resolves to: net yields body chunks → `parser.process()` per chunk → first-paint checkpoint after `<head>` CSS → incremental body layout. No WPT target (perf/architecture).
+
 ### 2. Web-traversal versatility (compatibility breadth)
 Broadest real-world site set (excluding the hostile/bot-walled tier), WPT-verified.
 - **Layout:** floats, tables, absolute/relative/fixed/sticky positioning, margin
