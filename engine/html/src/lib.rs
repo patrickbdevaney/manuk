@@ -5,13 +5,15 @@
 //! html5ever into an `RcDom` and then walks that into our arena-based
 //! [`manuk_dom::Dom`], which is the representation the rest of the engine consumes.
 //!
-//! Streaming note (CLAUDE.md § click-to-navigate latency): html5ever is itself an
-//! incremental `TendrilSink`, so the eventual zero-copy socket→tokenizer path feeds
-//! bytes in as they arrive. This first pass parses a fully-buffered document; the
-//! incremental driver is a drop-in on the same sink.
+//! Streaming (CLAUDE.md § click-to-navigate latency): [`parse`] handles a fully-
+//! buffered document, while [`StreamParser`] drives html5ever incrementally — feeding
+//! chunks off the socket and snapshotting the parsed-so-far tree, so the shell can
+//! first-paint `<head>` + above-the-fold before the tail arrives (B-latency).
 
-use html5ever::tendril::TendrilSink;
-use html5ever::{parse_document, ParseOpts};
+use std::rc::Rc;
+
+use html5ever::tendril::{StrTendril, TendrilSink};
+use html5ever::{parse_document, ParseOpts, Parser};
 use manuk_dom::{Dom, NodeData, NodeId};
 use markup5ever_rcdom::{Handle, NodeData as RcNodeData, RcDom};
 
@@ -41,6 +43,82 @@ pub fn parse_bytes(bytes: &[u8]) -> Dom {
     let root = dom.root();
     // The RcDom `Document` handle mirrors our `Document` root: walk its children.
     for child in rc.document.children.borrow().iter() {
+        walk(child, &mut dom, root);
+    }
+    dom
+}
+
+/// An **incremental** HTML parser (B-latency first-paint checkpoint). html5ever is
+/// itself a streaming [`TendrilSink`]: [`feed`](StreamParser::feed) pushes bytes as
+/// they arrive off the socket, and [`snapshot`](StreamParser::snapshot) walks the
+/// parsed-so-far tree into an arena [`Dom`] at any point — so the shell can lay out
+/// and paint `<head>` + early `<body>` before the rest of the document streams in.
+///
+/// The trick: we clone the `RcDom`'s document `Handle` (an `Rc<Node>`) before handing
+/// the `RcDom` to the parser; the tree builder mutates that same node in place, so the
+/// clone always reflects current progress.
+pub struct StreamParser {
+    parser: Parser<RcDom>,
+    document: Handle,
+}
+
+impl Default for StreamParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StreamParser {
+    /// Start a streaming parse.
+    pub fn new() -> Self {
+        let rcdom = RcDom::default();
+        let document = Rc::clone(&rcdom.document);
+        let parser = parse_document(rcdom, ParseOpts::default());
+        StreamParser { parser, document }
+    }
+
+    /// Feed the next chunk of document text (as it arrives off the network).
+    pub fn feed(&mut self, chunk: &str) {
+        self.parser.process(StrTendril::from(chunk));
+    }
+
+    /// Walk the **parsed-so-far** tree into an arena [`Dom`] (a partial document).
+    pub fn snapshot(&self) -> Dom {
+        rcdom_to_dom(&self.document)
+    }
+
+    /// Finish parsing and return the complete [`Dom`].
+    pub fn finish(self) -> Dom {
+        let rc = self.parser.finish();
+        // `rc.document` is the same node the running `self.document` aliased.
+        rcdom_to_dom(&rc.document)
+    }
+
+    /// Has the `<body>` been reached — i.e. `<head>` (and its render-blocking `<link>`/
+    /// `<style>`) is parsed, the point at which a first paint is worthwhile?
+    pub fn body_started(&self) -> bool {
+        fn find_body(handle: &Handle) -> bool {
+            for child in handle.children.borrow().iter() {
+                if let RcNodeData::Element { name, .. } = &child.data {
+                    if name.local.as_ref() == "body" {
+                        return true;
+                    }
+                }
+                if find_body(child) {
+                    return true;
+                }
+            }
+            false
+        }
+        find_body(&self.document)
+    }
+}
+
+/// Walk an RcDom `document` handle's children into a fresh arena [`Dom`].
+fn rcdom_to_dom(document: &Handle) -> Dom {
+    let mut dom = Dom::new();
+    let root = dom.root();
+    for child in document.children.borrow().iter() {
         walk(child, &mut dom, root);
     }
     dom
@@ -236,6 +314,40 @@ mod tests {
             .filter(|&n| dom.tag_name(n) == Some("p"))
             .collect();
         assert_eq!(ps.len(), 2, "two paragraphs via auto-closing");
+    }
+
+    #[test]
+    fn stream_parser_first_paint_checkpoint() {
+        // Chunk 1 delivers <head> + the start of <body>; chunk 2 the rest.
+        let mut sp = StreamParser::new();
+        sp.feed(
+            "<!DOCTYPE html><html><head><title>T</title>\
+                 <link rel='stylesheet' href='/s.css'></head><body><h1>Above the fold</h1>",
+        );
+        // The head is parsed and body has started → a first paint is worthwhile.
+        assert!(sp.body_started(), "body reached after the head");
+        let early = sp.snapshot();
+        assert!(early.find_first("h1").is_some(), "early content is present");
+        assert!(early.find_first("title").is_some());
+        let early_h1_text = early
+            .find_first("h1")
+            .map(|n| early.text_content(n))
+            .unwrap_or_default();
+        assert_eq!(early_h1_text, "Above the fold");
+        // The later paragraph has NOT arrived yet.
+        assert!(
+            early.find_first("p").is_none(),
+            "below-the-fold content not yet parsed at the first-paint checkpoint"
+        );
+
+        // Chunk 2 streams the rest.
+        sp.feed("<p>below the fold</p></body></html>");
+        let full = sp.finish();
+        assert!(full.find_first("h1").is_some());
+        assert!(
+            full.find_first("p").is_some(),
+            "full document has the late content"
+        );
     }
 
     #[test]

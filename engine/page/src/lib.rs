@@ -45,6 +45,14 @@ pub struct Subresource {
     pub url: String,
 }
 
+/// The result of a streaming load: the optional **first paint** (a layout of the
+/// head-complete partial document, available before the tail streams in) and the
+/// finished [`Page`].
+pub struct StreamingLoad {
+    pub first_paint: Option<LayoutBox>,
+    pub page: Page,
+}
+
 /// One entry in a page's ordered stylesheet list — an inline `<style>` body or an
 /// external `<link>` URL — preserving document order for correct cascade precedence.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -163,8 +171,17 @@ pub struct Page {
 impl Page {
     /// Parse + style + lay out `html` for a viewport of `viewport_width` px.
     pub fn load(html: &str, final_url: &str, fonts: &FontContext, viewport_width: f32) -> Page {
-        let mut dom = manuk_html::parse(html);
+        Page::from_dom(manuk_html::parse(html), final_url, fonts, viewport_width)
+    }
 
+    /// Build a page from an already-parsed [`Dom`] (shared by [`load`](Self::load) and
+    /// [`load_streaming`](Self::load_streaming)).
+    pub fn from_dom(
+        mut dom: Dom,
+        final_url: &str,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> Page {
         let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&dom);
         let styles = MinimalCascade.cascade(&dom, &sheets);
 
@@ -192,6 +209,35 @@ impl Page {
             dom,
             styles,
         }
+    }
+
+    /// **Streaming load with a first-paint checkpoint (B-latency).** Feeds `chunks` to
+    /// an incremental parser ([`manuk_html::StreamParser`]); at the head-complete
+    /// checkpoint (`<head>` + its render-blocking CSS parsed, `<body>` reached) it lays
+    /// out the *partial* DOM — the **first paint**, available before the tail of the
+    /// document arrives — and returns it alongside the finished [`Page`]. A real socket
+    /// source hands chunks as they arrive; the win is first-paint before full-load.
+    pub fn load_streaming<'a>(
+        chunks: impl IntoIterator<Item = &'a str>,
+        final_url: &str,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> StreamingLoad {
+        let mut sp = manuk_html::StreamParser::new();
+        let mut first_paint = None;
+        for chunk in chunks {
+            sp.feed(chunk);
+            if first_paint.is_none() && sp.body_started() {
+                // Lay out the DOM-so-far (inline styles only; external CSS is applied
+                // once fetched). This is the paint the user sees first.
+                let partial = sp.snapshot();
+                let sheets = MinimalCascade::collect_style_elements(&partial);
+                let styles = MinimalCascade.cascade(&partial, &sheets);
+                first_paint = Some(layout_document(&partial, &styles, fonts, viewport_width));
+            }
+        }
+        let page = Page::from_dom(sp.finish(), final_url, fonts, viewport_width);
+        StreamingLoad { first_paint, page }
     }
 
     /// Re-run layout at a new viewport width (reuses the DOM + computed styles).
@@ -505,6 +551,30 @@ mod tests {
             page.content_height > wide,
             "narrower viewport should wrap taller"
         );
+    }
+
+    #[test]
+    fn streaming_first_paint_precedes_full_content() {
+        let fonts = FontContext::new();
+        // Head + above-the-fold arrives first; the long tail arrives after.
+        let head_and_top = "<html><head><title>T</title></head>\
+                            <body><div style='height:40px'>top</div>";
+        let tail = "<div style='height:400px'>tail</div></body></html>";
+
+        let load = Page::load_streaming([head_and_top, tail], "x", &fonts, 800.0);
+
+        // A first paint was produced at the head-complete checkpoint...
+        let fp = load.first_paint.expect("first paint at checkpoint");
+        let fp_height = fp.content_bottom();
+        // ...and it is strictly shorter than the full page (the tail was not yet in).
+        assert!(
+            load.page.content_height > fp_height + 300.0,
+            "full page ({}) should be much taller than the first paint ({fp_height})",
+            load.page.content_height
+        );
+        // The full page has the tail content; the DOM is complete.
+        assert!(load.page.visible_text().contains("tail"));
+        assert!(load.page.visible_text().contains("top"));
     }
 
     #[test]

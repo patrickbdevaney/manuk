@@ -29,9 +29,23 @@ fixed in-memory page, no network variance:
 | `load_800` (parse + style + layout) | **51.3 µs** |
 | `load+paint_800x600` (full CPU pipeline) | **758 µs** |
 
+**First-paint checkpoint (B-latency), added 2026-07-10** — a large streamed article
+(head + above-the-fold, then a 400-paragraph tail):
+
+| Benchmark | Median |
+|---|---|
+| `streaming_first_paint` (head+fold prefix only) | **13.6 µs** |
+| `streaming_full_load` (whole ~400-paragraph document) | **1.55 ms** |
+
+The first paint (above-the-fold) is laid out in **~113× less time** than the full
+document — that gap is the click-to-first-paint win the streaming parser
+([`manuk_html::StreamParser`] → `Page::load_streaming`) buys: the user sees content at
+the head-complete checkpoint, before the tail streams in. (End-to-end over a *real*
+slow socket additionally needs a chunked-fetch API in `manuk-net` — `fetch()` buffers
+the body today; that's the next enabler.)
+
 The network leg (fetch) is measured separately once the pooled streaming client
-(P0.4) lands; end-to-end click-to-first-paint is measured once the first-paint
-checkpoint (B-latency) exists.
+(P0.4) lands.
 
 ## 3. Per-tab baseline RSS — SLOT RESERVED, NOT YET WIRED 🔧
 

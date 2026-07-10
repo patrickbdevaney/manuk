@@ -45,6 +45,34 @@ fn bench_pipeline(c: &mut Criterion) {
             black_box(canvas.width())
         })
     });
+
+    // B-latency: a large page where the head + above-the-fold arrives first and a long
+    // tail streams after. The first-paint checkpoint lays out only the prefix, so it
+    // completes well before the full document — that time gap is the click-to-first-
+    // paint win. These two benches measure both ends of the gap.
+    let head_top = "<html><head><title>Big</title></head><body>\
+                    <h1>Above the fold</h1><p>intro paragraph of the article</p>";
+    let tail: String = (0..400)
+        .map(|i| format!("<p>streamed paragraph number {i} of the long article body</p>"))
+        .collect();
+    let full_html = format!("{head_top}{tail}</body></html>");
+
+    c.bench_function("streaming_first_paint (head+fold only)", |b| {
+        b.iter(|| {
+            // Only the head+above-the-fold prefix has arrived: this is the work done
+            // before the first paint is on screen.
+            let load =
+                Page::load_streaming([black_box(head_top)], "http://bench.local/", &fonts, 800.0);
+            black_box(load.first_paint.map(|f| f.content_bottom()))
+        })
+    });
+
+    c.bench_function("streaming_full_load (whole document)", |b| {
+        b.iter(|| {
+            let p = Page::load(black_box(&full_html), "http://bench.local/", &fonts, 800.0);
+            black_box(p.content_height)
+        })
+    });
 }
 
 criterion_group!(benches, bench_pipeline);

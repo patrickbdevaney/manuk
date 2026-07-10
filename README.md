@@ -106,8 +106,12 @@ in; **Build** = written from scratch, to be verified against WPT.
   (via `markup5ever_rcdom`) into our arena DOM.
 - **Uses:** `html5ever` 0.39, `markup5ever_rcdom`.
 - **Works:** full error recovery, implied tags, malformed input.
-- **Not yet:** encoding sniffing (UTF-8 assumed); incremental streaming (the sink
-  supports it; we buffer first).
+- **Streaming:** `StreamParser` drives html5ever incrementally (feed chunks,
+  snapshot the parsed-so-far tree) → `Page::load_streaming` first-paints `<head>` +
+  above-the-fold before the tail arrives (~113x sooner than full-load in the bench).
+- **Not yet:** encoding sniffing at the parser layer (UTF-8 assumed; the net layer
+  does WHATWG charset decode); a chunked-body fetch to feed the stream from a real
+  socket (`fetch()` buffers today).
 
 #### `engine/dom` — the DOM tree · *Build*
 - **Does:** an arena (`Vec`-indexed `NodeId`) tree of Document/Doctype/Element/
