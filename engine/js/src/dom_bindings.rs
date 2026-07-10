@@ -52,7 +52,7 @@ use mozjs::rust::wrappers2::{
 use mozjs::jsapi::OnNewGlobalHookOption;
 use mozjs::rust::{evaluate_script, CompileOptionsWrapper, RealmOptions, Runtime, SIMPLE_GLOBAL_CLASS};
 
-use manuk_dom::{Dom, NodeId};
+use manuk_dom::{Dom, NodeData, NodeId};
 
 thread_local! {
     /// Pre-script layout snapshot (`NodeId` → `[x, y, width, height]`) exposed to
@@ -207,6 +207,16 @@ unsafe fn return_node_or_null(
 /// returned pointer is written straight to a GC-rooted `vp[0]` by callers, with no
 /// intervening allocation.
 unsafe fn new_reflector(cx: *mut RawJSContext, dom: *mut Dom, node: NodeId) -> *mut JSObject {
+    let id = node.0;
+    // Identity cache: one wrapper per node, so `a.firstChild === b`, `event.target === el`
+    // and the like hold (real sites rely on node identity). The cache is a JS-side
+    // `__nodes` map, so its entries are GC-reachable through the global.
+    if let Some(v) = eval_in_current_global(cx, &format!("(globalThis.__nodes&&__nodes[{id}])||null"))
+    {
+        if v.is_object() {
+            return v.to_object();
+        }
+    }
     let obj_ptr = JS_NewObject(&mut wrap_cx(cx), &NODE_CLASS);
     rooted!(in(cx) let obj = obj_ptr);
     let node_val = Int32Value(node.0 as i32);
@@ -214,6 +224,17 @@ unsafe fn new_reflector(cx: *mut RawJSContext, dom: *mut Dom, node: NodeId) -> *
     let dom_val = PrivateValue(dom as *const std::ffi::c_void);
     JS_SetReservedSlot(obj.get(), SLOT_DOM, &dom_val);
     define_members(cx, &obj, false);
+    // Store in the identity cache.
+    let global = CurrentGlobalOrNull(&wrap_cx(cx));
+    if !global.is_null() {
+        rooted!(in(cx) let g = global);
+        rooted!(in(cx) let ov = ObjectValue(obj.get()));
+        JS_SetProperty(&mut wrap_cx(cx), g.handle(), c"__pending_node".as_ptr(), ov.handle());
+        let _ = eval_in_current_global(
+            cx,
+            &format!("(globalThis.__nodes||(globalThis.__nodes={{}}))[{id}]=__pending_node"),
+        );
+    }
     obj.get()
 }
 
@@ -248,6 +269,7 @@ unsafe fn define_members(
         def(c"querySelector", doc_query, 1);
         def(c"querySelectorAll", doc_query_all, 1);
         def(c"createElement", doc_create_element, 1);
+        def(c"createTextNode", doc_create_text_node, 1);
         def(c"getElementsByTagName", el_get_by_tag, 1);
         def(c"getElementsByClassName", el_get_by_class, 1);
     } else {
@@ -264,6 +286,25 @@ unsafe fn define_members(
         def(c"addEventListener", el_add_event_listener, 2);
         def(c"dispatchEvent", el_dispatch_event, 1);
         def(c"getBoundingClientRect", el_get_bounding_rect, 0);
+        // DOM tree mutation + cloning.
+        def(c"insertBefore", el_insert_before, 2);
+        def(c"removeChild", el_remove_child, 1);
+        def(c"cloneNode", el_clone_node, 1);
+        // DOM traversal (read-only accessor properties).
+        prop(c"parentNode", el_get_parent_node, None);
+        prop(c"parentElement", el_get_parent_element, None);
+        prop(c"firstChild", el_get_first_child, None);
+        prop(c"lastChild", el_get_last_child, None);
+        prop(c"firstElementChild", el_get_first_element_child, None);
+        prop(c"nextSibling", el_get_next_sibling, None);
+        prop(c"previousSibling", el_get_prev_sibling, None);
+        prop(c"nextElementSibling", el_get_next_element_sibling, None);
+        prop(c"previousElementSibling", el_get_prev_element_sibling, None);
+        prop(c"children", el_get_children, None);
+        prop(c"childNodes", el_get_child_nodes, None);
+        // Control IDL reflections.
+        prop(c"value", el_get_value, Some(el_set_value));
+        prop(c"checked", el_get_checked, Some(el_set_checked));
         // Accessor properties (jQuery-core read/write surface).
         prop(
             c"textContent",
@@ -395,6 +436,226 @@ unsafe extern "C" fn el_get_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut
         Some(v) => return_string(cx, vp, &v),
         None => *vp = NullValue(),
     }
+    true
+}
+
+/// The next/previous sibling of `node` in `dom` skipping non-element nodes.
+unsafe fn next_element(dom: *mut Dom, node: NodeId) -> Option<NodeId> {
+    let mut cur = (*dom).next_sibling(node);
+    while let Some(n) = cur {
+        if (*dom).is_element(n) {
+            return Some(n);
+        }
+        cur = (*dom).next_sibling(n);
+    }
+    None
+}
+unsafe fn prev_element(dom: *mut Dom, node: NodeId) -> Option<NodeId> {
+    let mut cur = (*dom).prev_sibling(node);
+    while let Some(n) = cur {
+        if (*dom).is_element(n) {
+            return Some(n);
+        }
+        cur = (*dom).prev_sibling(n);
+    }
+    None
+}
+unsafe fn first_element_child(dom: *mut Dom, node: NodeId) -> Option<NodeId> {
+    let mut cur = (*dom).first_child(node);
+    while let Some(n) = cur {
+        if (*dom).is_element(n) {
+            return Some(n);
+        }
+        cur = (*dom).next_sibling(n);
+    }
+    None
+}
+
+macro_rules! node_getter {
+    ($name:ident, $f:expr) => {
+        unsafe extern "C" fn $name(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+            match this_node(vp) {
+                Some((dom, node)) => {
+                    let f: fn(*mut Dom, NodeId) -> Option<NodeId> = $f;
+                    return_node_or_null(cx, vp, dom, f(dom, node));
+                }
+                None => *vp = NullValue(),
+            }
+            true
+        }
+    };
+}
+node_getter!(el_get_parent_node, |dom, n| unsafe { (*dom).parent(n) });
+node_getter!(el_get_parent_element, |dom, n| unsafe {
+    (*dom).parent(n).filter(|&p| (*dom).is_element(p))
+});
+node_getter!(el_get_first_child, |dom, n| unsafe { (*dom).first_child(n) });
+node_getter!(el_get_last_child, |dom, n| unsafe { (*dom).last_child(n) });
+node_getter!(el_get_next_sibling, |dom, n| unsafe { (*dom).next_sibling(n) });
+node_getter!(el_get_prev_sibling, |dom, n| unsafe { (*dom).prev_sibling(n) });
+node_getter!(el_get_first_element_child, |d, n| unsafe { first_element_child(d, n) });
+node_getter!(el_get_next_element_sibling, |d, n| unsafe { next_element(d, n) });
+node_getter!(el_get_prev_element_sibling, |d, n| unsafe { prev_element(d, n) });
+
+/// `element.children` — element children as a static Array.
+unsafe extern "C" fn el_get_children(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let kids: Vec<NodeId> = (*dom).children(node).filter(|&c| (*dom).is_element(c)).collect();
+        node_array(cx, vp, dom, &kids);
+    } else {
+        *vp = NullValue();
+    }
+    true
+}
+
+/// `element.childNodes` — all child nodes as a static Array.
+unsafe extern "C" fn el_get_child_nodes(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let kids: Vec<NodeId> = (*dom).children(node).collect();
+        node_array(cx, vp, dom, &kids);
+    } else {
+        *vp = NullValue();
+    }
+    true
+}
+
+/// `element.value` getter (form controls) — the `value` attribute, else empty string.
+unsafe extern "C" fn el_get_value(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let v = this_node(vp)
+        .and_then(|(dom, n)| (*dom).element(n).and_then(|e| e.attr("value")).map(str::to_owned))
+        .unwrap_or_default();
+    return_string(cx, vp, &v);
+    true
+}
+/// `element.value = s` setter.
+unsafe extern "C" fn el_set_value(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let v = arg_string(cx, vp, argc, 0).unwrap_or_default();
+        (*dom).set_attr(node, "value", v);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `element.checked` getter — presence of the `checked` attribute.
+unsafe extern "C" fn el_get_checked(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let checked = this_node(vp)
+        .and_then(|(dom, n)| (*dom).element(n).map(|e| e.attr("checked").is_some()))
+        .unwrap_or(false);
+    *vp = BooleanValue(checked);
+    true
+}
+/// `element.checked = b` setter.
+unsafe extern "C" fn el_set_checked(_cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let on = argc > 0 && (*vp.add(2)).is_boolean() && (*vp.add(2)).to_boolean();
+        if on {
+            (*dom).set_attr(node, "checked", "");
+        } else {
+            (*dom).remove_attr(node, "checked");
+        }
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `parent.insertBefore(newChild, refChild)` — insert before `refChild` (or append if
+/// `refChild` is null). Returns the inserted node.
+unsafe extern "C" fn el_insert_before(_cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, parent)) = this_node(vp) else {
+        *vp = UndefinedValue();
+        return true;
+    };
+    let new_child = arg_object(vp, argc, 0).and_then(|o| node_and_dom(o).map(|(_, n)| (o, n)));
+    let reference = arg_object(vp, argc, 1).and_then(|o| node_and_dom(o).map(|(_, n)| n));
+    match new_child {
+        Some((obj, child)) => {
+            match reference {
+                Some(rf) => (*dom).insert_before(parent, child, rf),
+                None => (*dom).append_child(parent, child),
+            }
+            *vp = ObjectValue(obj);
+        }
+        None => *vp = NullValue(),
+    }
+    true
+}
+
+/// `parent.removeChild(child)` — detach `child`; returns it.
+unsafe extern "C" fn el_remove_child(_cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, parent)) = this_node(vp) else {
+        *vp = UndefinedValue();
+        return true;
+    };
+    match arg_object(vp, argc, 0).and_then(|o| node_and_dom(o).map(|(_, n)| (o, n))) {
+        Some((obj, child)) => {
+            (*dom).remove_child(parent, child);
+            *vp = ObjectValue(obj);
+        }
+        None => *vp = NullValue(),
+    }
+    true
+}
+
+/// `document.createTextNode(text)` → a detached text-node reflector.
+unsafe extern "C" fn doc_create_text_node(
+    cx: *mut RawJSContext,
+    argc: u32,
+    vp: *mut Value,
+) -> bool {
+    let Some((dom, _)) = this_node(vp) else {
+        *vp = NullValue();
+        return true;
+    };
+    let text = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    let node = (*dom).create_text(text);
+    *vp = ObjectValue(new_reflector(cx, dom, node));
+    true
+}
+
+/// Recursively clone `node` (elements copy tag+attrs; text copies content). `deep` clones
+/// children too. Returns the new detached node.
+unsafe fn clone_node(dom: *mut Dom, node: NodeId, deep: bool) -> NodeId {
+    let new = match (*dom).data(node) {
+        NodeData::Element(_) => {
+            let tag = (*dom).tag_name(node).unwrap_or("div").to_string();
+            let attrs: Vec<(String, String)> = (*dom)
+                .element(node)
+                .map(|e| {
+                    e.attrs
+                        .iter()
+                        .map(|a| (a.name.clone(), a.value.clone()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let el = (*dom).create_element(tag);
+            for (k, v) in attrs {
+                (*dom).set_attr(el, k, v);
+            }
+            el
+        }
+        NodeData::Text(t) => (*dom).create_text(t.clone()),
+        _ => (*dom).create_element("div"),
+    };
+    if deep {
+        let kids: Vec<NodeId> = (*dom).children(node).collect();
+        for k in kids {
+            let ck = clone_node(dom, k, true);
+            (*dom).append_child(new, ck);
+        }
+    }
+    new
+}
+
+/// `node.cloneNode(deep)` → a detached clone.
+unsafe extern "C" fn el_clone_node(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, node)) = this_node(vp) else {
+        *vp = NullValue();
+        return true;
+    };
+    let deep = argc > 0 && (*vp.add(2)).is_boolean() && (*vp.add(2)).to_boolean();
+    let clone = clone_node(dom, node, deep);
+    *vp = ObjectValue(new_reflector(cx, dom, clone));
     true
 }
 
@@ -1021,6 +1282,32 @@ mod tests {
             // Tier-0 BOM globals: window/self identity, a callable console (must not
             // throw), and an honest navigator.userAgent.
             console.log("bom probe", 1, {a: 2});   // must not throw
+            // Traversal + mutation + control IDL + cloning.
+            var ul = document.createElement("ul");
+            var li1 = document.createElement("li");
+            var li2 = document.createElement("li");
+            ul.appendChild(li1); ul.appendChild(li2);
+            var travOk = (ul.firstChild === li1) && (ul.lastChild === li2) &&
+                         (li1.nextSibling === li2) && (li2.previousSibling === li1) &&
+                         (li1.parentNode === ul) && (li1.parentElement === ul) &&
+                         (ul.children.length === 2) && (ul.childNodes.length === 2);
+            var li0 = document.createElement("li");
+            ul.insertBefore(li0, li1);
+            var insOk = (ul.firstChild === li0) && (ul.children.length === 3);
+            ul.removeChild(li0);
+            var remOk = (ul.children.length === 2) && (ul.firstChild === li1);
+            li1.appendChild(document.createTextNode("hello"));
+            var textOk = (li1.textContent === "hello");
+            var clone = ul.cloneNode(true);
+            var cloneOk = (clone.children.length === 2) && (clone !== ul);
+            var inp = document.createElement("input");
+            inp.value = "typed"; inp.checked = true;
+            var ctrlOk = (inp.value === "typed") && (inp.checked === true) &&
+                         (inp.getAttribute("value") === "typed");
+            inp.checked = false;
+            var domApis2 = travOk && insOk && remOk && textOk && cloneOk && ctrlOk &&
+                           (inp.checked === false);
+
             var bomOk = (window === globalThis) && (self === globalThis) &&
                         (typeof console.log === 'function') &&
                         (typeof navigator.userAgent === 'string') &&
@@ -1044,7 +1331,7 @@ mod tests {
               (parent.className === "box active") &&
               (parent.getAttribute("data-k") === "v") &&
               (Array.isArray(all)) && (all.length === 1) && (all[0].tagName === "P") &&
-              newApis && bomOk &&
+              newApis && bomOk && domApis2 &&
               (document.querySelector("span") === null) &&  // detached, not in tree
               (immediate === true) && (noListener === false) && (clicks === 1);
         "#;
