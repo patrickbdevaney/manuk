@@ -11,8 +11,9 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use manuk_compositor::Viewport;
 use manuk_css::Rgba;
-use manuk_paint::CpuPainter;
-use manuk_text::FontContext;
+use manuk_layout::TextStyle;
+use manuk_paint::{Canvas, CpuPainter};
+use manuk_text::{FontContext, FontFamily, FontKey};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, MouseScrollDelta, WindowEvent};
@@ -28,6 +29,9 @@ use crate::tab::Browser;
 use manuk_agent::Handoff;
 use manuk_compositor::TabId;
 use manuk_page::{fetch_html, Page};
+
+/// Height of the browser chrome band (toolbar) drawn above the page, in physical px.
+const CHROME_HEIGHT: f32 = 44.0;
 
 const WGSL: &str = r#"
 struct VsOut {
@@ -194,18 +198,45 @@ impl App {
         None
     }
 
-    /// Handle a left click at the current cursor: follow a link if one is under it.
+    /// Handle a left click at the current cursor: chrome (toolbar) if it lands in the band,
+    /// else follow a link under it on the page.
     fn handle_click(&mut self) {
         let (cx, cy) = self.cursor;
-        // Document coordinates: page starts at window top (chrome band is added later),
-        // shifted by the scroll offset.
-        let (doc_x, doc_y) = (cx, cy + self.scroll_y);
+        if cy < CHROME_HEIGHT {
+            self.handle_chrome_click(cx);
+            return;
+        }
+        // Page document coordinates: undo the chrome offset, add the scroll.
+        let (doc_x, doc_y) = (cx, cy - CHROME_HEIGHT + self.scroll_y);
         match self.link_at(doc_x, doc_y) {
             Some(url) => {
                 tracing::info!(url = %url, "click: follow link");
                 self.goto(&url);
             }
             None => tracing::info!(x = doc_x, y = doc_y, "click: no link under cursor"),
+        }
+    }
+
+    /// A click within the chrome band: back / forward / reload buttons, or the address field.
+    fn handle_chrome_click(&mut self, x: f32) {
+        if x < 30.0 {
+            if let Some(u) = self.history.back().map(str::to_string) {
+                self.goto_no_history(&u);
+            }
+        } else if x < 56.0 {
+            if let Some(u) = self.history.forward().map(str::to_string) {
+                self.goto_no_history(&u);
+            }
+        } else if x < 92.0 {
+            let u = self.url.clone();
+            if !u.is_empty() && u != "about:blank" {
+                self.goto_no_history(&u); // reload
+            }
+        } else {
+            // Focus the address field: open the omnibox pre-filled with the current URL.
+            self.omnibox_open = true;
+            self.omnibox_input = if self.url == "about:blank" { String::new() } else { self.url.clone() };
+            self.rerender();
         }
     }
 
@@ -226,7 +257,7 @@ impl App {
                 if let Some(w) = &self.window {
                     w.set_title(&format!("{} — manuk", page.title));
                 }
-                self.viewport = Viewport::new(width as f32, height as f32);
+                self.viewport = Viewport::new(width as f32, (height as f32 - CHROME_HEIGHT).max(1.0));
                 self.viewport.content_height = page.content_height;
                 self.browser.set_loaded(
                     self.tab_id,
@@ -241,35 +272,89 @@ impl App {
     }
 
     fn rerender(&mut self) {
-        let (Some(gpu), Some(page)) = (&mut self.gpu, &self.page) else {
+        let Some(gpu) = &self.gpu else {
             return;
         };
-        let mut canvas = CpuPainter::new(&self.fonts).render_scrolled(
-            &page.root_box,
-            gpu.config.width,
-            gpu.config.height,
-            Rgba::WHITE,
-            self.scroll_y,
-        );
+        let (w, h) = (gpu.config.width, gpu.config.height);
+        // The page is painted **below** the chrome band: shifting the scroll by
+        // -CHROME_HEIGHT moves page content down so its top sits just under the toolbar.
+        let mut canvas = match &self.page {
+            Some(page) => CpuPainter::new(&self.fonts).render_scrolled(
+                &page.root_box,
+                w,
+                h,
+                Rgba::WHITE,
+                self.scroll_y - CHROME_HEIGHT,
+            ),
+            None => Canvas::new(w, h, Rgba::WHITE),
+        };
 
-        // E1 find-in-page: highlights are an **overlay** composited after paint, so
-        // finding text never mutates the DOM or triggers a relayout.
+        // E1 find-in-page highlights (offset into the page region).
         if self.find_open && !self.find_session.is_empty() {
             const HIGHLIGHT: Rgba = Rgba { r: 255, g: 235, b: 59, a: 110 };
             const ACTIVE: Rgba = Rgba { r: 255, g: 145, b: 0, a: 255 };
+            let dy = CHROME_HEIGHT - self.scroll_y;
             for r in self.find_session.all_rects() {
-                canvas.fill_rect_blended(r.x, r.y - self.scroll_y, r.width, r.height, HIGHLIGHT);
+                canvas.fill_rect_blended(r.x, r.y + dy, r.width, r.height, HIGHLIGHT);
             }
             if let Some(m) = self.find_session.active_match() {
                 let b = m.bounds();
-                canvas.stroke_rect(b.x, b.y - self.scroll_y, b.width, b.height, ACTIVE, 2.0);
+                canvas.stroke_rect(b.x, b.y + dy, b.width, b.height, ACTIVE, 2.0);
             }
         }
 
-        gpu.upload(&canvas);
-        if let Some(w) = &self.window {
-            w.request_redraw();
+        self.draw_chrome(&mut canvas, w);
+
+        if let Some(gpu) = &mut self.gpu {
+            gpu.upload(&canvas);
         }
+        if let Some(win) = &self.window {
+            win.request_redraw();
+        }
+    }
+
+    /// Draw the browser chrome (toolbar) over the top [`CHROME_HEIGHT`] px: nav buttons, the
+    /// address/search field, and its current text (the URL, or the omnibox input while
+    /// editing).
+    fn draw_chrome(&self, canvas: &mut Canvas, w: u32) {
+        const BAND: Rgba = Rgba { r: 240, g: 240, b: 242, a: 255 };
+        const FIELD: Rgba = Rgba { r: 255, g: 255, b: 255, a: 255 };
+        const BORDER: Rgba = Rgba { r: 205, g: 205, b: 210, a: 255 };
+        const INK: Rgba = Rgba { r: 40, g: 40, b: 45, a: 255 };
+        const HINT: Rgba = Rgba { r: 150, g: 150, b: 155, a: 255 };
+
+        canvas.fill_rect(0.0, 0.0, w as f32, CHROME_HEIGHT, BAND);
+        canvas.fill_rect(0.0, CHROME_HEIGHT - 1.0, w as f32, 1.0, BORDER);
+
+        let font = |color: Rgba| TextStyle {
+            font_key: FontKey { family: FontFamily::SansSerif, bold: false, italic: false },
+            font_size: 15.0,
+            color,
+            line_height: 18.0,
+        };
+        let baseline = CHROME_HEIGHT / 2.0 + 5.0;
+        // Nav "buttons" (drawn as glyphs; their hit zones are in `handle_click`).
+        let back_ink = if self.page.is_some() { INK } else { HINT };
+        canvas.draw_text(&self.fonts, 14.0, baseline, "\u{2039}", &font(back_ink)); // ‹
+        canvas.draw_text(&self.fonts, 40.0, baseline, "\u{203A}", &font(back_ink)); // ›
+        canvas.draw_text(&self.fonts, 68.0, baseline - 1.0, "\u{25CB}", &font(INK)); // ○ reload
+
+        // Address/search field.
+        let field_x = 100.0;
+        let field_w = (w as f32 - field_x - 12.0).max(20.0);
+        canvas.fill_rect(field_x, 7.0, field_w, CHROME_HEIGHT - 14.0, FIELD);
+        canvas.stroke_rect(field_x, 7.0, field_w, CHROME_HEIGHT - 14.0, BORDER, 1.0);
+
+        let (text, ink) = if self.omnibox_open {
+            (format!("{}\u{2502}", self.omnibox_input), INK) // trailing caret
+        } else if self.url.is_empty() || self.url == "about:blank" {
+            ("Search or enter address".to_string(), HINT)
+        } else {
+            (self.url.clone(), INK)
+        };
+        // Clip the text to the field width by trimming from the left when overlong.
+        let padded = field_x + 10.0;
+        canvas.draw_text(&self.fonts, padded, baseline, &clip_text(&text, field_w - 20.0), &font(ink));
     }
 
     /// Re-run find over the current fragment tree (after a query edit, zoom, or resize).
@@ -567,6 +652,7 @@ impl App {
                 Key::Named(NamedKey::Escape) => {
                     self.omnibox_open = false;
                     self.omnibox_input.clear();
+                    self.rerender();
                     return true;
                 }
                 Key::Named(NamedKey::Enter) => {
@@ -583,16 +669,19 @@ impl App {
                 Key::Named(NamedKey::Backspace) => {
                     self.omnibox_input.pop();
                     self.log_suggestions();
+                    self.rerender();
                     return true;
                 }
                 Key::Character(c) if !ctrl && !alt => {
                     self.omnibox_input.push_str(c);
                     self.log_suggestions();
+                    self.rerender();
                     return true;
                 }
                 Key::Named(NamedKey::Space) if !ctrl && !alt => {
                     self.omnibox_input.push(' ');
                     self.log_suggestions();
+                    self.rerender();
                     return true;
                 }
                 _ => {}
@@ -672,7 +761,8 @@ impl App {
                 }
                 "l" => {
                     self.omnibox_open = true;
-                    self.omnibox_input.clear();
+                    self.omnibox_input = if self.url == "about:blank" { String::new() } else { self.url.clone() };
+                    self.rerender();
                     tracing::info!("omnibox: type a URL or a search, Enter to go, Esc to cancel");
                     true
                 }
@@ -824,7 +914,7 @@ impl ApplicationHandler for App {
                 if let Some(page) = &mut self.page {
                     page.relayout_zoomed(&self.fonts, w as f32, self.zoom);
                     self.viewport.width = w as f32;
-                    self.viewport.height = h as f32;
+                    self.viewport.height = (h as f32 - CHROME_HEIGHT).max(1.0);
                     self.viewport.content_height = page.content_height;
                 }
                 self.clamp_scroll();
@@ -894,6 +984,19 @@ impl ApplicationHandler for App {
             }
             _ => {}
         }
+    }
+}
+
+/// Trim `s` to roughly fit `max_w` px (approximate: ~8px/char at the chrome font size),
+/// appending an ellipsis when trimmed. Good enough for a toolbar; exact metrics aren't
+/// needed to avoid overflow.
+fn clip_text(s: &str, max_w: f32) -> String {
+    let max_chars = (max_w / 8.0).max(1.0) as usize;
+    if s.chars().count() <= max_chars {
+        s.to_string()
+    } else {
+        let head: String = s.chars().take(max_chars.saturating_sub(1)).collect();
+        format!("{head}\u{2026}")
     }
 }
 

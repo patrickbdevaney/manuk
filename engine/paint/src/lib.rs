@@ -72,6 +72,20 @@ pub struct Canvas {
 }
 
 impl Canvas {
+    /// A blank canvas filled with `background` — for a page-less view (new tab) that still
+    /// needs browser chrome drawn on it.
+    pub fn new(width: u32, height: u32, background: Rgba) -> Self {
+        let mut pixmap = tiny_skia::Pixmap::new(width.max(1), height.max(1))
+            .expect("valid pixmap dimensions");
+        pixmap.fill(tiny_skia::Color::from_rgba8(
+            background.r,
+            background.g,
+            background.b,
+            background.a,
+        ));
+        Canvas { pixmap }
+    }
+
     pub fn width(&self) -> u32 {
         self.pixmap.width()
     }
@@ -126,6 +140,46 @@ impl Canvas {
         };
         self.pixmap
             .stroke_path(&path, &paint, &stroke, tiny_skia::Transform::identity(), None);
+    }
+
+    /// Fill an opaque rect (used for browser chrome bands drawn over the page).
+    pub fn fill_rect(&mut self, x: f32, y: f32, width: f32, height: f32, color: Rgba) {
+        fill_rect(&mut self.pixmap, Rect { x, y, width, height }, color);
+    }
+
+    /// Draw a text string with its baseline at `baseline`, left edge at `origin_x`. Shapes
+    /// and rasterizes via `fonts`. Used for browser chrome (address bar, buttons) — the
+    /// page's own text goes through the layout/paint pipeline, not this.
+    pub fn draw_text(
+        &mut self,
+        fonts: &FontContext,
+        origin_x: f32,
+        baseline: f32,
+        text: &str,
+        style: &TextStyle,
+    ) {
+        let run = fonts.shape(text, style.font_key, style.font_size);
+        for g in &run.glyphs {
+            let Some(bitmap) = fonts.rasterize(g.ch, style.font_key, style.font_size) else {
+                continue;
+            };
+            if bitmap.metrics.width == 0 || bitmap.metrics.height == 0 {
+                continue;
+            }
+            let pen_x = origin_x + g.x;
+            let left = (pen_x + bitmap.metrics.xmin as f32).round() as i32;
+            let top = (baseline - bitmap.metrics.ymin as f32 - bitmap.metrics.height as f32).round()
+                as i32;
+            blit_coverage(
+                &mut self.pixmap,
+                &bitmap.coverage,
+                bitmap.metrics.width,
+                bitmap.metrics.height,
+                left,
+                top,
+                style.color,
+            );
+        }
     }
 }
 
