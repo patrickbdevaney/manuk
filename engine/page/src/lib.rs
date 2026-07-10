@@ -450,6 +450,73 @@ fn collapse_ws(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// A site hard-wall detected **honestly** (F2) — a page that blocks non-mainstream
+/// browsers. Manuk never solves or bypasses these; it presents an honest interstitial.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HardWall {
+    /// The documented `cf-mitigated: challenge` response header (a bot challenge).
+    Challenge,
+    /// `403 Forbidden` — often an access/bot wall.
+    Forbidden,
+    /// `429 Too Many Requests` — rate/bot limiting.
+    RateLimited,
+}
+
+impl HardWall {
+    fn describe(self) -> &'static str {
+        match self {
+            HardWall::Challenge => "the site served a bot-challenge (cf-mitigated)",
+            HardWall::Forbidden => "the site refused the request (HTTP 403)",
+            HardWall::RateLimited => "the site rate-limited the request (HTTP 429)",
+        }
+    }
+}
+
+/// Detect a hard-wall response **honestly** from its status + a header lookup. Returns
+/// `None` for a normal response. (The `cf-mitigated: challenge` header is Cloudflare's
+/// own documented signal; 403/429 are the coarse fallback.)
+pub fn detect_hard_wall(status: u16, header: impl Fn(&str) -> Option<String>) -> Option<HardWall> {
+    if header("cf-mitigated")
+        .map(|v| v.trim().eq_ignore_ascii_case("challenge"))
+        .unwrap_or(false)
+    {
+        return Some(HardWall::Challenge);
+    }
+    match status {
+        403 => Some(HardWall::Forbidden),
+        429 => Some(HardWall::RateLimited),
+        _ => None,
+    }
+}
+
+/// The honest graceful-degradation interstitial (F2): a calm page explaining that the
+/// site blocks non-mainstream browsers and that **Manuk won't impersonate another
+/// browser**, with honest options (retry / copy URL / open elsewhere). It contains
+/// **no** challenge-solving or bypass — it is UX honesty, not evasion.
+pub fn interstitial_html(url: &str, wall: HardWall) -> String {
+    let safe_url = url
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;");
+    format!(
+        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Site unavailable in Manuk</title>\
+         <style>body{{font-family:sans-serif;max-width:40em;margin:4em auto;padding:0 1em;color:#222;line-height:1.5}}\
+         h1{{font-size:1.4em}} .u{{color:#06c;word-break:break-all}} ul{{padding-left:1.2em}}</style></head>\
+         <body><h1>This site blocks non-mainstream browsers</h1>\
+         <p><span class=\"u\">{safe_url}</span> did not load: {reason}.</p>\
+         <p>Manuk <strong>will not impersonate another browser</strong> to get past it — \
+         doing so would be dishonest and fragile. Your options:</p>\
+         <ul><li><strong>Retry</strong> — the wall may be transient.</li>\
+         <li><strong>Copy the URL</strong> and open it in another browser you trust.</li>\
+         <li>Continue browsing sites that serve standards-based engines.</li></ul>\
+         <p style=\"color:#888;font-size:.9em\">Manuk identifies itself truthfully and \
+         solves no challenges.</p></body></html>",
+        safe_url = safe_url,
+        reason = wall.describe()
+    )
+}
+
 /// **Streaming page load with a first-paint checkpoint (B-latency, end to end).**
 /// For `http(s)` URLs, streams the body via [`manuk_net::fetch_streaming`] into an
 /// incremental [`manuk_html::StreamParser`], laying out the partial DOM at the
@@ -609,6 +676,36 @@ mod tests {
             page.content_height > wide,
             "narrower viewport should wrap taller"
         );
+    }
+
+    #[test]
+    fn hard_wall_detection_and_honest_interstitial() {
+        // cf-mitigated:challenge → Challenge, regardless of status.
+        let hdr = |name: &str| (name == "cf-mitigated").then(|| "challenge".to_string());
+        assert_eq!(detect_hard_wall(200, hdr), Some(HardWall::Challenge));
+        // Bare status walls.
+        assert_eq!(detect_hard_wall(403, |_| None), Some(HardWall::Forbidden));
+        assert_eq!(detect_hard_wall(429, |_| None), Some(HardWall::RateLimited));
+        // A normal response is not a wall.
+        assert_eq!(detect_hard_wall(200, |_| None), None);
+
+        // The interstitial is honest — no bypass/challenge-solving language, and it
+        // renders (the pipeline can lay it out) with the URL escaped.
+        let html = interstitial_html("https://walled.example/?a=1&b=2", HardWall::Challenge);
+        assert!(html.contains("will not impersonate another browser"));
+        assert!(html.contains("solves no challenges"));
+        assert!(html.contains("&amp;")); // URL entity-escaped
+        for banned in ["bypass", "solve the challenge", "spoof"] {
+            assert!(
+                !html.to_lowercase().contains(banned),
+                "no evasion language: {banned}"
+            );
+        }
+        let fonts = FontContext::new();
+        let page = Page::load(&html, "manuk:interstitial", &fonts, 800.0);
+        assert!(page
+            .visible_text()
+            .contains("blocks non-mainstream browsers"));
     }
 
     #[test]

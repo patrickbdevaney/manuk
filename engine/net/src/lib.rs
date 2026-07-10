@@ -19,7 +19,9 @@ use bytes::Bytes;
 use futures_util::StreamExt;
 use http_body_util::{BodyStream, Full};
 use hyper::body::Incoming;
-use hyper::header::{ACCEPT, ACCEPT_ENCODING, CONTENT_ENCODING, LOCATION, USER_AGENT};
+use hyper::header::{
+    ACCEPT, ACCEPT_ENCODING, ACCEPT_LANGUAGE, CONTENT_ENCODING, LOCATION, USER_AGENT,
+};
 use hyper::Request;
 use hyper_rustls::HttpsConnector;
 use hyper_util::client::legacy::connect::HttpConnector;
@@ -33,8 +35,33 @@ use url::Url;
 #[cfg(feature = "adblock")]
 pub mod blocker;
 
-/// Identifies the engine truthfully — no competitor impersonation (CLAUDE.md Axis F).
-const USER_AGENT_STR: &str = concat!("Manuk/", env!("CARGO_PKG_VERSION"), " (+standards)");
+/// **Honest `User-Agent`** (F1) — truthful, never competitor mimicry (CLAUDE.md Axis
+/// F). Form: `Mozilla/5.0 (<real-os>; <real-arch>) Manuk/<ver> (+standards)`. The
+/// `Mozilla/5.0` prefix is the *universal* compatibility token (every engine + many
+/// bots send it; it names no specific competitor); the OS/arch are the machine's
+/// **real** values (`std::env::consts`), and the product token names Manuk + its real
+/// version. **No** Chrome/Safari/Firefox spoofing, header-order copying, or JA3/JA4
+/// mimicry — see the module policy + the `user_agent_is_honest` guard test.
+pub fn user_agent() -> &'static str {
+    static UA: OnceLock<String> = OnceLock::new();
+    UA.get_or_init(|| {
+        let os = match std::env::consts::OS {
+            "linux" => "X11; Linux",
+            "macos" => "Macintosh; macOS",
+            "windows" => "Windows NT",
+            other => other,
+        };
+        format!(
+            "Mozilla/5.0 ({}; {}) Manuk/{} (+standards)",
+            os,
+            std::env::consts::ARCH,
+            env!("CARGO_PKG_VERSION")
+        )
+    })
+}
+
+/// `Accept-Language` default (English; a real preference, not a fingerprint knob).
+const ACCEPT_LANGUAGE_STR: &str = "en-US,en;q=0.9";
 
 /// Maximum number of 3xx redirects to follow before giving up.
 const MAX_REDIRECTS: usize = 10;
@@ -484,15 +511,21 @@ async fn send_raw(
     let mut builder = Request::builder()
         .method(method)
         .uri(url.as_str())
-        .header(USER_AGENT, USER_AGENT_STR);
-    let (mut has_accept, mut has_ae) = (false, false);
+        .header(USER_AGENT, user_agent());
+    let (mut has_accept, mut has_al, mut has_ae) = (false, false, false);
     for (k, v) in headers {
         has_accept |= k.eq_ignore_ascii_case("accept");
+        has_al |= k.eq_ignore_ascii_case("accept-language");
         has_ae |= k.eq_ignore_ascii_case("accept-encoding");
         builder = builder.header(*k, *v);
     }
+    // A complete, consistently-ordered default header set (F1) — Accept,
+    // Accept-Language, Accept-Encoding — added only when the caller didn't set them.
     if !has_accept {
         builder = builder.header(ACCEPT, "text/html,application/xhtml+xml,*/*;q=0.8");
+    }
+    if !has_al {
+        builder = builder.header(ACCEPT_LANGUAGE, ACCEPT_LANGUAGE_STR);
     }
     if !has_ae {
         builder = builder.header(ACCEPT_ENCODING, "gzip, deflate, br");
@@ -590,6 +623,28 @@ mod tests {
     fn rejects_unknown_scheme() {
         let err = rt().block_on(fetch("ftp://example.com/")).unwrap_err();
         assert!(err.to_string().contains("scheme"), "got: {err}");
+    }
+
+    #[test]
+    fn user_agent_is_honest() {
+        let ua = user_agent();
+        // Truthful: names Manuk + the universal Mozilla/5.0 compat token.
+        assert!(ua.starts_with("Mozilla/5.0 ("), "got: {ua}");
+        assert!(ua.contains("Manuk/"), "must name Manuk: {ua}");
+        // The no-mimicry guard: never impersonate a mainstream browser engine.
+        for competitor in [
+            "Chrome",
+            "Safari",
+            "Firefox",
+            "Edg",
+            "AppleWebKit",
+            "Gecko/",
+        ] {
+            assert!(
+                !ua.contains(competitor),
+                "UA must not mimic {competitor}: {ua}"
+            );
+        }
     }
 
     #[test]
