@@ -22,6 +22,7 @@ members = [
     "engine/page",
     "shell",
     "agent",
+    "bidi",
     "store",
     "tests/wpt",
 ]
@@ -97,6 +98,7 @@ raw-window-handle = "0.6"
 manuk-net = { path = "engine/net" }
 manuk-dom = { path = "engine/dom" }
 manuk-a11y = { path = "engine/a11y" }
+manuk-agent = { path = "agent" }
 manuk-html = { path = "engine/html" }
 manuk-css = { path = "engine/css" }
 manuk-layout = { path = "engine/layout" }

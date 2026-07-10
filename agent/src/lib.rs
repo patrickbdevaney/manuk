@@ -21,6 +21,12 @@ use manuk_page::{fetch_html, Link, Page};
 pub mod forms;
 use manuk_text::FontContext;
 
+/// Re-exports so downstream drivers (E4's BiDi remote end) need not depend on the
+/// engine crates directly. `A11yRole` is aliased because this crate already has a
+/// `Role` (the chat-message role).
+pub use manuk_a11y::{A11yNode, Rect as A11yRect, Role as A11yRole};
+pub use manuk_net::user_agent;
+
 pub mod env;
 pub mod groq;
 
@@ -228,6 +234,32 @@ impl AgentBrowser {
     /// The history stack (oldest first) and the index of the current entry.
     pub fn history(&self) -> (&[String], usize) {
         (&self.history, self.hist_pos)
+    }
+
+    /// The currently loaded URL, or `None` before the first navigation.
+    pub fn current_url(&self) -> Option<&str> {
+        self.page.as_ref().map(|p| p.final_url.as_str())
+    }
+
+    /// The current page's title, or `None` before the first navigation.
+    pub fn current_title(&self) -> Option<&str> {
+        self.page.as_ref().map(|p| p.title.as_str())
+    }
+
+    /// The viewport this browser renders at.
+    pub fn viewport(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+
+    /// Resize the viewport and re-lay-out the current page at the new width, clamping
+    /// the scroll offset (a taller viewport can leave `scroll_y` past the new maximum).
+    pub fn set_viewport(&mut self, width: u32, height: u32) {
+        self.width = width.max(1);
+        self.height = height.max(1);
+        if let Some(page) = self.page.as_mut() {
+            page.relayout(&self.fonts, self.width as f32);
+        }
+        self.scroll_by(0.0);
     }
 
     pub fn can_go_back(&self) -> bool {

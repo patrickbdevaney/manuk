@@ -1,0 +1,31 @@
+[package]
+name = "manuk-bidi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "E4: a WebDriver BiDi remote end (JSON-RPC over WebSocket) driving the shared page pipeline. Standards-track, not CDP."
+
+[dependencies]
+manuk-agent.workspace = true
+
+anyhow.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+base64.workspace = true
+futures-util.workspace = true
+tokio-tungstenite = "0.24"
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net"] }
+futures-util.workspace = true
+serde_json.workspace = true
+base64.workspace = true
+tokio-tungstenite = "0.24"
+
+[[bin]]
+name = "manuk-bidi"
+path = "src/bin/manuk-bidi.rs"
