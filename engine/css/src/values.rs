@@ -298,7 +298,83 @@ pub fn parse_color(input: &str) -> Option<Rgba> {
     if lower.starts_with("rgb") {
         return parse_rgb_func(&lower);
     }
+    if lower.starts_with("hsl") {
+        return parse_hsl_func(&lower);
+    }
     named_color(&lower)
+}
+
+/// Parse `hsl()` / `hsla()` — hue in degrees (bare number or `deg`), saturation/lightness
+/// as percentages, optional `/ alpha` or 4th component. Comma- or space-separated.
+fn parse_hsl_func(s: &str) -> Option<Rgba> {
+    let open = s.find('(')?;
+    let close = s.rfind(')')?;
+    let inner = s[open + 1..close].replace('/', " ");
+    let parts: Vec<&str> = inner
+        .split([',', ' '])
+        .filter(|t| !t.trim().is_empty())
+        .collect();
+    if parts.len() < 3 {
+        return None;
+    }
+    let hue: f32 = parts[0]
+        .trim()
+        .trim_end_matches("deg")
+        .trim()
+        .parse()
+        .ok()?;
+    let sat: f32 = parts[1].trim().trim_end_matches('%').trim().parse().ok()?;
+    let light: f32 = parts[2].trim().trim_end_matches('%').trim().parse().ok()?;
+    let a = if parts.len() >= 4 {
+        let raw = parts[3].trim();
+        let v: f32 = raw.trim_end_matches('%').parse().ok()?;
+        let v = if raw.contains('%') { v / 100.0 } else { v };
+        (v * 255.0).round().clamp(0.0, 255.0) as u8
+    } else {
+        255
+    };
+    let (r, g, b) = hsl_to_rgb(hue, sat / 100.0, light / 100.0);
+    Some(Rgba::new(r, g, b, a))
+}
+
+/// HSL → RGB (CSS Color 4). `h` in degrees, `s`/`l` in `0..=1`.
+fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (u8, u8, u8) {
+    let s = s.clamp(0.0, 1.0);
+    let l = l.clamp(0.0, 1.0);
+    let h = h.rem_euclid(360.0) / 360.0;
+    let hue = |p: f32, q: f32, mut t: f32| -> f32 {
+        if t < 0.0 {
+            t += 1.0;
+        }
+        if t > 1.0 {
+            t -= 1.0;
+        }
+        if t < 1.0 / 6.0 {
+            p + (q - p) * 6.0 * t
+        } else if t < 1.0 / 2.0 {
+            q
+        } else if t < 2.0 / 3.0 {
+            p + (q - p) * (2.0 / 3.0 - t) * 6.0
+        } else {
+            p
+        }
+    };
+    let (r, g, b) = if s == 0.0 {
+        (l, l, l)
+    } else {
+        let q = if l < 0.5 { l * (1.0 + s) } else { l + s - l * s };
+        let p = 2.0 * l - q;
+        (
+            hue(p, q, h + 1.0 / 3.0),
+            hue(p, q, h),
+            hue(p, q, h - 1.0 / 3.0),
+        )
+    };
+    (
+        (r * 255.0).round() as u8,
+        (g * 255.0).round() as u8,
+        (b * 255.0).round() as u8,
+    )
 }
 
 fn parse_hex(hex: &str) -> Option<Rgba> {
@@ -425,6 +501,12 @@ mod tests {
             Some(Rgba::new(102, 51, 153, 255))
         );
         assert_eq!(parse_color("nonsense"), None);
+        // hsl(): red, green, a mid-grey, and hsla with alpha.
+        assert_eq!(parse_color("hsl(0, 100%, 50%)"), Some(Rgba::new(255, 0, 0, 255)));
+        assert_eq!(parse_color("hsl(120 100% 50%)"), Some(Rgba::new(0, 255, 0, 255)));
+        assert_eq!(parse_color("hsl(0, 0%, 50%)"), Some(Rgba::new(128, 128, 128, 255)));
+        assert_eq!(parse_color("hsla(240, 100%, 50%, 0.5)").unwrap().a, 128);
+        assert_eq!(parse_color("hsl(240deg 100% 50%)"), Some(Rgba::new(0, 0, 255, 255)));
     }
 
     #[test]
