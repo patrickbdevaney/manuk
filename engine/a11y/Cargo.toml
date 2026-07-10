@@ -1,0 +1,13 @@
+[package]
+name = "manuk-a11y"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Accessibility / semantic tree over the arena DOM. Feeds screen readers (via accesskit) and the agent's structured observation channel."
+
+[dependencies]
+manuk-dom.workspace = true
+
+[dev-dependencies]
+manuk-html.workspace = true

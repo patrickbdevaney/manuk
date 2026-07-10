@@ -11,6 +11,7 @@ resolver = "2"
 members = [
     "engine/net",
     "engine/dom",
+    "engine/a11y",
     "engine/html",
     "engine/css",
     "engine/layout",
@@ -95,6 +96,7 @@ raw-window-handle = "0.6"
 # --- internal crates ---
 manuk-net = { path = "engine/net" }
 manuk-dom = { path = "engine/dom" }
+manuk-a11y = { path = "engine/a11y" }
 manuk-html = { path = "engine/html" }
 manuk-css = { path = "engine/css" }
 manuk-layout = { path = "engine/layout" }

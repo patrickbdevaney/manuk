@@ -16,6 +16,7 @@ path = "src/bin/agent-run.rs"
 
 [dependencies]
 manuk-page.workspace = true
+manuk-a11y.workspace = true
 manuk-paint.workspace = true
 manuk-net.workspace = true
 manuk-text.workspace = true

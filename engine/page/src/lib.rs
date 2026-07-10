@@ -297,6 +297,11 @@ impl Page {
         damage
     }
 
+    /// Shared access to the DOM (e.g. to build the §4a accessibility tree).
+    pub fn dom(&self) -> &Dom {
+        &self.dom
+    }
+
     /// Mutable access to the DOM (so a caller/JS binding can mutate the tree, then
     /// call [`relayout_incremental`](Self::relayout_incremental)).
     pub fn dom_mut(&mut self) -> &mut Dom {

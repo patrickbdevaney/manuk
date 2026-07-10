@@ -2754,6 +2754,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "manuk-a11y"
+version = "0.1.0"
+dependencies = [
+ "manuk-dom",
+ "manuk-html",
+]
+
+[[package]]
 name = "manuk-agent"
 version = "0.1.0"
 dependencies = [
@@ -2761,6 +2769,7 @@ dependencies = [
  "async-trait",
  "base64",
  "bytes",
+ "manuk-a11y",
  "manuk-net",
  "manuk-page",
  "manuk-paint",
