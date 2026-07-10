@@ -332,6 +332,27 @@ Live capability run (qwen/qwen3.6-27b, screenshots rendered by our own engine):
 4/4 capabilities passed
 ```
 
+### Bundled local model (INFERENCE.MD §2 — no API key, no network model call)
+
+The same four capabilities run against a **locally launched `llama-server`** through
+the keyless `OpenAiCompatBackend::local_llama` preset — identical `run_task`, only the
+backend differs. `scripts/setup-local-model.sh` fetches exactly one model (never the
+whole manifest), caches it outside the repo in `$MANUK_CACHE`, and launches the server;
+GPU layers auto-fit to free VRAM (set `MANUK_NGL` to pin). Run the gate with
+`agent-local-suite`.
+
+Measured on this harness (Linux, 8 GB GPU, auto-fit offload) — **not rounded**:
+
+| model (key)         | quant                         | suite result | vs Groq/qwen3.6-27B 4/4 |
+|---------------------|-------------------------------|:------------:|:-----------------------:|
+| `gemma-4-e4b`       | unsloth UD-Q4_K_XL (QAT)      | **4/4**      | clears                  |
+| `qwen3.5-4b-q4km`   | unsloth Q4_K_M                | **4/4**      | clears                  |
+| `qwen3.5-9b-q4km`   | unsloth Q4_K_M                | available, unverified on this harness |    |
+| `gemma-4-e2b-mobile`| unsloth UD-Q2_K_XL            | available, unverified on this harness |    |
+
+Both gated entries clear the baseline the cloud model set. The other two stay selectable
+but are labeled unverified — presence in the manifest is not validation.
+
 ## The JS-engine modification boundary
 
 Per CLAUDE.md's most important section: `engine/js` **configures and binds to**

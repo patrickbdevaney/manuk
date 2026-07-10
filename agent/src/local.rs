@@ -89,6 +89,13 @@ impl OpenAiCompatBackend {
             .with_max_tokens(2048)
     }
 
+    /// INFERENCE.MD §2 — the **bundled local model** preset: a `llama-server` on
+    /// `127.0.0.1:<port>` with **no API key**. The model is resolved from `/v1/models`,
+    /// which a single-model `llama-server` advertises exactly one of.
+    pub fn local_llama(port: u16) -> Self {
+        Self::at(&format!("http://127.0.0.1:{port}")).with_label("llama.cpp")
+    }
+
     pub fn with_model(self, model: impl Into<String>) -> Self {
         *self.model.lock().expect("model lock") = Some(model.into());
         self

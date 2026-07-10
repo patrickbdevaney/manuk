@@ -47,6 +47,9 @@ pub mod groq;
 /// §4c — local inference backends (llama.cpp / vLLM / LM Studio / Ollama).
 pub mod local;
 
+/// INFERENCE.MD §2 — the bundled-local-model manifest (a menu, not a download list).
+pub mod model_manifest;
+
 /// Default model — a Groq-hosted multimodal model (overridable via `GROQ_MODEL`).
 pub const DEFAULT_MODEL: &str = "qwen/qwen3.6-27b";
 
