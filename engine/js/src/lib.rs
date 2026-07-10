@@ -122,6 +122,10 @@ pub mod bindings {
 #[cfg(feature = "spidermonkey")]
 pub mod spidermonkey;
 
+/// D3 Step-0 prototype: an `Element.textContent`-style binding over the arena DOM.
+#[cfg(feature = "spidermonkey")]
+pub mod bindings_prototype;
+
 #[cfg(test)]
 mod tests {
     use super::*;

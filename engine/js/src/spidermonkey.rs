@@ -27,7 +27,7 @@ use crate::{JsError, JsRuntime, JsValue};
 /// deliberately leaked so it lives for the whole process.
 static ENGINE: OnceLock<Option<JSEngineHandle>> = OnceLock::new();
 
-fn engine_handle() -> Result<JSEngineHandle, JsError> {
+pub(crate) fn engine_handle() -> Result<JSEngineHandle, JsError> {
     ENGINE
         .get_or_init(|| match JSEngine::init() {
             Ok(engine) => {
