@@ -17,7 +17,9 @@ fn main() {
 
     match manuk_wpt::find_wpt_checkout() {
         Some(dir) => eprintln!("WPT checkout: {} (upstream runner: TODO)", dir.display()),
-        None => eprintln!("(set WPT_DIR to a web-platform-tests checkout to enable the upstream runner)"),
+        None => eprintln!(
+            "(set WPT_DIR to a web-platform-tests checkout to enable the upstream runner)"
+        ),
     }
 
     if !report.all_passed() {

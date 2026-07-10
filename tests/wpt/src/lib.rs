@@ -184,9 +184,7 @@ pub fn run_layout_suite(fonts: &FontContext) -> Report {
             fonts,
             800.0,
         );
-        let d = blocks(&root)
-            .into_iter()
-            .find(|b| b.background.is_some());
+        let d = blocks(&root).into_iter().find(|b| b.background.is_some());
         match d {
             Some(b) => approx(b.rect.width, 800.0 - 16.0, 0.5),
             None => Err("no #d box".into()),

@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # S-XP items 1-2: workspace builds (default + headless) and tests pass on all
+  # three OSes. macOS/Windows run on GitHub's hosted runners.
+  build-test:
+    name: build+test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: build (default features)
+        run: cargo build --workspace
+      - name: build (headless, no default features)
+        run: cargo build --workspace --no-default-features
+      - name: test
+        run: cargo test --workspace
+
+  lint:
+    name: fmt + clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace -- -D warnings
+
+  # S-XP item 3: the release profile's platform static-linking targets must each
+  # produce a *working* binary, not merely compile. Headless (no gui) so wgpu isn't
+  # pulled into a static target.
+  static-binary:
+    name: static release (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl   # fully static (musl)
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc       # static CRT (see .cargo/config.toml)
+          - os: macos-latest
+            target: aarch64-apple-darwin         # standard framework linking
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: musl toolchain (linux only)
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: build release (headless, static)
+        run: cargo build --release --workspace --no-default-features --target ${{ matrix.target }}
+      - name: smoke — the binary actually runs and renders a PNG
+        shell: bash
+        run: |
+          printf '<title>CI</title><body><h1>hello</h1><p>manuk static build works</p></body>' > ci.html
+          BIN="target/${{ matrix.target }}/release/manuk"
+          [ -f "$BIN.exe" ] && BIN="$BIN.exe"
+          "$BIN" render "file://$PWD/ci.html" -o ci.png --width 320
+          test -s ci.png && echo "OK: rendered ci.png ($(wc -c < ci.png) bytes)"
+
+  # Verify the heavy feature builds on Linux CI (per P0.5). macOS/Windows feature
+  # builds rely on servo/mozjs prebuilt archives (documented); tracked in P0.5.
+  features-linux:
+    name: feature builds (linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: SpiderMonkey (mozjs) feature
+        run: cargo build -p manuk-js --features spidermonkey
+      - name: Stylo feature
+        run: cargo build -p manuk-css --features stylo

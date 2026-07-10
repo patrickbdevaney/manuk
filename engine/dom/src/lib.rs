@@ -314,7 +314,7 @@ impl Dom {
             }
             NodeData::Text(t) => {
                 let trimmed = t.trim();
-                let _ = write!(out, "#text {:?}", trimmed);
+                let _ = write!(out, "#text {trimmed:?}");
             }
             NodeData::Comment(c) => {
                 let _ = write!(out, "<!-- {} -->", c.trim());

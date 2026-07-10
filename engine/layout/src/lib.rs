@@ -154,7 +154,9 @@ fn is_block_level(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
 
 fn is_rendered(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
     match dom.data(node) {
-        NodeData::Element(_) => !matches!(styles.get(&node).map(|s| s.display), Some(Display::None)),
+        NodeData::Element(_) => {
+            !matches!(styles.get(&node).map(|s| s.display), Some(Display::None))
+        }
         NodeData::Text(_) => true,
         _ => false,
     }
@@ -184,8 +186,14 @@ impl Ctx<'_> {
         let mr = s.margin.right.resolve(cw, 0.0);
         let mt = s.margin.top.resolve(cw, 0.0);
         let mb = s.margin.bottom.resolve(cw, 0.0);
-        let (pl, pr) = (s.padding.left.resolve(cw, 0.0), s.padding.right.resolve(cw, 0.0));
-        let (pt, pb) = (s.padding.top.resolve(cw, 0.0), s.padding.bottom.resolve(cw, 0.0));
+        let (pl, pr) = (
+            s.padding.left.resolve(cw, 0.0),
+            s.padding.right.resolve(cw, 0.0),
+        );
+        let (pt, pb) = (
+            s.padding.top.resolve(cw, 0.0),
+            s.padding.bottom.resolve(cw, 0.0),
+        );
         let (bl, br) = (s.border_width.left, s.border_width.right);
         let (bt, bb) = (s.border_width.top, s.border_width.bottom);
 
@@ -256,7 +264,9 @@ impl Ctx<'_> {
             return self.layout_flex(cx, cy, cw, &kids);
         }
 
-        let has_block = kids.iter().any(|&k| is_block_level(self.dom, self.styles, k));
+        let has_block = kids
+            .iter()
+            .any(|&k| is_block_level(self.dom, self.styles, k));
         if !has_block {
             // Pure inline formatting context.
             let items = self.collect_inline_group(&kids);
@@ -480,7 +490,11 @@ impl Ctx<'_> {
 
             let line_width = line
                 .last()
-                .map(|f| f.x + self.fonts.measure(&f.text, f.style.font_key, f.style.font_size))
+                .map(|f| {
+                    f.x + self
+                        .fonts
+                        .measure(&f.text, f.style.font_key, f.style.font_size)
+                })
                 .unwrap_or(0.0);
             let offset = match align {
                 TextAlign::Center => (cw - line_width).max(0.0) / 2.0,
@@ -600,6 +614,9 @@ mod tests {
                 }
             }
         });
-        assert!(first_x.unwrap() > 100.0, "centered text should be pushed right");
+        assert!(
+            first_x.unwrap() > 100.0,
+            "centered text should be pushed right"
+        );
     }
 }

@@ -14,8 +14,10 @@ use mozjs::jsapi::OnNewGlobalHookOption;
 use mozjs::jsval::UndefinedValue;
 use mozjs::rooted;
 use mozjs::rust::wrappers2::*;
-use mozjs::rust::{evaluate_script, CompileOptionsWrapper, JSEngine, JSEngineHandle, RealmOptions, Runtime};
 use mozjs::rust::SIMPLE_GLOBAL_CLASS;
+use mozjs::rust::{
+    evaluate_script, CompileOptionsWrapper, JSEngine, JSEngineHandle, RealmOptions, Runtime,
+};
 
 use crate::{JsError, JsRuntime, JsValue};
 
@@ -134,4 +136,3 @@ mod tests {
         );
     }
 }
-

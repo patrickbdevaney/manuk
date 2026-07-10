@@ -42,7 +42,12 @@ impl Page {
 
         let title = dom
             .find_first("title")
-            .map(|t| dom.text_content(t).split_whitespace().collect::<Vec<_>>().join(" "))
+            .map(|t| {
+                dom.text_content(t)
+                    .split_whitespace()
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            })
             .filter(|t| !t.is_empty())
             .unwrap_or_else(|| final_url.to_string());
 
@@ -106,7 +111,10 @@ impl Page {
     /// The page's visible text (body, whitespace-collapsed) — the agent's textual
     /// observation channel alongside the screenshot.
     pub fn visible_text(&self) -> String {
-        let node = self.dom.find_first("body").unwrap_or_else(|| self.dom.root());
+        let node = self
+            .dom
+            .find_first("body")
+            .unwrap_or_else(|| self.dom.root());
         collapse_ws(&self.dom.text_content(node))
     }
 }
@@ -128,8 +136,8 @@ pub async fn fetch_html(url: &str) -> Result<(String, String)> {
         Ok((resp.text(), resp.final_url.to_string()))
     } else {
         let path = url.strip_prefix("file://").unwrap_or(url);
-        let html = std::fs::read_to_string(path)
-            .with_context(|| format!("reading local file {path}"))?;
+        let html =
+            std::fs::read_to_string(path).with_context(|| format!("reading local file {path}"))?;
         Ok((html, url.to_string()))
     }
 }
@@ -163,10 +171,14 @@ mod tests {
         if fonts.face_count() == 0 {
             return;
         }
-        let html = "<body><p>the quick brown fox jumps over the lazy dog several times over</p></body>";
+        let html =
+            "<body><p>the quick brown fox jumps over the lazy dog several times over</p></body>";
         let mut page = Page::load(html, "x", &fonts, 600.0);
         let wide = page.content_height;
         page.relayout(&fonts, 90.0);
-        assert!(page.content_height > wide, "narrower viewport should wrap taller");
+        assert!(
+            page.content_height > wide,
+            "narrower viewport should wrap taller"
+        );
     }
 }

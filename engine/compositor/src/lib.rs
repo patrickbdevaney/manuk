@@ -270,8 +270,18 @@ mod tests {
     fn damage_bounding_unions_rects() {
         let mut d = Damage::new();
         assert!(d.is_empty());
-        d.add(Rect { x: 10.0, y: 10.0, width: 20.0, height: 20.0 });
-        d.add(Rect { x: 50.0, y: 5.0, width: 10.0, height: 10.0 });
+        d.add(Rect {
+            x: 10.0,
+            y: 10.0,
+            width: 20.0,
+            height: 20.0,
+        });
+        d.add(Rect {
+            x: 50.0,
+            y: 5.0,
+            width: 10.0,
+            height: 10.0,
+        });
         let b = d.bounding().unwrap();
         assert_eq!(b.x, 10.0);
         assert_eq!(b.y, 5.0);

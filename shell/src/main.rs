@@ -79,7 +79,9 @@ fn flag_value<'a>(args: &'a [String], names: &[&str]) -> Option<&'a str> {
 
 /// First positional argument (not starting with `-`).
 fn positional(args: &[String]) -> Option<&str> {
-    args.iter().find(|a| !a.starts_with('-')).map(String::as_str)
+    args.iter()
+        .find(|a| !a.starts_with('-'))
+        .map(String::as_str)
 }
 
 fn cmd_render(args: &[String]) -> Result<()> {
@@ -111,7 +113,10 @@ fn cmd_render(args: &[String]) -> Result<()> {
 
     println!("Rendered: {}", page.title);
     println!("  url:    {final_url}");
-    println!("  size:   {width}x{height}px  (content height {:.0}px)", page.content_height);
+    println!(
+        "  size:   {width}x{height}px  (content height {:.0}px)",
+        page.content_height
+    );
     println!("  wrote:  {out}");
     Ok(())
 }

@@ -127,7 +127,11 @@ impl Observation {
         } else {
             let _ = writeln!(s, "LINKS (index: text -> href):");
             for (i, l) in self.links.iter().enumerate().take(40) {
-                let t = if l.text.is_empty() { "(no text)" } else { &l.text };
+                let t = if l.text.is_empty() {
+                    "(no text)"
+                } else {
+                    &l.text
+                };
                 let _ = writeln!(s, "  {i}: {t} -> {}", l.href);
             }
         }

@@ -20,8 +20,8 @@ use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::{Window, WindowId};
 
 use crate::tab::Browser;
-use manuk_page::{fetch_html, Page};
 use manuk_compositor::TabId;
+use manuk_page::{fetch_html, Page};
 
 const WGSL: &str = r#"
 struct VsOut {
@@ -91,7 +91,10 @@ impl App {
     }
 
     fn load_page(&mut self, width: u32, height: u32) {
-        let rt = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
+        let rt = match tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+        {
             Ok(rt) => rt,
             Err(e) => {
                 tracing::error!("tokio runtime: {e}");
@@ -157,7 +160,11 @@ impl ApplicationHandler for App {
             }
         };
         let size = window.inner_size();
-        match pollster::block_on(Gpu::new(window.clone(), size.width.max(1), size.height.max(1))) {
+        match pollster::block_on(Gpu::new(
+            window.clone(),
+            size.width.max(1),
+            size.height.max(1),
+        )) {
             Ok(gpu) => {
                 self.window = Some(window);
                 self.gpu = Some(gpu);
@@ -226,9 +233,7 @@ struct Gpu {
 impl Gpu {
     async fn new(window: Arc<Window>, width: u32, height: u32) -> Result<Gpu> {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
-        let surface = instance
-            .create_surface(window)
-            .context("create_surface")?;
+        let surface = instance.create_surface(window).context("create_surface")?;
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::default(),
@@ -255,28 +260,27 @@ impl Gpu {
             source: wgpu::ShaderSource::Wgsl(WGSL.into()),
         });
 
-        let bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("present bgl"),
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("present bgl"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
                     },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-            });
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("present pl"),

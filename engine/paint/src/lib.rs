@@ -170,10 +170,7 @@ impl CpuPainter<'_> {
     ) {
         let run = self.fonts.shape(text, style.font_key, style.font_size);
         for g in &run.glyphs {
-            let Some(bitmap) = self
-                .fonts
-                .rasterize(g.ch, style.font_key, style.font_size)
-            else {
+            let Some(bitmap) = self.fonts.rasterize(g.ch, style.font_key, style.font_size) else {
                 continue;
             };
             if bitmap.metrics.width == 0 || bitmap.metrics.height == 0 {
@@ -183,8 +180,8 @@ impl CpuPainter<'_> {
             // fontdue: ymin is the baseline-relative lower bound (y-up). In screen
             // space (y-down) the glyph top sits at baseline - ymin - height.
             let left = (pen_x + bitmap.metrics.xmin as f32).round() as i32;
-            let top =
-                (baseline - bitmap.metrics.ymin as f32 - bitmap.metrics.height as f32).round() as i32;
+            let top = (baseline - bitmap.metrics.ymin as f32 - bitmap.metrics.height as f32).round()
+                as i32;
             blit_coverage(
                 pixmap,
                 &bitmap.coverage,
@@ -253,7 +250,9 @@ fn blit_coverage(
 
 #[inline]
 fn lerp(dst: u8, src: u8, a: f32) -> u8 {
-    (src as f32 * a + dst as f32 * (1.0 - a)).round().clamp(0.0, 255.0) as u8
+    (src as f32 * a + dst as f32 * (1.0 - a))
+        .round()
+        .clamp(0.0, 255.0) as u8
 }
 
 #[cfg(test)]
@@ -291,7 +290,12 @@ mod tests {
 
     #[test]
     fn renders_text_pixels() {
-        let canvas = render_html("<body style='margin:0'><p>Hello world</p></body>", "", 300, 80);
+        let canvas = render_html(
+            "<body style='margin:0'><p>Hello world</p></body>",
+            "",
+            300,
+            80,
+        );
         let fonts = FontContext::new();
         if fonts.face_count() == 0 {
             eprintln!("no system fonts; skipping text-pixel assertion");
@@ -305,6 +309,9 @@ mod tests {
         let canvas = render_html("<body><p>hi</p></body>", "", 64, 32);
         let png = canvas.encode_png().unwrap();
         // PNG magic number.
-        assert_eq!(&png[..8], &[0x89, b'P', b'N', b'G', b'\r', b'\n', 0x1a, b'\n']);
+        assert_eq!(
+            &png[..8],
+            &[0x89, b'P', b'N', b'G', b'\r', b'\n', 0x1a, b'\n']
+        );
     }
 }

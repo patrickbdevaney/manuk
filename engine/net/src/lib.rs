@@ -139,7 +139,15 @@ async fn send_once(
         Box::new(tcp)
     };
 
-    let mut resp = send_request(TokioIo::new(stream), method, &authority, &target, headers, body).await?;
+    let mut resp = send_request(
+        TokioIo::new(stream),
+        method,
+        &authority,
+        &target,
+        headers,
+        body,
+    )
+    .await?;
     resp.final_url = url.clone();
     Ok(resp)
 }

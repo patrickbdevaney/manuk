@@ -91,13 +91,21 @@ mod tests {
     #[test]
     fn two_grow_children_split_width() {
         let items = [
-            FlexItem { width: None, height: Some(20.0), grow: 1.0 },
-            FlexItem { width: None, height: Some(20.0), grow: 1.0 },
+            FlexItem {
+                width: None,
+                height: Some(20.0),
+                grow: 1.0,
+            },
+            FlexItem {
+                width: None,
+                height: Some(20.0),
+                grow: 1.0,
+            },
         ];
         let slots = solve_row(300.0, &items);
         assert_eq!(slots.len(), 2);
         // Each grow:1 child gets half.
-        assert!((slots[0].width - 150.0).abs() < 1.0, "got {:?}", slots);
+        assert!((slots[0].width - 150.0).abs() < 1.0, "got {slots:?}");
         assert!((slots[1].width - 150.0).abs() < 1.0);
         // Second is placed after the first on the main axis.
         assert!(slots[1].x >= slots[0].width - 1.0);
@@ -106,12 +114,20 @@ mod tests {
     #[test]
     fn fixed_child_keeps_its_width() {
         let items = [
-            FlexItem { width: Some(100.0), height: Some(20.0), grow: 0.0 },
-            FlexItem { width: None, height: Some(20.0), grow: 1.0 },
+            FlexItem {
+                width: Some(100.0),
+                height: Some(20.0),
+                grow: 0.0,
+            },
+            FlexItem {
+                width: None,
+                height: Some(20.0),
+                grow: 1.0,
+            },
         ];
         let slots = solve_row(300.0, &items);
         assert!((slots[0].width - 100.0).abs() < 1.0);
         // The grow child takes the remaining 200.
-        assert!((slots[1].width - 200.0).abs() < 1.0, "got {:?}", slots);
+        assert!((slots[1].width - 200.0).abs() < 1.0, "got {slots:?}");
     }
 }

@@ -166,7 +166,11 @@ fn parse_rgb_func(s: &str) -> Option<Rgba> {
     let b = comp(nums[2])?;
     let a = if nums.len() >= 4 {
         let av: f32 = nums[3].trim().trim_end_matches('%').parse().ok()?;
-        let av = if nums[3].contains('%') { av / 100.0 } else { av };
+        let av = if nums[3].contains('%') {
+            av / 100.0
+        } else {
+            av
+        };
         (av * 255.0).round().clamp(0.0, 255.0) as u8
     } else {
         255
@@ -220,9 +224,15 @@ mod tests {
         assert_eq!(parse_color("#f00"), Some(Rgba::new(255, 0, 0, 255)));
         assert_eq!(parse_color("#00ff00"), Some(Rgba::new(0, 255, 0, 255)));
         assert_eq!(parse_color("#0000ff80").unwrap().a, 128);
-        assert_eq!(parse_color("rgb(10, 20, 30)"), Some(Rgba::new(10, 20, 30, 255)));
+        assert_eq!(
+            parse_color("rgb(10, 20, 30)"),
+            Some(Rgba::new(10, 20, 30, 255))
+        );
         assert_eq!(parse_color("rgba(0,0,0,0.5)").unwrap().a, 128);
-        assert_eq!(parse_color("rebeccapurple"), Some(Rgba::new(102, 51, 153, 255)));
+        assert_eq!(
+            parse_color("rebeccapurple"),
+            Some(Rgba::new(102, 51, 153, 255))
+        );
         assert_eq!(parse_color("nonsense"), None);
     }
 

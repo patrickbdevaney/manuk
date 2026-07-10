@@ -112,7 +112,12 @@ impl InferenceBackend for GroqBackend {
         v["choices"][0]["message"]["content"]
             .as_str()
             .map(str::to_string)
-            .ok_or_else(|| anyhow!("no choices[0].message.content in response: {}", truncate(&resp.text(), 300)))
+            .ok_or_else(|| {
+                anyhow!(
+                    "no choices[0].message.content in response: {}",
+                    truncate(&resp.text(), 300)
+                )
+            })
     }
 
     fn name(&self) -> String {

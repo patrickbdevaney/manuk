@@ -462,7 +462,11 @@ fn parse_declarations(text: &str) -> Vec<Declaration> {
         let important = value.to_ascii_lowercase().ends_with("!important");
         if important {
             let cut = value.len() - "!important".len();
-            value = value[..cut].trim_end().trim_end_matches('!').trim().to_string();
+            value = value[..cut]
+                .trim_end()
+                .trim_end_matches('!')
+                .trim()
+                .to_string();
         }
         if name.is_empty() || value.is_empty() {
             continue;
@@ -513,6 +517,9 @@ impl MinimalCascade {
             .collect()
     }
 
+    // `self` (a unit struct) threads through the recursion for call-site symmetry
+    // with the public `cascade`; not a real parameter smell.
+    #[allow(clippy::only_used_in_recursion)]
     fn cascade_node(
         &self,
         dom: &Dom,
@@ -578,8 +585,8 @@ impl MinimalCascade {
 fn apply_ua_defaults(s: &mut ComputedStyle, tag: &str) {
     use Display::*;
     let (display, top_bottom_em, weight, scale): (Display, f32, u16, f32) = match tag {
-        "html" | "body" | "div" | "section" | "article" | "header" | "footer" | "nav"
-        | "main" | "aside" | "figure" | "figcaption" | "address" => (Block, 0.0, 400, 1.0),
+        "html" | "body" | "div" | "section" | "article" | "header" | "footer" | "nav" | "main"
+        | "aside" | "figure" | "figcaption" | "address" => (Block, 0.0, 400, 1.0),
         "p" | "blockquote" => (Block, 1.0, 400, 1.0),
         "h1" => (Block, 0.67, 700, 2.0),
         "h2" => (Block, 0.75, 700, 1.5),
