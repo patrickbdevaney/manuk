@@ -302,6 +302,29 @@ impl Page {
         &self.dom
     }
 
+    /// §4a — the accessibility / semantic tree for this page, **with element geometry**
+    /// taken from the current fragment tree. Shared by the agent's observation channel
+    /// and (eventually) the `accesskit` screen-reader bridge.
+    pub fn a11y_tree(&self) -> manuk_a11y::A11yNode {
+        let rects: std::collections::HashMap<_, _> = self
+            .root_box
+            .node_rects(&self.dom)
+            .into_iter()
+            .map(|(node, r)| {
+                (
+                    node,
+                    manuk_a11y::Rect {
+                        x: r.x,
+                        y: r.y,
+                        width: r.width,
+                        height: r.height,
+                    },
+                )
+            })
+            .collect();
+        manuk_a11y::build_tree_with_rects(&self.dom, &rects)
+    }
+
     /// Mutable access to the DOM (so a caller/JS binding can mutate the tree, then
     /// call [`relayout_incremental`](Self::relayout_incremental)).
     pub fn dom_mut(&mut self) -> &mut Dom {
@@ -631,6 +654,42 @@ fn hex(c: u8) -> Option<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// §4a — element geometry must come from the **real** layout pipeline, not a
+    /// synthetic map: the a11y tree's bboxes have to agree with the fragment tree,
+    /// and hit-testing a button's own center must return that button.
+    #[test]
+    fn a11y_tree_carries_real_layout_geometry_and_hit_tests() {
+        let fonts = FontContext::new();
+        let html = r#"<!DOCTYPE html><title>T</title><body>
+            <h1>Heading</h1>
+            <button>Sign in</button>
+            <p>filler</p>
+            </body>"#;
+        let page = Page::load(html, "http://example.test/", &fonts, 800.0);
+        let tree = page.a11y_tree();
+
+        let btn = tree
+            .find(&manuk_a11y::Role::Button, "Sign in")
+            .expect("button is in the a11y tree");
+        let bbox = btn.bbox.expect("button was laid out, so it has geometry");
+        assert!(bbox.width > 0.0 && bbox.height > 0.0, "degenerate bbox: {bbox:?}");
+
+        // The heading is laid out above the button (normal block flow).
+        let h1 = tree.find(&manuk_a11y::Role::Heading { level: 1 }, "Heading").unwrap();
+        assert!(h1.bbox.unwrap().y < bbox.y, "h1 should precede the button");
+
+        // Hit-testing the button's own center resolves to the button.
+        let (cx, cy) = bbox.center();
+        assert_eq!(tree.hit_test(cx, cy).map(|n| n.node), Some(btn.node));
+
+        // The viewport rendering carries a click point for the button.
+        let vp = manuk_a11y::Rect { x: 0.0, y: 0.0, width: 800.0, height: 600.0 };
+        assert!(tree
+            .to_viewport_lines(vp)
+            .iter()
+            .any(|l| l.starts_with("button \"Sign in\" @(")));
+    }
 
     #[test]
     fn loads_titles_links_and_text() {

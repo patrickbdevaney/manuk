@@ -13,23 +13,57 @@
 //! (accessible-name computation). It is deliberately a *subset*, and every gap is
 //! stated rather than silently approximated — see [`Role`] and [`accessible_name`].
 //!
-//! **Not yet modelled (documented, not faked):** element geometry (`bbox`) and
-//! viewport clipping — those need the layout fragment tree and are the tracked
-//! follow-up; `A11yNode::bbox` exists but is always `None` until that lands. Also
-//! absent: `aria-owns` re-parenting, live regions, and the full accname §2 recursion
-//! (we do one level of `aria-labelledby` dereference, not arbitrary nesting).
+//! **Geometry (§4a):** [`build_tree_with_rects`] attaches each element's absolute
+//! border-box from the layout fragment tree, enabling [`A11yNode::to_viewport_lines`]
+//! (viewport-clipped, with a click point per element), [`A11yNode::hit_test`], and
+//! [`A11yNode::find`] — so an agent can act by role+name or by coordinate rather than
+//! by link index. Nodes with no laid-out box keep `bbox == None` and are omitted from
+//! the viewport rendering, because an agent cannot click what has no place to click.
+//!
+//! **Not yet modelled (documented, not faked):** `aria-owns` re-parenting, live
+//! regions, and the full accname §2 recursion (we do one level of `aria-labelledby`
+//! dereference, not arbitrary nesting). Occlusion is not modelled either: `hit_test`
+//! picks the smallest containing box, which is not the same as the topmost painted
+//! box under a `z-index` stack.
 
 use std::collections::HashMap;
 
 use manuk_dom::{Dom, NodeId};
 
-/// A rectangle in CSS pixels. Present for the geometry follow-up; see module docs.
+/// A rectangle in absolute document CSS pixels.
+///
+/// Deliberately defined here rather than imported from `manuk-layout`: this crate
+/// stays dependency-lean (DOM only) so the `accesskit` bridge and the agent can use
+/// it without pulling the layout/text/css stack. Callers convert.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rect {
     pub x: f32,
     pub y: f32,
     pub width: f32,
     pub height: f32,
+}
+
+impl Rect {
+    pub fn right(&self) -> f32 {
+        self.x + self.width
+    }
+
+    pub fn bottom(&self) -> f32 {
+        self.y + self.height
+    }
+
+    /// Center point — where an agent should click this element.
+    pub fn center(&self) -> (f32, f32) {
+        (self.x + self.width / 2.0, self.y + self.height / 2.0)
+    }
+
+    /// Whether the two rects overlap (touching edges do not count).
+    pub fn intersects(&self, other: &Rect) -> bool {
+        self.x < other.right()
+            && other.x < self.right()
+            && self.y < other.bottom()
+            && other.y < self.bottom()
+    }
 }
 
 /// The subset of ARIA roles we compute. `Generic` is the honest fallback for
@@ -166,7 +200,8 @@ pub struct A11yNode {
     pub role: Role,
     /// Accessible name (may be empty — an unnamed `generic` container is normal).
     pub name: String,
-    /// Element geometry. Always `None` until the layout-fragment wiring lands.
+    /// Absolute border box, when the element produced one. `None` for elements the
+    /// layout never boxed — an agent has nowhere to click those.
     pub bbox: Option<Rect>,
     pub children: Vec<A11yNode>,
 }
@@ -179,20 +214,73 @@ impl A11yNode {
         out.into_iter()
     }
 
+    /// Nodes that carry semantics (unnamed `generic` containers are noise).
+    fn interesting(&self) -> impl Iterator<Item = &A11yNode> {
+        self.iter()
+            .filter(|n| n.role != Role::Generic || !n.name.is_empty())
+    }
+
+    fn render(n: &A11yNode) -> String {
+        match &n.role {
+            Role::Heading { level } if !n.name.is_empty() => {
+                format!("heading level {level} {:?}", n.name)
+            }
+            Role::Heading { level } => format!("heading level {level}"),
+            r if n.name.is_empty() => r.as_str().to_string(),
+            r => format!("{} {:?}", r.as_str(), n.name),
+        }
+    }
+
     /// A flat, human/agent-readable rendering: one `role "name"` line per node that
     /// carries semantics (unnamed `generic` containers are skipped as noise).
     pub fn to_observation_lines(&self) -> Vec<String> {
-        self.iter()
-            .filter(|n| n.role != Role::Generic || !n.name.is_empty())
-            .map(|n| match &n.role {
-                Role::Heading { level } if !n.name.is_empty() => {
-                    format!("heading level {level} {:?}", n.name)
+        self.interesting().map(Self::render).collect()
+    }
+
+    /// §4a — the same rendering **clipped to the viewport**, with each element's
+    /// click point appended. An agent can act on these directly: "click at (x, y)".
+    ///
+    /// `viewport` is in absolute document coordinates (i.e. already offset by the
+    /// current scroll), so a caller scrolled to `scroll_y` passes
+    /// `Rect { y: scroll_y, height: viewport_height, .. }`. Nodes with no geometry
+    /// (`bbox == None`) are **omitted**, because an agent cannot act on them and
+    /// listing them would imply it could.
+    pub fn to_viewport_lines(&self, viewport: Rect) -> Vec<String> {
+        self.interesting()
+            .filter_map(|n| {
+                let b = n.bbox?;
+                if !b.intersects(&viewport) {
+                    return None;
                 }
-                Role::Heading { level } => format!("heading level {level}"),
-                r if n.name.is_empty() => r.as_str().to_string(),
-                r => format!("{} {:?}", r.as_str(), n.name),
+                let (cx, cy) = b.center();
+                Some(format!("{} @({:.0},{:.0})", Self::render(n), cx, cy))
             })
             .collect()
+    }
+
+    /// The first node matching `role` whose accessible name equals `name`
+    /// (case-insensitive). This is how an agent says "click the *Sign in* button"
+    /// without needing a CSS selector.
+    pub fn find(&self, role: &Role, name: &str) -> Option<&A11yNode> {
+        self.iter()
+            .find(|n| &n.role == role && n.name.eq_ignore_ascii_case(name))
+    }
+
+    /// The deepest node whose `bbox` contains `(x, y)` — hit-testing for click-by-
+    /// coordinate. Deepest wins, since a button inside a `main` should beat the `main`.
+    pub fn hit_test(&self, x: f32, y: f32) -> Option<&A11yNode> {
+        let mut best: Option<(&A11yNode, f32)> = None;
+        for n in self.iter() {
+            let Some(b) = n.bbox else { continue };
+            if x >= b.x && x < b.right() && y >= b.y && y < b.bottom() {
+                let area = b.width * b.height;
+                // Smallest containing box == deepest meaningful element.
+                if best.is_none_or(|(_, a)| area < a) {
+                    best = Some((n, area));
+                }
+            }
+        }
+        best.map(|(n, _)| n)
     }
 }
 
@@ -466,9 +554,19 @@ fn find_label_for(dom: &Dom, id: &str) -> Option<String> {
 /// (e.g. `<img alt="">`, i.e. `presentation`) are dropped but their children are
 /// **kept and reparented**, matching how ARIA `role=presentation` behaves.
 pub fn build_tree(dom: &Dom) -> A11yNode {
+    build_tree_with_rects(dom, &HashMap::new())
+}
+
+/// Build the accessibility tree, attaching **element geometry** from `rects`.
+///
+/// `rects` maps a DOM node to its absolute border-box rect — produced by
+/// `manuk_layout::LayoutBox::node_rects()` (converted to this crate's [`Rect`]).
+/// Nodes with no entry keep `bbox == None`, which is honest: an anonymous or
+/// unlaid-out node has no place to click.
+pub fn build_tree_with_rects(dom: &Dom, rects: &HashMap<NodeId, Rect>) -> A11yNode {
     let index = id_index(dom);
     let root = dom.root();
-    let children = build_children(dom, root, &index);
+    let children = build_children(dom, root, &index, rects);
     A11yNode {
         node: root,
         role: Role::Document,
@@ -478,7 +576,12 @@ pub fn build_tree(dom: &Dom) -> A11yNode {
     }
 }
 
-fn build_children(dom: &Dom, parent: NodeId, index: &HashMap<String, NodeId>) -> Vec<A11yNode> {
+fn build_children(
+    dom: &Dom,
+    parent: NodeId,
+    index: &HashMap<String, NodeId>,
+    rects: &HashMap<NodeId, Rect>,
+) -> Vec<A11yNode> {
     let mut out = Vec::new();
     for child in dom.children(parent).collect::<Vec<_>>() {
         if !dom.is_element(child) {
@@ -490,7 +593,7 @@ fn build_children(dom: &Dom, parent: NodeId, index: &HashMap<String, NodeId>) ->
         // The tree root already *is* the document; `<html>` must not nest a second
         // `document` node inside it. Reparent its children instead.
         if dom.element(child).is_some_and(|e| e.name == "html") {
-            out.extend(build_children(dom, child, index));
+            out.extend(build_children(dom, child, index, rects));
             continue;
         }
         match role_of(dom, child) {
@@ -500,12 +603,12 @@ fn build_children(dom: &Dom, parent: NodeId, index: &HashMap<String, NodeId>) ->
                     node: child,
                     role,
                     name,
-                    bbox: None,
-                    children: build_children(dom, child, index),
+                    bbox: rects.get(&child).copied(),
+                    children: build_children(dom, child, index, rects),
                 });
             }
             // presentational: drop the node, keep (reparent) its children
-            None => out.extend(build_children(dom, child, index)),
+            None => out.extend(build_children(dom, child, index, rects)),
         }
     }
     out
@@ -798,6 +901,97 @@ mod tests {
 
         // Exactly one image node (the decorative one was dropped).
         assert_eq!(lines.iter().filter(|l| l.starts_with("image")).count(), 1);
+    }
+
+    fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
+        Rect {
+            x,
+            y,
+            width: w,
+            height: h,
+        }
+    }
+
+    /// §4a geometry: bboxes attach, the viewport clips, and each surviving element
+    /// carries the point an agent should click.
+    #[test]
+    fn geometry_attaches_and_viewport_clips_with_click_points() {
+        let dom = dom_with(|d, body| {
+            let b1 = d.create_element("button");
+            let t = d.create_text("Near");
+            d.append_child(b1, t);
+            d.append_child(body, b1);
+            let b2 = d.create_element("button");
+            let t = d.create_text("Far");
+            d.append_child(b2, t);
+            d.append_child(body, b2);
+            let b3 = d.create_element("button"); // no rect -> no geometry
+            let t = d.create_text("Unlaid");
+            d.append_child(b3, t);
+            d.append_child(body, b3);
+        });
+        let body = dom.children(dom.children(dom.root()).next().unwrap()).next().unwrap();
+        let kids: Vec<NodeId> = dom.children(body).collect();
+
+        let mut rects = HashMap::new();
+        rects.insert(kids[0], rect(10.0, 20.0, 100.0, 40.0)); // in viewport
+        rects.insert(kids[1], rect(10.0, 5000.0, 100.0, 40.0)); // far below
+        // kids[2] intentionally absent
+
+        let tree = build_tree_with_rects(&dom, &rects);
+        assert_eq!(tree.find(&Role::Button, "Near").unwrap().bbox, Some(rects[&kids[0]]));
+        assert_eq!(tree.find(&Role::Button, "Unlaid").unwrap().bbox, None);
+
+        // Viewport = the first 800px of the document.
+        let lines = tree.to_viewport_lines(rect(0.0, 0.0, 1024.0, 800.0));
+        // "Near" survives with its center; "Far" is clipped; "Unlaid" has no geometry.
+        assert_eq!(lines, vec!["button \"Near\" @(60,40)"]);
+
+        // Scrolled down, "Far" comes into view and "Near" leaves.
+        let scrolled = tree.to_viewport_lines(rect(0.0, 4800.0, 1024.0, 800.0));
+        assert_eq!(scrolled, vec!["button \"Far\" @(60,5020)"]);
+    }
+
+    #[test]
+    fn hit_test_picks_the_deepest_containing_element() {
+        let dom = dom_with(|d, body| {
+            let main = d.create_element("main");
+            let btn = d.create_element("button");
+            let t = d.create_text("Go");
+            d.append_child(btn, t);
+            d.append_child(main, btn);
+            d.append_child(body, main);
+        });
+        let body = dom.children(dom.children(dom.root()).next().unwrap()).next().unwrap();
+        let main = dom.children(body).next().unwrap();
+        let btn = dom.children(main).next().unwrap();
+
+        let mut rects = HashMap::new();
+        rects.insert(main, rect(0.0, 0.0, 1000.0, 1000.0));
+        rects.insert(btn, rect(100.0, 100.0, 80.0, 30.0));
+
+        let tree = build_tree_with_rects(&dom, &rects);
+        // Inside the button: the button wins over the enclosing main.
+        assert_eq!(tree.hit_test(120.0, 110.0).map(|n| n.role.clone()), Some(Role::Button));
+        // Outside the button but inside main.
+        assert_eq!(tree.hit_test(500.0, 500.0).map(|n| n.role.clone()), Some(Role::Main));
+        // Outside everything.
+        assert!(tree.hit_test(5000.0, 5000.0).is_none());
+    }
+
+    #[test]
+    fn find_is_case_insensitive_and_role_scoped() {
+        let dom = dom_with(|d, body| {
+            let a = d.create_element("a");
+            d.set_attr(a, "href", "/in");
+            let t = d.create_text("Sign In");
+            d.append_child(a, t);
+            d.append_child(body, a);
+        });
+        let tree = build_tree(&dom);
+        assert!(tree.find(&Role::Link, "sign in").is_some());
+        // Right name, wrong role.
+        assert!(tree.find(&Role::Button, "sign in").is_none());
     }
 
     #[test]

@@ -214,7 +214,25 @@ impl AgentBrowser {
             title: page.title.clone(),
             text: page.visible_text(),
             links: page.links(),
-            semantics: manuk_a11y::build_tree(page.dom()).to_observation_lines(),
+            semantics: {
+                // §4a — clip the semantic tree to what is actually on screen, and give
+                // each element a click point. If the page produced no geometry at all
+                // (nothing laid out), fall back to the unclipped tree rather than
+                // silently reporting an empty page.
+                let tree = page.a11y_tree();
+                let viewport = manuk_a11y::Rect {
+                    x: 0.0,
+                    y: self.scroll_y,
+                    width: self.width as f32,
+                    height: self.height as f32,
+                };
+                let lines = tree.to_viewport_lines(viewport);
+                if lines.is_empty() {
+                    tree.to_observation_lines()
+                } else {
+                    lines
+                }
+            },
             scroll_y: self.scroll_y,
             content_height: page.content_height,
             viewport: (self.width, self.height),

@@ -54,6 +54,37 @@ impl Rect {
         width: 0.0,
         height: 0.0,
     };
+
+    pub fn right(&self) -> f32 {
+        self.x + self.width
+    }
+
+    pub fn bottom(&self) -> f32 {
+        self.y + self.height
+    }
+
+    /// The smallest rect containing both. A zero-area rect still contributes its
+    /// origin, which matters for empty inline boxes.
+    pub fn union(&self, other: &Rect) -> Rect {
+        let x = self.x.min(other.x);
+        let y = self.y.min(other.y);
+        let right = self.right().max(other.right());
+        let bottom = self.bottom().max(other.bottom());
+        Rect {
+            x,
+            y,
+            width: right - x,
+            height: bottom - y,
+        }
+    }
+
+    /// Whether the two rects overlap (touching edges do not count).
+    pub fn intersects(&self, other: &Rect) -> bool {
+        self.x < other.right()
+            && other.x < self.right()
+            && self.y < other.bottom()
+            && other.y < self.bottom()
+    }
 }
 
 /// The visual style of a text run, resolved for shaping + paint.
@@ -72,8 +103,27 @@ pub struct TextFragment {
     pub x: f32,
     pub line_top: f32,
     pub baseline: f32,
+    /// Advance width of this run — lets a caller derive the run's rect without
+    /// re-measuring (§4a element geometry).
+    pub width: f32,
     pub text: String,
     pub style: TextStyle,
+    /// Deepest **element** ancestor of the text this run came from (e.g. the `<a>` in
+    /// `<p>text <a>link</a></p>`). Inline elements produce no `LayoutBox`, so this is
+    /// the only way to recover their geometry.
+    pub node: Option<NodeId>,
+}
+
+impl TextFragment {
+    /// This run's box: `line_height` tall, anchored at the line top.
+    pub fn rect(&self) -> Rect {
+        Rect {
+            x: self.x,
+            y: self.line_top,
+            width: self.width,
+            height: self.style.line_height,
+        }
+    }
 }
 
 /// Contents of a laid-out box.
@@ -105,6 +155,50 @@ impl LayoutBox {
                 c.walk(f);
             }
         }
+    }
+
+    /// Absolute border-box rect per DOM node (§4a element geometry).
+    ///
+    /// Two sources are unioned:
+    ///
+    /// * **Block boxes** — each `LayoutBox` carrying a `node`.
+    /// * **Inline runs** — an inline element (`<a>`, `<button>`) produces *no*
+    ///   `LayoutBox`; its text becomes [`TextFragment`]s in the containing block's
+    ///   inline context. Those runs record the element they came from, so the element's
+    ///   rect is the union of its runs. Without this, exactly the elements an agent
+    ///   wants to click would have no geometry at all.
+    ///
+    /// A run is also unioned into its **element ancestors** (walked via `dom`), so
+    /// `<a><em>x</em></a>` gives `<a>` a rect and not just `<em>`. A node producing
+    /// several boxes/runs (an inline split across lines) gets their union — the single
+    /// bounding box a caller wants for hit-testing. Anonymous boxes contribute nothing.
+    pub fn node_rects(&self, dom: &Dom) -> std::collections::HashMap<NodeId, Rect> {
+        fn add(map: &mut std::collections::HashMap<NodeId, Rect>, node: NodeId, rect: Rect) {
+            map.entry(node)
+                .and_modify(|r| *r = r.union(&rect))
+                .or_insert(rect);
+        }
+        let mut map: std::collections::HashMap<NodeId, Rect> = std::collections::HashMap::new();
+        self.walk(&mut |b| {
+            if let Some(node) = b.node {
+                add(&mut map, node, b.rect);
+            }
+            if let BoxContent::Inline(frags) = &b.content {
+                for f in frags {
+                    let Some(owner) = f.node else { continue };
+                    let rect = f.rect();
+                    add(&mut map, owner, rect);
+                    let mut cur = dom.parent(owner);
+                    while let Some(p) = cur {
+                        if dom.is_element(p) {
+                            add(&mut map, p, rect);
+                        }
+                        cur = dom.parent(p);
+                    }
+                }
+            }
+        });
+        map
     }
 
     /// Shift this box and its whole subtree by `(dx, dy)` (absolute coords). Used to
@@ -1399,17 +1493,21 @@ impl Ctx<'_> {
         let mut pending_space = false;
         let mut first = true;
         for &n in nodes {
-            self.collect_inline_node(n, &mut out, &mut pending_space, &mut first);
+            self.collect_inline_node(n, &mut out, &mut pending_space, &mut first, None);
         }
         out
     }
 
+    /// `owner` is the deepest **element** ancestor seen so far; each word records it so
+    /// inline elements (`<a>`, `<button>`) — which never get a `LayoutBox` — can still
+    /// have their geometry recovered from the runs they produced (§4a).
     fn collect_inline_node(
         &self,
         node: NodeId,
         out: &mut Vec<InlineItem>,
         pending_space: &mut bool,
         first: &mut bool,
+        owner: Option<NodeId>,
     ) {
         match self.dom.data(node) {
             NodeData::Text(t) => {
@@ -1418,7 +1516,7 @@ impl Ctx<'_> {
                 for ch in t.chars() {
                     if ch.is_whitespace() {
                         if !buf.is_empty() {
-                            push_word(out, &mut buf, style, pending_space, first);
+                            push_word(out, &mut buf, style, pending_space, first, owner);
                         }
                         *pending_space = true;
                     } else {
@@ -1426,7 +1524,7 @@ impl Ctx<'_> {
                     }
                 }
                 if !buf.is_empty() {
-                    push_word(out, &mut buf, style, pending_space, first);
+                    push_word(out, &mut buf, style, pending_space, first, owner);
                 }
             }
             NodeData::Element(_) => {
@@ -1435,7 +1533,7 @@ impl Ctx<'_> {
                 }
                 let children: Vec<NodeId> = self.dom.children(node).collect();
                 for c in children {
-                    self.collect_inline_node(c, out, pending_space, first);
+                    self.collect_inline_node(c, out, pending_space, first, Some(node));
                 }
             }
             _ => {}
@@ -1512,20 +1610,24 @@ impl Ctx<'_> {
                 line_avail = w;
                 cur.push(LineFrag {
                     x: 0.0,
+                    width: word_w,
                     text: item.text.clone(),
                     style: item.style,
                     ascent: lm.ascent,
                     descent: lm.descent,
+                    node: item.node,
                 });
                 pen = word_w;
             } else {
                 let x = if cur.is_empty() { 0.0 } else { pen + space_w };
                 cur.push(LineFrag {
                     x,
+                    width: word_w,
                     text: item.text.clone(),
                     style: item.style,
                     ascent: lm.ascent,
                     descent: lm.descent,
+                    node: item.node,
                 });
                 pen = x + word_w;
             }
@@ -1543,10 +1645,12 @@ impl Ctx<'_> {
 /// One word's builder within a line, before its vertical position is committed.
 struct LineFrag {
     x: f32,
+    width: f32,
     text: String,
     style: TextStyle,
     ascent: f32,
     descent: f32,
+    node: Option<NodeId>,
 }
 
 /// Commit a line's fragments at vertical `y` within band `[line_left, +line_avail)`,
@@ -1583,8 +1687,10 @@ fn close_line(
             x: line_left + offset + f.x,
             line_top: y,
             baseline,
+            width: f.width,
             text: f.text.clone(),
             style: f.style,
+            node: f.node,
         });
     }
     y + line_h
@@ -1595,6 +1701,8 @@ struct InlineItem {
     text: String,
     style: TextStyle,
     space_before: bool,
+    /// Deepest element ancestor of this word's text node.
+    node: Option<NodeId>,
 }
 
 fn push_word(
@@ -1603,11 +1711,13 @@ fn push_word(
     style: TextStyle,
     pending_space: &mut bool,
     first: &mut bool,
+    node: Option<NodeId>,
 ) {
     out.push(InlineItem {
         text: std::mem::take(buf),
         style,
         space_before: *pending_space && !*first,
+        node,
     });
     *first = false;
     *pending_space = false;
@@ -1625,6 +1735,63 @@ mod tests {
         let fonts = FontContext::new();
         let root = layout_document(&dom, &styles, &fonts, width);
         (dom, root)
+    }
+
+    /// §4a — inline elements never produce a `LayoutBox`, so without threading node
+    /// identity through the inline runs, links and buttons (exactly what an agent
+    /// clicks) would have no geometry. `node_rects` must recover them.
+    #[test]
+    fn node_rects_recovers_inline_element_geometry() {
+        let (dom, root) = layout_html(
+            "<body><p>before <a href='/x'>click me</a> after</p></body>",
+            "",
+            800.0,
+        );
+        let rects = root.node_rects(&dom);
+
+        let a = dom.find_first("a").unwrap();
+        let p = dom.find_first("p").unwrap();
+
+        let ar = rects.get(&a).expect("the inline <a> must have geometry");
+        assert!(ar.width > 0.0 && ar.height > 0.0, "degenerate <a> rect: {ar:?}");
+
+        // The <a> is strictly narrower than its containing <p> block box, and sits
+        // inside it — i.e. it is a genuine sub-rect, not the parent's box copied.
+        let pr = rects.get(&p).unwrap();
+        assert!(ar.width < pr.width, "a={ar:?} should be narrower than p={pr:?}");
+        assert!(ar.x >= pr.x && ar.right() <= pr.right() + 0.01);
+
+        // "before" precedes the link on the same line, so the link starts to its right.
+        assert!(ar.x > pr.x, "link should not start at the paragraph's left edge");
+    }
+
+    /// A run is unioned into its element ancestors, so `<a><em>x</em></a>` gives the
+    /// `<a>` a rect too — not only the innermost `<em>`.
+    #[test]
+    fn node_rects_propagates_runs_to_element_ancestors() {
+        let (dom, root) = layout_html("<body><p><a href='/x'><em>hi</em></a></p></body>", "", 800.0);
+        let rects = root.node_rects(&dom);
+        let a = dom.find_first("a").unwrap();
+        let em = dom.find_first("em").unwrap();
+        let ar = rects.get(&a).expect("<a> gets geometry from its descendant run");
+        let er = rects.get(&em).expect("<em> carries the run itself");
+        assert_eq!(ar, er, "a single run means <a> and <em> share the rect");
+    }
+
+    /// An inline element split across two lines gets the union of both runs.
+    #[test]
+    fn node_rects_unions_an_inline_split_across_lines() {
+        // A narrow viewport forces the link's words onto separate lines.
+        let (dom, root) = layout_html(
+            "<body><p><a href='/x'>wrapping link text here</a></p></body>",
+            "",
+            60.0,
+        );
+        let rects = root.node_rects(&dom);
+        let a = dom.find_first("a").unwrap();
+        let ar = rects.get(&a).unwrap();
+        // Taller than one line => the runs really were unioned across lines.
+        assert!(ar.height > 20.0, "expected a multi-line union, got {ar:?}");
     }
 
     #[test]
