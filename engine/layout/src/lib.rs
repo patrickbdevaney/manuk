@@ -734,9 +734,12 @@ impl Ctx<'_> {
             .filter(|&k| is_rendered(self.dom, self.styles, k))
             .collect();
 
-        // Flex containers route through taffy.
+        // Flex/grid containers route through taffy.
         if display == Display::Flex {
             return self.layout_flex(node, cx, cy, cw, &kids);
+        }
+        if display == Display::Grid {
+            return self.layout_grid(node, cx, cy, cw, &kids);
         }
 
         // Floated / out-of-flow children never count toward the "has block" decision.
@@ -1397,8 +1400,14 @@ impl Ctx<'_> {
         // Lay out content at a provisional origin, then re-origin once placed.
         let mut inner = FloatContext::new(0.0, content_w);
         let (content, ch) = self.layout_children(node, 0.0, 0.0, content_w, &mut inner);
+        let frame_v = mt + mb + pt + pb + bt + bb;
+        // Height: definite wins; else if both top+bottom are set the box stretches to fill
+        // between them; else it is content height (CSS2 §10.6.4).
         let content_height = match s.height {
-            Dim::Auto => ch.max(inner.lowest_bottom().max(0.0)),
+            Dim::Auto => match (top, bottom) {
+                (Some(t), Some(b)) => (cb.height - t - b - frame_v).max(0.0),
+                _ => ch.max(inner.lowest_bottom().max(0.0)),
+            },
             other => other.resolve(cb.height, ch),
         };
 
@@ -1550,13 +1559,65 @@ impl Ctx<'_> {
         };
         let slots = flex::solve_flex(cw, container_h, &items, &config);
 
+        self.place_taffy_slots(&block_kids, &slots, cx, cy)
+    }
+
+    /// Lay out a `display:grid` container via taffy, then place each item at its grid slot.
+    fn layout_grid(&self, node: NodeId, cx: f32, cy: f32, cw: f32, kids: &[NodeId]) -> (BoxContent, f32) {
+        let block_kids: Vec<NodeId> = kids.iter().copied().filter(|&k| self.dom.is_element(k)).collect();
+        if block_kids.is_empty() {
+            return (BoxContent::Block(vec![]), 0.0);
+        }
+        let items: Vec<flex::FlexItem> = block_kids
+            .iter()
+            .map(|&k| {
+                let s = &self.styles[&k];
+                flex::FlexItem {
+                    width: match s.width {
+                        Dim::Px(p) => Some(p),
+                        _ => None,
+                    },
+                    height: match s.height {
+                        Dim::Px(p) => Some(p),
+                        _ => None,
+                    },
+                    grow: 0.0,
+                    shrink: 1.0,
+                    basis: flex::FlexBasis::Auto,
+                }
+            })
+            .collect();
+        let cs = &self.styles[&node];
+        let container_h = match cs.height {
+            Dim::Px(p) => Some(p),
+            _ => None,
+        };
+        let slots = flex::solve_grid(
+            cw,
+            container_h,
+            &items,
+            &cs.grid_template_columns,
+            &cs.grid_template_rows,
+            cs.row_gap,
+            cs.column_gap,
+        );
+        self.place_taffy_slots(&block_kids, &slots, cx, cy)
+    }
+
+    /// Place each child at its taffy-assigned 2D slot, laying it out as a block within the
+    /// slot's width. Shared by flex and grid.
+    fn place_taffy_slots(
+        &self,
+        block_kids: &[NodeId],
+        slots: &[flex::Slot],
+        cx: f32,
+        cy: f32,
+    ) -> (BoxContent, f32) {
         let mut boxes = Vec::new();
         let mut max_h = 0.0f32;
         for (&k, slot) in block_kids.iter().zip(slots.iter()) {
-            // Each flex item establishes an independent formatting context at its 2D slot.
             let mut item_floats = FloatContext::new(cx + slot.x, cx + slot.x + slot.width);
             let r = self.layout_block(k, slot.width, cx + slot.x, cy + slot.y, 0.0, &mut item_floats);
-            // The container grows to contain the lowest item edge (taffy already placed them).
             let bottom = slot.y + r.margin_top + r.boxx.rect.height + r.margin_bottom;
             max_h = max_h.max(bottom);
             boxes.push(r.boxx);

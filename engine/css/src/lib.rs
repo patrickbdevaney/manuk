@@ -171,6 +171,16 @@ pub enum FlexWrap {
     WrapReverse,
 }
 
+/// One CSS Grid track size (`grid-template-columns`/`-rows` entry).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum TrackSize {
+    Px(f32),
+    /// A flexible `fr` track.
+    Fr(f32),
+    Percent(f32),
+    Auto,
+}
+
 /// Four-sided box values (margin, padding, border widths).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Sides<T> {
@@ -242,6 +252,9 @@ pub struct ComputedStyle {
     pub flex_shrink: f32,
     /// `flex-basis` (item); `Dim::Auto` = `auto`.
     pub flex_basis: Dim,
+    /// `grid-template-columns` / `-rows` (container). Empty = none.
+    pub grid_template_columns: Vec<TrackSize>,
+    pub grid_template_rows: Vec<TrackSize>,
 }
 
 impl ComputedStyle {
@@ -285,6 +298,8 @@ impl ComputedStyle {
             flex_grow: 0.0,
             flex_shrink: 1.0,
             flex_basis: Dim::Auto,
+            grid_template_columns: Vec::new(),
+            grid_template_rows: Vec::new(),
         }
     }
 
@@ -1241,6 +1256,8 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         "flex-basis" => s.flex_basis = values::parse_dim(v, s.font_size),
         "flex" => parse_flex_shorthand(s, v),
         "order" => {} // parsed but not yet used in layout
+        "grid-template-columns" => s.grid_template_columns = parse_track_list(v, s.font_size),
+        "grid-template-rows" => s.grid_template_rows = parse_track_list(v, s.font_size),
         // The `border` family. Widths feed the box model; the color feeds paint; the line
         // style is not tracked (only presence, since `none`/`hidden` zero the width).
         "border" => {
@@ -1324,6 +1341,53 @@ fn parse_border_shorthand(v: &str, fs: f32) -> (Option<f32>, Option<Rgba>) {
         width = Some(3.0);
     }
     (width, color)
+}
+
+/// Parse a `grid-template-columns`/`-rows` track list, expanding a single-track
+/// `repeat(N, <track>)`. Line names and `minmax()` are not modeled.
+fn parse_track_list(v: &str, fs: f32) -> Vec<TrackSize> {
+    expand_grid_repeat(v)
+        .split_whitespace()
+        .filter_map(|t| parse_track(t, fs))
+        .collect()
+}
+
+fn parse_track(t: &str, fs: f32) -> Option<TrackSize> {
+    let t = t.trim();
+    if t.eq_ignore_ascii_case("auto") {
+        return Some(TrackSize::Auto);
+    }
+    if let Some(n) = t.strip_suffix("fr").and_then(|n| n.trim().parse::<f32>().ok()) {
+        return Some(TrackSize::Fr(n));
+    }
+    if let Some(p) = t.strip_suffix('%').and_then(|n| n.trim().parse::<f32>().ok()) {
+        return Some(TrackSize::Percent(p));
+    }
+    values::parse_length_px(t, fs).map(TrackSize::Px)
+}
+
+/// Expand `repeat(N, <single-track>)` occurrences into N copies of the track.
+fn expand_grid_repeat(v: &str) -> String {
+    let mut out = String::new();
+    let mut rest = v;
+    while let Some(idx) = rest.to_ascii_lowercase().find("repeat(") {
+        out.push_str(&rest[..idx]);
+        let after = &rest[idx + 7..];
+        let Some(end) = after.find(')') else { break };
+        if let Some((n, track)) = after[..end].split_once(',') {
+            if let Ok(count) = n.trim().parse::<usize>() {
+                for i in 0..count {
+                    if i > 0 || !out.ends_with(' ') {
+                        out.push(' ');
+                    }
+                    out.push_str(track.trim());
+                }
+            }
+        }
+        rest = &after[end + 1..];
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Parse the `flex` shorthand (`flex: <grow> <shrink>? <basis>?`, plus the `none`/`auto`/

@@ -11,7 +11,7 @@
 
 use manuk_css::{
     AlignItems as CssAlign, FlexDirection as CssDir, FlexWrap as CssWrap,
-    JustifyContent as CssJustify,
+    JustifyContent as CssJustify, TrackSize,
 };
 use taffy::prelude::*;
 
@@ -175,6 +175,77 @@ pub fn solve_flex(
                 width: l.size.width,
                 height: l.size.height,
             }
+        })
+        .collect()
+}
+
+/// Solve a CSS Grid layout via taffy. `cols`/`rows` are the track templates; items
+/// auto-place into the grid in order. Returns each item's 2D slot.
+pub fn solve_grid(
+    container_width: f32,
+    container_height: Option<f32>,
+    items: &[FlexItem],
+    cols: &[TrackSize],
+    rows: &[TrackSize],
+    row_gap: f32,
+    column_gap: f32,
+) -> Vec<Slot> {
+    let mut tree: TaffyTree<()> = TaffyTree::new();
+
+    let children: Vec<NodeId> = items
+        .iter()
+        .map(|it| {
+            tree.new_leaf(Style {
+                size: Size {
+                    width: it.width.map(length).unwrap_or(auto()),
+                    height: it.height.map(length).unwrap_or(auto()),
+                },
+                ..Default::default()
+            })
+            .expect("taffy grid leaf")
+        })
+        .collect();
+
+    let track = |t: &TrackSize| match t {
+        TrackSize::Px(p) => length(*p),
+        TrackSize::Fr(f) => fr(*f),
+        TrackSize::Percent(p) => percent(*p / 100.0),
+        TrackSize::Auto => auto(),
+    };
+    let root = tree
+        .new_with_children(
+            Style {
+                display: Display::Grid,
+                grid_template_columns: cols.iter().map(track).collect(),
+                grid_template_rows: rows.iter().map(track).collect(),
+                gap: Size { width: length(column_gap), height: length(row_gap) },
+                size: Size {
+                    width: length(container_width),
+                    height: container_height.map(length).unwrap_or(auto()),
+                },
+                ..Default::default()
+            },
+            &children,
+        )
+        .expect("taffy grid root");
+
+    tree.compute_layout(
+        root,
+        Size {
+            width: AvailableSpace::Definite(container_width),
+            height: match container_height {
+                Some(h) => AvailableSpace::Definite(h),
+                None => AvailableSpace::MinContent,
+            },
+        },
+    )
+    .expect("taffy grid compute");
+
+    children
+        .iter()
+        .map(|&c| {
+            let l = tree.layout(c).expect("taffy grid layout");
+            Slot { x: l.location.x, y: l.location.y, width: l.size.width, height: l.size.height }
         })
         .collect()
 }
