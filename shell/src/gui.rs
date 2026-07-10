@@ -113,6 +113,23 @@ struct App {
 
     /// Last known cursor position in physical window pixels (for click hit-testing).
     cursor: (f32, f32),
+    /// The text `<input>`/`<textarea>` node currently focused for typing, if any.
+    focused_input: Option<manuk_dom::NodeId>,
+}
+
+/// What a click on the page should do, decided from an immutable hit-test so the mutable
+/// action can follow without a borrow conflict.
+enum PageAction {
+    /// Follow a link to this absolute URL.
+    Link(String),
+    /// Focus this text field for typing.
+    FocusInput(manuk_dom::NodeId),
+    /// Submit the form owning this button/submit node.
+    Submit(manuk_dom::NodeId),
+    /// Toggle this checkbox/radio.
+    Toggle(manuk_dom::NodeId),
+    /// Nothing actionable — clear focus.
+    Clear,
 }
 
 impl App {
@@ -176,6 +193,7 @@ impl App {
             agent_open: false,
             agent_input: String::new(),
             cursor: (0.0, 0.0),
+            focused_input: None,
         }
     }
 
@@ -208,12 +226,136 @@ impl App {
         }
         // Page document coordinates: undo the chrome offset, add the scroll.
         let (doc_x, doc_y) = (cx, cy - CHROME_HEIGHT + self.scroll_y);
-        match self.link_at(doc_x, doc_y) {
-            Some(url) => {
+        match self.classify_page_click(doc_x, doc_y) {
+            PageAction::Link(url) => {
+                self.focused_input = None;
                 tracing::info!(url = %url, "click: follow link");
                 self.goto(&url);
             }
-            None => tracing::info!(x = doc_x, y = doc_y, "click: no link under cursor"),
+            PageAction::FocusInput(node) => {
+                self.focused_input = Some(node);
+                self.omnibox_open = false;
+                tracing::info!("click: focused a text field");
+                self.rerender();
+            }
+            PageAction::Submit(node) => {
+                self.focused_input = None;
+                self.submit_owning_form(node);
+            }
+            PageAction::Toggle(node) => {
+                self.toggle_checkbox(node);
+            }
+            PageAction::Clear => {
+                self.focused_input = None;
+                self.rerender();
+            }
+        }
+    }
+
+    /// Decide what a page click does by hit-testing and walking up to the nearest actionable
+    /// element (link / text field / button / checkbox). Immutable so the action can follow.
+    fn classify_page_click(&self, doc_x: f32, doc_y: f32) -> PageAction {
+        let Some(page) = self.page.as_ref() else {
+            return PageAction::Clear;
+        };
+        let Some(hit) = page.a11y_tree().hit_test(doc_x, doc_y).map(|n| n.node) else {
+            return PageAction::Clear;
+        };
+        let dom = page.dom();
+        let mut cur = Some(hit);
+        while let Some(n) = cur {
+            match dom.tag_name(n) {
+                Some("a") => {
+                    if let Some(href) = dom.element(n).and_then(|e| e.attr("href")) {
+                        if let Some(u) = resolve_href(&page.final_url, href) {
+                            return PageAction::Link(u);
+                        }
+                    }
+                }
+                Some("input") => {
+                    let ty = dom
+                        .element(n)
+                        .and_then(|e| e.attr("type"))
+                        .unwrap_or("text")
+                        .to_ascii_lowercase();
+                    return match ty.as_str() {
+                        "submit" | "button" | "image" => PageAction::Submit(n),
+                        "checkbox" | "radio" => PageAction::Toggle(n),
+                        "hidden" | "file" | "range" | "color" => PageAction::Clear,
+                        _ => PageAction::FocusInput(n),
+                    };
+                }
+                Some("textarea") => return PageAction::FocusInput(n),
+                Some("button") => return PageAction::Submit(n),
+                _ => {}
+            }
+            cur = dom.parent(n);
+        }
+        PageAction::Clear
+    }
+
+    /// Toggle a checkbox/radio's `checked` attribute, relayout, repaint.
+    fn toggle_checkbox(&mut self, node: manuk_dom::NodeId) {
+        let width = self.viewport.width;
+        if let Some(page) = self.page.as_mut() {
+            let checked = page.dom().element(node).is_some_and(|e| e.attr("checked").is_some());
+            if checked {
+                page.dom_mut().remove_attr(node, "checked");
+            } else {
+                page.dom_mut().set_attr(node, "checked", "");
+            }
+            page.relayout_zoomed(&self.fonts, width, self.zoom);
+        }
+        self.rerender();
+    }
+
+    /// Submit the form owning `node` (a button / submit input): build the GET URL from the
+    /// form's successful controls and navigate. `method=post` and formless buttons are no-ops
+    /// (logged), matching the agent's form model.
+    fn submit_owning_form(&mut self, node: manuk_dom::NodeId) {
+        let action = self.page.as_ref().and_then(|page| {
+            let dom = page.dom();
+            let form = manuk_agent::forms::owning_form(dom, node)?;
+            manuk_agent::forms::submission_url(dom, form, &page.final_url).ok()
+        });
+        match action {
+            Some(url) => {
+                tracing::info!(url = %url, "submit: form GET");
+                self.goto(&url);
+            }
+            None => tracing::info!("submit: no form / non-GET method (ignored)"),
+        }
+    }
+
+    /// Edit the focused text field: append `ch` (or handle backspace when `ch` is empty and
+    /// `backspace` is set), update the DOM `value`, relayout, repaint.
+    fn edit_focused_input(&mut self, ch: &str, backspace: bool) {
+        let Some(node) = self.focused_input else {
+            return;
+        };
+        let width = self.viewport.width;
+        if let Some(page) = self.page.as_mut() {
+            let mut val = page
+                .dom()
+                .element(node)
+                .and_then(|e| e.attr("value"))
+                .unwrap_or("")
+                .to_string();
+            if backspace {
+                val.pop();
+            } else {
+                val.push_str(ch);
+            }
+            page.dom_mut().set_attr(node, "value", val);
+            page.relayout_zoomed(&self.fonts, width, self.zoom);
+        }
+        self.rerender();
+    }
+
+    /// Submit the form owning the currently focused field (Enter in a text input).
+    fn submit_focused_form(&mut self) {
+        if let Some(node) = self.focused_input {
+            self.submit_owning_form(node);
         }
     }
 
@@ -737,6 +879,35 @@ impl App {
                         self.find_query,
                         self.find_session.len()
                     );
+                    return true;
+                }
+                _ => {}
+            }
+        }
+
+        // A focused text field captures typing (unless a Ctrl/Alt chord — those still reach
+        // the chrome shortcuts below, e.g. Ctrl+L).
+        if self.focused_input.is_some() && !ctrl && !alt {
+            match key {
+                Key::Named(NamedKey::Enter) => {
+                    self.submit_focused_form();
+                    return true;
+                }
+                Key::Named(NamedKey::Escape) => {
+                    self.focused_input = None;
+                    self.rerender();
+                    return true;
+                }
+                Key::Named(NamedKey::Backspace) => {
+                    self.edit_focused_input("", true);
+                    return true;
+                }
+                Key::Named(NamedKey::Space) => {
+                    self.edit_focused_input(" ", false);
+                    return true;
+                }
+                Key::Character(c) => {
+                    self.edit_focused_input(c, false);
                     return true;
                 }
                 _ => {}
