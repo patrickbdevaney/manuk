@@ -594,10 +594,22 @@ impl Ctx<'_> {
         };
         // `box-sizing:border-box` — the specified width is the border box, so the content
         // width is that minus padding + border. (`auto` already resolves to content width.)
+        let bs_extra_w = if s.box_sizing == BoxSizing::BorderBox { pl + pr + bl + br } else { 0.0 };
         if s.box_sizing == BoxSizing::BorderBox && s.width != Dim::Auto {
-            width -= pl + pr + bl + br;
+            width -= bs_extra_w;
         }
         width = width.max(0.0);
+        // min-width / max-width clamp (max applied first, then min wins), converted to the
+        // content box to match `width`.
+        let min_w = (s.min_width.resolve(cw, 0.0) - bs_extra_w).max(0.0);
+        let max_w = match s.max_width {
+            Dim::Auto => f32::INFINITY,
+            other => (other.resolve(cw, f32::INFINITY) - bs_extra_w).max(0.0),
+        };
+        if max_w.is_finite() {
+            width = width.min(max_w);
+        }
+        width = width.max(min_w);
 
         // Horizontal auto-margin centering when width is definite. Only the left
         // margin shifts the box; the right margin absorbs the remainder implicitly.
@@ -630,18 +642,25 @@ impl Ctx<'_> {
         } else {
             self.layout_children(node, content_x, content_y, width, floats)
         };
-        let content_height = match s.height {
+        let bs_extra_h = if s.box_sizing == BoxSizing::BorderBox { pt + pb + bt + bb } else { 0.0 };
+        let mut content_height = match s.height {
             Dim::Auto => content_height,
             other => {
                 let h = other.resolve(0.0, content_height);
                 // Under border-box, the specified height includes padding + border.
-                if s.box_sizing == BoxSizing::BorderBox {
-                    (h - (pt + pb + bt + bb)).max(0.0)
-                } else {
-                    h
-                }
+                (h - bs_extra_h).max(0.0)
             }
         };
+        // min-height / max-height clamp (content-box).
+        let min_h = (s.min_height.resolve(0.0, 0.0) - bs_extra_h).max(0.0);
+        let max_h = match s.max_height {
+            Dim::Auto => f32::INFINITY,
+            other => (other.resolve(0.0, f32::INFINITY) - bs_extra_h).max(0.0),
+        };
+        if max_h.is_finite() {
+            content_height = content_height.min(max_h);
+        }
+        content_height = content_height.max(min_h);
 
         let border_box_w = bl + pl + width + pr + br;
         let border_box_h = bt + pt + content_height + pb + bb;
@@ -1496,6 +1515,8 @@ impl Ctx<'_> {
                     Dim::Auto => flex::FlexBasis::Auto,
                     Dim::Px(p) => flex::FlexBasis::Px(p),
                     Dim::Percent(f) => flex::FlexBasis::Pct(f / 100.0),
+                    // A calc() basis is resolved against the container's main size.
+                    Dim::Calc { .. } => flex::FlexBasis::Px(s.flex_basis.resolve(cw, 0.0)),
                 };
                 flex::FlexItem {
                     width: match s.width {

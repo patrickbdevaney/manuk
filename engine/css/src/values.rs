@@ -52,8 +52,15 @@ fn dimension_to_px(value: f32, unit: &str, font_size: f32) -> Option<f32> {
     }
 }
 
-/// Parse a `<length-percentage> | auto` into a [`Dim`]. Unitless `0` is accepted.
+/// Parse a `<length-percentage> | auto` into a [`Dim`]. Unitless `0` is accepted, and the
+/// additive form of `calc()` (`calc(<len/%> ± <len/%> …)`) is reduced to [`Dim::Calc`].
 pub fn parse_dim(input: &str, font_size: f32) -> Dim {
+    let t = input.trim();
+    if t.len() >= 5 && t[..5].eq_ignore_ascii_case("calc(") {
+        if let Some(d) = parse_calc(t, font_size) {
+            return d;
+        }
+    }
     with_first_token(input, |tok| match tok {
         Token::Ident(id) if id.eq_ignore_ascii_case("auto") => Some(Dim::Auto),
         Token::Percentage { unit_value, .. } => Some(Dim::Percent(unit_value * 100.0)),
@@ -64,6 +71,40 @@ pub fn parse_dim(input: &str, font_size: f32) -> Dim {
         _ => None,
     })
     .unwrap_or(Dim::Auto)
+}
+
+/// Evaluate the **additive** form of `calc()` — a sum/difference of lengths and percentages
+/// (which CSS requires be written with spaces around `+`/`-`). Multiplication/division and
+/// nested `calc()` are not handled (returns `None`, falling back to the token parser).
+fn parse_calc(input: &str, font_size: f32) -> Option<Dim> {
+    let low = input.to_ascii_lowercase();
+    let inner = low.strip_prefix("calc(")?.strip_suffix(')')?;
+    let mut px = 0.0f32;
+    let mut pct = 0.0f32;
+    let mut sign = 1.0f32;
+    for tok in inner.split_whitespace() {
+        match tok {
+            "+" => sign = 1.0,
+            "-" => sign = -1.0,
+            t => {
+                if let Some(p) = t.strip_suffix('%').and_then(|n| n.parse::<f32>().ok()) {
+                    pct += sign * p;
+                } else if let Some(v) = parse_length_px(t, font_size) {
+                    px += sign * v;
+                } else {
+                    return None; // an unsupported term (`*`, `/`, nested calc, a bare number)
+                }
+                sign = 1.0;
+            }
+        }
+    }
+    Some(if pct == 0.0 {
+        Dim::Px(px)
+    } else if px == 0.0 {
+        Dim::Percent(pct)
+    } else {
+        Dim::Calc { px, pct }
+    })
 }
 
 /// Parse a `<length>` to px (no percent/auto). Used for line-height etc.

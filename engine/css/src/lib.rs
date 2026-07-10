@@ -30,6 +30,11 @@ pub enum Dim {
     Auto,
     Px(f32),
     Percent(f32),
+    /// A `calc()` reduced to `px + pct% of the reference` — the common linear form.
+    Calc {
+        px: f32,
+        pct: f32,
+    },
 }
 
 impl Dim {
@@ -39,6 +44,7 @@ impl Dim {
             Dim::Auto => auto_px,
             Dim::Px(v) => v,
             Dim::Percent(p) => reference * p / 100.0,
+            Dim::Calc { px, pct } => px + reference * pct / 100.0,
         }
     }
     pub fn is_auto(self) -> bool {
@@ -203,6 +209,11 @@ pub struct ComputedStyle {
     pub border_color: Rgba,
     pub width: Dim,
     pub height: Dim,
+    /// `min-*`/`max-*` sizing. `Dim::Auto` on a min means 0; on a max means "no limit".
+    pub min_width: Dim,
+    pub max_width: Dim,
+    pub min_height: Dim,
+    pub max_height: Dim,
     pub float: Float,
     pub clear: Clear,
     pub position: Position,
@@ -253,6 +264,10 @@ impl ComputedStyle {
             border_color: Rgba::BLACK,
             width: Dim::Auto,
             height: Dim::Auto,
+            min_width: Dim::Auto,
+            max_width: Dim::Auto,
+            min_height: Dim::Auto,
+            max_height: Dim::Auto,
             float: Float::None,
             clear: Clear::None,
             position: Position::Static,
@@ -1093,6 +1108,10 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         }
         "width" => s.width = values::parse_dim(v, s.font_size),
         "height" => s.height = values::parse_dim(v, s.font_size),
+        "min-width" => s.min_width = values::parse_dim(v, s.font_size),
+        "max-width" => s.max_width = values::parse_dim(v, s.font_size),
+        "min-height" => s.min_height = values::parse_dim(v, s.font_size),
+        "max-height" => s.max_height = values::parse_dim(v, s.font_size),
         "margin" => set_shorthand(&mut s.margin, v, s.font_size, true),
         "margin-top" => s.margin.top = values::parse_dim(v, s.font_size),
         "margin-right" => s.margin.right = values::parse_dim(v, s.font_size),
