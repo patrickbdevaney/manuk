@@ -57,6 +57,36 @@ pub enum Display {
     None,
 }
 
+/// `float`, which pulls a box out of normal flow to one side (CSS2 §9.5).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Float {
+    #[default]
+    None,
+    Left,
+    Right,
+}
+
+/// `clear`, which pushes a box below preceding floats on the named side(s).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Clear {
+    #[default]
+    None,
+    Left,
+    Right,
+    Both,
+}
+
+/// `position` (CSS2 §9.3 + CSS-Position sticky).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Position {
+    #[default]
+    Static,
+    Relative,
+    Absolute,
+    Fixed,
+    Sticky,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextAlign {
     Left,
@@ -111,6 +141,13 @@ pub struct ComputedStyle {
     pub border_color: Rgba,
     pub width: Dim,
     pub height: Dim,
+    pub float: Float,
+    pub clear: Clear,
+    pub position: Position,
+    /// `top`/`right`/`bottom`/`left` insets; `Dim::Auto` means "not set".
+    pub inset: Sides<Dim>,
+    /// `z-index`; `None` = `auto`.
+    pub z_index: Option<i32>,
 }
 
 impl ComputedStyle {
@@ -133,6 +170,11 @@ impl ComputedStyle {
             border_color: Rgba::BLACK,
             width: Dim::Auto,
             height: Dim::Auto,
+            float: Float::None,
+            clear: Clear::None,
+            position: Position::Static,
+            inset: Sides::all(Dim::Auto),
+            z_index: None,
         }
     }
 
@@ -703,6 +745,35 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         "padding-right" => s.padding.right = values::parse_dim(v, s.font_size),
         "padding-bottom" => s.padding.bottom = values::parse_dim(v, s.font_size),
         "padding-left" => s.padding.left = values::parse_dim(v, s.font_size),
+        "float" => {
+            s.float = match v {
+                "left" => Float::Left,
+                "right" => Float::Right,
+                _ => Float::None,
+            }
+        }
+        "clear" => {
+            s.clear = match v {
+                "left" => Clear::Left,
+                "right" => Clear::Right,
+                "both" => Clear::Both,
+                _ => Clear::None,
+            }
+        }
+        "position" => {
+            s.position = match v {
+                "relative" => Position::Relative,
+                "absolute" => Position::Absolute,
+                "fixed" => Position::Fixed,
+                "sticky" => Position::Sticky,
+                _ => Position::Static,
+            }
+        }
+        "top" => s.inset.top = values::parse_dim(v, s.font_size),
+        "right" => s.inset.right = values::parse_dim(v, s.font_size),
+        "bottom" => s.inset.bottom = values::parse_dim(v, s.font_size),
+        "left" => s.inset.left = values::parse_dim(v, s.font_size),
+        "z-index" => s.z_index = if v == "auto" { None } else { v.parse().ok() },
         _ => {}
     }
 }
@@ -807,6 +878,22 @@ mod tests {
         let (dom, map) = styled(css);
         let span = dom.find_first("span").unwrap();
         assert_eq!(map[&span].color, Rgba::new(255, 0, 0, 255));
+    }
+
+    #[test]
+    fn float_clear_position_insets_parse() {
+        let (dom, map) = styled(
+            "p { float: right; clear: both; position: absolute; top: 10px; left: 5%; z-index: 3 }",
+        );
+        let p = dom.find_first("p").unwrap();
+        let s = &map[&p];
+        assert_eq!(s.float, Float::Right);
+        assert_eq!(s.clear, Clear::Both);
+        assert_eq!(s.position, Position::Absolute);
+        assert_eq!(s.inset.top, Dim::Px(10.0));
+        assert_eq!(s.inset.left, Dim::Percent(5.0));
+        assert_eq!(s.inset.right, Dim::Auto); // unset stays auto
+        assert_eq!(s.z_index, Some(3));
     }
 
     #[test]
