@@ -59,9 +59,9 @@ Small, high-impact, mostly no new deps. **Two already landed** (commit `c2ae03f`
 
 | # | Item | Where | Effort | Status |
 |---|---|---|---|---|
-| 1.1 | Search follows through (default → `lite.duckduckgo.com`) | `chrome.rs:86` | S | ✅ done |
-| 1.2 | Caret tracks the text run, not the box | `gui.rs:480`, `layout value_run` | S | ✅ done |
-| 1.3 | **One long-lived Tokio runtime + hyper client** (kill per-nav runtime → pool/DNS/TLS reuse) | `gui.rs:402,749` | M | next |
+| 1.1 | Search follows through (default → `lite.duckduckgo.com`) | `chrome.rs:86` | S | ✅ done (`c2ae03f`) |
+| 1.2 | Caret tracks the text run, not the box | `gui.rs:480`, `layout value_run` | S | ✅ done (`c2ae03f`) |
+| 1.3 | **One long-lived Tokio runtime + hyper client** (kill per-nav runtime → pool/DNS/TLS reuse) | `gui.rs:402,749` | M | ✅ done (`5149ae3`) |
 | 1.4 | Async / off-main-thread navigation (window never freezes on load) + loading indicator | `gui.rs:402-432` | M | |
 | 1.5 | Honor `<meta http-equiv=refresh>` client redirect | `page` load path | S | |
 | 1.6 | Defer/parallelize system-font enumeration off the startup critical path | `gui.rs:175`, `text/lib.rs:107` | S | |
@@ -116,7 +116,7 @@ directly (`font-family`, `overflow`, `opacity`, `border-radius`, `box-shadow`, g
 ### 2E. JavaScript / web APIs (ordered by abort-on-load)
 | # | Item | Effort |
 |---|---|---|
-| 2E.1 | **Tier-0 globals:** `window`/`self`/`globalThis` identity + `console.*` + `navigator` (honest UA) | S |
+| 2E.1 | **Tier-0 globals:** `window`/`self`/`globalThis` identity + `console.*` + `navigator` (honest UA) | S | ✅ done (`0938636`) |
 | 2E.2 | `document.body`/`head`/`documentElement`/`title`/`readyState`; **engine-generated `DOMContentLoaded`** | M |
 | 2E.3 | DOM mutation+traversal: `createTextNode`, `insertBefore`, `cloneNode`, `parentNode`/`children`/`firstChild`/siblings | M |
 | 2E.4 | Real `Event`/`CustomEvent` objects + capture/bubble + `target`/`preventDefault`/`stopPropagation`; listener options | M |
