@@ -514,18 +514,80 @@ pub fn diff_style(old: &ComputedStyle, new: &ComputedStyle) -> RestyleDamage {
 // Selectors
 // ---------------------------------------------------------------------------
 
+/// An attribute selector `[name]`, `[name=val]`, `[name~=val]`, etc.
+#[derive(Clone, Debug, PartialEq)]
+struct AttrSel {
+    name: String,
+    op: AttrOp,
+    value: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum AttrOp {
+    /// `[name]`
+    Exists,
+    /// `[name=val]`
+    Equals,
+    /// `[name~=val]` — whitespace-separated word list contains `val`.
+    Includes,
+    /// `[name^=val]`
+    Prefix,
+    /// `[name$=val]`
+    Suffix,
+    /// `[name*=val]`
+    Substring,
+    /// `[name|=val]` — equals `val` or starts with `val-`.
+    DashMatch,
+}
+
+/// A simple pseudo-class we can evaluate. Dynamic pseudos that need interaction state we
+/// don't have (`:hover`, `:focus`, …) are modelled as [`Pseudo::NeverStatic`] so a rule
+/// gated on them simply doesn't apply to a static render (rather than dropping the rule).
+#[derive(Clone, Debug, PartialEq)]
+enum Pseudo {
+    FirstChild,
+    LastChild,
+    OnlyChild,
+    /// `:nth-child(an+b)` — coefficients `a`, `b` (1-based index among element siblings).
+    NthChild(i32, i32),
+    Root,
+    Empty,
+    Checked,
+    Disabled,
+    Enabled,
+    Required,
+    Link,
+    /// `:not(<compound>)` — a single inner compound (no combinators).
+    Not(Box<Compound>),
+    /// `:hover`/`:focus`/`:active`/`:visited`/`:target`/… — never matches statically.
+    NeverStatic,
+}
+
+/// How a compound relates to the compound on its **right** in a selector chain.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Combinator {
+    Descendant,
+    Child,
+    NextSibling,
+    SubsequentSibling,
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 struct Compound {
     universal: bool,
     tag: Option<String>,
     id: Option<String>,
     classes: Vec<String>,
+    attrs: Vec<AttrSel>,
+    pseudos: Vec<Pseudo>,
 }
 
-/// A descendant-combinator chain; `parts[last]` is the subject (rightmost).
+/// A selector chain; `parts[last]` is the subject (rightmost). `combinators[i]` links
+/// `parts[i]` to `parts[i+1]` (so it has `parts.len() - 1` entries).
 #[derive(Clone, Debug, PartialEq)]
 struct Selector {
     parts: Vec<Compound>,
+    combinators: Vec<Combinator>,
     /// N4 — `::slotted(<compound>)`. The subject compound is the *inner* selector, and it
     /// matches a **light-DOM** element assigned to a slot inside this sheet's shadow root.
     /// That is the one selector that deliberately reaches across the shadow boundary.
@@ -540,12 +602,112 @@ impl Selector {
             if p.id.is_some() {
                 a += 1;
             }
-            b += p.classes.len() as u32;
+            // Classes, attribute selectors, and pseudo-classes are all class-level.
+            b += (p.classes.len() + p.attrs.len() + p.pseudos.len()) as u32;
             if p.tag.is_some() {
                 c += 1;
             }
         }
         (a.min(255) << 16) | (b.min(255) << 8) | c.min(255)
+    }
+}
+
+/// The previous element sibling of `node` (skipping text/comment nodes), if any.
+fn prev_element_sibling(dom: &Dom, node: NodeId) -> Option<NodeId> {
+    let mut cur = dom.prev_sibling(node);
+    while let Some(n) = cur {
+        if dom.is_element(n) {
+            return Some(n);
+        }
+        cur = dom.prev_sibling(n);
+    }
+    None
+}
+
+/// 1-based index of `node` among its element siblings, and the total element-sibling count.
+fn element_sibling_position(dom: &Dom, node: NodeId) -> (usize, usize) {
+    let Some(parent) = dom.parent(node) else {
+        return (1, 1);
+    };
+    let mut index = 0;
+    let mut total = 0;
+    for c in dom.children(parent) {
+        if dom.is_element(c) {
+            total += 1;
+            if c == node {
+                index = total;
+            }
+        }
+    }
+    (index.max(1), total.max(1))
+}
+
+fn pseudo_matches(p: &Pseudo, dom: &Dom, node: NodeId) -> bool {
+    let el = match dom.element(node) {
+        Some(e) => e,
+        None => return false,
+    };
+    match p {
+        Pseudo::FirstChild => prev_element_sibling(dom, node).is_none(),
+        Pseudo::LastChild => {
+            let mut cur = dom.next_sibling(node);
+            while let Some(n) = cur {
+                if dom.is_element(n) {
+                    return false;
+                }
+                cur = dom.next_sibling(n);
+            }
+            true
+        }
+        Pseudo::OnlyChild => {
+            prev_element_sibling(dom, node).is_none()
+                && pseudo_matches(&Pseudo::LastChild, dom, node)
+        }
+        Pseudo::NthChild(a, b) => {
+            let (idx, _) = element_sibling_position(dom, node);
+            let idx = idx as i32;
+            // idx == a*n + b for some integer n >= 0.
+            if *a == 0 {
+                idx == *b
+            } else {
+                let n = (idx - b) / a;
+                n >= 0 && a * n + b == idx
+            }
+        }
+        Pseudo::Root => dom.parent(node).map(|p| !dom.is_element(p)).unwrap_or(false),
+        Pseudo::Empty => !dom.children(node).any(|c| {
+            dom.is_element(c) || matches!(dom.data(c), NodeData::Text(t) if !t.trim().is_empty())
+        }),
+        Pseudo::Checked => el.attr("checked").is_some() || el.attr("selected").is_some(),
+        Pseudo::Disabled => el.attr("disabled").is_some(),
+        Pseudo::Enabled => {
+            matches!(el.name.as_str(), "input" | "button" | "select" | "textarea" | "option")
+                && el.attr("disabled").is_none()
+        }
+        Pseudo::Required => el.attr("required").is_some(),
+        Pseudo::Link => {
+            matches!(el.name.as_str(), "a" | "area" | "link") && el.attr("href").is_some()
+        }
+        Pseudo::Not(inner) => !compound_matches(inner, dom, node),
+        Pseudo::NeverStatic => false,
+    }
+}
+
+fn attr_matches(a: &AttrSel, dom: &Dom, node: NodeId) -> bool {
+    let Some(el) = dom.element(node) else {
+        return false;
+    };
+    let Some(actual) = el.attr(&a.name) else {
+        return false;
+    };
+    match a.op {
+        AttrOp::Exists => true,
+        AttrOp::Equals => actual == a.value,
+        AttrOp::Includes => actual.split_whitespace().any(|w| w == a.value),
+        AttrOp::Prefix => !a.value.is_empty() && actual.starts_with(&a.value),
+        AttrOp::Suffix => !a.value.is_empty() && actual.ends_with(&a.value),
+        AttrOp::Substring => !a.value.is_empty() && actual.contains(&a.value),
+        AttrOp::DashMatch => actual == a.value || actual.starts_with(&format!("{}-", a.value)),
     }
 }
 
@@ -565,6 +727,16 @@ fn compound_matches(c: &Compound, dom: &Dom, node: NodeId) -> bool {
     }
     for class in &c.classes {
         if !el.has_class(class) {
+            return false;
+        }
+    }
+    for a in &c.attrs {
+        if !attr_matches(a, dom, node) {
+            return false;
+        }
+    }
+    for p in &c.pseudos {
+        if !pseudo_matches(p, dom, node) {
             return false;
         }
     }
@@ -649,23 +821,56 @@ pub fn query_selector_all(dom: &Dom, root: NodeId, sel: &str) -> Vec<NodeId> {
 }
 
 fn selector_matches(sel: &Selector, dom: &Dom, node: NodeId) -> bool {
-    let Some((subject, ancestors)) = sel.parts.split_last() else {
+    let Some((subject, left)) = sel.parts.split_last() else {
         return false;
     };
     if !compound_matches(subject, dom, node) {
         return false;
     }
-    // Walk ancestors, matching the remaining compounds right-to-left. Descendant
-    // combinator: each must match *some* ancestor, in order.
-    let mut cursor = dom.parent(node);
-    for compound in ancestors.iter().rev() {
-        loop {
-            let Some(anc) = cursor else {
-                return false;
-            };
-            cursor = dom.parent(anc);
-            if compound_matches(compound, dom, anc) {
-                break;
+    // Match the remaining compounds right-to-left, honouring each link's combinator.
+    // `combinators[i]` links parts[i] to parts[i+1]; `right` tracks the node the
+    // already-matched compound to our right landed on. Greedy (no backtracking) — correct
+    // for the common selectors; a pathological descendant/sibling case could false-negative.
+    let mut right = node;
+    for i in (0..left.len()).rev() {
+        let cand = &sel.parts[i];
+        let comb = sel.combinators[i];
+        match comb {
+            Combinator::Child => {
+                let Some(p) = dom.parent(right) else { return false };
+                if !compound_matches(cand, dom, p) {
+                    return false;
+                }
+                right = p;
+            }
+            Combinator::Descendant => {
+                let mut cursor = dom.parent(right);
+                loop {
+                    let Some(anc) = cursor else { return false };
+                    cursor = dom.parent(anc);
+                    if compound_matches(cand, dom, anc) {
+                        right = anc;
+                        break;
+                    }
+                }
+            }
+            Combinator::NextSibling => {
+                let Some(s) = prev_element_sibling(dom, right) else { return false };
+                if !compound_matches(cand, dom, s) {
+                    return false;
+                }
+                right = s;
+            }
+            Combinator::SubsequentSibling => {
+                let mut cursor = prev_element_sibling(dom, right);
+                loop {
+                    let Some(sib) = cursor else { return false };
+                    cursor = prev_element_sibling(dom, sib);
+                    if compound_matches(cand, dom, sib) {
+                        right = sib;
+                        break;
+                    }
+                }
             }
         }
     }
@@ -823,6 +1028,7 @@ fn parse_selector(text: &str) -> Option<Selector> {
         let compound = parse_compound(inner)?;
         return Some(Selector {
             parts: vec![compound],
+            combinators: vec![],
             slotted: true,
         });
     }
@@ -831,20 +1037,84 @@ fn parse_selector(text: &str) -> Option<Selector> {
         return None;
     }
 
-    let mut parts = Vec::new();
-    for token in text.split_whitespace() {
-        // Combinators like > + ~ are not in the subset; bail so we don't
-        // mis-match (better to drop the rule than apply it wrongly).
-        if matches!(token, ">" | "+" | "~") {
-            return None;
-        }
-        parts.push(parse_compound(token)?);
+    // Tokenize into an alternating compound/combinator sequence, respecting `[...]` and
+    // `(...)` nesting (so `[a~=b]` and `:nth-child(2n+1)` don't split on `~`/`+`).
+    enum Tok {
+        Comp(String),
+        Comb(Combinator),
     }
-    if parts.is_empty() {
+    let mut toks: Vec<Tok> = Vec::new();
+    let mut cur = String::new();
+    let mut depth = 0i32;
+    let flush = |cur: &mut String, toks: &mut Vec<Tok>| {
+        if !cur.trim().is_empty() {
+            toks.push(Tok::Comp(cur.trim().to_string()));
+        }
+        cur.clear();
+    };
+    for ch in text.chars() {
+        match ch {
+            '[' | '(' => {
+                depth += 1;
+                cur.push(ch);
+            }
+            ']' | ')' => {
+                depth -= 1;
+                cur.push(ch);
+            }
+            '>' | '+' | '~' if depth == 0 => {
+                flush(&mut cur, &mut toks);
+                toks.push(Tok::Comb(match ch {
+                    '>' => Combinator::Child,
+                    '+' => Combinator::NextSibling,
+                    _ => Combinator::SubsequentSibling,
+                }));
+            }
+            c if c.is_whitespace() && depth == 0 => {
+                flush(&mut cur, &mut toks);
+                toks.push(Tok::Comb(Combinator::Descendant));
+            }
+            _ => cur.push(ch),
+        }
+    }
+    flush(&mut cur, &mut toks);
+
+    // Collapse adjacent combinators (a whitespace next to an explicit `>`/`+`/`~` yields
+    // two in a row): keep the explicit one, drop the tentative descendant. Drop any
+    // leading/trailing combinator.
+    let mut norm: Vec<Tok> = Vec::new();
+    for t in toks {
+        match t {
+            Tok::Comb(c) => match norm.last_mut() {
+                Some(Tok::Comb(prev)) => {
+                    if *prev == Combinator::Descendant {
+                        *prev = c;
+                    }
+                }
+                Some(Tok::Comp(_)) => norm.push(Tok::Comb(c)),
+                None => {} // leading combinator — ignore
+            },
+            Tok::Comp(s) => norm.push(Tok::Comp(s)),
+        }
+    }
+    if let Some(Tok::Comb(_)) = norm.last() {
+        norm.pop();
+    }
+
+    let mut parts = Vec::new();
+    let mut combinators = Vec::new();
+    for t in norm {
+        match t {
+            Tok::Comp(s) => parts.push(parse_compound(&s)?),
+            Tok::Comb(c) => combinators.push(c),
+        }
+    }
+    if parts.is_empty() || combinators.len() + 1 != parts.len() {
         None
     } else {
         Some(Selector {
             parts,
+            combinators,
             slotted: false,
         })
     }
@@ -861,7 +1131,7 @@ fn parse_compound(token: &str) -> Option<Compound> {
         } else if ch.is_ascii_alphabetic() {
             let mut tag = String::new();
             while let Some(&ch) = chars.peek() {
-                if ch == '.' || ch == '#' {
+                if matches!(ch, '.' | '#' | '[' | ':') {
                     break;
                 }
                 tag.push(ch);
@@ -888,11 +1158,159 @@ fn parse_compound(token: &str) -> Option<Compound> {
                 }
                 c.id = Some(name);
             }
-            // `[attr]`, `:hover`, `::before` — out of subset; drop the selector.
+            '[' => {
+                chars.next(); // consume '['
+                let mut inner = String::new();
+                let mut closed = false;
+                for ch in chars.by_ref() {
+                    if ch == ']' {
+                        closed = true;
+                        break;
+                    }
+                    inner.push(ch);
+                }
+                if !closed {
+                    return None;
+                }
+                c.attrs.push(parse_attr(&inner)?);
+            }
+            ':' => {
+                chars.next(); // consume ':'
+                // Read the pseudo name, then an optional parenthesised argument.
+                let name = take_ident(&mut chars);
+                if name.is_empty() {
+                    return None;
+                }
+                let mut arg = None;
+                if chars.peek() == Some(&'(') {
+                    chars.next();
+                    let mut a = String::new();
+                    let mut d = 1i32;
+                    for ch in chars.by_ref() {
+                        match ch {
+                            '(' => d += 1,
+                            ')' => {
+                                d -= 1;
+                                if d == 0 {
+                                    break;
+                                }
+                            }
+                            _ => {}
+                        }
+                        a.push(ch);
+                    }
+                    arg = Some(a);
+                }
+                c.pseudos.push(parse_pseudo(&name, arg.as_deref())?);
+            }
+            // Anything else is out of the supported grammar; drop the selector.
             _ => return None,
         }
     }
     Some(c)
+}
+
+/// Parse the inside of an attribute selector `[...]` (the text between the brackets).
+fn parse_attr(inner: &str) -> Option<AttrSel> {
+    let inner = inner.trim();
+    // Two-char operators first, then `=`.
+    for (tok, op) in [
+        ("~=", AttrOp::Includes),
+        ("^=", AttrOp::Prefix),
+        ("$=", AttrOp::Suffix),
+        ("*=", AttrOp::Substring),
+        ("|=", AttrOp::DashMatch),
+    ] {
+        if let Some((name, value)) = inner.split_once(tok) {
+            return Some(AttrSel {
+                name: name.trim().to_ascii_lowercase(),
+                op,
+                value: clean_attr_value(value),
+            });
+        }
+    }
+    if let Some((name, value)) = inner.split_once('=') {
+        return Some(AttrSel {
+            name: name.trim().to_ascii_lowercase(),
+            op: AttrOp::Equals,
+            value: clean_attr_value(value),
+        });
+    }
+    if inner.is_empty() {
+        return None;
+    }
+    Some(AttrSel {
+        name: inner.to_ascii_lowercase(),
+        op: AttrOp::Exists,
+        value: String::new(),
+    })
+}
+
+/// Strip quotes and a trailing case-sensitivity flag (` i`/` s`) from an attr value.
+fn clean_attr_value(v: &str) -> String {
+    let v = v.trim();
+    let v = v
+        .strip_suffix(" i")
+        .or_else(|| v.strip_suffix(" s"))
+        .unwrap_or(v)
+        .trim();
+    v.trim_matches(['"', '\'']).to_string()
+}
+
+fn parse_pseudo(name: &str, arg: Option<&str>) -> Option<Pseudo> {
+    Some(match name.to_ascii_lowercase().as_str() {
+        "first-child" => Pseudo::FirstChild,
+        "last-child" => Pseudo::LastChild,
+        "only-child" => Pseudo::OnlyChild,
+        "root" => Pseudo::Root,
+        "empty" => Pseudo::Empty,
+        "checked" => Pseudo::Checked,
+        "disabled" => Pseudo::Disabled,
+        "enabled" => Pseudo::Enabled,
+        "required" => Pseudo::Required,
+        "link" | "any-link" => Pseudo::Link,
+        // Dynamic / state pseudos we can't evaluate in a static render → never match, so a
+        // rule gated on them just doesn't apply (rather than dropping the whole rule).
+        "hover" | "focus" | "active" | "visited" | "target" | "focus-within"
+        | "focus-visible" | "read-write" | "placeholder-shown" | "autofill" => Pseudo::NeverStatic,
+        "nth-child" => {
+            let (a, b) = parse_nth(arg?)?;
+            Pseudo::NthChild(a, b)
+        }
+        "not" => {
+            let inner = parse_compound(arg?.trim())?;
+            Pseudo::Not(Box::new(inner))
+        }
+        // Unknown pseudo → drop the selector (conservative: better than mis-applying).
+        _ => return None,
+    })
+}
+
+/// Parse an `:nth-child()` argument (`odd`, `even`, `N`, `an+b`, `-n+b`, `2n`) into `(a, b)`.
+fn parse_nth(arg: &str) -> Option<(i32, i32)> {
+    let s = arg.trim().to_ascii_lowercase().replace(' ', "");
+    match s.as_str() {
+        "odd" => return Some((2, 1)),
+        "even" => return Some((2, 0)),
+        _ => {}
+    }
+    if let Some(idx) = s.find('n') {
+        let (a_str, rest) = s.split_at(idx);
+        let b_str = &rest[1..]; // skip 'n'
+        let a = match a_str {
+            "" | "+" => 1,
+            "-" => -1,
+            n => n.parse().ok()?,
+        };
+        let b = if b_str.is_empty() {
+            0
+        } else {
+            b_str.parse().ok()?
+        };
+        Some((a, b))
+    } else {
+        Some((0, s.parse().ok()?))
+    }
 }
 
 fn take_ident(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> String {
@@ -2214,5 +2632,62 @@ mod shadow_scoping_tests {
         // A bare <pre> is monospace by UA default even without an author rule.
         let (dom, map) = cascade_of("<pre>x</pre>");
         assert_eq!(map[&dom.find_first("pre").unwrap()].font_family, GenericFamily::Monospace);
+    }
+
+    #[test]
+    fn extended_selectors_match() {
+        use manuk_html::parse;
+        let html = r#"
+          <div class="nav">
+            <a href="/x" class="item">one</a>
+            <input type="submit" disabled>
+            <a href="https://e.com" data-role="ext">two</a>
+            <p>alpha</p><p>beta</p><p>gamma</p>
+          </div>"#;
+        let dom = parse(html);
+        let a1 = dom.find_first("a").unwrap();
+        let sub = dom.find_first("input").unwrap();
+        // Collect the <p>s in order.
+        let ps: Vec<_> = dom
+            .descendants(dom.root())
+            .filter(|&n| dom.tag_name(n) == Some("p"))
+            .collect();
+        let m = |sel: &str, node| matches_selector(&dom, node, sel);
+
+        // Child vs descendant combinator.
+        assert!(m(".nav > a", a1), "direct child a");
+        assert!(m("div a", a1), "descendant a");
+        assert!(!m("p > a", a1), "a is not a child of p");
+
+        // Attribute selectors.
+        assert!(m("[href]", a1));
+        assert!(m("input[type=submit]", sub));
+        assert!(m("a[href^='/']", a1), "prefix match");
+        let a2 = dom.descendants(dom.root())
+            .filter(|&n| dom.tag_name(n) == Some("a")).nth(1).unwrap();
+        assert!(m("a[href$='.com']", a2), "suffix match");
+        assert!(m("[data-role~=ext]", a2), "includes match");
+        assert!(!m("input[type=text]", sub), "type mismatch");
+
+        // Structural pseudo-classes over the three <p>s.
+        assert!(m("p:first-child", ps[0]) == false, "p[0] has prior siblings (a/input)");
+        assert!(m("p:last-child", ps[2]), "gamma is last child");
+        assert!(m("p:nth-child(4)", ps[0]), "alpha is the 4th child element");
+        // alpha=4th, beta=5th, gamma=6th among element children.
+        assert!(m(":nth-child(odd)", ps[1]), "beta (5th) is odd");
+        assert!(m(":nth-child(even)", ps[2]), "gamma (6th) is even");
+        assert!(!m(":nth-child(odd)", ps[2]), "gamma (6th) is not odd");
+        assert!(m(":not(a)", ps[0]), ":not(a) matches p");
+
+        // State + dynamic pseudos.
+        assert!(m("input:disabled", sub));
+        assert!(!m("input:enabled", sub));
+        assert!(!m("a:hover", a1), ":hover never matches in a static render");
+        assert!(!m("a:hover", a2));
+
+        // Sibling combinators.
+        assert!(m("p + p", ps[1]), "beta follows a p");
+        assert!(!m("p + p", ps[0]), "alpha has no preceding p sibling");
+        assert!(m("a ~ p", ps[2]), "gamma has a preceding a sibling");
     }
 }
