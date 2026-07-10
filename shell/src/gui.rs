@@ -106,6 +106,9 @@ struct App {
     /// Ctrl+J opens a task prompt; typed text goes to the agent, not the page.
     agent_open: bool,
     agent_input: String,
+
+    /// Last known cursor position in physical window pixels (for click hit-testing).
+    cursor: (f32, f32),
 }
 
 impl App {
@@ -168,6 +171,41 @@ impl App {
             store,
             agent_open: false,
             agent_input: String::new(),
+            cursor: (0.0, 0.0),
+        }
+    }
+
+    /// The absolute URL of a link under the given **document** point (window y already
+    /// offset by scroll), if any. Hit-tests the a11y tree, then walks up the DOM to the
+    /// nearest `<a href>` and resolves it against the page URL.
+    fn link_at(&self, doc_x: f32, doc_y: f32) -> Option<String> {
+        let page = self.page.as_ref()?;
+        let hit = page.a11y_tree().hit_test(doc_x, doc_y).map(|n| n.node)?;
+        let dom = page.dom();
+        let mut cur = Some(hit);
+        while let Some(n) = cur {
+            if dom.tag_name(n) == Some("a") {
+                if let Some(href) = dom.element(n).and_then(|e| e.attr("href")) {
+                    return resolve_href(&page.final_url, href);
+                }
+            }
+            cur = dom.parent(n);
+        }
+        None
+    }
+
+    /// Handle a left click at the current cursor: follow a link if one is under it.
+    fn handle_click(&mut self) {
+        let (cx, cy) = self.cursor;
+        // Document coordinates: page starts at window top (chrome band is added later),
+        // shifted by the scroll offset.
+        let (doc_x, doc_y) = (cx, cy + self.scroll_y);
+        match self.link_at(doc_x, doc_y) {
+            Some(url) => {
+                tracing::info!(url = %url, "click: follow link");
+                self.goto(&url);
+            }
+            None => tracing::info!(x = doc_x, y = doc_y, "click: no link under cursor"),
         }
     }
 
@@ -805,6 +843,14 @@ impl ApplicationHandler for App {
                 self.clamp_scroll();
                 self.rerender();
             }
+            WindowEvent::CursorMoved { position, .. } => {
+                self.cursor = (position.x as f32, position.y as f32);
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                if state == ElementState::Pressed && button == winit::event::MouseButton::Left {
+                    self.handle_click();
+                }
+            }
             WindowEvent::RedrawRequested => {
                 if let Some(gpu) = &mut self.gpu {
                     self.frame.begin();
@@ -848,6 +894,49 @@ impl ApplicationHandler for App {
             }
             _ => {}
         }
+    }
+}
+
+/// Resolve a possibly-relative `href` against the current page URL. Returns `None` for
+/// empty or pure-fragment (`#…`) links, and for `javascript:`/`mailto:` schemes the GUI
+/// does not navigate to.
+fn resolve_href(base: &str, href: &str) -> Option<String> {
+    let h = href.trim();
+    if h.is_empty() || h.starts_with('#') {
+        return None;
+    }
+    let lower = h.to_ascii_lowercase();
+    if lower.starts_with("javascript:") || lower.starts_with("mailto:") || lower.starts_with("tel:") {
+        return None;
+    }
+    match url::Url::parse(h) {
+        Ok(u) => Some(u.to_string()),
+        // Relative: resolve against the base document URL.
+        Err(_) => url::Url::parse(base)
+            .ok()
+            .and_then(|b| b.join(h).ok())
+            .map(|u| u.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_href;
+
+    #[test]
+    fn resolve_href_handles_relative_absolute_and_skips() {
+        let base = "https://example.com/dir/page.html";
+        // Relative resolves against the base's directory.
+        assert_eq!(resolve_href(base, "next.html").as_deref(), Some("https://example.com/dir/next.html"));
+        assert_eq!(resolve_href(base, "/root.html").as_deref(), Some("https://example.com/root.html"));
+        assert_eq!(resolve_href(base, "../up.html").as_deref(), Some("https://example.com/up.html"));
+        // Absolute passes through.
+        assert_eq!(resolve_href(base, "https://other.test/x").as_deref(), Some("https://other.test/x"));
+        // Non-navigational / empty are skipped.
+        assert_eq!(resolve_href(base, "#frag"), None);
+        assert_eq!(resolve_href(base, ""), None);
+        assert_eq!(resolve_href(base, "javascript:void(0)"), None);
+        assert_eq!(resolve_href(base, "mailto:a@b.com"), None);
     }
 }
 
