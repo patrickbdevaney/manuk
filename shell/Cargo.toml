@@ -18,7 +18,11 @@ default = ["gui"]
 gui = ["dep:winit", "dep:wgpu", "dep:pollster", "dep:bytemuck", "dep:raw-window-handle"]
 # Link SpiderMonkey and expose `manuk eval <expr>` — real JS execution. Heavy: this is
 # what the C2 binary-size measurement compares against the JS-less baseline.
-spidermonkey = ["manuk-js/spidermonkey"]
+# `_sm` is the internal code marker (shared by both variants); `spidermonkey-noicu` is
+# the C2 ICU-trimmed build (from-source, no `intl`/ICU — see engine/js/Cargo.toml).
+_sm = []
+spidermonkey = ["_sm", "manuk-js/spidermonkey"]
+spidermonkey-noicu = ["_sm", "manuk-js/spidermonkey-noicu"]
 
 [dependencies]
 manuk-net.workspace = true

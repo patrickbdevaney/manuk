@@ -31,13 +31,68 @@ ICU-trim decision is gated on:
 | — of which **ICU data** (`icu_data.o`, all-locales) | **~14.3 MB** (15,032,552 B) |
 
 `Intl.*` is functional in the built binary (`manuk eval 'new Intl.NumberFormat("en-US")
-.format(1234567.89)'` evaluates without error). **Decision:** the en-only ICU data
-filter (ICU 64+ `--with-data-filter`, keeping `Intl`) targets that ~14.3 MB → an
-estimated **~12–13 MB saving** (English ICU data ≈ 1–2 MB), i.e. a **~1/3 binary
-reduction** — this clearly justifies the trim (the plan expected only single-digit MB;
-the measured target is larger). The *realization* is engineering-gated: a
-`MOZJS_FROM_SOURCE=1` per-OS from-source build + baked `MOZJS_ARCHIVE` (the prebuilt is
-full-ICU), strictly build/config — never JIT/GC/sandbox. Tracked as C2's build step.
+.format(1234567.89)'` evaluates without error). The *realization* is engineering-gated: a
+from-source build (the prebuilt archive is full-ICU), strictly build/config — never
+JIT/GC/sandbox.
+
+### C2 REALIZED (2026-07-10) — `spidermonkey-noicu`, measured with a control ✅
+
+The from-source path now **works here** and the ICU trim is **implemented and measured**,
+not estimated. `engine/js` gained a `spidermonkey-noicu` feature: the same embedding
+surface with mozjs's `intl` cargo feature **off**, so `icu_capi` leaves the dependency
+graph and `js/src/configure` runs `--without-intl-api`. This is a *sanctioned build-config
+flag on the published `mozjs` crate* — it does not touch SpiderMonkey internals.
+
+Headless release, stripped (this file's metric — `--no-default-features`):
+
+| Build | Size |
+|---|---|
+| `--features spidermonkey` (intl/ICU) | **38.0 MB** (39,851,304 B) |
+| `--features spidermonkey-noicu` | **17.6 MB** (18,455,040 B) |
+| **Saved** | **20.4 MB (53.7%)** |
+
+**Control (why the number is trustworthy).** The noicu build is *from-source* while the
+intl build links the *prebuilt archive*, so their diff conflates two variables. Building
+from-source **with** `intl` isolates them (gui-default profile, stripped):
+
+| Build | Size |
+|---|---|
+| A: prebuilt + intl | 44,941,320 B |
+| B: from-source + intl *(control)* | 44,403,776 B |
+| C: from-source, noicu | 23,594,304 B |
+
+`A − B` = **0.5 MB** → prebuilt vs from-source is near-equivalent. `B − C` = **19.8 MB
+(46.9%)** → that is ICU/`intl`'s **true** cost. The earlier ~14.3 MB estimate counted only
+`icu_data.o` and undercounted ICU *code* + ICU4X.
+
+**Verified behavior (not assumed).** The ICU-free engine still executes real JS —
+`eval 'let s=0;for(let i=0;i<200000;i++)s+=i%7;s'` → `599994` (JIT loop), regexp → `99`,
+`JSON` round-trip → `3`. And `Intl` is genuinely gone: `typeof Intl === "undefined"` → `1`,
+`new Intl.NumberFormat("en-US")` **throws**; the intl build reports `typeof Intl ===
+"object"` → `1`. `libjs_static.a` carries **11,492 ICU symbols** with intl, **0** without.
+
+**Tradeoff — why this is opt-in, not the default.** `--without-intl-api` removes the whole
+`Intl` object, a real web API. That is a spec-compliance regression, so `spidermonkey`
+(full, prebuilt) stays the default and `spidermonkey-noicu` is an explicit opt-in for
+size-constrained targets. The more surgical variant — keep `Intl`, ship en-only ICU data —
+is now *unblocked* (it needs the same from-source path) and is the tracked follow-up.
+
+**Reproducing (no sudo required).** The from-source build needs clang + llvm-objdump +
+libclang + cbindgen. On this box they came from conda-forge into an isolated env, plus
+`cargo install cbindgen`:
+
+```
+conda create -n mozbuild -c conda-forge -y clang=18 clangxx=18 llvm-tools=18 lld=18 libclang=18
+conda activate mozbuild && cargo install cbindgen
+export CC=clang CXX=clang++ LIBCLANG_PATH="$CONDA_PREFIX/lib"
+# bindgen's libclang doesn't inherit the driver's gcc-toolchain probe → point it at libstdc++:
+export CLANGFLAGS="-I/usr/include/c++/13 -I/usr/include/x86_64-linux-gnu/c++/13 -I/usr/include/c++/13/backward"
+cargo build --release -p manuk-shell --no-default-features --features spidermonkey-noicu
+```
+
+`autoconf2.13` is **not** needed (mozjs ships a pre-generated `js/src/configure`).
+Platform: built + verified on Linux x86_64; the feature is [XP] but per-OS from-source
+builds are unverified on macOS/Windows.
 
 ## 2. Click-to-navigate latency — WIRED ✅ (render proxy)
 

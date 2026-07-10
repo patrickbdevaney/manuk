@@ -15,7 +15,22 @@ default = []
 # MODIFICATION BOUNDARY (CLAUDE.md §): this crate configures and BINDS to
 # SpiderMonkey. It must never patch JIT/GC internals or the JS sandbox. That is a
 # "come back to the human" boundary, not a "do it carefully" one.
-spidermonkey = ["dep:mozjs"]
+#
+# `spidermonkey` — full engine, matches mozjs's own defaults (jit + libz-sys + intl).
+# `intl` pulls ICU (icu_capi), which is ~14MB of the SpiderMonkey footprint (BASELINE
+# §8). With intl on + jit on, mozjs_sys links its PREBUILT archive (fast, no C++ build).
+# `_sm` is the INTERNAL code marker both variants enable (all `#[cfg]`'d SpiderMonkey
+# code gates on it, so the two variants share one code path and differ ONLY in `intl`).
+_sm = ["dep:mozjs"]
+spidermonkey = ["_sm", "mozjs/jit", "mozjs/libz-sys", "mozjs/intl"]
+# `spidermonkey-noicu` — C2 ICU trim. SAME embedding surface, minus the `intl` cargo
+# feature, so ICU (icu_capi) is dropped. Disabling intl forces mozjs_sys to BUILD FROM
+# SOURCE (no matching prebuilt archive), which needs clang + llvm + autoconf2.13 +
+# cbindgen. Tradeoff: no `Intl` object / locale-aware collation/formatting (documented,
+# acceptable for the size win). This is a SANCTIONED build-config flag on the published
+# mozjs crate — it does NOT touch SpiderMonkey internals (within the boundary above).
+# Use ONE of these two features (enabling both re-unions `intl` back on).
+spidermonkey-noicu = ["_sm", "mozjs/jit", "mozjs/libz-sys"]
 
 [dependencies]
 manuk-dom.workspace = true
@@ -23,6 +38,7 @@ manuk-css.workspace = true
 manuk-html.workspace = true
 tracing.workspace = true
 
-# Feature-gated. Pulled only with --features spidermonkey. Triggers the SpiderMonkey
-# C++ build. Version adjusted on wiring.
-mozjs = { version = "0.18", optional = true }
+# Feature-gated. Pulled only with a `spidermonkey*` feature. `default-features = false`
+# so the ICU-carrying `intl` default can be opted OUT of by `spidermonkey-noicu`;
+# `spidermonkey` re-enables the full default set explicitly.
+mozjs = { version = "0.18", optional = true, default-features = false }

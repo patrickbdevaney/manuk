@@ -84,7 +84,7 @@ impl JsRuntime for NoScriptRuntime {
 /// Construct the active JS runtime. Returns SpiderMonkey when the `spidermonkey`
 /// feature is enabled, otherwise the no-op [`NoScriptRuntime`].
 pub fn new_runtime() -> Box<dyn JsRuntime> {
-    #[cfg(feature = "spidermonkey")]
+    #[cfg(feature = "_sm")]
     {
         match spidermonkey::SpiderMonkeyRuntime::new() {
             Ok(rt) => return Box::new(rt),
@@ -119,19 +119,19 @@ pub mod bindings {
     }
 }
 
-#[cfg(feature = "spidermonkey")]
+#[cfg(feature = "_sm")]
 pub mod spidermonkey;
 
 /// D3 Step-0 prototype: an `Element.textContent`-style binding over the arena DOM.
-#[cfg(feature = "spidermonkey")]
+#[cfg(feature = "_sm")]
 pub mod bindings_prototype;
 
 /// D3 hand-written DOM binding subset (jQuery-core methods) over the arena DOM.
-#[cfg(feature = "spidermonkey")]
+#[cfg(feature = "_sm")]
 pub mod dom_bindings;
 
 /// D3 events tranche: the HTML event loop (microtasks + macrotasks/`setTimeout`).
-#[cfg(feature = "spidermonkey")]
+#[cfg(feature = "_sm")]
 pub mod event_loop;
 
 #[cfg(test)]
