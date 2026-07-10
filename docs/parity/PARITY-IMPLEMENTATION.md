@@ -15,6 +15,23 @@ Effort tags: **S** ≈ hours–1 day, **M** ≈ days, **L** ≈ 1–3 weeks, **X
 
 ---
 
+## Progress log (landed, verified)
+
+- **T1.1** search follow-through → `lite.duckduckgo.com` (`c2ae03f`)
+- **T1.2** caret tracks the text run (`c2ae03f`)
+- **T1.3** one long-lived Tokio runtime — connection-pool reuse (`5149ae3`)
+- **T1.7** GUI fetches + applies external stylesheets (`81876ca`)
+- **T1.8** glyph raster cache (`b8643e3`) — damage-rect repaint still pending
+- **T2E.1** Tier-0 JS globals: window/self/console/navigator (`0938636`)
+- **T2A/2B interim** font-family serif/sans/mono (`c27d29f`); extended CSS selectors —
+  combinators, attributes, pseudo-classes (`a3edffa`); hsl()/hsla() (`e593ea9`)
+- **T2D.1 images** Stage A replaced-element sizing (`7a11291`) + Stage B fetch/decode/paint
+  (`d96658c`) — `<img>` now renders, natural or attr/CSS-sized
+
+**Remaining flagship architecture:** the full Stylo cascade (2A) and the Parley text
+migration (2B) are the two large integrations still ahead; the interim slices above
+improve the shipping default engine in the meantime.
+
 ## Key research verdicts (these shape the plan)
 
 1. **CSS → finish Stylo, don't grow the hand-rolled matcher.** The premise shifted: the
