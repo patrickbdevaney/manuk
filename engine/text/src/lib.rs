@@ -56,11 +56,17 @@ impl LineMetrics {
     }
 }
 
+/// An index into the [`FontContext`] face registry (a resolved face: a `FontKey`'s primary
+/// face, or a fallback face chosen per-glyph for coverage the primary lacks).
+pub type FaceId = u32;
+
 /// One placed glyph within a shaped run: a font glyph id (not a `char` — after shaping,
-/// ligatures/complex scripts break the one-char-one-glyph assumption) at pen offset `x`.
+/// ligatures/complex scripts break the one-char-one-glyph assumption), the `face` it was
+/// shaped/rasterized from (per-glyph fallback), at pen offset `x`.
 #[derive(Clone, Copy, Debug)]
 pub struct GlyphPos {
     pub glyph_id: u16,
+    pub face: FaceId,
     pub x: f32,
 }
 
@@ -83,7 +89,10 @@ pub struct GlyphBitmap {
     pub top: i32,
     pub width: u32,
     pub height: u32,
+    /// `is_color == false`: 8-bit alpha coverage (`width*height`). `is_color == true`:
+    /// straight-alpha RGBA (`width*height*4`) for a color/emoji glyph.
     pub coverage: Vec<u8>,
+    pub is_color: bool,
 }
 
 /// Owns the font database and a cache of rasterizer-ready faces.
@@ -93,15 +102,29 @@ pub struct GlyphBitmap {
 /// change (swap to `Arc`/`Mutex`).
 /// Key for the shaped-run/measure cache: `(font, quantized size bits, run text)`.
 type RunKey = (FontKey, u32, String);
-/// Key for the glyph raster cache: `(font, size bits, glyph id, subpixel bucket 0..4)`.
-type GlyphKey = (FontKey, u32, u16, u8);
+/// Key for the glyph raster cache: `(face, size bits, glyph id, subpixel bucket 0..4)`.
+type GlyphKey = (FaceId, u32, u16, u8);
 
 /// Owned font-file bytes + face index, so a swash `FontRef` (which borrows the data) can be
-/// built on demand for rasterization.
+/// built on demand for shaping/rasterization.
 struct FaceData {
     data: Vec<u8>,
     index: u32,
 }
+
+/// Family names tried (in order) as per-glyph fallback faces for coverage the primary font
+/// lacks (CJK, emoji, symbols, Arabic/Hebrew). Only the ones actually installed are used.
+const FALLBACK_FAMILIES: &[&str] = &[
+    "Noto Color Emoji",
+    "Noto Sans CJK JP",
+    "Noto Sans CJK SC",
+    "Noto Sans CJK KR",
+    "Noto Sans Symbols2",
+    "Noto Sans Arabic",
+    "Noto Sans Hebrew",
+    "Noto Sans Devanagari",
+    "DejaVu Sans",
+];
 
 /// Number of horizontal subpixel positions a glyph is cached at (quarter-pixel).
 const SUBPIXEL_BUCKETS: u8 = 4;
@@ -109,8 +132,14 @@ const SUBPIXEL_BUCKETS: u8 = 4;
 pub struct FontContext {
     db: fontdb::Database,
     cache: RefCell<HashMap<FontKey, Option<Rc<fontdue::Font>>>>,
-    /// Owned face bytes per key, for building swash `FontRef`s during rasterization.
-    face_data: RefCell<HashMap<FontKey, Option<Rc<FaceData>>>>,
+    /// The face registry: interned faces indexed by [`FaceId`], deduped by fontdb id.
+    faces: RefCell<Vec<Rc<FaceData>>>,
+    face_by_dbid: RefCell<HashMap<fontdb::ID, FaceId>>,
+    /// `FontKey` → its primary [`FaceId`] (the resolved family/weight/style face).
+    primary_of: RefCell<HashMap<FontKey, Option<FaceId>>>,
+    /// Discovered fallback faces (lazy); per-`(face, char)` coverage memo.
+    fallbacks: RefCell<Option<Vec<FaceId>>>,
+    coverage: RefCell<HashMap<(FaceId, char), bool>>,
     /// swash's reusable scaling context (glyph rasterization). `RefCell` because scaling
     /// takes `&mut`; single-threaded like the rest of the context.
     scale_ctx: RefCell<swash::scale::ScaleContext>,
@@ -143,7 +172,11 @@ impl FontContext {
         FontContext {
             db,
             cache: RefCell::new(HashMap::new()),
-            face_data: RefCell::new(HashMap::new()),
+            faces: RefCell::new(Vec::new()),
+            face_by_dbid: RefCell::new(HashMap::new()),
+            primary_of: RefCell::new(HashMap::new()),
+            fallbacks: RefCell::new(None),
+            coverage: RefCell::new(HashMap::new()),
             scale_ctx: RefCell::new(swash::scale::ScaleContext::new()),
             shape_ctx: RefCell::new(swash::shape::ShapeContext::new()),
             measure_cache: RefCell::new(LruCache::new(
@@ -215,22 +248,89 @@ impl FontContext {
         Some(Rc::new(font))
     }
 
-    /// Resolve (and cache) the owned face bytes for `key` — needed to build a swash
-    /// `FontRef` for rasterization.
-    fn face_bytes(&self, key: FontKey) -> Option<Rc<FaceData>> {
-        if let Some(hit) = self.face_data.borrow().get(&key) {
-            return hit.clone();
+    /// Intern a fontdb face into the registry, returning its stable [`FaceId`] (deduped).
+    fn intern(&self, dbid: fontdb::ID) -> Option<FaceId> {
+        if let Some(&fid) = self.face_by_dbid.borrow().get(&dbid) {
+            return Some(fid);
         }
-        let loaded = self.face_id(key).and_then(|id| {
-            self.db.with_face_data(id, |data, index| {
-                Rc::new(FaceData {
-                    data: data.to_vec(),
-                    index,
-                })
+        let fd = self.db.with_face_data(dbid, |data, index| {
+            Rc::new(FaceData {
+                data: data.to_vec(),
+                index,
             })
-        });
-        self.face_data.borrow_mut().insert(key, loaded.clone());
-        loaded
+        })?;
+        let mut faces = self.faces.borrow_mut();
+        let fid = faces.len() as FaceId;
+        faces.push(fd);
+        self.face_by_dbid.borrow_mut().insert(dbid, fid);
+        Some(fid)
+    }
+
+    /// The primary [`FaceId`] for `key` (resolved family/weight/style), cached.
+    fn primary_face(&self, key: FontKey) -> Option<FaceId> {
+        if let Some(&hit) = self.primary_of.borrow().get(&key) {
+            return hit;
+        }
+        let fid = self.face_id(key).and_then(|id| self.intern(id));
+        self.primary_of.borrow_mut().insert(key, fid);
+        fid
+    }
+
+    fn face(&self, id: FaceId) -> Option<Rc<FaceData>> {
+        self.faces.borrow().get(id as usize).cloned()
+    }
+
+    /// The installed fallback faces, discovered once (lazy).
+    fn fallback_faces(&self) -> Vec<FaceId> {
+        if let Some(fbs) = self.fallbacks.borrow().as_ref() {
+            return fbs.clone();
+        }
+        let mut out = Vec::new();
+        for name in FALLBACK_FAMILIES {
+            let q = fontdb::Query {
+                families: &[fontdb::Family::Name(name)],
+                weight: fontdb::Weight::NORMAL,
+                stretch: fontdb::Stretch::Normal,
+                style: fontdb::Style::Normal,
+            };
+            if let Some(fid) = self.db.query(&q).and_then(|id| self.intern(id)) {
+                if !out.contains(&fid) {
+                    out.push(fid);
+                }
+            }
+        }
+        *self.fallbacks.borrow_mut() = Some(out.clone());
+        out
+    }
+
+    /// Whether `face` has a glyph for `ch` (cached).
+    fn face_covers(&self, face: FaceId, ch: char) -> bool {
+        if let Some(&hit) = self.coverage.borrow().get(&(face, ch)) {
+            return hit;
+        }
+        let covered = self
+            .face(face)
+            .and_then(|fd| {
+                swash::FontRef::from_index(&fd.data, fd.index as usize)
+                    .map(|f| f.charmap().map(ch) != 0)
+            })
+            .unwrap_or(false);
+        self.coverage.borrow_mut().insert((face, ch), covered);
+        covered
+    }
+
+    /// Resolve which face to shape/render `ch` with: the primary if it has the glyph, else
+    /// the first fallback face that does (CJK/emoji/symbols), else the primary (`.notdef`).
+    fn resolve_face(&self, ch: char, primary: FaceId) -> FaceId {
+        if ch.is_whitespace() || ch.is_control() || self.face_covers(primary, ch) {
+            return primary;
+        }
+        for fb in self.fallback_faces() {
+            if fb != primary && self.face_covers(fb, ch) {
+                return fb;
+            }
+        }
+        primary
     }
 
     /// Vertical line metrics for `key` at `size` px. Falls back to a reasonable
@@ -261,68 +361,89 @@ impl FontContext {
             self.hits.set(self.hits.get() + 1);
             return w;
         }
-        // Shape (kerning/ligatures) and sum advances; no glyph vec is built for a measure.
-        let w = self.with_shaper(text, key, size, |shaper| {
+        // Shape each fallback-segmented run and sum advances (no glyph vec is built).
+        let mut total = None;
+        if let Some(primary) = self.primary_face(key) {
             let mut pen = 0.0f32;
-            shaper.shape_with(|cluster| {
-                for g in cluster.glyphs {
-                    pen += g.advance;
-                }
-            });
-            pen
-        });
-        let w = w.unwrap_or_else(|| text.chars().count() as f32 * size * 0.5);
+            for (face, run) in self.segment(text, primary) {
+                self.shape_run(&run, face, size, |g, _| pen += g.advance);
+            }
+            total = Some(pen);
+        }
+        let w = total.unwrap_or_else(|| text.chars().count() as f32 * size * 0.5);
         self.misses.set(self.misses.get() + 1);
         self.measure_cache.borrow_mut().put(ck, w);
         w
     }
 
-    /// Build a swash shaper for `(text, key, size)` and hand **ownership** to `f`
-    /// (`Shaper::shape_with` consumes the shaper). `None` if no face is available.
-    fn with_shaper<R>(
+    /// Split `text` into maximal runs sharing a resolved face (primary + per-glyph
+    /// fallback), so each run can be shaped by a single font.
+    fn segment(&self, text: &str, primary: FaceId) -> Vec<(FaceId, String)> {
+        let mut runs: Vec<(FaceId, String)> = Vec::new();
+        for ch in text.chars() {
+            let face = self.resolve_face(ch, primary);
+            match runs.last_mut() {
+                Some((f, s)) if *f == face => s.push(ch),
+                _ => runs.push((face, ch.to_string())),
+            }
+        }
+        runs
+    }
+
+    /// Shape one same-face run via swash, invoking `emit(glyph, x_offset)` per glyph with
+    /// the pen advancing; returns the run's total advance width.
+    fn shape_run(
         &self,
         text: &str,
-        key: FontKey,
+        face: FaceId,
         size: f32,
-        f: impl FnOnce(swash::shape::Shaper) -> R,
-    ) -> Option<R> {
-        let face = self.face_bytes(key)?;
-        let font = swash::FontRef::from_index(&face.data, face.index as usize)?;
+        mut emit: impl FnMut(&swash::shape::cluster::Glyph, f32),
+    ) -> f32 {
+        let Some(fd) = self.face(face) else { return 0.0 };
+        let Some(font) = swash::FontRef::from_index(&fd.data, fd.index as usize) else {
+            return 0.0;
+        };
         let mut ctx = self.shape_ctx.borrow_mut();
         let mut shaper = ctx.builder(font).size(size).build();
         shaper.add_str(text);
-        Some(f(shaper))
+        let mut pen = 0.0f32;
+        shaper.shape_with(|cluster| {
+            for g in cluster.glyphs {
+                emit(g, pen);
+                pen += g.advance;
+            }
+        });
+        pen
     }
 
-    /// Shape a text run with kerning/ligatures/complex-script support (swash), placing each
-    /// resulting glyph (by glyph id) at its accumulated pen position.
+    /// Shape a text run with kerning/ligatures/complex-script support **and per-glyph font
+    /// fallback** (swash), placing each resulting glyph (by glyph id + face) at its pen
+    /// position. Runs of characters the primary font lacks are shaped with a fallback face.
     pub fn shape(&self, text: &str, key: FontKey, size: f32) -> ShapedRun {
         let metrics = self.line_metrics(key, size);
-        let shaped = self.with_shaper(text, key, size, |shaper| {
-            let mut glyphs = Vec::new();
-            let mut pen = 0.0f32;
-            shaper.shape_with(|cluster| {
-                for g in cluster.glyphs {
-                    glyphs.push(GlyphPos {
-                        glyph_id: g.id,
-                        x: pen + g.x,
-                    });
-                    pen += g.advance;
-                }
-            });
-            (glyphs, pen)
-        });
-        match shaped {
-            Some((glyphs, width)) => ShapedRun {
-                glyphs,
-                width,
-                metrics,
-            },
-            None => ShapedRun {
+        let Some(primary) = self.primary_face(key) else {
+            return ShapedRun {
                 glyphs: Vec::new(),
                 width: text.chars().count() as f32 * size * 0.5,
                 metrics,
-            },
+            };
+        };
+        let mut glyphs = Vec::new();
+        let mut pen = 0.0f32;
+        for (face, run) in self.segment(text, primary) {
+            let advance = self.shape_run(&run, face, size, |g, x| {
+                glyphs.push(GlyphPos {
+                    glyph_id: g.id,
+                    face,
+                    x: pen + x + g.x,
+                });
+            });
+            pen += advance;
+        }
+        ShapedRun {
+            glyphs,
+            width: pen,
+            metrics,
         }
     }
 
@@ -334,34 +455,40 @@ impl FontContext {
     pub fn rasterize(
         &self,
         glyph_id: u16,
-        key: FontKey,
+        face: FaceId,
         size: f32,
         subpixel_x: f32,
     ) -> Option<Rc<GlyphBitmap>> {
         let frac = subpixel_x - subpixel_x.floor();
         let bucket = ((frac * SUBPIXEL_BUCKETS as f32).round() as u8) % SUBPIXEL_BUCKETS;
-        let gk = (key, size.to_bits(), glyph_id, bucket);
+        let gk = (face, size.to_bits(), glyph_id, bucket);
         if let Some(hit) = self.glyph_cache.borrow_mut().get(&gk) {
             return Some(hit.clone());
         }
 
-        let face = self.face_bytes(key)?;
-        let font = swash::FontRef::from_index(&face.data, face.index as usize)?;
+        let fd = self.face(face)?;
+        let font = swash::FontRef::from_index(&fd.data, fd.index as usize)?;
 
         let mut ctx = self.scale_ctx.borrow_mut();
         let mut scaler = ctx.builder(font).size(size).hint(true).build();
         let offset = swash::zeno::Vector::new(bucket as f32 / SUBPIXEL_BUCKETS as f32, 0.0);
-        let image = swash::scale::Render::new(&[swash::scale::Source::Outline])
-            .format(swash::zeno::Format::Alpha)
-            .offset(offset)
-            .render(&mut scaler, glyph_id)?;
+        // Prefer a color bitmap/outline (emoji), then a plain alpha outline.
+        let image = swash::scale::Render::new(&[
+            swash::scale::Source::ColorBitmap(swash::scale::StrikeWith::BestFit),
+            swash::scale::Source::ColorOutline(0),
+            swash::scale::Source::Outline,
+        ])
+        .offset(offset)
+        .render(&mut scaler, glyph_id)?;
 
+        let is_color = matches!(image.content, swash::scale::image::Content::Color);
         let bmp = Rc::new(GlyphBitmap {
             left: image.placement.left,
             top: image.placement.top,
             width: image.placement.width,
             height: image.placement.height,
             coverage: image.data,
+            is_color,
         });
         self.glyph_cache.borrow_mut().put(gk, bmp.clone());
         Some(bmp)
@@ -396,10 +523,10 @@ mod tests {
         let run = ctx.shape("Hi", key, 16.0);
         assert_eq!(run.glyphs.len(), 2);
         assert!(run.width > 0.0);
-        // Rasterize the first shaped glyph of "W".
+        // Rasterize the first shaped glyph of "W" (by its resolved face).
         let wrun = ctx.shape("W", key, 32.0);
-        let gid = wrun.glyphs[0].glyph_id;
-        let g = ctx.rasterize(gid, key, 32.0, 0.0).expect("raster W");
+        let gp = wrun.glyphs[0];
+        let g = ctx.rasterize(gp.glyph_id, gp.face, 32.0, 0.0).expect("raster W");
         assert!(g.width > 0 && !g.coverage.is_empty());
     }
 

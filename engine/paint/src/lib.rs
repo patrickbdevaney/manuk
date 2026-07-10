@@ -247,7 +247,7 @@ impl Canvas {
         let run = fonts.shape(text, style.font_key, style.font_size);
         for g in &run.glyphs {
             let pen_x = origin_x + g.x;
-            let Some(bitmap) = fonts.rasterize(g.glyph_id, style.font_key, style.font_size, pen_x) else {
+            let Some(bitmap) = fonts.rasterize(g.glyph_id, g.face, style.font_size, pen_x) else {
                 continue;
             };
             if bitmap.width == 0 || bitmap.height == 0 {
@@ -255,16 +255,7 @@ impl Canvas {
             }
             let left = pen_x.floor() as i32 + bitmap.left;
             let top = baseline.round() as i32 - bitmap.top;
-            blit_coverage(
-                &mut self.pixmap,
-                &bitmap.coverage,
-                bitmap.width as usize,
-                bitmap.height as usize,
-                left,
-                top,
-                style.color,
-                None,
-            );
+            blit_glyph(&mut self.pixmap, &bitmap, left, top, style.color, None);
         }
     }
 }
@@ -415,7 +406,7 @@ impl CpuPainter<'_> {
             // swash rasterizes at the fractional pen position for crisp subpixel placement.
             let Some(bitmap) = self
                 .fonts
-                .rasterize(g.glyph_id, style.font_key, style.font_size, pen_x)
+                .rasterize(g.glyph_id, g.face, style.font_size, pen_x)
             else {
                 continue;
             };
@@ -425,16 +416,89 @@ impl CpuPainter<'_> {
             // swash placement: `left` = pen→bitmap-left, `top` = baseline→bitmap-top (up).
             let left = pen_x.floor() as i32 + bitmap.left;
             let top = baseline.round() as i32 - bitmap.top;
-            blit_coverage(
-                pixmap,
-                &bitmap.coverage,
-                bitmap.width as usize,
-                bitmap.height as usize,
-                left,
-                top,
-                style.color,
-                clip,
-            );
+            blit_glyph(pixmap, &bitmap, left, top, style.color, clip);
+        }
+    }
+}
+
+/// Blit a rasterized glyph: an alpha coverage bitmap tinted with `color`, or a color/emoji
+/// bitmap composited as-is (source-over), clipped to `clip`.
+fn blit_glyph(
+    pixmap: &mut tiny_skia::Pixmap,
+    bmp: &manuk_text::GlyphBitmap,
+    left: i32,
+    top: i32,
+    color: Rgba,
+    clip: Option<Rect>,
+) {
+    if bmp.is_color {
+        blit_color_glyph(
+            pixmap,
+            &bmp.coverage,
+            bmp.width as usize,
+            bmp.height as usize,
+            left,
+            top,
+            clip,
+        );
+    } else {
+        blit_coverage(
+            pixmap,
+            &bmp.coverage,
+            bmp.width as usize,
+            bmp.height as usize,
+            left,
+            top,
+            color,
+            clip,
+        );
+    }
+}
+
+/// Source-over composite a straight-alpha RGBA glyph bitmap onto the (opaque) pixmap.
+#[allow(clippy::too_many_arguments)]
+fn blit_color_glyph(
+    pixmap: &mut tiny_skia::Pixmap,
+    rgba: &[u8],
+    gw: usize,
+    gh: usize,
+    left: i32,
+    top: i32,
+    clip: Option<Rect>,
+) {
+    let pw = pixmap.width() as i32;
+    let ph = pixmap.height() as i32;
+    let (cx0, cy0, cx1, cy1) = match clip {
+        Some(c) => (
+            c.x.floor() as i32,
+            c.y.floor() as i32,
+            c.right().ceil() as i32,
+            c.bottom().ceil() as i32,
+        ),
+        None => (i32::MIN, i32::MIN, i32::MAX, i32::MAX),
+    };
+    let data = pixmap.data_mut();
+    for row in 0..gh as i32 {
+        let py = top + row;
+        if py < 0 || py >= ph || py < cy0 || py >= cy1 {
+            continue;
+        }
+        for col in 0..gw as i32 {
+            let px = left + col;
+            if px < 0 || px >= pw || px < cx0 || px >= cx1 {
+                continue;
+            }
+            let s = ((row as usize) * gw + col as usize) * 4;
+            let (sr, sg, sb, sa) = (rgba[s], rgba[s + 1], rgba[s + 2], rgba[s + 3]);
+            if sa == 0 {
+                continue;
+            }
+            let a = sa as f32 / 255.0;
+            let d = ((py * pw + px) as usize) * 4;
+            for (k, sc) in [sr, sg, sb].into_iter().enumerate() {
+                data[d + k] = (sc as f32 * a + data[d + k] as f32 * (1.0 - a)).round() as u8;
+            }
+            data[d + 3] = 255;
         }
     }
 }
