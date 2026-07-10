@@ -2327,6 +2327,12 @@ pub mod stylo_probe;
 #[cfg(feature = "stylo")]
 pub mod stylo_dom;
 
+/// D2 back-half: mapping Stylo's `ComputedValues` onto [`ComputedStyle`]. Scalar subset
+/// landed + tested against Stylo's initial values; the geometric properties follow per
+/// `docs/parity/STYLO-CASCADE-PLAN.md`.
+#[cfg(feature = "stylo")]
+pub mod stylo_map;
+
 #[cfg(test)]
 mod tests {
     use super::*;
