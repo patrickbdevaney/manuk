@@ -129,6 +129,12 @@ fn cmd_render(args: &[String]) -> Result<()> {
         "  size:   {width}x{height}px  (content height {:.0}px)",
         page.content_height
     );
+    if let Some(rss) = manuk_compositor::mem::process_rss_bytes() {
+        println!(
+            "  rss:    {:.1} MB (process resident)",
+            rss as f64 / 1_048_576.0
+        );
+    }
     println!("  wrote:  {out}");
     Ok(())
 }

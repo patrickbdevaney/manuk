@@ -15,6 +15,39 @@
 
 use manuk_layout::Rect;
 
+/// Process resident-memory (RSS) probe — the ground-truth counterpart to the per-tab
+/// [`TabManager::total_mem`] heap estimate (CLAUDE.md §8 metric #3, per-tab baseline
+/// RSS). Because tabs share one process, this is *whole-process* RSS; per-tab
+/// attribution is the estimate, this is the reality check on it.
+pub mod mem {
+    /// Current process resident set size, in bytes, or `None` if unavailable on this
+    /// platform.
+    ///
+    /// **Linux** reads `VmRSS` from `/proc/self/status` (pure `std`, verified here).
+    /// **macOS** would use `getrusage(RUSAGE_SELF).ru_maxrss` / `task_info`, **Windows**
+    /// `GetProcessMemoryInfo` — both need a platform crate (`libc`/`windows`), so they
+    /// are not wired in this Linux environment and return `None` (engineered for
+    /// portability, unverified elsewhere — CLAUDE.md platform discipline).
+    pub fn process_rss_bytes() -> Option<usize> {
+        #[cfg(target_os = "linux")]
+        {
+            let status = std::fs::read_to_string("/proc/self/status").ok()?;
+            for line in status.lines() {
+                if let Some(rest) = line.strip_prefix("VmRSS:") {
+                    // Format: "VmRSS:\t   12345 kB".
+                    let kb: usize = rest.split_whitespace().next()?.parse().ok()?;
+                    return Some(kb * 1024);
+                }
+            }
+            None
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            None
+        }
+    }
+}
+
 /// Render/JS tier of a tab, from heaviest (focused) to lightest (hibernated).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RenderTier {
@@ -278,6 +311,21 @@ mod tests {
         assert!(!tm.tier(TabId(4)).unwrap().js_frozen());
         assert!(tm.tier(TabId(0)).unwrap().js_frozen());
         assert!(tm.tier(TabId(0)).unwrap().is_evicted());
+    }
+
+    #[test]
+    fn rss_probe_reads_a_plausible_value() {
+        match mem::process_rss_bytes() {
+            Some(rss) => {
+                // A running test process holds at least ~1 MB and far less than 100 GB.
+                assert!(rss > 1 << 20, "RSS implausibly small: {rss}");
+                assert!(rss < 100 << 30, "RSS implausibly large: {rss}");
+            }
+            None => {
+                // Only acceptable off Linux (this environment is Linux).
+                assert!(!cfg!(target_os = "linux"), "RSS probe should work on Linux");
+            }
+        }
     }
 
     #[test]

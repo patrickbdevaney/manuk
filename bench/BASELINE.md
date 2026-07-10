@@ -47,12 +47,23 @@ the body today; that's the next enabler.)
 The network leg (fetch) is measured separately once the pooled streaming client
 (P0.4) lands.
 
-## 3. Per-tab baseline RSS — SLOT RESERVED, NOT YET WIRED 🔧
+## 3. Per-tab baseline RSS — WIRED (Linux) ✅ / per-tab attribution 🔧
 
-Requires a running tab/isolate to attribute. Wire after **C1** (tab freeze/discard)
-and **G-e** (per-tab accounting) exist; measurement is platform-specific
-(Linux `/proc/self/status` VmRSS; macOS/Windows via `getrusage`/PSAPI) and shares the
-shared-process self-attribution wrinkle noted in G-e. Not fabricated here.
+`manuk_compositor::mem::process_rss_bytes()` reads whole-process RSS from
+`/proc/self/status` `VmRSS` on Linux (macOS `getrusage`/Windows PSAPI need a platform
+crate — return `None`, engineered-unverified). The shell `render` prints it.
+
+| State | Process RSS |
+|---|---|
+| headless render of example.com (`--no-default-features`, 800px) | **~60.6 MB** |
+
+Most of that baseline is `fontdb`'s loaded system-font set + the process floor; a
+freshly-rendered page's fragment tree adds far less. **Per-tab attribution** is the
+[`TabManager::total_mem`] heap *estimate* ([`Page::estimated_bytes`]) — this RSS figure
+is the ground-truth reality check (tabs share one process, so true per-tab RSS is not
+directly separable — the shared-process self-attribution wrinkle from G-e). C1 proves
+the *retained-heap* drops on discard; whether RSS follows depends on the allocator
+returning freed pages to the OS.
 
 ## 4. Frame time — SLOT RESERVED, NOT YET WIRED 🔧
 
