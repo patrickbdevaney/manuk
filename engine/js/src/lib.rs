@@ -130,6 +130,10 @@ pub mod bindings_prototype;
 #[cfg(feature = "spidermonkey")]
 pub mod dom_bindings;
 
+/// D3 events tranche: the HTML event loop (microtasks + macrotasks/`setTimeout`).
+#[cfg(feature = "spidermonkey")]
+pub mod event_loop;
+
 #[cfg(test)]
 mod tests {
     use super::*;
