@@ -6,7 +6,8 @@
 //! - [`AgentBrowser`] — a **headless page driver** over the shared `manuk-page`
 //!   pipeline. It knows nothing about LLMs: navigate, scroll, screenshot, observe.
 //! - [`InferenceBackend`] — the **model abstraction**. The agent loop talks to this
-//!   trait, never to a specific provider. [`groq::GroqBackend`] is one impl.
+//!   trait, never to a specific provider. `local::OpenAiCompatBackend` is the canonical
+//!   impl; Groq is a *preset* of it (`groq::groq`), not a separate type.
 //! - [`run_task`] — the **agent loop** (observe → decide → act). It takes a
 //!   `&dyn InferenceBackend` and `&mut AgentBrowser`; it has no dependency on Groq
 //!   or on the test harness that drives it.

@@ -10,7 +10,7 @@
 //! `GROQ_MODEL` (default `qwen/qwen3.6-27b`).
 
 use anyhow::{bail, Context, Result};
-use manuk_agent::{env, groq::GroqBackend, run_task, AgentBrowser, AgentConfig, InferenceBackend};
+use manuk_agent::{env, groq, run_task, AgentBrowser, AgentConfig, InferenceBackend};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -33,7 +33,7 @@ async fn main() -> Result<()> {
 
     let key =
         env::single_key().context("no API key: set GROQ_API_KEY (or GROQ_API_KEY in .env)")?;
-    let backend = GroqBackend::from_key(key);
+    let backend = groq::groq(key);
     println!("backend: {}", backend.name());
 
     let mut browser = AgentBrowser::new(1024, 768);
