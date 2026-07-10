@@ -2325,6 +2325,7 @@ dependencies = [
 name = "manuk-js"
 version = "0.1.0"
 dependencies = [
+ "manuk-css",
  "manuk-dom",
  "mozjs",
  "tracing",

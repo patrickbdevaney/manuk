@@ -126,6 +126,10 @@ pub mod spidermonkey;
 #[cfg(feature = "spidermonkey")]
 pub mod bindings_prototype;
 
+/// D3 hand-written DOM binding subset (jQuery-core methods) over the arena DOM.
+#[cfg(feature = "spidermonkey")]
+pub mod dom_bindings;
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -274,6 +274,39 @@ fn compound_matches(c: &Compound, dom: &Dom, node: NodeId) -> bool {
     true
 }
 
+/// Does `node` match the CSS selector string `sel` (comma-separated list)? Reuses
+/// the cascade's own selector engine, so `querySelector`-style APIs and the cascade
+/// agree. Supports the documented subset (tag/id/class/`*` + descendant combinator).
+pub fn matches_selector(dom: &Dom, node: NodeId, sel: &str) -> bool {
+    dom.is_element(node)
+        && parse_selector_list(sel)
+            .iter()
+            .any(|s| selector_matches(s, dom, node))
+}
+
+/// First element in document order within `root`'s subtree (excluding `root`)
+/// matching `sel`, or `None`. The engine-shared analog of `Element.querySelector`.
+pub fn query_selector(dom: &Dom, root: NodeId, sel: &str) -> Option<NodeId> {
+    let sels = parse_selector_list(sel);
+    if sels.is_empty() {
+        return None;
+    }
+    dom.descendants(root)
+        .find(|&n| dom.is_element(n) && sels.iter().any(|s| selector_matches(s, dom, n)))
+}
+
+/// All elements in document order within `root`'s subtree matching `sel`
+/// (`Element.querySelectorAll`).
+pub fn query_selector_all(dom: &Dom, root: NodeId, sel: &str) -> Vec<NodeId> {
+    let sels = parse_selector_list(sel);
+    if sels.is_empty() {
+        return Vec::new();
+    }
+    dom.descendants(root)
+        .filter(|&n| dom.is_element(n) && sels.iter().any(|s| selector_matches(s, dom, n)))
+        .collect()
+}
+
 fn selector_matches(sel: &Selector, dom: &Dom, node: NodeId) -> bool {
     let Some((subject, ancestors)) = sel.parts.split_last() else {
         return false;
@@ -952,6 +985,21 @@ mod tests {
         assert_eq!(s.inset.left, Dim::Percent(5.0));
         assert_eq!(s.inset.right, Dim::Auto); // unset stays auto
         assert_eq!(s.z_index, Some(3));
+    }
+
+    #[test]
+    fn query_selector_reuses_the_cascade_engine() {
+        // <body><p class=lead>…<span id=x></span></p></body> from build_dom().
+        let dom = build_dom();
+        let root = dom.root();
+        let span = dom.find_first("span").unwrap();
+        let p = dom.find_first("p").unwrap();
+        assert_eq!(query_selector(&dom, root, "span"), Some(span));
+        assert_eq!(query_selector(&dom, root, "#x"), Some(span));
+        assert_eq!(query_selector(&dom, root, "body p"), Some(p));
+        assert_eq!(query_selector(&dom, root, ".nope"), None);
+        assert!(matches_selector(&dom, span, "span"));
+        assert_eq!(query_selector_all(&dom, root, "span").len(), 1);
     }
 
     #[test]
