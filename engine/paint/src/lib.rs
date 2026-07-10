@@ -211,7 +211,7 @@ impl Canvas {
         let run = fonts.shape(text, style.font_key, style.font_size);
         for g in &run.glyphs {
             let pen_x = origin_x + g.x;
-            let Some(bitmap) = fonts.rasterize(g.ch, style.font_key, style.font_size, pen_x) else {
+            let Some(bitmap) = fonts.rasterize(g.glyph_id, style.font_key, style.font_size, pen_x) else {
                 continue;
             };
             if bitmap.width == 0 || bitmap.height == 0 {
@@ -331,7 +331,7 @@ impl CpuPainter<'_> {
             // swash rasterizes at the fractional pen position for crisp subpixel placement.
             let Some(bitmap) = self
                 .fonts
-                .rasterize(g.ch, style.font_key, style.font_size, pen_x)
+                .rasterize(g.glyph_id, style.font_key, style.font_size, pen_x)
             else {
                 continue;
             };

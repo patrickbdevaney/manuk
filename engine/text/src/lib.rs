@@ -56,10 +56,11 @@ impl LineMetrics {
     }
 }
 
-/// One placed glyph within a shaped run. `x` is the pen offset from the run origin.
+/// One placed glyph within a shaped run: a font glyph id (not a `char` — after shaping,
+/// ligatures/complex scripts break the one-char-one-glyph assumption) at pen offset `x`.
 #[derive(Clone, Copy, Debug)]
 pub struct GlyphPos {
-    pub ch: char,
+    pub glyph_id: u16,
     pub x: f32,
 }
 
@@ -92,8 +93,8 @@ pub struct GlyphBitmap {
 /// change (swap to `Arc`/`Mutex`).
 /// Key for the shaped-run/measure cache: `(font, quantized size bits, run text)`.
 type RunKey = (FontKey, u32, String);
-/// Key for the glyph raster cache: `(font, size bits, glyph char, subpixel bucket 0..4)`.
-type GlyphKey = (FontKey, u32, char, u8);
+/// Key for the glyph raster cache: `(font, size bits, glyph id, subpixel bucket 0..4)`.
+type GlyphKey = (FontKey, u32, u16, u8);
 
 /// Owned font-file bytes + face index, so a swash `FontRef` (which borrows the data) can be
 /// built on demand for rasterization.
@@ -113,6 +114,8 @@ pub struct FontContext {
     /// swash's reusable scaling context (glyph rasterization). `RefCell` because scaling
     /// takes `&mut`; single-threaded like the rest of the context.
     scale_ctx: RefCell<swash::scale::ScaleContext>,
+    /// swash's reusable shaping context (kerning/ligatures/complex scripts).
+    shape_ctx: RefCell<swash::shape::ShapeContext>,
     /// Bounded LRU cache of measured run widths (A3 shaped-run cache). Layout measures
     /// the same words repeatedly (per line and in shrink-to-fit's multiple passes), so
     /// caching the advance width skips re-running per-glyph metrics.
@@ -142,6 +145,7 @@ impl FontContext {
             cache: RefCell::new(HashMap::new()),
             face_data: RefCell::new(HashMap::new()),
             scale_ctx: RefCell::new(swash::scale::ScaleContext::new()),
+            shape_ctx: RefCell::new(swash::shape::ShapeContext::new()),
             measure_cache: RefCell::new(LruCache::new(
                 NonZeroUsize::new(MEASURE_CACHE_CAP).unwrap(),
             )),
@@ -257,45 +261,68 @@ impl FontContext {
             self.hits.set(self.hits.get() + 1);
             return w;
         }
-        let w = match self.font(key) {
-            Some(font) => text
-                .chars()
-                .map(|c| font.metrics(c, size).advance_width)
-                .sum(),
-            // No font: estimate with a monospace-ish average.
-            None => text.chars().count() as f32 * size * 0.5,
-        };
+        // Shape (kerning/ligatures) and sum advances; no glyph vec is built for a measure.
+        let w = self.with_shaper(text, key, size, |shaper| {
+            let mut pen = 0.0f32;
+            shaper.shape_with(|cluster| {
+                for g in cluster.glyphs {
+                    pen += g.advance;
+                }
+            });
+            pen
+        });
+        let w = w.unwrap_or_else(|| text.chars().count() as f32 * size * 0.5);
         self.misses.set(self.misses.get() + 1);
         self.measure_cache.borrow_mut().put(ck, w);
         w
     }
 
-    /// Shape a text run: place each glyph at its accumulated pen position.
-    ///
-    /// Latin-only, left-to-right, no kerning/ligatures yet (that is Parley's remit).
+    /// Build a swash shaper for `(text, key, size)` and hand **ownership** to `f`
+    /// (`Shaper::shape_with` consumes the shaper). `None` if no face is available.
+    fn with_shaper<R>(
+        &self,
+        text: &str,
+        key: FontKey,
+        size: f32,
+        f: impl FnOnce(swash::shape::Shaper) -> R,
+    ) -> Option<R> {
+        let face = self.face_bytes(key)?;
+        let font = swash::FontRef::from_index(&face.data, face.index as usize)?;
+        let mut ctx = self.shape_ctx.borrow_mut();
+        let mut shaper = ctx.builder(font).size(size).build();
+        shaper.add_str(text);
+        Some(f(shaper))
+    }
+
+    /// Shape a text run with kerning/ligatures/complex-script support (swash), placing each
+    /// resulting glyph (by glyph id) at its accumulated pen position.
     pub fn shape(&self, text: &str, key: FontKey, size: f32) -> ShapedRun {
         let metrics = self.line_metrics(key, size);
-        let mut glyphs = Vec::with_capacity(text.len());
-        let mut pen = 0.0f32;
-        match self.font(key) {
-            Some(font) => {
-                for ch in text.chars() {
-                    glyphs.push(GlyphPos { ch, x: pen });
-                    pen += font.metrics(ch, size).advance_width;
+        let shaped = self.with_shaper(text, key, size, |shaper| {
+            let mut glyphs = Vec::new();
+            let mut pen = 0.0f32;
+            shaper.shape_with(|cluster| {
+                for g in cluster.glyphs {
+                    glyphs.push(GlyphPos {
+                        glyph_id: g.id,
+                        x: pen + g.x,
+                    });
+                    pen += g.advance;
                 }
-            }
-            None => {
-                let adv = size * 0.5;
-                for ch in text.chars() {
-                    glyphs.push(GlyphPos { ch, x: pen });
-                    pen += adv;
-                }
-            }
-        }
-        ShapedRun {
-            glyphs,
-            width: pen,
-            metrics,
+            });
+            (glyphs, pen)
+        });
+        match shaped {
+            Some((glyphs, width)) => ShapedRun {
+                glyphs,
+                width,
+                metrics,
+            },
+            None => ShapedRun {
+                glyphs: Vec::new(),
+                width: text.chars().count() as f32 * size * 0.5,
+                metrics,
+            },
         }
     }
 
@@ -306,21 +333,20 @@ impl FontContext {
     /// placement is preserved across the quarter-pixel buckets.
     pub fn rasterize(
         &self,
-        ch: char,
+        glyph_id: u16,
         key: FontKey,
         size: f32,
         subpixel_x: f32,
     ) -> Option<Rc<GlyphBitmap>> {
         let frac = subpixel_x - subpixel_x.floor();
         let bucket = ((frac * SUBPIXEL_BUCKETS as f32).round() as u8) % SUBPIXEL_BUCKETS;
-        let gk = (key, size.to_bits(), ch, bucket);
+        let gk = (key, size.to_bits(), glyph_id, bucket);
         if let Some(hit) = self.glyph_cache.borrow_mut().get(&gk) {
             return Some(hit.clone());
         }
 
         let face = self.face_bytes(key)?;
         let font = swash::FontRef::from_index(&face.data, face.index as usize)?;
-        let glyph_id = font.charmap().map(ch);
 
         let mut ctx = self.scale_ctx.borrow_mut();
         let mut scaler = ctx.builder(font).size(size).hint(true).build();
@@ -370,7 +396,10 @@ mod tests {
         let run = ctx.shape("Hi", key, 16.0);
         assert_eq!(run.glyphs.len(), 2);
         assert!(run.width > 0.0);
-        let g = ctx.rasterize('W', key, 32.0, 0.0).expect("raster W");
+        // Rasterize the first shaped glyph of "W".
+        let wrun = ctx.shape("W", key, 32.0);
+        let gid = wrun.glyphs[0].glyph_id;
+        let g = ctx.rasterize(gid, key, 32.0, 0.0).expect("raster W");
         assert!(g.width > 0 && !g.coverage.is_empty());
     }
 
