@@ -175,7 +175,10 @@ fn cmd_browse(args: &[String]) -> Result<()> {
     let width: u32 = flag_value(args, &["--width", "-w"])
         .and_then(|s| s.parse().ok())
         .unwrap_or(DEFAULT_WIDTH);
-    gui::run(url.to_string(), width)
+    // `--frames N` renders N GPU frames back-to-back, reports frame time, then exits
+    // (the §8 metric #4 headful measurement).
+    let frames = flag_value(args, &["--frames"]).and_then(|s| s.parse().ok());
+    gui::run(url.to_string(), width, frames)
 }
 
 #[cfg(not(feature = "gui"))]

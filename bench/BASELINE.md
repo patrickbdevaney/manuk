@@ -85,22 +85,20 @@ directly separable — the shared-process self-attribution wrinkle from G-e). C1
 the *retained-heap* drops on discard; whether RSS follows depends on the allocator
 returning freed pages to the OS.
 
-## 4. Frame time — WIRED (CPU raster) ✅ / GPU present 🔧
+## 4. Frame time — WIRED (CPU raster + GPU present) ✅
 
 `manuk_compositor::FrameTimer` is a rolling per-frame instrument (last / average /
-p95 / FPS / jank vs a `FRAME_BUDGET_60FPS` ~16.67 ms budget). The headless `render`
-times the CPU raster (`begin`/`end` around `Page::paint`) and prints `frame: N ms`.
+p95 / FPS / jank vs a `FRAME_BUDGET_60FPS` ~16.67 ms budget), wired at both tiers.
 
-| Frame (CPU raster) | Time |
-|---|---|
-| `paint_frame_800x600` (SAMPLE page, re-paint) | **~675 µs** |
-| live example.com render (800×143, incl. first paint) | ~3.2 ms |
+| Frame | Time | How |
+|---|---|---|
+| CPU raster `paint_frame_800x600` (SAMPLE, re-paint) | **~675 µs** | `cargo bench -p manuk-page --bench pipeline -- paint_frame` |
+| CPU raster, live example.com (800×143, +first paint) | ~3.2 ms | `manuk render …` prints `frame:` |
+| **GPU present** (winit/wgpu, 240 back-to-back frames) | **avg 0.64 ms, p95 1.07 ms, 0/240 jank (~1562 fps)** | `manuk browse <url> --frames 240` (`gui` feature) |
 
-Both are well under the 16.67 ms 60-fps budget — the CPU raster tier is not the frame
-bottleneck for representative pages. **GPU present time** (the actual on-screen frame
-under the shell `gui` feature) needs a display and is not measured headlessly; the
-`FrameTimer` is display-agnostic, so wrapping the winit/wgpu present loop with the
-same `begin`/`end` records real GPU frames when a headful session runs. The Vello GPU
-tier (A1) is monitor-upstream.
-
-Re-measure: `cargo bench -p manuk-page --bench pipeline -- paint_frame`.
+The GPU-present figure is a **real on-screen measurement on X11 hardware** (the shell
+`gui` redraw loop times each `gpu.draw()`); the present is uncapped (no vsync throttle
+in this mode), so it measures raw per-frame present cost, not the display refresh rate.
+All tiers are far under the 16.67 ms 60-fps budget for representative pages. The Vello
+GPU-compute tier (A1) is monitor-upstream and slots behind the same `Painter` seam /
+`FrameTimer`.

@@ -50,9 +50,9 @@ fn fs(in: VsOut) -> @location(0) vec4<f32> {
 "#;
 
 /// Launch the browser window pointed at `url`, with an initial content width.
-pub fn run(url: String, width: u32) -> Result<()> {
+pub fn run(url: String, width: u32, measure_frames: Option<usize>) -> Result<()> {
     let event_loop = EventLoop::new().context("creating winit event loop")?;
-    let mut app = App::new(url, width);
+    let mut app = App::new(url, width, measure_frames);
     event_loop.run_app(&mut app).context("running event loop")?;
     Ok(())
 }
@@ -70,10 +70,13 @@ struct App {
     tab_id: TabId,
     /// Rolling GPU-present frame timer (§8 metric #4) — real on-screen frames.
     frame: manuk_compositor::FrameTimer,
+    /// If set, render this many frames back-to-back, print GPU stats, then exit.
+    measure_frames: Option<usize>,
+    frames_done: usize,
 }
 
 impl App {
-    fn new(url: String, width: u32) -> Self {
+    fn new(url: String, width: u32, measure_frames: Option<usize>) -> Self {
         // One window == one tab for now, but the tab/tier model is wired so
         // multi-tab is an additive change (CLAUDE.md § per-tab memory).
         let mut browser = Browser::new(8);
@@ -89,7 +92,9 @@ impl App {
             scroll_y: 0.0,
             browser,
             tab_id,
-            frame: manuk_compositor::FrameTimer::new(120),
+            frame: manuk_compositor::FrameTimer::new(240),
+            measure_frames,
+            frames_done: 0,
         }
     }
 
@@ -224,6 +229,27 @@ impl ApplicationHandler for App {
                                 janky = self.frame.janky(manuk_compositor::FRAME_BUDGET_60FPS),
                                 "gpu present frame stats (120-frame window)"
                             );
+                        }
+                    }
+                    // §8 metric #4: `browse --frames N` renders N frames back-to-back,
+                    // reports GPU-present stats, then exits — a headful measurement.
+                    if let Some(n) = self.measure_frames {
+                        self.frames_done += 1;
+                        if self.frames_done >= n {
+                            let avg = self.frame.average().unwrap_or_default();
+                            let p95 = self.frame.p95().unwrap_or_default();
+                            println!(
+                                "gpu-present over {} frames: avg {:.2} ms ({:.0} fps), p95 {:.2} ms, jank {}/{}",
+                                self.frame.len(),
+                                avg.as_secs_f64() * 1000.0,
+                                self.frame.fps().unwrap_or(0.0),
+                                p95.as_secs_f64() * 1000.0,
+                                self.frame.janky(manuk_compositor::FRAME_BUDGET_60FPS),
+                                self.frame.len(),
+                            );
+                            event_loop.exit();
+                        } else if let Some(w) = &self.window {
+                            w.request_redraw(); // keep the render loop running
                         }
                     }
                 }
