@@ -5,11 +5,13 @@
 //! agent** both drive these functions and diverge only at how they consume the
 //! output — the shell presents to a window, the agent screenshots + reads it.
 
+use std::collections::HashMap;
+
 use anyhow::{Context, Result};
 use manuk_css::{
     diff_style, MinimalCascade, RestyleDamage, Rgba, StyleEngine, StyleMap, Stylesheet,
 };
-use manuk_dom::Dom;
+use manuk_dom::{Dom, NodeId};
 use manuk_layout::{layout_document, LayoutBox};
 use manuk_paint::{Canvas, CpuPainter, Painter};
 use manuk_text::FontContext;
@@ -20,6 +22,130 @@ use url::Url;
 pub struct Link {
     pub text: String,
     pub href: String,
+}
+
+/// The kind of external resource a page references, with its load semantics — the
+/// data a WHATWG-ordered fetch scheduler / preload scanner (D4) operates on.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SubresourceKind {
+    /// `<link rel="stylesheet">` — **render-blocking**: fetched and applied before
+    /// first paint (see [`Page::apply_stylesheets`]).
+    Stylesheet,
+    /// `<script src>` — `defer`/`async` drive scheduling. Fetching retrieves the text;
+    /// execution is the JS path (`manuk-js`, feature-gated) and is not done here.
+    Script { defer: bool, is_async: bool },
+    /// `<img src>` — fetched for decode/paint (image rendering is a follow-on).
+    Image,
+}
+
+/// An external subresource, its kind + load semantics, and its resolved absolute URL.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Subresource {
+    pub kind: SubresourceKind,
+    pub url: String,
+}
+
+/// One entry in a page's ordered stylesheet list — an inline `<style>` body or an
+/// external `<link>` URL — preserving document order for correct cascade precedence.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum StyleSource {
+    Inline(String),
+    External(String),
+}
+
+/// Resolve `href` against `base` to an absolute URL string (falling back to `href`).
+fn resolve_url(base: &str, href: &str) -> String {
+    Url::parse(base)
+        .ok()
+        .and_then(|b| b.join(href).ok())
+        .map(|u| u.to_string())
+        .unwrap_or_else(|| href.to_string())
+}
+
+/// Collect the page's stylesheet sources (inline + external) in document order.
+fn collect_style_sources(dom: &Dom, base: &str) -> Vec<StyleSource> {
+    let mut out = Vec::new();
+    for n in dom.descendants(dom.root()) {
+        match dom.tag_name(n) {
+            Some("style") => out.push(StyleSource::Inline(dom.text_content(n))),
+            Some("link") => {
+                if let Some(el) = dom.element(n) {
+                    let is_sheet = el
+                        .attr("rel")
+                        .map(|r| {
+                            r.split_ascii_whitespace()
+                                .any(|t| t.eq_ignore_ascii_case("stylesheet"))
+                        })
+                        .unwrap_or(false);
+                    if is_sheet {
+                        if let Some(href) = el.attr("href").map(str::trim).filter(|h| !h.is_empty())
+                        {
+                            out.push(StyleSource::External(resolve_url(base, href)));
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Enumerate all external subresources (`<link rel=stylesheet>`, `<script src>`,
+/// `<img src>`) in document order — the scheduler's work-list.
+fn collect_subresources(dom: &Dom, base: &str) -> Vec<Subresource> {
+    let attr = |n: NodeId, name: &str| {
+        dom.element(n)
+            .and_then(|e| e.attr(name))
+            .map(str::to_string)
+    };
+    let has = |n: NodeId, name: &str| {
+        dom.element(n)
+            .map(|e| e.attr(name).is_some())
+            .unwrap_or(false)
+    };
+    let mut out = Vec::new();
+    for n in dom.descendants(dom.root()) {
+        match dom.tag_name(n) {
+            Some("link") => {
+                let is_sheet = attr(n, "rel")
+                    .map(|r| {
+                        r.split_ascii_whitespace()
+                            .any(|t| t.eq_ignore_ascii_case("stylesheet"))
+                    })
+                    .unwrap_or(false);
+                if is_sheet {
+                    if let Some(href) = attr(n, "href").filter(|h| !h.trim().is_empty()) {
+                        out.push(Subresource {
+                            kind: SubresourceKind::Stylesheet,
+                            url: resolve_url(base, href.trim()),
+                        });
+                    }
+                }
+            }
+            Some("script") => {
+                if let Some(src) = attr(n, "src").filter(|s| !s.trim().is_empty()) {
+                    out.push(Subresource {
+                        kind: SubresourceKind::Script {
+                            defer: has(n, "defer"),
+                            is_async: has(n, "async"),
+                        },
+                        url: resolve_url(base, src.trim()),
+                    });
+                }
+            }
+            Some("img") => {
+                if let Some(src) = attr(n, "src").filter(|s| !s.trim().is_empty()) {
+                    out.push(Subresource {
+                        kind: SubresourceKind::Image,
+                        url: resolve_url(base, src.trim()),
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+    out
 }
 
 /// A loaded, styled, laid-out page. Retains the DOM + computed styles so it can be
@@ -129,6 +255,81 @@ impl Page {
     /// call [`relayout_incremental`](Self::relayout_incremental)).
     pub fn dom_mut(&mut self) -> &mut Dom {
         &mut self.dom
+    }
+
+    /// The external subresources this page references (`<link rel=stylesheet>`,
+    /// `<script src>`, `<img src>`), in document order — the fetch scheduler's
+    /// work-list (D4). Stylesheets are render-blocking; scripts carry `defer`/`async`.
+    pub fn subresources(&self) -> Vec<Subresource> {
+        collect_subresources(&self.dom, &self.final_url)
+    }
+
+    /// Re-style + re-lay-out with external stylesheets applied (D4 render-blocking
+    /// CSS). `external` maps each `<link>`'s resolved URL → its CSS text; inline
+    /// `<style>` and external sheets are combined in **document order** so cascade
+    /// precedence is correct. Returns the resulting [`RestyleDamage`].
+    ///
+    /// Callers fetch the CSS (via [`fetch_and_apply_stylesheets`](Self::fetch_and_apply_stylesheets)
+    /// or their own network path) and hand the texts here — keeping this core
+    /// deterministic and testable.
+    pub fn apply_stylesheets(
+        &mut self,
+        external: &HashMap<String, String>,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> RestyleDamage {
+        let sources = collect_style_sources(&self.dom, &self.final_url);
+        let sheets: Vec<Stylesheet> = sources
+            .iter()
+            .filter_map(|s| match s {
+                StyleSource::Inline(css) => Some(Stylesheet::parse(css)),
+                StyleSource::External(url) => external.get(url).map(|css| Stylesheet::parse(css)),
+            })
+            .collect();
+        let new_styles = MinimalCascade.cascade(&self.dom, &sheets);
+        // Classify the change vs the pre-external styling (usually Reflow — external
+        // rules add geometry).
+        let mut damage = RestyleDamage::None;
+        for (node, new_s) in &new_styles {
+            let d = match self.styles.get(node) {
+                Some(old_s) => diff_style(old_s, new_s),
+                None => RestyleDamage::Rebuild,
+            };
+            damage = damage.max(d);
+        }
+        self.styles = new_styles;
+        self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+        self.content_height = self.root_box.content_bottom();
+        self.dom.clear_all_dirty();
+        damage
+    }
+
+    /// Fetch this page's external render-blocking stylesheets (via `manuk-net`) and
+    /// apply them ([`apply_stylesheets`](Self::apply_stylesheets)). Returns how many
+    /// external sheets were successfully fetched. Failed fetches are skipped (the page
+    /// still renders with the sheets that loaded).
+    pub async fn fetch_and_apply_stylesheets(
+        &mut self,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> usize {
+        let sources = collect_style_sources(&self.dom, &self.final_url);
+        let mut external: HashMap<String, String> = HashMap::new();
+        for s in &sources {
+            if let StyleSource::External(url) = s {
+                if external.contains_key(url) {
+                    continue;
+                }
+                if let Ok(resp) = manuk_net::fetch(url).await {
+                    external.insert(url.clone(), resp.decoded_text());
+                }
+            }
+        }
+        let count = external.len();
+        if count > 0 {
+            self.apply_stylesheets(&external, fonts, viewport_width);
+        }
+        count
     }
 
     /// Rasterize the whole page to a canvas of the given pixel size (CPU tier).
@@ -303,6 +504,96 @@ mod tests {
         assert!(
             page.content_height > wide,
             "narrower viewport should wrap taller"
+        );
+    }
+
+    #[test]
+    fn collects_subresources_with_semantics() {
+        let fonts = FontContext::new();
+        let html = r#"<head>
+            <link rel="stylesheet" href="/css/site.css">
+            <link rel="icon" href="/favicon.ico">
+            <style>p{color:red}</style>
+            <script src="/js/app.js" defer></script>
+            <script src="analytics.js" async></script>
+          </head><body><img src="/img/logo.png"><p>hi</p></body>"#;
+        let page = Page::load(html, "http://ex.test/dir/", &fonts, 800.0);
+        let subs = page.subresources();
+
+        // stylesheet link, two scripts, one image — the `icon` link is not a sheet.
+        assert_eq!(
+            subs.iter()
+                .filter(|s| s.kind == SubresourceKind::Stylesheet)
+                .count(),
+            1
+        );
+        let sheet = subs
+            .iter()
+            .find(|s| s.kind == SubresourceKind::Stylesheet)
+            .unwrap();
+        assert_eq!(
+            sheet.url, "http://ex.test/css/site.css",
+            "href resolved absolute"
+        );
+
+        let scripts: Vec<_> = subs
+            .iter()
+            .filter(|s| matches!(s.kind, SubresourceKind::Script { .. }))
+            .collect();
+        assert_eq!(scripts.len(), 2);
+        assert_eq!(
+            scripts[0].kind,
+            SubresourceKind::Script {
+                defer: true,
+                is_async: false
+            }
+        );
+        assert_eq!(
+            scripts[1].kind,
+            SubresourceKind::Script {
+                defer: false,
+                is_async: true
+            }
+        );
+        assert_eq!(
+            scripts[1].url, "http://ex.test/dir/analytics.js",
+            "relative resolved"
+        );
+
+        assert_eq!(
+            subs.iter()
+                .filter(|s| s.kind == SubresourceKind::Image)
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn external_stylesheet_applies_before_layout() {
+        let fonts = FontContext::new();
+        // The page has NO inline sizing; the external sheet sets the div's height.
+        let html = r#"<head><link rel="stylesheet" href="/s.css"></head>
+            <body><div id=box></div></body>"#;
+        let mut page = Page::load(html, "http://ex.test/", &fonts, 800.0);
+        let before = page.content_height;
+
+        // Inject the fetched CSS (as fetch_and_apply_stylesheets would) and apply it.
+        let mut external = HashMap::new();
+        external.insert(
+            "http://ex.test/s.css".to_string(),
+            "#box { height: 250px }".to_string(),
+        );
+        let damage = page.apply_stylesheets(&external, &fonts, 800.0);
+
+        assert!(
+            damage >= RestyleDamage::Reflow,
+            "external sizing forces reflow"
+        );
+        assert!(
+            page.content_height >= before + 240.0,
+            "external stylesheet's height must apply: {} -> {}",
+            before,
+            page.content_height
         );
     }
 

@@ -102,7 +102,12 @@ fn cmd_render(args: &[String]) -> Result<()> {
     if fonts.face_count() == 0 {
         eprintln!("warning: no system fonts found; text will not render");
     }
-    let page = Page::load(&html, &final_url, &fonts, width as f32);
+    let mut page = Page::load(&html, &final_url, &fonts, width as f32);
+    // Fetch + apply render-blocking external stylesheets (<link rel=stylesheet>).
+    let sheets = rt.block_on(page.fetch_and_apply_stylesheets(&fonts, width as f32));
+    if sheets > 0 {
+        println!("  styles: {sheets} external stylesheet(s) applied");
+    }
 
     let height: u32 = flag_value(args, &["--height", "-h"])
         .and_then(|s| s.parse().ok())

@@ -94,6 +94,10 @@ in; **Build** = written from scratch, to be verified against WPT.
   on example.com); **connection pooling** (sequential same-origin fetches reuse the
   socket); **gzip/br/deflate decoding** (verified on httpbin.org/gzip); redirects;
   the Groq client reuses the same stack for outbound LLM calls.
+- **External subresources:** `<link rel=stylesheet>` is fetched and applied before
+  paint (render-blocking; `Page::fetch_and_apply_stylesheets`, wired into shell
+  `render`); `<script src>`/`<img src>` are enumerated with `defer`/`async` semantics
+  (`Page::subresources`) — script execution + image rendering are follow-ons.
 - **Not yet:** HTTP/3/QUIC (`quinn`) is a target, not yet a dependency; speculative
   preconnect on hover; cookies/cache.
 
