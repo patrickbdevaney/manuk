@@ -12,7 +12,7 @@ use manuk_css::{
     diff_style, MinimalCascade, RestyleDamage, Rgba, StyleEngine, StyleMap, Stylesheet,
 };
 use manuk_dom::{Dom, NodeId};
-use manuk_layout::{layout_document, LayoutBox};
+use manuk_layout::{layout_document, BoxContent, LayoutBox};
 use manuk_paint::{Canvas, CpuPainter, Painter};
 use manuk_text::FontContext;
 use url::Url;
@@ -301,6 +301,25 @@ impl Page {
     /// call [`relayout_incremental`](Self::relayout_incremental)).
     pub fn dom_mut(&mut self) -> &mut Dom {
         &mut self.dom
+    }
+
+    /// A rough estimate of the retained heap this page holds — the fragment tree,
+    /// DOM, and computed styles — for C1 per-tab memory accounting. It is a *proxy*
+    /// (not a true RSS figure): what a **discard** reclaims by dropping the `Page`.
+    pub fn estimated_bytes(&self) -> usize {
+        let mut n = 0usize;
+        self.root_box.walk(&mut |b| {
+            n += std::mem::size_of::<LayoutBox>();
+            if let BoxContent::Inline(frags) = &b.content {
+                for f in frags {
+                    n += std::mem::size_of_val(f) + f.text.len();
+                }
+            }
+        });
+        // DOM nodes + per-node computed style (approximate fixed cost each).
+        n += self.dom.len() * 96;
+        n += self.styles.len() * std::mem::size_of::<manuk_css::ComputedStyle>();
+        n
     }
 
     /// The external subresources this page references (`<link rel=stylesheet>`,

@@ -45,6 +45,10 @@ struct TabEntry {
     tier: RenderTier,
     /// Monotonic focus recency; higher = more recently focused. Avoids wall-clock.
     recency: u64,
+    /// Estimated retained bytes for this tab (fragment tree + tiles + JS), reported by
+    /// the tab owner via [`TabManager::set_mem`]. Drops sharply when a tab is
+    /// discarded (C1) — the per-tab memory accounting.
+    mem_bytes: usize,
 }
 
 /// Owns the set of tabs and assigns render tiers per the memory budget.
@@ -74,6 +78,7 @@ impl TabManager {
             id,
             tier: RenderTier::Hibernated,
             recency: 0,
+            mem_bytes: 0,
         });
         self.retier();
     }
@@ -99,6 +104,29 @@ impl TabManager {
 
     pub fn count(&self, tier: RenderTier) -> usize {
         self.tabs.iter().filter(|t| t.tier == tier).count()
+    }
+
+    /// Record a tab's estimated retained memory (the tab owner recomputes this after
+    /// load / discard / wake). Part of the C1 per-tab memory accounting.
+    pub fn set_mem(&mut self, id: TabId, bytes: usize) {
+        if let Some(t) = self.tabs.iter_mut().find(|t| t.id == id) {
+            t.mem_bytes = bytes;
+        }
+    }
+
+    /// A tab's last-reported retained bytes.
+    pub fn mem(&self, id: TabId) -> usize {
+        self.tabs
+            .iter()
+            .find(|t| t.id == id)
+            .map(|t| t.mem_bytes)
+            .unwrap_or(0)
+    }
+
+    /// Total retained bytes across all tabs — the process-wide tab-memory figure the
+    /// eviction budget is measured against.
+    pub fn total_mem(&self) -> usize {
+        self.tabs.iter().map(|t| t.mem_bytes).sum()
     }
 
     pub fn focused(&self) -> Option<TabId> {
@@ -250,6 +278,22 @@ mod tests {
         assert!(!tm.tier(TabId(4)).unwrap().js_frozen());
         assert!(tm.tier(TabId(0)).unwrap().js_frozen());
         assert!(tm.tier(TabId(0)).unwrap().is_evicted());
+    }
+
+    #[test]
+    fn per_tab_memory_accounting_totals() {
+        let mut tm = TabManager::new(2);
+        for i in 0..3 {
+            tm.add_tab(TabId(i));
+        }
+        tm.set_mem(TabId(0), 1_000_000); // a live tab
+        tm.set_mem(TabId(1), 800_000);
+        tm.set_mem(TabId(2), 5_000); // a discarded tab
+        assert_eq!(tm.mem(TabId(0)), 1_000_000);
+        assert_eq!(tm.total_mem(), 1_805_000);
+        // Discarding tab 0 (its owner drops the Page and re-reports) cuts the total.
+        tm.set_mem(TabId(0), 5_000);
+        assert_eq!(tm.total_mem(), 810_000);
     }
 
     #[test]
