@@ -31,6 +31,15 @@ use tokio::io::AsyncReadExt;
 use tokio_util::io::StreamReader;
 use url::Url;
 
+/// E7 storage layer — RFC 6265 cookie jar.
+pub mod cookies;
+
+/// E7 storage layer — profile/container/site-partitioned cookies, localStorage, history.
+pub mod storage;
+
+/// E7 — SOCKS5 proxying (user-provided proxy; no bundled VPN).
+pub mod proxy;
+
 /// E5 native content-blocking (feature `adblock`).
 #[cfg(feature = "adblock")]
 pub mod blocker;
