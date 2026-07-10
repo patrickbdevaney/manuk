@@ -130,6 +130,13 @@ pub mod bindings_prototype;
 #[cfg(feature = "_sm")]
 pub mod dom_bindings;
 
+/// N2 (host half) — History API state model; no JS engine dependency, always built.
+pub mod history_host;
+
+/// N2 — the History API JS bindings (pushState/replaceState/popstate/hashchange).
+#[cfg(feature = "_sm")]
+pub mod history_bindings;
+
 /// D3 events tranche: the HTML event loop (microtasks + macrotasks/`setTimeout`).
 #[cfg(feature = "_sm")]
 pub mod event_loop;

@@ -36,6 +36,9 @@ spidermonkey-noicu = ["_sm", "mozjs/jit", "mozjs/libz-sys"]
 manuk-dom.workspace = true
 manuk-css.workspace = true
 manuk-html.workspace = true
+# N1/N2: the one SessionHistory model the History API binds to.
+manuk-page.workspace = true
+url.workspace = true
 tracing.workspace = true
 
 # Feature-gated. Pulled only with a `spidermonkey*` feature. `default-features = false`

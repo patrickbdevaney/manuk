@@ -2898,8 +2898,10 @@ dependencies = [
  "manuk-css",
  "manuk-dom",
  "manuk-html",
+ "manuk-page",
  "mozjs",
  "tracing",
+ "url",
 ]
 
 [[package]]
