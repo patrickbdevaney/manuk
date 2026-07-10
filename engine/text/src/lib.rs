@@ -71,10 +71,17 @@ pub struct ShapedRun {
     pub metrics: LineMetrics,
 }
 
-/// A rasterized glyph: its fontdue metrics and an 8-bit coverage bitmap
+/// A rasterized glyph (via swash): placement offsets + an 8-bit coverage bitmap
 /// (`width * height`, row-major, top-to-bottom).
+///
+/// `left` is the horizontal offset from the pen origin to the bitmap's left edge; `top` is
+/// the distance from the baseline **up** to the bitmap's top edge (so in screen space, with
+/// y growing down, the bitmap's top y is `baseline - top`).
 pub struct GlyphBitmap {
-    pub metrics: fontdue::Metrics,
+    pub left: i32,
+    pub top: i32,
+    pub width: u32,
+    pub height: u32,
     pub coverage: Vec<u8>,
 }
 
@@ -85,12 +92,27 @@ pub struct GlyphBitmap {
 /// change (swap to `Arc`/`Mutex`).
 /// Key for the shaped-run/measure cache: `(font, quantized size bits, run text)`.
 type RunKey = (FontKey, u32, String);
-/// Key for the glyph raster cache: `(font, size bits, glyph char)`.
-type GlyphKey = (FontKey, u32, char);
+/// Key for the glyph raster cache: `(font, size bits, glyph char, subpixel bucket 0..4)`.
+type GlyphKey = (FontKey, u32, char, u8);
+
+/// Owned font-file bytes + face index, so a swash `FontRef` (which borrows the data) can be
+/// built on demand for rasterization.
+struct FaceData {
+    data: Vec<u8>,
+    index: u32,
+}
+
+/// Number of horizontal subpixel positions a glyph is cached at (quarter-pixel).
+const SUBPIXEL_BUCKETS: u8 = 4;
 
 pub struct FontContext {
     db: fontdb::Database,
     cache: RefCell<HashMap<FontKey, Option<Rc<fontdue::Font>>>>,
+    /// Owned face bytes per key, for building swash `FontRef`s during rasterization.
+    face_data: RefCell<HashMap<FontKey, Option<Rc<FaceData>>>>,
+    /// swash's reusable scaling context (glyph rasterization). `RefCell` because scaling
+    /// takes `&mut`; single-threaded like the rest of the context.
+    scale_ctx: RefCell<swash::scale::ScaleContext>,
     /// Bounded LRU cache of measured run widths (A3 shaped-run cache). Layout measures
     /// the same words repeatedly (per line and in shrink-to-fit's multiple passes), so
     /// caching the advance width skips re-running per-glyph metrics.
@@ -118,6 +140,8 @@ impl FontContext {
         FontContext {
             db,
             cache: RefCell::new(HashMap::new()),
+            face_data: RefCell::new(HashMap::new()),
+            scale_ctx: RefCell::new(swash::scale::ScaleContext::new()),
             measure_cache: RefCell::new(LruCache::new(
                 NonZeroUsize::new(MEASURE_CACHE_CAP).unwrap(),
             )),
@@ -149,7 +173,8 @@ impl FontContext {
         loaded
     }
 
-    fn load(&self, key: FontKey) -> Option<Rc<fontdue::Font>> {
+    /// Resolve the fontdb face id for `key` (specific query, else any face).
+    fn face_id(&self, key: FontKey) -> Option<fontdb::ID> {
         let family = match key.family {
             FontFamily::SansSerif => fontdb::Family::SansSerif,
             FontFamily::Serif => fontdb::Family::Serif,
@@ -169,11 +194,13 @@ impl FontContext {
                 fontdb::Style::Normal
             },
         };
-        // Fall back to any face if the specific query misses.
-        let id = self
-            .db
+        self.db
             .query(&query)
-            .or_else(|| self.db.faces().next().map(|f| f.id))?;
+            .or_else(|| self.db.faces().next().map(|f| f.id))
+    }
+
+    fn load(&self, key: FontKey) -> Option<Rc<fontdue::Font>> {
+        let id = self.face_id(key)?;
         let font = self.db.with_face_data(id, |data, index| {
             let settings = fontdue::FontSettings {
                 collection_index: index,
@@ -182,6 +209,24 @@ impl FontContext {
             fontdue::Font::from_bytes(data, settings).ok()
         })??;
         Some(Rc::new(font))
+    }
+
+    /// Resolve (and cache) the owned face bytes for `key` — needed to build a swash
+    /// `FontRef` for rasterization.
+    fn face_bytes(&self, key: FontKey) -> Option<Rc<FaceData>> {
+        if let Some(hit) = self.face_data.borrow().get(&key) {
+            return hit.clone();
+        }
+        let loaded = self.face_id(key).and_then(|id| {
+            self.db.with_face_data(id, |data, index| {
+                Rc::new(FaceData {
+                    data: data.to_vec(),
+                    index,
+                })
+            })
+        });
+        self.face_data.borrow_mut().insert(key, loaded.clone());
+        loaded
     }
 
     /// Vertical line metrics for `key` at `size` px. Falls back to a reasonable
@@ -254,17 +299,44 @@ impl FontContext {
         }
     }
 
-    /// Rasterize a single glyph to an 8-bit coverage bitmap, cached by
-    /// `(font, size, glyph)`. Repeated draws (every frame, every scroll/caret tick) hit
-    /// the cache instead of re-running the outline fill.
-    pub fn rasterize(&self, ch: char, key: FontKey, size: f32) -> Option<Rc<GlyphBitmap>> {
-        let gk = (key, size.to_bits(), ch);
+    /// Rasterize a single glyph (via swash) to an 8-bit coverage bitmap, at the horizontal
+    /// subpixel offset `subpixel_x` (its fractional part is quantized into
+    /// [`SUBPIXEL_BUCKETS`] positions). Cached by `(font, size, glyph, bucket)` so repeated
+    /// draws — every frame, every scroll/caret tick — are a lookup, while crisp subpixel
+    /// placement is preserved across the quarter-pixel buckets.
+    pub fn rasterize(
+        &self,
+        ch: char,
+        key: FontKey,
+        size: f32,
+        subpixel_x: f32,
+    ) -> Option<Rc<GlyphBitmap>> {
+        let frac = subpixel_x - subpixel_x.floor();
+        let bucket = ((frac * SUBPIXEL_BUCKETS as f32).round() as u8) % SUBPIXEL_BUCKETS;
+        let gk = (key, size.to_bits(), ch, bucket);
         if let Some(hit) = self.glyph_cache.borrow_mut().get(&gk) {
             return Some(hit.clone());
         }
-        let font = self.font(key)?;
-        let (metrics, coverage) = font.rasterize(ch, size);
-        let bmp = Rc::new(GlyphBitmap { metrics, coverage });
+
+        let face = self.face_bytes(key)?;
+        let font = swash::FontRef::from_index(&face.data, face.index as usize)?;
+        let glyph_id = font.charmap().map(ch);
+
+        let mut ctx = self.scale_ctx.borrow_mut();
+        let mut scaler = ctx.builder(font).size(size).hint(true).build();
+        let offset = swash::zeno::Vector::new(bucket as f32 / SUBPIXEL_BUCKETS as f32, 0.0);
+        let image = swash::scale::Render::new(&[swash::scale::Source::Outline])
+            .format(swash::zeno::Format::Alpha)
+            .offset(offset)
+            .render(&mut scaler, glyph_id)?;
+
+        let bmp = Rc::new(GlyphBitmap {
+            left: image.placement.left,
+            top: image.placement.top,
+            width: image.placement.width,
+            height: image.placement.height,
+            coverage: image.data,
+        });
         self.glyph_cache.borrow_mut().put(gk, bmp.clone());
         Some(bmp)
     }
@@ -298,8 +370,8 @@ mod tests {
         let run = ctx.shape("Hi", key, 16.0);
         assert_eq!(run.glyphs.len(), 2);
         assert!(run.width > 0.0);
-        let g = ctx.rasterize('W', key, 32.0).expect("raster W");
-        assert!(g.metrics.width > 0 && !g.coverage.is_empty());
+        let g = ctx.rasterize('W', key, 32.0, 0.0).expect("raster W");
+        assert!(g.width > 0 && !g.coverage.is_empty());
     }
 
     #[test]

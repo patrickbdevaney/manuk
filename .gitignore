@@ -16,3 +16,7 @@ agent/src/bin/agent-run.rs
 !docs/*.png
 
 mozjs/
+
+firefox/
+
+chromium/

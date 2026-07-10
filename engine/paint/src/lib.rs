@@ -210,21 +210,20 @@ impl Canvas {
     ) {
         let run = fonts.shape(text, style.font_key, style.font_size);
         for g in &run.glyphs {
-            let Some(bitmap) = fonts.rasterize(g.ch, style.font_key, style.font_size) else {
+            let pen_x = origin_x + g.x;
+            let Some(bitmap) = fonts.rasterize(g.ch, style.font_key, style.font_size, pen_x) else {
                 continue;
             };
-            if bitmap.metrics.width == 0 || bitmap.metrics.height == 0 {
+            if bitmap.width == 0 || bitmap.height == 0 {
                 continue;
             }
-            let pen_x = origin_x + g.x;
-            let left = (pen_x + bitmap.metrics.xmin as f32).round() as i32;
-            let top = (baseline - bitmap.metrics.ymin as f32 - bitmap.metrics.height as f32).round()
-                as i32;
+            let left = pen_x.floor() as i32 + bitmap.left;
+            let top = baseline.round() as i32 - bitmap.top;
             blit_coverage(
                 &mut self.pixmap,
                 &bitmap.coverage,
-                bitmap.metrics.width,
-                bitmap.metrics.height,
+                bitmap.width as usize,
+                bitmap.height as usize,
                 left,
                 top,
                 style.color,
@@ -328,23 +327,25 @@ impl CpuPainter<'_> {
     ) {
         let run = self.fonts.shape(text, style.font_key, style.font_size);
         for g in &run.glyphs {
-            let Some(bitmap) = self.fonts.rasterize(g.ch, style.font_key, style.font_size) else {
+            let pen_x = origin_x + g.x;
+            // swash rasterizes at the fractional pen position for crisp subpixel placement.
+            let Some(bitmap) = self
+                .fonts
+                .rasterize(g.ch, style.font_key, style.font_size, pen_x)
+            else {
                 continue;
             };
-            if bitmap.metrics.width == 0 || bitmap.metrics.height == 0 {
+            if bitmap.width == 0 || bitmap.height == 0 {
                 continue; // whitespace and zero-area glyphs
             }
-            let pen_x = origin_x + g.x;
-            // fontdue: ymin is the baseline-relative lower bound (y-up). In screen
-            // space (y-down) the glyph top sits at baseline - ymin - height.
-            let left = (pen_x + bitmap.metrics.xmin as f32).round() as i32;
-            let top = (baseline - bitmap.metrics.ymin as f32 - bitmap.metrics.height as f32).round()
-                as i32;
+            // swash placement: `left` = pen→bitmap-left, `top` = baseline→bitmap-top (up).
+            let left = pen_x.floor() as i32 + bitmap.left;
+            let top = baseline.round() as i32 - bitmap.top;
             blit_coverage(
                 pixmap,
                 &bitmap.coverage,
-                bitmap.metrics.width,
-                bitmap.metrics.height,
+                bitmap.width as usize,
+                bitmap.height as usize,
                 left,
                 top,
                 style.color,
