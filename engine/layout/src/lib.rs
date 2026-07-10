@@ -34,7 +34,7 @@ use std::collections::HashMap;
 
 use manuk_css::{
     BoxSizing, Clear, ComputedStyle, Dim, Display, Float, Position, Rgba, StyleMap, TextAlign,
-    WhiteSpace,
+    VerticalAlign, WhiteSpace,
 };
 use manuk_dom::{Dom, NodeData, NodeId};
 use manuk_text::{FontContext, FontFamily, FontKey};
@@ -1763,11 +1763,11 @@ impl Ctx<'_> {
         if block_kids.is_empty() {
             return (BoxContent::Block(vec![]), 0.0);
         }
-        let items: Vec<flex::FlexItem> = block_kids
+        let items: Vec<flex::GridItem> = block_kids
             .iter()
             .map(|&k| {
                 let s = &self.styles[&k];
-                flex::FlexItem {
+                flex::GridItem {
                     width: match s.width {
                         Dim::Px(p) => Some(p),
                         _ => None,
@@ -1776,10 +1776,8 @@ impl Ctx<'_> {
                         Dim::Px(p) => Some(p),
                         _ => None,
                     },
-                    grow: 0.0,
-                    shrink: 1.0,
-                    basis: flex::FlexBasis::Auto,
-                    align_self: None,
+                    col: s.grid_column,
+                    row: s.grid_row,
                 }
             })
             .collect();
@@ -1814,9 +1812,15 @@ impl Ctx<'_> {
         for (&k, slot) in block_kids.iter().zip(slots.iter()) {
             let mut item_floats = FloatContext::new(cx + slot.x, cx + slot.x + slot.width);
             let r = self.layout_block(k, slot.width, Some(slot.height), cx + slot.x, cy + slot.y, 0.0, &mut item_floats);
-            let bottom = slot.y + r.margin_top + r.boxx.rect.height + r.margin_bottom;
+            let mut boxx = r.boxx;
+            // Taffy sized the item (grow/stretch/track height); when its own height is `auto`,
+            // adopt taffy's slot height so it fills its flex line / grid cell.
+            if self.styles[&k].height == Dim::Auto && slot.height > boxx.rect.height {
+                boxx.rect.height = slot.height;
+            }
+            let bottom = slot.y + r.margin_top + boxx.rect.height + r.margin_bottom;
             max_h = max_h.max(bottom);
-            boxes.push(r.boxx);
+            boxes.push(boxx);
         }
         (BoxContent::Block(boxes), max_h)
     }
@@ -1888,6 +1892,7 @@ impl Ctx<'_> {
                         advance,
                         height,
                         space_before: *pending_space && !*first,
+                        valign: s.vertical_align,
                     });
                     *first = false;
                     *pending_space = false;
@@ -1995,10 +2000,11 @@ impl Ctx<'_> {
                                 node,
                                 atomic: None,
                                 atomic_h: 0.0,
+                                valign: VerticalAlign::Baseline,
                             }),
                         )
                     }
-                    InlineItem::Atomic { box_, advance, height, space_before } => {
+                    InlineItem::Atomic { box_, advance, height, space_before, valign } => {
                         // Whitespace around an atomic uses the default text space width.
                         let key = FontKey { family: FontFamily::SansSerif, bold: false, italic: false };
                         let space_w = if space_before { self.fonts.measure(" ", key, 16.0) } else { 0.0 };
@@ -2018,6 +2024,7 @@ impl Ctx<'_> {
                                 node: None,
                                 atomic: Some(box_),
                                 atomic_h: height,
+                                valign,
                             }),
                         )
                     }
@@ -2041,6 +2048,7 @@ impl Ctx<'_> {
                                 node,
                                 atomic: None,
                                 atomic_h: 0.0,
+                                valign: VerticalAlign::Baseline,
                             }),
                         )
                     }
@@ -2091,6 +2099,7 @@ struct LineFrag {
     /// `Some` for an `inline-block`: the box to place, and its margin-box height.
     atomic: Option<Box<LayoutBox>>,
     atomic_h: f32,
+    valign: VerticalAlign,
 }
 
 /// Commit a line's fragments at vertical `y` within band `[line_left, +line_avail)`,
@@ -2135,9 +2144,22 @@ fn close_line(
     for f in line.drain(..) {
         let fx = line_left + offset + f.x;
         if let Some(mut b) = f.atomic {
-            // Position the atomic box: its content was laid out at the origin, so translate
-            // its whole subtree to the line slot. (vertical-align is simplified to top.)
-            b.translate(fx, y);
+            // Vertical position of the atomic box's top, per `vertical-align` relative to the
+            // line's baseline (an x-height ≈ half the ascent, per CSS `middle`).
+            let h = f.atomic_h;
+            let xheight = ascent * 0.5;
+            let box_top = match f.valign {
+                VerticalAlign::Top => y,
+                VerticalAlign::Bottom => y + line_h - h,
+                VerticalAlign::Middle => baseline - xheight / 2.0 - h / 2.0,
+                VerticalAlign::TextTop => baseline - ascent,
+                VerticalAlign::TextBottom => baseline + descent - h,
+                VerticalAlign::Sub => baseline + ascent * 0.15 - h,
+                VerticalAlign::Super => baseline - ascent * 0.35 - h,
+                // baseline: the box's bottom margin edge sits on the baseline.
+                VerticalAlign::Baseline => baseline - h,
+            };
+            b.translate(fx, box_top);
             atomic_boxes.push(*b);
         } else {
             frags.push(TextFragment {
@@ -2174,6 +2196,7 @@ enum InlineItem {
         advance: f32,
         height: f32,
         space_before: bool,
+        valign: VerticalAlign,
     },
     /// Horizontal padding/border of an inline element (`<span style="padding:0 15px">`):
     /// occupies `width` in the flow and extends the owning element's geometry, but paints

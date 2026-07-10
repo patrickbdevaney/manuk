@@ -10,10 +10,19 @@
 //! tree, so they extend rather than replace this.
 
 use manuk_css::{
-    AlignItems as CssAlign, FlexDirection as CssDir, FlexWrap as CssWrap,
-    JustifyContent as CssJustify, TrackSize,
+    AlignItems as CssAlign, FlexDirection as CssDir, FlexWrap as CssWrap, GridLine as CssGridLine,
+    JustifyContent as CssJustify, TrackSize, TrackUnit,
 };
 use taffy::prelude::*;
+
+/// A grid item: intrinsic size plus optional explicit line placement.
+#[derive(Clone, Copy, Debug)]
+pub struct GridItem {
+    pub width: Option<f32>,
+    pub height: Option<f32>,
+    pub col: (CssGridLine, CssGridLine),
+    pub row: (CssGridLine, CssGridLine),
+}
 
 /// A flex item's `flex-basis`.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -70,6 +79,39 @@ fn map_wrap(w: CssWrap) -> FlexWrap {
         CssWrap::NoWrap => FlexWrap::NoWrap,
         CssWrap::Wrap => FlexWrap::Wrap,
         CssWrap::WrapReverse => FlexWrap::WrapReverse,
+    }
+}
+
+fn place(l: CssGridLine) -> GridPlacement {
+    match l {
+        CssGridLine::Auto => GridPlacement::Auto,
+        CssGridLine::Line(n) => line(n),
+        CssGridLine::Span(n) => span(n),
+    }
+}
+
+fn grid_line(l: (CssGridLine, CssGridLine)) -> Line<GridPlacement> {
+    Line { start: place(l.0), end: place(l.1) }
+}
+
+fn track_min(u: TrackUnit) -> MinTrackSizingFunction {
+    match u {
+        TrackUnit::Px(p) => length(p),
+        TrackUnit::Percent(p) => percent(p / 100.0),
+        TrackUnit::Auto | TrackUnit::Fr(_) => auto(), // fr is invalid as a min; fall back
+        TrackUnit::MinContent => min_content(),
+        TrackUnit::MaxContent => max_content(),
+    }
+}
+
+fn track_max(u: TrackUnit) -> MaxTrackSizingFunction {
+    match u {
+        TrackUnit::Px(p) => length(p),
+        TrackUnit::Percent(p) => percent(p / 100.0),
+        TrackUnit::Fr(f) => fr(f),
+        TrackUnit::Auto => auto(),
+        TrackUnit::MinContent => min_content(),
+        TrackUnit::MaxContent => max_content(),
     }
 }
 
@@ -187,7 +229,7 @@ pub fn solve_flex(
 pub fn solve_grid(
     container_width: f32,
     container_height: Option<f32>,
-    items: &[FlexItem],
+    items: &[GridItem],
     cols: &[TrackSize],
     rows: &[TrackSize],
     row_gap: f32,
@@ -203,24 +245,31 @@ pub fn solve_grid(
                     width: it.width.map(length).unwrap_or(auto()),
                     height: it.height.map(length).unwrap_or(auto()),
                 },
+                grid_column: grid_line(it.col),
+                grid_row: grid_line(it.row),
                 ..Default::default()
             })
             .expect("taffy grid leaf")
         })
         .collect();
 
-    let track = |t: &TrackSize| match t {
-        TrackSize::Px(p) => length(*p),
-        TrackSize::Fr(f) => fr(*f),
-        TrackSize::Percent(p) => percent(*p / 100.0),
-        TrackSize::Auto => auto(),
+    let track = |t: &TrackSize| -> TrackSizingFunction {
+        match t {
+            TrackSize::Px(p) => length(*p),
+            TrackSize::Fr(f) => fr(*f),
+            TrackSize::Percent(p) => percent(*p / 100.0),
+            TrackSize::Auto => auto(),
+            TrackSize::MinContent => min_content(),
+            TrackSize::MaxContent => max_content(),
+            TrackSize::MinMax(lo, hi) => minmax(track_min(*lo), track_max(*hi)),
+        }
     };
     let root = tree
         .new_with_children(
             Style {
                 display: Display::Grid,
-                grid_template_columns: cols.iter().map(track).collect(),
-                grid_template_rows: rows.iter().map(track).collect(),
+                grid_template_columns: cols.iter().map(|t| GridTemplateComponent::Single(track(t))).collect(),
+                grid_template_rows: rows.iter().map(|t| GridTemplateComponent::Single(track(t))).collect(),
                 gap: Size { width: length(column_gap), height: length(row_gap) },
                 size: Size {
                     width: length(container_width),

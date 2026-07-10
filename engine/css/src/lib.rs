@@ -133,6 +133,19 @@ pub enum BoxSizing {
     BorderBox,
 }
 
+/// `vertical-align` for inline-level boxes (the common keywords).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VerticalAlign {
+    Baseline,
+    Top,
+    Middle,
+    Bottom,
+    TextTop,
+    TextBottom,
+    Sub,
+    Super,
+}
+
 /// `justify-content` — main-axis distribution of flex items.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum JustifyContent {
@@ -185,6 +198,17 @@ pub enum TransformFn {
     Matrix([f32; 6]),
 }
 
+/// A single grid track sizing unit (a `minmax()` bound or a plain track).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum TrackUnit {
+    Px(f32),
+    Fr(f32),
+    Percent(f32),
+    Auto,
+    MinContent,
+    MaxContent,
+}
+
 /// One CSS Grid track size (`grid-template-columns`/`-rows` entry).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum TrackSize {
@@ -193,6 +217,21 @@ pub enum TrackSize {
     Fr(f32),
     Percent(f32),
     Auto,
+    MinContent,
+    MaxContent,
+    /// `minmax(min, max)`.
+    MinMax(TrackUnit, TrackUnit),
+}
+
+/// A grid item's placement on one axis (`grid-column` / `grid-row`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum GridLine {
+    #[default]
+    Auto,
+    /// An explicit line number (1-based; negative counts from the end).
+    Line(i16),
+    /// `span N`.
+    Span(u16),
 }
 
 /// Four-sided box values (margin, padding, border widths).
@@ -272,9 +311,14 @@ pub struct ComputedStyle {
     /// matrix), resolved to an affine matrix at layout time (translate `%` is the box's own
     /// size). Empty = `none`.
     pub transform: Vec<TransformFn>,
+    /// `vertical-align` — cross-axis alignment of an inline-level box on its line.
+    pub vertical_align: VerticalAlign,
     /// `grid-template-columns` / `-rows` (container). Empty = none.
     pub grid_template_columns: Vec<TrackSize>,
     pub grid_template_rows: Vec<TrackSize>,
+    /// `grid-column` / `grid-row` (item) start/end line placement.
+    pub grid_column: (GridLine, GridLine),
+    pub grid_row: (GridLine, GridLine),
 }
 
 impl ComputedStyle {
@@ -320,8 +364,11 @@ impl ComputedStyle {
             flex_basis: Dim::Auto,
             align_self: None,
             transform: Vec::new(),
+            vertical_align: VerticalAlign::Baseline,
             grid_template_columns: Vec::new(),
             grid_template_rows: Vec::new(),
+            grid_column: (GridLine::Auto, GridLine::Auto),
+            grid_row: (GridLine::Auto, GridLine::Auto),
         }
     }
 
@@ -1337,7 +1384,25 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         "order" => {} // parsed but not yet used in layout
         "grid-template-columns" => s.grid_template_columns = parse_track_list(v, s.font_size),
         "grid-template-rows" => s.grid_template_rows = parse_track_list(v, s.font_size),
+        "grid-column" => s.grid_column = parse_grid_line_shorthand(v),
+        "grid-row" => s.grid_row = parse_grid_line_shorthand(v),
+        "grid-column-start" => s.grid_column.0 = parse_grid_line(v),
+        "grid-column-end" => s.grid_column.1 = parse_grid_line(v),
+        "grid-row-start" => s.grid_row.0 = parse_grid_line(v),
+        "grid-row-end" => s.grid_row.1 = parse_grid_line(v),
         "transform" => s.transform = parse_transform(v, s.font_size),
+        "vertical-align" => {
+            s.vertical_align = match v.trim() {
+                "top" => VerticalAlign::Top,
+                "middle" => VerticalAlign::Middle,
+                "bottom" => VerticalAlign::Bottom,
+                "text-top" => VerticalAlign::TextTop,
+                "text-bottom" => VerticalAlign::TextBottom,
+                "sub" => VerticalAlign::Sub,
+                "super" => VerticalAlign::Super,
+                _ => VerticalAlign::Baseline,
+            };
+        }
         // The `border` family. Widths feed the box model; the color feeds paint; the line
         // style is not tracked (only presence, since `none`/`hidden` zero the width).
         "border" => {
@@ -1488,16 +1553,56 @@ fn parse_angle_rad(s: &str) -> Option<f32> {
 /// Parse a `grid-template-columns`/`-rows` track list, expanding a single-track
 /// `repeat(N, <track>)`. Line names and `minmax()` are not modeled.
 fn parse_track_list(v: &str, fs: f32) -> Vec<TrackSize> {
-    expand_grid_repeat(v)
-        .split_whitespace()
-        .filter_map(|t| parse_track(t, fs))
+    split_tracks_top_level(&expand_grid_repeat(v))
+        .into_iter()
+        .filter_map(|t| parse_track(&t, fs))
         .collect()
+}
+
+/// Split a track list on whitespace, keeping parenthesized groups (`minmax(a, b)`) intact.
+fn split_tracks_top_level(s: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut depth = 0i32;
+    for ch in s.chars() {
+        match ch {
+            '(' => {
+                depth += 1;
+                cur.push(ch);
+            }
+            ')' => {
+                depth -= 1;
+                cur.push(ch);
+            }
+            c if c.is_whitespace() && depth == 0 => {
+                if !cur.is_empty() {
+                    out.push(std::mem::take(&mut cur));
+                }
+            }
+            c => cur.push(c),
+        }
+    }
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    out
 }
 
 fn parse_track(t: &str, fs: f32) -> Option<TrackSize> {
     let t = t.trim();
-    if t.eq_ignore_ascii_case("auto") {
+    let low = t.to_ascii_lowercase();
+    if low == "auto" {
         return Some(TrackSize::Auto);
+    }
+    if low == "min-content" {
+        return Some(TrackSize::MinContent);
+    }
+    if low == "max-content" {
+        return Some(TrackSize::MaxContent);
+    }
+    if let Some(inner) = low.strip_prefix("minmax(").and_then(|s| s.strip_suffix(')')) {
+        let (a, b) = inner.split_once(',')?;
+        return Some(TrackSize::MinMax(parse_track_unit(a.trim(), fs)?, parse_track_unit(b.trim(), fs)?));
     }
     if let Some(n) = t.strip_suffix("fr").and_then(|n| n.trim().parse::<f32>().ok()) {
         return Some(TrackSize::Fr(n));
@@ -1506,6 +1611,44 @@ fn parse_track(t: &str, fs: f32) -> Option<TrackSize> {
         return Some(TrackSize::Percent(p));
     }
     values::parse_length_px(t, fs).map(TrackSize::Px)
+}
+
+fn parse_track_unit(t: &str, fs: f32) -> Option<TrackUnit> {
+    let low = t.to_ascii_lowercase();
+    match low.as_str() {
+        "auto" => Some(TrackUnit::Auto),
+        "min-content" => Some(TrackUnit::MinContent),
+        "max-content" => Some(TrackUnit::MaxContent),
+        _ => {
+            if let Some(n) = t.strip_suffix("fr").and_then(|n| n.trim().parse::<f32>().ok()) {
+                Some(TrackUnit::Fr(n))
+            } else if let Some(p) = t.strip_suffix('%').and_then(|n| n.trim().parse::<f32>().ok()) {
+                Some(TrackUnit::Percent(p))
+            } else {
+                values::parse_length_px(t, fs).map(TrackUnit::Px)
+            }
+        }
+    }
+}
+
+/// Parse a `grid-column`/`grid-row` shorthand (`<start> [/ <end>]`).
+fn parse_grid_line_shorthand(v: &str) -> (GridLine, GridLine) {
+    match v.split_once('/') {
+        Some((a, b)) => (parse_grid_line(a), parse_grid_line(b)),
+        None => (parse_grid_line(v), GridLine::Auto),
+    }
+}
+
+/// Parse one grid line: `auto`, a line number, or `span N`.
+fn parse_grid_line(v: &str) -> GridLine {
+    let v = v.trim();
+    if v.eq_ignore_ascii_case("auto") || v.is_empty() {
+        return GridLine::Auto;
+    }
+    if let Some(n) = v.strip_prefix("span").map(str::trim).and_then(|n| n.parse::<u16>().ok()) {
+        return GridLine::Span(n.max(1));
+    }
+    v.parse::<i16>().map(GridLine::Line).unwrap_or(GridLine::Auto)
 }
 
 /// Expand `repeat(N, <single-track>)` occurrences into N copies of the track.
