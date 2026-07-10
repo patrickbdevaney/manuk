@@ -85,6 +85,8 @@ pub struct GlyphBitmap {
 /// change (swap to `Arc`/`Mutex`).
 /// Key for the shaped-run/measure cache: `(font, quantized size bits, run text)`.
 type RunKey = (FontKey, u32, String);
+/// Key for the glyph raster cache: `(font, size bits, glyph char)`.
+type GlyphKey = (FontKey, u32, char);
 
 pub struct FontContext {
     db: fontdb::Database,
@@ -93,12 +95,20 @@ pub struct FontContext {
     /// the same words repeatedly (per line and in shrink-to-fit's multiple passes), so
     /// caching the advance width skips re-running per-glyph metrics.
     measure_cache: RefCell<LruCache<RunKey, f32>>,
+    /// Bounded LRU cache of rasterized glyph coverage bitmaps. Painting re-draws the same
+    /// glyphs every frame (and every scroll/caret tick repaints the whole viewport), so
+    /// rasterizing each glyph fresh each time was the dominant text-paint cost. Cache the
+    /// coverage bitmap behind an `Rc` so repeated draws are a hash lookup + clone.
+    glyph_cache: RefCell<LruCache<GlyphKey, Rc<GlyphBitmap>>>,
     hits: Cell<u64>,
     misses: Cell<u64>,
 }
 
 /// Default capacity (entries) of the shaped-run cache.
 const MEASURE_CACHE_CAP: usize = 8192;
+/// Default capacity (entries) of the glyph raster cache. Distinct (font,size,char)
+/// triples on a page are modest; this bounds memory while covering the visible set.
+const GLYPH_CACHE_CAP: usize = 8192;
 
 impl FontContext {
     /// Build a context populated with the system's installed fonts.
@@ -110,6 +120,9 @@ impl FontContext {
             cache: RefCell::new(HashMap::new()),
             measure_cache: RefCell::new(LruCache::new(
                 NonZeroUsize::new(MEASURE_CACHE_CAP).unwrap(),
+            )),
+            glyph_cache: RefCell::new(LruCache::new(
+                NonZeroUsize::new(GLYPH_CACHE_CAP).unwrap(),
             )),
             hits: Cell::new(0),
             misses: Cell::new(0),
@@ -241,11 +254,19 @@ impl FontContext {
         }
     }
 
-    /// Rasterize a single glyph to an 8-bit coverage bitmap.
-    pub fn rasterize(&self, ch: char, key: FontKey, size: f32) -> Option<GlyphBitmap> {
+    /// Rasterize a single glyph to an 8-bit coverage bitmap, cached by
+    /// `(font, size, glyph)`. Repeated draws (every frame, every scroll/caret tick) hit
+    /// the cache instead of re-running the outline fill.
+    pub fn rasterize(&self, ch: char, key: FontKey, size: f32) -> Option<Rc<GlyphBitmap>> {
+        let gk = (key, size.to_bits(), ch);
+        if let Some(hit) = self.glyph_cache.borrow_mut().get(&gk) {
+            return Some(hit.clone());
+        }
         let font = self.font(key)?;
         let (metrics, coverage) = font.rasterize(ch, size);
-        Some(GlyphBitmap { metrics, coverage })
+        let bmp = Rc::new(GlyphBitmap { metrics, coverage });
+        self.glyph_cache.borrow_mut().put(gk, bmp.clone());
+        Some(bmp)
     }
 }
 
