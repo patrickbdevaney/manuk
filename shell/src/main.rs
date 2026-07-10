@@ -47,6 +47,13 @@ fn main() -> Result<()> {
             println!("manuk {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
+        Some("help") | Some("--help") | Some("-h") => {
+            print_usage();
+            Ok(())
+        }
+        // No subcommand: launch the browser to the home page (desktop-launcher behavior)
+        // when built with the GUI; otherwise show usage.
+        None if cfg!(feature = "gui") => cmd_browse(&[]),
         _ => {
             print_usage();
             Ok(())
@@ -173,20 +180,23 @@ fn cmd_eval(args: &[String]) -> Result<()> {
 
 #[cfg(feature = "gui")]
 fn cmd_browse(args: &[String]) -> Result<()> {
-    let Some(url) = positional(args) else {
-        bail!("browse: missing <url>");
-    };
     let width: u32 = flag_value(args, &["--width", "-w"])
         .and_then(|s| s.parse().ok())
         .unwrap_or(DEFAULT_WIDTH);
     // `--frames N` renders N GPU frames back-to-back, reports frame time, then exits
     // (the §8 metric #4 headful measurement).
     let frames = flag_value(args, &["--frames"]).and_then(|s| s.parse().ok());
-    // E1: the argument goes through the same omnibox resolution the in-window address
-    // bar uses, so `manuk browse rust-lang.org` navigates and `manuk browse "rust lang"`
-    // searches.
-    let intent = chrome::omnibox_intent(url, &chrome::Settings::default());
-    gui::run(intent.url().to_string(), width, frames)
+    // No URL → open the home / new-tab page (`about:blank`) with the address bar focused,
+    // so launching the app from a desktop icon works. With a URL, resolve it through the
+    // same omnibox logic the address bar uses (so `browse rust-lang.org` navigates and
+    // `browse "rust lang"` searches).
+    let target = match positional(args) {
+        Some(url) => chrome::omnibox_intent(url, &chrome::Settings::default())
+            .url()
+            .to_string(),
+        None => "about:blank".to_string(),
+    };
+    gui::run(target, width, frames)
 }
 
 #[cfg(not(feature = "gui"))]

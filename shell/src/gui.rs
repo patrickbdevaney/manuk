@@ -241,6 +241,15 @@ impl App {
     }
 
     fn load_page(&mut self, width: u32, height: u32) {
+        // The home / new-tab page has no document — just chrome over a blank canvas.
+        if self.url.is_empty() || self.url == "about:blank" {
+            self.page = None;
+            self.viewport = Viewport::new(width as f32, (height as f32 - CHROME_HEIGHT).max(1.0));
+            if let Some(w) = &self.window {
+                w.set_title("New Tab — manuk");
+            }
+            return;
+        }
         let rt = match tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
@@ -891,6 +900,11 @@ impl ApplicationHandler for App {
         }
         self.load_page(size.width.max(1), size.height.max(1));
         self.history.push(self.url.clone());
+        // On the home / new-tab page, focus the address bar so the user can type immediately.
+        if self.url == "about:blank" {
+            self.omnibox_open = true;
+            self.omnibox_input.clear();
+        }
         self.rerender();
     }
 

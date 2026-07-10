@@ -1,0 +1,13 @@
+[Desktop Entry]
+Name=Manuk
+GenericName=Web Browser
+Comment=A from-scratch web browser engine
+# %u passes an optional URL (e.g. when opened via a link); with none, Manuk opens its
+# home / new-tab page with the address bar focused.
+Exec=manuk browse %u
+Icon=manuk
+Type=Application
+Categories=Network;WebBrowser;
+Terminal=false
+StartupNotify=true
+MimeType=text/html;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
