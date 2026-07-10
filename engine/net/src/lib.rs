@@ -40,19 +40,29 @@ type NetClient = Client<HttpsConnector<HttpConnector>, Full<Bytes>>;
 /// The process-global pooled client. Cheap to clone; reuses idle connections
 /// (default 90s keep-alive), so sequential same-origin fetches skip the TLS
 /// handshake.
-fn client() -> &'static NetClient {
-    static CLIENT: OnceLock<NetClient> = OnceLock::new();
-    CLIENT.get_or_init(|| {
+/// The process-global HTTPS connector, shared by the pooled [`client`] and the
+/// [`Preconnector`]. Cloning it shares the same `Arc<rustls::ClientConfig>` — so a
+/// preconnect's TLS handshake populates the **same session cache** the real
+/// navigation resumes from (a warm preconnect saves the TLS round-trips even though
+/// the raw socket itself is not adopted by the pool).
+fn connector() -> HttpsConnector<HttpConnector> {
+    static CONN: OnceLock<HttpsConnector<HttpConnector>> = OnceLock::new();
+    CONN.get_or_init(|| {
         // Install a rustls crypto provider once (idempotent).
         let _ = rustls::crypto::ring::default_provider().install_default();
-        let https = hyper_rustls::HttpsConnectorBuilder::new()
+        hyper_rustls::HttpsConnectorBuilder::new()
             .with_webpki_roots()
             .https_or_http()
             .enable_http1()
             .enable_http2()
-            .build();
-        Client::builder(TokioExecutor::new()).build(https)
+            .build()
     })
+    .clone()
+}
+
+fn client() -> &'static NetClient {
+    static CLIENT: OnceLock<NetClient> = OnceLock::new();
+    CLIENT.get_or_init(|| Client::builder(TokioExecutor::new()).build(connector()))
 }
 
 /// The negotiated HTTP version of a response.
@@ -289,6 +299,136 @@ pub async fn fetch_streaming<F: FnMut(&[u8])>(url: &str, mut on_chunk: F) -> Res
     bail!("too many redirects (>{MAX_REDIRECTS}) starting at {url}")
 }
 
+/// Outcome of a speculative preconnect attempt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Preconnect {
+    /// TCP + TLS handshake warmed (DNS resolved, TLS session cached for resumption).
+    Warmed,
+    /// The origin was warmed within the idle window — nothing to do.
+    SkippedRecent,
+    /// The in-flight preconnect budget is full.
+    SkippedBusy,
+    /// **Privacy policy:** cross-origin preconnects are never done speculatively.
+    DeclinedCrossOrigin,
+    /// The target is not an `http(s)` URL.
+    DeclinedScheme,
+    /// The connection attempt failed (host down, TLS error, …).
+    Failed,
+}
+
+/// **Speculative preconnect** (B-latency): on a user gesture (link hover / pointer-
+/// down) warm the connection to the link's origin so the click reuses it. Warming is a
+/// TCP + TLS handshake only — **no HTTP request** — and populates the shared connector's
+/// TLS session cache (so the real navigation resumes the handshake).
+///
+/// Privacy (CLAUDE.md Axis F): **user-initiated + same-origin only**. Speculative
+/// cross-origin preconnect is refused ([`Preconnect::DeclinedCrossOrigin`]) so hover
+/// intent never leaks to a third-party origin. (Page-*declared* `<link rel=preconnect>`
+/// to a subresource origin is a separate, solicited path handled by the D4 scheduler.)
+/// Bounded by an in-flight cap and a per-origin idle window.
+pub struct Preconnector {
+    warmed: std::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>,
+    in_flight: std::sync::atomic::AtomicUsize,
+    max_in_flight: usize,
+    idle: std::time::Duration,
+}
+
+impl Default for Preconnector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Preconnector {
+    pub fn new() -> Self {
+        Preconnector {
+            warmed: std::sync::Mutex::new(std::collections::HashMap::new()),
+            in_flight: std::sync::atomic::AtomicUsize::new(0),
+            max_in_flight: 6,
+            idle: std::time::Duration::from_secs(10),
+        }
+    }
+
+    /// Pure policy: may we speculatively preconnect from `current_page` to `target`?
+    /// `Ok(origin)` if allowed (same-origin `http(s)`), else the declining outcome.
+    pub fn classify(current_page: &str, target: &str) -> Result<String, Preconnect> {
+        let tgt = Url::parse(target).map_err(|_| Preconnect::DeclinedScheme)?;
+        if !matches!(tgt.scheme(), "http" | "https") {
+            return Err(Preconnect::DeclinedScheme);
+        }
+        let cur = Url::parse(current_page).map_err(|_| Preconnect::DeclinedCrossOrigin)?;
+        // Same-origin only (scheme + host + port must match).
+        if cur.origin() != tgt.origin() {
+            return Err(Preconnect::DeclinedCrossOrigin);
+        }
+        Ok(origin_key(&tgt))
+    }
+
+    /// Warm the connection to `target`'s origin if policy + budget allow. `current_page`
+    /// is the page the gesture happened on (for the same-origin check).
+    pub async fn preconnect(&self, current_page: &str, target: &str) -> Preconnect {
+        let origin = match Self::classify(current_page, target) {
+            Ok(o) => o,
+            Err(decline) => return decline,
+        };
+
+        // Per-origin idle window.
+        {
+            let map = self.warmed.lock().unwrap();
+            if let Some(&at) = map.get(&origin) {
+                if at.elapsed() < self.idle {
+                    return Preconnect::SkippedRecent;
+                }
+            }
+        }
+
+        // In-flight budget.
+        use std::sync::atomic::Ordering;
+        if self.in_flight.load(Ordering::Relaxed) >= self.max_in_flight {
+            return Preconnect::SkippedBusy;
+        }
+        self.in_flight.fetch_add(1, Ordering::Relaxed);
+        self.warmed
+            .lock()
+            .unwrap()
+            .insert(origin, std::time::Instant::now());
+
+        let result = warm_origin(target).await;
+        self.in_flight.fetch_sub(1, Ordering::Relaxed);
+        if result {
+            Preconnect::Warmed
+        } else {
+            Preconnect::Failed
+        }
+    }
+}
+
+/// Origin key `scheme://host:port` for the warmed-origins map.
+fn origin_key(u: &Url) -> String {
+    format!(
+        "{}://{}:{}",
+        u.scheme(),
+        u.host_str().unwrap_or(""),
+        u.port_or_known_default().unwrap_or(0)
+    )
+}
+
+/// Establish (and immediately drop) a TCP + TLS connection to `target`'s origin — a
+/// request-free preconnect that warms DNS + the TLS session cache.
+async fn warm_origin(target: &str) -> bool {
+    use tower_service::Service;
+    let Ok(uri) = target.parse::<hyper::Uri>() else {
+        return false;
+    };
+    let mut conn = connector();
+    // Drive the connector's `Service<Uri>` to a connection, then drop it.
+    let ready = std::future::poll_fn(|cx| conn.poll_ready(cx)).await;
+    if ready.is_err() {
+        return false;
+    }
+    conn.call(uri).await.is_ok()
+}
+
 /// A general single request (no redirect following): any method, extra headers, and
 /// a request body. Used for API calls (e.g. `POST` JSON to an LLM endpoint).
 pub async fn request(
@@ -446,6 +586,53 @@ mod tests {
     fn rejects_unknown_scheme() {
         let err = rt().block_on(fetch("ftp://example.com/")).unwrap_err();
         assert!(err.to_string().contains("scheme"), "got: {err}");
+    }
+
+    #[test]
+    fn preconnect_policy_is_same_origin_only() {
+        let cur = "https://example.com/page";
+        // Same origin (any path) → allowed.
+        assert!(Preconnector::classify(cur, "https://example.com/other").is_ok());
+        // Cross-origin (host/scheme/port differ) → refused for privacy.
+        assert_eq!(
+            Preconnector::classify(cur, "https://evil.test/track"),
+            Err(Preconnect::DeclinedCrossOrigin)
+        );
+        assert_eq!(
+            Preconnector::classify(cur, "http://example.com/"),
+            Err(Preconnect::DeclinedCrossOrigin) // scheme differs → different origin
+        );
+        assert_eq!(
+            Preconnector::classify(cur, "https://example.com:8443/"),
+            Err(Preconnect::DeclinedCrossOrigin) // port differs
+        );
+        // Non-http(s) target → declined.
+        assert_eq!(
+            Preconnector::classify(cur, "ftp://example.com/"),
+            Err(Preconnect::DeclinedScheme)
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires network access"]
+    async fn preconnect_warms_then_skips_recent() {
+        let pc = Preconnector::new();
+        // Same-origin hover → warm the connection (TCP+TLS, no request).
+        let first = pc
+            .preconnect("https://example.com/", "https://example.com/path")
+            .await;
+        assert_eq!(first, Preconnect::Warmed);
+        // A second hover within the idle window is skipped.
+        let second = pc
+            .preconnect("https://example.com/", "https://example.com/other")
+            .await;
+        assert_eq!(second, Preconnect::SkippedRecent);
+        // Cross-origin is refused without touching the network.
+        assert_eq!(
+            pc.preconnect("https://example.com/", "https://other.test/")
+                .await,
+            Preconnect::DeclinedCrossOrigin
+        );
     }
 
     #[test]

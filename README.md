@@ -101,8 +101,10 @@ in; **Build** = written from scratch, to be verified against WPT.
   paint (render-blocking; `Page::fetch_and_apply_stylesheets`, wired into shell
   `render`); `<script src>`/`<img src>` are enumerated with `defer`/`async` semantics
   (`Page::subresources`) — script execution + image rendering are follow-ons.
-- **Not yet:** HTTP/3/QUIC (`quinn`) is a target, not yet a dependency; speculative
-  preconnect on hover; cookies/cache.
+- **Speculative preconnect** (`Preconnector`): warms a link's origin on hover with a
+  TCP+TLS handshake (no HTTP request), same-origin-only for privacy (no cross-origin
+  leak) + bounded concurrency/idle — the GUI hover-hit-test signal is the remaining wire.
+- **Not yet:** HTTP/3/QUIC (`quinn`) is a target, not yet a dependency; cookies/cache.
 
 #### `engine/html` — HTML parsing · *Reuse*
 - **Does:** `parse(html) -> Dom`, walking `html5ever`'s spec-compliant tree builder

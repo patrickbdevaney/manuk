@@ -26,6 +26,9 @@ tokio-util.workspace = true
 futures-util.workspace = true
 encoding_rs.workspace = true
 chardetng.workspace = true
+# Calling the connector's `Service<Uri>` directly for speculative preconnect (warm
+# TCP+TLS without an HTTP request). Already in the tree transitively.
+tower-service = "0.3"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "macros"] }
