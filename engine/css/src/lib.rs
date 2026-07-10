@@ -252,6 +252,8 @@ pub struct ComputedStyle {
     pub flex_shrink: f32,
     /// `flex-basis` (item); `Dim::Auto` = `auto`.
     pub flex_basis: Dim,
+    /// `align-self` (item); `None` = `auto` (defer to the container's `align-items`).
+    pub align_self: Option<AlignItems>,
     /// `grid-template-columns` / `-rows` (container). Empty = none.
     pub grid_template_columns: Vec<TrackSize>,
     pub grid_template_rows: Vec<TrackSize>,
@@ -298,6 +300,7 @@ impl ComputedStyle {
             flex_grow: 0.0,
             flex_shrink: 1.0,
             flex_basis: Dim::Auto,
+            align_self: None,
             grid_template_columns: Vec::new(),
             grid_template_rows: Vec::new(),
         }
@@ -1250,6 +1253,17 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             if let Some(px) = values::parse_length_px(v.trim(), s.font_size) {
                 s.column_gap = px;
             }
+        }
+        "align-self" => {
+            s.align_self = match v.trim() {
+                "auto" => None,
+                "center" => Some(AlignItems::Center),
+                "flex-end" | "end" => Some(AlignItems::FlexEnd),
+                "flex-start" | "start" => Some(AlignItems::FlexStart),
+                "baseline" => Some(AlignItems::Baseline),
+                "stretch" => Some(AlignItems::Stretch),
+                _ => None,
+            };
         }
         "flex-grow" => s.flex_grow = v.trim().parse().unwrap_or(0.0),
         "flex-shrink" => s.flex_shrink = v.trim().parse().unwrap_or(1.0),

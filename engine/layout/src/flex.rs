@@ -32,6 +32,8 @@ pub struct FlexItem {
     pub grow: f32,
     pub shrink: f32,
     pub basis: FlexBasis,
+    /// `align-self`; `None` defers to the container's `align-items`.
+    pub align_self: Option<CssAlign>,
 }
 
 /// The flex container's configuration.
@@ -125,6 +127,7 @@ pub fn solve_flex(
                 flex_grow: it.grow,
                 flex_shrink: it.shrink,
                 flex_basis: basis,
+                align_self: it.align_self.map(map_align),
                 ..Default::default()
             };
             tree.new_leaf(style).expect("taffy leaf")
@@ -265,7 +268,7 @@ mod tests {
         }
     }
     fn item(width: Option<f32>, grow: f32) -> FlexItem {
-        FlexItem { width, height: Some(20.0), grow, shrink: 1.0, basis: FlexBasis::Auto }
+        FlexItem { width, height: Some(20.0), grow, shrink: 1.0, basis: FlexBasis::Auto, align_self: None }
     }
     fn row(w: f32, items: &[FlexItem], j: CssJustify) -> Vec<Slot> {
         solve_flex(w, None, items, &cfg(j))
@@ -303,8 +306,8 @@ mod tests {
     fn column_direction_stacks_and_gap_separates() {
         let col = FlexConfig { direction: CssDir::Column, row_gap: 10.0, ..cfg(CssJustify::FlexStart) };
         let items = [
-            FlexItem { width: Some(80.0), height: Some(30.0), grow: 0.0, shrink: 1.0, basis: FlexBasis::Auto },
-            FlexItem { width: Some(80.0), height: Some(40.0), grow: 0.0, shrink: 1.0, basis: FlexBasis::Auto },
+            FlexItem { width: Some(80.0), height: Some(30.0), grow: 0.0, shrink: 1.0, basis: FlexBasis::Auto, align_self: None },
+            FlexItem { width: Some(80.0), height: Some(40.0), grow: 0.0, shrink: 1.0, basis: FlexBasis::Auto, align_self: None },
         ];
         let slots = solve_flex(200.0, Some(300.0), &items, &col);
         assert!(slots[0].y.abs() < 1.0, "first at top: {slots:?}");
@@ -315,7 +318,7 @@ mod tests {
     #[test]
     fn wrap_pushes_the_overflowing_item_to_the_next_line() {
         let three: Vec<FlexItem> = (0..3)
-            .map(|_| FlexItem { width: Some(100.0), height: Some(30.0), grow: 0.0, shrink: 0.0, basis: FlexBasis::Auto })
+            .map(|_| FlexItem { width: Some(100.0), height: Some(30.0), grow: 0.0, shrink: 0.0, basis: FlexBasis::Auto, align_self: None })
             .collect();
         let wrap = FlexConfig { wrap: CssWrap::Wrap, ..cfg(CssJustify::FlexStart) };
         let slots = solve_flex(250.0, None, &three, &wrap);

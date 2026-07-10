@@ -1541,6 +1541,7 @@ impl Ctx<'_> {
                     grow: s.flex_grow,
                     shrink: s.flex_shrink,
                     basis,
+                    align_self: s.align_self,
                 }
             })
             .collect();
@@ -1584,6 +1585,7 @@ impl Ctx<'_> {
                     grow: 0.0,
                     shrink: 1.0,
                     basis: flex::FlexBasis::Auto,
+                    align_self: None,
                 }
             })
             .collect();
