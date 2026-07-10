@@ -622,9 +622,11 @@ D (compat) ───────────────► E (headful UI) ─�
 
 ## Open human decisions (surface before executing the relevant item)
 
-1. **F1 UA string** — approve the `Mozilla/5.0 … Manuk/<ver>` general-token form (or
-   choose a bare `Manuk/<ver>` and accept some wrongful walling).
-2. **D3 Step-0 outcome** — hand-written subset (lean) vs Servo codegen, decided from
-   the prototype.
-3. **C2** — ship the trimmed SpiderMonkey archive only if the measured size delta
-   justifies the per-OS bake friction.
+1. **F1 UA string** — ✅ **DECIDED (2026-07): `Mozilla/5.0 (…) … Manuk/<ver>`** (the
+   universal compat token; honest, not competitor impersonation). Apply when F1 lands.
+2. **D3 Step-0 outcome** — ✅ **DECIDED (2026-07): hand-write the prioritized subset
+   on a thin safe binding-helper layer** (prototype validated the arena-DOM
+   reserved-slot approach; raw jsapi per-interface is segfault-prone). Servo codegen
+   is the fallback if the subset balloons. See CLAUDE.md D3 "Step-0 outcome".
+3. **C2** — still open: ship the trimmed SpiderMonkey archive only if the measured
+   size delta justifies the per-OS bake friction (bring the number first).
