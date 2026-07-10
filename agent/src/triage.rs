@@ -56,6 +56,10 @@ pub struct TriageReport {
     pub script_count: usize,
     /// The signals that drove the decision, most salient first.
     pub signals: Vec<Signal>,
+    /// The collapsed visible text triage extracted while classifying — reused by the
+    /// traversal cache as the content-address key, so no second parse/layout is needed just
+    /// to hash "what actually matters" on this page.
+    pub extracted_text: String,
 }
 
 impl TriageReport {
@@ -113,7 +117,8 @@ pub fn triage(html: &str) -> TriageReport {
         }
     }
 
-    let static_text_len = collapse_ws(&visible).len();
+    let extracted_text = collapse_ws(&visible);
+    let static_text_len = extracted_text.len();
 
     // An SPA mount is only a signal if it is *empty* (no meaningful text under it).
     let empty_mount = mount_candidates.iter().any(|&m| {
@@ -151,6 +156,7 @@ pub fn triage(html: &str) -> TriageReport {
         static_text_len,
         script_count,
         signals,
+        extracted_text,
     }
 }
 

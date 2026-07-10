@@ -63,6 +63,10 @@ pub mod triage;
 /// CPU-bound JS-execution tier — never one conflated limit).
 pub mod concurrency;
 
+/// INFERENCE.MD §4 — the traversal driver composing cache + triage + concurrency into one
+/// "traverse at scale" capability (freshness-skip → fetch → triage → record).
+pub mod traversal;
+
 /// Default model — a Groq-hosted multimodal model (overridable via `GROQ_MODEL`).
 pub const DEFAULT_MODEL: &str = "qwen/qwen3.6-27b";
 

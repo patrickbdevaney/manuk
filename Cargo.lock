@@ -2819,6 +2819,7 @@ dependencies = [
  "async-trait",
  "base64",
  "bytes",
+ "futures-util",
  "manuk-a11y",
  "manuk-dom",
  "manuk-html",
