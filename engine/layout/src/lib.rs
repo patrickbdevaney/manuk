@@ -1693,10 +1693,28 @@ impl Ctx<'_> {
                     *pending_space = false;
                     return;
                 }
+                // An inline element's horizontal padding + border occupies space in the flow
+                // and extends its geometry — emit edge spacers around its content.
+                let s = &self.styles[&node];
+                let pad_l = s.padding.left.resolve(cw, 0.0) + s.border_width.left;
+                let pad_r = s.padding.right.resolve(cw, 0.0) + s.border_width.right;
+                if pad_l > 0.0 {
+                    out.push(InlineItem::Spacer {
+                        width: pad_l,
+                        node: Some(node),
+                        space_before: *pending_space && !*first,
+                    });
+                    *first = false;
+                    *pending_space = false;
+                }
                 // N4: inline content also follows the flat tree.
                 let children: Vec<NodeId> = self.dom.flat_children(node);
                 for c in children {
                     self.collect_inline_node(c, out, pending_space, first, Some(node), cw);
+                }
+                if pad_r > 0.0 {
+                    out.push(InlineItem::Spacer { width: pad_r, node: Some(node), space_before: false });
+                    *pending_space = false;
                 }
             }
             _ => {}
@@ -1795,6 +1813,28 @@ impl Ctx<'_> {
                                 node: None,
                                 atomic: Some(box_),
                                 atomic_h: height,
+                            }),
+                        )
+                    }
+                    InlineItem::Spacer { width, node, space_before } => {
+                        // Inline padding/border: occupies `width`, paints nothing, but its
+                        // (empty-text) fragment carries the owning element's geometry.
+                        let key = FontKey { family: FontFamily::SansSerif, bold: false, italic: false };
+                        let space_w = if space_before { self.fonts.measure(" ", key, 16.0) } else { 0.0 };
+                        (
+                            width,
+                            space_w,
+                            0.0,
+                            Box::new(move |x: f32| LineFrag {
+                                x,
+                                width,
+                                text: String::new(),
+                                style: TextStyle { font_key: key, font_size: 16.0, color: Rgba::BLACK, line_height: 0.0 },
+                                ascent: 0.0,
+                                descent: 0.0,
+                                node,
+                                atomic: None,
+                                atomic_h: 0.0,
                             }),
                         )
                     }
@@ -1921,6 +1961,14 @@ enum InlineItem {
         box_: Box<LayoutBox>,
         advance: f32,
         height: f32,
+        space_before: bool,
+    },
+    /// Horizontal padding/border of an inline element (`<span style="padding:0 15px">`):
+    /// occupies `width` in the flow and extends the owning element's geometry, but paints
+    /// nothing itself.
+    Spacer {
+        width: f32,
+        node: Option<NodeId>,
         space_before: bool,
     },
 }
