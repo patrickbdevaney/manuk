@@ -161,6 +161,105 @@ Investigate: `<link rel=stylesheet>`/script/image fetch scheduling and ordering;
 gzip/br/deflate crate choice + bloat; charset sniffing (the WHATWG encoding
 standard; `encoding_rs` — the Gecko crate); data/blob URLs.
 
+### PASS-1 findings (2026-07-10) — Axis D amendment only (Custom Elements/Shadow DOM; SSR/History API)
+
+*Scope note:* this pass covers **only** the two items the framework-rendering note names
+as "genuinely not covered by general DOM/CSS work". D1–D4 are untouched here.
+WPT pinned at **`7cbfe0be66b3b2c228cf5da70ed3cbeb30b214b3` (2026-07-10)**.
+
+**D-amend-1 — Custom Elements + Shadow DOM. Split the item: DSD is parser work and lands
+now; imperative custom elements gate on D3.**
+*Finding (primary source — `html5ever` 0.39 `src/tree_builder/mod.rs:1484`, and
+`markup5ever` 0.39 `interface/tree_builder.rs:272`):* html5ever **already implements the
+Declarative Shadow DOM parsing rules**. The tree builder checks
+`attr.name.local == local_name!("shadowrootmode")` on a `<template>` start tag and calls
+two `TreeSink` hooks: `allow_declarative_shadow_roots()` (**defaults `true`**) and
+`attach_declarative_shadow()` (**defaults `false`**). We consume the tree through
+`markup5ever_rcdom::RcDom`, which **does not override `attach_declarative_shadow`** — so
+today a `<template shadowrootmode="open">` is parsed as an ordinary `<template>` and the
+shadow root is silently never attached. This is a *reuse* opportunity mis-wired, not a
+missing capability.
+*Finding (why DSD is separable):* Declarative Shadow DOM is **parser-level and requires no
+JavaScript** (`<template shadowrootmode>`, standard since Chrome/Edge 111 for the
+`shadowrootmode` attribute; the older `shadowroot` name is non-standard). Imperative
+`customElements.define()` + `Element.attachShadow()` are JS APIs and therefore sit behind
+D3's binding layer. Scoped custom-element registries (`shadowrootcustomelementregistry`)
+are shipping but are a strictly later layer.
+*Finding (reference implementation):* Servo has shadow DOM with `<slot>` fully supported
+including layout, plus the `::slotted()` selector — so the style-side scoping is a solved
+problem with a Rust precedent to follow. Note our Stylo trait wall already stubs exactly
+these: `parent_node_is_shadow_root`, `containing_shadow_host`, `is_html_slot_element`,
+`assigned_slot` all return `false`/`None` (documented in `engine/css/src/stylo_dom.rs`).
+*Disposition:*
+- **DSD: hand-roll the `TreeSink` over the arena DOM** (reusing html5ever's tokenizer +
+  tree builder, which already do the hard part). This *also* deletes the `RcDom` →
+  arena copy that `engine/html` performs today — a strict win independent of shadow DOM.
+  Requires a real shadow-root node kind in `manuk-dom` and slot assignment.
+- **Style scoping:** flat-tree traversal + `::slotted()`, following Servo. Our existing
+  `selectors::Element` stubs are the exact insertion points.
+- **Imperative `customElements.define` / `attachShadow`: DEFER behind D3.** They need the
+  JS binding layer, custom-element reactions, and the upgrade/reaction queue, which is a
+  distinct spec area.
+- **Scoped registries: out of scope for this pass.**
+*Roadmap edit:* CLAUDE.md §D3 — add "Declarative Shadow DOM is D1/parser work, not D3
+work"; §D2 — the four shadow stubs in `stylo_dom.rs` become real once a shadow node kind
+exists.
+*New WPT targets (@ `7cbfe0be`):* `shadow-dom/` (declarative + slots + `::slotted`);
+`custom-elements/` (deferred, post-D3). Current pass count: **0** for both (no runner
+integration yet, see P0.3).
+
+**D-amend-2 — SSR/hydration mechanics (`<script type="module">`, dynamic `import()`,
+History API). Order is the finding: History API first, module scripts second, dynamic
+`import()` blocked.**
+*Finding (the one that changes priorities):* **server-rendered HTML renders without any
+JavaScript** — that is what SSR *is*. Hydration is React/Svelte attaching event handlers to
+already-present markup. So a spec-compliant engine with **no** module support still
+*displays* Next.js / SvelteKit / Nuxt SSR pages correctly; what breaks is *interactivity*
+and *client-side routing*, not rendering. This directly contradicts the intuition that
+module scripts are the prerequisite for "supporting Next.js", and it re-orders the work.
+*Finding (History API — WHATWG HTML §7.2, nav-history-apis):* `pushState()` creates a new
+session-history entry and `replaceState()` mutates the current one; both **update the
+document URL without fetching or loading anything**, and **do not fire `popstate`** —
+`popstate` fires only on history *traversal*. Both are restricted to **same-origin** URLs.
+Next.js's own docs state that native `window.history.pushState`/`replaceState` "integrate
+into the Next.js Router" and sync with `usePathname`/`useSearchParams` — i.e. frameworks
+call the *platform* API, they do not replace it. Consequence: `history.*` is **pure host
+state**, with **zero SpiderMonkey dependency** beyond binding the methods. We already own
+a session-history model twice over (`AgentBrowser::history`, `shell::chrome::History`) —
+this is a unification, not new machinery.
+*Finding (module scripts — SpiderMonkey JSAPI, mozilla-spidermonkey/embedding-examples):*
+module loading is entirely **host-driven**: the embedder implements
+`JS::SetModuleResolveHook` (now taking a `ModuleRequest` object, with
+`JS::GetModuleRequestSpecifier` to read the specifier), compiles with `JS::CompileModule`,
+links, and calls `JS::ModuleEvaluate` — which since top-level-await gained a
+`MutableHandleValue` **out-parameter carrying the Promise**. Dynamic `import()` needs
+`SetModuleDynamicImportHook` and **resolves a Promise**.
+*Blocker, already known and now confirmed relevant:* our D3 work recorded that mozjs 0.18's
+**promise job-queue wrapper segfaults on call** (`JS::UseInternalJobQueues`/`RunJobs`), which
+is why native `Promise.prototype.then` reactions are not routed through our event loop.
+Because `ModuleEvaluate` returns a Promise and dynamic `import()` *is* a Promise, **dynamic
+`import()` cannot resolve without the job queue**. Static `<script type="module">` with
+top-level-await absent may still work (the returned Promise is already-resolved), but this
+is unverified.
+*Disposition:*
+1. **History API — implement now.** Host-only, `[XP]`, no engine risk. Bind
+   `history.pushState/replaceState/length/state`, `popstate`, `hashchange`, and the
+   same-origin check, over a single unified session-history model shared by shell + agent
+   (this also retires the duplicated stacks). Gated on the existing `spidermonkey` feature
+   only because the *bindings* need JS; the model itself is not.
+2. **`<script type="module">` — implement after (1), with a spike first.** The spike is
+   whether mozjs 0.18 exposes `CompileModule`/`ModuleEvaluate`/`SetModuleResolveHook` in
+   safe Rust at all. Sanctioned embedding API; **does not touch JIT/GC/sandbox**.
+3. **Dynamic `import()` — DEFER, blocked on the promise job queue.** The follow-up is
+   *research*, not implementation: does a newer `mozjs` fix the `RustJobQueue` crash, or do
+   we implement custom `JobQueueTraps`? Nothing should be built until that is answered.
+*Roadmap edit:* CLAUDE.md §D3 — record that SSR pages already render; that History API is
+host-only; and that dynamic `import()` inherits the promise-job-queue blocker.
+*New WPT targets (@ `7cbfe0be`):*
+`html/browsers/history/the-history-interface/` (History API);
+`html/semantics/scripting-1/the-script-element/module/` (module scripts, post-spike).
+Current pass count: **0** for both.
+
 ## Axis E — User-facing features (headful parity + polish)
 
 For each, the research question is the same shape: **what's the leanest correct
@@ -285,6 +384,129 @@ Decision it feeds: how the shell panel's "task-scoped, not the full agent
 action space" constraint (Axis E6) is actually implemented — an allowlist
 per invocation, a capability token, something else. Must compose cleanly with
 H1-H3 rather than becoming a second schema.
+
+### PASS-1 findings (2026-07-10) — Axis H
+
+*Context that changes the questions:* H1 and H3 were **substantially answered by
+implementation** during the Phase 3–5 execution (`§4a` accessibility tree +
+`§4b` action set + `E4` BiDi remote end). The research below therefore names the
+**residual delta** rather than re-deriving settled ground.
+
+**H1 — Targeting mechanism. RESOLVED: adopt WebDriver BiDi's targeting vocabulary;
+both modes, not one.**
+*Finding (primary source — w3c/webdriver-bidi `index.bs`, CDDL §7.3.2.3, §7.9.2.1):*
+the spec's own locator set is
+`Locator = AccessibilityLocator / CssLocator / ContextLocator / InnerTextLocator /
+XPathLocator`, and **`AccessibilityLocator = {type:"accessibility", value:{?name, ?role}}`**
+— i.e. the standard's canonical element-targeting strategy is keyed on **role + name**,
+exactly the shape `manuk_a11y::A11yNode::find(role, name)` already implements. Node
+identity across the protocol is `script.SharedReference = {sharedId, ?handle}`, a stable
+opaque handle, **not** an ordinal index. Separately,
+`input.Origin = "viewport" / "pointer" / input.ElementOrigin` — so coordinate-space and
+element-space clicking are *co-equal modes of one action*, settling the "second, not
+replacement" question in the affirmative at the spec level.
+*Finding (model side):* the literature is unambiguous that both modes are load-bearing.
+Set-of-Marks / AxTree ID-selection is a distinct tradition whose known failure modes are
+long textual context, hallucination, and absent visual/positional cues; the frontier of
+GUI grounding (UI-TARS, MolmoPoint) instead emits **pixel coordinates** directly, with
+MolmoPoint reporting SOTA-among-open GUI pointing (61.1 ScreenSpotPro) precisely by
+pointing at image features rather than selecting a widget id. BrowserGym exposes **both**
+`click(bid)` and `mouse_click(x, y)`. Forcing pixel-grounded models into an indexed-list
+convention would discard the capability they were trained for.
+*Disposition:* **reuse the BiDi vocabulary; do not invent a third schema.** Keep the two
+targeting modes we have (`click_text{role,name}`, `click_at{x,y}`), and close the residual
+delta: (a) a **stable `sharedId` node handle** so a target resolved once can be reused and
+so E4 can honour `script.SharedReference` / `input.ElementOrigin`; (b) a
+`browsingContext.locateNodes` implementation over the a11y tree (`accessibility` locator)
+and `manuk_css::query_selector_all` (`css` locator). `xpath` is **out of scope** (no XPath
+engine, and no evidence agents need it).
+*Roadmap edit:* CLAUDE.md §D3/§4a — record that role+name is the *standard's* locator, not
+a Manuk convention, and that `sharedId` is the missing identity primitive.
+*WPT target:* none directly (BiDi conformance lives in `webdriver/tests/bidi/`, already
+E4's target).
+
+**H2 — Observation richness scaling. RESOLVED on the main question; one sub-question
+deferred.**
+*Finding (primary source — BrowserGym / AgentLab, the reference research harness):*
+observation is **already a flag set, not a fixed schema**: `use_html`, `use_axtree`,
+screenshot, Set-of-Marks, plus `extract_center` / `extract_box` / `extract_visible_tag`
+augmentations, and configurable history depth. Every element carries a unique `bid`,
+bounding box, and visible/clickable flags — a **superset of our `A11yNode{role, name,
+bbox}`**, over *one* engine data structure. This directly validates the axis's framing
+("same underlying engine data, different serialization depth — not two implementations").
+*Finding (what actually degrades reliability):* increasing context length **degrades
+solving accuracy even when the necessary information is present in the prompt**, with
+agents showing gradual and sometimes sharp degradation past ~100K tokens. An AxTree is
+~10× smaller than the DOM but still routinely runs to tens of thousands of tokens.
+FocusAgent shows a task-guided retriever cutting observation size **>50%**, after which
+**two small models reach 51.5 / 51.8% SR versus 53.0% for a large model on the full tree**
+— i.e. pruning closes most of the small-vs-large gap.
+*Disposition:* **harness-set parameter over one engine data structure** — confirmed, not
+deferred. Crucially, the evidence says the knob should be keyed on a **token budget +
+task-relevance**, *not* on a model-capability enum: there is **no evidence that a richer
+observation makes a larger model better** at web tasks, while there is direct evidence
+that more context makes *every* model worse. So: one `ObservationPolicy` (depth flags +
+token budget), lean defaults, viewport-clipping already in place.
+*Deferred sub-question (insufficient evidence within budget):* whether depth should be
+**auto-tuned** per model (capability detection / adaptive escalation on failure). The
+literature evaluates fixed configurations and task-guided pruning; it does not establish
+an auto-tuning policy, and inventing one here would be a confident-sounding guess. Needs a
+follow-up pass with an actual eval harness before any implementation.
+*Roadmap edit:* CLAUDE.md §4 — replace "richer observation for bigger models" framing with
+"one policy object, budget-keyed, lean default".
+*WPT target:* none (not a web-platform feature).
+
+**H3 — Action-set completeness. RESOLVED: the canonical set is BiDi's, and two of the
+candidates are not actions at all.**
+*Finding (primary source — `index.bs` CDDL):* the `input` module's primitives are
+`PauseAction`, `KeyDownAction`/`KeyUpAction`, `PointerDownAction`/`PointerUpAction`/
+`PointerMoveAction`, wheel/scroll, `SetFiles`, `ReleaseActions`. Navigation, history and
+tabs live in `browsingContext`: `navigate`, `traverseHistory`, `create`, `close`,
+`activate`, `getTree`, `locateNodes`, `handleUserPrompt`. Two candidates from the axis
+prompt are **not** separate actions in the standard:
+- **wait-for-load** is a *parameter* of navigate —
+  `browsingContext.ReadinessState = "none" / "interactive" / "complete"`.
+- **wait-for-element** is `browsingContext.locateNodes` (poll a locator), not an action.
+*Finding (agent-facing vocabulary):* BrowserGym's high-level set — `click`, `fill`,
+`select_option`, `hover`, `press`, `scroll`, `new_tab`, `tab_close`, `tab_focus`,
+`go_back`, `go_forward` — maps onto the above with no residue.
+*Status against what we shipped (§4b):* `type`, `submit`, `back`, `forward`, `scroll_to`,
+`click_text`, `click_at` are landed. **Residual, in priority order:** (1) `wait` readiness
+on navigate (currently we always behave as `complete`); (2) **tab management**
+(`new`/`close`/`switch`) — shared surface with E1's headful tab UI, per the axis, and the
+one item that pays twice; (3) `select_option` (our `<select>` is read-only in `forms.rs`);
+(4) `press`/key actions; (5) `hover`; (6) `handleUserPrompt` (dialogs). `SetFiles` is
+**out of scope** (file upload is a deliberate non-goal for an autonomous agent).
+*Roadmap edit:* CLAUDE.md §4b — record wait-for-load as a navigate parameter, and tab
+management as the shared E1/§4b item.
+*WPT target:* none directly; BiDi conformance via `webdriver/tests/bidi/`.
+
+**H4 — Permission scoping. RESOLVED: a per-invocation capability set enforced at the
+action boundary; not a bearer token, and not a second schema.**
+*Finding (CaMeL, Debenedetti et al., arXiv:2503.18813):* the design that actually defeats
+prompt injection attaches **capabilities as metadata to values** (data provenance) and
+enforces **security policies at each tool call**, with a privileged LLM producing control
+flow from the *trusted* query and a quarantined LLM never touching tools. It solves 77% of
+AgentDojo tasks *with provable security* versus 84% undefended. The enforcement point is a
+check **before each tool call** — i.e. a filter over the *existing* action schema, which is
+exactly the composition property H4 demands.
+*Finding (why not a token):* macaroons (Birgisson et al., NDSS/CCS 2014) give attenuable
+bearer credentials via chained HMACs, whose *raison d'être* is **decentralized delegation
+without a round-trip to an issuer** — a holder attenuates its own authority for another
+holder across a trust boundary. In-process, where the shell constructs the agent loop
+directly and no untrusted party ever holds the credential, an HMAC-chained bearer token
+buys nothing over a plain Rust value; it would add crypto surface for zero threat-model
+gain.
+*Disposition:* **per-invocation `Capabilities` value** — an allowlist of permitted action
+kinds plus an origin allowlist and a `allow_sensitive_actions` bit — passed into `run_task`
+and consulted by the *existing* `assess_action` guard, which already sits at the CaMeL
+enforcement point. The panel (E6) simply constructs a narrower `Capabilities` than the
+headless binary. **Macaroon-style attenuation is deferred until authority actually crosses
+a process boundary** (out-of-process agent, or agent-to-sub-agent delegation) — at which
+point attenuation, not authentication, is the property we would be buying.
+*Roadmap edit:* CLAUDE.md §E6 — record the capability object as the panel's scoping
+mechanism and note that `assess_action` is already the enforcement point.
+*WPT target:* none (not a web-platform feature).
 
 ## Axis G — Blue-ocean capabilities (novel to both front-ends)
 
