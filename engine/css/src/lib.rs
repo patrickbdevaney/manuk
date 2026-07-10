@@ -109,6 +109,19 @@ pub enum Position {
     Sticky,
 }
 
+/// `overflow` — whether content is clipped to the box. We clip for every non-`visible`
+/// value (scrolling of the clipped content is a follow-on); this is the visual-correctness
+/// win real pages depend on (overflow:hidden containment, clearfix, avatars).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Overflow {
+    #[default]
+    Visible,
+    Hidden,
+    Scroll,
+    Auto,
+    Clip,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextAlign {
     Left,
@@ -295,6 +308,9 @@ pub struct ComputedStyle {
     pub inset: Sides<Dim>,
     /// `z-index`; `None` = `auto`.
     pub z_index: Option<i32>,
+    /// `overflow` (the more-clipping of overflow-x/overflow-y). `Visible` = no clip; any
+    /// other value clips descendants to this element's padding box.
+    pub overflow: Overflow,
     pub table_layout: TableLayout,
     /// `border-spacing` (px) between table cells in the separated-borders model.
     pub border_spacing: f32,
@@ -364,6 +380,7 @@ impl ComputedStyle {
             position: Position::Static,
             inset: Sides::all(Dim::Auto),
             z_index: None,
+            overflow: Overflow::Visible,
             table_layout: TableLayout::Auto,
             border_spacing: 0.0,
             border_collapse: false,
@@ -1771,6 +1788,20 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         "bottom" => s.inset.bottom = values::parse_dim(v, s.font_size),
         "left" => s.inset.left = values::parse_dim(v, s.font_size),
         "z-index" => s.z_index = if v == "auto" { None } else { v.parse().ok() },
+        // overflow shorthand + longhands: we clip the box for any non-visible value, and
+        // take the more-clipping of x/y (a single clip rect, no independent-axis scroll).
+        "overflow" | "overflow-x" | "overflow-y" => {
+            let o = match v.split_whitespace().next().unwrap_or("visible") {
+                "hidden" => Overflow::Hidden,
+                "scroll" => Overflow::Scroll,
+                "auto" => Overflow::Auto,
+                "clip" => Overflow::Clip,
+                _ => Overflow::Visible,
+            };
+            if o != Overflow::Visible {
+                s.overflow = o;
+            }
+        }
         "table-layout" => {
             s.table_layout = match v {
                 "fixed" => TableLayout::Fixed,

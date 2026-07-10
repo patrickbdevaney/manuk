@@ -658,10 +658,52 @@ impl Page {
         map
     }
 
+    /// Per-node clip rect for `overflow` clipping: the intersection of the padding boxes of
+    /// all ancestors with `overflow != visible`. A node not under any clipping ancestor is
+    /// absent (unclipped). An element's own box is clipped by its ancestors, not itself; its
+    /// descendants additionally get its padding box.
+    fn clip_map(&self) -> HashMap<manuk_dom::NodeId, manuk_layout::Rect> {
+        use manuk_css::Overflow;
+        let rects = self.root_box.node_rects(&self.dom);
+        let mut map = HashMap::new();
+        let mut stack: Vec<(manuk_dom::NodeId, Option<manuk_layout::Rect>)> =
+            vec![(self.dom.root(), None)];
+        while let Some((node, clip)) = stack.pop() {
+            if let Some(c) = clip {
+                map.insert(node, c);
+            }
+            // If this node clips, its descendants are additionally bounded by its padding box.
+            let child_clip = match self.styles.get(&node) {
+                Some(s) if s.overflow != Overflow::Visible => rects
+                    .get(&node)
+                    .map(|br| {
+                        let bw = s.border_width;
+                        let pad = manuk_layout::Rect {
+                            x: br.x + bw.left,
+                            y: br.y + bw.top,
+                            width: (br.width - bw.left - bw.right).max(0.0),
+                            height: (br.height - bw.top - bw.bottom).max(0.0),
+                        };
+                        match clip {
+                            Some(c) => c.intersect(&pad),
+                            None => pad,
+                        }
+                    })
+                    .or(clip),
+                _ => clip,
+            };
+            for c in self.dom.children(node) {
+                stack.push((c, child_clip));
+            }
+        }
+        map
+    }
+
     /// Rasterize the whole page to a canvas of the given pixel size (CPU tier).
     pub fn paint(&self, fonts: &FontContext, width: u32, height: u32) -> Canvas {
         let z = self.z_index_map();
-        CpuPainter::with_images_and_z(fonts, &self.images, &z)
+        let clip = self.clip_map();
+        CpuPainter::with_layers(fonts, &self.images, &z, &clip)
             .render(&self.root_box, width, height, Rgba::WHITE)
     }
 
@@ -674,7 +716,8 @@ impl Page {
         scroll_y: f32,
     ) -> Canvas {
         let z = self.z_index_map();
-        CpuPainter::with_images_and_z(fonts, &self.images, &z).render_scrolled(
+        let clip = self.clip_map();
+        CpuPainter::with_layers(fonts, &self.images, &z, &clip).render_scrolled(
             &self.root_box,
             width,
             height,

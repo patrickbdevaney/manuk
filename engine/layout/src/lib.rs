@@ -88,6 +88,20 @@ impl Rect {
             && self.y < other.bottom()
             && other.y < self.bottom()
     }
+
+    /// The overlap of two rects (a possibly-empty rect: zero width/height if disjoint).
+    pub fn intersect(&self, other: &Rect) -> Rect {
+        let x = self.x.max(other.x);
+        let y = self.y.max(other.y);
+        let right = self.right().min(other.right());
+        let bottom = self.bottom().min(other.bottom());
+        Rect {
+            x,
+            y,
+            width: (right - x).max(0.0),
+            height: (bottom - y).max(0.0),
+        }
+    }
 }
 
 /// The visual style of a text run, resolved for shaping + paint.

@@ -77,8 +77,24 @@ impl DisplayList {
         images: &std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<DecodedImage>>,
         z_index: &std::collections::HashMap<manuk_dom::NodeId, i32>,
     ) -> DisplayList {
+        let groups = Self::layered_groups(root, images, z_index, &std::collections::HashMap::new());
+        DisplayList {
+            items: groups.into_iter().flat_map(|(_, _, it)| it).collect(),
+        }
+    }
+
+    /// The paint groups in stacking order: `(z, clip, items)` per box, stably sorted by `z`.
+    /// `clip` is the intersection of any `overflow`-clipping ancestors' boxes (from
+    /// `clip_map`), applied to this box's items at paint time.
+    #[allow(clippy::type_complexity)]
+    fn layered_groups(
+        root: &LayoutBox,
+        images: &std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<DecodedImage>>,
+        z_index: &std::collections::HashMap<manuk_dom::NodeId, i32>,
+        clip_map: &std::collections::HashMap<manuk_dom::NodeId, Rect>,
+    ) -> Vec<(i32, Option<Rect>, Vec<DisplayItem>)> {
         // One group of paint items per box, tagged with its layer (effective z).
-        let mut groups: Vec<(i32, Vec<DisplayItem>)> = Vec::new();
+        let mut groups: Vec<(i32, Option<Rect>, Vec<DisplayItem>)> = Vec::new();
         root.walk(&mut |b| {
             let mut items = Vec::new();
             if let Some(bg) = b.background {
@@ -126,14 +142,13 @@ impl DisplayList {
             }
             if !items.is_empty() {
                 let z = b.node.and_then(|n| z_index.get(&n)).copied().unwrap_or(0);
-                groups.push((z, items));
+                let clip = b.node.and_then(|n| clip_map.get(&n)).copied();
+                groups.push((z, clip, items));
             }
         });
         // Stable sort keeps tree (document) order within each layer.
-        groups.sort_by_key(|(z, _)| *z);
-        DisplayList {
-            items: groups.into_iter().flat_map(|(_, it)| it).collect(),
-        }
+        groups.sort_by_key(|(z, _, _)| *z);
+        groups
     }
 }
 
@@ -248,6 +263,7 @@ impl Canvas {
                 left,
                 top,
                 style.color,
+                None,
             );
         }
     }
@@ -264,10 +280,13 @@ pub trait Painter {
 type NodeImages<'a> = std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<DecodedImage>>;
 type ZIndexMap<'a> = std::collections::HashMap<manuk_dom::NodeId, i32>;
 
+type ClipMap<'a> = std::collections::HashMap<manuk_dom::NodeId, Rect>;
+
 pub struct CpuPainter<'a> {
     fonts: &'a FontContext,
     images: Option<&'a NodeImages<'a>>,
     z_index: Option<&'a ZIndexMap<'a>>,
+    clip: Option<&'a ClipMap<'a>>,
 }
 
 impl<'a> CpuPainter<'a> {
@@ -276,6 +295,7 @@ impl<'a> CpuPainter<'a> {
             fonts,
             images: None,
             z_index: None,
+            clip: None,
         }
     }
 
@@ -285,20 +305,23 @@ impl<'a> CpuPainter<'a> {
             fonts,
             images: Some(images),
             z_index: None,
+            clip: None,
         }
     }
 
-    /// A painter that blits images **and** paints in stacking order per the effective
-    /// z-index of each node.
-    pub fn with_images_and_z(
+    /// A painter that blits images, paints in stacking order (z-index), and clips content
+    /// to `overflow`-clipping ancestors (`clip`).
+    pub fn with_layers(
         fonts: &'a FontContext,
         images: &'a NodeImages<'a>,
         z_index: &'a ZIndexMap<'a>,
+        clip: &'a ClipMap<'a>,
     ) -> Self {
         CpuPainter {
             fonts,
             images: Some(images),
             z_index: Some(z_index),
+            clip: Some(clip),
         }
     }
 }
@@ -332,28 +355,42 @@ impl CpuPainter<'_> {
 
         let empty = std::collections::HashMap::new();
         let empty_z = std::collections::HashMap::new();
-        let list = DisplayList::build_layered(
+        let empty_c = std::collections::HashMap::new();
+        let groups = DisplayList::layered_groups(
             root,
             self.images.unwrap_or(&empty),
             self.z_index.unwrap_or(&empty_z),
+            self.clip.unwrap_or(&empty_c),
         );
-        for item in &list.items {
-            match item {
-                DisplayItem::Rect { rect, color } => {
-                    let mut r = *rect;
-                    r.y -= scroll_y;
-                    fill_rect(&mut pixmap, r, *color);
-                }
-                DisplayItem::Text {
-                    x,
-                    baseline,
-                    text,
-                    style,
-                } => self.draw_text(&mut pixmap, *x, *baseline - scroll_y, text, style),
-                DisplayItem::Image { rect, image } => {
-                    let mut r = *rect;
-                    r.y -= scroll_y;
-                    blit_image(&mut pixmap, image, r);
+        for (_z, clip, items) in &groups {
+            // A group's clip is an `overflow` ancestor's box; shift it by the scroll.
+            let clip = clip.map(|c| Rect {
+                x: c.x,
+                y: c.y - scroll_y,
+                width: c.width,
+                height: c.height,
+            });
+            for item in items {
+                match item {
+                    DisplayItem::Rect { rect, color } => {
+                        let mut r = *rect;
+                        r.y -= scroll_y;
+                        if let Some(cl) = clip {
+                            r = r.intersect(&cl);
+                        }
+                        fill_rect(&mut pixmap, r, *color);
+                    }
+                    DisplayItem::Text {
+                        x,
+                        baseline,
+                        text,
+                        style,
+                    } => self.draw_text(&mut pixmap, *x, *baseline - scroll_y, text, style, clip),
+                    DisplayItem::Image { rect, image } => {
+                        let mut r = *rect;
+                        r.y -= scroll_y;
+                        blit_image(&mut pixmap, image, r, clip);
+                    }
                 }
             }
         }
@@ -370,6 +407,7 @@ impl CpuPainter<'_> {
         baseline: f32,
         text: &str,
         style: &TextStyle,
+        clip: Option<Rect>,
     ) {
         let run = self.fonts.shape(text, style.font_key, style.font_size);
         for g in &run.glyphs {
@@ -395,6 +433,7 @@ impl CpuPainter<'_> {
                 left,
                 top,
                 style.color,
+                clip,
             );
         }
     }
@@ -415,10 +454,12 @@ fn fill_rect(pixmap: &mut tiny_skia::Pixmap, rect: Rect, color: Rgba) {
 
 /// Scale a decoded (straight-alpha) RGBA image into `rect` and blit it onto the pixmap
 /// with bilinear filtering.
-fn blit_image(pixmap: &mut tiny_skia::Pixmap, image: &DecodedImage, rect: Rect) {
+fn blit_image(pixmap: &mut tiny_skia::Pixmap, image: &DecodedImage, rect: Rect, clip: Option<Rect>) {
     if rect.width <= 0.0 || rect.height <= 0.0 || image.width == 0 || image.height == 0 {
         return;
     }
+    // Build a rectangular clip mask when the image is inside an overflow-clipping box.
+    let mask = clip.and_then(|cl| rect_mask(pixmap.width(), pixmap.height(), cl));
     // Build a source pixmap, premultiplying each pixel (tiny-skia stores premultiplied).
     let Some(mut src) = tiny_skia::Pixmap::new(image.width, image.height) else {
         return;
@@ -441,13 +482,29 @@ fn blit_image(pixmap: &mut tiny_skia::Pixmap, image: &DecodedImage, rect: Rect) 
         quality: tiny_skia::FilterQuality::Bilinear,
         ..Default::default()
     };
-    pixmap.draw_pixmap(0, 0, src.as_ref(), &paint, transform, None);
+    pixmap.draw_pixmap(0, 0, src.as_ref(), &paint, transform, mask.as_ref());
+}
+
+/// A full-canvas alpha mask that is opaque inside `clip` — used to bound image draws to an
+/// overflow-clipping ancestor's box.
+fn rect_mask(pw: u32, ph: u32, clip: Rect) -> Option<tiny_skia::Mask> {
+    let mut mask = tiny_skia::Mask::new(pw, ph)?;
+    let rect = tiny_skia::Rect::from_xywh(clip.x, clip.y, clip.width.max(0.0), clip.height.max(0.0))?;
+    let path = tiny_skia::PathBuilder::from_rect(rect);
+    mask.fill_path(
+        &path,
+        tiny_skia::FillRule::Winding,
+        true,
+        tiny_skia::Transform::identity(),
+    );
+    Some(mask)
 }
 
 /// Alpha-blit an 8-bit coverage bitmap in `color` onto the (opaque) pixmap.
 ///
 /// The canvas starts fully opaque, so premultiplied == straight alpha here and we
 /// can blend in-place without un/re-premultiplying.
+#[allow(clippy::too_many_arguments)]
 fn blit_coverage(
     pixmap: &mut tiny_skia::Pixmap,
     coverage: &[u8],
@@ -456,18 +513,29 @@ fn blit_coverage(
     left: i32,
     top: i32,
     color: Rgba,
+    clip: Option<Rect>,
 ) {
     let pw = pixmap.width() as i32;
     let ph = pixmap.height() as i32;
+    // Integer clip bounds (glyph pixels outside an overflow box are skipped).
+    let (cx0, cy0, cx1, cy1) = match clip {
+        Some(c) => (
+            c.x.floor() as i32,
+            c.y.floor() as i32,
+            c.right().ceil() as i32,
+            c.bottom().ceil() as i32,
+        ),
+        None => (i32::MIN, i32::MIN, i32::MAX, i32::MAX),
+    };
     let data = pixmap.data_mut();
     for row in 0..gh as i32 {
         let py = top + row;
-        if py < 0 || py >= ph {
+        if py < 0 || py >= ph || py < cy0 || py >= cy1 {
             continue;
         }
         for col in 0..gw as i32 {
             let px = left + col;
-            if px < 0 || px >= pw {
+            if px < 0 || px >= pw || px < cx0 || px >= cx1 {
                 continue;
             }
             let cov = coverage[(row as usize) * gw + (col as usize)];
