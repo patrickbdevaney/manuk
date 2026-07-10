@@ -38,8 +38,16 @@ Effort tags: **S** ≈ hours–1 day, **M** ≈ days, **L** ≈ 1–3 weeks, **X
   harness); Stylo is opt-in under `--features stylo`. Rollout follow-on: a page `stylo`
   feature + re-tuning the parity corpus to Stylo's exact metrics before defaulting to it.
 
-**Remaining flagship architecture:** the Parley text migration (2B) is the last large
-integration; the interim slices above improve the shipping default engine in the meantime.
+- **T2B text (swash) — core done** (`ade0d05`, `17d0c13`): the text stack is now **swash
+  end-to-end** — shaping (kerning/ligatures/complex-script via `ShapeContext`) + subpixel/
+  hinted rasterization (`ScaleContext`) over fontdb discovery, with the glyph-ID `GlyphPos`
+  model. Plus `font-family` (generic, earlier). Parity gate held 72/72 through both.
+  Remaining toward full Parley: bidi/RTL, per-glyph fallback (CJK/emoji), color-glyph
+  rendering, web fonts (`@font-face`).
+
+**Flagship architecture status:** 2A (Stylo cascade) ✅ and 2B (swash text) core ✅ both
+landed this initiative. Remaining are enhancements (bidi, font fallback, color emoji, web
+fonts) and the deep T3 items (incremental layout, compositor/Vello, ES modules, SVG).
 
 ## Key research verdicts (these shape the plan)
 
