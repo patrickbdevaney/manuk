@@ -28,9 +28,16 @@ Effort tags: **S** ≈ hours–1 day, **M** ≈ days, **L** ≈ 1–3 weeks, **X
 - **T2D.1 images** Stage A replaced-element sizing (`7a11291`) + Stage B fetch/decode/paint
   (`d96658c`) — `<img>` now renders, natural or attr/CSS-sized
 
-**Remaining flagship architecture:** the full Stylo cascade (2A) and the Parley text
-migration (2B) are the two large integrations still ahead; the interim slices above
-improve the shipping default engine in the meantime.
+- **T2A Stylo cascade** — de-risked + groundwork (`8246d0f`, `1d6822d`): `Stylesheet`
+  retains `source()`; `docs/parity/STYLO-CASCADE-PLAN.md` is the exact source-verified
+  execution plan; the `ComputedValues → ComputedStyle` **mapping foundation** landed +
+  tested (scalar subset vs Stylo's initial values, first-try green). **Remaining:** the
+  107-method `TElement`/`TNode` DOM trait wall (confirmed multi-session) + the geometric
+  mapping tranche — both fully specified in the plan.
+
+**Remaining flagship architecture:** the full Stylo cascade's DOM trait wall (2A) and the
+Parley text migration (2B) are the two large integrations still ahead; the interim slices
+above improve the shipping default engine in the meantime.
 
 ## Key research verdicts (these shape the plan)
 
