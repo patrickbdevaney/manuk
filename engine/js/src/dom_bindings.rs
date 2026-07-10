@@ -38,10 +38,15 @@ use std::ptr::{self, NonNull};
 use mozjs::context::JSContext;
 use mozjs::conversions::{ConversionResult, FromJSValConvertible, ToJSValConvertible};
 use mozjs::glue::JS_GetReservedSlot;
-use mozjs::jsapi::{JSClass, JSContext as RawJSContext, JSObject, JS_SetReservedSlot, Value};
+use mozjs::jsapi::{
+    JSClass, JSContext as RawJSContext, JSObject, JS_SetReservedSlot, Value, JSPROP_ENUMERATE,
+};
 use mozjs::jsval::{Int32Value, NullValue, ObjectValue, PrivateValue, UndefinedValue};
 use mozjs::rooted;
-use mozjs::rust::wrappers2::{JS_DefineFunction, JS_DefineProperty, JS_NewObject};
+use mozjs::rust::wrappers2::{
+    JS_DefineFunction, JS_DefineProperty, JS_DefineProperty1, JS_NewObject, JS_SetElement1,
+    NewArrayObject1,
+};
 
 use manuk_dom::{Dom, NodeId};
 
@@ -173,15 +178,40 @@ unsafe fn define_members(
                n: u32| {
         JS_DefineFunction(&mut wrap_cx(cx), obj.handle(), name.as_ptr(), Some(f), n, 0);
     };
+    // Define an accessor property `name` with a `getter` and optional `setter`.
+    let prop =
+        |name: &std::ffi::CStr,
+         getter: unsafe extern "C" fn(*mut RawJSContext, u32, *mut Value) -> bool,
+         setter: Option<unsafe extern "C" fn(*mut RawJSContext, u32, *mut Value) -> bool>| {
+            JS_DefineProperty1(
+                &mut wrap_cx(cx),
+                obj.handle(),
+                name.as_ptr(),
+                Some(getter),
+                setter,
+                JSPROP_ENUMERATE as u32,
+            );
+        };
     if is_document {
         def(c"getElementById", doc_get_by_id, 1);
         def(c"querySelector", doc_query, 1);
+        def(c"querySelectorAll", doc_query_all, 1);
         def(c"createElement", doc_create_element, 1);
     } else {
         def(c"appendChild", el_append_child, 1);
         def(c"setAttribute", el_set_attribute, 2);
         def(c"getAttribute", el_get_attribute, 1);
         def(c"querySelector", doc_query, 1);
+        def(c"querySelectorAll", doc_query_all, 1);
+        // Accessor properties (jQuery-core read/write surface).
+        prop(
+            c"textContent",
+            el_get_text_content,
+            Some(el_set_text_content),
+        );
+        prop(c"tagName", el_get_tag_name, None); // read-only
+        prop(c"id", el_get_id, Some(el_set_id));
+        prop(c"className", el_get_class_name, Some(el_set_class_name));
     }
 }
 
@@ -287,6 +317,124 @@ unsafe extern "C" fn el_get_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut
     true
 }
 
+/// `document.querySelectorAll(sel)` / `element.querySelectorAll(sel)` → a JS `Array`
+/// of element reflectors (a static NodeList, per this tranche).
+unsafe extern "C" fn doc_query_all(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, root)) = this_node(vp) else {
+        *vp = NullValue();
+        return true;
+    };
+    let sel = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    let matches = manuk_css::query_selector_all(&*dom, root, &sel);
+
+    let arr_ptr = NewArrayObject1(&mut wrap_cx(cx), matches.len());
+    rooted!(in(cx) let arr = arr_ptr);
+    for (i, &n) in matches.iter().enumerate() {
+        let refl = new_reflector(cx, dom, n);
+        rooted!(in(cx) let robj = refl);
+        JS_SetElement1(&mut wrap_cx(cx), arr.handle(), i as u32, robj.handle());
+    }
+    *vp = ObjectValue(arr.get());
+    true
+}
+
+// ---------------------------------------------------------------------------
+// Element accessor properties (getters/setters)
+// ---------------------------------------------------------------------------
+
+/// `element.textContent` getter → the element's concatenated text.
+unsafe extern "C" fn el_get_text_content(
+    cx: *mut RawJSContext,
+    _argc: u32,
+    vp: *mut Value,
+) -> bool {
+    match this_node(vp) {
+        Some((dom, node)) => {
+            let text = (*dom).text_content(node);
+            return_string(cx, vp, &text);
+        }
+        None => *vp = NullValue(),
+    }
+    true
+}
+
+/// `element.textContent = s` setter → replace all children with a single text node.
+unsafe extern "C" fn el_set_text_content(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let value = arg_string(cx, vp, argc, 0).unwrap_or_default();
+        let kids: Vec<NodeId> = (*dom).children(node).collect();
+        for k in kids {
+            (*dom).detach(k);
+        }
+        let text = (*dom).create_text(value);
+        (*dom).append_child(node, text);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `element.tagName` getter → the uppercase tag name (read-only, per DOM).
+unsafe extern "C" fn el_get_tag_name(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    match this_node(vp) {
+        Some((dom, node)) => match (*dom).tag_name(node) {
+            Some(t) => {
+                let upper = t.to_ascii_uppercase();
+                return_string(cx, vp, &upper);
+            }
+            None => *vp = NullValue(),
+        },
+        None => *vp = NullValue(),
+    }
+    true
+}
+
+/// `element.id` getter → the `id` attribute (empty string if absent, per DOM).
+unsafe extern "C" fn el_get_id(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    match this_node(vp) {
+        Some((dom, node)) => {
+            let id = (*dom).element(node).and_then(|e| e.id()).unwrap_or("");
+            return_string(cx, vp, id);
+        }
+        None => *vp = NullValue(),
+    }
+    true
+}
+
+/// `element.id = s` setter.
+unsafe extern "C" fn el_set_id(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let v = arg_string(cx, vp, argc, 0).unwrap_or_default();
+        (*dom).set_attr(node, "id", v);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `element.className` getter → the `class` attribute (empty string if absent).
+unsafe extern "C" fn el_get_class_name(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    match this_node(vp) {
+        Some((dom, node)) => {
+            let cls = (*dom)
+                .element(node)
+                .and_then(|e| e.attr("class"))
+                .unwrap_or("");
+            return_string(cx, vp, cls);
+        }
+        None => *vp = NullValue(),
+    }
+    true
+}
+
+/// `element.className = s` setter.
+unsafe extern "C" fn el_set_class_name(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let v = arg_string(cx, vp, argc, 0).unwrap_or_default();
+        (*dom).set_attr(node, "class", v);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
 // ---------------------------------------------------------------------------
 // Installation
 // ---------------------------------------------------------------------------
@@ -377,19 +525,32 @@ mod tests {
         dom.append_child(body, p);
         let before = dom.len();
 
-        // One script exercises the whole tranche: getElementById + querySelector
-        // (document and element) + createElement + appendChild + set/getAttribute,
-        // all driving the arena DOM through the reflectors' reserved-slot NodeIds.
+        // One script exercises the whole surface so far: methods (getElementById /
+        // querySelector / querySelectorAll / createElement / appendChild /
+        // get-setAttribute) AND the new accessor properties (textContent get+set,
+        // tagName read-only, id get+set, className get+set) — all driving the arena
+        // DOM through the reflectors' reserved-slot NodeIds.
         let script = r#"
             var g = document.getElementById("greeting");
-            var q = document.querySelector("p");
             var scoped = body_query();          // element.querySelector
             var parent = document.createElement("div");
             var child = document.createElement("span");
             parent.appendChild(child);
-            parent.setAttribute("id", "made-in-js");
-            (g !== null) && (q !== null) && (scoped !== null) &&
-              (parent.getAttribute("id") === "made-in-js") &&
+
+            g.textContent = "hello world";      // accessor setter → arena mutation
+            parent.id = "made-in-js";
+            parent.className = "box active";
+            parent.setAttribute("data-k", "v");
+
+            var all = document.querySelectorAll("p");   // NodeList (JS Array)
+
+            (g !== null) && (scoped !== null) &&
+              (g.textContent === "hello world") &&
+              (g.tagName === "P") && (parent.tagName === "DIV") &&
+              (g.id === "greeting") && (parent.id === "made-in-js") &&
+              (parent.className === "box active") &&
+              (parent.getAttribute("data-k") === "v") &&
+              (Array.isArray(all)) && (all.length === 1) && (all[0].tagName === "P") &&
               (document.querySelector("span") === null)   // detached, not in tree
         "#;
         // `body_query` helper avoids relying on a `body` global.
@@ -400,7 +561,9 @@ mod tests {
             eval_bool(&mut dom, &script).expect("eval"),
             "DOM script mismatch"
         );
-        // The two createElement calls grew the arena DOM.
+        // The textContent setter wrote a real text node into the arena DOM.
+        assert_eq!(dom.text_content(p), "hello world");
+        // createElement + the text node grew the arena DOM.
         assert!(
             dom.len() >= before + 2,
             "createElement should grow the arena DOM: {} -> {}",

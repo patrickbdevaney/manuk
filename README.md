@@ -168,17 +168,19 @@ in; **Build** = written from scratch, to be verified against WPT.
   returns typed values.
 - **Uses:** `mozjs` 0.18 / `mozjs_sys` 140 (the Servo integration path — **not
   V8**). In this environment it builds from a prebuilt in seconds.
-- **Works:** real evaluation under the feature (`40+2 == 42`, etc.). **DOM bindings
-  (tranche 1)** — a hand-written jQuery-core method subset over the arena DOM on a
-  thin safe helper layer (reserved-slot `NodeId`, the Servo mechanism, no `Dom<T>`):
-  `document.getElementById`/`querySelector`/`createElement`, `element.appendChild`/
-  `setAttribute`/`getAttribute`/`querySelector`. JS mutates the real arena DOM;
-  validated end-to-end (`engine/js::dom_bindings`, isolated test).
+- **Works:** real evaluation under the feature (`40+2 == 42`, etc.). **DOM bindings**
+  — a hand-written jQuery-core subset over the arena DOM on a thin safe helper layer
+  (reserved-slot `NodeId`, the Servo mechanism, no `Dom<T>`). **Methods:**
+  `document.getElementById`/`querySelector`/`querySelectorAll`/`createElement`,
+  `element.appendChild`/`setAttribute`/`getAttribute`/`querySelector`/
+  `querySelectorAll`. **Accessor properties:** `textContent` (get+set), `tagName`,
+  `id` (get+set), `className` (get+set). `querySelectorAll` returns a real JS array
+  NodeList. JS mutates the real arena DOM; validated end-to-end
+  (`engine/js::dom_bindings`, isolated test).
 - **Boundary:** this crate only *configures and binds to* SpiderMonkey — never
   patches JIT/GC or the sandbox. See [the modification boundary](#the-js-engine-modification-boundary).
-- **Not yet:** accessor properties (`textContent`/`tagName`), `querySelectorAll`
-  NodeList, `innerHTML`, events (`addEventListener` + event loop), `fetch`/XHR — the
-  documented next binding tranches.
+- **Not yet:** `innerHTML`, events (`addEventListener` + event loop), `fetch`/XHR —
+  the documented next binding tranches.
 
 #### `engine/paint` — rasterization · *Reuse target (Vello), Build (CPU tier)*
 - **Does:** flattens the fragment tree to a `DisplayList`, then a `Painter` renders
