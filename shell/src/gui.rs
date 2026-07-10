@@ -413,9 +413,18 @@ impl App {
             Ok((html, final_url)) => {
                 // `load_async` also fetches external `<script src>` (under the spidermonkey
                 // feature) so a page's real scripts run.
-                let page = self
+                let mut page = self
                     .rt
                     .block_on(Page::load_async(&html, &final_url, &self.fonts, width as f32));
+                // Fetch + apply render-blocking external stylesheets (`<link rel=stylesheet>`)
+                // and relayout — the interactive path previously loaded no external CSS at
+                // all, so styled pages rendered with only their inline/UA styles.
+                let sheets = self
+                    .rt
+                    .block_on(page.fetch_and_apply_stylesheets(&self.fonts, width as f32));
+                if sheets > 0 {
+                    tracing::info!(sheets, "applied external stylesheet(s)");
+                }
                 if let Some(w) = &self.window {
                     w.set_title(&format!("{} — manuk", page.title));
                 }
