@@ -104,6 +104,10 @@ impl Node {
 pub struct Dom {
     nodes: Vec<Node>,
     root: NodeId,
+    /// Set by structural mutations (`append_child`/`detach`) since the last clean
+    /// pass — a box was added or removed, so incremental relayout must reflow (an
+    /// attribute-only change, by contrast, is classified by the style diff).
+    structure_changed: bool,
 }
 
 impl Default for Dom {
@@ -120,6 +124,7 @@ impl Dom {
         Dom {
             nodes,
             root: NodeId(0),
+            structure_changed: false,
         }
     }
 
@@ -237,12 +242,19 @@ impl Dom {
         }
     }
 
+    /// Did a structural mutation (`append_child`/`detach`) occur since the last clean
+    /// pass? Structural changes add/remove boxes, so incremental relayout must reflow.
+    pub fn structure_changed(&self) -> bool {
+        self.structure_changed
+    }
+
     /// Clear every dirty bit in the tree (call after a full clean layout pass).
     pub fn clear_all_dirty(&mut self) {
         for n in &mut self.nodes {
             n.dirty = false;
             n.dirty_descendants = false;
         }
+        self.structure_changed = false;
     }
 
     /// Append `child` as the last child of `parent`, unlinking it from any old
@@ -262,6 +274,7 @@ impl Dom {
             }
         }
         // Structural change: the child (and thus the parent's subtree) is dirty.
+        self.structure_changed = true;
         self.mark_dirty(child);
     }
 
@@ -291,6 +304,7 @@ impl Dom {
         n.next_sibling = None;
         // The old parent's child set changed: its subtree needs relayout.
         if let Some(par) = parent {
+            self.structure_changed = true;
             self.mark_dirty(par);
         }
     }

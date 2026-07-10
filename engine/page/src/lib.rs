@@ -6,7 +6,9 @@
 //! output — the shell presents to a window, the agent screenshots + reads it.
 
 use anyhow::{Context, Result};
-use manuk_css::{MinimalCascade, Rgba, StyleEngine, StyleMap, Stylesheet};
+use manuk_css::{
+    diff_style, MinimalCascade, RestyleDamage, Rgba, StyleEngine, StyleMap, Stylesheet,
+};
 use manuk_dom::Dom;
 use manuk_layout::{layout_document, LayoutBox};
 use manuk_paint::{Canvas, CpuPainter, Painter};
@@ -35,7 +37,7 @@ pub struct Page {
 impl Page {
     /// Parse + style + lay out `html` for a viewport of `viewport_width` px.
     pub fn load(html: &str, final_url: &str, fonts: &FontContext, viewport_width: f32) -> Page {
-        let dom = manuk_html::parse(html);
+        let mut dom = manuk_html::parse(html);
 
         let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&dom);
         let styles = MinimalCascade.cascade(&dom, &sheets);
@@ -53,6 +55,8 @@ impl Page {
 
         let root_box = layout_document(&dom, &styles, fonts, viewport_width);
         let content_height = root_box.content_bottom();
+        // The tree is now laid out and clean; later mutations mark fresh dirtiness.
+        dom.clear_all_dirty();
 
         Page {
             final_url: final_url.to_string(),
@@ -68,6 +72,63 @@ impl Page {
     pub fn relayout(&mut self, fonts: &FontContext, viewport_width: f32) {
         self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
         self.content_height = self.root_box.content_bottom();
+        self.dom.clear_all_dirty();
+    }
+
+    /// **Incremental relayout (A2 activation).** After DOM mutations (e.g. from the
+    /// JS bindings), re-cascade only if something changed and classify the change:
+    ///
+    /// - clean tree (or a mutation that produced no style/structure change) → **`None`**,
+    ///   reuse the existing layout and paint (zero work);
+    /// - otherwise re-cascade, compute the tree's [`RestyleDamage`] (structural change →
+    ///   at least `Reflow`; per-node style diffs give `Repaint`/`Reflow`/`Rebuild`), and
+    ///   re-lay-out.
+    ///
+    /// The returned damage lets the caller drive the compositor (repaint region vs
+    /// reflow). *Current scope:* any `>= Repaint` change re-lays-out the whole tree —
+    /// subtree-partial reuse (skipping clean subtrees via the DOM's summary bit) and a
+    /// paint-only refresh that skips layout are the documented next fill-ins, since
+    /// paint attributes are currently baked into the fragment tree.
+    pub fn relayout_incremental(
+        &mut self,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> RestyleDamage {
+        // Nothing changed since the last clean pass → reuse everything.
+        if self.dom.subtree_clean(self.dom.root()) {
+            return RestyleDamage::None;
+        }
+
+        let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
+        let new_styles = MinimalCascade.cascade(&self.dom, &sheets);
+
+        // A structural mutation adds/removes boxes → reflow at minimum.
+        let mut damage = if self.dom.structure_changed() {
+            RestyleDamage::Reflow
+        } else {
+            RestyleDamage::None
+        };
+        for (node, new_s) in &new_styles {
+            let d = match self.styles.get(node) {
+                Some(old_s) => diff_style(old_s, new_s),
+                None => RestyleDamage::Rebuild, // a node that did not exist before
+            };
+            damage = damage.max(d);
+        }
+        self.styles = new_styles;
+
+        if damage >= RestyleDamage::Repaint {
+            self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            self.content_height = self.root_box.content_bottom();
+        }
+        self.dom.clear_all_dirty();
+        damage
+    }
+
+    /// Mutable access to the DOM (so a caller/JS binding can mutate the tree, then
+    /// call [`relayout_incremental`](Self::relayout_incremental)).
+    pub fn dom_mut(&mut self) -> &mut Dom {
+        &mut self.dom
     }
 
     /// Rasterize the whole page to a canvas of the given pixel size (CPU tier).
@@ -242,6 +303,64 @@ mod tests {
         assert!(
             page.content_height > wide,
             "narrower viewport should wrap taller"
+        );
+    }
+
+    #[test]
+    fn incremental_relayout_classifies_and_skips() {
+        let fonts = FontContext::new();
+        let html = "<body><div id=a style='width:100px;height:20px'></div>\
+                    <div id=b style='height:20px'></div></body>";
+        let mut page = Page::load(html, "x", &fonts, 800.0);
+
+        // Nothing changed → None (zero-work reuse).
+        assert_eq!(
+            page.relayout_incremental(&fonts, 800.0),
+            RestyleDamage::None,
+            "an unmutated page relayouts to None"
+        );
+
+        // Find node `a`.
+        let a = page
+            .dom
+            .descendants(page.dom.root())
+            .find(|&n| page.dom.element(n).and_then(|e| e.id()) == Some("a"))
+            .unwrap();
+
+        // A color-only change → Repaint.
+        page.dom_mut()
+            .set_attr(a, "style", "width:100px;height:20px;background:red");
+        assert_eq!(
+            page.relayout_incremental(&fonts, 800.0),
+            RestyleDamage::Repaint,
+            "background-only change is Repaint"
+        );
+
+        // A geometry change → Reflow, and the height actually changes.
+        let before_h = page.content_height;
+        page.dom_mut()
+            .set_attr(a, "style", "width:100px;height:200px;background:red");
+        assert_eq!(
+            page.relayout_incremental(&fonts, 800.0),
+            RestyleDamage::Reflow,
+            "height change is Reflow"
+        );
+        assert!(page.content_height > before_h, "taller box grew the page");
+
+        // A structural change (append a new block) → at least Reflow.
+        let new_div = page.dom_mut().create_element("div");
+        page.dom_mut().set_attr(new_div, "style", "height:50px");
+        let body = page.dom.find_first("body").unwrap();
+        page.dom_mut().append_child(body, new_div);
+        assert!(
+            page.relayout_incremental(&fonts, 800.0) >= RestyleDamage::Reflow,
+            "appending a box forces reflow"
+        );
+
+        // Settles back to None once clean.
+        assert_eq!(
+            page.relayout_incremental(&fonts, 800.0),
+            RestyleDamage::None
         );
     }
 }
