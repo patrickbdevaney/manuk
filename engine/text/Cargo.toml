@@ -15,3 +15,5 @@ description = "Text shaping + font discovery. fontdb + fontdue (swash/Parley fam
 fontdb.workspace = true
 fontdue.workspace = true
 tracing.workspace = true
+# Bounded shaped-run/measure cache (A3). Pure-Rust, cross-platform.
+lru = "0.12"

@@ -554,6 +554,26 @@ mod tests {
     }
 
     #[test]
+    fn shaped_run_cache_hits_during_layout() {
+        let fonts = FontContext::new();
+        if fonts.face_count() == 0 {
+            return;
+        }
+        // A page whose words repeat heavily (a list of identical items) — real layout
+        // should hit the shaped-run cache far more than it misses.
+        let items = "<li>alpha beta gamma delta</li>".repeat(60);
+        let html = format!("<body><ul>{items}</ul></body>");
+        let _page = Page::load(&html, "x", &fonts, 800.0);
+
+        let (hits, misses) = fonts.measure_cache_stats();
+        assert!(
+            hits > misses * 4,
+            "repeated text should hit the shaped-run cache far more than it misses \
+             (hits={hits}, misses={misses})"
+        );
+    }
+
+    #[test]
     fn streaming_first_paint_precedes_full_content() {
         let fonts = FontContext::new();
         // Head + above-the-fold arrives first; the long tail arrives after.

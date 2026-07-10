@@ -7,9 +7,12 @@
 //! behind the [`FontContext`] API — layout and paint only depend on the shapes and
 //! metrics returned here, not on the shaper.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+use std::num::NonZeroUsize;
 use std::rc::Rc;
+
+use lru::LruCache;
 
 /// Which generic font family to resolve. Mapped to concrete faces via `fontdb`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -80,10 +83,22 @@ pub struct GlyphBitmap {
 /// Single-threaded by design (uses `Rc`/`RefCell`) — the focused-tab pipeline runs
 /// on one thread. A `Send` variant for the compositor's background tiers is a small
 /// change (swap to `Arc`/`Mutex`).
+/// Key for the shaped-run/measure cache: `(font, quantized size bits, run text)`.
+type RunKey = (FontKey, u32, String);
+
 pub struct FontContext {
     db: fontdb::Database,
     cache: RefCell<HashMap<FontKey, Option<Rc<fontdue::Font>>>>,
+    /// Bounded LRU cache of measured run widths (A3 shaped-run cache). Layout measures
+    /// the same words repeatedly (per line and in shrink-to-fit's multiple passes), so
+    /// caching the advance width skips re-running per-glyph metrics.
+    measure_cache: RefCell<LruCache<RunKey, f32>>,
+    hits: Cell<u64>,
+    misses: Cell<u64>,
 }
+
+/// Default capacity (entries) of the shaped-run cache.
+const MEASURE_CACHE_CAP: usize = 8192;
 
 impl FontContext {
     /// Build a context populated with the system's installed fonts.
@@ -93,7 +108,17 @@ impl FontContext {
         FontContext {
             db,
             cache: RefCell::new(HashMap::new()),
+            measure_cache: RefCell::new(LruCache::new(
+                NonZeroUsize::new(MEASURE_CACHE_CAP).unwrap(),
+            )),
+            hits: Cell::new(0),
+            misses: Cell::new(0),
         }
+    }
+
+    /// `(hits, misses)` on the shaped-run cache — for perf assertions / diagnostics.
+    pub fn measure_cache_stats(&self) -> (u64, u64) {
+        (self.hits.get(), self.misses.get())
     }
 
     /// Number of faces discovered — 0 means no system fonts were found.
@@ -165,16 +190,26 @@ impl FontContext {
         }
     }
 
-    /// Advance width of a run of text at `size` px.
+    /// Advance width of a run of text at `size` px. Cached (A3 shaped-run cache): a
+    /// repeat measure of the same `(text, font, size)` is an LRU hit that skips the
+    /// per-glyph metrics.
     pub fn measure(&self, text: &str, key: FontKey, size: f32) -> f32 {
-        match self.font(key) {
+        let ck: RunKey = (key, size.to_bits(), text.to_owned());
+        if let Some(&w) = self.measure_cache.borrow_mut().get(&ck) {
+            self.hits.set(self.hits.get() + 1);
+            return w;
+        }
+        let w = match self.font(key) {
             Some(font) => text
                 .chars()
                 .map(|c| font.metrics(c, size).advance_width)
                 .sum(),
             // No font: estimate with a monospace-ish average.
             None => text.chars().count() as f32 * size * 0.5,
-        }
+        };
+        self.misses.set(self.misses.get() + 1);
+        self.measure_cache.borrow_mut().put(ck, w);
+        w
     }
 
     /// Shape a text run: place each glyph at its accumulated pen position.
@@ -244,5 +279,29 @@ mod tests {
         assert!(run.width > 0.0);
         let g = ctx.rasterize('W', key, 32.0).expect("raster W");
         assert!(g.metrics.width > 0 && !g.coverage.is_empty());
+    }
+
+    #[test]
+    fn measure_cache_hits_on_repeat() {
+        let ctx = FontContext::new();
+        let key = FontKey::default();
+
+        // First measure of each of two distinct runs → two misses.
+        let a = ctx.measure("the", key, 16.0);
+        let b = ctx.measure("quick", key, 16.0);
+        let (h0, m0) = ctx.measure_cache_stats();
+        assert_eq!((h0, m0), (0, 2), "two distinct runs are two misses");
+
+        // Re-measuring the same runs → hits, identical results.
+        assert_eq!(ctx.measure("the", key, 16.0), a);
+        assert_eq!(ctx.measure("quick", key, 16.0), b);
+        let (h1, _m1) = ctx.measure_cache_stats();
+        assert_eq!(h1, 2, "repeat measures are cache hits");
+
+        // A different size is a distinct key (miss), not a stale hit.
+        let _ = ctx.measure("the", key, 24.0);
+        let (h2, m2) = ctx.measure_cache_stats();
+        assert_eq!(h2, 2, "different size does not falsely hit");
+        assert_eq!(m2, 3);
     }
 }
