@@ -158,12 +158,15 @@ Broadest real-world site set (excluding the hostile/bot-walled tier), WPT-verifi
   report binary size before/after size-affecting changes.
 - Strip unused SpiderMonkey features (WASM, debugger, unused ICU locale data) via
   build config — size wins that do **not** cross the JS modification boundary.
-- Dependency hygiene: dedupe heavy/duplicate crates (e.g. two `tiny-skia`/
-  `cssparser` versions currently resolve), prefer `default-features = false`.
+- Dependency hygiene: the default engine/agent graph is already lean (0 `wgpu`/
+  `winit` — correctly gated behind `shell`'s `gui` feature); remaining duplicates
+  are transitive (see C3). Prefer `default-features = false`; audit with
+  `cargo tree --duplicates` / `cargo bloat`.
 - Minimize per-tab baseline resident memory; measure it.
 
 **Research dispositions (2026-07):**
 - **C2 SpiderMonkey build-size reduction (config-only, inside the boundary).** *Finding:* the real lever is **ICU locale data**, not code — `--without-intl-api` drops `Intl`+ICU entirely, but ICU *data* dominates size and en-US-only data is ~3–4MB vs the full-locale set (bugzilla 1402379, firefox-source-docs/intl). Crucially, `mozjs` **links a prebuilt archive by default** (why it "builds" in seconds here) that is Servo's fixed config **with** Intl+ICU; custom configure flags only apply when `MOZJS_FROM_SOURCE=1` forces the ~30-min from-source build (github.com/servo/mozjs README). *Disposition:* **defer, blocked on** (a) a `MOZJS_FROM_SOURCE=1` build path + patched SpiderMonkey configure invocation, and (b) per-flag binary-size measurement (§8) — the default prebuilt hides the win and cannot be trimmed as-is. When unblocked: baseline `--enable-optimize --disable-debug`, **trim ICU locale data** (keep `Intl` — real sites use `Intl.*`; never `--without-intl-api`), treat **WASM disable** as a measured compat tradeoff (increasingly used → default keep). Strictly build/config; never JIT/GC/sandbox. No WPT target.
+- **C3 dependency-graph hygiene.** *Finding (own `cargo tree`, 2026-07):* the earlier "two `tiny-skia`/`cssparser` versions" note was inaccurate. In the **default** build there is **one** `cssparser` (0.34); the second (0.37) appears **only** under `--features stylo` (Stylo brings its own). The duplicate `tiny-skia 0.11.4` is a **transitive** of `winit → sctk-adwaita` (Wayland client-side decorations, `gui`+Linux only) — not a competing copy of our paint's 0.12. The default **engine + agent** graph pulls **0** `wgpu`/`winit`/`sctk` (all correctly gated behind `shell`'s `gui` feature); remaining dupes (hashbrown/foldhash/getrandom/linux-raw-sys/phf) are deep transitive churn with low payoff. *Disposition:* **no action needed structurally** — gating is already correct. Optional low-priority trim: drop winit's `sctk-adwaita` default feature if we forgo Wayland CSD (removes the 0.11.4 `tiny-skia`), a measured UX tradeoff. Adopt `cargo tree --duplicates` + `cargo bloat` + `cargo-udeps` as **standing** measurement tooling (§8) rather than one-off audits. No crate to add, nothing to hand-roll. No WPT target.
 
 ### 4. Agentic capability (headless phase)
 - **Observation:** viewport-clipped text; an accessibility/semantic tree; element
