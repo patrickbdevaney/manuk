@@ -45,9 +45,23 @@ Effort tags: **S** ≈ hours–1 day, **M** ≈ days, **L** ≈ 1–3 weeks, **X
   Remaining toward full Parley: bidi/RTL, per-glyph fallback (CJK/emoji), color-glyph
   rendering, web fonts (`@font-face`).
 
-**Flagship architecture status:** 2A (Stylo cascade) ✅ and 2B (swash text) core ✅ both
-landed this initiative. Remaining are enhancements (bidi, font fallback, color emoji, web
-fonts) and the deep T3 items (incremental layout, compositor/Vello, ES modules, SVG).
+**Flagship architecture status:** 2A (Stylo cascade) ✅ and 2B (swash text) ✅ both landed.
+
+### Enhancements + T3 (this initiative)
+- **SVG rendering** (`72831c5`) — resvg/usvg via the image pipeline; logos/icons render.
+- **z-index / stacking** (`a0f0823`) — effective-z paint ordering.
+- **overflow clipping** (`963082a`) — clip descendants to the padding box (rects/text/img).
+- **JS DOM traversal + mutation + identity** (`ff94e7c`) — parentNode/children/siblings,
+  insertBefore/removeChild/cloneNode/createTextNode, value/checked, and a reflector
+  identity cache (node `===`) — the SPA-critical surface.
+- **Font fallback + color emoji** (`f1cdbe5`) — FaceId registry + per-glyph fallback
+  (CJK/emoji/symbols) + swash color-glyph (COLR/CBDT) rendering.
+
+**Remaining (each substantial, deferred to focused work):** bidi/RTL reordering; web fonts
+(needs a named-family refactor across css/layout/text); getComputedStyle + engine-generated
+events; ES modules (SpiderMonkey module API); incremental/partial layout; a real compositor
+with damage-rect repaint + a feature-gated Vello GPU backend. The parity gate held 72/72
+through every change above.
 
 ## Key research verdicts (these shape the plan)
 
