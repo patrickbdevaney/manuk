@@ -11,11 +11,35 @@ engine is the scope of Servo/Chromium. What exists is the full crate architectur
 the directive mandates, real dependencies wired in, and two working vertical slices
 that load real pages over HTTPS and render them.
 
-> **Snapshot (kept current):** 13 workspace crates · **40 tests pass, 0 warnings** ·
-> renders real sites to pixels · SpiderMonkey evaluates real JS behind a feature ·
+> **Snapshot (kept current):** 13 workspace crates · **329 tests pass, 0 warnings** ·
+> renders real sites to pixels with **±3px box-geometry parity to headless Chrome**
+> across the layout primitives (block/flex/grid/positioning/box-model/inline) ·
 > the agent is live-tested end-to-end against Groq `qwen/qwen3.6-27b`.
 > This README documents the **entire stack as it actually is**, and is updated on
 > every major change (see [Maintenance](#maintenance)).
+
+## The interactive browser (headful `manuk browse`)
+
+The GUI is a usable browser, not just a renderer:
+
+- **Visible chrome** — a toolbar with back/forward/reload and an editable
+  **address/search bar** (type a URL or a search; the omnibox disambiguates).
+- **Mouse interactivity** — click links to navigate, click a text field to focus and
+  type, click a button / press Enter to **submit a form** (GET), toggle checkboxes.
+  Clicks hit-test the real layout.
+- **Form controls render** — bordered text inputs (with placeholder/value), buttons
+  that hug their label, checkboxes; borders paint for every box.
+- **JavaScript** — with `--features spidermonkey`, a page's inline `<script>`s run
+  against the DOM (getElementById/querySelector/createElement/appendChild/textContent/
+  innerHTML …) before layout, so script-built content renders.
+- **Launches as an app** — `manuk` with no URL opens a home/new-tab page with the
+  address bar focused; `packaging/manuk.desktop` installs a launcher.
+- **Layout parity is measured** — `manuk-wpt parity` compares box geometry to headless
+  Chrome and gates against regressions (`tests/wpt/corpus`).
+
+Chrome/Gecko parity across the *whole* web platform is the scope of Servo/Chromium and
+is not claimed; the honest frontier is documented per feature (text selection, `<select>`
+dropdowns, external scripts, most of the DOM/BOM/CSSOM surface, …).
 
 ```
                           ┌── shell → winit/wgpu window       (headful)
