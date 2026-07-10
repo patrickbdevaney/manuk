@@ -115,6 +115,8 @@ struct App {
     cursor: (f32, f32),
     /// The text `<input>`/`<textarea>` node currently focused for typing, if any.
     focused_input: Option<manuk_dom::NodeId>,
+    /// Whether the cursor is currently over a clickable link (drives the hand cursor).
+    over_link: bool,
 }
 
 /// What a click on the page should do, decided from an immutable hit-test so the mutable
@@ -194,6 +196,7 @@ impl App {
             agent_input: String::new(),
             cursor: (0.0, 0.0),
             focused_input: None,
+            over_link: false,
         }
     }
 
@@ -275,15 +278,38 @@ impl App {
         PageAction::Clear
     }
 
-    /// Toggle a checkbox/radio's `checked` attribute, relayout, repaint.
+    /// Toggle a checkbox/radio's `checked` attribute, relayout, repaint. A radio is
+    /// exclusive: checking it clears every other radio with the same `name`.
     fn toggle_checkbox(&mut self, node: manuk_dom::NodeId) {
         let width = self.viewport.width;
         if let Some(page) = self.page.as_mut() {
-            let checked = page.dom().element(node).is_some_and(|e| e.attr("checked").is_some());
-            if checked {
-                page.dom_mut().remove_attr(node, "checked");
-            } else {
+            let dom = page.dom();
+            let is_radio = dom
+                .element(node)
+                .and_then(|e| e.attr("type"))
+                .is_some_and(|t| t.eq_ignore_ascii_case("radio"));
+            if is_radio {
+                let name = dom.element(node).and_then(|e| e.attr("name")).map(str::to_string);
+                // Clear the whole radio group, then check this one.
+                let group: Vec<manuk_dom::NodeId> = dom
+                    .descendants(dom.root())
+                    .filter(|&n| {
+                        dom.tag_name(n) == Some("input")
+                            && dom.element(n).and_then(|e| e.attr("type")).is_some_and(|t| t.eq_ignore_ascii_case("radio"))
+                            && dom.element(n).and_then(|e| e.attr("name")).map(str::to_string) == name
+                    })
+                    .collect();
+                for n in group {
+                    page.dom_mut().remove_attr(n, "checked");
+                }
                 page.dom_mut().set_attr(node, "checked", "");
+            } else {
+                let checked = dom.element(node).is_some_and(|e| e.attr("checked").is_some());
+                if checked {
+                    page.dom_mut().remove_attr(node, "checked");
+                } else {
+                    page.dom_mut().set_attr(node, "checked", "");
+                }
             }
             page.relayout_zoomed(&self.fonts, width, self.zoom);
         }
@@ -435,6 +461,7 @@ impl App {
             }
         }
 
+        self.draw_focus_caret(&mut canvas);
         self.draw_chrome(&mut canvas, w);
 
         if let Some(gpu) = &mut self.gpu {
@@ -443,6 +470,25 @@ impl App {
         if let Some(win) = &self.window {
             win.request_redraw();
         }
+    }
+
+    /// Draw a text caret at the end of the focused field's value (a thin dark bar), in the
+    /// page region (offset by the chrome band and scroll).
+    fn draw_focus_caret(&self, canvas: &mut Canvas) {
+        let Some(node) = self.focused_input else { return };
+        let Some(page) = self.page.as_ref() else { return };
+        let rects = page.root_box.node_rects(page.dom());
+        let Some(r) = rects.get(&node) else { return };
+        let value = page.dom().element(node).and_then(|e| e.attr("value")).unwrap_or("");
+        let key = FontKey { family: FontFamily::SansSerif, bold: false, italic: false };
+        // 20px is the form-control default font size; measure the value to place the caret.
+        let font_size = 16.0;
+        let tw = self.fonts.measure(value, key, font_size);
+        let caret_x = (r.x + 7.0 + tw).min(r.x + r.width - 3.0);
+        let top = r.y + CHROME_HEIGHT - self.scroll_y + 4.0;
+        let h = (r.height - 8.0).max(10.0);
+        const INK: Rgba = Rgba { r: 30, g: 30, b: 30, a: 255 };
+        canvas.fill_rect(caret_x, top, 1.5, h, INK);
     }
 
     /// Draw the browser chrome (toolbar) over the top [`CHROME_HEIGHT`] px: nav buttons, the
@@ -1101,6 +1147,23 @@ impl ApplicationHandler for App {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 self.cursor = (position.x as f32, position.y as f32);
+                // Show a hand cursor over links / clickable controls, an arrow otherwise.
+                let (cx, cy) = self.cursor;
+                let clickable = cy >= CHROME_HEIGHT
+                    && matches!(
+                        self.classify_page_click(cx, cy - CHROME_HEIGHT + self.scroll_y),
+                        PageAction::Link(_) | PageAction::Submit(_) | PageAction::Toggle(_)
+                    );
+                if clickable != self.over_link {
+                    self.over_link = clickable;
+                    if let Some(w) = &self.window {
+                        w.set_cursor(if clickable {
+                            winit::window::CursorIcon::Pointer
+                        } else {
+                            winit::window::CursorIcon::Default
+                        });
+                    }
+                }
             }
             WindowEvent::MouseInput { state, button, .. } => {
                 if state == ElementState::Pressed && button == winit::event::MouseButton::Left {

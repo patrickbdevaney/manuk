@@ -398,7 +398,8 @@ fn form_control_text(dom: &Dom, node: NodeId) -> Option<String> {
             "submit" => Some(el.attr("value").unwrap_or("Submit").to_string()),
             "reset" => Some(el.attr("value").unwrap_or("Reset").to_string()),
             "button" => Some(el.attr("value").unwrap_or("").to_string()),
-            "checkbox" | "radio" | "hidden" | "file" | "image" | "range" | "color" => None,
+            "file" => Some("Choose File".to_string()),
+            "checkbox" | "radio" | "hidden" | "image" | "range" | "color" => None,
             "password" => {
                 let n = el.attr("value").map(|v| v.chars().count()).unwrap_or(0);
                 Some("\u{2022}".repeat(n))
@@ -418,6 +419,23 @@ fn form_control_text(dom: &Dom, node: NodeId) -> Option<String> {
                 .map(str::to_string)
                 .unwrap_or_else(|| dom.text_content(node)),
         ),
+        // A <select> shows its selected <option> (first with `selected`, else the first).
+        "select" => {
+            let mut first = None;
+            let mut selected = None;
+            for c in dom.descendants(node) {
+                if dom.tag_name(c) == Some("option") {
+                    if first.is_none() {
+                        first = Some(c);
+                    }
+                    if dom.element(c).is_some_and(|e| e.attr("selected").is_some()) {
+                        selected = Some(c);
+                        break;
+                    }
+                }
+            }
+            selected.or(first).map(|opt| dom.text_content(opt).trim().to_string())
+        }
         _ => None,
     }
 }

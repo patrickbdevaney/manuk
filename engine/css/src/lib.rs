@@ -1125,16 +1125,20 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
         if tag == "input" {
             match el.attr("type").unwrap_or("text").to_ascii_lowercase().as_str() {
                 // Button-like inputs hug their label (like <button>).
-                "submit" | "reset" | "button" => {
+                "submit" | "reset" | "button" | "file" => {
                     s.background_color = Some(Rgba::new(239, 239, 239, 255));
                     s.padding.left = Dim::Px(10.0);
                     s.padding.right = Dim::Px(10.0);
                 }
-                // Checkbox / radio: a small square (no text, no default text width).
+                // Checkbox / radio: a small square. A checked one is filled so its state is
+                // visible (a full round/check mark needs border-radius/glyph rendering).
                 "checkbox" | "radio" => {
                     s.width = Dim::Px(13.0);
                     s.height = Dim::Px(13.0);
                     s.padding = Sides::all(Dim::Px(0.0));
+                    if el.attr("checked").is_some() {
+                        s.background_color = Some(Rgba::new(60, 110, 220, 255));
+                    }
                 }
                 "hidden" => s.display = None,
                 // Text-like inputs get a default field width.
