@@ -30,8 +30,16 @@ use manuk_agent::Handoff;
 use manuk_compositor::TabId;
 use manuk_page::{fetch_html, Page};
 
-/// Height of the browser chrome band (toolbar) drawn above the page, in physical px.
+/// Height of the toolbar band (nav buttons + address field), in physical px.
 const CHROME_HEIGHT: f32 = 44.0;
+/// Height of the tab strip drawn above the toolbar.
+const TAB_STRIP_H: f32 = 32.0;
+/// Total top chrome height — where the page content begins (tab strip + toolbar).
+const CHROME_TOP: f32 = TAB_STRIP_H + CHROME_HEIGHT;
+/// Layout of the tab strip: per-tab width cap, the `+` new-tab button width.
+const TAB_MAX_W: f32 = 210.0;
+const TAB_MIN_W: f32 = 90.0;
+const NEWTAB_W: f32 = 30.0;
 
 const WGSL: &str = r#"
 struct VsOut {
@@ -271,12 +279,16 @@ impl App {
     /// else follow a link under it on the page.
     fn handle_click(&mut self) {
         let (cx, cy) = self.cursor;
-        if cy < CHROME_HEIGHT {
-            self.handle_chrome_click(cx);
+        if cy < CHROME_TOP {
+            if cy < TAB_STRIP_H {
+                self.handle_tab_strip_click(cx);
+            } else {
+                self.handle_chrome_click(cx);
+            }
             return;
         }
         // Page document coordinates: undo the chrome offset, add the scroll.
-        let (doc_x, doc_y) = (cx, cy - CHROME_HEIGHT + self.scroll_y);
+        let (doc_x, doc_y) = (cx, cy - CHROME_TOP + self.scroll_y);
 
         // Fire the page's JS `click` listeners on the hit node first (bubbling handles
         // delegation). If a handler called `preventDefault`, suppress the default action;
@@ -495,7 +507,7 @@ impl App {
         if self.url.is_empty() || self.url == "about:blank" {
             self.page = None;
             self.loading = false;
-            self.viewport = Viewport::new(w as f32, (h as f32 - CHROME_HEIGHT).max(1.0));
+            self.viewport = Viewport::new(w as f32, (h as f32 - CHROME_TOP).max(1.0));
             if let Some(win) = &self.window {
                 win.set_title("New Tab — manuk");
             }
@@ -533,7 +545,7 @@ impl App {
             win.set_title(&format!("{} — manuk", page.title));
         }
         page.relayout_zoomed(&self.fonts, w as f32, self.zoom);
-        self.viewport = Viewport::new(w as f32, (h as f32 - CHROME_HEIGHT).max(1.0));
+        self.viewport = Viewport::new(w as f32, (h as f32 - CHROME_TOP).max(1.0));
         self.viewport.content_height = page.content_height;
         self.browser.set_loaded(
             self.tab_id,
@@ -567,7 +579,7 @@ impl App {
         // -CHROME_HEIGHT moves page content down so its top sits just under the toolbar.
         let mut canvas = match &self.page {
             // Route through the page's own painter so decoded <img> bitmaps are blitted.
-            Some(page) => page.paint_scrolled(&self.fonts, w, h, self.scroll_y - CHROME_HEIGHT),
+            Some(page) => page.paint_scrolled(&self.fonts, w, h, self.scroll_y - CHROME_TOP),
             None => Canvas::new(w, h, Rgba::WHITE),
         };
 
@@ -575,7 +587,7 @@ impl App {
         if self.find_open && !self.find_session.is_empty() {
             const HIGHLIGHT: Rgba = Rgba { r: 255, g: 235, b: 59, a: 110 };
             const ACTIVE: Rgba = Rgba { r: 255, g: 145, b: 0, a: 255 };
-            let dy = CHROME_HEIGHT - self.scroll_y;
+            let dy = CHROME_TOP - self.scroll_y;
             for r in self.find_session.all_rects() {
                 canvas.fill_rect_blended(r.x, r.y + dy, r.width, r.height, HIGHLIGHT);
             }
@@ -614,7 +626,7 @@ impl App {
         let Some(r) = rects.get(&node) else { return };
         const INK: Rgba = Rgba { r: 30, g: 30, b: 30, a: 255 };
         // Page content is drawn shifted down by the chrome band and up by the scroll.
-        let dy = CHROME_HEIGHT - self.scroll_y;
+        let dy = CHROME_TOP - self.scroll_y;
 
         // Prefer the field's actual value run: the caret sits at the end of the glyphs,
         // spanning the text's own line box, so it tracks the text baseline instead of the
@@ -636,48 +648,102 @@ impl App {
         canvas.fill_rect(caret_x, top, 1.5, h, INK);
     }
 
-    /// Draw the browser chrome (toolbar) over the top [`CHROME_HEIGHT`] px: nav buttons, the
-    /// address/search field, and its current text (the URL, or the omnibox input while
-    /// editing).
+    /// Per-tab strip layout: `(id, x, width)` packed left-to-right, each width in
+    /// `[TAB_MIN_W, TAB_MAX_W]` and shrunk to fit. Shared by the painter and click hit-test so
+    /// they never disagree.
+    fn tab_layout(&self, w: f32) -> Vec<(TabId, f32, f32)> {
+        let tabs = self.browser.tabs();
+        let n = tabs.len().max(1) as f32;
+        let avail = (w - NEWTAB_W - 2.0).max(1.0);
+        let tw = (avail / n).clamp(TAB_MIN_W.min(avail), TAB_MAX_W);
+        tabs.iter()
+            .enumerate()
+            .map(|(i, t)| (t.id, i as f32 * tw, tw))
+            .collect()
+    }
+
+    /// The x of the `+` new-tab button (just past the last tab, clamped into the window).
+    fn new_tab_button_x(&self, w: f32) -> f32 {
+        let end = self.tab_layout(w).last().map(|(_, x, tw)| x + tw).unwrap_or(0.0);
+        end.min(w - NEWTAB_W).max(0.0)
+    }
+
+    /// Draw the full top chrome: the tab strip, then the toolbar (nav buttons + address field
+    /// + hamburger). Coordinates for the toolbar are offset below the strip by `TAB_STRIP_H`.
     fn draw_chrome(&self, canvas: &mut Canvas, w: u32) {
+        const STRIP_BG: Rgba = Rgba { r: 222, g: 223, b: 227, a: 255 };
+        const TAB_BG: Rgba = Rgba { r: 236, g: 237, b: 240, a: 255 };
+        const TAB_ACTIVE: Rgba = Rgba { r: 255, g: 255, b: 255, a: 255 };
         const BAND: Rgba = Rgba { r: 240, g: 240, b: 242, a: 255 };
         const FIELD: Rgba = Rgba { r: 255, g: 255, b: 255, a: 255 };
         const BORDER: Rgba = Rgba { r: 205, g: 205, b: 210, a: 255 };
         const INK: Rgba = Rgba { r: 40, g: 40, b: 45, a: 255 };
         const HINT: Rgba = Rgba { r: 150, g: 150, b: 155, a: 255 };
+        let w = w as f32;
 
-        canvas.fill_rect(0.0, 0.0, w as f32, CHROME_HEIGHT, BAND);
-        canvas.fill_rect(0.0, CHROME_HEIGHT - 1.0, w as f32, 1.0, BORDER);
-
-        let font = |color: Rgba| TextStyle {
+        let font = |size: f32, color: Rgba| TextStyle {
             font_key: FontKey { family: FontFamily::SansSerif, bold: false, italic: false },
-            font_size: 15.0,
+            font_size: size,
             color,
-            line_height: 18.0,
+            line_height: size + 3.0,
         };
-        let baseline = CHROME_HEIGHT / 2.0 + 5.0;
-        // Nav "buttons" (drawn as glyphs; their hit zones are in `handle_click`).
+
+        // --- Tab strip ---
+        canvas.fill_rect(0.0, 0.0, w, TAB_STRIP_H, STRIP_BG);
+        let active = self.browser.active();
+        let tab_base = TAB_STRIP_H / 2.0 + 4.0;
+        for (i, (id, x, tw)) in self.tab_layout(w).into_iter().enumerate() {
+            let is_active = active == Some(id);
+            let bg = if is_active { TAB_ACTIVE } else { TAB_BG };
+            canvas.fill_rect(x + 1.0, 3.0, tw - 2.0, TAB_STRIP_H - 3.0, bg);
+            if !is_active {
+                canvas.fill_rect(x + tw - 1.0, 7.0, 1.0, TAB_STRIP_H - 12.0, BORDER);
+            }
+            let title = self
+                .browser
+                .tabs()
+                .get(i)
+                .map(|t| match (t.title.trim().is_empty(), t.url.is_empty()) {
+                    (false, _) => t.title.clone(),
+                    (true, false) => t.url.clone(),
+                    (true, true) => "New Tab".to_string(),
+                })
+                .unwrap_or_else(|| "Tab".to_string());
+            canvas.draw_text(&self.fonts, x + 10.0, tab_base, &clip_text(&title, tw - 30.0), &font(13.0, INK));
+            canvas.draw_text(&self.fonts, x + tw - 16.0, tab_base, "\u{00D7}", &font(14.0, HINT)); // × close
+        }
+        let ntx = self.new_tab_button_x(w);
+        canvas.draw_text(&self.fonts, ntx + 9.0, tab_base, "+", &font(18.0, INK));
+
+        // --- Toolbar (below the strip) ---
+        let top = TAB_STRIP_H;
+        canvas.fill_rect(0.0, top, w, CHROME_HEIGHT, BAND);
+        canvas.fill_rect(0.0, CHROME_TOP - 1.0, w, 1.0, BORDER);
+        let baseline = top + CHROME_HEIGHT / 2.0 + 5.0;
         let back_ink = if self.page.is_some() { INK } else { HINT };
-        canvas.draw_text(&self.fonts, 14.0, baseline, "\u{2039}", &font(back_ink)); // ‹
-        canvas.draw_text(&self.fonts, 40.0, baseline, "\u{203A}", &font(back_ink)); // ›
-        canvas.draw_text(&self.fonts, 68.0, baseline - 1.0, "\u{25CB}", &font(INK)); // ○ reload
+        canvas.draw_text(&self.fonts, 14.0, baseline, "\u{2039}", &font(15.0, back_ink)); // ‹
+        canvas.draw_text(&self.fonts, 40.0, baseline, "\u{203A}", &font(15.0, back_ink)); // ›
+        canvas.draw_text(&self.fonts, 68.0, baseline - 1.0, "\u{25CB}", &font(15.0, INK)); // ○ reload
 
-        // Address/search field.
+        // Address/search field (room left at the right for the hamburger).
         let field_x = 100.0;
-        let field_w = (w as f32 - field_x - 12.0).max(20.0);
-        canvas.fill_rect(field_x, 7.0, field_w, CHROME_HEIGHT - 14.0, FIELD);
-        canvas.stroke_rect(field_x, 7.0, field_w, CHROME_HEIGHT - 14.0, BORDER, 1.0);
-
+        let field_w = (w - field_x - 44.0).max(20.0);
+        canvas.fill_rect(field_x, top + 7.0, field_w, CHROME_HEIGHT - 14.0, FIELD);
+        canvas.stroke_rect(field_x, top + 7.0, field_w, CHROME_HEIGHT - 14.0, BORDER, 1.0);
         let (text, ink) = if self.omnibox_open {
-            (format!("{}\u{2502}", self.omnibox_input), INK) // trailing caret
+            (format!("{}\u{2502}", self.omnibox_input), INK)
         } else if self.url.is_empty() || self.url == "about:blank" {
             ("Search or enter address".to_string(), HINT)
         } else {
             (self.url.clone(), INK)
         };
-        // Clip the text to the field width by trimming from the left when overlong.
-        let padded = field_x + 10.0;
-        canvas.draw_text(&self.fonts, padded, baseline, &clip_text(&text, field_w - 20.0), &font(ink));
+        canvas.draw_text(&self.fonts, field_x + 10.0, baseline, &clip_text(&text, field_w - 20.0), &font(15.0, ink));
+
+        // Hamburger menu (three bars) at the right edge.
+        let hx = w - 30.0;
+        for k in 0..3 {
+            canvas.fill_rect(hx, top + 15.0 + k as f32 * 6.0, 16.0, 2.0, INK);
+        }
     }
 
     /// Re-run find over the current fragment tree (after a query edit, zoom, or resize).
@@ -774,7 +840,7 @@ impl App {
             None => (self.width, 768),
         };
         self.url = url.to_string();
-        self.viewport = Viewport::new(w as f32, (h as f32 - CHROME_HEIGHT).max(1.0));
+        self.viewport = Viewport::new(w as f32, (h as f32 - CHROME_TOP).max(1.0));
         self.viewport.content_height = entry.page.content_height;
         self.scroll_y = entry.scroll;
         self.clamp_scroll();
@@ -827,6 +893,56 @@ impl App {
         let id = ids[next];
         self.focus_tab(id);
         tracing::info!(tab = next + 1, of = ids.len(), url = %self.url, "switched tab");
+    }
+
+    /// A click in the tab strip: the `+` button opens a tab; a tab's `×` closes it; elsewhere
+    /// on a tab focuses it.
+    fn handle_tab_strip_click(&mut self, cx: f32) {
+        let w = self.viewport.width;
+        let ntx = self.new_tab_button_x(w);
+        if cx >= ntx && cx < ntx + NEWTAB_W {
+            self.new_tab();
+            return;
+        }
+        for (id, x, tw) in self.tab_layout(w) {
+            if cx >= x && cx < x + tw {
+                if cx >= x + tw - 22.0 {
+                    self.close_tab_by_id(id);
+                } else if id != self.tab_id {
+                    self.focus_tab(id);
+                }
+                return;
+            }
+        }
+    }
+
+    /// Close a specific tab by id (from the strip's `×`). Closing the last tab replaces it with
+    /// a fresh blank tab so the window stays open; otherwise focus falls to the active tab.
+    fn close_tab_by_id(&mut self, id: TabId) {
+        if self.browser.tabs().len() <= 1 {
+            self.new_tab();
+            self.browser.close(id);
+            if let Some(a) = self.browser.active() {
+                self.focus_tab(a);
+            }
+            return;
+        }
+        let was_active = id == self.tab_id;
+        self.browser.close(id);
+        match self.browser.active() {
+            Some(a) if was_active => self.focus_tab(a),
+            _ => self.rerender(),
+        }
+    }
+
+    /// Duplicate a tab: open a new tab at the same URL, right after it, and focus it.
+    fn duplicate_tab(&mut self, id: TabId) {
+        if let Some(url) = self.browser.tab(id).map(|t| t.url.clone()) {
+            let new = self.browser.open(url.clone());
+            self.tab_id = new;
+            self.url = url.clone();
+            self.focus_tab(new);
+        }
     }
 
     /// Open a new tab and drop into the omnibox to type its destination.
@@ -1317,7 +1433,7 @@ impl ApplicationHandler<NavEvent> for App {
                 if let Some(page) = &mut self.page {
                     page.relayout_zoomed(&self.fonts, w as f32, self.zoom);
                     self.viewport.width = w as f32;
-                    self.viewport.height = (h as f32 - CHROME_HEIGHT).max(1.0);
+                    self.viewport.height = (h as f32 - CHROME_TOP).max(1.0);
                     self.viewport.content_height = page.content_height;
                 }
                 self.clamp_scroll();
@@ -1340,8 +1456,8 @@ impl ApplicationHandler<NavEvent> for App {
                 self.cursor = (position.x as f32, position.y as f32);
                 // Show a hand cursor over links / clickable controls, an arrow otherwise.
                 let (cx, cy) = self.cursor;
-                let action = if cy >= CHROME_HEIGHT {
-                    self.classify_page_click(cx, cy - CHROME_HEIGHT + self.scroll_y)
+                let action = if cy >= CHROME_TOP {
+                    self.classify_page_click(cx, cy - CHROME_TOP + self.scroll_y)
                 } else {
                     PageAction::Clear
                 };
@@ -1369,8 +1485,24 @@ impl ApplicationHandler<NavEvent> for App {
                 }
             }
             WindowEvent::MouseInput { state, button, .. } => {
-                if state == ElementState::Pressed && button == winit::event::MouseButton::Left {
-                    self.handle_click();
+                if state == ElementState::Pressed {
+                    match button {
+                        winit::event::MouseButton::Left => self.handle_click(),
+                        // Middle-click a tab to duplicate it (a fresh tab at the same URL).
+                        winit::event::MouseButton::Middle => {
+                            let (cx, cy) = self.cursor;
+                            if cy < TAB_STRIP_H {
+                                if let Some((id, _, _)) = self
+                                    .tab_layout(self.viewport.width)
+                                    .into_iter()
+                                    .find(|(_, x, tw)| cx >= *x && cx < *x + *tw)
+                                {
+                                    self.duplicate_tab(id);
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
                 }
             }
             WindowEvent::RedrawRequested => {
