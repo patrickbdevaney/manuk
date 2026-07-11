@@ -32,12 +32,13 @@ Working through the repomaps' + research's fold-in recommendations beyond the to
 - **net/page:** preload scanner (warm the cache with `<link stylesheet|preload>` before parse)
 - **text:** shaped-run cache (paint/scroll reuse glyph runs, not just widths)
 - **agent:** typed `BrowserAction` + `perform()` dispatcher (#E4)
+- **a11y:** occlusion-aware hit-test (high-`z` overlay wins the click; z-index plumbed from
+  the page into the a11y tree)
 
 **Heavy tail (dedicated efforts / heavy builds / live verification):**
 - **js** (needs SpiderMonkey builds): replace `eval`-string bindings with direct JSAPI,
   native timers / `fetch` / `MutationObserver`, a minimal WebIDL generator
-- **text:** UAX#14 line-breaking (Unicode tables), `{script,locale}` fallback
-- **a11y:** occlusion-aware hit-test (needs z-order plumbed from layout into the a11y tree)
+- **text:** UAX#14 line-breaking (Unicode tables — parity-sensitive), `{script,locale}` fallback
 - **html/dom:** preserve namespaces → inline SVG/MathML render (new SVG layout/paint)
 - **scheduling:** microtask checkpoints, task priority lanes
 - **paint:** Vello backend behind the `Painter` trait
