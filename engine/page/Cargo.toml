@@ -40,6 +40,8 @@ spidermonkey-noicu = ["manuk-js/spidermonkey-noicu"]
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
 tokio = { workspace = true, features = ["rt", "macros"] }
+# Parse the decoded sfnt in the live web-font test (A3, #[ignore]d network test).
+fontdb.workspace = true
 
 [[bench]]
 name = "pipeline"

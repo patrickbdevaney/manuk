@@ -2995,6 +2995,7 @@ dependencies = [
  "smallvec",
  "stylo",
  "stylo_dom",
+ "stylo_static_prefs",
  "tracing",
  "url",
 ]
@@ -3078,6 +3079,8 @@ dependencies = [
  "anyhow",
  "base64",
  "criterion",
+ "fontdb 0.23.0",
+ "futures-util",
  "image",
  "manuk-a11y",
  "manuk-css",
@@ -3157,11 +3160,14 @@ dependencies = [
 name = "manuk-text"
 version = "0.1.0"
 dependencies = [
+ "brotli-decompressor",
+ "flate2",
  "fontdb 0.23.0",
  "fontdue",
  "lru",
  "swash",
  "tracing",
+ "ttf-parser 0.25.1",
  "unicode-bidi",
 ]
 

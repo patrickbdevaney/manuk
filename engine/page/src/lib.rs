@@ -217,14 +217,19 @@ async fn fetch_image_bytes(url: &str) -> Option<Vec<u8>> {
 }
 
 /// Fetch a web-font URL and return OpenType/TrueType bytes fontdb can load. Raw TTF/OTF
-/// (and TrueType collections) pass through; WOFF/WOFF2 are skipped (no working pure-Rust
-/// WOFF2 decompressor builds in the current ecosystem — a documented gap).
+/// (and TrueType collections) pass through; WOFF2 (`wOF2`) and legacy WOFF1 (`wOFF`) are
+/// decoded to sfnt via the pure-Rust reconstructor in `manuk_text::woff2` (A3) — most real
+/// web fonts ship as WOFF2, so this is the difference between the page font loading or not.
 async fn fetch_font_bytes(url: &str) -> Option<Vec<u8>> {
     let bytes = fetch_image_bytes(url).await?; // reuses data:/http(s)/file handling
     let sig = bytes.get(..4)?;
-    // sfnt magics: TrueType (0x00010000 / "true"), OpenType ("OTTO"), collection ("ttcf").
-    let is_sfnt = matches!(sig, b"\x00\x01\x00\x00" | b"true" | b"OTTO" | b"ttcf");
-    is_sfnt.then_some(bytes)
+    match sig {
+        // WOFF2 / WOFF1: decompress + reconstruct to sfnt (None if malformed/unsupported).
+        b"wOF2" | b"wOFF" => manuk_text::decode_webfont(&bytes),
+        // sfnt magics: TrueType (0x00010000 / "true"), OpenType ("OTTO"), collection ("ttcf").
+        b"\x00\x01\x00\x00" | b"true" | b"OTTO" | b"ttcf" => Some(bytes),
+        _ => None,
+    }
 }
 
 /// Collect the page's stylesheet sources (inline + external) in document order.

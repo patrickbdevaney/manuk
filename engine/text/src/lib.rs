@@ -14,6 +14,9 @@ use std::rc::Rc;
 
 use lru::LruCache;
 
+pub mod woff2;
+pub use woff2::{decode_webfont, decode_woff1, decode_woff2};
+
 /// Which font family to resolve. `Named` carries an interned id into the [`FontContext`]
 /// family-name registry (a specific installed or `@font-face`-registered family); the rest
 /// are the CSS generics. Mapped to concrete faces via `fontdb`.

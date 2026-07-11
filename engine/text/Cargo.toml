@@ -23,3 +23,11 @@ lru = "0.12"
 swash = "0.2"
 # Unicode bidirectional algorithm (RTL/mixed-direction reordering to visual order).
 unicode-bidi = "0.3"
+# WOFF2 web-font decoding (A3): pure-Rust Brotli decode of the compressed block,
+# feeding a hand-rolled glyf/loca + hmtx transform reconstructor (see src/woff2.rs).
+# Decode-only, safe, no C/C++ toolchain. `flate2` handles legacy WOFF1 (zlib-per-table).
+brotli-decompressor = "5"
+flate2 = "1"
+
+[dev-dependencies]
+ttf-parser = "0.25"
