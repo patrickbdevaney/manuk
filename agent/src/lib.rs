@@ -143,6 +143,9 @@ pub struct AgentBrowser {
     /// §4b/N1 — the per-tab navigation stack. One shared `SessionHistory` model, the
     /// same type the shell and BiDi's `traverseHistory` drive.
     history: manuk_page::history::SessionHistory,
+    /// The accessibility snapshot from the last [`Self::observe_diff`], for race-free
+    /// in-process semantic diffing of what an action changed.
+    last_a11y: Option<manuk_a11y::A11yNode>,
 }
 
 /// G-a — a **live browsing session** moving between the human front-end and the agent.
@@ -311,7 +314,24 @@ impl AgentBrowser {
             page: None,
             scroll_y: 0.0,
             history: manuk_page::history::SessionHistory::new(),
+            last_a11y: None,
         }
+    }
+
+    /// E-moat — compute the current accessibility tree, diff it against the previous
+    /// [`Self::observe_diff`] snapshot, remember the new one, and return the semantic delta.
+    /// An agent calls this after an action to learn *what changed* (a dialog opened, a
+    /// control vanished) as a compact race-free delta, instead of re-scanning and
+    /// re-reasoning over the whole tree — a capability an out-of-process CDP/WebDriver
+    /// client can't get without a serializing snapshot protocol.
+    pub fn observe_diff(&mut self) -> Result<manuk_a11y::A11yDiff> {
+        let tree = self.a11y_tree()?;
+        let diff = match &self.last_a11y {
+            Some(prev) => tree.diff(prev),
+            None => manuk_a11y::A11yDiff::default(),
+        };
+        self.last_a11y = Some(tree);
+        Ok(diff)
     }
 
     pub fn has_fonts(&self) -> bool {

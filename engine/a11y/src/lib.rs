@@ -68,7 +68,7 @@ impl Rect {
 
 /// The subset of ARIA roles we compute. `Generic` is the honest fallback for
 /// containers that carry no semantics (`div`, `span`, `a` without `href`).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Role {
     Document,
     Article,
@@ -224,6 +224,34 @@ pub struct A11yNode {
     pub children: Vec<A11yNode>,
 }
 
+/// The result of [`A11yNode::diff`]: semantic `(role, name)` nodes that appeared
+/// (`added`) or disappeared (`removed`) between two accessibility snapshots.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct A11yDiff {
+    pub added: Vec<(Role, String)>,
+    pub removed: Vec<(Role, String)>,
+}
+
+impl A11yDiff {
+    /// No semantic change between the two snapshots.
+    pub fn is_empty(&self) -> bool {
+        self.added.is_empty() && self.removed.is_empty()
+    }
+
+    /// A compact agent-readable summary, e.g. `+button "Submit"  -link "Sign in"`.
+    /// Empty string when nothing changed.
+    pub fn summarize(&self) -> String {
+        let mut parts = Vec::new();
+        for (r, n) in &self.added {
+            parts.push(format!("+{} {:?}", r.as_str(), n));
+        }
+        for (r, n) in &self.removed {
+            parts.push(format!("-{} {:?}", r.as_str(), n));
+        }
+        parts.join("  ")
+    }
+}
+
 impl A11yNode {
     /// Depth-first iteration over `self` and all descendants.
     pub fn iter(&self) -> impl Iterator<Item = &A11yNode> {
@@ -236,6 +264,28 @@ impl A11yNode {
     fn interesting(&self) -> impl Iterator<Item = &A11yNode> {
         self.iter()
             .filter(|n| n.role != Role::Generic || !n.name.is_empty())
+    }
+
+    /// A concise **semantic diff** against a previous accessibility snapshot: which
+    /// semantic (role + name) nodes appeared or disappeared. Computed in-process from two
+    /// owned trees, so it is race-free — no serialization, no cross-process staleness that
+    /// a CDP/WebDriver diff would suffer. An agent calls this after an action to see *what
+    /// changed* (e.g. "a `dialog` opened", "the `Sign in` button is gone") instead of
+    /// re-reading and re-reasoning over the whole tree. Nodes are keyed by
+    /// `(role, lowercased-name)`; a renamed node reads as one removal + one addition.
+    pub fn diff(&self, prev: &A11yNode) -> A11yDiff {
+        use std::collections::HashSet;
+        let key = |n: &A11yNode| (n.role.clone(), n.name.to_ascii_lowercase());
+        let before: HashSet<(Role, String)> = prev.interesting().map(&key).collect();
+        let after: HashSet<(Role, String)> = self.interesting().map(&key).collect();
+        let sort = |mut v: Vec<(Role, String)>| {
+            v.sort_by(|a, b| a.0.as_str().cmp(b.0.as_str()).then_with(|| a.1.cmp(&b.1)));
+            v
+        };
+        A11yDiff {
+            added: sort(after.difference(&before).cloned().collect()),
+            removed: sort(before.difference(&after).cloned().collect()),
+        }
     }
 
     fn render(n: &A11yNode) -> String {
@@ -654,6 +704,34 @@ fn build_children(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn leaf(role: Role, name: &str) -> A11yNode {
+        A11yNode { node: NodeId(0), role, name: name.to_string(), bbox: None, children: vec![] }
+    }
+
+    #[test]
+    fn a11y_diff_reports_added_and_removed() {
+        let before = A11yNode {
+            node: NodeId(0),
+            role: Role::Generic,
+            name: String::new(),
+            bbox: None,
+            children: vec![leaf(Role::Link, "Sign in"), leaf(Role::Button, "Menu")],
+        };
+        let after = A11yNode {
+            node: NodeId(0),
+            role: Role::Generic,
+            name: String::new(),
+            bbox: None,
+            children: vec![leaf(Role::Button, "Menu"), leaf(Role::Button, "Sign out")],
+        };
+        let d = after.diff(&before);
+        assert_eq!(d.added, vec![(Role::Button, "sign out".to_string())]);
+        assert_eq!(d.removed, vec![(Role::Link, "sign in".to_string())]);
+        assert!(!d.is_empty());
+        // No change against itself.
+        assert!(after.diff(&after).is_empty());
+    }
 
     /// Build a small DOM: root -> html -> body -> ...
     fn dom_with(body_children: impl FnOnce(&mut Dom, NodeId)) -> Dom {
