@@ -124,8 +124,35 @@ external interop only.
 
 ---
 
-## Phase F — JS engine & bindings  *(pending repomap/06)*
-## Phase G — HTML parser & DOM  *(pending repomap/09 — html5ever-vs-hand-rolled decision)*
+## Phase F — JS engine & bindings  *(js repomap; verdict: keep SpiderMonkey/mozjs)*
+Manuk's reflector model = Gecko's minus the cycle collector. The wins are ergonomic/perf,
+not an engine swap.
+### F1 ☐ Replace `eval`'d JS-string bindings with direct JSAPI calls  *(js #R1 — do first)*
+Identity cache, event dispatch, `getComputedStyle`, job enqueue currently round-trip
+through `eval`'d source strings — slow, page-shadowing-fragile, injection-prone.
+- **Files:** `engine/js/src/dom_bindings.rs`. **Verify:** existing JS tests stay green;
+  add a test that a page redefining `Object`/`Array` can't break our bindings.
+### F2 ☐ Minimal WebIDL binding generator (~30–50 curated interfaces via `weedle`)  *(#R2)*
+Target mozjs's existing conversion traits — NOT a 25k-line codegen. Replaces the
+~1,650-line hand-written conflated `Node`.
+### F3 ☐ Servo-style wrapper-cache + GC trace hook (not a cycle collector)  *(#R3)*
+Fixes the raw `*mut Dom` deref + **arena `NodeId`-reuse hazard** — pairs with **G3**.
+### F4 ☐ Per-interface prototypes (Ladybird `ensure_web_prototype` model)  *(#R5)*
+### F5 ☐ Native `Promise`-returning `fetch`, real timers, structured clone, `MutationObserver`.
+
+## Phase G — HTML parser & DOM  *(html/dom repomap; already on html5ever — decision settled)*
+### G1 ☑ Keep html5ever — validated as correct (Servo's, spec-complete). No action.
+### G2 ☐ Context-aware fragment parsing for `innerHTML`  *(html #2)*
+`set_inner_html` parses as a full document, so `innerHTML="<tr>…"` breaks. Use html5ever's
+fragment-parsing with the element's context. **Files:** `engine/html/src/lib.rs`.
+### G3 ☐ Arena generational free list  *(html #3 — the arena's one true weakness)*
+`alloc` only pushes; slots are never freed, so long-lived pages leak and `NodeId`s can be
+reused unsafely (the hazard **F3** guards against). Add generational indices. **Files:**
+`engine/dom/src/lib.rs`. **Verify:** churn test (create/remove N nodes) shows bounded memory.
+### G4 ☐ Stop folding namespaces to local names  *(html #4)*
+`sink.rs` folds namespaced names, so inline SVG/MathML don't render. Preserve namespace.
+**Files:** `engine/html/src/sink.rs`.
+### G5 ☐ `id`→`NodeId` index for O(1) `getElementById` + id-selector matching.
 
 ---
 
