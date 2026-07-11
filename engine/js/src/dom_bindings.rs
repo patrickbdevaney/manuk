@@ -537,6 +537,13 @@ unsafe fn define_members(
         prop(c"media", el_get_media, Some(el_set_media));
         prop(c"srcset", el_get_srcset, Some(el_set_srcset));
         prop(c"htmlFor", el_get_html_for, Some(el_set_html_for));
+        // CSSOM + the DOM ergonomics every framework and hand-written handler depends on.
+        prop(c"style", el_get_style, None);
+        prop(c"classList", el_get_class_list, None);
+        prop(c"dataset", el_get_dataset, None);
+        def(c"matches", el_matches, 1);
+        def(c"closest", el_closest, 1);
+        def(c"contains", el_contains, 1);
     }
 }
 
@@ -1365,6 +1372,90 @@ reflect_attr!(el_get_media, el_set_media, "media");
 reflect_attr!(el_get_srcset, el_set_srcset, "srcset");
 reflect_attr!(el_get_html_for, el_set_html_for, "for");
 
+/// `element.matches(sel)` — does this element match the selector?
+unsafe extern "C" fn el_matches(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let ok = match (this_node(vp), arg_string(cx, vp, argc, 0)) {
+        (Some((dom, node)), Some(sel)) => manuk_css::matches_selector(&*dom, node, &sel),
+        _ => false,
+    };
+    *vp = mozjs::jsval::BooleanValue(ok);
+    true
+}
+
+/// `element.closest(sel)` — this element or the nearest ancestor that matches. The idiom every
+/// event-delegation handler on the web is written with.
+unsafe extern "C" fn el_closest(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    match (this_node(vp), arg_string(cx, vp, argc, 0)) {
+        (Some((dom, node)), Some(sel)) => {
+            let mut cur = Some(node);
+            while let Some(n) = cur {
+                if (*dom).is_element(n) && manuk_css::matches_selector(&*dom, n, &sel) {
+                    return_node_or_null(cx, vp, dom, Some(n));
+                    return true;
+                }
+                cur = (*dom).parent(n);
+            }
+            *vp = NullValue();
+        }
+        _ => *vp = NullValue(),
+    }
+    true
+}
+
+/// `a.contains(b)` — is `b` `a`, or a descendant of it?
+unsafe extern "C" fn el_contains(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let mut ok = false;
+    if let Some((dom, node)) = this_node(vp) {
+        if argc >= 1 {
+            let other = *vp.add(2);
+            if other.is_object() {
+                if let Some((_, o)) = node_and_dom(other.to_object()) {
+                    let mut cur = Some(o);
+                    while let Some(n) = cur {
+                        if n == node {
+                            ok = true;
+                            break;
+                        }
+                        cur = (*dom).parent(n);
+                    }
+                }
+            }
+        }
+    }
+    let _ = cx;
+    *vp = mozjs::jsval::BooleanValue(ok);
+    true
+}
+
+/// `element.style` / `.classList` / `.dataset` — each a live view over an attribute, built in JS
+/// (see `CSSOM_PRELUDE`) and memoised per node.
+///
+/// These are not conveniences. `el.style.width = …` is the single most common DOM write on the web
+/// and `classList.add` is not far behind; before this, touching either threw a `TypeError` that
+/// aborted the rest of the page's script.
+unsafe fn lazy_view(cx: *mut RawJSContext, vp: *mut Value, maker: &str) -> bool {
+    match this_node(vp) {
+        Some((_, node)) => {
+            match eval_in_current_global(cx, &format!("{maker}({})", node.0)) {
+                Some(v) => *vp = v,
+                None => *vp = NullValue(),
+            }
+        }
+        None => *vp = NullValue(),
+    }
+    true
+}
+
+unsafe extern "C" fn el_get_style(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    lazy_view(cx, vp, "__mkStyle")
+}
+unsafe extern "C" fn el_get_class_list(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    lazy_view(cx, vp, "__mkClassList")
+}
+unsafe extern "C" fn el_get_dataset(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    lazy_view(cx, vp, "__mkDataset")
+}
+
 /// `document.documentElement` → the `<html>` element.
 unsafe extern "C" fn doc_get_document_element(
     cx: *mut RawJSContext,
@@ -1506,6 +1597,7 @@ pub unsafe fn install(
 
     // The JS-side event-listener registry that addEventListener/dispatchEvent drive.
     let _ = eval_in_current_global(cx, LISTENER_PRELUDE);
+    let _ = eval_in_current_global(cx, CSSOM_PRELUDE);
     // Seed the identity cache with the document (id = root) so event bubbling to
     // document-level (delegated) listeners resolves its node id.
     JS_SetProperty(
@@ -2017,6 +2109,154 @@ fn collect_inline_scripts(dom: &Dom) -> Vec<(String, bool)> {
 /// The listener registry + helpers backing `addEventListener`/`dispatchEvent`.
 /// Listeners are keyed by `"<nodeId>:<type>"` and kept GC-alive via the global
 /// `__listeners` map.
+
+/// `element.style`, `.classList`, `.dataset` — each a **live view over the underlying attribute**,
+/// so a write goes straight into the DOM the cascade reads. Built in JS because that is where a
+/// `Proxy` gives the real interface (arbitrary property names, `in`, `delete`, enumeration) for
+/// almost no code; the native side is a single lazy getter that calls the maker below and memoises.
+///
+/// Property names are camelCase in JS and dashed in CSS (`el.style.backgroundColor` ↔
+/// `background-color`), and `dataset.userId` ↔ `data-user-id`. Both directions are converted here.
+const CSSOM_PRELUDE: &str = r#"
+(function () {
+    var g = globalThis;
+    var dash = function (p) { return String(p).replace(/[A-Z]/g, function (m) { return '-' + m.toLowerCase(); }); };
+    var camel = function (p) { return String(p).replace(/-([a-z])/g, function (_, c) { return c.toUpperCase(); }); };
+
+    // ---- element.style ------------------------------------------------------------------
+    g.__styleCache = {};
+    g.__mkStyle = function (id) {
+        if (g.__styleCache[id]) return g.__styleCache[id];
+        var el = g.__nodes[id];
+        if (!el) return null;
+        var parse = function () {
+            var o = {};
+            var txt = el.getAttribute('style') || '';
+            txt.split(';').forEach(function (d) {
+                var i = d.indexOf(':');
+                if (i > 0) {
+                    var k = d.slice(0, i).trim();
+                    if (k) o[k] = d.slice(i + 1).trim();
+                }
+            });
+            return o;
+        };
+        var write = function (o) {
+            var out = [];
+            for (var k in o) out.push(k + ': ' + o[k]);
+            el.setAttribute('style', out.join('; '));
+        };
+        var api = {
+            setProperty: function (k, v) { var o = parse(); o[dash(k)] = String(v); write(o); },
+            removeProperty: function (k) { var o = parse(); delete o[dash(k)]; write(o); },
+            getPropertyValue: function (k) { return parse()[dash(k)] || ''; }
+        };
+        var p = new Proxy(api, {
+            get: function (t, prop) {
+                if (prop === 'cssText') return el.getAttribute('style') || '';
+                if (Object.prototype.hasOwnProperty.call(t, prop)) return t[prop];
+                if (prop === 'length') return Object.keys(parse()).length;
+                if (typeof prop !== 'string') return undefined;
+                return parse()[dash(prop)] || '';
+            },
+            set: function (t, prop, v) {
+                if (prop === 'cssText') { el.setAttribute('style', String(v)); return true; }
+                if (typeof prop !== 'string') return true;
+                var o = parse();
+                var k = dash(prop);
+                if (v === '' || v === null || v === undefined) delete o[k]; else o[k] = String(v);
+                write(o);
+                return true;
+            },
+            has: function (t, prop) {
+                return Object.prototype.hasOwnProperty.call(t, prop) || dash(prop) in parse();
+            },
+            deleteProperty: function (t, prop) { var o = parse(); delete o[dash(prop)]; write(o); return true; },
+            ownKeys: function () { return Object.keys(parse()).map(camel); }
+        });
+        g.__styleCache[id] = p;
+        return p;
+    };
+
+    // ---- element.classList --------------------------------------------------------------
+    g.__clsCache = {};
+    g.__mkClassList = function (id) {
+        if (g.__clsCache[id]) return g.__clsCache[id];
+        var el = g.__nodes[id];
+        if (!el) return null;
+        var read = function () {
+            return (el.getAttribute('class') || '').split(/\s+/).filter(function (x) { return x; });
+        };
+        var write = function (a) { el.setAttribute('class', a.join(' ')); };
+        var api = {
+            add: function () {
+                var a = read();
+                for (var i = 0; i < arguments.length; i++) {
+                    var c = String(arguments[i]);
+                    if (a.indexOf(c) < 0) a.push(c);
+                }
+                write(a);
+            },
+            remove: function () {
+                var a = read();
+                for (var i = 0; i < arguments.length; i++) {
+                    var j = a.indexOf(String(arguments[i]));
+                    if (j >= 0) a.splice(j, 1);
+                }
+                write(a);
+            },
+            toggle: function (c, force) {
+                c = String(c);
+                var a = read();
+                var j = a.indexOf(c);
+                var want = (force === undefined) ? (j < 0) : !!force;
+                if (want && j < 0) a.push(c);
+                if (!want && j >= 0) a.splice(j, 1);
+                write(a);
+                return want;
+            },
+            replace: function (o, n) {
+                var a = read();
+                var j = a.indexOf(String(o));
+                if (j < 0) return false;
+                a[j] = String(n);
+                write(a);
+                return true;
+            },
+            contains: function (c) { return read().indexOf(String(c)) >= 0; },
+            item: function (i) { var a = read(); return (i >= 0 && i < a.length) ? a[i] : null; },
+            forEach: function (fn, thisArg) { read().forEach(fn, thisArg); },
+            toString: function () { return read().join(' '); }
+        };
+        Object.defineProperty(api, 'length', { get: function () { return read().length; } });
+        Object.defineProperty(api, 'value', { get: function () { return read().join(' '); } });
+        g.__clsCache[id] = api;
+        return api;
+    };
+
+    // ---- element.dataset ---------------------------------------------------------------
+    g.__dsCache = {};
+    g.__mkDataset = function (id) {
+        if (g.__dsCache[id]) return g.__dsCache[id];
+        var el = g.__nodes[id];
+        if (!el) return null;
+        var attr = function (p) { return 'data-' + dash(p); };
+        var p = new Proxy({}, {
+            get: function (t, prop) {
+                if (typeof prop !== 'string') return undefined;
+                var v = el.getAttribute(attr(prop));
+                return v === null ? undefined : v;
+            },
+            set: function (t, prop, v) { el.setAttribute(attr(prop), String(v)); return true; },
+            has: function (t, prop) { return el.hasAttribute(attr(prop)); },
+            deleteProperty: function (t, prop) { el.removeAttribute(attr(prop)); return true; }
+        });
+        g.__dsCache[id] = p;
+        return p;
+    };
+})();
+"#;
+
 const LISTENER_PRELUDE: &str = r#"
     globalThis.__listeners = {};
     globalThis.__addEventListener = function(nid, type, fn, capture) {

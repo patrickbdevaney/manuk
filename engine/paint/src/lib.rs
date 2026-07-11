@@ -50,7 +50,14 @@ impl DisplayList {
                 DisplayItem::Rect { rect, .. }
                 | DisplayItem::Image { rect, .. }
                 | DisplayItem::MaskedRect { rect, .. }
+                | DisplayItem::Gradient { rect, .. }
                 | DisplayItem::RoundRect { rect, .. } => *rect,
+                DisplayItem::TextLine { x, y, width, thickness, .. } => Rect {
+                    x: *x,
+                    y: *y,
+                    width: *width,
+                    height: *thickness,
+                },
                 // A shadow bleeds `blur` px past its rect — grow the damage box so it repaints.
                 DisplayItem::Shadow { rect, blur, .. } => Rect {
                     x: rect.x - blur,
@@ -123,6 +130,24 @@ pub enum DisplayItem {
     Image {
         rect: Rect,
         image: std::rc::Rc<DecodedImage>,
+    },
+    /// A **gradient** filling `rect`. `angle_deg` uses CSS's convention (0° points up, clockwise);
+    /// a radial gradient ignores it and runs from the centre outwards.
+    Gradient {
+        rect: Rect,
+        stops: Vec<manuk_css::ColorStop>,
+        angle_deg: f32,
+        radial: bool,
+        radius: f32,
+    },
+    /// A **line under / over / through** a text run: `text-decoration`. Emitted as its own item
+    /// because the line spans the run, not the glyphs, and must not be re-shaped.
+    TextLine {
+        x: f32,
+        y: f32,
+        width: f32,
+        thickness: f32,
+        color: Rgba,
     },
     /// `color` painted THROUGH a mask's alpha channel — how the modern web draws an **icon**:
     /// an empty element whose `background-color` is shaped by `mask-image`. Painting the
@@ -224,6 +249,10 @@ impl DisplayList {
                 (Some(_), Some(n)) => images.get(&n).cloned(),
                 _ => None,
             };
+            // `background-image` sits ON TOP of `background-color` (CSS backgrounds paint
+            // colour first, then each image layer). A gradient paints directly; a `url()` is
+            // resolved to a decoded bitmap by the page layer and blitted into the box.
+            let bg_img = b.background_image.clone();
             if let Some(bg) = b.background.map(fade) {
                 if bg.a > 0 {
                     if let Some(m) = &mask {
@@ -243,6 +272,37 @@ impl DisplayList {
                             rect: b.rect,
                             color: bg,
                         });
+                    }
+                }
+            }
+            if let Some(img) = &bg_img {
+                match img {
+                    manuk_css::BackgroundImage::Linear { angle_deg, stops } => {
+                        items.push(DisplayItem::Gradient {
+                            rect: b.rect,
+                            stops: stops.iter().map(|s| manuk_css::ColorStop { color: fade(s.color), at: s.at }).collect(),
+                            angle_deg: *angle_deg,
+                            radial: false,
+                            radius,
+                        });
+                    }
+                    manuk_css::BackgroundImage::Radial { stops } => {
+                        items.push(DisplayItem::Gradient {
+                            rect: b.rect,
+                            stops: stops.iter().map(|s| manuk_css::ColorStop { color: fade(s.color), at: s.at }).collect(),
+                            angle_deg: 0.0,
+                            radial: true,
+                            radius,
+                        });
+                    }
+                    // A `url()` background is keyed by node in the same bitmap map as `<img>` —
+                    // the page layer fetches and decodes it there.
+                    manuk_css::BackgroundImage::Url(_) => {
+                        if let Some(node) = b.node {
+                            if let Some(bmp) = images.get(&node) {
+                                items.push(DisplayItem::Image { rect: b.rect, image: bmp.clone() });
+                            }
+                        }
                     }
                 }
             }
@@ -271,6 +331,15 @@ impl DisplayList {
                     });
                 }
             }
+            // The list marker — generated content, so it rides on the box, not the tree.
+            if let Some(m) = &b.marker {
+                items.push(DisplayItem::Text {
+                    x: m.x,
+                    baseline: m.baseline,
+                    text: m.text.clone(),
+                    style: m.style,
+                });
+            }
             if let BoxContent::Inline(frags) = &b.content {
                 for f in frags {
                     items.push(DisplayItem::Text {
@@ -279,6 +348,44 @@ impl DisplayList {
                         text: f.text.clone(),
                         style: f.style,
                     });
+                    // `text-decoration`: a line ACROSS the run, not part of the glyphs.
+                    let d = f.style.decoration;
+                    if d.any() && f.width > 0.0 {
+                        let thickness = (f.style.font_size / 14.0).max(1.0);
+                        let mut line = |y: f32| {
+                            items.push(DisplayItem::TextLine {
+                                x: f.x,
+                                y,
+                                width: f.width,
+                                thickness,
+                                color: fade(f.style.color),
+                            });
+                        };
+                        if d.underline {
+                            line(f.baseline + (f.style.font_size * 0.12).max(1.0));
+                        }
+                        if d.overline {
+                            line(f.baseline - f.style.font_size * 0.9);
+                        }
+                        if d.line_through {
+                            line(f.baseline - f.style.font_size * 0.30);
+                        }
+                    }
+                }
+            }
+            // `outline` paints OUTSIDE the border box and never affects layout — which is exactly
+            // what makes it usable as a focus ring.
+            if let Some((ow, oc)) = b.outline {
+                let oc = fade(oc);
+                if ow > 0.0 && oc.a > 0 {
+                    let r = b.rect;
+                    let mut edge = |x: f32, y: f32, w: f32, h: f32| {
+                        items.push(DisplayItem::Rect { rect: Rect { x, y, width: w, height: h }, color: oc });
+                    };
+                    edge(r.x - ow, r.y - ow, r.width + ow * 2.0, ow);
+                    edge(r.x - ow, r.y + r.height, r.width + ow * 2.0, ow);
+                    edge(r.x - ow, r.y, ow, r.height);
+                    edge(r.x + r.width, r.y, ow, r.height);
                 }
             }
             if !items.is_empty() {
@@ -537,6 +644,18 @@ impl CpuPainter<'_> {
                         let mut r = *rect;
                         r.y -= scroll_y;
                         blit_masked(&mut pixmap, mask, *color, r, clip);
+                    }
+                    DisplayItem::Gradient { rect, stops, angle_deg, radial, radius } => {
+                        let mut r = *rect;
+                        r.y -= scroll_y;
+                        fill_gradient(&mut pixmap, r, stops, *angle_deg, *radial, *radius, clip);
+                    }
+                    DisplayItem::TextLine { x, y, width, thickness, color } => {
+                        let mut r = Rect { x: *x, y: *y - scroll_y, width: *width, height: *thickness };
+                        if let Some(cl) = clip {
+                            r = r.intersect(&cl);
+                        }
+                        fill_rect(&mut pixmap, r, *color);
                     }
                 }
             }
@@ -1089,4 +1208,126 @@ fn blit_masked(
             }
         }
     }
+}
+
+
+/// Fill `rect` with a **gradient** — the modern web's most common background.
+///
+/// tiny-skia has real gradient shaders, but they need `GradientStop`s and a transform; a direct
+/// per-pixel evaluation is simpler, exact for our stop model, and lets the radial case share the
+/// same code. `angle_deg` follows CSS: **0° points up**, angles increase clockwise — which is not
+/// the maths convention and is the usual place to get this wrong.
+#[allow(clippy::too_many_arguments)]
+fn fill_gradient(
+    pixmap: &mut tiny_skia::Pixmap,
+    rect: Rect,
+    stops: &[manuk_css::ColorStop],
+    angle_deg: f32,
+    radial: bool,
+    radius: f32,
+    clip: Option<Rect>,
+) {
+    if rect.width <= 0.0 || rect.height <= 0.0 || stops.is_empty() {
+        return;
+    }
+    let (pw, ph) = (pixmap.width() as i32, pixmap.height() as i32);
+    let mut r = rect;
+    if let Some(cl) = clip {
+        r = r.intersect(&cl);
+    }
+    let x0 = r.x.floor().max(0.0) as i32;
+    let y0 = r.y.floor().max(0.0) as i32;
+    let x1 = (r.x + r.width).ceil().min(pw as f32) as i32;
+    let y1 = (r.y + r.height).ceil().min(ph as f32) as i32;
+    if x1 <= x0 || y1 <= y0 {
+        return;
+    }
+
+    // The gradient LINE, per CSS Images 3: it passes through the centre at `angle_deg`, and its
+    // length is the projection of the box onto it, so the first and last stops land exactly on the
+    // corners.
+    let a = angle_deg.to_radians();
+    let (dx, dy) = (a.sin(), -a.cos()); // 0° = up
+    let (cx, cy) = (rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+    let len = (rect.width * dx.abs() + rect.height * dy.abs()).max(1.0);
+    let rmax = ((rect.width * rect.width + rect.height * rect.height).sqrt() / 2.0).max(1.0);
+
+    let sample = |t: f32| -> Rgba {
+        let t = t.clamp(0.0, 1.0);
+        if t <= stops[0].at {
+            return stops[0].color;
+        }
+        let last = stops[stops.len() - 1];
+        if t >= last.at {
+            return last.color;
+        }
+        for w in stops.windows(2) {
+            let (a, b) = (w[0], w[1]);
+            if t >= a.at && t <= b.at {
+                let span = (b.at - a.at).max(1e-6);
+                let f = (t - a.at) / span;
+                let lerp = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * f).round().clamp(0.0, 255.0) as u8;
+                return Rgba {
+                    r: lerp(a.color.r, b.color.r),
+                    g: lerp(a.color.g, b.color.g),
+                    b: lerp(a.color.b, b.color.b),
+                    a: lerp(a.color.a, b.color.a),
+                };
+            }
+        }
+        last.color
+    };
+
+    let rad = radius.min(rect.width / 2.0).min(rect.height / 2.0).max(0.0);
+    let data = pixmap.pixels_mut();
+    for py in y0..y1 {
+        for px in x0..x1 {
+            let (fx, fy) = (px as f32 + 0.5, py as f32 + 0.5);
+            // Respect a border-radius: a gradient in a rounded card must not spill its corners.
+            if rad > 0.0 && !inside_round_rect(fx, fy, &rect, rad) {
+                continue;
+            }
+            let t = if radial {
+                (((fx - cx).powi(2) + (fy - cy).powi(2)).sqrt()) / rmax
+            } else {
+                ((fx - cx) * dx + (fy - cy) * dy) / len + 0.5
+            };
+            let c = sample(t);
+            if c.a == 0 {
+                continue;
+            }
+            let al = c.a as f32 / 255.0;
+            let di = (py * pw + px) as usize;
+            let Some(dst) = data.get_mut(di) else { continue };
+            let inv = 1.0 - al;
+            let blend = |s: u8, d: u8| ((s as f32 * al) + (d as f32 * inv)).round().clamp(0.0, 255.0) as u8;
+            let na = ((al * 255.0) + (dst.alpha() as f32 * inv)).round().clamp(0.0, 255.0) as u8;
+            let (rr, gg, bb) = (blend(c.r, dst.red()), blend(c.g, dst.green()), blend(c.b, dst.blue()));
+            if let Some(p) = tiny_skia::PremultipliedColorU8::from_rgba(rr.min(na), gg.min(na), bb.min(na), na) {
+                *dst = p;
+            }
+        }
+    }
+}
+
+/// Is `(x, y)` inside a rounded rectangle? (Corner circles, straight edges.)
+fn inside_round_rect(x: f32, y: f32, r: &Rect, rad: f32) -> bool {
+    let (l, t, rt, b) = (r.x, r.y, r.x + r.width, r.y + r.height);
+    if x < l || x > rt || y < t || y > b {
+        return false;
+    }
+    let corner = |cx: f32, cy: f32| (x - cx).powi(2) + (y - cy).powi(2) <= rad * rad;
+    if x < l + rad && y < t + rad {
+        return corner(l + rad, t + rad);
+    }
+    if x > rt - rad && y < t + rad {
+        return corner(rt - rad, t + rad);
+    }
+    if x < l + rad && y > b - rad {
+        return corner(l + rad, b - rad);
+    }
+    if x > rt - rad && y > b - rad {
+        return corner(rt - rad, b - rad);
+    }
+    true
 }

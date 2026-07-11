@@ -113,6 +113,10 @@ pub struct TextStyle {
     pub font_size: f32,
     pub color: Rgba,
     pub line_height: f32,
+    /// `text-decoration` — underline / overline / line-through. Carried on the *text* because that
+    /// is what the line is drawn under, and because the decoration propagates from an ancestor
+    /// block down to the inline fragments that actually paint.
+    pub decoration: manuk_css::TextDecoration,
 }
 
 /// A positioned run of text produced by inline layout. `baseline` is the absolute
@@ -171,6 +175,17 @@ pub struct LayoutBox {
     /// `mask-image: url(...)` — the icon shape. The background is painted THROUGH this mask's
     /// alpha; without it an icon is a solid block of its background colour.
     pub mask_image: Option<String>,
+    /// `background-image` — a URL (decoded by the page layer) or a gradient (painted directly).
+    pub background_image: Option<manuk_css::BackgroundImage>,
+    pub background_size: manuk_css::BackgroundSize,
+    pub background_repeat: manuk_css::BackgroundRepeat,
+    /// `outline` — painted OUTSIDE the border box and never affecting layout, which is exactly what
+    /// makes it usable as a focus ring.
+    pub outline: Option<(f32, Rgba)>,
+    /// A list item's **marker** — the bullet or number. It is generated content, not a child, so it
+    /// rides on the box rather than in the tree. Without it every `<ul>` and `<ol>` on the web
+    /// renders as bare indented text.
+    pub marker: Option<TextFragment>,
     /// **Effective** opacity (own × ancestors'). `0.0` = invisible, `1.0` = opaque.
     pub opacity: f32,
     /// The DOM node this box came from, if any (anonymous boxes are `None`).
@@ -462,6 +477,11 @@ pub fn layout_document(
             shadow: None,
             hidden: false,
             mask_image: None,
+            background_image: None,
+            background_size: manuk_css::BackgroundSize::Auto,
+            background_repeat: manuk_css::BackgroundRepeat::Repeat,
+            outline: None,
+            marker: None,
             opacity: 1.0,
             node: None,
             content: BoxContent::Block(vec![]),
@@ -641,6 +661,7 @@ fn is_rendered(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
 
 fn text_style(cs: &ComputedStyle, fonts: &FontContext) -> TextStyle {
     TextStyle {
+        decoration: cs.text_decoration,
         font_key: FontKey {
             // Resolve the CSS font-family list to a concrete face (installed or
             // `@font-face`-registered), falling back through generics.
@@ -935,6 +956,41 @@ fn content_right_extent(content: &BoxContent, fonts: &FontContext, origin: f32) 
     max_r
 }
 
+/// `1 → a`, `26 → z`, `27 → aa` — the bijective base-26 an alphabetic list counts in.
+fn alpha_ordinal(n: i64, upper: bool) -> String {
+    let mut n = n.max(1);
+    let mut out = Vec::new();
+    while n > 0 {
+        let rem = ((n - 1) % 26) as u8;
+        out.push(if upper { b'A' + rem } else { b'a' + rem });
+        n = (n - 1) / 26;
+    }
+    out.reverse();
+    String::from_utf8(out).unwrap_or_default()
+}
+
+/// Roman numerals, for `list-style-type: lower-roman|upper-roman`.
+fn roman_ordinal(n: i64, upper: bool) -> String {
+    const TABLE: [(i64, &str); 13] = [
+        (1000, "m"), (900, "cm"), (500, "d"), (400, "cd"),
+        (100, "c"), (90, "xc"), (50, "l"), (40, "xl"),
+        (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i"),
+    ];
+    let mut n = n.max(1);
+    let mut out = String::new();
+    for (v, sym) in TABLE {
+        while n >= v {
+            out.push_str(sym);
+            n -= v;
+        }
+    }
+    if upper {
+        out.to_uppercase()
+    } else {
+        out
+    }
+}
+
 /// Collapse two adjoining vertical margins (CSS2 §8.3.1): positive margins take the
 /// max, negative margins take the min (most negative), mixed signs sum. Passing `0`
 /// for one side yields the other unchanged, so the first-in-flow block "collapses"
@@ -1094,6 +1150,7 @@ impl Ctx<'_> {
         // against the box's *normal-flow* position (CSS2 §9.4.3).
         let flow_bottom = border_y + border_box_h;
 
+        let marker = self.list_marker(node, &s, content_x, content_y);
         let mut boxx = LayoutBox {
             rect,
             background: s.background_color,
@@ -1102,6 +1159,11 @@ impl Ctx<'_> {
             shadow: s.box_shadow,
             hidden: s.visibility != manuk_css::Visibility::Visible,
             mask_image: s.mask_image.clone(),
+            background_image: s.background_image.clone(),
+            background_size: s.background_size,
+            background_repeat: s.background_repeat,
+            outline: (s.outline_width > 0.0 && s.outline_color.a > 0).then_some((s.outline_width, s.outline_color)),
+            marker,
             opacity: s.opacity,
             node: Some(node),
             content,
@@ -1235,6 +1297,11 @@ impl Ctx<'_> {
                     shadow: None,
                     hidden: false,
                     mask_image: None,
+                    background_image: None,
+                    background_size: manuk_css::BackgroundSize::Auto,
+                    background_repeat: manuk_css::BackgroundRepeat::Repeat,
+                    outline: None,
+                    marker: None,
                     opacity: 1.0,
                     node: None,
                     content: BoxContent::Inline(frags),
@@ -1398,6 +1465,11 @@ impl Ctx<'_> {
             shadow: s.box_shadow,
             hidden: s.visibility != manuk_css::Visibility::Visible,
             mask_image: s.mask_image.clone(),
+            background_image: s.background_image.clone(),
+            background_size: s.background_size,
+            background_repeat: s.background_repeat,
+            outline: (s.outline_width > 0.0 && s.outline_color.a > 0).then_some((s.outline_width, s.outline_color)),
+            marker: None,
             opacity: s.opacity,
             node: Some(node),
             content,
@@ -1417,6 +1489,85 @@ impl Ctx<'_> {
             }
         }
         boxx
+    }
+
+    /// The **list marker** for a list item: the bullet or the number.
+    ///
+    /// It is generated content — not a child — so it is built here and carried on the box. `outside`
+    /// (the default) hangs it in the padding to the left of the content edge, which is why `<ul>`
+    /// carries 40px of left padding in the UA sheet; `inside` puts it at the content edge.
+    ///
+    /// The ordinal counts the item's list-item siblings, honouring `<ol start>` and an item's own
+    /// `value` attribute.
+    fn list_marker(
+        &self,
+        node: NodeId,
+        s: &ComputedStyle,
+        content_x: f32,
+        content_y: f32,
+    ) -> Option<TextFragment> {
+        use manuk_css::ListStyleType as L;
+        if self.dom.tag_name(node) != Some("li") || s.list_style_type == L::None {
+            return None;
+        }
+        let parent = self.dom.parent(node);
+        let ordered = parent.and_then(|p| self.dom.tag_name(p)) == Some("ol");
+        // The ordinal: `value` on this item wins; otherwise `start` on the list plus the count of
+        // preceding list items.
+        let ordinal = self
+            .dom
+            .element(node)
+            .and_then(|e| e.attr("value"))
+            .and_then(|v| v.trim().parse::<i64>().ok())
+            .unwrap_or_else(|| {
+                let start = parent
+                    .and_then(|p| self.dom.element(p))
+                    .and_then(|e| e.attr("start"))
+                    .and_then(|v| v.trim().parse::<i64>().ok())
+                    .unwrap_or(1);
+                let idx = parent
+                    .map(|p| {
+                        self.dom
+                            .children(p)
+                            .take_while(|&c| c != node)
+                            .filter(|&c| self.dom.tag_name(c) == Some("li"))
+                            .count() as i64
+                    })
+                    .unwrap_or(0);
+                start + idx
+            });
+        // An `<li>` inside an `<ol>` numbers itself even when `list-style-type` is still the
+        // inherited default (`disc`) — that default only means "the UA picks for this list kind".
+        let ty = match (s.list_style_type, ordered) {
+            (L::Disc, true) => L::Decimal,
+            (t, _) => t,
+        };
+        let text = match ty {
+            L::Disc => "\u{2022}".to_string(),
+            L::Circle => "\u{25e6}".to_string(),
+            L::Square => "\u{25aa}".to_string(),
+            L::Decimal => format!("{ordinal}."),
+            L::LowerAlpha => format!("{}.", alpha_ordinal(ordinal, false)),
+            L::UpperAlpha => format!("{}.", alpha_ordinal(ordinal, true)),
+            L::LowerRoman => format!("{}.", roman_ordinal(ordinal, false)),
+            L::UpperRoman => format!("{}.", roman_ordinal(ordinal, true)),
+            L::None => return None,
+        };
+        let style = text_style(s, self.fonts);
+        let w = self.fonts.measure(&text, style.font_key, style.font_size);
+        let lm = self.fonts.line_metrics(style.font_key, style.font_size);
+        // `outside`: hang it left of the content edge, with a small gap. `inside`: at the edge.
+        const GAP: f32 = 6.0;
+        let x = if s.list_style_inside { content_x } else { content_x - w - GAP };
+        Some(TextFragment {
+            x,
+            baseline: content_y + lm.ascent,
+            line_top: content_y,
+            width: w,
+            text,
+            style,
+            node: Some(node),
+        })
     }
 
     /// Shrink-to-fit width (CSS2 §10.3.5, approximated as `min(max-content, avail)`):
@@ -1660,6 +1811,11 @@ impl Ctx<'_> {
                 shadow: rs.and_then(|s| s.box_shadow),
                 hidden: rs.map(|s| s.visibility != manuk_css::Visibility::Visible).unwrap_or(false),
                 mask_image: rs.and_then(|s| s.mask_image.clone()),
+                background_image: rs.and_then(|s| s.background_image.clone()),
+                background_size: rs.map(|s| s.background_size).unwrap_or_default(),
+                background_repeat: rs.map(|s| s.background_repeat).unwrap_or_default(),
+                outline: rs.and_then(|s| (s.outline_width > 0.0 && s.outline_color.a > 0).then_some((s.outline_width, s.outline_color))),
+                marker: None,
                 opacity: rs.map(|s| s.opacity).unwrap_or(1.0),
                 node: rn,
                 content: BoxContent::Block(std::mem::take(&mut row_cells[r])),
@@ -1688,6 +1844,11 @@ impl Ctx<'_> {
             shadow: s.box_shadow,
             hidden: s.visibility != manuk_css::Visibility::Visible,
             mask_image: s.mask_image.clone(),
+            background_image: s.background_image.clone(),
+            background_size: s.background_size,
+            background_repeat: s.background_repeat,
+            outline: (s.outline_width > 0.0 && s.outline_color.a > 0).then_some((s.outline_width, s.outline_color)),
+            marker: None,
             opacity: s.opacity,
             node: Some(node),
             content: BoxContent::Block(row_boxes),
@@ -1924,6 +2085,11 @@ impl Ctx<'_> {
                 shadow: s.box_shadow,
                 hidden: s.visibility != manuk_css::Visibility::Visible,
                 mask_image: s.mask_image.clone(),
+                background_image: s.background_image.clone(),
+                background_size: s.background_size,
+                background_repeat: s.background_repeat,
+                outline: (s.outline_width > 0.0 && s.outline_color.a > 0).then_some((s.outline_width, s.outline_color)),
+                marker: None,
                 opacity: s.opacity,
                 node: Some(cell),
                 content,
@@ -2006,6 +2172,11 @@ impl Ctx<'_> {
                         shadow: None,
                         hidden: false,
                         mask_image: None,
+                        background_image: None,
+                        background_size: manuk_css::BackgroundSize::Auto,
+                        background_repeat: manuk_css::BackgroundRepeat::Repeat,
+                        outline: None,
+                        marker: None,
                         opacity: 1.0,
                         node: None,
                         content: BoxContent::Inline(std::mem::take(frags)),
@@ -2153,6 +2324,11 @@ impl Ctx<'_> {
             shadow: s.box_shadow,
             hidden: s.visibility != manuk_css::Visibility::Visible,
             mask_image: s.mask_image.clone(),
+            background_image: s.background_image.clone(),
+            background_size: s.background_size,
+            background_repeat: s.background_repeat,
+            outline: (s.outline_width > 0.0 && s.outline_color.a > 0).then_some((s.outline_width, s.outline_color)),
+            marker: None,
             opacity: s.opacity,
             node: Some(node),
             content,
@@ -2223,6 +2399,11 @@ impl Ctx<'_> {
             shadow: None,
             hidden: false,
             mask_image: None,
+            background_image: None,
+            background_size: manuk_css::BackgroundSize::Auto,
+            background_repeat: manuk_css::BackgroundRepeat::Repeat,
+            outline: None,
+            marker: None,
             opacity: 1.0,
             node: None,
             content: BoxContent::Inline(frags),
@@ -2306,6 +2487,11 @@ impl Ctx<'_> {
                 shadow: s.box_shadow,
                 hidden: s.visibility != manuk_css::Visibility::Visible,
                 mask_image: s.mask_image.clone(),
+                background_image: s.background_image.clone(),
+                background_size: s.background_size,
+                background_repeat: s.background_repeat,
+                outline: (s.outline_width > 0.0 && s.outline_color.a > 0).then_some((s.outline_width, s.outline_color)),
+                marker: None,
                 opacity: s.opacity,
                 node: Some(p.dom),
                 content: BoxContent::Block(children),
@@ -2577,7 +2763,7 @@ impl Ctx<'_> {
                         x: 0.0,
                         width: 0.0,
                         text: String::new(),
-                        style: TextStyle { font_key: key, font_size: 16.0, color: Rgba::BLACK, line_height: height },
+                        style: TextStyle { font_key: key, font_size: 16.0, color: Rgba::BLACK, line_height: height, decoration: Default::default() },
                         ascent: 0.0,
                         descent: 0.0,
                         node,
@@ -2634,7 +2820,7 @@ impl Ctx<'_> {
                                 x,
                                 width: advance,
                                 text: String::new(),
-                                style: TextStyle { font_key: key, font_size: 16.0, color: Rgba::BLACK, line_height: height },
+                                style: TextStyle { font_key: key, font_size: 16.0, color: Rgba::BLACK, line_height: height, decoration: Default::default() },
                                 // Treated as all-ascent so text on the same line shares the top.
                                 ascent: height,
                                 descent: 0.0,
@@ -2663,7 +2849,7 @@ impl Ctx<'_> {
                                 text: String::new(),
                                 // `line_height` is only what the fragment's RECT reports; ascent/
                                 // descent stay 0 so a spacer never grows the line box.
-                                style: TextStyle { font_key: key, font_size: 16.0, color: Rgba::BLACK, line_height: report_height },
+                                style: TextStyle { font_key: key, font_size: 16.0, color: Rgba::BLACK, line_height: report_height, decoration: Default::default() },
                                 ascent: 0.0,
                                 descent: 0.0,
                                 node,
@@ -3727,5 +3913,47 @@ mod tests {
             p_h >= 55.0,
             "two <br>s make three lines, got {p_h}px (<br> did nothing)"
         );
+    }
+    /// Regression: a `<ul>` gets bullets and an `<ol>` numbers. Absent markers, every list on the
+    /// web renders as bare indented text.
+    #[test]
+    fn list_items_get_markers() {
+        let html = "<ul><li id=\"a\">one</li><li id=\"b\">two</li></ul>\
+                    <ol start=\"3\"><li id=\"c\">three</li></ol>";
+        let css = "ul{list-style-type:disc} ol{list-style-type:decimal}";
+        let (dom, root) = layout_html(html, css, 400.0);
+        let mut markers: Vec<String> = Vec::new();
+        root.walk(&mut |b| {
+            if let Some(m) = &b.marker {
+                markers.push(m.text.clone());
+            }
+        });
+        assert_eq!(
+            markers,
+            vec!["\u{2022}".to_string(), "\u{2022}".to_string(), "3.".to_string()],
+            "two bullets and an <ol start=3> numbering from 3"
+        );
+    }
+
+    /// Regression: `text-decoration` propagates from a block to the inline fragments that paint.
+    #[test]
+    fn text_decoration_reaches_the_fragments() {
+        let (dom, root) = layout_html(
+            "<p class=\"u\">underlined</p>",
+            ".u{text-decoration:underline}",
+            400.0,
+        );
+        let _ = &dom;
+        let mut seen = false;
+        root.walk(&mut |b| {
+            if let BoxContent::Inline(frags) = &b.content {
+                for f in frags {
+                    if !f.text.trim().is_empty() && f.style.decoration.underline {
+                        seen = true;
+                    }
+                }
+            }
+        });
+        assert!(seen, "the underline must reach the text fragment, which is what paints it");
     }
 }

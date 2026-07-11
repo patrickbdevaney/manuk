@@ -134,6 +134,14 @@ h5 { font-size: 0.83em; font-weight: bold; margin: 1.5em 0; }
 h6 { font-size: 0.75em; font-weight: bold; margin: 1.67em 0; }
 b, strong, th { font-weight: bold; }
 ul, ol { padding-left: 40px; }
+/* Chrome's UA sheet underlines links and puts a marker on list items. Ours did neither, so every
+   link on the web was bare text and every list was an indent. */
+a:link, a:visited { text-decoration: underline; }
+ul { list-style-type: disc; }
+ol { list-style-type: decimal; }
+u, ins { text-decoration: underline; }
+s, del, strike { text-decoration: line-through; }
+abbr[title] { text-decoration: underline; }
 table { display: table; }
 thead, tbody, tfoot { display: table-row-group; }
 tr { display: table-row; }
@@ -258,6 +266,17 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
             // `mask-image` is likewise not exposed by Stylo's servo build. Without it every icon
             // (an empty span with a background-color shaped by a mask) paints as a black square.
             cs.mask_image = m.mask_image.clone();
+            // `background-image` (url + gradients), `text-decoration`, and `list-style` are taken
+            // from MinimalCascade for the same reason as `visibility`: Stylo's servo build models
+            // them as generic image/keyword types we would have to reimplement to consume. Dropping
+            // them was not cosmetic — a gradient hero, an underlined link and a bulleted list are
+            // three of the most common things on a web page, and all three rendered as nothing.
+            cs.background_image = m.background_image.clone();
+            cs.background_size = m.background_size;
+            cs.background_repeat = m.background_repeat;
+            cs.text_decoration = m.text_decoration;
+            cs.list_style_type = m.list_style_type;
+            cs.list_style_inside = m.list_style_inside;
         }
     }
 

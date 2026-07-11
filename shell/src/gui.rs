@@ -1077,6 +1077,7 @@ impl App {
         let w = w as f32;
 
         let font = |size: f32, color: Rgba| TextStyle {
+            decoration: Default::default(),
             font_key: FontKey { family: FontFamily::SansSerif, bold: false, italic: false },
             font_size: size,
             color,
@@ -1226,6 +1227,7 @@ impl App {
         const INK: Rgba = Rgba { r: 40, g: 40, b: 45, a: 255 };
         const HINT: Rgba = Rgba { r: 130, g: 130, b: 138, a: 255 };
         let font = |size: f32, color: Rgba| TextStyle {
+            decoration: Default::default(),
             font_key: FontKey { family: FontFamily::SansSerif, bold: false, italic: false },
             font_size: size,
             color,

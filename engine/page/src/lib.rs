@@ -516,6 +516,7 @@ impl Page {
         self.fetch_and_run_dynamic_scripts(fonts, viewport_width, 4).await;
         self.fetch_and_apply_images(fonts, viewport_width).await;
         self.fetch_and_apply_masks().await;
+        self.fetch_and_apply_background_images().await;
     }
 
     /// Without SpiderMonkey there are no dynamic scripts to run.
@@ -524,6 +525,7 @@ impl Page {
         self.fetch_and_apply_stylesheets(fonts, viewport_width).await;
         self.fetch_and_apply_images(fonts, viewport_width).await;
         self.fetch_and_apply_masks().await;
+        self.fetch_and_apply_background_images().await;
     }
 
     /// Fetch + decode this page's `<img>` resources and paint them. An image without an
@@ -703,6 +705,45 @@ impl Page {
         let rc: HashMap<String, std::rc::Rc<manuk_paint::DecodedImage>> =
             owned.into_iter().map(|(u, i)| (u, std::rc::Rc::new(i))).collect();
         self.apply_masks(&rc)
+    }
+
+    /// Fetch this page's **`background-image: url(...)`** bitmaps and bind them to their nodes.
+    ///
+    /// The same per-node bitmap map the painter already consults for `<img>` — an element with a
+    /// `url()` background is never also a replaced image, so they cannot collide. Gradients need no
+    /// fetch at all; they are painted from the computed value directly.
+    pub async fn fetch_and_apply_background_images(&mut self) -> usize {
+        let targets: Vec<(manuk_dom::NodeId, String)> = self
+            .styles
+            .iter()
+            .filter_map(|(&n, s)| match s.background_image.as_ref()? {
+                manuk_css::BackgroundImage::Url(u) => {
+                    let abs = if u.starts_with("data:") {
+                        u.clone()
+                    } else {
+                        resolve_url(&self.final_url, u)
+                    };
+                    Some((n, abs))
+                }
+                _ => None,
+            })
+            .collect();
+        if targets.is_empty() {
+            return 0;
+        }
+        let fetched = futures_util::future::join_all(targets.into_iter().map(|(n, url)| async move {
+            (n, fetch_image_bytes(&url).await, url)
+        }))
+        .await;
+        let mut count = 0usize;
+        for (node, bytes, url) in fetched {
+            let Some(bytes) = bytes else { continue };
+            if let Some(img) = decode_bitmap(&bytes, &url) {
+                self.images.insert(node, std::rc::Rc::new(img));
+                count += 1;
+            }
+        }
+        count
     }
 
     /// **DEBT-1.** Build a page from [`Prefetched`] data — parse/cascade/layout/JS only, with
@@ -2240,11 +2281,47 @@ mod js_interactive_tests {
              resolved against the document"
         );
 
+        // (19) **CSSOM + the DOM ergonomics every framework is written with.** `el.style.width = …`
+        // is the most common DOM write on the web and `classList.add` is not far behind. Before this
+        // they threw a TypeError that aborted the rest of the page's script — one missing property
+        // taking the whole page's interactivity with it. A style written by script must also reach
+        // the CASCADE, not just the attribute: the assertion checks the resulting BOX.
+        let html19 = r#"<!doctype html><html><body>
+            <div id="a" class="one" data-user-id="42">A</div><p id="o">?</p>
+            <script>
+              var a = document.getElementById('a');
+              a.style.width = '123px';
+              a.style.backgroundColor = 'red';
+              a.classList.add('two');
+              a.classList.toggle('one');
+              document.getElementById('o').textContent = [
+                a.getAttribute('style'), a.className, a.classList.contains('two'),
+                a.classList.length, a.dataset.userId, a.matches('#a.two'),
+                a.closest('body').tagName, document.body.contains(a)
+              ].join('|');
+            </script></body></html>"#;
+        let page19 = Page::load(html19, "https://example.test/", &fonts, 600.0);
+        let r19 = page19.dom().root();
+        let o19 = manuk_css::query_selector_all(page19.dom(), r19, "#o")[0];
+        assert_eq!(
+            page19.dom().text_content(o19),
+            "width: 123px; background-color: red|two|true|1|42|true|BODY|true",
+            "style/classList/dataset/matches/closest/contains must all be live views of the DOM"
+        );
+        let a19 = manuk_css::query_selector_all(page19.dom(), r19, "#a")[0];
+        let w19 = page19.root_box.node_rects(page19.dom())[&a19].width;
+        assert!(
+            (w19 - 123.0).abs() < 1.0,
+            "a style written by script must drive the CASCADE, not just the attribute \
+             (got {w19}px, want 123px)"
+        );
+
         // Tear SpiderMonkey down before this process exits, exactly as the shell and the harness do.
         // Every page above is out of scope by now, so no rooted object outlives its runtime. Leaving
         // the engine up means its C++ static destructors run at exit against a live context and
         // abort — the test would pass and the process would still fail.
         drop(page18);
+        drop(page19);
         manuk_js::shutdown();
     }
 }

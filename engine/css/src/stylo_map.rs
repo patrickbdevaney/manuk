@@ -214,6 +214,25 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     let bg = cv.clone_background_color().resolve_to_absolute(&current);
     s.background_color = (bg.alpha > 0.0).then(|| abs_to_rgba(&bg));
 
+    // background-image, text-decoration, list-style and outline are recovered from MinimalCascade
+    // in `stylo_engine` (this Stylo build exposes them only as generic image//keyword types whose
+    // shape we would have to re-implement anyway). See the recovery loop there.
+
+    // outline: a width and a colour is all a focus ring needs — but the width is only *used* when
+    // a style is set. Stylo computes `outline-width: medium` (3px) regardless, and `outline-color`
+    // resolves to `currentColor` (opaque black), so taking the width at face value drew a 3px black
+    // ring around EVERY element on the page.
+    {
+        use stylo::values::specified::outline::OutlineStyle;
+        let o = cv.get_outline();
+        let styled = !matches!(o.clone_outline_style(), OutlineStyle::BorderStyle(bs) if bs.none_or_hidden());
+        s.outline_width = if styled { o.clone_outline_width().0.to_f32_px() } else { 0.0 };
+        let oc = o.clone_outline_color().resolve_to_absolute(&current);
+        if oc.alpha > 0.0 {
+            s.outline_color = abs_to_rgba(&oc);
+        }
+    }
+
     // Font / text.
     s.font_size = cv.clone_font_size().computed_size().px();
     s.font_weight = cv.clone_font_weight().value().round().clamp(1.0, 1000.0) as u16;

@@ -136,6 +136,77 @@ pub enum TextAlign {
     Justify,
 }
 
+/// One colour stop of a gradient, at a position in `0.0..=1.0` along the gradient line.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ColorStop {
+    pub color: Rgba,
+    pub at: f32,
+}
+
+/// A `background-image`. The modern web's visual identity is mostly *this*: hero gradients, card
+/// washes, button fills, and the icons a site does not ship as `<img>`.
+#[derive(Clone, Debug, PartialEq)]
+pub enum BackgroundImage {
+    /// `url(...)` — resolved and decoded by the page layer, painted by the compositor.
+    Url(String),
+    /// `linear-gradient(<angle>, stops…)`. `angle_deg` is CSS's convention: 0° points **up**, and
+    /// angles increase clockwise.
+    Linear { angle_deg: f32, stops: Vec<ColorStop> },
+    /// `radial-gradient(stops…)` — centred, covering the box (the `farthest-corner` default).
+    Radial { stops: Vec<ColorStop> },
+}
+
+/// `background-size`.
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub enum BackgroundSize {
+    /// The image's own size.
+    #[default]
+    Auto,
+    /// Scale to fill the box, cropping the overflow.
+    Cover,
+    /// Scale to fit entirely inside the box.
+    Contain,
+    Px(f32, f32),
+}
+
+/// `background-repeat`.
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub enum BackgroundRepeat {
+    #[default]
+    Repeat,
+    NoRepeat,
+}
+
+/// `text-decoration-line`. Bitflags, because `underline line-through` is legal and used.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct TextDecoration {
+    pub underline: bool,
+    pub overline: bool,
+    pub line_through: bool,
+}
+
+impl TextDecoration {
+    pub fn any(&self) -> bool {
+        self.underline || self.overline || self.line_through
+    }
+}
+
+/// `list-style-type` — the marker a list item draws. Absent these, every `<ul>` and `<ol>` on the
+/// web renders as bare indented text.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ListStyleType {
+    #[default]
+    Disc,
+    Circle,
+    Square,
+    Decimal,
+    LowerAlpha,
+    UpperAlpha,
+    LowerRoman,
+    UpperRoman,
+    None,
+}
+
 /// `white-space`, which drives inline wrapping/collapsing in layout.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WhiteSpace {
@@ -317,6 +388,22 @@ pub struct ComputedStyle {
     pub display: Display,
     pub color: Rgba,
     pub background_color: Option<Rgba>,
+    /// `background-image` — a URL or a gradient. Painting only the colour and dropping this is why
+    /// gradient heroes, washed cards and CSS-only icons rendered as blank rectangles.
+    pub background_image: Option<BackgroundImage>,
+    pub background_size: BackgroundSize,
+    pub background_repeat: BackgroundRepeat,
+    /// `text-decoration-line` (INHERITED in effect: a decoration set on a block draws through its
+    /// inline descendants).
+    pub text_decoration: TextDecoration,
+    /// `list-style-type` (inherited).
+    pub list_style_type: ListStyleType,
+    /// `list-style-position: inside` puts the marker in the principal box's content flow.
+    pub list_style_inside: bool,
+    /// `outline` — the focus ring. Without it keyboard focus is invisible, which is not a cosmetic
+    /// bug but an accessibility one.
+    pub outline_width: f32,
+    pub outline_color: Rgba,
     pub font_size: f32,
     pub font_weight: u16,
     /// The `font-family` list (names in priority order, lowercased; generic keywords kept
@@ -427,6 +514,14 @@ impl ComputedStyle {
             border_radius: 0.0,
             visibility: Visibility::Visible,
             mask_image: None,
+            background_image: None,
+            background_size: BackgroundSize::Auto,
+            background_repeat: BackgroundRepeat::Repeat,
+            text_decoration: TextDecoration::default(),
+            list_style_type: ListStyleType::Disc,
+            list_style_inside: false,
+            outline_width: 0.0,
+            outline_color: Rgba { r: 0, g: 0, b: 0, a: 0 },
             opacity: 1.0,
             box_shadow: None,
             width: Dim::Auto,
@@ -481,6 +576,13 @@ impl ComputedStyle {
         s.line_height = parent.line_height;
         s.text_align = parent.text_align;
         s.white_space = parent.white_space;
+        // `list-style-*` is inherited (that is how `ul{list-style:none}` silences its `li`s).
+        s.list_style_type = parent.list_style_type;
+        s.list_style_inside = parent.list_style_inside;
+        // `text-decoration` is not *inherited* in the CSS sense — it PROPAGATES: a decoration on a
+        // block draws through its inline descendants. Carrying it down the tree is how the text
+        // fragments that actually paint find out about it.
+        s.text_decoration = parent.text_decoration;
         s
     }
 }
@@ -2250,6 +2352,87 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 _ => Visibility::Visible,
             }
         }
+        "background-image" => s.background_image = parse_background_image(v),
+        "background" => {
+            // The shorthand: pull out whatever we understand — a colour, an image/gradient — and
+            // ignore the rest. A page that writes `background: linear-gradient(...)` (very common)
+            // otherwise gets nothing at all.
+            if let Some(img) = parse_background_image(v) {
+                s.background_image = Some(img);
+            } else if let Some(c) = values::parse_color(v) {
+                s.background_color = Some(c);
+            }
+            if v.contains("no-repeat") {
+                s.background_repeat = BackgroundRepeat::NoRepeat;
+            }
+        }
+        "background-size" => {
+            let t = v.trim();
+            s.background_size = if t.eq_ignore_ascii_case("cover") {
+                BackgroundSize::Cover
+            } else if t.eq_ignore_ascii_case("contain") {
+                BackgroundSize::Contain
+            } else {
+                let parts: Vec<f32> = t
+                    .split_whitespace()
+                    .filter_map(|p| values::parse_length_px(p, s.font_size))
+                    .collect();
+                match parts.len() {
+                    1 => BackgroundSize::Px(parts[0], parts[0]),
+                    2 => BackgroundSize::Px(parts[0], parts[1]),
+                    _ => BackgroundSize::Auto,
+                }
+            };
+        }
+        "background-repeat" => {
+            s.background_repeat = if v.contains("no-repeat") {
+                BackgroundRepeat::NoRepeat
+            } else {
+                BackgroundRepeat::Repeat
+            };
+        }
+        "text-decoration" | "text-decoration-line" => {
+            let v = v.to_ascii_lowercase();
+            s.text_decoration = TextDecoration {
+                underline: v.contains("underline"),
+                overline: v.contains("overline"),
+                line_through: v.contains("line-through"),
+            };
+        }
+        "list-style-type" => s.list_style_type = parse_list_style_type(v),
+        "list-style-position" => s.list_style_inside = v.trim().eq_ignore_ascii_case("inside"),
+        "list-style" => {
+            // Shorthand: the type and/or the position, in any order.
+            for tok in v.split_whitespace() {
+                if tok.eq_ignore_ascii_case("inside") {
+                    s.list_style_inside = true;
+                } else if tok.eq_ignore_ascii_case("outside") {
+                    s.list_style_inside = false;
+                } else if let Some(t) = parse_list_style_type_opt(tok) {
+                    s.list_style_type = t;
+                }
+            }
+        }
+        "outline" => {
+            for tok in v.split_whitespace() {
+                if let Some(w) = values::parse_length_px(tok, s.font_size) {
+                    s.outline_width = w;
+                } else if let Some(c) = values::parse_color(tok) {
+                    s.outline_color = c;
+                }
+            }
+            if v.trim() == "none" || v.trim() == "0" {
+                s.outline_width = 0.0;
+            }
+        }
+        "outline-width" => {
+            s.outline_width = values::parse_length_px(v, s.font_size).unwrap_or(0.0);
+        }
+        "outline-color" => {
+            if let Some(c) = values::parse_color(v) {
+                s.outline_color = c;
+            }
+        }
         "opacity" => {
             if let Ok(o) = v.trim().parse::<f32>() {
                 s.opacity = o.clamp(0.0, 1.0);
@@ -2331,6 +2514,178 @@ fn parse_border_shorthand(v: &str, fs: f32) -> (Option<f32>, Option<Rgba>) {
 }
 
 /// Split `v` on top-level whitespace, keeping parenthesised groups (`rgba(0, 0, 0, .3)`) intact.
+fn parse_list_style_type_opt(v: &str) -> Option<ListStyleType> {
+    Some(match v.trim().to_ascii_lowercase().as_str() {
+        "disc" => ListStyleType::Disc,
+        "circle" => ListStyleType::Circle,
+        "square" => ListStyleType::Square,
+        "decimal" => ListStyleType::Decimal,
+        "lower-alpha" | "lower-latin" => ListStyleType::LowerAlpha,
+        "upper-alpha" | "upper-latin" => ListStyleType::UpperAlpha,
+        "lower-roman" => ListStyleType::LowerRoman,
+        "upper-roman" => ListStyleType::UpperRoman,
+        "none" => ListStyleType::None,
+        _ => return None,
+    })
+}
+
+fn parse_list_style_type(v: &str) -> ListStyleType {
+    parse_list_style_type_opt(v).unwrap_or(ListStyleType::Disc)
+}
+
+/// `background-image: url(...) | linear-gradient(...) | radial-gradient(...) | none`.
+///
+/// Only the first layer is taken (multiple backgrounds are a documented v1 simplification), and
+/// gradient syntax is handled to the depth the web actually uses: an optional angle or `to <side>`,
+/// then colour stops with optional percentage positions.
+pub fn parse_background_image(v: &str) -> Option<BackgroundImage> {
+    let v = v.trim();
+    if v.eq_ignore_ascii_case("none") || v.is_empty() {
+        return None;
+    }
+    // Find the first function-ish token in the (possibly shorthand) value.
+    let lower = v.to_ascii_lowercase();
+    if let Some(i) = lower.find("url(") {
+        let rest = &v[i + 4..];
+        let end = rest.find(')')?;
+        let raw = rest[..end].trim().trim_matches('"').trim_matches('\'');
+        return (!raw.is_empty()).then(|| BackgroundImage::Url(raw.to_string()));
+    }
+    let (kind, start) = if let Some(i) = lower.find("linear-gradient(") {
+        (0u8, i + "linear-gradient(".len())
+    } else if let Some(i) = lower.find("radial-gradient(") {
+        (1u8, i + "radial-gradient(".len())
+    } else {
+        return None;
+    };
+    // Take the balanced argument list (stops may contain `rgba(...)`).
+    let bytes = v.as_bytes();
+    let mut depth = 1i32;
+    let mut end = start;
+    while end < bytes.len() {
+        match bytes[end] {
+            b'(' => depth += 1,
+            b')' => {
+                depth -= 1;
+                if depth == 0 {
+                    break;
+                }
+            }
+            _ => {}
+        }
+        end += 1;
+    }
+    let args = &v[start..end.min(v.len())];
+    let parts = split_top_level_commas(args);
+    if parts.is_empty() {
+        return None;
+    }
+
+    let mut angle_deg = 180.0f32; // CSS default: `to bottom`
+    let mut first_stop = 0usize;
+    let head = parts[0].trim().to_ascii_lowercase();
+    if kind == 0 {
+        if let Some(deg) = parse_angle_deg(&head) {
+            angle_deg = deg;
+            first_stop = 1;
+        } else if let Some(side) = head.strip_prefix("to ") {
+            angle_deg = match side.trim() {
+                "top" => 0.0,
+                "right" => 90.0,
+                "bottom" => 180.0,
+                "left" => 270.0,
+                "top right" | "right top" => 45.0,
+                "bottom right" | "right bottom" => 135.0,
+                "bottom left" | "left bottom" => 225.0,
+                "top left" | "left top" => 315.0,
+                _ => 180.0,
+            };
+            first_stop = 1;
+        }
+    } else if head.starts_with("circle")
+        || head.starts_with("ellipse")
+        || head.starts_with("at ")
+        || head.contains("corner")
+        || head.contains("side")
+    {
+        first_stop = 1;
+    }
+
+    let raw_stops: Vec<&str> = parts[first_stop..].iter().map(|s| s.trim()).collect();
+    if raw_stops.is_empty() {
+        return None;
+    }
+    let n = raw_stops.len();
+    let mut stops: Vec<ColorStop> = Vec::new();
+    for (i, sp) in raw_stops.iter().enumerate() {
+        // `<color> [<pos>]` — the position may be a percentage or a length (treated as %-ish).
+        let (cpart, pos) = match sp.rfind(char::is_whitespace) {
+            Some(k) if sp[k..].trim().ends_with('%') => {
+                let p: f32 = sp[k..].trim().trim_end_matches('%').parse().unwrap_or(0.0);
+                (&sp[..k], Some(p / 100.0))
+            }
+            _ => (&sp[..], None),
+        };
+        let color = values::parse_color(cpart.trim())?;
+        let at = pos.unwrap_or(if n <= 1 { 0.0 } else { i as f32 / (n - 1) as f32 });
+        stops.push(ColorStop { color, at: at.clamp(0.0, 1.0) });
+    }
+    if stops.len() == 1 {
+        // A single stop is a solid fill; give it two ends so the painter's interpolation is uniform.
+        stops.push(ColorStop { at: 1.0, ..stops[0] });
+    }
+    Some(match kind {
+        0 => BackgroundImage::Linear { angle_deg, stops },
+        _ => BackgroundImage::Radial { stops },
+    })
+}
+
+/// `45deg` / `0.25turn` / `100grad` / `1.5rad` → degrees.
+fn parse_angle_deg(v: &str) -> Option<f32> {
+    let v = v.trim();
+    for (suffix, scale) in [
+        ("deg", 1.0f32),
+        ("grad", 0.9),
+        ("rad", 180.0 / std::f32::consts::PI),
+        ("turn", 360.0),
+    ] {
+        if let Some(n) = v.strip_suffix(suffix) {
+            return n.trim().parse::<f32>().ok().map(|x| x * scale);
+        }
+    }
+    None
+}
+
+/// Split on commas that are not inside parentheses (so `rgba(0,0,0,.5)` stays whole).
+fn split_top_level_commas(v: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut depth = 0i32;
+    for ch in v.chars() {
+        match ch {
+            '(' => {
+                depth += 1;
+                cur.push(ch);
+            }
+            ')' => {
+                depth -= 1;
+                cur.push(ch);
+            }
+            ',' if depth == 0 => {
+                if !cur.trim().is_empty() {
+                    out.push(cur.trim().to_string());
+                }
+                cur.clear();
+            }
+            _ => cur.push(ch),
+        }
+    }
+    if !cur.trim().is_empty() {
+        out.push(cur.trim().to_string());
+    }
+    out
+}
+
 fn tokens_keeping_parens(v: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut cur = String::new();
