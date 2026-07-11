@@ -360,6 +360,25 @@ fn match_rules_recursive(
                     match_rules_recursive(&nested.0, guard, device, el, caches, winners, order);
                 }
             }
+            // `@supports` — feature queries. Skipping these was NOT a harmless simplification: the
+            // modern web uses `@supports` for progressive enhancement, hiding a legacy fallback and
+            // revealing the real layout inside the block. Ignoring it means we silently rendered
+            // the FALLBACK of every such site. (Wikipedia hides its whole TOC sidebar with
+            // `display:none`, then re-shows it inside `@supports (display:grid)` — so the sidebar
+            // simply never appeared.) Stylo evaluates the condition at parse time into `enabled`.
+            CssRule::Supports(supports_rule) => {
+                if supports_rule.enabled {
+                    let nested = supports_rule.rules.read_with(guard);
+                    match_rules_recursive(&nested.0, guard, device, el, caches, winners, order);
+                }
+            }
+            // `@layer` — a cascade layer's rules still apply (layer *ordering* is not modelled, so
+            // they cascade by specificity/order like any author rule). Dropping them entirely would
+            // lose real styles; modern design systems ship whole sheets inside `@layer`.
+            CssRule::LayerBlock(layer_rule) => {
+                let nested = layer_rule.rules.read_with(guard);
+                match_rules_recursive(&nested.0, guard, device, el, caches, winners, order);
+            }
             _ => {}
         }
     }
@@ -477,6 +496,33 @@ mod tests {
         // Inline style on <em> overrides the inherited color; weight still inherits.
         assert_eq!(ems.color, Rgba::new(0, 128, 0, 255), "inline style= overrides inherited color");
         assert_eq!(ems.font_weight, 700, "font-weight inherited by <em>");
+    }
+
+    /// W3 regression. `@supports` is how the modern web does progressive enhancement: hide a
+    /// legacy fallback, then reveal the real layout inside `@supports (display:grid)`. Skipping the
+    /// block meant we silently rendered the FALLBACK of every such site — Wikipedia hides its whole
+    /// TOC sidebar with `display:none` and re-shows it inside `@supports (display:grid)`, so the
+    /// sidebar simply never appeared.
+    #[test]
+    fn supports_block_rules_apply_when_the_feature_is_supported() {
+        let mut dom = Dom::new();
+        let body = dom.create_element("body");
+        let side = dom.create_element("div");
+        dom.set_attr(side, "class", "sidebar");
+        dom.append_child(dom.root(), body);
+        dom.append_child(body, side);
+
+        // The exact pattern Wikipedia uses.
+        let sheet = Stylesheet::parse(
+            ".sidebar { display: none; }              @supports (display: grid) { .sidebar { display: block; width: 200px; } }",
+        );
+        let map = cascade_via_stylo(&dom, std::slice::from_ref(&sheet), 1200.0, 800.0);
+        assert_eq!(
+            map[&side].display,
+            crate::Display::Block,
+            "the @supports block must apply — grid IS supported, so the sidebar is shown, not hidden"
+        );
+        assert_eq!(map[&side].width, crate::Dim::Px(200.0));
     }
 
     /// Responsive `@media`: a media block's rules apply only when its query matches the current
