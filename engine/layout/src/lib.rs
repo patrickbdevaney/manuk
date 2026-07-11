@@ -30,6 +30,7 @@
 //!   tokens (so `a<b>b</b>` gains a space it should not); Parley-grade segmentation
 //!   is the upgrade.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 use manuk_css::{
@@ -347,6 +348,12 @@ struct Ctx<'a> {
     dom: &'a Dom,
     styles: &'a StyleMap,
     fonts: &'a FontContext,
+    /// Memoized intrinsic content sizes for the flex/grid measure seam, keyed by
+    /// `(node, available-width rounded to px)`. Taffy probes each item's size several
+    /// times (min-content, max-content, resolved) and each probe would otherwise re-lay-out
+    /// the whole subtree — an O(n²) blow-up on nested flex/grid. Interior-mutable so
+    /// `measure_intrinsic` (`&self`) can fill it.
+    measure_cache: RefCell<HashMap<(NodeId, u32), (f32, f32)>>,
 }
 
 /// Lay out a whole document into a fragment tree, given a viewport width in px.
@@ -359,7 +366,7 @@ pub fn layout_document(
     fonts: &FontContext,
     viewport_width: f32,
 ) -> LayoutBox {
-    let ctx = Ctx { dom, styles, fonts };
+    let ctx = Ctx { dom, styles, fonts, measure_cache: RefCell::new(HashMap::new()) };
     let root_el = dom
         .find_first("body")
         .or_else(|| dom.find_first("html"))
@@ -1204,10 +1211,19 @@ impl Ctx<'_> {
     /// to zero. Read-only (`&self`), so it can be called from the measure closure.
     fn measure_intrinsic(&self, node: NodeId, avail_width: Option<f32>) -> (f32, f32) {
         let avail = avail_width.unwrap_or(1.0e6);
+        // Memoize: taffy probes each item several times per solve, and each probe re-lays-out
+        // the subtree. Round the available width to a px so repeated min/max-content probes
+        // (which pass the same very-large avail) share a cache entry.
+        let key = (node, avail.round().min(u32::MAX as f32) as u32);
+        if let Some(&cached) = self.measure_cache.borrow().get(&key) {
+            return cached;
+        }
         let width = self.shrink_to_fit(node, avail);
         let mut fc = FloatContext::new(0.0, width.max(1.0));
         let (_content, height) = self.layout_children(node, 0.0, 0.0, width.max(0.0), None, &mut fc);
-        (width, height)
+        let result = (width, height);
+        self.measure_cache.borrow_mut().insert(key, result);
+        result
     }
 
     /// Lay out a `display:table` box (CSS2 §17), separated-borders model. Sequence:
