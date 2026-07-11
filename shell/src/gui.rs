@@ -58,6 +58,7 @@ const MENU: &[(&str, MenuAction)] = &[
 const MENU_W: f32 = 210.0;
 const MENU_ITEM_H: f32 = 30.0;
 const SUGGEST_ITEM_H: f32 = 28.0;
+const SCROLLBAR_W: f32 = 12.0;
 
 /// Height of the toolbar band (nav buttons + address field), in physical px.
 const CHROME_HEIGHT: f32 = 44.0;
@@ -185,6 +186,8 @@ struct App {
     omnibox_input: String,
     /// Hamburger menu open state (the settings/actions dropdown).
     menu_open: bool,
+    /// While dragging the scrollbar thumb: the grab offset (cursor y − thumb top).
+    scrollbar_drag: Option<f32>,
 
     // ---- §5 session persistence ----
     /// The on-disk tab store (session + collections), outside the repo. `None` if the state
@@ -297,6 +300,7 @@ impl App {
             omnibox_open: false,
             omnibox_input: String::new(),
             menu_open: false,
+            scrollbar_drag: None,
             store,
             agent_open: false,
             agent_input: String::new(),
@@ -331,6 +335,12 @@ impl App {
                 self.goto(&url);
                 return;
             }
+        }
+
+        // Scrollbar grab (right edge, below the chrome).
+        let win_h = self.viewport.height + CHROME_TOP;
+        if self.scrollbar_press(cx, cy, w, win_h) {
+            return;
         }
 
         if cy < CHROME_TOP {
@@ -658,6 +668,7 @@ impl App {
         }
 
         self.draw_focus_caret(&mut canvas);
+        self.draw_scrollbar(&mut canvas, w as f32, h as f32);
         self.draw_chrome(&mut canvas, w);
         self.draw_overlays(&mut canvas, w as f32);
 
@@ -935,6 +946,65 @@ impl App {
             return None;
         }
         sugg.get(idx as usize).map(|s| s.url.clone())
+    }
+
+    /// Scrollbar geometry `(track_y, track_h, thumb_y, thumb_h)` at window height `h`, or
+    /// `None` when the page fits (nothing to scroll). The track spans below the chrome.
+    fn scrollbar_geom(&self, h: f32) -> Option<(f32, f32, f32, f32)> {
+        let vp_h = self.viewport.height;
+        let content = self.viewport.content_height;
+        let max = (content - vp_h).max(0.0);
+        if max <= 0.5 || content <= 0.0 {
+            return None;
+        }
+        let track_y = CHROME_TOP;
+        let track_h = (h - CHROME_TOP).max(1.0);
+        let thumb_h = (vp_h / content * track_h).clamp(24.0, track_h);
+        let thumb_y = track_y + (self.scroll_y / max) * (track_h - thumb_h);
+        Some((track_y, track_h, thumb_y, thumb_h))
+    }
+
+    /// Draw the scrollbar (track + thumb) on the right edge, if the page overflows.
+    fn draw_scrollbar(&self, canvas: &mut Canvas, w: f32, h: f32) {
+        const TRACK: Rgba = Rgba { r: 244, g: 244, b: 246, a: 255 };
+        const THUMB: Rgba = Rgba { r: 178, g: 180, b: 188, a: 255 };
+        if let Some((track_y, track_h, thumb_y, thumb_h)) = self.scrollbar_geom(h) {
+            let x = w - SCROLLBAR_W;
+            canvas.fill_rect(x, track_y, SCROLLBAR_W, track_h, TRACK);
+            canvas.fill_rect(x + 2.0, thumb_y + 1.0, SCROLLBAR_W - 4.0, thumb_h - 2.0, THUMB);
+        }
+    }
+
+    /// If `(cx, cy)` is on the scrollbar, begin a thumb drag (or page-jump toward the click) and
+    /// return true so the caller stops further click handling.
+    fn scrollbar_press(&mut self, cx: f32, cy: f32, w: f32, h: f32) -> bool {
+        if cx < w - SCROLLBAR_W {
+            return false;
+        }
+        let Some((track_y, track_h, thumb_y, thumb_h)) = self.scrollbar_geom(h) else {
+            return false;
+        };
+        if cy >= thumb_y && cy <= thumb_y + thumb_h {
+            self.scrollbar_drag = Some(cy - thumb_y); // grab offset within the thumb
+        } else {
+            // Click on the track above/below the thumb: jump so the thumb centers on the click.
+            let max = self.viewport.max_scroll();
+            let denom = (track_h - thumb_h).max(1.0);
+            self.scroll_y = ((cy - track_y - thumb_h / 2.0) / denom * max).clamp(0.0, max);
+            self.scrollbar_drag = Some(thumb_h / 2.0);
+            self.rerender();
+        }
+        true
+    }
+
+    /// Continue a scrollbar thumb drag: map the cursor to a scroll offset.
+    fn scrollbar_drag_to(&mut self, cy: f32, h: f32) {
+        let Some(grab) = self.scrollbar_drag else { return };
+        let Some((track_y, track_h, _, thumb_h)) = self.scrollbar_geom(h) else { return };
+        let max = self.viewport.max_scroll();
+        let denom = (track_h - thumb_h).max(1.0);
+        self.scroll_y = ((cy - grab - track_y) / denom * max).clamp(0.0, max);
+        self.rerender();
     }
 
     /// Run a hamburger-menu action (the same operations as the keyboard shortcuts).
@@ -1638,6 +1708,12 @@ impl ApplicationHandler<NavEvent> for App {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 self.cursor = (position.x as f32, position.y as f32);
+                // A scrollbar thumb drag takes over cursor movement.
+                if self.scrollbar_drag.is_some() {
+                    let win_h = self.viewport.height + CHROME_TOP;
+                    self.scrollbar_drag_to(position.y as f32, win_h);
+                    return;
+                }
                 // Show a hand cursor over links / clickable controls, an arrow otherwise.
                 let (cx, cy) = self.cursor;
                 let action = if cy >= CHROME_TOP {
@@ -1669,6 +1745,9 @@ impl ApplicationHandler<NavEvent> for App {
                 }
             }
             WindowEvent::MouseInput { state, button, .. } => {
+                if state == ElementState::Released {
+                    self.scrollbar_drag = None; // end any scrollbar drag
+                }
                 if state == ElementState::Pressed {
                     match button {
                         winit::event::MouseButton::Left => self.handle_click(),
