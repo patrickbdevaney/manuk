@@ -3162,6 +3162,7 @@ dependencies = [
  "lru",
  "swash",
  "tracing",
+ "unicode-bidi",
 ]
 
 [[package]]

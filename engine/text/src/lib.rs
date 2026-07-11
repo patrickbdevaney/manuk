@@ -492,9 +492,10 @@ impl FontContext {
         // Shape each fallback-segmented run and sum advances (no glyph vec is built).
         let mut total = None;
         if let Some(primary) = self.primary_face(key) {
+            // Width is order-independent, so measure without bidi reordering.
             let mut pen = 0.0f32;
             for (face, run) in self.segment(text, primary) {
-                self.shape_run(&run, face, size, |g, _| pen += g.advance);
+                self.shape_run(&run, face, size, false, |g, _| pen += g.advance);
             }
             total = Some(pen);
         }
@@ -519,20 +520,27 @@ impl FontContext {
     }
 
     /// Shape one same-face run via swash, invoking `emit(glyph, x_offset)` per glyph with
-    /// the pen advancing; returns the run's total advance width.
+    /// the pen advancing; returns the run's total advance width. `rtl` sets the shaping
+    /// direction (glyphs are still emitted in visual, left-to-right pen order).
     fn shape_run(
         &self,
         text: &str,
         face: FaceId,
         size: f32,
+        rtl: bool,
         mut emit: impl FnMut(&swash::shape::cluster::Glyph, f32),
     ) -> f32 {
         let Some(fd) = self.face(face) else { return 0.0 };
         let Some(font) = swash::FontRef::from_index(&fd.data, fd.index as usize) else {
             return 0.0;
         };
+        let dir = if rtl {
+            swash::shape::Direction::RightToLeft
+        } else {
+            swash::shape::Direction::LeftToRight
+        };
         let mut ctx = self.shape_ctx.borrow_mut();
-        let mut shaper = ctx.builder(font).size(size).build();
+        let mut shaper = ctx.builder(font).size(size).direction(dir).build();
         shaper.add_str(text);
         let mut pen = 0.0f32;
         shaper.shape_with(|cluster| {
@@ -558,15 +566,26 @@ impl FontContext {
         };
         let mut glyphs = Vec::new();
         let mut pen = 0.0f32;
-        for (face, run) in self.segment(text, primary) {
-            let advance = self.shape_run(&run, face, size, |g, x| {
-                glyphs.push(GlyphPos {
-                    glyph_id: g.id,
-                    face,
-                    x: pen + x + g.x,
-                });
-            });
-            pen += advance;
+        // Bidi: reorder the text into visual runs (LTR base), then within each run
+        // face-segment and shape with the run's direction. Pure-LTR text yields a single
+        // LTR run identical to the non-bidi path.
+        let info = unicode_bidi::BidiInfo::new(text, Some(unicode_bidi::Level::ltr()));
+        for para in &info.paragraphs {
+            let (levels, vruns) = info.visual_runs(para, para.range.clone());
+            for vr in vruns {
+                let rtl = levels[vr.start].is_rtl();
+                let sub = &text[vr.clone()];
+                for (face, run) in self.segment(sub, primary) {
+                    let advance = self.shape_run(&run, face, size, rtl, |g, x| {
+                        glyphs.push(GlyphPos {
+                            glyph_id: g.id,
+                            face,
+                            x: pen + x + g.x,
+                        });
+                    });
+                    pen += advance;
+                }
+            }
         }
         ShapedRun {
             glyphs,

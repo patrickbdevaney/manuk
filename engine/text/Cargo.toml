@@ -21,3 +21,5 @@ lru = "0.12"
 # and (future) color/emoji + shaping. Replaces fontdue for glyph rasterization; fontdue
 # is retained for measurement so advance widths (and thus layout/parity) are unchanged.
 swash = "0.2"
+# Unicode bidirectional algorithm (RTL/mixed-direction reordering to visual order).
+unicode-bidi = "0.3"
