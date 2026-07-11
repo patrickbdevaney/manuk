@@ -223,6 +223,230 @@ pub fn to_taffy_style(cs: &ComputedStyle) -> Style {
     }
 }
 
+use crate::flex::Slot;
+use manuk_css::StyleMap;
+use manuk_dom::{Dom, NodeId as DomNodeId};
+use taffy::{
+    compute_cached_layout, compute_flexbox_layout, compute_grid_layout, compute_leaf_layout,
+    compute_root_layout, Cache, CacheTree, Layout, LayoutFlexboxContainer, LayoutGridContainer,
+    LayoutInput, LayoutOutput, LayoutPartialTree, NodeId as TId, RoundTree, TraversePartialTree,
+    TraverseTree,
+};
+
+/// A callback that content-measures a Manuk-leaf DOM node (block/inline/table/float) for
+/// the taffy tree — `(dom_node, known_dims, available_space) -> size`.
+type MeasureFn<'m> = dyn FnMut(DomNodeId, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32> + 'm;
+
+struct TNode {
+    dom: DomNodeId,
+    style: Style,
+    children: Vec<TId>,
+    cache: Cache,
+    layout: Layout,
+    /// Flex/grid container (taffy lays out its children) vs. Manuk-measured leaf.
+    container: bool,
+}
+
+/// A unified taffy tree spanning one flex/grid container and its directly-nested flex/grid
+/// descendants. Block/inline/float/table children are leaves measured back into Manuk.
+pub struct TaffyDom<'m> {
+    nodes: Vec<TNode>,
+    measure: Box<MeasureFn<'m>>,
+}
+
+impl<'m> TaffyDom<'m> {
+    /// Build the tree for `container` (a flex/grid DOM node) and its subtree, mapping styles
+    /// and recursing through nested flex/grid. Returns the tree and the container's taffy id.
+    fn build(
+        dom: &Dom,
+        styles: &StyleMap,
+        container: DomNodeId,
+        measure: Box<MeasureFn<'m>>,
+    ) -> (Self, TId) {
+        let mut tree = TaffyDom { nodes: Vec::new(), measure };
+        let root = tree.add(dom, styles, container);
+        // The container's own margin/padding/border/inset are applied by Manuk's block
+        // layout around this subtree; the tree just positions children from the content
+        // origin, so zero them on the root and pin it in flow.
+        let r: usize = root.into();
+        tree.nodes[r].style.margin = Rect::zero();
+        tree.nodes[r].style.padding = Rect::zero();
+        tree.nodes[r].style.border = Rect::zero();
+        tree.nodes[r].style.inset = Rect::auto();
+        tree.nodes[r].style.position = taffy::style::Position::Relative;
+        (tree, root)
+    }
+
+    fn add(&mut self, dom: &Dom, styles: &StyleMap, node: DomNodeId) -> TId {
+        let cs = &styles[&node];
+        let style = to_taffy_style(cs);
+        let container = matches!(cs.display, CssDisplay::Flex | CssDisplay::Grid);
+        let children: Vec<TId> = if container {
+            dom.children(node)
+                .filter(|&c| dom.is_element(c))
+                .map(|c| self.add(dom, styles, c))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let id = self.nodes.len();
+        self.nodes.push(TNode {
+            dom: node,
+            style,
+            children,
+            cache: Cache::new(),
+            layout: Layout::new(),
+            container,
+        });
+        TId::from(id)
+    }
+
+    fn dispatch(&mut self, node_id: TId, inputs: LayoutInput) -> LayoutOutput {
+        let idx: usize = node_id.into();
+        if self.nodes[idx].container {
+            match self.nodes[idx].style.display {
+                Display::Grid => compute_grid_layout(self, node_id, inputs),
+                _ => compute_flexbox_layout(self, node_id, inputs),
+            }
+        } else {
+            // Manuk-measured leaf: content-size via the callback into block/inline layout.
+            let style = self.nodes[idx].style.clone();
+            let dom_node = self.nodes[idx].dom;
+            let measure = &mut self.measure;
+            compute_leaf_layout(inputs, &style, |_, _| 0.0, |known, avail| measure(dom_node, known, avail))
+        }
+    }
+}
+
+impl TraversePartialTree for TaffyDom<'_> {
+    type ChildIter<'a>
+        = std::iter::Copied<std::slice::Iter<'a, TId>>
+    where
+        Self: 'a;
+    fn child_ids(&self, node_id: TId) -> Self::ChildIter<'_> {
+        self.nodes[usize::from(node_id)].children.iter().copied()
+    }
+    fn child_count(&self, node_id: TId) -> usize {
+        self.nodes[usize::from(node_id)].children.len()
+    }
+    fn get_child_id(&self, node_id: TId, index: usize) -> TId {
+        self.nodes[usize::from(node_id)].children[index]
+    }
+}
+impl TraverseTree for TaffyDom<'_> {}
+
+impl LayoutPartialTree for TaffyDom<'_> {
+    type CoreContainerStyle<'a>
+        = &'a Style
+    where
+        Self: 'a;
+    type CustomIdent = String;
+    fn get_core_container_style(&self, node_id: TId) -> &Style {
+        &self.nodes[usize::from(node_id)].style
+    }
+    fn set_unrounded_layout(&mut self, node_id: TId, layout: &Layout) {
+        self.nodes[usize::from(node_id)].layout = *layout;
+    }
+    fn compute_child_layout(&mut self, node_id: TId, inputs: LayoutInput) -> LayoutOutput {
+        compute_cached_layout(self, node_id, inputs, |tree, id, inputs| tree.dispatch(id, inputs))
+    }
+}
+
+impl CacheTree for TaffyDom<'_> {
+    fn cache_get(&self, node_id: TId, inputs: &LayoutInput) -> Option<LayoutOutput> {
+        self.nodes[usize::from(node_id)].cache.get(inputs)
+    }
+    fn cache_store(&mut self, node_id: TId, inputs: &LayoutInput, output: LayoutOutput) {
+        self.nodes[usize::from(node_id)].cache.store(inputs, output);
+    }
+    fn cache_clear(&mut self, node_id: TId) {
+        self.nodes[usize::from(node_id)].cache.clear();
+    }
+}
+
+impl RoundTree for TaffyDom<'_> {
+    fn get_unrounded_layout(&self, node_id: TId) -> Layout {
+        self.nodes[usize::from(node_id)].layout
+    }
+    fn set_final_layout(&mut self, node_id: TId, layout: &Layout) {
+        self.nodes[usize::from(node_id)].layout = *layout;
+    }
+}
+
+impl LayoutFlexboxContainer for TaffyDom<'_> {
+    type FlexboxContainerStyle<'a>
+        = &'a Style
+    where
+        Self: 'a;
+    type FlexboxItemStyle<'a>
+        = &'a Style
+    where
+        Self: 'a;
+    fn get_flexbox_container_style(&self, node_id: TId) -> &Style {
+        &self.nodes[usize::from(node_id)].style
+    }
+    fn get_flexbox_child_style(&self, child_node_id: TId) -> &Style {
+        &self.nodes[usize::from(child_node_id)].style
+    }
+}
+
+impl LayoutGridContainer for TaffyDom<'_> {
+    type GridContainerStyle<'a>
+        = &'a Style
+    where
+        Self: 'a;
+    type GridItemStyle<'a>
+        = &'a Style
+    where
+        Self: 'a;
+    fn get_grid_container_style(&self, node_id: TId) -> &Style {
+        &self.nodes[usize::from(node_id)].style
+    }
+    fn get_grid_child_style(&self, child_node_id: TId) -> &Style {
+        &self.nodes[usize::from(child_node_id)].style
+    }
+}
+
+/// Lay out a flex/grid `container` and its directly-nested flex/grid descendants in one
+/// unified taffy tree, measuring block/inline/float/table leaves via `measure`. Returns the
+/// container's **direct children's** slots (relative to its content origin) — the same shape
+/// [`crate::flex::solve_flex`] returns, so it drops into the existing placement path.
+pub fn solve_subtree(
+    dom: &Dom,
+    styles: &StyleMap,
+    container: DomNodeId,
+    container_width: f32,
+    container_height: Option<f32>,
+    measure: impl FnMut(DomNodeId, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32> + 'static,
+) -> Vec<Slot> {
+    let (mut tree, root) = TaffyDom::build(dom, styles, container, Box::new(measure));
+    // Pin the root to the given content size (Manuk resolved width; height when definite).
+    let r: usize = root.into();
+    tree.nodes[r].style.size = Size {
+        width: length(container_width),
+        height: container_height.map(length).unwrap_or(auto()),
+    };
+    compute_root_layout(
+        &mut tree,
+        root,
+        Size {
+            width: AvailableSpace::Definite(container_width),
+            height: match container_height {
+                Some(h) => AvailableSpace::Definite(h),
+                None => AvailableSpace::MinContent,
+            },
+        },
+    );
+    tree.nodes[r]
+        .children
+        .iter()
+        .map(|&c| {
+            let l = tree.nodes[usize::from(c)].layout;
+            Slot { x: l.location.x, y: l.location.y, width: l.size.width, height: l.size.height }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -248,5 +472,42 @@ mod tests {
         let t = to_taffy_style(&cs);
         assert_eq!(t.flex_grow, 1.0);
         assert_eq!(t.size.width, auto());
+    }
+
+    #[test]
+    fn solve_subtree_lays_out_flex_row() {
+        use manuk_dom::Dom;
+        use std::collections::HashMap;
+
+        // A 300px flex row with two grow:1 children → 150/150 split.
+        let mut dom = Dom::new();
+        let container = dom.create_element("div");
+        dom.append_child(dom.root(), container);
+        let a = dom.create_element("div");
+        let b = dom.create_element("div");
+        dom.append_child(container, a);
+        dom.append_child(container, b);
+
+        let mut styles: HashMap<_, _> = HashMap::new();
+        let mut cc = ComputedStyle::initial();
+        cc.display = CssDisplay::Flex;
+        cc.width = Dim::Px(300.0);
+        styles.insert(container, cc);
+        for &child in &[a, b] {
+            let mut cs = ComputedStyle::initial();
+            cs.display = CssDisplay::Block;
+            cs.flex_grow = 1.0;
+            styles.insert(child, cs);
+        }
+
+        // Leaves measure to zero content (only grow matters here).
+        let slots = solve_subtree(&dom, &styles, container, 300.0, None, |_n, _k, _a| Size {
+            width: 0.0,
+            height: 0.0,
+        });
+        assert_eq!(slots.len(), 2);
+        assert!((slots[0].width - 150.0).abs() < 1.0, "got {slots:?}");
+        assert!((slots[1].width - 150.0).abs() < 1.0, "got {slots:?}");
+        assert!(slots[1].x >= slots[0].width - 1.0, "second is to the right: {slots:?}");
     }
 }
