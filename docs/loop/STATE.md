@@ -25,7 +25,7 @@ Gate: `cargo run -q -p manuk-wpt --release -- parity` = **72/72**.
 | PERF | 58 | Off-thread nav, bfcache, preconnect, **predictive prerender (hover → full page built into bfcache → instant click)**, partial GPU upload, shaping caches. Not yet profiled against Chromium; cold-start ~73ms tiny page. |
 | MEM | 55 | Tab hibernation (discard/restore). No SoA DOM yet (deferred, measure first). Binary 16.4 MB (Stylo+SM). |
 | AGENT-IN | 44 | llama.cpp/GGUF in-browser agent panel (Ctrl+J), typed actions. **Deterministic action grounding** (model Action → confidence-gated on-page target, model-free + tested). Model inference still depends on a local GGUF backend. |
-| AGENT-EXT | 50 | In-process typed `BrowserAction` + a11y targeting; **AG2 task-intent pruning + AG3 dual (semantic+visual) targeting** with confidence margins. AG5 ~12× lower per-command latency than CDP. BiDi surface exists (no DevTools UI). |
+| AGENT-EXT | 55 | In-process typed `BrowserAction` + a11y targeting; AG2/AG3 targeting with confidence; **automation surface: durable Selectors + wait-for Conditions + assertions** (act→wait→assert). AG5 ~12× lower per-command latency than CDP. BiDi surface exists (no DevTools UI). |
 | FINGERPRINT | 33 | Honest human UA + navigator + **boot window/screen metrics** (innerWidth/screen/dpr/matchMedia/rAF). Not yet complete (fonts, timezone, canvas/WebGL consistency, true window size). |
 | COMPAT | 53 | Simple + table-driven sites faithful (example.com, HN). Boot-metric ReferenceErrors fixed; **fetch/XHR + pushState routing + postMessage/opener + MutationObserver** (SPA hydration, routing, OAuth-return, post-fetch DOM-watching all work). Remaining SPA gaps narrowing; responsive `@media` correctness (Wikipedia-class) still partial (next). |
 | STABILITY | 55 | Parity green; fast-exit avoids mozjs teardown crash. GUI paths unverified headlessly. |
@@ -41,7 +41,7 @@ real Promises + host round-trip (Tick 2)**; **history.pushState/popstate + locat
 **downloads to disk (Tick 4)**; **predictive prerender into bfcache (Tick 5)**; **cross-window
 postMessage + window.opener (Tick 6)**; **MutationObserver (Tick 7)**; **responsive @media +
 matchMedia (Tick 8)**; **agent targeting AG2/AG3 (Tick 9)**; **action grounding (Tick 10)**; **file uploads / multipart
-(Tick 11)**.
+(Tick 11)**; **automation surface selectors/wait/assert (Tick 12)**.
 
 ## Known weak frontiers (feed exploration)
 

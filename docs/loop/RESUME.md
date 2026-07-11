@@ -4,8 +4,8 @@ _A fresh session reads [[CONSTITUTION]] then this file, and resumes at the named
 
 ## Where the loop is
 
-- **TICKS = 12** (about to run Tick 12). Ticks 1–11 done + committed; latest: 9 (`6524b11`),
-  10 (`2db6920`), 11 (`fc41bc9`).
+- **TICKS = 13** (about to run Tick 13). Ticks 1–12 done + committed; latest: 10 (`2db6920`),
+  11 (`fc41bc9`), 12 (`034c275`).
 - Working tree: clean, on `main`, pushed. Parity 72/72. Disk: 41G free (86%); nuke
   `target/debug` only if free < 25G.
 - Key architecture notes for future ticks:
@@ -32,45 +32,40 @@ _A fresh session reads [[CONSTITUTION]] then this file, and resumes at the named
     (shared by finish_load + finish_prewarm); prewarmed pages live in the bfcache; `goto` checks
     it first for an instant click.
 
-## Next action (Tick 12)
+## Next action (Tick 13)
 
-Pick: **L30 — in-process automation-surface hardening** (top raw-UCB ~4.6; the agent-native
-differentiator, composing directly with Ticks 9–10 targeting+grounding; the user's latest
-directive explicitly invites "innovations"). Pure, HEADLESS-verifiable functions over the a11y
-tree + observation stream — a reliable driving surface an external agent/test can depend on.
+Pick: **L18 — cookie partitioning + `SameSite` enforcement audit** (rotate back to human/security
+after the agentic L30; advances the under-developed SECURITY axis 45; self-contained + HEADLESS in
+`engine/net`).
 
-Build in `agent/` (new module, e.g. `automation.rs`), composing `targeting`/`grounding`:
-1. **Stable selectors.** A `Selector` that references an element by durable attributes rather
-   than a fragile index/path: `{ role, name, nth }` (+ maybe an ancestor role for scoping).
-   `resolve(selector, tree) -> Option<NodeId>` — deterministic, and stable across unrelated DOM
-   mutations (re-resolve by role+name, not position). Unit-test that it still resolves after
-   sibling insert/removal.
-2. **Wait-for conditions.** A `Condition` enum evaluated against an `A11yNode` snapshot:
-   `Visible(Selector)`, `Gone(Selector)`, `TextPresent(String)`, `UrlMatches(String)`,
-   `CountAtLeast(Selector, n)`. `evaluate(cond, tree, url) -> bool`. The agent loop polls it
-   between observations (no timers here — the caller drives ticks); provide a
-   `wait(cond, snapshots: impl Iterator<Item=&A11yNode>) -> Outcome` that returns Met/Timeout
-   over a bounded snapshot budget.
-3. **Assertions.** The same `Condition`s as pass/fail checks: `assert_that(cond, tree, url) ->
-   AssertResult { passed, detail }` — the primitive a test/automation script uses to verify page
-   state. Compose with `grounding::ground_action` so an automation step is
-   act → wait(post-condition) → assert.
-4. Verify HEADLESS: unit tests over synthetic trees — selector resolves the intended node and
-   survives a sibling mutation; each Condition true/false case; wait returns Met when a later
-   snapshot satisfies it and Timeout when none do; assert reports the failing detail. Parity 72/72
-   (agent-layer only).
+FIRST survey what exists: `engine/net/src/cookies.rs` (RFC-6265 `CookieJar`, `SameSite` enum,
+serde, persistence) and `engine/net/src/storage.rs` (there's already a partitioned store —
+`jar_mut(profile, container, top_level)`, `RequestContext::{navigation, subresource}`,
+`is_same_site` — see the earlier grep). The tick likely = **wire + audit + test**, not build from
+scratch:
+1. Confirm/þfix that cross-site subresource requests use a **partitioned** jar keyed by the
+   top-level site (so a tracker's cookie on site A isn't sent on site B). If `storage.rs` already
+   partitions, ensure the actual `send_once`/`cookie_jar()` path (lib.rs) routes through it with
+   the request's top-level context rather than the single global jar.
+2. `SameSite` enforcement on send: `Strict` cookies omitted on cross-site navigations;
+   `Lax` sent only on top-level GET navigations, omitted on cross-site subresource/POST;
+   `None` requires Secure. Implement `should_send(cookie, request_ctx)` purely and test the
+   matrix.
+3. Verify HEADLESS: unit tests — a `Strict`/`Lax`/`None` cookie set on site A is/ isn't attached
+   for (same-site nav, cross-site nav, cross-site subresource, cross-site POST); partition
+   isolation (cookie on A not visible to B's jar). Parity 72/72 (net-layer only).
 
-Follow-ons: wire the automation surface into a scriptable session/BiDi command; retries with
-backoff; a `Selector` by test-id attribute (`data-testid`) when present.
+Follow-ons: `__Host-`/`__Secure-` prefixes; partition-key persistence; CHIPS (`Partitioned`
+attribute).
 
 ## Then keep going
 
-After Tick 12, re-run §5 UCB. **Tick 15 is the next forced-highest-U.** Tier-A still open:
+After Tick 13, re-run §5 UCB. **Tick 15 is the next forced-highest-U.** Tier-A still open:
 L06 password autofill (EXTERNAL keyring), L07 semantic history, L09 DevTools (GUI), L13 off-thread
-external CSS/image, L15 inline SVG, L16 Shadow DOM, L18 cookie partitioning; Tier-B: L33 SoA-DOM
-measure, L34 service worker. Rotate human/agentic to keep axis balance. Each tick: implement →
-verify (build + parity 72/72 + test) → disk hygiene → commit+push (co-author line) → update
-LEDGER/STATE/JOURNAL/RESUME → next.
+external CSS/image, L15 inline SVG, L16 Shadow DOM; Tier-B: L33 SoA-DOM measure, L34 service
+worker. Rotate human/agentic to keep axis balance. Each tick: implement → verify (build + parity
+72/72 + test) → disk hygiene → commit+push (co-author line) → update LEDGER/STATE/JOURNAL/RESUME
+→ next.
 
 ## Re-establish context
 

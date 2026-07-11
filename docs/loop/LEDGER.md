@@ -5,12 +5,11 @@ T=times touched. `score = V/C + 1.5*sqrt(ln(1+TICKS)/(1+T)) + 1.0*(U/10)`. Every
 the highest-U item. Update T/status/scores each tick; add items on reflection; mark dead ends
 `superseded`. Verify class per §7: HEADLESS / GUI / EXTERNAL / MEASURE._
 
-**TICKS = 12** (global tick counter; increment each tick). _Done: 1 L14-slice, 2 L01 fetch/XHR,
-3 L10 pushState, 4 L04 downloads, 5 L32 prerender, 6 L03 postMessage, 7 L02 MutationObserver,
-8 L11 @media, 9 L17 targeting, 10 L31-slice grounding (forced-U), 11 L05 uploads. Tick 12 pick:
-**L30 in-process automation-surface hardening** — the top raw-UCB item (~4.6), the agent-native
-differentiator that composes directly with Ticks 9–10 (targeting+grounding); the user's latest
-directive explicitly invites "innovations". NOTE: Tick 15 is the next forced-highest-U tick._
+**TICKS = 13** (global tick counter; increment each tick). _Done: 1 L14-slice, 2 L01, 3 L10,
+4 L04, 5 L32, 6 L03, 7 L02, 8 L11, 9 L17, 10 L31-slice (forced-U), 11 L05, 12 L30. Tick 13 pick:
+**L18 cookie partitioning + `SameSite` enforcement audit** — rotate back to human/security after
+the agentic L30; advances the under-developed SECURITY axis (45); self-contained + HEADLESS in
+engine/net. NOTE: Tick 15 is the next forced-highest-U tick._
 
 ## Tier A — absorb outstanding beneficial work already suggested (do first)
 
@@ -52,7 +51,7 @@ STATE weak frontiers. High V, mostly known ⇒ high exploit ⇒ front-loaded.
 
 | id | intent | axis | V | C | U | T | status | verify |
 |----|--------|------|---|---|---|---|--------|--------|
-| L30 | In-process automation tool surface hardening (stable selectors, wait-for, assertions) as the agent-native differentiator | AGENT-EXT | 9 | 6 | 7 | 0 | backlog | HEADLESS |
+| L30 | In-process automation tool surface hardening (stable selectors, wait-for, assertions) as the agent-native differentiator | AGENT-EXT | 9 | 6 | 7 | 1 | **done** (Tick 12) | HEADLESS |
 | L31 | llama.cpp agent: prompt→action grounding over the a11y tree, replayable | AGENT-IN | 8 | 7 | 8 | 1 | **partial** (Tick 10: grounding half done HEADLESS; model inference still EXTERNAL) | EXTERNAL |
 | L32 | Speculative/predictive prerender of likely-next navigations | PERF | 6 | 7 | 8 | 1 | **done** (Tick 5) | HEADLESS |
 | L32b | Idle (non-hover) prerender from ranked content links + surfaced prewarm hit-rate metric | PERF | 4 | 5 | 5 | 0 | backlog (L32 follow-on) | MEASURE |
@@ -69,7 +68,8 @@ MEM3-binary-size · window.open→new-tab · **fetch()+XHR real Promises (L01, T
 (L04, Tick 4)** · **predictive prerender into bfcache (L32, Tick 5)** · **cross-window
 postMessage + window.opener (L03, Tick 6)** · **MutationObserver (L02, Tick 7)** ·
 **responsive @media + matchMedia (L11, Tick 8)** · **agent targeting AG2/AG3 (L17, Tick 9)** ·
-**action grounding (L31-slice, Tick 10)** · **file uploads / multipart (L05, Tick 11)**.
+**action grounding (L31-slice, Tick 10)** · **file uploads / multipart (L05, Tick 11)** ·
+**automation surface: selectors/wait/assert (L30, Tick 12)**.
 
 ## Superseded / blocked
 

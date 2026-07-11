@@ -187,3 +187,16 @@ _Minimal history for audit + resume. See [[CONSTITUTION]] §4/§6, [[RESUME]] fo
   Parity 72/72; net+agent 117 + workspace green. Commit `fc41bc9`.
 - Reflect: shell OS file-picker on `<input type=file>` click, multi-file, drag-drop, streaming,
   progress are follow-ons (the GUI picker is the remaining thin integration). Next: Tick 12.
+
+## Tick 12 — L30: in-process automation surface (2026-07-11)
+- Selected: top raw-UCB (~4.6); the agent-native differentiator composing Ticks 9-10; user's
+  latest directive explicitly invited "innovations".
+- Implemented: `agent/src/automation.rs` — `Selector{role,name,nth}` durable element reference
+  (resolves by semantics, survives sibling mutations); `Condition{Visible,Gone,TextPresent,
+  UrlMatches,CountAtLeast}` with `evaluate`; `wait(cond, snapshots)->Outcome::{Met{at},Timeout}`
+  over a caller-driven snapshot stream (no timers); `assert_that(...)->AssertResult`.
+- Verified: HEADLESS — 5 unit tests (selector stable across sibling insert; nth among
+  duplicates; each Condition; wait Met/Timeout; assert failure detail). Parity 72/72; agent 122 +
+  workspace green. Commit `034c275`.
+- Reflect: expose as a scriptable session/BiDi command; retries w/ backoff; data-testid
+  selectors; an act→wait→assert step helper. Next: Tick 13.
