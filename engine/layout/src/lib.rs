@@ -1197,6 +1197,19 @@ impl Ctx<'_> {
         pref.min(avail).max(0.0)
     }
 
+    /// The intrinsic **content** size `(width, height)` of `node` for taffy's flex/grid
+    /// measure seam (Blitz model): shrink-to-fit the width against `avail_width` (max-content
+    /// clamped to available), then lay the content out at that width to get its height. This
+    /// is what lets an `auto`-sized flex/grid item size to its content instead of collapsing
+    /// to zero. Read-only (`&self`), so it can be called from the measure closure.
+    fn measure_intrinsic(&self, node: NodeId, avail_width: Option<f32>) -> (f32, f32) {
+        let avail = avail_width.unwrap_or(1.0e6);
+        let width = self.shrink_to_fit(node, avail);
+        let mut fc = FloatContext::new(0.0, width.max(1.0));
+        let (_content, height) = self.layout_children(node, 0.0, 0.0, width.max(0.0), None, &mut fc);
+        (width, height)
+    }
+
     /// Lay out a `display:table` box (CSS2 §17), separated-borders model. Sequence:
     /// gather rows (flattening row groups) → per-column intrinsic min/max widths →
     /// distribute the table width across columns (fixed or auto) → lay out cells,
@@ -1865,6 +1878,7 @@ impl Ctx<'_> {
                     Dim::Calc { .. } => flex::FlexBasis::Px(s.flex_basis.resolve(cw, 0.0)),
                 };
                 flex::FlexItem {
+                    node: k,
                     width: match s.width {
                         Dim::Px(p) => Some(p),
                         _ => None,
@@ -1895,7 +1909,9 @@ impl Ctx<'_> {
             row_gap: cs.row_gap,
             column_gap: cs.column_gap,
         };
-        let slots = flex::solve_flex(cw, container_h, &items, &config);
+        let slots = flex::solve_flex(cw, container_h, &items, &config, |node, avail| {
+            self.measure_intrinsic(node, avail)
+        });
 
         self.place_taffy_slots(&block_kids, &slots, cx, cy)
     }
@@ -1911,6 +1927,7 @@ impl Ctx<'_> {
             .map(|&k| {
                 let s = &self.styles[&k];
                 flex::GridItem {
+                    node: k,
                     width: match s.width {
                         Dim::Px(p) => Some(p),
                         _ => None,
@@ -1937,6 +1954,7 @@ impl Ctx<'_> {
             &cs.grid_template_rows,
             cs.row_gap,
             cs.column_gap,
+            |node, avail| self.measure_intrinsic(node, avail),
         );
         self.place_taffy_slots(&block_kids, &slots, cx, cy)
     }
