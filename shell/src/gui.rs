@@ -777,6 +777,8 @@ impl App {
                 Err(e) => tracing::warn!("session save failed: {e:#}"),
             }
         }
+        // Persist login cookies alongside the session so they survive a restart.
+        manuk_net::save_cookies();
     }
 
     /// Focus a tab and **wake it on focus**: a hibernated (restored/background) tab holds no

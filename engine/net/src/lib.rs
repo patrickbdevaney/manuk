@@ -594,9 +594,35 @@ pub async fn request(
 
 /// Process-global RFC-6265 cookie jar shared by every request (U6). Single-profile for now;
 /// per-container/site partitioning (via `storage.rs`) and disk persistence are follow-ons.
+/// Where persistent cookies live: `$MANUK_STATE` / `$XDG_STATE_HOME/manuk` / `~/.local/state/manuk`
+/// (mirrors the shell's session store), file `cookies.json`.
+pub fn cookie_store_path() -> std::path::PathBuf {
+    let dir = if let Some(d) = std::env::var_os("MANUK_STATE") {
+        std::path::PathBuf::from(d)
+    } else if let Some(d) = std::env::var_os("XDG_STATE_HOME") {
+        std::path::PathBuf::from(d).join("manuk")
+    } else if let Some(home) = std::env::var_os("HOME") {
+        std::path::PathBuf::from(home).join(".local/state/manuk")
+    } else {
+        std::path::PathBuf::from(".manuk")
+    };
+    dir.join("cookies.json")
+}
+
 fn cookie_jar() -> &'static std::sync::Mutex<cookies::CookieJar> {
     static JAR: std::sync::OnceLock<std::sync::Mutex<cookies::CookieJar>> = std::sync::OnceLock::new();
-    JAR.get_or_init(|| std::sync::Mutex::new(cookies::CookieJar::new()))
+    // Load persistent cookies from disk on first use, so a prior session's logins survive.
+    JAR.get_or_init(|| std::sync::Mutex::new(cookies::CookieJar::load_from(&cookie_store_path())))
+}
+
+/// Flush persistent cookies to disk. Call on navigation-commit and on quit so logins with a
+/// multi-week expiry survive a restart. Best-effort; a write failure is logged, not fatal.
+pub fn save_cookies() {
+    if let Ok(jar) = cookie_jar().lock() {
+        if let Err(e) = jar.save_to(&cookie_store_path()) {
+            tracing::warn!(error = %e, "failed to persist cookies");
+        }
+    }
 }
 
 async fn send_once(
@@ -615,13 +641,19 @@ async fn send_once(
     let status = resp.status().as_u16();
     let http_version = resp.version().into();
     let headers_vec = collect_headers(&resp);
-    // Store any Set-Cookie the server sent.
+    // Store any Set-Cookie the server sent, and flush to disk if we saw one (so a login
+    // response's persistent cookies survive a restart without waiting for a clean quit).
+    let mut saw_set_cookie = false;
     if let Ok(mut jar) = cookie_jar().lock() {
         for (k, v) in &headers_vec {
             if k.eq_ignore_ascii_case("set-cookie") {
                 jar.store(url, v);
+                saw_set_cookie = true;
             }
         }
+    }
+    if saw_set_cookie {
+        save_cookies();
     }
     let encoding = content_encoding(&resp);
 

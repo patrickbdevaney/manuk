@@ -22,14 +22,14 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use url::Url;
 
 /// `SameSite` attribute (parsed and stored; enforced by `storage`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum SameSite {
     Strict,
     Lax,
     None,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Cookie {
     pub name: String,
     pub value: String,
@@ -267,6 +267,50 @@ impl CookieJar {
         self.cookies.clear();
     }
 
+    /// Persist cookies that survive a restart — those with an explicit, unexpired `expires`.
+    /// Session cookies (no expiry) are intentionally dropped, matching Chromium/Gecko. Writes
+    /// JSON to `path`, creating parent directories. Best-effort (returns the IO error).
+    pub fn save_to(&self, path: &std::path::Path) -> std::io::Result<()> {
+        self.save_to_at(path, SystemTime::now())
+    }
+
+    pub fn save_to_at(&self, path: &std::path::Path, now: SystemTime) -> std::io::Result<()> {
+        let keep: Vec<&Cookie> = self
+            .cookies
+            .iter()
+            .filter(|c| c.expires.is_some() && !c.is_expired_at(now))
+            .collect();
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        let json = serde_json::to_vec_pretty(&keep).map_err(std::io::Error::other)?;
+        std::fs::write(path, json)
+    }
+
+    /// Load persistent cookies from `path`, dropping any that have since expired. A missing
+    /// or corrupt file yields an empty jar (first run / partial write are non-fatal).
+    pub fn load_from(path: &std::path::Path) -> Self {
+        Self::load_from_at(path, SystemTime::now())
+    }
+
+    pub fn load_from_at(path: &std::path::Path, now: SystemTime) -> Self {
+        let mut jar = Self::new();
+        let Ok(bytes) = std::fs::read(path) else {
+            return jar;
+        };
+        let Ok(cookies) = serde_json::from_slice::<Vec<Cookie>>(&bytes) else {
+            return jar;
+        };
+        for mut c in cookies {
+            if c.expires.is_some() && !c.is_expired_at(now) {
+                c.creation = jar.next_creation;
+                jar.next_creation += 1;
+                jar.cookies.push(c);
+            }
+        }
+        jar
+    }
+
     /// Store a `Set-Cookie` header received from `url`. Returns whether it was accepted.
     pub fn store(&mut self, url: &Url, set_cookie: &str) -> bool {
         let Some(mut c) = parse_set_cookie(url, set_cookie) else {
@@ -370,6 +414,36 @@ mod tests {
 
     fn u(s: &str) -> Url {
         Url::parse(s).unwrap()
+    }
+
+    #[test]
+    fn persists_expiring_cookies_but_not_session_cookies() {
+        let dir = std::env::temp_dir().join(format!("manuk-cookie-test-{}", std::process::id()));
+        let path = dir.join("cookies.json");
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let mut jar = CookieJar::new();
+        // A persistent (expiring) login cookie, and a session cookie (no expiry).
+        jar.store(&u("https://example.com/"), "login=xyz; Max-Age=1209600"); // 2 weeks
+        jar.store(&u("https://example.com/"), "tmp=session");
+        jar.save_to(&path).unwrap();
+
+        // Reload: the login cookie survives; the session cookie is dropped.
+        let reloaded = CookieJar::load_from(&path);
+        assert_eq!(
+            reloaded.cookie_header(&u("https://example.com/")),
+            Some("login=xyz".to_string())
+        );
+
+        // An already-expired persistent cookie is not resurrected on load.
+        let past = SystemTime::now() - std::time::Duration::from_secs(3600);
+        let mut jar2 = CookieJar::new();
+        jar2.store(&u("https://example.com/"), "login=xyz; Max-Age=1209600");
+        jar2.save_to(&path).unwrap();
+        let expired_load = CookieJar::load_from_at(&path, past + std::time::Duration::from_secs(3 * 1209600));
+        assert_eq!(expired_load.cookie_header(&u("https://example.com/")), None);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

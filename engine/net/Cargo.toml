@@ -32,6 +32,9 @@ tokio-util.workspace = true
 futures-util.workspace = true
 encoding_rs.workspace = true
 chardetng.workspace = true
+# Cross-session cookie persistence (U6): serialize the jar's persistent cookies to disk.
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 # Calling the connector's `Service<Uri>` directly for speculative preconnect (warm
 # TCP+TLS without an HTTP request). Already in the tree transitively.
 tower-service = "0.3"
