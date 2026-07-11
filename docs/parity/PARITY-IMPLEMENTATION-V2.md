@@ -22,6 +22,27 @@ Progress against them + the phase plan below:
 Also shipped this program: DDG search-click fix, `vw/vh/vmin/vmax` units, 9 engine
 repomaps, `RESEARCH-PROMPT-V2` + `RESEARCH-FINDINGS-V2`.
 
+### Beyond the top-10 — broad-insight backlog (in progress)
+
+Working through the repomaps' + research's fold-in recommendations beyond the top-10:
+
+**Shipped:**
+- **html/dom:** context-aware `innerHTML` fragment parsing (`<tr>`/`<td>`/`<li>` survive)
+- **net:** in-memory HTTP cache (RFC-9111 subset — fresh GETs skip the round-trip)
+- **net/page:** preload scanner (warm the cache with `<link stylesheet|preload>` before parse)
+- **text:** shaped-run cache (paint/scroll reuse glyph runs, not just widths)
+- **agent:** typed `BrowserAction` + `perform()` dispatcher (#E4)
+
+**Heavy tail (dedicated efforts / heavy builds / live verification):**
+- **js** (needs SpiderMonkey builds): replace `eval`-string bindings with direct JSAPI,
+  native timers / `fetch` / `MutationObserver`, a minimal WebIDL generator
+- **text:** UAX#14 line-breaking (Unicode tables), `{script,locale}` fallback
+- **a11y:** occlusion-aware hit-test (needs z-order plumbed from layout into the a11y tree)
+- **html/dom:** preserve namespaces → inline SVG/MathML render (new SVG layout/paint)
+- **scheduling:** microtask checkpoints, task priority lanes
+- **paint:** Vello backend behind the `Painter` trait
+- **#6** GPU spatial/scroll tree (live-window verification)
+
 Remaining big rocks are sequenced in Phases B3 / C / G below; the GPU ones need live-window
 verification and the Taffy integration is a focused multi-step effort.
 
