@@ -1792,10 +1792,46 @@ const WINDOW_PRELUDE: &str = r#"
             colorDepth: 24, pixelDepth: 24, orientation: { type: 'landscape-primary', angle: 0 }
         };
         if (typeof g.matchMedia === 'undefined') {
+            // Evaluate the common media features against the viewport (VW×VH), mirroring the CSS
+            // @media cascade, so JS responsive branches agree with the rendered layout. Commas =
+            // OR, ` and ` = AND; unknown features don't block (evaluate true).
+            g.__evalMediaFeature = function (f) {
+                f = String(f).trim();
+                var m = f.match(/^\(?\s*([a-z-]+)\s*(?::\s*([^)]+))?\)?$/);
+                if (!m) return f.indexOf('print') < 0;
+                var name = m[1], val = (m[2] || '').trim(), px = parseFloat(val);
+                switch (name) {
+                    case 'min-width': return VW >= px;
+                    case 'max-width': return VW <= px;
+                    case 'min-height': return VH >= px;
+                    case 'max-height': return VH <= px;
+                    case 'width': return VW === px;
+                    case 'height': return VH === px;
+                    case 'orientation': return (val === 'landscape') === (VW >= VH);
+                    case 'prefers-color-scheme': return val === 'light';
+                    case 'prefers-reduced-motion': return val !== 'reduce';
+                    case 'screen': case 'all': return true;
+                    case 'print': return false;
+                    default: return true;
+                }
+            };
+            g.__evalMedia = function (q) {
+                q = String(q).toLowerCase().trim();
+                var ors = q.split(',');
+                for (var i = 0; i < ors.length; i++) {
+                    var parts = ors[i].split(' and '), ok = true;
+                    for (var j = 0; j < parts.length; j++) {
+                        if (!g.__evalMediaFeature(parts[j])) { ok = false; break; }
+                    }
+                    if (ok) return true;
+                }
+                return false;
+            };
             g.matchMedia = function (q) {
-                return { matches: false, media: String(q), onchange: null,
+                return { matches: g.__evalMedia(q), media: String(q), onchange: null,
                          addListener: function () {}, removeListener: function () {},
-                         addEventListener: function () {}, removeEventListener: function () {} };
+                         addEventListener: function () {}, removeEventListener: function () {},
+                         dispatchEvent: function () { return false; } };
             };
         }
         if (typeof g.requestAnimationFrame === 'undefined') {

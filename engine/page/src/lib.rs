@@ -1686,6 +1686,22 @@ mod js_interactive_tests {
             "attributes:data-x:+0:-0|attributes:data-y:+0:-0|childList:-:+1:-0",
             "the observer got batched records: two attribute changes (incl. a subtree one) + a childList add"
         );
+
+        // (12) matchMedia evaluates width features against the boot viewport (1280×720), so JS
+        // responsive branches agree with the CSS @media cascade.
+        let html12 = r#"<!doctype html><html><body id="mm"><script>
+            document.getElementById('mm').setAttribute('data-r',
+              matchMedia('(max-width: 600px)').matches + ',' +
+              matchMedia('(min-width: 1000px)').matches + ',' +
+              matchMedia('(min-width: 1000px) and (max-width: 1400px)').matches);
+            </script></body></html>"#;
+        let page12 = Page::load(html12, "https://app.test/", &fonts, 800.0);
+        let mm = manuk_css::query_selector_all(page12.dom(), page12.dom().root(), "#mm")[0];
+        assert_eq!(
+            page12.dom().element(mm).and_then(|e| e.attr("data-r")),
+            Some("false,true,true"),
+            "matchMedia: not-narrow, is-wide, and in-range at 1280px wide"
+        );
     }
 }
 

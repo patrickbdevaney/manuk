@@ -48,7 +48,7 @@ use stylo::queries::values::PrefersColorScheme;
 use stylo::servo_arc::Arc as ServoArc;
 use stylo::shared_lock::{SharedRwLock, SharedRwLockReadGuard, StylesheetGuards};
 use stylo::stylesheets::{
-    AllowImportRules, CssRule, CssRuleType, DocumentStyleSheet, Origin,
+    AllowImportRules, CssRule, CssRuleType, CustomMediaEvaluator, DocumentStyleSheet, Origin,
     Stylesheet as StyloStylesheet, UrlExtraData,
 };
 use stylo::stylist::Stylist;
@@ -270,6 +270,54 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
     }
 }
 
+/// Match `rules` against `el`, appending each winning `(specificity, order, block)` to
+/// `winners`. Descends into `@media` blocks whose query [evaluates](MediaList::evaluate) true
+/// against `device` (built from the real viewport in [`make_device`]) — this is what makes
+/// responsive `@media (max-width: …)` rules apply. Nested `@media` recurse; other at-rules
+/// (`@supports`, `@layer`, …) are skipped for now (their inner rules are not applied), matching
+/// the prior flat behavior except that media rules now work.
+#[allow(clippy::type_complexity)]
+fn match_rules_recursive(
+    rules: &[CssRule],
+    guard: &SharedRwLockReadGuard<'_>,
+    device: &Device,
+    el: &StyloElement<'_>,
+    caches: &mut SelectorCaches,
+    winners: &mut Vec<(u32, usize, ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>)>,
+    order: &mut usize,
+) {
+    for rule in rules {
+        match rule {
+            CssRule::Style(style_rule) => {
+                let sr = style_rule.read_with(guard);
+                for sel in sr.selectors.slice() {
+                    let mut ctx = MatchingContext::new(
+                        MatchingMode::Normal,
+                        None,
+                        caches,
+                        selectors::context::QuirksMode::NoQuirks,
+                        NeedsSelectorFlags::No,
+                        MatchingForInvalidation::No,
+                    );
+                    if matches_selector(sel, 0, None, el, &mut ctx) {
+                        winners.push((sel.specificity(), *order, sr.block.clone()));
+                    }
+                    *order += 1;
+                }
+            }
+            CssRule::Media(media_rule) => {
+                let ml = media_rule.media_queries.read_with(guard);
+                let mut custom = CustomMediaEvaluator::none();
+                if ml.evaluate(device, QuirksMode::NoQuirks, &mut custom) {
+                    let nested = media_rule.rules.read_with(guard);
+                    match_rules_recursive(&nested.0, guard, device, el, caches, winners, order);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 /// Compute one element's `ComputedValues`: match author rules, merge, cascade.
 #[allow(clippy::too_many_arguments)]
 fn cascade_one_element(
@@ -283,31 +331,17 @@ fn cascade_one_element(
     node: NodeId,
     parent_cv: &std::collections::HashMap<NodeId, ServoArc<ComputedValues>>,
 ) -> ServoArc<ComputedValues> {
-    // Gather matching (specificity, order, block) across all sheets, document order.
+    // Gather matching (specificity, order, block) across all sheets, document order —
+    // descending into `@media` blocks whose query matches the current viewport (see
+    // `match_rules_recursive`).
     let mut winners: Vec<(u32, usize, ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>)> =
         Vec::new();
     let mut order = 0usize;
     let mut caches = SelectorCaches::default();
+    let device = stylist.device();
     for sheet in stylo_sheets {
-        for rule in sheet.contents.read_with(guard).rules(guard).iter() {
-            if let CssRule::Style(style_rule) = rule {
-                let sr = style_rule.read_with(guard);
-                for sel in sr.selectors.slice() {
-                    let mut ctx = MatchingContext::new(
-                        MatchingMode::Normal,
-                        None,
-                        &mut caches,
-                        selectors::context::QuirksMode::NoQuirks,
-                        NeedsSelectorFlags::No,
-                        MatchingForInvalidation::No,
-                    );
-                    if matches_selector(sel, 0, None, el, &mut ctx) {
-                        winners.push((sel.specificity(), order, sr.block.clone()));
-                    }
-                    order += 1;
-                }
-            }
-        }
+        let rules = sheet.contents.read_with(guard).rules(guard);
+        match_rules_recursive(rules, guard, device, el, &mut caches, &mut winners, &mut order);
     }
     winners.sort_by_key(|(spec, ord, _)| (*spec, *ord));
 
@@ -396,5 +430,48 @@ mod tests {
         // Inline style on <em> overrides the inherited color; weight still inherits.
         assert_eq!(ems.color, Rgba::new(0, 128, 0, 255), "inline style= overrides inherited color");
         assert_eq!(ems.font_weight, 700, "font-weight inherited by <em>");
+    }
+
+    /// Responsive `@media`: a media block's rules apply only when its query matches the current
+    /// viewport (evaluated against the real width the render path threads in).
+    #[test]
+    fn media_query_applies_by_viewport_width() {
+        // <body><div class="box"></div></body>
+        let mut dom = Dom::new();
+        let body = dom.create_element("body");
+        let bx = dom.create_element("div");
+        dom.set_attr(bx, "class", "box");
+        dom.append_child(dom.root(), body);
+        dom.append_child(body, bx);
+
+        let sheet = Stylesheet::parse(
+            ".box { display: block; width: 500px; } \
+             @media (max-width: 600px) { .box { display: none; width: 100px; } } \
+             @media (min-width: 1000px) { .box { width: 900px; } }",
+        );
+
+        // Narrow (400px): the max-width:600 block matches → display:none, width:100. The
+        // min-width:1000 block does NOT match.
+        let narrow = cascade_via_stylo(&dom, std::slice::from_ref(&sheet), 400.0, 800.0);
+        assert_eq!(
+            narrow[&bx].display,
+            crate::Display::None,
+            "@media(max-width:600) applies at 400px"
+        );
+        assert_eq!(narrow[&bx].width, crate::Dim::Px(100.0));
+
+        // Mid (800px): neither media block matches → base rule only.
+        let mid = cascade_via_stylo(&dom, std::slice::from_ref(&sheet), 800.0, 800.0);
+        assert_eq!(mid[&bx].display, crate::Display::Block, "no @media matches at 800px");
+        assert_eq!(mid[&bx].width, crate::Dim::Px(500.0));
+
+        // Wide (1200px): the min-width:1000 block matches → width:900 (later rule wins over base).
+        let wide = cascade_via_stylo(&dom, std::slice::from_ref(&sheet), 1200.0, 800.0);
+        assert_eq!(wide[&bx].display, crate::Display::Block, "base display at 1200px");
+        assert_eq!(
+            wide[&bx].width,
+            crate::Dim::Px(900.0),
+            "@media(min-width:1000) applies at 1200px"
+        );
     }
 }
