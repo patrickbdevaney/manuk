@@ -2344,6 +2344,35 @@ enum InlineItem {
 }
 
 
+/// Split a whitespace-delimited word at intra-word **UAX #14** break opportunities — after a
+/// hyphen (`well-known`), at a soft-hyphen or zero-width space, and between CJK ideographs —
+/// so long unspaced tokens can wrap at the right points instead of overflowing. A word with
+/// no internal opportunity returns unchanged, so plain English words are byte-identical to
+/// the old whitespace-only split (the common case, and why the parity gate is unmoved).
+/// Zero-width breaking spaces (U+200B), which exist only to mark an opportunity, are dropped.
+fn break_segments(word: &str) -> Vec<String> {
+    let mut segs = Vec::new();
+    let mut start = 0;
+    for (idx, _op) in unicode_linebreak::linebreaks(word) {
+        // The final opportunity is the mandatory break at end-of-word — already handled by
+        // the outer whitespace loop; only split at *interior* opportunities.
+        if idx >= word.len() {
+            break;
+        }
+        segs.push(word[start..idx].to_string());
+        start = idx;
+    }
+    segs.push(word[start..].to_string());
+    for s in &mut segs {
+        s.retain(|c| c != '\u{200b}');
+    }
+    segs.retain(|s| !s.is_empty());
+    if segs.is_empty() {
+        segs.push(String::new());
+    }
+    segs
+}
+
 fn push_word(
     out: &mut Vec<InlineItem>,
     buf: &mut String,
@@ -2353,14 +2382,20 @@ fn push_word(
     node: Option<NodeId>,
     no_wrap: bool,
 ) {
-    out.push(InlineItem::Word {
-        text: std::mem::take(buf),
-        style,
-        space_before: *pending_space && !*first,
-        node,
-        no_wrap,
-    });
-    *first = false;
+    let text = std::mem::take(buf);
+    // `nowrap`/`pre` forbid breaks inside the run, so never split those.
+    let segs = if no_wrap { vec![text] } else { break_segments(&text) };
+    for (i, seg) in segs.into_iter().enumerate() {
+        out.push(InlineItem::Word {
+            text: seg,
+            style,
+            // Only the first sub-token inherits the preceding space; the rest are contiguous.
+            space_before: i == 0 && *pending_space && !*first,
+            node,
+            no_wrap,
+        });
+        *first = false;
+    }
     *pending_space = false;
 }
 
@@ -2376,6 +2411,20 @@ mod tests {
         let fonts = FontContext::new();
         let root = layout_document(&dom, &styles, &fonts, width);
         (dom, root)
+    }
+
+    /// UAX #14 intra-word break opportunities. Plain words are untouched (parity-safe); a
+    /// hyphenated word breaks after each hyphen (the hyphen stays visible); CJK breaks per
+    /// ideograph; a zero-width space is a break point and is stripped from the output.
+    #[test]
+    fn break_segments_finds_intra_word_opportunities() {
+        assert_eq!(break_segments("plain"), vec!["plain"]);
+        assert_eq!(break_segments("well-known"), vec!["well-", "known"]);
+        assert_eq!(break_segments("a-b-c"), vec!["a-", "b-", "c"]);
+        // CJK: each ideograph is its own break segment.
+        assert_eq!(break_segments("日本語"), vec!["日", "本", "語"]);
+        // Zero-width space marks a break and is removed from the rendered text.
+        assert_eq!(break_segments("foo\u{200b}bar"), vec!["foo", "bar"]);
     }
 
     /// `display:inline-block` flows atomically: sized boxes sit side by side on a line, and

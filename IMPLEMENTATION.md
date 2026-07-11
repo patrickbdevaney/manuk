@@ -994,7 +994,18 @@ parity gate stays green.
   `TCP_NODELAY` so the number is honest, not a Nagle stall) = **295 µs/command**. So the
   agent-native path avoids **~270 µs of pure transport/serialization per command — ~12×
   faster** — which compounds over the hundreds–thousands of commands an agent issues per task.
-- **Remaining (sequenced, each own seam-scoped pass, parity gate green):** P2 UAX#14
-  (parity-sensitive); U2 bookmarks/downloads/history; U7 OAuth popup (multi-window JS — large);
-  U8 zoom/translate; DT/AG BiDi devtools panels. These are genuine multi-step features;
-  sequenced honestly rather than half-landed.
+- **P2** ✅ UAX #14 line-breaking — intra-word break opportunities that whitespace-splitting
+  missed. Text is still split at whitespace first (preserving space collapsing + the parity
+  geometry), then each word is sub-split at UAX #14 opportunities via the audited
+  `unicode-linebreak` crate: after hyphens (`anti-establishment-oriented` → three lines,
+  hyphens kept), at soft-hyphens / zero-width spaces (ZWSP stripped), and between CJK
+  ideographs (per-character wrap). Words with no interior opportunity are byte-identical to
+  before, so the parity gate is unmoved — **72/72**. `nowrap`/`pre` runs are never split.
+  Verified by render (hyphenated + CJK boxes now wrap within their width) and a unit test.
+- **U8 zoom** ✅ (pre-existing, confirmed) — `apply_zoom` does a crisp full-page
+  `relayout_zoomed` (not a bitmap scale), keybound Ctrl+`=`/`-`/`0`. Only *translate* remains
+  (needs an external translation service — out of autonomous scope).
+- **Remaining (sequenced, each own seam-scoped pass, parity gate green):** U2 bookmarks/
+  downloads/history; U7 OAuth popup (multi-window JS — large); DT/AG BiDi devtools panels.
+  These are genuine multi-step, mostly GUI-verification-bound features; sequenced honestly
+  rather than half-landed.

@@ -13,6 +13,9 @@ manuk-text.workspace = true
 taffy.workspace = true
 smallvec.workspace = true
 tracing.workspace = true
+# UAX #14 line-breaking: the audited Unicode Line Breaking Algorithm (intra-word break
+# opportunities — hyphens, soft-hyphens, ZWSP, CJK — that whitespace-splitting misses).
+unicode-linebreak = "0.1"
 
 [dev-dependencies]
 manuk-html.workspace = true
