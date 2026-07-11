@@ -11,7 +11,7 @@ default = []
 # Stylo (Servo/Firefox production CSS engine) is the reuse target per CLAUDE.md.
 # It is heavy to build, so it is opt-in. The default build uses the minimal
 # from-scratch cascade so the workspace compiles and runs without it.
-stylo = ["dep:stylo", "dep:url", "dep:euclid", "dep:selectors", "dep:stylo_dom", "dep:app_units"]
+stylo = ["dep:stylo", "dep:url", "dep:euclid", "dep:selectors", "dep:stylo_dom", "dep:app_units", "dep:stylo_static_prefs"]
 
 [dependencies]
 manuk-dom.workspace = true
@@ -31,6 +31,9 @@ selectors = { version = "0.39", optional = true }
 # `stylo_dom` crate that stylo depends on; `app_units::Au` appears in a wall signature.
 stylo_dom = { version = "0.19", optional = true }
 app_units = { version = "0.7", optional = true }
+# Lets us flip Stylo's `layout.grid.enabled` pref on (it defaults off under the `servo`
+# feature, which drops `display:grid` at parse time). Same 0.19 version as stylo.
+stylo_static_prefs = { version = "0.19", optional = true }
 
 [dev-dependencies]
 # N4 tests parse real HTML (declarative shadow DOM) to build the tree they scope over.

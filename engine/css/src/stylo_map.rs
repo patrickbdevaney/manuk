@@ -118,6 +118,87 @@ fn map_text_align(t: StyloTextAlign) -> TextAlign {
     }
 }
 
+/// One Stylo grid `<track-breadth>` → our `TrackUnit` (for `minmax()` endpoints).
+fn breadth_to_unit(
+    b: &stylo::values::generics::grid::GenericTrackBreadth<LengthPercentage>,
+) -> crate::TrackUnit {
+    use stylo::values::generics::grid::GenericTrackBreadth as TB;
+    match b {
+        TB::Breadth(lp) => match lp_to_dim(lp) {
+            Dim::Px(p) => crate::TrackUnit::Px(p),
+            Dim::Percent(p) => crate::TrackUnit::Percent(p),
+            _ => crate::TrackUnit::Auto,
+        },
+        TB::Flex(f) => crate::TrackUnit::Fr(f.0),
+        TB::Auto => crate::TrackUnit::Auto,
+        TB::MinContent => crate::TrackUnit::MinContent,
+        TB::MaxContent => crate::TrackUnit::MaxContent,
+    }
+}
+
+/// One Stylo `<track-size>` → our `TrackSize`.
+fn track_size_to_ours(
+    ts: &stylo::values::generics::grid::GenericTrackSize<LengthPercentage>,
+) -> crate::TrackSize {
+    use stylo::values::generics::grid::{GenericTrackBreadth as TB, GenericTrackSize as TS};
+    match ts {
+        TS::Breadth(b) => match b {
+            TB::Breadth(lp) => match lp_to_dim(lp) {
+                Dim::Px(p) => crate::TrackSize::Px(p),
+                Dim::Percent(p) => crate::TrackSize::Percent(p),
+                _ => crate::TrackSize::Auto,
+            },
+            TB::Flex(f) => crate::TrackSize::Fr(f.0),
+            TB::Auto => crate::TrackSize::Auto,
+            TB::MinContent => crate::TrackSize::MinContent,
+            TB::MaxContent => crate::TrackSize::MaxContent,
+        },
+        TS::Minmax(a, b) => crate::TrackSize::MinMax(breadth_to_unit(a), breadth_to_unit(b)),
+        TS::FitContent(_) => crate::TrackSize::Auto,
+    }
+}
+
+/// A Stylo `grid-template-columns`/`-rows` component → our flat `Vec<TrackSize>`, expanding
+/// integer `repeat()`; `none`/subgrid/masonry/auto-repeat collapse to what we can model.
+fn template_to_tracks(
+    c: &stylo::values::computed::GridTemplateComponent,
+) -> Vec<crate::TrackSize> {
+    use stylo::values::generics::grid::{
+        GenericGridTemplateComponent as GC, GenericTrackListValue as TLV, RepeatCount,
+    };
+    let mut out = Vec::new();
+    if let GC::TrackList(list) = c {
+        for v in list.values.iter() {
+            match v {
+                TLV::TrackSize(ts) => out.push(track_size_to_ours(ts)),
+                TLV::TrackRepeat(r) => {
+                    let n = match r.count {
+                        RepeatCount::Number(i) => i.max(0) as usize,
+                        _ => 1,
+                    };
+                    for _ in 0..n {
+                        for ts in r.track_sizes.iter() {
+                            out.push(track_size_to_ours(ts));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// A Stylo computed `<grid-line>` → our `GridLine`.
+fn grid_line_to_ours(l: &stylo::values::computed::GridLine) -> crate::GridLine {
+    if l.is_span {
+        crate::GridLine::Span(l.line_num.max(1) as u16)
+    } else if l.line_num != 0 {
+        crate::GridLine::Line(l.line_num as i16)
+    } else {
+        crate::GridLine::Auto
+    }
+}
+
 /// Map a Stylo `ComputedValues` onto our `ComputedStyle`, starting from initial and
 /// overriding every property we model.
 pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
@@ -336,6 +417,18 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         }
         s.transform = ops;
     }
+
+    // Grid tracks + item placement.
+    s.grid_template_columns = template_to_tracks(&cv.clone_grid_template_columns());
+    s.grid_template_rows = template_to_tracks(&cv.clone_grid_template_rows());
+    s.grid_column = (
+        grid_line_to_ours(&cv.clone_grid_column_start()),
+        grid_line_to_ours(&cv.clone_grid_column_end()),
+    );
+    s.grid_row = (
+        grid_line_to_ours(&cv.clone_grid_row_start()),
+        grid_line_to_ours(&cv.clone_grid_row_end()),
+    );
 
     // Insets.
     s.inset.top = inset_to_dim(&cv.clone_top());

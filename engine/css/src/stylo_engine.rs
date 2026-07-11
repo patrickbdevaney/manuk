@@ -149,6 +149,10 @@ code, kbd, samp { font-family: monospace; }
 /// [`ComputedStyle`], inheriting from each element's parent. This is what gives real
 /// `var()` / `@media` / full-selector / `font-family` computation.
 pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> StyleMap {
+    // Stylo's `grid_enabled()` reads `layout.grid.enabled` (off by default under the `servo`
+    // feature), which makes it drop `display:grid` at parse time. Flip it on once so grid
+    // containers cascade. Idempotent + cheap; safe to call every cascade.
+    stylo_static_prefs::set_pref!("layout.grid.enabled", true);
     let lock = SharedRwLock::new();
     let Ok(url) = ::url::Url::parse("about:manuk") else {
         return MinimalCascade.cascade(dom, sheets);
