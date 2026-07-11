@@ -26,8 +26,8 @@ Gate: `cargo run -q -p manuk-wpt --release -- parity` = **72/72**.
 | MEM | 55 | Tab hibernation (discard/restore). No SoA DOM yet (deferred, measure first). Binary 16.4 MB (Stylo+SM). |
 | AGENT-IN | 40 | llama.cpp/GGUF in-browser agent panel (Ctrl+J), typed actions. Depends on local model. |
 | AGENT-EXT | 45 | In-process typed `BrowserAction` + a11y targeting; AG5 measured ~12× lower per-command latency than CDP-over-socket. BiDi surface exists (no DevTools UI). |
-| FINGERPRINT | 30 | Honest human UA + navigator. Not yet a complete, ordinary-human fingerprint surface (fonts, timezone, screen, canvas/WebGL consistency). |
-| COMPAT | 40 | Simple + table-driven sites faithful (example.com, HN). SPAs (x.com, LinkedIn, Indeed) untested/likely partial (need broad JS + fetch + observers). |
+| FINGERPRINT | 33 | Honest human UA + navigator + **boot window/screen metrics** (innerWidth/screen/dpr/matchMedia/rAF). Not yet complete (fonts, timezone, canvas/WebGL consistency, true window size). |
+| COMPAT | 42 | Simple + table-driven sites faithful (example.com, HN). Boot-metric ReferenceErrors fixed. SPAs (x.com, LinkedIn, Indeed) still need fetch/XHR (L01, next) + observers. |
 | STABILITY | 55 | Parity green; fast-exit avoids mozjs teardown crash. GUI paths unverified headlessly. |
 | SECURITY | 45 | Provenance-tagged agent observations + Action-Guard; adblock; no site sandbox/process isolation (deliberate in-process model). |
 

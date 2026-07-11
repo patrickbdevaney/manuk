@@ -5,7 +5,8 @@ T=times touched. `score = V/C + 1.5*sqrt(ln(1+TICKS)/(1+T)) + 1.0*(U/10)`. Every
 the highest-U item. Update T/status/scores each tick; add items on reflection; mark dead ends
 `superseded`. Verify class per §7: HEADLESS / GUI / EXTERNAL / MEASURE._
 
-**TICKS = 0** (global tick counter; increment each tick).
+**TICKS = 2** (global tick counter; increment each tick). _Tick 1 landed an L14 slice (window/
+screen metrics); L14 stays backlog for the rest of the fingerprint surface (T=1)._
 
 ## Tier A — absorb outstanding beneficial work already suggested (do first)
 
