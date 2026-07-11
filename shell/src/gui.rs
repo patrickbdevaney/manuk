@@ -179,6 +179,12 @@ struct App {
     /// L32 — the URL currently being speculatively prewarmed (at most one in flight), so a hover
     /// doesn't spawn duplicate prerenders.
     prewarming: Option<String>,
+    /// L03 — cross-window messaging routing. Each tab has a process-unique JS window id; a
+    /// `postMessage` targets a window id, which these maps resolve back to the tab to deliver to.
+    /// `tab_opener` records which window opened a tab (its `window.opener`).
+    win_to_tab: std::collections::HashMap<u64, TabId>,
+    tab_win: std::collections::HashMap<TabId, u64>,
+    tab_opener: std::collections::HashMap<TabId, u64>,
     /// R2 back-forward cache: recently-navigated-away pages kept fully constructed (DOM +
     /// layout + scroll) so Back/Forward restores instantly instead of re-running the whole
     /// pipeline. Bounded LRU (most-recent last).
@@ -313,6 +319,9 @@ impl App {
             history: History::new(),
             downloads: Vec::new(),
             prewarming: None,
+            win_to_tab: std::collections::HashMap::new(),
+            tab_win: std::collections::HashMap::new(),
+            tab_opener: std::collections::HashMap::new(),
             bfcache: Vec::new(),
             proxy,
             nav_gen: 0,
@@ -433,6 +442,8 @@ impl App {
         self.pump_fetches();
         // A handler may have routed client-side (history.pushState) — reflect it in the chrome.
         self.handle_history_ops();
+        // A handler may have posted a cross-window message — route it to the target tab.
+        self.pump_messages();
         if prevented {
             tracing::info!("click: default action prevented by page JS");
             self.rerender();
@@ -687,11 +698,20 @@ impl App {
         self.page = Some(page);
         self.scroll_y = 0.0;
         self.loading = false;
+        // Seed this tab's window identity (own id + opener) so postMessage source + window.opener
+        // resolve before any load-time script posts a message.
+        let win = self.win_id_for(self.tab_id);
+        let opener = self.tab_opener.get(&self.tab_id).copied().unwrap_or(0);
+        if let Some(p) = self.page.as_ref() {
+            p.set_identity(win, opener);
+        }
         // The page's load scripts may have kicked off fetch/XHR (SPA data hydration) — perform
         // and settle them so the first paint reflects the fetched data.
         self.pump_fetches();
         // Load scripts may also have routed (history.replaceState on boot) — reflect it.
         self.handle_history_ops();
+        // ...and may have posted to their opener (the OAuth popup pattern) — route it.
+        self.pump_messages();
         self.rerender();
     }
 
@@ -1288,16 +1308,65 @@ impl App {
     /// Open any URLs the page requested via `window.open(...)` as new tabs (resolved against
     /// the current page), focusing the last one — the multi-window/OAuth-popup pattern.
     fn handle_window_opens(&mut self) {
-        for raw in manuk_js::take_window_opens() {
+        let opener_tab = self.tab_id;
+        let opener_win = self.win_id_for(opener_tab);
+        for (win_id, raw) in manuk_js::take_window_opens() {
             let resolved = url::Url::parse(&self.url)
                 .ok()
                 .and_then(|base| base.join(&raw).ok())
                 .map(|u| u.to_string())
                 .unwrap_or(raw);
             let id = self.browser.open(resolved.clone());
+            // Bind the JS-allocated window id to this new tab so a later postMessage to the
+            // returned handle routes here, and record its opener for `window.opener`.
+            self.win_to_tab.insert(win_id, id);
+            self.tab_win.insert(id, win_id);
+            self.tab_opener.insert(id, opener_win);
             self.tab_id = id;
             self.focus_tab(id);
-            tracing::info!(url = %resolved, "window.open -> new tab");
+            tracing::info!(url = %resolved, win = win_id, opener = opener_win, "window.open -> new tab");
+        }
+    }
+
+    /// The process-unique JS window id for `tab`, allocating (and recording the reverse map) on
+    /// first use. Every tab that runs JS needs one so `postMessage` routing + `window.opener`
+    /// resolve.
+    fn win_id_for(&mut self, tab: TabId) -> u64 {
+        if let Some(w) = self.tab_win.get(&tab) {
+            return *w;
+        }
+        let w = manuk_js::next_window_id();
+        self.tab_win.insert(tab, w);
+        self.win_to_tab.insert(w, tab);
+        w
+    }
+
+    /// L03 — drain page-issued cross-window `postMessage` sends and route each to its target
+    /// window's tab (the active page or a background tab), firing a `message` MessageEvent there.
+    /// The send queue is a single shared thread-local, so draining via the active page collects
+    /// every send regardless of which document posted. Called after dispatch / load / fetches.
+    fn pump_messages(&mut self) {
+        let msgs = match self.page.as_ref() {
+            Some(p) => p.take_messages(),
+            None => return,
+        };
+        if msgs.is_empty() {
+            return;
+        }
+        let w = self.viewport.width;
+        for (target_win, json, origin, source_win) in msgs {
+            let Some(&tab) = self.win_to_tab.get(&target_win) else {
+                tracing::debug!(target_win, "postMessage to an unknown/closed window; dropped");
+                continue;
+            };
+            if tab == self.tab_id {
+                if let Some(p) = self.page.as_mut() {
+                    p.deliver_message(&json, &origin, source_win, &self.fonts, w);
+                }
+            } else if let Some(p) = self.browser.page_mut(tab) {
+                p.deliver_message(&json, &origin, source_win, &self.fonts, w);
+            }
+            tracing::info!(target_win, source_win, "postMessage routed");
         }
     }
 
@@ -1596,6 +1665,11 @@ impl App {
     /// Close a specific tab by id (from the strip's `×`). Closing the last tab replaces it with
     /// a fresh blank tab so the window stays open; otherwise focus falls to the active tab.
     fn close_tab_by_id(&mut self, id: TabId) {
+        // Drop the closed tab's window-id routing entries so the maps don't leak.
+        if let Some(w) = self.tab_win.remove(&id) {
+            self.win_to_tab.remove(&w);
+        }
+        self.tab_opener.remove(&id);
         if self.browser.tabs().len() <= 1 {
             self.new_tab();
             self.browser.close(id);

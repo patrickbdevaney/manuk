@@ -167,16 +167,29 @@ pub fn run_document_scripts(
     })
 }
 
-/// URLs the current page requested via `window.open(...)` since the last call — the host opens
-/// each as a new tab/window (the OAuth-popup pattern). Empty without the JS feature.
+/// `window.open(...)` requests since the last call, each `(win_id, url)` — the host opens each as
+/// a new tab/window (recording `win_id → tab` for `postMessage` routing). Empty without the JS
+/// feature.
 #[cfg(feature = "_sm")]
-pub fn take_window_opens() -> Vec<String> {
+pub fn take_window_opens() -> Vec<(u64, String)> {
     dom_bindings::take_pending_window_opens()
 }
 
 #[cfg(not(feature = "_sm"))]
-pub fn take_window_opens() -> Vec<String> {
+pub fn take_window_opens() -> Vec<(u64, String)> {
     Vec::new()
+}
+
+/// Allocate the next process-unique window id (for ordinary, non-`window.open` tabs), shared
+/// with the id space `window.open` draws from. `0` without the JS feature (unused there).
+#[cfg(feature = "_sm")]
+pub fn next_window_id() -> u64 {
+    dom_bindings::next_window_id()
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn next_window_id() -> u64 {
+    0
 }
 
 /// Requests `ctx`'s page issued via `fetch`/`XMLHttpRequest` since the last call, each
@@ -261,6 +274,62 @@ pub fn fire_popstate(
     _dom: &mut manuk_dom::Dom,
     _state_json: &str,
     _url: &str,
+    _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<(), JsError> {
+    Ok(())
+}
+
+/// Cross-window `postMessage` sends `ctx`'s page made since the last call, each `(target_win,
+/// json, origin, source_win)`. The host routes each to the target window's [`deliver_message`].
+/// Empty without the JS feature.
+#[cfg(feature = "_sm")]
+pub fn take_messages(ctx: &PageContext) -> Vec<(u64, String, String, u64)> {
+    ctx.take_messages()
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn take_messages(_ctx: &PageContext) -> Vec<(u64, String, String, u64)> {
+    Vec::new()
+}
+
+/// Seed `ctx`'s window identity (own id + opener id) after load, so posted messages carry the
+/// right `source` and `window.opener` resolves. No-op without the JS feature.
+#[cfg(feature = "_sm")]
+pub fn set_identity(ctx: &PageContext, win_id: u64, opener_win: u64) -> Result<(), JsError> {
+    with_runtime(|rt| ctx.set_identity(rt, win_id, opener_win).map_err(|message| JsError { message }))
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn set_identity(_ctx: &PageContext, _win_id: u64, _opener_win: u64) -> Result<(), JsError> {
+    Ok(())
+}
+
+/// Deliver a cross-window message into `ctx`'s document: fire a `message` MessageEvent
+/// (`{data, origin, source}`) and run the handler. No-op without the JS feature.
+#[cfg(feature = "_sm")]
+pub fn deliver_message(
+    ctx: &PageContext,
+    dom: &mut manuk_dom::Dom,
+    json: &str,
+    origin: &str,
+    source_win: u64,
+    layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<(), JsError> {
+    with_runtime(|rt| {
+        ctx.deliver_message(rt, dom, json, origin, source_win, layout, styles)
+            .map_err(|message| JsError { message })
+    })
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn deliver_message(
+    _ctx: &PageContext,
+    _dom: &mut manuk_dom::Dom,
+    _json: &str,
+    _origin: &str,
+    _source_win: u64,
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
     _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
 ) -> Result<(), JsError> {

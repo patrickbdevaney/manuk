@@ -71,6 +71,15 @@ impl Tab {
         }
     }
 
+    /// Mutable access to a live (non-discarded) tab's page — e.g. to deliver a cross-window
+    /// `postMessage` to a background tab that is the message's target.
+    pub fn page_mut(&mut self) -> Option<&mut Page> {
+        match &mut self.retained {
+            Retained::Live { page, .. } => Some(page.as_mut()),
+            Retained::Discarded => None,
+        }
+    }
+
     /// §5 — whether the user pinned this tab.
     pub fn is_pinned(&self) -> bool {
         self.pinned
@@ -279,6 +288,12 @@ impl Browser {
 
     pub fn tab(&self, id: TabId) -> Option<&Tab> {
         self.tabs.iter().find(|t| t.id == id)
+    }
+
+    /// Mutable access to a live tab's page by id (for cross-window `postMessage` delivery to a
+    /// background tab). `None` if the tab is unknown or discarded.
+    pub fn page_mut(&mut self, id: TabId) -> Option<&mut Page> {
+        self.tabs.iter_mut().find(|t| t.id == id).and_then(|t| t.page_mut())
     }
 
     pub fn tier(&self, id: TabId) -> Option<RenderTier> {

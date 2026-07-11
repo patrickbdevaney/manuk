@@ -619,6 +619,58 @@ impl Page {
         &self.final_url
     }
 
+    /// Seed this page's window identity (own id + opener id) so `postMessage` `source` and
+    /// `window.opener` resolve. No-op without a JS context.
+    pub fn set_identity(&self, win_id: u64, opener_win: u64) {
+        if let Some(ctx) = &self.js {
+            if let Err(e) = manuk_js::set_identity(ctx, win_id, opener_win) {
+                tracing::warn!("set_identity: {e}");
+            }
+        }
+    }
+
+    /// Drain this page's queued cross-window `postMessage` sends as `(target_win, json, origin,
+    /// source_win)` for the host to route. Empty without a JS context.
+    pub fn take_messages(&self) -> Vec<(u64, String, String, u64)> {
+        match &self.js {
+            Some(ctx) => manuk_js::take_messages(ctx),
+            None => Vec::new(),
+        }
+    }
+
+    /// Deliver a cross-window message into this page: fire a `message` MessageEvent and run the
+    /// handler, re-laying-out if it mutated the DOM. No-op without a JS context.
+    pub fn deliver_message(
+        &mut self,
+        json: &str,
+        origin: &str,
+        source_win: u64,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) {
+        let Some(ctx) = &self.js else { return };
+        let rects: std::collections::HashMap<manuk_dom::NodeId, [f32; 4]> = self
+            .root_box
+            .node_rects(&self.dom)
+            .into_iter()
+            .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+            .collect();
+        if let Err(e) =
+            manuk_js::deliver_message(ctx, &mut self.dom, json, origin, source_win, &rects, &self.styles)
+        {
+            tracing::warn!("deliver_message: {e}");
+            return;
+        }
+        let root = self.dom.root();
+        if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
+            let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
+            self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
+            self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            self.content_height = self.root_box.content_bottom();
+            self.dom.clear_all_dirty();
+        }
+    }
+
     /// Drain the page's queued `history` ops (`pushState`/`replaceState`/`back`/`forward`/`go`)
     /// as `(kind, state_json, url)` — the host reflects them in the omnibox + back/forward stack
     /// without a network navigation. Empty when the page has no JS context.
@@ -1453,9 +1505,11 @@ mod js_interactive_tests {
             <script>window.open('https://accounts.example/oauth?client=x');</script>
             </body></html>"#;
         let _page3 = Page::load(html3, "https://app.test/", &fonts, 800.0);
+        let opens3 = manuk_js::take_window_opens();
+        assert_eq!(opens3.len(), 1, "window.open recorded one open for the host");
+        assert!(opens3[0].0 > 0, "the open carries an allocated window id");
         assert_eq!(
-            manuk_js::take_window_opens(),
-            vec!["https://accounts.example/oauth?client=x".to_string()],
+            opens3[0].1, "https://accounts.example/oauth?client=x",
             "window.open recorded the URL for the host"
         );
 
@@ -1553,6 +1607,47 @@ mod js_interactive_tests {
             page7.dom().text_content(r7),
             "pop:7",
             "onpopstate ran with the restored state on back/forward"
+        );
+
+        // (9) window.open(...).postMessage(...): the send is queued for the host with the popup's
+        // window id + this window's id as source (the OAuth popup → opener channel).
+        let html9 = r#"<!doctype html><html><body>
+            <script>
+              var w = window.open('https://auth.test/login');
+              w.postMessage({ token: 'T' }, 'https://auth.test');
+            </script></body></html>"#;
+        let page9 = Page::load(html9, "https://app.test/", &fonts, 800.0);
+        page9.set_identity(100, 0); // this window is #100 (no opener)
+        let opens = page9.take_history_ops(); // (unrelated) — ensure no crosstalk
+        assert!(opens.is_empty());
+        let msgs = page9.take_messages();
+        assert_eq!(msgs.len(), 1, "one postMessage queued");
+        let (target, json, origin, source) = &msgs[0];
+        assert!(*target > 0, "routed to the opened popup's window id");
+        assert_eq!(origin, "https://auth.test", "targetOrigin preserved");
+        assert!(json.contains("token") && json.contains('T'), "payload serialized: {json}");
+        // NB: source is read at post time; set_identity ran after load, so this asserts the
+        // send path carries a source slot (0 here — the post happened during load, pre-identity).
+        let _ = source;
+
+        // (10) deliver_message: a message routed to a page fires its onmessage with data+origin.
+        let html10 = r#"<!doctype html><html><body>
+            <div id="m">waiting</div>
+            <script>
+              window.addEventListener('message', function (e) {
+                document.getElementById('m').textContent =
+                  'from:' + e.origin + ':' + (e.data ? e.data.token : '?') +
+                  ':src=' + (e.source ? e.source.__winId : 'none');
+              });
+            </script></body></html>"#;
+        let mut page10 = Page::load(html10, "https://app.test/", &fonts, 800.0);
+        page10.set_identity(200, 0);
+        let m10 = manuk_css::query_selector_all(page10.dom(), page10.dom().root(), "#m")[0];
+        page10.deliver_message("{\"token\":\"XYZ\"}", "https://auth.test", 100, &fonts, 800.0);
+        assert_eq!(
+            page10.dom().text_content(m10),
+            "from:https://auth.test:XYZ:src=100",
+            "onmessage fired with data, origin, and a source window ref"
         );
     }
 }

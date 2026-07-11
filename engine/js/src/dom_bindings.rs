@@ -1211,6 +1211,14 @@ pub unsafe fn install(
         3,
         0,
     );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__postMessage".as_ptr(),
+        Some(post_message),
+        4,
+        0,
+    );
     let platform = format!("{} {}", std::env::consts::OS, std::env::consts::ARCH);
     // JS string-literal-escape the document URL so it can't break out of the "%URL%" slot.
     let url_lit = {
@@ -1459,6 +1467,69 @@ impl PageContext {
         let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"popstate.js".to_owned(), 1);
         if evaluate_script(runtime.cx(), global.handle(), &script, rval.handle_mut(), opts).is_err() {
             tracing::warn!("popstate dispatch threw; continuing");
+        }
+        crate::event_loop::run_deferred(runtime, global.handle())?;
+        Ok(())
+    }
+
+    /// Seed this document's window **identity** after load: its own window id (stamped as the
+    /// `source` on messages it posts) and its opener's id (`window.opener`, `0` = none). Called
+    /// by the host once the tab's id linkage is known.
+    pub fn set_identity(&self, runtime: &mut Runtime, win_id: u64, opener_win: u64) -> Result<(), String> {
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        let script = format!(
+            "globalThis.__winId = {win_id}; globalThis.opener = {};",
+            if opener_win == 0 {
+                "null".to_string()
+            } else {
+                format!("globalThis.__makeWindowRef({opener_win})")
+            }
+        );
+        rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
+        let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"identity.js".to_owned(), 1);
+        let _ = evaluate_script(runtime.cx(), global.handle(), &script, rval.handle_mut(), opts);
+        Ok(())
+    }
+
+    /// Drain this document's queued `postMessage` sends as `(target_win, json, origin,
+    /// source_win)` so the host can route each to the destination window's [`deliver_message`].
+    pub fn take_messages(&self) -> Vec<(u64, String, String, u64)> {
+        take_pending_messages()
+    }
+
+    /// Deliver a cross-window message: fire a `message` `MessageEvent` (`{data, origin, source}`)
+    /// on this document's window, then run the handler's reactions. `origin` is the sender's
+    /// origin (the receiver may check it); `source_win` (`0` = none) lets the handler reply via
+    /// `event.source.postMessage`.
+    pub fn deliver_message(
+        &self,
+        runtime: &mut Runtime,
+        dom: &mut Dom,
+        json: &str,
+        origin: &str,
+        source_win: u64,
+        layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    ) -> Result<(), String> {
+        LAYOUT_RECTS.with(|l| *l.borrow_mut() = layout.clone());
+        STYLES.with(|s| *s.borrow_mut() = styles.clone());
+        let _ = dom;
+
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        let script = format!(
+            "globalThis.__deliverMessage({}, {}, {})",
+            js_string_literal(json),
+            js_string_literal(origin),
+            source_win
+        );
+        rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
+        let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"message.js".to_owned(), 1);
+        if evaluate_script(runtime.cx(), global.handle(), &script, rval.handle_mut(), opts).is_err() {
+            tracing::warn!("message delivery threw; continuing");
         }
         crate::event_loop::run_deferred(runtime, global.handle())?;
         Ok(())
@@ -1756,6 +1827,40 @@ const WINDOW_PRELUDE: &str = r#"
                 go: function (n) { try { g.__historyPush('4', 'null', String(n == null ? 0 : n)); } catch (e) {} }
             };
         }
+
+        // Cross-window messaging (postMessage / opener). Each document has a window id
+        // (`__winId`, seeded by the host after load); a window *handle* (opener, or the value
+        // window.open returns) is a small ref carrying the target's id. postMessage routes the
+        // (structured-clone-lite / JSON) payload through the host to that window, which fires a
+        // `message` MessageEvent on the receiver via the window event registry (built for
+        // popstate). This completes the OAuth-popup round-trip begun by window.open.
+        if (typeof g.__winId === 'undefined') g.__winId = 0;
+        g.__makeWindowRef = function (winId) {
+            return {
+                __winId: winId, closed: false,
+                postMessage: function (msg, targetOrigin) {
+                    var json;
+                    try { json = JSON.stringify(msg === undefined ? null : msg); } catch (e) { json = 'null'; }
+                    try {
+                        g.__postMessage(String(winId), json,
+                            String(targetOrigin == null ? '*' : targetOrigin), String(g.__winId || 0));
+                    } catch (e) {}
+                },
+                close: function () { this.closed = true; }, focus: function () {}, blur: function () {}
+            };
+        };
+        if (typeof g.opener === 'undefined') g.opener = null;
+        // Host → receiver: build a MessageEvent and fire it. `sourceWin` (0 = none) lets the
+        // handler reply via `event.source.postMessage(...)`.
+        g.__deliverMessage = function (json, origin, sourceWin) {
+            var data; try { data = JSON.parse(json); } catch (e) { data = null; }
+            var ev = {
+                type: 'message', data: data, origin: String(origin || ''),
+                source: sourceWin ? g.__makeWindowRef(sourceWin) : null,
+                ports: [], lastEventId: ''
+            };
+            g.__fireWindowEvent('message', ev);
+        };
     })();
 "#;
 
@@ -1792,32 +1897,68 @@ fn honest_user_agent() -> String {
 }
 
 thread_local! {
-    /// URLs the page asked to open via `window.open(...)`, drained by the host after the JS
-    /// call returns (so the browser can open a real tab/window — the OAuth-popup pattern).
-    static PENDING_OPENS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// `window.open(...)` requests since the last drain: `(win_id, url)`. The host opens a real
+    /// tab/window and records `win_id → tab` so a later `postMessage` to the returned handle
+    /// routes to it (the OAuth-popup pattern).
+    static PENDING_OPENS: std::cell::RefCell<Vec<(u64, String)>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// Monotonic window-id source, shared with the host via [`next_window_id`] so ids allocated
+    /// by `window.open` never collide with ids the host assigns to ordinary tabs.
+    static WIN_ID: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// `postMessage` sends since the last drain: `(target_win, json, origin, source_win)`.
+    static PENDING_MESSAGES: std::cell::RefCell<Vec<(u64, String, String, u64)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// URLs requested via `window.open` since the last drain (host side).
-pub fn take_pending_window_opens() -> Vec<String> {
+/// Allocate the next process-unique window id (host side, for ordinary tabs).
+pub fn next_window_id() -> u64 {
+    WIN_ID.with(|c| {
+        let next = c.get().wrapping_add(1);
+        c.set(next);
+        next
+    })
+}
+
+/// `window.open` requests since the last drain, each `(win_id, url)` (host side).
+pub fn take_pending_window_opens() -> Vec<(u64, String)> {
     PENDING_OPENS.with(|q| std::mem::take(&mut *q.borrow_mut()))
 }
 
-/// `window.open(url, ...)` — record the URL for the host to open as a new tab/window. Returns
-/// a minimal stub window (so `w = window.open(...)`, `w.closed`, `w.close()` don't throw);
-/// cross-window `postMessage`/`opener` is a follow-on.
+/// `postMessage` sends since the last drain, each `(target_win, json, origin, source_win)`.
+pub fn take_pending_messages() -> Vec<(u64, String, String, u64)> {
+    PENDING_MESSAGES.with(|q| std::mem::take(&mut *q.borrow_mut()))
+}
+
+/// `window.open(url, ...)` — allocate a window id, record `(win_id, url)` for the host to open
+/// as a new tab/window, and return a window **handle** carrying that id (so `w = window.open()`,
+/// `w.postMessage(...)`, `w.closed`, `w.close()` all work and route to the opened window).
 unsafe extern "C" fn window_open(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
-    if let Some(url) = arg_string(cx, vp, argc, 0) {
-        if !url.is_empty() {
-            PENDING_OPENS.with(|q| q.borrow_mut().push(url));
-        }
+    let url = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    let win = next_window_id();
+    if !url.is_empty() {
+        PENDING_OPENS.with(|q| q.borrow_mut().push((win, url)));
     }
-    match eval_in_current_global(
-        cx,
-        "({closed:false, close:function(){this.closed=true;}, focus:function(){}, postMessage:function(){}})",
-    ) {
+    match eval_in_current_global(cx, &format!("globalThis.__makeWindowRef({win})")) {
         Some(v) => *vp = v,
         None => *vp = NullValue(),
     }
+    true
+}
+
+/// `__postMessage(targetWin, json, origin, sourceWin)` — queue a cross-window message for the
+/// host to route to the target window's document (which fires a `message` MessageEvent).
+unsafe extern "C" fn post_message(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let target: u64 = arg_string(cx, vp, argc, 0)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    let json = arg_string(cx, vp, argc, 1).unwrap_or_else(|| "null".to_string());
+    let origin = arg_string(cx, vp, argc, 2).unwrap_or_else(|| "*".to_string());
+    let source: u64 = arg_string(cx, vp, argc, 3)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    if target != 0 {
+        PENDING_MESSAGES.with(|q| q.borrow_mut().push((target, json, origin, source)));
+    }
+    *vp = UndefinedValue();
     true
 }
 
