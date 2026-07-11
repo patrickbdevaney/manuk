@@ -237,6 +237,18 @@ use taffy::{
 /// the taffy tree — `(dom_node, known_dims, available_space) -> size`.
 type MeasureFn<'m> = dyn FnMut(DomNodeId, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32> + 'm;
 
+/// A node placed by the unified taffy tree: its DOM node, its taffy-assigned rectangle
+/// (`slot`, relative to its parent's border box), whether it is a flex/grid **container**
+/// (its `children` were positioned by taffy in this same tree — extract them directly, no
+/// re-solve) or a Manuk-measured **leaf** (`children` empty — lay its content out via block/
+/// inline at the assigned rect).
+pub struct Placed {
+    pub dom: DomNodeId,
+    pub slot: Slot,
+    pub container: bool,
+    pub children: Vec<Placed>,
+}
+
 struct TNode {
     dom: DomNodeId,
     style: Style,
@@ -299,6 +311,20 @@ impl<'m> TaffyDom<'m> {
             container,
         });
         TId::from(id)
+    }
+
+    /// Recursively snapshot the placed geometry of `tid` and its subtree from the computed
+    /// tree (each node's taffy `layout`), so callers can extract the whole positioned
+    /// flex/grid subtree without re-solving nested containers.
+    fn placed(&self, tid: TId) -> Placed {
+        let n = &self.nodes[usize::from(tid)];
+        let l = n.layout;
+        Placed {
+            dom: n.dom,
+            slot: Slot { x: l.location.x, y: l.location.y, width: l.size.width, height: l.size.height },
+            container: n.container,
+            children: n.children.iter().map(|&c| self.placed(c)).collect(),
+        }
     }
 
     fn dispatch(&mut self, node_id: TId, inputs: LayoutInput) -> LayoutOutput {
@@ -409,8 +435,9 @@ impl LayoutGridContainer for TaffyDom<'_> {
 
 /// Lay out a flex/grid `container` and its directly-nested flex/grid descendants in one
 /// unified taffy tree, measuring block/inline/float/table leaves via `measure`. Returns the
-/// container's **direct children's** slots (relative to its content origin) — the same shape
-/// [`crate::flex::solve_flex`] returns, so it drops into the existing placement path.
+/// container's direct children as [`Placed`] subtrees (positions relative to the content
+/// origin) — a container child carries its whole positioned subtree so the caller extracts
+/// it directly instead of re-solving.
 pub fn solve_subtree<'m>(
     dom: &Dom,
     styles: &StyleMap,
@@ -418,7 +445,7 @@ pub fn solve_subtree<'m>(
     container_width: f32,
     container_height: Option<f32>,
     measure: impl FnMut(DomNodeId, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32> + 'm,
-) -> Vec<Slot> {
+) -> Vec<Placed> {
     let (mut tree, root) = TaffyDom::build(dom, styles, container, Box::new(measure));
     // Pin the root to the given content size (Manuk resolved width; height when definite).
     let r: usize = root.into();
@@ -437,14 +464,8 @@ pub fn solve_subtree<'m>(
             },
         },
     );
-    tree.nodes[r]
-        .children
-        .iter()
-        .map(|&c| {
-            let l = tree.nodes[usize::from(c)].layout;
-            Slot { x: l.location.x, y: l.location.y, width: l.size.width, height: l.size.height }
-        })
-        .collect()
+    let child_ids: Vec<TId> = tree.nodes[r].children.clone();
+    child_ids.iter().map(|&c| tree.placed(c)).collect()
 }
 
 #[cfg(test)]
@@ -501,13 +522,16 @@ mod tests {
         }
 
         // Leaves measure to zero content (only grow matters here).
-        let slots = solve_subtree(&dom, &styles, container, 300.0, None, |_n, _k, _a| Size {
+        let placed = solve_subtree(&dom, &styles, container, 300.0, None, |_n, _k, _a| Size {
             width: 0.0,
             height: 0.0,
         });
-        assert_eq!(slots.len(), 2);
-        assert!((slots[0].width - 150.0).abs() < 1.0, "got {slots:?}");
-        assert!((slots[1].width - 150.0).abs() < 1.0, "got {slots:?}");
-        assert!(slots[1].x >= slots[0].width - 1.0, "second is to the right: {slots:?}");
+        assert_eq!(placed.len(), 2);
+        let s0 = placed[0].slot;
+        let s1 = placed[1].slot;
+        assert!((s0.width - 150.0).abs() < 1.0, "got {s0:?}");
+        assert!((s1.width - 150.0).abs() < 1.0, "got {s1:?}");
+        assert!(s1.x >= s0.width - 1.0, "second is to the right");
+        assert!(!placed[0].container, "block child is a leaf");
     }
 }

@@ -1896,7 +1896,7 @@ impl Ctx<'_> {
             Dim::Px(p) => Some(p),
             _ => None,
         };
-        let slots = taffy_tree::solve_subtree(
+        let placed = taffy_tree::solve_subtree(
             self.dom,
             self.styles,
             node,
@@ -1911,34 +1911,53 @@ impl Ctx<'_> {
                 taffy::Size { width: known.width.unwrap_or(w), height: known.height.unwrap_or(h) }
             },
         );
-        self.place_taffy_slots(&block_kids, &slots, cx, cy)
-    }
-
-    /// Place each child at its taffy-assigned 2D slot, laying it out as a block within the
-    /// slot's width. Shared by flex and grid.
-    fn place_taffy_slots(
-        &self,
-        block_kids: &[NodeId],
-        slots: &[flex::Slot],
-        cx: f32,
-        cy: f32,
-    ) -> (BoxContent, f32) {
         let mut boxes = Vec::new();
         let mut max_h = 0.0f32;
-        for (&k, slot) in block_kids.iter().zip(slots.iter()) {
-            let mut item_floats = FloatContext::new(cx + slot.x, cx + slot.x + slot.width);
-            let r = self.layout_block(k, slot.width, Some(slot.height), cx + slot.x, cy + slot.y, 0.0, &mut item_floats);
-            let mut boxx = r.boxx;
-            // Taffy sized the item (grow/stretch/track height); when its own height is `auto`,
-            // adopt taffy's slot height so it fills its flex line / grid cell.
-            if self.styles[&k].height == Dim::Auto && slot.height > boxx.rect.height {
-                boxx.rect.height = slot.height;
-            }
-            let bottom = slot.y + r.margin_top + boxx.rect.height + r.margin_bottom;
+        for p in &placed {
+            let (boxx, bottom) = self.extract_placed(p, cx, cy);
             max_h = max_h.max(bottom);
             boxes.push(boxx);
         }
         (BoxContent::Block(boxes), max_h)
+    }
+
+    /// Turn a [`taffy_tree::Placed`] node into a `LayoutBox` at its taffy-assigned position
+    /// (`base_x`/`base_y` is the parent's border-box origin). A **container** (flex/grid) is
+    /// built directly from the unified tree's geometry, recursing into its already-placed
+    /// children — no re-solve. A **leaf** (block/inline/float/table) is laid out via
+    /// [`Self::layout_block`] at the assigned rect, exactly as before, so its content (text,
+    /// floats, its own separate flex subtrees) is produced. Returns the box and its bottom
+    /// extent relative to `base_y` (for the container's content-height).
+    fn extract_placed(&self, p: &taffy_tree::Placed, base_x: f32, base_y: f32) -> (LayoutBox, f32) {
+        let abs_x = base_x + p.slot.x;
+        let abs_y = base_y + p.slot.y;
+        if p.container {
+            let children: Vec<LayoutBox> = p
+                .children
+                .iter()
+                .map(|c| self.extract_placed(c, abs_x, abs_y).0)
+                .collect();
+            let s = &self.styles[&p.dom];
+            let boxx = LayoutBox {
+                rect: Rect { x: abs_x, y: abs_y, width: p.slot.width, height: p.slot.height },
+                background: s.background_color,
+                border: border_of(s),
+                node: Some(p.dom),
+                content: BoxContent::Block(children),
+            };
+            (boxx, p.slot.y + p.slot.height)
+        } else {
+            let mut item_floats = FloatContext::new(abs_x, abs_x + p.slot.width);
+            let r = self.layout_block(p.dom, p.slot.width, Some(p.slot.height), abs_x, abs_y, 0.0, &mut item_floats);
+            let mut boxx = r.boxx;
+            // Taffy sized the item (grow/stretch/track height); when its own height is `auto`,
+            // adopt taffy's slot height so it fills its flex line / grid cell.
+            if self.styles[&p.dom].height == Dim::Auto && p.slot.height > boxx.rect.height {
+                boxx.rect.height = p.slot.height;
+            }
+            let bottom = p.slot.y + r.margin_top + boxx.rect.height + r.margin_bottom;
+            (boxx, bottom)
+        }
     }
 
     /// Collect inline tokens (words) from a run of inline-level siblings, tracking
