@@ -14,7 +14,7 @@ path = "src/main.rs"
 # The interactive GPU window (winit + wgpu). On by default. Disable it
 # (`--no-default-features`) to build just the headless `render` pipeline, which
 # needs no display/GPU — useful for CI and this environment.
-default = ["gui", "stylo"]
+default = ["gui", "stylo", "spidermonkey"]
 gui = ["dep:winit", "dep:wgpu", "dep:pollster", "dep:bytemuck", "dep:raw-window-handle"]
 # Route the cascade through the real Stylo engine (full selectors/@media/var/cascade;
 # 72/72 parity). Default-on for real-world CSS fidelity, with a per-page panic fallback
