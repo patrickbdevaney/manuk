@@ -288,3 +288,31 @@ _Minimal history for audit + resume. See [[CONSTITUTION]] §4/§6, [[RESUME]] fo
 - Reflect: two ticks running, the screenshot discipline has found the bug the tick then fixed.
   Next: Tick 17 = **empirical real-page visual audit vs Chrome** — stop guessing which fidelity
   gap matters; render real pages side-by-side and let the diff pick the work.
+
+## Ticks 18–22 (user-feedback arc + EPOCH-1 fallout) (2026-07-11)
+- **T18 — CRITICAL dead affordances.** User ran the binary: "bookmark and find in page dont work".
+  Both were dead affordances (§1.8, ratcheted by EPOCH-1 days earlier). Find set a flag and **drew
+  no UI at all**; bookmark toggled state and logged. Added a real find bar (live match count), a
+  ★/☆ star + toast, Chromium-style zoom −[%]+, and the missing standard keybindings.
+- **T19 — STANDING GATES (ADR-010).** JS interactivity + Chromium CSS/HTML fidelity are continuous
+  obligations, not features; they were only checked *opportunistically*. Now G1/G2/G3/G4 run every
+  tick via `scripts/verify.sh`. G3 makes §1.8 machine-checked (a menu item cannot ship without
+  declaring its observable effect).
+- **T20 — DEBT-1 paid.** The UI thread `block_on`'d the network 4× while building a page (scripts,
+  CSS, images, page fetch). Root blocker: `fetch_images` held an `Rc` across an `.await`, making the
+  future `!Send` — that one detail pinned the whole build to the UI thread. Now everything is
+  prefetched off-thread and the UI thread builds with ZERO network. **4 → 1 blocks.** (User's
+  "refresh lag" — gone.)
+- **T21 — G1 + ADR-011.** Built real-site visual fidelity (render real URL → Chromium screenshot →
+  block-grid compare → side-by-side composite). It immediately exposed that **the gates were testing
+  a cascade no user ever sees**: `manuk-wpt` defaulted to MinimalCascade, the shell ships Stylo.
+  Fixed (stylo now default; parity 72/72 under both, so it cost nothing).
+- **T22 — W1.** Screenshot showed Wikipedia's language dropdown painting over the infobox. Root
+  cause: **`visibility` and `opacity` were not supported at all.** The modern web hides dropdowns/
+  modals/tooltips with `visibility:hidden`+`opacity:0` (animatable, unlike `display:none`) — so
+  every one of them painted on top of the page. Implemented both (visibility inherited; opacity
+  folded to an effective subtree value). Dropdown/Tools/Main-menu overlaps gone.
+- **Recurring lesson, now 3×:** Wikipedia's score moved 81.0→81.7% for a *massive* structural
+  repair. **The score gates; the eyeball diagnoses.**
+- Remaining from the Wikipedia screenshot (next): missing left TOC sidebar + right Appearance panel
+  (page-level CSS Grid), broken infobox table layout, unrendered icon squares.
