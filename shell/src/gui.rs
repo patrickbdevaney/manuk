@@ -214,6 +214,9 @@ struct App {
     /// EPOCH-1 (COMPLETENESS): the Downloads panel. The menu item used to only log to stderr —
     /// a user who clicked it saw NOTHING. A dead affordance is a product bug, not backlog.
     downloads_open: bool,
+    /// A brief confirmation shown to the user (e.g. "Bookmarked"). An action the user takes must be
+    /// *observable* — §1.8.
+    toast: Option<(String, std::time::Instant)>,
     /// While dragging the scrollbar thumb: the grab offset (cursor y − thumb top).
     scrollbar_drag: Option<f32>,
     /// Text selection anchor and cursor in **document** coordinates (`None` = no selection).
@@ -339,6 +342,7 @@ impl App {
             omnibox_input: String::new(),
             menu_open: false,
             downloads_open: false,
+            toast: None,
             scrollbar_drag: None,
             sel_start: None,
             sel_end: None,
@@ -615,11 +619,74 @@ impl App {
         }
     }
 
-    /// A click within the chrome band: back / forward / reload buttons, or the address field.
+    /// Toolbar geometry, shared by `draw_chrome` and `handle_chrome_click` so the pixels a user
+    /// sees and the regions that respond can never drift apart. Right-to-left: hamburger, bookmark
+    /// star, zoom [+ / % / −]. Returns `(minus_x, pct_x, plus_x, star_x, hamburger_x, field_w)`.
+    fn toolbar_geom(w: f32) -> (f32, f32, f32, f32, f32, f32) {
+        let hamburger_x = w - 30.0;
+        let star_x = w - 62.0;
+        let plus_x = w - 92.0;
+        let pct_x = w - 138.0;
+        let minus_x = w - 162.0;
+        // The address field ends where the right-hand controls begin.
+        let field_w = (minus_x - 12.0 - 100.0).max(20.0);
+        (minus_x, pct_x, plus_x, star_x, hamburger_x, field_w)
+    }
+
+    /// Whether the current page is bookmarked (drives the ★/☆ toggle).
+    fn is_bookmarked(&self) -> bool {
+        self.bookmarks.contains(&self.url)
+    }
+
+    /// Reload the current page (toolbar ○, Ctrl+R, F5).
+    fn reload(&mut self) {
+        let u = self.url.clone();
+        if !u.is_empty() && u != "about:blank" {
+            self.goto_no_history(&u);
+        }
+    }
+
+    /// Toggle the bookmark for the current page **and show it** — the star flips immediately.
+    /// (Before EPOCH-1/Tick-18 this only wrote a log line: the user saw nothing, so it read as
+    /// broken. §1.8: a log line is not a UI.)
+    fn toggle_bookmark(&mut self) {
+        let title = self.page.as_ref().map(|p| p.title.clone()).unwrap_or_default();
+        let url = self.url.clone();
+        if url.is_empty() || url == "about:blank" {
+            return;
+        }
+        let on = self.bookmarks.toggle(&url, &title);
+        self.toast = Some((
+            if on { "Bookmarked".to_string() } else { "Bookmark removed".to_string() },
+            std::time::Instant::now(),
+        ));
+        self.rerender();
+        tracing::info!(bookmarked = on, url = %url, "bookmark toggled");
+    }
+
+    /// A click within the chrome band: back / forward / reload, zoom, bookmark, menu, or the field.
     fn handle_chrome_click(&mut self, x: f32) {
-        // Hamburger menu at the right edge.
-        if x >= self.viewport.width - 40.0 {
+        let w = self.viewport.width;
+        let (minus_x, _pct_x, plus_x, star_x, hamburger_x, _fw) = Self::toolbar_geom(w);
+
+        // Right-hand controls first (they sit inside the old "address field" region).
+        if x >= hamburger_x - 10.0 {
             self.menu_open = !self.menu_open;
+            self.rerender();
+            return;
+        }
+        if x >= star_x - 8.0 && x < star_x + 20.0 {
+            self.toggle_bookmark();
+            return;
+        }
+        // Chromium-style zoom: − and + side by side, click either repeatedly.
+        if x >= plus_x - 6.0 && x < plus_x + 20.0 {
+            self.apply_zoom(chrome::zoom_in(self.zoom));
+            self.rerender();
+            return;
+        }
+        if x >= minus_x - 6.0 && x < minus_x + 20.0 {
+            self.apply_zoom(chrome::zoom_out(self.zoom));
             self.rerender();
             return;
         }
@@ -637,10 +704,7 @@ impl App {
                 }
             }
         } else if x < 92.0 {
-            let u = self.url.clone();
-            if !u.is_empty() && u != "about:blank" {
-                self.goto_no_history(&u); // reload
-            }
+            self.reload();
         } else {
             // Focus the address field: open the omnibox pre-filled with the current URL.
             self.omnibox_open = true;
@@ -995,9 +1059,10 @@ impl App {
         canvas.draw_text(&self.fonts, 40.0, baseline, "\u{203A}", &font(15.0, back_ink)); // ›
         canvas.draw_text(&self.fonts, 68.0, baseline - 1.0, "\u{25CB}", &font(15.0, INK)); // ○ reload
 
-        // Address/search field (room left at the right for the hamburger).
+        // Address/search field — width comes from the shared geometry so it never overlaps the
+        // right-hand controls.
+        let (minus_x, pct_x, plus_x, star_x, _hx, field_w) = Self::toolbar_geom(w);
         let field_x = 100.0;
-        let field_w = (w - field_x - 44.0).max(20.0);
         canvas.fill_rect(field_x, top + 7.0, field_w, CHROME_HEIGHT - 14.0, FIELD);
         canvas.stroke_rect(field_x, top + 7.0, field_w, CHROME_HEIGHT - 14.0, BORDER, 1.0);
         let (text, ink) = if self.omnibox_open {
@@ -1008,6 +1073,28 @@ impl App {
             (self.url.clone(), INK)
         };
         canvas.draw_text(&self.fonts, field_x + 10.0, baseline, &clip_text(&text, field_w - 20.0), &font(15.0, ink));
+
+        // Chromium-style zoom controls: − [ 100% ] +, side by side, clickable repeatedly.
+        const ACCENT: Rgba = Rgba { r: 26, g: 115, b: 232, a: 255 };
+        let zoom_ink = if (self.zoom - 1.0).abs() > 0.01 { ACCENT } else { INK };
+        canvas.draw_text(&self.fonts, minus_x, baseline, "\u{2212}", &font(16.0, zoom_ink)); // −
+        canvas.draw_text(
+            &self.fonts,
+            pct_x,
+            baseline,
+            &format!("{}%", (self.zoom * 100.0).round() as i32),
+            &font(12.0, zoom_ink),
+        );
+        canvas.draw_text(&self.fonts, plus_x, baseline, "+", &font(16.0, zoom_ink)); // +
+
+        // Bookmark star — FILLED when the page is bookmarked. The user must be able to SEE the
+        // state, not infer it from a log line (§1.8).
+        let (star, star_ink) = if self.is_bookmarked() {
+            ("\u{2605}", ACCENT) // ★
+        } else {
+            ("\u{2606}", INK) // ☆
+        };
+        canvas.draw_text(&self.fonts, star_x, baseline, star, &font(16.0, star_ink));
 
         // Hamburger menu (three bars) at the right edge.
         let hx = w - 30.0;
@@ -1083,6 +1170,59 @@ impl App {
             color,
             line_height: size + 3.0,
         };
+
+        // FIND BAR (Tick 18 CRITICAL fix). Ctrl+F used to only set a flag and log "type to search"
+        // — no UI was ever drawn, so the user pressed it and saw NOTHING, i.e. it read as broken.
+        // A real bar: the query, a live match count, and the keys that drive it.
+        if self.find_open {
+            const ACCENT: Rgba = Rgba { r: 26, g: 115, b: 232, a: 255 };
+            let bw = 380.0f32.min(w - 24.0);
+            let x = w - bw - 12.0;
+            let y = CHROME_TOP + 8.0;
+            let bh = 38.0;
+            canvas.fill_rect(x, y, bw, bh, WHITE);
+            canvas.stroke_rect(x, y, bw, bh, BORDER, 1.0);
+
+            let n = self.find_session.len();
+            let cur = self.find_session.active_index();
+            let q = &self.find_query;
+            let label = if q.is_empty() {
+                "Find in page…".to_string()
+            } else {
+                format!("{q}\u{2502}")
+            };
+            let ink = if q.is_empty() { HINT } else { INK };
+            canvas.draw_text(&self.fonts, x + 12.0, y + 24.0, &clip_text(&label, bw - 150.0), &font(14.0, ink));
+
+            // Match count — the feedback that tells the user it is actually working.
+            let count = if q.is_empty() {
+                String::new()
+            } else if n == 0 {
+                "No results".to_string()
+            } else {
+                format!("{cur}/{n}")
+            };
+            let count_ink = if n == 0 && !q.is_empty() { Rgba { r: 200, g: 60, b: 60, a: 255 } } else { ACCENT };
+            canvas.draw_text(&self.fonts, x + bw - 132.0, y + 24.0, &count, &font(13.0, count_ink));
+            canvas.draw_text(&self.fonts, x + bw - 66.0, y + 24.0, "\u{2039} \u{203A}  Esc", &font(12.0, HINT));
+        }
+
+        // A brief toast (e.g. "Bookmarked") — an action the user takes must be observable.
+        if let Some((msg, at)) = &self.toast {
+            if at.elapsed() < std::time::Duration::from_millis(1600) {
+                let tw = 150.0f32;
+                let x = (w - tw) / 2.0;
+                let y = CHROME_TOP + 10.0;
+                canvas.fill_rect(x, y, tw, 30.0, Rgba { r: 45, g: 45, b: 50, a: 235 });
+                canvas.draw_text(
+                    &self.fonts,
+                    x + 14.0,
+                    y + 20.0,
+                    msg,
+                    &font(13.0, Rgba { r: 255, g: 255, b: 255, a: 255 }),
+                );
+            }
+        }
 
         // Downloads panel (EPOCH-1 COMPLETENESS fix): a real, visible surface for the menu item.
         if self.downloads_open {
@@ -1538,12 +1678,7 @@ impl App {
         match action {
             MenuAction::NewTab => self.new_tab(),
             MenuAction::DuplicateTab => self.duplicate_tab(self.tab_id),
-            MenuAction::Bookmark => {
-                let title = self.page.as_ref().map(|p| p.title.clone()).unwrap_or_default();
-                let url = self.url.clone();
-                let on = self.bookmarks.toggle(&url, &title);
-                tracing::info!(bookmarked = on, url = %url, "bookmark toggled (menu)");
-            }
+            MenuAction::Bookmark => self.toggle_bookmark(),
             MenuAction::History => {
                 // Open the omnibox empty so the dropdown shows recent history.
                 self.omnibox_open = true;
@@ -2060,11 +2195,36 @@ impl App {
                     }
                     true
                 }
-                "f" => {
+                "f" | "F" => {
                     self.find_open = true;
                     self.find_query.clear();
                     self.find_session = FindSession::default();
-                    tracing::info!("find-in-page: type to search, Enter/Shift+Enter to cycle, Esc to close");
+                    self.rerender(); // the bar must APPEAR (it is drawn in draw_overlays)
+                    true
+                }
+                // Standard browser shortcuts (Tick 18 — ERGONOMICS: the bindings a user already
+                // knows must work, or the browser feels broken even when the feature exists).
+                "d" | "D" => {
+                    self.toggle_bookmark();
+                    true
+                }
+                "r" | "R" => {
+                    self.reload();
+                    true
+                }
+                "t" | "T" => {
+                    self.new_tab();
+                    true
+                }
+                "w" | "W" => {
+                    self.close_tab_by_id(self.tab_id);
+                    true
+                }
+                "l" | "L" => {
+                    self.omnibox_open = true;
+                    self.omnibox_input =
+                        if self.url == "about:blank" { String::new() } else { self.url.clone() };
+                    self.rerender();
                     true
                 }
                 // Ctrl+'+' arrives as '=' on most layouts.
@@ -2130,6 +2290,10 @@ impl App {
                 _ => false,
             },
             // §5 — Ctrl+Tab / Ctrl+Shift+Tab cycle tabs (wake on focus).
+            Key::Named(NamedKey::F5) => {
+                self.reload();
+                true
+            }
             Key::Named(NamedKey::Tab) if ctrl => {
                 self.cycle_tab(if shift { -1 } else { 1 });
                 true

@@ -229,3 +229,29 @@ in the guarantee, so it is debt rather than a feature.
 
 **Cost.** EPOCH-1 was bounded as designed: total measurement, 2 fixes, 3 deferrals. Feature velocity
 resumes immediately at Tick 18.
+
+## ADR-009 — Star point 13: DURABILITY & UPDATABILITY (user-issued, long-horizon) (2026-07-11)
+
+**Requirement.** At release maturity (not during rapid iteration), the **browser binary must be
+decoupled from user data**. Shipping a new version must never disturb the user's profile:
+bookmarks, history, cookies, sessions, passwords, downloads, settings. Updates are seamless; the
+profile is durable across them, forward- and backward-compatible within a major line.
+
+**Why it is a star point, not a feature.** It is an *emergent product property* — it cannot be
+verified by any single feature tick, and it fails catastrophically and silently (a user upgrades
+and loses their logins). It also constrains design *now*: every store we add (cookies.json, session,
+bookmarks, history, password store) is a schema that will have to migrate. Deciding that late is
+how browsers corrupt profiles.
+
+**Star point 13 — DURABILITY & UPDATABILITY**
+*Meaning:* user data outlives the binary. A version upgrade never destroys, locks, or silently
+migrates-wrong a profile. The profile is a versioned, self-describing store, separate from the
+executable, with explicit forward/backward-compat rules.
+*Probe:* (i) every on-disk store carries a **schema version**; (ii) load an *older* profile with a
+*newer* binary and assert no data loss; (iii) the binary writes **nothing** user-owned inside its
+own install dir; (iv) a corrupt/partial store degrades gracefully (never a panic, never a wipe).
+
+**Now vs later.** Do **not** build an updater during rapid iteration. But **do**, from here on:
+version every persisted store as it is created or touched, keep all user data under the profile
+dir (`$MANUK_STATE`/XDG), and never write user data next to the binary. The full seamless-update
+mechanism is a release-epoch item. Cheap now; unaffordable to retrofit later.

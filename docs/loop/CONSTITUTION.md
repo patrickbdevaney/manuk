@@ -66,6 +66,14 @@ while PERF/MEM/STABILITY rose **+3**.) The star's points:
 10. **SECURITY & PRIVACY** — safe defaults, partitioning, no leaks.
 11. **IDENTITY & HONESTY** — a genuine Manuk fingerprint; truthful reporting (ADR-004).
 12. **AGENT-DRIVABILITY** — the automation surface works end-to-end, ambidextrously.
+13. **DURABILITY & UPDATABILITY** (ADR-009) — **user data outlives the binary.** A version upgrade
+    never destroys, locks or mis-migrates a profile (bookmarks, history, cookies, sessions,
+    passwords, settings). The profile is a versioned, self-describing store *separate from the
+    executable*. *Probe:* every store carries a schema version; an older profile loads in a newer
+    binary with no data loss; the binary writes nothing user-owned into its install dir; a corrupt
+    store degrades gracefully (never a panic, never a wipe). *Build the updater at release maturity
+    — but version the stores and keep user data in the profile dir from now on: cheap now,
+    unaffordable to retrofit.*
 
 **k is dynamic.** Points are added/retired **only by ADR**, and **a point must ship with its probe**
 — *a point without a probe is a slogan, not an axis.* Capability without these is a demo, not a
