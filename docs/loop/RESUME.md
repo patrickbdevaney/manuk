@@ -4,8 +4,9 @@ _A fresh session reads [[CONSTITUTION]] then this file, and resumes at the named
 
 ## Where the loop is
 
-- **TICKS = 16** (about to run Tick 16). Ticks 1–15 done + committed; latest: 13 (`64ba73a`),
-  14 (`e441564`), 15 (`8f76665`).
+- **TICKS = 18.** Ticks 1–17 done + committed; latest: 15 (`8f76665`), 16 (`e7cd623`),
+  17 (`6e27574`).
+- **>>> EPOCH-1 IS DUE (CONSTITUTION §10 / ADR-005). It is the next action, not a tick. <<<**
 - **Mission amended (ADR-004):** maximal traversal earned by **capability** — a fifth real browser
   with its own genuine fingerprint (impersonation is *off-strategy*, not merely forbidden); named
   sites are representative points, **not a checklist**. **Ambidextrous spine:** one engine — a
@@ -41,47 +42,49 @@ _A fresh session reads [[CONSTITUTION]] then this file, and resumes at the named
     (shared by finish_load + finish_prewarm); prewarmed pages live in the bfcache; `goto` checks
     it first for an instant click.
 
-## Next action (Tick 16)
+## Next action — **EPOCH-1** (systemic audit; NOT a feature tick)
 
-Pick: **L45 — block-in-inline** (found while VISUAL-verifying Tick 15; pre-existing and NOT
-shadow-specific). A block-level box inside an inline element **loses its box entirely** — the text
-still flows, but the block's background / padding / border simply vanish. Repro:
+**Why now.** §10.1's drift detector has fired: over Ticks 1–17, capability rose **+49**
+(JS +22, COMPAT +15, RENDER +12) while quality rose **+3** (PERF +3, MEM 0, STABILITY 0).
+Threshold is 25; drift is **46**. Per-tick gates verify a *feature in isolation* and are
+structurally incapable of proving the whole engine is fast, lean and hang-free. The loop
+optimized what it measured; EPOCH-1 makes it measure the machine.
 
-    cargo run -q -p manuk-wpt --release -- render --inline \
-      '<span><div style="background:#fd0;padding:6px">block in inline</div></span>' \
-      --out /tmp/bii.png --chrome
-    # Manuk: bare text, no yellow box. Chrome: a yellow padded block.
+**This is an arc, not one tick** (§10.4). Several consecutive ticks is normal. Do not slice it
+into "a bit of perf each tick" — that dilution is exactly what the gate exists to prevent.
 
-Straightforwardly traversal-blocking per ADR-004: block-in-inline is everywhere in real markup
-(a `<div>` inside an `<a>`/`<span>`/custom element), and losing the box means losing the visual.
-It is also *why* an inline shadow host with block shadow content renders bare text (Tick 15).
+Run §10.2 in order. **Measure first — do not optimize anything before there is a number.**
 
-Design — CSS2 §9.2.1.1 **anonymous block boxes**: when an inline box contains a block-level child,
-the inline is *split* around it and the whole run is wrapped in anonymous block boxes:
-`inline-before | block | inline-after`. In `engine/layout`:
-1. Find where inline content is gathered (`collect_inline_group` / `collect_inline_node`, ~line
-   2040+) — a block-level child encountered while building inline items is currently swallowed.
-2. When building a block's children, if an inline-level run contains a block-level descendant,
-   emit: anonymous block(inline run before) → the block child (laid out as a block) → anonymous
-   block(inline run after). The existing anonymous-box machinery around line 1720 (`kids.extend
-   (new_boxes)`, `BoxContent::Inline(std::mem::take(frags))`) is the seam.
-3. Preserve the inline's own styles on the split parts (an inline's background/border applies to
-   each fragment) — a simplification is acceptable if documented.
-4. Verify **VISUAL** (render + `--chrome`: the yellow padded block appears, matching Chrome) and
-   **HEADLESS** (a layout test: the inner block's box has the right width/height/background, and
-   text before/after it stays on separate lines). Parity MUST stay 72/72 — this touches the core
-   inline/block seam, so run it early and often.
+1. **Profile the hot paths.** Build a `manuk-wpt bench` (or `shell --measure`) that reports, on
+   real pages (example.com / HN / Wikipedia / a heavy SPA): nav→first-paint, click→paint,
+   key→caret, scroll frame time, and the per-stage breakdown (parse, cascade, layout, paint,
+   display-list build, JS dispatch). **Publish the numbers next to Chromium's on the same pages.**
+   Existing seeds: `AG5` latency harness (agent/src/bin/ag5-latency.rs), the `MEM3` binary-size
+   measurement, `cold-start ~73ms` in STATE.
+2. **Algorithmic complexity audit.** Hunt superlinear behaviour that only shows at scale. Known
+   suspects already visible in the code: `cascade_via_stylo` runs a **full second MinimalCascade
+   over the whole document** every cascade (for `vertical_align` + the shadow-tree fallback);
+   `measure_intrinsic` re-lays-out subtrees per taffy probe (memoized — verify the hit rate);
+   `DisplayList::build` rebuilds the entire list per frame; `styles` is a `HashMap` looked up in
+   inner loops; `collect_positioned` / `flat_children` walk the tree repeatedly per layout.
+3. **Latency budgets → invariants.** Set a budget per interaction, then write them into §1 so a
+   later tick that regresses one **fails** like a parity regression. This is the ratchet that stops
+   drift re-accruing.
+4. **No hangs, no panics.** Every `block_on` on the UI thread is a latent hang — several are
+   already logged as follow-ons (L21 async page-fetch; `pump_fetches`; `build_page`'s
+   `fetch_and_apply_stylesheets`). Audit `unwrap`/`expect`/index/slice on input- and network-driven
+   paths; bound every loop. (Tick 15 already removed one real layout panic — there will be more.)
+5. **Memory.** Steady-state + per-tab; growth across repeated navigation.
+6. **Stability soak.** Long realistic session (many navs, clicks, scrolls, tabs): zero panics, zero
+   hangs, bounded memory.
 
-## Then keep going
+**Binding output (§10.3):** a MEASURE report with real numbers, new invariant floors in §1, and an
+ADR. *An epoch that produces no numbers has not happened.*
 
-Re-run §5 UCB (Tick 20 = next forced-highest-U). Rank by **traversal-blocking capability**
-(ADR-004):
-- **JS/DOM depth**: L02b Intersection/ResizeObserver (virtualized feeds *need* these), L16b named
-  slots + a scoped flat-tree walk in Stylo, L22 fetch fidelity.
-- **Virtualized-feed performance** (the X/feed class): scroll + recycle + incremental relayout
-  under a live feed; pair with L20 (profile vs Chromium).
-- **Session/auth durability**: L18 cookie partitioning, L06 autofill.
-- **Visual fidelity**: real-page audits vs Chrome (`render --chrome` on example.com / HN /
-  Wikipedia); L43b radii/shadows; L15 inline SVG; L44 shell-chrome paint (unblocks GUI-chrome).
-Each tick: implement → verify (build + parity 72/72 + test/screenshot) → disk hygiene →
-commit+push (co-author line) → update LEDGER/STATE/JOURNAL/RESUME → next.
+## After EPOCH-1
+
+Reset the epoch tracker in [[LEDGER]] (record the axis snapshot). Then resume normal UCB ticks,
+ranked by traversal-blocking capability (ADR-004). Queued and now well-motivated by the amended
+mission's "media-rich client apps" class: **L50 CSS animations/transitions**, **L51 video/audio**,
+**L52 canvas 2D**, **L53 iframes** — plus L02b Intersection/ResizeObserver (virtualized feeds),
+L47 (HN nav wrap), L18 cookie partitioning, L15 SVG, L44 shell-chrome paint.

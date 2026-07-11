@@ -48,6 +48,15 @@ core, diverge at consumption," made literal. **No agent-only or human-only fork 
 pipeline**: an agent action in headful mode goes through the same code a human click does.
 Divergence is a defect.
 
+**Speed and stability are the product, not polish (ADR-005).** A browser that hangs is not a
+browser; a browser that is slow is not competitive, however many features it has. "Genuinely
+competitive with Chromium/Gecko" is a claim about the *machine* — nav→first-paint, click→paint,
+scroll frame time, memory, and the absolute absence of hangs/panics/"app unresponsive" — not only
+about the feature matrix. Capability without responsiveness is a demo. This is enforced by the
+**EPOCH** gate (§10), because per-tick gates provably do not enforce it: over Ticks 1–17 capability
+rose +49 points while PERF/MEM/STABILITY rose +3. The loop optimizes what it measures — so it must
+measure this.
+
 These faces are complementary, not in tension. The loop expands the **entire possibility surface**
 of a diverse, cohesive, coexisting feature set — it is not limited to today's list.
 
@@ -221,3 +230,56 @@ is not).
 
 *Amend only through an ADR in `DECISIONS.md`. The loop serves the north star; the knowledge base
 serves the loop; the commits serve the browser.*
+
+---
+
+## 10. EPOCH — the long-horizon systemic audit (rare, intensive, binding)
+
+Per-tick gates (§1) are right for a *feature*: build, parity, a test, a screenshot. They are
+structurally incapable of proving the **whole engine** is fast, lean and hang-free — latency is an
+emergent property of cascade × layout × paint × event-loop × I/O, an O(n²) only shows at scale, and
+a hang only shows under a real session. So the loop adds a second, much rarer gate.
+
+An **EPOCH** is *not* a feature tick. It is a dedicated arc (several consecutive ticks is normal)
+that treats the browser as one machine and ruthlessly optimizes it end to end. **It must not run
+often** — it is expensive, and its value is in the epochal step-jump, not in a recurring tax.
+
+### 10.1 When (a drift detector, not just a counter)
+
+An epoch is **DUE** when either holds since the last epoch:
+- **(a) cadence** — ≥ 20 ticks have passed; or
+- **(b) drift** — `(ΔRENDER + ΔJS + ΔCOMPAT) − (ΔPERF + ΔMEM + ΔSTABILITY) > 25`.
+
+(b) is the real forcing function: it fires exactly when features outrun the machine. Record the
+axis snapshot at each epoch's end in [[STATE]] so the deltas are computable.
+
+### 10.2 What (the whole machine, not one feature)
+
+1. **Profile, don't guess.** Measure the real hot paths: nav→first-paint, click→paint, key→caret,
+   scroll frame time, relayout, cascade, paint, JS dispatch, display-list rebuild. **Publish the
+   numbers** and compare against Chromium on the same pages.
+2. **Algorithmic complexity audit.** Hunt superlinear behaviour that only appears at scale on real
+   pages — repeated full-tree walks, per-node map lookups in inner loops, whole-display-list
+   rebuilds on a one-pixel change, caches that never hit, re-cascading the world for a class flip.
+   Fix the complexity, not the constant.
+3. **Latency budgets → invariants.** Set a budget per interaction; once set it becomes an
+   invariant floor in §1 and a later tick that regresses it **fails**, exactly as a parity
+   regression fails. This is what stops drift from re-accruing.
+4. **No hangs, no panics.** Audit every `unwrap`/`expect`/index/slice on an input- or
+   network-driven path; bound every loop; ensure **nothing blocks the UI thread** (every `block_on`
+   logged as a follow-on is a latent hang). The user must never see "application not responding".
+5. **Memory.** Steady-state and per-tab; check for growth across repeated navigation.
+6. **Stability soak.** Drive a long, realistic session (many navigations, clicks, scrolls, tabs)
+   and assert zero panics, zero hangs, bounded memory.
+
+### 10.3 Binding output
+
+An epoch ends by writing (i) a MEASURE report with the numbers, (ii) new **invariant floors** into
+§1, and (iii) an ADR recording what changed and why. An epoch that produces no numbers has not
+happened.
+
+### 10.4 Relationship to ticks
+
+A tick is **never blocked** waiting for an epoch, and an epoch is never sliced into "a bit of perf
+each tick" — that is precisely the dilution this gate exists to prevent. When an epoch comes due,
+[[RESUME]] names it and the loop enters the epoch arc.

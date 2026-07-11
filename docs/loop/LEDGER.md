@@ -13,6 +13,17 @@ now found the bug that the tick then fixed, two ticks running (L42 flex, L45 blo
 Stop *guessing* which fidelity gap matters: render real pages beside headless Chrome and let the
 diff choose the work. Highest expected value per ADR-004 (traversal breadth)._
 
+## EPOCH tracker (CONSTITUTION §10 / ADR-005)
+
+- **Last epoch:** none (the loop ran 17 ticks with no systemic gate — that is the flaw ADR-005 fixes).
+- **Axis snapshot at last epoch:** n/a; baseline = Tick-0 scores (RENDER 70, JS 55, COMPAT 42,
+  PERF 55, MEM 55, STABILITY 55).
+- **Drift now:** (ΔRENDER 12 + ΔJS 22 + ΔCOMPAT 15) − (ΔPERF 3 + ΔMEM 0 + ΔSTABILITY 0) = **+46**.
+- **Threshold:** > 25 → **EPOCH-1 IS DUE.** Also (a) fires at 20 ticks.
+- **Verdict:** run **EPOCH-1** as the next major arc (it is not a tick; see §10.4). It is scheduled
+  at Tick 18 — i.e. after the current feature arc reaches a clean boundary — and its output is
+  binding: published numbers + new invariant floors in §1.
+
 ## Tier A — absorb outstanding beneficial work already suggested (do first)
 
 These come from the tier plan, the RESEARCH_V2 directive, IMPLEMENTATION.md follow-ons, and
@@ -43,7 +54,12 @@ STATE weak frontiers. High V, mostly known ⇒ high exploit ⇒ front-loaded.
 | L16 | Custom Elements + Shadow DOM basics (P4) | JS/RENDER | 6 | 8 | 7 | 1 | **done** (Tick 15) | HEADLESS+VISUAL |
 | L16b | Named slots + slot reassignment; `::part`/`::slotted`; closed-mode hiding; a scoped flat-tree walk in Stylo (shadow content currently falls back to MinimalCascade) | JS/RENDER | 5 | 6 | 5 | 0 | backlog (L16 follow-on) | HEADLESS |
 | L45 | **block-in-inline**: a block box inside an inline element loses its box | RENDER | 8 | 6 | 5 | 1 | **done** (Tick 16) | VISUAL |
-| L46 | Empirical real-page visual audit vs Chrome (example.com / HN / Wikipedia): render side-by-side, rank the gaps, fix the top one | RENDER/COMPAT | 9 | 5 | 6 | 0 | backlog | VISUAL |
+| L46 | Empirical real-page visual audit vs Chrome: render side-by-side, rank gaps, fix the top one | RENDER/COMPAT | 9 | 5 | 6 | 1 | **done** (Tick 17; async render + bgcolor hints) | VISUAL |
+| L47 | HN header nav wraps vertically — table auto-layout column-width distribution | RENDER | 5 | 5 | 5 | 0 | backlog (from L46 audit) | VISUAL |
+| L50 | **CSS animations + transitions** (a live web is animated; static pages read as broken) | RENDER/PERF | 8 | 7 | 6 | 0 | backlog | VISUAL |
+| L51 | **`<video>` + `<audio>`** playback (media-rich client apps — an ADR-004 traversal class) | MEDIA/COMPAT | 8 | 9 | 8 | 0 | backlog | VISUAL |
+| L52 | **`<canvas>` 2D context** (charts, games, editors — huge swathe of real apps) | RENDER/JS | 8 | 8 | 7 | 0 | backlog | VISUAL |
+| L53 | **`<iframe>` / embedded content** (ads, players, auth widgets, maps) | COMPAT | 7 | 8 | 7 | 0 | backlog | VISUAL |
 | L17 | AG2 task-intent AXTree pruning + AG3 dual (semantic+visual) targeting | AGENT-EXT | 6 | 4 | 5 | 1 | **done** (Tick 9) | HEADLESS |
 | L18 | Cookie partitioning + `SameSite` enforcement audit | NET/SECURITY | 5 | 4 | 4 | 0 | backlog | HEADLESS |
 | L19 | Settings page / preferences surface | UI | 4 | 5 | 4 | 0 | backlog | GUI |
