@@ -219,10 +219,41 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
         let cv = cascade_one_element(
             &stylist, &stylo_sheets, &lock, &url_data, &guard, &guards, &el, node, &parent_cv,
         );
-        map.insert(node, to_computed_style(&cv));
+        let mut cs = to_computed_style(&cv);
+        apply_presentational_hints(dom, node, &mut cs);
+        map.insert(node, cs);
         parent_cv.insert(node, cv);
     }
     map
+}
+
+/// Apply HTML presentational hints that Stylo's cascade doesn't see (our `TElement` wall
+/// doesn't synthesize them): replaced-element `width`/`height` attributes and `<td>`/`<th>`
+/// default padding. Applied only where the property is still at its initial, so real author
+/// CSS wins (presentational hints are lower priority than author rules).
+fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedStyle) {
+    let Some(el) = dom.element(node) else {
+        return;
+    };
+    let tag = dom.tag_name(node).unwrap_or("");
+    if matches!(tag, "td" | "th") && s.padding == crate::Sides::all(crate::Dim::Px(0.0)) {
+        s.padding = crate::Sides::all(crate::Dim::Px(1.0));
+    }
+    if matches!(tag, "img" | "canvas" | "video" | "svg" | "object" | "embed") {
+        if s.display == crate::Display::Inline {
+            s.display = crate::Display::InlineBlock;
+        }
+        if s.width == crate::Dim::Auto {
+            if let Some(w) = el.attr("width").and_then(crate::parse_dimension_attr) {
+                s.width = crate::Dim::Px(w);
+            }
+        }
+        if s.height == crate::Dim::Auto {
+            if let Some(h) = el.attr("height").and_then(crate::parse_dimension_attr) {
+                s.height = crate::Dim::Px(h);
+            }
+        }
+    }
 }
 
 /// Compute one element's `ComputedValues`: match author rules, merge, cascade.
