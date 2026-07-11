@@ -17,7 +17,7 @@ Progress against them + the phase plan below:
 | 8 | Stable + generational `NodeId` | ✅ foundation shipped (packed gen+index, free-list reclaim infra, `is_alive`/`discard_subtree`); auto-free wiring at safe discard sites is the follow-on |
 | 2 | Persistent-texture partial damage upload | ☐ remaining (GPU; headless-unverifiable) |
 | 6 | Minimal spatial/scroll tree | ☐ remaining |
-| 7 | Blitz-model Taffy 0.12 integration + intrinsic-size cache | ✅ **LayoutPartialTree shipped** — measure seam + intrinsic cache, then a full unified taffy tree (7 trait impls) now drives flex/grid; block/inline/float/table are Manuk-measured leaves. Verified 72/72. Stage-4 full-geometry extraction (avoid re-placing nested flex/grid) is a remaining perf refinement |
+| 7 | Blitz-model Taffy 0.12 integration + intrinsic-size cache | ✅ **complete** — measure seam + intrinsic cache + full unified taffy tree (7 trait impls) driving flex/grid + **stage-4 full-subtree extraction** (a container and ALL nested flex/grid solved & placed in one pass; block/inline/float/table stay Manuk leaves). Verified 72/72 + nested flex-in-flex |
 
 Also shipped this program: DDG search-click fix, `vw/vh/vmin/vmax` units, 9 engine
 repomaps, `RESEARCH-PROMPT-V2` + `RESEARCH-FINDINGS-V2`.
