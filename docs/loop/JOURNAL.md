@@ -109,3 +109,21 @@ _Minimal history for audit + resume. See [[CONSTITUTION]] §4/§6, [[RESUME]] fo
   Parity 72/72; `_sm` + JS-less builds green. Commit `7c4a1f6`.
 - Reflect: BroadcastChannel, MessageChannel/MessagePort, full structured clone (Blob/Map/Set),
   and window.name targeting are follow-ons (logged). Next: Tick 7 (normal UCB).
+
+## Tick 7 — L02: MutationObserver (2026-07-11)
+- Selected: top UCB score (~4.4); the next SPA-compat lever — frameworks mutate the DOM after a
+  fetch and observe it; absent the API their code throws at construction.
+- Implemented: a real `MutationObserver` in the window prelude (observe with attributes/childList/
+  characterData/subtree/attributeOldValue/attributeFilter, disconnect, takeRecords). The native
+  DOM-mutating methods (setAttribute/removeAttribute/appendChild/insertBefore/removeChild/remove/
+  textContent/innerHTML) emit records via a `record_mutation` helper; delivery is a microtask
+  (queueMicrotask) so a handler's mutations surface after the current script but before the
+  dispatch/load/fetch call returns (all drain microtasks via `run_deferred`). Subtree matching
+  walks parentNode over live reflectors. No host round-trip — entirely in engine/js.
+- Verified: HEADLESS — page interactive scenario (11): a click sets an attribute on the target,
+  an attribute on a descendant (subtree), and appends a child → observer fires with the batched,
+  correctly-typed records. Parity 72/72; workspace + js + page tests green (ignored js tests'
+  exit-SIGSEGV is the pre-existing leaked-runtime teardown; assertions pass first, confirmed via
+  git-stash). Commit `861a66c`.
+- Reflect: characterData oldValue nuance, observer GC lifetime, and IntersectionObserver/
+  ResizeObserver are follow-ons (logged). Next: Tick 8 (normal UCB).

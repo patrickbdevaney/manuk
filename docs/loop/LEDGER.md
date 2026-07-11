@@ -5,11 +5,12 @@ T=times touched. `score = V/C + 1.5*sqrt(ln(1+TICKS)/(1+T)) + 1.0*(U/10)`. Every
 the highest-U item. Update T/status/scores each tick; add items on reflection; mark dead ends
 `superseded`. Verify class per §7: HEADLESS / GUI / EXTERNAL / MEASURE._
 
-**TICKS = 7** (global tick counter; increment each tick). _Ticks done: 1 L14-slice, 2 L01
-fetch/XHR, 3 L10 pushState, 4 L04 downloads, 5 L32 prerender, 6 L03 postMessage/opener. Tick 7
-UCB pick: **L02 MutationObserver** (top score ~4.4; the next SPA-compat lever — frameworks mutate
-the DOM post-fetch and watch it with observers; absent, their code ReferenceErrors). NOTE: Tick
-10 is the next forced-highest-U tick._
+**TICKS = 8** (global tick counter; increment each tick). _Ticks done: 1 L14-slice, 2 L01
+fetch/XHR, 3 L10 pushState, 4 L04 downloads, 5 L32 prerender, 6 L03 postMessage/opener, 7 L02
+MutationObserver. Tick 8 pick: **L11 responsive `@media`** — UCB near-tie between L17 (agentic,
+~4.22) and L11 (RENDER, ~4.15); the user's explicit ordering (human-browser table stakes BEFORE
+agentic) breaks it toward L11, which also hits a known weak frontier ("look like Chromium/Gecko"
+on Wikipedia-class responsive layouts). NOTE: Tick 10 is the next forced-highest-U tick._
 
 ## Tier A — absorb outstanding beneficial work already suggested (do first)
 
@@ -19,7 +20,8 @@ STATE weak frontiers. High V, mostly known ⇒ high exploit ⇒ front-loaded.
 | id | intent | axis | V | C | U | T | status | verify |
 |----|--------|------|---|---|---|---|--------|--------|
 | L01 | `fetch()` + `XMLHttpRequest` in page JS (SPA data loading) | JS/COMPAT | 10 | 5 | 4 | 1 | **done** (Tick 2) | HEADLESS |
-| L02 | `MutationObserver` (SPAs mutate DOM post-load) | JS/COMPAT | 9 | 5 | 4 | 0 | backlog | HEADLESS |
+| L02 | `MutationObserver` (SPAs mutate DOM post-load) | JS/COMPAT | 9 | 5 | 4 | 1 | **done** (Tick 7) | HEADLESS |
+| L02b | `IntersectionObserver` + `ResizeObserver` + characterData oldValue nuance | JS/COMPAT | 6 | 6 | 5 | 0 | backlog (L02 follow-on) | HEADLESS |
 | L03 | Cross-window `postMessage` + `window.opener` (finish OAuth popup return) | JS | 9 | 5 | 5 | 1 | **done** (Tick 6) | HEADLESS |
 | L03b | `BroadcastChannel` + `MessageChannel`/`MessagePort` + full structured clone (Blob/Map/Set) + `window.name` targeting | JS | 4 | 6 | 5 | 0 | backlog (L03 follow-on) | HEADLESS |
 | L04 | Downloads to disk (Content-Disposition, stream to file, manager entry) | NET/UI | 8 | 4 | 3 | 1 | **done** (Tick 4) | HEADLESS |
@@ -64,7 +66,7 @@ position:sticky · grid-template-areas · UAX#14-linebreak · preconnect(R4) · 
 MEM3-binary-size · window.open→new-tab · **fetch()+XHR real Promises (L01, Tick 2)** ·
 **history.pushState/replaceState/popstate + location (L10, Tick 3)** · **downloads to disk
 (L04, Tick 4)** · **predictive prerender into bfcache (L32, Tick 5)** · **cross-window
-postMessage + window.opener (L03, Tick 6)**.
+postMessage + window.opener (L03, Tick 6)** · **MutationObserver (L02, Tick 7)**.
 
 ## Superseded / blocked
 

@@ -19,7 +19,7 @@ Gate: `cargo run -q -p manuk-wpt --release -- parity` = **72/72**.
 | Axis | Score | Notes |
 |------|------|-------|
 | RENDER | 70 | Stylo cascade, flex/grid, grid-template-areas, UAX#14 breaking, position:sticky. Complex responsive skins (Wikipedia Vector-2022) still partial. |
-| JS | 70 | **Interactive**: persistent per-page context, real clicks fire listeners, preventDefault. **fetch()/XHR real Promises + host round-trip**; **history.pushState/replaceState/popstate + real `location`** (SPA routing); **window.open + cross-window `postMessage` + `window.opener`** (OAuth popup round-trip, host-routed between tabs). Missing: MutationObserver, many WebIDL APIs. |
+| JS | 73 | **Interactive**: persistent per-page context, real clicks fire listeners, preventDefault. **fetch()/XHR real Promises + host round-trip**; **pushState/popstate + real `location`**; **window.open + cross-window `postMessage`/`opener`**; **MutationObserver** (attributes/childList/characterData/subtree, microtask-batched). Missing: IntersectionObserver/ResizeObserver, many WebIDL APIs. |
 | NET | 62 | hyper+rustls, HTTP cache (RFC-9111 subset), RFC-6265 cookies **persistent across sessions**, preconnect, adblock, page-fetch bodies, **downloads to disk (Content-Disposition/binary, de-dup, path-safe)**. Missing: HTTP/2 push nuance, service workers, async non-blocking page-fetch (currently block_on), streaming-to-disk. |
 | UI | 58 | Tab strip (new/close/dup), hamburger menu, omnibox suggestions/history dropdown, scrollbar, find, zoom, text selection + clipboard; omnibox URL tracks SPA pushState routes; **downloads saved to disk + listed in the menu**. Missing: richer downloads shelf, settings page, richer a11y. |
 | PERF | 58 | Off-thread nav, bfcache, preconnect, **predictive prerender (hover → full page built into bfcache → instant click)**, partial GPU upload, shaping caches. Not yet profiled against Chromium; cold-start ~73ms tiny page. |
@@ -27,7 +27,7 @@ Gate: `cargo run -q -p manuk-wpt --release -- parity` = **72/72**.
 | AGENT-IN | 40 | llama.cpp/GGUF in-browser agent panel (Ctrl+J), typed actions. Depends on local model. |
 | AGENT-EXT | 45 | In-process typed `BrowserAction` + a11y targeting; AG5 measured ~12× lower per-command latency than CDP-over-socket. BiDi surface exists (no DevTools UI). |
 | FINGERPRINT | 33 | Honest human UA + navigator + **boot window/screen metrics** (innerWidth/screen/dpr/matchMedia/rAF). Not yet complete (fonts, timezone, canvas/WebGL consistency, true window size). |
-| COMPAT | 50 | Simple + table-driven sites faithful (example.com, HN). Boot-metric ReferenceErrors fixed; **fetch/XHR real round-trips + pushState routing + cross-window postMessage/opener** (SPA hydration, client-side routes, OAuth-popup return all work). SPAs still need MutationObserver for full fidelity. |
+| COMPAT | 53 | Simple + table-driven sites faithful (example.com, HN). Boot-metric ReferenceErrors fixed; **fetch/XHR + pushState routing + postMessage/opener + MutationObserver** (SPA hydration, routing, OAuth-return, post-fetch DOM-watching all work). Remaining SPA gaps narrowing; responsive `@media` correctness (Wikipedia-class) still partial (next). |
 | STABILITY | 55 | Parity green; fast-exit avoids mozjs teardown crash. GUI paths unverified headlessly. |
 | SECURITY | 45 | Provenance-tagged agent observations + Action-Guard; adblock; no site sandbox/process isolation (deliberate in-process model). |
 
@@ -39,7 +39,7 @@ position:sticky; grid-template-areas; UAX#14 line-breaking; speculative preconne
 measurement; MEM3 binary-size measurement; boot window/screen metrics (Tick 1); **fetch()/XHR
 real Promises + host round-trip (Tick 2)**; **history.pushState/popstate + location (Tick 3)**;
 **downloads to disk (Tick 4)**; **predictive prerender into bfcache (Tick 5)**; **cross-window
-postMessage + window.opener (Tick 6)**.
+postMessage + window.opener (Tick 6)**; **MutationObserver (Tick 7)**.
 
 ## Known weak frontiers (feed exploration)
 
