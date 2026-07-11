@@ -673,7 +673,9 @@ impl Page {
                 )
             })
             .collect();
-        manuk_a11y::build_tree_with_rects(&self.dom, &rects)
+        // Pass the effective z-index per node so hit-testing is occlusion-aware (a
+        // high-`z` overlay wins a click over content beneath it).
+        manuk_a11y::build_tree_with_geometry(&self.dom, &rects, &self.z_index_map())
     }
 
     /// Mutable access to the DOM (so a caller/JS binding can mutate the tree, then

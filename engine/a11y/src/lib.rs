@@ -230,6 +230,10 @@ pub struct A11yNode {
     /// Absolute border box, when the element produced one. `None` for elements the
     /// layout never boxed — an agent has nowhere to click those.
     pub bbox: Option<Rect>,
+    /// Effective stacking layer (z-index) of this node, for occlusion-aware hit-testing —
+    /// a higher-`z` box on top wins a click even if a lower-`z` box also contains the point.
+    /// `0` for the common non-positioned case (then hit-testing falls back to deepest-wins).
+    pub z: i32,
     pub children: Vec<A11yNode>,
 }
 
@@ -355,23 +359,28 @@ impl A11yNode {
     /// The deepest node whose `bbox` contains `(x, y)` — hit-testing for click-by-
     /// coordinate. Deepest wins, since a button inside a `main` should beat the `main`.
     pub fn hit_test(&self, x: f32, y: f32) -> Option<&A11yNode> {
-        let mut best: Option<(&A11yNode, f32)> = None;
+        // Occlusion-aware: the box on the highest stacking layer (`z`) that contains the
+        // point wins — so a `position:fixed`/high-`z` overlay beats content beneath it.
+        // Within a layer, the smallest (deepest) box wins; on an exact area tie the deeper
+        // node wins, and since `iter()` is pre-order "deeper" is "seen later" (`<=`).
+        let mut best: Option<&A11yNode> = None;
         for n in self.iter() {
             let Some(b) = n.bbox else { continue };
-            if x >= b.x && x < b.right() && y >= b.y && y < b.bottom() {
-                let area = b.width * b.height;
-                // Smallest containing box == deepest meaningful element. On a TIE
-                // (a wrapper exactly as large as its only child, e.g. `<form>` around
-                // a lone `<button>`) the deeper node must win — and since `iter()` is
-                // pre-order, "deeper" is "seen later", so `<=` is what selects it.
-                // (`map_or(true, …)` rather than `is_none_or`, which needs Rust 1.82
-                // while this workspace's MSRV is 1.80.)
-                if best.map_or(true, |(_, a)| area <= a) {
-                    best = Some((n, area));
+            if !(x >= b.x && x < b.right() && y >= b.y && y < b.bottom()) {
+                continue;
+            }
+            let area = b.width * b.height;
+            match best {
+                None => best = Some(n),
+                Some(bn) => {
+                    let ba = bn.bbox.map_or(f32::MAX, |r| r.width * r.height);
+                    if n.z > bn.z || (n.z == bn.z && area <= ba) {
+                        best = Some(n);
+                    }
                 }
             }
         }
-        best.map(|(n, _)| n)
+        best
     }
 }
 
@@ -651,6 +660,9 @@ pub fn build_tree(dom: &Dom) -> A11yNode {
     build_tree_with_rects(dom, &HashMap::new())
 }
 
+/// The effective stacking layer per node, for occlusion-aware hit-testing (see [`A11yNode::z`]).
+pub type ZIndex = HashMap<NodeId, i32>;
+
 /// Build the accessibility tree, attaching **element geometry** from `rects`.
 ///
 /// `rects` maps a DOM node to its absolute border-box rect — produced by
@@ -658,14 +670,21 @@ pub fn build_tree(dom: &Dom) -> A11yNode {
 /// Nodes with no entry keep `bbox == None`, which is honest: an anonymous or
 /// unlaid-out node has no place to click.
 pub fn build_tree_with_rects(dom: &Dom, rects: &HashMap<NodeId, Rect>) -> A11yNode {
+    build_tree_with_geometry(dom, rects, &HashMap::new())
+}
+
+/// As [`build_tree_with_rects`], plus a per-node effective stacking layer (`z_index`, from
+/// the page's z-index map) so [`A11yNode::hit_test`] is occlusion-aware.
+pub fn build_tree_with_geometry(dom: &Dom, rects: &HashMap<NodeId, Rect>, z_index: &ZIndex) -> A11yNode {
     let index = id_index(dom);
     let root = dom.root();
-    let children = build_children(dom, root, &index, rects);
+    let children = build_children(dom, root, &index, rects, z_index);
     A11yNode {
         node: root,
         role: Role::Document,
         name: String::new(),
         bbox: None,
+        z: 0,
         children,
     }
 }
@@ -675,6 +694,7 @@ fn build_children(
     parent: NodeId,
     index: &HashMap<String, NodeId>,
     rects: &HashMap<NodeId, Rect>,
+    z_index: &ZIndex,
 ) -> Vec<A11yNode> {
     let mut out = Vec::new();
     // N3/N4 — the FLAT tree: a shadow host exposes its shadow content, and a `<slot>`
@@ -689,7 +709,7 @@ fn build_children(
         // The tree root already *is* the document; `<html>` must not nest a second
         // `document` node inside it. Reparent its children instead.
         if dom.element(child).is_some_and(|e| e.name == "html") {
-            out.extend(build_children(dom, child, index, rects));
+            out.extend(build_children(dom, child, index, rects, z_index));
             continue;
         }
         match role_of(dom, child) {
@@ -700,11 +720,12 @@ fn build_children(
                     role,
                     name,
                     bbox: rects.get(&child).copied(),
-                    children: build_children(dom, child, index, rects),
+                    z: z_index.get(&child).copied().unwrap_or(0),
+                    children: build_children(dom, child, index, rects, z_index),
                 });
             }
             // presentational: drop the node, keep (reparent) its children
-            None => out.extend(build_children(dom, child, index, rects)),
+            None => out.extend(build_children(dom, child, index, rects, z_index)),
         }
     }
     out
@@ -715,7 +736,38 @@ mod tests {
     use super::*;
 
     fn leaf(role: Role, name: &str) -> A11yNode {
-        A11yNode { node: NodeId(0), role, name: name.to_string(), bbox: None, children: vec![] }
+        A11yNode { node: NodeId(0), role, name: name.to_string(), bbox: None, z: 0, children: vec![] }
+    }
+
+    #[test]
+    fn hit_test_is_occlusion_aware() {
+        // A higher-layer overlay (z=10) covering a button (z=0) wins the click even though
+        // it is larger — you can't click through a modal.
+        let button = A11yNode {
+            node: NodeId(1),
+            role: Role::Button,
+            name: "Buy".into(),
+            bbox: Some(Rect { x: 10.0, y: 10.0, width: 40.0, height: 20.0 }),
+            z: 0,
+            children: vec![],
+        };
+        let overlay = A11yNode {
+            node: NodeId(2),
+            role: Role::Generic,
+            name: "dialog".into(),
+            bbox: Some(Rect { x: 0.0, y: 0.0, width: 200.0, height: 200.0 }),
+            z: 10,
+            children: vec![],
+        };
+        let root = A11yNode {
+            node: NodeId(0),
+            role: Role::Document,
+            name: String::new(),
+            bbox: None,
+            z: 0,
+            children: vec![button, overlay],
+        };
+        assert_eq!(root.hit_test(20.0, 15.0).map(|n| n.node), Some(NodeId(2)));
     }
 
     #[test]
@@ -725,6 +777,7 @@ mod tests {
             role: Role::Generic,
             name: String::new(),
             bbox: None,
+            z: 0,
             children: vec![leaf(Role::Link, "Sign in"), leaf(Role::Button, "Menu")],
         };
         let after = A11yNode {
@@ -732,6 +785,7 @@ mod tests {
             role: Role::Generic,
             name: String::new(),
             bbox: None,
+            z: 0,
             children: vec![leaf(Role::Button, "Menu"), leaf(Role::Button, "Sign out")],
         };
         let d = after.diff(&before);
