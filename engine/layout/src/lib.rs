@@ -105,7 +105,7 @@ impl Rect {
 }
 
 /// The visual style of a text run, resolved for shaping + paint.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextStyle {
     pub font_key: FontKey,
     pub font_size: f32,

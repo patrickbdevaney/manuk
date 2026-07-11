@@ -17,13 +17,65 @@ use manuk_layout::{BoxContent, LayoutBox, Rect, TextStyle};
 use manuk_text::FontContext;
 
 /// A flat, back-to-front list of paint operations derived from a fragment tree.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct DisplayList {
     pub items: Vec<DisplayItem>,
 }
 
+impl DisplayList {
+    /// Whether this display list differs from `prev` — the invalidation check a compositor
+    /// uses to skip re-rasterizing / re-uploading an idle frame whose content is unchanged.
+    pub fn changed_since(&self, prev: &DisplayList) -> bool {
+        self.items != prev.items
+    }
+
+    /// A coarse damage rectangle covering everything that changed vs `prev`: the union of
+    /// the bounding rects of items present in one list but not the other (compared by index,
+    /// a safe over-approximation). `None` if unchanged. Rect-anchored items contribute their
+    /// rect; text/other items contribute a rect around their origin. The compositor repaints
+    /// (and re-uploads) only this region instead of the whole viewport.
+    pub fn damage_since(&self, prev: &DisplayList) -> Option<Rect> {
+        if self.items == prev.items {
+            return None;
+        }
+        let mut dmg: Option<Rect> = None;
+        let mut add = |r: Rect| {
+            dmg = Some(match dmg {
+                Some(d) => d.union(&r),
+                None => r,
+            });
+        };
+        let item_rect = |it: &DisplayItem| -> Rect {
+            match it {
+                DisplayItem::Rect { rect, .. } | DisplayItem::Image { rect, .. } => *rect,
+                DisplayItem::Text { x, baseline, style, .. } => Rect {
+                    x: *x,
+                    y: baseline - style.line_height,
+                    // Text has no stored width; a generous box keeps the damage a superset.
+                    width: 4096.0,
+                    height: style.line_height * 2.0,
+                },
+            }
+        };
+        let n = self.items.len().max(prev.items.len());
+        for i in 0..n {
+            let a = self.items.get(i);
+            let b = prev.items.get(i);
+            if a != b {
+                if let Some(it) = a {
+                    add(item_rect(it));
+                }
+                if let Some(it) = b {
+                    add(item_rect(it));
+                }
+            }
+        }
+        dmg
+    }
+}
+
 /// A decoded raster image: non-premultiplied RGBA8, row-major.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DecodedImage {
     pub width: u32,
     pub height: u32,
@@ -31,7 +83,7 @@ pub struct DecodedImage {
 }
 
 /// One paint operation.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum DisplayItem {
     /// A solid-color rectangle (backgrounds, borders).
     Rect { rect: Rect, color: Rgba },
@@ -627,6 +679,34 @@ fn lerp(dst: u8, src: u8, a: f32) -> u8 {
 mod tests {
     use super::*;
     use manuk_css::{MinimalCascade, StyleEngine, Stylesheet};
+
+    #[test]
+    fn display_list_change_detection_and_damage() {
+        let red = DisplayItem::Rect {
+            rect: Rect { x: 0.0, y: 0.0, width: 10.0, height: 10.0 },
+            color: Rgba::new(255, 0, 0, 255),
+        };
+        let blue = DisplayItem::Rect {
+            rect: Rect { x: 100.0, y: 100.0, width: 20.0, height: 20.0 },
+            color: Rgba::new(0, 0, 255, 255),
+        };
+        let a = DisplayList { items: vec![red.clone(), blue.clone()] };
+        let b = DisplayList { items: vec![red.clone(), blue.clone()] };
+        // Identical lists → no change, no damage (idle frame skips re-upload).
+        assert!(!a.changed_since(&b));
+        assert_eq!(a.damage_since(&b), None);
+
+        // Change the second item's color → changed, and the damage covers its rect.
+        let blue2 = DisplayItem::Rect {
+            rect: Rect { x: 100.0, y: 100.0, width: 20.0, height: 20.0 },
+            color: Rgba::new(0, 200, 0, 255),
+        };
+        let c = DisplayList { items: vec![red, blue2] };
+        assert!(c.changed_since(&a));
+        let dmg = c.damage_since(&a).expect("some damage");
+        // Damage must contain the changed rect (100,100 20x20).
+        assert!(dmg.x <= 100.0 && dmg.y <= 100.0 && dmg.right() >= 120.0 && dmg.bottom() >= 120.0);
+    }
 
     fn render_html(html: &str, css: &str, w: u32, h: u32) -> Canvas {
         let dom = manuk_html::parse(html);

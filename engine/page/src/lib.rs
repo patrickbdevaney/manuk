@@ -762,6 +762,14 @@ impl Page {
         map
     }
 
+    /// The page's paint display list (stacking-ordered, with images). A compositor caches
+    /// this and calls [`manuk_paint::DisplayList::changed_since`] / `damage_since` to skip
+    /// re-rasterizing / re-uploading an idle frame, or to repaint only the damaged region.
+    pub fn display_list(&self) -> manuk_paint::DisplayList {
+        let z = self.z_index_map();
+        manuk_paint::DisplayList::build_layered(&self.root_box, &self.images, &z)
+    }
+
     /// Rasterize the whole page to a canvas of the given pixel size (CPU tier).
     pub fn paint(&self, fonts: &FontContext, width: u32, height: u32) -> Canvas {
         let z = self.z_index_map();
