@@ -1250,14 +1250,30 @@ fn resolve_href(base: &str, href: &str) -> Option<String> {
     if lower.starts_with("javascript:") || lower.starts_with("mailto:") || lower.starts_with("tel:") {
         return None;
     }
-    match url::Url::parse(h) {
-        Ok(u) => Some(u.to_string()),
-        // Relative: resolve against the base document URL.
-        Err(_) => url::Url::parse(base)
-            .ok()
-            .and_then(|b| b.join(h).ok())
-            .map(|u| u.to_string()),
+    let resolved = match url::Url::parse(h) {
+        Ok(u) => u,
+        // Relative (incl. protocol-relative `//host/…`): resolve against the base document URL.
+        Err(_) => url::Url::parse(base).ok().and_then(|b| b.join(h).ok())?,
+    };
+    Some(unwrap_redirect(resolved).to_string())
+}
+
+/// Unwrap known search-engine redirect wrappers to their real destination. DuckDuckGo
+/// result links point at `//duckduckgo.com/l/?uddg=<target>`, whose endpoint serves a
+/// JS/meta interstitial our engine can't follow — so we jump straight to the decoded
+/// target. A no-op for every other URL.
+fn unwrap_redirect(u: url::Url) -> url::Url {
+    let is_ddg = u
+        .host_str()
+        .is_some_and(|h| h == "duckduckgo.com" || h.ends_with(".duckduckgo.com"));
+    if is_ddg && u.path() == "/l/" {
+        if let Some((_, target)) = u.query_pairs().find(|(k, _)| k == "uddg") {
+            if let Ok(dest) = url::Url::parse(&target) {
+                return dest;
+            }
+        }
     }
+    u
 }
 
 #[cfg(test)]
@@ -1278,6 +1294,19 @@ mod tests {
         assert_eq!(resolve_href(base, ""), None);
         assert_eq!(resolve_href(base, "javascript:void(0)"), None);
         assert_eq!(resolve_href(base, "mailto:a@b.com"), None);
+    }
+
+    #[test]
+    fn resolve_href_unwraps_ddg_redirect() {
+        let base = "https://lite.duckduckgo.com/lite/?q=rust";
+        // Protocol-relative DDG redirect resolves to the decoded `uddg` target.
+        let got = resolve_href(base, "//duckduckgo.com/l/?uddg=https%3A%2F%2Frust-lang.org%2F&rut=abc");
+        assert_eq!(got.as_deref(), Some("https://rust-lang.org/"));
+        // A plain duckduckgo.com link is untouched.
+        assert_eq!(
+            resolve_href(base, "https://duckduckgo.com/about").as_deref(),
+            Some("https://duckduckgo.com/about")
+        );
     }
 }
 
