@@ -24,6 +24,7 @@ use winit::window::{Window, WindowId};
 use crate::chrome::{self, Bookmarks, History, Settings};
 use crate::find::{self, FindSession};
 use crate::panel::{self, AgentPanel, HandoffConsent, PanelScope};
+use crate::prerender;
 use crate::session::{self, SessionStore};
 use crate::tab::Browser;
 use manuk_agent::Handoff;
@@ -107,6 +108,9 @@ enum NavEvent {
     /// The main document finished fetching off-thread: a rendered document or a download, or an
     /// error string.
     Fetched { gen: u64, result: std::result::Result<manuk_page::Loaded, String> },
+    /// L32 — a speculatively-prewarmed document finished fetching off-thread. `url` is the
+    /// *requested* URL (the key a future click will look up). Built into the bfcache, not shown.
+    Prewarmed { url: String, result: std::result::Result<manuk_page::Loaded, String> },
 }
 
 /// A completed download, shown in the hamburger menu's Downloads section.
@@ -172,6 +176,9 @@ struct App {
     history: History,
     /// L04 — completed downloads (most recent last), surfaced in the hamburger menu.
     downloads: Vec<DownloadRecord>,
+    /// L32 — the URL currently being speculatively prewarmed (at most one in flight), so a hover
+    /// doesn't spawn duplicate prerenders.
+    prewarming: Option<String>,
     /// R2 back-forward cache: recently-navigated-away pages kept fully constructed (DOM +
     /// layout + scroll) so Back/Forward restores instantly instead of re-running the whole
     /// pipeline. Bounded LRU (most-recent last).
@@ -305,6 +312,7 @@ impl App {
             modifiers: ModifiersState::empty(),
             history: History::new(),
             downloads: Vec::new(),
+            prewarming: None,
             bfcache: Vec::new(),
             proxy,
             nav_gen: 0,
@@ -664,15 +672,10 @@ impl App {
             Some(g) => (g.config.width, g.config.height),
             None => (self.width, 768),
         };
-        let mut page = self.rt.block_on(Page::load_async(&html, &final_url, &self.fonts, w as f32));
-        let sheets = self.rt.block_on(page.fetch_and_apply_stylesheets(&self.fonts, w as f32));
-        if sheets > 0 {
-            tracing::info!(sheets, "applied external stylesheet(s)");
-        }
+        let page = self.build_page(&html, &final_url, w);
         if let Some(win) = &self.window {
             win.set_title(&format!("{} — manuk", page.title));
         }
-        page.relayout_zoomed(&self.fonts, w as f32, self.zoom);
         self.viewport = Viewport::new(w as f32, (h as f32 - CHROME_TOP).max(1.0));
         self.viewport.content_height = page.content_height;
         self.browser.set_loaded(
@@ -719,6 +722,69 @@ impl App {
         } else {
             self.url = "about:blank".to_string();
             self.start_fetch();
+        }
+    }
+
+    /// Build a fully-laid-out [`Page`] from fetched HTML (parse → external CSS/images → relayout
+    /// at the current zoom). Shared by [`finish_load`](Self::finish_load) (which then displays it)
+    /// and the L32 prerender path (which stashes it into the bfcache). `Page`/`FontContext` are
+    /// `!Send`, so this runs on the UI thread; only the network fetch that produced `html` was
+    /// off-thread.
+    fn build_page(&self, html: &str, final_url: &str, w: u32) -> Page {
+        let mut page = self.rt.block_on(Page::load_async(html, final_url, &self.fonts, w as f32));
+        let sheets = self.rt.block_on(page.fetch_and_apply_stylesheets(&self.fonts, w as f32));
+        if sheets > 0 {
+            tracing::info!(sheets, "applied external stylesheet(s)");
+        }
+        page.relayout_zoomed(&self.fonts, w as f32, self.zoom);
+        page
+    }
+
+    /// L32 — speculatively prewarm `url` (the predicted next navigation): fetch it off-thread so
+    /// a `Prewarmed` event can build it into the bfcache for an instant click. Bounded to one
+    /// in-flight prewarm; skips URLs already cached or currently loading. The predictor
+    /// ([`prerender::predict_next`]) has already enforced same-origin `http(s)`.
+    fn prewarm(&mut self, url: String) {
+        if self.prewarming.is_some()
+            || url == self.url
+            || self.bfcache.iter().any(|(u, _)| u == &url)
+        {
+            return;
+        }
+        self.prewarming = Some(url.clone());
+        let proxy = self.proxy.clone();
+        tracing::debug!(%url, "prerender: prewarming predicted next navigation");
+        self.rt.spawn(async move {
+            let result = manuk_page::fetch_document(&url).await.map_err(|e| format!("{e:#}"));
+            let _ = proxy.send_event(NavEvent::Prewarmed { url, result });
+        });
+    }
+
+    /// L32 — a prewarm fetch landed: build the page and stash it into the bfcache keyed by the
+    /// *requested* URL (what a click will look up), without disturbing the current page. Ignores
+    /// downloads and errors.
+    fn finish_prewarm(&mut self, url: String, result: std::result::Result<manuk_page::Loaded, String>) {
+        if self.prewarming.as_deref() == Some(url.as_str()) {
+            self.prewarming = None;
+        }
+        let (w, _) = match &self.gpu {
+            Some(g) => (g.config.width, g.config.height),
+            None => (self.width, 768),
+        };
+        match result {
+            Ok(manuk_page::Loaded::Document { html, final_url }) => {
+                if url == self.url || self.bfcache.iter().any(|(u, _)| u == &url) {
+                    return; // navigated there already, or a duplicate — nothing to cache
+                }
+                let page = self.build_page(&html, &final_url, w);
+                self.bfcache.push((url.clone(), BfEntry { page, scroll: 0.0 }));
+                while self.bfcache.len() > BFCACHE_CAP {
+                    self.bfcache.remove(0);
+                }
+                tracing::info!(%url, "prerender: page built into bfcache (next click is instant)");
+            }
+            Ok(manuk_page::Loaded::Download { .. }) => {} // never prewarm a download
+            Err(e) => tracing::debug!(%url, "prerender: prewarm failed: {e}"),
         }
     }
 
@@ -1400,8 +1466,15 @@ impl App {
         self.rerender();
     }
 
-    /// Navigate to `url`, recording it in the history stack.
+    /// Navigate to `url`, recording it in the history stack. L32: if the page was speculatively
+    /// prewarmed it is already in the bfcache — serve it instantly (no fetch/pipeline) instead of
+    /// a fresh load.
     fn goto(&mut self, url: &str) {
+        if self.bfcache.iter().any(|(u, _)| u == url) && self.restore_from_bfcache(url) {
+            tracing::info!(%url, "prerender: instant click served from prewarmed bfcache");
+            self.history.push(url.to_string());
+            return;
+        }
         self.goto_no_history(url);
         self.history.push(url.to_string());
     }
@@ -2010,6 +2083,7 @@ impl ApplicationHandler<NavEvent> for App {
                     }
                 }
             }
+            NavEvent::Prewarmed { url, result } => self.finish_prewarm(url, result),
         }
     }
 
@@ -2123,11 +2197,20 @@ impl ApplicationHandler<NavEvent> for App {
                     self.over_link = clickable;
                     // R4: speculatively warm the connection to a newly-hovered link's origin
                     // (same-origin policy + recency/budget enforced by the net Preconnector).
+                    // L32: and, if the hovered link is a safe same-origin GET, prewarm the whole
+                    // page into the bfcache so the click is instant.
                     if let PageAction::Link(target) = &action {
-                        let (cur, target) = (self.url.clone(), target.clone());
-                        self.rt.spawn(async move {
-                            manuk_net::preconnect(&cur, &target).await;
-                        });
+                        let cur = self.url.clone();
+                        let target = target.clone();
+                        {
+                            let (cur, target) = (cur.clone(), target.clone());
+                            self.rt.spawn(async move {
+                                manuk_net::preconnect(&cur, &target).await;
+                            });
+                        }
+                        if let Some(url) = prerender::predict_next(&cur, Some(&target), &[]) {
+                            self.prewarm(url);
+                        }
                     }
                     if let Some(w) = &self.window {
                         w.set_cursor(if clickable {
