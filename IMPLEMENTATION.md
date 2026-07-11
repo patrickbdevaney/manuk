@@ -870,3 +870,89 @@ reports `None`; SOCKS4 / HTTP `CONNECT` proxying absent (SOCKS5/HTTP proxy prese
 `aria-labelledby` and `translate` attributes unmodeled; hit-testing ignores occlusion
 (z-order overlap); table auto column sizing does not redistribute a colspan cell's
 intrinsic width, and border-collapse does not run per-edge conflict resolution.
+
+---
+
+## Phase 7 — RESEARCH v2 Directive (2026-07-11): responsiveness, fidelity, parity, agent spine
+
+Derived from `RESEARCH_V2_DIR.MD` (8 axes). Staged single-agent per its process rule.
+**Priority: Axis R first** (the felt problem), then P/U, then DT/AG, then MEM/SRC.
+
+### Axis R — Responsiveness & navigation (HIGHEST). Diagnosis (confirmed 2026-07-11)
+`shell/gui.rs::goto_no_history` runs the whole pipeline via `rt.block_on(fetch_html →
+Page::load_async → fetch_and_apply_stylesheets)` **on the UI thread** — so during any of the
+six nav triggers (typed+Enter, search-result click, in-page link, Back, Forward, Refresh)
+winit processes no events and the OS shows "unresponsive". Back/forward has **no bfcache**
+(re-runs the full pipeline). This is one architectural gap surfaced through six entry points.
+
+- **R2 — bfcache (do first; most contained, biggest back/forward lever).** Keep the
+  constructed `Page` (DOM + layout + images) in a bounded LRU keyed by URL. On Back/Forward,
+  if the target is cached and **eligible**, swap it in instantly (no pipeline). Eligibility
+  (from web.dev/bfcache + Blink `Document::CanBeCached`): skip if the main resource carried
+  `Cache-Control: no-store`, or a load is in flight. Bound to ~4–6 pages; LRU-evict; this is
+  the retained *tier* the compositor's tiering already models (MEM2). Seam: a
+  `BfCache { LruCache<String, CachedPage> }` in the shell; cache the outgoing page on nav,
+  restore on Back/Forward before falling through to a fresh load. **Verifiable** (unit-test
+  the cache/eligibility; the swap is deterministic).
+- **R1/R3 — off-thread navigation + input responsiveness.** Move `fetch→DOM→cascade→layout`
+  off the UI thread onto a **dedicated page-worker thread** (JS-safe: it owns the single
+  SpiderMonkey `Runtime`, honoring one-Runtime-per-process; only `Send` results cross the
+  boundary — the arena DOM is `Send`). The UI thread: keeps rendering the prior page + a
+  progress affordance, stays live to chrome input, can **cancel** a stale load (generation
+  token), and swaps the finished `Page` in on a winit `UserEvent`/proxy wakeup. Servo's
+  Constellation/Script-thread split is the reference (SRC1). Default (no-JS) build is fully
+  `Send` → clean; spidermonkey build routes JS through the same worker. *Live-window
+  verification* for the actual responsiveness; the threading/handoff logic compiles + is
+  testable.
+- **R4 — speculative preconnect.** On link hover + omnibox typing, preconnect (DNS+TLS warm)
+  to the likely host/search endpoint. Privacy-safe: same-origin/opt-in only. Composes with
+  the preload scanner + HTTP cache. Lower priority.
+
+### Axis P — fidelity. **P0 finding (2026-07-11): NOT a fetch regression.**
+A Wikipedia article render (`en.wikipedia.org/wiki/Browser_engine`) applies **2 external
+stylesheets + 6 images** correctly; text/fonts/logo/tables/timeline render. The residual is
+**P1 layout fidelity** — the Vector-2022 skin's sidebar flows linearly instead of as a
+positioned column (likely `position:sticky`/`fixed` falling back to static + grid-area gaps).
+Already improved vs the directive's screenshots by this session's Stylo-default + Taffy work.
+P0 closes with no fetch work; P1 continues:
+- **P1** — `position:sticky`/`fixed` layout (currently sticky→static), `grid-template-areas`,
+  complex floats/table corners, overflow-scroll containers. Per-feature WPT targets.
+- **P2** — UAX#14 line-breaking (`unicode-linebreak` crate) — parity-sensitive (shifts wrap).
+- **P3** — inline SVG/MathML (preserve namespaces → new inline-SVG layout/paint path).
+- **P4** — Custom Elements + Shadow DOM + `pushState`/`replaceState` + dynamic `import()`
+  (framework interactivity). Confirm coverage.
+- **P5** — replace hot-path `eval`-string DOM bindings with native JSAPI reflectors.
+
+### Axis U — feature parity (leanly, over existing engine primitives)
+U1 nav chrome + bfcache (R2); U2 bookmarks/downloads/history store (one schema, shares
+`store`); U3 keyboard shortcuts — **needs a selection model over the fragment/text tree
+(largest new surface)** + copy/paste + zoom; U4 tabs/windows/tab-groups + duplicate=clone
+session; U5 autofill origin-matching (anti-phishing correctness); U6 **persistent encrypted
+cookie jar** (what "stay logged in" needs — composes with `store`); U7 **Google OAuth popup
+flow** (`window.open`+`postMessage`+`window.opener` — real multi-window JS plumbing; forcing
+function for cross-context correctness); U8 zoom + translate (reuse local model); U9
+downloads (stream-to-FS) + `<input type=file>` uploads.
+
+### Axis DT — DevTools over **WebDriver-BiDi** (`bidi` exists; one surface, two consumers).
+Minimal panels: DOM inspector (arena), console (SpiderMonkey), network (`engine/net`),
+box-model (fragment tree). Reuses existing introspection.
+
+### Axis AG — agent spine. AG1 BiDi as the external API (+ the in-process typed
+`BrowserAction` already shipped); AG2 task-intent AXTree pruning over the `a11y` tree +
+`diff`; AG3 expose both semantic (a11y) and visual (screenshot indexed-overlay) targeting;
+AG4 audit the provenance Action-Guard fence; AG5 **measure** the in-process advantage vs a
+CDP-over-socket baseline (the claim needs a number).
+
+### Axis MEM. MEM1 SoA/DOD DOM — **defer, measure current reflow cache first** (large refactor,
+likely premature). MEM2 realize hibernation (freeze-JS/evict-tiles) reconciled with R2's
+bfcache tier (one memory model). MEM3 `cargo bloat` binary breakdown + ICU delta
+(`spidermonkey-noicu`) + dedupe duplicate crate resolutions (build-config only).
+
+### Axis SRC. Targeted **reference reads** (approach/edge-cases, never code): Blink
+`Document::CanBeCached` (R2 eligibility), Servo constellation/script-thread boundary (R1),
+float/table structure (P1), `window.opener` plumbing (U7). Do **not** take Chromium's process
+model / quirk-compat / IPC — Manuk's in-process model is a deliberate divergence.
+
+### Sequencing: R2 (bfcache) → R1/R3 (off-thread) → R4 → P1/P2 → U6/U7 → DT/AG → MEM3.
+Each item: primary-source-backed disposition, seam-scoped, new WPT target where relevant,
+parity gate stays green.
