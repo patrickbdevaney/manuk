@@ -157,3 +157,41 @@ Cadence guards (so epochs stay rare):
 
 **Ratchet.** Every measured floor becomes an invariant (§1): a later tick that regresses it FAILS,
 like a parity regression. That is what stops any star point from silently rotting again.
+
+## ADR-007 — Comprehensiveness guarantee: severity classes + STAR DEBT (2026-07-11)
+
+**The hole in ADR-006.** "Measure everything, fix only the worst, hand the rest to the LEDGER"
+bounds the epoch — but as written, a deferred violation could sit in the backlog forever and the
+epoch would be **theatre**. Boundedness must constrain *when* a thing is fixed, **never whether it
+is measured or fixed**. Both must hold: comprehensive **and** non-disruptive.
+
+**1. Coverage is never bounded.** Every star point is probed **every epoch, without exception**. No
+point is ever skipped for budget. Comprehensiveness lives here, and it is cheap — probes are
+designed to be automatable. *The budget may cut repair; it may never cut measurement.*
+
+**2. Severity decides what may be deferred.** Not everything found is equal:
+
+- **CRITICAL — fixed in-epoch, never deferred.** Panics; hangs / UI-thread blocks; **dead
+  user-reachable affordances** (a button that does nothing); data loss; a security-default
+  violation. These *are* what "self-contained working product" means — deferring one means shipping
+  a broken browser. An epoch **cannot close** with an open CRITICAL.
+- **MAJOR — a measured floor breach.** May be deferred out of the epoch, but only as **STAR DEBT**
+  (below), never as ordinary backlog.
+- **MINOR — suboptimal but within floor.** Ordinary LEDGER item, with the measurement attached as
+  evidence.
+
+**3. STAR DEBT — deferral with teeth.** A MAJOR deferred from an epoch becomes a `DEBT` item in the
+LEDGER. Debt is *not* ordinary backlog:
+
+- **Priority override:** debt outranks new capability work in selection.
+- **Mandated paydown rate:** **at least one DEBT item must be retired every 3 ticks** while any
+  debt is outstanding. A tick that ignores an available debt item when the rate is unmet **fails**.
+- **No silent rollover:** the **next epoch cannot close** while prior STAR DEBT is outstanding —
+  it must be paid, or explicitly re-justified in an ADR (a conscious, recorded decision, never
+  drift).
+
+**Net effect.** Coverage total; CRITICALs always fixed; MAJORs guaranteed to be fixed within a few
+ticks (rate-enforced) rather than "someday"; MINORs tracked with evidence. The epoch stays bounded
+in *duration* while the star stays comprehensively defended over *time*. That is how both
+properties hold at once: **the epoch is a checkpoint, not the only place quality happens** — the
+ratchet (floors that fail a tick) and the debt rate carry the guarantee between epochs.

@@ -298,13 +298,32 @@ Then fix only the worst violations.
 7. **SECURITY / IDENTITY / AGENT-DRIVABILITY** — defaults, partitioning, fingerprint honesty; drive
    a real task both headless and headful.
 
-### 10.3 Binding output (the ratchet)
+### 10.3 Comprehensiveness guarantee (ADR-007) — bounded ≠ partial
+
+Boundedness constrains **when** a thing is fixed, **never whether it is measured or fixed**.
+
+- **Coverage is never bounded.** Every star point is probed **every epoch, without exception**. The
+  budget may cut repair; **it may never cut measurement.**
+- **CRITICAL is never deferred.** Panics; hangs / UI-thread blocks; **dead user-reachable
+  affordances**; data loss; security-default violations. An epoch **cannot close with an open
+  CRITICAL** — deferring one means shipping a broken browser.
+- **MAJOR (a floor breach) deferred ⇒ STAR DEBT**, not ordinary backlog. Debt **outranks new
+  capability work**; **≥1 debt item must be retired every 3 ticks** while any is outstanding (a tick
+  that ignores an available debt item when the rate is unmet **fails**); and the **next epoch cannot
+  close while prior debt is outstanding** — pay it, or re-justify it in an ADR.
+- **MINOR** — ordinary LEDGER item with the measurement attached as evidence.
+
+The epoch is a **checkpoint, not the only place quality happens**: the ratchet (floors that fail a
+tick) plus the debt paydown rate carry the guarantee *between* epochs. That is how comprehensive and
+non-disruptive hold simultaneously.
+
+### 10.4 Binding output (the ratchet)
 
 An epoch ends by writing (i) a **MEASURE report with real numbers**, (ii) the measured budgets as
 new **invariant floors** in §1 — so a later tick that regresses one **FAILS**, exactly like a parity
 regression — and (iii) an **ADR**. *An epoch that produces no numbers has not happened.*
 
-### 10.4 Relationship to ticks
+### 10.5 Relationship to ticks
 
 A tick is **never blocked** waiting for an epoch, and an epoch is **never sliced** into "a bit of
 perf each tick" — that dilution is precisely what this gate exists to prevent. When an epoch comes
