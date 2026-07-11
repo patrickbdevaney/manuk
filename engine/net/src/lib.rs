@@ -259,9 +259,111 @@ pub mod charset {
     }
 }
 
+/// A minimal in-memory HTTP cache (a subset of RFC 9111): fresh `GET` `200` responses
+/// with an explicit freshness lifetime (`Cache-Control: max-age` / `s-maxage`) are stored
+/// and served without a network round-trip until they go stale. Deliberately omitted for
+/// now (documented, not faked): `Vary`, conditional revalidation (`ETag`/`If-None-Match`),
+/// heuristic freshness, and disk persistence.
+mod http_cache {
+    use super::Response;
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    use std::time::{Duration, Instant};
+
+    struct Entry {
+        response: Response,
+        stored: Instant,
+        fresh_for: Duration,
+    }
+
+    fn store() -> &'static Mutex<HashMap<String, Entry>> {
+        static S: OnceLock<Mutex<HashMap<String, Entry>>> = OnceLock::new();
+        S.get_or_init(|| Mutex::new(HashMap::new()))
+    }
+
+    /// A still-fresh cached response for `url`, if any.
+    pub fn get(url: &str) -> Option<Response> {
+        let map = store().lock().ok()?;
+        let e = map.get(url)?;
+        (e.stored.elapsed() < e.fresh_for).then(|| e.response.clone())
+    }
+
+    /// Cache `response` for `url` if it is cacheable: `GET`-implied `200` with a positive
+    /// `max-age` and no `no-store`/`private`.
+    pub fn put(url: &str, response: &Response) {
+        if response.status != 200 {
+            return;
+        }
+        let cc = response.header("cache-control").unwrap_or("").to_ascii_lowercase();
+        if cc.contains("no-store") || cc.contains("private") || cc.contains("no-cache") {
+            return;
+        }
+        let Some(secs) = max_age(&cc) else { return };
+        if secs == 0 {
+            return;
+        }
+        if let Ok(mut map) = store().lock() {
+            map.insert(
+                url.to_string(),
+                Entry { response: response.clone(), stored: Instant::now(), fresh_for: Duration::from_secs(secs) },
+            );
+        }
+    }
+
+    /// Parse `max-age`/`s-maxage` (seconds) from a lowercased `Cache-Control` value.
+    fn max_age(cc: &str) -> Option<u64> {
+        for directive in ["s-maxage=", "max-age="] {
+            if let Some(i) = cc.find(directive) {
+                let rest = &cc[i + directive.len()..];
+                let n: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+                if let Ok(v) = n.parse::<u64>() {
+                    return Some(v);
+                }
+            }
+        }
+        None
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use crate::HttpVersion;
+        use bytes::Bytes;
+        use url::Url;
+
+        fn resp(cc: &str) -> Response {
+            Response {
+                status: 200,
+                headers: vec![("cache-control".into(), cc.into())],
+                body: Bytes::from_static(b"x"),
+                final_url: Url::parse("https://e.test/a.css").unwrap(),
+                http_version: HttpVersion::Http11,
+            }
+        }
+
+        #[test]
+        fn caches_fresh_and_skips_uncacheable() {
+            let u = "https://e.test/max-age";
+            put(u, &resp("max-age=300"));
+            assert!(get(u).is_some(), "fresh max-age response is served from cache");
+
+            put("https://e.test/nostore", &resp("no-store, max-age=300"));
+            assert!(get("https://e.test/nostore").is_none(), "no-store is not cached");
+
+            put("https://e.test/zero", &resp("max-age=0"));
+            assert!(get("https://e.test/zero").is_none(), "max-age=0 is not cached");
+        }
+    }
+}
+
 /// Fetch `url` with GET, following redirects. `url` must be an absolute
-/// `http`/`https` URL.
+/// `http`/`https` URL. A still-fresh in-memory cache entry (see [`http_cache`]) short-
+/// circuits the network round-trip.
 pub async fn fetch(url: &str) -> Result<Response> {
+    if let Some(cached) = http_cache::get(url) {
+        tracing::debug!(%url, "served from HTTP cache");
+        return Ok(cached);
+    }
     let mut current = Url::parse(url).with_context(|| format!("invalid URL: {url}"))?;
     for _ in 0..=MAX_REDIRECTS {
         let resp = send_once("GET", &current, &[], Bytes::new()).await?;
@@ -275,6 +377,7 @@ pub async fn fetch(url: &str) -> Result<Response> {
                 continue;
             }
         }
+        http_cache::put(url, &resp);
         return Ok(resp);
     }
     bail!("too many redirects (>{MAX_REDIRECTS}) starting at {url}")
