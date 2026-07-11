@@ -201,6 +201,28 @@ pub enum Activation {
     Inert,
 }
 
+/// A typed browser action for an in-process agent (#E4). One `BrowserAction` value names an
+/// intent by role+name, by stable [`NodeId`](manuk_dom::NodeId) handle, or by URL, and
+/// [`AgentBrowser::perform`] dispatches it — the ergonomic, allocation-light alternative to
+/// a stringly-typed remote automation protocol.
+#[derive(Clone, Debug)]
+pub enum BrowserAction {
+    /// Activate the control with this role + accessible name (link/button/checkbox).
+    Click { role: manuk_a11y::Role, name: String },
+    /// Activate a control by its stable arena handle (from [`AgentBrowser::resolve_handle`]).
+    ClickHandle(manuk_dom::NodeId),
+    /// Type `text` into the text field with this accessible name.
+    Type { field: String, text: String },
+    /// Type `text` into the field addressed by its stable handle.
+    TypeHandle { node: manuk_dom::NodeId, text: String },
+    /// Submit the form near a control (or the document's first form when `None`).
+    Submit { near: Option<(manuk_a11y::Role, String)> },
+    /// Navigate to an absolute URL.
+    Navigate(String),
+    /// Scroll the viewport by `dy` px.
+    ScrollBy(f32),
+}
+
 /// What the agent perceives after an action: the textual channel plus enough
 /// structure to act (links by index). The screenshot is fetched separately via
 /// [`AgentBrowser::screenshot_png`].
@@ -529,6 +551,39 @@ impl AgentBrowser {
         page.dom_mut().set_attr(node, "value", text);
         page.relayout(&self.fonts, self.width as f32);
         Ok(())
+    }
+
+    /// #E4 — perform a typed [`BrowserAction`], dispatching to the underlying method. The
+    /// single entry point an agent loop drives; returns the [`Activation`] outcome
+    /// (navigations/submissions carry their URL, local edits are `Inert`).
+    pub async fn perform(&mut self, action: BrowserAction) -> Result<Activation> {
+        match action {
+            BrowserAction::Click { role, name } => {
+                let node = self.resolve(&role, &name)?;
+                self.activate(node).await
+            }
+            BrowserAction::ClickHandle(node) => self.activate(node).await,
+            BrowserAction::Type { field, text } => {
+                self.type_into(&field, &text)?;
+                Ok(Activation::Inert)
+            }
+            BrowserAction::TypeHandle { node, text } => {
+                self.type_into_handle(node, &text)?;
+                Ok(Activation::Inert)
+            }
+            BrowserAction::Submit { near } => {
+                let near = near.as_ref().map(|(r, n)| (r, n.as_str()));
+                self.submit(near).await
+            }
+            BrowserAction::Navigate(url) => {
+                self.navigate(&url).await?;
+                Ok(Activation::Navigated(url))
+            }
+            BrowserAction::ScrollBy(dy) => {
+                self.scroll_by(dy);
+                Ok(Activation::Inert)
+            }
+        }
     }
 
     /// E1 — resolve a `role` + accessible `name` to a **stable node handle** once, so a
