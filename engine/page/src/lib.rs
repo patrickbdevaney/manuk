@@ -126,8 +126,16 @@ async fn fetch_images(
             }
         })
         .collect();
-    for (node, url) in targets {
-        let Some(bytes) = fetch_image_bytes(&url).await else {
+    // Fetch every image concurrently (I/O-bound; the shared client pools + multiplexes),
+    // then decode sequentially (CPU-bound). Serial awaits here were a real latency cost.
+    let fetched = futures_util::future::join_all(
+        targets
+            .into_iter()
+            .map(|(node, url)| async move { (node, fetch_image_bytes(&url).await, url) }),
+    )
+    .await;
+    for (node, bytes, url) in fetched {
+        let Some(bytes) = bytes else {
             continue;
         };
         // Try raster decode; fall back to SVG (usvg/resvg) for vector sources.
@@ -691,15 +699,26 @@ impl Page {
         viewport_width: f32,
     ) -> usize {
         let sources = collect_style_sources(&self.dom, &self.final_url);
+        // Fetch all render-blocking external stylesheets concurrently (deduped, order-
+        // independent) rather than serially — the biggest first-paint latency win here.
+        let mut seen = std::collections::HashSet::new();
+        let ext_urls: Vec<String> = sources
+            .iter()
+            .filter_map(|s| match s {
+                StyleSource::External(url) => Some(url.clone()),
+                _ => None,
+            })
+            .filter(|url| seen.insert(url.clone()))
+            .collect();
+        let fetched = futures_util::future::join_all(ext_urls.into_iter().map(|url| async move {
+            let text = manuk_net::fetch(&url).await.ok().map(|r| r.decoded_text());
+            (url, text)
+        }))
+        .await;
         let mut external: HashMap<String, String> = HashMap::new();
-        for s in &sources {
-            if let StyleSource::External(url) = s {
-                if external.contains_key(url) {
-                    continue;
-                }
-                if let Ok(resp) = manuk_net::fetch(url).await {
-                    external.insert(url.clone(), resp.decoded_text());
-                }
+        for (url, text) in fetched {
+            if let Some(t) = text {
+                external.insert(url, t);
             }
         }
         // Web fonts: fetch @font-face sources (from inline + external CSS) and register
