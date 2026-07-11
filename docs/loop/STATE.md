@@ -18,7 +18,7 @@ Gate: `cargo run -q -p manuk-wpt --release -- parity` = **72/72**.
 
 | Axis | Score | Notes |
 |------|------|-------|
-| RENDER | 76 | Stylo cascade, flex/grid (**incl. flex/grid items with block children — a major collapse bug is fixed**), grid-template-areas, UAX#14 breaking, position:sticky, responsive `@media`. **VISUAL verification now autonomous** (`manuk-wpt render` PNG + Chrome ref). Missing paint: border-radius, box-shadow (next). Container queries + Wikipedia collapsed-menu JS still partial. |
+| RENDER | 79 | Stylo cascade, flex/grid (**incl. flex/grid items with block children — a major collapse bug is fixed**), grid-template-areas, UAX#14 breaking, position:sticky, responsive `@media`. **VISUAL verification now autonomous** (`manuk-wpt render` PNG + Chrome ref). **border-radius + box-shadow now paint.** Missing paint: per-corner/elliptical radii, inset/multiple shadows. Container queries + Wikipedia collapsed-menu JS still partial. |
 | JS | 73 | **Interactive**: persistent per-page context, real clicks fire listeners, preventDefault. **fetch()/XHR real Promises + host round-trip**; **pushState/popstate + real `location`**; **window.open + cross-window `postMessage`/`opener`**; **MutationObserver** (attributes/childList/characterData/subtree, microtask-batched). Missing: IntersectionObserver/ResizeObserver, many WebIDL APIs. |
 | NET | 63 | hyper+rustls, HTTP cache (RFC-9111 subset), RFC-6265 cookies **persistent across sessions**, preconnect, adblock, page-fetch bodies, downloads to disk, **multipart/form-data uploads (RFC 7578 encoder + POST builder)**. Missing: HTTP/2 push nuance, service workers, async non-blocking page-fetch (block_on), streaming to/from disk, GUI file picker. |
 | UI | 58 | Tab strip (new/close/dup), hamburger menu, omnibox suggestions/history dropdown, scrollbar, find, zoom, text selection + clipboard; omnibox URL tracks SPA pushState routes; **downloads saved to disk + listed in the menu**. Missing: richer downloads shelf, settings page, richer a11y. |
@@ -42,7 +42,7 @@ real Promises + host round-trip (Tick 2)**; **history.pushState/popstate + locat
 postMessage + window.opener (Tick 6)**; **MutationObserver (Tick 7)**; **responsive @media +
 matchMedia (Tick 8)**; **agent targeting AG2/AG3 (Tick 9)**; **action grounding (Tick 10)**; **file uploads / multipart
 (Tick 11)**; **automation surface selectors/wait/assert (Tick 12)**; **headless screenshot discipline + flex
-block-child collapse fix (Tick 13)**.
+block-child collapse fix (Tick 13)**; **border-radius + box-shadow paint (Tick 14)**.
 
 ## New capability (2026-07-11, user-unblocked)
 

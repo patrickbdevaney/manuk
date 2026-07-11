@@ -5,11 +5,14 @@ T=times touched. `score = V/C + 1.5*sqrt(ln(1+TICKS)/(1+T)) + 1.0*(U/10)`. Every
 the highest-U item. Update T/status/scores each tick; add items on reflection; mark dead ends
 `superseded`. Verify class per §7: HEADLESS / GUI / EXTERNAL / MEASURE._
 
-**TICKS = 14** (global tick counter; increment each tick). _Done: 1–12 (see below), 13 = **L41
-screenshot discipline + L42 flex-block-child fix** (reprioritized when the user unblocked headful
-verification + llama.cpp; L18 re-queued). Tick 14 pick: **L43 border-radius + box-shadow paint** —
-the next visible "look like Chromium" gaps (both missing in the flex-card screenshot vs Chrome),
-now VISUAL-verifiable via `manuk-wpt render`. NOTE: Tick 15 is the next forced-highest-U tick._
+**TICKS = 15** (global tick counter; increment each tick). _Done: 1–12, 13 = L41 screenshot
+discipline + L42 flex-block-child fix, 14 = L43 border-radius + box-shadow. **Tick 15 = the
+forced-highest-U tick**, now filtered by **ADR-004's traversal-blocking rule**: pick
+**L16 Custom Elements + Shadow DOM** (U7, HEADLESS). Rationale: L34 service worker is nominally
+higher-U (8) but C9 and *not* traversal-blocking (sites degrade gracefully without it), whereas
+unsupported web components make content **simply not appear** — they block whole classes of the
+modern web (design systems, YouTube-class apps). Highest-U among the traversal-blocking + honestly
+verifiable set wins._
 
 ## Tier A — absorb outstanding beneficial work already suggested (do first)
 
@@ -45,7 +48,8 @@ STATE weak frontiers. High V, mostly known ⇒ high exploit ⇒ front-loaded.
 | L20 | PERF profile vs Chromium: nav + reflow + paint timings, publish numbers | PERF | 7 | 4 | 6 | 0 | backlog | MEASURE |
 | L41 | Headless screenshot discipline (`manuk-wpt render` → PNG + Chrome ref) — autonomous VISUAL verification | RENDER/infra | 9 | 2 | 3 | 1 | **done** (Tick 13) | VISUAL |
 | L42 | Fix flex/grid items with block children measuring to full container (collapse bug) | RENDER | 8 | 3 | 3 | 1 | **done** (Tick 13) | VISUAL |
-| L43 | `border-radius` + `box-shadow` paint (rounded corners + shadows) | RENDER | 7 | 5 | 4 | 0 | backlog | VISUAL |
+| L43 | `border-radius` + `box-shadow` paint (rounded corners + shadows) | RENDER | 7 | 5 | 4 | 1 | **done** (Tick 14) | VISUAL |
+| L43b | Per-corner + elliptical radii; radius-clip borders/images; inset + multiple shadows; spread | RENDER | 4 | 5 | 4 | 0 | backlog (L43 follow-on) | VISUAL |
 | L44 | Shell-chrome headless paint path → screenshot the tab strip/menus/omnibox (unblocks GUI-chrome VISUAL items) | UI/infra | 6 | 5 | 5 | 0 | backlog | VISUAL |
 | L21 | Non-blocking async page-fetch (don't `block_on` the UI thread; spawn + deliver on completion) | PERF/JS | 6 | 5 | 5 | 0 | backlog (L01 follow-on) | HEADLESS |
 | L22 | Real request/response fidelity for fetch: headers, `Request`/`Headers`/`Response` objects, credentials/cookies on XHR | JS/NET | 6 | 5 | 5 | 0 | backlog (L01 follow-on) | HEADLESS |
@@ -74,7 +78,7 @@ postMessage + window.opener (L03, Tick 6)** · **MutationObserver (L02, Tick 7)*
 **responsive @media + matchMedia (L11, Tick 8)** · **agent targeting AG2/AG3 (L17, Tick 9)** ·
 **action grounding (L31-slice, Tick 10)** · **file uploads / multipart (L05, Tick 11)** ·
 **automation surface: selectors/wait/assert (L30, Tick 12)** · **screenshot discipline + flex
-block-child fix (L41/L42, Tick 13)**.
+block-child fix (L41/L42, Tick 13)** · **border-radius + box-shadow (L43, Tick 14)**.
 
 ## Superseded / blocked
 

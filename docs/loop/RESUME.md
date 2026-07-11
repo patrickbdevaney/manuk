@@ -4,8 +4,13 @@ _A fresh session reads [[CONSTITUTION]] then this file, and resumes at the named
 
 ## Where the loop is
 
-- **TICKS = 14** (about to run Tick 14). Ticks 1–13 done + committed; latest: 11 (`fc41bc9`),
-  12 (`034c275`), 13 (`64ba73a`).
+- **TICKS = 15** (about to run Tick 15 — the forced-highest-U tick). Ticks 1–14 done + committed;
+  latest: 12 (`034c275`), 13 (`64ba73a`), 14 (`e441564`).
+- **Mission amended (ADR-004):** maximal traversal earned by **capability** — a fifth real browser
+  with its own genuine fingerprint (impersonation is *off-strategy*, not merely forbidden); named
+  sites are representative points, **not a checklist**. **Ambidextrous spine:** one engine — a
+  human drives the headful GUI, an agent drives headless *or* the same headful GUI; **no forked
+  page pipeline**. Rank candidates by *traversal-blocking capability*.
 - Working tree: clean, on `main`, pushed. Parity 72/72. Disk: 41G free (86%); nuke
   `target/debug` only if free < 25G.
 - **NEW verification powers (Tick 13, see [[CONSTITUTION]] §7):** VISUAL via `manuk-wpt render`
@@ -36,40 +41,43 @@ _A fresh session reads [[CONSTITUTION]] then this file, and resumes at the named
     (shared by finish_load + finish_prewarm); prewarmed pages live in the bfcache; `goto` checks
     it first for an instant click.
 
-## Next action (Tick 14)
+## Next action (Tick 15 — FORCED-HIGHEST-U, filtered by traversal impact)
 
-Pick: **L43 — `border-radius` + `box-shadow` paint** (the next visible "look like Chromium" gaps,
-both plainly missing in the flex-card screenshot vs Chrome; now VISUAL-verifiable).
+Pick: **L16 — Custom Elements + Shadow DOM basics** (U7, HEADLESS). §5 forces the highest-U item;
+ADR-004 then filters by traversal-blocking capability. L34 (service worker) is nominally U8 but
+C9 and *not* traversal-blocking — sites degrade gracefully without it. Unsupported **web
+components** instead make content **simply not appear**, blocking whole classes of the modern web
+(design systems, YouTube-class apps). So: highest-U among the traversal-blocking, honestly
+verifiable set.
 
-1. Confirm the CSS is parsed: `grep -rn "border.radius\|border_radius\|box.shadow\|box_shadow"
-   engine/css/src`. `border-radius` likely parses to a `ComputedStyle` field (checkbox rendering
-   mentioned it); `box-shadow` may need parsing (offset-x, offset-y, blur, spread, color, inset).
-2. Paint (`engine/paint`): the CPU painter uses tiny-skia — it has `PathBuilder` for rounded
-   rects. Add rounded-corner clipping/fill for background + border when `border-radius` > 0, and a
-   blurred shadow rect for `box-shadow` (tiny-skia blur, or an approximate feathered rect).
-   Thread the radii/shadow from `ComputedStyle`/`LayoutBox` into the paint DisplayList.
-3. Verify VISUAL: `manuk-wpt render --inline '<div style="border-radius:12px;box-shadow:0 2px
-   8px rgba(0,0,0,.3);width:100px;height:60px;background:#09e"></div>' --out P.png --chrome`, Read
-   P.png + P.chrome.png — corners rounded, soft shadow present. Add a HEADLESS assertion where
-   feasible (e.g. a corner pixel is background, not fill). Parity must stay 72/72.
+1. **Custom elements**: `customElements.define(name, ctor)` registry in the window prelude;
+   upgrade matching elements already in the DOM and on later insert (reuse the Tick-7
+   `record_mutation` hook — it already fires on every native DOM mutation). Call the lifecycle
+   callbacks: `connectedCallback` / `disconnectedCallback` / `attributeChangedCallback` (+
+   `observedAttributes`).
+2. **Shadow DOM**: `element.attachShadow({mode})` → a shadow root the element's children render
+   *instead of* its light-DOM children. The arena DOM needs a shadow-root notion; layout/paint must
+   walk the shadow tree. NOTE: `Page::visible_text` already claims to respect shadow DOM + slot
+   assignment (see its doc comment) — **read that first**; some of the model may already exist.
+   Start with closed/open mode + a single default `<slot>`; named slots are a follow-on.
+3. Verify **HEADLESS + VISUAL**: an interactive-test scenario where a custom element upgrades,
+   `connectedCallback` fires, and its shadow content renders (assert via the DOM/a11y tree); then
+   `manuk-wpt render` the same page and *look* at the PNG to confirm the shadow content actually
+   paints. Parity must stay 72/72.
 
-Follow-ons: per-corner radii; `border-radius` on images/clipping; inset shadows; multiple shadows.
+Follow-ons: named slots + slot reassignment; `::part`/`::slotted`; adopted stylesheets; scoped
+style isolation in the cascade.
 
 ## Then keep going
 
-Re-run §5 UCB. **Tick 15 is the next forced-highest-U.** The screenshot + llama unblock means the
-GUI/EXTERNAL backlog is now fair game — grind visual fidelity (real-page audits vs Chrome:
-example.com/HN/Wikipedia), L09 DevTools, L06 autofill, and the L44 shell-chrome headless-paint
-path (to screenshot the tab strip/menus). Also still open: L18 cookie partitioning (re-queued),
-L07 history, L13 off-thread CSS/image, L15 SVG, L16 Shadow DOM. Rotate human/agentic. Each tick:
-implement → verify (build + parity 72/72 + test/screenshot) → disk hygiene → commit+push → update
-docs → next.
-
-## Re-establish context
-
-```
-cd /home/patrickd/manuk
-cargo build -q --workspace 2>&1 | grep -E "^error"      # expect none
-cargo run -q -p manuk-wpt --release -- parity | tail -1 # expect 72/72
-cat docs/loop/LEDGER.md docs/loop/STATE.md docs/loop/JOURNAL.md
-```
+Re-run §5 UCB (Tick 20 is the next forced-highest-U). With VISUAL + llama unblocked, **the whole
+GUI/EXTERNAL backlog is fair game** — and ADR-004 says rank by traversal-blocking capability:
+- **JS/DOM depth**: L02b (Intersection/ResizeObserver — virtualized feeds *need* these), L22
+  fetch fidelity, L16 follow-ons.
+- **Virtualized-feed performance** (the X/feed class): scroll + recycle + incremental relayout
+  under a live feed — likely a new ledger item; pair with L20 (profile vs Chromium).
+- **Session/auth durability**: L18 cookie partitioning (re-queued), L06 autofill, L22 credentials.
+- **Visual fidelity**: real-page audits vs Chrome (example.com / HN / Wikipedia) using `render
+  --chrome`; L43b radii/shadows; L15 inline SVG; L44 shell-chrome paint (unblocks GUI-chrome).
+Each tick: implement → verify (build + parity 72/72 + test/screenshot) → disk hygiene →
+commit+push (co-author line) → update LEDGER/STATE/JOURNAL/RESUME → next.

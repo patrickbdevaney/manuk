@@ -220,3 +220,24 @@ _Minimal history for audit + resume. See [[CONSTITUTION]] §4/§6, [[RESUME]] fo
   parity 72/72; layout 28+1, workspace green. Commit `64ba73a` (docs to follow).
 - Reflect: border-radius + box-shadow paint are the next visible gaps (VISUAL-verifiable now);
   shell-chrome headless paint for tab-strip pixels. Next: Tick 14.
+
+## Tick 14 — L43: border-radius + box-shadow paint (2026-07-11)
+- Selected: the two visible "look like Chromium" gaps the Tick-13 screenshot exposed (square
+  corners, no shadows) — now VISUAL-verifiable.
+- Implemented: `border_radius` (uniform) + `box_shadow` (first outer) on ComputedStyle, parsed in
+  MinimalCascade (paren-aware tokenizer for `rgba(...)`; inset/multiple/spread → None, never a
+  wrong shadow) and mapped from Stylo. Threaded through LayoutBox. New paint items RoundRect +
+  Shadow: rounded rects as a tiny-skia Bézier path (k=0.5523); the shadow's soft edge is stacked
+  concentric rounded rects with quadratic alpha falloff (tiny-skia has no Gaussian blur). Damage
+  boxes grow by `blur`.
+- Verified: VISUAL — radius-16 / pill-45 / square+shadow / radius-no-shadow render correctly and
+  match Chrome's shapes; the card sample now has Chrome-like rounded corners + shadows. HEADLESS —
+  paint pixel tests (corner cut away, centre + straight edges filled; shadow bleeds outside the
+  box but not across the canvas). Parity 72/72; css 21, layout 29, paint 6, workspace green.
+  Commit `e441564`.
+- Governance: **ADR-004 mission amendment** recorded (maximal traversal earned by CAPABILITY — a
+  fifth real browser with its own genuine fingerprint, impersonation is off-strategy; sites are
+  representative points, not a checklist; ambidextrous spine — one engine, no forked page
+  pipeline). Constitution §0 rewritten to match, incl. the traversal-blocking prioritization rule.
+- Reflect: per-corner/elliptical radii, radius-clipping for borders/images, inset + multiple
+  shadows are follow-ons. Next: Tick 15 (FORCED-HIGHEST-U, now filtered by traversal impact).
