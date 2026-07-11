@@ -4,10 +4,14 @@ _A fresh session reads [[CONSTITUTION]] then this file, and resumes at the named
 
 ## Where the loop is
 
-- **TICKS = 13** (about to run Tick 13). Ticks 1–12 done + committed; latest: 10 (`2db6920`),
-  11 (`fc41bc9`), 12 (`034c275`).
+- **TICKS = 14** (about to run Tick 14). Ticks 1–13 done + committed; latest: 11 (`fc41bc9`),
+  12 (`034c275`), 13 (`64ba73a`).
 - Working tree: clean, on `main`, pushed. Parity 72/72. Disk: 41G free (86%); nuke
   `target/debug` only if free < 25G.
+- **NEW verification powers (Tick 13, see [[CONSTITUTION]] §7):** VISUAL via `manuk-wpt render`
+  (paint a page to PNG headlessly, then Read it; `--chrome` for a reference). EXTERNAL via
+  `llama-server` + the Qwen GGUF under `/home/patrickd`. GUI/EXTERNAL items are no longer blocked —
+  grind the visual/model-deferred backlog.
 - Key architecture notes for future ticks:
   - Page JS runs on a **persistent** `PageContext` (`engine/js/src/dom_bindings.rs`) whose event
     loop is `event_loop::run_deferred` — microtasks + timers run, but `fetch`/XHR stay queued for
@@ -32,40 +36,34 @@ _A fresh session reads [[CONSTITUTION]] then this file, and resumes at the named
     (shared by finish_load + finish_prewarm); prewarmed pages live in the bfcache; `goto` checks
     it first for an instant click.
 
-## Next action (Tick 13)
+## Next action (Tick 14)
 
-Pick: **L18 — cookie partitioning + `SameSite` enforcement audit** (rotate back to human/security
-after the agentic L30; advances the under-developed SECURITY axis 45; self-contained + HEADLESS in
-`engine/net`).
+Pick: **L43 — `border-radius` + `box-shadow` paint** (the next visible "look like Chromium" gaps,
+both plainly missing in the flex-card screenshot vs Chrome; now VISUAL-verifiable).
 
-FIRST survey what exists: `engine/net/src/cookies.rs` (RFC-6265 `CookieJar`, `SameSite` enum,
-serde, persistence) and `engine/net/src/storage.rs` (there's already a partitioned store —
-`jar_mut(profile, container, top_level)`, `RequestContext::{navigation, subresource}`,
-`is_same_site` — see the earlier grep). The tick likely = **wire + audit + test**, not build from
-scratch:
-1. Confirm/þfix that cross-site subresource requests use a **partitioned** jar keyed by the
-   top-level site (so a tracker's cookie on site A isn't sent on site B). If `storage.rs` already
-   partitions, ensure the actual `send_once`/`cookie_jar()` path (lib.rs) routes through it with
-   the request's top-level context rather than the single global jar.
-2. `SameSite` enforcement on send: `Strict` cookies omitted on cross-site navigations;
-   `Lax` sent only on top-level GET navigations, omitted on cross-site subresource/POST;
-   `None` requires Secure. Implement `should_send(cookie, request_ctx)` purely and test the
-   matrix.
-3. Verify HEADLESS: unit tests — a `Strict`/`Lax`/`None` cookie set on site A is/ isn't attached
-   for (same-site nav, cross-site nav, cross-site subresource, cross-site POST); partition
-   isolation (cookie on A not visible to B's jar). Parity 72/72 (net-layer only).
+1. Confirm the CSS is parsed: `grep -rn "border.radius\|border_radius\|box.shadow\|box_shadow"
+   engine/css/src`. `border-radius` likely parses to a `ComputedStyle` field (checkbox rendering
+   mentioned it); `box-shadow` may need parsing (offset-x, offset-y, blur, spread, color, inset).
+2. Paint (`engine/paint`): the CPU painter uses tiny-skia — it has `PathBuilder` for rounded
+   rects. Add rounded-corner clipping/fill for background + border when `border-radius` > 0, and a
+   blurred shadow rect for `box-shadow` (tiny-skia blur, or an approximate feathered rect).
+   Thread the radii/shadow from `ComputedStyle`/`LayoutBox` into the paint DisplayList.
+3. Verify VISUAL: `manuk-wpt render --inline '<div style="border-radius:12px;box-shadow:0 2px
+   8px rgba(0,0,0,.3);width:100px;height:60px;background:#09e"></div>' --out P.png --chrome`, Read
+   P.png + P.chrome.png — corners rounded, soft shadow present. Add a HEADLESS assertion where
+   feasible (e.g. a corner pixel is background, not fill). Parity must stay 72/72.
 
-Follow-ons: `__Host-`/`__Secure-` prefixes; partition-key persistence; CHIPS (`Partitioned`
-attribute).
+Follow-ons: per-corner radii; `border-radius` on images/clipping; inset shadows; multiple shadows.
 
 ## Then keep going
 
-After Tick 13, re-run §5 UCB. **Tick 15 is the next forced-highest-U.** Tier-A still open:
-L06 password autofill (EXTERNAL keyring), L07 semantic history, L09 DevTools (GUI), L13 off-thread
-external CSS/image, L15 inline SVG, L16 Shadow DOM; Tier-B: L33 SoA-DOM measure, L34 service
-worker. Rotate human/agentic to keep axis balance. Each tick: implement → verify (build + parity
-72/72 + test) → disk hygiene → commit+push (co-author line) → update LEDGER/STATE/JOURNAL/RESUME
-→ next.
+Re-run §5 UCB. **Tick 15 is the next forced-highest-U.** The screenshot + llama unblock means the
+GUI/EXTERNAL backlog is now fair game — grind visual fidelity (real-page audits vs Chrome:
+example.com/HN/Wikipedia), L09 DevTools, L06 autofill, and the L44 shell-chrome headless-paint
+path (to screenshot the tab strip/menus). Also still open: L18 cookie partitioning (re-queued),
+L07 history, L13 off-thread CSS/image, L15 SVG, L16 Shadow DOM. Rotate human/agentic. Each tick:
+implement → verify (build + parity 72/72 + test/screenshot) → disk hygiene → commit+push → update
+docs → next.
 
 ## Re-establish context
 

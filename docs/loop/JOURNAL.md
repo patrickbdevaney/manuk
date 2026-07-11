@@ -200,3 +200,23 @@ _Minimal history for audit + resume. See [[CONSTITUTION]] §4/§6, [[RESUME]] fo
   workspace green. Commit `034c275`.
 - Reflect: expose as a scriptable session/BiDi command; retries w/ backoff; data-testid
   selectors; an act→wait→assert step helper. Next: Tick 13.
+
+## Tick 13 — headless screenshot discipline + flex-block-child fix (2026-07-11)
+- Trigger: user unblocked headful verification (screenshots) + llama.cpp. Reprioritized ahead of
+  L18 (re-queued) because visual verification is the force-multiplier the user asked for.
+- Built: `manuk-wpt render` — CPU-painter PNG of any HTML (+ optional headless-Chrome reference),
+  readable back for eyeballing. NO window/GPU. Proven working.
+- First fruit: the first screenshot caught a major bug — a flex card row rendered as ONE
+  full-width card. Root cause: `content_right_extent` counted a block child's container-filling
+  width (≈1e6 at the max-content probe), so the first flex item measured to the whole container.
+  Fixed by ignoring a box's own edge when it filled the measuring width. Affects most real flex/
+  grid layouts (cards/columns nest block content).
+- EXTERNAL proven: `llama-server` + `Qwen3.5-4B.Q4_K_M.gguf` → prompt yields
+  `{"Type":{"field":"Email","text":"alice@example.com"}}` (with `/no_think`), the exact Action
+  the Tick-10 `ground_action` resolves. Server stopped after (restartable).
+- Constitution §7 rewritten: added `VISUAL` (render+Read PNG) + made `EXTERNAL` (llama) runnable;
+  documented both disciplines + the mmproj multimodal lever.
+- Verified: VISUAL — before/after screenshots (1→3 cards, matches Chrome); layout regression test;
+  parity 72/72; layout 28+1, workspace green. Commit `64ba73a` (docs to follow).
+- Reflect: border-radius + box-shadow paint are the next visible gaps (VISUAL-verifiable now);
+  shell-chrome headless paint for tab-strip pixels. Next: Tick 14.

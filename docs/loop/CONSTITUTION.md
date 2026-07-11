@@ -136,10 +136,30 @@ The loop must survive a session ending at any point:
 
 ## 7. Verification classes (honesty tags)
 
-Each LEDGER item carries one: `HEADLESS` (provable via test/render/parity — do so), `GUI`
-(pixels/interaction in the winit window — write robustly, mark "needs user verification"),
-`EXTERNAL` (needs a service/model/key — wire the seam, note the dependency), `MEASURE` (a number
-must be produced, e.g. latency/memory). Never upgrade a class silently.
+Each LEDGER item carries one. Never upgrade a class silently; never claim pixels are verified when
+they were not.
+
+- `HEADLESS` — provable via test / parity / **render screenshot**. Do so.
+- `VISUAL` — the rendered *pixels* must be right. **Now autonomously verifiable** (user unblocked
+  it, Tick 13): `cargo run -q -p manuk-wpt --release -- render (--html FILE | --inline HTML)
+  --out PNG [--width W] [--height H] [--chrome]` paints the page through the CPU painter (no
+  window/GPU) to a real PNG; **Read the PNG to eyeball it**, and `--chrome` writes a headless-
+  Chrome reference PNG beside it for side-by-side diff. This is how a "look like Chromium" item is
+  now worked + verified — no display needed. (It already caught the flex/block-child collapse.)
+  *Limitation:* renders page content, not the shell chrome (tab strip/menus) — a shell headless-
+  paint path is the follow-on for chrome-pixel items; until then those stay `GUI`.
+- `GUI` — live winit-window interaction (real input events, GPU present, multi-window). Still
+  needs a human at the machine; write robustly and mark "needs user verification". Prefer to
+  carve off a `VISUAL` or `HEADLESS` slice that IS checkable.
+- `EXTERNAL` — needs a service/model/key. **llama.cpp is now runnable** (user granted, Tick 13):
+  models live under `/home/patrickd` (e.g. `qwen_35_4b_claude/Qwen3.5-4B.Q4_K_M.gguf` + an
+  `mmproj` vision projector); `llama-server` at `~/llama.cpp/build/bin/llama-server`. Start:
+  `llama-server -m <gguf> --host 127.0.0.1 --port 8099 -c 2048 -ngl 0 --no-webui &`, poll
+  `/health`, hit the OpenAI-compat `/v1/chat/completions`. Qwen3.5 is a reasoning model — append
+  `/no_think` for clean JSON-only output. Verified end-to-end: prompt → `{"Type":{"field":"Email",
+  ...}}` → `grounding::ground_action`. **Stop the server when done** (frees RAM/CPU); restart on
+  demand. The mmproj enables multimodal (screenshot-in) grounding — a future lever.
+- `MEASURE` — a number must be produced (latency/memory) and published.
 
 ## 8. Disk hygiene (every tick; the loop must not fill the disk)
 
