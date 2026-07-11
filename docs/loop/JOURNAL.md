@@ -145,3 +145,18 @@ _Minimal history for audit + resume. See [[CONSTITUTION]] §4/§6, [[RESUME]] fo
 - Reflect: container queries, matchMedia resize-listeners, full media-feature set, @supports are
   follow-ons (logged). Table stakes now solid → un-defer the agentic L17 for Tick 9.
   Next: Tick 9 (L17). NOTE: Tick 10 is the forced-highest-U tick.
+
+## Tick 9 — L17: agent-native targeting (AG2 pruning + AG3 dual targeting) (2026-07-11)
+- Selected: top UCB (~4.3), un-deferred now that human table stakes are solid — the agent-native
+  differentiator, advancing the under-developed AGENT-EXT axis.
+- Implemented: `agent/src/targeting.rs`, pure functions over `engine/a11y`. AG2
+  `prune_for_task(tree, task)` keeps interactive + name-matching nodes + ancestor chains, drops
+  decorative/off-task subtrees. AG3 `resolve_target(tree, intent, viewport)` scores candidates by
+  semantic (keyword overlap + exact-label + action-role bonuses) and visual (in-viewport, larger,
+  central) signals, weighted 0.72/0.28; returns node + click point + confidence margin.
+- Verified: HEADLESS — 4 unit tests over a synthetic page tree (prune shrinks + keeps the right
+  nodes; resolve picks the prominent nav button over the same-text footer link; identical buttons
+  → low confidence; no candidate → None). Parity 72/72; agent 109 + workspace green. Commit
+  `6524b11`.
+- Reflect: wire AG3 into the shell/BrowserAction path, a learned scorer, and OCR fallback are
+  follow-ons. Next: Tick 10 (FORCED-HIGHEST-U).

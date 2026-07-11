@@ -181,11 +181,16 @@ fn collect_scored<'a>(
     out: &mut Vec<(f32, &'a A11yNode)>,
 ) {
     if let Some(bbox) = node.bbox {
-        // Candidates are actionable nodes, or non-interactive nodes whose name matches the
-        // intent (a heading/label the agent might click). A non-matching, non-interactive node
-        // is never a target, however visually prominent.
-        let is_candidate = node.role.is_interactive() || name_matches(&node.name, kw);
-        if is_candidate {
+        // With an intent, a candidate must match it by name (so "Checkout" never resolves to an
+        // unrelated button on the strength of role/visual alone). With no intent, fall back to
+        // ranking interactive nodes visually. The action-role/exact bonuses only break ties
+        // among genuinely matching candidates.
+        let eligible = if kw.is_empty() {
+            node.role.is_interactive()
+        } else {
+            name_matches(&node.name, kw)
+        };
+        if eligible {
             let sem = semantic_score(&node.name, &node.role, kw);
             let vis = visual_score(&bbox, viewport);
             let score = SEMANTIC_W * sem + VISUAL_W * vis;
