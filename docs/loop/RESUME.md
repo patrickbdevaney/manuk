@@ -4,8 +4,8 @@ _A fresh session reads [[CONSTITUTION]] then this file, and resumes at the named
 
 ## Where the loop is
 
-- **TICKS = 15** (about to run Tick 15 — the forced-highest-U tick). Ticks 1–14 done + committed;
-  latest: 12 (`034c275`), 13 (`64ba73a`), 14 (`e441564`).
+- **TICKS = 16** (about to run Tick 16). Ticks 1–15 done + committed; latest: 13 (`64ba73a`),
+  14 (`e441564`), 15 (`8f76665`).
 - **Mission amended (ADR-004):** maximal traversal earned by **capability** — a fifth real browser
   with its own genuine fingerprint (impersonation is *off-strategy*, not merely forbidden); named
   sites are representative points, **not a checklist**. **Ambidextrous spine:** one engine — a
@@ -41,43 +41,47 @@ _A fresh session reads [[CONSTITUTION]] then this file, and resumes at the named
     (shared by finish_load + finish_prewarm); prewarmed pages live in the bfcache; `goto` checks
     it first for an instant click.
 
-## Next action (Tick 15 — FORCED-HIGHEST-U, filtered by traversal impact)
+## Next action (Tick 16)
 
-Pick: **L16 — Custom Elements + Shadow DOM basics** (U7, HEADLESS). §5 forces the highest-U item;
-ADR-004 then filters by traversal-blocking capability. L34 (service worker) is nominally U8 but
-C9 and *not* traversal-blocking — sites degrade gracefully without it. Unsupported **web
-components** instead make content **simply not appear**, blocking whole classes of the modern web
-(design systems, YouTube-class apps). So: highest-U among the traversal-blocking, honestly
-verifiable set.
+Pick: **L45 — block-in-inline** (found while VISUAL-verifying Tick 15; pre-existing and NOT
+shadow-specific). A block-level box inside an inline element **loses its box entirely** — the text
+still flows, but the block's background / padding / border simply vanish. Repro:
 
-1. **Custom elements**: `customElements.define(name, ctor)` registry in the window prelude;
-   upgrade matching elements already in the DOM and on later insert (reuse the Tick-7
-   `record_mutation` hook — it already fires on every native DOM mutation). Call the lifecycle
-   callbacks: `connectedCallback` / `disconnectedCallback` / `attributeChangedCallback` (+
-   `observedAttributes`).
-2. **Shadow DOM**: `element.attachShadow({mode})` → a shadow root the element's children render
-   *instead of* its light-DOM children. The arena DOM needs a shadow-root notion; layout/paint must
-   walk the shadow tree. NOTE: `Page::visible_text` already claims to respect shadow DOM + slot
-   assignment (see its doc comment) — **read that first**; some of the model may already exist.
-   Start with closed/open mode + a single default `<slot>`; named slots are a follow-on.
-3. Verify **HEADLESS + VISUAL**: an interactive-test scenario where a custom element upgrades,
-   `connectedCallback` fires, and its shadow content renders (assert via the DOM/a11y tree); then
-   `manuk-wpt render` the same page and *look* at the PNG to confirm the shadow content actually
-   paints. Parity must stay 72/72.
+    cargo run -q -p manuk-wpt --release -- render --inline \
+      '<span><div style="background:#fd0;padding:6px">block in inline</div></span>' \
+      --out /tmp/bii.png --chrome
+    # Manuk: bare text, no yellow box. Chrome: a yellow padded block.
 
-Follow-ons: named slots + slot reassignment; `::part`/`::slotted`; adopted stylesheets; scoped
-style isolation in the cascade.
+Straightforwardly traversal-blocking per ADR-004: block-in-inline is everywhere in real markup
+(a `<div>` inside an `<a>`/`<span>`/custom element), and losing the box means losing the visual.
+It is also *why* an inline shadow host with block shadow content renders bare text (Tick 15).
+
+Design — CSS2 §9.2.1.1 **anonymous block boxes**: when an inline box contains a block-level child,
+the inline is *split* around it and the whole run is wrapped in anonymous block boxes:
+`inline-before | block | inline-after`. In `engine/layout`:
+1. Find where inline content is gathered (`collect_inline_group` / `collect_inline_node`, ~line
+   2040+) — a block-level child encountered while building inline items is currently swallowed.
+2. When building a block's children, if an inline-level run contains a block-level descendant,
+   emit: anonymous block(inline run before) → the block child (laid out as a block) → anonymous
+   block(inline run after). The existing anonymous-box machinery around line 1720 (`kids.extend
+   (new_boxes)`, `BoxContent::Inline(std::mem::take(frags))`) is the seam.
+3. Preserve the inline's own styles on the split parts (an inline's background/border applies to
+   each fragment) — a simplification is acceptable if documented.
+4. Verify **VISUAL** (render + `--chrome`: the yellow padded block appears, matching Chrome) and
+   **HEADLESS** (a layout test: the inner block's box has the right width/height/background, and
+   text before/after it stays on separate lines). Parity MUST stay 72/72 — this touches the core
+   inline/block seam, so run it early and often.
 
 ## Then keep going
 
-Re-run §5 UCB (Tick 20 is the next forced-highest-U). With VISUAL + llama unblocked, **the whole
-GUI/EXTERNAL backlog is fair game** — and ADR-004 says rank by traversal-blocking capability:
-- **JS/DOM depth**: L02b (Intersection/ResizeObserver — virtualized feeds *need* these), L22
-  fetch fidelity, L16 follow-ons.
+Re-run §5 UCB (Tick 20 = next forced-highest-U). Rank by **traversal-blocking capability**
+(ADR-004):
+- **JS/DOM depth**: L02b Intersection/ResizeObserver (virtualized feeds *need* these), L16b named
+  slots + a scoped flat-tree walk in Stylo, L22 fetch fidelity.
 - **Virtualized-feed performance** (the X/feed class): scroll + recycle + incremental relayout
-  under a live feed — likely a new ledger item; pair with L20 (profile vs Chromium).
-- **Session/auth durability**: L18 cookie partitioning (re-queued), L06 autofill, L22 credentials.
-- **Visual fidelity**: real-page audits vs Chrome (example.com / HN / Wikipedia) using `render
-  --chrome`; L43b radii/shadows; L15 inline SVG; L44 shell-chrome paint (unblocks GUI-chrome).
+  under a live feed; pair with L20 (profile vs Chromium).
+- **Session/auth durability**: L18 cookie partitioning, L06 autofill.
+- **Visual fidelity**: real-page audits vs Chrome (`render --chrome` on example.com / HN /
+  Wikipedia); L43b radii/shadows; L15 inline SVG; L44 shell-chrome paint (unblocks GUI-chrome).
 Each tick: implement → verify (build + parity 72/72 + test/screenshot) → disk hygiene →
 commit+push (co-author line) → update LEDGER/STATE/JOURNAL/RESUME → next.

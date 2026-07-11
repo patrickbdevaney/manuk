@@ -241,3 +241,30 @@ _Minimal history for audit + resume. See [[CONSTITUTION]] §4/§6, [[RESUME]] fo
   pipeline). Constitution §0 rewritten to match, incl. the traversal-blocking prioritization rule.
 - Reflect: per-corner/elliptical radii, radius-clipping for borders/images, inset + multiple
   shadows are follow-ons. Next: Tick 15 (FORCED-HIGHEST-U, now filtered by traversal impact).
+
+## Tick 15 — L16: Custom Elements + Shadow DOM (FORCED-HIGHEST-U) (2026-07-11)
+- Selected: §5 forces highest-U; **ADR-004's traversal-blocking rule** then vetoed the nominal
+  winner (L34 service worker, U8/C9 — sites *degrade* without it) in favour of **L16** (U7):
+  unsupported web components make content **simply not appear**. First decision the amendment
+  changed.
+- Discovery: the DOM + layout ALREADY modelled shadow roots + the flat tree (slots, declarative
+  `<template shadowrootmode>`). But the path was broken and there was no JS API.
+- **Two real bugs (both surfaced by the screenshot discipline):**
+  1. **CRASH** — layout's `collect_positioned` walked the *node* tree while all other layout walks
+     the *flat* tree, so it reached unslotted light-DOM children of a shadow host (never rendered →
+     never styled) and panicked indexing styles. **Any declarative-shadow-DOM page crashed layout.**
+     Now flat-tree + non-indexing lookup (a missing style can never crash layout).
+  2. **Stylo styled no shadow content** (the shell's default cascade walks the node tree) → blank.
+     `cascade_via_stylo` now adopts MinimalCascade's N4 flat-tree scoped result for nodes it missed.
+- Implemented: `attachShadow({mode})` + `shadowRoot`; `customElements.define/get/whenDefined` with
+  real upgrade — `HTMLElement`'s constructor RETURNS the element under upgrade, so (per ES) the
+  derived ctor's `this` becomes it and `constructor(){super(); this.attachShadow(...)}` runs on the
+  real element, as the spec's upgrade does. connectedCallback + attributeChangedCallback +
+  observedAttributes. Upgrade sweep in the MutationObserver microtask catches later inserts.
+  `tests/wpt` gains an optional `spidermonkey` feature so `render` can screenshot JS-built pages.
+- Verified: HEADLESS — scenario (13). VISUAL — declarative shadow DOM (block + inline hosts, slot
+  assignment) and a JS-defined custom element both render end-to-end. Parity 72/72; css 21,
+  layout 29, paint 6, dom 9, workspace green. Commit `8f76665`.
+- Reflect: **new bug L45 — block-in-inline** (a block box inside an inline loses its box;
+  pre-existing, not shadow-specific — it's why an inline host with block shadow content renders
+  bare text). High traversal value. Next: Tick 16 = L45.
