@@ -365,6 +365,8 @@ impl Page {
         // snapshot (so `getBoundingClientRect` works), letting them mutate the DOM. If they
         // did, re-style and re-lay-out so script-built content is rendered. All a no-op unless
         // the `spidermonkey` feature is on; scripts that throw are logged and the rest run.
+        // Resolve viewport-unit lengths (vw/vh/…) against this viewport before cascading.
+        manuk_css::values::set_viewport_width(viewport_width);
         let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&dom);
         let mut styles = MinimalCascade.cascade(&dom, &sheets);
         let mut root_box = layout_document(&dom, &styles, fonts, viewport_width);

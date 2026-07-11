@@ -5,9 +5,40 @@
 //! parsed by hand for the common `#hex` / `rgb()` / named forms — the full CSS
 //! Color grammar is Stylo's job.
 
+use std::sync::atomic::{AtomicU32, Ordering};
+
 use cssparser::{Parser, ParserInput, Token};
 
 use crate::Dim;
+
+/// The viewport size (CSS px) used to resolve `vw`/`vh`/`vmin`/`vmax` to px at parse
+/// time, stored as `f32` bit patterns. Global (not per-cascade) because `parse_dim`
+/// is called from ~20 sites that only thread `font_size`; the cascade entry points
+/// set this before parsing. Eager resolution means a viewport resize needs a
+/// re-cascade for viewport-unit lengths to update — which the page pipeline already
+/// does on relayout. Defaults to a common desktop size so tests/pre-cascade parses
+/// stay sane.
+static VP_W: AtomicU32 = AtomicU32::new(1280.0_f32.to_bits());
+static VP_H: AtomicU32 = AtomicU32::new(720.0_f32.to_bits());
+
+/// Set the viewport width and height (CSS px) for viewport-unit resolution.
+pub fn set_viewport(w: f32, h: f32) {
+    VP_W.store(w.to_bits(), Ordering::Relaxed);
+    VP_H.store(h.to_bits(), Ordering::Relaxed);
+}
+
+/// Set only the viewport width, preserving the last-known height. Cascade sites thread
+/// an authoritative width but not always a height, so they update width alone.
+pub fn set_viewport_width(w: f32) {
+    VP_W.store(w.to_bits(), Ordering::Relaxed);
+}
+
+fn viewport() -> (f32, f32) {
+    (
+        f32::from_bits(VP_W.load(Ordering::Relaxed)),
+        f32::from_bits(VP_H.load(Ordering::Relaxed)),
+    )
+}
 
 /// 8-bit RGBA color.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -48,6 +79,10 @@ fn dimension_to_px(value: f32, unit: &str, font_size: f32) -> Option<f32> {
         "cm" => Some(value * 96.0 / 2.54),
         "mm" => Some(value * 96.0 / 25.4),
         "q" => Some(value * 96.0 / 101.6),
+        "vw" | "vi" => Some(value * viewport().0 / 100.0),
+        "vh" | "vb" => Some(value * viewport().1 / 100.0),
+        "vmin" => Some(value * viewport().0.min(viewport().1) / 100.0),
+        "vmax" => Some(value * viewport().0.max(viewport().1) / 100.0),
         _ => None,
     }
 }
