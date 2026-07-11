@@ -33,7 +33,18 @@ fn cascade_styles(dom: &Dom, sheets: &[Stylesheet], viewport_width: f32) -> Styl
     #[cfg(feature = "stylo")]
     {
         let (_, vh) = manuk_css::values::viewport_size();
-        manuk_css::stylo_engine::cascade_via_stylo(dom, sheets, viewport_width, vh)
+        // Stylo's DOM trait wall has provably-unreachable `unimplemented!()` paths; if a real
+        // page trips one, don't crash the browser — fall back to MinimalCascade for that page.
+        let cascaded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            manuk_css::stylo_engine::cascade_via_stylo(dom, sheets, viewport_width, vh)
+        }));
+        match cascaded {
+            Ok(styles) => styles,
+            Err(_) => {
+                tracing::warn!("Stylo cascade panicked; falling back to MinimalCascade for this page");
+                MinimalCascade.cascade(dom, sheets)
+            }
+        }
     }
     #[cfg(not(feature = "stylo"))]
     {

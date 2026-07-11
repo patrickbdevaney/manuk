@@ -14,9 +14,11 @@ path = "src/main.rs"
 # The interactive GPU window (winit + wgpu). On by default. Disable it
 # (`--no-default-features`) to build just the headless `render` pipeline, which
 # needs no display/GPU — useful for CI and this environment.
-default = ["gui"]
+default = ["gui", "stylo"]
 gui = ["dep:winit", "dep:wgpu", "dep:pollster", "dep:bytemuck", "dep:raw-window-handle"]
-# Route the cascade through the real Stylo engine (heavy build). Forwarded to manuk-page.
+# Route the cascade through the real Stylo engine (full selectors/@media/var/cascade;
+# 72/72 parity). Default-on for real-world CSS fidelity, with a per-page panic fallback
+# to MinimalCascade. Heavy to build; drop with --no-default-features for the lean path.
 stylo = ["manuk-page/stylo"]
 # Link SpiderMonkey and expose `manuk eval <expr>` — real JS execution. Heavy: this is
 # what the C2 binary-size measurement compares against the JS-less baseline.

@@ -15,7 +15,22 @@ gate; render-to-PNG for visual items; unit tests for logic).
 
 ## Phase A — Visual parity (kills the "1990s" look)
 
-### A1 ☐ Wire Stylo into the runtime  *(highest leverage; CSS repomap #1)*
+### A1 ☑ Wire Stylo into the runtime — DONE, flipped to default  *(CSS repomap #1)*
+**Status:** complete. `engine/page` routes every cascade through `cascade_styles()`; under
+`stylo` (now a **default** shell feature) it drives `cascade_via_stylo` with the real
+viewport. The full `ComputedValues`→`ComputedStyle` mapping was completed — color/font/
+display/sizing/margin/padding/border(+style-zeroing)/inset/position/float/clear/overflow/
+z-index/box-sizing/white-space/table/transform(2D)/calc(two-basis)/flex(AlignFlags)/grid
+(+`layout.grid.enabled` pref)/presentational-hints — reaching **Stylo parity 72/72** (was
+26/72). `vertical-align` (no computed accessor in stylo 0.19) is patched from MinimalCascade.
+Default-on with a **per-page `catch_unwind` fallback to MinimalCascade** so a trait-wall
+`unimplemented!()` on an untested page degrades gracefully instead of crashing. Verified: no
+panic on example.com/HN/wikipedia; both cascades hold 72/72. Tradeoff accepted: heavier
+build + larger binary (drop via `--no-default-features` for the lean MinimalCascade path).
+
+<details><summary>original plan</summary>
+
+#### A1 (orig) Wire Stylo into the runtime  *(highest leverage; CSS repomap #1)*
 The `StyloEngine`/`cascade_via_stylo` path is real and tested but **dead code** — nothing
 enables the `stylo` feature and `engine/page` hardcodes `MinimalCascade` everywhere. Only
 Step 5 of `STYLO-CASCADE-PLAN.md` (wiring + gate) remains.
@@ -33,6 +48,8 @@ Step 5 of `STYLO-CASCADE-PLAN.md` (wiring + gate) remains.
   child/attr selectors) that MinimalCascade fails.
 - **Default decision:** ship behind the feature first; flip to default only after the
   page-set fuzz is clean. Keep `MinimalCascade` as `--no-default-features` fallback.
+
+</details>
 
 ### A2 ☐ MinimalCascade stopgaps *(only if A1 stays feature-gated, not default)*
 - `@media (min/max-width)` evaluation against the real viewport (currently `skip_at_rule`
