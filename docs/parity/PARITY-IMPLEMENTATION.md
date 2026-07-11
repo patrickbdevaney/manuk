@@ -57,11 +57,20 @@ Effort tags: **S** ≈ hours–1 day, **M** ≈ days, **L** ≈ 1–3 weeks, **X
 - **Font fallback + color emoji** (`f1cdbe5`) — FaceId registry + per-glyph fallback
   (CJK/emoji/symbols) + swash color-glyph (COLR/CBDT) rendering.
 
-**Remaining (each substantial, deferred to focused work):** bidi/RTL reordering; web fonts
-(needs a named-family refactor across css/layout/text); getComputedStyle + engine-generated
-events; ES modules (SpiderMonkey module API); incremental/partial layout; a real compositor
-with damage-rect repaint + a feature-gated Vello GPU backend. The parity gate held 72/72
-through every change above.
+- **JS events + getComputedStyle** (`3fc5e88`, `f93dd4e`) — real Event object with
+  capture/bubble/target/preventDefault; getComputedStyle(el) snapshot.
+- **Web fonts + named families** (`eda4a23`) — font-family resolves by name (Arial, custom)
+  not just generics; `@font-face` fetched + registered under its CSS name (alias map).
+  WOFF2 skipped (no building pure-Rust decompressor); TTF/OTF pass through.
+- **Bidi/RTL** (`f83fe27`) — unicode-bidi visual reordering; Arabic/Hebrew lay out RTL.
+
+**Deep-architecture tier remaining (each a focused effort):** ES modules (the mozjs module
+API is present — CompileModule/ModuleLink/ModuleEvaluate/SetModuleResolveHook — but a
+correct loader needs import-graph discovery + async fetch + the resolve-hook FFI);
+incremental/partial layout (subtree relayout re-entrancy); a real compositor with damage-rect
+repaint + partial texture upload + a feature-gated Vello GPU backend (the invalidation win is
+in the GPU shell path, hard to verify headlessly). The parity gate held **72/72** through
+every change above.
 
 ## Key research verdicts (these shape the plan)
 
