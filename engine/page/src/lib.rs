@@ -178,6 +178,17 @@ async fn fetch_image_bytes(url: &str) -> Option<Vec<u8>> {
     std::fs::read(path).ok()
 }
 
+/// Fetch a web-font URL and return OpenType/TrueType bytes fontdb can load. Raw TTF/OTF
+/// (and TrueType collections) pass through; WOFF/WOFF2 are skipped (no working pure-Rust
+/// WOFF2 decompressor builds in the current ecosystem — a documented gap).
+async fn fetch_font_bytes(url: &str) -> Option<Vec<u8>> {
+    let bytes = fetch_image_bytes(url).await?; // reuses data:/http(s)/file handling
+    let sig = bytes.get(..4)?;
+    // sfnt magics: TrueType (0x00010000 / "true"), OpenType ("OTTO"), collection ("ttcf").
+    let is_sfnt = matches!(sig, b"\x00\x01\x00\x00" | b"true" | b"OTTO" | b"ttcf");
+    is_sfnt.then_some(bytes)
+}
+
 /// Collect the page's stylesheet sources (inline + external) in document order.
 fn collect_style_sources(dom: &Dom, base: &str) -> Vec<StyleSource> {
     let mut out = Vec::new();
@@ -630,9 +641,30 @@ impl Page {
                 }
             }
         }
+        // Web fonts: fetch @font-face sources (from inline + external CSS) and register
+        // them BEFORE the relayout, so the cascade's font-family resolves to them.
+        for s in &sources {
+            let css = match s {
+                StyleSource::Inline(c) => c.clone(),
+                StyleSource::External(url) => external.get(url).cloned().unwrap_or_default(),
+            };
+            for ff in Stylesheet::parse(&css).font_faces() {
+                for src in &ff.srcs {
+                    let url = resolve_url(&self.final_url, src);
+                    if let Some(data) = fetch_font_bytes(&url).await {
+                        fonts.register_named_font(&ff.family, data);
+                        break; // first usable source wins
+                    }
+                }
+            }
+        }
+
         let count = external.len();
         if count > 0 {
             self.apply_stylesheets(&external, fonts, viewport_width);
+        } else {
+            // Even with no external CSS, an inline @font-face may have registered a font.
+            self.relayout(fonts, viewport_width);
         }
         count
     }

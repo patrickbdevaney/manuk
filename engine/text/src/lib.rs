@@ -14,12 +14,15 @@ use std::rc::Rc;
 
 use lru::LruCache;
 
-/// Which generic font family to resolve. Mapped to concrete faces via `fontdb`.
+/// Which font family to resolve. `Named` carries an interned id into the [`FontContext`]
+/// family-name registry (a specific installed or `@font-face`-registered family); the rest
+/// are the CSS generics. Mapped to concrete faces via `fontdb`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum FontFamily {
     SansSerif,
     Serif,
     Monospace,
+    Named(u32),
 }
 
 /// A resolved-font lookup key.
@@ -130,7 +133,7 @@ const FALLBACK_FAMILIES: &[&str] = &[
 const SUBPIXEL_BUCKETS: u8 = 4;
 
 pub struct FontContext {
-    db: fontdb::Database,
+    db: RefCell<fontdb::Database>,
     cache: RefCell<HashMap<FontKey, Option<Rc<fontdue::Font>>>>,
     /// The face registry: interned faces indexed by [`FaceId`], deduped by fontdb id.
     faces: RefCell<Vec<Rc<FaceData>>>,
@@ -140,6 +143,12 @@ pub struct FontContext {
     /// Discovered fallback faces (lazy); per-`(face, char)` coverage memo.
     fallbacks: RefCell<Option<Vec<FaceId>>>,
     coverage: RefCell<HashMap<(FaceId, char), bool>>,
+    /// Interned named font families (id ↔ lowercase name), for `FontFamily::Named`.
+    family_names: RefCell<Vec<String>>,
+    family_ids: RefCell<HashMap<String, u32>>,
+    /// `@font-face` family name (lowercase) → the registered face ids, so a web font
+    /// resolves under its CSS-declared name even if the file's internal name differs.
+    webfonts: RefCell<HashMap<String, Vec<fontdb::ID>>>,
     /// swash's reusable scaling context (glyph rasterization). `RefCell` because scaling
     /// takes `&mut`; single-threaded like the rest of the context.
     scale_ctx: RefCell<swash::scale::ScaleContext>,
@@ -170,13 +179,16 @@ impl FontContext {
         let mut db = fontdb::Database::new();
         db.load_system_fonts();
         FontContext {
-            db,
+            db: RefCell::new(db),
             cache: RefCell::new(HashMap::new()),
             faces: RefCell::new(Vec::new()),
             face_by_dbid: RefCell::new(HashMap::new()),
             primary_of: RefCell::new(HashMap::new()),
             fallbacks: RefCell::new(None),
             coverage: RefCell::new(HashMap::new()),
+            family_names: RefCell::new(Vec::new()),
+            family_ids: RefCell::new(HashMap::new()),
+            webfonts: RefCell::new(HashMap::new()),
             scale_ctx: RefCell::new(swash::scale::ScaleContext::new()),
             shape_ctx: RefCell::new(swash::shape::ShapeContext::new()),
             measure_cache: RefCell::new(LruCache::new(
@@ -197,7 +209,7 @@ impl FontContext {
 
     /// Number of faces discovered — 0 means no system fonts were found.
     pub fn face_count(&self) -> usize {
-        self.db.len()
+        self.db.borrow().len()
     }
 
     /// Resolve (and cache) a fontdue face for `key`, or `None` if unavailable.
@@ -210,12 +222,127 @@ impl FontContext {
         loaded
     }
 
+    /// Register a downloaded font (no CSS family alias — matched by its internal name).
+    pub fn register_font(&self, data: Vec<u8>) {
+        self.db.borrow_mut().load_font_data(data);
+    }
+
+    /// Register a downloaded `@font-face` font under its CSS-declared `family` name, so
+    /// `font-family: family` resolves to it regardless of the file's internal name.
+    pub fn register_named_font(&self, family: &str, data: Vec<u8>) {
+        let before: std::collections::HashSet<fontdb::ID> =
+            self.db.borrow().faces().map(|f| f.id).collect();
+        self.db.borrow_mut().load_font_data(data);
+        let new_ids: Vec<fontdb::ID> = self
+            .db
+            .borrow()
+            .faces()
+            .map(|f| f.id)
+            .filter(|id| !before.contains(id))
+            .collect();
+        if !new_ids.is_empty() {
+            self.webfonts
+                .borrow_mut()
+                .entry(family.to_ascii_lowercase())
+                .or_default()
+                .extend(new_ids);
+        }
+    }
+
+    /// Intern a lowercase family name, returning its stable id.
+    fn intern_family(&self, name: &str) -> u32 {
+        let key = name.to_ascii_lowercase();
+        if let Some(&id) = self.family_ids.borrow().get(&key) {
+            return id;
+        }
+        let mut names = self.family_names.borrow_mut();
+        let id = names.len() as u32;
+        names.push(key.clone());
+        self.family_ids.borrow_mut().insert(key, id);
+        id
+    }
+
+    fn family_name_of(&self, id: u32) -> Option<String> {
+        self.family_names.borrow().get(id as usize).cloned()
+    }
+
+    /// Resolve a CSS `font-family` list to a `FontFamily` we can load: the first entry that
+    /// is a generic keyword, an installed/`@font-face` face by that exact name, or a known
+    /// named→generic mapping (Courier→mono, Times→serif). Defaults to sans-serif.
+    pub fn resolve_family(&self, names: &[String]) -> FontFamily {
+        for raw in names {
+            let n = raw.trim().trim_matches(['"', '\'']).to_ascii_lowercase();
+            match n.as_str() {
+                "sans-serif" | "system-ui" | "ui-sans-serif" | "-apple-system"
+                | "blinkmacsystemfont" => return FontFamily::SansSerif,
+                "serif" | "ui-serif" | "cursive" | "fantasy" => return FontFamily::Serif,
+                "monospace" | "ui-monospace" => return FontFamily::Monospace,
+                "" => continue,
+                _ => {
+                    // An @font-face-registered family wins under its CSS name.
+                    if self.webfonts.borrow().contains_key(&n) {
+                        return FontFamily::Named(self.intern_family(&n));
+                    }
+                    // A named family: use it only if fontdb actually has a face whose family
+                    // name matches (so unknown names fall through to hints / next entry).
+                    let q = fontdb::Query {
+                        families: &[fontdb::Family::Name(&n)],
+                        weight: fontdb::Weight::NORMAL,
+                        stretch: fontdb::Stretch::Normal,
+                        style: fontdb::Style::Normal,
+                    };
+                    let db = self.db.borrow();
+                    let matched = db.query(&q).is_some_and(|id| {
+                        db.face(id).is_some_and(|f| {
+                            f.families.iter().any(|(fam, _)| fam.eq_ignore_ascii_case(&n))
+                        })
+                    });
+                    if matched {
+                        return FontFamily::Named(self.intern_family(&n));
+                    }
+                    if n.contains("mono") || n.contains("courier") || n.contains("consol") {
+                        return FontFamily::Monospace;
+                    }
+                    if n.contains("times") || n.contains("georgia") || n.contains("serif")
+                        || n.contains("garamond") || n.contains("palatino")
+                    {
+                        return FontFamily::Serif;
+                    }
+                }
+            }
+        }
+        FontFamily::SansSerif
+    }
+
     /// Resolve the fontdb face id for `key` (specific query, else any face).
     fn face_id(&self, key: FontKey) -> Option<fontdb::ID> {
+        let named = match key.family {
+            FontFamily::Named(id) => self.family_name_of(id),
+            _ => None,
+        };
+        // An @font-face family resolves directly to its registered face ids (bypassing the
+        // internal-name query), picking the bold/italic variant when present.
+        if let Some(n) = &named {
+            if let Some(ids) = self.webfonts.borrow().get(n) {
+                if let Some(&id) = ids.iter().find(|&&id| {
+                    self.db.borrow().face(id).is_some_and(|f| {
+                        (f.weight == fontdb::Weight::BOLD) == key.bold
+                            && (f.style != fontdb::Style::Normal) == key.italic
+                    })
+                }) {
+                    return Some(id);
+                }
+                return ids.first().copied();
+            }
+        }
         let family = match key.family {
             FontFamily::SansSerif => fontdb::Family::SansSerif,
             FontFamily::Serif => fontdb::Family::Serif,
             FontFamily::Monospace => fontdb::Family::Monospace,
+            FontFamily::Named(_) => match &named {
+                Some(n) => fontdb::Family::Name(n),
+                None => fontdb::Family::SansSerif,
+            },
         };
         let query = fontdb::Query {
             families: &[family, fontdb::Family::SansSerif],
@@ -231,14 +358,14 @@ impl FontContext {
                 fontdb::Style::Normal
             },
         };
-        self.db
+        self.db.borrow()
             .query(&query)
-            .or_else(|| self.db.faces().next().map(|f| f.id))
+            .or_else(|| self.db.borrow().faces().next().map(|f| f.id))
     }
 
     fn load(&self, key: FontKey) -> Option<Rc<fontdue::Font>> {
         let id = self.face_id(key)?;
-        let font = self.db.with_face_data(id, |data, index| {
+        let font = self.db.borrow().with_face_data(id, |data, index| {
             let settings = fontdue::FontSettings {
                 collection_index: index,
                 ..fontdue::FontSettings::default()
@@ -253,7 +380,7 @@ impl FontContext {
         if let Some(&fid) = self.face_by_dbid.borrow().get(&dbid) {
             return Some(fid);
         }
-        let fd = self.db.with_face_data(dbid, |data, index| {
+        let fd = self.db.borrow().with_face_data(dbid, |data, index| {
             Rc::new(FaceData {
                 data: data.to_vec(),
                 index,
@@ -293,7 +420,8 @@ impl FontContext {
                 stretch: fontdb::Stretch::Normal,
                 style: fontdb::Style::Normal,
             };
-            if let Some(fid) = self.db.query(&q).and_then(|id| self.intern(id)) {
+            let found = self.db.borrow().query(&q);
+            if let Some(fid) = found.and_then(|id| self.intern(id)) {
                 if !out.contains(&fid) {
                     out.push(fid);
                 }

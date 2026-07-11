@@ -285,7 +285,9 @@ pub struct ComputedStyle {
     pub background_color: Option<Rgba>,
     pub font_size: f32,
     pub font_weight: u16,
-    pub font_family: GenericFamily,
+    /// The `font-family` list (names in priority order, lowercased; generic keywords kept
+    /// literally, e.g. `"sans-serif"`). Resolved to a concrete face by the text layer.
+    pub font_family: Vec<String>,
     pub italic: bool,
     pub line_height: f32,
     pub text_align: TextAlign,
@@ -360,7 +362,7 @@ impl ComputedStyle {
             background_color: None,
             font_size: 16.0,
             font_weight: 400,
-            font_family: GenericFamily::SansSerif,
+            font_family: vec!["sans-serif".to_string()],
             italic: false,
             line_height: 16.0 * 1.2,
             text_align: TextAlign::Left,
@@ -411,7 +413,7 @@ impl ComputedStyle {
         s.color = parent.color;
         s.font_size = parent.font_size;
         s.font_weight = parent.font_weight;
-        s.font_family = parent.font_family;
+        s.font_family = parent.font_family.clone();
         s.italic = parent.italic;
         s.line_height = parent.line_height;
         s.text_align = parent.text_align;
@@ -911,6 +913,15 @@ struct Rule {
     declarations: Vec<Declaration>,
 }
 
+/// An `@font-face` rule: the family name it defines and its candidate source URLs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FontFace {
+    /// `font-family` (lowercased, dequoted) — the name author CSS references.
+    pub family: String,
+    /// `src` `url(...)` candidates, in order.
+    pub srcs: Vec<String>,
+}
+
 /// A parsed stylesheet (subset). Build one with [`Stylesheet::parse`].
 #[derive(Clone, Debug, Default)]
 pub struct Stylesheet {
@@ -918,6 +929,8 @@ pub struct Stylesheet {
     /// The original CSS source, retained so the Stylo engine can re-parse it with
     /// Stylo's own (spec-complete) parser. Empty for programmatically-built sheets.
     source: String,
+    /// `@font-face` rules captured during parse (for web-font loading).
+    font_faces: Vec<FontFace>,
 }
 
 impl Stylesheet {
@@ -925,6 +938,42 @@ impl Stylesheet {
     pub fn source(&self) -> &str {
         &self.source
     }
+
+    /// The `@font-face` rules this sheet declares.
+    pub fn font_faces(&self) -> &[FontFace] {
+        &self.font_faces
+    }
+}
+
+/// Parse an `@font-face` block body into a [`FontFace`] (`family` + `src` urls).
+fn parse_font_face_block(block: &str) -> Option<FontFace> {
+    let mut family = None;
+    let mut srcs = Vec::new();
+    for d in parse_declarations(block) {
+        match d.name.as_str() {
+            "font-family" => {
+                family = Some(d.value.trim().trim_matches(['"', '\'']).to_ascii_lowercase())
+            }
+            "src" => {
+                let mut rest = d.value.as_str();
+                while let Some(p) = rest.find("url(") {
+                    let after = &rest[p + 4..];
+                    if let Some(close) = after.find(')') {
+                        let url = after[..close].trim().trim_matches(['"', '\'']).to_string();
+                        if !url.is_empty() {
+                            srcs.push(url);
+                        }
+                        rest = &after[close + 1..];
+                    } else {
+                        break;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    let family = family.filter(|f| !f.is_empty())?;
+    (!srcs.is_empty()).then_some(FontFace { family, srcs })
 }
 
 impl Stylesheet {
@@ -934,6 +983,7 @@ impl Stylesheet {
     pub fn parse(src: &str) -> Stylesheet {
         let src = strip_comments(src);
         let mut rules = Vec::new();
+        let mut font_faces = Vec::new();
         let bytes = src.as_bytes();
         let mut i = 0;
         while i < bytes.len() {
@@ -943,9 +993,19 @@ impl Stylesheet {
             if i >= bytes.len() {
                 break;
             }
-            // Skip @-rules (media/font-face/etc.) — subset does not handle them.
+            // @-rules: capture @font-face (for web fonts); skip the rest of the subset.
             if bytes[i] == b'@' {
-                i = skip_at_rule(&src, i);
+                let end = skip_at_rule(&src, i);
+                let rest = &src[i..];
+                if rest.len() >= 10 && rest[..10].eq_ignore_ascii_case("@font-face") {
+                    if let Some(open) = rest.find('{') {
+                        let block = &src[i + open + 1..end.saturating_sub(1)];
+                        if let Some(ff) = parse_font_face_block(block) {
+                            font_faces.push(ff);
+                        }
+                    }
+                }
+                i = end;
                 continue;
             }
             // Read up to the opening brace: the selector list.
@@ -982,6 +1042,7 @@ impl Stylesheet {
         Stylesheet {
             rules,
             source: src,
+            font_faces,
         }
     }
 }
@@ -1630,7 +1691,7 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
     }
     // UA default: monospace for the code/teletype families.
     if matches!(tag, "pre" | "code" | "kbd" | "samp" | "tt" | "var") {
-        s.font_family = GenericFamily::Monospace;
+        s.font_family = vec!["monospace".to_string()];
     }
     if matches!(tag, "ul" | "ol") {
         s.padding.left = Dim::Px(40.0);
@@ -1715,8 +1776,9 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         }
         "font-style" => s.italic = v == "italic" || v == "oblique",
         "font-family" => {
-            if let Some(f) = parse_font_family(v) {
-                s.font_family = f;
+            let list = parse_font_family(v);
+            if !list.is_empty() {
+                s.font_family = list;
             }
         }
         "line-height" => {
@@ -1985,38 +2047,14 @@ fn border_len(tok: &str, fs: f32) -> f32 {
 /// named family mapped to its generic (so `"Courier New"` → monospace, `Georgia` → serif).
 /// Named families we don't know are skipped (we can't load them), falling through to the
 /// next candidate; `None` if nothing is recognized (caller keeps the inherited family).
-fn parse_font_family(v: &str) -> Option<GenericFamily> {
-    for raw in v.split(',') {
-        let t = raw.trim().trim_matches(['"', '\'']).to_ascii_lowercase();
-        let g = match t.as_str() {
-            "serif" | "cursive" | "fantasy" | "ui-serif" => Some(GenericFamily::Serif),
-            "sans-serif" | "system-ui" | "ui-sans-serif" | "-apple-system" | "blinkmacsystemfont" => {
-                Some(GenericFamily::SansSerif)
-            }
-            "monospace" | "ui-monospace" => Some(GenericFamily::Monospace),
-            named => {
-                // Map common named families to their generic so real pages get the right
-                // shape even though we only load generics.
-                if named.contains("mono") || named.contains("courier") || named.contains("consol")
-                    || named.contains("menlo") || named.contains("code") || named.contains("merc")
-                {
-                    Some(GenericFamily::Monospace)
-                } else if named.contains("times") || named.contains("georgia")
-                    || named.contains("garamond") || named.contains("cambria")
-                    || named.contains("serif") || named.contains("minion")
-                    || named.contains("book antiqua") || named.contains("palatino")
-                {
-                    Some(GenericFamily::Serif)
-                } else {
-                    None // unknown named font — try the next candidate
-                }
-            }
-        };
-        if g.is_some() {
-            return g;
-        }
-    }
-    None
+/// Parse a `font-family` value into the priority list of family names (lowercased,
+/// dequoted). Generic keywords are kept literally (e.g. `"sans-serif"`); named families
+/// are preserved so the text layer can resolve them to installed / `@font-face` faces.
+fn parse_font_family(v: &str) -> Vec<String> {
+    v.split(',')
+        .map(|raw| raw.trim().trim_matches(['"', '\'']).to_ascii_lowercase())
+        .filter(|s| !s.is_empty())
+        .collect()
 }
 
 /// Parse the `border`/`border-<side>` shorthand into an optional width and color. The line
@@ -2692,26 +2730,25 @@ mod shadow_scoping_tests {
     #[test]
     fn font_family_resolves_generics_named_and_ua() {
         // Generic keyword after an unavailable named font falls through to the generic.
-        assert_eq!(parse_font_family("Arial, sans-serif"), Some(GenericFamily::SansSerif));
-        assert_eq!(parse_font_family("Georgia, serif"), Some(GenericFamily::Serif));
-        assert_eq!(parse_font_family("'Courier New', monospace"), Some(GenericFamily::Monospace));
+        assert_eq!(parse_font_family("Arial, sans-serif"), vec!["arial", "sans-serif"]);
+        assert_eq!(parse_font_family("Georgia, serif"), vec!["georgia", "serif"]);
+        assert_eq!(parse_font_family("'Courier New', monospace"), vec!["courier new", "monospace"]);
         // Named families we know map to their generic even without a following keyword.
-        assert_eq!(parse_font_family("Times New Roman"), Some(GenericFamily::Serif));
-        assert_eq!(parse_font_family("Menlo"), Some(GenericFamily::Monospace));
-        // Wholly-unknown named font → None (caller keeps the inherited family).
-        assert_eq!(parse_font_family("Wingdings"), None);
+        // Named families are preserved (the text layer resolves them).
+        assert_eq!(parse_font_family("Times New Roman"), vec!["times new roman"]);
+        assert_eq!(parse_font_family("Menlo, monospace"), vec!["menlo", "monospace"]);
 
-        // Cascade: an author family applies and is inherited; UA gives <code> monospace.
+        // Cascade: an author family list applies and is inherited; UA gives <code> monospace.
         let (dom, map) = cascade_of(
-            r#"<div style="font-family:monospace">a<code>b</code></div>"#,
+            r#"<div style="font-family:'MyFont', monospace">a<code>b</code></div>"#,
         );
         let div = dom.find_first("div").unwrap();
-        assert_eq!(map[&div].font_family, GenericFamily::Monospace);
-        assert_eq!(map[&dom.find_first("code").unwrap()].font_family, GenericFamily::Monospace);
+        assert_eq!(map[&div].font_family, vec!["myfont", "monospace"]);
+        assert_eq!(map[&dom.find_first("code").unwrap()].font_family, vec!["monospace"]);
 
         // A bare <pre> is monospace by UA default even without an author rule.
         let (dom, map) = cascade_of("<pre>x</pre>");
-        assert_eq!(map[&dom.find_first("pre").unwrap()].font_family, GenericFamily::Monospace);
+        assert_eq!(map[&dom.find_first("pre").unwrap()].font_family, vec!["monospace"]);
     }
 
     #[test]

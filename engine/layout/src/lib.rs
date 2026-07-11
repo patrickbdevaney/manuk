@@ -504,14 +504,12 @@ fn is_rendered(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
     }
 }
 
-fn text_style(cs: &ComputedStyle) -> TextStyle {
+fn text_style(cs: &ComputedStyle, fonts: &FontContext) -> TextStyle {
     TextStyle {
         font_key: FontKey {
-            family: match cs.font_family {
-                manuk_css::GenericFamily::SansSerif => FontFamily::SansSerif,
-                manuk_css::GenericFamily::Serif => FontFamily::Serif,
-                manuk_css::GenericFamily::Monospace => FontFamily::Monospace,
-            },
+            // Resolve the CSS font-family list to a concrete face (installed or
+            // `@font-face`-registered), falling back through generics.
+            family: fonts.resolve_family(&cs.font_family),
             bold: cs.font_weight >= 600,
             italic: cs.italic,
         },
@@ -954,7 +952,7 @@ impl Ctx<'_> {
         // Form controls render their *value*/label as synthetic text (an `<input>` has no
         // child nodes; a `<button>` uses its real children so it is not handled here).
         if let Some(text) = form_control_text(self.dom, node) {
-            let style = text_style(&self.styles[&node]);
+            let style = text_style(&self.styles[&node], self.fonts);
             if text.is_empty() {
                 // An empty field still occupies one line's height.
                 return (BoxContent::Inline(vec![]), style.line_height);
@@ -1986,7 +1984,7 @@ impl Ctx<'_> {
         match self.dom.data(node) {
             NodeData::Text(t) => {
                 let cs = &self.styles[&node];
-                let style = text_style(cs);
+                let style = text_style(cs, self.fonts);
                 // `white-space` is inherited, so the text node carries it. `nowrap` and `pre`
                 // both suppress wrapping between words.
                 let no_wrap = matches!(cs.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre);

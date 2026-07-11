@@ -88,7 +88,7 @@ fn rgba_css(c: &manuk_css::Rgba) -> String {
 /// Serialize a `ComputedStyle` to a JS object-literal source (camelCase CSS properties →
 /// CSS value strings) for `getComputedStyle`.
 fn computed_style_js(cs: &manuk_css::ComputedStyle) -> String {
-    use manuk_css::{Display, GenericFamily, Overflow, Position, TextAlign};
+    use manuk_css::{Display, Overflow, Position, TextAlign};
     let display = match cs.display {
         Display::Block => "block",
         Display::Inline => "inline",
@@ -117,11 +117,8 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle) -> String {
         TextAlign::Right => "right",
         TextAlign::Justify => "justify",
     };
-    let family = match cs.font_family {
-        GenericFamily::SansSerif => "sans-serif",
-        GenericFamily::Serif => "serif",
-        GenericFamily::Monospace => "monospace",
-    };
+    // The computed `font-family` list, joined (its first entry is the primary).
+    let family = cs.font_family.join(", ");
     let overflow = match cs.overflow {
         Overflow::Visible => "visible",
         Overflow::Hidden => "hidden",
@@ -147,7 +144,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle) -> String {
         q(&format!("{}px", cs.font_size)),
         q(&cs.font_weight.to_string()),
         q(if cs.italic { "italic" } else { "normal" }),
-        q(family),
+        q(&family),
         q(&format!("{}px", cs.line_height)),
         q(text_align),
         q(display),
