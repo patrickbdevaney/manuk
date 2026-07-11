@@ -154,6 +154,75 @@ pub fn submission_url(dom: &Dom, form: NodeId, base: &str) -> Result<String, Sub
     Ok(url.to_string())
 }
 
+/// A ready-to-send `multipart/form-data` POST built from a form + the user's chosen files.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MultipartPost {
+    /// Absolute action URL (resolved against the page).
+    pub url: String,
+    /// `multipart/form-data; boundary=…` for the `Content-Type` header.
+    pub content_type: String,
+    /// The encoded request body.
+    pub body: Vec<u8>,
+}
+
+/// The names of `type=file` controls in `form` that have a `name`, in document order — the inputs
+/// a multipart submission expects file bytes for.
+pub fn file_inputs(dom: &Dom, form: NodeId) -> Vec<String> {
+    let mut out = Vec::new();
+    for n in dom.descendants(form) {
+        let Some(el) = dom.element(n) else { continue };
+        if el.name == "input" && input_type(dom, n) == "file" {
+            if let Some(name) = el.attr("name").filter(|s| !s.is_empty()) {
+                out.push(name.to_string());
+            }
+        }
+    }
+    out
+}
+
+/// Build a `multipart/form-data` **POST** for `form` (L05 uploads): the successful non-file
+/// controls (via [`fields`]) become plain parts, and each supplied
+/// `(name, filename, content_type, bytes)` becomes a file part. The action resolves against
+/// `base`; `boundary` is caller-supplied so the bytes are deterministic. Requires `method=post`
+/// (a GET file upload is not a thing). The shell obtains the file bytes from the OS picker; a
+/// headless caller supplies them directly.
+pub fn multipart_submission(
+    dom: &Dom,
+    form: NodeId,
+    base: &str,
+    files: &[(String, String, String, Vec<u8>)],
+    boundary: &str,
+) -> Result<MultipartPost, SubmitError> {
+    let el = dom.element(form).ok_or(SubmitError::NoForm)?;
+    let method = el.attr("method").unwrap_or("get").to_ascii_lowercase();
+    if method != "post" {
+        return Err(SubmitError::BadAction("multipart upload requires method=post".to_string()));
+    }
+    let action = el.attr("action").filter(|a| !a.trim().is_empty());
+    let base_url = Url::parse(base).map_err(|_| SubmitError::BadAction(base.to_string()))?;
+    let url = match action {
+        Some(a) => base_url
+            .join(a.trim())
+            .map_err(|_| SubmitError::BadAction(a.to_string()))?,
+        None => base_url,
+    };
+
+    let mut parts: Vec<manuk_net::multipart::Part> = fields(dom, form)
+        .into_iter()
+        .map(|(k, v)| manuk_net::multipart::Part::field(k, v))
+        .collect();
+    for (name, filename, ct, bytes) in files {
+        parts.push(manuk_net::multipart::Part::file(
+            name.clone(),
+            filename.clone(),
+            ct.clone(),
+            bytes.clone(),
+        ));
+    }
+    let (content_type, body) = manuk_net::multipart::encode(&parts, boundary);
+    Ok(MultipartPost { url: url.to_string(), content_type, body })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -253,5 +322,40 @@ mod tests {
         // A node outside any form falls back to the document's first form.
         let p = dom.find_first("p").unwrap();
         assert_eq!(owning_form(&dom, p), Some(form));
+    }
+
+    #[test]
+    fn file_inputs_lists_named_file_controls() {
+        let dom = dom_of(
+            r#"<form><input type="file" name="a"><input type="file"><input name="b"><input type="file" name="c"></form>"#,
+        );
+        let form = dom.find_first("form").unwrap();
+        assert_eq!(file_inputs(&dom, form), vec!["a".to_string(), "c".to_string()]);
+    }
+
+    #[test]
+    fn multipart_post_builds_body_with_fields_and_file() {
+        let dom = dom_of(
+            r#"<form method="post" action="/upload"><input name="title" value="hi"><input type="file" name="doc"></form>"#,
+        );
+        let form = dom.find_first("form").unwrap();
+        let files = vec![("doc".to_string(), "a.txt".to_string(), "text/plain".to_string(), b"DATA".to_vec())];
+        let post = multipart_submission(&dom, form, "https://ex.test/page", &files, "BOUND").expect("post");
+        assert_eq!(post.url, "https://ex.test/upload");
+        assert_eq!(post.content_type, "multipart/form-data; boundary=BOUND");
+        let s = String::from_utf8(post.body).unwrap();
+        assert!(s.contains("name=\"title\"\r\n\r\nhi\r\n"), "text field part: {s}");
+        assert!(
+            s.contains("name=\"doc\"; filename=\"a.txt\"\r\nContent-Type: text/plain\r\n\r\nDATA\r\n"),
+            "file part: {s}"
+        );
+        assert!(s.ends_with("--BOUND--\r\n"), "closing delimiter");
+    }
+
+    #[test]
+    fn multipart_requires_post() {
+        let dom = dom_of(r#"<form action="/x"><input type="file" name="f"></form>"#);
+        let form = dom.find_first("form").unwrap();
+        assert!(multipart_submission(&dom, form, "https://ex.test/", &[], "B").is_err());
     }
 }

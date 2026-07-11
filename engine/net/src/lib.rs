@@ -38,6 +38,8 @@ pub mod cookies;
 
 pub mod downloads;
 
+pub mod multipart;
+
 /// E7 storage layer — profile/container/site-partitioned cookies, localStorage, history.
 pub mod storage;
 
