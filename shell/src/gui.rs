@@ -30,6 +30,35 @@ use manuk_agent::Handoff;
 use manuk_compositor::TabId;
 use manuk_page::{fetch_html, Page};
 
+/// A hamburger-menu action. The menu is a fixed list of these; [`App::run_menu_action`] maps
+/// each to the same operation its keyboard shortcut performs.
+#[derive(Clone, Copy)]
+enum MenuAction {
+    NewTab,
+    DuplicateTab,
+    Bookmark,
+    History,
+    Find,
+    ZoomIn,
+    ZoomOut,
+    ZoomReset,
+}
+
+/// The hamburger menu's items, top to bottom.
+const MENU: &[(&str, MenuAction)] = &[
+    ("New tab", MenuAction::NewTab),
+    ("Duplicate tab", MenuAction::DuplicateTab),
+    ("Bookmark this page", MenuAction::Bookmark),
+    ("History", MenuAction::History),
+    ("Find in page", MenuAction::Find),
+    ("Zoom in", MenuAction::ZoomIn),
+    ("Zoom out", MenuAction::ZoomOut),
+    ("Reset zoom", MenuAction::ZoomReset),
+];
+const MENU_W: f32 = 210.0;
+const MENU_ITEM_H: f32 = 30.0;
+const SUGGEST_ITEM_H: f32 = 28.0;
+
 /// Height of the toolbar band (nav buttons + address field), in physical px.
 const CHROME_HEIGHT: f32 = 44.0;
 /// Height of the tab strip drawn above the toolbar.
@@ -154,6 +183,8 @@ struct App {
     /// tracked follow-up.
     omnibox_open: bool,
     omnibox_input: String,
+    /// Hamburger menu open state (the settings/actions dropdown).
+    menu_open: bool,
 
     // ---- §5 session persistence ----
     /// The on-disk tab store (session + collections), outside the repo. `None` if the state
@@ -265,6 +296,7 @@ impl App {
             find_session: FindSession::default(),
             omnibox_open: false,
             omnibox_input: String::new(),
+            menu_open: false,
             store,
             agent_open: false,
             agent_input: String::new(),
@@ -279,6 +311,28 @@ impl App {
     /// else follow a link under it on the page.
     fn handle_click(&mut self) {
         let (cx, cy) = self.cursor;
+        let w = self.viewport.width;
+
+        // Open overlays intercept the click first.
+        if self.menu_open {
+            if let Some(action) = self.menu_item_at(cx, cy, w) {
+                self.menu_open = false;
+                self.run_menu_action(action);
+            } else {
+                self.menu_open = false;
+            }
+            self.rerender();
+            return;
+        }
+        if self.omnibox_open {
+            if let Some(url) = self.suggestion_at(cx, cy, w) {
+                self.omnibox_open = false;
+                self.omnibox_input.clear();
+                self.goto(&url);
+                return;
+            }
+        }
+
         if cy < CHROME_TOP {
             if cy < TAB_STRIP_H {
                 self.handle_tab_strip_click(cx);
@@ -467,6 +521,12 @@ impl App {
 
     /// A click within the chrome band: back / forward / reload buttons, or the address field.
     fn handle_chrome_click(&mut self, x: f32) {
+        // Hamburger menu at the right edge.
+        if x >= self.viewport.width - 40.0 {
+            self.menu_open = !self.menu_open;
+            self.rerender();
+            return;
+        }
         if x < 30.0 {
             if let Some(u) = self.history.back().map(str::to_string) {
                 // R2: instant restore from bfcache, else a fresh load.
@@ -599,6 +659,7 @@ impl App {
 
         self.draw_focus_caret(&mut canvas);
         self.draw_chrome(&mut canvas, w);
+        self.draw_overlays(&mut canvas, w as f32);
 
         // #2: upload only the rows that changed since last frame (exact row diff), so a
         // small update touches a small band and an unchanged frame uploads nothing.
@@ -777,6 +838,129 @@ impl App {
             for (i, sug) in s.iter().enumerate() {
                 tracing::info!("omnibox {}: [{:?}] {} — {}", i + 1, sug.source, sug.url, sug.title);
             }
+        }
+    }
+
+    /// Suggestions to show under the omnibox. With text typed, the ranked matches; with the
+    /// box empty (e.g. opened via the History menu item), the most recent history, newest
+    /// first — so the dropdown doubles as an accessible history list.
+    fn current_suggestions(&self) -> Vec<chrome::Suggestion> {
+        if self.omnibox_input.trim().is_empty() {
+            self.history
+                .entries()
+                .iter()
+                .rev()
+                .take(8)
+                .map(|u| chrome::Suggestion {
+                    url: u.clone(),
+                    title: u.clone(),
+                    source: chrome::SuggestionSource::History,
+                })
+                .collect()
+        } else {
+            chrome::suggestions(&self.omnibox_input, self.history.entries(), &self.bookmarks, 8)
+        }
+    }
+
+    /// Draw the open overlays (omnibox suggestions dropdown, hamburger menu) above the page.
+    fn draw_overlays(&self, canvas: &mut Canvas, w: f32) {
+        const WHITE: Rgba = Rgba { r: 255, g: 255, b: 255, a: 255 };
+        const BORDER: Rgba = Rgba { r: 205, g: 205, b: 210, a: 255 };
+        const INK: Rgba = Rgba { r: 40, g: 40, b: 45, a: 255 };
+        const HINT: Rgba = Rgba { r: 130, g: 130, b: 138, a: 255 };
+        let font = |size: f32, color: Rgba| TextStyle {
+            font_key: FontKey { family: FontFamily::SansSerif, bold: false, italic: false },
+            font_size: size,
+            color,
+            line_height: size + 3.0,
+        };
+
+        if self.omnibox_open {
+            let sugg = self.current_suggestions();
+            if !sugg.is_empty() {
+                let x = 100.0;
+                let iw = (w - x - 44.0).max(20.0);
+                let h = sugg.len() as f32 * SUGGEST_ITEM_H + 4.0;
+                canvas.fill_rect(x, CHROME_TOP, iw, h, WHITE);
+                canvas.stroke_rect(x, CHROME_TOP, iw, h, BORDER, 1.0);
+                for (i, s) in sugg.iter().enumerate() {
+                    let y = CHROME_TOP + 2.0 + i as f32 * SUGGEST_ITEM_H;
+                    canvas.draw_text(&self.fonts, x + 12.0, y + 19.0, &clip_text(&s.title, iw * 0.42), &font(14.0, INK));
+                    canvas.draw_text(&self.fonts, x + iw * 0.45, y + 19.0, &clip_text(&s.url, iw * 0.5), &font(13.0, HINT));
+                }
+            }
+        }
+
+        if self.menu_open {
+            let x = (w - MENU_W - 6.0).max(0.0);
+            let h = MENU.len() as f32 * MENU_ITEM_H + 8.0;
+            canvas.fill_rect(x, CHROME_TOP, MENU_W, h, WHITE);
+            canvas.stroke_rect(x, CHROME_TOP, MENU_W, h, BORDER, 1.0);
+            for (i, (label, _)) in MENU.iter().enumerate() {
+                let y = CHROME_TOP + 4.0 + i as f32 * MENU_ITEM_H;
+                canvas.draw_text(&self.fonts, x + 16.0, y + MENU_ITEM_H / 2.0 + 4.0, label, &font(14.0, INK));
+            }
+        }
+    }
+
+    /// Hit-test a click against the hamburger menu items. Returns the action, or `None` if the
+    /// click is outside the menu panel (which the caller treats as "close the menu").
+    fn menu_item_at(&self, cx: f32, cy: f32, w: f32) -> Option<MenuAction> {
+        let x = (w - MENU_W - 6.0).max(0.0);
+        let h = MENU.len() as f32 * MENU_ITEM_H + 8.0;
+        if cx < x || cx > x + MENU_W || cy < CHROME_TOP || cy > CHROME_TOP + h {
+            return None;
+        }
+        let idx = ((cy - CHROME_TOP - 4.0) / MENU_ITEM_H).floor();
+        if idx < 0.0 {
+            return None;
+        }
+        MENU.get(idx as usize).map(|(_, a)| *a)
+    }
+
+    /// Hit-test a click against the suggestions dropdown. Returns the URL to navigate to.
+    fn suggestion_at(&self, cx: f32, cy: f32, w: f32) -> Option<String> {
+        let sugg = self.current_suggestions();
+        if sugg.is_empty() {
+            return None;
+        }
+        let x = 100.0;
+        let iw = (w - x - 44.0).max(20.0);
+        let h = sugg.len() as f32 * SUGGEST_ITEM_H + 4.0;
+        if cx < x || cx > x + iw || cy < CHROME_TOP || cy > CHROME_TOP + h {
+            return None;
+        }
+        let idx = ((cy - CHROME_TOP - 2.0) / SUGGEST_ITEM_H).floor();
+        if idx < 0.0 {
+            return None;
+        }
+        sugg.get(idx as usize).map(|s| s.url.clone())
+    }
+
+    /// Run a hamburger-menu action (the same operations as the keyboard shortcuts).
+    fn run_menu_action(&mut self, action: MenuAction) {
+        match action {
+            MenuAction::NewTab => self.new_tab(),
+            MenuAction::DuplicateTab => self.duplicate_tab(self.tab_id),
+            MenuAction::Bookmark => {
+                let title = self.page.as_ref().map(|p| p.title.clone()).unwrap_or_default();
+                let url = self.url.clone();
+                let on = self.bookmarks.toggle(&url, &title);
+                tracing::info!(bookmarked = on, url = %url, "bookmark toggled (menu)");
+            }
+            MenuAction::History => {
+                // Open the omnibox empty so the dropdown shows recent history.
+                self.omnibox_open = true;
+                self.omnibox_input.clear();
+            }
+            MenuAction::Find => {
+                self.find_open = true;
+                self.find_query.clear();
+                self.find_session = FindSession::default();
+            }
+            MenuAction::ZoomIn => self.apply_zoom(chrome::zoom_in(self.zoom)),
+            MenuAction::ZoomOut => self.apply_zoom(chrome::zoom_out(self.zoom)),
+            MenuAction::ZoomReset => self.apply_zoom(chrome::zoom_reset()),
         }
     }
 
