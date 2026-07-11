@@ -385,6 +385,21 @@ pub fn load_document(
 
 /// Dispatch a trusted `ty` event to `node` in `ctx`'s document. Returns `true` if the engine
 /// should still perform the element's default action (no listener called `preventDefault`).
+/// Evaluate a dynamically fetched script in an existing page context.
+#[cfg(feature = "_sm")]
+pub fn eval_in_page(
+    ctx: &PageContext,
+    dom: &mut manuk_dom::Dom,
+    src: &str,
+    layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<(), JsError> {
+    with_runtime(|rt| {
+        ctx.eval(rt, dom, src, layout, styles)
+            .map_err(|message| JsError { message })
+    })
+}
+
 #[cfg(feature = "_sm")]
 pub fn dispatch_event(
     ctx: &PageContext,

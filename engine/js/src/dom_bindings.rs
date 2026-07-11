@@ -69,6 +69,24 @@ thread_local! {
 
     /// The document's URL — the origin `document.cookie` reads and writes against.
     static DOC_URL: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+
+    /// **The** live `Dom` for the current re-entry into JS.
+    ///
+    /// Every reflector used to cache its own `*mut Dom` in a reserved slot. That pointer is stale
+    /// the moment it is written: `Page::from_dom` builds the JS context against a *local* `Dom`,
+    /// then moves that `Dom` into the returned `Page`. Every wrapper created at load time therefore
+    /// held a pointer to a struct that no longer exists — undefined behaviour that happened not to
+    /// crash until a dynamically loaded script called `document.getElementById` through the cached
+    /// document wrapper, and then it segfaulted.
+    ///
+    /// A reflector's *node id* is stable, so that stays in its slot. The arena pointer is not, so it
+    /// lives here instead — set once per entry (load / dispatch / eval), read by every binding.
+    static CURRENT_DOM: std::cell::Cell<*mut Dom> = const { std::cell::Cell::new(std::ptr::null_mut()) };
+}
+
+/// Point every DOM binding at `dom` for the duration of this re-entry into JS.
+pub(crate) fn set_current_dom(dom: *mut Dom) {
+    CURRENT_DOM.with(|c| c.set(dom));
 }
 
 /// A `Dim` as a CSS string.
@@ -227,12 +245,12 @@ unsafe fn wrap_cx(cx: *mut RawJSContext) -> JSContext {
 unsafe fn node_and_dom(obj: *mut JSObject) -> Option<(*mut Dom, NodeId)> {
     let mut ns = UndefinedValue();
     JS_GetReservedSlot(obj, SLOT_NODE, &mut ns);
-    let mut ds = UndefinedValue();
-    JS_GetReservedSlot(obj, SLOT_DOM, &mut ds);
     if !ns.is_int32() {
         return None;
     }
-    let dom = ds.to_private() as *mut Dom;
+    // The node id is stable and comes from the reflector. The arena pointer is NOT stable — see
+    // `CURRENT_DOM` — so it comes from the thread-local, which the current re-entry just set.
+    let dom = CURRENT_DOM.with(|c| c.get());
     if dom.is_null() {
         return None;
     }
@@ -502,6 +520,23 @@ unsafe fn define_members(
         prop(c"tagName", el_get_tag_name, None); // read-only
         prop(c"id", el_get_id, Some(el_set_id));
         prop(c"className", el_get_class_name, Some(el_set_class_name));
+        // Reflected content attributes. `createElement` → assign → `appendChild` is how the modern
+        // web builds elements; without reflection the element that reaches the tree is empty.
+        prop(c"href", el_get_href, Some(el_set_href));
+        prop(c"src", el_get_src, Some(el_set_src));
+        prop(c"rel", el_get_rel, Some(el_set_rel));
+        prop(c"type", el_get_type, Some(el_set_type));
+        prop(c"alt", el_get_alt, Some(el_set_alt));
+        prop(c"title", el_get_title, Some(el_set_title));
+        prop(c"name", el_get_name, Some(el_set_name));
+        prop(c"placeholder", el_get_placeholder, Some(el_set_placeholder));
+        prop(c"action", el_get_action, Some(el_set_action));
+        prop(c"method", el_get_method, Some(el_set_method));
+        prop(c"target", el_get_target, Some(el_set_target));
+        prop(c"content", el_get_content, Some(el_set_content));
+        prop(c"media", el_get_media, Some(el_set_media));
+        prop(c"srcset", el_get_srcset, Some(el_set_srcset));
+        prop(c"htmlFor", el_get_html_for, Some(el_set_html_for));
     }
 }
 
@@ -1241,6 +1276,95 @@ unsafe extern "C" fn host_storage(cx: *mut RawJSContext, argc: u32, vp: *mut Val
     true
 }
 
+/// Generate a **reflected content attribute** property: `el.rel`, `el.alt`, `el.title` … Each is
+/// just a view of the underlying attribute, in both directions.
+///
+/// Without these, `link.href = url` / `script.src = url` / `img.src = url` set a plain JS property
+/// on the wrapper object and touch nothing in the DOM. That is how the modern web builds elements —
+/// `createElement`, assign, `appendChild` — so the element that reaches the tree is empty. It is
+/// also how a page loads its own code-split CSS and JS at runtime.
+macro_rules! reflect_attr {
+    ($get:ident, $set:ident, $attr:literal) => {
+        unsafe extern "C" fn $get(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+            match this_node(vp) {
+                Some((dom, node)) => {
+                    let v = (*dom)
+                        .element(node)
+                        .and_then(|e| e.attr($attr))
+                        .unwrap_or("")
+                        .to_string();
+                    return_string(cx, vp, &v);
+                }
+                None => *vp = NullValue(),
+            }
+            true
+        }
+        unsafe extern "C" fn $set(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+            if let Some((dom, node)) = this_node(vp) {
+                let v = arg_string(cx, vp, argc, 0).unwrap_or_default();
+                (*dom).set_attr(node, $attr, v);
+            }
+            *vp = UndefinedValue();
+            true
+        }
+    };
+}
+
+/// As [`reflect_attr`], but the getter returns the URL **resolved against the document** — which is
+/// what `a.href` and `img.src` are specified to do (and what pages compare against). The setter
+/// stores whatever was given, exactly like `setAttribute`.
+macro_rules! reflect_url_attr {
+    ($get:ident, $set:ident, $attr:literal) => {
+        unsafe extern "C" fn $get(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+            match this_node(vp) {
+                Some((dom, node)) => {
+                    let raw = (*dom)
+                        .element(node)
+                        .and_then(|e| e.attr($attr))
+                        .unwrap_or("")
+                        .to_string();
+                    let out = if raw.is_empty() {
+                        String::new()
+                    } else {
+                        let base = DOC_URL.with(|u| u.borrow().clone());
+                        match url::Url::parse(&base).and_then(|b| b.join(&raw)) {
+                            Ok(u) => u.to_string(),
+                            Err(_) => raw,
+                        }
+                    };
+                    return_string(cx, vp, &out);
+                }
+                None => *vp = NullValue(),
+            }
+            true
+        }
+        unsafe extern "C" fn $set(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+            if let Some((dom, node)) = this_node(vp) {
+                let v = arg_string(cx, vp, argc, 0).unwrap_or_default();
+                (*dom).set_attr(node, $attr, v);
+            }
+            *vp = UndefinedValue();
+            true
+        }
+    };
+}
+
+reflect_url_attr!(el_get_href, el_set_href, "href");
+reflect_url_attr!(el_get_src, el_set_src, "src");
+reflect_attr!(el_get_rel, el_set_rel, "rel");
+reflect_attr!(el_get_type, el_set_type, "type");
+reflect_attr!(el_get_alt, el_set_alt, "alt");
+reflect_attr!(el_get_title, el_set_title, "title");
+reflect_attr!(el_get_name, el_set_name, "name");
+reflect_attr!(el_get_placeholder, el_set_placeholder, "placeholder");
+reflect_attr!(el_get_action, el_set_action, "action");
+reflect_attr!(el_get_method, el_set_method, "method");
+reflect_attr!(el_get_target, el_set_target, "target");
+reflect_attr!(el_get_content, el_set_content, "content");
+reflect_attr!(el_get_media, el_set_media, "media");
+reflect_attr!(el_get_srcset, el_set_srcset, "srcset");
+reflect_attr!(el_get_html_for, el_set_html_for, "for");
+
 /// `document.documentElement` → the `<html>` element.
 unsafe extern "C" fn doc_get_document_element(
     cx: *mut RawJSContext,
@@ -1361,6 +1485,7 @@ pub unsafe fn install(
     doc_url: &str,
 ) {
     DOC_URL.with(|u| *u.borrow_mut() = doc_url.to_string());
+    set_current_dom(dom);
     let root = (*dom).root();
     let doc_ptr = JS_NewObject(&mut wrap_cx(cx), &NODE_CLASS);
     rooted!(in(cx) let document = doc_ptr);
@@ -1606,6 +1731,38 @@ impl PageContext {
     /// microtasks/timers they queue. Returns `true` if the engine should still perform the
     /// element's **default action** (navigation, submit) — i.e. no listener called
     /// `preventDefault()`.
+    /// Evaluate `src` in **this page's** persistent global — the one its load-time scripts already
+    /// ran in — then pump the microtask/timer queue.
+    ///
+    /// This is how a script the page fetched *at runtime* executes. The modern web ships almost all
+    /// of its code that way: `createElement('script')` → set `src` → `appendChild`. Without it a
+    /// code-split app loads nothing but its loader, and Wikipedia's ResourceLoader — which embeds
+    /// every icon's CSS in a module payload — never delivers a single module.
+    pub fn eval(
+        &self,
+        runtime: &mut Runtime,
+        dom: &mut Dom,
+        src: &str,
+        layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    ) -> Result<(), String> {
+        LAYOUT_RECTS.with(|l| *l.borrow_mut() = layout.clone());
+        STYLES.with(|s| *s.borrow_mut() = styles.clone());
+        // The arena the bindings dereference must be the CURRENT one: the `Dom` this context was
+        // built against was moved into the `Page` the moment `from_dom` returned.
+        set_current_dom(dom as *mut Dom);
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
+        let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"dynamic.js".to_owned(), 1);
+        if evaluate_script(runtime.cx(), global.handle(), src, rval.handle_mut(), opts).is_err() {
+            tracing::warn!("a dynamically loaded <script> threw; continuing");
+        }
+        crate::event_loop::run_deferred(runtime, global.handle())?;
+        Ok(())
+    }
+
     pub fn dispatch(
         &self,
         runtime: &mut Runtime,
@@ -1617,6 +1774,7 @@ impl PageContext {
     ) -> Result<bool, String> {
         LAYOUT_RECTS.with(|l| *l.borrow_mut() = layout.clone());
         STYLES.with(|s| *s.borrow_mut() = styles.clone());
+        set_current_dom(dom as *mut Dom);
 
         let raw_cx = unsafe { runtime.cx().raw_cx() };
         rooted!(&in(runtime.cx()) let global = self.global.get());

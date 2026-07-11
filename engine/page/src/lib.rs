@@ -507,6 +507,25 @@ impl Page {
         page
     }
 
+    /// Everything a page needs *after* its document is parsed and its load-time scripts have run:
+    /// external CSS, the scripts those scripts asked for, images, and icon masks — in the order
+    /// each depends on the last. One call, so no caller can perform half of it.
+    #[cfg(feature = "spidermonkey")]
+    pub async fn finish_loading(&mut self, fonts: &FontContext, viewport_width: f32) {
+        self.fetch_and_apply_stylesheets(fonts, viewport_width).await;
+        self.fetch_and_run_dynamic_scripts(fonts, viewport_width, 4).await;
+        self.fetch_and_apply_images(fonts, viewport_width).await;
+        self.fetch_and_apply_masks().await;
+    }
+
+    /// Without SpiderMonkey there are no dynamic scripts to run.
+    #[cfg(not(feature = "spidermonkey"))]
+    pub async fn finish_loading(&mut self, fonts: &FontContext, viewport_width: f32) {
+        self.fetch_and_apply_stylesheets(fonts, viewport_width).await;
+        self.fetch_and_apply_images(fonts, viewport_width).await;
+        self.fetch_and_apply_masks().await;
+    }
+
     /// Fetch + decode this page's `<img>` resources and paint them. An image without an
     /// explicit width/height (attribute or CSS) is sized to its natural pixel dimensions;
     /// then the page is re-laid-out so the boxes are correct. Returns how many images
@@ -549,6 +568,83 @@ impl Page {
         self.images = images;
         self.relayout(fonts, viewport_width);
         count
+    }
+
+    /// **Dynamic script loading.** Fetch and run every `<script src>` the page added to its own DOM
+    /// *at runtime*, then let those scripts add more, up to `max_rounds`. Returns how many ran.
+    ///
+    /// This is not an edge case; it is how the modern web ships code. `createElement('script')` →
+    /// set `src` → `appendChild` is the shape of every code-split bundle, every lazy-loaded route,
+    /// and every module loader. Wikipedia's ResourceLoader embeds each icon's CSS inside a module
+    /// payload delivered exactly this way — so without it the page loads its loader and stops, and
+    /// the icons that never arrive paint as bare `background-color` squares.
+    ///
+    /// A script's `src` attribute is **removed** once it has run, which is both how a script is
+    /// marked as executed and how the load-time collector already distinguishes "inline" from
+    /// "external" — so a script can never run twice.
+    ///
+    /// Rounds are bounded: a loader that keeps appending scripts must terminate, and a page that
+    /// wants to spin is not entitled to spin the browser with it.
+    #[cfg(feature = "spidermonkey")]
+    pub async fn fetch_and_run_dynamic_scripts(
+        &mut self,
+        fonts: &FontContext,
+        viewport_width: f32,
+        max_rounds: usize,
+    ) -> usize {
+        let mut ran = 0usize;
+        for _ in 0..max_rounds {
+            let pending: Vec<(manuk_dom::NodeId, String)> = self
+                .dom
+                .descendants(self.dom.root())
+                .filter(|&n| self.dom.tag_name(n) == Some("script"))
+                .filter_map(|n| {
+                    let src = self.dom.element(n)?.attr("src")?.trim().to_string();
+                    (!src.is_empty()).then(|| (n, resolve_url(&self.final_url, &src)))
+                })
+                .collect();
+            if pending.is_empty() {
+                break;
+            }
+            let fetched = futures_util::future::join_all(pending.into_iter().map(
+                |(node, url)| async move {
+                    let text = manuk_net::fetch(&url).await.ok().map(|r| r.decoded_text());
+                    (node, text)
+                },
+            ))
+            .await;
+
+            let mut any = false;
+            for (node, text) in fetched {
+                // Mark it run *first*: a script that throws must not be retried forever.
+                self.dom.remove_attr(node, "src");
+                let Some(src) = text else { continue };
+                if src.trim().is_empty() {
+                    continue;
+                }
+                let Some(ctx) = &self.js else { continue };
+                let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+                    .root_box
+                    .node_rects(&self.dom)
+                    .into_iter()
+                    .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+                    .collect();
+                if let Err(e) = manuk_js::eval_in_page(ctx, &mut self.dom, &src, &rects, &self.styles)
+                {
+                    tracing::warn!("dynamic script: {e}");
+                }
+                ran += 1;
+                any = true;
+            }
+            if !any {
+                break;
+            }
+            // Those scripts may have injected <style>/<link> and mutated the tree — restyle before
+            // the next round so the next script sees the layout it actually caused.
+            self.fetch_and_apply_stylesheets(fonts, viewport_width).await;
+            self.fetch_and_apply_masks().await;
+        }
+        ran
     }
 
     /// The computed styles, keyed by node — the input to layout, and the thing to look at when a
@@ -1179,12 +1275,11 @@ impl Page {
         }
 
         let count = external.len();
-        if count > 0 {
-            self.apply_stylesheets(&external, fonts, viewport_width);
-        } else {
-            // Even with no external CSS, an inline @font-face may have registered a font.
-            self.relayout(fonts, viewport_width);
-        }
+        // Always re-cascade, even with no external CSS. Scripts add nodes (a module loader's
+        // `<script>`, a framework's fragment) and layout indexes the style map — a node the cascade
+        // has never seen is a node layout cannot lay out. Re-scanning the DOM for `<link>`s each
+        // time makes this idempotent: the external sheets are simply refetched from cache.
+        self.apply_stylesheets(&external, fonts, viewport_width);
         count
     }
 
@@ -2118,6 +2213,39 @@ mod js_interactive_tests {
             "null",
             "storage is partitioned by origin — storage-b must not see storage-a's key"
         );
+
+        // (18) **Property → attribute reflection.** `createElement` → assign → `appendChild` is how
+        // the modern web builds every element it did not ship in the HTML. Without reflection,
+        // `link.href = url` sets a plain JS property on the wrapper and touches nothing in the DOM,
+        // so the element that reaches the tree is empty — and a page can never load its own
+        // code-split CSS or JS.
+        let html18 = r#"<!doctype html><html><body><img id="i"><p id="o">?</p>
+            <script>
+              var im = document.getElementById('i');
+              im.src = 'x.png';
+              var a = document.createElement('a');
+              a.href = '/next';
+              a.rel = 'next';
+              document.body.appendChild(a);
+              document.getElementById('o').textContent =
+                im.getAttribute('src') + '|' + a.getAttribute('href') + '|' + a.rel + '|' + im.src;
+            </script></body></html>"#;
+        let page18 = Page::load(html18, "https://example.test/dir/page", &fonts, 800.0);
+        let r18 = page18.dom().root();
+        let o18 = manuk_css::query_selector_all(page18.dom(), r18, "#o")[0];
+        assert_eq!(
+            page18.dom().text_content(o18),
+            "x.png|/next|next|https://example.test/dir/x.png",
+            "assigning .src/.href/.rel must write the CONTENT ATTRIBUTE, and .src must read back \
+             resolved against the document"
+        );
+
+        // Tear SpiderMonkey down before this process exits, exactly as the shell and the harness do.
+        // Every page above is out of scope by now, so no rooted object outlives its runtime. Leaving
+        // the engine up means its C++ static destructors run at exit against a live context and
+        // abort — the test would pass and the process would still fail.
+        drop(page18);
+        manuk_js::shutdown();
     }
 }
 

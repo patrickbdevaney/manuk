@@ -177,7 +177,7 @@ fn run_render_cmd(args: &[String], fonts: &FontContext) {
         rt.block_on(async {
             let mut p = Page::load_async(&html, &url, fonts, vw as f32).await;
             let sheets = p.fetch_and_apply_stylesheets(fonts, vw as f32).await;
-            p.fetch_and_apply_masks().await;
+            p.finish_loading(fonts, vw as f32).await;
             if sheets > 0 {
                 eprintln!("applied {sheets} external stylesheet(s)");
             }
@@ -238,8 +238,7 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
         };
         let page = rt.block_on(async {
             let mut p = Page::load_async(&html, &final_url, fonts, vw as f32).await;
-            p.fetch_and_apply_stylesheets(fonts, vw as f32).await;
-            p.fetch_and_apply_masks().await;
+            p.finish_loading(fonts, vw as f32).await;
             p
         });
         let mpath = out.join(format!("{name}.manuk.png"));
@@ -420,8 +419,7 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
         .expect("tokio runtime");
     let page = rt.block_on(async {
         let mut p = manuk_page::Page::load_async(&html, &url, fonts, vw as f32).await;
-        p.fetch_and_apply_stylesheets(fonts, vw as f32).await;
-        p.fetch_and_apply_masks().await;
+        p.finish_loading(fonts, vw as f32).await;
         p
     });
     let _ = vh;

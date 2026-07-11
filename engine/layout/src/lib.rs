@@ -625,10 +625,16 @@ fn inline_contains_block(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
 
 fn is_rendered(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
     match dom.data(node) {
-        NodeData::Element(_) => {
-            !matches!(styles.get(&node).map(|s| s.display), Some(Display::None))
-        }
-        NodeData::Text(_) => true,
+        // A node the cascade has never seen is not in the render tree. This is not merely a
+        // convenience: layout INDEXES the style map, so an unstyled node is a panic. Scripts add
+        // nodes to the DOM at runtime (a `<script>` element appended by a module loader, a
+        // fragment built by a framework), and any one of them arriving before the next restyle
+        // used to abort the process.
+        NodeData::Element(_) => match styles.get(&node) {
+            Some(s) => s.display != Display::None,
+            None => false,
+        },
+        NodeData::Text(_) => styles.contains_key(&node),
         _ => false,
     }
 }
