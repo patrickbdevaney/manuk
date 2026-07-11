@@ -48,14 +48,29 @@ core, diverge at consumption," made literal. **No agent-only or human-only fork 
 pipeline**: an agent action in headful mode goes through the same code a human click does.
 Divergence is a defect.
 
-**Speed and stability are the product, not polish (ADR-005).** A browser that hangs is not a
-browser; a browser that is slow is not competitive, however many features it has. "Genuinely
-competitive with Chromium/Gecko" is a claim about the *machine* — nav→first-paint, click→paint,
-scroll frame time, memory, and the absolute absence of hangs/panics/"app unresponsive" — not only
-about the feature matrix. Capability without responsiveness is a demo. This is enforced by the
-**EPOCH** gate (§10), because per-tick gates provably do not enforce it: over Ticks 1–17 capability
-rose +49 points while PERF/MEM/STABILITY rose +3. The loop optimizes what it measures — so it must
-measure this.
+**The PRODUCT STAR — k extensible points (ADR-006).** The north star is not one point. A browser
+is judged on qualities that are **emergent in the whole product** and that *no feature tick owns* —
+so no tick defends them, and they rot silently. (Proof: over Ticks 1–17 capability rose **+49**
+while PERF/MEM/STABILITY rose **+3**.) The star's points:
+
+1. **RESPONSIVENESS** — input→feedback, nav→first-paint, frame pacing; never blocks.
+2. **EFFICIENCY** — CPU/memory/instruction cost; **algorithmic scaling** (no superlinear on real pages).
+3. **RELIABILITY** — no panics, no hangs, no lost work; graceful degradation.
+4. **FIDELITY** — looks and behaves like Chromium/Gecko on the real web.
+5. **ERGONOMICS** — a person does the thing *without being taught*; keyboard-complete.
+6. **AESTHETICS** — the chrome is coherent and beautiful, not a toy.
+7. **COMPLETENESS** — a self-contained working product: **no dead buttons, no unwired menu items,
+   no user-reachable stubs**. Every affordance the UI offers actually works.
+8. **COHERENCE** — one engine; headful/headless/agent share the page pipeline (the ADR-004 spine).
+9. **ACCESSIBILITY** — keyboard-only operable; correct a11y tree; contrast.
+10. **SECURITY & PRIVACY** — safe defaults, partitioning, no leaks.
+11. **IDENTITY & HONESTY** — a genuine Manuk fingerprint; truthful reporting (ADR-004).
+12. **AGENT-DRIVABILITY** — the automation surface works end-to-end, ambidextrously.
+
+**k is dynamic.** Points are added/retired **only by ADR**, and **a point must ship with its probe**
+— *a point without a probe is a slogan, not an axis.* Capability without these is a demo, not a
+browser. The star is enforced by the **EPOCH** gate (§10); per-tick gates provably cannot enforce
+it, because the loop optimizes only what it measures.
 
 These faces are complementary, not in tension. The loop expands the **entire possibility surface**
 of a diverse, cohesive, coexisting feature set — it is not limited to today's list.
@@ -233,53 +248,64 @@ serves the loop; the commits serve the browser.*
 
 ---
 
-## 10. EPOCH — the long-horizon systemic audit (rare, intensive, binding)
+## 10. EPOCH — the whole-star systemic audit (rare, bounded, binding)
 
 Per-tick gates (§1) are right for a *feature*: build, parity, a test, a screenshot. They are
-structurally incapable of proving the **whole engine** is fast, lean and hang-free — latency is an
-emergent property of cascade × layout × paint × event-loop × I/O, an O(n²) only shows at scale, and
-a hang only shows under a real session. So the loop adds a second, much rarer gate.
+structurally incapable of proving the **whole product** is fast, lean, hang-free, beautiful,
+intuitive, and **complete** — those qualities are emergent (latency comes from cascade × layout ×
+paint × event-loop × I/O; an O(n²) shows only at scale; a hang only under a real session; a dead
+button only when a user presses it). So the loop adds a second, much rarer gate over the **PRODUCT
+STAR** (§0).
 
-An **EPOCH** is *not* a feature tick. It is a dedicated arc (several consecutive ticks is normal)
-that treats the browser as one machine and ruthlessly optimizes it end to end. **It must not run
-often** — it is expensive, and its value is in the epochal step-jump, not in a recurring tax.
+An **EPOCH** is *not* a feature tick. It is a dedicated arc that treats the browser as one product.
 
-### 10.1 When (a drift detector, not just a counter)
+### 10.1 The cost bound (why this does not eat velocity)
 
-An epoch is **DUE** when either holds since the last epoch:
-- **(a) cadence** — ≥ 20 ticks have passed; or
-- **(b) drift** — `(ΔRENDER + ΔJS + ΔCOMPAT) − (ΔPERF + ΔMEM + ΔSTABILITY) > 25`.
+> **Measurement is total and cheap. Remediation is bounded and prioritized.**
 
-(b) is the real forcing function: it fires exactly when features outrun the machine. Record the
-axis snapshot at each epoch's end in [[STATE]] so the deltas are computable.
+An epoch **measures every star point** — probes are chosen to be cheap and automatable — but
+**fixes only the top violations**: those breaching a floor, worst-first, within budget. Everything
+else becomes an **ordinary LEDGER item with the measurement attached as evidence**. The epoch's
+*diligence* is total; its *repair* is bounded. **An epoch always terminates**, and feature velocity
+(which must stay fast and compounding) continues right after it.
 
-### 10.2 What (the whole machine, not one feature)
+Guards:
+- **Trigger:** ≥ 20 ticks since the last epoch, **or** drift `(Σ capability gains) − (Σ quality
+  gains) > 25`.
+- **Minimum interval:** never within **12 ticks** of the last epoch (anti-thrash).
+- **Budget:** target ≤ **~15% of ticks**. If remediation would overrun, **ship the measurements +
+  floors and hand the rest to the LEDGER** rather than overrunning.
 
-1. **Profile, don't guess.** Measure the real hot paths: nav→first-paint, click→paint, key→caret,
-   scroll frame time, relayout, cascade, paint, JS dispatch, display-list rebuild. **Publish the
-   numbers** and compare against Chromium on the same pages.
-2. **Algorithmic complexity audit.** Hunt superlinear behaviour that only appears at scale on real
-   pages — repeated full-tree walks, per-node map lookups in inner loops, whole-display-list
-   rebuilds on a one-pixel change, caches that never hit, re-cascading the world for a class flip.
-   Fix the complexity, not the constant.
-3. **Latency budgets → invariants.** Set a budget per interaction; once set it becomes an
-   invariant floor in §1 and a later tick that regresses it **fails**, exactly as a parity
-   regression fails. This is what stops drift from re-accruing.
-4. **No hangs, no panics.** Audit every `unwrap`/`expect`/index/slice on an input- or
-   network-driven path; bound every loop; ensure **nothing blocks the UI thread** (every `block_on`
-   logged as a follow-on is a latent hang). The user must never see "application not responding".
-5. **Memory.** Steady-state and per-tab; check for growth across repeated navigation.
-6. **Stability soak.** Drive a long, realistic session (many navigations, clicks, scrolls, tabs)
-   and assert zero panics, zero hangs, bounded memory.
+### 10.2 What an epoch does
 
-### 10.3 Binding output
+For **each** star point: run its probe, record the number/verdict, compare to its floor.
+Then fix only the worst violations.
 
-An epoch ends by writing (i) a MEASURE report with the numbers, (ii) new **invariant floors** into
-§1, and (iii) an ADR recording what changed and why. An epoch that produces no numbers has not
-happened.
+1. **RESPONSIVENESS / EFFICIENCY** — profile the real hot paths (parse, cascade, layout, paint,
+   display-list, JS dispatch; nav→first-paint, click→paint, scroll frame). **Publish numbers.**
+   Measure timings **against page size** to expose superlinear scaling — that is the complexity
+   audit, and it is where the real wins are (fix the complexity, not the constant).
+2. **RELIABILITY** — every `block_on` on the UI thread is a latent hang; audit
+   `unwrap`/`expect`/index/slice on input- and network-driven paths; bound every loop; soak a long
+   realistic session for zero panics/hangs.
+3. **COMPLETENESS** — enumerate **every user-reachable affordance** (button, menu item, shortcut)
+   and assert each does something real. Dead affordances are product bugs, not backlog.
+4. **FIDELITY / AESTHETICS** — `render --chrome` diffs on real pages; screenshot the chrome and
+   *look at it*.
+5. **ERGONOMICS / ACCESSIBILITY** — walk the standard browser tasks with only standard affordances;
+   keyboard-only traversal.
+6. **COHERENCE** — grep for forked/divergent paths between headful, headless and agent.
+7. **SECURITY / IDENTITY / AGENT-DRIVABILITY** — defaults, partitioning, fingerprint honesty; drive
+   a real task both headless and headful.
+
+### 10.3 Binding output (the ratchet)
+
+An epoch ends by writing (i) a **MEASURE report with real numbers**, (ii) the measured budgets as
+new **invariant floors** in §1 — so a later tick that regresses one **FAILS**, exactly like a parity
+regression — and (iii) an **ADR**. *An epoch that produces no numbers has not happened.*
 
 ### 10.4 Relationship to ticks
 
-A tick is **never blocked** waiting for an epoch, and an epoch is never sliced into "a bit of perf
-each tick" — that is precisely the dilution this gate exists to prevent. When an epoch comes due,
-[[RESUME]] names it and the loop enters the epoch arc.
+A tick is **never blocked** waiting for an epoch, and an epoch is **never sliced** into "a bit of
+perf each tick" — that dilution is precisely what this gate exists to prevent. When an epoch comes
+due, [[RESUME]] names it and the loop enters the epoch arc, then returns to fast feature ticks.

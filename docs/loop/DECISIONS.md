@@ -103,3 +103,57 @@ slice would measure the part and miss the machine. It must be a distinct, infreq
 **Output is binding.** An epoch publishes numbers and then **converts them into invariant floors**
 (CONSTITUTION §1): once a latency/memory budget is measured and set, a later tick that regresses it
 FAILS, exactly as a parity regression fails today. That is what stops the drift from re-accruing.
+
+## ADR-006 — The PRODUCT STAR (k extensible points) + a bounded EPOCH (2026-07-11)
+
+**What ADR-005 got wrong.** It framed the systemic gate as *speed and stability*. That is too
+narrow. The qualities a feature tick cannot own are not only performance ones — they are every
+property that is **emergent in the whole product**: whether the UI is beautiful and intuitive,
+whether every button a user can reach actually *does* something, whether the thing is a
+self-contained working browser rather than a pile of working features. No tick owns these, so no
+tick defends them, so they rot silently. (Exactly as PERF/MEM/STABILITY rotted: +3 while capability
+went +49.)
+
+**The PRODUCT STAR.** The north star is not one point but **k points** — the dimensions of a
+complete browser *product*. These are distinct from the capability axes in §3 (which measure what
+the engine *can do*); the star measures what the product *is*.
+
+| # | point | what it means | probe (how it is observed) |
+|---|-------|---------------|-----------------------------|
+| 1 | **RESPONSIVENESS** | input→feedback, nav→first-paint, frame pacing; never blocks | per-stage timings + interaction latencies, published |
+| 2 | **EFFICIENCY** | CPU / memory / instruction cost; **algorithmic scaling** | timings vs page size — hunt superlinear |
+| 3 | **RELIABILITY** | no panics, no hangs, no lost work; graceful degradation | panic/hang audit on input+network paths; soak run |
+| 4 | **FIDELITY** | looks and behaves like Chromium/Gecko on the real web | parity gate + `render --chrome` visual diffs |
+| 5 | **ERGONOMICS** | a person does the thing *without being taught*; keyboard-complete | task walkthrough against the standard affordance set |
+| 6 | **AESTHETICS** | the chrome is coherent and beautiful, not a toy | screenshot the chrome and *look at it* |
+| 7 | **COMPLETENESS** | self-contained working product — **no dead buttons, no unwired menu items, no user-reachable stubs** | enumerate every reachable affordance; assert each does something real |
+| 8 | **COHERENCE** | one engine; headful/headless/agent share the page pipeline (ADR-004 spine) | grep for divergent/forked paths |
+| 9 | **ACCESSIBILITY** | keyboard-only operable; a11y tree correct; contrast | a11y-tree assertions; keyboard traversal |
+| 10 | **SECURITY & PRIVACY** | safe defaults, partitioning, no leaks | audit defaults + partition isolation |
+| 11 | **IDENTITY & HONESTY** | genuine Manuk fingerprint; truthful reporting (ADR-004) | fingerprint surface review; verification-class honesty |
+| 12 | **AGENT-DRIVABILITY** | the automation surface works end-to-end, ambidextrously | drive a real task headless *and* headful |
+
+**The list is dynamic.** k is not fixed. A point may be **added or retired only by ADR**, and — this
+is the load-bearing rule — **a point must ship with its probe.** *A point without a probe is a
+slogan, not an axis.* If we cannot say how we would observe it, we do not add it.
+
+**The EPOCH audits the whole star** (not just perf), and is **cost-bounded** so diligence never eats
+velocity. The bound is the key design move:
+
+> **Measurement is total and cheap. Remediation is bounded and prioritized.**
+
+An epoch **measures every star point** (probes are chosen to be cheap and automatable) but **fixes
+only the top violations** — those breaching a floor, worst-first, within the epoch's budget.
+Everything else becomes an **ordinary ledger item with the measurement attached as evidence**. So
+the epoch's *diligence* is total while its *repair* is bounded: feature velocity continues, and the
+epoch cannot become a swamp. **An epoch always terminates.**
+
+Cadence guards (so epochs stay rare):
+- **Minimum interval:** no epoch within **12 ticks** of the last (prevents thrash).
+- **Budget:** target ≤ **~15% of ticks**. If remediation would exceed budget, the epoch **ships the
+  measurements + floors and hands the rest to the LEDGER** rather than overrunning.
+- Trigger stays ADR-005's drift detector (≥20 ticks, or capability-minus-quality drift > 25),
+  now computed over the **star**, not just three axes.
+
+**Ratchet.** Every measured floor becomes an invariant (§1): a later tick that regresses it FAILS,
+like a parity regression. That is what stops any star point from silently rotting again.
