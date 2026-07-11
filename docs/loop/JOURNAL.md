@@ -160,3 +160,19 @@ _Minimal history for audit + resume. See [[CONSTITUTION]] §4/§6, [[RESUME]] fo
   `6524b11`.
 - Reflect: wire AG3 into the shell/BrowserAction path, a learned scorer, and OCR fallback are
   follow-ons. Next: Tick 10 (FORCED-HIGHEST-U).
+
+## Tick 10 — L31 slice: action grounding (FORCED-HIGHEST-U) (2026-07-11)
+- Selected: §5 forces the highest-U item; L31 (llama grounding, U8) is highest. Its model
+  inference is EXTERNAL (can't cleanly HEADLESS-verify), but the **grounding half** — model
+  Action → concrete on-page target — is pure + verifiable, and composes Tick 9's scorer. Landed
+  that half (honors both forced-highest-U and the verification invariant).
+- Implemented: `agent/src/grounding.rs` `ground_action(action, tree, viewport, min_confidence)`
+  → `Grounded::{Direct, Ready, Ambiguous, Unresolved}`; text-targeting actions resolve via
+  `targeting::resolve_target`, below-margin targets flagged Ambiguous. Fixed a targeting
+  false-positive: with an intent, a candidate must match it by name (role/visual bonuses only
+  break ties among real matches) — "Checkout" no longer resolves to an unrelated button.
+- Verified: HEADLESS — 5 grounding tests + corrected targeting tests. Parity 72/72; agent 114 +
+  workspace green. Commit `2db6920`.
+- Reflect: inject a real backend (external) to produce the Action; a disambiguation prompt on
+  Ambiguous; wire Grounded into the shell BrowserAction executor. Next: Tick 11 (normal UCB;
+  Tick 15 is the next forced-highest-U).

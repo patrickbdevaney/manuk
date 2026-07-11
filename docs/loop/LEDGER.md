@@ -5,12 +5,13 @@ T=times touched. `score = V/C + 1.5*sqrt(ln(1+TICKS)/(1+T)) + 1.0*(U/10)`. Every
 the highest-U item. Update T/status/scores each tick; add items on reflection; mark dead ends
 `superseded`. Verify class per §7: HEADLESS / GUI / EXTERNAL / MEASURE._
 
-**TICKS = 9** (global tick counter; increment each tick). _Ticks done: 1 L14-slice, 2 L01
-fetch/XHR, 3 L10 pushState, 4 L04 downloads, 5 L32 prerender, 6 L03 postMessage/opener, 7 L02
-MutationObserver, 8 L11 responsive @media. Tick 9 pick: **L17 AG2 task-intent AXTree pruning +
-AG3 dual (semantic+visual) targeting** — top UCB (~4.3), deferred through Ticks 2–8 by the
-human-first ordering; table stakes now solid, so the agent-native differentiator is un-deferred.
-NOTE: Tick 10 is the forced-highest-U tick._
+**TICKS = 11** (global tick counter; increment each tick). _Done: 1 L14-slice, 2 L01 fetch/XHR,
+3 L10 pushState, 4 L04 downloads, 5 L32 prerender, 6 L03 postMessage, 7 L02 MutationObserver,
+8 L11 @media, 9 L17 targeting, 10 L31-slice grounding (forced-U). Tick 11 pick: **L05 file
+uploads** — UCB tops out at L30 (agentic automation-surface, ~4.6) but I've run two agentic ticks
+(9,10); rotating back to human table stakes per the user's ordering, L05 (multipart-core
+HEADLESS-verifiable, a concrete "run any website" gap) is the top human item (~4.2). L30 stays
+queued as the next agentic pick. NOTE: Tick 15 is the next forced-highest-U tick._
 
 ## Tier A — absorb outstanding beneficial work already suggested (do first)
 
@@ -40,7 +41,7 @@ STATE weak frontiers. High V, mostly known ⇒ high exploit ⇒ front-loaded.
 | L14 | Complete human fingerprint surface (screen, timezone, fonts, canvas/WebGL consistency) | FINGERPRINT | 7 | 6 | 7 | 0 | backlog | HEADLESS |
 | L15 | Inline SVG rendering (P3) | RENDER | 6 | 7 | 6 | 0 | backlog | HEADLESS |
 | L16 | Custom Elements + Shadow DOM basics (P4) | JS/RENDER | 6 | 8 | 7 | 0 | backlog | HEADLESS |
-| L17 | AG2 task-intent AXTree pruning + AG3 dual (semantic+visual) targeting | AGENT-EXT | 6 | 4 | 5 | 0 | backlog | HEADLESS |
+| L17 | AG2 task-intent AXTree pruning + AG3 dual (semantic+visual) targeting | AGENT-EXT | 6 | 4 | 5 | 1 | **done** (Tick 9) | HEADLESS |
 | L18 | Cookie partitioning + `SameSite` enforcement audit | NET/SECURITY | 5 | 4 | 4 | 0 | backlog | HEADLESS |
 | L19 | Settings page / preferences surface | UI | 4 | 5 | 4 | 0 | backlog | GUI |
 | L20 | PERF profile vs Chromium: nav + reflow + paint timings, publish numbers | PERF | 7 | 4 | 6 | 0 | backlog | MEASURE |
@@ -53,7 +54,7 @@ STATE weak frontiers. High V, mostly known ⇒ high exploit ⇒ front-loaded.
 | id | intent | axis | V | C | U | T | status | verify |
 |----|--------|------|---|---|---|---|--------|--------|
 | L30 | In-process automation tool surface hardening (stable selectors, wait-for, assertions) as the agent-native differentiator | AGENT-EXT | 9 | 6 | 7 | 0 | backlog | HEADLESS |
-| L31 | llama.cpp agent: prompt→action grounding over the a11y tree, replayable | AGENT-IN | 8 | 7 | 8 | 0 | backlog | EXTERNAL |
+| L31 | llama.cpp agent: prompt→action grounding over the a11y tree, replayable | AGENT-IN | 8 | 7 | 8 | 1 | **partial** (Tick 10: grounding half done HEADLESS; model inference still EXTERNAL) | EXTERNAL |
 | L32 | Speculative/predictive prerender of likely-next navigations | PERF | 6 | 7 | 8 | 1 | **done** (Tick 5) | HEADLESS |
 | L32b | Idle (non-hover) prerender from ranked content links + surfaced prewarm hit-rate metric | PERF | 4 | 5 | 5 | 0 | backlog (L32 follow-on) | MEASURE |
 | L33 | Memory: measure reflow-cache hit rate, then SoA-DOM only if it pays | MEM | 6 | 8 | 7 | 0 | backlog | MEASURE |
@@ -68,7 +69,8 @@ MEM3-binary-size · window.open→new-tab · **fetch()+XHR real Promises (L01, T
 **history.pushState/replaceState/popstate + location (L10, Tick 3)** · **downloads to disk
 (L04, Tick 4)** · **predictive prerender into bfcache (L32, Tick 5)** · **cross-window
 postMessage + window.opener (L03, Tick 6)** · **MutationObserver (L02, Tick 7)** ·
-**responsive @media + matchMedia (L11, Tick 8)**.
+**responsive @media + matchMedia (L11, Tick 8)** · **agent targeting AG2/AG3 (L17, Tick 9)** ·
+**action grounding (L31-slice, Tick 10)**.
 
 ## Superseded / blocked
 
