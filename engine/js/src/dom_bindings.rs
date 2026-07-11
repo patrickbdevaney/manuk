@@ -1546,6 +1546,32 @@ const WINDOW_PRELUDE: &str = r#"
                 try { return g.__windowOpen(String(u == null ? '' : u)); } catch (e) { return null; }
             };
         }
+        // Viewport / screen metrics. Real sites (and every SPA framework) read these at boot and
+        // throw a ReferenceError if absent. Honest, ordinary-human desktop values (not spoofed to
+        // mimic a specific competitor); a follow-on threads the true window size through.
+        var VW = 1280, VH = 720;
+        if (typeof g.innerWidth === 'undefined') g.innerWidth = VW;
+        if (typeof g.innerHeight === 'undefined') g.innerHeight = VH;
+        if (typeof g.outerWidth === 'undefined') g.outerWidth = VW;
+        if (typeof g.outerHeight === 'undefined') g.outerHeight = VH;
+        if (typeof g.devicePixelRatio === 'undefined') g.devicePixelRatio = 1;
+        if (typeof g.screenX === 'undefined') g.screenX = 0;
+        if (typeof g.screenY === 'undefined') g.screenY = 0;
+        if (typeof g.screen === 'undefined') g.screen = {
+            width: VW, height: VH, availWidth: VW, availHeight: VH,
+            colorDepth: 24, pixelDepth: 24, orientation: { type: 'landscape-primary', angle: 0 }
+        };
+        if (typeof g.matchMedia === 'undefined') {
+            g.matchMedia = function (q) {
+                return { matches: false, media: String(q), onchange: null,
+                         addListener: function () {}, removeListener: function () {},
+                         addEventListener: function () {}, removeEventListener: function () {} };
+            };
+        }
+        if (typeof g.requestAnimationFrame === 'undefined') {
+            g.requestAnimationFrame = function (cb) { return setTimeout(function () { cb(Date.now()); }, 16); };
+            g.cancelAnimationFrame = function (id) { clearTimeout(id); };
+        }
     })();
 "#;
 

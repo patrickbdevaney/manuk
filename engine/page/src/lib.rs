@@ -1327,6 +1327,20 @@ mod js_interactive_tests {
             vec!["https://accounts.example/oauth?client=x".to_string()],
             "window.open recorded the URL for the host"
         );
+
+        // (4) Boot-time window/screen metrics exist (SPAs read these or throw at load).
+        let html4 = r#"<!doctype html><html><body id="b"><script>
+            document.getElementById('b').setAttribute('data-m',
+                window.innerWidth + 'x' + screen.height + 'x' + devicePixelRatio +
+                ':' + (typeof matchMedia) + ':' + (typeof requestAnimationFrame));
+            </script></body></html>"#;
+        let page4 = Page::load(html4, "https://app.test/", &fonts, 800.0);
+        let b = manuk_css::query_selector_all(page4.dom(), page4.dom().root(), "#b")[0];
+        assert_eq!(
+            page4.dom().element(b).and_then(|e| e.attr("data-m")),
+            Some("1280x720x1:function:function"),
+            "window/screen/devicePixelRatio/matchMedia/rAF present at load"
+        );
     }
 }
 
