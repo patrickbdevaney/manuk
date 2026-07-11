@@ -316,3 +316,44 @@ _Minimal history for audit + resume. See [[CONSTITUTION]] §4/§6, [[RESUME]] fo
   repair. **The score gates; the eyeball diagnoses.**
 - Remaining from the Wikipedia screenshot (next): missing left TOC sidebar + right Appearance panel
   (page-level CSS Grid), broken infobox table layout, unrendered icon squares.
+
+## Tick 25–26 (2026-07-11) — the A/B screenshot found four class bugs, then a fifth that wasn't a layout bug at all
+
+**COVERAGE 77.0% → 99.7%. Wikipedia's TOC 1,949px → 374px (Chrome: 364px).**
+
+Five findings, in the order they fell:
+
+1. **mask-image.** The modern web draws an icon as an *empty element* with a `background-color`
+   shaped by a mask. We painted the background and ignored the mask: a black square where every
+   icon should be.
+2. **Inline elements had no geometry.** An empty `<span id=…>` anchor produced no box and no
+   fragment, so it did not exist. Chrome gives it width 0 and a line-height-tall rect, and pages
+   depend on that. 1,079 spans + 298 anchors on ONE article — 98% of everything we were missing.
+3. **`inline-flex` did not exist.** Stylo mapped it to block-level flex, so every icon button
+   filled its container.
+4. **Flex max-content was measured by laying the container out at a 1e6 width and reading the
+   right edge.** `max-width` clamps the container back down and `justify-content:center` centres
+   the content inside *that* — a 32px button measured 234px, auto margins measured 500,532px.
+   Ask taffy for max-content instead.
+5. **`'localStorage' in window` — the gate.** The web feature-detects and *grades* the browser.
+   MediaWiki reverts `client-js` → `client-nojs` and ships its no-script fallback. That, not
+   layout, was the ~5,000px of vertical drift.
+
+### The lesson, sharper than before
+
+We have said "THE SCORE GATES; THE EYEBALL DIAGNOSES" for four ticks. Tick 26 adds the next layer:
+**the eyeball diagnoses, but only a MEASUREMENT tells you which box is wrong.** Three hours went
+into staring at a stacked header. Ten minutes went into `boxes --tree`, which printed
+`label.cdx-button <InlineFlex> [44 17 236×32]` and ended the argument. Build the probe *first*.
+
+And: **when a metric will not move, suspect the metric.** Wikipedia's median dy sat at exactly
+5,122px across four real fixes. It was not stubborn — Chrome's screenshot and Chrome's box probe
+were rendering different pages, `node_rects` was unioning overflow into every ancestor, and the
+site was serving us a degraded document. None of those were the engine.
+
+### The crash we had been hiding
+
+The shell called `libc::_exit()` to skip SpiderMonkey's atexit crash. That is not a fix: `_exit`
+skips *every* exit handler, and in a browser those handlers flush the user's profile. The crash was
+real (exit code 139, after `main` returned, with perfect output). `JS_ShutDown()` now runs in order.
+**A workaround that hides a crash is a data-loss bug wearing a disguise.**
