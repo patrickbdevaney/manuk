@@ -216,6 +216,22 @@ impl LayoutBox {
     /// Translate this box and its whole subtree down by `dy` (in document coordinates) —
     /// used to realize `position:sticky` at paint time. Shifts block rects and the baselines
     /// of inline text so the whole subtree moves together.
+    /// Shift this box and its whole subtree horizontally (used to place a float-laid-out subtree
+    /// that was measured at a provisional origin).
+    pub fn shift_x(&mut self, dx: f32) {
+        if dx == 0.0 {
+            return;
+        }
+        self.walk_mut(&mut |b| {
+            b.rect.x += dx;
+            if let BoxContent::Inline(frags) = &mut b.content {
+                for f in frags {
+                    f.x += dx;
+                }
+            }
+        });
+    }
+
     pub fn shift_y(&mut self, dy: f32) {
         if dy == 0.0 {
             return;
@@ -1244,6 +1260,21 @@ impl Ctx<'_> {
             Dim::Auto => self.shrink_to_fit(node, avail),
             other => other.resolve(cw, avail).max(0.0),
         };
+
+        // **A floated table must still get TABLE layout.** `layout_table` is only reached from
+        // `layout_block`, so a table arriving here (float) — or as a flex/grid item — fell through
+        // to the generic path, where `<tr>`/`<th>` are not "block-level" and every cell's text
+        // simply flowed inline. That is why Wikipedia's infobox rendered as one run of text.
+        // Run the real table formatter at a provisional origin, then place its margin box.
+        if s.display == Display::Table {
+            let r = self.layout_table(node, cw, 0.0, 0.0, 0.0);
+            let mut b = r.boxx;
+            let (mbw, mbh) = (ml + b.rect.width + mr, mt + b.rect.height + mb);
+            let margin_rect = floats.place(s.float, top, mbw, mbh);
+            b.shift_x(margin_rect.x + ml - b.rect.x);
+            b.shift_y(margin_rect.y + mt - b.rect.y);
+            return b;
+        }
 
         // Lay out content at a provisional origin (0,0) in the float's own BFC.
         let mut inner = FloatContext::new(0.0, width);
@@ -2654,6 +2685,33 @@ mod tests {
             find_box(&root, b).is_some_and(|bx| bx.opacity <= 0.01),
             "opacity:0 gives the box zero effective opacity"
         );
+    }
+
+    /// W4 regression: a **floated** table must still get TABLE layout. `layout_table` was only
+    /// reachable from the block path, so a table arriving as a float (or flex/grid item) fell
+    /// through to the generic path — where `<tr>`/`<th>` are not block-level, so every cell's text
+    /// flowed inline. Wikipedia's infobox rendered as one run of prose because of this.
+    #[test]
+    fn a_floated_table_still_gets_table_layout() {
+        let html = r#"<table id="t"><tbody>
+            <tr><th id="l1">Developer</th><td id="d1">The Rust Team</td></tr>
+            <tr><th id="l2">First appeared</th><td id="d2">2012</td></tr>
+        </tbody></table><p>body text</p>"#;
+        let css = "#t{float:right;width:300px}";
+        let (dom, root) = layout_html(html, css, 800.0);
+        let rects = root.node_rects(&dom);
+        let by = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .and_then(|n| rects.get(&n).copied())
+                .unwrap_or_else(|| panic!("{id} has no box"))
+        };
+        let (l1, d1, l2) = (by("l1"), by("d1"), by("l2"));
+        // Cells form COLUMNS: the value sits to the right of its label, on the same row.
+        assert!(d1.x > l1.x, "the value cell is to the right of its label (columns, not inline flow)");
+        assert!((d1.y - l1.y).abs() < 2.0, "label and value share a row");
+        // Rows STACK: row 2 is below row 1.
+        assert!(l2.y >= l1.y + l1.height - 1.0, "the second row is below the first");
     }
 
     #[test]

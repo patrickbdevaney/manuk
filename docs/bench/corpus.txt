@@ -1,0 +1,15 @@
+# Parity Benchmark Corpus (ADR-012). Grouped by TRAVERSAL CLASS (ADR-004) — the named site is a
+# SAMPLE of the class; the class is what must pass. `#tick` = in the fast per-tick tier.
+#
+# class                url
+reference              https://en.wikipedia.org/wiki/Rust_(programming_language)   #tick
+reference              https://developer.mozilla.org/en-US/docs/Web/CSS/display
+link-aggregator        https://news.ycombinator.com                                #tick
+link-aggregator        https://lobste.rs
+docs                   https://doc.rust-lang.org/book/ch01-00-getting-started.html
+docs                   https://docs.python.org/3/tutorial/introduction.html
+marketing              https://example.com                                         #tick
+marketing              https://www.rust-lang.org
+app-shell              https://github.com/rust-lang/rust
+news                   https://text.npr.org
+forum                  https://stackoverflow.com/questions/tagged/rust

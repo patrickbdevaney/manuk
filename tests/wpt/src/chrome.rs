@@ -37,6 +37,63 @@ var pre=document.createElement('pre');pre.id='__PARITY__';
 pre.textContent=JSON.stringify(out);document.documentElement.appendChild(pre);})();
 </script>"#;
 
+/// **Structural probe** (the benchmark's rigorous half). Reports `getBoundingClientRect` for
+/// every element carrying an `id` — real sites have hundreds — plus its tag. This is what catches
+/// what the visual score keeps missing: a MISSING element is a missing BOX, and a whole absent
+/// sidebar barely moves a pixel score but is glaring here.
+const PROBE_ALL_IDS_JS: &str = r#"<script>
+(function(){var out={};
+document.querySelectorAll('[id]').forEach(function(e){
+  var r=e.getBoundingClientRect();
+  if (r.width===0 && r.height===0) return;   // not rendered: don't demand Manuk render it either
+  out[e.id]=[Math.round(r.x),Math.round(r.y),Math.round(r.width),Math.round(r.height)];
+});
+var pre=document.createElement('pre');pre.id='__PARITY__';
+pre.textContent=JSON.stringify(out);document.documentElement.appendChild(pre);})();
+</script>"#;
+
+/// Capture Chrome's box for every `[id]` element of a LIVE url (structural benchmark half).
+pub fn capture_boxes_all_ids(url: &str, vw: u32, vh: u32) -> Result<HashMap<String, Box4>> {
+    let chrome = chrome_bin().ok_or_else(|| anyhow!("no Chrome/Chromium found"))?;
+    // Inject the probe by navigating, then re-serialising the DOM with --dump-dom after the
+    // script has run. Chrome evaluates page scripts before dump-dom, so we ship the probe as a
+    // `javascript:`-free approach: fetch the page, append the probe, serve from a temp file with a
+    // <base> so subresources still resolve to the real origin.
+    let html = ureq_get(url)?;
+    let base = format!("<base href=\"{url}\">");
+    let doc = if let Some(i) = html.find("<head>") {
+        let (a, b) = html.split_at(i + 6);
+        format!("{a}{base}{b}{PROBE_ALL_IDS_JS}")
+    } else {
+        format!("{base}{html}{PROBE_ALL_IDS_JS}")
+    };
+    let tmp = std::env::temp_dir().join(format!("manuk-struct-{}.html", stable_tag(&doc)));
+    std::fs::write(&tmp, &doc)?;
+    let mut cmd = Command::new(&chrome);
+    cmd.args(base_flags(vw, vh))
+        .arg("--virtual-time-budget=6000")
+        .arg("--dump-dom")
+        .arg(format!("file://{}", tmp.display()));
+    let out = cmd.output().context("chrome --dump-dom (structural probe)")?;
+    let _ = std::fs::remove_file(&tmp);
+    if !out.status.success() {
+        bail!("chrome --dump-dom failed: {}", String::from_utf8_lossy(&out.stderr).trim());
+    }
+    parse_probe_json(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// Minimal blocking GET (the harness already links reqwest-free; use curl for zero new deps).
+fn ureq_get(url: &str) -> Result<String> {
+    let out = Command::new("curl")
+        .args(["-sL", "--max-time", "25", "-A", "Mozilla/5.0 (X11; Linux x86_64) Manuk/0.1", url])
+        .output()
+        .context("curl")?;
+    if !out.status.success() {
+        bail!("curl failed for {url}");
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
 /// Find an installed Chrome/Chromium binary, preferring stable Chrome.
 pub fn chrome_bin() -> Option<PathBuf> {
     const CANDIDATES: &[&str] = &[

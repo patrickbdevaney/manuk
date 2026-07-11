@@ -227,10 +227,43 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
         }
 
         match manuk_wpt::fidelity::compare(&mpath, &cpath, &name) {
-            Ok(f) => {
+            Ok(mut f) => {
                 let side = out.join(format!("{name}.SIDE.png"));
                 let _ = manuk_wpt::fidelity::write_side_by_side(&mpath, &cpath, &side);
                 eprintln!("  side-by-side: {}", side.display());
+
+                // STRUCTURAL half — the honest number. Compare Chrome's box for every rendered
+                // `[id]` element against Manuk's. A missing sidebar is a MISSING BOX; the pixel
+                // score averages it away, this does not.
+                if let Ok(cboxes) = manuk_wpt::chrome::capture_boxes_all_ids(url, vw, vh) {
+                    let rects = page.root_box.node_rects(page.dom());
+                    let mut mboxes: std::collections::HashMap<String, [i64; 4]> =
+                        std::collections::HashMap::new();
+                    for n in page.dom().descendants(page.dom().root()) {
+                        if let Some(id) = page.dom().element(n).and_then(|e| e.attr("id")) {
+                            if let Some(r) = rects.get(&n) {
+                                if r.width > 0.0 || r.height > 0.0 {
+                                    mboxes.insert(
+                                        id.to_string(),
+                                        [
+                                            r.x.round() as i64,
+                                            r.y.round() as i64,
+                                            r.width.round() as i64,
+                                            r.height.round() as i64,
+                                        ],
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    let (sc, missing, misplaced, probed) =
+                        manuk_wpt::fidelity::compare_structure(&cboxes.iter().map(|(k,v)| (k.clone(), [v[0] as i64, v[1] as i64, v[2] as i64, v[3] as i64])).collect(), &mboxes, 8);
+                    f.structure = Some(sc);
+                    f.missing = missing;
+                    f.misplaced = misplaced;
+                    f.probed = probed;
+                    eprintln!("  structural: {:.1}% ({probed} ids, {missing} missing, {misplaced} misplaced)", sc * 100.0);
+                }
                 rows.push(f);
             }
             Err(e) => eprintln!("  compare: {e}"),

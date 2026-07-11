@@ -326,3 +326,42 @@ screenshot → compare to Chromium's screenshot of the same URL → **look at th
 that loop, and it is now a standing gate with a ratcheting floor (start 0.75; raise as it improves).
 The numeric score alone is insufficient and is documented as such: Wikipedia scored 75% while being
 visibly, structurally broken. **The score gates; the eyeball diagnoses.**
+
+## ADR-012 — The PARITY BENCHMARK SUITE: broad, honest, and lean (2026-07-11)
+
+**The ask.** Prove real parity with Chromium/Gecko across *the internet*, not one reference site —
+and cover the **interaction surface** (clicks, scroll, typing, form filling), not just static
+rendering. It must be rigorous enough to be believed and cheap enough not to strangle the loop.
+
+**1. The honest metric: COVERAGE.** This session proved a pixel score is a poor proxy — an entirely
+absent sidebar moved Wikipedia's visual score by <1 point. So the benchmark reports **two** numbers,
+and gates on the second:
+
+- **VISUAL** — coarse block-grid agreement with Chromium's screenshot (blind to font AA, sensitive
+  to layout/colour). Diagnostic.
+- **COVERAGE (the gate)** — of every element **Chromium actually renders**, what fraction does Manuk
+  render *at all*? Probed via `getBoundingClientRect` over every `[id]` in both engines. **A missing
+  region cannot hide in this.** Placement drift is reported separately (`misplaced`), because on
+  real pages it is dominated by font-metric differences — a fidelity concern, not a correctness one.
+
+*First reading: HN 75.6% coverage (29 of 119 missing); Wikipedia 78.3% (1,402 of 6,461 missing).
+Mean **77%**. That is the real distance to parity, and the number to drive to ~99%.*
+
+**2. Breadth: a corpus spanning the traversal classes (ADR-004), not one site.** `docs/bench/corpus.txt`,
+grouped by class — reference/content, link aggregator, docs, marketing/landing, app shell,
+e-commerce, social feed, media-rich, dashboard. Named sites are *samples of a class*; the class is
+what must pass.
+
+**3. Leanness: two tiers, so diligence never strangles velocity.**
+- **TICK tier** (every tick, seconds): 3 sites, one per dominant class. Catches regressions.
+- **EPOCH tier** (epochs only, minutes): the full corpus. Produces the headline parity number and
+  the per-class breakdown that says *which kind of web* we still fail.
+
+**4. Interaction parity (G5 — new).** Rendering parity is half the claim. The other half is that the
+browser *behaves* like Chromium under real use: click a link, type into a field, submit a form,
+scroll, focus, select. This is scripted through the **in-process automation surface** already built
+(Tick 12: durable `Selector`s, `Condition`s, `assert_that`) and mirrored in Chromium, comparing the
+resulting page state. An interaction that works in Chromium and not in Manuk is a **CRITICAL**, the
+same class as a dead affordance — because to a user it *is* one.
+
+**5. Ratchet.** Mean COVERAGE becomes a binding floor (§1.7-style). It only goes up.
