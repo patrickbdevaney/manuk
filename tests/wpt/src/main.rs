@@ -23,6 +23,12 @@ fn main() {
         return;
     }
 
+    // `manuk-wpt render` — headless screenshot of one page to PNG (autonomous visual check).
+    if args.first().map(String::as_str) == Some("render") {
+        run_render_cmd(&args[1..], &fonts);
+        return;
+    }
+
     let wpt_flag = flag(&args, "--wpt");
     let wpt_dir = wpt_flag
         .map(PathBuf::from)
@@ -80,6 +86,50 @@ fn run_parity_cmd(args: &[String], fonts: &FontContext) {
     print!("{}", report.summary());
     if !report.all_within() {
         std::process::exit(1);
+    }
+}
+
+/// `manuk-wpt render (--html FILE | --inline HTML) --out PNG [--width W] [--height H] [--chrome]`
+///
+/// Headlessly renders one page through Manuk's CPU painter (no window/GPU) and writes a PNG — the
+/// autonomous **visual** check: render, then read the PNG back (it is a real screenshot of what
+/// Manuk draws). With `--chrome`, also writes `<out>.chrome.png` from headless Chrome for an
+/// eyeball comparison. Self-contained HTML only (no network); inline `<style>`/`<script>` run.
+fn run_render_cmd(args: &[String], fonts: &FontContext) {
+    use manuk_page::Page;
+
+    let vw: u32 = flag(args, "--width").and_then(|s| s.parse().ok()).unwrap_or(1280);
+    let vh: u32 = flag(args, "--height").and_then(|s| s.parse().ok()).unwrap_or(800);
+    let out = flag(args, "--out").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("render.png"));
+    let has_chrome = args.iter().any(|a| a == "--chrome");
+
+    let (html, url) = if let Some(f) = flag(args, "--html") {
+        let html = std::fs::read_to_string(f).unwrap_or_else(|e| {
+            eprintln!("cannot read {f}: {e}");
+            std::process::exit(1);
+        });
+        (html, format!("file://{f}"))
+    } else if let Some(inline) = flag(args, "--inline") {
+        (inline.to_string(), "about:inline".to_string())
+    } else {
+        eprintln!("usage: manuk-wpt render (--html FILE | --inline HTML) --out PNG [--width W] [--height H] [--chrome]");
+        std::process::exit(2);
+    };
+
+    let page = Page::load(&html, &url, fonts, vw as f32);
+    match page.paint(fonts, vw, vh).save_png(&out) {
+        Ok(()) => eprintln!("wrote {} ({}x{})", out.display(), vw, vh),
+        Err(e) => {
+            eprintln!("failed to write {}: {e}", out.display());
+            std::process::exit(1);
+        }
+    }
+    if has_chrome && manuk_wpt::chrome::available() {
+        let chrome_out = out.with_extension("chrome.png");
+        match manuk_wpt::chrome::capture_screenshot_png(&html, vw, vh, &chrome_out) {
+            Ok(()) => eprintln!("wrote {} (headless Chrome reference)", chrome_out.display()),
+            Err(e) => eprintln!("chrome screenshot failed: {e}"),
+        }
     }
 }
 

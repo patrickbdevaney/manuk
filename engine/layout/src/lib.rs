@@ -746,9 +746,19 @@ fn establishes_bfc(s: &ComputedStyle) -> bool {
 
 /// The max right extent of already-laid-out content (used for shrink-to-fit).
 fn content_right_extent(content: &BoxContent, fonts: &FontContext) -> f32 {
+    // `shrink_to_fit` lays the subtree out at a very large available width (1e6) to read its
+    // *max-content* width. A block-level box fills its container, so at that width its own
+    // `rect.width` is ≈1e6 — meaningless for max-content. Count a box's own right edge only when
+    // it did NOT fill the measuring width (i.e. it has a definite/intrinsic width worth
+    // counting); otherwise ignore its box and recurse to the inline text that carries the real
+    // content extent. Without this, any flex/grid item containing a block child measured to the
+    // full container width and hogged the track — collapsing sibling items to zero.
+    const FILL_SENTINEL: f32 = 500_000.0;
     let mut max_r = 0.0f32;
     fn visit(b: &LayoutBox, fonts: &FontContext, max_r: &mut f32) {
-        *max_r = max_r.max(b.rect.x + b.rect.width);
+        if b.rect.width < FILL_SENTINEL {
+            *max_r = max_r.max(b.rect.x + b.rect.width);
+        }
         match &b.content {
             BoxContent::Block(kids) => {
                 for k in kids {
@@ -2440,6 +2450,39 @@ mod tests {
         let fonts = FontContext::new();
         let root = layout_document(&dom, &styles, &fonts, width);
         (dom, root)
+    }
+
+    /// Regression (found via the headless screenshot discipline): `flex: 1` items that contain a
+    /// block-level child must size to equal tracks. Before the `content_right_extent` fix, a
+    /// block child filled the huge measuring width, so the first item measured to the whole
+    /// container and its siblings collapsed to zero — three cards rendered as one.
+    #[test]
+    fn flex_items_with_block_children_get_equal_widths() {
+        let html = r#"<div class="row">
+            <div class="item"><p>alpha</p></div>
+            <div class="item"><p>beta</p></div>
+            <div class="item"><p>gamma</p></div>
+        </div>"#;
+        let css = ".row{display:flex} .item{flex:1}";
+        let (dom, root) = layout_html(html, css, 600.0);
+        let rects = root.node_rects(&dom);
+
+        let widths: Vec<f32> = dom
+            .descendants(dom.root())
+            .filter(|&n| {
+                dom.tag_name(n) == Some("div")
+                    && dom.element(n).and_then(|e| e.attr("class")) == Some("item")
+            })
+            .filter_map(|n| rects.get(&n).map(|r| r.width))
+            .collect();
+
+        assert_eq!(widths.len(), 3, "three flex items laid out");
+        for w in &widths {
+            assert!(
+                (*w - 200.0).abs() < 20.0,
+                "each flex item ~1/3 of 600px, got {w} (widths: {widths:?})"
+            );
+        }
     }
 
     #[test]
