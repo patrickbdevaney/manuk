@@ -10,6 +10,10 @@ publish = false
 [features]
 # Run the parity/reftest harness against the real Stylo cascade instead of MinimalCascade.
 stylo = ["manuk-page/stylo"]
+# Run page JS (SpiderMonkey) — off by default so the parity gate stays lean/fast. Enable it for
+# `manuk-wpt render` when the page you want to screenshot builds itself with JS (custom elements,
+# SPA hydration): `cargo run -p manuk-wpt --release --features spidermonkey -- render ...`
+spidermonkey = ["manuk-page/spidermonkey"]
 
 [lib]
 path = "src/lib.rs"

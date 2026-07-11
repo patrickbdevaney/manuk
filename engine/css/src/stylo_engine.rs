@@ -238,6 +238,17 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
         }
     }
 
+    // **Shadow trees.** The walk above is over the *node* tree, and a shadow root is deliberately
+    // not a child of its host — so shadow content never got a style here. Layout walks the **flat**
+    // tree (`flat_children`: shadow content + slot assignment), so those nodes MUST have styles or
+    // it panics on the lookup. `MinimalCascade` already implements the N4 flat-tree cascade with
+    // tree-scoped matching (a shadow root's own `<style>` applies only inside it), so adopt its
+    // result for every node Stylo's walk missed. Document nodes keep Stylo's (richer) cascade;
+    // only shadow content falls back. Giving Stylo a scoped flat-tree walk is the follow-on.
+    for (node, m) in minimal.iter() {
+        map.entry(*node).or_insert_with(|| m.clone());
+    }
+
     map
 }
 

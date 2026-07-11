@@ -47,7 +47,7 @@ use mozjs::jsval::{
 use mozjs::rooted;
 use mozjs::rust::wrappers2::{
     CurrentGlobalOrNull, JS_DefineFunction, JS_DefineProperty, JS_DefineProperty1, JS_NewObject,
-    JS_NewGlobalObject, JS_SetElement1, JS_SetProperty, NewArrayObject1,
+    JS_GetProperty, JS_NewGlobalObject, JS_SetElement1, JS_SetProperty, NewArrayObject1,
 };
 use mozjs::jsapi::OnNewGlobalHookOption;
 use mozjs::gc::RootedTraceableBox;
@@ -449,6 +449,7 @@ unsafe fn define_members(
         def(c"removeAttribute", el_remove_attribute, 1);
         def(c"hasAttribute", el_has_attribute, 1);
         def(c"remove", el_remove, 0);
+        def(c"attachShadow", el_attach_shadow, 1);
         def(c"getElementsByTagName", el_get_by_tag, 1);
         def(c"getElementsByClassName", el_get_by_class, 1);
         def(c"querySelector", doc_query, 1);
@@ -463,6 +464,7 @@ unsafe fn define_members(
         def(c"cloneNode", el_clone_node, 1);
         // DOM traversal (read-only accessor properties).
         prop(c"parentNode", el_get_parent_node, None);
+        prop(c"shadowRoot", el_get_shadow_root, None);
         prop(c"parentElement", el_get_parent_element, None);
         prop(c"firstChild", el_get_first_child, None);
         prop(c"lastChild", el_get_last_child, None);
@@ -870,6 +872,52 @@ unsafe extern "C" fn el_remove(cx: *mut RawJSContext, _argc: u32, vp: *mut Value
         (*dom).detach(node);
     }
     *vp = UndefinedValue();
+    true
+}
+
+/// `element.attachShadow({mode})` — attach a shadow root to this element and return it as a
+/// reflector (so `root.innerHTML = ...` / `root.appendChild(...)` work). The arena DOM already
+/// models shadow roots as separate trees surfaced through the **flat tree**, so layout/paint pick
+/// the content up with no further plumbing. Idempotent: a host that already has a shadow root
+/// returns the existing one. `mode` defaults to `open`.
+unsafe extern "C" fn el_attach_shadow(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, host)) = this_node(vp) else {
+        *vp = NullValue();
+        return true;
+    };
+    // `{mode: "open"|"closed"}` — read the mode off the options object, defaulting to open.
+    let mode = match arg_object(vp, argc, 0) {
+        Some(opts) => {
+            rooted!(in(cx) let o = opts);
+            rooted!(in(cx) let mut v = UndefinedValue());
+            let got = JS_GetProperty(&mut wrap_cx(cx), o.handle(), c"mode".as_ptr(), v.handle_mut());
+            let is_closed = got && {
+                let mut c = wrap_cx(cx);
+                matches!(
+                    String::safe_from_jsval(&mut c, v.handle(), ()),
+                    Ok(ConversionResult::Success(ref s)) if s == "closed"
+                )
+            };
+            if is_closed {
+                manuk_dom::ShadowRootMode::Closed
+            } else {
+                manuk_dom::ShadowRootMode::Open
+            }
+        }
+        None => manuk_dom::ShadowRootMode::Open,
+    };
+    let sr = (*dom).attach_shadow(host, mode);
+    *vp = ObjectValue(new_reflector(cx, dom, sr));
+    true
+}
+
+/// `element.shadowRoot` — the attached shadow root, or `null`. (An `closed` root is still
+/// returned here; hiding it is a follow-on and would only obscure the page from itself.)
+unsafe extern "C" fn el_get_shadow_root(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    match this_node(vp).and_then(|(dom, n)| (*dom).shadow_root(n).map(|sr| (dom, sr))) {
+        Some((dom, sr)) => *vp = ObjectValue(new_reflector(cx, dom, sr)),
+        None => *vp = NullValue(),
+    }
     true
 }
 
@@ -1951,6 +1999,85 @@ const WINDOW_PRELUDE: &str = r#"
             g.__fireWindowEvent('message', ev);
         };
 
+        // Custom elements. `HTMLElement` is the base every custom element extends. On *upgrade*
+        // we set `__ceUnderConstruction` to the element being upgraded; `super()` then reaches
+        // this constructor, which RETURNS that element — and per ES semantics a derived
+        // constructor's `this` becomes the object its base constructor returned. So the author's
+        // `constructor() { super(); this.attachShadow(...) }` runs with `this` === the real
+        // element, exactly as the spec's upgrade does.
+        if (typeof g.HTMLElement === 'undefined') {
+            g.__ceUnderConstruction = null;
+            g.HTMLElement = function HTMLElement() {
+                if (g.__ceUnderConstruction) return g.__ceUnderConstruction;
+                return this;
+            };
+            g.HTMLElement.prototype = {};
+        }
+        if (typeof g.customElements === 'undefined') {
+            g.customElements = {
+                __defs: {},
+                define: function (name, ctor) {
+                    name = String(name).toLowerCase();
+                    if (this.__defs[name]) return; // already defined
+                    this.__defs[name] = ctor;
+                    g.__upgradeTag(name);
+                },
+                get: function (name) { return this.__defs[String(name).toLowerCase()]; },
+                whenDefined: function (name) {
+                    return Promise.resolve(this.__defs[String(name).toLowerCase()]);
+                }
+            };
+            // Upgrade one element: graft the class's prototype methods onto the host object (a
+            // reflector's prototype can't be swapped), run the constructor with `this` bound to
+            // it, then fire the lifecycle callbacks.
+            g.__upgradeEl = function (el, ctor) {
+                if (!el || el.__ceUpgraded) return;
+                el.__ceUpgraded = true;
+                var proto = ctor && ctor.prototype;
+                if (proto) {
+                    var keys = Object.getOwnPropertyNames(proto);
+                    for (var i = 0; i < keys.length; i++) {
+                        var k = keys[i];
+                        if (k === 'constructor') continue;
+                        try { el[k] = proto[k]; } catch (e) {}
+                    }
+                }
+                var prev = g.__ceUnderConstruction;
+                g.__ceUnderConstruction = el;
+                try { new ctor(); } catch (e) { try { g.__hostLog('warn', 'custom element ctor: ' + e); } catch (x) {} }
+                g.__ceUnderConstruction = prev;
+                // attributeChangedCallback for observed attributes already present.
+                var obs = ctor && ctor.observedAttributes;
+                if (obs && obs.length && typeof el.attributeChangedCallback === 'function') {
+                    for (var j = 0; j < obs.length; j++) {
+                        var a = obs[j], v = el.getAttribute(a);
+                        if (v !== null) {
+                            try { el.attributeChangedCallback(a, null, v); } catch (e) {}
+                        }
+                    }
+                }
+                // It is already in the document (we only scan the live tree), so connect it.
+                if (typeof el.connectedCallback === 'function') {
+                    try { el.connectedCallback(); } catch (e) {}
+                }
+            };
+            g.__upgradeTag = function (name) {
+                var ctor = g.customElements.__defs[name];
+                if (!ctor) return;
+                var els = document.getElementsByTagName(name) || [];
+                for (var i = 0; i < els.length; i++) g.__upgradeEl(els[i], ctor);
+            };
+            // Sweep every defined tag — run after DOM mutations so elements inserted later
+            // (the common SPA pattern) are upgraded too.
+            g.__upgradeScan = function () {
+                for (var name in g.customElements.__defs) {
+                    if (Object.prototype.hasOwnProperty.call(g.customElements.__defs, name)) {
+                        g.__upgradeTag(name);
+                    }
+                }
+            };
+        }
+
         // MutationObserver. The native DOM-mutating methods emit records via __recordMutation;
         // matching records are delivered to each observer as a microtask (after the current
         // script), exactly as the spec batches them. SPAs mutate the DOM post-fetch and watch it
@@ -2009,6 +2136,9 @@ const WINDOW_PRELUDE: &str = r#"
             g.__deliverMutations = function () {
                 g.__moScheduled = false;
                 var recs = g.__pendingMutations; g.__pendingMutations = [];
+                // Elements inserted since the last checkpoint may be custom elements awaiting
+                // upgrade (the common SPA pattern: render markup, then the component boots).
+                if (g.__upgradeScan) { try { g.__upgradeScan(); } catch (e) {} }
                 if (!recs.length) return;
                 for (var i = 0; i < g.__moObservers.length; i++) {
                     var obs = g.__moObservers[i];

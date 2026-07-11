@@ -1736,15 +1736,25 @@ impl Ctx<'_> {
         }
     }
 
-    /// Collect rendered `absolute`/`fixed` element nodes in `node`'s subtree, DOM
+    /// Collect rendered `absolute`/`fixed` element nodes in `node`'s subtree, **flat-tree**
     /// pre-order.
+    ///
+    /// Flat tree, not the node tree: everything else in layout walks `flat_children` (shadow
+    /// content + slot assignment), and only flat-tree nodes are styled. Walking the node tree here
+    /// would reach *unslotted* light-DOM children of a shadow host — which are never rendered, so
+    /// the cascade gives them no style — and the lookup would panic. A missing style is likewise
+    /// skipped rather than indexed, so an unstyled node can never crash layout.
     fn collect_positioned(&self, node: NodeId, out: &mut Vec<NodeId>) {
-        for k in self.dom.children(node) {
+        for k in self.dom.flat_children(node) {
             if !is_rendered(self.dom, self.styles, k) {
                 continue;
             }
-            if self.dom.is_element(k) && is_out_of_flow_positioned(&self.styles[&k]) {
-                out.push(k);
+            if self.dom.is_element(k) {
+                if let Some(st) = self.styles.get(&k) {
+                    if is_out_of_flow_positioned(st) {
+                        out.push(k);
+                    }
+                }
             }
             self.collect_positioned(k, out);
         }

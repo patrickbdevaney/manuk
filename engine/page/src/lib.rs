@@ -1702,6 +1702,59 @@ mod js_interactive_tests {
             Some("false,true,true"),
             "matchMedia: not-narrow, is-wide, and in-range at 1280px wide"
         );
+
+        // (13) Custom elements + Shadow DOM: a class extending HTMLElement is defined, the
+        // existing element upgrades (its constructor runs with `this` === the real element),
+        // attachShadow gives it a shadow root whose content is set from JS, and
+        // connectedCallback + attributeChangedCallback fire.
+        let html13 = r#"<!doctype html><html><body>
+            <my-widget label="Hello"></my-widget>
+            <div id="trace">-</div>
+            <script>
+              class MyWidget extends HTMLElement {
+                static get observedAttributes() { return ['label']; }
+                constructor() {
+                  super();
+                  this.attachShadow({ mode: 'open' });
+                  this.shadowRoot.innerHTML = '<b>SHADOW</b>';
+                }
+                connectedCallback() { this.setAttribute('data-connected', '1'); }
+                attributeChangedCallback(name, oldV, newV) {
+                  document.getElementById('trace').textContent = 'attr:' + name + '=' + newV;
+                }
+              }
+              customElements.define('my-widget', MyWidget);
+            </script></body></html>"#;
+        let page13 = Page::load(html13, "https://app.test/", &fonts, 800.0);
+        let root13 = page13.dom().root();
+        let widget = manuk_css::query_selector_all(page13.dom(), root13, "my-widget")[0];
+        let trace = manuk_css::query_selector_all(page13.dom(), root13, "#trace")[0];
+
+        // connectedCallback ran on upgrade.
+        assert_eq!(
+            page13.dom().element(widget).and_then(|e| e.attr("data-connected")),
+            Some("1"),
+            "connectedCallback fired on upgrade"
+        );
+        // attributeChangedCallback fired for the observed attribute already present.
+        assert_eq!(
+            page13.dom().text_content(trace),
+            "attr:label=Hello",
+            "attributeChangedCallback fired for an observed attribute present at upgrade"
+        );
+        // attachShadow gave the host a real shadow root, and its content is in the shadow tree
+        // (NOT a light-DOM child of the host).
+        let sr = page13.dom().shadow_root(widget).expect("shadow root attached from JS");
+        assert!(page13.dom().is_shadow_root(sr));
+        assert_eq!(
+            page13.dom().text_content(sr),
+            "SHADOW",
+            "shadowRoot.innerHTML populated the shadow tree"
+        );
+        assert!(
+            !page13.dom().text_content(widget).contains("SHADOW"),
+            "shadow content is not a light-DOM child of the host"
+        );
     }
 }
 
