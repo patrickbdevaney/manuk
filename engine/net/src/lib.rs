@@ -36,6 +36,8 @@ use url::Url;
 /// E7 storage layer — RFC 6265 cookie jar.
 pub mod cookies;
 
+pub mod downloads;
+
 /// E7 storage layer — profile/container/site-partitioned cookies, localStorage, history.
 pub mod storage;
 

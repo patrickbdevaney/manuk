@@ -28,7 +28,7 @@ use crate::session::{self, SessionStore};
 use crate::tab::Browser;
 use manuk_agent::Handoff;
 use manuk_compositor::TabId;
-use manuk_page::{fetch_html, Page};
+use manuk_page::Page;
 
 /// A hamburger-menu action. The menu is a fixed list of these; [`App::run_menu_action`] maps
 /// each to the same operation its keyboard shortcut performs.
@@ -38,6 +38,7 @@ enum MenuAction {
     DuplicateTab,
     Bookmark,
     History,
+    Downloads,
     Find,
     ZoomIn,
     ZoomOut,
@@ -50,6 +51,7 @@ const MENU: &[(&str, MenuAction)] = &[
     ("Duplicate tab", MenuAction::DuplicateTab),
     ("Bookmark this page", MenuAction::Bookmark),
     ("History", MenuAction::History),
+    ("Downloads", MenuAction::Downloads),
     ("Find in page", MenuAction::Find),
     ("Zoom in", MenuAction::ZoomIn),
     ("Zoom out", MenuAction::ZoomOut),
@@ -102,8 +104,16 @@ fn fs(in: VsOut) -> @location(0) vec4<f32> {
 /// The `gen` tags the navigation it belongs to, so a result from a superseded/cancelled load
 /// is ignored (the user navigated again before it returned).
 enum NavEvent {
-    /// The main document finished fetching off-thread: `(html, final_url)` or an error string.
-    Fetched { gen: u64, result: std::result::Result<(String, String), String> },
+    /// The main document finished fetching off-thread: a rendered document or a download, or an
+    /// error string.
+    Fetched { gen: u64, result: std::result::Result<manuk_page::Loaded, String> },
+}
+
+/// A completed download, shown in the hamburger menu's Downloads section.
+struct DownloadRecord {
+    filename: String,
+    path: std::path::PathBuf,
+    bytes: usize,
 }
 
 pub fn run(url: String, width: u32, measure_frames: Option<usize>) -> Result<()> {
@@ -160,6 +170,8 @@ struct App {
     // ---- E1 chrome UI state ----
     modifiers: ModifiersState,
     history: History,
+    /// L04 — completed downloads (most recent last), surfaced in the hamburger menu.
+    downloads: Vec<DownloadRecord>,
     /// R2 back-forward cache: recently-navigated-away pages kept fully constructed (DOM +
     /// layout + scroll) so Back/Forward restores instantly instead of re-running the whole
     /// pipeline. Bounded LRU (most-recent last).
@@ -292,6 +304,7 @@ impl App {
             frames_done: 0,
             modifiers: ModifiersState::empty(),
             history: History::new(),
+            downloads: Vec::new(),
             bfcache: Vec::new(),
             proxy,
             nav_gen: 0,
@@ -636,7 +649,7 @@ impl App {
         let url = self.url.clone();
         let proxy = self.proxy.clone();
         self.rt.spawn(async move {
-            let result = fetch_html(&url).await.map_err(|e| format!("{e:#}"));
+            let result = manuk_page::fetch_document(&url).await.map_err(|e| format!("{e:#}"));
             let _ = proxy.send_event(NavEvent::Fetched { gen, result });
         });
         self.rerender(); // keep the old page visible; chrome stays responsive during the fetch
@@ -677,6 +690,36 @@ impl App {
         // Load scripts may also have routed (history.replaceState on boot) — reflect it.
         self.handle_history_ops();
         self.rerender();
+    }
+
+    /// L04 — the navigation resolved to a **download** (server said attachment / binary). Write
+    /// the bytes to the downloads directory (de-duplicating the name), record it for the menu,
+    /// and restore the page the user was on: a download must not replace the current page or
+    /// leave the URL bar pointing at the file. Best-effort restore via the previous history
+    /// entry (re-fetched from the HTTP cache); if there's none, fall back to a blank page.
+    fn finish_download(&mut self, filename: String, bytes: Vec<u8>) {
+        let dir = manuk_net::downloads::download_dir();
+        match manuk_net::downloads::write_download(&dir, &filename, &bytes) {
+            Ok(path) => {
+                tracing::info!(file = %path.display(), bytes = bytes.len(), "download saved");
+                self.downloads.push(DownloadRecord {
+                    filename: path
+                        .file_name()
+                        .map(|s| s.to_string_lossy().into_owned())
+                        .unwrap_or(filename),
+                    path,
+                    bytes: bytes.len(),
+                });
+            }
+            Err(e) => tracing::error!(error = %e, "failed to write download {filename}"),
+        }
+        // Undo the navigation the download rode in on: go back to the prior page.
+        if let Some(prev) = self.history.back().map(str::to_string) {
+            self.goto_no_history(&prev);
+        } else {
+            self.url = "about:blank".to_string();
+            self.start_fetch();
+        }
     }
 
     /// Mark the frame stale and ask winit for a redraw; the paint itself happens in
@@ -1320,6 +1363,16 @@ impl App {
                 self.omnibox_open = true;
                 self.omnibox_input.clear();
             }
+            MenuAction::Downloads => {
+                if self.downloads.is_empty() {
+                    tracing::info!("downloads: none yet (saved to {})", manuk_net::downloads::download_dir().display());
+                } else {
+                    tracing::info!("downloads ({}):", self.downloads.len());
+                    for d in &self.downloads {
+                        tracing::info!("  {} ({} bytes) -> {}", d.filename, d.bytes, d.path.display());
+                    }
+                }
+            }
             MenuAction::Find => {
                 self.find_open = true;
                 self.find_query.clear();
@@ -1945,7 +1998,12 @@ impl ApplicationHandler<NavEvent> for App {
                 }
                 self.loading = false;
                 match result {
-                    Ok((html, final_url)) => self.finish_load(html, final_url),
+                    Ok(manuk_page::Loaded::Document { html, final_url }) => {
+                        self.finish_load(html, final_url)
+                    }
+                    Ok(manuk_page::Loaded::Download { filename, bytes }) => {
+                        self.finish_download(filename, bytes)
+                    }
                     Err(e) => {
                         tracing::error!("load {}: {e}", self.url);
                         self.rerender();

@@ -1257,6 +1257,44 @@ async fn fetch_external_scripts(dom: &mut Dom, base: &str) {
     }
 }
 
+/// The outcome of navigating to a URL: a document to render, or a file to save (the server
+/// marked the response `Content-Disposition: attachment` or served a non-renderable binary).
+pub enum Loaded {
+    Document { html: String, final_url: String },
+    Download { filename: String, bytes: Vec<u8> },
+}
+
+/// Like [`fetch_html`] but distinguishes a **download** from a document: an HTTP response whose
+/// headers say "attachment" (or a clearly binary content-type) becomes [`Loaded::Download`]
+/// carrying the suggested filename + bytes, for the shell to write to disk instead of rendering.
+/// `data:`/`file:` URLs are always documents.
+pub async fn fetch_document(url: &str) -> Result<Loaded> {
+    if url.starts_with("http://") || url.starts_with("https://") {
+        let resp = manuk_net::fetch(url)
+            .await
+            .with_context(|| format!("fetching {url}"))?;
+        if resp.status >= 400 {
+            anyhow::bail!("server returned HTTP {} for {}", resp.status, url);
+        }
+        let cd = resp.header("content-disposition");
+        let ct = resp.header("content-type");
+        if manuk_net::downloads::is_attachment(cd, ct) {
+            let filename = manuk_net::downloads::suggested_filename(cd, resp.final_url.as_str());
+            return Ok(Loaded::Download {
+                filename,
+                bytes: resp.body.to_vec(),
+            });
+        }
+        Ok(Loaded::Document {
+            html: resp.decoded_text(),
+            final_url: resp.final_url.to_string(),
+        })
+    } else {
+        let (html, final_url) = fetch_html(url).await?;
+        Ok(Loaded::Document { html, final_url })
+    }
+}
+
 pub async fn fetch_html(url: &str) -> Result<(String, String)> {
     if url.starts_with("http://") || url.starts_with("https://") {
         let resp = manuk_net::fetch(url)
