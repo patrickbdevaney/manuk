@@ -15,7 +15,7 @@ use std::rc::Rc;
 
 use html5ever::tendril::stream::Utf8LossyDecoder;
 use html5ever::tendril::{ByteTendril, TendrilSink};
-use html5ever::{parse_document, ParseOpts, Parser};
+use html5ever::{parse_document, parse_fragment, ParseOpts, Parser};
 use manuk_dom::{Dom, NodeData, NodeId};
 /// N3 — our `TreeSink` directly over the arena DOM (enables Declarative Shadow DOM).
 pub mod sink;
@@ -182,14 +182,28 @@ pub fn set_inner_html(dom: &mut Dom, node: NodeId, html: &str) {
     for c in existing {
         dom.detach(c);
     }
-    // Parse the fragment and graft the body's children in.
-    let fragment = parse(html);
-    if let Some(body) = fragment.find_first("body") {
-        let roots: Vec<NodeId> = fragment.children(body).collect();
-        for r in roots {
-            clone_into(&fragment, r, dom, node);
-        }
+    // Context-aware fragment parse: parse `html` as if inside `node`'s element, so
+    // table-scoped content (`<tr>`, `<td>`, `<option>`, `<li>`, …) survives instead of
+    // being dropped as it would at document level. The parsed nodes are children of the
+    // fragment's synthetic root element.
+    let context = dom.tag_name(node).unwrap_or("div").to_string();
+    let fragment = parse_fragment_in(html, &context);
+    let root = fragment.find_first("html").unwrap_or_else(|| fragment.root());
+    let roots: Vec<NodeId> = fragment.children(root).collect();
+    for r in roots {
+        clone_into(&fragment, r, dom, node);
     }
+}
+
+/// Parse `html` as a fragment inside a `context_tag` element (HTML fragment parsing
+/// algorithm), so context-sensitive content is retained. Returns a [`Dom`] whose synthetic
+/// root element holds the parsed nodes.
+pub fn parse_fragment_in(html: &str, context_tag: &str) -> Dom {
+    let context = sink::html_name(context_tag);
+    parse_fragment(sink::ArenaSink::new(), ParseOpts::default(), context, vec![], false)
+        .from_utf8()
+        .read_from(&mut std::io::Cursor::new(html.as_bytes()))
+        .expect("parsing is infallible for in-memory input")
 }
 
 /// Deep-copy `src_node`'s subtree from `src` into `dst` under `dst_parent`
@@ -312,6 +326,19 @@ mod tests {
         assert_eq!(dom.tag_name(kids[1]), Some("b"));
         // Round-trips through serialization.
         assert_eq!(serialize_inner(&dom, host), "<span>new</span><b>bold</b>");
+    }
+
+    #[test]
+    fn set_inner_html_is_context_aware_for_table_rows() {
+        // A `<tr>` set as innerHTML of a <tbody> must survive (document-level parsing
+        // would drop it). Context-aware fragment parsing keeps it.
+        let mut dom = parse("<body><table><tbody id=tb></tbody></table></body>");
+        let tb = dom.find_first("tbody").unwrap();
+        set_inner_html(&mut dom, tb, "<tr><td>cell</td></tr>");
+        let rows: Vec<_> = dom.children(tb).collect();
+        assert_eq!(rows.len(), 1, "the <tr> survived context-aware parsing");
+        assert_eq!(dom.tag_name(rows[0]), Some("tr"));
+        assert_eq!(dom.text_content(tb), "cell");
     }
 }
 
