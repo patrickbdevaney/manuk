@@ -50,6 +50,8 @@ use mozjs::rust::wrappers2::{
     JS_NewGlobalObject, JS_SetElement1, JS_SetProperty, NewArrayObject1,
 };
 use mozjs::jsapi::OnNewGlobalHookOption;
+use mozjs::gc::RootedTraceableBox;
+use mozjs::jsapi::Heap;
 use mozjs::rust::{evaluate_script, CompileOptionsWrapper, RealmOptions, Runtime, SIMPLE_GLOBAL_CLASS};
 
 use manuk_dom::{Dom, NodeData, NodeId};
@@ -1266,6 +1268,116 @@ pub fn run_scripts(
     // Drain microtasks (Promise reactions) and macrotasks (setTimeout) the scripts queued.
     crate::event_loop::run(runtime, global.handle())?;
     Ok(ran)
+}
+
+/// A persistent per-document JS context — the keystone of an *interactive* page.
+///
+/// [`run_scripts`] creates a throwaway global, so every event listener a page registers is
+/// destroyed the instant load finishes: a later click has nothing to fire. `PageContext`
+/// instead keeps the document's global alive in a [`RootedTraceableBox`] (GC-rooted across
+/// event-loop turns), so listeners registered while the page's scripts run survive to fire on
+/// real user input via [`dispatch`](PageContext::dispatch).
+///
+/// # Lifetime / safety contract
+/// The `Dom` passed to [`load`](PageContext::load) and every [`dispatch`](PageContext::dispatch)
+/// must be the **same live `Dom` at a stable address** for the context's lifetime — reflectors
+/// cache a raw `*mut Dom`. A navigation builds a fresh `PageContext` over the new document.
+pub struct PageContext {
+    global: RootedTraceableBox<Heap<*mut JSObject>>,
+}
+
+impl PageContext {
+    /// Build the persistent global, install the DOM+BOM bindings and the event loop, then run
+    /// the document's inline scripts (registering their listeners). Returns the context to keep
+    /// alive alongside the page, and the number of scripts that ran.
+    pub fn load(
+        runtime: &mut Runtime,
+        dom: &mut Dom,
+        layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    ) -> Result<(Self, usize), String> {
+        LAYOUT_RECTS.with(|l| *l.borrow_mut() = layout.clone());
+        STYLES.with(|s| *s.borrow_mut() = styles.clone());
+
+        let options = RealmOptions::default();
+        rooted!(&in(runtime.cx()) let global = unsafe {
+            JS_NewGlobalObject(runtime.cx(), &SIMPLE_GLOBAL_CLASS, ptr::null_mut(),
+                OnNewGlobalHookOption::FireOnNewGlobalHook, &*options)
+        });
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        unsafe { install(raw_cx, &global, dom as *mut Dom) };
+        crate::event_loop::install(runtime, global.handle())?;
+        unsafe {
+            mozjs::jsapi::SetModuleResolveHook(
+                mozjs::jsapi::JS_GetRuntime(raw_cx),
+                Some(module_resolve_hook),
+            );
+        }
+
+        let mut ran = 0usize;
+        for (src, is_module) in collect_inline_scripts(dom) {
+            if is_module {
+                if !unsafe { run_module(raw_cx, &src) } {
+                    tracing::warn!("a page module failed (compile/link/evaluate); continuing");
+                }
+            } else {
+                rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
+                let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"inline.js".to_owned(), 1);
+                if evaluate_script(runtime.cx(), global.handle(), &src, rval.handle_mut(), opts).is_err() {
+                    tracing::warn!("a page <script> threw; continuing with the rest");
+                }
+            }
+            ran += 1;
+        }
+        crate::event_loop::run(runtime, global.handle())?;
+
+        // Promote the stack-rooted global to a persistent root so it outlives this call.
+        let boxed = RootedTraceableBox::new(Heap::default());
+        boxed.set(global.get());
+        Ok((Self { global: boxed }, ran))
+    }
+
+    /// Dispatch a trusted `ty` event (e.g. `"click"`, `"input"`) to `node`, running its
+    /// listeners (and delegated listeners up the ancestor chain) synchronously plus any
+    /// microtasks/timers they queue. Returns `true` if the engine should still perform the
+    /// element's **default action** (navigation, submit) — i.e. no listener called
+    /// `preventDefault()`.
+    pub fn dispatch(
+        &self,
+        runtime: &mut Runtime,
+        dom: &mut Dom,
+        node: NodeId,
+        ty: &str,
+        layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    ) -> Result<bool, String> {
+        LAYOUT_RECTS.with(|l| *l.borrow_mut() = layout.clone());
+        STYLES.with(|s| *s.borrow_mut() = styles.clone());
+
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        // Reflect the target node (idempotent) so it is registered in `__nodes` and
+        // `__dispatchEvent` can resolve it and walk its ancestor chain for delegation.
+        unsafe {
+            let _ = new_reflector(raw_cx, dom as *mut Dom, node);
+        }
+        let script = format!("__dispatchEvent({}, {})", node.0, js_string_literal(ty));
+        rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
+        let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"dispatch.js".to_owned(), 1);
+        let proceed = match evaluate_script(runtime.cx(), global.handle(), &script, rval.handle_mut(), opts) {
+            // `__dispatchEvent` returns `!defaultPrevented`; a non-boolean or error means
+            // nothing suppressed the default, so proceed.
+            Ok(()) => {
+                let v = rval.get();
+                !v.is_boolean() || v.to_boolean()
+            }
+            Err(()) => true,
+        };
+        crate::event_loop::run(runtime, global.handle())?;
+        Ok(proceed)
+    }
 }
 
 /// Compile + link + evaluate `source` as an ES module in the current realm. Returns false

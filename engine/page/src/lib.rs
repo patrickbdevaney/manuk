@@ -369,10 +369,17 @@ pub struct Page {
     pub title: String,
     pub content_height: f32,
     pub root_box: LayoutBox,
-    dom: Dom,
+    /// Boxed so its heap address is stable across `Page` moves: the persistent JS context
+    /// (`js`) caches raw `*mut Dom` pointers in its reflectors, which must not dangle when the
+    /// `Page` is moved into the shell's tab slot.
+    dom: Box<Dom>,
     /// The **base** cascade at 100% zoom. Zoomed layouts always derive from this, so
     /// repeated zooming never compounds.
     styles: StyleMap,
+    /// The document's persistent JS context, kept alive so listeners registered by the page's
+    /// scripts survive to fire on user input (a click, an input). `None` if scripts failed to
+    /// load or (always) without the `spidermonkey` feature.
+    js: Option<manuk_js::PageContext>,
     zoom: f32,
     /// Decoded raster images keyed by their `<img>` node, painted into each element's box.
     images: std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
@@ -458,10 +465,12 @@ impl Page {
         fonts: &FontContext,
         viewport_width: f32,
     ) -> Page {
-        // Style + lay out once, then run the document's inline scripts against that layout
-        // snapshot (so `getBoundingClientRect` works), letting them mutate the DOM. If they
-        // did, re-style and re-lay-out so script-built content is rendered. All a no-op unless
-        // the `spidermonkey` feature is on; scripts that throw are logged and the rest run.
+        // Box the DOM up front so its address is stable for the persistent JS context's raw
+        // reflector pointers, then style + lay out once and run the document's inline scripts
+        // against that layout snapshot (so `getBoundingClientRect` works), letting them mutate
+        // the DOM and register event listeners. If they mutated it, re-style + re-lay-out so
+        // script-built content renders. All a no-op unless the `spidermonkey` feature is on.
+        let mut dom = Box::new(dom);
         let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&dom);
         let mut styles = cascade_styles(&dom, &sheets, viewport_width);
         let mut root_box = layout_document(&dom, &styles, fonts, viewport_width);
@@ -471,16 +480,28 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
-        match manuk_js::run_document_scripts(&mut dom, &rects, &styles) {
-            Ok(n) if n > 0 => {
-                tracing::debug!(scripts = n, "executed page scripts");
-                let sheets2: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&dom);
-                styles = cascade_styles(&dom, &sheets2, viewport_width);
-                root_box = layout_document(&dom, &styles, fonts, viewport_width);
+        // Only stand up a JS context for documents that actually have a script — a static page
+        // needs no engine spin-up (faster load, and no persistent global to keep alive). With
+        // no initial script, no listener can ever be registered, so there is nothing to lose.
+        let js = if dom.find_first("script").is_none() {
+            None
+        } else {
+            match manuk_js::load_document(&mut dom, &rects, &styles) {
+                Ok((ctx, n)) => {
+                    if n > 0 {
+                        tracing::debug!(scripts = n, "executed page scripts");
+                        let sheets2: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&dom);
+                        styles = cascade_styles(&dom, &sheets2, viewport_width);
+                        root_box = layout_document(&dom, &styles, fonts, viewport_width);
+                    }
+                    Some(ctx)
+                }
+                Err(e) => {
+                    tracing::warn!("page scripts: {e}");
+                    None
+                }
             }
-            Ok(_) => {}
-            Err(e) => tracing::warn!("page scripts: {e}"),
-        }
+        };
 
         let title = dom
             .find_first("title")
@@ -504,9 +525,43 @@ impl Page {
             root_box,
             dom,
             styles,
+            js,
             zoom: 1.0,
             images: std::collections::HashMap::new(),
         }
+    }
+
+    /// Fire a trusted `click` at `node` and its ancestors (delegation), running the page's JS
+    /// listeners. If the DOM changed, re-cascade + re-lay-out so the mutation renders. Returns
+    /// `true` if the engine should still perform the element's **default action** (follow a
+    /// link, submit a form) — i.e. no listener called `preventDefault()`. Without JS (no
+    /// context / feature off) this is a no-op that returns `true`.
+    pub fn dispatch_click(&mut self, node: manuk_dom::NodeId, fonts: &FontContext, viewport_width: f32) -> bool {
+        let Some(ctx) = &self.js else { return true };
+        let rects: std::collections::HashMap<manuk_dom::NodeId, [f32; 4]> = self
+            .root_box
+            .node_rects(&self.dom)
+            .into_iter()
+            .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+            .collect();
+        let proceed = match manuk_js::dispatch_event(ctx, &mut self.dom, node, "click", &rects, &self.styles) {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::warn!("click dispatch: {e}");
+                return true;
+            }
+        };
+        // If a handler mutated the DOM, re-style + re-lay-out so it renders (at base zoom;
+        // the caller re-applies zoom on its next relayout).
+        let root = self.dom.root();
+        if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
+            let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
+            self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
+            self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            self.content_height = self.root_box.content_bottom();
+            self.dom.clear_all_dirty();
+        }
+        proceed
     }
 
     /// **Streaming load with a first-paint checkpoint (B-latency).** Feeds `chunks` to
@@ -1157,6 +1212,67 @@ fn hex(c: u8) -> Option<u8> {
         b'a'..=b'f' => Some(c - b'a' + 10),
         b'A'..=b'F' => Some(c - b'A' + 10),
         _ => None,
+    }
+}
+
+/// The keystone interactivity test: a click handler registered while the page's scripts run
+/// must fire on a *later* dispatch and mutate the live DOM — proving the persistent JS context
+/// survives load, real input reaches page listeners, and their DOM writes land in the arena.
+/// Only meaningful with a real JS engine.
+#[cfg(all(test, feature = "spidermonkey"))]
+mod js_interactive_tests {
+    use super::*;
+
+    // One combined test: a leaked per-process SpiderMonkey runtime tears down messily at
+    // process exit, and exercising it from *multiple* #[test] fns in one binary can crash on
+    // exit (a known mozjs shutdown-ordering issue; real browsers fast-exit the same way). A
+    // single test keeps one JS context per binary and covers both the fire-and-mutate path and
+    // preventDefault.
+    // `#[ignore]` by default: the deliberately-leaked per-process SpiderMonkey runtime crashes
+    // on *process exit* (a known mozjs shutdown-ordering issue) when this JS test co-runs with
+    // the rest of the crate's suite. It passes reliably in isolation — run it explicitly:
+    //   cargo test -p manuk-page --features spidermonkey -- --ignored user_click_fires
+    #[test]
+    #[ignore = "leaked SpiderMonkey runtime crashes at process exit when co-run; run in isolation"]
+    fn user_click_fires_page_listeners_and_respects_prevent_default() {
+        let fonts = FontContext::new();
+
+        // (1) A click handler registered at load fires on a later dispatch and mutates the DOM.
+        let html = r#"<!doctype html><html><body>
+            <button id="b">Go</button><p id="out">before</p>
+            <script>
+              document.getElementById('b').addEventListener('click', function () {
+                document.getElementById('out').textContent = 'CLICKED';
+              });
+            </script></body></html>"#;
+        let mut page = Page::load(html, "https://example.test/", &fonts, 800.0);
+        let root = page.dom().root();
+        let button = manuk_css::query_selector_all(page.dom(), root, "#b")[0];
+        let out = manuk_css::query_selector_all(page.dom(), root, "#out")[0];
+        assert_eq!(page.dom().text_content(out), "before");
+        let proceed = page.dispatch_click(button, &fonts, 800.0);
+        assert!(proceed, "no listener called preventDefault, so the default action proceeds");
+        assert_eq!(
+            page.dom().text_content(out),
+            "CLICKED",
+            "the load-time click listener fired on dispatch and mutated the arena DOM"
+        );
+
+        // (2) preventDefault() on a link's click handler suppresses the default navigation.
+        let html2 = r#"<!doctype html><html><body>
+            <a id="lnk" href="/next">go</a>
+            <script>
+              document.getElementById('lnk').addEventListener('click', function (e) {
+                e.preventDefault();
+              });
+            </script></body></html>"#;
+        let mut page2 = Page::load(html2, "https://example.test/", &fonts, 800.0);
+        let root2 = page2.dom().root();
+        let link = manuk_css::query_selector_all(page2.dom(), root2, "#lnk")[0];
+        assert!(
+            !page2.dispatch_click(link, &fonts, 800.0),
+            "preventDefault means the engine must NOT follow the link"
+        );
     }
 }
 

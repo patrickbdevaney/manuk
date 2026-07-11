@@ -132,15 +132,14 @@ pub mod bindings {
 ///
 /// `layout` maps each element's `NodeId` to its border box `[x, y, width, height]` from a
 /// pre-script layout snapshot, so `element.getBoundingClientRect()` returns real geometry.
+/// The one SpiderMonkey [`Runtime`] per thread (the UI thread, in the shell). Shared by every
+/// JS entry point so load and later event dispatch reach the same runtime (SpiderMonkey is
+/// thread-affine; one live runtime per thread). Held in `ManuallyDrop` — leaked deliberately
+/// for the process lifetime, since tearing a runtime down mid-process is the fragile path.
 #[cfg(feature = "_sm")]
-pub fn run_document_scripts(
-    dom: &mut manuk_dom::Dom,
-    layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
-) -> Result<usize, JsError> {
+fn with_runtime<R>(f: impl FnOnce(&mut mozjs::rust::Runtime) -> Result<R, JsError>) -> Result<R, JsError> {
     use std::cell::RefCell;
     use std::mem::ManuallyDrop;
-
     use mozjs::rust::Runtime;
 
     thread_local! {
@@ -153,8 +152,82 @@ pub fn run_document_scripts(
             *slot = Some(ManuallyDrop::new(Runtime::new(handle)));
         }
         let rt: &mut Runtime = &mut *slot.as_mut().expect("runtime just initialized");
+        f(rt)
+    })
+}
+
+#[cfg(feature = "_sm")]
+pub fn run_document_scripts(
+    dom: &mut manuk_dom::Dom,
+    layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<usize, JsError> {
+    with_runtime(|rt| {
         dom_bindings::run_scripts(rt, dom, layout, styles).map_err(|message| JsError { message })
     })
+}
+
+/// The interactive JS surface. `load_document` runs the page's scripts on a **persistent**
+/// global and returns a [`PageContext`] to keep alive; `dispatch_event` later fires a trusted
+/// event (a real click/input) into that same global so the page's registered listeners run.
+/// This is what turns a one-shot script run into an interactive page.
+#[cfg(feature = "_sm")]
+pub use dom_bindings::PageContext;
+
+/// Load `dom`'s scripts on a persistent global and return the context to retain for the
+/// document's lifetime, plus the number of scripts that ran.
+#[cfg(feature = "_sm")]
+pub fn load_document(
+    dom: &mut manuk_dom::Dom,
+    layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<(PageContext, usize), JsError> {
+    with_runtime(|rt| {
+        dom_bindings::PageContext::load(rt, dom, layout, styles).map_err(|message| JsError { message })
+    })
+}
+
+/// Dispatch a trusted `ty` event to `node` in `ctx`'s document. Returns `true` if the engine
+/// should still perform the element's default action (no listener called `preventDefault`).
+#[cfg(feature = "_sm")]
+pub fn dispatch_event(
+    ctx: &PageContext,
+    dom: &mut manuk_dom::Dom,
+    node: manuk_dom::NodeId,
+    ty: &str,
+    layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<bool, JsError> {
+    with_runtime(|rt| {
+        ctx.dispatch(rt, dom, node, ty, layout, styles).map_err(|message| JsError { message })
+    })
+}
+
+/// JS-less build: an opaque zero-sized context so callers compile unchanged. `dispatch_event`
+/// always returns `true` (perform the default action), and `load_document` is a no-op.
+#[cfg(not(feature = "_sm"))]
+#[derive(Default)]
+pub struct PageContext;
+
+#[cfg(not(feature = "_sm"))]
+pub fn load_document(
+    _dom: &mut manuk_dom::Dom,
+    _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<(PageContext, usize), JsError> {
+    Ok((PageContext, 0))
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn dispatch_event(
+    _ctx: &PageContext,
+    _dom: &mut manuk_dom::Dom,
+    _node: manuk_dom::NodeId,
+    _ty: &str,
+    _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<bool, JsError> {
+    Ok(true)
 }
 
 /// The JS-less build: `<script>`s are parsed into the DOM but not executed.
