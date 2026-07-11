@@ -5,8 +5,10 @@ T=times touched. `score = V/C + 1.5*sqrt(ln(1+TICKS)/(1+T)) + 1.0*(U/10)`. Every
 the highest-U item. Update T/status/scores each tick; add items on reflection; mark dead ends
 `superseded`. Verify class per §7: HEADLESS / GUI / EXTERNAL / MEASURE._
 
-**TICKS = 2** (global tick counter; increment each tick). _Tick 1 landed an L14 slice (window/
-screen metrics); L14 stays backlog for the rest of the fingerprint surface (T=1)._
+**TICKS = 3** (global tick counter; increment each tick). _Tick 1 landed an L14 slice (window/
+screen metrics; L14 stays backlog for the rest, T=1). Tick 2 landed L01 fetch/XHR (done, T=1).
+Tick 3 UCB pick: **L10 pushState/popstate** (V/C=2.0, top score; the natural complement to
+fetch — SPAs pair data-load with client-side routing)._
 
 ## Tier A — absorb outstanding beneficial work already suggested (do first)
 
@@ -15,7 +17,7 @@ STATE weak frontiers. High V, mostly known ⇒ high exploit ⇒ front-loaded.
 
 | id | intent | axis | V | C | U | T | status | verify |
 |----|--------|------|---|---|---|---|--------|--------|
-| L01 | `fetch()` + `XMLHttpRequest` in page JS (SPA data loading) | JS/COMPAT | 10 | 5 | 4 | 0 | backlog | HEADLESS |
+| L01 | `fetch()` + `XMLHttpRequest` in page JS (SPA data loading) | JS/COMPAT | 10 | 5 | 4 | 1 | **done** (Tick 2) | HEADLESS |
 | L02 | `MutationObserver` (SPAs mutate DOM post-load) | JS/COMPAT | 9 | 5 | 4 | 0 | backlog | HEADLESS |
 | L03 | Cross-window `postMessage` + `window.opener` (finish OAuth popup return) | JS | 9 | 5 | 5 | 0 | backlog | HEADLESS |
 | L04 | Downloads to disk (Content-Disposition, stream to file, manager entry) | NET/UI | 8 | 4 | 3 | 0 | backlog | HEADLESS |
@@ -35,6 +37,9 @@ STATE weak frontiers. High V, mostly known ⇒ high exploit ⇒ front-loaded.
 | L18 | Cookie partitioning + `SameSite` enforcement audit | NET/SECURITY | 5 | 4 | 4 | 0 | backlog | HEADLESS |
 | L19 | Settings page / preferences surface | UI | 4 | 5 | 4 | 0 | backlog | GUI |
 | L20 | PERF profile vs Chromium: nav + reflow + paint timings, publish numbers | PERF | 7 | 4 | 6 | 0 | backlog | MEASURE |
+| L21 | Non-blocking async page-fetch (don't `block_on` the UI thread; spawn + deliver on completion) | PERF/JS | 6 | 5 | 5 | 0 | backlog (L01 follow-on) | HEADLESS |
+| L22 | Real request/response fidelity for fetch: headers, `Request`/`Headers`/`Response` objects, credentials/cookies on XHR | JS/NET | 6 | 5 | 5 | 0 | backlog (L01 follow-on) | HEADLESS |
+| L23 | `AbortController` / `signal` for fetch + XHR `abort()` wired to cancel the host request | JS | 4 | 4 | 4 | 0 | backlog (L01 follow-on) | HEADLESS |
 
 ## Tier B — new innovation surface (exploration; higher U)
 
@@ -51,7 +56,7 @@ STATE weak frontiers. High V, mostly known ⇒ high exploit ⇒ front-loaded.
 interactive-JS-keystone · persistent-cookies · spidermonkey-default · clicks→JS · fast-exit ·
 clipboard+selection · tab-strip · hamburger-menu · suggestions/history-dropdown · scrollbar ·
 position:sticky · grid-template-areas · UAX#14-linebreak · preconnect(R4) · AG5-latency ·
-MEM3-binary-size · window.open→new-tab.
+MEM3-binary-size · window.open→new-tab · **fetch()+XHR real Promises (L01, Tick 2)**.
 
 ## Superseded / blocked
 
