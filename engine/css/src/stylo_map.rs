@@ -22,15 +22,21 @@ fn abs_to_rgba(c: &AbsoluteColor) -> Rgba {
     Rgba::new(to(s.components.0), to(s.components.1), to(s.components.2), to(s.alpha))
 }
 
-/// A `LengthPercentage` reduced to our `Dim` (pure length → px, pure percentage → %,
-/// mixed calc → its length part; percentages are stored 0–100 in `Dim`).
+/// A `LengthPercentage` reduced to our `Dim`. Sampling the used value at two bases makes
+/// this work for the mixed `calc()` case too: at basis 0 the result is the pure length
+/// part, and the slope to basis 100px is the percentage fraction — so `calc(50% - 10px)`
+/// maps to `Dim::Calc { px: -10, pct: 50 }`. Percentages are stored 0–100 in `Dim`.
 fn lp_to_dim(lp: &LengthPercentage) -> Dim {
-    if let Some(l) = lp.to_length() {
-        Dim::Px(l.px())
-    } else if let Some(p) = lp.to_percentage() {
-        Dim::Percent(p.0 * 100.0)
+    use app_units::Au;
+    let at = |basis_px: f32| lp.to_used_value(Au::from_f32_px(basis_px)).to_f32_px();
+    let px = at(0.0);
+    let pct = at(100.0) - px;
+    if pct.abs() < 1e-4 {
+        Dim::Px(px)
+    } else if px.abs() < 1e-4 {
+        Dim::Percent(pct)
     } else {
-        Dim::Px(0.0)
+        Dim::Calc { px, pct }
     }
 }
 
@@ -160,6 +166,42 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     };
     s.border_color = abs_to_rgba(&cv.clone_border_top_color().resolve_to_absolute(&current));
 
+    // Position mode — drives whether the insets below are actually applied by layout.
+    use stylo::values::computed::{
+        Clear as SClear, Float as SFloat, Overflow as SOverflow, PositionProperty, ZIndex,
+    };
+    s.position = match cv.clone_position() {
+        PositionProperty::Relative => crate::Position::Relative,
+        PositionProperty::Absolute => crate::Position::Absolute,
+        PositionProperty::Fixed => crate::Position::Fixed,
+        PositionProperty::Sticky => crate::Position::Sticky,
+        PositionProperty::Static => crate::Position::Static,
+    };
+    s.float = match cv.clone_float() {
+        SFloat::Left | SFloat::InlineStart => crate::Float::Left,
+        SFloat::Right | SFloat::InlineEnd => crate::Float::Right,
+        SFloat::None => crate::Float::None,
+    };
+    s.clear = match cv.clone_clear() {
+        SClear::Left | SClear::InlineStart => crate::Clear::Left,
+        SClear::Right | SClear::InlineEnd => crate::Clear::Right,
+        SClear::Both => crate::Clear::Both,
+        SClear::None => crate::Clear::None,
+    };
+    // `overflow`: our model keeps one axis (the more-clipping of x/y).
+    let map_overflow = |o: SOverflow| match o {
+        SOverflow::Hidden => crate::Overflow::Hidden,
+        SOverflow::Scroll => crate::Overflow::Scroll,
+        SOverflow::Auto => crate::Overflow::Auto,
+        SOverflow::Clip => crate::Overflow::Clip,
+        SOverflow::Visible => crate::Overflow::Visible,
+    };
+    let (ox, oy) = (map_overflow(cv.clone_overflow_x()), map_overflow(cv.clone_overflow_y()));
+    s.overflow = if ox != crate::Overflow::Visible { ox } else { oy };
+    s.z_index = match cv.clone_z_index() {
+        ZIndex::Integer(i) => Some(i),
+        ZIndex::Auto => None,
+    };
     // Insets.
     s.inset.top = inset_to_dim(&cv.clone_top());
     s.inset.right = inset_to_dim(&cv.clone_right());

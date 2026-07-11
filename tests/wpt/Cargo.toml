@@ -7,6 +7,10 @@ license.workspace = true
 description = "Web Platform Tests harness + results tracking. Ground-truth conformance."
 publish = false
 
+[features]
+# Run the parity/reftest harness against the real Stylo cascade instead of MinimalCascade.
+stylo = ["manuk-page/stylo"]
+
 [lib]
 path = "src/lib.rs"
 
