@@ -29,7 +29,9 @@ diff choose the work. Highest expected value per ADR-004 (traversal breadth)._
 | **DEBT-1** | Eliminate the 4 UI-thread `block_on`s (page load, stylesheets, fetch pump, agent panel) — each is a latent hang | RELIABILITY | EPOCH-1 |
 | **DEBT-2** | Residual cascade superlinearity (still 4.3× worse per node at 19k nodes vs 1.3k) | EFFICIENCY | EPOCH-1 |
 | ~~W1~~ | ~~Unhidden dropdowns painting over the page~~ **DONE (T22)** — root cause was `visibility`/`opacity` being **entirely unsupported**. Generalizes to every site hiding UI that way (most of the modern web). | RENDER | G1 |
-| **W3** | **Page-level CSS Grid**: Wikipedia's left TOC sidebar + right Appearance panel don't render at all (Chrome shows both). Vector-2022 lays the page out with grid — suspect grid template/placement on the page container. Represents the "app shell / complex skin" class. | RENDER | G1 |
+| ~~W3~~ | ~~TOC sidebar never renders~~ **DONE (T23)** — root cause was `@supports` (and `@layer`) being skipped: we rendered the FALLBACK branch of every progressive-enhancement site. | RENDER | G1 |
+| **W6** | **A/B caught (1000px):** below Vector-2022's `min-width:1120px` breakpoint the TOC should collapse to a hamburger (Chrome does); Manuk renders it **overlapping the article**. Responsive collapse + positioned-element containment. Found only by side-by-side — the 1200px shot looked fine. | RENDER | G1 A/B |
+| **W3-old** | (superseded) **Page-level CSS Grid**: Wikipedia's left TOC sidebar + right Appearance panel don't render at all (Chrome shows both). Vector-2022 lays the page out with grid — suspect grid template/placement on the page container. Represents the "app shell / complex skin" class. | RENDER | G1 |
 | **W4** | **Infobox table layout broken** — th/td overlap instead of forming columns. Represents data tables + infoboxes everywhere. | RENDER | G1 |
 | **W5** | Unrendered icon squares (black boxes) — likely SVG/icon-font/mask not painted | RENDER | G1 |
 | **W2** | HN fidelity 78.6% — table auto-layout column widths (header nav wraps) | RENDER | G1 |
