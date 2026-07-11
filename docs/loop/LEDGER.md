@@ -5,12 +5,11 @@ T=times touched. `score = V/C + 1.5*sqrt(ln(1+TICKS)/(1+T)) + 1.0*(U/10)`. Every
 the highest-U item. Update T/status/scores each tick; add items on reflection; mark dead ends
 `superseded`. Verify class per §7: HEADLESS / GUI / EXTERNAL / MEASURE._
 
-**TICKS = 5** (global tick counter; increment each tick). _Tick 1: L14 slice (window/screen
-metrics; rest stays backlog, T=1). Tick 2: L01 fetch/XHR (done). Tick 3: L10 pushState/popstate
-(done). Tick 4: L04 downloads (done). **Tick 5 is the forced-highest-U tick** (§5): highest U
-overall is L31/L32/L34 (U8), but L31 (llama grounding) + L34 (service worker) are EXTERNAL/very
-costly and can't be cleanly HEADLESS-verified here — so the pick is the highest-U item that
-honors the verification invariant: **L32 predictive prerender** (U8, HEADLESS, PERF)._
+**TICKS = 6** (global tick counter; increment each tick). _Ticks done: 1 L14-slice, 2 L01
+fetch/XHR, 3 L10 pushState, 4 L04 downloads, 5 L32 prerender. Tick 6 UCB pick: **L03 cross-window
+`postMessage` + `window.opener`** (top score ~4.4; completes the OAuth-popup story begun by
+window.open — an explicit needs-list item — and is HEADLESS-verifiable). NOTE: Tick 10 is the
+next forced-highest-U tick._
 
 ## Tier A — absorb outstanding beneficial work already suggested (do first)
 
@@ -51,7 +50,8 @@ STATE weak frontiers. High V, mostly known ⇒ high exploit ⇒ front-loaded.
 |----|--------|------|---|---|---|---|--------|--------|
 | L30 | In-process automation tool surface hardening (stable selectors, wait-for, assertions) as the agent-native differentiator | AGENT-EXT | 9 | 6 | 7 | 0 | backlog | HEADLESS |
 | L31 | llama.cpp agent: prompt→action grounding over the a11y tree, replayable | AGENT-IN | 8 | 7 | 8 | 0 | backlog | EXTERNAL |
-| L32 | Speculative/predictive prerender of likely-next navigations | PERF | 6 | 7 | 8 | 0 | backlog | HEADLESS |
+| L32 | Speculative/predictive prerender of likely-next navigations | PERF | 6 | 7 | 8 | 1 | **done** (Tick 5) | HEADLESS |
+| L32b | Idle (non-hover) prerender from ranked content links + surfaced prewarm hit-rate metric | PERF | 4 | 5 | 5 | 0 | backlog (L32 follow-on) | MEASURE |
 | L33 | Memory: measure reflow-cache hit rate, then SoA-DOM only if it pays | MEM | 6 | 8 | 7 | 0 | backlog | MEASURE |
 | L34 | Service worker / offline cache subset | NET/COMPAT | 6 | 9 | 8 | 0 | backlog | HEADLESS |
 
@@ -62,7 +62,7 @@ clipboard+selection · tab-strip · hamburger-menu · suggestions/history-dropdo
 position:sticky · grid-template-areas · UAX#14-linebreak · preconnect(R4) · AG5-latency ·
 MEM3-binary-size · window.open→new-tab · **fetch()+XHR real Promises (L01, Tick 2)** ·
 **history.pushState/replaceState/popstate + location (L10, Tick 3)** · **downloads to disk
-(L04, Tick 4)**.
+(L04, Tick 4)** · **predictive prerender into bfcache (L32, Tick 5)**.
 
 ## Superseded / blocked
 

@@ -73,3 +73,22 @@ _Minimal history for audit + resume. See [[CONSTITUTION]] §4/§6, [[RESUME]] fo
 - Reflect: the download rides in on a navigation then restores the prior page (re-fetch from
   cache) — fine, but a `<a download>` attribute trigger + a streaming-to-disk progress shelf are
   follow-ons (logged). Next: Tick 5 (forced-highest-U).
+
+## Tick 5 — L32: predictive prerender of the likely-next navigation (2026-07-11)
+- Selected: the forced-highest-U tick (§5). U8 tied three ways (L31 llama, L32 prerender, L34
+  service worker); L31 (needs a GGUF model → EXTERNAL) and L34 (C9) can't be honestly
+  HEADLESS-verified in one tick, so picked the highest-U item that keeps the verification
+  invariant: **L32** (PERF, HEADLESS).
+- Implemented: `shell/prerender.rs` (pure predictor: hovered link, else first same-origin content
+  link; gated by `is_prewarmable` = same-origin http(s) GET only). On hover the shell prewarms
+  the predicted URL off-thread (bounded to 1 in-flight), builds it into the bfcache keyed by the
+  requested URL without disturbing the current page (`finish_prewarm`), and `goto` checks the
+  bfcache first so a prewarmed click is an instant swap. `build_page` extracted + shared with
+  `finish_load`.
+- Verified: HEADLESS — 5 predictor unit tests (hover wins; cross-origin hover → same-origin
+  content fallback; non-http never prewarmed; no same-origin → None; same_origin gate). Parity
+  72/72; workspace builds; page interactive test green. MEASURE: prewarm/hit logged. Commit
+  `c6925f7`.
+- Reflect: idle (non-hover) prerender from ranked content links, a surfaced hit-rate metric, and
+  never-cross-origin speculation rules are follow-ons (logged). Next: Tick 6 (normal UCB; Tick 10
+  is the next forced-highest-U).

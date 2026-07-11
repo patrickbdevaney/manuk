@@ -4,9 +4,9 @@ _A fresh session reads [[CONSTITUTION]] then this file, and resumes at the named
 
 ## Where the loop is
 
-- **TICKS = 5** (about to run Tick 5 — the forced-highest-U tick). Ticks 1 (`1a717d0`),
-  2 (`91a22bb`), 3 (`7f1b35d`), 4 (`d6022ff`) done + committed.
-- Working tree: clean, on `main`, pushed. Parity 72/72. Disk: 42G free (86%); nuke
+- **TICKS = 6** (about to run Tick 6). Ticks 1 (`1a717d0`), 2 (`91a22bb`), 3 (`7f1b35d`),
+  4 (`d6022ff`), 5 (`c6925f7`) done + committed.
+- Working tree: clean, on `main`, pushed. Parity 72/72. Disk: 41G free (86%); nuke
   `target/debug` only if free < 25G.
 - Key architecture notes for future ticks:
   - Page JS runs on a **persistent** `PageContext` (`engine/js/src/dom_bindings.rs`) whose event
@@ -19,39 +19,44 @@ _A fresh session reads [[CONSTITUTION]] then this file, and resumes at the named
     rework in Tick 2).
   - The document URL reaches JS via `install(..., doc_url)` → `%URL%` in `WINDOW_PRELUDE`.
   - Navigation returns `manuk_page::Loaded::{Document, Download}` from `fetch_document`; the shell
-    branches in `NavEvent::Fetched`. Downloads policy is `manuk_net::downloads` (pure + tested).
+    branches in `NavEvent::{Fetched, Prewarmed}`. Downloads policy = `manuk_net::downloads`;
+    prerender predictor = `shell/prerender.rs` (pure). `build_page` builds a Page off fetched HTML
+    (shared by finish_load + finish_prewarm); prewarmed pages live in the bfcache; `goto` checks
+    it first for an instant click.
 
-## Next action (Tick 5 — forced highest-U)
+## Next action (Tick 6)
 
-§5 forces the highest-U item. Highest U overall is a three-way tie at U8 (L31 llama grounding,
-L32 prerender, L34 service worker); L31 (needs a local GGUF model → EXTERNAL) and L34 (C9, very
-costly) can't be cleanly HEADLESS-verified in one tick, so honoring the verification invariant
-the pick is **L32 — speculative/predictive prerender of the likely-next navigation** (U8, PERF,
-HEADLESS). Design:
+UCB pick: **L03 — cross-window `postMessage` + `window.opener`** (top score ~4.4; completes the
+OAuth-popup story `window.open` began — an explicit needs-list item — and is HEADLESS-verifiable).
+Design (route messages between the two tabs' PageContexts through the host — reuse the host-queue
+pattern, do NOT add a parallel queue):
 
-1. A predictor: given the current page + its links (and optionally hover/pointer signal from the
-   shell), score which link the user is most likely to click next. Start simple + measurable:
-   the top-of-viewport primary link / highest-rank in-content link, or the link currently
-   hovered. Keep the scoring in a small `manuk_page` (or shell) module so it is unit-testable.
-2. Prewarm: on idle after load (or on hover), kick an **off-thread** `manuk_net::fetch` of the
-   predicted URL into the HTTP cache (RFC-9111) — the machinery already exists (preconnect R4 +
-   the cache). Optionally pre-build the `Page` into the bfcache keyed by URL so a click is an
-   instant swap. Bound it (1 in-flight; cancel/replace on a new prediction; never prerender
-   cross-origin POST/again-non-idempotent or `rel=nofollow`).
-3. Shell: wire a hover/idle hook to call the predictor + prewarm; on the actual click, if the
-   target was prewarmed, serve from cache/bfcache (measure the win).
-4. Verify HEADLESS + MEASURE: unit-test the predictor (given a link set + signal → expected pick)
-   and assert a prewarmed URL is served from cache (cache-hit path) rather than re-fetched.
-   Publish the latency delta. Parity must stay 72/72.
+1. `window.open` already queues the URL and the host opens a new tab with its own `PageContext`.
+   Give the opener a stable handle to the opened tab and vice-versa (an `opener` tab-id link in
+   the shell's `Browser`/tab model), plus a JS `window.opener` shim and the returned popup handle
+   carrying a target tab-id.
+2. `postMessage(msg, targetOrigin)` on a window handle (opener or popup): the JS shim serializes
+   `msg` (structured-clone-lite: JSON) and calls a native `__postMessage(targetTabId, json,
+   origin)` that queues `(from_tab, to_tab, json, origin)` to a thread-local drained by the host
+   (`take_pending_messages`). The host routes it to the destination tab's `PageContext` via a new
+   `PageContext::deliver_message(data_json, origin, source_ref)` that fires a `message`
+   `MessageEvent` (`{data, origin, source}`) through the window event registry (`__fireWindowEvent`
+   — already built in Tick 3), then `run_deferred`.
+3. `engine/js` + `engine/page` wrappers (`take_messages`, `deliver_message`) + shell pump
+   (`pump_messages`, called alongside `pump_fetches`/`handle_history_ops` after dispatch + load).
+   Respect `targetOrigin` ('*' or an exact origin match).
+4. Verify HEADLESS: drive two `PageContext`s directly — one registers `onmessage`, the other
+   `deliver_message`s a payload; assert the handler ran with the right `data`/`origin`. (A single
+   context can also self-post to test the MessageEvent shape.) Parity must stay 72/72.
 
-Guardrails: only same-origin GET; respect adblock + `nofollow`/`noreferrer`; cap concurrency;
-cancel stale predictions. Log what was prewarmed vs used (hit rate) so it can be tuned.
+Follow-ons: `BroadcastChannel`; `MessageChannel`/`MessagePort`; full structured clone (Blob/Map/
+Set); `window.name` targeting.
 
 ## Then keep going
 
-After Tick 5, re-run §5 UCB (normal exploit/explore; Tick 10 is the next forced-highest-U).
-Strong Tier-A candidates still open: L02 MutationObserver, L03 postMessage/opener, L11 responsive
-`@media`, L06 password autofill, L07 semantic history, L09 DevTools. Each tick: implement →
+After Tick 6, re-run §5 UCB (normal exploit/explore; **Tick 10** is the next forced-highest-U).
+Strong Tier-A candidates still open: L02 MutationObserver, L11 responsive `@media`, L06 password
+autofill (EXTERNAL keyring), L07 semantic history, L09 DevTools (GUI). Each tick: implement →
 verify (build + parity 72/72 + test) → disk hygiene → commit+push (co-author line) → update
 LEDGER/STATE/JOURNAL/RESUME → next.
 
