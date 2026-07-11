@@ -35,14 +35,20 @@ Working through the repomaps' + research's fold-in recommendations beyond the to
 - **a11y:** occlusion-aware hit-test (high-`z` overlay wins the click; z-index plumbed from
   the page into the a11y tree)
 
-**Heavy tail (dedicated efforts / heavy builds / live verification):**
-- **js** (needs SpiderMonkey builds): replace `eval`-string bindings with direct JSAPI,
-  native timers / `fetch` / `MutationObserver`, a minimal WebIDL generator
-- **text:** UAX#14 line-breaking (Unicode tables — parity-sensitive), `{script,locale}` fallback
-- **html/dom:** preserve namespaces → inline SVG/MathML render (new SVG layout/paint)
-- **scheduling:** microtask checkpoints, task priority lanes
-- **paint:** Vello backend behind the `Painter` trait
-- **#6** GPU spatial/scroll tree (live-window verification)
+**Already present (found while triaging):** `setTimeout` macrotask queue + microtask
+checkpoints (host `queueMicrotask` + SpiderMonkey native promise jobs) already run in
+`engine/js/event_loop.rs`; the shaped-run/measure caches and per-char font fallback exist.
+
+**Heavy tail (dedicated efforts / heavy builds / live verification — not "safe quick wins"):**
+- **js** (each needs a full SpiderMonkey rebuild): replace `eval`-string bindings with
+  direct JSAPI (identity cache / event dispatch / getComputedStyle), a native Promise
+  `fetch`, `MutationObserver`, a minimal `weedle` WebIDL generator
+- **text:** UAX#14 line-breaking (new Unicode-table dep, shifts wrapping → parity-sensitive)
+- **html/dom:** preserve namespaces → inline SVG/MathML render (a whole SVG layout/paint path)
+- **paint:** Vello backend behind the `Painter` trait (large alpha dependency)
+- **#6** GPU spatial/scroll tree (needs live-window verification)
+
+These are the multi-session frontier; the safe, verifiable, non-heavy-build backlog is done.
 
 Remaining big rocks are sequenced in Phases B3 / C / G below; the GPU ones need live-window
 verification and the Taffy integration is a focused multi-step effort.
