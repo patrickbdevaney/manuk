@@ -380,6 +380,9 @@ pub struct Page {
     /// scripts survive to fire on user input (a click, an input). `None` if scripts failed to
     /// load or (always) without the `spidermonkey` feature.
     js: Option<manuk_js::PageContext>,
+    /// Whether any element uses `position:sticky` — gates the per-frame sticky paint pass so
+    /// non-sticky pages pay nothing.
+    has_sticky: bool,
     zoom: f32,
     /// Decoded raster images keyed by their `<img>` node, painted into each element's box.
     images: std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
@@ -518,6 +521,7 @@ impl Page {
         // The tree is now laid out and clean; later mutations mark fresh dirtiness.
         dom.clear_all_dirty();
 
+        let has_sticky = styles.values().any(|s| s.position == manuk_css::Position::Sticky);
         Page {
             final_url: final_url.to_string(),
             title,
@@ -526,6 +530,7 @@ impl Page {
             dom,
             styles,
             js,
+            has_sticky,
             zoom: 1.0,
             images: std::collections::HashMap::new(),
         }
@@ -799,6 +804,7 @@ impl Page {
             damage = damage.max(d);
         }
         self.styles = new_styles;
+        self.has_sticky = self.styles.values().any(|s| s.position == manuk_css::Position::Sticky);
         self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
         self.content_height = self.root_box.content_bottom();
         self.dom.clear_all_dirty();
@@ -953,13 +959,20 @@ impl Page {
     ) -> Canvas {
         let z = self.z_index_map();
         let clip = self.clip_map();
-        CpuPainter::with_layers(fonts, &self.images, &z, &clip).render_scrolled(
-            &self.root_box,
-            width,
-            height,
-            Rgba::WHITE,
-            scroll_y,
-        )
+        // position:sticky is a paint-time effect of the current scroll: pin sticky boxes to
+        // their threshold within their containing block. Applied to a throwaway copy of the
+        // box tree so the base layout is untouched; only sticky pages pay the clone.
+        let sticky_boxes;
+        let boxes: &LayoutBox = if self.has_sticky {
+            let mut b = self.root_box.clone();
+            apply_sticky(&mut b, &self.styles, scroll_y);
+            sticky_boxes = b;
+            &sticky_boxes
+        } else {
+            &self.root_box
+        };
+        CpuPainter::with_layers(fonts, &self.images, &z, &clip)
+            .render_scrolled(boxes, width, height, Rgba::WHITE, scroll_y)
     }
 
     /// All `<a href>` links, in document order, with hrefs resolved absolute.
@@ -1215,6 +1228,35 @@ fn hex(c: u8) -> Option<u8> {
     }
 }
 
+/// Recursively pin `position:sticky` boxes for the current `scroll_y`. Each sticky child is
+/// shifted (with its subtree) so it stays at its `top` threshold from the viewport, bounded by
+/// the bottom of its containing block (its parent box). Non-sticky boxes are untouched.
+fn apply_sticky(b: &mut LayoutBox, styles: &StyleMap, scroll_y: f32) {
+    use manuk_layout::BoxContent;
+    let cb_bottom = b.rect.y + b.rect.height;
+    let cb_width = b.rect.width;
+    if let BoxContent::Block(children) = &mut b.content {
+        for child in children.iter_mut() {
+            if let Some(node) = child.node {
+                if let Some(s) = styles.get(&node) {
+                    if s.position == manuk_css::Position::Sticky && !s.inset.top.is_auto() {
+                        let top = s.inset.top.resolve(cb_width, 0.0);
+                        let shift = manuk_layout::sticky_shift(
+                            child.rect.y,
+                            child.rect.height,
+                            top,
+                            cb_bottom,
+                            scroll_y,
+                        );
+                        child.shift_y(shift);
+                    }
+                }
+            }
+            apply_sticky(child, styles, scroll_y);
+        }
+    }
+}
+
 /// The keystone interactivity test: a click handler registered while the page's scripts run
 /// must fire on a *later* dispatch and mutate the live DOM — proving the persistent JS context
 /// survives load, real input reaches page listeners, and their DOM writes land in the arena.
@@ -1279,6 +1321,32 @@ mod js_interactive_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sticky_header_pins_on_scroll_and_releases_at_bottom() {
+        let html = r#"<body style="margin:0">
+            <div id="h" style="position:sticky;top:0;height:40px">Header</div>
+            <div style="height:2000px">tall content</div>
+        </body>"#;
+        let fonts = FontContext::new();
+        let page = Page::load(html, "https://x.test/", &fonts, 400.0);
+        assert!(page.has_sticky, "sticky is detected");
+
+        let hid = manuk_css::query_selector_all(page.dom(), page.dom().root(), "#h")[0];
+        let rects: std::collections::HashMap<_, _> = page.root_box.node_rects(page.dom()).into_iter().collect();
+        let natural_y = rects[&hid].y;
+
+        // Scrolled 500px past the top: the header pins so it stays at the viewport top (top:0),
+        // i.e. its document y rises to ~scroll_y.
+        let mut boxes = page.root_box.clone();
+        apply_sticky(&mut boxes, &page.styles, 500.0);
+        let pinned: std::collections::HashMap<_, _> = boxes.node_rects(page.dom()).into_iter().collect();
+        assert!(
+            (pinned[&hid].y - (natural_y + 500.0)).abs() < 1.5,
+            "sticky header pinned to the scroll offset (natural {natural_y}, got {})",
+            pinned[&hid].y
+        );
+    }
 
     #[test]
     fn preload_scanner_finds_stylesheets_and_preloads() {

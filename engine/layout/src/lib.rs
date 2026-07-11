@@ -205,6 +205,24 @@ impl LayoutBox {
         }
     }
 
+    /// Translate this box and its whole subtree down by `dy` (in document coordinates) —
+    /// used to realize `position:sticky` at paint time. Shifts block rects and the baselines
+    /// of inline text so the whole subtree moves together.
+    pub fn shift_y(&mut self, dy: f32) {
+        if dy == 0.0 {
+            return;
+        }
+        self.walk_mut(&mut |b| {
+            b.rect.y += dy;
+            if let BoxContent::Inline(frags) = &mut b.content {
+                for frag in frags {
+                    frag.line_top += dy;
+                    frag.baseline += dy;
+                }
+            }
+        });
+    }
+
     /// Absolute border-box rect per DOM node (§4a element geometry).
     ///
     /// Two sources are unioned:
@@ -695,6 +713,17 @@ impl FloatContext {
 /// Does this element pull out of flow to one side?
 fn is_float(s: &ComputedStyle) -> bool {
     s.float != Float::None
+}
+
+/// The document-coordinate shift to apply to a `position:sticky` box at scroll offset
+/// `scroll_y`. The box stays in normal flow until the viewport would scroll it above
+/// `top_inset`, at which point it pins there — but never past the bottom of its containing
+/// block (`cb_bottom`), so it scrolls away with its container. `natural_y`/`box_h` are the
+/// box's in-flow top and height. Returns `0.0` while the box hasn't been scrolled to its
+/// threshold (the common, unshifted case).
+pub fn sticky_shift(natural_y: f32, box_h: f32, top_inset: f32, cb_bottom: f32, scroll_y: f32) -> f32 {
+    let pinned = (scroll_y + top_inset).min(cb_bottom - box_h);
+    natural_y.max(pinned) - natural_y
 }
 
 /// Is this box positioned out of normal flow (absolute/fixed)? Such boxes are
@@ -2411,6 +2440,19 @@ mod tests {
         let fonts = FontContext::new();
         let root = layout_document(&dom, &styles, &fonts, width);
         (dom, root)
+    }
+
+    #[test]
+    fn sticky_shift_pins_then_releases_at_container_bottom() {
+        // A header at y=200, 40px tall, sticky top:0, in a container spanning 0..1000.
+        // Not scrolled to it yet → no shift.
+        assert_eq!(sticky_shift(200.0, 40.0, 0.0, 1000.0, 100.0), 0.0);
+        // Scrolled past its top → it pins at the viewport top (shift keeps it at scroll_y+0).
+        assert_eq!(sticky_shift(200.0, 40.0, 0.0, 1000.0, 300.0), 100.0); // 300 - 200
+        // With a top:10 inset, it pins 10px lower.
+        assert_eq!(sticky_shift(200.0, 40.0, 10.0, 1000.0, 300.0), 110.0);
+        // Near the container bottom it stops sticking (can't exceed cb_bottom - box_h = 960).
+        assert_eq!(sticky_shift(200.0, 40.0, 0.0, 1000.0, 5000.0), 760.0); // 960 - 200
     }
 
     /// UAX #14 intra-word break opportunities. Plain words are untouched (parity-safe); a
