@@ -89,10 +89,14 @@ fn map_display(d: StyloDisplay) -> Display {
         Display::Inline
     } else if d == StyloDisplay::InlineBlock {
         Display::InlineBlock
-    } else if d == StyloDisplay::Flex || d == StyloDisplay::InlineFlex {
+    } else if d == StyloDisplay::Flex {
         Display::Flex
-    } else if d == StyloDisplay::Grid || d == StyloDisplay::InlineGrid {
+    } else if d == StyloDisplay::InlineFlex {
+        Display::InlineFlex
+    } else if d == StyloDisplay::Grid {
         Display::Grid
+    } else if d == StyloDisplay::InlineGrid {
+        Display::InlineGrid
     } else if d == StyloDisplay::Table || d == StyloDisplay::InlineTable {
         Display::Table
     } else if d == StyloDisplay::TableRowGroup {

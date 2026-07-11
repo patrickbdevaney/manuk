@@ -146,6 +146,9 @@ fn cmd_render(args: &[String]) -> Result<()> {
     }
     // Fetch + decode + paint images (and size undimensioned ones to natural).
     let imgs = rt.block_on(page.fetch_and_apply_images(&fonts, width as f32));
+    // Icons: an empty element with a background-colour shaped by `mask-image`. Without the mask
+    // the background paints as a solid block.
+    rt.block_on(page.fetch_and_apply_masks());
     if imgs > 0 {
         println!("  images: {imgs} decoded");
     }

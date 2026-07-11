@@ -219,6 +219,68 @@ async fn fetch_images_owned(
     out
 }
 
+/// Every raw `url(...)` argument of a `mask-image` / `-webkit-mask-image` declaration in a
+/// stylesheet. A cheap text scan, deliberately: the prefetch thread has no cascade, and a superset
+/// of the URLs actually used is harmless (a page has a few dozen distinct icons at most).
+fn scan_mask_urls(css: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let bytes = css.as_bytes();
+    let mut i = 0usize;
+    while let Some(hit) = css[i..].find("mask-image") {
+        let start = i + hit;
+        i = start + 10;
+        // The declaration's value runs to the next `;` or `}`.
+        let end = bytes[i..]
+            .iter()
+            .position(|&c| c == b';' || c == b'}')
+            .map(|p| i + p)
+            .unwrap_or(bytes.len());
+        let val = &css[i..end];
+        if let Some(u0) = val.find("url(") {
+            let rest = &val[u0 + 4..];
+            if let Some(u1) = rest.find(')') {
+                let raw = rest[..u1].trim().trim_matches('"').trim_matches('\'');
+                if !raw.is_empty() {
+                    out.push(raw.to_string());
+                }
+            }
+        }
+        i = end;
+    }
+    out
+}
+
+/// Decode fetched bytes as a raster image, falling back to SVG (icons are overwhelmingly SVG).
+fn decode_bitmap(bytes: &[u8], url: &str) -> Option<manuk_paint::DecodedImage> {
+    match image::load_from_memory(bytes) {
+        Ok(img) => {
+            let rgba = img.to_rgba8();
+            let (w, h) = rgba.dimensions();
+            (w > 0 && h > 0).then(|| manuk_paint::DecodedImage { width: w, height: h, rgba: rgba.into_raw() })
+        }
+        Err(_) => decode_svg(bytes, url).filter(|i| i.width > 0 && i.height > 0),
+    }
+}
+
+/// Fetch + decode a set of **mask images**, keyed by the raw `url(...)` string exactly as it
+/// appears in the CSS (so a computed `mask-image` can be looked up directly).
+///
+/// The modern web draws icons as an empty element with a `background-color` shaped by a
+/// `mask-image`. Without the mask, that background paints as a solid block — a black square where
+/// every icon should be. Owned data only, no `Rc`: this runs off the UI thread.
+async fn fetch_masks_owned(
+    targets: Vec<(String, String)>,
+) -> HashMap<String, manuk_paint::DecodedImage> {
+    let fetched = futures_util::future::join_all(targets.into_iter().map(|(raw, abs)| async move {
+        (raw, fetch_image_bytes(&abs).await, abs)
+    }))
+    .await;
+    fetched
+        .into_iter()
+        .filter_map(|(raw, bytes, abs)| Some((raw, decode_bitmap(&bytes?, &abs)?)))
+        .collect()
+}
+
 /// Rasterize an SVG document to a [`DecodedImage`] (non-premultiplied RGBA) at its
 /// intrinsic size via usvg + resvg. `None` if the bytes are not valid SVG.
 fn decode_svg(bytes: &[u8], url: &str) -> Option<manuk_paint::DecodedImage> {
@@ -441,6 +503,7 @@ impl Page {
         fetch_external_scripts(&mut dom, final_url).await;
         let mut page = Page::from_dom(dom, final_url, fonts, viewport_width);
         page.fetch_and_apply_images(fonts, viewport_width).await;
+        page.fetch_and_apply_masks().await;
         page
     }
 
@@ -488,14 +551,78 @@ impl Page {
         count
     }
 
+    /// The computed styles, keyed by node — the input to layout, and the thing to look at when a
+    /// box is the wrong size (a filled box vs a hugged one is a `display` question, not a layout
+    /// bug). Read-only; used by the render/box-dump harness.
+    pub fn styles_map(&self) -> &StyleMap {
+        &self.styles
+    }
+
+    /// Bind fetched **mask bitmaps** (keyed by raw CSS url) to the nodes whose computed
+    /// `mask-image` names them. They land in the same per-node bitmap map the painter already
+    /// consults; a masked element is empty by construction, so it is never also an `<img>`.
+    ///
+    /// No relayout: a mask changes only what is painted inside the box, never its size.
+    pub fn apply_masks(
+        &mut self,
+        masks: &HashMap<String, std::rc::Rc<manuk_paint::DecodedImage>>,
+    ) -> usize {
+        if masks.is_empty() {
+            return 0;
+        }
+        let bound: Vec<(manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>)> = self
+            .styles
+            .iter()
+            .filter_map(|(&n, s)| Some((n, masks.get(s.mask_image.as_ref()?)?.clone())))
+            .collect();
+        let count = bound.len();
+        for (n, img) in bound {
+            self.images.insert(n, img);
+        }
+        count
+    }
+
+    /// Fetch this page's mask images from the cascade (the paths that *have* styles: `load_async`,
+    /// the shell's first paint, the render/fidelity harness) and bind them.
+    pub async fn fetch_and_apply_masks(&mut self) -> usize {
+        let mut seen = std::collections::HashSet::new();
+        let targets: Vec<(String, String)> = self
+            .styles
+            .values()
+            .filter_map(|s| s.mask_image.clone())
+            .filter(|raw| seen.insert(raw.clone()))
+            .map(|raw| {
+                let abs = if raw.starts_with("data:") {
+                    raw.clone()
+                } else {
+                    resolve_url(&self.final_url, &raw)
+                };
+                (raw, abs)
+            })
+            .collect();
+        if targets.is_empty() {
+            return 0;
+        }
+        let owned = fetch_masks_owned(targets).await;
+        let rc: HashMap<String, std::rc::Rc<manuk_paint::DecodedImage>> =
+            owned.into_iter().map(|(u, i)| (u, std::rc::Rc::new(i))).collect();
+        self.apply_masks(&rc)
+    }
+
     /// **DEBT-1.** Build a page from [`Prefetched`] data — parse/cascade/layout/JS only, with
     /// **zero network calls**, so the UI thread never blocks. This is the path the shell uses for
     /// every navigation and reload.
     pub fn from_prefetched(pre: Prefetched, fonts: &FontContext, viewport_width: f32) -> Page {
-        let Prefetched { dom, final_url, css, images } = pre;
+        let Prefetched { dom, final_url, css, images, masks } = pre;
         let mut page = Page::from_dom(dom, &final_url, fonts, viewport_width);
         if !css.is_empty() {
             page.apply_stylesheets(&css, fonts, viewport_width);
+        }
+        if !masks.is_empty() {
+            // After the cascade: only now does a node have a computed `mask-image` to bind to.
+            let rc: HashMap<String, std::rc::Rc<manuk_paint::DecodedImage>> =
+                masks.into_iter().map(|(u, i)| (u, std::rc::Rc::new(i))).collect();
+            page.apply_masks(&rc);
         }
         if !images.is_empty() {
             let rc: HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>> =
@@ -1373,6 +1500,9 @@ pub struct Prefetched {
     pub css: HashMap<String, String>,
     /// `<img>` node → decoded bitmap.
     pub images: HashMap<manuk_dom::NodeId, manuk_paint::DecodedImage>,
+    /// raw `mask-image` url → decoded bitmap (icons). Keyed by URL, not node, because the
+    /// off-thread prefetch has no cascade — the nodes are bound to it once styles exist.
+    pub masks: HashMap<String, manuk_paint::DecodedImage>,
 }
 
 /// Fetch a document **and all of its subresources** off-thread (DEBT-1). The returned
@@ -1415,7 +1545,28 @@ pub async fn prefetch_document(url: &str) -> Result<Loaded> {
             let images: HashMap<manuk_dom::NodeId, manuk_paint::DecodedImage> =
                 fetch_images_owned(&dom, &final_url).await;
 
-            Ok(Loaded::Prefetched(Box::new(Prefetched { dom, final_url, css, images })))
+            // Masks (icons). Scanned from the CSS text rather than the cascade: this thread has no
+            // styles, and a URL-keyed cache is all the cascade needs later to bind them to nodes.
+            // Each raw url resolves against ITS OWN stylesheet, which is what CSS specifies.
+            let mask_targets: Vec<(String, String)> = {
+                let mut seen = std::collections::HashSet::new();
+                css.iter()
+                    .flat_map(|(sheet, text)| {
+                        scan_mask_urls(text).into_iter().map(move |raw| {
+                            let abs = if raw.starts_with("data:") {
+                                raw.clone()
+                            } else {
+                                resolve_url(sheet, &raw)
+                            };
+                            (raw, abs)
+                        })
+                    })
+                    .filter(|(raw, _)| seen.insert(raw.clone()))
+                    .collect()
+            };
+            let masks = fetch_masks_owned(mask_targets).await;
+
+            Ok(Loaded::Prefetched(Box::new(Prefetched { dom, final_url, css, images, masks })))
         }
         other => Ok(other),
     }

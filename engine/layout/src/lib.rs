@@ -168,6 +168,9 @@ pub struct LayoutBox {
     pub shadow: Option<manuk_css::BoxShadow>,
     /// `visibility: hidden|collapse` — the box still OCCUPIES its space but is not painted.
     pub hidden: bool,
+    /// `mask-image: url(...)` — the icon shape. The background is painted THROUGH this mask's
+    /// alpha; without it an icon is a solid block of its background colour.
+    pub mask_image: Option<String>,
     /// **Effective** opacity (own × ancestors'). `0.0` = invisible, `1.0` = opaque.
     pub opacity: f32,
     /// The DOM node this box came from, if any (anonymous boxes are `None`).
@@ -435,6 +438,7 @@ pub fn layout_document(
             radius: 0.0,
             shadow: None,
             hidden: false,
+            mask_image: None,
             opacity: 1.0,
             node: None,
             content: BoxContent::Block(vec![]),
@@ -805,35 +809,62 @@ fn establishes_bfc(s: &ComputedStyle) -> bool {
         || is_out_of_flow_positioned(s)
         || matches!(
             s.display,
-            Display::Flex | Display::Grid | Display::InlineBlock
+            Display::Flex
+                | Display::Grid
+                | Display::InlineFlex
+                | Display::InlineGrid
+                | Display::InlineBlock
         )
 }
 
 /// The max right extent of already-laid-out content (used for shrink-to-fit).
-fn content_right_extent(content: &BoxContent, fonts: &FontContext) -> f32 {
+///
+/// `origin` is the left edge the subtree was laid out from, so extents are measured **relative** to
+/// the thing being sized rather than in absolute page coordinates.
+fn content_right_extent(content: &BoxContent, fonts: &FontContext, origin: f32) -> f32 {
     // `shrink_to_fit` lays the subtree out at a very large available width (1e6) to read its
-    // *max-content* width. A block-level box fills its container, so at that width its own
-    // `rect.width` is ≈1e6 — meaningless for max-content. Count a box's own right edge only when
-    // it did NOT fill the measuring width (i.e. it has a definite/intrinsic width worth
-    // counting); otherwise ignore its box and recurse to the inline text that carries the real
-    // content extent. Without this, any flex/grid item containing a block child measured to the
-    // full container width and hogged the track — collapsing sibling items to zero.
+    // *max-content* width. Two artifacts of that absurd width must be discarded, or the measurement
+    // is nonsense:
+    //
+    //  * **Size.** A block-level box fills its container, so its own `rect.width` is ≈1e6 —
+    //    meaningless as a max-content contribution. Count a box's own right edge only when it did
+    //    NOT fill the measuring width; otherwise recurse to the inline text that carries the real
+    //    extent. (Without this, a flex/grid item with a block child hogged its whole track.)
+    //
+    //  * **Position.** Centering (`margin: 0 auto`, `justify-content: center`) distributes FREE
+    //    SPACE — and at a 1e6 available width the free space is ~1e6, so a perfectly ordinary
+    //    1,000px-wide box lands at x≈499,500. Its width is real; its offset is an artifact. Adding
+    //    that offset to the extent reported Wikipedia's header as **500,532px wide**, which
+    //    overflowed its flex line and wrapped the search bar onto its own row — dragging the whole
+    //    page 66px down and every element below it out of place.
+    //
+    // So: measure relative to `origin`, and treat an implausibly large relative offset as slack
+    // rather than content. The box's own width still counts, so nothing real is lost.
     const FILL_SENTINEL: f32 = 500_000.0;
+    const SLACK: f32 = 100_000.0;
+    let rel = |x: f32| -> f32 {
+        let d = x - origin;
+        if d > SLACK {
+            0.0
+        } else {
+            d
+        }
+    };
     let mut max_r = 0.0f32;
-    fn visit(b: &LayoutBox, fonts: &FontContext, max_r: &mut f32) {
+    fn visit(b: &LayoutBox, fonts: &FontContext, max_r: &mut f32, rel: &dyn Fn(f32) -> f32) {
         if b.rect.width < FILL_SENTINEL {
-            *max_r = max_r.max(b.rect.x + b.rect.width);
+            *max_r = max_r.max(rel(b.rect.x) + b.rect.width);
         }
         match &b.content {
             BoxContent::Block(kids) => {
                 for k in kids {
-                    visit(k, fonts, max_r);
+                    visit(k, fonts, max_r, rel);
                 }
             }
             BoxContent::Inline(frags) => {
                 for f in frags {
                     let w = fonts.measure(&f.text, f.style.font_key, f.style.font_size);
-                    *max_r = max_r.max(f.x + w);
+                    *max_r = max_r.max(rel(f.x) + w);
                 }
             }
         }
@@ -841,13 +872,13 @@ fn content_right_extent(content: &BoxContent, fonts: &FontContext) -> f32 {
     match content {
         BoxContent::Block(kids) => {
             for k in kids {
-                visit(k, fonts, &mut max_r);
+                visit(k, fonts, &mut max_r, &rel);
             }
         }
         BoxContent::Inline(frags) => {
             for f in frags {
                 let w = fonts.measure(&f.text, f.style.font_key, f.style.font_size);
-                max_r = max_r.max(f.x + w);
+                max_r = max_r.max(rel(f.x) + w);
             }
         }
     }
@@ -911,11 +942,17 @@ impl Ctx<'_> {
         let (bl, br) = (s.border_width.left, s.border_width.right);
         let (bt, bb) = (s.border_width.top, s.border_width.bottom);
 
-        // Resolve width. `auto` fills the available inline space — except an inline-block
-        // (an atomic inline box) shrinks to fit its content, so a `<button>` hugs its label.
+        // Resolve width. `auto` fills the available inline space — except an **inline-level** box
+        // (inline-block, inline-flex, inline-grid), which is atomic and shrinks to fit its content,
+        // so a `<button>` hugs its label and an icon button stays icon-sized.
         let extra = ml + mr + pl + pr + bl + br;
         let mut width = match s.width {
-            Dim::Auto if s.display == Display::InlineBlock => {
+            Dim::Auto
+                if matches!(
+                    s.display,
+                    Display::InlineBlock | Display::InlineFlex | Display::InlineGrid
+                ) =>
+            {
                 self.shrink_to_fit(node, (cw - extra).max(0.0))
             }
             Dim::Auto => (cw - extra).max(0.0),
@@ -1014,6 +1051,7 @@ impl Ctx<'_> {
             radius: s.border_radius,
             shadow: s.box_shadow,
             hidden: s.visibility != manuk_css::Visibility::Visible,
+            mask_image: s.mask_image.clone(),
             opacity: s.opacity,
             node: Some(node),
             content,
@@ -1104,11 +1142,13 @@ impl Ctx<'_> {
             .filter(|&k| is_rendered(self.dom, self.styles, k))
             .collect();
 
-        // Flex/grid containers route through taffy.
-        if display == Display::Flex {
+        // Flex/grid containers route through taffy. `inline-flex`/`inline-grid` establish the same
+        // formatting context — they differ only in how the CONTAINER is sized by its parent (handled
+        // in `layout_block`: inline-level boxes shrink to fit).
+        if matches!(display, Display::Flex | Display::InlineFlex) {
             return self.layout_flex(node, cx, cy, cw, &kids);
         }
-        if display == Display::Grid {
+        if matches!(display, Display::Grid | Display::InlineGrid) {
             return self.layout_grid(node, cx, cy, cw, &kids);
         }
 
@@ -1144,6 +1184,7 @@ impl Ctx<'_> {
                     radius: 0.0,
                     shadow: None,
                     hidden: false,
+                    mask_image: None,
                     opacity: 1.0,
                     node: None,
                     content: BoxContent::Inline(frags),
@@ -1306,6 +1347,7 @@ impl Ctx<'_> {
             radius: s.border_radius,
             shadow: s.box_shadow,
             hidden: s.visibility != manuk_css::Visibility::Visible,
+            mask_image: s.mask_image.clone(),
             opacity: s.opacity,
             node: Some(node),
             content,
@@ -1330,9 +1372,52 @@ impl Ctx<'_> {
     /// Shrink-to-fit width (CSS2 §10.3.5, approximated as `min(max-content, avail)`):
     /// lay the content out unconstrained to get its preferred width, then clamp.
     fn shrink_to_fit(&self, node: NodeId, avail: f32) -> f32 {
+        // A flex/grid container's preferred width is a question taffy can answer exactly; the
+        // lay-out-at-1e6-and-measure trick cannot (see `taffy_tree::max_content_width`).
+        if matches!(
+            self.styles[&node].display,
+            Display::Flex | Display::Grid | Display::InlineFlex | Display::InlineGrid
+        ) {
+            let pref = taffy_tree::max_content_width(
+                self.dom,
+                self.styles,
+                node,
+                |dn, known: taffy::Size<Option<f32>>, av: taffy::Size<taffy::AvailableSpace>| {
+                    let aw = known.width.or(match av.width {
+                        taffy::AvailableSpace::Definite(w) => Some(w),
+                        _ => None,
+                    });
+                    let (w, h) = self.measure_intrinsic(dn, aw);
+                    taffy::Size { width: known.width.unwrap_or(w), height: known.height.unwrap_or(h) }
+                },
+            );
+            if let Ok(want) = std::env::var("MANUK_TRACE_INTRINSIC") {
+                if self.dom.element(node).and_then(|e| e.attr("id")) == Some(want.as_str()) {
+                    eprintln!("[shrink-to-fit/flex] #{want} max-content={pref:.1} avail={avail:.1}");
+                }
+            }
+            return pref.min(avail).max(0.0);
+        }
         let mut fc = FloatContext::new(0.0, 1.0e6);
         let (content, _h) = self.layout_children(node, 0.0, 0.0, 1.0e6, None, &mut fc);
-        let pref = content_right_extent(&content, self.fonts);
+        let pref = content_right_extent(&content, self.fonts, 0.0);
+        // See `MANUK_TRACE_INTRINSIC` in `measure_intrinsic`: shrink-to-fit is the OTHER place an
+        // intrinsic width is decided (inline-block / inline-flex / float / abs), and a box that
+        // fills when it should hug is nearly always this number.
+        if let Ok(want) = std::env::var("MANUK_TRACE_INTRINSIC") {
+            if self.dom.element(node).and_then(|e| e.attr("id")) == Some(want.as_str()) {
+                eprintln!("[shrink-to-fit] #{want} pref={pref:.1} avail={avail:.1} -> {:.1}", pref.min(avail).max(0.0));
+                if let BoxContent::Block(kids) = &content {
+                    for k in kids {
+                        eprintln!(
+                            "    child {:?} [{:.0} {:.0} {:.0}x{:.0}]",
+                            k.node.and_then(|n| self.dom.tag_name(n)),
+                            k.rect.x, k.rect.y, k.rect.width, k.rect.height
+                        );
+                    }
+                }
+            }
+        }
         pref.min(avail).max(0.0)
     }
 
@@ -1354,6 +1439,17 @@ impl Ctx<'_> {
         let mut fc = FloatContext::new(0.0, width.max(1.0));
         let (_content, height) = self.layout_children(node, 0.0, 0.0, width.max(0.0), None, &mut fc);
         let result = (width, height);
+        // `MANUK_TRACE_INTRINSIC=<id>` prints what a flex/grid item told taffy it wanted to be.
+        // Flex WRAPPING is decided by this number, so when a row breaks that Chrome keeps on one
+        // line, this is the number that is wrong — and it is otherwise invisible in the output.
+        if let Ok(want) = std::env::var("MANUK_TRACE_INTRINSIC") {
+            if self.dom.element(node).and_then(|e| e.attr("id")) == Some(want.as_str()) {
+                eprintln!(
+                    "[intrinsic] #{want} avail={avail:.0} -> width={:.1} height={:.1}",
+                    result.0, result.1
+                );
+            }
+        }
         self.measure_cache.borrow_mut().insert(key, result);
         result
     }
@@ -1510,6 +1606,7 @@ impl Ctx<'_> {
                 radius: 0.0,
                 shadow: None,
                 hidden: false,
+                mask_image: None,
                 opacity: 1.0,
                 node: None,
                 content: BoxContent::Block(std::mem::take(&mut row_cells[r])),
@@ -1537,6 +1634,7 @@ impl Ctx<'_> {
             radius: s.border_radius,
             shadow: s.box_shadow,
             hidden: s.visibility != manuk_css::Visibility::Visible,
+            mask_image: s.mask_image.clone(),
             opacity: s.opacity,
             node: Some(node),
             content: BoxContent::Block(row_boxes),
@@ -1608,10 +1706,10 @@ impl Ctx<'_> {
         }
         let mut fc_max = FloatContext::new(0.0, 1.0e6);
         let (cmax, _) = self.layout_children(cell, 0.0, 0.0, 1.0e6, None, &mut fc_max);
-        let max = content_right_extent(&cmax, self.fonts);
+        let max = content_right_extent(&cmax, self.fonts, 0.0);
         let mut fc_min = FloatContext::new(0.0, 0.0);
         let (cmin, _) = self.layout_children(cell, 0.0, 0.0, 0.0, None, &mut fc_min);
-        let min = content_right_extent(&cmin, self.fonts);
+        let min = content_right_extent(&cmin, self.fonts, 0.0);
         (min + frame, max + frame)
     }
 
@@ -1732,6 +1830,7 @@ impl Ctx<'_> {
                 radius: s.border_radius,
                 shadow: s.box_shadow,
                 hidden: s.visibility != manuk_css::Visibility::Visible,
+                mask_image: s.mask_image.clone(),
                 opacity: s.opacity,
                 node: Some(cell),
                 content,
@@ -1813,6 +1912,7 @@ impl Ctx<'_> {
                         radius: 0.0,
                         shadow: None,
                         hidden: false,
+                        mask_image: None,
                         opacity: 1.0,
                         node: None,
                         content: BoxContent::Inline(std::mem::take(frags)),
@@ -1959,6 +2059,7 @@ impl Ctx<'_> {
             radius: s.border_radius,
             shadow: s.box_shadow,
             hidden: s.visibility != manuk_css::Visibility::Visible,
+            mask_image: s.mask_image.clone(),
             opacity: s.opacity,
             node: Some(node),
             content,
@@ -2028,6 +2129,7 @@ impl Ctx<'_> {
             radius: 0.0,
             shadow: None,
             hidden: false,
+            mask_image: None,
             opacity: 1.0,
             node: None,
             content: BoxContent::Inline(frags),
@@ -2110,6 +2212,7 @@ impl Ctx<'_> {
                 radius: s.border_radius,
                 shadow: s.box_shadow,
                 hidden: s.visibility != manuk_css::Visibility::Visible,
+                mask_image: s.mask_image.clone(),
                 opacity: s.opacity,
                 node: Some(p.dom),
                 content: BoxContent::Block(children),
@@ -2183,7 +2286,16 @@ impl Ctx<'_> {
                 // An `inline-block` (or inline-flex/grid) is an *atomic* inline box: lay it
                 // out as a block right here and flow it like a word, rather than recursing
                 // into its children as inline text.
-                if matches!(disp, Some(Display::InlineBlock | Display::Flex | Display::Grid)) {
+                if matches!(
+                    disp,
+                    Some(
+                        Display::InlineBlock
+                            | Display::Flex
+                            | Display::Grid
+                            | Display::InlineFlex
+                            | Display::InlineGrid
+                    )
+                ) {
                     let s = &self.styles[&node];
                     let ml = s.margin.left.resolve(cw, 0.0);
                     let mr = s.margin.right.resolve(cw, 0.0);
@@ -2205,6 +2317,7 @@ impl Ctx<'_> {
                 // An inline element's horizontal padding + border occupies space in the flow
                 // and extends its geometry — emit edge spacers around its content.
                 let s = &self.styles[&node];
+                let mark = out.len();
                 let pad_l = s.padding.left.resolve(cw, 0.0) + s.border_width.left;
                 let pad_r = s.padding.right.resolve(cw, 0.0) + s.border_width.right;
                 if pad_l > 0.0 {
@@ -2212,6 +2325,7 @@ impl Ctx<'_> {
                         width: pad_l,
                         node: Some(node),
                         space_before: *pending_space && !*first,
+                        report_height: 0.0,
                     });
                     *first = false;
                     *pending_space = false;
@@ -2222,8 +2336,20 @@ impl Ctx<'_> {
                     self.collect_inline_node(c, out, pending_space, first, Some(node), cw);
                 }
                 if pad_r > 0.0 {
-                    out.push(InlineItem::Spacer { width: pad_r, node: Some(node), space_before: false });
+                    out.push(InlineItem::Spacer { width: pad_r, node: Some(node), space_before: false, report_height: 0.0 });
                     *pending_space = false;
+                }
+                // An inline element that contributed NOTHING to the flow is still a box. Without
+                // this it has no geometry at all: `getBoundingClientRect` returns nothing, it can't
+                // be scrolled to, and it cannot be painted. On one Wikipedia article that is 1,079
+                // spans and 298 anchors — the single largest source of missing elements.
+                if out.len() == mark {
+                    out.push(InlineItem::Spacer {
+                        width: 0.0,
+                        node: Some(node),
+                        space_before: false,
+                        report_height: s.line_height.max(0.0),
+                    });
                 }
             }
             _ => {}
@@ -2332,7 +2458,7 @@ impl Ctx<'_> {
                             }),
                         )
                     }
-                    InlineItem::Spacer { width, node, space_before } => {
+                    InlineItem::Spacer { width, node, space_before, report_height } => {
                         // Inline padding/border: occupies `width`, paints nothing, but its
                         // (empty-text) fragment carries the owning element's geometry.
                         let key = FontKey { family: FontFamily::SansSerif, bold: false, italic: false };
@@ -2346,7 +2472,9 @@ impl Ctx<'_> {
                                 x,
                                 width,
                                 text: String::new(),
-                                style: TextStyle { font_key: key, font_size: 16.0, color: Rgba::BLACK, line_height: 0.0 },
+                                // `line_height` is only what the fragment's RECT reports; ascent/
+                                // descent stay 0 so a spacer never grows the line box.
+                                style: TextStyle { font_key: key, font_size: 16.0, color: Rgba::BLACK, line_height: report_height },
                                 ascent: 0.0,
                                 descent: 0.0,
                                 node,
@@ -2505,10 +2633,17 @@ enum InlineItem {
     /// Horizontal padding/border of an inline element (`<span style="padding:0 15px">`):
     /// occupies `width` in the flow and extends the owning element's geometry, but paints
     /// nothing itself.
+    ///
+    /// Also carries an **empty inline element** (`<span id="Section_2"></span>`), which occupies no
+    /// width but is still a box: Chrome reports zero width and a line-height-tall rect for it, and
+    /// real pages depend on that (fragment anchors, scroll-spy targets, `getBoundingClientRect` on
+    /// a marker span). `report_height` is the height its rect claims — `0` for a padding edge (which
+    /// must not inflate anything), the element's line-height for an empty inline.
     Spacer {
         width: f32,
         node: Option<NodeId>,
         space_before: bool,
+        report_height: f32,
     },
 }
 
@@ -3294,6 +3429,74 @@ mod tests {
         assert!(
             first_x.unwrap() > 100.0,
             "centered text should be pushed right"
+        );
+    }
+    /// Regression (found by A/B against Chromium on Wikipedia): an **icon button** — `inline-flex`,
+    /// `justify-content:center`, a `max-width`, one small icon — must hug its icon, not fill its
+    /// container.
+    ///
+    /// Two bugs conspired here. (1) `inline-flex` was mapped to block-level `flex`, so the button
+    /// filled. (2) Even once inline, its max-content was computed by laying it out at a 1e6
+    /// available width — where `max-width` clamped it to 448px and `justify-content:center` put the
+    /// icon at x=214, so the measured "extent" was 234px. The 32px button measured 234px, overflowed
+    /// the header's flex line, wrapped the search bar onto a second row, and pushed every element on
+    /// the page down.
+    #[test]
+    fn inline_flex_icon_button_hugs_its_content() {
+        let html = r#"<div class="bar"><label class="btn"><span class="icon"></span></label></div>"#;
+        let css = ".bar{width:900px}                    .btn{display:inline-flex;align-items:center;justify-content:center;max-width:28rem}                    .icon{display:block;width:20px;height:20px}";
+        let (dom, root) = layout_html(html, css, 1000.0);
+        let rects = root.node_rects(&dom);
+        let btn = dom
+            .descendants(dom.root())
+            .find(|&n| dom.element(n).and_then(|e| e.attr("class")) == Some("btn"))
+            .expect("btn");
+        let w = rects[&btn].width;
+        assert!(
+            (15.0..60.0).contains(&w),
+            "an inline-flex icon button must hug its 20px icon, got {w}px \
+             (filling its container is what wrapped Wikipedia's header)"
+        );
+    }
+
+    /// Regression: an **empty inline element** is still a box. Chrome reports zero width and a
+    /// line-height-tall rect for `<span id="anchor"></span>`; real pages depend on that for fragment
+    /// anchors and scroll-spy. We produced no geometry at all — 1,079 spans and 298 anchors missing
+    /// from one Wikipedia article, the single largest source of missing elements.
+    #[test]
+    fn empty_inline_element_still_has_a_box() {
+        let html = r#"<p>before <span id="anchor"></span> after</p>"#;
+        let (dom, root) = layout_html(html, "", 600.0);
+        let rects = root.node_rects(&dom);
+        let anchor = dom
+            .descendants(dom.root())
+            .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("anchor"))
+            .expect("anchor span");
+        assert!(
+            rects.contains_key(&anchor),
+            "an empty inline element must still have geometry"
+        );
+    }
+
+    /// Regression: centering inside the huge measuring width is FREE SPACE, not content. A block
+    /// with `margin: 0 auto` sits at x≈499,500 when laid out at a 1e6 available width; adding that
+    /// offset to the max-content extent reported Wikipedia's header as 500,532px wide.
+    #[test]
+    fn auto_margins_do_not_inflate_max_content() {
+        let html = r#"<div class="row"><div class="item"><div class="c">hi</div></div><div class="item">x</div></div>"#;
+        let css = ".row{display:flex;flex-wrap:wrap;width:600px} .c{display:block;margin:0 auto;width:100px}";
+        let (dom, root) = layout_html(html, css, 800.0);
+        let rects = root.node_rects(&dom);
+        let items: Vec<f32> = dom
+            .descendants(dom.root())
+            .filter(|&n| dom.element(n).and_then(|e| e.attr("class")) == Some("item"))
+            .map(|n| rects[&n].y)
+            .collect();
+        assert_eq!(items.len(), 2);
+        assert!(
+            (items[0] - items[1]).abs() < 1.0,
+            "both flex items must stay on ONE line; an auto-margin child must not measure \
+             half a million pixels wide and wrap its sibling"
         );
     }
 }

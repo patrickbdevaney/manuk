@@ -41,6 +41,15 @@ fn main() {
         return;
     }
 
+    // `manuk-wpt boxes` — dump Manuk's rect for every `[id]` element. The counterpart of Chrome's
+    // `getBoundingClientRect` probe: annotate any element with an id and the two engines' geometry
+    // becomes directly comparable. A screenshot shows THAT the layout is wrong; this shows BY HOW
+    // MUCH, and for which box.
+    if args.first().map(String::as_str) == Some("boxes") {
+        run_boxes_cmd(&args[1..], &fonts);
+        return;
+    }
+
     let wpt_flag = flag(&args, "--wpt");
     let wpt_dir = wpt_flag
         .map(PathBuf::from)
@@ -150,6 +159,7 @@ fn run_render_cmd(args: &[String], fonts: &FontContext) {
         rt.block_on(async {
             let mut p = Page::load_async(&html, &url, fonts, vw as f32).await;
             let sheets = p.fetch_and_apply_stylesheets(fonts, vw as f32).await;
+            p.fetch_and_apply_masks().await;
             if sheets > 0 {
                 eprintln!("applied {sheets} external stylesheet(s)");
             }
@@ -211,6 +221,7 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
         let page = rt.block_on(async {
             let mut p = Page::load_async(&html, &final_url, fonts, vw as f32).await;
             p.fetch_and_apply_stylesheets(fonts, vw as f32).await;
+            p.fetch_and_apply_masks().await;
             p
         });
         let mpath = out.join(format!("{name}.manuk.png"));
@@ -256,13 +267,54 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                             }
                         }
                     }
-                    let (sc, missing, misplaced, probed) =
-                        manuk_wpt::fidelity::compare_structure(&cboxes.iter().map(|(k,v)| (k.clone(), [v[0] as i64, v[1] as i64, v[2] as i64, v[3] as i64])).collect(), &mboxes, 8);
+                    let cmap: std::collections::HashMap<String, [i64; 4]> = cboxes
+                        .iter()
+                        .map(|(k, v)| (k.clone(), [v[0] as i64, v[1] as i64, v[2] as i64, v[3] as i64]))
+                        .collect();
+                    let (sc, missing, misplaced, probed, missing_ids) =
+                        manuk_wpt::fidelity::compare_structure_detail(&cmap, &mboxes, 8);
+                    // Which elements are missing? A coverage number is only actionable if it names
+                    // the culprits — and 1,402 missing elements are a handful of CLASS bugs, not
+                    // 1,402 bugs. Print the tag of each missing id so the class is visible.
+                    if !missing_ids.is_empty() {
+                        let mut by_tag: std::collections::BTreeMap<String, usize> =
+                            std::collections::BTreeMap::new();
+                        for id in &missing_ids {
+                            let tag = page
+                                .dom()
+                                .descendants(page.dom().root())
+                                .find(|&n| page.dom().element(n).and_then(|e| e.attr("id")) == Some(id.as_str()))
+                                .and_then(|n| page.dom().tag_name(n))
+                                .unwrap_or("(not-in-dom)")
+                                .to_string();
+                            *by_tag.entry(tag).or_default() += 1;
+                        }
+                        let mut v: Vec<_> = by_tag.into_iter().collect();
+                        v.sort_by(|a, b| b.1.cmp(&a.1));
+                        eprintln!("  MISSING by tag: {}", v.iter().take(8)
+                            .map(|(t, c)| format!("{t}×{c}")).collect::<Vec<_>>().join("  "));
+                        // A count says *how much* is missing; only the ids say *what*. 1,402 missing
+                        // elements are never 1,402 bugs — they are a few CLASS bugs, and a sample of
+                        // the actual ids is what identifies the class.
+                        eprintln!("  MISSING sample: {}", missing_ids.iter().take(12)
+                            .map(|s| s.as_str()).collect::<Vec<_>>().join(", "));
+                    }
                     f.structure = Some(sc);
                     f.missing = missing;
                     f.misplaced = misplaced;
                     f.probed = probed;
                     eprintln!("  structural: {:.1}% ({probed} ids, {missing} missing, {misplaced} misplaced)", sc * 100.0);
+                    if let Some((last_ok, _, first_bad, dy)) =
+                        manuk_wpt::fidelity::first_divergence(&cmap, &mboxes, 60)
+                    {
+                        eprintln!("  FIRST DIVERGENCE: after #{last_ok}, element #{first_bad} is off by dy={dy}");
+                    }
+                    let (dx, dy, dw, dh, within) =
+                        manuk_wpt::fidelity::placement_stats(&cmap, &mboxes, 8);
+                    eprintln!(
+                        "  PLACEMENT: {:.1}% within 8px | median offset dx={dx} dy={dy} dw={dw} dh={dh}",
+                        within * 100.0
+                    );
                 }
                 rows.push(f);
             }
@@ -327,4 +379,137 @@ fn flag<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
         }
     }
     None
+}
+
+
+/// `manuk-wpt boxes --html FILE [--url URL] [--width W] [--height H]` — print `id x y w h` for every
+/// element carrying an `id`, in document-y order.
+fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
+    let vw: u32 = flag(args, "--width").and_then(|s| s.parse().ok()).unwrap_or(1200);
+    let vh: u32 = flag(args, "--height").and_then(|s| s.parse().ok()).unwrap_or(800);
+    let Some(f) = flag(args, "--html") else {
+        eprintln!("usage: manuk-wpt boxes --html FILE [--url URL] [--width W]");
+        std::process::exit(2);
+    };
+    let html = std::fs::read_to_string(f).unwrap_or_else(|e| {
+        eprintln!("cannot read {f}: {e}");
+        std::process::exit(1);
+    });
+    let url = flag(args, "--url").map(String::from).unwrap_or_else(|| format!("file://{f}"));
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("tokio runtime");
+    let page = rt.block_on(async {
+        let mut p = manuk_page::Page::load_async(&html, &url, fonts, vw as f32).await;
+        p.fetch_and_apply_stylesheets(fonts, vw as f32).await;
+        p.fetch_and_apply_masks().await;
+        p
+    });
+    let _ = vh;
+    // `--tree ID` — print the LAYOUT BOX SUBTREE under one element (tag.class + rect), which is the
+    // only view that shows *which* box is the wrong size. An id-keyed dump tells you the container
+    // is 442px wide; this tells you which child made it so.
+    if let Some(want) = flag(args, "--tree") {
+        let dom = page.dom();
+        let styles = page.styles_map();
+        #[allow(clippy::too_many_arguments)]
+        fn walk(
+            b: &manuk_layout::LayoutBox,
+            dom: &manuk_dom::Dom,
+            styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+            depth: usize,
+            hit: bool,
+            want_node: manuk_dom::NodeId,
+            out: &mut Vec<String>,
+        ) {
+            let hit = hit || b.node == Some(want_node);
+            if hit {
+                let desc = b
+                    .node
+                    .map(|n| {
+                        let tag = dom.tag_name(n).unwrap_or("#text");
+                        let cls = dom
+                            .element(n)
+                            .and_then(|e| e.attr("class"))
+                            .map(|c| format!(".{}", c.split_whitespace().take(2).collect::<Vec<_>>().join(".")))
+                            .unwrap_or_default();
+                        // The COMPUTED display is what decides whether a box fills or hugs — the
+                        // difference between an icon button and a full-width bar. Show it.
+                        let d = styles
+                            .get(&n)
+                            .map(|s| format!("{:?}", s.display))
+                            .unwrap_or_else(|| "?".into());
+                        format!("{tag}{cls} <{d}>")
+                    })
+                    .unwrap_or_else(|| "(anon)".into());
+                out.push(format!(
+                    "{:indent$}{desc}  [{:.0} {:.0} {:.0}×{:.0}]",
+                    "",
+                    b.rect.x,
+                    b.rect.y,
+                    b.rect.width,
+                    b.rect.height,
+                    indent = depth * 2
+                ));
+            }
+            if let manuk_layout::BoxContent::Block(kids) = &b.content {
+                for k in kids {
+                    walk(k, dom, styles, if hit { depth + 1 } else { depth }, hit, want_node, out);
+                }
+            }
+            if let manuk_layout::BoxContent::Inline(frags) = &b.content {
+                if hit {
+                    for f in frags {
+                        if !f.text.trim().is_empty() {
+                            out.push(format!(
+                                "{:indent$}\"{}\"  [{:.0} {:.0} w={:.0}]",
+                                "",
+                                f.text.trim(),
+                                f.x,
+                                f.line_top,
+                                f.width,
+                                indent = (depth + 1) * 2
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        let target = dom
+            .descendants(dom.root())
+            .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(want));
+        match target {
+            Some(t) => {
+                let mut out = Vec::new();
+                walk(&page.root_box, dom, styles, 0, false, t, &mut out);
+                for l in out {
+                    println!("{l}");
+                }
+            }
+            None => eprintln!("no element with id={want}"),
+        }
+        return;
+    }
+
+    let rects = page.root_box.node_rects(page.dom());
+    let dom = page.dom();
+    let mut rows: Vec<(String, manuk_layout::Rect)> = Vec::new();
+    for n in dom.descendants(dom.root()) {
+        if let Some(id) = dom.element(n).and_then(|e| e.attr("id")) {
+            if let Some(r) = rects.get(&n) {
+                rows.push((id.to_string(), *r));
+            }
+        }
+    }
+    rows.sort_by(|a, b| a.1.y.partial_cmp(&b.1.y).unwrap_or(std::cmp::Ordering::Equal));
+    for (id, r) in rows {
+        println!(
+            "{id}\t{}\t{}\t{}\t{}",
+            r.x.round(),
+            r.y.round(),
+            r.width.round(),
+            r.height.round()
+        );
+    }
 }

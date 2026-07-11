@@ -239,6 +239,9 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
             // web hides dropdowns/modals/tooltips with `visibility:hidden` (animatable, unlike
             // `display:none`), and without it every one of them paints on top of the page.
             cs.visibility = m.visibility;
+            // `mask-image` is likewise not exposed by Stylo's servo build. Without it every icon
+            // (an empty span with a background-color shaped by a mask) paints as a black square.
+            cs.mask_image = m.mask_image.clone();
         }
     }
 

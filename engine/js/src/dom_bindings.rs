@@ -97,6 +97,8 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle) -> String {
         Display::InlineBlock => "inline-block",
         Display::Flex => "flex",
         Display::Grid => "grid",
+        Display::InlineFlex => "inline-flex",
+        Display::InlineGrid => "inline-grid",
         Display::Table => "table",
         Display::TableRow => "table-row",
         Display::TableRowGroup => "table-row-group",

@@ -156,11 +156,27 @@ pub fn compare_structure(
     manuk: &std::collections::HashMap<String, [i64; 4]>,
     tol: i64,
 ) -> (f64, usize, usize, usize) {
+    let (c, m, mi, p, _) = compare_structure_detail(chrome, manuk, tol);
+    (c, m, mi, p)
+}
+
+/// Same, but also returns the **ids Manuk failed to render at all** — the diagnostic that turns a
+/// coverage number into actionable work. 1,402 missing elements are almost never 1,402 bugs; they
+/// are a handful of CLASS bugs with huge blast radius, and the ids tell you which.
+pub fn compare_structure_detail(
+    chrome: &std::collections::HashMap<String, [i64; 4]>,
+    manuk: &std::collections::HashMap<String, [i64; 4]>,
+    tol: i64,
+) -> (f64, usize, usize, usize, Vec<String>) {
     let probed = chrome.len();
     let (mut missing, mut misplaced) = (0usize, 0usize);
+    let mut missing_ids: Vec<String> = Vec::new();
     for (id, c) in chrome {
         match manuk.get(id) {
-            None => missing += 1,
+            None => {
+                missing += 1;
+                missing_ids.push(id.clone());
+            }
             Some(m) => {
                 let off = (0..4).map(|i| (c[i] - m[i]).abs()).fold(0, i64::max);
                 if off > tol {
@@ -176,7 +192,71 @@ pub fn compare_structure(
     // metric differences, which are a *fidelity* concern, not a *correctness* one.
     let rendered = probed.saturating_sub(missing);
     let coverage = if probed == 0 { 1.0 } else { rendered as f64 / probed as f64 };
-    (coverage, missing, misplaced, probed)
+    missing_ids.sort();
+    (coverage, missing, misplaced, probed, missing_ids)
+}
+
+/// The **placement** half of the honest number, now that COVERAGE is near-saturated: for every
+/// element BOTH engines render, how far off is Manuk? Returns `(median_dx, median_dy, median_dw,
+/// median_dh, within_tol_fraction)`.
+///
+/// A count of "misplaced" says nothing about *why*: 6,000 elements each off by 4px is a font-metric
+/// difference, while 6,000 elements each off by 200px is one displaced container dragging its whole
+/// subtree. The medians separate those two worlds, which is the whole point of measuring.
+pub fn placement_stats(
+    chrome: &std::collections::HashMap<String, [i64; 4]>,
+    manuk: &std::collections::HashMap<String, [i64; 4]>,
+    tol: i64,
+) -> (i64, i64, i64, i64, f64) {
+    let mut d: [Vec<i64>; 4] = Default::default();
+    let (mut within, mut n) = (0usize, 0usize);
+    for (id, c) in chrome {
+        let Some(m) = manuk.get(id) else { continue };
+        n += 1;
+        let mut worst = 0i64;
+        for i in 0..4 {
+            let off = (c[i] - m[i]).abs();
+            d[i].push(off);
+            worst = worst.max(off);
+        }
+        if worst <= tol {
+            within += 1;
+        }
+    }
+    let med = |v: &mut Vec<i64>| -> i64 {
+        if v.is_empty() {
+            return 0;
+        }
+        v.sort_unstable();
+        v[v.len() / 2]
+    };
+    let frac = if n == 0 { 1.0 } else { within as f64 / n as f64 };
+    (med(&mut d[0]), med(&mut d[1]), med(&mut d[2]), med(&mut d[3]), frac)
+}
+
+/// **Where does the layout first diverge?** Sort every element both engines render by Chrome's `y`
+/// and walk down the page; report the first id whose vertical offset exceeds `jump`, plus the last
+/// id that was still in agreement. Downstream drift is almost always ONE upstream box with the
+/// wrong height — a median tells you drift exists, this tells you where it started.
+pub fn first_divergence(
+    chrome: &std::collections::HashMap<String, [i64; 4]>,
+    manuk: &std::collections::HashMap<String, [i64; 4]>,
+    jump: i64,
+) -> Option<(String, i64, String, i64)> {
+    let mut pairs: Vec<(&String, &[i64; 4], &[i64; 4])> = chrome
+        .iter()
+        .filter_map(|(id, c)| manuk.get(id).map(|m| (id, c, m)))
+        .collect();
+    pairs.sort_by_key(|(_, c, _)| c[1]);
+    let mut last_ok = String::from("(document start)");
+    for (id, c, m) in pairs {
+        let dy = (c[1] - m[1]).abs();
+        if dy > jump {
+            return Some((last_ok, 0, id.clone(), c[1] - m[1]));
+        }
+        last_ok = id.clone();
+    }
+    None
 }
 
 /// Print the report + the gate verdict against `floor` (applied to the STRUCTURAL score when it is

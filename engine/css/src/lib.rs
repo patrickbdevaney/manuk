@@ -60,6 +60,12 @@ pub enum Display {
     InlineBlock,
     Flex,
     Grid,
+    /// `inline-flex` / `inline-grid` — a flex/grid **formatting context** in an *inline-level* box.
+    /// The distinction is not cosmetic: a block-level flex container fills its parent, an
+    /// inline-level one shrinks to fit. Collapsing the two makes every icon button, chip, pill and
+    /// badge on the modern web stretch across its container.
+    InlineFlex,
+    InlineGrid,
     Table,
     TableRowGroup,
     TableRow,
@@ -324,6 +330,10 @@ pub struct ComputedStyle {
     pub border_radius: f32,
     /// `visibility` (inherited). `Hidden`/`Collapse` boxes still take space but are not painted.
     pub visibility: Visibility,
+    /// `mask-image` / `-webkit-mask-image` `url(...)`. The modern web draws **icons** as an empty
+    /// element with a `background-color` shaped by a mask. Ignoring the mask paints the raw
+    /// background — a solid black square where every icon should be.
+    pub mask_image: Option<String>,
     /// **Effective** `opacity` — this element's own `opacity` already multiplied by its ancestors'
     /// (CSS opacity applies to the whole subtree). `0.0` = fully transparent, `1.0` = opaque.
     pub opacity: f32,
@@ -411,6 +421,7 @@ impl ComputedStyle {
             border_color: Rgba::BLACK,
             border_radius: 0.0,
             visibility: Visibility::Visible,
+            mask_image: None,
             opacity: 1.0,
             box_shadow: None,
             width: Dim::Auto,
@@ -1919,6 +1930,8 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 "inline-block" => Display::InlineBlock,
                 "flex" => Display::Flex,
                 "grid" => Display::Grid,
+                "inline-flex" => Display::InlineFlex,
+                "inline-grid" => Display::InlineGrid,
                 "table" | "inline-table" => Display::Table,
                 "table-row-group" | "table-header-group" | "table-footer-group" => {
                     Display::TableRowGroup
@@ -2202,6 +2215,15 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             }
         }
         "box-shadow" => s.box_shadow = parse_box_shadow(v, s.font_size),
+        "mask-image" | "-webkit-mask-image" => {
+            let v = v.trim();
+            if let Some(rest) = v.strip_prefix("url(") {
+                let inner = rest.trim_end_matches(')').trim().trim_matches('"').trim_matches('\'');
+                if !inner.is_empty() {
+                    s.mask_image = Some(inner.to_string());
+                }
+            }
+        }
         "visibility" => {
             s.visibility = match v.trim().to_ascii_lowercase().as_str() {
                 "hidden" => Visibility::Hidden,

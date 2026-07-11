@@ -70,8 +70,10 @@ fn lp(d: Dim) -> LengthPercentage {
 
 fn map_display(d: CssDisplay) -> Display {
     match d {
-        CssDisplay::Flex => Display::Flex,
-        CssDisplay::Grid => Display::Grid,
+        // Inline-level flex/grid boxes run the SAME formatting algorithm; they differ only in how
+        // their parent sizes them (shrink-to-fit), which `layout_block` handles.
+        CssDisplay::Flex | CssDisplay::InlineFlex => Display::Flex,
+        CssDisplay::Grid | CssDisplay::InlineGrid => Display::Grid,
         CssDisplay::None => Display::None,
         // Everything else is a Manuk-measured leaf; taffy treats it as a block-level box.
         _ => Display::Block,
@@ -292,7 +294,10 @@ impl<'m> TaffyDom<'m> {
     fn add(&mut self, dom: &Dom, styles: &StyleMap, node: DomNodeId) -> TId {
         let cs = &styles[&node];
         let style = to_taffy_style(cs);
-        let container = matches!(cs.display, CssDisplay::Flex | CssDisplay::Grid);
+        let container = matches!(
+            cs.display,
+            CssDisplay::Flex | CssDisplay::Grid | CssDisplay::InlineFlex | CssDisplay::InlineGrid
+        );
         let children: Vec<TId> = if container {
             dom.children(node)
                 .filter(|&c| dom.is_element(c))
@@ -484,6 +489,34 @@ pub fn solve_subtree<'m>(
     );
     let child_ids: Vec<TId> = tree.nodes[r].children.clone();
     child_ids.iter().map(|&c| tree.placed(c)).collect()
+}
+
+/// The **max-content width** of a flex/grid container, asked of taffy directly.
+///
+/// Do NOT compute this by laying the container out at a huge available width and reading the right
+/// edge of its content: `max-width` clamps the container back down, and `justify-content: center`
+/// then pushes the content to the middle of *that*, so the "extent" you read back is
+/// `(max-width + content) / 2` — a number with no meaning. Wikipedia's 32px icon button measured
+/// 234px that way, which overflowed the header's flex line and wrapped its search bar onto a second
+/// row, displacing every element on the page below it.
+///
+/// Taffy already knows how to size a flex/grid container to its content; ask it.
+pub fn max_content_width<'m>(
+    dom: &Dom,
+    styles: &StyleMap,
+    container: DomNodeId,
+    measure: impl FnMut(DomNodeId, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32> + 'm,
+) -> f32 {
+    let (mut tree, root) = TaffyDom::build(dom, styles, container, Box::new(measure));
+    let r: usize = root.into();
+    // Auto-size the root (do not pin it), then solve against MAX-CONTENT available space.
+    tree.nodes[r].style.size = Size { width: auto(), height: auto() };
+    compute_root_layout(
+        &mut tree,
+        root,
+        Size { width: AvailableSpace::MaxContent, height: AvailableSpace::MaxContent },
+    );
+    tree.nodes[r].layout.size.width
 }
 
 #[cfg(test)]

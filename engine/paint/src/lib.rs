@@ -49,6 +49,7 @@ impl DisplayList {
             match it {
                 DisplayItem::Rect { rect, .. }
                 | DisplayItem::Image { rect, .. }
+                | DisplayItem::MaskedRect { rect, .. }
                 | DisplayItem::RoundRect { rect, .. } => *rect,
                 // A shadow bleeds `blur` px past its rect — grow the damage box so it repaints.
                 DisplayItem::Shadow { rect, blur, .. } => Rect {
@@ -122,6 +123,14 @@ pub enum DisplayItem {
     Image {
         rect: Rect,
         image: std::rc::Rc<DecodedImage>,
+    },
+    /// `color` painted THROUGH a mask's alpha channel — how the modern web draws an **icon**:
+    /// an empty element whose `background-color` is shaped by `mask-image`. Painting the
+    /// background without the mask yields a solid block where the glyph should be.
+    MaskedRect {
+        rect: Rect,
+        color: Rgba,
+        mask: std::rc::Rc<DecodedImage>,
     },
 }
 
@@ -208,9 +217,22 @@ impl DisplayList {
                     });
                 }
             }
+            // An element with `mask-image` whose mask decoded: paint its background through the
+            // mask instead of as a rectangle. (Fetched into the same per-node bitmap map — a
+            // masked element is empty by construction, so it is never also a replaced `<img>`.)
+            let mask = match (&b.mask_image, b.node) {
+                (Some(_), Some(n)) => images.get(&n).cloned(),
+                _ => None,
+            };
             if let Some(bg) = b.background.map(fade) {
                 if bg.a > 0 {
-                    if radius > 0.0 {
+                    if let Some(m) = &mask {
+                        items.push(DisplayItem::MaskedRect {
+                            rect: b.rect,
+                            color: bg,
+                            mask: m.clone(),
+                        });
+                    } else if radius > 0.0 {
                         items.push(DisplayItem::RoundRect {
                             rect: b.rect,
                             color: bg,
@@ -241,7 +263,7 @@ impl DisplayList {
                 edge(r.x, r.y, l, r.height); // left
                 edge(r.x + r.width - rr, r.y, rr, r.height); // right
             }
-            if let Some(node) = b.node {
+            if let Some(node) = b.node.filter(|_| mask.is_none()) {
                 if let Some(img) = images.get(&node) {
                     items.push(DisplayItem::Image {
                         rect: b.rect,
@@ -510,6 +532,11 @@ impl CpuPainter<'_> {
                         let mut r = *rect;
                         r.y -= scroll_y;
                         blit_image(&mut pixmap, image, r, clip);
+                    }
+                    DisplayItem::MaskedRect { rect, color, mask } => {
+                        let mut r = *rect;
+                        r.y -= scroll_y;
+                        blit_masked(&mut pixmap, mask, *color, r, clip);
                     }
                 }
             }
@@ -986,5 +1013,80 @@ mod tests {
         assert!(alpha(30, 30) > 0, "the shadow core is painted");
         assert!(alpha(30, 15) > 0, "it bleeds above the box (blur)");
         assert_eq!(alpha(0, 0), 0, "but not across the whole canvas");
+    }
+}
+
+/// Paint `color` through `mask`'s **alpha channel**, scaled to fill `rect`.
+///
+/// This is how the modern web draws icons: an empty element with a `background-color` and a
+/// `mask-image` holding the glyph's shape. tiny-skia has no mask-composite op, so this is a direct
+/// source-over blend — for every destination pixel, sample the mask, multiply its alpha into the
+/// fill colour, and composite. Nearest sampling is deliberate: icons are small and crisp, and
+/// smoothing a 20×20 glyph scaled to 16px only muddies it.
+fn blit_masked(
+    pixmap: &mut tiny_skia::Pixmap,
+    mask: &DecodedImage,
+    color: Rgba,
+    rect: Rect,
+    clip: Option<Rect>,
+) {
+    if rect.width <= 0.0 || rect.height <= 0.0 || mask.width == 0 || mask.height == 0 {
+        return;
+    }
+    let (pw, ph) = (pixmap.width() as i32, pixmap.height() as i32);
+    let x0 = rect.x.floor().max(0.0) as i32;
+    let y0 = rect.y.floor().max(0.0) as i32;
+    let x1 = (rect.x + rect.width).ceil().min(pw as f32) as i32;
+    let y1 = (rect.y + rect.height).ceil().min(ph as f32) as i32;
+    // Intersect with any overflow clip.
+    let (cx0, cy0, cx1, cy1) = match clip {
+        Some(c) => (
+            x0.max(c.x.floor() as i32),
+            y0.max(c.y.floor() as i32),
+            x1.min((c.x + c.width).ceil() as i32),
+            y1.min((c.y + c.height).ceil() as i32),
+        ),
+        None => (x0, y0, x1, y1),
+    };
+    let data = pixmap.pixels_mut();
+    for py in cy0..cy1 {
+        for px in cx0..cx1 {
+            // Map the destination pixel back into mask space.
+            let u = ((px as f32 - rect.x) / rect.width * mask.width as f32) as i32;
+            let v = ((py as f32 - rect.y) / rect.height * mask.height as f32) as i32;
+            if u < 0 || v < 0 || u >= mask.width as i32 || v >= mask.height as i32 {
+                continue;
+            }
+            let mi = ((v as u32 * mask.width + u as u32) * 4) as usize;
+            let Some(&ma) = mask.rgba.get(mi + 3) else { continue };
+            if ma == 0 {
+                continue;
+            }
+            let a = (ma as f32 / 255.0) * (color.a as f32 / 255.0);
+            if a <= 0.002 {
+                continue;
+            }
+            let di = (py * pw + px) as usize;
+            let Some(dst) = data.get_mut(di) else { continue };
+            // Source-over, on premultiplied storage.
+            let inv = 1.0 - a;
+            let blend = |s: u8, d: u8| -> u8 {
+                ((s as f32 * a) + (d as f32 * inv)).round().clamp(0.0, 255.0) as u8
+            };
+            let (r, g, b) = (
+                blend(color.r, dst.red()),
+                blend(color.g, dst.green()),
+                blend(color.b, dst.blue()),
+            );
+            let na = ((a * 255.0) + (dst.alpha() as f32 * inv)).round().clamp(0.0, 255.0) as u8;
+            if let Some(p) = tiny_skia::PremultipliedColorU8::from_rgba(
+                r.min(na),
+                g.min(na),
+                b.min(na),
+                na,
+            ) {
+                *dst = p;
+            }
+        }
     }
 }
