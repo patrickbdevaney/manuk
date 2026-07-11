@@ -3240,6 +3240,7 @@ dependencies = [
  "manuk-paint",
  "manuk-text",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]

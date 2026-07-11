@@ -23,6 +23,7 @@ name = "manuk-wpt"
 path = "src/main.rs"
 
 [dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 manuk-dom.workspace = true
 manuk-html.workspace = true
 manuk-css.workspace = true

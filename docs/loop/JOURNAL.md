@@ -268,3 +268,23 @@ _Minimal history for audit + resume. See [[CONSTITUTION]] §4/§6, [[RESUME]] fo
 - Reflect: **new bug L45 — block-in-inline** (a block box inside an inline loses its box;
   pre-existing, not shadow-specific — it's why an inline host with block shadow content renders
   bare text). High traversal value. Next: Tick 16 = L45.
+
+## Tick 16 — L45: block-in-inline (2026-07-11)
+- Selected: top traversal-blocking item (found while VISUAL-verifying Tick 15). A block box inside
+  an inline lost its box entirely — text flowed, background/padding/border vanished. Ubiquitous in
+  real markup (`<div>` inside `<a>`/`<span>`/a custom element).
+- Cause: `layout_children` decides `has_block` from DIRECT children only, so an inline wrapping a
+  block sent the parent down the pure-inline path, where `collect_inline_node` harvested the
+  block's TEXT as inline words and discarded its box.
+- Fix (CSS2 §9.2.1.1): **blockify** an inline that contains a block-level box (`is_block_level` +
+  new `inline_contains_block`, recursing through inline-only descent; inline-block/flex/table are
+  atomic and don't propagate). The parent opens a BFC and the inline's children split into
+  anonymous blocks + the block child — the spec's resulting box structure. Documented deviation:
+  the inline's OWN background paints behind the blockified box, not per split fragment.
+- Verified: VISUAL — repro now matches Chrome (yellow padded block); the previously-blank Tick-15
+  inline-shadow-host page renders fully. HEADLESS — `block_inside_an_inline_keeps_its_box`.
+  **Parity 72/72** (core inline/block seam — the gate that matters most here); layout 30,
+  workspace, page interactive all green. Commit `e7cd623`.
+- Reflect: two ticks running, the screenshot discipline has found the bug the tick then fixed.
+  Next: Tick 17 = **empirical real-page visual audit vs Chrome** — stop guessing which fidelity
+  gap matters; render real pages side-by-side and let the diff pick the work.

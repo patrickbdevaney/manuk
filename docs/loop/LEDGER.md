@@ -7,11 +7,11 @@ the highest-U item. Update T/status/scores each tick; add items on reflection; m
 
 **TICKS = 16** (global tick counter; increment each tick). _Done: 1–12, 13 = L41 screenshot
 discipline + L42 flex fix, 14 = L43 radius/shadow, 15 = L16 web components (forced-U, the first
-pick ADR-004's traversal rule changed — it vetoed L34 service worker). **Tick 16 pick: L45
-block-in-inline** — a block box inside an inline element loses its box entirely (found while
-verifying Tick 15; pre-existing, not shadow-specific). Straightforwardly traversal-blocking:
-block-in-inline is everywhere in real markup, and the box (background/padding/border) simply
-vanishes. VISUAL-verifiable._
+pick ADR-004's traversal rule changed — it vetoed L34 service worker). 16 = L45 block-in-inline.
+**Tick 17 pick: L46 empirical real-page visual audit vs Chrome** — the screenshot discipline has
+now found the bug that the tick then fixed, two ticks running (L42 flex, L45 block-in-inline).
+Stop *guessing* which fidelity gap matters: render real pages beside headless Chrome and let the
+diff choose the work. Highest expected value per ADR-004 (traversal breadth)._
 
 ## Tier A — absorb outstanding beneficial work already suggested (do first)
 
@@ -42,7 +42,8 @@ STATE weak frontiers. High V, mostly known ⇒ high exploit ⇒ front-loaded.
 | L15 | Inline SVG rendering (P3) | RENDER | 6 | 7 | 6 | 0 | backlog | HEADLESS |
 | L16 | Custom Elements + Shadow DOM basics (P4) | JS/RENDER | 6 | 8 | 7 | 1 | **done** (Tick 15) | HEADLESS+VISUAL |
 | L16b | Named slots + slot reassignment; `::part`/`::slotted`; closed-mode hiding; a scoped flat-tree walk in Stylo (shadow content currently falls back to MinimalCascade) | JS/RENDER | 5 | 6 | 5 | 0 | backlog (L16 follow-on) | HEADLESS |
-| L45 | **block-in-inline**: a block box inside an inline element loses its box (bg/padding/border vanish; text still flows). Needs anonymous block-box generation / inline splitting | RENDER | 8 | 6 | 5 | 0 | backlog | VISUAL |
+| L45 | **block-in-inline**: a block box inside an inline element loses its box | RENDER | 8 | 6 | 5 | 1 | **done** (Tick 16) | VISUAL |
+| L46 | Empirical real-page visual audit vs Chrome (example.com / HN / Wikipedia): render side-by-side, rank the gaps, fix the top one | RENDER/COMPAT | 9 | 5 | 6 | 0 | backlog | VISUAL |
 | L17 | AG2 task-intent AXTree pruning + AG3 dual (semantic+visual) targeting | AGENT-EXT | 6 | 4 | 5 | 1 | **done** (Tick 9) | HEADLESS |
 | L18 | Cookie partitioning + `SameSite` enforcement audit | NET/SECURITY | 5 | 4 | 4 | 0 | backlog | HEADLESS |
 | L19 | Settings page / preferences surface | UI | 4 | 5 | 4 | 0 | backlog | GUI |
@@ -79,7 +80,7 @@ postMessage + window.opener (L03, Tick 6)** · **MutationObserver (L02, Tick 7)*
 **responsive @media + matchMedia (L11, Tick 8)** · **agent targeting AG2/AG3 (L17, Tick 9)** ·
 **action grounding (L31-slice, Tick 10)** · **file uploads / multipart (L05, Tick 11)** ·
 **automation surface: selectors/wait/assert (L30, Tick 12)** · **screenshot discipline + flex
-block-child fix (L41/L42, Tick 13)** · **border-radius + box-shadow (L43, Tick 14)** · **Custom Elements + Shadow DOM + 2 shadow-tree bug fixes (L16, Tick 15)**.
+block-child fix (L41/L42, Tick 13)** · **border-radius + box-shadow (L43, Tick 14)** · **Custom Elements + Shadow DOM + 2 shadow-tree bug fixes (L16, Tick 15)** · **block-in-inline (L45, Tick 16)**.
 
 ## Superseded / blocked
 

@@ -264,6 +264,16 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
     if matches!(tag, "td" | "th") && s.padding == crate::Sides::all(crate::Dim::Px(0.0)) {
         s.padding = crate::Sides::all(crate::Dim::Px(1.0));
     }
+    // Legacy presentational colour attributes — still load-bearing (Hacker News's whole identity
+    // is `bgcolor` on <table>/<td>). Applied only where author CSS left the property initial.
+    if s.background_color.is_none() {
+        if let Some(c) = el.attr("bgcolor").and_then(crate::values::parse_color) {
+            s.background_color = Some(c);
+        }
+    }
+    if let Some(c) = el.attr("text").and_then(crate::values::parse_color) {
+        s.color = c;
+    }
     if matches!(tag, "img" | "canvas" | "video" | "svg" | "object" | "embed") {
         if s.display == crate::Display::Inline {
             s.display = crate::Display::InlineBlock;

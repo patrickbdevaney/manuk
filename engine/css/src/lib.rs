@@ -1737,6 +1737,20 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
     if matches!(tag, "td" | "th") {
         s.padding = Sides::all(Dim::Px(1.0));
     }
+    // Legacy presentational colour attributes (HTML §presentational hints). Still load-bearing
+    // on the real web: Hacker News, for one, gets its entire visual identity from
+    // `bgcolor="#ff6600"` / `bgcolor="#f6f6ef"` on <table>/<td> — without these the page renders
+    // colourless. Author CSS overrides them (hints are lower priority), so they are only applied
+    // where the property is still at its initial value.
+    if s.background_color.is_none() {
+        if let Some(c) = el.attr("bgcolor").and_then(values::parse_color) {
+            s.background_color = Some(c);
+        }
+    }
+    if let Some(c) = el.attr("text").and_then(values::parse_color) {
+        s.color = c;
+    }
+
     // Replaced elements: an <img>/<canvas>/<video> is an atomic inline-block box sized by
     // its presentational width/height attributes (author CSS width/height still overrides,
     // as those are applied after UA defaults). Natural (intrinsic) sizing from the decoded

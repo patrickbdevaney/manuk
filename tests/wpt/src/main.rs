@@ -103,7 +103,7 @@ fn run_render_cmd(args: &[String], fonts: &FontContext) {
     let out = flag(args, "--out").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("render.png"));
     let has_chrome = args.iter().any(|a| a == "--chrome");
 
-    let (html, url) = if let Some(f) = flag(args, "--html") {
+    let (html, mut url) = if let Some(f) = flag(args, "--html") {
         let html = std::fs::read_to_string(f).unwrap_or_else(|e| {
             eprintln!("cannot read {f}: {e}");
             std::process::exit(1);
@@ -116,7 +116,34 @@ fn run_render_cmd(args: &[String], fonts: &FontContext) {
         std::process::exit(2);
     };
 
-    let page = Page::load(&html, &url, fonts, vw as f32);
+    // `--url URL` overrides the document's own URL, so a page saved to disk still resolves its
+    // relative `<link href>` / `<img src>` against the real origin (without it they'd resolve
+    // against `file://…` and silently fail — rendering the page undressed).
+    if let Some(u) = flag(args, "--url") {
+        url = u.to_string();
+    }
+
+    // Load through the **async** path so external `<link rel=stylesheet>` and `<img>` actually
+    // fetch — a real page's visual identity lives in its external CSS, and rendering it undressed
+    // would make any Chrome comparison dishonest. `--offline` keeps the old sync (no-network) path
+    // for self-contained fixtures.
+    let offline = args.iter().any(|a| a == "--offline");
+    let page = if offline {
+        Page::load(&html, &url, fonts, vw as f32)
+    } else {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("tokio runtime");
+        rt.block_on(async {
+            let mut p = Page::load_async(&html, &url, fonts, vw as f32).await;
+            let sheets = p.fetch_and_apply_stylesheets(fonts, vw as f32).await;
+            if sheets > 0 {
+                eprintln!("applied {sheets} external stylesheet(s)");
+            }
+            p
+        })
+    };
     match page.paint(fonts, vw, vh).save_png(&out) {
         Ok(()) => eprintln!("wrote {} ({}x{})", out.display(), vw, vh),
         Err(e) => {
