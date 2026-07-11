@@ -41,6 +41,7 @@ use manuk_dom::{Dom, NodeData, NodeId};
 use manuk_text::{FontContext, FontFamily, FontKey};
 
 pub mod flex;
+mod taffy_tree;
 
 /// An axis-aligned rectangle in absolute document px.
 #[derive(Clone, Copy, Debug, PartialEq)]
