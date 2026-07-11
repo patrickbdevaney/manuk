@@ -192,6 +192,17 @@ impl LayoutBox {
         }
     }
 
+    /// Mutable pre-order visit — for updating paint attributes (colors) in place on a
+    /// repaint-only restyle without recomputing geometry.
+    pub fn walk_mut(&mut self, f: &mut impl FnMut(&mut LayoutBox)) {
+        f(self);
+        if let BoxContent::Block(children) = &mut self.content {
+            for c in children {
+                c.walk_mut(f);
+            }
+        }
+    }
+
     /// Absolute border-box rect per DOM node (§4a element geometry).
     ///
     /// Two sources are unioned:

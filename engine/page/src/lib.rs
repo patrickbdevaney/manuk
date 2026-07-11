@@ -512,12 +512,43 @@ impl Page {
         }
         self.styles = new_styles;
 
-        if damage >= RestyleDamage::Repaint {
+        // Geometry-affecting change → full relayout. A repaint-only change (color /
+        // background / border color) updates the fragment tree's paint attributes in place
+        // and skips layout entirely — the incremental fast path.
+        if damage >= RestyleDamage::Reflow {
             self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
             self.content_height = self.root_box.content_bottom();
+        } else if damage == RestyleDamage::Repaint {
+            self.apply_paint_only();
         }
         self.dom.clear_all_dirty();
         damage
+    }
+
+    /// Update the existing fragment tree's paint attributes (backgrounds, border colours,
+    /// text colours) from the current styles, without recomputing geometry. Used on a
+    /// repaint-only restyle so a colour change does not force a full relayout.
+    fn apply_paint_only(&mut self) {
+        let styles = &self.styles;
+        self.root_box.walk_mut(&mut |b| {
+            if let Some(node) = b.node {
+                if let Some(s) = styles.get(&node) {
+                    b.background = s.background_color;
+                    if let Some(border) = &mut b.border {
+                        border.color = s.border_color;
+                    }
+                }
+            }
+            if let BoxContent::Inline(frags) = &mut b.content {
+                for f in frags {
+                    if let Some(fnode) = f.node {
+                        if let Some(s) = styles.get(&fnode) {
+                            f.style.color = s.color;
+                        }
+                    }
+                }
+            }
+        });
     }
 
     /// Shared access to the DOM (e.g. to build the §4a accessibility tree).
@@ -1372,10 +1403,27 @@ mod tests {
         // A color-only change → Repaint.
         page.dom_mut()
             .set_attr(a, "style", "width:100px;height:20px;background:red");
+        let h_before_repaint = page.content_height;
         assert_eq!(
             page.relayout_incremental(&fonts, 800.0),
             RestyleDamage::Repaint,
             "background-only change is Repaint"
+        );
+        // The paint-only fast path updated the box's background in place without relayout.
+        let mut bg_a = None;
+        page.root_box.walk(&mut |b| {
+            if b.node == Some(a) {
+                bg_a = b.background;
+            }
+        });
+        assert_eq!(
+            bg_a,
+            Some(Rgba::new(255, 0, 0, 255)),
+            "repaint fast path set the background in place"
+        );
+        assert_eq!(
+            page.content_height, h_before_repaint,
+            "a repaint-only change does not change geometry"
         );
 
         // A geometry change → Reflow, and the height actually changes.
