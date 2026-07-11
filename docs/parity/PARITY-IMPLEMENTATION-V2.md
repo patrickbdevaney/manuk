@@ -15,8 +15,8 @@ Progress against them + the phase plan below:
 | 10 | In-process semantic DOM diffing (moat) | ✅ shipped (`A11yNode::diff` / `observe_diff`); provenance Action-Guard exists (E6) |
 | 3 | WOFF2 web fonts | ✅ shipped (A3 — pure-Rust decoder + glyf/hmtx transforms) |
 | 8 | Stable + generational `NodeId` | ✅ foundation shipped (packed gen+index, free-list reclaim infra, `is_alive`/`discard_subtree`); auto-free wiring at safe discard sites is the follow-on |
-| 2 | Persistent-texture partial damage upload | ☐ remaining (GPU; headless-unverifiable) |
-| 6 | Minimal spatial/scroll tree | ☐ remaining |
+| 2 | Persistent-texture partial damage upload | ✅ shipped — persistent page texture + exact row-diff partial upload; ~1288 fps present, correctness guaranteed by exact diff |
+| 6 | Minimal spatial/scroll tree | ⏸ needs live-window verification — requires a page/chrome compositor-layer split + uv-scroll; `--frames` can't exercise scroll rendering, so landing it blind risks visible corruption. With #2 + B2 already making scroll coalesced + partial-upload, marginal benefit is lower and blind risk higher; deferred to a live session |
 | 7 | Blitz-model Taffy 0.12 integration + intrinsic-size cache | ✅ **complete** — measure seam + intrinsic cache + full unified taffy tree (7 trait impls) driving flex/grid + **stage-4 full-subtree extraction** (a container and ALL nested flex/grid solved & placed in one pass; block/inline/float/table stay Manuk leaves). Verified 72/72 + nested flex-in-flex |
 
 Also shipped this program: DDG search-click fix, `vw/vh/vmin/vmax` units, 9 engine
