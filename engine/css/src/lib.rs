@@ -247,6 +247,17 @@ pub enum GridLine {
     Span(u16),
 }
 
+/// A resolved `grid-template-areas` named cell region: 1-indexed grid-line ranges
+/// `[start, end)` on each axis. Stylo pre-resolves the ASCII art into these rects.
+#[derive(Clone, Debug, PartialEq)]
+pub struct GridAreaRect {
+    pub name: String,
+    /// Row grid lines `(start, end)`, 1-indexed.
+    pub row: (u16, u16),
+    /// Column grid lines `(start, end)`, 1-indexed.
+    pub col: (u16, u16),
+}
+
 /// Four-sided box values (margin, padding, border widths).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Sides<T> {
@@ -350,6 +361,10 @@ pub struct ComputedStyle {
     /// `grid-column` / `grid-row` (item) start/end line placement.
     pub grid_column: (GridLine, GridLine),
     pub grid_row: (GridLine, GridLine),
+    /// Container: `grid-template-areas` resolved to named line-rects.
+    pub grid_template_areas: Vec<GridAreaRect>,
+    /// Item: the named area this element is placed into (via `grid-area: name`).
+    pub grid_area: Option<String>,
 }
 
 impl ComputedStyle {
@@ -403,6 +418,8 @@ impl ComputedStyle {
             grid_template_rows: Vec::new(),
             grid_column: (GridLine::Auto, GridLine::Auto),
             grid_row: (GridLine::Auto, GridLine::Auto),
+            grid_template_areas: Vec::new(),
+            grid_area: None,
         }
     }
 

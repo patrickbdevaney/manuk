@@ -301,6 +301,24 @@ impl<'m> TaffyDom<'m> {
         } else {
             Vec::new()
         };
+        // grid-template-areas: resolve each child's `grid-area: name` against this
+        // container's named rects into explicit line placement. Our taffy path exposes no
+        // ASCII-art areas API, so we pre-resolve names to lines here (the container has the
+        // rects; the child carries the area name).
+        if container && !cs.grid_template_areas.is_empty() {
+            for &child in &children {
+                let cdom = self.nodes[usize::from(child)].dom;
+                if let Some(name) = styles[&cdom].grid_area.clone() {
+                    if let Some(r) = cs.grid_template_areas.iter().find(|a| a.name == name) {
+                        let n = &mut self.nodes[usize::from(child)];
+                        n.style.grid_row =
+                            Line { start: line(r.row.0 as i16), end: line(r.row.1 as i16) };
+                        n.style.grid_column =
+                            Line { start: line(r.col.0 as i16), end: line(r.col.1 as i16) };
+                    }
+                }
+            }
+        }
         let id = self.nodes.len();
         self.nodes.push(TNode {
             dom: node,

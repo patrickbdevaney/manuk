@@ -430,6 +430,33 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         grid_line_to_ours(&cv.clone_grid_row_end()),
     );
 
+    // grid-template-areas: Stylo pre-resolves the ASCII art to `NamedArea`s with
+    // 1-indexed line ranges. Carry them so the item's `grid-area: name` can resolve.
+    if let stylo::values::computed::position::GridTemplateAreas::Areas(a) =
+        cv.clone_grid_template_areas()
+    {
+        s.grid_template_areas = a
+            .0
+            .areas
+            .iter()
+            .map(|na| crate::GridAreaRect {
+                name: na.name.to_string(),
+                row: (na.rows.start as u16, na.rows.end as u16),
+                col: (na.columns.start as u16, na.columns.end as u16),
+            })
+            .collect();
+    }
+    // Item placement by area name: `grid-area: main` sets all four grid-line idents to
+    // "main"; the row-start ident is representative. A bare custom-ident (no line number,
+    // no span) is a named-area/named-line reference.
+    {
+        let rs = cv.clone_grid_row_start();
+        let name = rs.ident.0.to_string();
+        if !rs.is_span && rs.line_num == 0 && !name.is_empty() {
+            s.grid_area = Some(name);
+        }
+    }
+
     // Insets.
     s.inset.top = inset_to_dim(&cv.clone_top());
     s.inset.right = inset_to_dim(&cv.clone_right());
