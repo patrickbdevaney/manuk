@@ -1138,6 +1138,7 @@ pub unsafe fn install(
     cx: *mut RawJSContext,
     global: &mozjs::rust::RootedGuard<'_, *mut JSObject>,
     dom: *mut Dom,
+    doc_url: &str,
 ) {
     let root = (*dom).root();
     let doc_ptr = JS_NewObject(&mut wrap_cx(cx), &NODE_CLASS);
@@ -1202,10 +1203,24 @@ pub unsafe fn install(
         1,
         0,
     );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__historyPush".as_ptr(),
+        Some(history_push),
+        3,
+        0,
+    );
     let platform = format!("{} {}", std::env::consts::OS, std::env::consts::ARCH);
+    // JS string-literal-escape the document URL so it can't break out of the "%URL%" slot.
+    let url_lit = {
+        let esc = js_string_literal(doc_url); // yields a quoted literal
+        esc[1..esc.len() - 1].to_string() // strip the quotes; %URL% sits inside "..."
+    };
     let prelude = WINDOW_PRELUDE
         .replace("%UA%", &honest_user_agent())
-        .replace("%PLATFORM%", &platform);
+        .replace("%PLATFORM%", &platform)
+        .replace("%URL%", &url_lit);
     let _ = eval_in_current_global(cx, &prelude);
 }
 
@@ -1244,7 +1259,7 @@ pub fn run_scripts(
     });
     let raw_cx = unsafe { runtime.cx().raw_cx() };
     let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
-    unsafe { install(raw_cx, &global, dom as *mut Dom) };
+    unsafe { install(raw_cx, &global, dom as *mut Dom, "") };
     crate::event_loop::install(runtime, global.handle())?;
     // Register the ES-module resolve hook (self-contained modules for now).
     unsafe {
@@ -1301,6 +1316,7 @@ impl PageContext {
     pub fn load(
         runtime: &mut Runtime,
         dom: &mut Dom,
+        doc_url: &str,
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
         styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
     ) -> Result<(Self, usize), String> {
@@ -1314,7 +1330,7 @@ impl PageContext {
         });
         let raw_cx = unsafe { runtime.cx().raw_cx() };
         let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
-        unsafe { install(raw_cx, &global, dom as *mut Dom) };
+        unsafe { install(raw_cx, &global, dom as *mut Dom, doc_url) };
         crate::event_loop::install(runtime, global.handle())?;
         unsafe {
             mozjs::jsapi::SetModuleResolveHook(
@@ -1400,6 +1416,52 @@ impl PageContext {
         rooted!(&in(runtime.cx()) let global = self.global.get());
         let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
         crate::event_loop::drain_pending(runtime, global.handle())
+    }
+
+    /// Drain this document's queued `history` ops as `(kind, state_json, url)` (see
+    /// [`take_pending_history`]). Host-side thread-local, so no realm entry is needed.
+    pub fn take_history_ops(&self) -> Vec<(u8, String, String)> {
+        take_pending_history()
+    }
+
+    /// Fire a `popstate` event into this document's window (real back/forward), updating
+    /// `history.state` + `location` first, then running the page's `onpopstate`/listeners and
+    /// any DOM mutations they make. `state_json` is a JSON string (`"null"` for no state);
+    /// `url` (if non-empty) becomes the new `location`.
+    pub fn fire_popstate(
+        &self,
+        runtime: &mut Runtime,
+        dom: &mut Dom,
+        state_json: &str,
+        url: &str,
+        layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    ) -> Result<(), String> {
+        LAYOUT_RECTS.with(|l| *l.borrow_mut() = layout.clone());
+        STYLES.with(|s| *s.borrow_mut() = styles.clone());
+        let _ = dom;
+
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        let set_url = if url.is_empty() {
+            String::new()
+        } else {
+            format!("globalThis.__applyUrl({});", js_string_literal(url))
+        };
+        let script = format!(
+            "(function(){{ var s = JSON.parse({}); globalThis.__histState = s; {} \
+             globalThis.__fireWindowEvent('popstate', {{type:'popstate', state:s}}); }})()",
+            js_string_literal(state_json),
+            set_url
+        );
+        rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
+        let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"popstate.js".to_owned(), 1);
+        if evaluate_script(runtime.cx(), global.handle(), &script, rval.handle_mut(), opts).is_err() {
+            tracing::warn!("popstate dispatch threw; continuing");
+        }
+        crate::event_loop::run_deferred(runtime, global.handle())?;
+        Ok(())
     }
 
     /// Settle a pending `fetch`/`XHR` request (issued earlier via the `__fetch` host queue) by
@@ -1618,6 +1680,82 @@ const WINDOW_PRELUDE: &str = r#"
         }
         // fetch / XMLHttpRequest are installed by the event-loop prelude (see event_loop.rs),
         // which owns the host request queue + delivery.
+
+        // window-level events (popstate/load/...) — a small registry separate from the node
+        // listener map, since window is not an arena node.
+        if (typeof g.__winListeners === 'undefined') {
+            g.__winListeners = {};
+            var _origAdd = g.addEventListener;
+            g.addEventListener = function (type, fn, capture) {
+                if (typeof fn === 'function') (g.__winListeners[type] = g.__winListeners[type] || []).push(fn);
+            };
+            g.removeEventListener = function (type, fn) {
+                var a = g.__winListeners[type]; if (!a) return;
+                var i = a.indexOf(fn); if (i >= 0) a.splice(i, 1);
+            };
+            g.__fireWindowEvent = function (type, ev) {
+                var a = (g.__winListeners[type] || []).slice();
+                for (var i = 0; i < a.length; i++) { try { a[i].call(g, ev); } catch (e) {} }
+                var on = g['on' + type];
+                if (typeof on === 'function') { try { on.call(g, ev); } catch (e) {} }
+            };
+        }
+
+        // location + history — client-side (SPA) routing. pushState/replaceState update
+        // location and queue an op for the host (__historyPush) to reflect in the omnibox +
+        // back/forward stack WITHOUT a network navigation. The host fires popstate on real
+        // back/forward via __fireWindowEvent('popstate', ...).
+        g.__parseUrl = function (href) {
+            var m = /^([a-zA-Z][a-zA-Z0-9+.\-]*:)\/\/([^\/?#]*)([^?#]*)(\?[^#]*)?(#.*)?$/.exec(href);
+            if (!m) { m = [href, 'https:', '', href.charAt(0) === '/' ? href : '/' + href, '', '']; }
+            var protocol = m[1] || 'https:', host = m[2] || '', path = m[3] || '/';
+            var hostParts = host.split(':');
+            return {
+                href: href, protocol: protocol, host: host,
+                hostname: hostParts[0] || '', port: hostParts[1] || '',
+                pathname: path || '/', search: m[4] || '', hash: m[5] || '',
+                origin: protocol + '//' + host,
+                assign: function (u) { g.__applyUrl(String(u)); },
+                replace: function (u) { g.__applyUrl(String(u)); },
+                reload: function () {}, toString: function () { return this.href; }
+            };
+        };
+        g.__applyUrl = function (u) {
+            u = String(u);
+            var loc = g.location, abs;
+            if (/^[a-zA-Z][a-zA-Z0-9+.\-]*:\/\//.test(u)) abs = u;
+            else if (u.charAt(0) === '?') abs = loc.origin + loc.pathname + u;
+            else if (u.charAt(0) === '#') abs = loc.origin + loc.pathname + loc.search + u;
+            else if (u.charAt(0) === '/') abs = loc.origin + u;
+            else abs = loc.origin + loc.pathname.replace(/[^\/]*$/, '') + u;
+            g.location = g.__parseUrl(abs);
+        };
+        if (typeof g.location === 'undefined' || typeof g.location.pathname === 'undefined') {
+            g.location = g.__parseUrl("%URL%");
+        }
+        g.__histState = (typeof g.__histState === 'undefined') ? null : g.__histState;
+        if (typeof g.history === 'undefined' || typeof g.history.pushState !== 'function') {
+            var _len = 1;
+            g.history = {
+                get state() { return g.__histState; },
+                get length() { return _len; },
+                get scrollRestoration() { return 'auto'; },
+                set scrollRestoration(v) {},
+                pushState: function (st, title, url) {
+                    g.__histState = (st == null ? null : st);
+                    if (url != null) { g.__applyUrl(String(url)); _len++; }
+                    try { g.__historyPush('0', JSON.stringify(g.__histState), g.location.href); } catch (e) {}
+                },
+                replaceState: function (st, title, url) {
+                    g.__histState = (st == null ? null : st);
+                    if (url != null) g.__applyUrl(String(url));
+                    try { g.__historyPush('1', JSON.stringify(g.__histState), g.location.href); } catch (e) {}
+                },
+                back: function () { try { g.__historyPush('2', 'null', ''); } catch (e) {} },
+                forward: function () { try { g.__historyPush('3', 'null', ''); } catch (e) {} },
+                go: function (n) { try { g.__historyPush('4', 'null', String(n == null ? 0 : n)); } catch (e) {} }
+            };
+        }
     })();
 "#;
 
@@ -1683,6 +1821,33 @@ unsafe extern "C" fn window_open(cx: *mut RawJSContext, argc: u32, vp: *mut Valu
     true
 }
 
+thread_local! {
+    /// `history` operations the page performed since the last drain, each
+    /// `(kind, state_json, url)` where kind: 0=pushState 1=replaceState 2=back 3=forward
+    /// 4=go(n) (url holds n). The host reflects these in the omnibox + its back/forward stack
+    /// WITHOUT a network navigation (SPA client-side routing).
+    static PENDING_HISTORY: std::cell::RefCell<Vec<(u8, String, String)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// `history` ops the page performed since the last drain (host side).
+pub fn take_pending_history() -> Vec<(u8, String, String)> {
+    PENDING_HISTORY.with(|q| std::mem::take(&mut *q.borrow_mut()))
+}
+
+/// `__historyPush(kind, stateJson, url)` — record a `history` op for the host. `kind` arrives
+/// as a stringified small integer (see [`PENDING_HISTORY`]).
+unsafe extern "C" fn history_push(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let kind: u8 = arg_string(cx, vp, argc, 0)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    let state = arg_string(cx, vp, argc, 1).unwrap_or_else(|| "null".to_string());
+    let url = arg_string(cx, vp, argc, 2).unwrap_or_default();
+    PENDING_HISTORY.with(|q| q.borrow_mut().push((kind, state, url)));
+    *vp = UndefinedValue();
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1704,7 +1869,7 @@ mod tests {
         });
         let raw_cx = unsafe { runtime.cx().raw_cx() };
         let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
-        unsafe { install(raw_cx, &global, dom as *mut Dom) };
+        unsafe { install(raw_cx, &global, dom as *mut Dom, "https://test.example/") };
         crate::event_loop::install(&mut runtime, global.handle())?;
 
         eval_val(&mut runtime, global.handle(), setup)?;

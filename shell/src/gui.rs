@@ -410,6 +410,8 @@ impl App {
         self.handle_window_opens();
         // A handler may have issued fetch/XHR — perform them and settle the page's Promises.
         self.pump_fetches();
+        // A handler may have routed client-side (history.pushState) — reflect it in the chrome.
+        self.handle_history_ops();
         if prevented {
             tracing::info!("click: default action prevented by page JS");
             self.rerender();
@@ -672,6 +674,8 @@ impl App {
         // The page's load scripts may have kicked off fetch/XHR (SPA data hydration) — perform
         // and settle them so the first paint reflects the fetched data.
         self.pump_fetches();
+        // Load scripts may also have routed (history.replaceState on boot) — reflect it.
+        self.handle_history_ops();
         self.rerender();
     }
 
@@ -1234,6 +1238,68 @@ impl App {
         if did_any {
             // A response may have carried Set-Cookie (e.g. a session refresh); persist it.
             manuk_net::save_cookies();
+            self.rerender();
+        }
+    }
+
+    /// Reflect page `history` ops (SPA client-side routing) into the chrome. `pushState`/
+    /// `replaceState` update the omnibox URL + the back/forward stack **without a network
+    /// navigation**; JS-initiated `back`/`forward`/`go` fall back to the ordinary navigate path
+    /// (correct URL, though it reloads rather than firing popstate — same-document back/forward
+    /// with per-entry state restore is a logged follow-on).
+    fn handle_history_ops(&mut self) {
+        let ops = match self.page.as_ref() {
+            Some(p) => p.take_history_ops(),
+            None => return,
+        };
+        let mut routed = false;
+        for (kind, _state, url) in ops {
+            match kind {
+                0 => {
+                    if !url.is_empty() {
+                        self.history.push(url.clone());
+                        self.url = url;
+                        routed = true;
+                    }
+                }
+                1 => {
+                    if !url.is_empty() {
+                        self.history.replace_current(url.clone());
+                        self.url = url;
+                        routed = true;
+                    }
+                }
+                2 => {
+                    if let Some(u) = self.history.back().map(str::to_string) {
+                        self.goto_no_history(&u);
+                    }
+                }
+                3 => {
+                    if let Some(u) = self.history.forward().map(str::to_string) {
+                        self.goto_no_history(&u);
+                    }
+                }
+                4 => {
+                    if let Ok(n) = url.parse::<i64>() {
+                        if let Some(u) = self.history.traverse(n).map(str::to_string) {
+                            self.goto_no_history(&u);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        if routed {
+            // Keep the omnibox (unless the user is typing) + tab record in sync with the route.
+            if !self.omnibox_open {
+                self.omnibox_input = self.url.clone();
+            }
+            let (title, height) = self
+                .page
+                .as_ref()
+                .map(|p| (p.title.clone(), p.content_height))
+                .unwrap_or_default();
+            self.browser.set_loaded(self.tab_id, self.url.clone(), title, height);
             self.rerender();
         }
     }

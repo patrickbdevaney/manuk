@@ -224,6 +224,49 @@ pub fn resolve_fetch(
     Ok(())
 }
 
+/// `history` ops (`pushState`/`replaceState`/`back`/`forward`/`go`) the page performed since the
+/// last call, each `(kind, state_json, url)`. The host reflects them in the omnibox +
+/// back/forward stack without a network navigation. Empty without the JS feature.
+#[cfg(feature = "_sm")]
+pub fn take_history_ops(ctx: &PageContext) -> Vec<(u8, String, String)> {
+    ctx.take_history_ops()
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn take_history_ops(_ctx: &PageContext) -> Vec<(u8, String, String)> {
+    Vec::new()
+}
+
+/// Fire a `popstate` event into `ctx`'s document (a real back/forward to a same-document
+/// history entry), updating `history.state` + `location` and running the page's reactions.
+/// No-op without the JS feature.
+#[cfg(feature = "_sm")]
+pub fn fire_popstate(
+    ctx: &PageContext,
+    dom: &mut manuk_dom::Dom,
+    state_json: &str,
+    url: &str,
+    layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<(), JsError> {
+    with_runtime(|rt| {
+        ctx.fire_popstate(rt, dom, state_json, url, layout, styles)
+            .map_err(|message| JsError { message })
+    })
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn fire_popstate(
+    _ctx: &PageContext,
+    _dom: &mut manuk_dom::Dom,
+    _state_json: &str,
+    _url: &str,
+    _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<(), JsError> {
+    Ok(())
+}
+
 /// The interactive JS surface. `load_document` runs the page's scripts on a **persistent**
 /// global and returns a [`PageContext`] to keep alive; `dispatch_event` later fires a trusted
 /// event (a real click/input) into that same global so the page's registered listeners run.
@@ -236,11 +279,12 @@ pub use dom_bindings::PageContext;
 #[cfg(feature = "_sm")]
 pub fn load_document(
     dom: &mut manuk_dom::Dom,
+    url: &str,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
     styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
 ) -> Result<(PageContext, usize), JsError> {
     with_runtime(|rt| {
-        dom_bindings::PageContext::load(rt, dom, layout, styles).map_err(|message| JsError { message })
+        dom_bindings::PageContext::load(rt, dom, url, layout, styles).map_err(|message| JsError { message })
     })
 }
 
@@ -269,6 +313,7 @@ pub struct PageContext;
 #[cfg(not(feature = "_sm"))]
 pub fn load_document(
     _dom: &mut manuk_dom::Dom,
+    _url: &str,
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
     _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
 ) -> Result<(PageContext, usize), JsError> {

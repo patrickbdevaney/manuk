@@ -489,7 +489,7 @@ impl Page {
         let js = if dom.find_first("script").is_none() {
             None
         } else {
-            match manuk_js::load_document(&mut dom, &rects, &styles) {
+            match manuk_js::load_document(&mut dom, final_url, &rects, &styles) {
                 Ok((ctx, n)) => {
                     if n > 0 {
                         tracing::debug!(scripts = n, "executed page scripts");
@@ -617,6 +617,49 @@ impl Page {
     /// The base URL for resolving relative request URLs (page `fetch`/XHR targets).
     pub fn base_url(&self) -> &str {
         &self.final_url
+    }
+
+    /// Drain the page's queued `history` ops (`pushState`/`replaceState`/`back`/`forward`/`go`)
+    /// as `(kind, state_json, url)` — the host reflects them in the omnibox + back/forward stack
+    /// without a network navigation. Empty when the page has no JS context.
+    pub fn take_history_ops(&self) -> Vec<(u8, String, String)> {
+        match &self.js {
+            Some(ctx) => manuk_js::take_history_ops(ctx),
+            None => Vec::new(),
+        }
+    }
+
+    /// Fire a `popstate` (a real back/forward to a same-document `pushState` entry): updates
+    /// `history.state` + `location`, runs the page's `onpopstate` reactions, and re-lays-out if
+    /// they mutated the DOM. No-op without a JS context.
+    pub fn fire_popstate(
+        &mut self,
+        state_json: &str,
+        url: &str,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) {
+        let Some(ctx) = &self.js else { return };
+        let rects: std::collections::HashMap<manuk_dom::NodeId, [f32; 4]> = self
+            .root_box
+            .node_rects(&self.dom)
+            .into_iter()
+            .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+            .collect();
+        if let Err(e) =
+            manuk_js::fire_popstate(ctx, &mut self.dom, state_json, url, &rects, &self.styles)
+        {
+            tracing::warn!("popstate: {e}");
+            return;
+        }
+        let root = self.dom.root();
+        if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
+            let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
+            self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
+            self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            self.content_height = self.root_box.content_bottom();
+            self.dom.clear_all_dirty();
+        }
     }
 
     /// **Streaming load with a first-paint checkpoint (B-latency).** Feeds `chunks` to
@@ -1434,6 +1477,44 @@ mod js_interactive_tests {
             page6.dom().text_content(x6),
             "S201:BODY",
             "XHR onload saw the resolved status + body"
+        );
+
+        // (7) history.pushState: a click handler routes client-side — location updates and the
+        // op is queued for the host (no navigation).
+        let html7 = r#"<!doctype html><html><body>
+            <button id="nav">go</button><div id="r">home</div>
+            <script>
+              window.onpopstate = function (e) {
+                document.getElementById('r').textContent = 'pop:' + (e.state ? e.state.p : 'none');
+              };
+              document.getElementById('nav').addEventListener('click', function () {
+                history.pushState({ p: 42 }, '', '/next');
+                document.getElementById('r').textContent = 'at:' + location.pathname;
+              });
+            </script></body></html>"#;
+        let mut page7 = Page::load(html7, "https://app.test/home", &fonts, 800.0);
+        let root7 = page7.dom().root();
+        let nav = manuk_css::query_selector_all(page7.dom(), root7, "#nav")[0];
+        let r7 = manuk_css::query_selector_all(page7.dom(), root7, "#r")[0];
+        let _ = page7.take_history_ops(); // clear residue
+        page7.dispatch_click(nav, &fonts, 800.0);
+        assert_eq!(
+            page7.dom().text_content(r7),
+            "at:/next",
+            "pushState updated location.pathname without a navigation"
+        );
+        let ops = page7.take_history_ops();
+        assert_eq!(ops.len(), 1, "one history op queued for the host");
+        assert_eq!(ops[0].0, 0, "kind 0 = pushState");
+        assert_eq!(ops[0].2, "https://app.test/next", "resolved absolute URL for the omnibox");
+        assert!(ops[0].1.contains("42"), "state serialized: {}", ops[0].1);
+
+        // (8) popstate: a host-driven back/forward fires onpopstate with the restored state.
+        page7.fire_popstate("{\"p\":7}", "https://app.test/home", &fonts, 800.0);
+        assert_eq!(
+            page7.dom().text_content(r7),
+            "pop:7",
+            "onpopstate ran with the restored state on back/forward"
         );
     }
 }
