@@ -64,13 +64,20 @@ Effort tags: **S** ≈ hours–1 day, **M** ≈ days, **L** ≈ 1–3 weeks, **X
   WOFF2 skipped (no building pure-Rust decompressor); TTF/OTF pass through.
 - **Bidi/RTL** (`f83fe27`) — unicode-bidi visual reordering; Arabic/Hebrew lay out RTL.
 
-**Deep-architecture tier remaining (each a focused effort):** ES modules (the mozjs module
-API is present — CompileModule/ModuleLink/ModuleEvaluate/SetModuleResolveHook — but a
-correct loader needs import-graph discovery + async fetch + the resolve-hook FFI);
-incremental/partial layout (subtree relayout re-entrancy); a real compositor with damage-rect
-repaint + partial texture upload + a feature-gated Vello GPU backend (the invalidation win is
-in the GPU shell path, hard to verify headlessly). The parity gate held **72/72** through
-every change above.
+- **ES modules** (`40fa0d8`) — `<script type=module>` compiles/links/evaluates via the
+  SpiderMonkey module API; self-contained modules run (import/export no longer syntax-error).
+- **Incremental layout — paint-only fast path** (`7d2fc0b`) — color/background restyles
+  update the fragment tree in place and skip layout; only Reflow/Rebuild relayouts.
+- **Compositor invalidation primitives** (`f278dcb`) — `DisplayList::changed_since` /
+  `damage_since` + `Page::display_list()` for frame diffing (skip idle re-upload / repaint
+  only the damage rect).
+
+**Deep-architecture follow-ons (scoped, in the code's comments):** ES-module import-graph
+fetching + a resolve-hook registry + `import.meta` hook; true subtree relayout (re-entrant
+layout with containing-block/float context); the GPU-shell wiring of the damage primitives
+(skip re-upload, partial `write_texture`) + a feature-gated Vello backend behind the
+`Painter` trait. WOFF2 web fonts (no building pure-Rust decompressor). The parity gate held
+**72/72** through every change above.
 
 ## Key research verdicts (these shape the plan)
 
