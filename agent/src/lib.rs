@@ -475,6 +475,27 @@ impl AgentBrowser {
         Ok(())
     }
 
+    /// E1 — resolve a `role` + accessible `name` to a **stable node handle** once, so a
+    /// caller can act on it repeatedly (`activate`, `type_into_handle`) without re-resolving
+    /// the whole a11y tree per action. The handle is the arena [`NodeId`], stable for the
+    /// page's lifetime. This is the in-process alternative to the per-call round-trips a
+    /// CDP/WebDriver client makes across a process boundary.
+    pub fn resolve_handle(&self, role: &manuk_a11y::Role, name: &str) -> Result<manuk_dom::NodeId> {
+        self.resolve(role, name)
+    }
+
+    /// E1 — type `text` into a text field addressed by its stable [`NodeId`] handle (from
+    /// [`Self::resolve_handle`] or the a11y tree's `node`), skipping name re-resolution.
+    pub fn type_into_handle(&mut self, node: manuk_dom::NodeId, text: &str) -> Result<()> {
+        let page = self.page.as_mut().context("no page loaded")?;
+        if !page.dom().tag_name(node).is_some_and(|t| matches!(t, "input" | "textarea")) {
+            return Err(anyhow!("node {} is not a text field", node.0));
+        }
+        page.dom_mut().set_attr(node, "value", text);
+        page.relayout(&self.fonts, self.width as f32);
+        Ok(())
+    }
+
     /// §4b — submit the form containing the control named `near` (or the document's
     /// first form when `near` is `None`).
     pub async fn submit(&mut self, near: Option<(&manuk_a11y::Role, &str)>) -> Result<Activation> {
