@@ -528,13 +528,50 @@ fn form_control_text(dom: &Dom, node: NodeId) -> Option<String> {
 
 fn is_block_level(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
     if let NodeData::Element(_) = dom.data(node) {
-        matches!(
+        if matches!(
             styles.get(&node).map(|s| s.display),
             Some(Display::Block | Display::Flex | Display::Grid | Display::Table)
-        )
-    } else {
-        false
+        ) {
+            return true;
+        }
+        // **Block-in-inline** (CSS2 §9.2.1.1). An inline box containing a block-level box cannot
+        // stay in an inline formatting context: the spec splits the inline around the block and
+        // wraps the run in anonymous block boxes. We approximate that by *blockifying* such an
+        // inline — it becomes block-level, so its parent opens a block formatting context and the
+        // inline's own children then split into anonymous blocks (the inline run) plus the block
+        // child, which is exactly the resulting box structure.
+        //
+        // Without this the block child was swallowed by the inline collector: its text still
+        // flowed, but its BOX (background/padding/border) vanished entirely. The approximation
+        // differs from the spec only in where the *inline's own* background paints (spec: on each
+        // split fragment; here: behind the blockified box) — invisible unless a block-containing
+        // inline is itself styled, which is vanishingly rare.
+        if matches!(styles.get(&node).map(|s| s.display), Some(Display::Inline)) {
+            return inline_contains_block(dom, styles, node);
+        }
     }
+    false
+}
+
+/// Whether `node` (an inline box) has a block-level box somewhere in its inline-only descent.
+/// Recurses only through further *inline* children — an inline-block / flex / table child is
+/// atomic and does not make its ancestor block-level.
+fn inline_contains_block(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
+    for k in dom.flat_children(node) {
+        if !is_rendered(dom, styles, k) {
+            continue;
+        }
+        let Some(d) = styles.get(&k).map(|s| s.display) else {
+            continue;
+        };
+        if matches!(d, Display::Block | Display::Flex | Display::Grid | Display::Table) {
+            return true;
+        }
+        if d == Display::Inline && inline_contains_block(dom, styles, k) {
+            return true;
+        }
+    }
+    false
 }
 
 fn is_rendered(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
@@ -2519,6 +2556,34 @@ mod tests {
                 "each flex item ~1/3 of 600px, got {w} (widths: {widths:?})"
             );
         }
+    }
+
+    /// Regression (found while VISUAL-verifying Tick 15): a block-level box inside an *inline*
+    /// element must keep its box. Before the block-in-inline fix the inline collector swallowed
+    /// it — the text still flowed but the block's background/padding/border vanished entirely.
+    /// CSS2 §9.2.1.1: the inline is split around the block into anonymous block boxes; we
+    /// blockify the inline, which yields the same box structure.
+    #[test]
+    fn block_inside_an_inline_keeps_its_box() {
+        let html = r#"<span>before<div id="b">inner</div>after</span>"#;
+        let css = "#b{background:#ff0;padding:6px}";
+        let (dom, root) = layout_html(html, css, 400.0);
+        let rects = root.node_rects(&dom);
+
+        let div = dom
+            .descendants(dom.root())
+            .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("b"))
+            .expect("the div exists");
+        let r = rects
+            .get(&div)
+            .expect("the block inside the inline produced a box (it used to be swallowed)");
+        // A block fills its containing block's width, and padding gives it real height.
+        assert!(
+            r.width > 300.0,
+            "the block spans the container width, got {} (widths collapse if it stayed inline)",
+            r.width
+        );
+        assert!(r.height > 12.0, "6px padding top+bottom plus a line, got {}", r.height);
     }
 
     #[test]
