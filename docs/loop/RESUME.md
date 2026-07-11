@@ -4,50 +4,51 @@ _A fresh session reads [[CONSTITUTION]] then this file, and resumes at the named
 
 ## Where the loop is
 
-- **TICKS = 3** (about to run Tick 3). Ticks 1 (`1a717d0`) + 2 (`91a22bb`) done + committed.
+- **TICKS = 4** (about to run Tick 4). Ticks 1 (`1a717d0`), 2 (`91a22bb`), 3 (`7f1b35d`) done +
+  committed.
 - Working tree: clean, on `main`, pushed. Parity 72/72. Disk: 42G free (86%); nuke
   `target/debug` only if free < 25G.
-- Key architecture note for future ticks: page JS runs on a **persistent** `PageContext`
-  (`engine/js/src/dom_bindings.rs`) whose event loop is `event_loop::run_deferred` — it runs
-  microtasks + timers but leaves `fetch`/XHR queued for the host. The host (shell
-  `pump_fetches`) drains via `Page::take_fetches()`, performs I/O on `manuk-net`, and settles
-  via `Page::resolve_fetch`. Reuse this host-queue + re-enter pattern for any new async surface
-  (postMessage, MutationObserver callbacks, pushState) — don't add a parallel queue.
+- Key architecture notes for future ticks:
+  - Page JS runs on a **persistent** `PageContext` (`engine/js/src/dom_bindings.rs`) whose event
+    loop is `event_loop::run_deferred` — microtasks + timers run, but `fetch`/XHR stay queued for
+    the host. Host (shell `pump_fetches`) drains via `Page::take_fetches()`, performs I/O on
+    `manuk-net`, settles via `Page::resolve_fetch`.
+  - Same host-queue pattern for `window.open` (`take_pending_window_opens`) and `history`
+    (`take_pending_history` / `handle_history_ops`). **Reuse it for any new host-visible surface
+    (downloads, postMessage) — never add a parallel queue** (that mistake cost a rework in Tick 2).
+  - The document URL reaches JS via `install(..., doc_url)` → `%URL%` in `WINDOW_PRELUDE`.
 
-## Next action (Tick 3)
+## Next action (Tick 4)
 
-UCB pick: **L10 — `history.pushState`/`replaceState` + `popstate` SPA routing** (V/C = 2.0, top
-score; the natural complement to the fetch just landed — SPAs pair data-load with client-side
-URL routing). Design:
+UCB pick: **L04 — downloads to disk** (V/C=2.0; self-contained, low-risk, a concrete item from
+the original diligence needs list, cleanly HEADLESS-verifiable). Design:
 
-1. `engine/js/src/dom_bindings.rs` window prelude: define `history` with `pushState(state,
-   title, url)`, `replaceState(...)`, `state`, `length`, `back()/forward()/go()`, and a
-   `location` shim kept in sync (at least `href/pathname/search/hash`). `pushState`/`replaceState`
-   update `location`, store the state, and queue an entry for the host (thread-local
-   `PENDING_HISTORY` drained like window.open — the host updates the omnibox URL + its
-   session/back-forward stack WITHOUT a network navigation). Fire no `popstate` on push (per
-   spec); fire `popstate` when the host calls back on a real back/forward.
-2. `engine/js/src/lib.rs`: `take_history_ops(ctx)` (drain queued pushes) + `fire_popstate(ctx,
-   state_json)` (dispatch a `popstate` event into the persistent global, then `run_deferred`).
-3. `engine/page`: `Page::take_history_ops()` + `Page::fire_popstate(state, fonts, w)` (relayout
-   on mutation, mirroring `resolve_fetch`).
-4. `shell/src/gui.rs`: after dispatch, drain history ops → update `self.url` + omnibox + the
-   tab's back/forward stack (no reload). Wire the existing Back/Forward buttons so that when the
-   target entry was a pushState entry (same document), call `page.fire_popstate(...)` instead of
-   re-navigating.
-5. Verify HEADLESS: interactive test — a click handler calls `history.pushState({p:1},'','/next')`;
-   assert `location.pathname==='/next'` and the queued op reached `take_history_ops`; then
-   `fire_popstate` and assert the page's `onpopstate` ran. Parity must stay 72/72.
+1. Detect a download: a navigation/click whose response has `Content-Disposition: attachment`
+   (or a hyperlink with the `download` attribute, or a MIME the engine won't render). The
+   response already flows through `shell` `finish_load` / the click path — branch there instead
+   of rendering.
+2. `engine/net`: expose enough of the response (headers + body bytes + suggested filename from
+   `Content-Disposition` / URL basename) to write to disk. A `download_dir()` helper mirroring
+   `cookie_store_path()` (`$XDG_DOWNLOAD_DIR` / `~/Downloads`), with filename de-duplication
+   (`name (1).ext`).
+3. `shell`: a `Download { url, path, total, received, done }` record + a `downloads: Vec<..>`
+   field; write the body to `download_dir()/filename`; add a downloads entry to the hamburger
+   menu (and/or a small shelf). Keep it synchronous (block_on) for now; streaming-to-disk with
+   progress is a follow-on.
+4. Verify HEADLESS: a unit test that, given a canned `Response` with `Content-Disposition:
+   attachment; filename="report.pdf"` + body bytes, `download_dir()` + the filename resolver
+   produce the right path and the bytes are written (to a temp dir via `MANUK_STATE`/env).
+   Parity must stay 72/72.
 
-Follow-ons already logged: L21 async non-blocking fetch, L22 request/response fidelity, L23
-AbortController.
+Follow-ons to log: streaming-to-disk with a progress bar; a real downloads shelf UI; open/reveal.
 
 ## Then keep going
 
-After Tick 3, re-run §5 UCB over the LEDGER (Tick 5 forces the highest-U item). Strong Tier-A
-candidates queued: L02 MutationObserver, L03 postMessage/opener, L04 downloads, L11 responsive
-`@media`. Each tick: implement → verify (build + parity 72/72 + test) → disk hygiene →
-commit+push (co-author line) → update LEDGER/STATE/JOURNAL/RESUME → next.
+After Tick 4, re-run §5 UCB over the LEDGER. **Tick 5 is the forced-highest-U tick** (candidates:
+L14 fingerprint U7, L16 Shadow DOM U7, L31 llama grounding U8, L32 prerender U8, L33 SoA U7,
+L34 service worker U8). Strong normal Tier-A candidates: L02 MutationObserver, L03 postMessage/
+opener, L11 responsive `@media`. Each tick: implement → verify (build + parity 72/72 + test) →
+disk hygiene → commit+push (co-author line) → update LEDGER/STATE/JOURNAL/RESUME → next.
 
 ## Re-establish context
 

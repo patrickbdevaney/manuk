@@ -41,3 +41,20 @@ _Minimal history for audit + resume. See [[CONSTITUTION]] §4/§6, [[RESUME]] fo
 - Reflect: async non-blocking fetch (don't stall the UI thread on block_on), real request
   headers/Request/Response fidelity, and `AbortController` are logged follow-ons (new ledger
   items). Next: Tick 3.
+
+## Tick 3 — L10: history.pushState/replaceState + popstate + location (2026-07-11)
+- Selected: top UCB score (V/C=2.0); the natural complement to Tick 2 fetch — SPAs pair
+  data-load with client-side routing, so this unblocks the same site class.
+- Implemented: real `location` (parsed from the doc URL, threaded through `install` as `%URL%`);
+  `history` (pushState/replaceState/state/length/back/forward/go) that updates location + queues
+  a host op via native `__historyPush` (window.open-style thread-local); a window-level event
+  registry so `popstate` fires (it's a window event, not a node event). `PageContext` +
+  `Page::{take_history_ops, fire_popstate}`; shell `handle_history_ops` reflects pushState/
+  replaceState into the omnibox URL + back/forward stack with NO navigation.
+- Verified: HEADLESS — page interactive test scenarios (7) click→pushState updates
+  `location.pathname` + queues the op with serialized state, (8) `fire_popstate` runs
+  `onpopstate` with restored state. Parity 72/72; `_sm` + JS-less green.
+- Disk: pruned target incremental dirs (42G free, 86%; > 25G, no nuke). Commit `7f1b35d`.
+- Reflect: same-document Back/Forward *button* → popstate (with per-entry state restore, needs
+  a same-doc flag on SessionHistory) is a follow-on (L10b); `document.location`/`document.URL`
+  mirror pending. Next: Tick 4.

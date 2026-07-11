@@ -5,10 +5,11 @@ T=times touched. `score = V/C + 1.5*sqrt(ln(1+TICKS)/(1+T)) + 1.0*(U/10)`. Every
 the highest-U item. Update T/status/scores each tick; add items on reflection; mark dead ends
 `superseded`. Verify class per §7: HEADLESS / GUI / EXTERNAL / MEASURE._
 
-**TICKS = 3** (global tick counter; increment each tick). _Tick 1 landed an L14 slice (window/
-screen metrics; L14 stays backlog for the rest, T=1). Tick 2 landed L01 fetch/XHR (done, T=1).
-Tick 3 UCB pick: **L10 pushState/popstate** (V/C=2.0, top score; the natural complement to
-fetch — SPAs pair data-load with client-side routing)._
+**TICKS = 4** (global tick counter; increment each tick). _Tick 1: L14 slice (window/screen
+metrics; rest stays backlog, T=1). Tick 2: L01 fetch/XHR (done, T=1). Tick 3: L10 pushState/
+popstate (done, T=1). Tick 4 UCB pick: **L04 downloads** (V/C=2.0; self-contained, low-risk,
+a concrete item from the original diligence needs list, cleanly HEADLESS-verifiable). NOTE:
+Tick 5 is the forced-highest-U tick per §5._
 
 ## Tier A — absorb outstanding beneficial work already suggested (do first)
 
@@ -26,7 +27,8 @@ STATE weak frontiers. High V, mostly known ⇒ high exploit ⇒ front-loaded.
 | L07 | Wire semantic history index (record visits, query in omnibox) | UI/MEM | 7 | 5 | 4 | 0 | backlog | HEADLESS |
 | L08 | Wire page-translate (menu item → agent translate backend) | UI/AGENT-IN | 6 | 5 | 5 | 0 | backlog | EXTERNAL |
 | L09 | DevTools panel over BiDi (DOM tree, console, network) Ctrl+Shift+I | UI/AGENT-EXT | 8 | 8 | 5 | 0 | backlog | GUI |
-| L10 | `history.pushState`/`popstate` SPA routing correctness end-to-end | JS/COMPAT | 8 | 4 | 4 | 0 | backlog | HEADLESS |
+| L10 | `history.pushState`/`popstate` SPA routing correctness end-to-end | JS/COMPAT | 8 | 4 | 4 | 1 | **done** (Tick 3) | HEADLESS |
+| L10b | Same-document Back/Forward *button* → popstate w/ per-entry state restore (SessionHistory same-doc flag) | JS/UI | 5 | 4 | 4 | 0 | backlog (L10 follow-on) | HEADLESS |
 | L11 | Responsive-skin correctness: `@media` + collapsed-menu on Wikipedia-class | RENDER | 8 | 6 | 6 | 0 | backlog | HEADLESS |
 | L12 | New window (2nd winit window) + duplicate/close semantics | UI | 5 | 7 | 5 | 0 | backlog | GUI |
 | L13 | Off-thread the external-CSS/image fetch phase (R1 follow-on) | PERF | 6 | 5 | 4 | 0 | backlog | HEADLESS |
@@ -56,7 +58,8 @@ STATE weak frontiers. High V, mostly known ⇒ high exploit ⇒ front-loaded.
 interactive-JS-keystone · persistent-cookies · spidermonkey-default · clicks→JS · fast-exit ·
 clipboard+selection · tab-strip · hamburger-menu · suggestions/history-dropdown · scrollbar ·
 position:sticky · grid-template-areas · UAX#14-linebreak · preconnect(R4) · AG5-latency ·
-MEM3-binary-size · window.open→new-tab · **fetch()+XHR real Promises (L01, Tick 2)**.
+MEM3-binary-size · window.open→new-tab · **fetch()+XHR real Promises (L01, Tick 2)** ·
+**history.pushState/replaceState/popstate + location (L10, Tick 3)**.
 
 ## Superseded / blocked
 
