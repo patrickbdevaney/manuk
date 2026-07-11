@@ -1875,103 +1875,41 @@ impl Ctx<'_> {
     /// Lay out flex children as a row using taffy for main-axis sizing/positioning.
     /// Each child is then laid out as a block within its taffy-assigned slot.
     fn layout_flex(&self, node: NodeId, cx: f32, cy: f32, cw: f32, kids: &[NodeId]) -> (BoxContent, f32) {
-        let block_kids: Vec<NodeId> = kids
-            .iter()
-            .copied()
-            .filter(|&k| self.dom.is_element(k))
-            .collect();
-        if block_kids.is_empty() {
-            return (BoxContent::Block(vec![]), 0.0);
-        }
-        let items: Vec<flex::FlexItem> = block_kids
-            .iter()
-            .map(|&k| {
-                let s = &self.styles[&k];
-                let basis = match s.flex_basis {
-                    Dim::Auto => flex::FlexBasis::Auto,
-                    Dim::Px(p) => flex::FlexBasis::Px(p),
-                    Dim::Percent(f) => flex::FlexBasis::Pct(f / 100.0),
-                    // A calc() basis is resolved against the container's main size.
-                    Dim::Calc { .. } => flex::FlexBasis::Px(s.flex_basis.resolve(cw, 0.0)),
-                };
-                flex::FlexItem {
-                    node: k,
-                    width: match s.width {
-                        Dim::Px(p) => Some(p),
-                        _ => None,
-                    },
-                    height: match s.height {
-                        Dim::Px(p) => Some(p),
-                        _ => None,
-                    },
-                    // `flex-grow`/`shrink` default per CSS; an auto-width item with no explicit
-                    // grow still fills like the old behavior only when nothing else is set.
-                    grow: s.flex_grow,
-                    shrink: s.flex_shrink,
-                    basis,
-                    align_self: s.align_self,
-                }
-            })
-            .collect();
-        let cs = &self.styles[&node];
-        let container_h = match cs.height {
-            Dim::Px(p) => Some(p),
-            _ => None,
-        };
-        let config = flex::FlexConfig {
-            direction: cs.flex_direction,
-            wrap: cs.flex_wrap,
-            justify: cs.justify_content,
-            align: cs.align_items,
-            row_gap: cs.row_gap,
-            column_gap: cs.column_gap,
-        };
-        let slots = flex::solve_flex(cw, container_h, &items, &config, |node, avail| {
-            self.measure_intrinsic(node, avail)
-        });
-
-        self.place_taffy_slots(&block_kids, &slots, cx, cy)
+        self.layout_flex_or_grid(node, cx, cy, cw, kids)
     }
 
     /// Lay out a `display:grid` container via taffy, then place each item at its grid slot.
     fn layout_grid(&self, node: NodeId, cx: f32, cy: f32, cw: f32, kids: &[NodeId]) -> (BoxContent, f32) {
+        self.layout_flex_or_grid(node, cx, cy, cw, kids)
+    }
+
+    /// Shared flex/grid layout via the unified taffy tree ([`taffy_tree::solve_subtree`]): the
+    /// container and its directly-nested flex/grid descendants are solved in one tree, with
+    /// block/inline/float/table children content-measured back into Manuk. Returns the
+    /// container's child slots, then places each child (as a block within its slot).
+    fn layout_flex_or_grid(&self, node: NodeId, cx: f32, cy: f32, cw: f32, kids: &[NodeId]) -> (BoxContent, f32) {
         let block_kids: Vec<NodeId> = kids.iter().copied().filter(|&k| self.dom.is_element(k)).collect();
         if block_kids.is_empty() {
             return (BoxContent::Block(vec![]), 0.0);
         }
-        let items: Vec<flex::GridItem> = block_kids
-            .iter()
-            .map(|&k| {
-                let s = &self.styles[&k];
-                flex::GridItem {
-                    node: k,
-                    width: match s.width {
-                        Dim::Px(p) => Some(p),
-                        _ => None,
-                    },
-                    height: match s.height {
-                        Dim::Px(p) => Some(p),
-                        _ => None,
-                    },
-                    col: s.grid_column,
-                    row: s.grid_row,
-                }
-            })
-            .collect();
-        let cs = &self.styles[&node];
-        let container_h = match cs.height {
+        let container_h = match self.styles[&node].height {
             Dim::Px(p) => Some(p),
             _ => None,
         };
-        let slots = flex::solve_grid(
+        let slots = taffy_tree::solve_subtree(
+            self.dom,
+            self.styles,
+            node,
             cw,
             container_h,
-            &items,
-            &cs.grid_template_columns,
-            &cs.grid_template_rows,
-            cs.row_gap,
-            cs.column_gap,
-            |node, avail| self.measure_intrinsic(node, avail),
+            |dn, known: taffy::Size<Option<f32>>, avail: taffy::Size<taffy::AvailableSpace>| {
+                let aw = known.width.or(match avail.width {
+                    taffy::AvailableSpace::Definite(w) => Some(w),
+                    _ => None,
+                });
+                let (w, h) = self.measure_intrinsic(dn, aw);
+                taffy::Size { width: known.width.unwrap_or(w), height: known.height.unwrap_or(h) }
+            },
         );
         self.place_taffy_slots(&block_kids, &slots, cx, cy)
     }

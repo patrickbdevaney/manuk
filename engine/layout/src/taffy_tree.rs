@@ -411,13 +411,13 @@ impl LayoutGridContainer for TaffyDom<'_> {
 /// unified taffy tree, measuring block/inline/float/table leaves via `measure`. Returns the
 /// container's **direct children's** slots (relative to its content origin) — the same shape
 /// [`crate::flex::solve_flex`] returns, so it drops into the existing placement path.
-pub fn solve_subtree(
+pub fn solve_subtree<'m>(
     dom: &Dom,
     styles: &StyleMap,
     container: DomNodeId,
     container_width: f32,
     container_height: Option<f32>,
-    measure: impl FnMut(DomNodeId, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32> + 'static,
+    measure: impl FnMut(DomNodeId, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32> + 'm,
 ) -> Vec<Slot> {
     let (mut tree, root) = TaffyDom::build(dom, styles, container, Box::new(measure));
     // Pin the root to the given content size (Manuk resolved width; height when definite).
