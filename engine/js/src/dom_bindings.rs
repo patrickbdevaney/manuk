@@ -1236,14 +1236,29 @@ pub fn run_scripts(
     let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
     unsafe { install(raw_cx, &global, dom as *mut Dom) };
     crate::event_loop::install(runtime, global.handle())?;
+    // Register the ES-module resolve hook (self-contained modules for now).
+    unsafe {
+        mozjs::jsapi::SetModuleResolveHook(
+            mozjs::jsapi::JS_GetRuntime(raw_cx),
+            Some(module_resolve_hook),
+        );
+    }
 
     let mut ran = 0usize;
-    for src in &scripts {
-        rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
-        let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"inline.js".to_owned(), 1);
-        match evaluate_script(runtime.cx(), global.handle(), src, rval.handle_mut(), opts) {
-            Ok(()) => {}
-            Err(()) => tracing::warn!("a page <script> threw; continuing with the rest"),
+    for (src, is_module) in &scripts {
+        if *is_module {
+            // `<script type=module>`: compile + link + evaluate as an ES module, so
+            // import/export syntax is valid and self-contained modules run.
+            if !unsafe { run_module(raw_cx, src) } {
+                tracing::warn!("a page module failed (compile/link/evaluate); continuing");
+            }
+        } else {
+            rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
+            let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"inline.js".to_owned(), 1);
+            match evaluate_script(runtime.cx(), global.handle(), src, rval.handle_mut(), opts) {
+                Ok(()) => {}
+                Err(()) => tracing::warn!("a page <script> threw; continuing with the rest"),
+            }
         }
         ran += 1;
     }
@@ -1253,30 +1268,63 @@ pub fn run_scripts(
     Ok(ran)
 }
 
+/// Compile + link + evaluate `source` as an ES module in the current realm. Returns false
+/// if any stage fails. A module with imports that the resolve hook can't satisfy fails at
+/// link; self-contained modules (no imports, `export`, `import.meta`, top-level await) run.
+unsafe fn run_module(cx: *mut RawJSContext, source: &str) -> bool {
+    use mozjs::jsapi::{CompileModule, ModuleEvaluate, ModuleLink};
+    let opts = CompileOptionsWrapper::new(&wrap_cx(cx), c"module.js".to_owned(), 1);
+    let utf16: Vec<u16> = source.encode_utf16().collect();
+    let mut src = mozjs::rust::transform_u16_to_source_text(&utf16);
+    let module = CompileModule(cx, opts.ptr, &mut src);
+    if module.is_null() {
+        return false;
+    }
+    rooted!(in(cx) let mod_obj = module);
+    if !ModuleLink(cx, mod_obj.handle().into()) {
+        return false;
+    }
+    rooted!(in(cx) let mut rval = UndefinedValue());
+    ModuleEvaluate(cx, mod_obj.handle().into(), rval.handle_mut().into())
+}
+
+/// ES-module resolve hook. Self-contained modules only for now: imports resolve to null,
+/// so `ModuleLink` fails for a module that imports (caught by the caller). A registry of
+/// pre-fetched modules keyed by resolved specifier is the follow-on for import graphs.
+unsafe extern "C" fn module_resolve_hook(
+    _cx: *mut RawJSContext,
+    _referencing: mozjs::jsapi::JS::Handle<mozjs::jsapi::Value>,
+    _request: mozjs::jsapi::JS::Handle<*mut JSObject>,
+) -> *mut JSObject {
+    ptr::null_mut()
+}
+
 /// The inline JavaScript sources of a document, in tree order. Skips `src=` scripts and
 /// non-JS `type`s (e.g. `application/json`).
-fn collect_inline_scripts(dom: &Dom) -> Vec<String> {
+fn collect_inline_scripts(dom: &Dom) -> Vec<(String, bool)> {
     let mut out = Vec::new();
     for n in dom.descendants(dom.root()) {
         if dom.tag_name(n) != Some("script") {
             continue;
         }
+        let mut is_module = false;
         if let Some(el) = dom.element(n) {
             if el.attr("src").is_some() {
                 continue;
             }
             let ty = el.attr("type").unwrap_or("").trim();
+            is_module = ty.eq_ignore_ascii_case("module");
             let is_js = ty.is_empty()
                 || ty.eq_ignore_ascii_case("text/javascript")
                 || ty.eq_ignore_ascii_case("application/javascript")
-                || ty.eq_ignore_ascii_case("module");
+                || is_module;
             if !is_js {
                 continue;
             }
         }
         let src = dom.text_content(n);
         if !src.trim().is_empty() {
-            out.push(src);
+            out.push((src, is_module));
         }
     }
     out
