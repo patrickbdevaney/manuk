@@ -546,6 +546,14 @@ impl Preconnector {
     }
 }
 
+/// R4 — speculatively warm the connection to `target`'s origin (same-origin policy + recency
+/// + budget enforced by the process-global [`Preconnector`]). Fire-and-forget from a link
+/// hover or the omnibox: the subsequent real request reuses the warm TLS connection.
+pub async fn preconnect(current_page: &str, target: &str) -> Preconnect {
+    static P: std::sync::OnceLock<Preconnector> = std::sync::OnceLock::new();
+    P.get_or_init(Preconnector::new).preconnect(current_page, target).await
+}
+
 /// Origin key `scheme://host:port` for the warmed-origins map.
 fn origin_key(u: &Url) -> String {
     format!(

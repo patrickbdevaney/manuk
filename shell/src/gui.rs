@@ -1314,13 +1314,25 @@ impl ApplicationHandler<NavEvent> for App {
                 self.cursor = (position.x as f32, position.y as f32);
                 // Show a hand cursor over links / clickable controls, an arrow otherwise.
                 let (cx, cy) = self.cursor;
-                let clickable = cy >= CHROME_HEIGHT
-                    && matches!(
-                        self.classify_page_click(cx, cy - CHROME_HEIGHT + self.scroll_y),
-                        PageAction::Link(_) | PageAction::Submit(_) | PageAction::Toggle(_)
-                    );
+                let action = if cy >= CHROME_HEIGHT {
+                    self.classify_page_click(cx, cy - CHROME_HEIGHT + self.scroll_y)
+                } else {
+                    PageAction::Clear
+                };
+                let clickable = matches!(
+                    action,
+                    PageAction::Link(_) | PageAction::Submit(_) | PageAction::Toggle(_)
+                );
                 if clickable != self.over_link {
                     self.over_link = clickable;
+                    // R4: speculatively warm the connection to a newly-hovered link's origin
+                    // (same-origin policy + recency/budget enforced by the net Preconnector).
+                    if let PageAction::Link(target) = &action {
+                        let (cur, target) = (self.url.clone(), target.clone());
+                        self.rt.spawn(async move {
+                            manuk_net::preconnect(&cur, &target).await;
+                        });
+                    }
                     if let Some(w) = &self.window {
                         w.set_cursor(if clickable {
                             winit::window::CursorIcon::Pointer
