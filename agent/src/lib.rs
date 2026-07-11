@@ -71,6 +71,8 @@ pub mod targeting;
 
 pub mod grounding;
 
+pub mod automation;
+
 /// Default model — a Groq-hosted multimodal model (overridable via `GROQ_MODEL`).
 pub const DEFAULT_MODEL: &str = "qwen/qwen3.6-27b";
 
