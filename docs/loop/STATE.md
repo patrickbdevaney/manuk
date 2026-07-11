@@ -20,8 +20,8 @@ Gate: `cargo run -q -p manuk-wpt --release -- parity` = **72/72**.
 |------|------|-------|
 | RENDER | 70 | Stylo cascade, flex/grid, grid-template-areas, UAX#14 breaking, position:sticky. Complex responsive skins (Wikipedia Vector-2022) still partial. |
 | JS | 66 | **Interactive**: persistent per-page context, real clicks fire listeners, preventDefault, window.open. **fetch()/XHR real Promises + host round-trip**; **history.pushState/replaceState/popstate + real `location`** (SPA routing). Missing: cross-window postMessage/opener, MutationObserver, many WebIDL APIs. |
-| NET | 60 | hyper+rustls, HTTP cache (RFC-9111 subset), RFC-6265 cookies **persistent across sessions**, preconnect, adblock, page-fetch bodies via manuk-net. Missing: HTTP/2 push nuance, service workers, async non-blocking page-fetch (currently block_on). |
-| UI | 56 | Tab strip (new/close/dup), hamburger menu, omnibox suggestions/history dropdown, scrollbar, find, zoom, text selection + clipboard; **omnibox URL tracks SPA pushState routes**. Missing: downloads UI (next), settings page, richer a11y. |
+| NET | 62 | hyper+rustls, HTTP cache (RFC-9111 subset), RFC-6265 cookies **persistent across sessions**, preconnect, adblock, page-fetch bodies, **downloads to disk (Content-Disposition/binary, de-dup, path-safe)**. Missing: HTTP/2 push nuance, service workers, async non-blocking page-fetch (currently block_on), streaming-to-disk. |
+| UI | 58 | Tab strip (new/close/dup), hamburger menu, omnibox suggestions/history dropdown, scrollbar, find, zoom, text selection + clipboard; omnibox URL tracks SPA pushState routes; **downloads saved to disk + listed in the menu**. Missing: richer downloads shelf, settings page, richer a11y. |
 | PERF | 55 | Off-thread nav, bfcache, preconnect, partial GPU upload, shaping caches. Not yet profiled against Chromium; cold-start ~73ms tiny page. |
 | MEM | 55 | Tab hibernation (discard/restore). No SoA DOM yet (deferred, measure first). Binary 16.4 MB (Stylo+SM). |
 | AGENT-IN | 40 | llama.cpp/GGUF in-browser agent panel (Ctrl+J), typed actions. Depends on local model. |
@@ -37,7 +37,8 @@ Interactive JS keystone; persistent cookies; SpiderMonkey default; clicks→JS +
 clipboard + text selection; tab strip; hamburger menu; suggestions/history dropdown; scrollbar;
 position:sticky; grid-template-areas; UAX#14 line-breaking; speculative preconnect; AG5 latency
 measurement; MEM3 binary-size measurement; boot window/screen metrics (Tick 1); **fetch()/XHR
-real Promises + host round-trip (Tick 2)**; **history.pushState/popstate + location (Tick 3)**.
+real Promises + host round-trip (Tick 2)**; **history.pushState/popstate + location (Tick 3)**;
+**downloads to disk (Tick 4)**.
 
 ## Known weak frontiers (feed exploration)
 

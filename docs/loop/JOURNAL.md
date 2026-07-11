@@ -58,3 +58,18 @@ _Minimal history for audit + resume. See [[CONSTITUTION]] §4/§6, [[RESUME]] fo
 - Reflect: same-document Back/Forward *button* → popstate (with per-entry state restore, needs
   a same-doc flag on SessionHistory) is a follow-on (L10b); `document.location`/`document.URL`
   mirror pending. Next: Tick 4.
+
+## Tick 4 — L04: downloads to disk (2026-07-11)
+- Selected: V/C=2.0; self-contained, low-risk, a concrete item from the original diligence needs
+  list, cleanly HEADLESS-verifiable (chosen over the higher-V but heavier/observers ticks to
+  land a complete verified feature).
+- Implemented: `engine/net/downloads.rs` (pure policy+FS tail: is_attachment, suggested_filename
+  w/ RFC 6266 + path-traversal sanitize, download_dir, write_download w/ de-dupe); `manuk_page::
+  fetch_document -> Loaded::{Document,Download}` branching on response headers; shell
+  `finish_download` (write + record + restore prior page) + a Downloads hamburger entry.
+- Verified: HEADLESS — 4 net unit tests (attachment detection; filename from CD/URL incl.
+  RFC5987 + traversal safety; write+dedupe). Parity 72/72; workspace builds; page interactive
+  test still green. Commit `d6022ff`.
+- Reflect: the download rides in on a navigation then restores the prior page (re-fetch from
+  cache) — fine, but a `<a download>` attribute trigger + a streaming-to-disk progress shelf are
+  follow-ons (logged). Next: Tick 5 (forced-highest-U).

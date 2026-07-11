@@ -5,11 +5,12 @@ T=times touched. `score = V/C + 1.5*sqrt(ln(1+TICKS)/(1+T)) + 1.0*(U/10)`. Every
 the highest-U item. Update T/status/scores each tick; add items on reflection; mark dead ends
 `superseded`. Verify class per §7: HEADLESS / GUI / EXTERNAL / MEASURE._
 
-**TICKS = 4** (global tick counter; increment each tick). _Tick 1: L14 slice (window/screen
-metrics; rest stays backlog, T=1). Tick 2: L01 fetch/XHR (done, T=1). Tick 3: L10 pushState/
-popstate (done, T=1). Tick 4 UCB pick: **L04 downloads** (V/C=2.0; self-contained, low-risk,
-a concrete item from the original diligence needs list, cleanly HEADLESS-verifiable). NOTE:
-Tick 5 is the forced-highest-U tick per §5._
+**TICKS = 5** (global tick counter; increment each tick). _Tick 1: L14 slice (window/screen
+metrics; rest stays backlog, T=1). Tick 2: L01 fetch/XHR (done). Tick 3: L10 pushState/popstate
+(done). Tick 4: L04 downloads (done). **Tick 5 is the forced-highest-U tick** (§5): highest U
+overall is L31/L32/L34 (U8), but L31 (llama grounding) + L34 (service worker) are EXTERNAL/very
+costly and can't be cleanly HEADLESS-verified here — so the pick is the highest-U item that
+honors the verification invariant: **L32 predictive prerender** (U8, HEADLESS, PERF)._
 
 ## Tier A — absorb outstanding beneficial work already suggested (do first)
 
@@ -21,7 +22,8 @@ STATE weak frontiers. High V, mostly known ⇒ high exploit ⇒ front-loaded.
 | L01 | `fetch()` + `XMLHttpRequest` in page JS (SPA data loading) | JS/COMPAT | 10 | 5 | 4 | 1 | **done** (Tick 2) | HEADLESS |
 | L02 | `MutationObserver` (SPAs mutate DOM post-load) | JS/COMPAT | 9 | 5 | 4 | 0 | backlog | HEADLESS |
 | L03 | Cross-window `postMessage` + `window.opener` (finish OAuth popup return) | JS | 9 | 5 | 5 | 0 | backlog | HEADLESS |
-| L04 | Downloads to disk (Content-Disposition, stream to file, manager entry) | NET/UI | 8 | 4 | 3 | 0 | backlog | HEADLESS |
+| L04 | Downloads to disk (Content-Disposition, stream to file, manager entry) | NET/UI | 8 | 4 | 3 | 1 | **done** (Tick 4) | HEADLESS |
+| L04b | `<a download>` attribute trigger + streaming-to-disk progress shelf UI + open/reveal | NET/UI | 4 | 5 | 3 | 0 | backlog (L04 follow-on) | GUI |
 | L05 | File uploads (multipart from `type=file`) | NET/JS | 7 | 5 | 4 | 0 | backlog | HEADLESS |
 | L06 | Wire password store + autofill (keyring-derived key, save/fill on forms) | UI/SECURITY | 8 | 6 | 5 | 0 | backlog | EXTERNAL |
 | L07 | Wire semantic history index (record visits, query in omnibox) | UI/MEM | 7 | 5 | 4 | 0 | backlog | HEADLESS |
@@ -59,7 +61,8 @@ interactive-JS-keystone · persistent-cookies · spidermonkey-default · clicks�
 clipboard+selection · tab-strip · hamburger-menu · suggestions/history-dropdown · scrollbar ·
 position:sticky · grid-template-areas · UAX#14-linebreak · preconnect(R4) · AG5-latency ·
 MEM3-binary-size · window.open→new-tab · **fetch()+XHR real Promises (L01, Tick 2)** ·
-**history.pushState/replaceState/popstate + location (L10, Tick 3)**.
+**history.pushState/replaceState/popstate + location (L10, Tick 3)** · **downloads to disk
+(L04, Tick 4)**.
 
 ## Superseded / blocked
 
