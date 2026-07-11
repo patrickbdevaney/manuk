@@ -13,8 +13,8 @@ Progress against them + the phase plan below:
 | 1 | Frame-scheduled dirty-bit render loop | ✅ shipped (B2 coalescing); wiring scroll→incremental paths remains |
 | 9 | Synchronous `Readiness` + role/name agent API | ✅ shipped (E2 + E1 handles) |
 | 10 | In-process semantic DOM diffing (moat) | ✅ shipped (`A11yNode::diff` / `observe_diff`); provenance Action-Guard exists (E6) |
-| 3 | WOFF2 web fonts | 🔄 in progress |
-| 8 | Stable + generational `NodeId` | ◐ stable handle shipped (E1); generational free-list (arena reclaim) remains |
+| 3 | WOFF2 web fonts | ✅ shipped (A3 — pure-Rust decoder + glyf/hmtx transforms) |
+| 8 | Stable + generational `NodeId` | ✅ foundation shipped (packed gen+index, free-list reclaim infra, `is_alive`/`discard_subtree`); auto-free wiring at safe discard sites is the follow-on |
 | 2 | Persistent-texture partial damage upload | ☐ remaining (GPU; headless-unverifiable) |
 | 6 | Minimal spatial/scroll tree | ☐ remaining |
 | 7 | Blitz-model Taffy 0.12 integration + intrinsic-size cache | ☐ remaining (largest; ~2–3.5k LOC) |
