@@ -167,6 +167,18 @@ pub fn run_document_scripts(
     })
 }
 
+/// URLs the current page requested via `window.open(...)` since the last call — the host opens
+/// each as a new tab/window (the OAuth-popup pattern). Empty without the JS feature.
+#[cfg(feature = "_sm")]
+pub fn take_window_opens() -> Vec<String> {
+    dom_bindings::take_pending_window_opens()
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn take_window_opens() -> Vec<String> {
+    Vec::new()
+}
+
 /// The interactive JS surface. `load_document` runs the page's scripts on a **persistent**
 /// global and returns a [`PageContext`] to keep alive; `dispatch_event` later fires a trusted
 /// event (a real click/input) into that same global so the page's registered listeners run.

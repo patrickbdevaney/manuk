@@ -1194,6 +1194,14 @@ pub unsafe fn install(
         1,
         0,
     );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__windowOpen".as_ptr(),
+        Some(window_open),
+        1,
+        0,
+    );
     let platform = format!("{} {}", std::env::consts::OS, std::env::consts::ARCH);
     let prelude = WINDOW_PRELUDE
         .replace("%UA%", &honest_user_agent())
@@ -1531,6 +1539,13 @@ const WINDOW_PRELUDE: &str = r#"
             language: "en-US", languages: ["en-US", "en"],
             onLine: true, cookieEnabled: false, doNotTrack: null
         };
+        // window.open → the host opens a real tab/window (OAuth-popup pattern). Returns a
+        // stub window handle so `var w = window.open(...)` and `w.close()` work.
+        if (typeof g.open !== 'function') {
+            g.open = function (u) {
+                try { return g.__windowOpen(String(u == null ? '' : u)); } catch (e) { return null; }
+            };
+        }
     })();
 "#;
 
@@ -1564,6 +1579,36 @@ fn honest_user_agent() -> String {
         std::env::consts::ARCH,
         env!("CARGO_PKG_VERSION")
     )
+}
+
+thread_local! {
+    /// URLs the page asked to open via `window.open(...)`, drained by the host after the JS
+    /// call returns (so the browser can open a real tab/window — the OAuth-popup pattern).
+    static PENDING_OPENS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// URLs requested via `window.open` since the last drain (host side).
+pub fn take_pending_window_opens() -> Vec<String> {
+    PENDING_OPENS.with(|q| std::mem::take(&mut *q.borrow_mut()))
+}
+
+/// `window.open(url, ...)` — record the URL for the host to open as a new tab/window. Returns
+/// a minimal stub window (so `w = window.open(...)`, `w.closed`, `w.close()` don't throw);
+/// cross-window `postMessage`/`opener` is a follow-on.
+unsafe extern "C" fn window_open(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some(url) = arg_string(cx, vp, argc, 0) {
+        if !url.is_empty() {
+            PENDING_OPENS.with(|q| q.borrow_mut().push(url));
+        }
+    }
+    match eval_in_current_global(
+        cx,
+        "({closed:false, close:function(){this.closed=true;}, focus:function(){}, postMessage:function(){}})",
+    ) {
+        Some(v) => *vp = v,
+        None => *vp = NullValue(),
+    }
+    true
 }
 
 #[cfg(test)]

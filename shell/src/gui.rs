@@ -399,15 +399,19 @@ impl App {
             .page
             .as_ref()
             .and_then(|p| p.a11y_tree().hit_test(doc_x, doc_y).map(|n| n.node));
+        let mut prevented = false;
         if let Some(hit) = hit {
             let width = self.viewport.width;
             if let Some(page) = self.page.as_mut() {
-                if !page.dispatch_click(hit, &self.fonts, width) {
-                    tracing::info!("click: default action prevented by page JS");
-                    self.rerender();
-                    return;
-                }
+                prevented = !page.dispatch_click(hit, &self.fonts, width);
             }
+        }
+        // A handler may have called window.open — open those as new tabs.
+        self.handle_window_opens();
+        if prevented {
+            tracing::info!("click: default action prevented by page JS");
+            self.rerender();
+            return;
         }
 
         match self.classify_page_click(doc_x, doc_y) {
@@ -1161,6 +1165,22 @@ impl App {
     fn copy_selection(&self) {
         let (text, _) = self.selection_text_and_rects();
         self.set_clipboard(&text);
+    }
+
+    /// Open any URLs the page requested via `window.open(...)` as new tabs (resolved against
+    /// the current page), focusing the last one — the multi-window/OAuth-popup pattern.
+    fn handle_window_opens(&mut self) {
+        for raw in manuk_js::take_window_opens() {
+            let resolved = url::Url::parse(&self.url)
+                .ok()
+                .and_then(|base| base.join(&raw).ok())
+                .map(|u| u.to_string())
+                .unwrap_or(raw);
+            let id = self.browser.open(resolved.clone());
+            self.tab_id = id;
+            self.focus_tab(id);
+            tracing::info!(url = %resolved, "window.open -> new tab");
+        }
     }
 
     /// Run a hamburger-menu action (the same operations as the keyboard shortcuts).

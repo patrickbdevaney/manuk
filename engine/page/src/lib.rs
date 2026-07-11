@@ -1315,6 +1315,18 @@ mod js_interactive_tests {
             !page2.dispatch_click(link, &fonts, 800.0),
             "preventDefault means the engine must NOT follow the link"
         );
+
+        // (3) window.open queues the URL for the host to open as a new tab (OAuth-popup path).
+        let _ = manuk_js::take_window_opens(); // clear any residue
+        let html3 = r#"<!doctype html><html><body>
+            <script>window.open('https://accounts.example/oauth?client=x');</script>
+            </body></html>"#;
+        let _page3 = Page::load(html3, "https://app.test/", &fonts, 800.0);
+        assert_eq!(
+            manuk_js::take_window_opens(),
+            vec!["https://accounts.example/oauth?client=x".to_string()],
+            "window.open recorded the URL for the host"
+        );
     }
 }
 
