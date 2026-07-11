@@ -322,6 +322,11 @@ pub struct ComputedStyle {
     /// `border-radius` — a single uniform corner radius in px (per-corner radii are a follow-on).
     /// `0.0` = square corners.
     pub border_radius: f32,
+    /// `visibility` (inherited). `Hidden`/`Collapse` boxes still take space but are not painted.
+    pub visibility: Visibility,
+    /// **Effective** `opacity` — this element's own `opacity` already multiplied by its ancestors'
+    /// (CSS opacity applies to the whole subtree). `0.0` = fully transparent, `1.0` = opaque.
+    pub opacity: f32,
     /// `box-shadow` — the first outer shadow, if any (multiple shadows / `inset` / `spread` are
     /// follow-ons).
     pub box_shadow: Option<BoxShadow>,
@@ -405,6 +410,8 @@ impl ComputedStyle {
             border_width: Sides::all(0.0),
             border_color: Rgba::BLACK,
             border_radius: 0.0,
+            visibility: Visibility::Visible,
+            opacity: 1.0,
             box_shadow: None,
             width: Dim::Auto,
             height: Dim::Auto,
@@ -447,6 +454,9 @@ impl ComputedStyle {
     /// else resets to initial. (CSS inheritance model.)
     fn inherit_from(parent: &ComputedStyle) -> Self {
         let mut s = ComputedStyle::initial();
+        // `visibility` is inherited — a hidden subtree stays hidden unless a descendant explicitly
+        // re-declares `visible`.
+        s.visibility = parent.visibility;
         s.color = parent.color;
         s.font_size = parent.font_size;
         s.font_weight = parent.font_weight;
@@ -626,6 +636,22 @@ enum Combinator {
     Child,
     NextSibling,
     SubsequentSibling,
+}
+
+/// `visibility` — an element that is `hidden` still **occupies its box** (unlike `display:none`)
+/// but is not painted. It is an **inherited** property, so a hidden subtree stays hidden unless a
+/// descendant explicitly sets `visibility: visible`.
+///
+/// This is not a nicety: the modern web hides dropdowns/modals/tooltips with `visibility:hidden`
+/// (+ `opacity:0`) far more often than with `display:none`, because those are animatable. Without
+/// it, every such element paints **on top of the page**.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Visibility {
+    #[default]
+    Visible,
+    Hidden,
+    /// `collapse` — treated as `hidden` outside tables (which is what the spec allows).
+    Collapse,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -1708,6 +1734,10 @@ impl MinimalCascade {
                 for (_, _, d) in matched.iter().filter(|(_, _, d)| d.important) {
                     apply_declaration(&mut s, d, parent_fs);
                 }
+                // CSS `opacity` applies to the whole SUBTREE (it forms a group). We fold that in
+                // here so every box carries its *effective* opacity and paint needs no ancestor
+                // context: effective = own × parent's effective.
+                s.opacity = (s.opacity * parent_style.opacity).clamp(0.0, 1.0);
                 s
             }
             // Text/comment/doctype inherit their parent's computed style.
@@ -2172,6 +2202,18 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             }
         }
         "box-shadow" => s.box_shadow = parse_box_shadow(v, s.font_size),
+        "visibility" => {
+            s.visibility = match v.trim().to_ascii_lowercase().as_str() {
+                "hidden" => Visibility::Hidden,
+                "collapse" => Visibility::Collapse,
+                _ => Visibility::Visible,
+            }
+        }
+        "opacity" => {
+            if let Ok(o) = v.trim().parse::<f32>() {
+                s.opacity = o.clamp(0.0, 1.0);
+            }
+        }
         "border-width" => set_border_widths(&mut s.border_width, v, s.font_size),
         "border-top-width" => s.border_width.top = border_len(v, s.font_size),
         "border-right-width" => s.border_width.right = border_len(v, s.font_size),

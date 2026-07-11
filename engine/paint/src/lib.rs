@@ -173,10 +173,27 @@ impl DisplayList {
         let mut groups: Vec<(i32, Option<Rect>, Vec<DisplayItem>)> = Vec::new();
         root.walk(&mut |b| {
             let mut items = Vec::new();
+            // `visibility: hidden` / `opacity: 0` — the box still occupies its space (layout already
+            // accounted for it) but paints NOTHING. Without this, every dropdown, modal and tooltip
+            // the modern web hides this way renders on top of the page.
+            if b.hidden || b.opacity <= 0.01 {
+                return;
+            }
             // A radius can never exceed half the shorter side (CSS clamps overlapping corners).
             let radius = b.radius.min(b.rect.width / 2.0).min(b.rect.height / 2.0).max(0.0);
+            // Partial opacity: scale every colour's alpha. (A true CSS opacity group would composite
+            // the subtree off-screen; per-item alpha is a close, cheap approximation and is exact
+            // for the overwhelmingly common non-overlapping case.)
+            let fade = |c: Rgba| -> Rgba {
+                if b.opacity >= 0.999 {
+                    c
+                } else {
+                    Rgba { a: ((c.a as f32) * b.opacity).round().clamp(0.0, 255.0) as u8, ..c }
+                }
+            };
             // `box-shadow` paints *beneath* the background.
             if let Some(sh) = b.shadow {
+                let sh = manuk_css::BoxShadow { color: fade(sh.color), ..sh };
                 if sh.color.a > 0 {
                     items.push(DisplayItem::Shadow {
                         rect: Rect {
@@ -191,7 +208,7 @@ impl DisplayList {
                     });
                 }
             }
-            if let Some(bg) = b.background {
+            if let Some(bg) = b.background.map(fade) {
                 if bg.a > 0 {
                     if radius > 0.0 {
                         items.push(DisplayItem::RoundRect {

@@ -253,6 +253,11 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     };
     s.border_color = abs_to_rgba(&cv.clone_border_top_color().resolve_to_absolute(&current));
 
+    // `opacity` — own value; the *effective* (subtree-folded) value is computed by the caller.
+    // (`visibility` is not exposed by Stylo's servo build, so it is recovered from MinimalCascade
+    // in `cascade_via_stylo` — the same pattern already used for `vertical-align`.)
+    s.opacity = cv.get_effects().clone_opacity().clamp(0.0, 1.0);
+
     // `border-radius` — uniform MVP: the top-left corner's horizontal radius (per-corner and
     // elliptical radii are a follow-on). A `%` radius resolves against the box, which we don't
     // have here, so only a px radius is taken.

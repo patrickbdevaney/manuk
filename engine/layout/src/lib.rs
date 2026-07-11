@@ -166,6 +166,10 @@ pub struct LayoutBox {
     pub radius: f32,
     /// `box-shadow` (first outer shadow), painted beneath the box.
     pub shadow: Option<manuk_css::BoxShadow>,
+    /// `visibility: hidden|collapse` — the box still OCCUPIES its space but is not painted.
+    pub hidden: bool,
+    /// **Effective** opacity (own × ancestors'). `0.0` = invisible, `1.0` = opaque.
+    pub opacity: f32,
     /// The DOM node this box came from, if any (anonymous boxes are `None`).
     pub node: Option<NodeId>,
     pub content: BoxContent,
@@ -414,6 +418,8 @@ pub fn layout_document(
             border: None,
             radius: 0.0,
             shadow: None,
+            hidden: false,
+            opacity: 1.0,
             node: None,
             content: BoxContent::Block(vec![]),
         },
@@ -991,6 +997,8 @@ impl Ctx<'_> {
             border: border_of(&s),
             radius: s.border_radius,
             shadow: s.box_shadow,
+            hidden: s.visibility != manuk_css::Visibility::Visible,
+            opacity: s.opacity,
             node: Some(node),
             content,
         };
@@ -1119,6 +1127,8 @@ impl Ctx<'_> {
                     border: None,
                     radius: 0.0,
                     shadow: None,
+                    hidden: false,
+                    opacity: 1.0,
                     node: None,
                     content: BoxContent::Inline(frags),
                 });
@@ -1264,6 +1274,8 @@ impl Ctx<'_> {
             border: border_of(&s),
             radius: s.border_radius,
             shadow: s.box_shadow,
+            hidden: s.visibility != manuk_css::Visibility::Visible,
+            opacity: s.opacity,
             node: Some(node),
             content,
         };
@@ -1466,6 +1478,8 @@ impl Ctx<'_> {
                 border: None,
                 radius: 0.0,
                 shadow: None,
+                hidden: false,
+                opacity: 1.0,
                 node: None,
                 content: BoxContent::Block(std::mem::take(&mut row_cells[r])),
             });
@@ -1491,6 +1505,8 @@ impl Ctx<'_> {
             border: border_of(&s),
             radius: s.border_radius,
             shadow: s.box_shadow,
+            hidden: s.visibility != manuk_css::Visibility::Visible,
+            opacity: s.opacity,
             node: Some(node),
             content: BoxContent::Block(row_boxes),
         };
@@ -1684,6 +1700,8 @@ impl Ctx<'_> {
                 border: border_of(&s),
                 radius: s.border_radius,
                 shadow: s.box_shadow,
+                hidden: s.visibility != manuk_css::Visibility::Visible,
+                opacity: s.opacity,
                 node: Some(cell),
                 content,
             },
@@ -1763,6 +1781,8 @@ impl Ctx<'_> {
                         border: None,
                         radius: 0.0,
                         shadow: None,
+                        hidden: false,
+                        opacity: 1.0,
                         node: None,
                         content: BoxContent::Inline(std::mem::take(frags)),
                     });
@@ -1907,6 +1927,8 @@ impl Ctx<'_> {
             border: border_of(&s),
             radius: s.border_radius,
             shadow: s.box_shadow,
+            hidden: s.visibility != manuk_css::Visibility::Visible,
+            opacity: s.opacity,
             node: Some(node),
             content,
         };
@@ -1974,6 +1996,8 @@ impl Ctx<'_> {
             border: None,
             radius: 0.0,
             shadow: None,
+            hidden: false,
+            opacity: 1.0,
             node: None,
             content: BoxContent::Inline(frags),
         });
@@ -2054,6 +2078,8 @@ impl Ctx<'_> {
                 border: border_of(s),
                 radius: s.border_radius,
                 shadow: s.box_shadow,
+                hidden: s.visibility != manuk_css::Visibility::Visible,
+                opacity: s.opacity,
                 node: Some(p.dom),
                 content: BoxContent::Block(children),
             };
@@ -2584,6 +2610,50 @@ mod tests {
             r.width
         );
         assert!(r.height > 12.0, "6px padding top+bottom plus a line, got {}", r.height);
+    }
+
+    /// W1 regression: the modern web hides dropdowns/modals/tooltips with `visibility:hidden` and
+    /// `opacity:0` (both animatable, unlike `display:none`). Neither was supported, so every one of
+    /// them painted **on top of the page** — that was Wikipedia's broken layout (an unhidden
+    /// language dropdown over the infobox, a floating Tools panel). A hidden box must still OCCUPY
+    /// its space (unlike display:none) but paint nothing.
+    #[test]
+    fn visibility_hidden_and_opacity_zero_still_occupy_space_but_do_not_paint() {
+        let html = r#"<div id="a">A</div><div id="b">B</div><div id="c">C</div>"#;
+        let css = "div{height:20px} #a{visibility:hidden} #b{opacity:0}";
+        let (dom, root) = layout_html(html, css, 400.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("node")
+        };
+        // Space is still occupied: #c sits below both, i.e. layout is unchanged.
+        let (a, b, c) = (by_id("a"), by_id("b"), by_id("c"));
+        assert_eq!(rects[&a].height, 20.0, "a hidden box still occupies its box");
+        assert!(
+            rects[&c].y >= rects[&b].y + 20.0,
+            "the visible box after them is NOT pulled up (that would be display:none)"
+        );
+        // …but neither is painted.
+        fn find_box<'a>(b: &'a LayoutBox, n: NodeId) -> Option<&'a LayoutBox> {
+            if b.node == Some(n) {
+                return Some(b);
+            }
+            if let BoxContent::Block(kids) = &b.content {
+                for k in kids {
+                    if let Some(f) = find_box(k, n) {
+                        return Some(f);
+                    }
+                }
+            }
+            None
+        }
+        assert!(find_box(&root, a).is_some_and(|bx| bx.hidden), "visibility:hidden marks the box");
+        assert!(
+            find_box(&root, b).is_some_and(|bx| bx.opacity <= 0.01),
+            "opacity:0 gives the box zero effective opacity"
+        );
     }
 
     #[test]

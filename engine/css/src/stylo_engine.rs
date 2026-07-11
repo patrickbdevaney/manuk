@@ -235,8 +235,17 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
     for (node, cs) in map.iter_mut() {
         if let Some(m) = minimal.get(node) {
             cs.vertical_align = m.vertical_align;
+            // `visibility` is not exposed by Stylo's servo build. It is NOT optional: the modern
+            // web hides dropdowns/modals/tooltips with `visibility:hidden` (animatable, unlike
+            // `display:none`), and without it every one of them paints on top of the page.
+            cs.visibility = m.visibility;
         }
     }
+
+    // CSS `opacity` forms a group: it applies to the whole SUBTREE. Fold each element's own opacity
+    // with its ancestors' so every box carries an *effective* opacity and paint needs no ancestor
+    // context. Walk the flat tree (shadow content included) in preorder.
+    fold_effective_opacity(dom, &mut map);
 
     // **Shadow trees.** The walk above is over the *node* tree, and a shadow root is deliberately
     // not a child of its host — so shadow content never got a style here. Layout walks the **flat**
@@ -250,6 +259,23 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
     }
 
     map
+}
+
+/// Multiply each element's own `opacity` by its ancestors' (CSS opacity applies to the subtree).
+fn fold_effective_opacity(dom: &Dom, map: &mut StyleMap) {
+    fn walk(dom: &Dom, node: NodeId, parent: f32, map: &mut StyleMap) {
+        let eff = match map.get_mut(&node) {
+            Some(cs) => {
+                cs.opacity = (cs.opacity * parent).clamp(0.0, 1.0);
+                cs.opacity
+            }
+            None => parent,
+        };
+        for k in dom.flat_children(node) {
+            walk(dom, k, eff, map);
+        }
+    }
+    walk(dom, dom.root(), 1.0, map);
 }
 
 /// Apply HTML presentational hints that Stylo's cascade doesn't see (our `TElement` wall
