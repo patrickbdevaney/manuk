@@ -408,6 +408,8 @@ impl App {
         }
         // A handler may have called window.open — open those as new tabs.
         self.handle_window_opens();
+        // A handler may have issued fetch/XHR — perform them and settle the page's Promises.
+        self.pump_fetches();
         if prevented {
             tracing::info!("click: default action prevented by page JS");
             self.rerender();
@@ -667,6 +669,9 @@ impl App {
         self.page = Some(page);
         self.scroll_y = 0.0;
         self.loading = false;
+        // The page's load scripts may have kicked off fetch/XHR (SPA data hydration) — perform
+        // and settle them so the first paint reflects the fetched data.
+        self.pump_fetches();
         self.rerender();
     }
 
@@ -1180,6 +1185,56 @@ impl App {
             self.tab_id = id;
             self.focus_tab(id);
             tracing::info!(url = %resolved, "window.open -> new tab");
+        }
+    }
+
+    /// Drain page-issued `fetch`/`XHR` requests, perform each over the network, and settle the
+    /// page's Promise / XHR callbacks — looping so a reaction that issues a follow-on request
+    /// (a common SPA pattern) also runs. Bounded to keep a runaway request chain from stalling
+    /// the UI thread. Synchronous `block_on` for now (the requests are HTTP-cached); truly
+    /// non-blocking async fetch is a logged follow-on.
+    fn pump_fetches(&mut self) {
+        let base = self
+            .page
+            .as_ref()
+            .map(|p| p.base_url().to_string())
+            .unwrap_or_else(|| self.url.clone());
+        let mut did_any = false;
+        for _ in 0..8 {
+            let reqs = match self.page.as_ref() {
+                Some(p) => p.take_fetches(),
+                None => break,
+            };
+            if reqs.is_empty() {
+                break;
+            }
+            for (id, raw_url, method, body) in reqs {
+                did_any = true;
+                let url = url::Url::parse(&base)
+                    .ok()
+                    .and_then(|b| b.join(&raw_url).ok())
+                    .map(|u| u.to_string())
+                    .unwrap_or(raw_url);
+                let hdrs: &[(&str, &str)] = &[];
+                let bytes = manuk_net::Bytes::from(body.into_bytes());
+                let (status, text) =
+                    match self.rt.block_on(manuk_net::request(&method, &url, hdrs, bytes)) {
+                        Ok(resp) => (resp.status, resp.text()),
+                        Err(e) => {
+                            tracing::warn!(url = %url, error = %e, "page fetch failed");
+                            (0u16, String::new())
+                        }
+                    };
+                let w = self.viewport.width;
+                if let Some(page) = self.page.as_mut() {
+                    page.resolve_fetch(id, status, &text, &self.fonts, w);
+                }
+            }
+        }
+        if did_any {
+            // A response may have carried Set-Cookie (e.g. a session refresh); persist it.
+            manuk_net::save_cookies();
+            self.rerender();
         }
     }
 

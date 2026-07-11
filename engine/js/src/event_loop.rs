@@ -43,42 +43,75 @@ const PRELUDE: &str = r#"
     };
 
     // --- fetch / XMLHttpRequest -------------------------------------------
-    // Requests are enqueued here (as "id\x01kind\x01method\x01url" strings) and the
-    // Rust event loop performs the network I/O, then calls __deliverFetch/__deliverXhr.
+    // Requests are enqueued here (as "id\x01kind\x01method\x01url\x01body" strings). The Rust
+    // loop (run_with_fetcher) or the host (drain_pending + deliver) performs the network I/O,
+    // then calls __deliver(id, status, body) — kind-agnostic; it routes to the right settler.
+    // fetch() returns a REAL Promise (native promise jobs are routed into this loop via
+    // job_queue), so `.then(...).then(...)` chains and `await` work.
     globalThis.__fetchId = 0;
-    globalThis.__fetchCb = {};
-    globalThis.__xhrObj = {};
+    globalThis.__fetchCb = {};   // id -> {resolve, reject}  (fetch)
+    globalThis.__xhrObj = {};    // id -> XMLHttpRequest     (xhr)
     globalThis.__pendingFetches = [];
 
-    // fetch(url[, {method}]) -> a thenable resolving with a Response-like object.
-    // (A host thenable, not a native Promise — the native promise-job queue is
-    // blocked in this mozjs build; see module docs.)
+    globalThis.__makeResponse = function(status, text) {
+        return {
+            ok: (status >= 200 && status < 300), status: status, statusText: "",
+            url: "", redirected: false, type: "basic", bodyUsed: false, body: null,
+            headers: { get: function(){ return null; }, has: function(){ return false; },
+                       forEach: function(){} },
+            text: function(){ return Promise.resolve(text); },
+            json: function(){ try { return Promise.resolve(JSON.parse(text)); }
+                              catch (e) { return Promise.reject(e); } },
+            clone: function(){ return globalThis.__makeResponse(status, text); }
+        };
+    };
+
+    // fetch(url[, {method, body}]) -> Promise<Response-like>.
     globalThis.fetch = function(url, opts) {
         var id = ++__fetchId;
         var method = (opts && opts.method) || "GET";
-        __pendingFetches.push(id + "\x01f\x01" + method + "\x01" + url);
-        var thenable = { then: function(onF) { __fetchCb[id] = onF; return thenable; } };
-        return thenable;
+        var body = (opts && opts.body != null) ? String(opts.body) : "";
+        __pendingFetches.push(id + "\x01f\x01" + method + "\x01" + url + "\x01" + body);
+        return new Promise(function(resolve, reject){ __fetchCb[id] = { resolve: resolve, reject: reject }; });
     };
     globalThis.__deliverFetch = function(id, status, text) {
         var cb = __fetchCb[id]; if (!cb) return; delete __fetchCb[id];
-        cb({ status: status, ok: (status >= 200 && status < 300),
-             body: text, text: function(){ return text; } });
+        if (status === 0) { cb.reject(new TypeError("Failed to fetch")); return; }
+        cb.resolve(globalThis.__makeResponse(status, text));
     };
 
     globalThis.XMLHttpRequest = function() {
-        this.readyState = 0; this.status = 0; this.responseText = "";
-        this.onload = null; this._m = "GET"; this._u = "";
+        this.readyState = 0; this.status = 0; this.statusText = "";
+        this.responseText = ""; this.response = ""; this.responseType = "";
+        this.onload = null; this.onerror = null; this.onreadystatechange = null;
+        this._m = "GET"; this._u = ""; this._id = null;
     };
-    XMLHttpRequest.prototype.open = function(m, u) { this._m = m; this._u = u; this.readyState = 1; };
-    XMLHttpRequest.prototype.send = function() {
+    XMLHttpRequest.prototype.open = function(m, u) { this._m = m || "GET"; this._u = u || ""; this.readyState = 1; };
+    XMLHttpRequest.prototype.setRequestHeader = function() {};
+    XMLHttpRequest.prototype.getAllResponseHeaders = function() { return ""; };
+    XMLHttpRequest.prototype.getResponseHeader = function() { return null; };
+    XMLHttpRequest.prototype.abort = function() {};
+    XMLHttpRequest.prototype.send = function(body) {
         var id = ++__fetchId; __xhrObj[id] = this; this._id = id;
-        __pendingFetches.push(id + "\x01x\x01" + this._m + "\x01" + this._u);
+        __pendingFetches.push(id + "\x01x\x01" + this._m + "\x01" + this._u + "\x01" + (body != null ? String(body) : ""));
     };
     globalThis.__deliverXhr = function(id, status, text) {
         var x = __xhrObj[id]; if (!x) return; delete __xhrObj[id];
-        x.status = status; x.responseText = text; x.readyState = 4;
-        if (typeof x.onload === 'function') x.onload();
+        x.status = status; x.statusText = ""; x.responseText = text;
+        x.response = (x.responseType === "json")
+            ? (function(){ try { return JSON.parse(text); } catch (e) { return null; } })()
+            : text;
+        x.readyState = 4;
+        if (typeof x.onreadystatechange === 'function') { try { x.onreadystatechange(); } catch (e) {} }
+        if (status === 0) { if (typeof x.onerror === 'function') { try { x.onerror(new Error("network")); } catch (e) {} } }
+        else if (typeof x.onload === 'function') { try { x.onload(); } catch (e) {} }
+    };
+
+    // Kind-agnostic delivery: the host settles a request by id without tracking whether it was
+    // a fetch or an XHR.
+    globalThis.__deliver = function(id, status, text) {
+        if (__fetchCb[id]) { globalThis.__deliverFetch(id, status, text); return; }
+        if (__xhrObj[id]) { globalThis.__deliverXhr(id, status, text); return; }
     };
 "#;
 
@@ -125,6 +158,65 @@ pub fn run(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<u32, S
     run_with_fetcher(rt, global, |_method, _url| (0, String::new()))
 }
 
+/// Run the event loop to quiescence **without touching the network**: microtasks + timers run,
+/// but pending `fetch`/XHR requests are left queued in `__pendingFetches` for the *host* to
+/// perform (via [`drain_pending`] + [`deliver`]). This is the interactive path — a page's
+/// `fetch` must reach real `manuk-net` I/O on the shell thread, not resolve to status 0 inline.
+/// Returns the number of macrotasks run.
+pub fn run_deferred(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<u32, String> {
+    let mut count = 0u32;
+    loop {
+        microtask_checkpoint(rt, global)?;
+        let ran = eval(rt, global, NEXT_TASK, "event_loop_tick.js")?;
+        if ran.is_boolean() && ran.to_boolean() {
+            count += 1;
+            continue;
+        }
+        break;
+    }
+    microtask_checkpoint(rt, global)?;
+    Ok(count)
+}
+
+/// Drain the page's queued `fetch`/XHR requests, returning `(id, url, method, body)` for each so
+/// the host can perform them over the real network. Kind (`fetch` vs XHR) is intentionally
+/// dropped — [`deliver`] settles by id regardless.
+pub fn drain_pending(
+    rt: &mut Runtime,
+    global: mozjs::rust::HandleObject,
+) -> Result<Vec<(u32, String, String, String)>, String> {
+    let mut out = Vec::new();
+    while let Some(req) = eval_string(rt, global, NEXT_PENDING, "event_loop_drain.js")? {
+        let parts: Vec<&str> = req.splitn(5, '\u{1}').collect();
+        if parts.len() < 4 {
+            continue;
+        }
+        let id: u32 = match parts[0].parse() {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let method = parts[2].to_string();
+        let url = parts[3].to_string();
+        let body = parts.get(4).map(|s| s.to_string()).unwrap_or_default();
+        out.push((id, url, method, body));
+    }
+    Ok(out)
+}
+
+/// Settle a page request by `id` with an HTTP `status` + response `body` (`status == 0` =
+/// network failure). Routes to the fetch Promise or XHR callbacks (kind-agnostic). The caller
+/// runs [`run_deferred`] afterward to process the reactions.
+pub fn deliver(
+    rt: &mut Runtime,
+    global: mozjs::rust::HandleObject,
+    id: u32,
+    status: u16,
+    body: &str,
+) -> Result<(), String> {
+    let script = format!("__deliver({}, {}, {})", id, status, js_string_literal(body));
+    eval(rt, global, &script, "event_loop_deliver.js").map(|_| ())
+}
+
 /// Run the event loop to quiescence, performing pending `fetch`/XHR I/O via `fetch`
 /// (`fn(method, url) -> (status, body)` — production injects a `manuk-net`-backed
 /// closure; tests inject a deterministic mock). Each turn: drain microtasks → perform
@@ -147,8 +239,9 @@ where
         let mut did_io = false;
         while let Some(req) = eval_string(rt, global, NEXT_PENDING, "event_loop_net.js")? {
             did_io = true;
-            let parts: Vec<&str> = req.splitn(4, '\u{1}').collect();
-            if parts.len() != 4 {
+            // "id\x01kind\x01method\x01url\x01body" (body optional for back-compat).
+            let parts: Vec<&str> = req.splitn(5, '\u{1}').collect();
+            if parts.len() < 4 {
                 continue;
             }
             let (id, kind, method, url) = (parts[0], parts[1], parts[2], parts[3]);
@@ -315,11 +408,13 @@ mod tests {
 
         install(&mut runtime, global.handle()).expect("install event loop");
 
-        // A fetch (thenable) and an XHR (callback), both delivered by the loop's I/O.
+        // A fetch (real Promise) and an XHR (callback), both delivered by the loop's I/O.
         let user = r#"
             globalThis.fr = "";
             globalThis.xr = "";
-            fetch("http://host/api").then(function(r){ fr = r.status + ":" + r.body + ":" + r.ok; });
+            fetch("http://host/api").then(function(r){
+                return r.text().then(function(t){ fr = r.status + ":" + t + ":" + r.ok; });
+            });
             var x = new XMLHttpRequest();
             x.open("POST", "http://host/data");
             x.onload = function(){ xr = x.status + ":" + x.responseText; };

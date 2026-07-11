@@ -179,6 +179,51 @@ pub fn take_window_opens() -> Vec<String> {
     Vec::new()
 }
 
+/// Requests `ctx`'s page issued via `fetch`/`XMLHttpRequest` since the last call, each
+/// `(id, url, method, body)`. The host performs the round-trip and settles it via
+/// [`resolve_fetch`]. Empty without the JS feature.
+#[cfg(feature = "_sm")]
+pub fn take_fetches(ctx: &PageContext) -> Vec<(u32, String, String, String)> {
+    with_runtime(|rt| ctx.take_fetches(rt).map_err(|message| JsError { message })).unwrap_or_default()
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn take_fetches(_ctx: &PageContext) -> Vec<(u32, String, String, String)> {
+    Vec::new()
+}
+
+/// Settle the `fetch`/`XHR` request `id` in `ctx`'s document with an HTTP `status` and response
+/// `body` (`status == 0` = network failure). Runs the page's `.then`/`onload` reactions and any
+/// DOM mutations they make. No-op without the JS feature.
+#[cfg(feature = "_sm")]
+pub fn resolve_fetch(
+    ctx: &PageContext,
+    dom: &mut manuk_dom::Dom,
+    id: u32,
+    status: u16,
+    body: &str,
+    layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<(), JsError> {
+    with_runtime(|rt| {
+        ctx.resolve_fetch(rt, dom, id, status, body, layout, styles)
+            .map_err(|message| JsError { message })
+    })
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn resolve_fetch(
+    _ctx: &PageContext,
+    _dom: &mut manuk_dom::Dom,
+    _id: u32,
+    _status: u16,
+    _body: &str,
+    _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<(), JsError> {
+    Ok(())
+}
+
 /// The interactive JS surface. `load_document` runs the page's scripts on a **persistent**
 /// global and returns a [`PageContext`] to keep alive; `dispatch_event` later fires a trusted
 /// event (a real click/input) into that same global so the page's registered listeners run.

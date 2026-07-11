@@ -1338,7 +1338,9 @@ impl PageContext {
             }
             ran += 1;
         }
-        crate::event_loop::run(runtime, global.handle())?;
+        // Deferred: load-time fetch/XHR stays queued for the host to perform (see run_deferred);
+        // resolving inline would settle every request with status 0 (no real network here).
+        crate::event_loop::run_deferred(runtime, global.handle())?;
 
         // Promote the stack-rooted global to a persistent root so it outlives this call.
         let boxed = RootedTraceableBox::new(Heap::default());
@@ -1383,8 +1385,50 @@ impl PageContext {
             }
             Err(()) => true,
         };
-        crate::event_loop::run(runtime, global.handle())?;
+        // Deferred: a handler's fetch/XHR stays queued for the host (pumped after dispatch).
+        crate::event_loop::run_deferred(runtime, global.handle())?;
         Ok(proceed)
+    }
+
+    /// Drain this document's queued `fetch`/XHR requests as `(id, url, method, body)` so the
+    /// host can perform them over the real network and settle each via [`resolve_fetch`].
+    pub fn take_fetches(
+        &self,
+        runtime: &mut Runtime,
+    ) -> Result<Vec<(u32, String, String, String)>, String> {
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        crate::event_loop::drain_pending(runtime, global.handle())
+    }
+
+    /// Settle a pending `fetch`/`XHR` request (issued earlier via the `__fetch` host queue) by
+    /// id: evaluates `__resolveFetch(id, status, body)` in this document's persistent global,
+    /// which resolves the stored Promise / drives the XHR callbacks, then drains the event loop
+    /// so the page's `.then(...)` / `onload` reactions (and any DOM mutations they make) run.
+    /// `status == 0` signals a network failure (rejects the Promise / fires `onerror`).
+    pub fn resolve_fetch(
+        &self,
+        runtime: &mut Runtime,
+        dom: &mut Dom,
+        id: u32,
+        status: u16,
+        body: &str,
+        layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    ) -> Result<(), String> {
+        LAYOUT_RECTS.with(|l| *l.borrow_mut() = layout.clone());
+        STYLES.with(|s| *s.borrow_mut() = styles.clone());
+        let _ = dom; // reflectors cache the stable `*mut Dom` from `load`; kept for API symmetry.
+
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        crate::event_loop::deliver(runtime, global.handle(), id, status, body)?;
+        // Run the reactions (`.then` / `onload`) and any DOM mutations they make; a follow-on
+        // fetch they issue stays queued for the host's next pump.
+        crate::event_loop::run_deferred(runtime, global.handle())?;
+        Ok(())
     }
 }
 
@@ -1572,6 +1616,8 @@ const WINDOW_PRELUDE: &str = r#"
             g.requestAnimationFrame = function (cb) { return setTimeout(function () { cb(Date.now()); }, 16); };
             g.cancelAnimationFrame = function (id) { clearTimeout(id); };
         }
+        // fetch / XMLHttpRequest are installed by the event-loop prelude (see event_loop.rs),
+        // which owns the host request queue + delivery.
     })();
 "#;
 

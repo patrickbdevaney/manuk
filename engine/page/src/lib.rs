@@ -569,6 +569,56 @@ impl Page {
         proceed
     }
 
+    /// Settle a page `fetch`/`XHR` request (issued during script run or a click handler) with an
+    /// HTTP `status` + response `body` (`status == 0` = network failure). Runs the page's
+    /// `.then`/`onload` reactions; if they mutated the DOM, re-style + re-lay-out so the update
+    /// renders. No-op when the page has no JS context.
+    pub fn resolve_fetch(
+        &mut self,
+        id: u32,
+        status: u16,
+        body: &str,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) {
+        let Some(ctx) = &self.js else { return };
+        let rects: std::collections::HashMap<manuk_dom::NodeId, [f32; 4]> = self
+            .root_box
+            .node_rects(&self.dom)
+            .into_iter()
+            .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+            .collect();
+        if let Err(e) =
+            manuk_js::resolve_fetch(ctx, &mut self.dom, id, status, body, &rects, &self.styles)
+        {
+            tracing::warn!("fetch resolve: {e}");
+            return;
+        }
+        let root = self.dom.root();
+        if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
+            let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
+            self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
+            self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            self.content_height = self.root_box.content_bottom();
+            self.dom.clear_all_dirty();
+        }
+    }
+
+    /// Drain the page's queued `fetch`/XHR requests as `(id, url, method, body)`, for the host
+    /// to perform over the network and settle via [`resolve_fetch`](Self::resolve_fetch). Empty
+    /// when the page has no JS context.
+    pub fn take_fetches(&self) -> Vec<(u32, String, String, String)> {
+        match &self.js {
+            Some(ctx) => manuk_js::take_fetches(ctx),
+            None => Vec::new(),
+        }
+    }
+
+    /// The base URL for resolving relative request URLs (page `fetch`/XHR targets).
+    pub fn base_url(&self) -> &str {
+        &self.final_url
+    }
+
     /// **Streaming load with a first-paint checkpoint (B-latency).** Feeds `chunks` to
     /// an incremental parser ([`manuk_html::StreamParser`]); at the head-complete
     /// checkpoint (`<head>` + its render-blocking CSS parsed, `<body>` reached) it lays
@@ -1340,6 +1390,50 @@ mod js_interactive_tests {
             page4.dom().element(b).and_then(|e| e.attr("data-m")),
             Some("1280x720x1:function:function"),
             "window/screen/devicePixelRatio/matchMedia/rAF present at load"
+        );
+
+        // (5) fetch(): a load-time request is queued for the host, and resolving it runs the
+        // page's `.then` chain, mutating the DOM with the response body (the SPA data path).
+        let html5 = r#"<!doctype html><html><body>
+            <div id="out">loading</div>
+            <script>
+              fetch('/api/data')
+                .then(function (r) { return r.text(); })
+                .then(function (t) { document.getElementById('out').textContent = t; });
+            </script></body></html>"#;
+        let mut page5 = Page::load(html5, "https://app.test/page", &fonts, 800.0);
+        let out5 = manuk_css::query_selector_all(page5.dom(), page5.dom().root(), "#out")[0];
+        assert_eq!(page5.dom().text_content(out5), "loading", "pre-resolution placeholder");
+        let reqs = page5.take_fetches();
+        assert_eq!(reqs.len(), 1, "the page issued exactly one fetch");
+        let (id, url, method, _body) = &reqs[0];
+        assert_eq!(url, "/api/data", "the requested URL reached the host queue");
+        assert_eq!(method, "GET");
+        page5.resolve_fetch(*id, 200, "HELLO-FROM-HOST", &fonts, 800.0);
+        assert_eq!(
+            page5.dom().text_content(out5),
+            "HELLO-FROM-HOST",
+            "resolving the fetch ran the .then chain and mutated the DOM with the body"
+        );
+
+        // (6) XMLHttpRequest: onload fires with the resolved status + body.
+        let html6 = r#"<!doctype html><html><body>
+            <div id="x">idle</div>
+            <script>
+              var r = new XMLHttpRequest();
+              r.open('GET', '/xhr');
+              r.onload = function () { document.getElementById('x').textContent = 'S' + r.status + ':' + r.responseText; };
+              r.send();
+            </script></body></html>"#;
+        let mut page6 = Page::load(html6, "https://app.test/", &fonts, 800.0);
+        let x6 = manuk_css::query_selector_all(page6.dom(), page6.dom().root(), "#x")[0];
+        let reqs6 = page6.take_fetches();
+        assert_eq!(reqs6.len(), 1, "XHR issued one request");
+        page6.resolve_fetch(reqs6[0].0, 201, "BODY", &fonts, 800.0);
+        assert_eq!(
+            page6.dom().text_content(x6),
+            "S201:BODY",
+            "XHR onload saw the resolved status + body"
         );
     }
 }

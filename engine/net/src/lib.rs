@@ -15,7 +15,9 @@
 use std::sync::OnceLock;
 
 use anyhow::{bail, Context, Result};
-use bytes::Bytes;
+/// `pub` so callers (the shell's page-fetch pump) can build request bodies without a direct
+/// `bytes` dependency.
+pub use bytes::Bytes;
 use futures_util::StreamExt;
 use http_body_util::{BodyStream, Full};
 use hyper::body::Incoming;
