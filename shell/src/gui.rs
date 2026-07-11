@@ -75,7 +75,11 @@ pub fn run(url: String, width: u32, measure_frames: Option<usize>) -> Result<()>
     let proxy = event_loop.create_proxy();
     let mut app = App::new(url, width, measure_frames, proxy);
     event_loop.run_app(&mut app).context("running event loop")?;
-    Ok(())
+    // Fast-exit like a real browser: session + cookies are already flushed on quit, and the
+    // deliberately-leaked SpiderMonkey runtime crashes if its C++ statics run destructors at
+    // process teardown. `exit(0)` skips all destructors cleanly (nothing left needs flushing).
+    let _ = &app;
+    std::process::exit(0);
 }
 
 /// A back-forward-cached page: the fully constructed [`Page`] plus the scroll offset to
@@ -273,6 +277,26 @@ impl App {
         }
         // Page document coordinates: undo the chrome offset, add the scroll.
         let (doc_x, doc_y) = (cx, cy - CHROME_HEIGHT + self.scroll_y);
+
+        // Fire the page's JS `click` listeners on the hit node first (bubbling handles
+        // delegation). If a handler called `preventDefault`, suppress the default action;
+        // otherwise a handler may still have mutated the DOM, which `dispatch_click` relayouts.
+        // A no-op returning `true` without JS, so JS-less builds behave exactly as before.
+        let hit = self
+            .page
+            .as_ref()
+            .and_then(|p| p.a11y_tree().hit_test(doc_x, doc_y).map(|n| n.node));
+        if let Some(hit) = hit {
+            let width = self.viewport.width;
+            if let Some(page) = self.page.as_mut() {
+                if !page.dispatch_click(hit, &self.fonts, width) {
+                    tracing::info!("click: default action prevented by page JS");
+                    self.rerender();
+                    return;
+                }
+            }
+        }
+
         match self.classify_page_click(doc_x, doc_y) {
             PageAction::Link(url) => {
                 self.focused_input = None;
