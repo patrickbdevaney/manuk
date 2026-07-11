@@ -17,7 +17,7 @@ Progress against them + the phase plan below:
 | 8 | Stable + generational `NodeId` | ✅ foundation shipped (packed gen+index, free-list reclaim infra, `is_alive`/`discard_subtree`); auto-free wiring at safe discard sites is the follow-on |
 | 2 | Persistent-texture partial damage upload | ☐ remaining (GPU; headless-unverifiable) |
 | 6 | Minimal spatial/scroll tree | ☐ remaining |
-| 7 | Blitz-model Taffy 0.12 integration + intrinsic-size cache | ☐ remaining (largest; ~2–3.5k LOC) |
+| 7 | Blitz-model Taffy 0.12 integration + intrinsic-size cache | ◐ measure seam + intrinsic cache shipped (auto items content-size; O(n²) probes memoized); full unified `LayoutPartialTree` (block/inline as size-only measure mode) remains |
 
 Also shipped this program: DDG search-click fix, `vw/vh/vmin/vmax` units, 9 engine
 repomaps, `RESEARCH-PROMPT-V2` + `RESEARCH-FINDINGS-V2`.
