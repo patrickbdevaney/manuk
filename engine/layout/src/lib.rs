@@ -162,6 +162,10 @@ pub struct LayoutBox {
     pub background: Option<Rgba>,
     /// Border edge widths (top, right, bottom, left) + color, when any edge is non-zero.
     pub border: Option<Border>,
+    /// `border-radius` in px (uniform); `0.0` = square corners. Rounds the painted background.
+    pub radius: f32,
+    /// `box-shadow` (first outer shadow), painted beneath the box.
+    pub shadow: Option<manuk_css::BoxShadow>,
     /// The DOM node this box came from, if any (anonymous boxes are `None`).
     pub node: Option<NodeId>,
     pub content: BoxContent,
@@ -408,6 +412,8 @@ pub fn layout_document(
             rect: Rect::ZERO,
             background: None,
             border: None,
+            radius: 0.0,
+            shadow: None,
             node: None,
             content: BoxContent::Block(vec![]),
         },
@@ -946,6 +952,8 @@ impl Ctx<'_> {
             rect,
             background: s.background_color,
             border: border_of(&s),
+            radius: s.border_radius,
+            shadow: s.box_shadow,
             node: Some(node),
             content,
         };
@@ -1072,6 +1080,8 @@ impl Ctx<'_> {
                     rect: Rect { x: cx, y: cy, width: cw, height: h },
                     background: None,
                     border: None,
+                    radius: 0.0,
+                    shadow: None,
                     node: None,
                     content: BoxContent::Inline(frags),
                 });
@@ -1215,6 +1225,8 @@ impl Ctx<'_> {
             },
             background: s.background_color,
             border: border_of(&s),
+            radius: s.border_radius,
+            shadow: s.box_shadow,
             node: Some(node),
             content,
         };
@@ -1415,6 +1427,8 @@ impl Ctx<'_> {
                 rect: Rect { x: content_x, y: row_y[r], width: content_w, height: row_h[r] },
                 background: None,
                 border: None,
+                radius: 0.0,
+                shadow: None,
                 node: None,
                 content: BoxContent::Block(std::mem::take(&mut row_cells[r])),
             });
@@ -1438,6 +1452,8 @@ impl Ctx<'_> {
             },
             background: s.background_color,
             border: border_of(&s),
+            radius: s.border_radius,
+            shadow: s.box_shadow,
             node: Some(node),
             content: BoxContent::Block(row_boxes),
         };
@@ -1629,6 +1645,8 @@ impl Ctx<'_> {
                 },
                 background: s.background_color,
                 border: border_of(&s),
+                radius: s.border_radius,
+                shadow: s.box_shadow,
                 node: Some(cell),
                 content,
             },
@@ -1706,6 +1724,8 @@ impl Ctx<'_> {
                         rect: root.rect,
                         background: None,
                         border: None,
+                        radius: 0.0,
+                        shadow: None,
                         node: None,
                         content: BoxContent::Inline(std::mem::take(frags)),
                     });
@@ -1838,6 +1858,8 @@ impl Ctx<'_> {
             },
             background: s.background_color,
             border: border_of(&s),
+            radius: s.border_radius,
+            shadow: s.box_shadow,
             node: Some(node),
             content,
         };
@@ -1903,6 +1925,8 @@ impl Ctx<'_> {
             },
             background: None,
             border: None,
+            radius: 0.0,
+            shadow: None,
             node: None,
             content: BoxContent::Inline(frags),
         });
@@ -1981,6 +2005,8 @@ impl Ctx<'_> {
                 rect: Rect { x: abs_x, y: abs_y, width: p.slot.width, height: p.slot.height },
                 background: s.background_color,
                 border: border_of(s),
+                radius: s.border_radius,
+                shadow: s.box_shadow,
                 node: Some(p.dom),
                 content: BoxContent::Block(children),
             };

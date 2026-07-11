@@ -47,7 +47,16 @@ impl DisplayList {
         };
         let item_rect = |it: &DisplayItem| -> Rect {
             match it {
-                DisplayItem::Rect { rect, .. } | DisplayItem::Image { rect, .. } => *rect,
+                DisplayItem::Rect { rect, .. }
+                | DisplayItem::Image { rect, .. }
+                | DisplayItem::RoundRect { rect, .. } => *rect,
+                // A shadow bleeds `blur` px past its rect — grow the damage box so it repaints.
+                DisplayItem::Shadow { rect, blur, .. } => Rect {
+                    x: rect.x - blur,
+                    y: rect.y - blur,
+                    width: rect.width + blur * 2.0,
+                    height: rect.height + blur * 2.0,
+                },
                 DisplayItem::Text { x, baseline, style, .. } => Rect {
                     x: *x,
                     y: baseline - style.line_height,
@@ -87,6 +96,21 @@ pub struct DecodedImage {
 pub enum DisplayItem {
     /// A solid-color rectangle (backgrounds, borders).
     Rect { rect: Rect, color: Rgba },
+    /// A solid-color rectangle with rounded corners (`border-radius`). `radius` is uniform and
+    /// already clamped to half the shorter side.
+    RoundRect {
+        rect: Rect,
+        color: Rgba,
+        radius: f32,
+    },
+    /// An outer `box-shadow`: a (rounded) rect offset by the shadow, softened over `blur` px.
+    /// Painted *beneath* the box's own background.
+    Shadow {
+        rect: Rect,
+        color: Rgba,
+        radius: f32,
+        blur: f32,
+    },
     /// A run of text drawn along a baseline.
     Text {
         x: f32,
@@ -149,12 +173,38 @@ impl DisplayList {
         let mut groups: Vec<(i32, Option<Rect>, Vec<DisplayItem>)> = Vec::new();
         root.walk(&mut |b| {
             let mut items = Vec::new();
+            // A radius can never exceed half the shorter side (CSS clamps overlapping corners).
+            let radius = b.radius.min(b.rect.width / 2.0).min(b.rect.height / 2.0).max(0.0);
+            // `box-shadow` paints *beneath* the background.
+            if let Some(sh) = b.shadow {
+                if sh.color.a > 0 {
+                    items.push(DisplayItem::Shadow {
+                        rect: Rect {
+                            x: b.rect.x + sh.dx,
+                            y: b.rect.y + sh.dy,
+                            width: b.rect.width,
+                            height: b.rect.height,
+                        },
+                        color: sh.color,
+                        radius,
+                        blur: sh.blur.max(0.0),
+                    });
+                }
+            }
             if let Some(bg) = b.background {
                 if bg.a > 0 {
-                    items.push(DisplayItem::Rect {
-                        rect: b.rect,
-                        color: bg,
-                    });
+                    if radius > 0.0 {
+                        items.push(DisplayItem::RoundRect {
+                            rect: b.rect,
+                            color: bg,
+                            radius,
+                        });
+                    } else {
+                        items.push(DisplayItem::Rect {
+                            rect: b.rect,
+                            color: bg,
+                        });
+                    }
                 }
             }
             if let Some(border) = &b.border {
@@ -423,6 +473,16 @@ impl CpuPainter<'_> {
                         }
                         fill_rect(&mut pixmap, r, *color);
                     }
+                    DisplayItem::RoundRect { rect, color, radius } => {
+                        let mut r = *rect;
+                        r.y -= scroll_y;
+                        fill_round_rect(&mut pixmap, r, *color, *radius, clip);
+                    }
+                    DisplayItem::Shadow { rect, color, radius, blur } => {
+                        let mut r = *rect;
+                        r.y -= scroll_y;
+                        fill_shadow(&mut pixmap, r, *color, *radius, *blur, clip);
+                    }
                     DisplayItem::Text {
                         x,
                         baseline,
@@ -566,6 +626,113 @@ fn fill_rect(pixmap: &mut tiny_skia::Pixmap, rect: Rect, color: Rgba) {
     paint.set_color_rgba8(color.r, color.g, color.b, color.a);
     paint.anti_alias = true;
     pixmap.fill_rect(r, &paint, tiny_skia::Transform::identity(), None);
+}
+
+/// A rounded-rectangle path (uniform corner radius), clamped so the corners never overlap.
+fn round_rect_path(rect: Rect, radius: f32) -> Option<tiny_skia::Path> {
+    let (x, y, w, h) = (rect.x, rect.y, rect.width, rect.height);
+    if w <= 0.0 || h <= 0.0 {
+        return None;
+    }
+    let r = radius.min(w / 2.0).min(h / 2.0).max(0.0);
+    let mut pb = tiny_skia::PathBuilder::new();
+    if r <= 0.0 {
+        pb.push_rect(tiny_skia::Rect::from_xywh(x, y, w, h)?);
+        return pb.finish();
+    }
+    // `k` is the circle-approximating cubic constant: a quarter circle of radius r is closely
+    // approximated by a Bézier whose control points sit k*r along the tangents.
+    const K: f32 = 0.552_284_75;
+    let c = r * K;
+    pb.move_to(x + r, y);
+    pb.line_to(x + w - r, y);
+    pb.cubic_to(x + w - r + c, y, x + w, y + r - c, x + w, y + r); // top-right
+    pb.line_to(x + w, y + h - r);
+    pb.cubic_to(x + w, y + h - r + c, x + w - r + c, y + h, x + w - r, y + h); // bottom-right
+    pb.line_to(x + r, y + h);
+    pb.cubic_to(x + r - c, y + h, x, y + h - r + c, x, y + h - r); // bottom-left
+    pb.line_to(x, y + r);
+    pb.cubic_to(x, y + r - c, x + r - c, y, x + r, y); // top-left
+    pb.close();
+    pb.finish()
+}
+
+/// Fill a rounded rect (`border-radius`), optionally clipped to an ancestor's overflow box.
+fn fill_round_rect(
+    pixmap: &mut tiny_skia::Pixmap,
+    rect: Rect,
+    color: Rgba,
+    radius: f32,
+    clip: Option<Rect>,
+) {
+    let Some(path) = round_rect_path(rect, radius) else {
+        return;
+    };
+    let mask = clip.and_then(|cl| rect_mask(pixmap.width(), pixmap.height(), cl));
+    let mut paint = tiny_skia::Paint::default();
+    paint.set_color_rgba8(color.r, color.g, color.b, color.a);
+    paint.anti_alias = true;
+    pixmap.fill_path(
+        &path,
+        &paint,
+        tiny_skia::FillRule::Winding,
+        tiny_skia::Transform::identity(),
+        mask.as_ref(),
+    );
+}
+
+/// Paint an outer `box-shadow`. tiny-skia has no Gaussian blur, so the soft edge is approximated
+/// by stacking concentric rounded rects: the shadow's rect grown by 0..blur px, each at a low
+/// alpha, so the accumulated coverage falls off toward the outside — visually a soft drop shadow.
+/// A `blur` of 0 is just a hard offset rect.
+fn fill_shadow(
+    pixmap: &mut tiny_skia::Pixmap,
+    rect: Rect,
+    color: Rgba,
+    radius: f32,
+    blur: f32,
+    clip: Option<Rect>,
+) {
+    if rect.width <= 0.0 || rect.height <= 0.0 || color.a == 0 {
+        return;
+    }
+    if blur <= 0.5 {
+        fill_round_rect(pixmap, rect, color, radius, clip);
+        return;
+    }
+    let mask = clip.and_then(|cl| rect_mask(pixmap.width(), pixmap.height(), cl));
+    // One ring per px of blur (capped — a huge blur doesn't need hundreds of passes).
+    let steps = (blur.ceil() as u32).clamp(1, 24);
+    for i in (0..steps).rev() {
+        // t: 0 at the outermost ring → 1 at the core.
+        let t = (i as f32 + 1.0) / steps as f32;
+        let grow = blur * (1.0 - t);
+        let grown = Rect {
+            x: rect.x - grow,
+            y: rect.y - grow,
+            width: rect.width + grow * 2.0,
+            height: rect.height + grow * 2.0,
+        };
+        // Quadratic falloff reads closer to a Gaussian than a linear ramp.
+        let a = (color.a as f32) * (t * t) / steps as f32 * 2.0;
+        let alpha = a.clamp(0.0, 255.0) as u8;
+        if alpha == 0 {
+            continue;
+        }
+        let Some(path) = round_rect_path(grown, radius + grow) else {
+            continue;
+        };
+        let mut paint = tiny_skia::Paint::default();
+        paint.set_color_rgba8(color.r, color.g, color.b, alpha);
+        paint.anti_alias = true;
+        pixmap.fill_path(
+            &path,
+            &paint,
+            tiny_skia::FillRule::Winding,
+            tiny_skia::Transform::identity(),
+            mask.as_ref(),
+        );
+    }
 }
 
 /// Scale a decoded (straight-alpha) RGBA image into `rect` and blit it onto the pixmap
@@ -761,5 +928,46 @@ mod tests {
             &png[..8],
             &[0x89, b'P', b'N', b'G', b'\r', b'\n', 0x1a, b'\n']
         );
+    }
+
+    /// `border-radius` actually cuts the corners: the centre of a rounded rect is filled while
+    /// its extreme corner pixel is not. (Verified visually too — see the render screenshots.)
+    #[test]
+    fn rounded_rect_cuts_the_corners() {
+        let mut pm = tiny_skia::Pixmap::new(50, 50).expect("pixmap");
+        let red = Rgba { r: 255, g: 0, b: 0, a: 255 };
+        fill_round_rect(
+            &mut pm,
+            Rect { x: 0.0, y: 0.0, width: 50.0, height: 50.0 },
+            red,
+            20.0,
+            None,
+        );
+        let alpha = |x: u32, y: u32| pm.data()[((y * 50 + x) * 4 + 3) as usize];
+        assert_eq!(alpha(25, 25), 255, "the centre is filled");
+        assert_eq!(alpha(0, 0), 0, "the corner is cut away by the 20px radius");
+        assert_eq!(alpha(49, 0), 0, "…on every corner");
+        assert_eq!(alpha(25, 0), 255, "but the straight top edge is still filled");
+    }
+
+    /// An outer `box-shadow` paints *outside* the box (softened over `blur`), and nothing at all
+    /// when the shadow colour is transparent.
+    #[test]
+    fn box_shadow_paints_outside_the_box() {
+        let mut pm = tiny_skia::Pixmap::new(60, 60).expect("pixmap");
+        let black = Rgba { r: 0, g: 0, b: 0, a: 200 };
+        // A 20x20 box at (20,20), shadow blurred 8px: pixels just outside it get some alpha.
+        fill_shadow(
+            &mut pm,
+            Rect { x: 20.0, y: 20.0, width: 20.0, height: 20.0 },
+            black,
+            0.0,
+            8.0,
+            None,
+        );
+        let alpha = |x: u32, y: u32| pm.data()[((y * 60 + x) * 4 + 3) as usize];
+        assert!(alpha(30, 30) > 0, "the shadow core is painted");
+        assert!(alpha(30, 15) > 0, "it bleeds above the box (blur)");
+        assert_eq!(alpha(0, 0), 0, "but not across the whole canvas");
     }
 }

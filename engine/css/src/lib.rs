@@ -267,6 +267,18 @@ pub struct Sides<T> {
     pub left: T,
 }
 
+/// A single **outer** `box-shadow`: `offset-x offset-y blur color`. `spread`, `inset`, and
+/// multiple comma-separated shadows are follow-ons — this is the shape real pages overwhelmingly
+/// use (a soft drop shadow under a card).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BoxShadow {
+    pub dx: f32,
+    pub dy: f32,
+    /// Blur radius in px (`0` = a hard-edged offset rect).
+    pub blur: f32,
+    pub color: Rgba,
+}
+
 impl<T: Copy> Sides<T> {
     pub fn all(v: T) -> Self {
         Sides {
@@ -307,6 +319,12 @@ pub struct ComputedStyle {
     pub padding: Sides<Dim>,
     pub border_width: Sides<f32>,
     pub border_color: Rgba,
+    /// `border-radius` — a single uniform corner radius in px (per-corner radii are a follow-on).
+    /// `0.0` = square corners.
+    pub border_radius: f32,
+    /// `box-shadow` — the first outer shadow, if any (multiple shadows / `inset` / `spread` are
+    /// follow-ons).
+    pub box_shadow: Option<BoxShadow>,
     pub width: Dim,
     pub height: Dim,
     /// `min-*`/`max-*` sizing. `Dim::Auto` on a min means 0; on a max means "no limit".
@@ -386,6 +404,8 @@ impl ComputedStyle {
             padding: Sides::all(Dim::Px(0.0)),
             border_width: Sides::all(0.0),
             border_color: Rgba::BLACK,
+            border_radius: 0.0,
+            box_shadow: None,
             width: Dim::Auto,
             height: Dim::Auto,
             min_width: Dim::Auto,
@@ -2029,6 +2049,16 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 s.border_color = c;
             }
         }
+        "border-radius" => {
+            // MVP: a single uniform radius. `border-radius: 8px` / `8px 8px` → take the first
+            // length (per-corner + elliptical `/` radii are a follow-on).
+            if let Some(first) = v.split_whitespace().next() {
+                if let Dim::Px(px) = values::parse_dim(first, s.font_size) {
+                    s.border_radius = px.max(0.0);
+                }
+            }
+        }
+        "box-shadow" => s.box_shadow = parse_box_shadow(v, s.font_size),
         "border-width" => set_border_widths(&mut s.border_width, v, s.font_size),
         "border-top-width" => s.border_width.top = border_len(v, s.font_size),
         "border-right-width" => s.border_width.right = border_len(v, s.font_size),
@@ -2102,6 +2132,83 @@ fn parse_border_shorthand(v: &str, fs: f32) -> (Option<f32>, Option<Rgba>) {
         width = Some(3.0);
     }
     (width, color)
+}
+
+/// Split `v` on top-level whitespace, keeping parenthesised groups (`rgba(0, 0, 0, .3)`) intact.
+fn tokens_keeping_parens(v: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut depth = 0i32;
+    for c in v.chars() {
+        match c {
+            '(' => {
+                depth += 1;
+                cur.push(c);
+            }
+            ')' => {
+                depth -= 1;
+                cur.push(c);
+            }
+            c if c.is_whitespace() && depth == 0 => {
+                if !cur.is_empty() {
+                    out.push(std::mem::take(&mut cur));
+                }
+            }
+            c => cur.push(c),
+        }
+    }
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
+/// Parse `box-shadow: <offset-x> <offset-y> [<blur>] [<color>]` — the first **outer** shadow.
+/// `none`, `inset`, and shadows past the first comma are not painted (documented follow-ons), and
+/// yield `None` rather than a wrong shadow.
+fn parse_box_shadow(v: &str, fs: f32) -> Option<BoxShadow> {
+    let v = v.trim();
+    if v.is_empty() || v.eq_ignore_ascii_case("none") {
+        return None;
+    }
+    // Only the first shadow: split on the first *top-level* comma (commas inside rgba() don't count).
+    let mut depth = 0i32;
+    let mut end = v.len();
+    for (i, c) in v.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            ',' if depth == 0 => {
+                end = i;
+                break;
+            }
+            _ => {}
+        }
+    }
+    let first = &v[..end];
+    if first.split_whitespace().any(|t| t.eq_ignore_ascii_case("inset")) {
+        return None; // inset shadows aren't painted yet
+    }
+
+    let mut lens: Vec<f32> = Vec::new();
+    let mut color: Option<Rgba> = None;
+    for tok in tokens_keeping_parens(first) {
+        if let Some(px) = values::parse_length_px(&tok, fs) {
+            lens.push(px);
+        } else if let Some(c) = values::parse_color(&tok) {
+            color = Some(c);
+        }
+    }
+    // offset-x and offset-y are required.
+    if lens.len() < 2 {
+        return None;
+    }
+    Some(BoxShadow {
+        dx: lens[0],
+        dy: lens[1],
+        blur: lens.get(2).copied().unwrap_or(0.0).max(0.0),
+        color: color.unwrap_or(Rgba::BLACK),
+    })
 }
 
 /// Parse a `transform` value into an ordered list of [`TransformFn`]s (translate/scale/

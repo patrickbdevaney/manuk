@@ -253,6 +253,27 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     };
     s.border_color = abs_to_rgba(&cv.clone_border_top_color().resolve_to_absolute(&current));
 
+    // `border-radius` — uniform MVP: the top-left corner's horizontal radius (per-corner and
+    // elliptical radii are a follow-on). A `%` radius resolves against the box, which we don't
+    // have here, so only a px radius is taken.
+    s.border_radius = match lp_to_dim(&cv.clone_border_top_left_radius().0.width.0) {
+        crate::Dim::Px(px) => px.max(0.0),
+        _ => 0.0,
+    };
+
+    // `box-shadow` — the first outer shadow (inset / spread / multiple are follow-ons).
+    s.box_shadow = cv
+        .clone_box_shadow()
+        .0
+        .iter()
+        .find(|sh| !sh.inset)
+        .map(|sh| crate::BoxShadow {
+            dx: sh.base.horizontal.px(),
+            dy: sh.base.vertical.px(),
+            blur: sh.base.blur.0.px().max(0.0),
+            color: abs_to_rgba(&sh.base.color.clone().resolve_to_absolute(&current)),
+        });
+
     // Position mode — drives whether the insets below are actually applied by layout.
     use stylo::values::computed::{
         Clear as SClear, Float as SFloat, Overflow as SOverflow, PositionProperty, ZIndex,

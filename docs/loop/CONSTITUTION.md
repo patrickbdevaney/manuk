@@ -12,21 +12,50 @@ resume: it lives in `docs/loop/` markdown, not in any one session's memory.
 ## 0. Prime directive & north star (invariant)
 
 Build the best browser. Concretely, drive every quality axis upward toward a coherent global
-maximum without ever regressing one axis to gain another. The north star has two faces that must
-both hold:
+maximum without ever regressing one axis to gain another.
 
-- **Human-first.** A real person's daily driver: correct CSS/HTML/JS on the modern web
-  (including JS-heavy SPAs — x.com, LinkedIn, Indeed, Google apps), legitimate **human-user**
-  browser fingerprinting (a truthful, ordinary human browser — *never* AI-agent evasion or
-  competitor impersonation), fast/lean/low-memory with tab hibernation, and an ergonomic,
-  fully accessible UI (buttons, menus, keyboard, everything reachable and obvious).
+**Maximal traversal, earned by capability (amended — see ADR-004).** The ambition is near-total
+traversal of the *real* internet: Chromium/Gecko-parity breadth across the **kinds** of site the
+web is actually made of — real-time virtualized feeds, session-heavy professional platforms,
+media-rich client apps, complex authenticated dashboards. Named sites (X, LinkedIn, Indeed,
+Instagram, cloud consoles) are *representative points in that space*, **never a checklist** — the
+target is the whole space they stand in for.
+
+Manuk earns that access the way any real browser does: **by being one.** Its own genuine TLS
+handshake, its own genuine engine fingerprint. Chrome has a Chrome fingerprint; Firefox a Firefox
+one; **Manuk has a Manuk fingerprint, and it is earned, not hidden.** The whole strategy for
+coverage is closing the **capability gap** — full JS/DOM depth, full layout/CSS fidelity,
+real-time-feed-grade performance — until *being genuinely Manuk* is sufficient anywhere a real
+browser is welcome. **A fifth real browser, not a disguise wearing someone else's face.**
+Impersonation isn't just forbidden by §1.4 — it is *off-strategy*, a substitute for the very
+capability that is the point.
+
+The north star has two faces that must both hold:
+
+- **Human-first.** A real person's daily driver: correct CSS/HTML/JS on the modern web,
+  legitimate **human-user** fingerprinting (truthful — never evasion or competitor
+  impersonation), fast/lean/low-memory with tab hibernation, and an ergonomic, fully accessible
+  UI.
 - **Agent-native.** Built from first principles for the agentic era: an in-browser AI agent via
-  the local llama.cpp/GGUF runtime for quick user prompts→browser-actions, **and** a robust,
-  first-class in-process automation tool surface that an external agent harness (headless or
-  headful) can drive — the in-process advantage over CDP-over-socket, measured and real.
+  the local llama.cpp/GGUF runtime, **and** a first-class in-process automation surface an
+  external harness can drive — the in-process advantage over CDP-over-socket, measured and real.
 
-These two are complementary, not in tension. The loop expands the **entire possibility surface**
+**Ambidextrous spine (amended — ADR-004): one engine; the split is who's driving, not which
+binary.** A human drives the headful GUI. An agent drives **either** headless mode (no window;
+scale/throughput) **or the same headful GUI, visibly and live**. Both are the identical engine and
+page pipeline — differing only in whether a window is presented and who issues the actions. "Shared
+core, diverge at consumption," made literal. **No agent-only or human-only fork of the page
+pipeline**: an agent action in headful mode goes through the same code a human click does.
+Divergence is a defect.
+
+These faces are complementary, not in tension. The loop expands the **entire possibility surface**
 of a diverse, cohesive, coexisting feature set — it is not limited to today's list.
+
+**Prioritization consequence.** Rank candidates by *traversal-blocking capability*: "which class of
+the real web does this unblock?" That elevates JS/DOM depth (remaining WebIDL surface), layout/CSS
+fidelity (now VISUAL-verifiable, §7), virtualized-feed performance (scroll/recycle/incremental
+relayout under a live feed), and session/auth durability (cookies, storage partitioning, OAuth,
+long-lived logins).
 
 ## 1. Invariants (never violated; violating one fails the tick)
 
