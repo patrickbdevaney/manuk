@@ -18,9 +18,35 @@ use std::fmt::Write as _;
 /// cycle. It has no DOM dependency itself.
 pub mod history;
 
-/// Index of a node within a [`Dom`] arena. Stable for the life of the tree.
+/// A handle to a node in a [`Dom`] arena. The `usize` packs a **generation** (high 32
+/// bits) and a **slot index** (low 32 bits), so a handle to a removed node whose slot was
+/// later reused is detected as stale (its generation no longer matches) instead of
+/// silently aliasing the new occupant. For a never-reused (generation-0) node the packed
+/// value equals the bare index, so old code and serialized handles stay compatible.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct NodeId(pub usize);
+
+impl NodeId {
+    const INDEX_MASK: usize = 0xFFFF_FFFF;
+
+    /// Pack a slot index + generation into a handle.
+    #[inline]
+    pub(crate) fn pack(index: usize, generation: u32) -> NodeId {
+        NodeId((generation as usize) << 32 | (index & Self::INDEX_MASK))
+    }
+
+    /// The arena slot this handle points at (its low 32 bits).
+    #[inline]
+    pub fn index(self) -> usize {
+        self.0 & Self::INDEX_MASK
+    }
+
+    /// The generation this handle was minted at (its high 32 bits).
+    #[inline]
+    pub fn generation(self) -> u32 {
+        (self.0 >> 32) as u32
+    }
+}
 
 /// An element attribute. Namespaced attributes are folded to their local name for
 /// now; the `namespace` slot is reserved so XML/SVG/MathML can populate it later.
@@ -128,6 +154,13 @@ impl Node {
 #[derive(Clone, Debug)]
 pub struct Dom {
     nodes: Vec<Node>,
+    /// Per-slot generation, parallel to `nodes`. Bumped when a slot is freed, so a stale
+    /// [`NodeId`] into a reused slot fails the generation check in [`Dom::is_alive`].
+    generations: Vec<u32>,
+    /// Whether each slot currently holds a live node (vs. a freed tombstone awaiting reuse).
+    alive: Vec<bool>,
+    /// Freed slot indices available for reuse by [`Dom::alloc`] (LIFO).
+    free: Vec<usize>,
     root: NodeId,
     /// Set by structural mutations (`append_child`/`detach`) since the last clean
     /// pass — a box was added or removed, so incremental relayout must reflow (an
@@ -148,9 +181,30 @@ impl Dom {
         nodes.push(Node::new(NodeData::Document));
         Dom {
             nodes,
+            generations: vec![0],
+            alive: vec![true],
+            free: Vec::new(),
             root: NodeId(0),
             structure_changed: false,
         }
+    }
+
+    /// Whether `id` still points at a live node of the generation it was minted at. A
+    /// handle to a removed (and possibly reused) node returns `false`. Public accessors
+    /// that return `Option` gate on this so a stale handle reads as "no such node" rather
+    /// than aliasing whatever now occupies the slot.
+    #[inline]
+    pub fn is_alive(&self, id: NodeId) -> bool {
+        let i = id.index();
+        i < self.nodes.len() && self.alive[i] && self.generations[i] == id.generation()
+    }
+
+    /// The live handle for arena slot `index`, if it currently holds a node. Lets an
+    /// index-keyed external reference (e.g. a JS reflector) recover the current generation.
+    #[inline]
+    pub fn id_at_index(&self, index: usize) -> Option<NodeId> {
+        (index < self.nodes.len() && self.alive[index])
+            .then(|| NodeId::pack(index, self.generations[index]))
     }
 
     pub fn root(&self) -> NodeId {
@@ -168,21 +222,79 @@ impl Dom {
     }
 
     pub fn node(&self, id: NodeId) -> &Node {
-        &self.nodes[id.0]
+        &self.nodes[id.index()]
     }
 
     pub fn node_mut(&mut self, id: NodeId) -> &mut Node {
-        &mut self.nodes[id.0]
+        &mut self.nodes[id.index()]
     }
 
     pub fn data(&self, id: NodeId) -> &NodeData {
-        &self.nodes[id.0].data
+        &self.nodes[id.index()].data
     }
 
     fn alloc(&mut self, data: NodeData) -> NodeId {
-        let id = NodeId(self.nodes.len());
-        self.nodes.push(Node::new(data));
-        id
+        if let Some(index) = self.free.pop() {
+            // Reuse a freed slot: its generation was already bumped at free time, so the
+            // handle we mint here differs from any stale handle to the old occupant.
+            self.nodes[index] = Node::new(data);
+            self.alive[index] = true;
+            NodeId::pack(index, self.generations[index])
+        } else {
+            let index = self.nodes.len();
+            self.nodes.push(Node::new(data));
+            self.generations.push(0);
+            self.alive.push(true);
+            NodeId::pack(index, 0)
+        }
+    }
+
+    /// Free a node's slot for reuse, bumping its generation so outstanding handles to it
+    /// become stale. The node's links are left as-is (callers unlink first); only the slot
+    /// is reclaimed. Not freed if already dead (idempotent).
+    fn free_slot(&mut self, id: NodeId) {
+        let i = id.index();
+        if i < self.nodes.len() && self.alive[i] && self.generations[i] == id.generation() {
+            self.alive[i] = false;
+            self.generations[i] = self.generations[i].wrapping_add(1);
+            self.free.push(i);
+        }
+    }
+
+    /// Recursively free a node and its entire subtree (child links + shadow root +
+    /// template contents), reclaiming every slot. Used when a subtree is detached and
+    /// discarded so long-lived pages don't leak arena slots.
+    fn free_subtree(&mut self, id: NodeId) {
+        if !self.is_alive(id) {
+            return;
+        }
+        let mut child = self.nodes[id.index()].first_child;
+        while let Some(c) = child {
+            let next = self.nodes[c.index()].next_sibling;
+            self.free_subtree(c);
+            child = next;
+        }
+        if let Some(sr) = self.nodes[id.index()].shadow_root {
+            self.free_subtree(sr);
+        }
+        if let Some(tc) = self.nodes[id.index()].template_contents {
+            self.free_subtree(tc);
+        }
+        self.free_slot(id);
+    }
+
+    /// Permanently discard a node and its whole subtree: detach it from its parent, then
+    /// reclaim every slot, bumping each generation so any outstanding handle into the
+    /// subtree becomes stale (fails [`Dom::is_alive`]). Use only when the subtree is
+    /// **known** to be thrown away — not moved or re-inserted (the parser's reparenting and
+    /// JS `removeChild`-then-append both re-insert, so those must keep using `remove_child`).
+    /// This is the safe seam for reclaiming arena slots on long-lived pages.
+    pub fn discard_subtree(&mut self, node: NodeId) {
+        if !self.is_alive(node) {
+            return;
+        }
+        self.detach(node);
+        self.free_subtree(node);
     }
 
     pub fn create_element(&mut self, name: impl Into<String>) -> NodeId {
@@ -213,27 +325,27 @@ impl Dom {
     /// The shadow root is **not** a child of the host — `children(host)` never yields it.
     /// It only appears in the [flat tree](Self::flat_children).
     pub fn attach_shadow(&mut self, host: NodeId, mode: ShadowRootMode) -> NodeId {
-        if let Some(existing) = self.nodes[host.0].shadow_root {
+        if let Some(existing) = self.nodes[host.index()].shadow_root {
             return existing;
         }
         let sr = self.alloc(NodeData::ShadowRoot { mode });
-        self.nodes[sr.0].parent = Some(host);
-        self.nodes[host.0].shadow_root = Some(sr);
+        self.nodes[sr.index()].parent = Some(host);
+        self.nodes[host.index()].shadow_root = Some(sr);
         self.structure_changed = true;
         self.mark_dirty(host);
         sr
     }
 
     pub fn shadow_root(&self, host: NodeId) -> Option<NodeId> {
-        self.nodes[host.0].shadow_root
+        self.nodes[host.index()].shadow_root
     }
 
     pub fn is_shadow_root(&self, id: NodeId) -> bool {
-        matches!(self.nodes[id.0].data, NodeData::ShadowRoot { .. })
+        matches!(self.nodes[id.index()].data, NodeData::ShadowRoot { .. })
     }
 
     pub fn shadow_root_mode(&self, id: NodeId) -> Option<ShadowRootMode> {
-        match self.nodes[id.0].data {
+        match self.nodes[id.index()].data {
             NodeData::ShadowRoot { mode } => Some(mode),
             _ => None,
         }
@@ -242,7 +354,7 @@ impl Dom {
     /// The element hosting this shadow root.
     pub fn shadow_host(&self, shadow_root: NodeId) -> Option<NodeId> {
         if self.is_shadow_root(shadow_root) {
-            self.nodes[shadow_root.0].parent
+            self.nodes[shadow_root.index()].parent
         } else {
             None
         }
@@ -250,17 +362,17 @@ impl Dom {
 
     /// Create (or fetch) a `<template>`'s contents fragment. Also not a child link.
     pub fn template_contents(&mut self, template: NodeId) -> NodeId {
-        if let Some(f) = self.nodes[template.0].template_contents {
+        if let Some(f) = self.nodes[template.index()].template_contents {
             return f;
         }
         let frag = self.alloc(NodeData::Fragment);
-        self.nodes[frag.0].parent = Some(template);
-        self.nodes[template.0].template_contents = Some(frag);
+        self.nodes[frag.index()].parent = Some(template);
+        self.nodes[template.index()].template_contents = Some(frag);
         frag
     }
 
     pub fn get_template_contents(&self, template: NodeId) -> Option<NodeId> {
-        self.nodes[template.0].template_contents
+        self.nodes[template.index()].template_contents
     }
 
     /// Point a `<template>`'s contents at `node`.
@@ -271,7 +383,7 @@ impl Dom {
     /// inserting into `get_template_contents`; without this the shadow root would stay
     /// empty.)
     pub fn set_template_contents(&mut self, template: NodeId, node: NodeId) {
-        self.nodes[template.0].template_contents = Some(node);
+        self.nodes[template.index()].template_contents = Some(node);
     }
 
     fn is_slot(&self, id: NodeId) -> bool {
@@ -327,7 +439,7 @@ impl Dom {
             if self.is_shadow_root(n) {
                 return Some(n);
             }
-            cur = self.nodes[n.0].parent;
+            cur = self.nodes[n.index()].parent;
         }
         None
     }
@@ -361,7 +473,7 @@ impl Dom {
     /// boolean content attributes (`checked`, `hidden`) — setting them to `""` still
     /// counts as present, per HTML.
     pub fn remove_attr(&mut self, id: NodeId, name: &str) -> bool {
-        if let NodeData::Element(el) = &mut self.nodes[id.0].data {
+        if let NodeData::Element(el) = &mut self.nodes[id.index()].data {
             if let Some(i) = el.attrs.iter().position(|a| a.name == name) {
                 el.attrs.remove(i);
                 return true;
@@ -371,7 +483,7 @@ impl Dom {
     }
 
     pub fn set_attr(&mut self, id: NodeId, name: impl Into<String>, value: impl Into<String>) {
-        if let NodeData::Element(el) = &mut self.nodes[id.0].data {
+        if let NodeData::Element(el) = &mut self.nodes[id.index()].data {
             let name = name.into();
             if let Some(a) = el.attrs.iter_mut().find(|a| a.name == name) {
                 a.value = value.into();
@@ -393,41 +505,41 @@ impl Dom {
     /// model: a later traversal restyles/relayouts only dirty nodes and descends only
     /// into subtrees whose summary bit is set.
     pub fn mark_dirty(&mut self, node: NodeId) {
-        if node.0 >= self.nodes.len() {
+        if node.index() >= self.nodes.len() {
             return;
         }
-        self.nodes[node.0].dirty = true;
-        let mut cur = self.nodes[node.0].parent;
+        self.nodes[node.index()].dirty = true;
+        let mut cur = self.nodes[node.index()].parent;
         while let Some(p) = cur {
-            if self.nodes[p.0].dirty_descendants {
+            if self.nodes[p.index()].dirty_descendants {
                 break;
             }
-            self.nodes[p.0].dirty_descendants = true;
-            cur = self.nodes[p.0].parent;
+            self.nodes[p.index()].dirty_descendants = true;
+            cur = self.nodes[p.index()].parent;
         }
     }
 
     /// Has `node` itself changed since the last clean pass?
     pub fn is_dirty(&self, node: NodeId) -> bool {
-        self.nodes.get(node.0).is_some_and(|n| n.dirty)
+        self.nodes.get(node.index()).is_some_and(|n| n.dirty)
     }
 
     /// Does `node`'s subtree contain a dirty node (the skip-this-subtree summary bit)?
     pub fn has_dirty_descendants(&self, node: NodeId) -> bool {
-        self.nodes.get(node.0).is_some_and(|n| n.dirty_descendants)
+        self.nodes.get(node.index()).is_some_and(|n| n.dirty_descendants)
     }
 
     /// Is `node` clean *and* free of dirty descendants — i.e. a traversal may skip its
     /// whole subtree and reuse cached layout/paint?
     pub fn subtree_clean(&self, node: NodeId) -> bool {
         self.nodes
-            .get(node.0)
+            .get(node.index())
             .is_some_and(|n| !n.dirty && !n.dirty_descendants)
     }
 
     /// Clear both dirty bits on a single node (call after processing it).
     pub fn clear_dirty(&mut self, node: NodeId) {
-        if let Some(n) = self.nodes.get_mut(node.0) {
+        if let Some(n) = self.nodes.get_mut(node.index()) {
             n.dirty = false;
             n.dirty_descendants = false;
         }
@@ -458,7 +570,7 @@ impl Dom {
     /// elements. Removing a node that is *not* a child of `parent` is a no-op returning
     /// `false`, never a silent detach from somewhere else.
     pub fn remove_child(&mut self, parent: NodeId, child: NodeId) -> bool {
-        if self.nodes[child.0].parent != Some(parent) {
+        if self.nodes[child.index()].parent != Some(parent) {
             return false;
         }
         self.detach(child);
@@ -469,16 +581,16 @@ impl Dom {
 
     pub fn append_child(&mut self, parent: NodeId, child: NodeId) {
         self.detach(child);
-        self.nodes[child.0].parent = Some(parent);
-        match self.nodes[parent.0].last_child {
+        self.nodes[child.index()].parent = Some(parent);
+        match self.nodes[parent.index()].last_child {
             Some(last) => {
-                self.nodes[last.0].next_sibling = Some(child);
-                self.nodes[child.0].prev_sibling = Some(last);
-                self.nodes[parent.0].last_child = Some(child);
+                self.nodes[last.index()].next_sibling = Some(child);
+                self.nodes[child.index()].prev_sibling = Some(last);
+                self.nodes[parent.index()].last_child = Some(child);
             }
             None => {
-                self.nodes[parent.0].first_child = Some(child);
-                self.nodes[parent.0].last_child = Some(child);
+                self.nodes[parent.index()].first_child = Some(child);
+                self.nodes[parent.index()].last_child = Some(child);
             }
         }
         // Structural change: the child (and thus the parent's subtree) is dirty.
@@ -489,24 +601,24 @@ impl Dom {
     /// Remove `child` from its parent, leaving it a detached root of its subtree.
     pub fn detach(&mut self, child: NodeId) {
         let (parent, prev, next) = {
-            let n = &self.nodes[child.0];
+            let n = &self.nodes[child.index()];
             (n.parent, n.prev_sibling, n.next_sibling)
         };
         if let Some(p) = prev {
-            self.nodes[p.0].next_sibling = next;
+            self.nodes[p.index()].next_sibling = next;
         }
         if let Some(n) = next {
-            self.nodes[n.0].prev_sibling = prev;
+            self.nodes[n.index()].prev_sibling = prev;
         }
         if let Some(par) = parent {
-            if self.nodes[par.0].first_child == Some(child) {
-                self.nodes[par.0].first_child = next;
+            if self.nodes[par.index()].first_child == Some(child) {
+                self.nodes[par.index()].first_child = next;
             }
-            if self.nodes[par.0].last_child == Some(child) {
-                self.nodes[par.0].last_child = prev;
+            if self.nodes[par.index()].last_child == Some(child) {
+                self.nodes[par.index()].last_child = prev;
             }
         }
-        let n = &mut self.nodes[child.0];
+        let n = &mut self.nodes[child.index()];
         n.parent = None;
         n.prev_sibling = None;
         n.next_sibling = None;
@@ -518,26 +630,26 @@ impl Dom {
     }
 
     pub fn first_child(&self, id: NodeId) -> Option<NodeId> {
-        self.nodes[id.0].first_child
+        self.nodes[id.index()].first_child
     }
 
     pub fn next_sibling(&self, id: NodeId) -> Option<NodeId> {
-        self.nodes[id.0].next_sibling
+        self.nodes[id.index()].next_sibling
     }
 
     pub fn last_child(&self, id: NodeId) -> Option<NodeId> {
-        self.nodes[id.0].last_child
+        self.nodes[id.index()].last_child
     }
 
     pub fn prev_sibling(&self, id: NodeId) -> Option<NodeId> {
-        self.nodes[id.0].prev_sibling
+        self.nodes[id.index()].prev_sibling
     }
 
     /// If `id` is a text node, append `text` to it and report `true`. Used by the parser
     /// to merge adjacent text runs — two sibling text nodes would otherwise produce two
     /// inline runs for what is one string.
     pub fn append_text_to(&mut self, id: NodeId, text: &str) -> bool {
-        if let NodeData::Text(t) = &mut self.nodes[id.0].data {
+        if let NodeData::Text(t) = &mut self.nodes[id.index()].data {
             t.push_str(text);
             self.mark_dirty(id);
             return true;
@@ -547,39 +659,44 @@ impl Dom {
 
     /// Insert `new_node` into `parent`'s child list immediately before `sibling`.
     pub fn insert_before(&mut self, parent: NodeId, new_node: NodeId, sibling: NodeId) {
-        debug_assert_eq!(self.nodes[sibling.0].parent, Some(parent));
+        debug_assert_eq!(self.nodes[sibling.index()].parent, Some(parent));
         self.detach(new_node);
-        let prev = self.nodes[sibling.0].prev_sibling;
-        self.nodes[new_node.0].parent = Some(parent);
-        self.nodes[new_node.0].prev_sibling = prev;
-        self.nodes[new_node.0].next_sibling = Some(sibling);
-        self.nodes[sibling.0].prev_sibling = Some(new_node);
+        let prev = self.nodes[sibling.index()].prev_sibling;
+        self.nodes[new_node.index()].parent = Some(parent);
+        self.nodes[new_node.index()].prev_sibling = prev;
+        self.nodes[new_node.index()].next_sibling = Some(sibling);
+        self.nodes[sibling.index()].prev_sibling = Some(new_node);
         match prev {
-            Some(p) => self.nodes[p.0].next_sibling = Some(new_node),
-            None => self.nodes[parent.0].first_child = Some(new_node),
+            Some(p) => self.nodes[p.index()].next_sibling = Some(new_node),
+            None => self.nodes[parent.index()].first_child = Some(new_node),
         }
         self.structure_changed = true;
         self.mark_dirty(new_node);
     }
 
     pub fn parent(&self, id: NodeId) -> Option<NodeId> {
-        self.nodes[id.0].parent
+        self.nodes[id.index()].parent
     }
 
     /// Iterator over the direct children of `id`.
     pub fn children(&self, id: NodeId) -> Children<'_> {
         Children {
             dom: self,
-            next: self.nodes[id.0].first_child,
+            next: self.nodes[id.index()].first_child,
         }
     }
 
     pub fn is_element(&self, id: NodeId) -> bool {
-        matches!(self.nodes[id.0].data, NodeData::Element(_))
+        matches!(self.nodes[id.index()].data, NodeData::Element(_))
     }
 
     pub fn element(&self, id: NodeId) -> Option<&ElementData> {
-        match &self.nodes[id.0].data {
+        // Gate on the generation so a stale handle (to a removed/reused slot) reads as "no
+        // element" rather than aliasing the slot's current or freed-but-uncleared contents.
+        if !self.is_alive(id) {
+            return None;
+        }
+        match &self.nodes[id.index()].data {
             NodeData::Element(e) => Some(e),
             _ => None,
         }
@@ -608,11 +725,11 @@ impl Dom {
     /// Concatenated text content of the subtree rooted at `id`.
     pub fn text_content(&self, id: NodeId) -> String {
         let mut out = String::new();
-        if let NodeData::Text(t) = &self.nodes[id.0].data {
+        if let NodeData::Text(t) = &self.nodes[id.index()].data {
             out.push_str(t);
         }
         for d in self.descendants(id) {
-            if let NodeData::Text(t) = &self.nodes[d.0].data {
+            if let NodeData::Text(t) = &self.nodes[d.index()].data {
                 out.push_str(t);
             }
         }
@@ -630,7 +747,7 @@ impl Dom {
         for _ in 0..depth {
             out.push_str("  ");
         }
-        match &self.nodes[id.0].data {
+        match &self.nodes[id.index()].data {
             NodeData::Document => out.push_str("#document"),
             NodeData::Doctype { name } => {
                 let _ = write!(out, "<!DOCTYPE {name}>");
@@ -671,7 +788,7 @@ impl Iterator for Children<'_> {
     type Item = NodeId;
     fn next(&mut self) -> Option<NodeId> {
         let cur = self.next?;
-        self.next = self.dom.nodes[cur.0].next_sibling;
+        self.next = self.dom.nodes[cur.index()].next_sibling;
         Some(cur)
     }
 }
@@ -697,6 +814,33 @@ impl Iterator for Descendants<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn generational_nodeid_reclaims_slots_and_detects_stale() {
+        let mut dom = Dom::new();
+        let body = dom.create_element("body");
+        dom.append_child(dom.root(), body);
+        let a = dom.create_element("div");
+        dom.append_child(body, a);
+        assert!(dom.is_alive(a));
+        let a_index = a.index();
+        assert_eq!(a.generation(), 0, "first-alloc node is generation 0");
+
+        // Discard the subtree: `a` is now stale, its slot freed for reuse.
+        dom.discard_subtree(a);
+        assert!(!dom.is_alive(a), "handle to a discarded node is stale");
+        assert!(dom.element(a).is_none(), "stale handle resolves to no element");
+
+        // Next allocation reuses the freed slot with a bumped generation, so the new
+        // handle differs from the stale one even though it shares the slot index.
+        let b = dom.create_element("span");
+        assert_eq!(b.index(), a_index, "freed slot was reused");
+        assert_ne!(b, a, "reused slot yields a distinct (newer-generation) handle");
+        assert!(dom.is_alive(b));
+        assert!(!dom.is_alive(a), "the old handle stays stale after reuse");
+        // The current live handle for that slot is recoverable by index.
+        assert_eq!(dom.id_at_index(a_index), Some(b));
+    }
 
     #[test]
     fn build_and_traverse() {
