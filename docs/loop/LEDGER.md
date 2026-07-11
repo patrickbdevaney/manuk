@@ -28,6 +28,7 @@ diff choose the work. Highest expected value per ADR-004 (traversal breadth)._
 |----|------|-----------|------|
 | **DEBT-1** | Eliminate the 4 UI-thread `block_on`s (page load, stylesheets, fetch pump, agent panel) — each is a latent hang | RELIABILITY | EPOCH-1 |
 | **DEBT-2** | Residual cascade superlinearity (still 4.3× worse per node at 19k nodes vs 1.3k) | EFFICIENCY | EPOCH-1 |
+| **G1** | **Real-site fidelity harness** (ADR-010 §1.10): generalize the Chrome probe from `#p-*` to **every `[id]` element**, snapshot real modern pages with CSS inlined (hermetic), compare Manuk vs Chrome boxes, report a fidelity %, ratchet it as a floor. Until this lands the 72/72 synthetic probe is NOT sufficient to claim "renders like Chromium". | FIDELITY | ADR-010 |
 | **DEBT-3** | Shell-chrome headless paint — AESTHETICS/ERGONOMICS are currently **unprobeable** (a probe gap, not just a feature) | AESTHETICS | EPOCH-1 |
 
 ## Tier A — absorb outstanding beneficial work already suggested (do first)

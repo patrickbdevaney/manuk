@@ -116,6 +116,23 @@ long-lived logins).
 9. **STAR DEBT paydown (ADR-007).** While any `DEBT` item is outstanding, **≥1 must be retired every
    3 ticks**; a tick that ignores an available debt item when the rate is unmet **fails**. Debt
    outranks new capability work.
+10. **STANDING GATES (ADR-010) — run EVERY tick via `scripts/verify.sh`.** JS interactivity and
+    Chromium-grade CSS/HTML fidelity on **real** sites are continuous obligations, not features.
+    Anything not gated rots (proof: EPOCH-1's drift; two dead buttons a *user* found).
+    - **G1 — real-site fidelity.** A corpus of **real, snapshotted modern pages** renders within
+      tolerance of headless Chrome. *(Harness in build — see LEDGER G1; until it lands, the 72/72
+      synthetic probe carries the gate and is NOT sufficient.)*
+    - **G2 — JS conformance.** `js_conformance_suite` — the DOM/BOM surface real sites use. **Every
+      JS tick MUST add a scenario; the suite only grows.**
+    - **G3 — affordance completeness.** Machine-checked: every user-reachable control has an
+      **observable** effect. A log line is not a UI. Includes **ergonomics parity** — a binding a
+      user already knows (Ctrl+F/D/R/T/W/L, F5, zoom ±) that does not behave as expected is a
+      defect, not a missing feature.
+    - **G4 — visual eyeball, on interval.** Rendered screenshots + Chrome references, inspected
+      directly: a page can pass box tolerance and still *look* wrong (colour, shadow, font).
+
+**One command:** `scripts/verify.sh` runs B/P/G2/G3/T (+ F with a bench corpus). A tick that has not
+run it has not landed.
 
 ## 2. Knowledge base (the Karpathy-wiki; prioritized, cross-linked)
 

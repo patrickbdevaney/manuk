@@ -1459,7 +1459,30 @@ mod js_interactive_tests {
     //   cargo test -p manuk-page --features spidermonkey -- --ignored user_click_fires
     #[test]
     #[ignore = "leaked SpiderMonkey runtime crashes at process exit when co-run; run in isolation"]
-    fn user_click_fires_page_listeners_and_respects_prevent_default() {
+    fn js_conformance_suite() {
+        // G2 — JS CONFORMANCE GATE (ADR-010). The DOM/BOM surface a real modern site actually
+        // uses. This runs EVERY tick (scripts/verify.sh), and **every JS tick must add a
+        // scenario** — the suite only grows. It is one test on purpose: the leaked per-process
+        // SpiderMonkey runtime tears down messily at process exit when several JS tests co-run.
+        //
+        // Covered so far:
+        //   1  click listeners fire on a real dispatch, and mutate the DOM
+        //   2  preventDefault suppresses the default action
+        //   3  window.open queues for the host (OAuth popup path)
+        //   4  boot window/screen metrics (innerWidth/screen/dpr/matchMedia/rAF)
+        //   5  fetch() — real Promise, .then chain mutates the DOM with the body
+        //   6  XMLHttpRequest — onload sees status + body
+        //   7  history.pushState — updates location, queues the host op
+        //   8  popstate — fires onpopstate with restored state
+        //   9  postMessage — queues with target window id + targetOrigin
+        //  10  message delivery — onmessage gets data/origin/source
+        //  11  MutationObserver — batched records (attributes, subtree, childList)
+        //  12  matchMedia — width features evaluate against the viewport
+        //  13  Custom Elements + Shadow DOM — upgrade, attachShadow, lifecycle callbacks
+        js_conformance_body();
+    }
+
+    fn js_conformance_body() {
         let fonts = FontContext::new();
 
         // (1) A click handler registered at load fires on a later dispatch and mutates the DOM.

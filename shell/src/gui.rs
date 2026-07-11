@@ -58,6 +58,10 @@ const MENU: &[(&str, MenuAction)] = &[
     ("Zoom out", MenuAction::ZoomOut),
     ("Reset zoom", MenuAction::ZoomReset),
 ];
+/// The number of hamburger-menu items — bound by the G3 affordance gate (ADR-010) so a new menu
+/// item cannot ship without declaring its observable effect.
+pub(crate) const MENU_LEN: usize = MENU.len();
+
 const MENU_W: f32 = 210.0;
 const MENU_ITEM_H: f32 = 30.0;
 const SUGGEST_ITEM_H: f32 = 28.0;

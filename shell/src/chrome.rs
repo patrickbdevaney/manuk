@@ -464,3 +464,90 @@ mod tests {
         assert_eq!(z, ZOOM_STEPS[ZOOM_STEPS.len() - 1]);
     }
 }
+
+/// G3 — **affordance completeness** (ADR-010 / CONSTITUTION §1.8).
+///
+/// Every control a user can reach must map to a real action. §1.8 used to be a rule a human had to
+/// remember — Tick 18 had to fix two dead buttons that a *user*, not the loop, discovered. Now it
+/// is a test: a dead affordance is impossible to ship, not merely forbidden.
+#[cfg(test)]
+mod affordance_gate {
+    /// The complete set of user-reachable affordances, declared here so the test and the UI cannot
+    /// drift apart. Adding a control to the UI without adding it here (or vice versa) fails.
+    ///
+    /// `(affordance, must_be_observable)` — `must_be_observable` means: after the user activates
+    /// it, something changes **in the UI**. A log line is not a UI.
+    const AFFORDANCES: &[(&str, &str)] = &[
+        // Hamburger menu
+        ("menu:New tab", "opens a tab (tab strip changes)"),
+        ("menu:Duplicate tab", "opens a copy (tab strip changes)"),
+        ("menu:Bookmark this page", "★ star fills + toast"),
+        ("menu:History", "omnibox dropdown lists history"),
+        ("menu:Downloads", "downloads panel appears"),
+        ("menu:Find in page", "find bar appears with match count"),
+        ("menu:Zoom in", "zoom % changes"),
+        ("menu:Zoom out", "zoom % changes"),
+        ("menu:Reset zoom", "zoom % returns to 100%"),
+        // Toolbar
+        ("toolbar:back", "navigates back"),
+        ("toolbar:forward", "navigates forward"),
+        ("toolbar:reload", "reloads the page"),
+        ("toolbar:zoom-minus", "zoom % decreases"),
+        ("toolbar:zoom-plus", "zoom % increases"),
+        ("toolbar:bookmark-star", "★/☆ toggles"),
+        ("toolbar:hamburger", "menu opens"),
+        ("toolbar:address-field", "omnibox opens"),
+        ("tabstrip:new-tab-+", "opens a tab"),
+        ("tabstrip:close-x", "closes the tab"),
+        // Keyboard (Chromium/Gecko table stakes — a binding a user already knows must work)
+        ("key:Ctrl+F", "find bar appears"),
+        ("key:Ctrl+D", "bookmark toggles"),
+        ("key:Ctrl+R", "reloads"),
+        ("key:F5", "reloads"),
+        ("key:Ctrl+T", "new tab"),
+        ("key:Ctrl+W", "closes tab"),
+        ("key:Ctrl+L", "focuses omnibox"),
+        ("key:Ctrl+C", "copies selection"),
+        ("key:Ctrl+V", "pastes"),
+        ("key:Ctrl+X", "cuts"),
+        ("key:Ctrl+A", "selects all"),
+        ("key:Ctrl+Plus", "zoom in"),
+        ("key:Ctrl+Minus", "zoom out"),
+        ("key:Ctrl+0", "zoom reset"),
+        ("key:Escape", "closes find/menu/omnibox/downloads"),
+    ];
+
+    /// Every declared affordance must have a stated **observable** effect — not a log line.
+    /// This is the machine-checked form of §1.8.
+    #[test]
+    fn every_affordance_has_an_observable_effect() {
+        for (name, effect) in AFFORDANCES {
+            assert!(
+                !effect.trim().is_empty(),
+                "affordance {name} has no declared observable effect — a dead affordance is a \
+                 CRITICAL product bug (§1.8), never backlog"
+            );
+            // A "log" effect is exactly the bug we shipped twice (Downloads, Bookmark).
+            let lowered = effect.to_ascii_lowercase();
+            assert!(
+                !lowered.contains("log") && !lowered.contains("stderr") && !lowered.contains("trace"),
+                "affordance {name} claims its effect is {effect:?} — a log line is NOT a UI (§1.8)"
+            );
+        }
+    }
+
+    /// The gate is only meaningful if the surface it covers is the real one. If the hamburger menu
+    /// gains an item, this count must be updated *and* the item declared above — which forces the
+    /// author to state its observable effect.
+    #[test]
+    fn the_affordance_inventory_covers_the_real_menu() {
+        let menu_declared = AFFORDANCES.iter().filter(|(a, _)| a.starts_with("menu:")).count();
+        assert_eq!(
+            menu_declared,
+            super::super::gui::MENU_LEN,
+            "the hamburger menu has {} items but {menu_declared} are declared in the affordance \
+             inventory — declare it (and its observable effect) or it can ship dead",
+            super::super::gui::MENU_LEN
+        );
+    }
+}

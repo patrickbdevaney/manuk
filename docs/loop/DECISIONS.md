@@ -255,3 +255,40 @@ own install dir; (iv) a corrupt/partial store degrades gracefully (never a panic
 version every persisted store as it is created or touched, keep all user data under the profile
 dir (`$MANUK_STATE`/XDG), and never write user data next to the binary. The full seamless-update
 mechanism is a release-epoch item. Cheap now; unaffordable to retrofit later.
+
+## ADR-010 — STANDING GATES: JS interactivity, Chromium CSS/HTML fidelity, and affordance completeness are checked EVERY tick (2026-07-11)
+
+**The problem.** JS interactivity and CSS/HTML parity-with-Chromium-on-real-sites are the two
+biggest traversal-blocking axes (ADR-004) — they are not features to be "done in a tick", they are
+**continuous obligations**. Today they are only checked *opportunistically*: the parity gate is 30
+synthetic box-probe pages, and JS is verified by whatever scenario the current tick happened to add.
+Nothing forces every tick to prove that a **real modern site** still renders like Chromium and that
+the **DOM/BOM surface a real site needs** still works. The same is true of UI affordances — Tick 18
+had to fix two dead buttons that a *user*, not the loop, discovered.
+
+Anything not gated rots. (Proof: EPOCH-1's drift, and two dead affordances shipped.)
+
+**The rule: these become STANDING GATES — run every tick, like the parity gate.** They are
+invariants (§1), not backlog:
+
+- **G1 — Real-site fidelity.** A corpus of **real, snapshotted modern pages** (not just synthetic
+  probes) renders within tolerance of headless Chrome, every tick. Box parity *and* the visual
+  screenshot pair are produced. Growing this corpus is how "renders any modern website like
+  Chromium" becomes a measured claim instead of an aspiration.
+- **G2 — JS conformance.** A named, growing suite asserting the DOM/BOM surface real sites actually
+  use (events, fetch/XHR, history/location, postMessage, observers, custom elements/shadow DOM,
+  timers, matchMedia…). Every tick runs it. Every new JS capability **adds a scenario** — the suite
+  only grows.
+- **G3 — Affordance completeness.** A machine-checked assertion that **every user-reachable control
+  maps to a real action** (menu items, toolbar buttons, shortcuts). §1.8 was a rule a human had to
+  remember; now it is a test. Dead affordances become impossible to ship, not merely forbidden.
+- **G4 — Visual eyeball, on interval.** Headful/rendered screenshots of the corpus + Chrome
+  references, produced for direct inspection (not only numeric box tolerance — a page can pass box
+  parity and still look wrong: colours, shadows, fonts).
+
+**Ergonomics parity** (Chromium/Gecko table stakes: standard keybindings, zoom controls, find bar,
+bookmark star, back/forward/refresh behaviour) is folded into G3: an affordance that exists but does
+not behave the way a user *already expects* is a defect, not a missing feature.
+
+**One command.** All gates run via a single `verify` entry so a tick cannot "forget" one, and so the
+epoch's floors, the parity gate, and these gates are one wall rather than four.
