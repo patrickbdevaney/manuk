@@ -96,6 +96,49 @@ enum StyleSource {
     External(String),
 }
 
+/// Scan raw HTML for render-blocking subresource URLs to prefetch early (the preload
+/// scanner): `<link rel="stylesheet">` and `<link rel="preload">` hrefs, resolved absolute.
+/// A lightweight string scan (runs before the tree is built) — only well-formed `http(s)`
+/// URLs are returned.
+fn scan_preloads(html: &str, base: &str) -> Vec<String> {
+    let lower = html.to_ascii_lowercase();
+    let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut i = 0;
+    while let Some(p) = lower[i..].find("<link") {
+        let start = i + p;
+        let end = lower[start..].find('>').map(|e| start + e + 1).unwrap_or(lower.len());
+        let tag_low = &lower[start..end];
+        i = end;
+        let is_target = tag_low.contains("stylesheet") || tag_low.contains("preload");
+        if !is_target {
+            continue;
+        }
+        if let Some(href) = extract_tag_attr(&html[start..end], "href") {
+            let abs = resolve_url(base, &href);
+            if abs.starts_with("http") && seen.insert(abs.clone()) {
+                out.push(abs);
+            }
+        }
+    }
+    out
+}
+
+/// Extract `name="value"` (or `name='value'`) from a single HTML start-tag string.
+fn extract_tag_attr(tag: &str, name: &str) -> Option<String> {
+    let lower = tag.to_ascii_lowercase();
+    let key = format!("{name}=");
+    let at = lower.find(&key)? + key.len();
+    let rest = &tag[at..];
+    let quote = rest.chars().next()?;
+    if quote == '"' || quote == '\'' {
+        let v = &rest[1..];
+        v.find(quote).map(|e| v[..e].to_string())
+    } else {
+        Some(rest.split([' ', '>', '\t', '\n']).next()?.to_string())
+    }
+}
+
 /// Resolve `href` against `base` to an absolute URL string (falling back to `href`).
 fn resolve_url(base: &str, href: &str) -> String {
     Url::parse(base)
@@ -355,6 +398,17 @@ impl Page {
         fonts: &FontContext,
         viewport_width: f32,
     ) -> Page {
+        // Preload scanner: kick off render-blocking subresource fetches (external CSS,
+        // <link rel=preload>) concurrently *before* parse + layout + scripts run, so they
+        // land in the HTTP cache by the time apply_stylesheets needs them — overlapping the
+        // network with the CPU-bound pipeline.
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            for url in scan_preloads(html, final_url) {
+                handle.spawn(async move {
+                    let _ = manuk_net::fetch(&url).await;
+                });
+            }
+        }
         #[allow(unused_mut)]
         let mut dom = manuk_html::parse(html);
         #[cfg(feature = "spidermonkey")]
@@ -1107,6 +1161,21 @@ fn hex(c: u8) -> Option<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preload_scanner_finds_stylesheets_and_preloads() {
+        let html = r#"<head>
+            <link rel="stylesheet" href="/a.css">
+            <link rel='preload' as='font' href='https://cdn.test/f.woff2'>
+            <link rel="icon" href="/favicon.ico">
+            <link rel="stylesheet" href="/a.css">
+        </head>"#;
+        let urls = scan_preloads(html, "https://e.test/page");
+        assert!(urls.contains(&"https://e.test/a.css".to_string()), "found stylesheet: {urls:?}");
+        assert!(urls.contains(&"https://cdn.test/f.woff2".to_string()), "found preload: {urls:?}");
+        assert!(!urls.iter().any(|u| u.contains("favicon")), "icon is not preloaded");
+        assert_eq!(urls.iter().filter(|u| u.contains("a.css")).count(), 1, "deduped");
+    }
 
     /// §4a — element geometry must come from the **real** layout pipeline, not a
     /// synthetic map: the a11y tree's bboxes have to agree with the fragment tree,

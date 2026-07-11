@@ -20,6 +20,8 @@ anyhow.workspace = true
 url.workspace = true
 tracing.workspace = true
 base64.workspace = true
+# `tokio::spawn` for the preload scanner's concurrent cache-warming fetches.
+tokio = { workspace = true, features = ["rt"] }
 # Concurrent subresource fetching (join_all) — overlaps image/font/CSS network waits
 # on the shared pooled client instead of awaiting them serially.
 futures-util = { workspace = true, features = ["alloc"] }
