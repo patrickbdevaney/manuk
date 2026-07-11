@@ -463,7 +463,7 @@ impl Page {
     /// Build a page from an already-parsed [`Dom`] (shared by [`load`](Self::load) and
     /// [`load_streaming`](Self::load_streaming)).
     pub fn from_dom(
-        mut dom: Dom,
+        dom: Dom,
         final_url: &str,
         fonts: &FontContext,
         viewport_width: f32,

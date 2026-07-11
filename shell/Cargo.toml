@@ -15,7 +15,7 @@ path = "src/main.rs"
 # (`--no-default-features`) to build just the headless `render` pipeline, which
 # needs no display/GPU — useful for CI and this environment.
 default = ["gui", "stylo", "spidermonkey"]
-gui = ["dep:winit", "dep:wgpu", "dep:pollster", "dep:bytemuck", "dep:raw-window-handle"]
+gui = ["dep:winit", "dep:wgpu", "dep:pollster", "dep:bytemuck", "dep:raw-window-handle", "dep:arboard"]
 # Route the cascade through the real Stylo engine (full selectors/@media/var/cascade;
 # 72/72 parity). Default-on for real-world CSS fidelity, with a per-page panic fallback
 # to MinimalCascade. Heavy to build; drop with --no-default-features for the lean path.
@@ -51,6 +51,8 @@ serde_json.workspace = true
 # Only used to exit hard past SpiderMonkey's crashing static/atexit teardown.
 libc = "0.2"
 
+# System clipboard (Ctrl+C/V/X). Optional, pulled with the GUI.
+arboard = { version = "3", optional = true }
 winit = { workspace = true, optional = true }
 wgpu = { workspace = true, optional = true }
 pollster = { workspace = true, optional = true }

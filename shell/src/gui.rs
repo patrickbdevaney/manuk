@@ -11,7 +11,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use manuk_compositor::Viewport;
 use manuk_css::Rgba;
-use manuk_layout::TextStyle;
+use manuk_layout::{BoxContent, TextStyle};
 use manuk_paint::{Canvas, CpuPainter};
 use manuk_text::{FontContext, FontFamily, FontKey};
 use winit::application::ApplicationHandler;
@@ -188,6 +188,11 @@ struct App {
     menu_open: bool,
     /// While dragging the scrollbar thumb: the grab offset (cursor y − thumb top).
     scrollbar_drag: Option<f32>,
+    /// Text selection anchor and cursor in **document** coordinates (`None` = no selection).
+    sel_start: Option<(f32, f32)>,
+    sel_end: Option<(f32, f32)>,
+    /// True while a drag-select is in progress (mouse held down over the page).
+    selecting: bool,
 
     // ---- §5 session persistence ----
     /// The on-disk tab store (session + collections), outside the repo. `None` if the state
@@ -301,6 +306,9 @@ impl App {
             omnibox_input: String::new(),
             menu_open: false,
             scrollbar_drag: None,
+            sel_start: None,
+            sel_end: None,
+            selecting: false,
             store,
             agent_open: false,
             agent_input: String::new(),
@@ -351,13 +359,42 @@ impl App {
             }
             return;
         }
-        // Page document coordinates: undo the chrome offset, add the scroll.
+        // Page mouse-down: begin a potential drag-selection. The click *action* (link/submit)
+        // is deferred to mouse-up, so a drag selects text and a tap follows the link.
         let (doc_x, doc_y) = (cx, cy - CHROME_TOP + self.scroll_y);
+        self.menu_open = false;
+        self.sel_start = Some((doc_x, doc_y));
+        self.sel_end = None;
+        self.selecting = true;
+        self.rerender();
+    }
 
-        // Fire the page's JS `click` listeners on the hit node first (bubbling handles
-        // delegation). If a handler called `preventDefault`, suppress the default action;
-        // otherwise a handler may still have mutated the DOM, which `dispatch_click` relayouts.
-        // A no-op returning `true` without JS, so JS-less builds behave exactly as before.
+    /// Mouse-up on the page: if it was a tap (no meaningful drag), clear any selection and
+    /// perform the click action; if it was a drag, keep the selection.
+    fn finish_page_interaction(&mut self) {
+        if !self.selecting {
+            return;
+        }
+        self.selecting = false;
+        let dragged = match (self.sel_start, self.sel_end) {
+            (Some((sx, sy)), Some((ex, ey))) => (sx - ex).abs() > 3.0 || (sy - ey).abs() > 3.0,
+            _ => false,
+        };
+        if dragged {
+            self.rerender(); // finalize the highlighted selection
+            return;
+        }
+        // A tap: no selection, run the click action at the anchor.
+        if let Some((doc_x, doc_y)) = self.sel_start.take() {
+            self.sel_end = None;
+            self.perform_page_click(doc_x, doc_y);
+        }
+    }
+
+    /// The page-click action: fire JS listeners on the hit node (bubbling handles delegation),
+    /// and unless a handler called `preventDefault`, perform the element's default action
+    /// (follow a link, focus a field, submit, toggle).
+    fn perform_page_click(&mut self, doc_x: f32, doc_y: f32) {
         let hit = self
             .page
             .as_ref()
@@ -652,6 +689,16 @@ impl App {
             Some(page) => page.paint_scrolled(&self.fonts, w, h, self.scroll_y - CHROME_TOP),
             None => Canvas::new(w, h, Rgba::WHITE),
         };
+
+        // Text selection highlight (offset into the page region).
+        if self.sel_start.is_some() && self.sel_end.is_some() {
+            const SEL: Rgba = Rgba { r: 66, g: 133, b: 244, a: 90 };
+            let dy = CHROME_TOP - self.scroll_y;
+            let (_, rects) = self.selection_text_and_rects();
+            for (x, y, rw, rh) in rects {
+                canvas.fill_rect_blended(x, y + dy, rw, rh, SEL);
+            }
+        }
 
         // E1 find-in-page highlights (offset into the page region).
         if self.find_open && !self.find_session.is_empty() {
@@ -1005,6 +1052,115 @@ impl App {
         let denom = (track_h - thumb_h).max(1.0);
         self.scroll_y = ((cy - grab - track_y) / denom * max).clamp(0.0, max);
         self.rerender();
+    }
+
+    /// Put `text` on the system clipboard. Best-effort (a headless/no-clipboard environment
+    /// just no-ops with a log).
+    fn set_clipboard(&self, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+        match arboard::Clipboard::new().and_then(|mut c| c.set_text(text.to_string())) {
+            Ok(()) => tracing::info!(bytes = text.len(), "copied to clipboard"),
+            Err(e) => tracing::warn!("clipboard write failed: {e}"),
+        }
+    }
+
+    /// Read text from the system clipboard, if any.
+    fn clipboard_text(&self) -> Option<String> {
+        arboard::Clipboard::new().and_then(|mut c| c.get_text()).ok()
+    }
+
+    /// Every laid-out text run in the current page as `(x, top, width, height, text)` in
+    /// document coordinates — the basis for selection hit-testing and copy.
+    fn page_text_runs(&self) -> Vec<(f32, f32, f32, f32, String)> {
+        let mut out = Vec::new();
+        if let Some(page) = &self.page {
+            page.root_box.walk(&mut |b| {
+                if let BoxContent::Inline(frags) = &b.content {
+                    for f in frags {
+                        if f.text.trim().is_empty() {
+                            continue;
+                        }
+                        let h = (f.baseline - f.line_top).max(f.style.font_size) + 3.0;
+                        out.push((f.x, f.line_top, f.width, h, f.text.clone()));
+                    }
+                }
+            });
+        }
+        out
+    }
+
+    /// The selected text and its highlight rects (document coords), for the current
+    /// anchor→cursor selection. Flow (line-based) selection: whole lines between the endpoints,
+    /// trimmed to the anchor x on the first line and the cursor x on the last.
+    fn selection_text_and_rects(&self) -> (String, Vec<(f32, f32, f32, f32)>) {
+        let (Some((ax, ay)), Some((bx, by))) = (self.sel_start, self.sel_end) else {
+            return (String::new(), Vec::new());
+        };
+        // Order endpoints top-to-bottom (then left-to-right on the same line).
+        let ((sx, sy), (ex, ey)) = if (ay, ax) <= (by, bx) { ((ax, ay), (bx, by)) } else { ((bx, by), (ax, ay)) };
+
+        let mut runs = self.page_text_runs();
+        runs.sort_by(|a, b| (a.1, a.0).partial_cmp(&(b.1, b.0)).unwrap_or(std::cmp::Ordering::Equal));
+
+        // Which runs fall in the vertical band (by run vertical midpoint).
+        let in_band: Vec<_> = runs
+            .into_iter()
+            .filter(|(_, y, _, h, _)| {
+                let mid = y + h / 2.0;
+                mid >= sy - 1.0 && mid <= ey + 1.0
+            })
+            .collect();
+        if in_band.is_empty() {
+            return (String::new(), Vec::new());
+        }
+        let top_line = in_band.iter().map(|r| r.1).fold(f32::MAX, f32::min);
+        let bot_line = in_band.iter().map(|r| r.1).fold(f32::MIN, f32::max);
+        let single_line = (bot_line - top_line).abs() < 1.0;
+
+        let mut rects = Vec::new();
+        let mut lines: Vec<(f32, Vec<String>)> = Vec::new();
+        for (x, y, w, h, text) in in_band {
+            // Trim the boundary lines to the horizontal selection extent.
+            let on_top = (y - top_line).abs() < 1.0;
+            let on_bot = (y - bot_line).abs() < 1.0;
+            if single_line {
+                if x + w < sx || x > ex {
+                    continue;
+                }
+            } else if on_top && x + w < sx {
+                continue;
+            } else if on_bot && x > ex {
+                continue;
+            }
+            rects.push((x, y, w, h));
+            match lines.last_mut() {
+                Some((ly, words)) if (*ly - y).abs() < 1.0 => words.push(text),
+                _ => lines.push((y, vec![text])),
+            }
+        }
+        let text = lines.iter().map(|(_, w)| w.join(" ")).collect::<Vec<_>>().join("\n");
+        (text, rects)
+    }
+
+    /// Select the entire page (Ctrl+A): span from the top-left to below the last run.
+    fn select_all(&mut self) {
+        let runs = self.page_text_runs();
+        if runs.is_empty() {
+            return;
+        }
+        let max_y = runs.iter().map(|r| r.1 + r.3).fold(0.0_f32, f32::max);
+        let max_x = runs.iter().map(|r| r.0 + r.2).fold(0.0_f32, f32::max);
+        self.sel_start = Some((0.0, 0.0));
+        self.sel_end = Some((max_x + 1.0, max_y + 1.0));
+        self.rerender();
+    }
+
+    /// Copy the current selection to the clipboard (Ctrl+C).
+    fn copy_selection(&self) {
+        let (text, _) = self.selection_text_and_rects();
+        self.set_clipboard(&text);
     }
 
     /// Run a hamburger-menu action (the same operations as the keyboard shortcuts).
@@ -1484,6 +1640,38 @@ impl App {
 
         match key {
             Key::Character(c) if ctrl => match c.as_str() {
+                // Clipboard + selection.
+                "c" | "C" => {
+                    self.copy_selection();
+                    true
+                }
+                "a" | "A" => {
+                    self.select_all();
+                    true
+                }
+                "v" | "V" => {
+                    if let Some(text) = self.clipboard_text() {
+                        if self.omnibox_open {
+                            self.omnibox_input.push_str(&text);
+                            self.rerender();
+                        } else if self.focused_input.is_some() {
+                            self.edit_focused_input(&text, false);
+                        }
+                    }
+                    true
+                }
+                "x" | "X" => {
+                    // Cut applies to editable fields (omnibox / focused input).
+                    if self.omnibox_open {
+                        self.set_clipboard(&self.omnibox_input.clone());
+                        self.omnibox_input.clear();
+                        self.rerender();
+                    } else if self.focused_input.is_some() {
+                        let (text, _) = self.selection_text_and_rects();
+                        self.set_clipboard(&text);
+                    }
+                    true
+                }
                 "f" => {
                     self.find_open = true;
                     self.find_query.clear();
@@ -1714,6 +1902,13 @@ impl ApplicationHandler<NavEvent> for App {
                     self.scrollbar_drag_to(position.y as f32, win_h);
                     return;
                 }
+                // A drag-select in progress: extend the selection to the cursor.
+                if self.selecting {
+                    let doc_y = (position.y as f32 - CHROME_TOP + self.scroll_y).max(0.0);
+                    self.sel_end = Some((position.x as f32, doc_y));
+                    self.rerender();
+                    return;
+                }
                 // Show a hand cursor over links / clickable controls, an arrow otherwise.
                 let (cx, cy) = self.cursor;
                 let action = if cy >= CHROME_TOP {
@@ -1747,6 +1942,9 @@ impl ApplicationHandler<NavEvent> for App {
             WindowEvent::MouseInput { state, button, .. } => {
                 if state == ElementState::Released {
                     self.scrollbar_drag = None; // end any scrollbar drag
+                    if button == winit::event::MouseButton::Left {
+                        self.finish_page_interaction();
+                    }
                 }
                 if state == ElementState::Pressed {
                     match button {
