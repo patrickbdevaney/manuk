@@ -22,6 +22,25 @@ use manuk_paint::{Canvas, CpuPainter, Painter};
 use manuk_text::FontContext;
 use url::Url;
 
+/// Cascade styles for `dom` with author `sheets`, resolving `@media` and viewport units
+/// (`vw`/`vh`/…) against a `viewport_width`-wide viewport. Under `--features stylo` this
+/// drives the real Stylo cascade (full selector matching, `@media`, `var()`, `@layer`,
+/// correct specificity); otherwise the from-scratch [`MinimalCascade`]. Both consume the
+/// same `Stylesheet`s (collected via [`MinimalCascade::collect_style_elements`]), so only
+/// the cascade step swaps — the rest of the pipeline is engine-agnostic.
+fn cascade_styles(dom: &Dom, sheets: &[Stylesheet], viewport_width: f32) -> StyleMap {
+    manuk_css::values::set_viewport_width(viewport_width);
+    #[cfg(feature = "stylo")]
+    {
+        let (_, vh) = manuk_css::values::viewport_size();
+        manuk_css::stylo_engine::cascade_via_stylo(dom, sheets, viewport_width, vh)
+    }
+    #[cfg(not(feature = "stylo"))]
+    {
+        MinimalCascade.cascade(dom, sheets)
+    }
+}
+
 /// A hyperlink discovered in the page, with its href resolved to an absolute URL.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Link {
@@ -365,10 +384,8 @@ impl Page {
         // snapshot (so `getBoundingClientRect` works), letting them mutate the DOM. If they
         // did, re-style and re-lay-out so script-built content is rendered. All a no-op unless
         // the `spidermonkey` feature is on; scripts that throw are logged and the rest run.
-        // Resolve viewport-unit lengths (vw/vh/…) against this viewport before cascading.
-        manuk_css::values::set_viewport_width(viewport_width);
         let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&dom);
-        let mut styles = MinimalCascade.cascade(&dom, &sheets);
+        let mut styles = cascade_styles(&dom, &sheets, viewport_width);
         let mut root_box = layout_document(&dom, &styles, fonts, viewport_width);
 
         let rects: std::collections::HashMap<manuk_dom::NodeId, [f32; 4]> = root_box
@@ -380,7 +397,7 @@ impl Page {
             Ok(n) if n > 0 => {
                 tracing::debug!(scripts = n, "executed page scripts");
                 let sheets2: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&dom);
-                styles = MinimalCascade.cascade(&dom, &sheets2);
+                styles = cascade_styles(&dom, &sheets2, viewport_width);
                 root_box = layout_document(&dom, &styles, fonts, viewport_width);
             }
             Ok(_) => {}
@@ -435,7 +452,7 @@ impl Page {
                 // once fetched). This is the paint the user sees first.
                 let partial = sp.snapshot();
                 let sheets = MinimalCascade::collect_style_elements(&partial);
-                let styles = MinimalCascade.cascade(&partial, &sheets);
+                let styles = cascade_styles(&partial, &sheets, viewport_width);
                 first_paint = Some(layout_document(&partial, &styles, fonts, viewport_width));
             }
         }
@@ -497,7 +514,7 @@ impl Page {
         }
 
         let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
-        let new_styles = MinimalCascade.cascade(&self.dom, &sheets);
+        let new_styles = cascade_styles(&self.dom, &sheets, viewport_width);
 
         // A structural mutation adds/removes boxes → reflow at minimum.
         let mut damage = if self.dom.structure_changed() {
@@ -635,7 +652,7 @@ impl Page {
                 StyleSource::External(url) => external.get(url).map(|css| Stylesheet::parse(css)),
             })
             .collect();
-        let new_styles = MinimalCascade.cascade(&self.dom, &sheets);
+        let new_styles = cascade_styles(&self.dom, &sheets, viewport_width);
         // Classify the change vs the pre-external styling (usually Reflow — external
         // rules add geometry).
         let mut damage = RestyleDamage::None;
@@ -946,7 +963,7 @@ pub async fn fetch_streaming_page(
             // Lay out the DOM-so-far (inline styles only) — the first paint.
             let partial = sp.snapshot();
             let sheets = MinimalCascade::collect_style_elements(&partial);
-            let styles = MinimalCascade.cascade(&partial, &sheets);
+            let styles = cascade_styles(&partial, &sheets, viewport_width);
             first_paint = Some(layout_document(&partial, &styles, fonts, viewport_width));
         }
     })

@@ -26,6 +26,9 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg",
 resvg = "0.44"
 
 [features]
+# Route the cascade through the real Stylo engine (full selectors/@media/var()) instead
+# of the from-scratch MinimalCascade. Heavy to build, so opt-in; forwarded to manuk-css.
+stylo = ["manuk-css/stylo"]
 # Execute page <script> via SpiderMonkey (forwarded to manuk-js). Off by default:
 # run_document_scripts is a no-op without it, so the parse/layout path is unchanged.
 spidermonkey = ["manuk-js/spidermonkey"]

@@ -200,6 +200,15 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
             stack.push(k);
         }
         if !dom.is_element(node) {
+            // Text/other non-element nodes have no cascade of their own but inherit their
+            // parent element's computed style. Layout indexes a style for *every* node it
+            // walks, so — like MinimalCascade — we must give them one. The preorder walk
+            // guarantees the parent is already in `map`.
+            if let Some(parent) = dom.parent(node) {
+                if let Some(ps) = map.get(&parent).cloned() {
+                    map.insert(node, ps);
+                }
+            }
             continue;
         }
         let el = StyloElement::new(dom, node, &store);

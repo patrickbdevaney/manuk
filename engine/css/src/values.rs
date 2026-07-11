@@ -33,11 +33,17 @@ pub fn set_viewport_width(w: f32) {
     VP_W.store(w.to_bits(), Ordering::Relaxed);
 }
 
-fn viewport() -> (f32, f32) {
+/// The current viewport `(width, height)` in CSS px (see [`set_viewport`]). Public so the
+/// Stylo cascade path can build its `Device` with the same viewport the minimal path uses.
+pub fn viewport_size() -> (f32, f32) {
     (
         f32::from_bits(VP_W.load(Ordering::Relaxed)),
         f32::from_bits(VP_H.load(Ordering::Relaxed)),
     )
+}
+
+fn viewport() -> (f32, f32) {
+    viewport_size()
 }
 
 /// 8-bit RGBA color.

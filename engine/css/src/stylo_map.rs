@@ -149,11 +149,14 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     };
 
     // Borders (widths + a single color taken from the top edge, matching our model).
+    // Stylo zeroes a border-width for `none`/`hidden` only at *resolved*-value time, so the
+    // computed width is still `medium` (3px). Replicate that zeroing here or every block
+    // paints a spurious 3px border.
     s.border_width = Sides {
-        top: cv.clone_border_top_width().0.to_f32_px(),
-        right: cv.clone_border_right_width().0.to_f32_px(),
-        bottom: cv.clone_border_bottom_width().0.to_f32_px(),
-        left: cv.clone_border_left_width().0.to_f32_px(),
+        top: if cv.clone_border_top_style().none_or_hidden() { 0.0 } else { cv.clone_border_top_width().0.to_f32_px() },
+        right: if cv.clone_border_right_style().none_or_hidden() { 0.0 } else { cv.clone_border_right_width().0.to_f32_px() },
+        bottom: if cv.clone_border_bottom_style().none_or_hidden() { 0.0 } else { cv.clone_border_bottom_width().0.to_f32_px() },
+        left: if cv.clone_border_left_style().none_or_hidden() { 0.0 } else { cv.clone_border_left_width().0.to_f32_px() },
     };
     s.border_color = abs_to_rgba(&cv.clone_border_top_color().resolve_to_absolute(&current));
 
