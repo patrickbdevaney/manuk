@@ -1,5 +1,33 @@
 # Manuk — Parity Implementation Plan V2 (the delta, ordered)
 
+## Execution status (live) — research top-10 ↔ shipped
+
+The frontier synthesis (`RESEARCH-FINDINGS-V2.md`) ranked 10 highest-leverage moves.
+Progress against them + the phase plan below:
+
+| # | Move | Status |
+|---|------|--------|
+| — | **Stylo cascade wired + default (72/72)** | ✅ shipped (A1) |
+| 4 | `@media` viewport coupling | ✅ shipped (via A1 viewport threading) |
+| 5 | Parallelize subresource fetch | ✅ shipped (B4) |
+| 1 | Frame-scheduled dirty-bit render loop | ✅ shipped (B2 coalescing); wiring scroll→incremental paths remains |
+| 9 | Synchronous `Readiness` + role/name agent API | ✅ shipped (E2 + E1 handles) |
+| 10 | In-process semantic DOM diffing (moat) | ✅ shipped (`A11yNode::diff` / `observe_diff`); provenance Action-Guard exists (E6) |
+| 3 | WOFF2 web fonts | 🔄 in progress |
+| 8 | Stable + generational `NodeId` | ◐ stable handle shipped (E1); generational free-list (arena reclaim) remains |
+| 2 | Persistent-texture partial damage upload | ☐ remaining (GPU; headless-unverifiable) |
+| 6 | Minimal spatial/scroll tree | ☐ remaining |
+| 7 | Blitz-model Taffy 0.12 integration + intrinsic-size cache | ☐ remaining (largest; ~2–3.5k LOC) |
+
+Also shipped this program: DDG search-click fix, `vw/vh/vmin/vmax` units, 9 engine
+repomaps, `RESEARCH-PROMPT-V2` + `RESEARCH-FINDINGS-V2`.
+
+Remaining big rocks are sequenced in Phases B3 / C / G below; the GPU ones need live-window
+verification and the Taffy integration is a focused multi-step effort.
+
+---
+
+
 **Derived from** the wave-1+2 repomap (`docs/parity/repomap/01–09`) and
 `RESEARCH-PROMPT-V2.md`. Ordered by the user's three stated pain points —
 **(1) real-site visual parity ("1990s HTML"), (2) latency/snappiness, (3) agent-native
