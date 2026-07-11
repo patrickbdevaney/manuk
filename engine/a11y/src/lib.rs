@@ -105,6 +105,15 @@ pub enum Role {
 }
 
 impl Role {
+    /// Whether an agent (or user) can meaningfully *act* on a node of this role — click,
+    /// type, or toggle it. Used for readiness/affordance counting.
+    pub fn is_interactive(&self) -> bool {
+        matches!(
+            self,
+            Role::Link | Role::Button | Role::TextBox | Role::CheckBox | Role::Radio | Role::ComboBox
+        )
+    }
+
     /// Roles whose accessible name is computed **from their subtree text**
     /// (accname "name from content"). Others must get a name from an explicit
     /// attribute, or have none.

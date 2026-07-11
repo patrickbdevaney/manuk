@@ -148,6 +148,24 @@ pub struct AgentBrowser {
     last_a11y: Option<manuk_a11y::A11yNode>,
 }
 
+/// A synchronous readiness snapshot (see [`AgentBrowser::readiness`]).
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct Readiness {
+    /// A page is loaded and laid out.
+    pub loaded: bool,
+    /// The resolved document title, if any.
+    pub title: Option<String>,
+    /// Count of actionable affordances (links, buttons, text fields, checkboxes, …).
+    pub interactive: usize,
+}
+
+impl Readiness {
+    /// A page is present with at least one thing to act on.
+    pub fn is_actionable(&self) -> bool {
+        self.loaded && self.interactive > 0
+    }
+}
+
 /// G-a — a **live browsing session** moving between the human front-end and the agent.
 ///
 /// It carries the live [`Page`] (DOM, form values, computed styles), the scroll offset,
@@ -315,6 +333,24 @@ impl AgentBrowser {
             scroll_y: 0.0,
             history: manuk_page::history::SessionHistory::new(),
             last_a11y: None,
+        }
+    }
+
+    /// E2 — a **synchronous** readiness snapshot computed directly from the shared page
+    /// state (no network-idle guessing, no polling): whether a page is loaded, its title,
+    /// and how many actionable affordances (links/buttons/fields) it exposes. Because the
+    /// controller shares `engine/page`, this is an exact in-process read — not the
+    /// heuristic an out-of-process automation client is forced to use.
+    pub fn readiness(&self) -> Readiness {
+        let interactive = self
+            .a11y_tree()
+            .ok()
+            .map(|t| t.iter().filter(|n| n.role.is_interactive()).count())
+            .unwrap_or(0);
+        Readiness {
+            loaded: self.page.is_some(),
+            title: self.current_title().map(str::to_string),
+            interactive,
         }
     }
 
