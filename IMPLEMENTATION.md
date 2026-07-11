@@ -956,3 +956,21 @@ model / quirk-compat / IPC — Manuk's in-process model is a deliberate divergen
 ### Sequencing: R2 (bfcache) → R1/R3 (off-thread) → R4 → P1/P2 → U6/U7 → DT/AG → MEM3.
 Each item: primary-source-backed disposition, seam-scoped, new WPT target where relevant,
 parity gate stays green.
+
+### Phase 7 — progress (2026-07-11, autonomous)
+- **P0** ✅ diagnosed: Wikipedia is NOT a fetch regression (2 stylesheets + 6 images apply);
+  residual is P1 layout fidelity of the Vector-2022 skin (sidebar flows linearly —
+  `sticky`→static and/or `grid-template-areas` unsupported).
+- **R2** ✅ back-forward cache — bounded LRU keeps the 6 most-recently-left pages constructed;
+  Back/Forward restore instantly (`shell/gui.rs` `bfcache`/`stash_current`/`restore_from_bfcache`).
+- **R1** ✅ off-thread navigation — main-document fetch runs off-thread on the multi-thread
+  runtime; UI thread stays live; a generation-tagged `NavEvent` (`EventLoopProxy`) wakes the
+  loop and `finish_load` builds the `!Send` page. Stale fetches cancelled by generation.
+  Verified end-to-end. *Follow-on:* off-thread the external-CSS/image phase too.
+- **U6** ✅ (within-session) cookie jar wired into `send_once` — sends stored cookies, stores
+  `Set-Cookie`. *Follow-on:* cross-session disk persistence (add serde to net + `store`) and
+  per-container partitioning.
+- **Remaining (sequenced):** R4 preconnect; P1 `sticky`/`grid-template-areas`; P2 UAX#14
+  (parity-sensitive); U2 bookmarks/downloads/history; U7 OAuth popup (multi-window JS);
+  U8 zoom/translate; DT/AG BiDi panels + AG5 measurement; MEM3 `cargo bloat`. Each its own
+  seam-scoped pass, parity gate green.
