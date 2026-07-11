@@ -5,12 +5,12 @@ T=times touched. `score = V/C + 1.5*sqrt(ln(1+TICKS)/(1+T)) + 1.0*(U/10)`. Every
 the highest-U item. Update T/status/scores each tick; add items on reflection; mark dead ends
 `superseded`. Verify class per §7: HEADLESS / GUI / EXTERNAL / MEASURE._
 
-**TICKS = 8** (global tick counter; increment each tick). _Ticks done: 1 L14-slice, 2 L01
+**TICKS = 9** (global tick counter; increment each tick). _Ticks done: 1 L14-slice, 2 L01
 fetch/XHR, 3 L10 pushState, 4 L04 downloads, 5 L32 prerender, 6 L03 postMessage/opener, 7 L02
-MutationObserver. Tick 8 pick: **L11 responsive `@media`** — UCB near-tie between L17 (agentic,
-~4.22) and L11 (RENDER, ~4.15); the user's explicit ordering (human-browser table stakes BEFORE
-agentic) breaks it toward L11, which also hits a known weak frontier ("look like Chromium/Gecko"
-on Wikipedia-class responsive layouts). NOTE: Tick 10 is the next forced-highest-U tick._
+MutationObserver, 8 L11 responsive @media. Tick 9 pick: **L17 AG2 task-intent AXTree pruning +
+AG3 dual (semantic+visual) targeting** — top UCB (~4.3), deferred through Ticks 2–8 by the
+human-first ordering; table stakes now solid, so the agent-native differentiator is un-deferred.
+NOTE: Tick 10 is the forced-highest-U tick._
 
 ## Tier A — absorb outstanding beneficial work already suggested (do first)
 
@@ -33,7 +33,8 @@ STATE weak frontiers. High V, mostly known ⇒ high exploit ⇒ front-loaded.
 | L09 | DevTools panel over BiDi (DOM tree, console, network) Ctrl+Shift+I | UI/AGENT-EXT | 8 | 8 | 5 | 0 | backlog | GUI |
 | L10 | `history.pushState`/`popstate` SPA routing correctness end-to-end | JS/COMPAT | 8 | 4 | 4 | 1 | **done** (Tick 3) | HEADLESS |
 | L10b | Same-document Back/Forward *button* → popstate w/ per-entry state restore (SessionHistory same-doc flag) | JS/UI | 5 | 4 | 4 | 0 | backlog (L10 follow-on) | HEADLESS |
-| L11 | Responsive-skin correctness: `@media` + collapsed-menu on Wikipedia-class | RENDER | 8 | 6 | 6 | 0 | backlog | HEADLESS |
+| L11 | Responsive-skin correctness: `@media` + collapsed-menu on Wikipedia-class | RENDER | 8 | 6 | 6 | 1 | **done** (Tick 8) | HEADLESS |
+| L11b | Container queries + matchMedia resize-listeners + full media-feature set (resolution/aspect-ratio/hover/pointer) + `@supports` | RENDER/JS | 5 | 6 | 5 | 0 | backlog (L11 follow-on) | HEADLESS |
 | L12 | New window (2nd winit window) + duplicate/close semantics | UI | 5 | 7 | 5 | 0 | backlog | GUI |
 | L13 | Off-thread the external-CSS/image fetch phase (R1 follow-on) | PERF | 6 | 5 | 4 | 0 | backlog | HEADLESS |
 | L14 | Complete human fingerprint surface (screen, timezone, fonts, canvas/WebGL consistency) | FINGERPRINT | 7 | 6 | 7 | 0 | backlog | HEADLESS |
@@ -66,7 +67,8 @@ position:sticky · grid-template-areas · UAX#14-linebreak · preconnect(R4) · 
 MEM3-binary-size · window.open→new-tab · **fetch()+XHR real Promises (L01, Tick 2)** ·
 **history.pushState/replaceState/popstate + location (L10, Tick 3)** · **downloads to disk
 (L04, Tick 4)** · **predictive prerender into bfcache (L32, Tick 5)** · **cross-window
-postMessage + window.opener (L03, Tick 6)** · **MutationObserver (L02, Tick 7)**.
+postMessage + window.opener (L03, Tick 6)** · **MutationObserver (L02, Tick 7)** ·
+**responsive @media + matchMedia (L11, Tick 8)**.
 
 ## Superseded / blocked
 

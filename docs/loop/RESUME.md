@@ -4,8 +4,8 @@ _A fresh session reads [[CONSTITUTION]] then this file, and resumes at the named
 
 ## Where the loop is
 
-- **TICKS = 8** (about to run Tick 8). Ticks 1 (`1a717d0`), 2 (`91a22bb`), 3 (`7f1b35d`),
-  4 (`d6022ff`), 5 (`c6925f7`), 6 (`7c4a1f6`), 7 (`861a66c`) done + committed.
+- **TICKS = 9** (about to run Tick 9). Ticks 1 (`1a717d0`), 2 (`91a22bb`), 3 (`7f1b35d`),
+  4 (`d6022ff`), 5 (`c6925f7`), 6 (`7c4a1f6`), 7 (`861a66c`), 8 (`02595bc`) done + committed.
 - Working tree: clean, on `main`, pushed. Parity 72/72. Disk: 41G free (86%); nuke
   `target/debug` only if free < 25G.
 - Key architecture notes for future ticks:
@@ -32,41 +32,48 @@ _A fresh session reads [[CONSTITUTION]] then this file, and resumes at the named
     (shared by finish_load + finish_prewarm); prewarmed pages live in the bfcache; `goto` checks
     it first for an instant click.
 
-## Next action (Tick 8)
+## Next action (Tick 9)
 
-Pick: **L11 — responsive `@media` correctness** (UCB near-tie with the agentic L17; the user's
-explicit "human-browser table stakes BEFORE agentic" ordering breaks it toward L11, which also
-hits a known weak frontier — Wikipedia-class responsive layouts render only partially).
+Pick: **L17 — AG2 task-intent AXTree pruning + AG3 dual (semantic+visual) targeting** (top UCB
+~4.3; the agent-native differentiator, un-deferred now that human table stakes are solid). Pure
+functions over the existing `engine/a11y` tree — HEADLESS-verifiable.
 
-FIRST: establish the current state — `grep -rn "media\|@media\|MediaQuery\|media_query" engine/css/src`
-to see how much `@media` the parser/cascade already handles (it may parse-and-drop, or ignore
-entirely). The tick's shape depends on this:
-1. Parse `@media` prelude conditions into a small evaluable form: `width`/`min-width`/`max-width`/
-   `min-height`/`max-height` (px), `orientation`, `prefers-color-scheme`, and `and`/comma lists.
-   Keep the evaluator pure + unit-testable (`matches(query, viewport_w, viewport_h) -> bool`).
-2. In the cascade, include a media-block's rules only when its query matches the current
-   viewport. The cascade already takes `viewport_width` (see `cascade_styles(..., viewport_width)`)
-   — thread height too if needed. On resize/relayout the styles must be recomputed (the shell
-   already re-cascades on width changes; verify the media set is re-evaluated there).
-3. Make `window.matchMedia(q)` (currently a no-match stub in the prelude) evaluate the same way
-   against the boot viewport, and ideally update on resize (a follow-on if costly).
-4. Verify HEADLESS + MEASURE: a WPT-style parity probe or a unit/integration test where an element
-   has different computed width/display under a narrow vs a wide viewport (e.g.
-   `@media (max-width:600px){ .box{display:none} }`), asserting it applies only when narrow.
-   Parity must stay 72/72 (add a probe page if useful).
+Surface already present: `engine/a11y` `A11yNode { node, role: Role, name, bbox: Option<Rect>,
+z, children }`; `Role::is_interactive()`, `name_from_content()`; `A11yNode::{find, find_containing,
+hit_test, to_viewport_lines}`; `Rect::{center, intersects}`. The agent crate (`agent/src/*`)
+consumes it (traversal/triage/forms).
 
-Follow-ons: container queries; `matchMedia` change listeners on resize; the full media-feature
-set (resolution, aspect-ratio, hover/pointer).
+1. **AG2 — task-intent pruning.** A pure fn (new module, e.g. `agent/src/targeting.rs` or
+   `engine/a11y`): `prune_for_task(tree: &A11yNode, task: &str) -> PrunedTree` (or a `Vec<&A11yNode>`
+   of kept nodes). Keep: every interactive node (`role.is_interactive()`), any node whose `name`
+   token-overlaps the task keywords, and the ancestor chain of each kept node (for context). Drop
+   purely-decorative/hidden subtrees with no kept descendant. Emit a compact observation (reuse
+   `to_viewport_lines`-style formatting) so the pruned tree is smaller than the full one — assert
+   that reduction in a test.
+2. **AG3 — dual targeting.** `resolve_target(tree, intent: &str, viewport: Rect) -> Option<Targeted>`
+   combining a **semantic** score (role match + name token overlap / exact-match bonus) and a
+   **visual** score (in-viewport, larger/centered bbox preferred, top-of-reading-order tiebreak).
+   Return the best node + its click point (`bbox.center()`), plus the runner-up + a confidence
+   margin so the caller can gate on ambiguity. Keep weights as named consts.
+3. Verify HEADLESS: build a small synthetic `A11yNode` tree (buttons/links/headings with names +
+   bboxes) and assert: (a) pruning keeps the interactive + task-matching nodes and their
+   ancestors while dropping unrelated decorative nodes (and shrinks the node count); (b)
+   `resolve_target("sign in", …)` picks the "Sign in" button over a same-text footer link by the
+   visual score, and reports low confidence when two equally-good targets tie. Parity must stay
+   72/72 (this is agent-layer; no render change).
+
+Follow-ons: wire AG3 into the shell/agent action path (choose targets for `BrowserAction`); a
+learned/weighted scorer; OCR/visual-text fallback when the AX name is empty.
 
 ## Then keep going
 
-After Tick 8, re-run §5 UCB (normal exploit/explore; **Tick 10** is the next forced-highest-U —
-candidates incl. L16 Shadow DOM U7, L31 llama U8, L34 service worker U8). Strong Tier-A still
-open: L17 AG2/AG3 agentic targeting (top UCB, deferred by the human-first ordering — revisit once
-table stakes feel solid), L06 password autofill (EXTERNAL keyring), L07 semantic history, L05
-uploads, L09 DevTools (GUI), L13 off-thread external CSS/image. Each tick: implement → verify
-(build + parity 72/72 + test) → disk hygiene → commit+push (co-author line) → update
-LEDGER/STATE/JOURNAL/RESUME → next.
+After Tick 9, run **Tick 10 = forced-highest-U** (§5): candidates L31 llama grounding U8
+(EXTERNAL — may fail the verification gate; prefer the highest-U that stays HEADLESS, e.g. L16
+Shadow DOM U7 or L34 service-worker-subset U8 if a headless slice exists). Then resume normal UCB.
+Strong Tier-A still open: L06 password autofill (EXTERNAL keyring), L07 semantic history, L05
+uploads, L09 DevTools (GUI), L13 off-thread external CSS/image, L15 inline SVG, L16 Shadow DOM.
+Each tick: implement → verify (build + parity 72/72 + test) → disk hygiene → commit+push
+(co-author line) → update LEDGER/STATE/JOURNAL/RESUME → next.
 
 ## Re-establish context
 

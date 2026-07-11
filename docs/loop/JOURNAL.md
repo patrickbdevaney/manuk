@@ -127,3 +127,21 @@ _Minimal history for audit + resume. See [[CONSTITUTION]] §4/§6, [[RESUME]] fo
   git-stash). Commit `861a66c`.
 - Reflect: characterData oldValue nuance, observer GC lifetime, and IntersectionObserver/
   ResizeObserver are follow-ons (logged). Next: Tick 8 (normal UCB).
+
+## Tick 8 — L11: responsive @media (2026-07-11)
+- Selected: human-table-stakes item (UCB near-tie with agentic L17, broken by the user's
+  human-first ordering); a known weak frontier for "look like Chromium/Gecko".
+- Discovery: the Stylo cascade matched only top-level `CssRule::Style` and never descended into
+  `@media` blocks — so responsive rules never applied at ANY width (the viewport was already
+  threaded into the Device; only the walk was missing).
+- Implemented: `match_rules_recursive` descends into `CssRule::Media`, evaluating each query
+  (`MediaList::evaluate` + `CustomMediaEvaluator::none`) against the Stylist's real-viewport
+  Device and including inner rules only when it matches (nested @media recurse). `matchMedia`
+  upgraded from a no-match stub to a real min/max-width/height/orientation/prefers-* evaluator
+  (comma=OR, ` and `=AND) so JS branches agree with the CSS cascade.
+- Verified: HEADLESS — css `media_query_applies_by_viewport_width` (max-width applies at 400,
+  none at 800, min-width at 1200); page interactive (12) matchMedia not-narrow/is-wide/in-range.
+  Parity 72/72; css 27+2, page 12-scenario, workspace all green. Commit `02595bc`.
+- Reflect: container queries, matchMedia resize-listeners, full media-feature set, @supports are
+  follow-ons (logged). Table stakes now solid → un-defer the agentic L17 for Tick 9.
+  Next: Tick 9 (L17). NOTE: Tick 10 is the forced-highest-U tick.
