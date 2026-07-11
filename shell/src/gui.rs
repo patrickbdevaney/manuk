@@ -127,6 +127,12 @@ struct App {
     focused_input: Option<manuk_dom::NodeId>,
     /// Whether the cursor is currently over a clickable link (drives the hand cursor).
     over_link: bool,
+    /// The previous frame's canvas bytes (size + RGBA), for a row-level damage diff so
+    /// `paint_and_upload` uploads only the rows that actually changed (#2). Correctness is
+    /// exact — the uploaded rows are precisely those that differ — so it can't corrupt the
+    /// texture; a small change (caret, hover, form edit) uploads a small band, an unchanged
+    /// frame uploads nothing, and a scroll (whole canvas differs) falls back to a full upload.
+    prev_canvas: Option<(u32, u32, Vec<u8>)>,
 }
 
 /// What a click on the page should do, decided from an immutable hit-test so the mutable
@@ -212,6 +218,7 @@ impl App {
             cursor: (0.0, 0.0),
             focused_input: None,
             over_link: false,
+            prev_canvas: None,
         }
     }
 
@@ -488,9 +495,21 @@ impl App {
         self.draw_focus_caret(&mut canvas);
         self.draw_chrome(&mut canvas, w);
 
+        // #2: upload only the rows that changed since last frame (exact row diff), so a
+        // small update touches a small band and an unchanged frame uploads nothing.
+        let (cw, ch) = (canvas.width(), canvas.height());
+        let bytes = canvas.rgba_bytes();
+        let damage = match &self.prev_canvas {
+            Some((pw, ph, prev)) if *pw == cw && *ph == ch => row_damage(prev, bytes, cw),
+            _ => Some((0, ch)), // size changed or first frame → full upload
+        };
         if let Some(gpu) = &mut self.gpu {
-            gpu.upload(&canvas);
+            match damage {
+                Some((y0, h)) => gpu.upload_damage(&canvas, y0, h),
+                None => {} // nothing changed
+            }
         }
+        self.prev_canvas = Some((cw, ch, bytes.to_vec()));
     }
 
     /// Draw a text caret at the end of the focused field's value (a thin dark bar), in the
@@ -1257,6 +1276,26 @@ fn clip_text(s: &str, max_w: f32) -> String {
     }
 }
 
+/// The `(first_row, row_count)` band that differs between two equal-size RGBA buffers, or
+/// `None` when they are identical. Used to upload only the damaged rows to the GPU (#2).
+fn row_damage(prev: &[u8], cur: &[u8], width: u32) -> Option<(u32, u32)> {
+    let stride = width as usize * 4;
+    if stride == 0 || prev.len() != cur.len() {
+        return None;
+    }
+    let rows = prev.len() / stride;
+    let mut first = None;
+    let mut last = 0;
+    for y in 0..rows {
+        let r = y * stride;
+        if prev[r..r + stride] != cur[r..r + stride] {
+            first.get_or_insert(y);
+            last = y;
+        }
+    }
+    first.map(|f| (f as u32, (last - f + 1) as u32))
+}
+
 /// Resolve a possibly-relative `href` against the current page URL. Returns `None` for
 /// empty or pure-fragment (`#…`) links, and for `javascript:`/`mailto:` schemes the GUI
 /// does not navigate to.
@@ -1352,6 +1391,10 @@ struct Gpu {
     bind_group_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     bind_group: Option<wgpu::BindGroup>,
+    /// The page texture, kept across frames (#2). Re-created only when the canvas size
+    /// changes; otherwise `upload` writes into it in place instead of allocating a fresh
+    /// texture + bind group every frame.
+    texture: Option<wgpu::Texture>,
 }
 
 impl Gpu {
@@ -1449,6 +1492,7 @@ impl Gpu {
             bind_group_layout,
             sampler,
             bind_group: None,
+            texture: None,
         })
     }
 
@@ -1459,15 +1503,40 @@ impl Gpu {
     }
 
     /// Upload a CPU canvas as the texture to present next frame.
+    /// Upload the whole `canvas` to the (persistent) page texture. Allocates the texture +
+    /// bind group only when the size changes; otherwise reuses them (#2).
     fn upload(&mut self, canvas: &manuk_paint::Canvas) {
-        let size = wgpu::Extent3d {
-            width: canvas.width(),
-            height: canvas.height(),
-            depth_or_array_layers: 1,
-        };
+        self.ensure_texture(canvas.width(), canvas.height());
+        self.write_region(canvas, 0, 0, canvas.width(), canvas.height());
+    }
+
+    /// Upload only the rows `[y0, y0+h)` of `canvas` — the damaged band — into the persistent
+    /// texture, skipping the untouched rows (#2, partial damage upload). Falls back to a full
+    /// upload if the texture must be (re)allocated. Rows (not a sub-rect) so the copy stays a
+    /// single contiguous `write_texture` with the canvas' natural row stride.
+    fn upload_damage(&mut self, canvas: &manuk_paint::Canvas, y0: u32, h: u32) {
+        let full = self.texture.is_none()
+            || self.texture.as_ref().is_some_and(|t| t.width() != canvas.width() || t.height() != canvas.height());
+        if full {
+            self.upload(canvas);
+            return;
+        }
+        let y0 = y0.min(canvas.height());
+        let h = h.min(canvas.height() - y0);
+        if h == 0 {
+            return;
+        }
+        self.write_region(canvas, 0, y0, canvas.width(), h);
+    }
+
+    /// Create the page texture + bind group at `(w, h)` if absent or a different size.
+    fn ensure_texture(&mut self, w: u32, h: u32) {
+        if self.texture.as_ref().is_some_and(|t| t.width() == w && t.height() == h) {
+            return;
+        }
         let texture = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("page texture"),
-            size,
+            size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -1475,36 +1544,41 @@ impl Gpu {
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        self.queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            canvas.rgba_bytes(),
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * canvas.width()),
-                rows_per_image: Some(canvas.height()),
-            },
-            size,
-        );
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         self.bind_group = Some(self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("page bind group"),
             layout: &self.bind_group_layout,
             entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.sampler),
-                },
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.sampler) },
             ],
         }));
+        self.texture = Some(texture);
+    }
+
+    /// Copy the rows `[y .. y+h)` (full width) of `canvas` into the persistent texture at the
+    /// same rows. `x`/`w` span the full width (the shared row stride keeps the copy contiguous).
+    fn write_region(&mut self, canvas: &manuk_paint::Canvas, _x: u32, y: u32, w: u32, h: u32) {
+        let Some(texture) = &self.texture else { return };
+        let cw = canvas.width();
+        let start = (y as usize) * (cw as usize) * 4;
+        let end = start + (h as usize) * (cw as usize) * 4;
+        let bytes = &canvas.rgba_bytes()[start..end];
+        self.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d { x: 0, y, z: 0 },
+                aspect: wgpu::TextureAspect::All,
+            },
+            bytes,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * cw),
+                rows_per_image: Some(h),
+            },
+            wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+        );
     }
 
     fn draw(&mut self) -> Result<(), wgpu::SurfaceError> {
