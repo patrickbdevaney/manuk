@@ -161,6 +161,11 @@ pub struct FontContext {
     /// the same words repeatedly (per line and in shrink-to-fit's multiple passes), so
     /// caching the advance width skips re-running per-glyph metrics.
     measure_cache: RefCell<LruCache<RunKey, f32>>,
+    /// Bounded LRU cache of fully **shaped** runs (glyph ids + positions). Painting shapes
+    /// the same runs it already measured, and a scroll re-paint re-shapes every visible run;
+    /// caching the whole `ShapedRun` turns that into a clone of a small glyph vector instead
+    /// of re-running bidi + swash shaping.
+    shape_cache: RefCell<LruCache<RunKey, ShapedRun>>,
     /// Bounded LRU cache of rasterized glyph coverage bitmaps. Painting re-draws the same
     /// glyphs every frame (and every scroll/caret tick repaints the whole viewport), so
     /// rasterizing each glyph fresh each time was the dominant text-paint cost. Cache the
@@ -195,6 +200,9 @@ impl FontContext {
             scale_ctx: RefCell::new(swash::scale::ScaleContext::new()),
             shape_ctx: RefCell::new(swash::shape::ShapeContext::new()),
             measure_cache: RefCell::new(LruCache::new(
+                NonZeroUsize::new(MEASURE_CACHE_CAP).unwrap(),
+            )),
+            shape_cache: RefCell::new(LruCache::new(
                 NonZeroUsize::new(MEASURE_CACHE_CAP).unwrap(),
             )),
             glyph_cache: RefCell::new(LruCache::new(
@@ -559,6 +567,10 @@ impl FontContext {
     /// fallback** (swash), placing each resulting glyph (by glyph id + face) at its pen
     /// position. Runs of characters the primary font lacks are shaped with a fallback face.
     pub fn shape(&self, text: &str, key: FontKey, size: f32) -> ShapedRun {
+        let ck: RunKey = (key, size.to_bits(), text.to_owned());
+        if let Some(cached) = self.shape_cache.borrow_mut().get(&ck) {
+            return cached.clone();
+        }
         let metrics = self.line_metrics(key, size);
         let Some(primary) = self.primary_face(key) else {
             return ShapedRun {
@@ -590,11 +602,13 @@ impl FontContext {
                 }
             }
         }
-        ShapedRun {
+        let run = ShapedRun {
             glyphs,
             width: pen,
             metrics,
-        }
+        };
+        self.shape_cache.borrow_mut().put(ck, run.clone());
+        run
     }
 
     /// Rasterize a single glyph (via swash) to an 8-bit coverage bitmap, at the horizontal
