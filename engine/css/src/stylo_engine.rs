@@ -224,6 +224,20 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
         map.insert(node, cs);
         parent_cv.insert(node, cv);
     }
+
+    // `vertical-align` has no computed longhand accessor in stylo 0.19 (it became a
+    // CSS-Inline-3 shorthand of alignment-baseline/baseline-shift/baseline-source, and the
+    // legacy line-relative `top`/`bottom` keywords aren't exposed there). Recover *only*
+    // that one property from MinimalCascade, which parses it correctly from inline styles
+    // and stylesheets alike. Targeted patch — everything else stays Stylo's. Could later be
+    // narrowed to a vertical-align-only scan to avoid the second cascade.
+    let minimal = MinimalCascade.cascade(dom, sheets);
+    for (node, cs) in map.iter_mut() {
+        if let Some(m) = minimal.get(node) {
+            cs.vertical_align = m.vertical_align;
+        }
+    }
+
     map
 }
 
