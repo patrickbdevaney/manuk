@@ -176,3 +176,14 @@ _Minimal history for audit + resume. See [[CONSTITUTION]] §4/§6, [[RESUME]] fo
 - Reflect: inject a real backend (external) to produce the Action; a disambiguation prompt on
   Ambiguous; wire Grounded into the shell BrowserAction executor. Next: Tick 11 (normal UCB;
   Tick 15 is the next forced-highest-U).
+
+## Tick 11 — L05: file uploads (multipart) (2026-07-11)
+- Selected: rotated back to human table stakes after two agentic ticks (9,10); top human UCB item,
+  a concrete "run any website" gap (forms were GET-only, skipping file inputs).
+- Implemented: `engine/net/multipart.rs` (pure RFC-7578 encoder: `Part::{field,file}`, `encode`
+  to exact bytes, header-injection escape, deterministic `boundary_from_seed`); `agent/forms.rs`
+  `file_inputs` + `multipart_submission` (text-field parts + file parts → POST `MultipartPost`).
+- Verified: HEADLESS — net multipart exact-byte tests + agent forms multipart POST assembly.
+  Parity 72/72; net+agent 117 + workspace green. Commit `fc41bc9`.
+- Reflect: shell OS file-picker on `<input type=file>` click, multi-file, drag-drop, streaming,
+  progress are follow-ons (the GUI picker is the remaining thin integration). Next: Tick 12.

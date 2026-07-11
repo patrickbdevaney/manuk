@@ -5,13 +5,12 @@ T=times touched. `score = V/C + 1.5*sqrt(ln(1+TICKS)/(1+T)) + 1.0*(U/10)`. Every
 the highest-U item. Update T/status/scores each tick; add items on reflection; mark dead ends
 `superseded`. Verify class per §7: HEADLESS / GUI / EXTERNAL / MEASURE._
 
-**TICKS = 11** (global tick counter; increment each tick). _Done: 1 L14-slice, 2 L01 fetch/XHR,
+**TICKS = 12** (global tick counter; increment each tick). _Done: 1 L14-slice, 2 L01 fetch/XHR,
 3 L10 pushState, 4 L04 downloads, 5 L32 prerender, 6 L03 postMessage, 7 L02 MutationObserver,
-8 L11 @media, 9 L17 targeting, 10 L31-slice grounding (forced-U). Tick 11 pick: **L05 file
-uploads** — UCB tops out at L30 (agentic automation-surface, ~4.6) but I've run two agentic ticks
-(9,10); rotating back to human table stakes per the user's ordering, L05 (multipart-core
-HEADLESS-verifiable, a concrete "run any website" gap) is the top human item (~4.2). L30 stays
-queued as the next agentic pick. NOTE: Tick 15 is the next forced-highest-U tick._
+8 L11 @media, 9 L17 targeting, 10 L31-slice grounding (forced-U), 11 L05 uploads. Tick 12 pick:
+**L30 in-process automation-surface hardening** — the top raw-UCB item (~4.6), the agent-native
+differentiator that composes directly with Ticks 9–10 (targeting+grounding); the user's latest
+directive explicitly invites "innovations". NOTE: Tick 15 is the next forced-highest-U tick._
 
 ## Tier A — absorb outstanding beneficial work already suggested (do first)
 
@@ -27,7 +26,7 @@ STATE weak frontiers. High V, mostly known ⇒ high exploit ⇒ front-loaded.
 | L03b | `BroadcastChannel` + `MessageChannel`/`MessagePort` + full structured clone (Blob/Map/Set) + `window.name` targeting | JS | 4 | 6 | 5 | 0 | backlog (L03 follow-on) | HEADLESS |
 | L04 | Downloads to disk (Content-Disposition, stream to file, manager entry) | NET/UI | 8 | 4 | 3 | 1 | **done** (Tick 4) | HEADLESS |
 | L04b | `<a download>` attribute trigger + streaming-to-disk progress shelf UI + open/reveal | NET/UI | 4 | 5 | 3 | 0 | backlog (L04 follow-on) | GUI |
-| L05 | File uploads (multipart from `type=file`) | NET/JS | 7 | 5 | 4 | 0 | backlog | HEADLESS |
+| L05 | File uploads (multipart from `type=file`) | NET/JS | 7 | 5 | 4 | 1 | **done** (Tick 11; encoder+POST builder — GUI picker follow-on) | HEADLESS |
 | L06 | Wire password store + autofill (keyring-derived key, save/fill on forms) | UI/SECURITY | 8 | 6 | 5 | 0 | backlog | EXTERNAL |
 | L07 | Wire semantic history index (record visits, query in omnibox) | UI/MEM | 7 | 5 | 4 | 0 | backlog | HEADLESS |
 | L08 | Wire page-translate (menu item → agent translate backend) | UI/AGENT-IN | 6 | 5 | 5 | 0 | backlog | EXTERNAL |
@@ -70,7 +69,7 @@ MEM3-binary-size · window.open→new-tab · **fetch()+XHR real Promises (L01, T
 (L04, Tick 4)** · **predictive prerender into bfcache (L32, Tick 5)** · **cross-window
 postMessage + window.opener (L03, Tick 6)** · **MutationObserver (L02, Tick 7)** ·
 **responsive @media + matchMedia (L11, Tick 8)** · **agent targeting AG2/AG3 (L17, Tick 9)** ·
-**action grounding (L31-slice, Tick 10)**.
+**action grounding (L31-slice, Tick 10)** · **file uploads / multipart (L05, Tick 11)**.
 
 ## Superseded / blocked
 

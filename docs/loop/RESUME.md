@@ -4,8 +4,8 @@ _A fresh session reads [[CONSTITUTION]] then this file, and resumes at the named
 
 ## Where the loop is
 
-- **TICKS = 11** (about to run Tick 11). Ticks 1–10 done + committed; latest: 8 (`02595bc`),
-  9 (`6524b11`), 10 (`2db6920`).
+- **TICKS = 12** (about to run Tick 12). Ticks 1–11 done + committed; latest: 9 (`6524b11`),
+  10 (`2db6920`), 11 (`fc41bc9`).
 - Working tree: clean, on `main`, pushed. Parity 72/72. Disk: 41G free (86%); nuke
   `target/debug` only if free < 25G.
 - Key architecture notes for future ticks:
@@ -32,40 +32,45 @@ _A fresh session reads [[CONSTITUTION]] then this file, and resumes at the named
     (shared by finish_load + finish_prewarm); prewarmed pages live in the bfcache; `goto` checks
     it first for an instant click.
 
-## Next action (Tick 11)
+## Next action (Tick 12)
 
-Pick: **L05 — file uploads** (rotating back to human table stakes after two agentic ticks 9–10;
-UCB tops at the agentic L30 ~4.6 but the user's human-first ordering keeps L30 queued; L05 is the
-top human item ~4.2 — a concrete "run any website" gap, with a HEADLESS-verifiable core mirroring
-Tick 4 downloads).
+Pick: **L30 — in-process automation-surface hardening** (top raw-UCB ~4.6; the agent-native
+differentiator, composing directly with Ticks 9–10 targeting+grounding; the user's latest
+directive explicitly invites "innovations"). Pure, HEADLESS-verifiable functions over the a11y
+tree + observation stream — a reliable driving surface an external agent/test can depend on.
 
-1. `engine/net` (or a small module): a pure `multipart` encoder — given fields
-   `[(name, value)]` and files `[(field, filename, content_type, bytes)]`, produce the
-   `multipart/form-data` body + the `Content-Type: multipart/form-data; boundary=…` header.
-   Deterministic boundary (pass it in / derive from a counter — NO `Math.random`/time in tests).
-   Unit-test the exact wire bytes (CRLFs, `Content-Disposition: form-data; name=…; filename=…`,
-   part `Content-Type`, trailing `--boundary--`).
-2. Form submission path: when a `<form enctype="multipart/form-data">` (or containing a
-   `<input type=file>`) is submitted, encode with the above and POST via `manuk_net::request`.
-   Find the current form-submit path (`grep -rn "enctype\|multipart\|fn submit\|application/x-www-form-urlencoded" engine shell agent`)
-   and branch on enctype (urlencoded stays the default).
-3. Shell: a file picker is GUI (can't headlessly verify) — wire `<input type=file>` click to a
-   picker (winit/rfd or a stub), store the chosen path on the input, include it on submit. Keep
-   the GUI part thin; the encoder is the verified core.
-4. Verify HEADLESS: unit-test the multipart encoder's exact bytes for a field + a small file;
-   optionally an integration test that a multipart submit builds the right request. Parity 72/72.
+Build in `agent/` (new module, e.g. `automation.rs`), composing `targeting`/`grounding`:
+1. **Stable selectors.** A `Selector` that references an element by durable attributes rather
+   than a fragile index/path: `{ role, name, nth }` (+ maybe an ancestor role for scoping).
+   `resolve(selector, tree) -> Option<NodeId>` — deterministic, and stable across unrelated DOM
+   mutations (re-resolve by role+name, not position). Unit-test that it still resolves after
+   sibling insert/removal.
+2. **Wait-for conditions.** A `Condition` enum evaluated against an `A11yNode` snapshot:
+   `Visible(Selector)`, `Gone(Selector)`, `TextPresent(String)`, `UrlMatches(String)`,
+   `CountAtLeast(Selector, n)`. `evaluate(cond, tree, url) -> bool`. The agent loop polls it
+   between observations (no timers here — the caller drives ticks); provide a
+   `wait(cond, snapshots: impl Iterator<Item=&A11yNode>) -> Outcome` that returns Met/Timeout
+   over a bounded snapshot budget.
+3. **Assertions.** The same `Condition`s as pass/fail checks: `assert_that(cond, tree, url) ->
+   AssertResult { passed, detail }` — the primitive a test/automation script uses to verify page
+   state. Compose with `grounding::ground_action` so an automation step is
+   act → wait(post-condition) → assert.
+4. Verify HEADLESS: unit tests over synthetic trees — selector resolves the intended node and
+   survives a sibling mutation; each Condition true/false case; wait returns Met when a later
+   snapshot satisfies it and Timeout when none do; assert reports the failing detail. Parity 72/72
+   (agent-layer only).
 
-Follow-ons: multiple files per input; drag-drop; large-file streaming; progress.
+Follow-ons: wire the automation surface into a scriptable session/BiDi command; retries with
+backoff; a `Selector` by test-id attribute (`data-testid`) when present.
 
 ## Then keep going
 
-After Tick 11, re-run §5 UCB. **Tick 15 is the next forced-highest-U.** The **agentic L30**
-(in-process automation-surface hardening — stable selectors, wait-for conditions, assertions;
-composes directly with Ticks 9–10 targeting+grounding) is the top raw-UCB item — take it on the
-next agentic rotation. Other Tier-A open: L06 password autofill (EXTERNAL keyring), L07 semantic
-history, L09 DevTools (GUI), L13 off-thread external CSS/image, L15 inline SVG, L16 Shadow DOM,
-L18 cookie partitioning. Each tick: implement → verify (build + parity 72/72 + test) → disk
-hygiene → commit+push (co-author line) → update LEDGER/STATE/JOURNAL/RESUME → next.
+After Tick 12, re-run §5 UCB. **Tick 15 is the next forced-highest-U.** Tier-A still open:
+L06 password autofill (EXTERNAL keyring), L07 semantic history, L09 DevTools (GUI), L13 off-thread
+external CSS/image, L15 inline SVG, L16 Shadow DOM, L18 cookie partitioning; Tier-B: L33 SoA-DOM
+measure, L34 service worker. Rotate human/agentic to keep axis balance. Each tick: implement →
+verify (build + parity 72/72 + test) → disk hygiene → commit+push (co-author line) → update
+LEDGER/STATE/JOURNAL/RESUME → next.
 
 ## Re-establish context
 

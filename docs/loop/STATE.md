@@ -20,7 +20,7 @@ Gate: `cargo run -q -p manuk-wpt --release -- parity` = **72/72**.
 |------|------|-------|
 | RENDER | 73 | Stylo cascade, flex/grid, grid-template-areas, UAX#14 breaking, position:sticky, **responsive `@media` (rules apply by real viewport; matchMedia agrees)**. Complex responsive skins (Wikipedia Vector-2022) closer; container queries + collapsed-menu JS still partial. |
 | JS | 73 | **Interactive**: persistent per-page context, real clicks fire listeners, preventDefault. **fetch()/XHR real Promises + host round-trip**; **pushState/popstate + real `location`**; **window.open + cross-window `postMessage`/`opener`**; **MutationObserver** (attributes/childList/characterData/subtree, microtask-batched). Missing: IntersectionObserver/ResizeObserver, many WebIDL APIs. |
-| NET | 62 | hyper+rustls, HTTP cache (RFC-9111 subset), RFC-6265 cookies **persistent across sessions**, preconnect, adblock, page-fetch bodies, **downloads to disk (Content-Disposition/binary, de-dup, path-safe)**. Missing: HTTP/2 push nuance, service workers, async non-blocking page-fetch (currently block_on), streaming-to-disk. |
+| NET | 63 | hyper+rustls, HTTP cache (RFC-9111 subset), RFC-6265 cookies **persistent across sessions**, preconnect, adblock, page-fetch bodies, downloads to disk, **multipart/form-data uploads (RFC 7578 encoder + POST builder)**. Missing: HTTP/2 push nuance, service workers, async non-blocking page-fetch (block_on), streaming to/from disk, GUI file picker. |
 | UI | 58 | Tab strip (new/close/dup), hamburger menu, omnibox suggestions/history dropdown, scrollbar, find, zoom, text selection + clipboard; omnibox URL tracks SPA pushState routes; **downloads saved to disk + listed in the menu**. Missing: richer downloads shelf, settings page, richer a11y. |
 | PERF | 58 | Off-thread nav, bfcache, preconnect, **predictive prerender (hover → full page built into bfcache → instant click)**, partial GPU upload, shaping caches. Not yet profiled against Chromium; cold-start ~73ms tiny page. |
 | MEM | 55 | Tab hibernation (discard/restore). No SoA DOM yet (deferred, measure first). Binary 16.4 MB (Stylo+SM). |
@@ -40,7 +40,8 @@ measurement; MEM3 binary-size measurement; boot window/screen metrics (Tick 1); 
 real Promises + host round-trip (Tick 2)**; **history.pushState/popstate + location (Tick 3)**;
 **downloads to disk (Tick 4)**; **predictive prerender into bfcache (Tick 5)**; **cross-window
 postMessage + window.opener (Tick 6)**; **MutationObserver (Tick 7)**; **responsive @media +
-matchMedia (Tick 8)**; **agent targeting AG2/AG3 (Tick 9)**; **action grounding (Tick 10)**.
+matchMedia (Tick 8)**; **agent targeting AG2/AG3 (Tick 9)**; **action grounding (Tick 10)**; **file uploads / multipart
+(Tick 11)**.
 
 ## Known weak frontiers (feed exploration)
 
