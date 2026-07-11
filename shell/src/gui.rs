@@ -115,6 +115,10 @@ enum NavEvent {
     /// L32 — a speculatively-prewarmed document finished fetching off-thread. `url` is the
     /// *requested* URL (the key a future click will look up). Built into the bfcache, not shown.
     Prewarmed { url: String, result: std::result::Result<manuk_page::Loaded, String> },
+    /// DEBT-1 — a page-issued `fetch()`/XHR completed **off-thread**. Settled on the UI thread.
+    /// `gen` guards against a stale response landing in a page the user has since navigated away
+    /// from. This used to `block_on` the UI thread: a slow API call froze the whole browser.
+    PageFetch { gen: u64, id: u32, status: u16, body: String },
 }
 
 /// A completed download, shown in the hamburger menu's Downloads section.
@@ -745,7 +749,9 @@ impl App {
         let url = self.url.clone();
         let proxy = self.proxy.clone();
         self.rt.spawn(async move {
-            let result = manuk_page::fetch_document(&url).await.map_err(|e| format!("{e:#}"));
+            // DEBT-1: fetch the document AND all its subresources (scripts, CSS, images) here,
+            // off the UI thread. The UI thread then builds the page with zero network calls.
+            let result = manuk_page::prefetch_document(&url).await.map_err(|e| format!("{e:#}"));
             let _ = proxy.send_event(NavEvent::Fetched { gen, result });
         });
         self.rerender(); // keep the old page visible; chrome stays responsive during the fetch
@@ -827,12 +833,52 @@ impl App {
     /// and the L32 prerender path (which stashes it into the bfcache). `Page`/`FontContext` are
     /// `!Send`, so this runs on the UI thread; only the network fetch that produced `html` was
     /// off-thread.
-    fn build_page(&self, html: &str, final_url: &str, w: u32) -> Page {
-        let mut page = self.rt.block_on(Page::load_async(html, final_url, &self.fonts, w as f32));
-        let sheets = self.rt.block_on(page.fetch_and_apply_stylesheets(&self.fonts, w as f32));
-        if sheets > 0 {
-            tracing::info!(sheets, "applied external stylesheet(s)");
+    /// DEBT-1 — the navigation completion path. Identical to [`finish_load`] except the page is
+    /// built from already-fetched subresources, so **the UI thread never blocks on the network**.
+    fn finish_load_prefetched(&mut self, pre: manuk_page::Prefetched) {
+        let (w, h) = match &self.gpu {
+            Some(g) => (g.config.width, g.config.height),
+            None => (self.width, 768),
+        };
+        let page = self.build_prefetched(pre, w);
+        if let Some(win) = &self.window {
+            win.set_title(&format!("{} — manuk", page.title));
         }
+        self.viewport = Viewport::new(w as f32, (h as f32 - CHROME_TOP).max(1.0));
+        self.viewport.content_height = page.content_height;
+        self.browser.set_loaded(
+            self.tab_id,
+            page.final_url.clone(),
+            page.title.clone(),
+            page.content_height,
+        );
+        self.page = Some(page);
+        self.scroll_y = 0.0;
+        self.loading = false;
+        let win = self.win_id_for(self.tab_id);
+        let opener = self.tab_opener.get(&self.tab_id).copied().unwrap_or(0);
+        if let Some(p) = self.page.as_ref() {
+            p.set_identity(win, opener);
+        }
+        self.pump_fetches();
+        self.handle_history_ops();
+        self.pump_messages();
+        self.rerender();
+    }
+
+    /// **DEBT-1: builds a page with ZERO network calls** — the subresources were already fetched
+    /// off-thread into [`manuk_page::Prefetched`]. This used to `block_on` twice (external scripts,
+    /// then external CSS) *on the UI thread*, freezing the window for the whole round-trip. That is
+    /// what made the reload button lag.
+    fn build_prefetched(&self, pre: manuk_page::Prefetched, w: u32) -> Page {
+        let mut page = Page::from_prefetched(pre, &self.fonts, w as f32);
+        page.relayout_zoomed(&self.fonts, w as f32, self.zoom);
+        page
+    }
+
+    /// Fallback for a plain (non-prefetched) document — self-contained HTML only, still no network.
+    fn build_page(&self, html: &str, final_url: &str, w: u32) -> Page {
+        let mut page = Page::load(html, final_url, &self.fonts, w as f32);
         page.relayout_zoomed(&self.fonts, w as f32, self.zoom);
         page
     }
@@ -852,7 +898,7 @@ impl App {
         let proxy = self.proxy.clone();
         tracing::debug!(%url, "prerender: prewarming predicted next navigation");
         self.rt.spawn(async move {
-            let result = manuk_page::fetch_document(&url).await.map_err(|e| format!("{e:#}"));
+            let result = manuk_page::prefetch_document(&url).await.map_err(|e| format!("{e:#}"));
             let _ = proxy.send_event(NavEvent::Prewarmed { url, result });
         });
     }
@@ -869,6 +915,17 @@ impl App {
             None => (self.width, 768),
         };
         match result {
+            Ok(manuk_page::Loaded::Prefetched(pre)) => {
+                if url == self.url || self.bfcache.iter().any(|(u, _)| u == &url) {
+                    return; // navigated there already, or a duplicate — nothing to cache
+                }
+                let page = self.build_prefetched(*pre, w);
+                self.bfcache.push((url.clone(), BfEntry { page, scroll: 0.0 }));
+                while self.bfcache.len() > BFCACHE_CAP {
+                    self.bfcache.remove(0);
+                }
+                tracing::info!(%url, "prerender: page built into bfcache (next click is instant)");
+            }
             Ok(manuk_page::Loaded::Document { html, final_url }) => {
                 if url == self.url || self.bfcache.iter().any(|(u, _)| u == &url) {
                     return; // navigated there already, or a duplicate — nothing to cache
@@ -1592,21 +1649,25 @@ impl App {
                     .and_then(|b| b.join(&raw_url).ok())
                     .map(|u| u.to_string())
                     .unwrap_or(raw_url);
-                let hdrs: &[(&str, &str)] = &[];
-                let bytes = manuk_net::Bytes::from(body.into_bytes());
-                let (status, text) =
-                    match self.rt.block_on(manuk_net::request(&method, &url, hdrs, bytes)) {
+                // DEBT-1: perform the request OFF the UI thread and settle it when it lands. This
+                // used to `block_on` here — a page calling a slow API froze the entire browser.
+                let gen = self.nav_gen;
+                let proxy = self.proxy.clone();
+                self.rt.spawn(async move {
+                    let hdrs: &[(&str, &str)] = &[];
+                    let bytes = manuk_net::Bytes::from(body.into_bytes());
+                    let (status, text) = match manuk_net::request(&method, &url, hdrs, bytes).await {
                         Ok(resp) => (resp.status, resp.text()),
                         Err(e) => {
                             tracing::warn!(url = %url, error = %e, "page fetch failed");
                             (0u16, String::new())
                         }
                     };
-                let w = self.viewport.width;
-                if let Some(page) = self.page.as_mut() {
-                    page.resolve_fetch(id, status, &text, &self.fonts, w);
-                }
+                    let _ = proxy.send_event(NavEvent::PageFetch { gen, id, status, body: text });
+                });
             }
+            // Nothing to drain synchronously any more — the responses arrive as events.
+            break;
         }
         if did_any {
             // A response may have carried Set-Cookie (e.g. a session refresh); persist it.
@@ -2360,6 +2421,7 @@ impl ApplicationHandler<NavEvent> for App {
                 }
                 self.loading = false;
                 match result {
+                    Ok(manuk_page::Loaded::Prefetched(pre)) => self.finish_load_prefetched(*pre),
                     Ok(manuk_page::Loaded::Document { html, final_url }) => {
                         self.finish_load(html, final_url)
                     }
@@ -2373,6 +2435,23 @@ impl ApplicationHandler<NavEvent> for App {
                 }
             }
             NavEvent::Prewarmed { url, result } => self.finish_prewarm(url, result),
+            NavEvent::PageFetch { gen, id, status, body } => {
+                // A response for a page the user has navigated away from must not be applied.
+                if gen != self.nav_gen {
+                    return;
+                }
+                let w = self.viewport.width;
+                if let Some(page) = self.page.as_mut() {
+                    page.resolve_fetch(id, status, &body, &self.fonts, w);
+                }
+                // The reaction may have issued a follow-on fetch, mutated the DOM, routed, or
+                // posted a message — pump those, then repaint.
+                self.pump_fetches();
+                self.handle_history_ops();
+                self.pump_messages();
+                manuk_net::save_cookies();
+                self.rerender();
+            }
         }
     }
 

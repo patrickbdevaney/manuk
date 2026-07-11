@@ -151,12 +151,28 @@ fn resolve_url(base: &str, href: &str) -> String {
 /// Fetch + decode every `<img src>` in the tree into a node→bitmap map. Failures are
 /// skipped (the element keeps its box, empty of pixels). Natural sizing is applied by the
 /// caller from each [`DecodedImage`]'s dimensions.
+/// UI-thread convenience: [`fetch_images_owned`] with the results wrapped in `Rc`.
 async fn fetch_images(
     dom: &Dom,
     base: &str,
 ) -> std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>> {
-    use std::rc::Rc;
-    let mut out = std::collections::HashMap::new();
+    fetch_images_owned(dom, base)
+        .await
+        .into_iter()
+        .map(|(n, img)| (n, std::rc::Rc::new(img)))
+        .collect()
+}
+
+/// DEBT-1 — the **owned, `Send`** image fetch. Not one `Rc` appears inside this async body: an
+/// `Rc` held across an `.await` makes the whole future `!Send`, and that single detail is what
+/// pinned image fetching to the UI thread (and blocked it). The `Rc` wrapper is applied afterwards,
+/// on the UI thread, by [`fetch_images`].
+async fn fetch_images_owned(
+    dom: &Dom,
+    base: &str,
+) -> std::collections::HashMap<manuk_dom::NodeId, manuk_paint::DecodedImage> {
+    let mut out: std::collections::HashMap<manuk_dom::NodeId, manuk_paint::DecodedImage> =
+        std::collections::HashMap::new();
     let targets: Vec<(manuk_dom::NodeId, String)> = dom
         .descendants(dom.root())
         .filter(|&n| dom.tag_name(n) == Some("img"))
@@ -196,7 +212,7 @@ async fn fetch_images(
         };
         if let Some(img) = decoded {
             if img.width > 0 && img.height > 0 {
-                out.insert(node, Rc::new(img));
+                out.insert(node, img);
             }
         }
     }
@@ -439,6 +455,18 @@ impl Page {
         viewport_width: f32,
     ) -> usize {
         let images = fetch_images(&self.dom, &self.final_url).await;
+        self.apply_images(images, fonts, viewport_width)
+    }
+
+    /// The **pure** half of image application (DEBT-1): given already-fetched+decoded images,
+    /// patch natural sizes and relayout. No network — so this can run on the UI thread without
+    /// blocking it, with the fetching done off-thread.
+    pub fn apply_images(
+        &mut self,
+        images: std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> usize {
         if images.is_empty() {
             return 0;
         }
@@ -458,6 +486,23 @@ impl Page {
         self.images = images;
         self.relayout(fonts, viewport_width);
         count
+    }
+
+    /// **DEBT-1.** Build a page from [`Prefetched`] data — parse/cascade/layout/JS only, with
+    /// **zero network calls**, so the UI thread never blocks. This is the path the shell uses for
+    /// every navigation and reload.
+    pub fn from_prefetched(pre: Prefetched, fonts: &FontContext, viewport_width: f32) -> Page {
+        let Prefetched { dom, final_url, css, images } = pre;
+        let mut page = Page::from_dom(dom, &final_url, fonts, viewport_width);
+        if !css.is_empty() {
+            page.apply_stylesheets(&css, fonts, viewport_width);
+        }
+        if !images.is_empty() {
+            let rc: HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>> =
+                images.into_iter().map(|(n, img)| (n, std::rc::Rc::new(img))).collect();
+            page.apply_images(rc, fonts, viewport_width);
+        }
+        page
     }
 
     /// Build a page from an already-parsed [`Dom`] (shared by [`load`](Self::load) and
@@ -1309,11 +1354,81 @@ async fn fetch_external_scripts(dom: &mut Dom, base: &str) {
     }
 }
 
+/// **DEBT-1 (RELIABILITY).** Everything a page needs from the network, fetched **off the UI
+/// thread** and handed over as plain data.
+///
+/// Before this, the UI thread called `block_on` three times while building a page — external
+/// scripts, external CSS, and images. That is a *hang*: the window stops responding for the whole
+/// round-trip. The user saw it as "the refresh button lags". Now the network thread does all of it
+/// and the UI thread builds the page with **zero** network calls.
+///
+/// Everything here is `Send` on purpose: `Dom` and `DecodedImage` are plain data (no `Rc`), so they
+/// cross the thread boundary. `Page` itself cannot — it borrows `FontContext` — which is exactly
+/// why the *fetching* has to be what moves, not the page construction.
+pub struct Prefetched {
+    /// Parsed, with any external `<script src>` already fetched and inlined.
+    pub dom: Dom,
+    pub final_url: String,
+    /// External stylesheet URL → CSS text.
+    pub css: HashMap<String, String>,
+    /// `<img>` node → decoded bitmap.
+    pub images: HashMap<manuk_dom::NodeId, manuk_paint::DecodedImage>,
+}
+
+/// Fetch a document **and all of its subresources** off-thread (DEBT-1). The returned
+/// [`Prefetched`] needs no further network access, so [`Page::from_prefetched`] can build the page
+/// on the UI thread without ever blocking it.
+pub async fn prefetch_document(url: &str) -> Result<Loaded> {
+    match fetch_document(url).await? {
+        Loaded::Download { filename, bytes } => Ok(Loaded::Download { filename, bytes }),
+        Loaded::Document { html, final_url } => {
+            #[allow(unused_mut)]
+            let mut dom = manuk_html::parse(&html);
+            // External <script src> — fetched and inlined here, off-thread. (Execution still
+            // happens on the UI thread inside `from_dom`; only the *fetch* moves.)
+            #[cfg(feature = "spidermonkey")]
+            fetch_external_scripts(&mut dom, &final_url).await;
+
+            // External stylesheets, concurrently.
+            let mut seen = std::collections::HashSet::new();
+            let ext: Vec<String> = collect_style_sources(&dom, &final_url)
+                .iter()
+                .filter_map(|s| match s {
+                    StyleSource::External(u) => Some(u.clone()),
+                    _ => None,
+                })
+                .filter(|u| seen.insert(u.clone()))
+                .collect();
+            let fetched = futures_util::future::join_all(ext.into_iter().map(|u| async move {
+                let text = manuk_net::fetch(&u).await.ok().map(|r| r.decoded_text());
+                (u, text)
+            }))
+            .await;
+            let css: HashMap<String, String> = fetched
+                .into_iter()
+                .filter_map(|(u, t)| t.map(|t| (u, t)))
+                .collect();
+
+            // Images: fetch + decode off-thread as OWNED data. Never touch `Rc` here — an `Rc`
+            // anywhere inside this async fn would make the whole future `!Send`, which is exactly
+            // what pinned image fetching to the UI thread and blocked it.
+            let images: HashMap<manuk_dom::NodeId, manuk_paint::DecodedImage> =
+                fetch_images_owned(&dom, &final_url).await;
+
+            Ok(Loaded::Prefetched(Box::new(Prefetched { dom, final_url, css, images })))
+        }
+        other => Ok(other),
+    }
+}
+
 /// The outcome of navigating to a URL: a document to render, or a file to save (the server
 /// marked the response `Content-Disposition: attachment` or served a non-renderable binary).
 pub enum Loaded {
     Document { html: String, final_url: String },
     Download { filename: String, bytes: Vec<u8> },
+    /// DEBT-1: a document whose subresources were already fetched off-thread. The UI thread can
+    /// build this with **no network calls at all**.
+    Prefetched(Box<Prefetched>),
 }
 
 /// Like [`fetch_html`] but distinguishes a **download** from a document: an HTTP response whose
