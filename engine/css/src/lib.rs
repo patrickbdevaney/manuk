@@ -959,6 +959,64 @@ pub struct FontFace {
     pub srcs: Vec<String>,
 }
 
+/// One selector of one rule, with the scope + source order it was seen at.
+#[derive(Clone, Copy)]
+struct IndexedRule<'a> {
+    scope: Option<NodeId>,
+    sel: &'a Selector,
+    rule: &'a Rule,
+    order: usize,
+}
+
+/// A selector index: rules bucketed by the **key** of their rightmost (subject) compound, so an
+/// element only tests rules it could possibly match. See `MinimalCascade::build_index`.
+#[derive(Default)]
+struct RuleIndex<'a> {
+    by_id: std::collections::HashMap<String, Vec<IndexedRule<'a>>>,
+    by_class: std::collections::HashMap<String, Vec<IndexedRule<'a>>>,
+    by_tag: std::collections::HashMap<String, Vec<IndexedRule<'a>>>,
+    universal: Vec<IndexedRule<'a>>,
+}
+
+impl<'a> RuleIndex<'a> {
+    /// Visit the rules that could possibly match `node`: those keyed on its id, on any of its
+    /// classes, on its tag, plus the universal bucket.
+    ///
+    /// Order does not matter here and we deliberately do **not** sort: the caller already sorts the
+    /// *matched declarations* by `(specificity, source order)`, so pre-sorting candidates was pure
+    /// waste (an allocation + an O(k log k) sort **per element**). Visiting via a callback also
+    /// avoids allocating a candidate Vec per element — on a large document that allocation and
+    /// sort were themselves a meaningful slice of the cascade.
+    fn for_each_candidate(&self, dom: &Dom, node: NodeId, mut f: impl FnMut(&IndexedRule<'a>)) {
+        for r in &self.universal {
+            f(r);
+        }
+        if let Some(el) = dom.element(node) {
+            if let Some(id) = el.attr("id") {
+                if let Some(v) = self.by_id.get(id) {
+                    for r in v {
+                        f(r);
+                    }
+                }
+            }
+            for c in el.classes() {
+                if let Some(v) = self.by_class.get(c) {
+                    for r in v {
+                        f(r);
+                    }
+                }
+            }
+        }
+        if let Some(tag) = dom.tag_name(node) {
+            if let Some(v) = self.by_tag.get(&tag.to_ascii_lowercase()) {
+                for r in v {
+                    f(r);
+                }
+            }
+        }
+    }
+}
+
 /// A parsed stylesheet (subset). Build one with [`Stylesheet::parse`].
 #[derive(Clone, Debug, Default)]
 pub struct Stylesheet {
@@ -1550,11 +1608,59 @@ impl MinimalCascade {
     /// Walking the flat tree is what makes shadow content styled and laid out at all, and
     /// it is also what makes inheritance correct: a slotted element inherits from the
     /// slot's flat-tree ancestors, not from its node-tree parent.
+    /// **Rule index** (EPOCH-1 remediation). Without it the cascade tested *every element against
+    /// every rule* — O(nodes × rules) — which the EPOCH-1 probe measured at 66% of the whole
+    /// pipeline on a large real page, scaling superlinearly (per-node cascade cost rose 11.6× from
+    /// 1.3k to 18.7k nodes).
+    ///
+    /// Every real engine solves this the same way: bucket each selector by the **key** of its
+    /// rightmost (subject) compound — an id if it has one, else a class, else a tag, else
+    /// universal. An element then only tests the rules whose key it could possibly match (its own
+    /// id / classes / tag, plus universal) instead of all of them. Selector matching itself is
+    /// unchanged, so results are identical — this only skips rules that provably cannot match.
+    fn build_index<'a>(sheets: &'a [ScopedSheet]) -> RuleIndex<'a> {
+        let mut ix = RuleIndex::default();
+        let mut order = 0usize;
+        for scoped in sheets {
+            for rule in &scoped.sheet.rules {
+                for sel in &rule.selectors {
+                    let entry = IndexedRule { scope: scoped.scope, sel, rule, order };
+                    // The subject compound is the rightmost part.
+                    let key = sel.parts.last();
+                    match key {
+                        // `::slotted(x)` reaches across the shadow boundary; keep it universal so
+                        // it is never index-skipped.
+                        _ if sel.slotted => ix.universal.push(entry),
+                        Some(c) if c.id.is_some() => {
+                            ix.by_id.entry(c.id.clone().unwrap()).or_default().push(entry)
+                        }
+                        Some(c) if !c.classes.is_empty() => ix
+                            .by_class
+                            .entry(c.classes[0].clone())
+                            .or_default()
+                            .push(entry),
+                        Some(c) if c.tag.is_some() => ix
+                            .by_tag
+                            .entry(c.tag.clone().unwrap().to_ascii_lowercase())
+                            .or_default()
+                            .push(entry),
+                        _ => ix.universal.push(entry),
+                    }
+                    order += 1;
+                }
+            }
+        }
+        ix
+    }
+
     pub fn cascade_scoped(&self, dom: &Dom, sheets: &[ScopedSheet]) -> StyleMap {
         let mut map = StyleMap::new();
+        // Build the rule index ONCE for the whole document (see `build_index`), instead of
+        // re-scanning every rule for every element.
+        let index = Self::build_index(sheets);
         let root = dom.root();
         for child in dom.flat_children(root) {
-            self.cascade_node(dom, child, &ComputedStyle::initial(), sheets, &mut map);
+            self.cascade_node(dom, child, &ComputedStyle::initial(), &index, &mut map);
         }
         map
     }
@@ -1567,7 +1673,7 @@ impl MinimalCascade {
         dom: &Dom,
         node: NodeId,
         parent_style: &ComputedStyle,
-        sheets: &[ScopedSheet],
+        index: &RuleIndex<'_>,
         map: &mut StyleMap,
     ) {
         let style = match dom.data(node) {
@@ -1575,25 +1681,18 @@ impl MinimalCascade {
                 let mut s = ComputedStyle::inherit_from(parent_style);
                 apply_ua_defaults(&mut s, el);
 
-                // Author rules, ordered by (specificity, source order).
+                // Author rules, ordered by (specificity, source order). Only the rules the index
+                // says could possibly match this element are tested (EPOCH-1: this is the fix for
+                // the O(nodes × rules) cascade).
                 let mut matched: Vec<(u32, usize, &Declaration)> = Vec::new();
-                let mut order = 0usize;
-                for scoped in sheets {
-                    for rule in &scoped.sheet.rules {
-                        if let Some(spec) = rule
-                            .selectors
-                            .iter()
-                            .filter(|sel| selector_matches_scoped(sel, dom, node, scoped.scope))
-                            .map(|sel| sel.specificity())
-                            .max()
-                        {
-                            for d in &rule.declarations {
-                                matched.push((spec, order, d));
-                                order += 1;
-                            }
+                index.for_each_candidate(dom, node, |cand| {
+                    if selector_matches_scoped(cand.sel, dom, node, cand.scope) {
+                        let spec = cand.sel.specificity();
+                        for d in &cand.rule.declarations {
+                            matched.push((spec, cand.order, d));
                         }
                     }
-                }
+                });
                 // Inline style has the highest weight.
                 let inline = el.attr("style").map(parse_declarations).unwrap_or_default();
 
@@ -1620,7 +1719,7 @@ impl MinimalCascade {
         // are visited once (through their slot), and unslotted light children are skipped
         // because they do not render.
         for child in dom.flat_children(node) {
-            self.cascade_node(dom, child, &style, sheets, map);
+            self.cascade_node(dom, child, &style, index, map);
         }
     }
 }

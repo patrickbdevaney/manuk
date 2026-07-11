@@ -97,6 +97,17 @@ long-lived logins).
    seam-scoped and self-contained (no half-landed features on `main`).
 6. **No local regression:** a change may not lower any axis score in `LEDGER.md` to raise
    another. If a tradeoff is unavoidable, it is an ADR in `DECISIONS.md`, not a silent regress.
+7. **PERFORMANCE FLOORS (EPOCH-1; §10.4 ratchet).** Measured, binding — a tick that regresses one
+   **fails**, exactly as a parity regression fails. Re-measure:
+   `cargo run -q -p manuk-wpt --release -- bench --pages <pages> --runs 5`
+   - **F1** cascade on a ≈19k-node page ≤ **40 ms** (EPOCH-1: 31.4)
+   - **F2** full pipeline parse→paint, same page ≤ **95 ms** (EPOCH-1: 76.4)
+   - **F3** full pipeline on a ≈1.3k-node page ≤ **10 ms** (EPOCH-1: 7.7)
+8. **NO DEAD AFFORDANCES (EPOCH-1).** Every user-reachable control must do something **observable in
+   the UI** — a log line is not a UI. A dead affordance is a CRITICAL product bug, never backlog.
+9. **STAR DEBT paydown (ADR-007).** While any `DEBT` item is outstanding, **≥1 must be retired every
+   3 ticks**; a tick that ignores an available debt item when the rate is unmet **fails**. Debt
+   outranks new capability work.
 
 ## 2. Knowledge base (the Karpathy-wiki; prioritized, cross-linked)
 

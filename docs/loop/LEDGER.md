@@ -15,14 +15,20 @@ diff choose the work. Highest expected value per ADR-004 (traversal breadth)._
 
 ## EPOCH tracker (CONSTITUTION §10 / ADR-005)
 
-- **Last epoch:** none (the loop ran 17 ticks with no systemic gate — that is the flaw ADR-005 fixes).
-- **Axis snapshot at last epoch:** n/a; baseline = Tick-0 scores (RENDER 70, JS 55, COMPAT 42,
-  PERF 55, MEM 55, STABILITY 55).
-- **Drift now:** (ΔRENDER 12 + ΔJS 22 + ΔCOMPAT 15) − (ΔPERF 3 + ΔMEM 0 + ΔSTABILITY 0) = **+46**.
-- **Threshold:** > 25 → **EPOCH-1 IS DUE.** Also (a) fires at 20 ticks.
-- **Verdict:** run **EPOCH-1** as the next major arc (it is not a tick; see §10.4). It is scheduled
-  at Tick 18 — i.e. after the current feature arc reaches a clean boundary — and its output is
-  binding: published numbers + new invariant floors in §1.
+- **Last epoch: EPOCH-1 — CLOSED (2026-07-11).** Report: [[EPOCH-1]]. 12/12 star points probed.
+  1 CRITICAL found+fixed (dead "Downloads" button), 1 MAJOR fixed (cascade **2.69×**, pipeline
+  **1.67×**), floors F1–F3 + no-dead-affordances now binding invariants (§1.7/§1.8).
+- **Axis snapshot at EPOCH-1 close:** RENDER 82, JS 77, COMPAT 57, PERF **65**, MEM 55,
+  STABILITY **58**. (Compute the next drift from HERE.)
+- **Next epoch:** earliest Tick 30 (min interval 12 ticks, §10.1), or sooner if drift > 25.
+
+### STAR DEBT (outstanding — §1.9: ≥1 retired per 3 ticks; outranks new capability work)
+
+| id | debt | star point | from |
+|----|------|-----------|------|
+| **DEBT-1** | Eliminate the 4 UI-thread `block_on`s (page load, stylesheets, fetch pump, agent panel) — each is a latent hang | RELIABILITY | EPOCH-1 |
+| **DEBT-2** | Residual cascade superlinearity (still 4.3× worse per node at 19k nodes vs 1.3k) | EFFICIENCY | EPOCH-1 |
+| **DEBT-3** | Shell-chrome headless paint — AESTHETICS/ERGONOMICS are currently **unprobeable** (a probe gap, not just a feature) | AESTHETICS | EPOCH-1 |
 
 ## Tier A — absorb outstanding beneficial work already suggested (do first)
 

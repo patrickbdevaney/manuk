@@ -23,6 +23,12 @@ fn main() {
         return;
     }
 
+    // `manuk-wpt bench` — EPOCH probe: per-stage hot-path timings + scaling (§10.2).
+    if args.first().map(String::as_str) == Some("bench") {
+        run_bench_cmd(&args[1..], &fonts);
+        return;
+    }
+
     // `manuk-wpt render` — headless screenshot of one page to PNG (autonomous visual check).
     if args.first().map(String::as_str) == Some("render") {
         run_render_cmd(&args[1..], &fonts);
@@ -158,6 +164,44 @@ fn run_render_cmd(args: &[String], fonts: &FontContext) {
             Err(e) => eprintln!("chrome screenshot failed: {e}"),
         }
     }
+}
+
+/// `manuk-wpt bench --pages a.html,b.html [--runs N] [--width W]`
+///
+/// EPOCH probe (CONSTITUTION §10.2): per-stage hot-path timings on pages of increasing size, with
+/// per-KB / per-node costs so **superlinear scaling** is visible by inspection.
+fn run_bench_cmd(args: &[String], fonts: &FontContext) {
+    let runs: usize = flag(args, "--runs").and_then(|s| s.parse().ok()).unwrap_or(5);
+    let vw: f32 = flag(args, "--width").and_then(|s| s.parse().ok()).unwrap_or(1280.0);
+    let vh: u32 = flag(args, "--height").and_then(|s| s.parse().ok()).unwrap_or(900);
+    let Some(list) = flag(args, "--pages") else {
+        eprintln!("usage: manuk-wpt bench --pages f1.html,f2.html [--runs N] [--width W]");
+        std::process::exit(2);
+    };
+    let mut rows = Vec::new();
+    for path in list.split(',') {
+        let path = path.trim();
+        let Ok(html) = std::fs::read_to_string(path) else {
+            eprintln!("skip (unreadable): {path}");
+            continue;
+        };
+        let name = std::path::Path::new(path)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("?")
+            .to_string();
+        eprintln!("benching {name} ({} KB, {runs} runs)…", html.len() / 1024);
+        rows.push(manuk_wpt::bench::bench_page(
+            &name,
+            &html,
+            &format!("file://{path}"),
+            vw,
+            vh,
+            fonts,
+            runs,
+        ));
+    }
+    manuk_wpt::bench::report(&rows);
 }
 
 /// The in-repo corpus next to this crate: `tests/wpt/corpus`.

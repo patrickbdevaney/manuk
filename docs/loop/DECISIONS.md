@@ -195,3 +195,37 @@ ticks (rate-enforced) rather than "someday"; MINORs tracked with evidence. The e
 in *duration* while the star stays comprehensively defended over *time*. That is how both
 properties hold at once: **the epoch is a checkpoint, not the only place quality happens** — the
 ratchet (floors that fail a tick) and the debt rate carry the guarantee between epochs.
+
+## ADR-008 — EPOCH-1 closed: cascade rule index, dead-affordance fix, binding floors (2026-07-11)
+
+Full report: [[EPOCH-1]]. 12/12 star points probed (coverage is never bounded, §10.3).
+
+**Headline.** The cascade was **66% of the entire pipeline** on a 19k-node real page and
+**superlinear** — per-node cost rose ×11.6 from 1.3k→18.7k nodes — because *every element was
+matched against every rule* (O(nodes × rules), no selector index). Fixed with a **rule index**
+(bucket each selector by its rightmost compound's key: id → class → tag → universal; an element
+tests only rules it could possibly match), plus removal of a per-element allocate-and-sort that was
+pure waste (the caller already sorts matched declarations).
+
+Result: cascade **84.56 → 31.40 ms (2.69×)**, whole pipeline **127.97 → 76.44 ms (1.67×)**.
+**Parity stayed 72/72** — the index only skips rules that provably cannot match, so computed styles
+are byte-identical. This is a complexity fix, not a constant-factor one.
+
+**CRITICAL found and fixed.** The COMPLETENESS probe caught a **dead affordance**: the "Downloads"
+menu item only wrote to `tracing` — a user who clicked it saw **nothing**. Per ADR-007 a critical is
+never deferred; an epoch cannot close over one. Replaced with a real Downloads panel. This is
+exactly the class of bug no feature tick would ever have caught, and it validates adding
+COMPLETENESS to the star.
+
+**Ratchet (§1.7/§1.8).** The measured budgets are now **invariants**: F1 cascade ≤ 40 ms, F2
+pipeline ≤ 95 ms, F3 mid-page ≤ 10 ms (19k / 1.3k node classes), plus **no dead affordances**. A
+tick that regresses one now **fails**, like a parity regression. That is what stops the drift from
+re-accruing.
+
+**STAR DEBT (§1.9, ≥1 per 3 ticks).** DEBT-1 the 4 UI-thread `block_on`s (latent hangs); DEBT-2
+residual cascade superlinearity; DEBT-3 shell-chrome headless paint — note DEBT-3 is a **probe
+gap**: aesthetics/ergonomics are currently *unmeasurable*, and an unprobeable star point is a hole
+in the guarantee, so it is debt rather than a feature.
+
+**Cost.** EPOCH-1 was bounded as designed: total measurement, 2 fixes, 3 deferrals. Feature velocity
+resumes immediately at Tick 18.

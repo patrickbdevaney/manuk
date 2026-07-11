@@ -211,6 +211,9 @@ struct App {
     omnibox_input: String,
     /// Hamburger menu open state (the settings/actions dropdown).
     menu_open: bool,
+    /// EPOCH-1 (COMPLETENESS): the Downloads panel. The menu item used to only log to stderr —
+    /// a user who clicked it saw NOTHING. A dead affordance is a product bug, not backlog.
+    downloads_open: bool,
     /// While dragging the scrollbar thumb: the grab offset (cursor y − thumb top).
     scrollbar_drag: Option<f32>,
     /// Text selection anchor and cursor in **document** coordinates (`None` = no selection).
@@ -335,6 +338,7 @@ impl App {
             omnibox_open: false,
             omnibox_input: String::new(),
             menu_open: false,
+            downloads_open: false,
             scrollbar_drag: None,
             sel_start: None,
             sel_end: None,
@@ -356,6 +360,11 @@ impl App {
         let w = self.viewport.width;
 
         // Open overlays intercept the click first.
+        if self.downloads_open {
+            self.downloads_open = false;
+            self.rerender();
+            return;
+        }
         if self.menu_open {
             if let Some(action) = self.menu_item_at(cx, cy, w) {
                 self.menu_open = false;
@@ -1075,6 +1084,48 @@ impl App {
             line_height: size + 3.0,
         };
 
+        // Downloads panel (EPOCH-1 COMPLETENESS fix): a real, visible surface for the menu item.
+        if self.downloads_open {
+            let pw = 460.0f32.min(w - 40.0);
+            let x = w - pw - 12.0;
+            let rows = self.downloads.len().max(1);
+            let h = 34.0 + rows as f32 * 34.0;
+            canvas.fill_rect(x, CHROME_TOP, pw, h, WHITE);
+            canvas.stroke_rect(x, CHROME_TOP, pw, h, BORDER, 1.0);
+            canvas.draw_text(&self.fonts, x + 12.0, CHROME_TOP + 22.0, "Downloads", &font(14.0, INK));
+            if self.downloads.is_empty() {
+                canvas.draw_text(
+                    &self.fonts,
+                    x + 12.0,
+                    CHROME_TOP + 52.0,
+                    &clip_text(
+                        &format!("No downloads yet — saved to {}", manuk_net::downloads::download_dir().display()),
+                        pw - 24.0,
+                    ),
+                    &font(12.0, HINT),
+                );
+            } else {
+                for (i, d) in self.downloads.iter().rev().enumerate() {
+                    let y = CHROME_TOP + 34.0 + i as f32 * 34.0;
+                    canvas.draw_text(
+                        &self.fonts,
+                        x + 12.0,
+                        y + 16.0,
+                        &clip_text(&d.filename, pw - 24.0),
+                        &font(13.0, INK),
+                    );
+                    let kb = (d.bytes as f64 / 1024.0).max(0.1);
+                    canvas.draw_text(
+                        &self.fonts,
+                        x + 12.0,
+                        y + 29.0,
+                        &clip_text(&format!("{kb:.1} KB — {}", d.path.display()), pw - 24.0),
+                        &font(11.0, HINT),
+                    );
+                }
+            }
+        }
+
         if self.omnibox_open {
             let sugg = self.current_suggestions();
             if !sugg.is_empty() {
@@ -1499,14 +1550,10 @@ impl App {
                 self.omnibox_input.clear();
             }
             MenuAction::Downloads => {
-                if self.downloads.is_empty() {
-                    tracing::info!("downloads: none yet (saved to {})", manuk_net::downloads::download_dir().display());
-                } else {
-                    tracing::info!("downloads ({}):", self.downloads.len());
-                    for d in &self.downloads {
-                        tracing::info!("  {} ({} bytes) -> {}", d.filename, d.bytes, d.path.display());
-                    }
-                }
+                // Show a real panel. (Before EPOCH-1 this only wrote to the log — the user saw
+                // nothing at all, which is a dead affordance.)
+                self.downloads_open = !self.downloads_open;
+                self.rerender();
             }
             MenuAction::Find => {
                 self.find_open = true;
