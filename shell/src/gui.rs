@@ -82,6 +82,10 @@ struct App {
     page: Option<Page>,
     viewport: Viewport,
     scroll_y: f32,
+    /// Set when the on-screen content is stale (scroll/edit/relayout). The actual CPU paint
+    /// + texture upload is deferred to the next `RedrawRequested`, so a burst of input events
+    /// in one frame coalesces into a single paint instead of re-rasterizing per event.
+    needs_paint: bool,
     browser: Browser,
     tab_id: TabId,
     /// Rolling GPU-present frame timer (§8 metric #4) — real on-screen frames.
@@ -186,6 +190,7 @@ impl App {
             page: None,
             viewport: Viewport::new(width as f32, 768.0),
             scroll_y: 0.0,
+            needs_paint: true,
             browser,
             tab_id,
             frame: manuk_compositor::FrameTimer::new(240),
@@ -442,7 +447,18 @@ impl App {
         }
     }
 
+    /// Mark the frame stale and ask winit for a redraw; the paint itself happens in
+    /// `RedrawRequested` (see [`Self::paint_and_upload`]). Cheap — safe to call per event.
     fn rerender(&mut self) {
+        self.needs_paint = true;
+        if let Some(win) = &self.window {
+            win.request_redraw();
+        }
+    }
+
+    /// Do the actual CPU paint of the current page/scroll/overlays and upload it to the GPU
+    /// texture. Called once per frame from `RedrawRequested` when `needs_paint` is set.
+    fn paint_and_upload(&mut self) {
         let Some(gpu) = &self.gpu else {
             return;
         };
@@ -474,9 +490,6 @@ impl App {
 
         if let Some(gpu) = &mut self.gpu {
             gpu.upload(&canvas);
-        }
-        if let Some(win) = &self.window {
-            win.request_redraw();
         }
     }
 
@@ -1180,6 +1193,12 @@ impl ApplicationHandler for App {
                 }
             }
             WindowEvent::RedrawRequested => {
+                // Coalesced paint: input bursts only set `needs_paint`; do the one CPU paint
+                // + texture upload here, then present.
+                if self.needs_paint {
+                    self.paint_and_upload();
+                    self.needs_paint = false;
+                }
                 if let Some(gpu) = &mut self.gpu {
                     self.frame.begin();
                     if let Err(e) = gpu.draw() {
