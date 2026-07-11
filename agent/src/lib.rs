@@ -67,6 +67,8 @@ pub mod concurrency;
 /// "traverse at scale" capability (freshness-skip → fetch → triage → record).
 pub mod traversal;
 
+pub mod targeting;
+
 /// Default model — a Groq-hosted multimodal model (overridable via `GROQ_MODEL`).
 pub const DEFAULT_MODEL: &str = "qwen/qwen3.6-27b";
 
