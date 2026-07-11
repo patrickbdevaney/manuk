@@ -60,9 +60,20 @@ fn fs(in: VsOut) -> @location(0) vec4<f32> {
 "#;
 
 /// Launch the browser window pointed at `url`, with an initial content width.
+/// R1 — a message delivered back to the UI thread when off-thread navigation work finishes.
+/// The `gen` tags the navigation it belongs to, so a result from a superseded/cancelled load
+/// is ignored (the user navigated again before it returned).
+enum NavEvent {
+    /// The main document finished fetching off-thread: `(html, final_url)` or an error string.
+    Fetched { gen: u64, result: std::result::Result<(String, String), String> },
+}
+
 pub fn run(url: String, width: u32, measure_frames: Option<usize>) -> Result<()> {
-    let event_loop = EventLoop::new().context("creating winit event loop")?;
-    let mut app = App::new(url, width, measure_frames);
+    let event_loop = EventLoop::<NavEvent>::with_user_event()
+        .build()
+        .context("creating winit event loop")?;
+    let proxy = event_loop.create_proxy();
+    let mut app = App::new(url, width, measure_frames, proxy);
     event_loop.run_app(&mut app).context("running event loop")?;
     Ok(())
 }
@@ -111,6 +122,13 @@ struct App {
     /// layout + scroll) so Back/Forward restores instantly instead of re-running the whole
     /// pipeline. Bounded LRU (most-recent last).
     bfcache: Vec<(String, BfEntry)>,
+    /// R1 — proxy to wake the event loop when off-thread navigation work completes.
+    proxy: winit::event_loop::EventLoopProxy<NavEvent>,
+    /// R1 — the current navigation generation. Incremented per navigation; a `NavEvent` with
+    /// a stale `gen` (the user navigated again first) is discarded, giving free cancellation.
+    nav_gen: u64,
+    /// R1 — a navigation's main-document fetch is in flight off-thread (chrome stays live).
+    loading: bool,
     bookmarks: Bookmarks,
     settings: Settings,
     zoom: f32,
@@ -165,7 +183,12 @@ enum PageAction {
 }
 
 impl App {
-    fn new(url: String, width: u32, measure_frames: Option<usize>) -> Self {
+    fn new(
+        url: String,
+        width: u32,
+        measure_frames: Option<usize>,
+        proxy: winit::event_loop::EventLoopProxy<NavEvent>,
+    ) -> Self {
         let mut browser = Browser::new(8);
 
         // §5 — restore the prior session **hibernated** (no fetches), unless this is a
@@ -219,6 +242,9 @@ impl App {
             modifiers: ModifiersState::empty(),
             history: History::new(),
             bfcache: Vec::new(),
+            proxy,
+            nav_gen: 0,
+            loading: false,
             bookmarks: Bookmarks::new(),
             settings: Settings::default(),
             zoom: 1.0,
@@ -431,47 +457,70 @@ impl App {
         }
     }
 
-    fn load_page(&mut self, width: u32, height: u32) {
-        // The home / new-tab page has no document — just chrome over a blank canvas.
+    /// R1 — begin loading `self.url`. The **main-document fetch** (the dominant blocking wait:
+    /// DNS + TLS + TTFB + download) runs **off-thread** on the shared runtime; the UI thread
+    /// keeps rendering the current page and stays live to chrome input. On completion a
+    /// `NavEvent::Fetched` wakes the event loop and [`Self::finish_load`] builds the page. The
+    /// blank/home page has no document and is handled inline (instant). Each fetch is tagged
+    /// with `nav_gen`, so navigating again cancels the stale one (its result is discarded).
+    fn start_fetch(&mut self) {
+        let (w, h) = match &self.gpu {
+            Some(g) => (g.config.width, g.config.height),
+            None => (self.width, 768),
+        };
         if self.url.is_empty() || self.url == "about:blank" {
             self.page = None;
-            self.viewport = Viewport::new(width as f32, (height as f32 - CHROME_HEIGHT).max(1.0));
-            if let Some(w) = &self.window {
-                w.set_title("New Tab — manuk");
+            self.loading = false;
+            self.viewport = Viewport::new(w as f32, (h as f32 - CHROME_HEIGHT).max(1.0));
+            if let Some(win) = &self.window {
+                win.set_title("New Tab — manuk");
             }
+            self.scroll_y = 0.0;
+            self.rerender();
             return;
         }
-        match self.rt.block_on(fetch_html(&self.url)) {
-            Ok((html, final_url)) => {
-                // `load_async` also fetches external `<script src>` (under the spidermonkey
-                // feature) so a page's real scripts run.
-                let mut page = self
-                    .rt
-                    .block_on(Page::load_async(&html, &final_url, &self.fonts, width as f32));
-                // Fetch + apply render-blocking external stylesheets (`<link rel=stylesheet>`)
-                // and relayout — the interactive path previously loaded no external CSS at
-                // all, so styled pages rendered with only their inline/UA styles.
-                let sheets = self
-                    .rt
-                    .block_on(page.fetch_and_apply_stylesheets(&self.fonts, width as f32));
-                if sheets > 0 {
-                    tracing::info!(sheets, "applied external stylesheet(s)");
-                }
-                if let Some(w) = &self.window {
-                    w.set_title(&format!("{} — manuk", page.title));
-                }
-                self.viewport = Viewport::new(width as f32, (height as f32 - CHROME_HEIGHT).max(1.0));
-                self.viewport.content_height = page.content_height;
-                self.browser.set_loaded(
-                    self.tab_id,
-                    page.final_url.clone(),
-                    page.title.clone(),
-                    page.content_height,
-                );
-                self.page = Some(page);
-            }
-            Err(e) => tracing::error!("load {}: {e:#}", self.url),
+        self.nav_gen += 1;
+        let gen = self.nav_gen;
+        self.loading = true;
+        let url = self.url.clone();
+        let proxy = self.proxy.clone();
+        self.rt.spawn(async move {
+            let result = fetch_html(&url).await.map_err(|e| format!("{e:#}"));
+            let _ = proxy.send_event(NavEvent::Fetched { gen, result });
+        });
+        self.rerender(); // keep the old page visible; chrome stays responsive during the fetch
+    }
+
+    /// R1 — build the page from the off-thread-fetched document and swap it in (on the UI
+    /// thread, since `Page`/`FontContext` are `!Send`). External-stylesheet/image fetches
+    /// still `block_on` here (a shorter, HTTP-cached + preload-warmed wait — off-threading
+    /// that phase too is the documented follow-on).
+    fn finish_load(&mut self, html: String, final_url: String) {
+        let (w, h) = match &self.gpu {
+            Some(g) => (g.config.width, g.config.height),
+            None => (self.width, 768),
+        };
+        let mut page = self.rt.block_on(Page::load_async(&html, &final_url, &self.fonts, w as f32));
+        let sheets = self.rt.block_on(page.fetch_and_apply_stylesheets(&self.fonts, w as f32));
+        if sheets > 0 {
+            tracing::info!(sheets, "applied external stylesheet(s)");
         }
+        if let Some(win) = &self.window {
+            win.set_title(&format!("{} — manuk", page.title));
+        }
+        page.relayout_zoomed(&self.fonts, w as f32, self.zoom);
+        self.viewport = Viewport::new(w as f32, (h as f32 - CHROME_HEIGHT).max(1.0));
+        self.viewport.content_height = page.content_height;
+        self.browser.set_loaded(
+            self.tab_id,
+            page.final_url.clone(),
+            page.title.clone(),
+            page.content_height,
+        );
+        self.page = Some(page);
+        self.scroll_y = 0.0;
+        self.loading = false;
+        self.rerender();
     }
 
     /// Mark the frame stale and ask winit for a redraw; the paint itself happens in
@@ -667,18 +716,8 @@ impl App {
     /// outgoing page into the bfcache so a later Back/Forward to it is instant.
     fn goto_no_history(&mut self, url: &str) {
         self.stash_current();
-        let (w, h) = match &self.gpu {
-            Some(g) => (g.config.width, g.config.height),
-            None => (self.width, 768),
-        };
         self.url = url.to_string();
-        self.load_page(w, h);
-        if let Some(page) = &mut self.page {
-            page.relayout_zoomed(&self.fonts, w as f32, self.zoom);
-            self.viewport.content_height = page.content_height;
-        }
-        self.scroll_y = 0.0;
-        self.rerender();
+        self.start_fetch(); // off-thread; finish_load swaps the page in when the fetch returns
     }
 
     /// R2 — move the current page into the bfcache (bounded LRU), keyed by its URL. A no-op
@@ -1170,7 +1209,27 @@ impl App {
     }
 }
 
-impl ApplicationHandler for App {
+impl ApplicationHandler<NavEvent> for App {
+    /// R1 — off-thread navigation work landed. Discard stale results (the user navigated
+    /// again), else build + swap in the page on this (UI) thread.
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: NavEvent) {
+        match event {
+            NavEvent::Fetched { gen, result } => {
+                if gen != self.nav_gen {
+                    return; // superseded/cancelled navigation
+                }
+                self.loading = false;
+                match result {
+                    Ok((html, final_url)) => self.finish_load(html, final_url),
+                    Err(e) => {
+                        tracing::error!("load {}: {e}", self.url);
+                        self.rerender();
+                    }
+                }
+            }
+        }
+    }
+
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_some() {
             return;
@@ -1202,7 +1261,7 @@ impl ApplicationHandler for App {
                 return;
             }
         }
-        self.load_page(size.width.max(1), size.height.max(1));
+        self.start_fetch();
         self.history.push(self.url.clone());
         // On the home / new-tab page, focus the address bar so the user can type immediately.
         if self.url == "about:blank" {
