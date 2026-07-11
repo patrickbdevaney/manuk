@@ -584,16 +584,37 @@ pub async fn request(
     send_once(method, &u, headers, body).await
 }
 
+/// Process-global RFC-6265 cookie jar shared by every request (U6). Single-profile for now;
+/// per-container/site partitioning (via `storage.rs`) and disk persistence are follow-ons.
+fn cookie_jar() -> &'static std::sync::Mutex<cookies::CookieJar> {
+    static JAR: std::sync::OnceLock<std::sync::Mutex<cookies::CookieJar>> = std::sync::OnceLock::new();
+    JAR.get_or_init(|| std::sync::Mutex::new(cookies::CookieJar::new()))
+}
+
 async fn send_once(
     method: &str,
     url: &Url,
     headers: &[(&str, &str)],
     body: Bytes,
 ) -> Result<Response> {
-    let resp = send_raw(method, url, headers, body).await?;
+    // Attach any stored cookies for this URL (so a logged-in session stays logged in).
+    let cookie = cookie_jar().lock().ok().and_then(|j| j.cookie_header(url));
+    let mut hdrs: Vec<(&str, &str)> = headers.to_vec();
+    if let Some(c) = &cookie {
+        hdrs.push(("cookie", c.as_str()));
+    }
+    let resp = send_raw(method, url, &hdrs, body).await?;
     let status = resp.status().as_u16();
     let http_version = resp.version().into();
     let headers_vec = collect_headers(&resp);
+    // Store any Set-Cookie the server sent.
+    if let Ok(mut jar) = cookie_jar().lock() {
+        for (k, v) in &headers_vec {
+            if k.eq_ignore_ascii_case("set-cookie") {
+                jar.store(url, v);
+            }
+        }
+    }
     let encoding = content_encoding(&resp);
 
     let decoded = read_body_decoded(resp.into_body(), encoding.as_deref()).await?;
