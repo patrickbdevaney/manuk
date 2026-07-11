@@ -141,7 +141,12 @@ pub enum TextAlign {
 pub enum WhiteSpace {
     Normal,
     NoWrap,
+    /// `pre` — preserve newlines AND runs of spaces; never wrap. (`<pre>`, code blocks.)
     Pre,
+    /// `pre-wrap` — preserve newlines and spaces, but still wrap long lines.
+    PreWrap,
+    /// `pre-line` — preserve newlines, collapse runs of spaces, wrap.
+    PreLine,
 }
 
 /// `box-sizing`: whether `width`/`height` size the content box (CSS default) or the
@@ -2006,7 +2011,9 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         "white-space" => {
             s.white_space = match v {
                 "nowrap" => WhiteSpace::NoWrap,
-                "pre" | "pre-wrap" | "pre-line" => WhiteSpace::Pre,
+                "pre" => WhiteSpace::Pre,
+                "pre-wrap" => WhiteSpace::PreWrap,
+                "pre-line" => WhiteSpace::PreLine,
                 _ => WhiteSpace::Normal,
             }
         }

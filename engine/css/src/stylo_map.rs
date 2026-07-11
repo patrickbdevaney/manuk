@@ -388,12 +388,16 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         use stylo::properties::longhands::{text_wrap_mode, white_space_collapse};
         let collapse = cv.clone_white_space_collapse();
         let wrap = cv.clone_text_wrap_mode();
-        s.white_space = if collapse == white_space_collapse::computed_value::T::Preserve {
-            crate::WhiteSpace::Pre
-        } else if wrap == text_wrap_mode::computed_value::T::Nowrap {
-            crate::WhiteSpace::NoWrap
-        } else {
-            crate::WhiteSpace::Normal
+        let nowrap = wrap == text_wrap_mode::computed_value::T::Nowrap;
+        s.white_space = match collapse {
+            // `pre` and `pre-wrap` both preserve newlines; they differ only in whether a long line
+            // may still wrap. Collapsing them lost that distinction — and mapping `pre-line` to
+            // `normal` lost its newlines entirely.
+            white_space_collapse::computed_value::T::Preserve if nowrap => crate::WhiteSpace::Pre,
+            white_space_collapse::computed_value::T::Preserve => crate::WhiteSpace::PreWrap,
+            white_space_collapse::computed_value::T::PreserveBreaks => crate::WhiteSpace::PreLine,
+            _ if nowrap => crate::WhiteSpace::NoWrap,
+            _ => crate::WhiteSpace::Normal,
         };
     }
 

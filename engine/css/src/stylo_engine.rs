@@ -139,7 +139,10 @@ thead, tbody, tfoot { display: table-row-group; }
 tr { display: table-row; }
 td, th { display: table-cell; padding: 1px; }
 caption { display: table-caption; }
-pre { font-family: monospace; }
+/* `pre` preserves whitespace. Chrome's UA sheet says so; ours did not, so every code block on
+   the web folded its newlines into spaces and rendered as one endless line. */
+pre { font-family: monospace; white-space: pre; }
+textarea { white-space: pre-wrap; }
 code, kbd, samp { font-family: monospace; }
 "#;
 

@@ -2350,6 +2350,60 @@ impl Ctx<'_> {
                 // `white-space` is inherited, so the text node carries it. `nowrap` and `pre`
                 // both suppress wrapping between words.
                 let no_wrap = matches!(cs.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre);
+                // `pre-wrap` / `pre-line` preserve newlines but still wrap long lines: break at each
+                // newline, then split the line into words as usual.
+                if matches!(cs.white_space, WhiteSpace::PreWrap | WhiteSpace::PreLine) {
+                    for (i, line) in t.split('\n').enumerate() {
+                        if i > 0 {
+                            out.push(InlineItem::Break { height: style.line_height, node: owner });
+                            *pending_space = false;
+                            *first = true;
+                        }
+                        let mut buf = String::new();
+                        for ch in line.chars() {
+                            if ch.is_whitespace() {
+                                if !buf.is_empty() {
+                                    push_word(out, &mut buf, style, pending_space, first, owner, false);
+                                }
+                                *pending_space = true;
+                            } else {
+                                buf.push(ch);
+                            }
+                        }
+                        if !buf.is_empty() {
+                            push_word(out, &mut buf, style, pending_space, first, owner, false);
+                        }
+                    }
+                    return;
+                }
+                // `white-space: pre` preserves BOTH newlines and runs of spaces. Folding them away
+                // like ordinary whitespace turns every code block into one endless line.
+                if cs.white_space == WhiteSpace::Pre {
+                    for (i, line) in t.split('\n').enumerate() {
+                        if i > 0 {
+                            out.push(InlineItem::Break {
+                                height: style.line_height,
+                                node: owner,
+                            });
+                            *pending_space = false;
+                            *first = true;
+                        }
+                        if line.is_empty() {
+                            continue;
+                        }
+                        // One word per line: `pre` never wraps, and the literal text (indentation
+                        // included) is measured as written.
+                        out.push(InlineItem::Word {
+                            text: line.to_string(),
+                            style,
+                            space_before: false,
+                            node: owner,
+                            no_wrap: true,
+                        });
+                        *first = false;
+                    }
+                    return;
+                }
                 let mut buf = String::new();
                 for ch in t.chars() {
                     if ch.is_whitespace() {
@@ -2368,6 +2422,18 @@ impl Ctx<'_> {
             NodeData::Element(_) => {
                 let disp = self.styles.get(&node).map(|s| s.display);
                 if disp == Some(Display::None) {
+                    return;
+                }
+                // `<br>` — a forced line break, and nothing else.
+                if self.dom.tag_name(node) == Some("br") {
+                    let lh = self
+                        .styles
+                        .get(&node)
+                        .map(|s| s.line_height)
+                        .unwrap_or(16.0);
+                    out.push(InlineItem::Break { height: lh, node: Some(node) });
+                    *pending_space = false;
+                    *first = true;
                     return;
                 }
                 // An `inline-block` (or inline-flex/grid) is an *atomic* inline box: lay it
@@ -2491,6 +2557,34 @@ impl Ctx<'_> {
         // Tracks whether the item most recently placed on the line forbids a wrap after it.
         let mut prev_no_wrap = false;
         for item in items {
+            // A forced break (`<br>`, a newline in `pre`) closes the current line immediately and
+            // starts the next one — it is not laid out *on* a line, it *ends* one. An empty line
+            // (two breaks in a row, a blank line in a code block) still occupies its line height,
+            // so an empty `cur` opens a band and closes it straight away rather than collapsing.
+            if let InlineItem::Break { height, node } = item {
+                if cur.is_empty() {
+                    let (l, w) = open_band(&mut y, height);
+                    line_left = l;
+                    line_avail = w;
+                    let key = FontKey { family: FontFamily::SansSerif, bold: false, italic: false };
+                    cur.push(LineFrag {
+                        x: 0.0,
+                        width: 0.0,
+                        text: String::new(),
+                        style: TextStyle { font_key: key, font_size: 16.0, color: Rgba::BLACK, line_height: height },
+                        ascent: 0.0,
+                        descent: 0.0,
+                        node,
+                        atomic: None,
+                        atomic_h: 0.0,
+                        valign: VerticalAlign::Baseline,
+                    });
+                }
+                y = close_line(&mut frags, &mut atomic_boxes, &mut cur, y, line_left, line_avail, align, self.fonts);
+                pen = 0.0;
+                prev_no_wrap = false;
+                continue;
+            }
             // Per-item main-axis advance, leading space, cross-axis height, and the LineFrag
             // builder (positioned once the line's x is known).
             let (advance, space_w, est_h, no_wrap, make_frag): (f32, f32, f32, bool, Box<dyn FnOnce(f32) -> LineFrag>) =
@@ -2545,6 +2639,8 @@ impl Ctx<'_> {
                             }),
                         )
                     }
+                    // Handled above: a break never becomes a fragment on the line it ends.
+                    InlineItem::Break { .. } => unreachable!("Break is consumed before this match"),
                     InlineItem::Spacer { width, node, space_before, report_height } => {
                         // Inline padding/border: occupies `width`, paints nothing, but its
                         // (empty-text) fragment carries the owning element's geometry.
@@ -2731,6 +2827,19 @@ enum InlineItem {
         node: Option<NodeId>,
         space_before: bool,
         report_height: f32,
+    },
+    /// A **forced line break** — `<br>`, or a newline inside `white-space: pre`.
+    ///
+    /// Without this the engine had no way to end a line early at all. `<br>` did nothing, and every
+    /// `<pre>` code block collapsed onto a single line: the newlines were folded to spaces like any
+    /// other whitespace. On a technical article that is most of the page's height — Wikipedia's Rust
+    /// article rendered 20% shorter than Chrome's, and every element below the first code sample was
+    /// thousands of pixels out of place.
+    Break {
+        /// The line box this break terminates still has this height (an empty `<br>` line is not
+        /// zero-height).
+        height: f32,
+        node: Option<NodeId>,
     },
 }
 
@@ -3584,6 +3693,33 @@ mod tests {
             (items[0] - items[1]).abs() < 1.0,
             "both flex items must stay on ONE line; an auto-margin child must not measure \
              half a million pixels wide and wrap its sibling"
+        );
+    }
+    /// Regression: `<pre>` preserves newlines, and `<br>` forces a line break. The engine had **no
+    /// forced-break concept at all**: `<br>` did nothing, and every code block folded its newlines
+    /// into spaces and rendered as one endless line. On Wikipedia's Rust article — which is mostly
+    /// code samples — that made the page 20% shorter than Chrome's and threw everything below the
+    /// first code block thousands of pixels out of place.
+    #[test]
+    fn pre_preserves_newlines_and_br_breaks_lines() {
+        let html = "<pre id=\"p\">a\nb\nc</pre><p id=\"q\">a<br>b<br>c</p>";
+        let css = "pre{white-space:pre;line-height:20px} p{line-height:20px}";
+        let (dom, root) = layout_html(html, css, 800.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let pre_h = rects[&by_id("p")].height;
+        let p_h = rects[&by_id("q")].height;
+        assert!(
+            pre_h >= 55.0,
+            "a 3-line <pre> must be ~3 line boxes tall, got {pre_h}px (newlines were folded away)"
+        );
+        assert!(
+            p_h >= 55.0,
+            "two <br>s make three lines, got {p_h}px (<br> did nothing)"
         );
     }
 }
