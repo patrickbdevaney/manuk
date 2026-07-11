@@ -5,11 +5,11 @@ T=times touched. `score = V/C + 1.5*sqrt(ln(1+TICKS)/(1+T)) + 1.0*(U/10)`. Every
 the highest-U item. Update T/status/scores each tick; add items on reflection; mark dead ends
 `superseded`. Verify class per §7: HEADLESS / GUI / EXTERNAL / MEASURE._
 
-**TICKS = 6** (global tick counter; increment each tick). _Ticks done: 1 L14-slice, 2 L01
-fetch/XHR, 3 L10 pushState, 4 L04 downloads, 5 L32 prerender. Tick 6 UCB pick: **L03 cross-window
-`postMessage` + `window.opener`** (top score ~4.4; completes the OAuth-popup story begun by
-window.open — an explicit needs-list item — and is HEADLESS-verifiable). NOTE: Tick 10 is the
-next forced-highest-U tick._
+**TICKS = 7** (global tick counter; increment each tick). _Ticks done: 1 L14-slice, 2 L01
+fetch/XHR, 3 L10 pushState, 4 L04 downloads, 5 L32 prerender, 6 L03 postMessage/opener. Tick 7
+UCB pick: **L02 MutationObserver** (top score ~4.4; the next SPA-compat lever — frameworks mutate
+the DOM post-fetch and watch it with observers; absent, their code ReferenceErrors). NOTE: Tick
+10 is the next forced-highest-U tick._
 
 ## Tier A — absorb outstanding beneficial work already suggested (do first)
 
@@ -20,7 +20,8 @@ STATE weak frontiers. High V, mostly known ⇒ high exploit ⇒ front-loaded.
 |----|--------|------|---|---|---|---|--------|--------|
 | L01 | `fetch()` + `XMLHttpRequest` in page JS (SPA data loading) | JS/COMPAT | 10 | 5 | 4 | 1 | **done** (Tick 2) | HEADLESS |
 | L02 | `MutationObserver` (SPAs mutate DOM post-load) | JS/COMPAT | 9 | 5 | 4 | 0 | backlog | HEADLESS |
-| L03 | Cross-window `postMessage` + `window.opener` (finish OAuth popup return) | JS | 9 | 5 | 5 | 0 | backlog | HEADLESS |
+| L03 | Cross-window `postMessage` + `window.opener` (finish OAuth popup return) | JS | 9 | 5 | 5 | 1 | **done** (Tick 6) | HEADLESS |
+| L03b | `BroadcastChannel` + `MessageChannel`/`MessagePort` + full structured clone (Blob/Map/Set) + `window.name` targeting | JS | 4 | 6 | 5 | 0 | backlog (L03 follow-on) | HEADLESS |
 | L04 | Downloads to disk (Content-Disposition, stream to file, manager entry) | NET/UI | 8 | 4 | 3 | 1 | **done** (Tick 4) | HEADLESS |
 | L04b | `<a download>` attribute trigger + streaming-to-disk progress shelf UI + open/reveal | NET/UI | 4 | 5 | 3 | 0 | backlog (L04 follow-on) | GUI |
 | L05 | File uploads (multipart from `type=file`) | NET/JS | 7 | 5 | 4 | 0 | backlog | HEADLESS |
@@ -62,7 +63,8 @@ clipboard+selection · tab-strip · hamburger-menu · suggestions/history-dropdo
 position:sticky · grid-template-areas · UAX#14-linebreak · preconnect(R4) · AG5-latency ·
 MEM3-binary-size · window.open→new-tab · **fetch()+XHR real Promises (L01, Tick 2)** ·
 **history.pushState/replaceState/popstate + location (L10, Tick 3)** · **downloads to disk
-(L04, Tick 4)** · **predictive prerender into bfcache (L32, Tick 5)**.
+(L04, Tick 4)** · **predictive prerender into bfcache (L32, Tick 5)** · **cross-window
+postMessage + window.opener (L03, Tick 6)**.
 
 ## Superseded / blocked
 

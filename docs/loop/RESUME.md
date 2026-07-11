@@ -4,8 +4,8 @@ _A fresh session reads [[CONSTITUTION]] then this file, and resumes at the named
 
 ## Where the loop is
 
-- **TICKS = 6** (about to run Tick 6). Ticks 1 (`1a717d0`), 2 (`91a22bb`), 3 (`7f1b35d`),
-  4 (`d6022ff`), 5 (`c6925f7`) done + committed.
+- **TICKS = 7** (about to run Tick 7). Ticks 1 (`1a717d0`), 2 (`91a22bb`), 3 (`7f1b35d`),
+  4 (`d6022ff`), 5 (`c6925f7`), 6 (`7c4a1f6`) done + committed.
 - Working tree: clean, on `main`, pushed. Parity 72/72. Disk: 41G free (86%); nuke
   `target/debug` only if free < 25G.
 - Key architecture notes for future ticks:
@@ -13,52 +13,58 @@ _A fresh session reads [[CONSTITUTION]] then this file, and resumes at the named
     loop is `event_loop::run_deferred` — microtasks + timers run, but `fetch`/XHR stay queued for
     the host. Host (shell `pump_fetches`) drains via `Page::take_fetches()`, performs I/O on
     `manuk-net`, settles via `Page::resolve_fetch`.
-  - Same host-queue pattern for `window.open` (`take_pending_window_opens`) and `history`
-    (`take_pending_history` / `handle_history_ops`). **Reuse it for any new host-visible surface
-    (postMessage, MutationObserver delivery) — never add a parallel queue** (that mistake cost a
-    rework in Tick 2).
+  - **Host-queue + re-enter is the universal pattern.** A native pushes to a thread-local; the
+    host drains (`take_*`) after dispatch/load and calls back into a `PageContext` method that
+    evals a delivery shim + `run_deferred`. Used by: `fetch`, `window.open`
+    (`take_pending_window_opens`), `history` (`take_pending_history`/`handle_history_ops`),
+    `postMessage` (`take_messages`/`pump_messages` → `deliver_message`). **Reuse it — never add a
+    parallel queue** (that mistake cost a rework in Tick 2).
+  - Window events (popstate, message, load) fire via the window-level registry
+    `__fireWindowEvent(type, ev)` in the prelude (added Tick 3) — reuse it for any window event.
   - The document URL reaches JS via `install(..., doc_url)` → `%URL%` in `WINDOW_PRELUDE`.
+    Per-document window identity (id + opener) is seeded post-load via `PageContext::set_identity`.
   - Navigation returns `manuk_page::Loaded::{Document, Download}` from `fetch_document`; the shell
-    branches in `NavEvent::{Fetched, Prewarmed}`. Downloads policy = `manuk_net::downloads`;
-    prerender predictor = `shell/prerender.rs` (pure). `build_page` builds a Page off fetched HTML
+    branches in `NavEvent::{Fetched, Prewarmed}`. `build_page` builds a Page off fetched HTML
     (shared by finish_load + finish_prewarm); prewarmed pages live in the bfcache; `goto` checks
     it first for an instant click.
 
-## Next action (Tick 6)
+## Next action (Tick 7)
 
-UCB pick: **L03 — cross-window `postMessage` + `window.opener`** (top score ~4.4; completes the
-OAuth-popup story `window.open` began — an explicit needs-list item — and is HEADLESS-verifiable).
-Design (route messages between the two tabs' PageContexts through the host — reuse the host-queue
-pattern, do NOT add a parallel queue):
+UCB pick: **L02 — `MutationObserver`** (top score ~4.4; the next SPA-compat lever — frameworks
+mutate the DOM after a fetch and observe it; without the API their code throws at construction).
+Design (emit records at the reflector mutation sites, deliver as a microtask):
 
-1. `window.open` already queues the URL and the host opens a new tab with its own `PageContext`.
-   Give the opener a stable handle to the opened tab and vice-versa (an `opener` tab-id link in
-   the shell's `Browser`/tab model), plus a JS `window.opener` shim and the returned popup handle
-   carrying a target tab-id.
-2. `postMessage(msg, targetOrigin)` on a window handle (opener or popup): the JS shim serializes
-   `msg` (structured-clone-lite: JSON) and calls a native `__postMessage(targetTabId, json,
-   origin)` that queues `(from_tab, to_tab, json, origin)` to a thread-local drained by the host
-   (`take_pending_messages`). The host routes it to the destination tab's `PageContext` via a new
-   `PageContext::deliver_message(data_json, origin, source_ref)` that fires a `message`
-   `MessageEvent` (`{data, origin, source}`) through the window event registry (`__fireWindowEvent`
-   — already built in Tick 3), then `run_deferred`.
-3. `engine/js` + `engine/page` wrappers (`take_messages`, `deliver_message`) + shell pump
-   (`pump_messages`, called alongside `pump_fetches`/`handle_history_ops` after dispatch + load).
-   Respect `targetOrigin` ('*' or an exact origin match).
-4. Verify HEADLESS: drive two `PageContext`s directly — one registers `onmessage`, the other
-   `deliver_message`s a payload; assert the handler ran with the right `data`/`origin`. (A single
-   context can also self-post to test the MessageEvent shape.) Parity must stay 72/72.
+1. `engine/js/src/dom_bindings.rs`: the DOM-mutating reflector methods (`setAttribute`/
+   `removeAttribute`, the `textContent`/`innerHTML` setters, `appendChild`/`insertBefore`/
+   `removeChild`/`replaceChild`) already run through native fns — have each emit a mutation
+   record to a JS-side pending list: `__recordMutation(type, targetNid, attrName, oldValue,
+   addedNids, removedNids)`. (Find the exact set with `grep -n "fn .*append\|set_attribute\|
+   text_content\|remove_child" engine/js/src/dom_bindings.rs`.)
+2. Prelude: a real `MutationObserver` class — `observe(targetNode, options)` records
+   `{target, childList, attributes, characterData, subtree, attributeOldValue,
+   characterDataOldValue, attributeFilter}`; `disconnect()`; `takeRecords()`. A microtask
+   checkpoint (queue via the existing `queueMicrotask`) drains `__pendingMutations`, builds
+   `MutationRecord`s, and dispatches the batched records to each observer whose target/subtree +
+   options match. Reuse the node reflectors (`__nodes`) to turn nids back into nodes.
+3. No host round-trip needed (mutations are same-document + synchronous), so this lives entirely
+   in `engine/js` — but it must run inside `PageContext` (load + dispatch + resolve paths), which
+   already drain microtasks via `run_deferred`. Ensure records queued during a dispatch are
+   delivered before that call returns.
+4. Verify HEADLESS: add a scenario to the page interactive test — a script observes a node, then
+   a click handler does `el.setAttribute('data-x','1')` + `el.appendChild(...)`; after
+   `dispatch_click`, assert the observer callback ran with records of the right `type`/`target`/
+   `addedNodes`. Also test `attributeOldValue` + `subtree`. Parity must stay 72/72.
 
-Follow-ons: `BroadcastChannel`; `MessageChannel`/`MessagePort`; full structured clone (Blob/Map/
-Set); `window.name` targeting.
+Follow-ons: `characterData` oldValue nuance; observer GC lifetime; `IntersectionObserver`/
+`ResizeObserver` (separate ticks).
 
 ## Then keep going
 
-After Tick 6, re-run §5 UCB (normal exploit/explore; **Tick 10** is the next forced-highest-U).
-Strong Tier-A candidates still open: L02 MutationObserver, L11 responsive `@media`, L06 password
-autofill (EXTERNAL keyring), L07 semantic history, L09 DevTools (GUI). Each tick: implement →
-verify (build + parity 72/72 + test) → disk hygiene → commit+push (co-author line) → update
-LEDGER/STATE/JOURNAL/RESUME → next.
+After Tick 7, re-run §5 UCB (normal exploit/explore; **Tick 10** is the next forced-highest-U).
+Strong Tier-A candidates still open: L11 responsive `@media`, L06 password autofill (EXTERNAL
+keyring), L07 semantic history, L09 DevTools (GUI), L13 off-thread external CSS/image. Each tick:
+implement → verify (build + parity 72/72 + test) → disk hygiene → commit+push (co-author line) →
+update LEDGER/STATE/JOURNAL/RESUME → next.
 
 ## Re-establish context
 

@@ -92,3 +92,20 @@ _Minimal history for audit + resume. See [[CONSTITUTION]] §4/§6, [[RESUME]] fo
 - Reflect: idle (non-hover) prerender from ranked content links, a surfaced hit-rate metric, and
   never-cross-origin speculation rules are follow-ons (logged). Next: Tick 6 (normal UCB; Tick 10
   is the next forced-highest-U).
+
+## Tick 6 — L03: cross-window postMessage + window.opener (2026-07-11)
+- Selected: top UCB score (~4.4); completes the OAuth-popup round-trip window.open began (an
+  explicit needs-list item) and is HEADLESS-verifiable.
+- Implemented: reused the host-queue pattern (no parallel queue). window handles
+  (`__makeWindowRef`) carry a target window id; `postMessage` routes a JSON payload via native
+  `__postMessage`; `__deliverMessage` fires a `message` MessageEvent through the window event
+  registry (built in Tick 3). `window.open` now allocates a window id + returns a real handle;
+  a shared `next_window_id` counter keeps open()-ids and host tab-ids from colliding.
+  `PageContext::{set_identity, take_messages, deliver_message}` + Page/lib wrappers. Shell keeps
+  win_id↔tab maps + per-tab opener, seeds identity on load, and `pump_messages` routes each send
+  to the target tab's page (active or background via `Browser::page_mut`).
+- Verified: HEADLESS — page interactive scenarios (9) window.open().postMessage queues with the
+  popup id + targetOrigin, (10) deliver_message fires onmessage with data/origin/source.__winId.
+  Parity 72/72; `_sm` + JS-less builds green. Commit `7c4a1f6`.
+- Reflect: BroadcastChannel, MessageChannel/MessagePort, full structured clone (Blob/Map/Set),
+  and window.name targeting are follow-ons (logged). Next: Tick 7 (normal UCB).
