@@ -367,6 +367,43 @@ unsafe fn new_reflector(cx: *mut RawJSContext, dom: *mut Dom, node: NodeId) -> *
     obj.get()
 }
 
+/// Emit a `MutationObserver` record to the JS-side pending list for delivery on the next
+/// microtask checkpoint. `kind` is `"attributes"` / `"childList"` / `"characterData"`. Ensures
+/// the target + added/removed nodes have reflectors (so `__nodes[id]` resolves in JS), then calls
+/// `__recordMutation`. A no-op if `MutationObserver` was never touched (the pending machinery
+/// still exists, so it just queues cheaply).
+unsafe fn record_mutation(
+    cx: *mut RawJSContext,
+    dom: *mut Dom,
+    kind: &str,
+    target: NodeId,
+    attr: Option<&str>,
+    old_value: Option<&str>,
+    added: &[NodeId],
+    removed: &[NodeId],
+) {
+    // Reflect every node the record references so JS can resolve the ids back to node objects.
+    let _ = new_reflector(cx, dom, target);
+    for &n in added.iter().chain(removed.iter()) {
+        let _ = new_reflector(cx, dom, n);
+    }
+    let ids = |v: &[NodeId]| {
+        v.iter().map(|n| n.0.to_string()).collect::<Vec<_>>().join(",")
+    };
+    let attr_lit = attr.map(js_string_literal).unwrap_or_else(|| "null".to_string());
+    let old_lit = old_value.map(js_string_literal).unwrap_or_else(|| "null".to_string());
+    let script = format!(
+        "if(globalThis.__recordMutation)__recordMutation({},{},{},{},{},{})",
+        js_string_literal(kind),
+        target.0,
+        attr_lit,
+        old_lit,
+        js_string_literal(&ids(added)),
+        js_string_literal(&ids(removed)),
+    );
+    let _ = eval_in_current_global(cx, &script);
+}
+
 /// Define the DOM methods on the rooted object `obj`. `is_document` selects the
 /// document surface; otherwise the element surface.
 unsafe fn define_members(
@@ -505,7 +542,7 @@ unsafe extern "C" fn doc_create_element(cx: *mut RawJSContext, argc: u32, vp: *m
 // ---------------------------------------------------------------------------
 
 /// `element.appendChild(child)` → the appended child (per DOM spec).
-unsafe extern "C" fn el_append_child(_cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe extern "C" fn el_append_child(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, parent)) = this_node(vp) else {
         *vp = UndefinedValue();
         return true;
@@ -513,6 +550,7 @@ unsafe extern "C" fn el_append_child(_cx: *mut RawJSContext, argc: u32, vp: *mut
     match arg_object(vp, argc, 0).and_then(|o| node_and_dom(o).map(|(_, c)| (o, c))) {
         Some((child_obj, child)) => {
             (*dom).append_child(parent, child);
+            record_mutation(cx, dom, "childList", parent, None, None, &[child], &[]);
             *vp = ObjectValue(child_obj);
         }
         None => *vp = UndefinedValue(),
@@ -527,6 +565,8 @@ unsafe extern "C" fn el_set_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut
         return true;
     };
     if let (Some(name), Some(value)) = (arg_string(cx, vp, argc, 0), arg_string(cx, vp, argc, 1)) {
+        let old = (*dom).element(node).and_then(|e| e.attr(&name)).map(|s| s.to_string());
+        record_mutation(cx, dom, "attributes", node, Some(&name), old.as_deref(), &[], &[]);
         (*dom).set_attr(node, name, value);
     }
     *vp = UndefinedValue();
@@ -695,7 +735,7 @@ unsafe extern "C" fn el_set_checked(_cx: *mut RawJSContext, argc: u32, vp: *mut 
 
 /// `parent.insertBefore(newChild, refChild)` — insert before `refChild` (or append if
 /// `refChild` is null). Returns the inserted node.
-unsafe extern "C" fn el_insert_before(_cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe extern "C" fn el_insert_before(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, parent)) = this_node(vp) else {
         *vp = UndefinedValue();
         return true;
@@ -708,6 +748,7 @@ unsafe extern "C" fn el_insert_before(_cx: *mut RawJSContext, argc: u32, vp: *mu
                 Some(rf) => (*dom).insert_before(parent, child, rf),
                 None => (*dom).append_child(parent, child),
             }
+            record_mutation(cx, dom, "childList", parent, None, None, &[child], &[]);
             *vp = ObjectValue(obj);
         }
         None => *vp = NullValue(),
@@ -716,13 +757,14 @@ unsafe extern "C" fn el_insert_before(_cx: *mut RawJSContext, argc: u32, vp: *mu
 }
 
 /// `parent.removeChild(child)` — detach `child`; returns it.
-unsafe extern "C" fn el_remove_child(_cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe extern "C" fn el_remove_child(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, parent)) = this_node(vp) else {
         *vp = UndefinedValue();
         return true;
     };
     match arg_object(vp, argc, 0).and_then(|o| node_and_dom(o).map(|(_, n)| (o, n))) {
         Some((obj, child)) => {
+            record_mutation(cx, dom, "childList", parent, None, None, &[], &[child]);
             (*dom).remove_child(parent, child);
             *vp = ObjectValue(obj);
         }
@@ -797,6 +839,8 @@ unsafe extern "C" fn el_clone_node(cx: *mut RawJSContext, argc: u32, vp: *mut Va
 unsafe extern "C" fn el_remove_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         if let Some(name) = arg_string(cx, vp, argc, 0) {
+            let old = (*dom).element(node).and_then(|e| e.attr(&name)).map(|s| s.to_string());
+            record_mutation(cx, dom, "attributes", node, Some(&name), old.as_deref(), &[], &[]);
             (*dom).remove_attr(node, &name);
         }
     }
@@ -817,8 +861,12 @@ unsafe extern "C" fn el_has_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut
 }
 
 /// `element.remove()` — detach this node from its parent (DOM Living Standard `ChildNode`).
-unsafe extern "C" fn el_remove(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe extern "C" fn el_remove(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
+        // Record on the parent (still attached) with this node as the removed child.
+        if let Some(parent) = (*dom).parent(node) {
+            record_mutation(cx, dom, "childList", parent, None, None, &[], &[node]);
+        }
         (*dom).detach(node);
     }
     *vp = UndefinedValue();
@@ -1031,11 +1079,13 @@ unsafe extern "C" fn el_set_text_content(cx: *mut RawJSContext, argc: u32, vp: *
     if let Some((dom, node)) = this_node(vp) {
         let value = arg_string(cx, vp, argc, 0).unwrap_or_default();
         let kids: Vec<NodeId> = (*dom).children(node).collect();
-        for k in kids {
+        for &k in &kids {
             (*dom).detach(k);
         }
         let text = (*dom).create_text(value);
         (*dom).append_child(node, text);
+        // childList: old children replaced by the single new text node.
+        record_mutation(cx, dom, "childList", node, None, None, &[text], &kids);
     }
     *vp = UndefinedValue();
     true
@@ -1057,7 +1107,10 @@ unsafe extern "C" fn el_get_inner_html(cx: *mut RawJSContext, _argc: u32, vp: *m
 unsafe extern "C" fn el_set_inner_html(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         let value = arg_string(cx, vp, argc, 0).unwrap_or_default();
+        let old_kids: Vec<NodeId> = (*dom).children(node).collect();
         manuk_html::set_inner_html(&mut *dom, node, &value);
+        let new_kids: Vec<NodeId> = (*dom).children(node).collect();
+        record_mutation(cx, dom, "childList", node, None, None, &new_kids, &old_kids);
     }
     *vp = UndefinedValue();
     true
@@ -1861,6 +1914,98 @@ const WINDOW_PRELUDE: &str = r#"
             };
             g.__fireWindowEvent('message', ev);
         };
+
+        // MutationObserver. The native DOM-mutating methods emit records via __recordMutation;
+        // matching records are delivered to each observer as a microtask (after the current
+        // script), exactly as the spec batches them. SPAs mutate the DOM post-fetch and watch it
+        // this way; absent the API their code throws at construction.
+        if (typeof g.MutationObserver === 'undefined') {
+            g.__moObservers = [];
+            g.__pendingMutations = [];
+            g.__moScheduled = false;
+            g.__nodeById = function (id) { return (g.__nodes && g.__nodes[id]) || null; };
+            g.__moListToNodes = function (csv) {
+                if (!csv) return [];
+                var out = [], parts = String(csv).split(',');
+                for (var i = 0; i < parts.length; i++) {
+                    if (parts[i] === '') continue;
+                    var n = g.__nodeById(parts[i]); if (n) out.push(n);
+                }
+                return out;
+            };
+            g.__recordMutation = function (type, targetId, attrName, oldValue, addedCsv, removedCsv) {
+                g.__pendingMutations.push({
+                    type: type, targetId: targetId, attrName: attrName,
+                    oldValue: oldValue, addedCsv: addedCsv, removedCsv: removedCsv
+                });
+                if (!g.__moScheduled) { g.__moScheduled = true; queueMicrotask(g.__deliverMutations); }
+            };
+            g.__moIsDescendant = function (node, ancestor) {
+                for (var cur = node && node.parentNode; cur; cur = cur.parentNode) {
+                    if (cur === ancestor) return true;
+                }
+                return false;
+            };
+            g.__moMatches = function (t, rec, target) {
+                var o = t.options || {};
+                if (rec.type === 'attributes' && !o.attributes) return false;
+                if (rec.type === 'childList' && !o.childList) return false;
+                if (rec.type === 'characterData' && !o.characterData) return false;
+                if (rec.type === 'attributes' && o.attributeFilter &&
+                    o.attributeFilter.indexOf(rec.attrName) < 0) return false;
+                if (target === t.node) return true;
+                if (o.subtree && g.__moIsDescendant(target, t.node)) return true;
+                return false;
+            };
+            g.__buildRecord = function (rec) {
+                var target = g.__nodeById(rec.targetId);
+                var attrs = (rec.type === 'attributes');
+                var chars = (rec.type === 'characterData');
+                return {
+                    type: rec.type, target: target,
+                    addedNodes: g.__moListToNodes(rec.addedCsv),
+                    removedNodes: g.__moListToNodes(rec.removedCsv),
+                    previousSibling: null, nextSibling: null,
+                    attributeName: attrs ? rec.attrName : null, attributeNamespace: null,
+                    oldValue: (attrs || chars) ? rec.oldValue : null
+                };
+            };
+            g.__deliverMutations = function () {
+                g.__moScheduled = false;
+                var recs = g.__pendingMutations; g.__pendingMutations = [];
+                if (!recs.length) return;
+                for (var i = 0; i < g.__moObservers.length; i++) {
+                    var obs = g.__moObservers[i];
+                    var matched = [];
+                    for (var j = 0; j < recs.length; j++) {
+                        var rec = recs[j];
+                        var target = g.__nodeById(rec.targetId);
+                        if (!target) continue;
+                        for (var k = 0; k < obs.__targets.length; k++) {
+                            if (g.__moMatches(obs.__targets[k], rec, target)) {
+                                matched.push(g.__buildRecord(rec)); break;
+                            }
+                        }
+                    }
+                    if (matched.length && typeof obs.__cb === 'function') {
+                        try { obs.__cb(matched, obs); } catch (e) {}
+                    }
+                }
+            };
+            g.MutationObserver = function (cb) { this.__cb = cb; this.__targets = []; this.__records = []; };
+            g.MutationObserver.prototype.observe = function (target, options) {
+                if (!target) return;
+                this.__targets.push({ node: target, options: options || {} });
+                if (g.__moObservers.indexOf(this) < 0) g.__moObservers.push(this);
+            };
+            g.MutationObserver.prototype.disconnect = function () {
+                this.__targets = [];
+                var i = g.__moObservers.indexOf(this); if (i >= 0) g.__moObservers.splice(i, 1);
+            };
+            g.MutationObserver.prototype.takeRecords = function () {
+                var r = this.__records; this.__records = []; return r;
+            };
+        }
     })();
 "#;
 

@@ -1649,6 +1649,43 @@ mod js_interactive_tests {
             "from:https://auth.test:XYZ:src=100",
             "onmessage fired with data, origin, and a source window ref"
         );
+
+        // (11) MutationObserver: a click handler mutates the DOM (attribute on the target, an
+        // attribute on a descendant [subtree], and a child append) — the observer's callback
+        // fires as a microtask with the batched, correctly-typed records.
+        let html11 = r#"<!doctype html><html><body>
+            <div id="c"><span id="s">x</span></div>
+            <button id="btn">go</button>
+            <div id="log">none</div>
+            <script>
+              var target = document.getElementById('c');
+              var mo = new MutationObserver(function (records) {
+                var out = [];
+                for (var i = 0; i < records.length; i++) {
+                  var r = records[i];
+                  out.push(r.type + ':' + (r.attributeName || '-') + ':+' + r.addedNodes.length +
+                           ':-' + r.removedNodes.length);
+                }
+                document.getElementById('log').textContent = out.join('|');
+              });
+              mo.observe(target, { attributes: true, childList: true, subtree: true });
+              document.getElementById('btn').addEventListener('click', function () {
+                target.setAttribute('data-x', '1');                 // attributes on target
+                document.getElementById('s').setAttribute('data-y', '2'); // attributes, subtree
+                target.appendChild(document.createElement('em'));    // childList add on target
+              });
+            </script></body></html>"#;
+        let mut page11 = Page::load(html11, "https://app.test/", &fonts, 800.0);
+        let root11 = page11.dom().root();
+        let btn = manuk_css::query_selector_all(page11.dom(), root11, "#btn")[0];
+        let log = manuk_css::query_selector_all(page11.dom(), root11, "#log")[0];
+        assert_eq!(page11.dom().text_content(log), "none", "no records before the mutation");
+        page11.dispatch_click(btn, &fonts, 800.0);
+        assert_eq!(
+            page11.dom().text_content(log),
+            "attributes:data-x:+0:-0|attributes:data-y:+0:-0|childList:-:+1:-0",
+            "the observer got batched records: two attribute changes (incl. a subtree one) + a childList add"
+        );
     }
 }
 
