@@ -970,7 +970,27 @@ parity gate stays green.
 - **U6** ✅ (within-session) cookie jar wired into `send_once` — sends stored cookies, stores
   `Set-Cookie`. *Follow-on:* cross-session disk persistence (add serde to net + `store`) and
   per-container partitioning.
-- **Remaining (sequenced):** R4 preconnect; P1 `sticky`/`grid-template-areas`; P2 UAX#14
-  (parity-sensitive); U2 bookmarks/downloads/history; U7 OAuth popup (multi-window JS);
-  U8 zoom/translate; DT/AG BiDi panels + AG5 measurement; MEM3 `cargo bloat`. Each its own
-  seam-scoped pass, parity gate green.
+- **R4** ✅ speculative preconnect — the request-free `Preconnector` (same-origin policy +
+  recency + budget) existed with no caller; added process-global `net::preconnect()` and wired
+  it to link *hover* in the shell (`CursorMoved`), so the click's request reuses a warm TLS
+  connection. Recency/budget prevent hover spam.
+- **P1** ⏳ grid-template-areas — **diagnosed precisely** (the confirmed Vector-skin/Wikipedia
+  fix): `grid-template-areas` + `grid-area` are entirely unparsed, so named items auto-place in
+  DOM source order → sidebar mis-columns (reproduced with a 2×2 named-area test). *Approach
+  (next focused pass):* both engines already support it natively — Stylo computes
+  `NamedArea { name, rows, columns }` (pre-resolved ranges) and taffy has
+  `GridTemplateArea` + `GridPlacement::NamedLine`. Implementation is a cascade feature: carry
+  `grid_template_areas: Vec<GridAreaRect>` + item `grid_area` in `ComputedStyle`, map from
+  Stylo's `NamedArea` list and the grid-row/column named idents, resolve the item's area name
+  against the container's areas in `taffy_tree` → explicit line placement. Deferred as its own
+  pass rather than rushed here (intricate Stylo named-line encoding; honest-deferral rule).
+- **MEM3** ✅ binary-size measured: default `manuk` (gui + Stylo + SpiderMonkey) = **16.4 MB**
+  (text 15.5 MB, data 0.9 MB); 31 icu/stylo/mozjs dep lines confirm the cascade + JS engines
+  are the bulk — the deliberate trade for a real Stylo cascade and audited SpiderMonkey vs a
+  hand-rolled parser/JIT. *Follow-on:* `cargo install cargo-bloat` for per-symbol breakdown;
+  `spidermonkey-noicu` ICU-delta A/B; dedupe duplicate crate resolutions (build-config only).
+- **Remaining (sequenced, each own seam-scoped pass, parity gate green):** P1 grid-areas cascade
+  (above); P2 UAX#14 (parity-sensitive); U2 bookmarks/downloads/history; U7 OAuth popup
+  (multi-window JS — large); U8 zoom/translate; DT/AG BiDi panels + AG5 in-process-latency
+  measurement. These are genuine multi-step features; sequenced honestly rather than
+  half-landed.
