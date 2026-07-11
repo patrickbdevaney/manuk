@@ -122,7 +122,8 @@ fn make_device(width: f32, height: f32) -> Device {
 const UA_CSS: &str = r#"
 html, body, div, section, article, header, footer, nav, main, aside, figure,
 figcaption, address, p, blockquote, ul, ol, li, dd, dt, pre, hr, h1, h2, h3, h4, h5, h6,
-form, fieldset, table, caption { display: block; }
+form, fieldset, table, caption, center { display: block; }
+center { text-align: center; }
 head, title, meta, link, script, style, base, noscript { display: none; }
 p, blockquote { margin: 1em 0; }
 h1 { font-size: 2em; font-weight: bold; margin: 0.67em 0; }
@@ -219,6 +220,18 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
         let cv = cascade_one_element(
             &stylist, &stylo_sheets, &lock, &url_data, &guard, &guards, &el, node, &parent_cv,
         );
+        // **`rem` is root-relative.** The device carries the root font size that every `rem` in the
+        // document resolves against, and it starts at the initial 16px. Unless it is updated once
+        // the root element's own font size is known, `html{font-size:62.5%}` — the "1rem = 10px"
+        // idiom half the web is built on — silently leaves every `rem` 60% too large, and
+        // `html{font-size:118%}` leaves them all too small. Set it as soon as the root is cascaded;
+        // the preorder walk reaches `<html>` first, and its OWN `rem` values still resolve against
+        // the initial size, which is exactly what CSS specifies.
+        if dom.tag_name(node) == Some("html") {
+            stylist
+                .device()
+                .set_root_font_size(cv.get_font().clone_font_size().computed_size().px());
+        }
         let mut cs = to_computed_style(&cv);
         apply_presentational_hints(dom, node, &mut cs);
         map.insert(node, cs);
@@ -303,18 +316,74 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
     if let Some(c) = el.attr("text").and_then(crate::values::parse_color) {
         s.color = c;
     }
+    // **Presentational sizing.** `width`/`height` attributes are not decoration; on `<table>`,
+    // `<td>` and `<img>` they are the layout. Hacker News is `<table width="85%">` — ignore it and
+    // the table shrink-to-fits to its text instead of spanning the page.
+    if matches!(
+        tag,
+        "table" | "td" | "th" | "col" | "colgroup" | "iframe" | "hr" | "pre"
+    ) {
+        if s.width == crate::Dim::Auto {
+            if let Some(w) = el.attr("width").and_then(crate::parse_dimension_attr_dim) {
+                s.width = w;
+            }
+        }
+        if s.height == crate::Dim::Auto {
+            if let Some(h) = el.attr("height").and_then(crate::parse_dimension_attr_dim) {
+                s.height = h;
+            }
+        }
+    }
+    // `<table cellspacing>` / `<table cellpadding>` — the separated-borders model's two knobs.
+    if tag == "table" {
+        if let Some(sp) = el.attr("cellspacing").and_then(crate::parse_dimension_attr) {
+            s.border_spacing = sp;
+        }
+        // `align="center"` centres the table; `<center>` does the same thing to its table child
+        // (Chrome implements it as `text-align: -webkit-center`, which centres block children too).
+        let centered = el.attr("align").is_some_and(|a| a.eq_ignore_ascii_case("center"))
+            || dom
+                .parent(node)
+                .and_then(|p| dom.tag_name(p))
+                .is_some_and(|t| t == "center");
+        if centered && s.margin.left == crate::Dim::Px(0.0) && s.margin.right == crate::Dim::Px(0.0) {
+            s.margin.left = crate::Dim::Auto;
+            s.margin.right = crate::Dim::Auto;
+        }
+    }
+    // `cellpadding` lives on the table but pads the CELLS.
+    if matches!(tag, "td" | "th") {
+        let table_cellpadding = {
+            let mut cur = dom.parent(node);
+            let mut found = None;
+            while let Some(p) = cur {
+                if dom.tag_name(p) == Some("table") {
+                    found = dom
+                        .element(p)
+                        .and_then(|e| e.attr("cellpadding"))
+                        .and_then(crate::parse_dimension_attr);
+                    break;
+                }
+                cur = dom.parent(p);
+            }
+            found
+        };
+        if let Some(cp) = table_cellpadding {
+            s.padding = crate::Sides::all(crate::Dim::Px(cp));
+        }
+    }
     if matches!(tag, "img" | "canvas" | "video" | "svg" | "object" | "embed") {
         if s.display == crate::Display::Inline {
             s.display = crate::Display::InlineBlock;
         }
         if s.width == crate::Dim::Auto {
-            if let Some(w) = el.attr("width").and_then(crate::parse_dimension_attr) {
-                s.width = crate::Dim::Px(w);
+            if let Some(w) = el.attr("width").and_then(crate::parse_dimension_attr_dim) {
+                s.width = w;
             }
         }
         if s.height == crate::Dim::Auto {
-            if let Some(h) = el.attr("height").and_then(crate::parse_dimension_attr) {
-                s.height = crate::Dim::Px(h);
+            if let Some(h) = el.attr("height").and_then(crate::parse_dimension_attr_dim) {
+                s.height = h;
             }
         }
     }

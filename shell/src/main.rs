@@ -61,19 +61,20 @@ fn main() -> Result<()> {
         }
     };
 
-    // With SpiderMonkey linked, exit **hard** past its teardown: mozjs's C++ static
-    // destructors / atexit handlers abort at process shutdown (the documented engine
-    // teardown issue). `libc::_exit` skips atexit handlers entirely (unlike
-    // `std::process::exit`, which runs them), so the correct, fully-flushed output stands
-    // without a spurious crash on exit.
-    #[cfg(feature = "_sm")]
-    {
-        use std::io::Write as _;
-        let _ = std::io::stdout().flush();
-        let _ = std::io::stderr().flush();
-        unsafe { libc::_exit(if result.is_ok() { 0 } else { 1 }) };
-    }
-    #[allow(unreachable_code)]
+    // Exit cleanly. SpiderMonkey requires `JS_ShutDown()` before the process exits: leave a live
+    // JSContext for its C++ static destructors to find and they segfault inside
+    // `__run_exit_handlers`, *after* `main` has returned — so the window closes, the output is
+    // perfect, and only the exit code (139) betrays it.
+    //
+    // This used to be worked around with `libc::_exit()`, which skips every atexit handler and so
+    // skips the crash. That trades a visible crash for an invisible one: `_exit` also skips the
+    // handlers that flush buffered state, and in a browser that state is the user's profile. The
+    // engine is now torn down properly instead, so a normal `return` is safe — and the profile is
+    // flushed explicitly first, in the order that matters.
+    manuk_net::save_cookies();
+    manuk_net::webstorage::save();
+    manuk_js::shutdown();
+
     result
 }
 

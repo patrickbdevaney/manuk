@@ -1672,6 +1672,7 @@ impl App {
         if did_any {
             // A response may have carried Set-Cookie (e.g. a session refresh); persist it.
             manuk_net::save_cookies();
+            manuk_net::webstorage::save();
             self.rerender();
         }
     }
@@ -1862,6 +1863,7 @@ impl App {
         }
         // Persist login cookies alongside the session so they survive a restart.
         manuk_net::save_cookies();
+        manuk_net::webstorage::save();
     }
 
     /// Focus a tab and **wake it on focus**: a hibernated (restored/background) tab holds no
@@ -2450,6 +2452,7 @@ impl ApplicationHandler<NavEvent> for App {
                 self.handle_history_ops();
                 self.pump_messages();
                 manuk_net::save_cookies();
+                manuk_net::webstorage::save();
                 self.rerender();
             }
         }

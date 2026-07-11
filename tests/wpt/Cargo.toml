@@ -8,14 +8,21 @@ description = "Web Platform Tests harness + results tracking. Ground-truth confo
 publish = false
 
 [features]
-# ADR-011: the gates MUST run the SHIPPING configuration. The shell ships Stylo; gating on
-# MinimalCascade measured a cascade no user ever sees (and understated fidelity by ~5 points while
-# hiding a near-total Wikipedia layout failure). Stylo is therefore ON BY DEFAULT here.
-default = ["stylo"]
+# ADR-011: the gates MUST run the SHIPPING configuration. The shell ships Stylo **and**
+# SpiderMonkey; a gate that runs anything else measures a browser no user has.
+#
+# Stylo: gating on MinimalCascade measured a cascade no user ever sees (understated fidelity by ~5
+# points while hiding a near-total Wikipedia layout failure).
+#
+# SpiderMonkey: gating without JS measured a page no user ever sees. Chromium runs the page's
+# scripts; a no-JS Manuk does not — so the comparison charged the ENGINE for the absence of the
+# SCRIPT ENGINE. Wikipedia ships `<html class="client-nojs">` and MediaWiki's startup script swaps
+# it to `client-js`, which is what collapses the table of contents. Without JS our TOC stayed fully
+# expanded — 1,949px instead of 364px — and dragged every element on the page ~5,000px out of
+# place. That is not a layout bug; it is a harness bug, and it was the single largest term in the
+# placement error.
+default = ["stylo", "spidermonkey"]
 stylo = ["manuk-page/stylo"]
-# Run page JS (SpiderMonkey) — off by default so the parity gate stays lean/fast. Enable it for
-# `manuk-wpt render` when the page you want to screenshot builds itself with JS (custom elements,
-# SPA hydration): `cargo run -p manuk-wpt --release --features spidermonkey -- render ...`
 spidermonkey = ["manuk-page/spidermonkey"]
 
 [lib]
@@ -33,7 +40,14 @@ manuk-css.workspace = true
 manuk-layout.workspace = true
 manuk-text.workspace = true
 manuk-page.workspace = true
+manuk-js.workspace = true
+manuk-net.workspace = true
 manuk-paint.workspace = true
 anyhow.workspace = true
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 serde_json.workspace = true
+# The harness runs the real engine; when a page's script throws, or a subresource fails, the engine
+# says so via `tracing`. Without a subscriber those diagnostics are silently dropped — which is how
+# a page script that never ran looked like a layout bug for an hour. `RUST_LOG=debug` to see them.
+tracing.workspace = true
+tracing-subscriber = { workspace = true }

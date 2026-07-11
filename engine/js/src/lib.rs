@@ -137,14 +137,16 @@ pub mod bindings {
 /// thread-affine; one live runtime per thread). Held in `ManuallyDrop` — leaked deliberately
 /// for the process lifetime, since tearing a runtime down mid-process is the fragile path.
 #[cfg(feature = "_sm")]
+thread_local! {
+    static RUNTIME: std::cell::RefCell<Option<std::mem::ManuallyDrop<mozjs::rust::Runtime>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(feature = "_sm")]
 fn with_runtime<R>(f: impl FnOnce(&mut mozjs::rust::Runtime) -> Result<R, JsError>) -> Result<R, JsError> {
-    use std::cell::RefCell;
     use std::mem::ManuallyDrop;
     use mozjs::rust::Runtime;
 
-    thread_local! {
-        static RUNTIME: RefCell<Option<ManuallyDrop<Runtime>>> = const { RefCell::new(None) };
-    }
     RUNTIME.with(|cell| {
         let mut slot = cell.borrow_mut();
         if slot.is_none() {
@@ -154,6 +156,30 @@ fn with_runtime<R>(f: impl FnOnce(&mut mozjs::rust::Runtime) -> Result<R, JsErro
         let rt: &mut Runtime = &mut *slot.as_mut().expect("runtime just initialized");
         f(rt)
     })
+}
+
+/// Tear the thread's JS runtime down **before the process exits**.
+///
+/// SpiderMonkey installs an `atexit` handler. If the process exits with a live `JSContext`, that
+/// handler runs against a context nobody destroyed and **segfaults** — after `main` has returned, so
+/// the exit code is 139 and the output looks perfectly fine. That is not a cosmetic crash: it aborts
+/// the rest of the exit handlers, which is where a browser flushes its cookie jar and `localStorage`
+/// to the profile. A crash on the way out is how a browser silently loses a user's data (ADR-009).
+///
+/// Call this once, last, after every `Page` (and therefore every `PageContext`) has been dropped —
+/// dropping a rooted JS object *after* its runtime is gone would crash in turn.
+pub fn shutdown() {
+    #[cfg(feature = "_sm")]
+    {
+        // Order matters: the runtime holds an engine handle, and the engine refuses to shut down
+        // while any handle is outstanding.
+        RUNTIME.with(|cell| {
+            if let Some(rt) = cell.borrow_mut().take() {
+                drop(std::mem::ManuallyDrop::into_inner(rt));
+            }
+        });
+        spidermonkey::shutdown_engine();
+    }
 }
 
 #[cfg(feature = "_sm")]

@@ -34,6 +34,7 @@ use tokio_util::io::StreamReader;
 use url::Url;
 
 /// E7 storage layer — RFC 6265 cookie jar.
+pub mod webstorage;
 pub mod cookies;
 
 pub mod downloads;
@@ -619,6 +620,35 @@ fn cookie_jar() -> &'static std::sync::Mutex<cookies::CookieJar> {
     static JAR: std::sync::OnceLock<std::sync::Mutex<cookies::CookieJar>> = std::sync::OnceLock::new();
     // Load persistent cookies from disk on first use, so a prior session's logins survive.
     JAR.get_or_init(|| std::sync::Mutex::new(cookies::CookieJar::load_from(&cookie_store_path())))
+}
+
+/// `document.cookie` (getter) for `url` — the **same jar the network uses**, minus `HttpOnly`
+/// cookies, which script must never see. That exclusion is the whole point of the flag: it is what
+/// stops an XSS from reading a session token.
+pub fn document_cookie(url: &str) -> String {
+    let Ok(u) = Url::parse(url) else {
+        return String::new();
+    };
+    let Ok(jar) = cookie_jar().lock() else {
+        return String::new();
+    };
+    jar.cookie_header_where(&u, std::time::SystemTime::now(), |c| !c.http_only)
+        .unwrap_or_default()
+}
+
+/// `document.cookie = "..."` (setter) — one `Set-Cookie`-shaped assignment into the real jar, so a
+/// cookie a script writes is a cookie the next request sends. Scripts cannot set `HttpOnly`.
+pub fn set_document_cookie(url: &str, assignment: &str) -> bool {
+    let Ok(u) = Url::parse(url) else {
+        return false;
+    };
+    if assignment.to_ascii_lowercase().contains("httponly") {
+        return false;
+    }
+    let Ok(mut jar) = cookie_jar().lock() else {
+        return false;
+    };
+    jar.store(&u, assignment)
 }
 
 /// Flush persistent cookies to disk. Call on navigation-commit and on quit so logins with a

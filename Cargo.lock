@@ -3076,7 +3076,9 @@ dependencies = [
  "manuk-css",
  "manuk-dom",
  "manuk-html",
+ "manuk-net",
  "mozjs",
+ "serde_json",
  "tracing",
  "url",
 ]
@@ -3236,12 +3238,16 @@ dependencies = [
  "manuk-css",
  "manuk-dom",
  "manuk-html",
+ "manuk-js",
  "manuk-layout",
+ "manuk-net",
  "manuk-page",
  "manuk-paint",
  "manuk-text",
  "serde_json",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

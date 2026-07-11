@@ -265,33 +265,56 @@ impl LayoutBox {
     /// `<a><em>x</em></a>` gives `<a>` a rect and not just `<em>`. A node producing
     /// several boxes/runs (an inline split across lines) gets their union — the single
     /// bounding box a caller wants for hit-testing. Anonymous boxes contribute nothing.
+    /// Every node's geometry, as `getBoundingClientRect` defines it.
+    ///
+    /// Two kinds of element, two answers:
+    ///
+    ///  * An element **with a box** reports that box — its own border box, and *nothing else*. It
+    ///    must NOT be unioned with its descendants: a container whose child overflows (a wide
+    ///    `<pre>`, an unwrapped code block) still has its own width, and Chrome reports that width.
+    ///    Unioning made Wikipedia's 1,200px page container report 2,603px, which is not a layout
+    ///    bug at all — it is a measurement bug, and it made every downstream number a lie.
+    ///
+    ///  * An element **without a box** — an inline `<span>`, `<a>`, `<em>` — has no `LayoutBox` at
+    ///    all; its geometry lives in the text fragments its subtree produced. So each fragment is
+    ///    walked up to the nearest ancestor that *does* have a box, unioning into every boxless
+    ///    element on the way, and stopping there.
     pub fn node_rects(&self, dom: &Dom) -> std::collections::HashMap<NodeId, Rect> {
         fn add(map: &mut std::collections::HashMap<NodeId, Rect>, node: NodeId, rect: Rect) {
             map.entry(node)
                 .and_modify(|r| *r = r.union(&rect))
                 .or_insert(rect);
         }
-        let mut map: std::collections::HashMap<NodeId, Rect> = std::collections::HashMap::new();
+        let mut boxes: std::collections::HashMap<NodeId, Rect> = std::collections::HashMap::new();
+        let mut frags: std::collections::HashMap<NodeId, Rect> = std::collections::HashMap::new();
         self.walk(&mut |b| {
             if let Some(node) = b.node {
-                add(&mut map, node, b.rect);
+                add(&mut boxes, node, b.rect);
             }
-            if let BoxContent::Inline(frags) = &b.content {
-                for f in frags {
-                    let Some(owner) = f.node else { continue };
-                    let rect = f.rect();
-                    add(&mut map, owner, rect);
-                    let mut cur = dom.parent(owner);
-                    while let Some(p) = cur {
-                        if dom.is_element(p) {
-                            add(&mut map, p, rect);
-                        }
-                        cur = dom.parent(p);
+            if let BoxContent::Inline(fs) = &b.content {
+                for f in fs {
+                    if let Some(owner) = f.node {
+                        add(&mut frags, owner, f.rect());
                     }
                 }
             }
         });
-        map
+        let mut out = boxes.clone();
+        for (&owner, &r) in &frags {
+            let mut cur = Some(owner);
+            while let Some(n) = cur {
+                // The first ancestor with a real box owns its own geometry — stop before inflating
+                // it with content that merely overflows it.
+                if boxes.contains_key(&n) {
+                    break;
+                }
+                if dom.is_element(n) {
+                    add(&mut out, n, r);
+                }
+                cur = dom.parent(n);
+            }
+        }
+        out
     }
 
     /// Where a text field's value glyphs actually sit, for placing a caret **on the
@@ -850,6 +873,33 @@ fn content_right_extent(content: &BoxContent, fonts: &FontContext, origin: f32) 
             d
         }
     };
+
+    /// The extent of one box's inline content, measured **per line**.
+    ///
+    /// A line's fragments cannot be read in absolute coordinates: `text-align: center` (which
+    /// `<center>` sets, and which then inherits into everything under it) centres each line inside
+    /// the *available* width — 1e6 during measurement — so every fragment sits at x≈500,000. Taking
+    /// `max(x + width)` there measures the centring slack; discarding the offset entirely measures
+    /// only the longest single word (Hacker News' story titles collapsed to a 99px column that way).
+    ///
+    /// Both are wrong for the same reason: a line's *position* is slack, its *span* is content. So
+    /// span each line from its own leftmost fragment, and keep the line's offset only when it is a
+    /// real indent (a padding, a margin) rather than half a million pixels of centring.
+    fn inline_extent(frags: &[TextFragment], fonts: &FontContext, rel: &dyn Fn(f32) -> f32) -> f32 {
+        let mut lines: std::collections::HashMap<u32, (f32, f32)> = std::collections::HashMap::new();
+        for f in frags {
+            let w = fonts.measure(&f.text, f.style.font_key, f.style.font_size);
+            let key = f.line_top.to_bits();
+            let e = lines.entry(key).or_insert((f32::MAX, f32::MIN));
+            e.0 = e.0.min(f.x);
+            e.1 = e.1.max(f.x + w);
+        }
+        lines
+            .values()
+            .map(|&(l, r)| rel(l).max(0.0) + (r - l).max(0.0))
+            .fold(0.0f32, f32::max)
+    }
+
     let mut max_r = 0.0f32;
     fn visit(b: &LayoutBox, fonts: &FontContext, max_r: &mut f32, rel: &dyn Fn(f32) -> f32) {
         if b.rect.width < FILL_SENTINEL {
@@ -862,10 +912,7 @@ fn content_right_extent(content: &BoxContent, fonts: &FontContext, origin: f32) 
                 }
             }
             BoxContent::Inline(frags) => {
-                for f in frags {
-                    let w = fonts.measure(&f.text, f.style.font_key, f.style.font_size);
-                    *max_r = max_r.max(rel(f.x) + w);
-                }
+                *max_r = max_r.max(inline_extent(frags, fonts, rel));
             }
         }
     }
@@ -876,10 +923,7 @@ fn content_right_extent(content: &BoxContent, fonts: &FontContext, origin: f32) 
             }
         }
         BoxContent::Inline(frags) => {
-            for f in frags {
-                let w = fonts.measure(&f.text, f.style.font_key, f.style.font_size);
-                max_r = max_r.max(rel(f.x) + w);
-            }
+            max_r = max_r.max(inline_extent(frags, fonts, &rel));
         }
     }
     max_r
@@ -1496,7 +1540,7 @@ impl Ctx<'_> {
         let mut placed: Vec<PlacedCell> = Vec::new();
         let mut occ: Vec<Vec<bool>> = Vec::new();
         let mut ncols = 0usize;
-        for (r, row) in rows.iter().enumerate() {
+        for (r, (_rn, row)) in rows.iter().enumerate() {
             let mut col = 0usize;
             for &cell in row {
                 while occ.get(r).and_then(|o| o.get(col)).copied().unwrap_or(false) {
@@ -1530,12 +1574,13 @@ impl Ctx<'_> {
         let avail_content = table_specified.unwrap_or((cw - ml).max(0.0)) - pl - pr;
         let avail_cols = (avail_content - spacing_total).max(0.0);
 
+        let cell_grid: Vec<Vec<NodeId>> = rows.iter().map(|(_, cells)| cells.clone()).collect();
         let widths = if ncols == 0 {
             Vec::new()
         } else if s.table_layout == manuk_css::TableLayout::Fixed {
-            self.fixed_col_widths(&rows, ncols, avail_cols)
+            self.fixed_col_widths(&cell_grid, ncols, avail_cols)
         } else {
-            self.auto_col_widths(&rows, ncols, avail_cols, table_specified.is_some())
+            self.auto_col_widths(&placed, ncols, avail_cols, table_specified.is_some())
         };
         let cols_used: f32 = widths.iter().sum();
         let content_w = cols_used + spacing_total;
@@ -1599,16 +1644,18 @@ impl Ctx<'_> {
         }
         let mut row_boxes = Vec::new();
         for r in 0..nrows {
+            let rn = rows.get(r).map(|(n, _)| *n);
+            let rs = rn.and_then(|n| self.styles.get(&n));
             row_boxes.push(LayoutBox {
                 rect: Rect { x: content_x, y: row_y[r], width: content_w, height: row_h[r] },
-                background: None,
-                border: None,
-                radius: 0.0,
-                shadow: None,
-                hidden: false,
-                mask_image: None,
-                opacity: 1.0,
-                node: None,
+                background: rs.and_then(|s| s.background_color),
+                border: rs.and_then(border_of),
+                radius: rs.map(|s| s.border_radius).unwrap_or(0.0),
+                shadow: rs.and_then(|s| s.box_shadow),
+                hidden: rs.map(|s| s.visibility != manuk_css::Visibility::Visible).unwrap_or(false),
+                mask_image: rs.and_then(|s| s.mask_image.clone()),
+                opacity: rs.map(|s| s.opacity).unwrap_or(1.0),
+                node: rn,
                 content: BoxContent::Block(std::mem::take(&mut row_cells[r])),
             });
         }
@@ -1639,6 +1686,18 @@ impl Ctx<'_> {
             node: Some(node),
             content: BoxContent::Block(row_boxes),
         };
+        // **Auto margins centre a table.** `layout_block` does this; `layout_table` did not, so
+        // every `<center><table>` and `<table align="center">` on the legacy web — Hacker News
+        // included — rendered flush against the left edge. The table's width is only known now
+        // (its columns had to be sized first), so the whole box is shifted rather than the origin
+        // being computed up front.
+        let mut boxx = boxx;
+        if s.margin.left.is_auto() && s.margin.right.is_auto() {
+            let leftover = cw - border_box_w;
+            if leftover > 0.0 {
+                boxx.shift_x(leftover / 2.0);
+            }
+        }
         BlockResult {
             boxx,
             margin_top: mt,
@@ -1658,21 +1717,26 @@ impl Ctx<'_> {
     }
 
     /// Gather a table's rows (each a list of cell nodes), flattening row groups.
-    fn collect_table_rows(&self, table: NodeId) -> Vec<Vec<NodeId>> {
+    /// The table's rows as `(row element, its cells)`. The row's own node is carried, not just its
+    /// cells: a `table-row` **generates a box** (CSS2 §17.5), and that box is where a row's
+    /// background and border paint and what `getBoundingClientRect` reports for a `<tr>`. Emitting
+    /// an anonymous row box instead left every `<tr>` on the web without geometry — 31 of Hacker
+    /// News' 119 identified elements.
+    fn collect_table_rows(&self, table: NodeId) -> Vec<(NodeId, Vec<NodeId>)> {
         let mut rows = Vec::new();
         for child in self.dom.children(table) {
             if !is_rendered(self.dom, self.styles, child) || !self.dom.is_element(child) {
                 continue;
             }
             match self.styles[&child].display {
-                Display::TableRow => rows.push(self.collect_cells(child)),
+                Display::TableRow => rows.push((child, self.collect_cells(child))),
                 Display::TableRowGroup => {
                     for gr in self.dom.children(child) {
                         if is_rendered(self.dom, self.styles, gr)
                             && self.dom.is_element(gr)
                             && self.styles[&gr].display == Display::TableRow
                         {
-                            rows.push(self.collect_cells(gr));
+                            rows.push((gr, self.collect_cells(gr)));
                         }
                     }
                 }
@@ -1717,21 +1781,44 @@ impl Ctx<'_> {
     /// per-column min/max content widths.
     fn auto_col_widths(
         &self,
-        rows: &[Vec<NodeId>],
+        placed: &[PlacedCell],
         ncols: usize,
         avail: f32,
         table_has_width: bool,
     ) -> Vec<f32> {
         let mut col_min = vec![0.0f32; ncols];
         let mut col_max = vec![0.0f32; ncols];
-        for row in rows {
-            for (c, &cell) in row.iter().enumerate() {
-                if c >= ncols {
-                    break;
+        // Single-column cells set their column's intrinsics directly. Cells are read from the
+        // PLACED grid, not from each row's raw child order: with a `colspan`, the two disagree, and
+        // attributing a spanning cell's width to the wrong column corrupts every column after it.
+        // Hacker News' subtext row (`<td colspan="2">` then the metadata cell) did exactly that.
+        for p in placed.iter().filter(|p| p.colspan == 1 && p.col < ncols) {
+            let (mn, mx) = self.cell_intrinsic(p.cell);
+            col_min[p.col] = col_min[p.col].max(mn);
+            col_max[p.col] = col_max[p.col].max(mx);
+        }
+        // A spanning cell only *raises* its columns if they cannot already hold it; the excess is
+        // spread evenly across the span (CSS2 §17.5.2.2 leaves the distribution up to the UA).
+        for p in placed.iter().filter(|p| p.colspan > 1) {
+            let end = (p.col + p.colspan).min(ncols);
+            if p.col >= end {
+                continue;
+            }
+            let span = (end - p.col) as f32;
+            let (mn, mx) = self.cell_intrinsic(p.cell);
+            let have_min: f32 = col_min[p.col..end].iter().sum();
+            let have_max: f32 = col_max[p.col..end].iter().sum();
+            if mn > have_min {
+                let add = (mn - have_min) / span;
+                for c in p.col..end {
+                    col_min[c] += add;
                 }
-                let (mn, mx) = self.cell_intrinsic(cell);
-                col_min[c] = col_min[c].max(mn);
-                col_max[c] = col_max[c].max(mx);
+            }
+            if mx > have_max {
+                let add = (mx - have_max) / span;
+                for c in p.col..end {
+                    col_max[c] += add;
+                }
             }
         }
         let sum_min: f32 = col_min.iter().sum();

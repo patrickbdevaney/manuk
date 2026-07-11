@@ -2044,6 +2044,80 @@ mod js_interactive_tests {
             !page13.dom().text_content(widget).contains("SHADOW"),
             "shadow content is not a light-DOM child of the host"
         );
+
+        // (14) The **browser-capability gate** every MediaWiki site in the world runs on us:
+        //
+        //   isCompatible() = 'querySelector' in document && 'localStorage' in window
+        //                    && typeof Promise === 'function' && Promise.prototype.finally
+        //                    && /./g.flags === 'g' && new Function('async (a = 0,) => a')
+        //
+        // Fail it and the site does not merely lose a feature — it *grades the browser down* and
+        // ships its no-script fallback. That is what kept Wikipedia's table of contents expanded
+        // and threw the whole page thousands of pixels out of alignment. Passing it is what makes
+        // Manuk a first-class browser to the sites that ask.
+        let html14 = r#"<!doctype html><html><body><p id="o">no</p>
+            <script>
+              var ok = !!('querySelector' in document && 'localStorage' in window
+                && typeof Promise === 'function' && Promise.prototype['finally']
+                && /./g.flags === 'g'
+                && (function(){ try { new Function('async (a = 0,) => a'); return true; }
+                                catch(e){ return false; } }()));
+              document.getElementById('o').textContent = ok ? 'GRADE-A' : 'GRADE-C';
+            </script></body></html>"#;
+        let page14 = Page::load(html14, "https://example.test/", &fonts, 800.0);
+        let r14 = page14.dom().root();
+        let o14 = manuk_css::query_selector_all(page14.dom(), r14, "#o")[0];
+        assert_eq!(
+            page14.dom().text_content(o14),
+            "GRADE-A",
+            "the real MediaWiki capability gate must grade Manuk as a fully capable browser"
+        );
+
+        // (15) `document.documentElement.className = ...` re-cascades. The web bootstraps itself
+        // this way (`client-nojs` → `client-js`, dark mode, feature flags): a class set by script
+        // must select real styles, or the page is styled for a world it isn't in.
+        let html15 = r#"<!doctype html><html class="a"><head>
+            <style>.a #x{height:300px} .b #x{height:20px}</style>
+            <script>document.documentElement.className='b';</script>
+            </head><body><div id="x"></div></body></html>"#;
+        let page15 = Page::load(html15, "https://example.test/", &fonts, 800.0);
+        let r15 = page15.dom().root();
+        let x15 = manuk_css::query_selector_all(page15.dom(), r15, "#x")[0];
+        let h15 = page15.root_box.node_rects(page15.dom())[&x15].height;
+        assert!(
+            (h15 - 20.0).abs() < 1.0,
+            "a script-set class on <html> must drive the cascade (got {h15}px, want 20px)"
+        );
+
+        // (16) Web Storage round-trips through the real, origin-partitioned store, and one origin
+        // cannot read another's.
+        let html16 = r#"<!doctype html><html><body><p id="o">?</p>
+            <script>
+              localStorage.setItem('k', 'v1');
+              sessionStorage.setItem('s', 'v2');
+              document.getElementById('o').textContent =
+                localStorage.getItem('k') + '/' + sessionStorage.getItem('s')
+                + '/' + localStorage.length + '/' + ('k' in localStorage);
+            </script></body></html>"#;
+        let page16 = Page::load(html16, "https://storage-a.test/page", &fonts, 800.0);
+        let r16 = page16.dom().root();
+        let o16 = manuk_css::query_selector_all(page16.dom(), r16, "#o")[0];
+        assert_eq!(
+            page16.dom().text_content(o16),
+            "v1/v2/1/true",
+            "localStorage/sessionStorage must round-trip, count, and answer `in`"
+        );
+        let html17 = r#"<!doctype html><html><body><p id="o">?</p>
+            <script>document.getElementById('o').textContent =
+                String(localStorage.getItem('k'));</script></body></html>"#;
+        let page17 = Page::load(html17, "https://storage-b.test/page", &fonts, 800.0);
+        let r17 = page17.dom().root();
+        let o17 = manuk_css::query_selector_all(page17.dom(), r17, "#o")[0];
+        assert_eq!(
+            page17.dom().text_content(o17),
+            "null",
+            "storage is partitioned by origin — storage-b must not see storage-a's key"
+        );
     }
 }
 

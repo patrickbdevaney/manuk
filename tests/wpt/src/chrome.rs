@@ -169,12 +169,32 @@ pub fn capture_boxes(html: &str, vw: u32, vh: u32) -> Result<HashMap<String, Box
 /// real site: relative subresource URLs would resolve against the temp file.)
 pub fn capture_url_screenshot(url: &str, vw: u32, vh: u32, dest: &Path) -> Result<()> {
     let chrome = chrome_bin().ok_or_else(|| anyhow!("no Chrome/Chromium found"))?;
+    // Screenshot the SAME page the box probe measures: the fetched HTML, served from a temp file
+    // with a `<base>` so subresources still resolve to the real origin.
+    //
+    // Pointing Chrome at the live URL instead looks more faithful and is in fact a trap: the two
+    // Chrome captures then render *different pages*. Wikipedia's CentralNotice injects a 350px
+    // fundraising banner on the real origin and not on a `file://` page, so the screenshot had a
+    // banner the box probe never saw — and the visual score and the structural score were measuring
+    // two different documents. One page, two probes.
+    let html = ureq_get(url)?;
+    let base = format!("<base href=\"{url}\">");
+    let doc = match html.find("<head>") {
+        Some(i) => {
+            let (a, b) = html.split_at(i + 6);
+            format!("{a}{base}{b}")
+        }
+        None => format!("{base}{html}"),
+    };
+    let tmp = std::env::temp_dir().join(format!("manuk-shot-{}.html", stable_tag(&doc)));
+    std::fs::write(&tmp, &doc)?;
     let mut cmd = Command::new(&chrome);
     cmd.args(base_flags(vw, vh))
         .arg("--virtual-time-budget=6000") // let the page settle (webfonts, JS) before the shot
         .arg(format!("--screenshot={}", dest.display()))
-        .arg(url);
+        .arg(format!("file://{}", tmp.display()));
     let out = cmd.output().context("running headless Chrome --screenshot <url>")?;
+    let _ = std::fs::remove_file(&tmp);
     if !out.status.success() {
         bail!(
             "chrome --screenshot exited with {}: {}",

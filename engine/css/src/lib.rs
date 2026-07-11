@@ -1908,6 +1908,18 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
 
 /// Parse an HTML presentational length attribute (`width="272"` or `width="272px"`) into
 /// pixels. Percentages and other units are ignored (returns `None`).
+/// An HTML presentational dimension attribute (`width="85%"`, `height="50"`) as a CSS `Dim`.
+/// Percentages are the point: `<table width="85%">` is how a large part of the legacy web —
+/// Hacker News included — sizes its layout, and treating it as "absent" shrink-to-fits the table.
+pub fn parse_dimension_attr_dim(v: &str) -> Option<Dim> {
+    let v = v.trim();
+    if let Some(pct) = v.strip_suffix('%') {
+        let n: f32 = pct.trim().parse().ok()?;
+        return (n.is_finite() && n >= 0.0).then_some(Dim::Percent(n));
+    }
+    parse_dimension_attr(v).map(Dim::Px)
+}
+
 fn parse_dimension_attr(v: &str) -> Option<f32> {
     let v = v.trim().trim_end_matches("px").trim();
     let n: f32 = v.parse().ok()?;

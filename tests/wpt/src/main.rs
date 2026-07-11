@@ -10,6 +10,24 @@ use std::path::PathBuf;
 use manuk_text::FontContext;
 
 fn main() {
+    run();
+    // SpiderMonkey's atexit handler segfaults if the process exits with a live JSContext —
+    // *after* main returns, so the output looks fine and the exit code is 139. Tear the runtime
+    // down explicitly, once every Page has been dropped.
+    manuk_net::webstorage::save();
+    manuk_js::shutdown();
+}
+
+fn run() {
+    // Engine diagnostics (a script that threw, a subresource that failed) go through `tracing`.
+    // `RUST_LOG=debug cargo run -p manuk-wpt -- ...` to see them.
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
+        )
+        .with_writer(std::io::stderr)
+        .try_init();
     let fonts = FontContext::new();
     if fonts.face_count() == 0 {
         eprintln!("note: no system fonts; text-dependent tests will be skipped");
@@ -407,6 +425,19 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
         p
     });
     let _ = vh;
+    // The <html> class is the page's own switch board (`client-nojs` → `client-js`, dark mode,
+    // feature flags). If a script failed to flip it, everything downstream is styled for the wrong
+    // world — so print what it ended up as.
+    {
+        let dom = page.dom();
+        if let Some(h) = dom.find_first("html") {
+            eprintln!(
+                "<html class=\"{}\">",
+                dom.element(h).and_then(|e| e.attr("class")).unwrap_or("")
+            );
+        }
+    }
+
     // `--tree ID` — print the LAYOUT BOX SUBTREE under one element (tag.class + rect), which is the
     // only view that shows *which* box is the wrong size. An id-keyed dump tells you the container
     // is 442px wide; this tells you which child made it so.

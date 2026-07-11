@@ -66,6 +66,9 @@ thread_local! {
     /// `getComputedStyle(el)`. Set by [`run_scripts`] for the current document.
     static STYLES: std::cell::RefCell<std::collections::HashMap<NodeId, manuk_css::ComputedStyle>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
+
+    /// The document's URL — the origin `document.cookie` reads and writes against.
+    static DOC_URL: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
 }
 
 /// A `Dim` as a CSS string.
@@ -433,6 +436,15 @@ unsafe fn define_members(
             );
         };
     if is_document {
+        // The document's landmark elements. `document.documentElement` in particular is how the
+        // web bootstraps itself: MediaWiki swaps `client-nojs` → `client-js` on it, and that class
+        // is what collapses Wikipedia's table of contents. Without this property the script threw,
+        // the class never changed, the TOC stayed fully expanded (1,949px instead of 364px), and
+        // every element on the page below it was ~5,000px out of place.
+        prop(c"documentElement", doc_get_document_element, None);
+        prop(c"body", doc_get_body, None);
+        prop(c"head", doc_get_head, None);
+        prop(c"cookie", doc_get_cookie, Some(doc_set_cookie));
         def(c"getElementById", doc_get_by_id, 1);
         def(c"querySelector", doc_query, 1);
         def(c"querySelectorAll", doc_query_all, 1);
@@ -1182,6 +1194,111 @@ unsafe extern "C" fn el_get_tag_name(cx: *mut RawJSContext, _argc: u32, vp: *mut
 }
 
 /// `element.id` getter → the `id` attribute (empty string if absent, per DOM).
+/// `__storage(op, area, key, value)` — the single native seam behind `localStorage` /
+/// `sessionStorage`. Ops: `get` `set` `remove` `clear` `keys`. The JS shim above turns this into
+/// the real Storage interface (indexed access, `length`, enumeration).
+unsafe extern "C" fn host_storage(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let op = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    let area_s = arg_string(cx, vp, argc, 1).unwrap_or_default();
+    let key = arg_string(cx, vp, argc, 2).unwrap_or_default();
+    let val = arg_string(cx, vp, argc, 3).unwrap_or_default();
+    let Some(area) = manuk_net::webstorage::Area::parse(&area_s) else {
+        *vp = NullValue();
+        return true;
+    };
+    let url = DOC_URL.with(|u| u.borrow().clone());
+    let Some(origin) = manuk_net::webstorage::origin_of(&url) else {
+        // An opaque origin (about:blank, a data: URL) gets no storage — as in every browser.
+        *vp = NullValue();
+        return true;
+    };
+    match op.as_str() {
+        "get" => match manuk_net::webstorage::get(area, &origin, &key) {
+            Some(v) => return_string(cx, vp, &v),
+            None => *vp = NullValue(),
+        },
+        "set" => {
+            let ok = manuk_net::webstorage::set(area, &origin, &key, &val);
+            *vp = mozjs::jsval::BooleanValue(ok);
+        }
+        "remove" => {
+            manuk_net::webstorage::remove(area, &origin, &key);
+            *vp = UndefinedValue();
+        }
+        "clear" => {
+            manuk_net::webstorage::clear(area, &origin);
+            *vp = UndefinedValue();
+        }
+        "keys" => {
+            let ks = manuk_net::webstorage::keys(area, &origin);
+            // Hand the list back as a JSON array string; the shim parses it. Cheap, and it keeps
+            // the FFI surface to a single string-in/string-out function.
+            let json = serde_json::to_string(&ks).unwrap_or_else(|_| "[]".into());
+            return_string(cx, vp, &json);
+        }
+        _ => *vp = UndefinedValue(),
+    }
+    true
+}
+
+/// `document.documentElement` → the `<html>` element.
+unsafe extern "C" fn doc_get_document_element(
+    cx: *mut RawJSContext,
+    _argc: u32,
+    vp: *mut Value,
+) -> bool {
+    match this_node(vp) {
+        Some((dom, _)) => {
+            let html = (*dom).find_first("html");
+            return_node_or_null(cx, vp, dom, html);
+        }
+        None => *vp = NullValue(),
+    }
+    true
+}
+
+/// `document.body` → the `<body>` element.
+unsafe extern "C" fn doc_get_body(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    match this_node(vp) {
+        Some((dom, _)) => {
+            let body = (*dom).find_first("body");
+            return_node_or_null(cx, vp, dom, body);
+        }
+        None => *vp = NullValue(),
+    }
+    true
+}
+
+/// `document.head` → the `<head>` element.
+unsafe extern "C" fn doc_get_head(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    match this_node(vp) {
+        Some((dom, _)) => {
+            let head = (*dom).find_first("head");
+            return_node_or_null(cx, vp, dom, head);
+        }
+        None => *vp = NullValue(),
+    }
+    true
+}
+
+/// `document.cookie` — the real jar, minus `HttpOnly` (script must never see those).
+unsafe extern "C" fn doc_get_cookie(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let url = DOC_URL.with(|u| u.borrow().clone());
+    return_string(cx, vp, &manuk_net::document_cookie(&url));
+    true
+}
+
+/// `document.cookie = "k=v; path=/"` — one assignment into the same jar the network uses, so a
+/// cookie a script writes is a cookie the next request sends.
+unsafe extern "C" fn doc_set_cookie(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some(v) = arg_string(cx, vp, argc, 0) {
+        let url = DOC_URL.with(|u| u.borrow().clone());
+        manuk_net::set_document_cookie(&url, &v);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
 unsafe extern "C" fn el_get_id(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
         Some((dom, node)) => {
@@ -1243,6 +1360,7 @@ pub unsafe fn install(
     dom: *mut Dom,
     doc_url: &str,
 ) {
+    DOC_URL.with(|u| *u.borrow_mut() = doc_url.to_string());
     let root = (*dom).root();
     let doc_ptr = JS_NewObject(&mut wrap_cx(cx), &NODE_CLASS);
     rooted!(in(cx) let document = doc_ptr);
@@ -1288,6 +1406,14 @@ pub unsafe fn install(
         c"__hostLog".as_ptr(),
         Some(host_log),
         2,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__storage".as_ptr(),
+        Some(host_storage),
+        4,
         0,
     );
     JS_DefineFunction(
@@ -1794,6 +1920,67 @@ const WINDOW_PRELUDE: &str = r#"
         var g = globalThis;
         if (typeof g.window === 'undefined') g.window = g;
         if (typeof g.self === 'undefined') g.self = g;
+
+        // ---- Web Storage -------------------------------------------------------------------
+        // The web FEATURE-DETECTS this and grades the browser on it. MediaWiki's startup script
+        // tests `'localStorage' in window` and, failing it, reverts the page to its no-script
+        // fallback — which is why Wikipedia's table of contents would not collapse and the whole
+        // page landed thousands of pixels out of place. A Proxy gives the real interface (indexed
+        // access, `length`, enumeration, `delete`) over one native seam.
+        var mkStorage = function (area) {
+            var api = {
+                getItem: function (k) { return g.__storage('get', area, String(k), ''); },
+                setItem: function (k, v) {
+                    if (!g.__storage('set', area, String(k), String(v))) {
+                        var e = new Error('QuotaExceededError');
+                        e.name = 'QuotaExceededError';
+                        throw e;
+                    }
+                },
+                removeItem: function (k) { g.__storage('remove', area, String(k), ''); },
+                clear: function () { g.__storage('clear', area, '', ''); },
+                key: function (i) {
+                    var ks = JSON.parse(g.__storage('keys', area, '', '') || '[]');
+                    i = Number(i);
+                    return (i >= 0 && i < ks.length) ? ks[i] : null;
+                }
+            };
+            var keysOf = function () { return JSON.parse(g.__storage('keys', area, '', '') || '[]'); };
+            return new Proxy(api, {
+                get: function (t, p) {
+                    if (p === 'length') return keysOf().length;
+                    if (typeof p !== 'string') return undefined;
+                    if (Object.prototype.hasOwnProperty.call(t, p)) return t[p];
+                    var v = g.__storage('get', area, p, '');
+                    return v === null ? undefined : v;
+                },
+                set: function (t, p, v) {
+                    if (typeof p === 'string' && !Object.prototype.hasOwnProperty.call(t, p)) {
+                        g.__storage('set', area, p, String(v));
+                    }
+                    return true;
+                },
+                has: function (t, p) {
+                    if (p === 'length' || Object.prototype.hasOwnProperty.call(t, p)) return true;
+                    return typeof p === 'string' && g.__storage('get', area, p, '') !== null;
+                },
+                deleteProperty: function (t, p) {
+                    if (typeof p === 'string') g.__storage('remove', area, p, '');
+                    return true;
+                },
+                ownKeys: function () { return keysOf(); },
+                getOwnPropertyDescriptor: function (t, p) {
+                    if (typeof p !== 'string') return undefined;
+                    var v = g.__storage('get', area, p, '');
+                    if (v === null) return undefined;
+                    return { value: v, writable: true, enumerable: true, configurable: true };
+                }
+            });
+        };
+        if (typeof g.localStorage === 'undefined') g.localStorage = mkStorage('local');
+        if (typeof g.sessionStorage === 'undefined') g.sessionStorage = mkStorage('session');
+        // -----------------------------------------------------------------------------------
+
         var mk = function (level) {
             return function () {
                 var parts = [];

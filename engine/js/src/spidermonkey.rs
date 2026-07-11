@@ -21,26 +21,72 @@ use mozjs::rust::{
 
 use crate::{JsError, JsRuntime, JsValue};
 
-/// The process-global SpiderMonkey engine. `JSEngine::init()` may run only once per
-/// process, so we initialize it exactly once (via `OnceLock`) and share the handle
-/// across every runtime/thread — the standard embedding pattern. The engine is
-/// deliberately leaked so it lives for the whole process.
-static ENGINE: OnceLock<Option<JSEngineHandle>> = OnceLock::new();
+/// The process-global SpiderMonkey engine. `JSEngine::init()` may run only once per process, so it
+/// is initialized exactly once and its handle shared across every runtime — the standard embedding
+/// pattern.
+///
+/// The engine is **owned** here rather than leaked, because SpiderMonkey requires `JS_ShutDown()`
+/// before the process exits. Leaking it (the obvious "keep it alive forever" move) means shutdown
+/// never runs, and SpiderMonkey's C++ static destructors then execute against a still-initialized
+/// engine and **segfault inside `__run_exit_handlers`** — after `main` has returned, so every byte
+/// of output looks correct and only the exit code (139) betrays it. Worse, a crash there aborts the
+/// remaining exit handlers, which is precisely where a browser flushes its cookie jar and
+/// `localStorage` to the profile: the failure mode is silent data loss (ADR-009).
+/// `JSEngine` is not `Send` — SpiderMonkey is thread-affine — so the engine itself lives on the one
+/// thread that creates it (the UI thread). Its **handle** is `Send`, so it is published in a
+/// process-global slot: that is how any thread obtains a `Runtime` from the single engine
+/// `JSEngine::init()` is allowed to create.
+///
+/// The engine is held in `ManuallyDrop` so that thread-local teardown — whose order across
+/// thread-locals is *unspecified* — can never drop it out from under a still-live `Runtime`
+/// (`JSEngine::drop` asserts "There are outstanding JS engine handles" if it does). The only way it
+/// is destroyed is [`shutdown_engine`], which runs after the runtime, in that order, on purpose.
+thread_local! {
+    static ENGINE: std::cell::RefCell<Option<std::mem::ManuallyDrop<JSEngine>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// The published handle. A `Mutex<Option<_>>` rather than a `OnceLock` because it must be
+/// *clearable*: a cached handle is an outstanding handle, and the engine refuses to shut down while
+/// one exists.
+static ENGINE_HANDLE: OnceLock<std::sync::Mutex<Option<JSEngineHandle>>> = OnceLock::new();
 
 pub(crate) fn engine_handle() -> Result<JSEngineHandle, JsError> {
-    ENGINE
-        .get_or_init(|| match JSEngine::init() {
-            Ok(engine) => {
-                let handle = engine.handle();
-                std::mem::forget(engine); // keep the engine alive for the process
-                Some(handle)
-            }
-            Err(_) => None,
-        })
-        .clone()
-        .ok_or_else(|| JsError {
+    let cell = ENGINE_HANDLE.get_or_init(|| std::sync::Mutex::new(None));
+    let mut slot = cell.lock().map_err(|_| JsError {
+        message: "SpiderMonkey engine lock poisoned".to_string(),
+    })?;
+    if slot.is_none() {
+        let engine = JSEngine::init().map_err(|_| JsError {
             message: "SpiderMonkey JSEngine::init() failed".to_string(),
-        })
+        })?;
+        *slot = Some(engine.handle());
+        ENGINE.with(|c| *c.borrow_mut() = Some(std::mem::ManuallyDrop::new(engine)));
+    }
+    slot.as_ref().cloned().ok_or_else(|| JsError {
+        message: "SpiderMonkey JSEngine::init() failed".to_string(),
+    })
+}
+
+/// Drop the engine, calling `JS_ShutDown()`. Every runtime (and therefore every outstanding
+/// handle) must already be gone — `JSEngine::drop` asserts on that, and the assert is the point:
+/// shutting down under a live runtime is the other way to crash here.
+pub(crate) fn shutdown_engine() {
+    // Release the cached handle first — it counts as outstanding.
+    if let Some(cell) = ENGINE_HANDLE.get() {
+        if let Ok(mut slot) = cell.lock() {
+            *slot = None;
+        }
+    }
+    // Then the engine itself, which is what calls `JS_ShutDown()`. Only the thread that created it
+    // holds it; called from anywhere else this is a no-op and the engine simply leaks (the old
+    // behaviour), which is safe but leaves the atexit crash in place — so call it from the JS
+    // thread.
+    ENGINE.with(|cell| {
+        if let Some(e) = cell.borrow_mut().take() {
+            drop(std::mem::ManuallyDrop::into_inner(e));
+        }
+    });
 }
 
 /// A SpiderMonkey runtime bound to the current thread.
