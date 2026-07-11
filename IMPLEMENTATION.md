@@ -974,23 +974,27 @@ parity gate stays green.
   recency + budget) existed with no caller; added process-global `net::preconnect()` and wired
   it to link *hover* in the shell (`CursorMoved`), so the click's request reuses a warm TLS
   connection. Recency/budget prevent hover spam.
-- **P1** ⏳ grid-template-areas — **diagnosed precisely** (the confirmed Vector-skin/Wikipedia
-  fix): `grid-template-areas` + `grid-area` are entirely unparsed, so named items auto-place in
-  DOM source order → sidebar mis-columns (reproduced with a 2×2 named-area test). *Approach
-  (next focused pass):* both engines already support it natively — Stylo computes
-  `NamedArea { name, rows, columns }` (pre-resolved ranges) and taffy has
-  `GridTemplateArea` + `GridPlacement::NamedLine`. Implementation is a cascade feature: carry
-  `grid_template_areas: Vec<GridAreaRect>` + item `grid_area` in `ComputedStyle`, map from
-  Stylo's `NamedArea` list and the grid-row/column named idents, resolve the item's area name
-  against the container's areas in `taffy_tree` → explicit line placement. Deferred as its own
-  pass rather than rushed here (intricate Stylo named-line encoding; honest-deferral rule).
+- **P1** ✅ grid-template-areas named placement — **the confirmed Vector-skin/Wikipedia fix**,
+  landed on the default Stylo path. Area names were dropped in the grid-line mapping, so named
+  items auto-placed in DOM source order. Now the cascade carries `grid_template_areas:
+  Vec<GridAreaRect>` (container) + `grid_area: Option<String>` (item): mapped from Stylo's
+  pre-resolved `NamedArea` rects and the grid-row-start custom-ident, then `taffy_tree` resolves
+  each child's area name against the container's rects into explicit line placement. Verified:
+  a `'side head' / 'side main'` grid now renders SIDEBAR spanning the left column (was
+  source-order auto-place). Parity 72/72.
 - **MEM3** ✅ binary-size measured: default `manuk` (gui + Stylo + SpiderMonkey) = **16.4 MB**
   (text 15.5 MB, data 0.9 MB); 31 icu/stylo/mozjs dep lines confirm the cascade + JS engines
   are the bulk — the deliberate trade for a real Stylo cascade and audited SpiderMonkey vs a
   hand-rolled parser/JIT. *Follow-on:* `cargo install cargo-bloat` for per-symbol breakdown;
   `spidermonkey-noicu` ICU-delta A/B; dedupe duplicate crate resolutions (build-config only).
-- **Remaining (sequenced, each own seam-scoped pass, parity gate green):** P1 grid-areas cascade
-  (above); P2 UAX#14 (parity-sensitive); U2 bookmarks/downloads/history; U7 OAuth popup
-  (multi-window JS — large); U8 zoom/translate; DT/AG BiDi panels + AG5 in-process-latency
-  measurement. These are genuine multi-step features; sequenced honestly rather than
-  half-landed.
+- **AG5** ✅ in-process advantage **measured** (the thesis "needs a number"): a real
+  benchmark (`manuk-agent --bin ag5-latency`) round-trips an identical 300-node / 43 KB a11y
+  snapshot two ways. In-process (native owned value, no transport) = **24.6 µs/command**;
+  CDP-over-socket (JSON encode + real localhost TCP round trip + decode, both ends
+  `TCP_NODELAY` so the number is honest, not a Nagle stall) = **295 µs/command**. So the
+  agent-native path avoids **~270 µs of pure transport/serialization per command — ~12×
+  faster** — which compounds over the hundreds–thousands of commands an agent issues per task.
+- **Remaining (sequenced, each own seam-scoped pass, parity gate green):** P2 UAX#14
+  (parity-sensitive); U2 bookmarks/downloads/history; U7 OAuth popup (multi-window JS — large);
+  U8 zoom/translate; DT/AG BiDi devtools panels. These are genuine multi-step features;
+  sequenced honestly rather than half-landed.

@@ -19,6 +19,11 @@ path = "src/bin/agent-run.rs"
 name = "agent-local-suite"
 path = "src/bin/agent-local-suite.rs"
 
+# AG5: measure the in-process agent advantage vs a CDP-over-socket baseline.
+[[bin]]
+name = "ag5-latency"
+path = "src/bin/ag5-latency.rs"
+
 [dependencies]
 manuk-page.workspace = true
 manuk-a11y.workspace = true
