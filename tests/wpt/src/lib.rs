@@ -14,6 +14,7 @@
 use std::path::PathBuf;
 
 pub mod bench;
+pub mod fidelity;
 pub mod chrome;
 pub mod parity;
 pub mod reftest;

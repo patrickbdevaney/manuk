@@ -28,7 +28,10 @@ diff choose the work. Highest expected value per ADR-004 (traversal breadth)._
 |----|------|-----------|------|
 | **DEBT-1** | Eliminate the 4 UI-thread `block_on`s (page load, stylesheets, fetch pump, agent panel) — each is a latent hang | RELIABILITY | EPOCH-1 |
 | **DEBT-2** | Residual cascade superlinearity (still 4.3× worse per node at 19k nodes vs 1.3k) | EFFICIENCY | EPOCH-1 |
-| **G1** | **Real-site fidelity harness** (ADR-010 §1.10): generalize the Chrome probe from `#p-*` to **every `[id]` element**, snapshot real modern pages with CSS inlined (hermetic), compare Manuk vs Chrome boxes, report a fidelity %, ratchet it as a floor. Until this lands the 72/72 synthetic probe is NOT sufficient to claim "renders like Chromium". | FIDELITY | ADR-010 |
+| **W1** | **Wikipedia/Vector-2022 layout is structurally broken under Stylo** (screenshot evidence): overlapping elements, an UNHIDDEN language dropdown painted over the infobox, a floating Tools panel. Suspects: rules that should hide/position these (`display:none`, absolute/grid placement) are not matching or not applying. This is the **top traversal-blocking render bug** — it represents the whole "content site / complex skin" class, not one site. | RENDER/FIDELITY | G1 |
+| **W2** | HN fidelity 78.6% — table auto-layout column widths (header nav wraps) | RENDER | G1 |
+| ~~G1~~ | ~~Real-site fidelity harness~~ **DONE** — `manuk-wpt fidelity` (real URL → Manuk render + Chromium screenshot → block-grid comparison + side-by-side composite). Now a standing gate with a ratcheting floor. | FIDELITY | ADR-010 |
+| **G1-old** | (superseded) **Real-site fidelity harness** (ADR-010 §1.10): generalize the Chrome probe from `#p-*` to **every `[id]` element**, snapshot real modern pages with CSS inlined (hermetic), compare Manuk vs Chrome boxes, report a fidelity %, ratchet it as a floor. Until this lands the 72/72 synthetic probe is NOT sufficient to claim "renders like Chromium". | FIDELITY | ADR-010 |
 | **DEBT-3** | Shell-chrome headless paint — AESTHETICS/ERGONOMICS are currently **unprobeable** (a probe gap, not just a feature) | AESTHETICS | EPOCH-1 |
 
 ## Tier A — absorb outstanding beneficial work already suggested (do first)

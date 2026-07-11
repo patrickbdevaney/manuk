@@ -3232,6 +3232,7 @@ name = "manuk-wpt"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "image",
  "manuk-css",
  "manuk-dom",
  "manuk-html",

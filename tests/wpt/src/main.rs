@@ -23,6 +23,12 @@ fn main() {
         return;
     }
 
+    // `manuk-wpt fidelity` — G1: real-site VISUAL parity vs Chromium (ADR-010).
+    if args.first().map(String::as_str) == Some("fidelity") {
+        run_fidelity_cmd(&args[1..], &fonts);
+        return;
+    }
+
     // `manuk-wpt bench` — EPOCH probe: per-stage hot-path timings + scaling (§10.2).
     if args.first().map(String::as_str) == Some("bench") {
         run_bench_cmd(&args[1..], &fonts);
@@ -163,6 +169,77 @@ fn run_render_cmd(args: &[String], fonts: &FontContext) {
             Ok(()) => eprintln!("wrote {} (headless Chrome reference)", chrome_out.display()),
             Err(e) => eprintln!("chrome screenshot failed: {e}"),
         }
+    }
+}
+
+/// `manuk-wpt fidelity --urls https://a,https://b [--out DIR] [--width W] [--height H] [--floor 0.9]`
+///
+/// **G1 (ADR-010).** Renders each real URL through Manuk's full pipeline (external CSS, images,
+/// JS), screenshots Chromium rendering the same URL, and compares them **visually**. Box probes
+/// measure geometry; this measures what the user actually sees.
+fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
+    use manuk_page::Page;
+
+    let vw: u32 = flag(args, "--width").and_then(|s| s.parse().ok()).unwrap_or(1200);
+    let vh: u32 = flag(args, "--height").and_then(|s| s.parse().ok()).unwrap_or(800);
+    let floor: f64 = flag(args, "--floor").and_then(|s| s.parse().ok()).unwrap_or(0.0);
+    let out = flag(args, "--out").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
+    let Some(urls) = flag(args, "--urls") else {
+        eprintln!("usage: manuk-wpt fidelity --urls URL[,URL...] [--out DIR] [--floor 0.9]");
+        std::process::exit(2);
+    };
+    let _ = std::fs::create_dir_all(&out);
+
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("rt");
+    let mut rows = Vec::new();
+
+    for url in urls.split(',').map(str::trim).filter(|u| !u.is_empty()) {
+        let name = url
+            .trim_start_matches("https://")
+            .trim_start_matches("http://")
+            .split('/')
+            .next()
+            .unwrap_or(url)
+            .to_string();
+        eprintln!("fidelity: {name}");
+
+        // Manuk — the real pipeline (fetch, external CSS, images, JS), same as a user gets.
+        let Ok((html, final_url)) = rt.block_on(manuk_page::fetch_html(url)) else {
+            eprintln!("  fetch failed, skipping");
+            continue;
+        };
+        let page = rt.block_on(async {
+            let mut p = Page::load_async(&html, &final_url, fonts, vw as f32).await;
+            p.fetch_and_apply_stylesheets(fonts, vw as f32).await;
+            p
+        });
+        let mpath = out.join(format!("{name}.manuk.png"));
+        if page.paint(fonts, vw, vh).save_png(&mpath).is_err() {
+            eprintln!("  manuk render failed");
+            continue;
+        }
+
+        // Chromium — the same live URL, so it fetches its own subresources.
+        let cpath = out.join(format!("{name}.chrome.png"));
+        if let Err(e) = manuk_wpt::chrome::capture_url_screenshot(url, vw, vh, &cpath) {
+            eprintln!("  chrome: {e}");
+            continue;
+        }
+
+        match manuk_wpt::fidelity::compare(&mpath, &cpath, &name) {
+            Ok(f) => {
+                let side = out.join(format!("{name}.SIDE.png"));
+                let _ = manuk_wpt::fidelity::write_side_by_side(&mpath, &cpath, &side);
+                eprintln!("  side-by-side: {}", side.display());
+                rows.push(f);
+            }
+            Err(e) => eprintln!("  compare: {e}"),
+        }
+    }
+
+    let ok = manuk_wpt::fidelity::report(&rows, floor);
+    if !ok && floor > 0.0 {
+        std::process::exit(1);
     }
 }
 

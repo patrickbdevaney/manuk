@@ -8,7 +8,10 @@ description = "Web Platform Tests harness + results tracking. Ground-truth confo
 publish = false
 
 [features]
-# Run the parity/reftest harness against the real Stylo cascade instead of MinimalCascade.
+# ADR-011: the gates MUST run the SHIPPING configuration. The shell ships Stylo; gating on
+# MinimalCascade measured a cascade no user ever sees (and understated fidelity by ~5 points while
+# hiding a near-total Wikipedia layout failure). Stylo is therefore ON BY DEFAULT here.
+default = ["stylo"]
 stylo = ["manuk-page/stylo"]
 # Run page JS (SpiderMonkey) — off by default so the parity gate stays lean/fast. Enable it for
 # `manuk-wpt render` when the page you want to screenshot builds itself with JS (custom elements,
@@ -32,4 +35,5 @@ manuk-text.workspace = true
 manuk-page.workspace = true
 manuk-paint.workspace = true
 anyhow.workspace = true
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 serde_json.workspace = true

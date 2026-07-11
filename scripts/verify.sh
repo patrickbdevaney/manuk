@@ -25,6 +25,17 @@ head_ "P · parity (§1.1 — 72/72 vs headless Chrome)"
 PAR=$(cargo run -q -p manuk-wpt --release -- parity 2>&1 | tail -1)
 if echo "$PAR" | grep -q "72/72"; then ok "$PAR"; else bad "$PAR"; fi
 
+head_ "G1 · real-site visual fidelity vs Chromium (ADR-010/011 — SHIPPING config)"
+G1URLS="${MANUK_FIDELITY_URLS:-https://example.com,https://news.ycombinator.com}"
+G1FLOOR="${MANUK_FIDELITY_FLOOR:-0.75}"
+G1OUT="${MANUK_FIDELITY_OUT:-/tmp/manuk-fidelity}"
+if cargo run -q -p manuk-wpt --release -- fidelity --urls "$G1URLS" --out "$G1OUT" --floor "$G1FLOOR" >/tmp/manuk-g1.txt 2>&1; then
+  ok "$(grep 'MEAN FIDELITY' /tmp/manuk-g1.txt || echo 'fidelity ok')"
+  printf '    side-by-side composites in %s — LOOK at them\n' "$G1OUT"
+else
+  bad "real-site fidelity below floor ($G1FLOOR) — see $G1OUT"; grep -E 'BELOW|MEAN' /tmp/manuk-g1.txt | sed 's/^/    /'
+fi
+
 head_ "G2 · JS conformance (ADR-010 — the DOM/BOM surface real sites need)"
 JS=$(cargo test -q -p manuk-page --features spidermonkey -- --ignored js_conformance 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$JS" ]; then ok "js conformance: $JS"; else bad "JS conformance suite did not pass"; fi

@@ -107,6 +107,27 @@ pub fn capture_boxes(html: &str, vw: u32, vh: u32) -> Result<HashMap<String, Box
     parse_probe_json(&dom)
 }
 
+/// G1 — screenshot a **live URL** in headless Chrome, so Chromium fetches the page's own CSS,
+/// images and fonts exactly as it would for a user. (The file:// variant below can't do that for a
+/// real site: relative subresource URLs would resolve against the temp file.)
+pub fn capture_url_screenshot(url: &str, vw: u32, vh: u32, dest: &Path) -> Result<()> {
+    let chrome = chrome_bin().ok_or_else(|| anyhow!("no Chrome/Chromium found"))?;
+    let mut cmd = Command::new(&chrome);
+    cmd.args(base_flags(vw, vh))
+        .arg("--virtual-time-budget=6000") // let the page settle (webfonts, JS) before the shot
+        .arg(format!("--screenshot={}", dest.display()))
+        .arg(url);
+    let out = cmd.output().context("running headless Chrome --screenshot <url>")?;
+    if !out.status.success() {
+        bail!(
+            "chrome --screenshot exited with {}: {}",
+            out.status,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    Ok(())
+}
+
 /// Capture a PNG screenshot of a local HTML file at the given viewport (for eyeballing).
 pub fn capture_screenshot_png(html: &str, vw: u32, vh: u32, dest: &Path) -> Result<()> {
     let chrome = chrome_bin().ok_or_else(|| anyhow!("no Chrome/Chromium found"))?;

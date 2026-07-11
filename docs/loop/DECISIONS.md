@@ -292,3 +292,37 @@ not behave the way a user *already expects* is a defect, not a missing feature.
 
 **One command.** All gates run via a single `verify` entry so a tick cannot "forget" one, and so the
 epoch's floors, the parity gate, and these gates are one wall rather than four.
+
+## ADR-011 — Gates MUST run the SHIPPING configuration (2026-07-11)
+
+**The bug in the method.** `manuk-wpt` defaulted to `MinimalCascade`. The **shell ships Stylo**. So
+the parity gate, the new G1 fidelity gate, and the EPOCH bench were all validating **a cascade no
+user has ever seen**. A gate that does not test what ships is not a gate.
+
+Caught by screenshot, exactly as the user predicted ("you will need to screenshot and analyze the
+headful browser UI rather than side channels and WPT heuristics that don't match the actual user
+experience"). Rendering Wikipedia under each cascade:
+
+- **MinimalCascade** — essentially **unstyled**: the no-CSS fallback source order (a checkbox "Main
+  menu", nav links stacked vertically, article content pushed off-screen). The "1990s look".
+- **Stylo** — genuinely styled (typography, links, infobox) but with **broken layout**: overlapping
+  elements, an unhidden language dropdown sitting on the infobox, a floating Tools panel.
+
+Two completely different bug classes, and the gates were pointed at the wrong one.
+
+**The rule.** Every gate builds the shipping configuration. `stylo` is now **default** for
+`manuk-wpt`; a full-fidelity G1 run also enables `spidermonkey` (the modern web is JS-driven, and a
+gate without JS measures a page no user loads). Parity is **72/72 under both**, so this cost nothing
+and should have been done from the start.
+
+**What it changed immediately.** Fidelity was *understated*: example.com 96.8→**99.2%**, HN
+71.2→**78.6%**, Wikipedia 75.5→**81.0%**, mean 81.2→**86.3%** — while simultaneously **hiding** a
+near-total Wikipedia layout failure that only the screenshot revealed. Both errors at once: the
+numbers were too low *and* too kind.
+
+**Generalization (the user's actual ask).** Real-site CSS/HTML and JS parity cannot be established
+by box probes on synthetic pages. It requires: render the real page in the shipping config →
+screenshot → compare to Chromium's screenshot of the same URL → **look at the composite**. G1 is
+that loop, and it is now a standing gate with a ratcheting floor (start 0.75; raise as it improves).
+The numeric score alone is insufficient and is documented as such: Wikipedia scored 75% while being
+visibly, structurally broken. **The score gates; the eyeball diagnoses.**
