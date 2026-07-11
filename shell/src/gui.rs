@@ -67,6 +67,16 @@ pub fn run(url: String, width: u32, measure_frames: Option<usize>) -> Result<()>
     Ok(())
 }
 
+/// A back-forward-cached page: the fully constructed [`Page`] plus the scroll offset to
+/// restore. Held in [`App::bfcache`] so Back/Forward is instant (R2).
+struct BfEntry {
+    page: Page,
+    scroll: f32,
+}
+
+/// Max pages kept in the back-forward cache (a small retained tier — bounded memory).
+const BFCACHE_CAP: usize = 6;
+
 struct App {
     url: String,
     width: u32,
@@ -97,6 +107,10 @@ struct App {
     // ---- E1 chrome UI state ----
     modifiers: ModifiersState,
     history: History,
+    /// R2 back-forward cache: recently-navigated-away pages kept fully constructed (DOM +
+    /// layout + scroll) so Back/Forward restores instantly instead of re-running the whole
+    /// pipeline. Bounded LRU (most-recent last).
+    bfcache: Vec<(String, BfEntry)>,
     bookmarks: Bookmarks,
     settings: Settings,
     zoom: f32,
@@ -204,6 +218,7 @@ impl App {
             frames_done: 0,
             modifiers: ModifiersState::empty(),
             history: History::new(),
+            bfcache: Vec::new(),
             bookmarks: Bookmarks::new(),
             settings: Settings::default(),
             zoom: 1.0,
@@ -392,11 +407,16 @@ impl App {
     fn handle_chrome_click(&mut self, x: f32) {
         if x < 30.0 {
             if let Some(u) = self.history.back().map(str::to_string) {
-                self.goto_no_history(&u);
+                // R2: instant restore from bfcache, else a fresh load.
+                if !self.restore_from_bfcache(&u) {
+                    self.goto_no_history(&u);
+                }
             }
         } else if x < 56.0 {
             if let Some(u) = self.history.forward().map(str::to_string) {
-                self.goto_no_history(&u);
+                if !self.restore_from_bfcache(&u) {
+                    self.goto_no_history(&u);
+                }
             }
         } else if x < 92.0 {
             let u = self.url.clone();
@@ -643,8 +663,10 @@ impl App {
         self.history.push(url.to_string());
     }
 
-    /// Load `url` without touching the history stack (used by back/forward).
+    /// Load `url` without touching the history stack (used by back/forward). Stashes the
+    /// outgoing page into the bfcache so a later Back/Forward to it is instant.
     fn goto_no_history(&mut self, url: &str) {
+        self.stash_current();
         let (w, h) = match &self.gpu {
             Some(g) => (g.config.width, g.config.height),
             None => (self.width, 768),
@@ -657,6 +679,49 @@ impl App {
         }
         self.scroll_y = 0.0;
         self.rerender();
+    }
+
+    /// R2 — move the current page into the bfcache (bounded LRU), keyed by its URL. A no-op
+    /// for the blank/home page. Called before every navigation so the page we leave can be
+    /// restored instantly on Back/Forward.
+    fn stash_current(&mut self) {
+        let Some(page) = self.page.take() else { return };
+        let url = self.url.clone();
+        if url.is_empty() || url == "about:blank" {
+            return;
+        }
+        self.bfcache.retain(|(u, _)| u != &url);
+        self.bfcache.push((url, BfEntry { page, scroll: self.scroll_y }));
+        while self.bfcache.len() > BFCACHE_CAP {
+            self.bfcache.remove(0);
+        }
+    }
+
+    /// R2 — restore `url` from the bfcache instantly (swap in the constructed page + scroll,
+    /// no pipeline). Returns `false` if it wasn't cached. Stashes the current page first so
+    /// the page being left stays available for the opposite Back/Forward direction.
+    fn restore_from_bfcache(&mut self, url: &str) -> bool {
+        self.stash_current();
+        let Some(pos) = self.bfcache.iter().position(|(u, _)| u == url) else {
+            return false;
+        };
+        let (_, entry) = self.bfcache.remove(pos);
+        let (w, h) = match &self.gpu {
+            Some(g) => (g.config.width, g.config.height),
+            None => (self.width, 768),
+        };
+        self.url = url.to_string();
+        self.viewport = Viewport::new(w as f32, (h as f32 - CHROME_HEIGHT).max(1.0));
+        self.viewport.content_height = entry.page.content_height;
+        self.scroll_y = entry.scroll;
+        self.clamp_scroll();
+        if let Some(win) = &self.window {
+            win.set_title(&format!("{} — manuk", entry.page.title));
+        }
+        self.page = Some(entry.page);
+        tracing::info!(%url, "restored from bfcache (instant Back/Forward)");
+        self.rerender();
+        true
     }
 
     // ---- §5 session persistence + multi-tab navigation ----
