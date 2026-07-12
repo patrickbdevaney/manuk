@@ -52,6 +52,88 @@ var pre=document.createElement('pre');pre.id='__PARITY__';
 pre.textContent=JSON.stringify(out);document.documentElement.appendChild(pre);})();
 </script>"#;
 
+/// **The oracle's Chromium half.** Render an *already-fetched snapshot* and report every `[id]`
+/// element's tag, computed `display`, and box.
+///
+/// It takes the HTML rather than a URL on purpose: the oracle must feed **one identical document**
+/// to both engines. Fetching independently per engine compares two different documents and calls
+/// the difference a bug — which is exactly what pinned a metric at 5,122px across four correct
+/// fixes, because the live origin injected a banner the `file://` copy never saw.
+pub fn oracle_probe(html: &str, base_url: &str, vw: u32, vh: u32) -> Result<HashMap<String, (String, String, [i64; 4])>> {
+    let chrome = chrome_bin().ok_or_else(|| anyhow!("no Chrome/Chromium found"))?;
+    let base = format!("<base href=\"{base_url}\">");
+    let probe = r#"<script>
+(function(){
+  var out = {};
+  document.querySelectorAll('[id]').forEach(function(e){
+    var r = e.getBoundingClientRect();
+    var cs = getComputedStyle(e);
+    if (r.width === 0 && r.height === 0 && cs.display !== 'none') return;
+    out[e.id] = [e.tagName.toLowerCase(), cs.display,
+                 Math.round(r.x + window.scrollX), Math.round(r.y + window.scrollY),
+                 Math.round(r.width), Math.round(r.height)];
+  });
+  // Health of the ORACLE ITSELF, not of the diff: is what Chromium rendered a real document, or a
+  // bot wall / error page / no-script shell? Answered by what Chromium DREW, not by how many
+  // elements happened to carry an id.
+  out['__META__'] = ['', '', document.querySelectorAll('*').length,
+                     (document.body ? document.body.innerText.length : 0), 0, 0];
+  var pre = document.createElement('pre'); pre.id = '__ORACLE__';
+  pre.textContent = JSON.stringify(out);
+  document.documentElement.appendChild(pre);
+})();
+</script>"#;
+    let doc = match html.find("<head>") {
+        Some(i) => {
+            let (a, b) = html.split_at(i + 6);
+            format!("{a}{base}{b}{probe}")
+        }
+        None => format!("{base}{html}{probe}"),
+    };
+    let tmp = std::env::temp_dir().join(format!("manuk-oracle-{}.html", stable_tag(&doc)));
+    std::fs::write(&tmp, &doc)?;
+    let mut cmd = Command::new(&chrome);
+    cmd.args(base_flags(vw, vh))
+        .arg("--virtual-time-budget=8000")
+        .arg("--dump-dom")
+        .arg(format!("file://{}", tmp.display()));
+    let out = cmd.output().context("chrome --dump-dom (oracle probe)")?;
+    let _ = std::fs::remove_file(&tmp);
+    if !out.status.success() {
+        bail!("chrome --dump-dom failed: {}", String::from_utf8_lossy(&out.stderr).trim());
+    }
+    let dumped = String::from_utf8_lossy(&out.stdout);
+    let dom = manuk_html::parse(&dumped);
+    let mut json = None;
+    for n in dom.descendants(dom.root()) {
+        if dom.element(n).and_then(|e| e.id()) == Some("__ORACLE__") {
+            json = Some(dom.text_content(n));
+            break;
+        }
+    }
+    let json = json.ok_or_else(|| anyhow!("oracle probe did not run in Chromium"))?;
+    let v: serde_json::Value = serde_json::from_str(json.trim()).context("parsing oracle JSON")?;
+    let mut map = HashMap::new();
+    if let Some(o) = v.as_object() {
+        for (id, arr) in o {
+            let Some(a) = arr.as_array() else { continue };
+            if a.len() < 6 {
+                continue;
+            }
+            let tag = a[0].as_str().unwrap_or("").to_string();
+            let disp = a[1].as_str().unwrap_or("").to_string();
+            let rect = [
+                a[2].as_i64().unwrap_or(0),
+                a[3].as_i64().unwrap_or(0),
+                a[4].as_i64().unwrap_or(0),
+                a[5].as_i64().unwrap_or(0),
+            ];
+            map.insert(id.clone(), (tag, disp, rect));
+        }
+    }
+    Ok(map)
+}
+
 /// Capture Chrome's `[id]` boxes **before and after** a scripted interaction — the G5 half.
 ///
 /// The interaction JS runs between the two probes, in the same document. Running it in a second

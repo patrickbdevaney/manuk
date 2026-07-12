@@ -66,6 +66,13 @@ fn run() {
         return;
     }
 
+    // `manuk-wpt oracle` — THE DIFFERENTIAL ORACLE (METHODOLOGY Part 2). Chromium as an infinite
+    // test generator: same document, both engines, diff, cluster by root cause, rank by sites.
+    if args.first().map(String::as_str) == Some("oracle") {
+        run_oracle_cmd(&args[1..], &fonts);
+        return;
+    }
+
     // `manuk-wpt hittest` — the LINK-CLICK flow, reproduced headlessly. Take every `<a href>` on a
     // real page, hit-test its own centre, and see whether the browser finds it again.
     if args.first().map(String::as_str) == Some("hittest") {
@@ -821,4 +828,159 @@ fn run_hittest_cmd(args: &[String], fonts: &FontContext) {
     if miss > 0 {
         std::process::exit(1);
     }
+}
+
+
+/// `manuk-wpt oracle --corpus FILE [--snapshots DIR] [--tol 8] [--width W]`
+///
+/// The discovery engine. For each site: fetch ONCE, feed the identical snapshot to both engines,
+/// diff every `[id]` element's tag/`display`/box, cluster by root cause, rank by sites explained.
+fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
+    use manuk_wpt::oracle::{cluster, diff_page, oracle_is_healthy, report, Seen};
+    use std::collections::HashMap;
+
+    let vw: u32 = flag(args, "--width").and_then(|s| s.parse().ok()).unwrap_or(1200);
+    let vh: u32 = flag(args, "--height").and_then(|s| s.parse().ok()).unwrap_or(800);
+    let tol: i64 = flag(args, "--tol").and_then(|s| s.parse().ok()).unwrap_or(8);
+    let snap_dir = flag(args, "--snapshots").unwrap_or("/tmp/manuk-oracle-snapshots");
+    let _ = std::fs::create_dir_all(snap_dir);
+
+    // The crawl frame. A corpus file, or explicit --urls.
+    let urls: Vec<String> = if let Some(u) = flag(args, "--urls") {
+        u.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+    } else if let Some(c) = flag(args, "--corpus") {
+        let text = std::fs::read_to_string(c).unwrap_or_else(|e| {
+            eprintln!("cannot read {c}: {e}");
+            std::process::exit(1);
+        });
+        text.lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .filter_map(|l| l.split_whitespace().nth(1).map(str::to_string))
+            .collect()
+    } else {
+        eprintln!("usage: manuk-wpt oracle (--corpus FILE | --urls A,B) [--tol 8]");
+        std::process::exit(2);
+    };
+
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("rt");
+    let mut all_divs = Vec::new();
+    let (mut diffed, mut skipped) = (0usize, 0usize);
+
+    for url in &urls {
+        let short = url.trim_start_matches("https://").trim_start_matches("http://");
+        let short = short.split('/').next().unwrap_or(short).to_string();
+
+        // --- ONE snapshot. Cached on disk, so a re-run diffs the SAME document and a fix is
+        // --- attributable to the engine rather than to the site having changed under us.
+        let key = format!("{:016x}", fnv(url));
+        let snap_path = std::path::Path::new(snap_dir).join(format!("{key}.html"));
+        let html = match std::fs::read_to_string(&snap_path) {
+            Ok(h) => h,
+            Err(_) => match rt.block_on(manuk_page::fetch_html(url)) {
+                Ok((h, _)) => {
+                    let _ = std::fs::write(&snap_path, &h);
+                    h
+                }
+                Err(e) => {
+                    eprintln!("  {short}: fetch failed ({e}) — skipping");
+                    skipped += 1;
+                    continue;
+                }
+            },
+        };
+
+        // --- Chromium, on that snapshot.
+        let chrome_raw = match manuk_wpt::chrome::oracle_probe(&html, url, vw, vh) {
+            Ok(m) => m,
+            Err(e) => {
+                eprintln!("  {short}: chromium probe failed ({e}) — skipping");
+                skipped += 1;
+                continue;
+            }
+        };
+        let mut chrome: HashMap<String, Seen> = chrome_raw
+            .into_iter()
+            .map(|(id, (tag, display, rect))| (id, Seen { tag, display, rect }))
+            .collect();
+
+        // --- Never diff against a degraded oracle.
+        if let Err(why) = oracle_is_healthy(&chrome) {
+            eprintln!("  {short}: DISCARDED — {why}");
+            skipped += 1;
+            continue;
+        }
+        chrome.remove("__META__"); // health metadata, not an element
+
+        // --- Manuk, on the SAME snapshot, with the same base URL.
+        let page = rt.block_on(async {
+            let mut p = manuk_page::Page::load_async(&html, url, fonts, vw as f32).await;
+            p.finish_loading(fonts, vw as f32).await;
+            p
+        });
+        let rects = page.root_box.node_rects(page.dom());
+        let styles = page.styles_map();
+        let dom = page.dom();
+        let manuk: HashMap<String, Seen> = dom
+            .descendants(dom.root())
+            .filter_map(|n| {
+                let id = dom.element(n).and_then(|e| e.attr("id"))?;
+                let tag = dom.tag_name(n)?.to_string();
+                let display = styles
+                    .get(&n)
+                    .map(|s| css_display_name(s.display))
+                    .unwrap_or("none")
+                    .to_string();
+                let r = rects.get(&n);
+                // A `display:none` element legitimately has no box; report it as such rather than
+                // as missing, so the oracle can tell "we hid it" from "we lost it".
+                let rect = match r {
+                    Some(r) => [r.x as i64, r.y as i64, r.width as i64, r.height as i64],
+                    None if display == "none" => [0, 0, 0, 0],
+                    None => return None,
+                };
+                Some((id.to_string(), Seen { tag, display, rect }))
+            })
+            .collect();
+
+        let divs = diff_page(&short, &chrome, &manuk, tol);
+        eprintln!("  {short}: {} divergence(s) over {} probed", divs.len(), chrome.len());
+        all_divs.extend(divs);
+        diffed += 1;
+    }
+
+    let clusters = cluster(&all_divs);
+    report(&clusters, diffed, skipped);
+}
+
+/// Our `Display` as CSS names it — the vocabulary the oracle diffs in.
+fn css_display_name(d: manuk_css::Display) -> &'static str {
+    use manuk_css::Display as D;
+    match d {
+        D::Block => "block",
+        D::Inline => "inline",
+        D::InlineBlock => "inline-block",
+        D::Flex => "flex",
+        D::Grid => "grid",
+        D::InlineFlex => "inline-flex",
+        D::InlineGrid => "inline-grid",
+        D::Table => "table",
+        D::TableRow => "table-row",
+        D::TableRowGroup => "table-row-group",
+        D::TableCell => "table-cell",
+        D::TableCaption => "table-caption",
+        D::TableColumn => "table-column",
+        D::TableColumnGroup => "table-column-group",
+        D::None => "none",
+    }
+}
+
+/// FNV-1a — a stable snapshot key with no clock and no RNG, so a re-run finds the same file.
+fn fnv(s: &str) -> u64 {
+    let mut h: u64 = 0xcbf29ce484222325;
+    for b in s.as_bytes() {
+        h ^= *b as u64;
+        h = h.wrapping_mul(0x100000001b3);
+    }
+    h
 }

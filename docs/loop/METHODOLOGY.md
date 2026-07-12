@@ -192,7 +192,28 @@ Replace hand-ordering with two intersected signals, refreshed at each EPOCH audi
 2. **Oracle divergence weight**: from Part 2's clustering, how many distinct sites in your crawl
    frame does each root cause explain.
 
-**Ledger score = usage_frequency × divergence_weight.** This is exactly the mechanism that
+### 4.1 Selection rule: broadest first, always. Depth is never a reason to go first.
+
+The ledger is ordered by **asymmetric breadth**, not by usage frequency alone and never by
+interest, difficulty, or how nearly-done something is:
+
+1. **Saltatory breadth first.** An item that unlocks *a whole class of design pattern* across the
+   widest set of sites outranks everything else, always. `:checked` (every CSS-only menu, accordion,
+   dropdown and sidebar on the web), `display:none` in a flex container (every hidden menu, modal
+   and template), form-control rendering (every form) — these are the shape. One change, a whole
+   pattern-class of the internet starts working. **Take every one of these before anything narrow.**
+2. **Then high-frequency sites** — the patterns concentrated in what people actually load most.
+3. **Then concentrated/specialised use** — narrow, deep, or complex items, however tempting.
+
+The oracle's ranking *is* this rule, mechanised: clusters are ranked by **distinct sites (and
+distinct traversal classes) explained**, so the broadest cause is at the top by construction. That
+ordering is not advice — it is the queue.
+
+**Never invert this.** A deep item is not more urgent for being deep, and a narrow item is not more
+urgent for being nearly finished. The failure mode this rule exists to prevent is spending a week on
+one site's last 8px while an entire design pattern is broken across ten thousand sites.
+
+**Ledger score = divergence_breadth (sites × classes) → usage_frequency → everything else.** This is exactly the mechanism that
 would have put `:checked` at the top of the queue automatically instead of leaving it a stub —
 high usage frequency (a load-bearing CSS-only interactivity primitive) times high divergence
 weight (every site using the checkbox hack diverges) is not a number judgment would reliably
@@ -464,6 +485,270 @@ don't substitute a WPT percentage or an external timeline for them.
 
 ---
 
+## Part 15 — Font/Text Stack: Adopt the Library, Don't Extract the Algorithm
+
+This is a narrow, explicit exception to "read Blink/Gecko for the algorithm only, never the
+code." Text metrics/hinting/shaping is a case where the correct move is to **link the actual
+sanctioned third-party libraries Chromium itself uses**, exactly as you already do with Stylo
+and SpiderMonkey — not re-derive their internals from source reading.
+
+- **Metrics, outline loading, hinting**: adopt **Skrifa** (Rust, part of Google's Fontations
+  family). This is the literal library Chromium ships as of Chrome 133–145, replacing FreeType.
+  Google ran extensive pixel-comparison testing between FreeType and Skrifa before shipping it
+  and maintains ~700 unit tests spanning low-level parsing through hinting virtual machines.
+  Adopting it directly makes your glyph metrics/hinting **byte-compatible with Chrome's current
+  pipeline**, not merely algorithm-similar.
+- **Shaping**: adopt **HarfBuzz** (C, via Rust bindings) for glyph substitution/positioning
+  (GSUB/GPOS), complex script shaping, ligatures. Both Chromium and Firefox use HarfBuzz for
+  this layer — it is a shared, independent library, not engine-specific code, and is a
+  legitimate sanctioned FFI dependency under your existing constraints.
+- **Rasterization** stays yours (tiny-skia) — Skrifa deliberately doesn't rasterize; it only
+  replaces the metrics/outline/hinting layer that Skia consumes.
+- **Known gap to track, not block on**: Skrifa currently exposes no stem-darkening
+  (small-size emboldening) controls the way FreeType did. File this as a known, narrow
+  divergence — it will show up as a small-text rendering difference in the oracle, not a
+  structural one.
+- **Priority**: do this before deep-diving any further font/text layout work. It collapses
+  what would otherwise be an open-ended "days each regardless of methodology" subsystem (per
+  your own EPOCH analysis) into a bounded integration task, and it's the single highest-value
+  unlock for the Bar 2 pixel-precision tier specifically, since font metrics are usually the
+  dominant source of persistent sub-pixel drift.
+
+---
+
+## Part 16 — Codebase-Aware Context: LSP-First, Not Chunk-Retrieval
+
+The rust-analyzer LSP plugin is already installed. This section governs *how* it and
+complementary tooling are used, not whether to install anything further.
+
+### 16.1 LSP is the default navigation tool, not a fallback
+- Before reading a file to understand its structure, prefer LSP operations (go-to-definition,
+  find-references, call hierarchy, incoming/outgoing calls) over grep or full-file reads. This
+  is exact-graph navigation from the compiler's own semantic model — it cannot bisect a
+  function across an arbitrary boundary the way embedding-chunk retrieval can, which is exactly
+  the property you asked to preserve.
+- Before any non-trivial refactor (renaming a shared type, changing a frozen interface per Part
+  3), run find-references first and treat the returned call sites as the actual blast radius —
+  not an estimate of it.
+- Rely on automatic post-edit diagnostics (type errors, missing imports) as an immediate,
+  free correctness signal on every edit — this is faster and more complete than waiting for the
+  next full verify-wall run to catch a type-level mistake.
+- **Known operational risk**: rust-analyzer can be memory-heavy and slow to respond on a large,
+  mozjs/Stylo-heavy workspace. If it becomes sluggish or crashes mid-session, disable it for
+  that session and fall back to targeted grep + `cargo check` rather than stalling — don't treat
+  a degraded LSP as a hard blocker.
+
+### 16.2 A cheap, generated orientation layer for session start
+LSP answers precise questions but assumes you already know roughly where to look. At the start
+of a fresh context window (new session, or post-compaction), generate — don't hand-maintain — a
+lightweight repository overview:
+- Parse the workspace with tree-sitter (or reuse `cargo doc`/`rustdoc` JSON output) to produce a
+  per-crate symbol list: public types, trait boundaries, and the frozen-interface types from
+  Part 3.1 called out explicitly.
+- This is deliberately *not* a PageRank-ranked map or an embedding index — it's a flat,
+  regenerated structural summary, cheap to produce, always current (regenerate at every EPOCH
+  audit or whenever crate boundaries shift), and it exists purely for orientation. Once oriented,
+  switch to LSP for anything precise.
+- Do not let this orientation artifact go stale and get trusted as ground truth — regenerating
+  it is cheap; treating a six-week-old hand-written architecture doc as current is the actual
+  failure mode this replaces.
+
+---
+
+## Part 17 — Long-Horizon Memory & Subagent Research Architecture
+
+Research-heavy work (the differential oracle's crawl, WPT triage, delta-debug reduction,
+Framework Exception Miner runs) must not accumulate in the main orchestrator's context. Model
+degradation with context length happens even when the relevant information is still present in
+context — so a context stuffed with raw crawl logs measurably degrades judgment quality on the
+*next* tick's decisions, independent of whether it technically still fits the window.
+
+### 17.1 The rule
+- Any task that is fundamentally "go look at a lot of things and come back with a verdict"
+  (oracle crawl analysis, WPT failure triage, delta-debug reduction, framework-exception
+  parsing) runs as an **isolated subagent call**, not inline in the main tick thread.
+- The subagent returns a **condensed, structured result** — cluster name, site-count/weight,
+  root-cause hypothesis, suggested file/function, confidence — never raw diffs, raw crawl
+  output, or raw exception logs. Target roughly 1,000–2,000 tokens per returned summary,
+  regardless of how much raw data the subagent processed to produce it.
+- The main orchestrator thread stays long-lived across many ticks and holds: the current
+  priority ledger, the frozen-interface contract state, and the structured journal (Part 7) —
+  not research exhaust.
+
+### 17.2 When to compact
+- Compact at natural tick/subgoal boundaries (a tick's journal entry is written and the tick is
+  closed), not on a fixed turn-count or token-count schedule. Compacting mid-subgoal risks
+  erasing information the model still needs for that subgoal; compacting only when a window is
+  nearly full risks the context already being degraded by staleness before compaction fires.
+  Tick boundaries are the correct trigger because they're exactly the points where "this unit of
+  work is done, nothing further from it is needed verbatim."
+- The memory-filesystem (journal, priority ledger, oracle cluster registry) is the durable
+  record across compactions — the in-context conversation history is disposable once its
+  contents are captured there.
+
+---
+
+## Part 18 — Multi-Objective Regression Guard
+
+Unlike a single-scalar optimization target, Manuk must improve on many axes simultaneously
+(correctness breadth, latency, memory, stability, feature completeness) without a gain on one
+axis silently costing another. The mechanism for this is not novel — it's disciplined use of
+what you're already building:
+
+- **Treat the differential oracle's passing cluster set as a monotonically-growing golden
+  master.** Every cluster the oracle has ever confirmed clean is a regression test from that
+  point forward. A commit that fixes a new cluster but flips a previously-clean cluster red is
+  a regression, full stop — it does not net out against the new fix. This is what actually
+  prevents "many axes chasing many goals" from degrading into whack-a-mole: the oracle corpus
+  *is* the multi-objective specification, built empirically rather than hand-written, and it
+  only grows.
+- **Every non-functional axis gets the same treatment as a functional one.** F1–F4 performance
+  floors, G_ALLOC, G_TEARDOWN, and the new gates in Part 19 below are not "nice to have"
+  checks distinct from correctness — a latency or memory regression is a Bar-1 regression under
+  this framing, because the stated goal includes "a person doesn't see breakage" and a stall or
+  a memory blowup is exactly the kind of breakage a person sees.
+- **No gate is ever loosened to make a feature land.** If a new feature's correct
+  implementation cannot pass the existing wall, the wall is right and the implementation is
+  incomplete — this is the direct antidote to cyclomatic-complexity creep from many
+  simultaneously-evolving concerns: the wall is the invariant; features conform to it, not the
+  reverse.
+
+---
+
+## Part 19 — Rust Throughput, Concurrency, and Deduplication Discipline
+
+The browser's runtime is a single pervasive hot path, not a set of independent modules with
+occasional performance-sensitive sections. This section is mandatory reading before touching
+`net`, `layout`, `paint`, `compositor`, `js`, or `page`, and its gates are enforced by Part 19.5
+below — not left as style guidance.
+
+### 19.1 Adopt Salsa for incremental computation instead of hand-rolling invalidation
+Part 11 of this document (algorithmic efficiency) previously specified extracting Blink's
+invalidation-set *algorithm*. Revise that: **adopt Salsa**, the general-purpose Rust
+incremental-computation framework that rust-analyzer itself is built on (you are already
+depending on rust-analyzer's engine for LSP navigation — this is the same lineage of tool,
+proven at the scale of "recompute semantic analysis of a large codebase on every keystroke").
+
+- Model style computation, layout, and paint-list generation as **Salsa queries**: pure
+  functions from inputs (DOM state, stylesheet state, viewport state) to outputs (computed
+  style, layout box tree, display list). Salsa automatically tracks the dependency graph,
+  memoizes results, and on a mutation, recomputes only the transitively-affected queries — this
+  is the invalidation-set *outcome* you wanted, produced generically and correctly by a
+  battle-tested library instead of hand-implemented and re-debugged.
+- Use Salsa's **durability** system for inputs that rarely change (e.g., the parsed UA
+  stylesheet, static viewport-independent constants) so that even the graph-traversal
+  bookkeeping is skipped for no-op-relevant mutations, not just the recomputation itself.
+- Salsa values are cheaply shareable across threads — this composes directly with the Rayon
+  parallelism in 19.2 below (parallel style/layout passes reading from the same memoized query
+  graph without contention).
+- This does not replace the differential oracle's job of verifying *correctness* of what gets
+  recomputed — it replaces the *mechanism* by which recomputation scope is determined, and
+  removes an entire class of hand-rolled dirty-bit bugs (the exact class that produced the
+  wheel-event clone regression in your history — stale or over-broad invalidation is a Salsa
+  problem Salsa is specifically designed not to have).
+
+### 19.2 Strict separation: Tokio for I/O, Rayon for CPU-bound data parallelism
+This is a hard architectural rule, not a preference:
+- **Tokio** owns `net` (hyper/rustls), timers, and any genuinely I/O-bound waiting (subresource
+  fetch, WebSocket/streaming, IPC). Tokio's worker threads are sized ~1-per-core and are
+  designed for tasks that yield frequently at `.await` points.
+- **Rayon** owns CPU-bound, data-parallel work over collections: style recalculation across a
+  set of dirty nodes, layout of independent subtrees, paint-list generation across
+  non-overlapping regions, hit-testing over spatial partitions. Rayon uses a fixed,
+  work-stealing thread pool sized to the core count — this is the mechanism that directly
+  answers "effective parallelism tuned to core/thread count": don't hand-tune thread counts
+  per-subsystem, let Rayon's pool (sized once, at startup, to `std::thread::available_parallelism()`)
+  own that decision globally, and express CPU-bound hot paths as `par_iter`/`join`-style
+  parallel operations rather than manual `std::thread::spawn`.
+- **Never nest one inside the other without explicit isolation.** Calling Rayon's `par_iter`
+  from inside a Tokio worker thread risks thread starvation — Tokio's worker assumes it will
+  yield at `.await` points; Rayon's work-stealing assumes threads run CPU work to completion and
+  become free. If Tokio's worker blocks waiting on Rayon work that is itself stuck waiting for a
+  Tokio-owned resource, both pools can stall. The correct pattern when a Tokio-driven event (a
+  network response, a timer) needs to trigger CPU-bound layout/paint work: hand off via
+  `tokio::task::spawn_blocking` (or a dedicated channel to a Rayon-consuming thread), let Rayon
+  "go wild" on its own pool, and return the result across the boundary — never call into Rayon
+  synchronously from async code on a Tokio worker thread.
+- Audit every existing `tokio::spawn` call in the layout/paint/style path for this violation as
+  part of standing up this rule — this is exactly the kind of latent cross-pool contention that
+  won't show up in a light synthetic load bench (the same failure shape as the wheel-event
+  clone regression: invisible until real concurrent load).
+
+### 19.3 Minimize task-spawn count on hot paths, not just allocation count
+`tokio::spawn`/task creation has real bookkeeping cost (allocation, scheduler queueing,
+wake/context-switch) even though it's cheaper than an OS thread. On any per-frame or
+per-input-event path:
+- Default to inlining trivial async/sync work rather than spawning a task or thread for it.
+- For fan-out over a collection (e.g., dirty style nodes, dirty layout subtrees), batch — one
+  Rayon parallel-iterator call over the whole collection, not one spawned unit of work per
+  element. This is both a throughput rule and a direct extension of the G_ALLOC gate's intent:
+  a wheel event that spawns one task per visible DOM node is the same failure class as one that
+  clones a rect map per node, just one layer down the stack, and must be caught by the same
+  category of gate (19.5).
+
+### 19.4 Contention and duplicate-work elimination
+- **Prefer ownership/message-passing over shared locks on any per-frame hot path.** Where a
+  `Mutex`/`RwLock` is unavoidable, keep the critical section to the minimum possible span and
+  never hold a lock across an `.await` point or a Rayon parallel operation. Prefer Salsa's
+  memoized, versioned values (19.1) or immutable/persistent data structures for read-heavy
+  shared state (computed style, layout results) over `Arc<RwLock<...>>` — this removes
+  read-side contention entirely rather than minimizing it.
+- **Coalesce before scheduling, not after.** If multiple independent triggers (a class change, a
+  child insertion, a resize) each mark the same subtree dirty within one logical frame, they
+  must collapse into a single style/layout/paint pass for that subtree — never one pass per
+  trigger. This is the general form of the event-coalescing rule already in Part 11 (scroll
+  events); apply the same principle to *any* class of mutation batching, not scroll alone.
+- **JS execution must not double-fire.** Microtasks drain exactly once per macrotask boundary;
+  `requestAnimationFrame` callbacks batch into exactly one pass per frame; a given event must
+  dispatch to a given listener exactly once per logical occurrence even under coalesced input.
+  These are correctness properties as much as performance ones — a double-dispatched event is
+  both a wasted-work bug and a behavioral-divergence bug the oracle should independently catch
+  (G5 interaction parity), so a violation here should show up as two separate gate failures, not
+  one; if it only shows up in one, the other gate has a blind spot to close.
+
+### 19.5 The gates that enforce this section (extend Part 5, don't bypass it)
+Add these as verify-wall gates, following the same shipping-configuration rule as every other
+gate in Part 5:
+- **G_SPAWN** (sibling to G_ALLOC): instrument task/thread-spawn count, not just heap
+  allocations, between input-event arrival and frame completion. Assert near-zero spawns for
+  events with no registered listener, and sub-linear (ideally O(1) or O(changed-subtree), never
+  O(DOM-size)) spawns when a listener is registered.
+- **G_DEDUP**: instrument a per-frame pass counter for style recalculation, layout, and paint.
+  Assert exactly one pass per logical unit of dirty work per frame under normal operation —
+  more than one pass over the *same* unhanged subtree within one frame is a hard failure, not a
+  warning.
+- **G_POOL_ISOLATION**: a targeted check (can be a lint/clippy rule plus a runtime assertion in
+  debug builds) that no Rayon parallel operation is invoked from a stack frame currently
+  executing on a Tokio worker thread without having crossed a `spawn_blocking` boundary first.
+- All three gates run under the shipping Stylo+SpiderMonkey configuration and are subject to
+  the risk-based gate scheduler (Part 5.4) for which diffs trigger them — but any diff touching
+  `layout`, `paint`, `compositor`, `js`, or the Tokio/Rayon boundary in `page`/`net` always
+  triggers the full set, no exceptions, same rule as frozen-interface changes.
+
+---
+
+## Part 20 — Visual Self-Verification Without a Human in the Loop
+
+Claude Code (and any subagent it dispatches) has native multimodal vision and can drive a
+browser and inspect screenshots directly — this doesn't require a third-party visual-diffing
+service, and the industry's own 2025–2026 trajectory validates the design already specified in
+Part 2: raw pixel diffing is the wrong primary signal, since anti-aliasing and font-smoothing
+noise dominates it and produces high false-positive rates; the effective tools in this space
+converged on coarser, semantic-level diffing for exactly that reason.
+
+- Keep the oracle's primary signal as DOM-geometry + coarse block-grid comparison (already
+  specified in Part 2) — this is now externally validated, not just internally reasoned.
+- Add a **cheap confirmation pass**: once DOM-geometry clustering (Part 2) narrows a divergence
+  to a specific page/region, have the agent capture a screenshot of just that region from both
+  engines and describe the visible difference in its own words before a ticket is written. This
+  catches the class of divergence that's real but geometry-subtle (a color, a font-weight, a
+  border style) without making full pixel-diffing the primary firehose filter.
+- This confirmation pass is agent-native by construction — no external SaaS, no human
+  screenshot review required, and it composes directly with the subagent-isolation architecture
+  in Part 17 (dispatch it as an isolated call, return a condensed verdict).
+
+---
+
 ## Immediate Action Items (first sessions under this methodology)
 
 1. Stand up the differential oracle (Part 2) against the existing 22-site corpus. Do this before
@@ -479,3 +764,19 @@ don't substitute a WPT percentage or an external timeline for them.
    Part 13's SPA-specific estimate becomes meaningful.
 6. Begin journaling in the Part 7 structure starting now, so the removal-model estimate has
    real data to fit at the next EPOCH audit.
+7. Audit the current `text` crate: if it is not already built on Skrifa + HarfBuzz, migrate it
+   (Part 15) before further font/text layout work — this is a bounded, high-value integration
+   task, do it early.
+8. Audit every existing `tokio::spawn` call reachable from the layout/paint/style path for the
+   Tokio/Rayon isolation violation described in Part 19.2 — this is likely already present
+   latent debt given the codebase predates this rule.
+9. Stand up G_SPAWN, G_DEDUP, and G_POOL_ISOLATION (Part 19.5) alongside G_ALLOC/G_TEARDOWN —
+   same priority, same "cheap to build, closes a proven gap" justification.
+10. Evaluate replacing the planned hand-rolled invalidation-set work (originally specified in
+    Part 11) with a Salsa-based incremental computation architecture (Part 19.1) before writing
+    new invalidation logic from scratch — this is a build-vs-adopt decision worth making
+    deliberately rather than defaulting to "extract the algorithm and hand-implement it," given
+    that Salsa is a proven, thread-safe, general solution to exactly this problem.
+11. Generate the tree-sitter orientation layer (Part 16.2) once, now, and add it to the EPOCH
+    audit checklist for regeneration — use rust-analyzer LSP (already installed) as the default
+    precise-navigation tool from this session forward per Part 16.1.

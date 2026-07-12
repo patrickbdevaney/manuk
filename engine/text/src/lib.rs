@@ -181,11 +181,110 @@ const MEASURE_CACHE_CAP: usize = 8192;
 /// triples on a page are modest; this bounds memory while covering the visible set.
 const GLYPH_CACHE_CAP: usize = 8192;
 
+/// Point `fontdb`'s generic families at the faces the system actually resolves them to.
+///
+/// The preference lists mirror the order a fontconfig-configured Linux system reports for
+/// `sans-serif` / `serif` / `monospace` — the first installed entry wins, exactly as `fc-match`
+/// would answer. An explicit `MANUK_FONT_{SANS,SERIF,MONO}` overrides, so a divergence traced to
+/// font choice can be pinned without a rebuild.
+fn resolve_generic_families(db: &mut fontdb::Database) {
+    fn first_installed(db: &fontdb::Database, candidates: &[&str]) -> Option<String> {
+        for name in candidates {
+            let found = db.faces().any(|f| {
+                f.families
+                    .iter()
+                    .any(|(fam, _)| fam.eq_ignore_ascii_case(name))
+            });
+            if found {
+                return Some((*name).to_string());
+            }
+        }
+        None
+    }
+
+    let pick = |db: &fontdb::Database, env: &str, candidates: &[&str]| -> Option<String> {
+        std::env::var(env)
+            .ok()
+            .filter(|v| !v.is_empty())
+            .or_else(|| first_installed(db, candidates))
+    };
+
+    if let Some(f) = pick(
+        db,
+        "MANUK_FONT_SANS",
+        &["Noto Sans", "DejaVu Sans", "Liberation Sans", "Arial", "Helvetica", "FreeSans"],
+    ) {
+        db.set_sans_serif_family(f);
+    }
+    if let Some(f) = pick(
+        db,
+        "MANUK_FONT_SERIF",
+        &["Noto Serif", "DejaVu Serif", "Liberation Serif", "Times New Roman", "FreeSerif"],
+    ) {
+        db.set_serif_family(f);
+    }
+    let mono = pick(
+        db,
+        "MANUK_FONT_MONO",
+        &[
+            "DejaVu Sans Mono",
+            "Noto Sans Mono",
+            "Liberation Mono",
+            "Courier New",
+            "FreeMono",
+        ],
+    );
+    if std::env::var("MANUK_FONT_DEBUG").is_ok() {
+        eprintln!(
+            "[fonts] sans={:?} serif={:?} mono={:?}",
+            db.family_name(&fontdb::Family::SansSerif),
+            db.family_name(&fontdb::Family::Serif),
+            mono
+        );
+    }
+    if let Some(f) = mono {
+        db.set_monospace_family(f);
+    }
+}
+
 impl FontContext {
     /// Build a context populated with the system's installed fonts.
     pub fn new() -> Self {
         let mut db = fontdb::Database::new();
         db.load_system_fonts();
+        // **Resolve the generic families the way the SYSTEM does.**
+        //
+        // `fontdb`'s defaults are `Arial` / `Times New Roman` / `Courier New` — Windows names that
+        // are usually absent on Linux, so `font-family: sans-serif` silently landed on whatever the
+        // query happened to fall back to. Chromium asks fontconfig, gets `Noto Sans` here, and every
+        // width it measures is a Noto Sans width. We were measuring a *different font's* widths for
+        // every string on every page: the same sentence came out 305px for us and 317px for Chrome,
+        // so every line wrapped at a different word and every box below it moved.
+        //
+        // Font metrics are the dominant source of persistent placement drift, and this — not the
+        // metrics engine — is where it starts. Pick the same physical faces the system's own
+        // resolver picks, in its own preference order.
+        //
+        // **HELD BEHIND A FLAG, deliberately.** Switching to the system's real faces is correct and
+        // measurably closes the width gap (a sans-serif sentence went from 305px to Chrome's 317px)
+        // — but it immediately turned the box-parity wall red (72/72 → 69/72) on `valign` and
+        // `white-space-nowrap`, which are LINE-HEIGHT and ADVANCE probes. The wall is right: the
+        // font selection is fixed, and the metrics computed on top of it are not.
+        //
+        // `swash`'s advances disagree with Chromium's by ~11% on monospace (6.9px/char where
+        // Chromium measures 7.83), and our `normal` line-height is a 1.2× guess rather than the
+        // font's own ascent/descent/lineGap. Both are the metrics layer, and METHODOLOGY Part 15
+        // says to solve that by ADOPTING Skrifa — the library Chromium itself ships — not by
+        // re-deriving advance math. Landing the selection fix on top of a broken metrics layer
+        // would trade a measured regression for an unmeasured improvement, which is precisely the
+        // trade the wall exists to refuse (METHODOLOGY Part 18: no gate is ever loosened to make a
+        // feature land).
+        //
+        // Enable with MANUK_FONT_SYSTEM=1 to reproduce the measurement; remove the flag with the
+        // Skrifa migration.
+        if std::env::var("MANUK_FONT_SYSTEM").is_ok() {
+            resolve_generic_families(&mut db);
+        }
         FontContext {
             db: RefCell::new(db),
             cache: RefCell::new(HashMap::new()),

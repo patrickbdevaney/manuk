@@ -411,3 +411,55 @@ features, and absent features are cheap once you can SEE that they are absent �
 corpus and the probes bought. Tier 3's real blockers (codec licensing, GPU driver integration, DRM)
 are external-integration problems. Reading Chromium's approach to them substitutes for none of the
 licensing or certification work, and no verification fan-out touches them at all.
+
+## Tick 38 (2026-07-12) — the differential oracle is live, and it changed what "next" means
+
+**Discovery method: THE ORACLE** (first tick where that is true).
+
+Built METHODOLOGY Part 2: one snapshot, fed identically to both engines; Chromium probed for every
+`[id]` element's tag, computed `display` and box; diff; **cluster by root cause**; rank by distinct
+sites explained. Two hygiene rules are enforced in code, because both have already burned us:
+
+* **One snapshot, both engines.** Fetching per-engine compares two different documents and calls the
+  difference a bug — that is what pinned a metric at 5,122px across four *correct* fixes.
+* **Never diff against a degraded oracle.** The health check asks what Chromium actually DREW
+  (element count, visible text length), not how many elements carried an id. A bot wall is discarded,
+  not scored as our bug.
+
+### What it found in its first minutes
+
+1. **Monospace was 23% too large.** Chrome's default monospace size is 13px, not 16px — which is why
+   `<code>` famously looks smaller than its prose. Every code block and every inline `<code>` on the
+   web was oversized, and every documentation site's layout was pushed down by it. `<pre>` 58px → 47px
+   (Chromium: 45px). **Fixed.**
+2. **Generic font families were never resolved.** `fontdb`'s defaults are `Arial`/`Times New Roman` —
+   Windows names, usually absent on Linux — so `font-family: sans-serif` landed on an arbitrary
+   fallback. Chromium asks fontconfig and gets Noto Sans. **We were measuring a different font's
+   widths for every string on every page**: the same sentence came out 305px for us, 317px for
+   Chromium, so every line wrapped at a different word and every box below it moved.
+
+### The finding that mattered more than either fix
+
+Fixing the selection **turned the wall red** (72/72 → 69/72) on `valign` and `white-space-nowrap` —
+both LINE-HEIGHT and ADVANCE probes. The wall is right. The selection is fixed; the metrics computed
+on top of it are not:
+
+* `swash` advances disagree with Chromium by **~11% on monospace** (6.9px/char vs 7.83).
+* Our `normal` line-height is a **1.2× guess**, not the font's own ascent/descent/lineGap.
+
+So the fix is **held behind `MANUK_FONT_SYSTEM=1`**, not landed. Shipping a measured regression to buy
+an unmeasured improvement is exactly the trade the wall exists to refuse (METHODOLOGY Part 18: *no
+gate is ever loosened to make a feature land*).
+
+**Next tick is therefore chosen for me, not by me:** adopt **Skrifa** for metrics/outlines/hinting
+(METHODOLOGY Part 15 — the library Chromium itself ships) rather than re-deriving advance math, then
+un-flag the font selection and expect both the wall and Bar 2 to move together.
+
+That is the oracle working as designed: it did not just find bugs, it **re-ordered the queue**, and
+it produced a number (11% advance error) that turns "fonts feel off" into a bounded integration task.
+
+### Also this tick
+* **Every swallowed exception now reports its message.** Six catch sites were shrugging. This is the
+  whole mechanism of the Framework Exception Miner (Part 9) — it only works if nothing is discarded.
+* METHODOLOGY Parts 15–20 folded in; §4.1 **saltatory breadth first** made an explicit selection rule:
+  an item that unlocks a whole *class* of design pattern outranks everything narrow or deep, always.

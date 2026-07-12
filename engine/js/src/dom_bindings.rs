@@ -116,8 +116,16 @@ pub fn take_focus_requests() -> Vec<Option<NodeId>> {
     PENDING_FOCUS.with(|q| std::mem::take(&mut *q.borrow_mut()))
 }
 
-/// The pending JS exception as a string, clearing it. "A page script threw" is not a diagnostic —
-/// it is a shrug. The message and the line are what turn an hour of bisecting into a minute.
+/// The pending JS exception as a string, clearing it.
+///
+/// **Every swallowed exception is a discarded bug report.** "A page script threw; continuing" is not
+/// a diagnostic, it is a shrug — and printing the message instead turned it into
+/// `TypeError: a.protocol is undefined`, which named a missing IDL property that was killing the
+/// navigation column of every mdbook site on the internet. An hour of bisecting became one line.
+///
+/// This is also the entire mechanism of the Framework Exception Miner (METHODOLOGY Part 9): load a
+/// framework's starter app and let the framework itself enumerate what we are missing. That only
+/// works if **no** exception is ever discarded — so every catch site in this file reports.
 fn pending_exception(cx: *mut RawJSContext) -> String {
     unsafe {
         rooted!(in(cx) let mut ex = UndefinedValue());
@@ -2130,14 +2138,14 @@ pub fn run_scripts(
             // `<script type=module>`: compile + link + evaluate as an ES module, so
             // import/export syntax is valid and self-contained modules run.
             if !unsafe { run_module(raw_cx, src) } {
-                tracing::warn!("a page module failed (compile/link/evaluate); continuing");
+                tracing::warn!(error = %pending_exception(raw_cx), "a page module failed");
             }
         } else {
             rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
             let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"inline.js".to_owned(), 1);
             match evaluate_script(runtime.cx(), global.handle(), src, rval.handle_mut(), opts) {
                 Ok(()) => {}
-                Err(()) => tracing::warn!("a page <script> threw; continuing with the rest"),
+                Err(()) => tracing::warn!(error = %pending_exception(raw_cx), "a page <script> threw"),
             }
         }
         ran += 1;
@@ -2197,7 +2205,7 @@ impl PageContext {
         for (src, is_module) in collect_inline_scripts(dom) {
             if is_module {
                 if !unsafe { run_module(raw_cx, &src) } {
-                    tracing::warn!("a page module failed (compile/link/evaluate); continuing");
+                    tracing::warn!(error = %pending_exception(raw_cx), "a page module failed");
                 }
             } else {
                 rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
@@ -2248,7 +2256,7 @@ impl PageContext {
         rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
         let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"dynamic.js".to_owned(), 1);
         if evaluate_script(runtime.cx(), global.handle(), src, rval.handle_mut(), opts).is_err() {
-            tracing::warn!("a dynamically loaded <script> threw; continuing");
+            tracing::warn!(error = %pending_exception(raw_cx), "a dynamically loaded <script> threw");
         }
         crate::event_loop::run_deferred(runtime, global.handle())?;
         Ok(())
@@ -2304,7 +2312,7 @@ impl PageContext {
         rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
         let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"view.js".to_owned(), 1);
         if evaluate_script(runtime.cx(), global.handle(), &src, rval.handle_mut(), opts).is_err() {
-            tracing::warn!("observer/scroll callback threw; continuing");
+            tracing::warn!(error = %pending_exception(raw_cx), "an observer/scroll callback threw");
         }
         crate::event_loop::run_deferred(runtime, global.handle())?;
         Ok(())
@@ -2398,7 +2406,7 @@ impl PageContext {
         rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
         let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"popstate.js".to_owned(), 1);
         if evaluate_script(runtime.cx(), global.handle(), &script, rval.handle_mut(), opts).is_err() {
-            tracing::warn!("popstate dispatch threw; continuing");
+            tracing::warn!(error = %pending_exception(raw_cx), "popstate dispatch threw");
         }
         crate::event_loop::run_deferred(runtime, global.handle())?;
         Ok(())
@@ -2460,7 +2468,7 @@ impl PageContext {
         rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
         let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"message.js".to_owned(), 1);
         if evaluate_script(runtime.cx(), global.handle(), &script, rval.handle_mut(), opts).is_err() {
-            tracing::warn!("message delivery threw; continuing");
+            tracing::warn!(error = %pending_exception(raw_cx), "message delivery threw");
         }
         crate::event_loop::run_deferred(runtime, global.handle())?;
         Ok(())

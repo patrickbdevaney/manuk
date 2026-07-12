@@ -180,6 +180,13 @@ td, th { display: table-cell; padding: 1px; }
 caption { display: table-caption; }
 /* `pre` preserves whitespace. Chrome's UA sheet says so; ours did not, so every code block on
    the web folded its newlines into spaces and rendered as one endless line. */
+/* Chrome's default MONOSPACE font size is 13px, not 16px — which is why `<code>` famously renders
+   smaller than the prose around it. `font-size: medium` resolves against the monospace default when
+   the family is monospace. We rendered monospace at 16px, so every code block and every inline
+   `<code>` on the web was 23% too large, and every documentation site's layout was pushed down by
+   it. (Found by the differential oracle on its first run: our <pre> was 57px where Chromium's was
+   45px.) */
+pre, code, kbd, samp, tt { font-size: 13px; }
 pre { font-family: monospace; white-space: pre; }
 textarea { white-space: pre-wrap; }
 code, kbd, samp { font-family: monospace; }
