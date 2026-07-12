@@ -12,8 +12,7 @@
 //!   `&dyn InferenceBackend` and `&mut AgentBrowser`; it has no dependency on Groq
 //!   or on the test harness that drives it.
 //!
-//! This decoupling is the point: the parallel key harness, the single-key
-//! runner, and any future backend all reuse the same `run_task` unchanged.
+//! This decoupling is the point: any runner — committed or local — plugs a different
 
 use anyhow::{anyhow, Context, Result};
 use manuk_page::{fetch_html, Link, Page};

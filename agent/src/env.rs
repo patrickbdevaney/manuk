@@ -1,7 +1,7 @@
-//! Minimal `.env` loading and Groq key/model helpers — no `dotenv` dependency.
+//! Minimal `.env` loading and provider key/model helpers — no `dotenv` dependency.
 //!
 //! Real process environment always wins; `.env` only fills gaps. The `.env` file
-//! (with the `GROQ_API_KEY_*` keys) is gitignored — see the project `.gitignore`.
+//! `.env` itself is gitignored — see the project `.gitignore`.
 
 use std::path::PathBuf;
 
@@ -49,31 +49,8 @@ pub fn model() -> String {
     std::env::var("GROQ_MODEL").unwrap_or_else(|_| crate::DEFAULT_MODEL.to_string())
 }
 
-/// A single API key for the committed runner: `GROQ_API_KEY`, falling back to
-/// `GROQ_API_KEY` for convenience with the numbered `.env`.
+/// The provider credential for the committed runner.
 pub fn single_key() -> Option<String> {
-    std::env::var("GROQ_API_KEY")
-        .ok()
-        .or_else(|| std::env::var("GROQ_API_KEY").ok())
-        .filter(|k| !k.is_empty())
+    std::env::var("GROQ_API_KEY").ok().filter(|k| !k.is_empty())
 }
 
-/// All numbered keys `GROQ_API_KEY..N` in order, plus a bare `GROQ_API_KEY` if
-/// set. Used only by the local (gitignored) parallel harness.
-pub fn provider_keys() -> Vec<String> {
-    let mut keys = Vec::new();
-    if let Ok(k) = std::env::var("GROQ_API_KEY") {
-        if !k.is_empty() {
-            keys.push(k);
-        }
-    }
-    let mut i = 1;
-    loop {
-        match std::env::var(format!("GROQ_API_KEY_{i}")) {
-            Ok(k) if !k.is_empty() => keys.push(k),
-            _ => break,
-        }
-        i += 1;
-    }
-    keys
-}

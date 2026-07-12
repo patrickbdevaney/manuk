@@ -1113,8 +1113,8 @@ depth is happening again, well before it costs a whole session's worth of drift.
 
 ## Part 27 — Resource-Budget-Aware Scheduling for the Actual Hardware
 
-The methodology so far assumes parallelism (Rayon sized to core count, the verification key
-pool, concurrent oracle crawl workers) without accounting for the fact that these consumers
+The methodology so far assumes parallelism (Rayon sized to core count, the parallel verification
+agents, concurrent oracle crawl workers) without accounting for the fact that these consumers
 share one finite, concrete resource envelope: a 24-core/32-thread CPU and 32GB of RAM. RAM, not
 core count, is very likely the binding constraint here, given rustc/LLVM codegen for large
 crates (mozjs bindings especially), N concurrent headless-Chromium instances for oracle
@@ -1140,14 +1140,29 @@ nightly/async full WPT run (Part 8), delta-debug reduction backlog (Part 2.1) �
 automatically whenever Claude Code is not actively mid-edit, rather than only running them when
 explicitly invoked in an interactive session.
 
-### 27.3 The verification key pool is this project's actual "distributed compute"
-Restate explicitly what Part 6 already implies: the ~25-key, two-provider verification pool is
-not a minor convenience, it's the practical answer to "what does this solo project have that
-looks like Chromium-team-scale automated capacity." It offloads narrow, closed-question work
-(delta-debug reduction, WPT triage, exception parsing) off the local 24-core machine entirely,
-onto compute this project doesn't have to provision, cool, or maintain. Treat it as the primary
-lever for anything narrow and parallelizable, before reaching for more local-machine
-parallelism — it doesn't compete with the local RAM/CPU budget in Part 27.1 at all.
+### 27.3 Parallel verification agents are this project's actual "distributed compute"
+
+Restate explicitly what Part 6 already implies: **parallel verification capacity is not a minor
+convenience — it is the practical answer to "what does this solo project have that looks like
+Chromium-team-scale automated verification."** It offloads narrow, closed-question work (delta-debug
+reduction, WPT triage, exception parsing, cluster confirmation) off the local machine entirely, onto
+compute that does not have to be provisioned, cooled or maintained here. Treat it as the primary lever
+for anything narrow and parallelizable, *before* reaching for more local-machine parallelism — it does
+not compete with the local RAM/CPU budget in Part 27.1 at all, which is exactly what makes it the first
+thing to reach for rather than the last.
+
+The discipline is fixed and is what makes the capacity trustworthy rather than merely large:
+**verification only** (never implementation, never open-ended diagnosis); **an over-budget check
+escalates to the orchestrator rather than being truncated to fit** — a truncated check returns a
+confident answer to a question nobody asked, which is worse than no answer; **a failure hands off
+rather than dropping the work, silently or loudly**; and **every dispatched check returns exactly one
+verdict**, asserted rather than assumed.
+
+The operational mechanics live in the local appendix (`docs/loop/METHODOLOGY-LOCAL.md`, gitignored),
+because they depend on a personal environment no clone of this repository has. Read both at the start
+of every session. The split is not redaction of the reasoning — every principle, decision and gate is
+here — it is the same rule that governs `parity-verify` and `.env`: **a committed artifact must be
+usable by anyone who clones this repo.**
 
 ### 27.4 If the resource envelope ever changes
 If more compute ever becomes available (cloud burst capacity, a distributed sccache backend, a

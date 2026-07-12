@@ -8,7 +8,6 @@
 **/*.rs.bk
 
 # Local-only agent tooling. Not part of the shipped engine.
-agent/src/bin/agent-run.rs
 
 # Local render/debug output.
 /*.png
@@ -38,14 +37,35 @@ v8/
 
 ladybird/
 # Deep-research provenance for docs/loop/METHODOLOGY.md — local working notes.
-METHODOLOGY.MD
 METHODOLOGY_RESEARCH.MD
-METHODOLOGY_RESULT.MD
 
-agent/src/bin/agent-parallel.rs
-agent/src/bin/parity-verify.rs
 
 # SPA corpus: the framework SOURCE (build.sh + package manifests) is versioned; node_modules and the
 # built dist/ are not. A 300MB node_modules in git is not a corpus, it is a mistake.
 tests/spa/apps/*/node_modules/
 tests/spa/apps/*/dist/
+
+# ── LOCAL-ONLY TOOLING (never committed) ────────────────────────────────────────────────────────
+# Credentials, and development harnesses that depend on a personal environment. A committed tool must
+# be runnable by anyone who clones this repository; one that is not, is a local tool by definition.
+# Repo-specific local paths live in .git/info/exclude, which is not itself committed — an ignore file
+# that NAMES a local tool is a public file describing a private one.
+.env
+.env.*
+!.env.example
+**/*.local.*
+**/*-LOCAL.md
+scripts/local-*
+*_RESEARCH.MD
+*_RESULT.MD
+
+# Local development harnesses and any credential material. These are working tools, not project
+# artifacts: they depend on a personal environment that no clone of this repository has, so
+# committing them would only ship something nobody else can run.
+.env
+.env.*
+!.env.example
+agent/src/bin/*-local.rs
+scripts/local-*
+**/*.local.*
+METHODOLOGY_RESEARCH.MD

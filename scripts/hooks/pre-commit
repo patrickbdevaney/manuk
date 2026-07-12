@@ -23,6 +23,45 @@ STAGED=$(git diff --cached --name-only)
 [ -z "$STAGED" ] && exit 0
 
 # ---------------------------------------------------------------------------------------------
+# 0. CREDENTIAL / LOCAL-TOOLING HYGIENE — a standing invariant, enforced, not remembered.
+# ---------------------------------------------------------------------------------------------
+# Local development harnesses depend on a personal environment that no clone of this repository has.
+# Committing one ships something nobody else can run, and documents a workflow that is nobody else's
+# business. The rule is simple and it is absolute: **a committed tool must be runnable by anyone who
+# clones this repo.** Anything else is a local tool by definition.
+#
+# This runs FIRST, before every other check, because a leak that reaches a public remote cannot be
+# taken back — and "I'll remember to check" is exactly the class of promise this hook exists to
+# replace.
+# The patterns are GENERIC on purpose. A committed hook that greps for the exact strings it is
+# suppressing is a public file describing a private thing — it defeats itself by existing. So: match
+# the SHAPE of credential material and personal tooling (numbered key vars, high-entropy secrets,
+# provider auth headers), and read any repo-specific additions from `.git/info/exclude`, which is not
+# committed.
+LEAK=$(git diff --cached -U0 | grep -E '^\+' | grep -viE '^\+\+\+' \
+  | grep -inE '[A-Z_]*KEY_[0-9]+|[A-Z_]*(SECRET|TOKEN|API_KEY)[A-Z_]*\s*=\s*[A-Za-z0-9_-]{16,}|Bearer\s+[A-Za-z0-9._-]{20,}' \
+  | head -3)
+if [ -n "$LEAK" ]; then
+  red "✗ HYGIENE: staged content looks like credential material or personal tooling."
+  red ""
+  echo "$LEAK" | sed 's/^/    /' >&2
+  red ""
+  red "  A committed artifact must be usable by anyone who clones this repository. Credentials and"
+  red "  local development harnesses are neither — they describe a personal environment, and a leak"
+  red "  that reaches a public remote cannot be taken back."
+  exit 1
+fi
+
+# Never commit anything git itself is told to ignore — including via `.git/info/exclude`, which is
+# where repo-specific local paths live. `git add -f` bypasses the ignore; it does not bypass this.
+for f in $(git diff --cached --name-only); do
+  if git check-ignore -q "$f" 2>/dev/null; then
+    red "✗ HYGIENE: '$f' is an ignored path and must not be committed (even with 'git add -f')."
+    exit 1
+  fi
+done
+
+# ---------------------------------------------------------------------------------------------
 # 1. THE JOURNAL — a tick may not commit code before it has said what it is doing.
 # ---------------------------------------------------------------------------------------------
 TICK=$(grep -oP '^TICK:\s*\K[0-9]+' STATUS.md 2>/dev/null || echo "")

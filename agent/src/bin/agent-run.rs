@@ -1,12 +1,11 @@
 //! `agent-run` — drive the headless agentic browser with a **single** API key.
 //!
-//! This is the committed runner. The local-only development harness
-//! (`agent-run`) is a local-only tool and is gitignored; see CLAUDE.md.
+//! This is the committed runner — the one anyone who clones the repository can actually run.
 //!
 //! Usage:
 //!   agent-run "<task>" <start-url>
 //!
-//! Reads `GROQ_API_KEY` (falling back to `GROQ_API_KEY` from a local `.env`) and
+//! Reads the provider credential from the environment (or a local `.env`) and
 //! `GROQ_MODEL` (default `qwen/qwen3.6-27b`).
 
 use anyhow::{bail, Context, Result};
@@ -32,7 +31,7 @@ async fn main() -> Result<()> {
     let start_url = &args[1];
 
     let key =
-        env::single_key().context("no API key: set GROQ_API_KEY (or GROQ_API_KEY in .env)")?;
+        env::single_key().context("no API key: set GROQ_API_KEY (in the environment or .env)")?;
     let backend = groq::groq(key);
     println!("backend: {}", backend.name());
 
