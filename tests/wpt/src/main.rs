@@ -477,19 +477,37 @@ fn flag<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
 fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
     let vw: u32 = flag(args, "--width").and_then(|s| s.parse().ok()).unwrap_or(1200);
     let vh: u32 = flag(args, "--height").and_then(|s| s.parse().ok()).unwrap_or(800);
-    let Some(f) = flag(args, "--html") else {
-        eprintln!("usage: manuk-wpt boxes --html FILE [--url URL] [--width W]");
-        std::process::exit(2);
-    };
-    let html = std::fs::read_to_string(f).unwrap_or_else(|e| {
-        eprintln!("cannot read {f}: {e}");
-        std::process::exit(1);
-    });
-    let url = flag(args, "--url").map(String::from).unwrap_or_else(|| format!("file://{f}"));
+    // `--fetch URL` probes a LIVE page — the boxes of the document as a user would actually get it,
+    // subresources and scripts included. A local snapshot cannot stand in for it: relative `<link>`s
+    // do not resolve from `file://`, so the CSS silently does not load and every box you measure is
+    // the box of an unstyled page. That mistake cost real time here; a probe that only works on
+    // local files invites it.
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .expect("tokio runtime");
+    let (html, url) = if let Some(u) = flag(args, "--fetch") {
+        match rt.block_on(manuk_page::fetch_html(u)) {
+            Ok((h, final_url)) => (h, final_url),
+            Err(e) => {
+                eprintln!("fetch {u} failed: {e}");
+                std::process::exit(1);
+            }
+        }
+    } else {
+        let Some(f) = flag(args, "--html") else {
+            eprintln!(
+                "usage: manuk-wpt boxes (--html FILE [--url URL] | --fetch URL) [--width W] [--tree ID]"
+            );
+            std::process::exit(2);
+        };
+        let h = std::fs::read_to_string(f).unwrap_or_else(|e| {
+            eprintln!("cannot read {f}: {e}");
+            std::process::exit(1);
+        });
+        let u = flag(args, "--url").map(String::from).unwrap_or_else(|| format!("file://{f}"));
+        (h, u)
+    };
     let page = rt.block_on(async {
         let mut p = manuk_page::Page::load_async(&html, &url, fonts, vw as f32).await;
         p.finish_loading(fonts, vw as f32).await;
