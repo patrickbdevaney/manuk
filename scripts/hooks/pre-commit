@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# **Compliance is mechanical, not remembered.**
+#
+# This hook exists because "did the gates run?" was a claim the user had to trust. It is now a fact
+# the tooling checks. Two things are enforced, and neither is a judgement call:
+#
+#   1. THE GATE RECEIPT. `verify.sh` writes a receipt naming the exact tree it verified. This hook
+#      recomputes that name from what is actually being committed. If they differ, the gates have not
+#      seen this code and the commit is refused. You cannot "decide" the gates weren't warranted.
+#
+#   2. THE JOURNAL. A tick's journal entry must exist before that tick's code can be committed.
+#      Writing it first is not a paperwork tax — it forces you to say what you are doing while you
+#      can still be wrong about it, rather than narrating a success afterwards.
+#
+# Docs-only commits skip (1) — updating STATUS.md must not cost a full wall run — but never (2).
+set -uo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+red()  { printf '\033[31m%s\033[0m\n' "$*" >&2; }
+grn()  { printf '\033[32m%s\033[0m\n' "$*"; }
+
+STAGED=$(git diff --cached --name-only)
+[ -z "$STAGED" ] && exit 0
+
+# ---------------------------------------------------------------------------------------------
+# 1. THE JOURNAL — a tick may not commit code before it has said what it is doing.
+# ---------------------------------------------------------------------------------------------
+TICK=$(grep -oP '^TICK:\s*\K[0-9]+' STATUS.md 2>/dev/null || echo "")
+if [ -z "$TICK" ]; then
+  red "✗ STATUS.md has no 'TICK: <n>' line. The tick counter is the anchor for every other check."
+  exit 1
+fi
+if ! grep -qE "^## Tick $TICK\b" docs/loop/JOURNAL.md 2>/dev/null; then
+  red "✗ JOURNAL: no '## Tick $TICK' entry in docs/loop/JOURNAL.md."
+  red ""
+  red "  A tick's journal entry must exist BEFORE its code is committed. Write it now — a stub"
+  red "  naming what you are attempting is enough; fill it in as the tick lands. The point is to"
+  red "  state the hypothesis while you can still be wrong about it."
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------------------------
+# 2. THE GATE RECEIPT — the gates must have seen exactly this code.
+# ---------------------------------------------------------------------------------------------
+# Docs and scripts alone cannot regress an engine gate; requiring a 3-minute wall run to fix a typo
+# in STATUS.md would make the hook something people disable, and a disabled hook enforces nothing.
+if ! echo "$STAGED" | grep -qvE '^(docs/|STATUS\.md$|.*\.md$|scripts/)'; then
+  grn "✓ docs/scripts-only commit — gate receipt not required (journal check passed)"
+  exit 0
+fi
+
+RECEIPT=".git/manuk-verify-receipt"
+if [ ! -f "$RECEIPT" ]; then
+  red "✗ GATES: no verify receipt. Run ./scripts/verify.sh before committing engine code."
+  exit 1
+fi
+
+# The receipt names the tree it verified. `verify.sh` hashes the working tree; here we hash what is
+# actually STAGED. If you verified and then edited without re-verifying, these differ, and they
+# should — that edit is unverified code.
+# The tree actually being committed. Compared against the tree `verify.sh` recorded — a real git
+# tree object on both sides, so "the gates saw this exact content" is an identity, not an inference.
+WANT=$(git write-tree)
+GOT=$(grep -oP '^tree:\s*\K\S+' "$RECEIPT" 2>/dev/null || echo "")
+RESULT=$(grep -oP '^result:\s*\K\S+' "$RECEIPT" 2>/dev/null || echo "")
+
+if [ "$RESULT" != "green" ]; then
+  red "✗ GATES: the last verify run was '$RESULT', not green. Fix it; do not commit over it."
+  exit 1
+fi
+if [ "$WANT" != "$GOT" ]; then
+  red "✗ GATES: the verify receipt is for a DIFFERENT tree than the one being committed."
+  red ""
+  red "    verified tree: ${GOT:0:16}…"
+  red "    staged tree:   ${WANT:0:16}…"
+  red ""
+  red "  The gates have not seen this code. Re-run ./scripts/verify.sh."
+  red "  (This is the whole point of the hook: 'the gates passed' cannot be a memory of an"
+  red "   earlier version of the diff.)"
+  exit 1
+fi
+
+grn "✓ gates green on exactly this tree ($(grep -oP '^at:\s*\K.*' "$RECEIPT"))"
+grn "✓ journal entry present for tick $TICK"
+exit 0

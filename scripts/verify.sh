@@ -124,5 +124,36 @@ if [ "${1:-}" != "--fast" ]; then
 fi
 
 printf '\n'
-if [ "$FAIL" -eq 0 ]; then printf '\033[32m\033[1mVERIFY: all gates green\033[0m\n'; else printf '\033[31m\033[1mVERIFY: FAILED — the tick does not land\033[0m\n'; fi
+# **The receipt.** The gates having run is now a FACT the pre-commit hook checks, not a claim anyone
+# has to trust. It names the exact tree that was verified: `git diff HEAD` of the working tree, which
+# is what a subsequent `git add -A && git commit` will stage. Edit anything afterwards and the name
+# changes, the hook notices, and the commit is refused — which is the entire point. A receipt that
+# said only "green, at 14:02" would be worthless, because the interesting failure is verifying one
+# version of the diff and committing another.
+# The receipt names a real git TREE OBJECT, not a diff hash. `git diff HEAD` was the obvious choice
+# and it is wrong: it omits UNTRACKED files, which `git add -A` happily stages — so the receipt and
+# the commit were hashing different things and the hook refused its own author's commit. It was right
+# to. Building the tree the way `git add -A && git commit` would (in a throwaway index, so the real
+# one is untouched) makes the two sides compute the same object by construction rather than by
+# agreement.
+RECEIPT=".git/manuk-verify-receipt"
+TMPIDX="$(mktemp)"
+GIT_INDEX_FILE="$TMPIDX" git read-tree HEAD 2>/dev/null
+GIT_INDEX_FILE="$TMPIDX" git add -A 2>/dev/null
+VERIFIED_TREE="$(GIT_INDEX_FILE="$TMPIDX" git write-tree 2>/dev/null)"
+rm -f "$TMPIDX"
+{
+  echo "tree: $VERIFIED_TREE"
+  echo "head: $(git rev-parse HEAD)"
+  echo "at: $(date -Iseconds)"
+  echo "seconds: ${SECONDS}"
+  if [ "$FAIL" -eq 0 ]; then echo "result: green"; else echo "result: FAILED"; fi
+} > "$RECEIPT"
+
+if [ "$FAIL" -eq 0 ]; then
+  printf '\033[32m\033[1mVERIFY: all gates green\033[0m  (%ss)\n' "$SECONDS"
+else
+  printf '\033[31m\033[1mVERIFY: FAILED — the tick does not land\033[0m\n'
+fi
+exit "$([ "$FAIL" -eq 0 ] && echo 0 || echo 1)"
 exit "$FAIL"

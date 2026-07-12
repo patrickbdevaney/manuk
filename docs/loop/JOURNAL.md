@@ -563,3 +563,48 @@ Corpus (18 sites): MEAN COVERAGE **99.0%**, MEAN VISUAL **81.1%**.
 old.reddit 45.7 → 56.9 · github coverage 91.4 → 97.8 · rust-lang 68.6 · users.rust-lang 98.8.
 
 Banked: `manuk-legible-web-2026-07-12`.
+
+## Tick 16 — compliance becomes mechanical (2026-07-12)
+
+Written at the START of the tick, which is now enforced: the pre-commit hook refuses a commit for a
+tick with no journal entry. Stating the hypothesis while you can still be wrong about it is the
+point; narrating a success afterwards is not journaling.
+
+**The problem this closes.** "Did the gates run?" was a claim the user had to trust, and the
+methodology had already drifted out of sync with reality once — verify-wall compression and oracle
+breadth were prescribed in Parts 2 and 10 for many ticks and simply had not been done, while backlog
+work carried on, and nobody noticed until it was asked about directly. Remembering the methodology is
+not a mechanism.
+
+**Four mechanisms, all live and all tested by trying to defeat them:**
+
+- **The gate receipt.** `verify.sh` writes `.git/manuk-verify-receipt` naming the *exact tree* it
+  verified (`sha256(git diff HEAD)`). `scripts/hooks/pre-commit` recomputes that name from what is
+  being **staged** and refuses the commit if they differ. Verifying one version of a diff and
+  committing another is now impossible rather than merely discouraged. Verified by trying it: no
+  receipt → blocked; **stale** receipt (verified a different tree) → blocked.
+- **Journal enforcement.** The same hook refuses any commit unless `JOURNAL.md` has a `## Tick <N>`
+  entry for the `TICK:` in `STATUS.md`. Verified: bumping the tick to one with no entry → blocked.
+- **`STATUS.md`** — checkable facts, not narrative, updated every tick. Current tier, measured wall
+  time, oracle size, SPA-miner status, which gates are actually standing vs. pending, last five
+  journal lines. Five seconds to know whether we are compliant, with no interrogation.
+- **`scripts/self-audit.sh`** — every 10 ticks, and it *exits non-zero*. It checks the filesystem and
+  the corpus for the artifacts each prescription would have produced if it had actually been
+  executed. An audit you can pass by remembering things is not an audit. It currently reports **8
+  real failures**, which is exactly what it is for.
+
+**Tier 0, measured honestly rather than assumed:**
+
+- **Item 1 (verify wall < 5 min): ALREADY MET.** 181s (3m 01s) on the worst realistic tick — touching
+  `engine/css`, the shared-type edit that cascades furthest — and 57s warm. So mold/lld,
+  cargo-nextest and workspace-hack are **not needed**, and doing them anyway would be infrastructure
+  theatre performed against a target that is already satisfied. Measured, not assumed; the self-audit
+  re-checks the number every 10 ticks and fails if it ever crosses 300s.
+- **Item 2 (oracle at 200–500 sites): OPEN.** 20 sites today. That is an anecdote about the web, not
+  a measurement of it. This is next.
+- **Item 3 (ten SPA apps through the Framework Exception Miner): OPEN.** Zero run. The largest
+  *unmeasured* unknown in the schedule, and cheap to measure.
+
+Also landed this tick, before the redirect: the cascade tested **every rule against every element**
+(the `Stylist` was built and then never used for matching) — 339ms → 199ms on Wikipedia; and a page
+load ran the full cascade **four** times, twice with byte-identical inputs.

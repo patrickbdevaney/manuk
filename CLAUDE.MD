@@ -1,3 +1,26 @@
+# FIRST ACTION OF EVERY SESSION — no exceptions
+
+**Read `STATUS.md`. State the current tier and any blocking items out loud before touching anything.**
+
+Do not proceed on assumed context from a previous session. The methodology drifted out of sync with
+reality once already — verify-wall compression and oracle breadth were prescribed for many ticks and
+simply had not been done, while backlog work carried on, and nobody noticed until it was explicitly
+asked about. `STATUS.md` exists so that gap is visible in five seconds instead of requiring an
+interrogation.
+
+While **Tier 0** (METHODOLOGY Part 21) is open, a productive session is defined as *Tier 0 advanced* —
+not bugs closed, not features shipped. If you find yourself reaching for a bug fix because it feels
+like more visible progress than widening the oracle or standing up a gate, **say so out loud**; that
+pull is the exact failure mode Part 21 exists to prevent, and following it quietly is the failure.
+
+Compliance is mechanical, not remembered:
+- `scripts/hooks/pre-commit` **refuses** any commit whose tree the gates have not verified, and any
+  commit for a tick with no journal entry. Do not work around it — it is the point.
+- `./scripts/self-audit.sh` runs every 10 ticks and **exits non-zero** on anything
+  prescribed-but-not-executed. It checks the filesystem, not your memory.
+
+---
+
 # CLAUDE.md — Browser Engine Project
 
 Project directive for Claude Code. Read this in full before making changes. This file governs scope, architecture, and — critically — which parts of this codebase are safe to modify freely versus which require explicit human sign-off regardless of how confident the change looks.

@@ -780,3 +780,178 @@ converged on coarser, semantic-level diffing for exactly that reason.
 11. Generate the tree-sitter orientation layer (Part 16.2) once, now, and add it to the EPOCH
     audit checklist for regeneration — use rust-analyzer LSP (already installed) as the default
     precise-navigation tool from this session forward per Part 16.1.
+
+---
+
+## Part 21 — Reprioritization Directive: Attack the Wall Before the Backlog
+
+A self-audit against this methodology surfaced that the highest-leverage prescribed items —
+verify-wall compression and oracle breadth — were specified in Parts 2 and 10 but had not
+actually been executed, while tick-level backlog work continued. This part exists to close that
+gap explicitly and to state, without ambiguity, the correct ordering.
+
+### 21.1 What's already correct and does not change
+The two-bar split (functional breadth vs. pixel precision), the breadth-first selection rule,
+the differential oracle as the discovery mechanism, and "add the measurement, not just the
+patch" as the standing response to any gate that reported green through a real problem — all of
+this is working as designed. Recent class-bug fixes (an unmapped `font-family`, flex items that
+couldn't shrink, percentage-squaring, stretched images, `font-size: 0` painting glyph-shaped
+content across the page, silently-deleted absolute boxes) confirm the shape is right: each was
+found by measurement, fixed once, at the class level, and moved many sites at once. Keep doing
+exactly that. The problem is not what gets fixed — it's that the infrastructure making fixes
+cheap and discovery automatic has been under-built relative to how much it was already
+prescribed.
+
+### 21.2 The reordering, in force starting now
+1. **Cut the verify wall to under five minutes before resuming backlog ticks.** This is
+   infrastructure, it is boring, and it multiplies every subsequent tick — that multiplier is
+   why it outranks any single feature fix on the ledger. Concretely and in this order: mold/lld
+   linking, cargo-nextest, workspace-hack to stop shared-type edits from cascading into
+   mozjs/Stylo rebuilds, and the risk-based gate scheduler (Part 5.4) so a diff touching only
+   `paint` cannot trigger a full G2 JS-conformance run. Run the full wall (full corpus, full
+   Chromium round-trips, full release build) only on a timer or immediately before release
+   banking — never on every tick regardless of what the diff touched. If the wall drops from
+   ~30 minutes to ~5, tick rate roughly triples; nothing else available right now has that
+   multiplier.
+2. **Run the oracle at 200–500 sites now, and let its cluster ranking be the ledger — not
+   judgment.** A 20-site corpus is an anecdote about the web, not a measurement of it. Widening
+   the crawl frame is not optional polish on Part 2 — it is the difference between "breadth of
+   the internet" being a claim and being a number. Re-crawl every few ticks; the ranking that
+   comes out is the plan, not an input judgment reweighs.
+3. **Load ten real SPA starter apps immediately and mine their exceptions, in parallel with
+   (1) and (2), not after.** The SPA web is the single largest unmeasured unknown in the whole
+   schedule, and it's a binary risk: if the missing substrate is additive IDL/scheduling work
+   it's fast, and if hydration failure cascades into a scheduling-fidelity subsystem it isn't —
+   you cannot plan around that distinction while it's unmeasured, and the measurement (the
+   Framework Exception Miner, Part 9) is cheap and already works. Converting the largest unknown
+   into a bounded, enumerated list is worth doing before committing to any timeline that
+   includes the app web.
+4. **Only then: incremental invalidation.** Today's full re-cascade on every mutation is
+   O(page) per event. Sub-frame latency holding up right now is an artifact of pages not yet
+   invalidating much under real interactive load — it will not stay true as SPA and
+   interaction coverage grows. This is the one item on this list that is *asymptotically*
+   wrong, not merely incomplete, which is why it's sequenced ahead of ordinary backlog work
+   but behind the three infrastructure items above (it depends on Salsa per Part 19.1, and
+   that decision should be made deliberately, not mid-implementation).
+5. **Keep deferring Bar 2.** Pixel precision is dominated by font metrics — Part 15's
+   Skrifa/HarfBuzz adoption addresses the largest piece of it, but what remains is one deep
+   problem, not many shallow ones. Neither parallelism nor more algorithm-reading shortens a
+   deep problem, and depth here buys far less than breadth does — a browser that's pixel-exact
+   on one site and broken on a thousand others is not what "usable" means under this
+   methodology. Do not let a tick get pulled into micro-tuning one site's rendering to
+   pixel-exactness; that effort belongs in Bar 2, and Bar 2 stays deferred.
+
+### 21.3 The standing discipline this establishes
+When self-assessment (yours, Claude Code's, or a future EPOCH audit's) finds a gap between what
+this document prescribes and what has actually been built, the correct response is to
+reprioritize toward closing that gap immediately, not to add the finding to the backlog at its
+default priority. Infrastructure that multiplies every future tick's velocity is categorically
+different from a feature fix that helps once, and the ledger's data-driven ranking (Part 4)
+should be understood to sit *below* this class of infrastructure decision, not above it — Part 4
+ranks what to fix once wall-compression and oracle breadth are actually in place, it does not
+override the sequencing of building them.
+
+---
+
+## Part 22 — System-Level Runtime Health & Call-Graph Leanness Audit
+
+The gates specified so far (G_ALLOC, G_TEARDOWN, G_SPAWN, G_DEDUP, G_POOL_ISOLATION) catch
+specific, named regression classes once they're known. This part adds a standing, general
+discipline aimed at the categories those gates don't individually name: contention, hangs,
+silent runtime failures, and redundant work anywhere in the load/render/script call graph — the
+things a user experiences as "this browser feels unstable" or "this page just never finished
+loading," independent of whether any single named gate happens to cover the specific cause.
+
+### 22.1 No silent failure, anywhere, ever
+The historical failure where a swallowed script exception ("a page `<script>` threw;
+continuing") hid two missing IDL properties killing navigation on every mdbook site is the
+general case, not a one-off. Extend that lesson system-wide: every subsystem — page load,
+subresource fetch, DOM parsing, style computation, layout, paint, script execution, event
+dispatch — must surface failures into the journal/oracle signal, never absorb them silently.
+- **G_SILENT_FAIL**: audit every `catch`/`Result`-discarding/`.ok()`/error-swallowing site
+  reachable from the page-load and script-execution paths. A caught error that isn't logged,
+  surfaced to the Framework Exception Miner (Part 9), or turned into a journal entry is treated
+  as a gate violation, not acceptable defensive coding. "Continuing" after an error is only ever
+  acceptable if the error is also recorded somewhere the discovery pipeline can see it.
+
+### 22.2 No hangs, no silent runtime failures on page load
+A page that never finishes loading, or an interaction that never completes, is a stability
+failure category distinct from a rendering-correctness bug, and it needs its own gate rather
+than being an assumed side effect of correctness gates.
+- **G_HANG**: every page-load, navigation, and interaction-latency test in the verify wall runs
+  under an explicit watchdog timeout. A timeout is a hard failure, not a slow pass — treat "the
+  gate eventually returned" and "the gate hung and the harness moved on" as categorically
+  different outcomes, and instrument the harness so it cannot mistake the second for a skipped
+  or inconclusive test.
+- Extend the oracle (Part 2) and the SPA Framework Exception Miner (Part 9) to record
+  load/hydration wall-clock time per site/app, not just pass/fail — a page that "passes" but
+  took 40x longer than Chromium's render is a stability signal the current diff-based clustering
+  won't surface on its own, and it belongs in the same cluster-and-rank pipeline as correctness
+  divergence.
+
+### 22.3 No contention, no redundant work in the call graph
+This generalizes G_DEDUP and G_POOL_ISOLATION (Part 19.5) beyond style/layout/paint to the full
+page lifecycle:
+- **No duplicate resource fetches**: a given URL should not be fetched twice for one navigation
+  unless the page genuinely requests it twice (cache-busting, explicit re-fetch) — audit the
+  `net` crate's request path for this specifically, since duplicate fetches are both a
+  performance bug and a correctness risk (stale/inconsistent state between the two copies).
+- **No duplicate tree renders per navigation**: instrument a counter for full-document
+  parse/layout/paint passes per navigation event; more than one for a single navigation (absent
+  an explicit re-navigation) is a hard failure, following the same pattern as G_DEDUP's
+  per-frame pass counter but scoped to page-load rather than interaction.
+- **No duplicate JS module execution or re-evaluation**: a `<script>` or module must not
+  execute twice for one load unless the page's own semantics require it (module identity/caching
+  rules must be respected) — this is both a spec-correctness item and a leanness item, since
+  double-execution is wasted work with potential double-side-effect bugs as a byproduct.
+- **No unbounded lock contention on the load/render hot path**: this is Part 19.4's contention
+  discipline, restated as an audit target specifically for page-load rather than just
+  interaction — profile a cold navigation under concurrent load (multiple tabs/navigations, if
+  that's in scope, or repeated rapid navigation in a single tab otherwise) and confirm no lock is
+  held across an `.await` or a Rayon parallel operation anywhere in the load path, per 19.4's
+  existing rule.
+
+### 22.4 Standing audit cadence
+This is not a one-time pass. Fold a runtime-health sweep — checking 22.1–22.3 against whatever
+subsystems changed since the last EPOCH audit — into every EPOCH audit alongside the existing
+change-coupling matrix refresh (3.3) and the oracle re-crawl (Part 2). A subsystem that was
+clean at the last audit is not guaranteed to still be clean; new code is where new silent
+failures, new duplicate work, and new contention get introduced, so the audit target list grows
+with the codebase, it does not shrink to "known problem areas only."
+
+---
+
+
+
+## Immediate Action Items (first sessions under this methodology)
+
+**Tier 0 — do these before touching the backlog, per Part 21.2. Nothing below this line starts
+until these are done or genuinely blocked:**
+1. Cut the verify wall to under five minutes: mold/lld, cargo-nextest, workspace-hack, and the
+   risk-based gate scheduler (Part 5.4). Full wall runs only on a timer or before release
+   banking from this point forward, never on every tick unconditionally.
+2. Widen the oracle's crawl frame to 200–500 sites (Part 2, Part 21.2 item 2) and regenerate the
+   priority ledger from its cluster ranking — stop hand-selecting what to fix next.
+3. Load ten real SPA starter apps and run the Framework Exception Miner (Part 9) against all of
+   them, in parallel with items 1–2, not sequenced after the document-web work.
+
+**Tier 1 — cheap, high-value, do alongside Tier 0, not blocked by it:**
+4. Add G_ALLOC and G_TEARDOWN to the verify wall (Part 5.2–5.3).
+5. Stand up G_SPAWN, G_DEDUP, and G_POOL_ISOLATION (Part 19.5).
+6. Stand up G_SILENT_FAIL and G_HANG (Part 22.1–22.2) — same "cheap, closes a proven gap"
+   justification as the gates above.
+7. Compute the change-coupling matrix from this repo's own git history (Part 3.3).
+8. Audit the current `text` crate for Skrifa + HarfBuzz (Part 15) before further font work.
+9. Audit every existing `tokio::spawn` call reachable from layout/paint/style for the
+   Tokio/Rayon isolation violation (Part 19.2) — likely latent debt predating this rule.
+10. Begin journaling in the Part 7 structure now, so the removal-model estimate has real data at
+    the next EPOCH audit.
+11. Generate the tree-sitter orientation layer (Part 16.2) once, now; use LSP as the default
+    precise-navigation tool (Part 16.1) from this session forward.
+
+**Tier 2 — sequenced after Tier 0 lands, per Part 21.2 item 4:**
+12. Evaluate the Salsa-based incremental computation architecture (Part 19.1) as the replacement
+    for hand-rolled invalidation sets — this is the one item on the original list that's
+    asymptotically wrong today (O(page) per event), not merely incomplete, so it's a priority
+    once infrastructure is in place, but it depends on a deliberate build-vs-adopt decision, not
+    a mid-implementation default.
