@@ -66,6 +66,13 @@ fn run() {
         return;
     }
 
+    // `manuk-wpt hittest` — the LINK-CLICK flow, reproduced headlessly. Take every `<a href>` on a
+    // real page, hit-test its own centre, and see whether the browser finds it again.
+    if args.first().map(String::as_str) == Some("hittest") {
+        run_hittest_cmd(&args[1..], &fonts);
+        return;
+    }
+
     // `manuk-wpt boxes` — dump Manuk's rect for every `[id]` element. The counterpart of Chrome's
     // `getBoundingClientRect` probe: annotate any element with an id and the two engines' geometry
     // becomes directly comparable. A screenshot shows THAT the layout is wrong; this shows BY HOW
@@ -724,4 +731,92 @@ fn to64(m: &std::collections::HashMap<String, [i32; 4]>) -> std::collections::Ha
     m.iter()
         .map(|(k, v)| (k.clone(), [v[0] as i64, v[1] as i64, v[2] as i64, v[3] as i64]))
         .collect()
+}
+
+
+/// `manuk-wpt hittest --html F [--url U]` — reproduce the LINK-CLICK flow without a window.
+///
+/// A click becomes a navigation only if `a11y_tree().hit_test(x, y)` finds the link under the
+/// cursor and the walk up from it reaches an `<a href>`. That is the entire path, and it is testable
+/// without a GUI: for every link on the page, hit-test its own centre and ask whether the browser
+/// finds it again. A link the browser cannot find is a link the user cannot click.
+fn run_hittest_cmd(args: &[String], fonts: &FontContext) {
+    let vw: u32 = flag(args, "--width").and_then(|s| s.parse().ok()).unwrap_or(1200);
+    let Some(f) = flag(args, "--html") else {
+        eprintln!("usage: manuk-wpt hittest --html FILE [--url URL]");
+        std::process::exit(2);
+    };
+    let html = std::fs::read_to_string(f).unwrap_or_else(|e| {
+        eprintln!("cannot read {f}: {e}");
+        std::process::exit(1);
+    });
+    let url = flag(args, "--url").map(String::from).unwrap_or_else(|| format!("file://{f}"));
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("rt");
+    let page = rt.block_on(async {
+        let mut p = manuk_page::Page::load_async(&html, &url, fonts, vw as f32).await;
+        p.finish_loading(fonts, vw as f32).await;
+        p
+    });
+
+    let rects = page.root_box.node_rects(page.dom());
+    let dom = page.dom();
+    let links: Vec<manuk_dom::NodeId> = dom
+        .descendants(dom.root())
+        .filter(|&n| dom.tag_name(n) == Some("a") && dom.element(n).and_then(|e| e.attr("href")).is_some())
+        .collect();
+
+    let (mut hit, mut no_box, mut miss) = (0usize, 0usize, 0usize);
+    let mut misses: Vec<String> = Vec::new();
+    for &a in &links {
+        let Some(r) = rects.get(&a) else {
+            no_box += 1;
+            continue;
+        };
+        if r.width <= 0.0 || r.height <= 0.0 {
+            no_box += 1;
+            continue;
+        }
+        let (cx, cy) = (r.x + r.width / 2.0, r.y + r.height / 2.0);
+        // Exactly what the shell does: hit-test, then walk up looking for an <a href>.
+        let found = page.a11y_tree().hit_test(cx, cy).map(|n| n.node);
+        let mut resolved = None;
+        let mut cur = found;
+        while let Some(n) = cur {
+            if dom.tag_name(n) == Some("a") && dom.element(n).and_then(|e| e.attr("href")).is_some() {
+                resolved = Some(n);
+                break;
+            }
+            cur = dom.parent(n);
+        }
+        match resolved {
+            Some(_) => hit += 1,
+            None => {
+                miss += 1;
+                if misses.len() < 6 {
+                    let text = dom.text_content(a);
+                    misses.push(format!(
+                        "  MISS  <a> at [{:.0} {:.0} {:.0}x{:.0}] {:?}",
+                        r.x, r.y, r.width, r.height,
+                        text.trim().chars().take(40).collect::<String>()
+                    ));
+                }
+            }
+        }
+    }
+
+    let total = links.len();
+    println!("\n=== LINK-CLICK FLOW (hit-test every <a href> at its own centre) ===\n");
+    println!("  links on page:      {total}");
+    println!("  clickable (found):  {hit}");
+    println!("  MISSED (unclickable): {miss}");
+    println!("  no box at all:      {no_box}");
+    for m in &misses {
+        println!("{m}");
+    }
+    let denom = (hit + miss).max(1);
+    println!("\n  CLICKABILITY: {:.1}%   (a link the browser cannot find is a link the user cannot click)\n",
+             hit as f64 / denom as f64 * 100.0);
+    if miss > 0 {
+        std::process::exit(1);
+    }
 }

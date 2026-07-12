@@ -44,6 +44,25 @@ head_ "G3 · affordance completeness (§1.8 — no dead buttons)"
 AFF=$(cargo test -q -p manuk-shell affordance 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$AFF" ]; then ok "affordances: $AFF"; else bad "affordance gate failed — a control may be dead"; fi
 
+head_ "G6 · clickability (a link the browser cannot find is a link the user cannot click)"
+G6URL="${MANUK_CLICK_URL:-https://en.wikipedia.org/wiki/Terrier}"
+G6HTML="/tmp/manuk-g6.html"
+if curl -sL "$G6URL" -o "$G6HTML" 2>/dev/null && [ -s "$G6HTML" ]; then
+  CLK=$(cargo run -q -p manuk-wpt --release -- hittest --html "$G6HTML" --url "$G6URL" 2>/dev/null | grep -E "CLICKABILITY|MISSED")
+  MISS=$(echo "$CLK" | grep -oE 'MISSED \(unclickable\): [0-9]+' | grep -oE '[0-9]+$' || echo 0)
+  PCT=$(echo "$CLK" | grep -oE 'CLICKABILITY: [0-9.]+' | grep -oE '[0-9.]+' || echo 0)
+  if [ "${MISS:-99}" -le 5 ]; then ok "clickability ${PCT}% (${MISS} unclickable links)"; else bad "clickability ${PCT}% — ${MISS} links the browser cannot find"; fi
+else
+  printf '  \033[33m—\033[0m could not fetch %s (skipped)\n' "$G6URL"
+fi
+
+head_ "F4 · interactive latency (§1.7 — one frame; the load bench is BLIND to this)"
+if [ -s "$G6HTML" ]; then
+  cargo run -q -p manuk-wpt --release -- bench --interactive --pages "$G6HTML" --runs 5 2>/dev/null | grep -E "^manuk-g6|OVER ONE FRAME" | sed 's/^/  /'
+  printf '  \033[33m!\033[0m scroll and click must each stay under 16ms — a browser that loads fast and\n'
+  printf '    then stutters on every wheel event is not fast, and G1/G2/G3 cannot see it.\n'
+fi
+
 head_ "T · crate tests"
 for c in manuk-css manuk-layout manuk-paint manuk-dom manuk-net manuk-agent manuk-shell; do
   R=$(cargo test -q -p "$c" 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)

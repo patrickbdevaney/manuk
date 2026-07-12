@@ -315,19 +315,38 @@ impl LayoutBox {
             }
         });
         let mut out = boxes.clone();
-        for (&owner, &r) in &frags {
-            let mut cur = Some(owner);
+        // A boxless element's geometry is the union of what its subtree produced — its text
+        // fragments AND its boxed children. A link wrapping an image (`<a><img></a>`) is inline, so
+        // it has no box of its own and no text either: propagating only fragments left it with **no
+        // geometry at all**, which means `getBoundingClientRect` returns nothing and the browser
+        // cannot find the link under the cursor. A link the browser cannot find is a link the user
+        // cannot click.
+        //
+        // Each contribution walks up only as far as the first ancestor that HAS a box — that
+        // ancestor owns its own border box and must not be inflated by content that merely
+        // overflows it.
+        let mut lift = |start: NodeId, r: Rect, out: &mut std::collections::HashMap<NodeId, Rect>| {
+            let mut cur = dom.parent(start);
             while let Some(n) = cur {
-                // The first ancestor with a real box owns its own geometry — stop before inflating
-                // it with content that merely overflows it.
                 if boxes.contains_key(&n) {
                     break;
                 }
                 if dom.is_element(n) {
-                    add(&mut out, n, r);
+                    add(out, n, r);
                 }
                 cur = dom.parent(n);
             }
+        };
+        for (&owner, &r) in &frags {
+            // The fragment's own owner is boxless by construction (an inline element), so it takes
+            // the fragment directly before the walk begins.
+            if !boxes.contains_key(&owner) && dom.is_element(owner) {
+                add(&mut out, owner, r);
+            }
+            lift(owner, r, &mut out);
+        }
+        for (&node, &r) in &boxes {
+            lift(node, r, &mut out);
         }
         out
     }
