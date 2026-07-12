@@ -1,15 +1,39 @@
 # Parity Benchmark Corpus (ADR-012). Grouped by TRAVERSAL CLASS (ADR-004) — the named site is a
 # SAMPLE of the class; the class is what must pass. `#tick` = in the fast per-tick tier.
 #
+# Why breadth comes before depth: with three sites, every judgement about what to fix next is drawn
+# from a sample of three. That is not a benchmark, it is an anecdote — and it will cheerfully tell
+# you that a bug on one of those three is the most important bug on the web. The corpus exists to
+# make "which remaining gap is actually high-impact" a MEASURED question instead of a guess.
+#
 # class                url
 reference              https://en.wikipedia.org/wiki/Rust_(programming_language)   #tick
+reference              https://en.wikipedia.org/wiki/Main_Page
 reference              https://developer.mozilla.org/en-US/docs/Web/CSS/display
+
 link-aggregator        https://news.ycombinator.com                                #tick
 link-aggregator        https://lobste.rs
+link-aggregator        https://old.reddit.com/r/rust/
+
 docs                   https://doc.rust-lang.org/book/ch01-00-getting-started.html
 docs                   https://docs.python.org/3/tutorial/introduction.html
+docs                   https://go.dev/doc/tutorial/getting-started
+
 marketing              https://example.com                                         #tick
 marketing              https://www.rust-lang.org
+marketing              https://go.dev
+
 app-shell              https://github.com/rust-lang/rust
+app-shell              https://github.com/
+
 news                   https://text.npr.org
+news                   https://lite.cnn.com
+
 forum                  https://stackoverflow.com/questions/tagged/rust
+forum                  https://users.rust-lang.org
+
+form-heavy             https://httpbin.org/forms/post
+form-heavy             https://www.w3schools.com/html/html_forms.asp
+
+blog                   https://blog.rust-lang.org
+blog                   https://this-week-in-rust.org

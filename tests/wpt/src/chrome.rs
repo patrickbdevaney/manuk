@@ -52,6 +52,98 @@ var pre=document.createElement('pre');pre.id='__PARITY__';
 pre.textContent=JSON.stringify(out);document.documentElement.appendChild(pre);})();
 </script>"#;
 
+/// Capture Chrome's `[id]` boxes **before and after** a scripted interaction — the G5 half.
+///
+/// The interaction JS runs between the two probes, in the same document. Running it in a second
+/// navigation would compare two different pages and call the difference "the interaction".
+pub fn capture_boxes_interaction(
+    url: &str,
+    vw: u32,
+    vh: u32,
+    steps_js: &str,
+) -> Result<(HashMap<String, Box4>, HashMap<String, Box4>)> {
+    let chrome = chrome_bin().ok_or_else(|| anyhow!("no Chrome/Chromium found"))?;
+    let html = ureq_get(url)?;
+    let base = format!("<base href=\"{url}\">");
+    let probe = format!(
+        r#"<script>
+(function(){{
+  var snap = function(){{
+    var out = {{}};
+    document.querySelectorAll('[id]').forEach(function(e){{
+      var r = e.getBoundingClientRect();
+      if (r.width === 0 && r.height === 0) return;
+      // Document coordinates: a scroll must not look like every box moving.
+      out[e.id] = [Math.round(r.x + window.scrollX), Math.round(r.y + window.scrollY),
+                   Math.round(r.width), Math.round(r.height)];
+    }});
+    return out;
+  }};
+  var before = snap();
+  try {{ {steps_js} }} catch (e) {{}}
+  var after = snap();
+  var pre = document.createElement('pre'); pre.id = '__G5__';
+  pre.textContent = JSON.stringify({{before: before, after: after}});
+  document.documentElement.appendChild(pre);
+}})();
+</script>"#
+    );
+    let doc = match html.find("<head>") {
+        Some(i) => {
+            let (a, b) = html.split_at(i + 6);
+            format!("{a}{base}{b}{probe}")
+        }
+        None => format!("{base}{html}{probe}"),
+    };
+    let tmp = std::env::temp_dir().join(format!("manuk-g5-{}.html", stable_tag(&doc)));
+    std::fs::write(&tmp, &doc)?;
+    let mut cmd = Command::new(&chrome);
+    cmd.args(base_flags(vw, vh))
+        .arg("--virtual-time-budget=8000")
+        .arg("--dump-dom")
+        .arg(format!("file://{}", tmp.display()));
+    let out = cmd.output().context("chrome --dump-dom (G5 probe)")?;
+    let _ = std::fs::remove_file(&tmp);
+    if !out.status.success() {
+        bail!("chrome --dump-dom failed: {}", String::from_utf8_lossy(&out.stderr).trim());
+    }
+    // Read the probe's payload back through the HTML parser — it is the thing that already knows
+    // how to undo the entity escaping Chrome applied on the way out.
+    let dumped = String::from_utf8_lossy(&out.stdout);
+    let dom = manuk_html::parse(&dumped);
+    let mut json = None;
+    for n in dom.descendants(dom.root()) {
+        if dom.element(n).and_then(|e| e.id()) == Some("__G5__") {
+            json = Some(dom.text_content(n));
+            break;
+        }
+    }
+    let json = json.ok_or_else(|| anyhow!("G5 probe did not run (no __G5__ in the dumped DOM)"))?;
+    let v: serde_json::Value =
+        serde_json::from_str(json.trim()).context("parsing G5 probe JSON")?;
+    let take = |k: &str| -> HashMap<String, Box4> {
+        v[k].as_object()
+            .map(|o| {
+                o.iter()
+                    .filter_map(|(id, arr)| {
+                        let a = arr.as_array()?;
+                        Some((
+                            id.clone(),
+                            [
+                                a.first()?.as_i64()? as i32,
+                                a.get(1)?.as_i64()? as i32,
+                                a.get(2)?.as_i64()? as i32,
+                                a.get(3)?.as_i64()? as i32,
+                            ],
+                        ))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    Ok((take("before"), take("after")))
+}
+
 /// Capture Chrome's box for every `[id]` element of a LIVE url (structural benchmark half).
 pub fn capture_boxes_all_ids(url: &str, vw: u32, vh: u32) -> Result<HashMap<String, Box4>> {
     let chrome = chrome_bin().ok_or_else(|| anyhow!("no Chrome/Chromium found"))?;

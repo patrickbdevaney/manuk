@@ -59,6 +59,13 @@ fn run() {
         return;
     }
 
+    // `manuk-wpt interact` — G5: INTERACTION parity. A page that renders like Chromium but does not
+    // respond like Chromium is a screenshot, not a browser.
+    if args.first().map(String::as_str) == Some("interact") {
+        run_interact_cmd(&args[1..], &fonts);
+        return;
+    }
+
     // `manuk-wpt boxes` — dump Manuk's rect for every `[id]` element. The counterpart of Chrome's
     // `getBoundingClientRect` probe: annotate any element with an id and the two engines' geometry
     // becomes directly comparable. A screenshot shows THAT the layout is wrong; this shows BY HOW
@@ -541,4 +548,155 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
             r.height.round()
         );
     }
+}
+
+
+/// `manuk-wpt interact --url U --steps "click:#a;type:#q=hi;scroll:400" [--name N] [--width W]`
+///
+/// Runs the SAME scripted interaction in Manuk and in Chromium, then compares the two resulting
+/// documents. Not the two implementations — the two OUTCOMES.
+fn run_interact_cmd(args: &[String], fonts: &manuk_text::FontContext) {
+    use manuk_wpt::interact::{changed_boxes, InteractionResult, Step};
+
+    let vw: u32 = flag(args, "--width").and_then(|s| s.parse().ok()).unwrap_or(1200);
+    let vh: u32 = flag(args, "--height").and_then(|s| s.parse().ok()).unwrap_or(800);
+    let floor: f64 = flag(args, "--floor").and_then(|s| s.parse().ok()).unwrap_or(0.75);
+    let Some(spec) = flag(args, "--scenarios") else {
+        eprintln!("usage: manuk-wpt interact --scenarios FILE [--width W] [--floor F]");
+        eprintln!("  each line:  <name> <url> <step>;<step>;...");
+        std::process::exit(2);
+    };
+    let text = std::fs::read_to_string(spec).unwrap_or_else(|e| {
+        eprintln!("cannot read {spec}: {e}");
+        std::process::exit(1);
+    });
+
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("tokio runtime");
+
+    let mut rows: Vec<InteractionResult> = Vec::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let mut parts = line.split_whitespace();
+        let (Some(name), Some(url)) = (parts.next(), parts.next()) else {
+            continue;
+        };
+        let steps_src: String = parts.collect::<Vec<_>>().join(" ");
+        let steps: Vec<Step> = match steps_src
+            .split(';')
+            .filter(|s| !s.trim().is_empty())
+            .map(Step::parse)
+            .collect::<anyhow::Result<Vec<_>>>()
+        {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("{name}: bad steps: {e}");
+                continue;
+            }
+        };
+        eprintln!("G5: {name}  ({} step(s))", steps.len());
+
+        // --- Chromium: the same steps, in the same document, before/after. ---
+        let js: String = steps.iter().map(|s| s.to_js()).collect::<Vec<_>>().join("\n");
+        let (c_before, c_after) =
+            match manuk_wpt::chrome::capture_boxes_interaction(url, vw, vh, &js) {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("  chrome: {e}");
+                    continue;
+                }
+            };
+
+        // --- Manuk: the same steps, through the real engine. ---
+        let Ok((html, final_url)) = rt.block_on(manuk_page::fetch_html(url)) else {
+            eprintln!("  manuk: fetch failed");
+            continue;
+        };
+        let mut page = rt.block_on(async {
+            let mut p = manuk_page::Page::load_async(&html, &final_url, fonts, vw as f32).await;
+            p.finish_loading(fonts, vw as f32).await;
+            p
+        });
+        let snap = |p: &manuk_page::Page| -> std::collections::HashMap<String, [i32; 4]> {
+            let rects = p.root_box.node_rects(p.dom());
+            let dom = p.dom();
+            dom.descendants(dom.root())
+                .filter_map(|n| {
+                    let id = dom.element(n).and_then(|e| e.attr("id"))?;
+                    let r = rects.get(&n)?;
+                    // Zero-size boxes are excluded on the Chromium side too — do not demand Manuk
+                    // render something Chromium does not.
+                    (r.width > 0.0 || r.height > 0.0).then(|| {
+                        (
+                            id.to_string(),
+                            [
+                                r.x.round() as i32,
+                                r.y.round() as i32,
+                                r.width.round() as i32,
+                                r.height.round() as i32,
+                            ],
+                        )
+                    })
+                })
+                .collect()
+        };
+        let m_before = snap(&page);
+        let mut scroll_y = 0.0f32;
+        for step in &steps {
+            match step {
+                Step::Click(sel) => {
+                    let root = page.dom().root();
+                    if let Some(&n) = manuk_css::query_selector_all(page.dom(), root, sel).first() {
+                        page.dispatch_click(n, fonts, vw as f32);
+                    } else {
+                        eprintln!("  manuk: no match for {sel:?}");
+                    }
+                }
+                Step::Type(sel, t) => {
+                    let root = page.dom().root();
+                    if let Some(&n) = manuk_css::query_selector_all(page.dom(), root, sel).first() {
+                        page.dispatch_type(n, t, fonts, vw as f32);
+                    } else {
+                        eprintln!("  manuk: no match for {sel:?}");
+                    }
+                }
+                Step::Scroll(y) => {
+                    scroll_y = *y;
+                    page.publish_view_state(0.0, scroll_y, None);
+                    page.view_changed(scroll_y, vw as f32, vh as f32, true);
+                }
+            }
+        }
+        let m_after = snap(&page);
+
+        // --- Compare the OUTCOMES. ---
+        let (cov, missing, moved, probed, _) =
+            manuk_wpt::fidelity::compare_structure_detail(&to64(&c_after), &to64(&m_after), 8);
+        let _ = cov;
+        rows.push(InteractionResult {
+            name: name.to_string(),
+            missing_after: missing,
+            moved_after: moved,
+            probed_after: probed,
+            chrome_changed: changed_boxes(&c_before, &c_after),
+            manuk_changed: changed_boxes(&m_before, &m_after),
+        });
+    }
+
+    let ok = manuk_wpt::interact::report(&rows, floor);
+    if !ok {
+        std::process::exit(1);
+    }
+}
+
+/// The structural comparator speaks `i64`; the probes speak `i32`.
+fn to64(m: &std::collections::HashMap<String, [i32; 4]>) -> std::collections::HashMap<String, [i64; 4]> {
+    m.iter()
+        .map(|(k, v)| (k.clone(), [v[0] as i64, v[1] as i64, v[2] as i64, v[3] as i64]))
+        .collect()
 }

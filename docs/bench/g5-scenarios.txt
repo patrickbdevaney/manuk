@@ -1,0 +1,18 @@
+# G5 — INTERACTION PARITY scenarios (ADR-012).
+#
+#   <name>  <url>  <step>;<step>;...
+#
+# Steps: click:<css> | type:<css>=<text> | scroll:<px>
+#
+# An interaction that works in Chromium and not in Manuk is a CRITICAL (ADR-007). The signal is not
+# "did the boxes agree" — it is "did Manuk's document RESPOND AT ALL when Chromium's did".
+
+wikipedia-toc-toggle  https://en.wikipedia.org/wiki/Rust_(programming_language)  click:#vector-toc-collapsed-button
+wikipedia-search-type https://en.wikipedia.org/wiki/Rust_(programming_language)  type:#searchInput=rust lang
+wikipedia-scroll      https://en.wikipedia.org/wiki/Rust_(programming_language)  scroll:1500
+hn-scroll             https://news.ycombinator.com                               scroll:800
+hn-more-link          https://news.ycombinator.com                               click:a.morelink
+mdn-scroll            https://developer.mozilla.org/en-US/docs/Web/CSS/display   scroll:1200
+httpbin-form-fill     https://httpbin.org/forms/post                             type:input[name=custname]=Ada;type:input[name=custtel]=555
+rustlang-nav-click    https://www.rust-lang.org                                  click:a[href='/learn']
+github-scroll         https://github.com/rust-lang/rust                          scroll:900

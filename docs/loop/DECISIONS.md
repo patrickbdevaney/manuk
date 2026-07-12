@@ -365,3 +365,102 @@ resulting page state. An interaction that works in Chromium and not in Manuk is 
 same class as a dead affordance — because to a user it *is* one.
 
 **5. Ratchet.** Mean COVERAGE becomes a binding floor (§1.7-style). It only goes up.
+
+---
+
+## ADR-013 — TWO BARS: functional breadth now, pixel precision later. Never conflate them.
+
+**Status:** accepted (2026-07-11). Amends ADR-012's single metric.
+
+**Context.** COVERAGE reached 99.7% and VISUAL ~90% on a **three-site** sample. Every judgement
+about "what to fix next" was being drawn from that sample — which is not a benchmark, it is an
+anecdote, and it will cheerfully report that a bug on one of those three sites is the most important
+bug on the web. Meanwhile the thing a person actually wants is not a page that matches Chromium
+within 8px; it is a page they can *read, click and use*.
+
+**Decision.** Two bars, kept permanently distinct, both reported, never substituted for one another.
+
+**BAR 1 — FUNCTIONAL BREADTH (the near-term target).** A site passes when a person can use it:
+scripts run and handlers fire, forms fill and submit, scrolling works, links navigate, and the page
+is *legible and correctly shaped* — right box model, right formatting context, right colours and
+text. "Close" means it does not look broken to a human looking at it. It does **not** mean it
+matches Chromium's geometry within a tolerance.
+
+**BAR 2 — PIXEL PRECISION (the existing gate, unchanged, deferred).** The 8px placement tolerance
+and the full box-for-box diff. Still the eventual Tier-1 completion target. Not lowered — *deferred*.
+
+**What this changes.** Do not iterate placement to convergence. Once a fix takes a page from broken
+to correctly-shaped, **stop** and move to the next broken site. Breadth of sites reaching Bar 1 beats
+depth of one site reaching Bar 2 — that is the actual mechanism that shortens time-to-daily-driver.
+
+**What this does NOT change.**
+* **Behavioural correctness is untouched.** An interaction that works in Chromium and not in Manuk
+  is still a CRITICAL (ADR-007). This defers visual *precision*, never working functionality.
+* Pass 1 (scripting/interactivity) is unaffected — a handler either fires or it does not; there was
+  never a pixel tolerance to relax.
+* Bar 2 is not abandoned. It is the milestone after Bar 1, at the pace it actually takes.
+
+**Reporting rule.** Every corpus and epoch report states BOTH, as two lines, always:
+
+```
+Functional-breadth (Bar 1):  X/Y sites usable
+Pixel-precision   (Bar 2):  X/Y sites within tolerance
+```
+
+Reporting one as if it were the other is the failure this ADR exists to prevent.
+
+---
+
+## ADR-014 — Work the backlog in three IMPACT passes, and report by pass.
+
+**Status:** accepted (2026-07-11).
+
+**Context.** PARITY-LEDGER.md is ordered by priority, but a flat P0 list still invites picking the
+easy item. Ease of implementation is not impact.
+
+**Decision.** Three passes, and the sequencing criterion is *usability impact only*.
+
+* **PASS 1 — breadth-securing.** Unlocks a whole CLASS of pages, not one page: IDL attribute
+  reflection, `element.style`/`classList`/`dataset`, event-handler attributes/properties, live layout
+  reads, dynamic `<script>`/`<link>` execution. Every server-rendered-button site; every SPA.
+* **PASS 2 — usability-securing.** Between "renders and responds" and "someone could use this
+  daily": real scrolling, text selection/editing, form submission, backgrounds/gradients,
+  `::before`/`::after`, navigation basics. Test: *would a person hit this in their first hour?*
+* **PASS 3 — everything else.** Deep spec completeness, edge-case selectors, rare values. Real gaps;
+  they block nobody. **A Pass 3 item never jumps the queue for being easy.**
+
+**Corollary — G5 and corpus breadth come before grinding any pass**, because they are what turn
+"assumed high-impact" into "measured high-impact".
+
+**Reporting rule.** Progress is reported **by pass**, not by ticks closed. A tick that moves three
+sites from broken to Bar-1-usable is a bigger deal than one that moves a single site from Bar 1 to
+Bar 2, and must not read the same.
+
+---
+
+## ADR-015 — Reference-source discovery: read the algorithm, never the code.
+
+**Status:** accepted (2026-07-11).
+
+**Context.** Every class bug this loop has found was found *experimentally* — render, stare, diagnose,
+fix, re-render. That works, and it is slow. Blink and Gecko already contain the correct algorithm for
+every ambiguous, edge-case-heavy thing we keep rediscovering: margin collapsing, line breaking,
+float/BFC interaction, event dispatch order, IDL reflection semantics.
+
+**Decision.** For any Pass 1/2 item whose correct behaviour is ambiguous or edge-case-heavy, **read
+the corresponding Blink/Gecko source first** and extract the *algorithm and its edge-case list*.
+Implement once, against that, rather than iterating against broken renders.
+
+**Hard boundary — same tier as the SpiderMonkey/Stylo modification boundary, and non-negotiable:**
+**never copy code verbatim from either reference tree, under any circumstance.** Licence
+incompatibility and the from-scratch mandate both make this a line, not a preference. What is
+extracted is the *algorithm*, the way one extracts an algorithm from a paper.
+
+**Traceability.** Every implementation informed this way names the reference file/function in its
+commit message — both as a citation and as an explicit record that it was pattern extraction and not
+transplantation.
+
+**Ceiling, stated so it is not extrapolated past its scope.** This compresses *discovery*. It does
+not compress *implementation* — the Rust still has to be written — and it does nothing at all for the
+external-integration problems (codec licensing, GPU drivers, DRM), which are not algorithm-discovery
+problems and where reading someone else's approach substitutes for none of the work.

@@ -17,3 +17,9 @@ rustflags = ["-C", "target-feature=+crt-static"]
 
 [target.aarch64-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
+
+# Build-artifact cache. Shared dependencies (stylo, mozjs bindings, taffy, hyper …) dominate the
+# compile cycle and are rebuilt identically across every session and every parallel branch; caching
+# them is the single cheapest speed-up available to the loop.
+[build]
+rustc-wrapper = "sccache"

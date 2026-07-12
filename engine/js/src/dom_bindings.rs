@@ -1515,6 +1515,50 @@ unsafe extern "C" fn host_rect(cx: *mut RawJSContext, argc: u32, vp: *mut Value)
     true
 }
 
+/// `__urlParse(href, base)` → the parsed parts, or `null` if it is not a URL.
+///
+/// (Named apart from the BOM shim's own `__parseUrl`, which builds `window.location`: the shim runs
+/// *after* install and would otherwise shadow this one — which it did, silently, until the parsed
+/// parts came back as the raw input string.)
+///
+/// Backed by the real `url` crate — the same parser the network stack uses. A regex here would
+/// disagree with what actually gets fetched, which is the kind of divergence that becomes a
+/// security bug rather than a rendering one.
+unsafe extern "C" fn host_parse_url(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let href = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    let base = arg_string(cx, vp, argc, 1).unwrap_or_default();
+    let parsed = if base.is_empty() {
+        url::Url::parse(&href)
+    } else {
+        url::Url::parse(&base).and_then(|b| b.join(&href))
+    };
+    let Ok(u) = parsed else {
+        *vp = NullValue();
+        return true;
+    };
+    let obj = serde_json::json!({
+        "href": u.as_str(),
+        "protocol": format!("{}:", u.scheme()),
+        "hostname": u.host_str().unwrap_or(""),
+        "port": u.port().map(|p| p.to_string()).unwrap_or_default(),
+        "host": match u.port() {
+            Some(p) => format!("{}:{}", u.host_str().unwrap_or(""), p),
+            None => u.host_str().unwrap_or("").to_string(),
+        },
+        "origin": u.origin().ascii_serialization(),
+        "pathname": u.path(),
+        "search": u.query().map(|q| format!("?{q}")).unwrap_or_default(),
+        "hash": u.fragment().map(|f| format!("#{f}")).unwrap_or_default(),
+        "username": u.username(),
+        "password": u.password().unwrap_or(""),
+    });
+    match eval_in_current_global(cx, &format!("({})", obj)) {
+        Some(v) => *vp = v,
+        None => *vp = NullValue(),
+    }
+    true
+}
+
 /// `element.matches(sel)` — does this element match the selector?
 unsafe extern "C" fn el_matches(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let ok = match (this_node(vp), arg_string(cx, vp, argc, 0)) {
@@ -1798,6 +1842,14 @@ pub unsafe fn install(
         c"__rect".as_ptr(),
         Some(host_rect),
         1,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__urlParse".as_ptr(),
+        Some(host_parse_url),
+        2,
         0,
     );
     JS_DefineFunction(
@@ -2660,6 +2712,164 @@ const WINDOW_PRELUDE: &str = r#"
             else { dx = a || 0; dy = b || 0; }
             g.__scrollTo(cur[0] + (Number(dx) || 0), cur[1] + (Number(dy) || 0));
         };
+
+        // ---- URL / URLSearchParams / Headers / FormData / structuredClone --------------------
+        // The SPA data path. Every one of these was missing, and a missing global is a
+        // ReferenceError that takes the whole script down — not a degraded feature, a dead page.
+        if (typeof g.URLSearchParams === 'undefined') {
+            g.URLSearchParams = function (init) {
+                var pairs = [];
+                var dec = function (x) { return decodeURIComponent(String(x).replace(/\+/g, ' ')); };
+                if (typeof init === 'string') {
+                    String(init).replace(/^\?/, '').split('&').forEach(function (kv) {
+                        if (!kv) return;
+                        var i = kv.indexOf('=');
+                        if (i < 0) pairs.push([dec(kv), '']);
+                        else pairs.push([dec(kv.slice(0, i)), dec(kv.slice(i + 1))]);
+                    });
+                } else if (init && typeof init === 'object') {
+                    if (Array.isArray(init)) init.forEach(function (p) { pairs.push([String(p[0]), String(p[1])]); });
+                    else for (var k in init) pairs.push([k, String(init[k])]);
+                }
+                this._p = pairs;
+                var enc = function (x) { return encodeURIComponent(String(x)); };
+                this.append = function (k, v) { this._p.push([String(k), String(v)]); };
+                this.set = function (k, v) {
+                    var found = false;
+                    this._p = this._p.filter(function (p) {
+                        if (p[0] !== String(k)) return true;
+                        if (found) return false;
+                        found = true;
+                        p[1] = String(v);
+                        return true;
+                    });
+                    if (!found) this._p.push([String(k), String(v)]);
+                };
+                this.get = function (k) {
+                    for (var i = 0; i < this._p.length; i++) if (this._p[i][0] === String(k)) return this._p[i][1];
+                    return null;
+                };
+                this.getAll = function (k) {
+                    return this._p.filter(function (p) { return p[0] === String(k); }).map(function (p) { return p[1]; });
+                };
+                this.has = function (k) { return this.get(k) !== null; };
+                this['delete'] = function (k) {
+                    this._p = this._p.filter(function (p) { return p[0] !== String(k); });
+                };
+                this.forEach = function (fn, t) { this._p.forEach(function (p) { fn.call(t, p[1], p[0], this); }, this); };
+                this.keys = function () { return this._p.map(function (p) { return p[0]; })[Symbol.iterator](); };
+                this.values = function () { return this._p.map(function (p) { return p[1]; })[Symbol.iterator](); };
+                this.entries = function () { return this._p.map(function (p) { return [p[0], p[1]]; })[Symbol.iterator](); };
+                this[Symbol.iterator] = this.entries;
+                this.toString = function () {
+                    return this._p.map(function (p) { return enc(p[0]) + '=' + enc(p[1]); }).join('&');
+                };
+                Object.defineProperty(this, 'size', { get: function () { return this._p.length; } });
+            };
+        }
+        if (typeof g.URL === 'undefined') {
+            g.URL = function (href, base) {
+                var p = g.__urlParse(String(href), base === undefined ? '' : String(base));
+                if (!p) throw new TypeError('Invalid URL: ' + href);
+                var self = this;
+                for (var k in p) self[k] = p[k];
+                self.searchParams = new g.URLSearchParams(self.search);
+                self.toString = function () { return self.href; };
+                self.toJSON = function () { return self.href; };
+            };
+        }
+        if (typeof g.Headers === 'undefined') {
+            g.Headers = function (init) {
+                this._h = {};
+                var self = this;
+                this.set = function (k, v) { self._h[String(k).toLowerCase()] = String(v); };
+                this.append = function (k, v) {
+                    var lk = String(k).toLowerCase();
+                    self._h[lk] = self._h[lk] ? self._h[lk] + ', ' + String(v) : String(v);
+                };
+                this.get = function (k) {
+                    var v = self._h[String(k).toLowerCase()];
+                    return v === undefined ? null : v;
+                };
+                this.has = function (k) { return String(k).toLowerCase() in self._h; };
+                this['delete'] = function (k) { delete self._h[String(k).toLowerCase()]; };
+                this.forEach = function (fn, t) {
+                    for (var k in self._h) fn.call(t, self._h[k], k, self);
+                };
+                this.entries = function () {
+                    return Object.keys(self._h).map(function (k) { return [k, self._h[k]]; })[Symbol.iterator]();
+                };
+                this.keys = function () { return Object.keys(self._h)[Symbol.iterator](); };
+                if (init && typeof init === 'object') {
+                    if (Array.isArray(init)) init.forEach(function (p) { self.append(p[0], p[1]); });
+                    else if (init._h) for (var k2 in init._h) self.set(k2, init._h[k2]);
+                    else for (var k3 in init) self.set(k3, init[k3]);
+                }
+            };
+        }
+        if (typeof g.FormData === 'undefined') {
+            g.FormData = function (form) {
+                var pairs = [];
+                this._p = pairs;
+                var self = this;
+                this.append = function (k, v) { pairs.push([String(k), v]); };
+                this.set = function (k, v) {
+                    self._p = pairs = pairs.filter(function (p) { return p[0] !== String(k); });
+                    pairs.push([String(k), v]);
+                };
+                this.get = function (k) {
+                    for (var i = 0; i < pairs.length; i++) if (pairs[i][0] === String(k)) return pairs[i][1];
+                    return null;
+                };
+                this.getAll = function (k) {
+                    return pairs.filter(function (p) { return p[0] === String(k); }).map(function (p) { return p[1]; });
+                };
+                this.has = function (k) { return self.get(k) !== null; };
+                this['delete'] = function (k) {
+                    self._p = pairs = pairs.filter(function (p) { return p[0] !== String(k); });
+                };
+                this.forEach = function (fn, t) { pairs.forEach(function (p) { fn.call(t, p[1], p[0], self); }); };
+                this.entries = function () { return pairs.map(function (p) { return [p[0], p[1]]; })[Symbol.iterator](); };
+                this[Symbol.iterator] = this.entries;
+                // `new FormData(form)` harvests the form's named controls — how a page submits a
+                // form it built itself.
+                if (form && form.querySelectorAll) {
+                    var els = form.querySelectorAll('input, select, textarea');
+                    for (var i = 0; i < els.length; i++) {
+                        var e = els[i];
+                        var n = e.getAttribute('name');
+                        if (!n) continue;
+                        var ty = (e.getAttribute('type') || '').toLowerCase();
+                        if ((ty === 'checkbox' || ty === 'radio') && !e.checked) continue;
+                        pairs.push([n, e.value === undefined ? '' : e.value]);
+                    }
+                }
+                // urlencoded serialisation, which is what `fetch(url, {body: fd})` sends until
+                // multipart is wired through the JS boundary.
+                this.toString = function () {
+                    return pairs.map(function (p) {
+                        return encodeURIComponent(p[0]) + '=' + encodeURIComponent(String(p[1]));
+                    }).join('&');
+                };
+            };
+        }
+        if (typeof g.structuredClone === 'undefined') {
+            g.structuredClone = function (v) {
+                var seen = new Map();
+                var walk = function (x) {
+                    if (x === null || typeof x !== 'object') return x;
+                    if (seen.has(x)) return seen.get(x);   // cycles are legal here, unlike JSON
+                    var out;
+                    if (Array.isArray(x)) { out = []; seen.set(x, out); x.forEach(function (i) { out.push(walk(i)); }); }
+                    else if (x instanceof Date) { out = new Date(x.getTime()); seen.set(x, out); }
+                    else if (x instanceof Map) { out = new Map(); seen.set(x, out); x.forEach(function (val, k) { out.set(walk(k), walk(val)); }); }
+                    else if (x instanceof Set) { out = new Set(); seen.set(x, out); x.forEach(function (val) { out.add(walk(val)); }); }
+                    else { out = {}; seen.set(x, out); for (var k in x) if (Object.prototype.hasOwnProperty.call(x, k)) out[k] = walk(x[k]); }
+                    return out;
+                };
+                return walk(v);
+            };
+        }
 
         // ---- IntersectionObserver / ResizeObserver -------------------------------------------
         // These are how the real-time web works: lazy images, infinite scroll, "load more" at the

@@ -649,6 +649,41 @@ impl Page {
         ran
     }
 
+    /// Type `text` into a field: set its value, then fire `input` and `change` — which is the part
+    /// that matters. A framework does not read the DOM; it listens. Setting the value without
+    /// dispatching the events leaves the page's own model of the form untouched, so the box shows
+    /// the text and the site behaves as though the field were still empty.
+    pub fn dispatch_type(
+        &mut self,
+        node: manuk_dom::NodeId,
+        text: &str,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) {
+        self.dom.set_attr(node, "value", text.to_string());
+        #[cfg(feature = "spidermonkey")]
+        {
+            let Some(ctx) = &self.js else {
+                self.relayout(fonts, viewport_width);
+                return;
+            };
+            let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+                .root_box
+                .node_rects(&self.dom)
+                .into_iter()
+                .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+                .collect();
+            for ty in ["input", "change"] {
+                if let Err(e) =
+                    manuk_js::dispatch_event(ctx, &mut self.dom, node, ty, &rects, &self.styles)
+                {
+                    tracing::warn!("{ty} dispatch: {e}");
+                }
+            }
+        }
+        self.relayout(fonts, viewport_width);
+    }
+
     /// Tell the page its **view changed** — it scrolled, or it was laid out again — so the
     /// observers run and `scroll` fires. Returns any scroll the callbacks then requested.
     ///
