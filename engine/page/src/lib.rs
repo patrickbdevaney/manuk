@@ -29,6 +29,7 @@ use url::Url;
 /// same `Stylesheet`s (collected via [`MinimalCascade::collect_style_elements`]), so only
 /// the cascade step swaps — the rest of the pipeline is engine-agnostic.
 fn cascade_styles(dom: &Dom, sheets: &[Stylesheet], viewport_width: f32) -> StyleMap {
+    tracing::debug!(sheets = sheets.len(), "cascade");
     manuk_css::values::set_viewport_width(viewport_width);
     #[cfg(feature = "stylo")]
     {
@@ -1511,8 +1512,15 @@ impl Page {
         .await;
         let mut external: HashMap<String, String> = HashMap::new();
         for (url, text) in fetched {
-            if let Some(t) = text {
-                external.insert(url, t);
+            match text {
+                Some(t) => {
+                    tracing::info!(bytes = t.len(), %url, "stylesheet applied");
+                    external.insert(url, t);
+                }
+                // A stylesheet that fails to arrive is not a cosmetic loss — it is the difference
+                // between a site's desktop layout and its mobile one. Say so.
+                None => tracing::warn!(%url, "STYLESHEET FAILED — the page will render unstyled or \
+                                              in its fallback layout"),
             }
         }
         // Web fonts: fetch @font-face sources (from inline + external CSS) and register

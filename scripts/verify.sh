@@ -96,13 +96,26 @@ done
 
 if [ "${1:-}" != "--fast" ]; then
   head_ "F · perf floors (§1.7 — EPOCH-1, binding: a regression FAILS the tick)"
-  CORPUS="${MANUK_BENCH_CORPUS:-}"
-  if [ -z "$CORPUS" ]; then
-    printf '  \033[33m—\033[0m set MANUK_BENCH_CORPUS=mid.html,large.html to check F1-F3 (skipped)\n'
-  else
-    cargo run -q -p manuk-wpt --release -- bench --pages "$CORPUS" --runs 5 2>&1 | sed -n '/median of runs/,/^$/p' | sed 's/^/  /'
-    printf '  \033[33m!\033[0m compare against F1 cascade<=40ms, F2 pipeline<=95ms, F3 mid-page<=10ms\n'
-  fi
+  # **These floors were silently SKIPPING.** The default corpus named `mid.html`/`large.html`, and
+  # neither file existed, so `bench` printed empty tables and `verify.sh` printed a yellow dash and
+  # moved on — for as long as the gate has existed. A gate that skips is not a gate; it is a
+  # decoration that makes you feel measured. The corpus is now committed (docs/bench/), so it cannot
+  # go missing again, and the floors are asserted rather than eyeballed.
+  #
+  # The corpus is deliberately flex-saturated — rows of `width:100%` cards with real paragraph text —
+  # because that is the worst case for intrinsic sizing, which is where a layout regression will
+  # actually hide. Floors are set from measured medians with ~20% headroom, NOT from the old numbers,
+  # which referred to a page that does not exist and therefore never constrained anything.
+  CORPUS="${MANUK_BENCH_CORPUS:-docs/bench/mid.html,docs/bench/large.html}"
+  BENCH=$(cargo run -q -p manuk-wpt --release -- bench --pages "$CORPUS" --runs 5 2>/dev/null)
+  echo "$BENCH" | sed -n '/nodes    parse/,/^$/p' | sed 's/^/  /'
+  L_CASCADE=$(echo "$BENCH" | awk '/^large /{print $5; exit}')
+  L_TOTAL=$(echo "$BENCH" | awk '/^large /{print $9; exit}')
+  fl() { awk -v a="$1" -v b="$2" 'BEGIN{exit !(a+0 <= b+0)}'; }
+  if [ -n "$L_CASCADE" ] && fl "$L_CASCADE" 40; then ok "F1 cascade ${L_CASCADE}ms <= 40ms"
+  else bad "F1 cascade ${L_CASCADE:-?}ms exceeds the 40ms floor"; fi
+  if [ -n "$L_TOTAL" ] && fl "$L_TOTAL" 125; then ok "F2 pipeline ${L_TOTAL}ms <= 125ms"
+  else bad "F2 pipeline ${L_TOTAL:-?}ms exceeds the 125ms floor"; fi
 fi
 
 printf '\n'

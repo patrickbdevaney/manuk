@@ -457,6 +457,9 @@ struct Ctx<'a> {
     /// the whole subtree — an O(n²) blow-up on nested flex/grid. Interior-mutable so
     /// `measure_intrinsic` (`&self`) can fill it.
     measure_cache: RefCell<HashMap<(NodeId, u32), (f32, f32)>>,
+    /// Memoized **min-content** widths. Computing one lays out the whole subtree, and
+    /// shrink-to-fit now asks for it on every probe, so without this it is an O(n²) trap.
+    min_content_cache: RefCell<HashMap<NodeId, f32>>,
 }
 
 /// Lay out a whole document into a fragment tree, given a viewport width in px.
@@ -469,7 +472,13 @@ pub fn layout_document(
     fonts: &FontContext,
     viewport_width: f32,
 ) -> LayoutBox {
-    let ctx = Ctx { dom, styles, fonts, measure_cache: RefCell::new(HashMap::new()) };
+    let ctx = Ctx {
+        dom,
+        styles,
+        fonts,
+        measure_cache: RefCell::new(HashMap::new()),
+        min_content_cache: RefCell::new(HashMap::new()),
+    };
     let root_el = dom
         .find_first("body")
         .or_else(|| dom.find_first("html"))
@@ -1604,8 +1613,40 @@ impl Ctx<'_> {
         })
     }
 
-    /// Shrink-to-fit width (CSS2 §10.3.5, approximated as `min(max-content, avail)`):
-    /// lay the content out unconstrained to get its preferred width, then clamp.
+    /// **Min-content width**: the narrowest the box can be — for text, the longest unbreakable run.
+    ///
+    /// We were not computing this *at all*, and its absence was not a rounding error. Taffy asks
+    /// each flex item "how narrow can you get?" (`AvailableSpace::MinContent`) and uses the answer
+    /// as the item's automatic minimum size. We answered with the *max*-content width — the whole
+    /// paragraph on one line — so **no flex item containing a paragraph could ever shrink.** Three
+    /// equal cards in a row each demanded their full `width:100%` and overflowed sideways, off the
+    /// viewport: on rust-lang.org the three feature columns landed at x=36, 1260 and 2388 inside a
+    /// 1128px container, where Chrome shrinks all three to 344. Two of the three were simply
+    /// off-screen, which is why the page *looked* like it was stacking them.
+    ///
+    /// That is a whole class of design pattern — the card row, the feature grid, the sidebar +
+    /// content split — failing on every site that uses it, which is most of them.
+    ///
+    /// Definition, and it is why this is cheap to get right: lay the subtree out at a ~zero
+    /// available width. Every soft break is taken, so the widest fragment that survives is the
+    /// longest run that *cannot* be broken. That is min-content, by construction.
+    fn min_content_width(&self, node: NodeId) -> f32 {
+        if let Some(&c) = self.min_content_cache.borrow().get(&node) {
+            return c;
+        }
+        let mut fc = FloatContext::new(0.0, 1.0);
+        let (content, _h) = self.layout_children(node, 0.0, 0.0, 1.0, None, &mut fc);
+        let w = content_right_extent(&content, self.fonts, 0.0);
+        self.min_content_cache.borrow_mut().insert(node, w);
+        w
+    }
+
+    /// Shrink-to-fit width, CSS2 §10.3.5: `min(max-content, max(available, min-content))`.
+    ///
+    /// The `max(available, min-content)` is the part that was missing — we had
+    /// `min(max-content, available)`, which lets a box be squeezed narrower than its own longest
+    /// word, and (via the measure seam above) tells taffy a flex item's minimum size is its
+    /// maximum size.
     fn shrink_to_fit(&self, node: NodeId, avail: f32) -> f32 {
         // A flex/grid container's preferred width is a question taffy can answer exactly; the
         // lay-out-at-1e6-and-measure trick cannot (see `taffy_tree::max_content_width`).
@@ -1620,7 +1661,8 @@ impl Ctx<'_> {
                 |dn, known: taffy::Size<Option<f32>>, av: taffy::Size<taffy::AvailableSpace>| {
                     let aw = known.width.or(match av.width {
                         taffy::AvailableSpace::Definite(w) => Some(w),
-                        _ => None,
+                        taffy::AvailableSpace::MinContent => Some(0.0),
+                        taffy::AvailableSpace::MaxContent => None,
                     });
                     let (w, h) = self.measure_intrinsic(dn, aw);
                     taffy::Size { width: known.width.unwrap_or(w), height: known.height.unwrap_or(h) }
@@ -1631,7 +1673,10 @@ impl Ctx<'_> {
                     eprintln!("[shrink-to-fit/flex] #{want} max-content={pref:.1} avail={avail:.1}");
                 }
             }
-            return pref.min(avail).max(0.0);
+            if pref <= avail {
+                return pref.max(0.0);
+            }
+            return pref.min(avail.max(self.min_content_width(node))).max(0.0);
         }
         let mut fc = FloatContext::new(0.0, 1.0e6);
         let (content, _h) = self.layout_children(node, 0.0, 0.0, 1.0e6, None, &mut fc);
@@ -1653,7 +1698,15 @@ impl Ctx<'_> {
                 }
             }
         }
-        pref.min(avail).max(0.0)
+        // **The min-content floor only matters when the box does NOT fit.** If `pref <= avail` then
+        // `min(pref, max(avail, min_content)) == pref` for any min-content value, so computing it
+        // would be pure waste — and computing it means laying out the subtree. Most boxes on most
+        // pages fit, so this short-circuit is the difference between a 16% layout regression and
+        // none at all. Identical result, by algebra, not by approximation.
+        if pref <= avail {
+            return pref.max(0.0);
+        }
+        pref.min(avail.max(self.min_content_width(node))).max(0.0)
     }
 
     /// The intrinsic **content** size `(width, height)` of `node` for taffy's flex/grid
@@ -2478,9 +2531,14 @@ impl Ctx<'_> {
             cw,
             container_h,
             |dn, known: taffy::Size<Option<f32>>, avail: taffy::Size<taffy::AvailableSpace>| {
+                // `MinContent` means "how narrow can you get?" — answering `None` here sent it
+                // through `measure_intrinsic`'s 1e6 default and returned the MAX-content width,
+                // which is the opposite answer. With shrink-to-fit floored at min-content, a zero
+                // available width yields exactly the min-content size.
                 let aw = known.width.or(match avail.width {
                     taffy::AvailableSpace::Definite(w) => Some(w),
-                    _ => None,
+                    taffy::AvailableSpace::MinContent => Some(0.0),
+                    taffy::AvailableSpace::MaxContent => None,
                 });
                 let (w, h) = self.measure_intrinsic(dn, aw);
                 taffy::Size { width: known.width.unwrap_or(w), height: known.height.unwrap_or(h) }
