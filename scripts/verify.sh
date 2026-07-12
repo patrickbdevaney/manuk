@@ -84,6 +84,10 @@ head_ "G_TEARDOWN · no exit path bypasses Drop (METHODOLOGY 5.3 — a hidden cr
 GT=$(cargo test -q -p manuk-shell --test g_teardown 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GT" ]; then ok "teardown: $GT"; else bad "G_TEARDOWN failed — an exit path skips the profile flush"; fi
 
+head_ "G_LOAD · the page renders when its subresources never answer (METHODOLOGY 4.1 — the frozen tab)"
+GL=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_load_budget 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GL" ]; then ok "load budget: $GL"; else bad "G_LOAD failed — a dead subresource can hold the document hostage"; fi
+
 head_ "T · crate tests"
 for c in manuk-css manuk-layout manuk-paint manuk-dom manuk-net manuk-agent manuk-shell; do
   R=$(cargo test -q -p "$c" 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)

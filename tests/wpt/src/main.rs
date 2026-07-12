@@ -252,7 +252,19 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
             .to_string();
         eprintln!("fidelity: {name}");
 
-        // Manuk — the real pipeline (fetch, external CSS, images, JS), same as a user gets.
+        // **Time each engine separately, and attribute the cost to whoever actually spent it.**
+        //
+        // A sweep with one wall-clock budget per site cannot tell "our engine hung" from "Chromium
+        // hung", and it will report both as *our* failure. That is not hypothetical: w3schools and
+        // go.dev both came back HANG/FAIL at a 75s budget, which would have made "fix the page-load
+        // hang" the single highest-priority item in the project — Pass 1, above everything. Timing
+        // the halves says our engine renders w3schools in **2.7s** and *Chromium* takes **21s** on
+        // the same bytes. The hang was the oracle's. The bug did not exist.
+        //
+        // This is the same hazard as `oracle::oracle_is_healthy` and it gets the same treatment:
+        // make the mis-attribution impossible in code, not a thing to remember. An oracle you are
+        // measuring yourself against must never be able to charge its own slowness to your account.
+        let t_manuk = std::time::Instant::now();
         let Ok((html, final_url)) = rt.block_on(manuk_page::fetch_html(url)) else {
             eprintln!("  fetch failed, skipping");
             continue;
@@ -267,12 +279,27 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
             eprintln!("  manuk render failed");
             continue;
         }
+        let manuk_ms = t_manuk.elapsed().as_millis();
 
         // Chromium — the same live URL, so it fetches its own subresources.
+        let t_chrome = std::time::Instant::now();
         let cpath = out.join(format!("{name}.chrome.png"));
         if let Err(e) = manuk_wpt::chrome::capture_url_screenshot(url, vw, vh, &cpath) {
             eprintln!("  chrome: {e}");
             continue;
+        }
+        let chrome_ms = t_chrome.elapsed().as_millis();
+        eprintln!("  load: manuk {manuk_ms}ms · chromium {chrome_ms}ms");
+        if manuk_ms > 10_000 {
+            eprintln!(
+                "  ** OURS IS SLOW: {manuk_ms}ms to load and paint. That is a bug in this engine and \
+                 it belongs in the ledger. **"
+            );
+        } else if chrome_ms > 3 * manuk_ms.max(1) && chrome_ms > 10_000 {
+            eprintln!(
+                "  (chromium took {chrome_ms}ms against our {manuk_ms}ms — the ORACLE is the slow \
+                 one here; do not book this as our latency)"
+            );
         }
 
         match manuk_wpt::fidelity::compare(&mpath, &cpath, &name) {

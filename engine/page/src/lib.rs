@@ -492,6 +492,18 @@ pub struct Page {
 pub const MIN_ZOOM: f32 = 0.25;
 pub const MAX_ZOOM: f32 = 5.0;
 
+/// How long a page's *enhancements* get, in total, before the document paints regardless.
+pub fn load_budget() -> std::time::Duration {
+    static B: std::sync::OnceLock<std::time::Duration> = std::sync::OnceLock::new();
+    *B.get_or_init(|| {
+        let ms = std::env::var("MANUK_LOAD_BUDGET_MS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(12_000);
+        std::time::Duration::from_millis(ms)
+    })
+}
+
 impl Page {
     /// Parse + style + lay out `html` for a viewport of `viewport_width` px.
     pub fn load(html: &str, final_url: &str, fonts: &FontContext, viewport_width: f32) -> Page {
@@ -529,25 +541,101 @@ impl Page {
         page
     }
 
-    /// Everything a page needs *after* its document is parsed and its load-time scripts have run:
-    /// external CSS, the scripts those scripts asked for, images, and icon masks — in the order
-    /// each depends on the last. One call, so no caller can perform half of it.
+    /// **The page-load budget: the document renders, full stop.**
+    ///
+    /// A per-request deadline (`manuk_net::request_timeout`) bounds any single fetch, but it does not
+    /// bound the *page*: these phases are serial by necessity (a stylesheet can add an image, a
+    /// script can add a stylesheet), so a site with dead subresources in several phases still stacks
+    /// timeout upon timeout. Worst case across the six phases is ~64s, which is a frozen tab with
+    /// extra steps.
+    ///
+    /// So the phases run under one overall deadline. When it expires, whatever has arrived is what
+    /// the page gets, and it paints. **This is what a browser actually promises.** Chromium does not
+    /// wait for a tracker to answer before showing you the article, and neither does this.
+    ///
+    /// The budget starts after parse, so the document — the thing the user came for — is never the
+    /// thing that gets dropped. Only the enhancements are abandonable, and abandoning them is the
+    /// correct behaviour, not a degradation of it.
+    ///
+    /// `MANUK_LOAD_BUDGET_MS` overrides.
     #[cfg(feature = "spidermonkey")]
     pub async fn finish_loading(&mut self, fonts: &FontContext, viewport_width: f32) {
-        self.fetch_and_apply_stylesheets(fonts, viewport_width).await;
-        self.fetch_and_run_dynamic_scripts(fonts, viewport_width, 4).await;
-        self.fetch_and_apply_images(fonts, viewport_width).await;
-        self.fetch_and_apply_masks().await;
-        self.fetch_and_apply_background_images().await;
+        // **A hard deadline, not a between-phases courtesy.** Checking the clock only *between*
+        // phases lets a phase start with a millisecond left and then run for its full per-request
+        // timeout, so a 12s budget delivered 21.6s. Wrapping the whole sequence means the clock is
+        // enforced wherever it runs out, including in the middle of a fetch.
+        //
+        // Cancelling mid-phase is safe by construction: each phase fetches everything it needs and
+        // only then applies it to the DOM, so a dropped future loses that phase's *enhancement* and
+        // never a half-mutated document. Earlier phases keep what they already applied.
+        let budget = load_budget();
+        if tokio::time::timeout(budget, self.finish_loading_inner(fonts, viewport_width))
+            .await
+            .is_err()
+        {
+            tracing::warn!(
+                "load budget of {:.1}s exhausted mid-phase — painting now. The document is what the \
+                 user came for; the rest was an enhancement.",
+                budget.as_secs_f32()
+            );
+        }
+    }
+
+    #[cfg(feature = "spidermonkey")]
+    async fn finish_loading_inner(&mut self, fonts: &FontContext, viewport_width: f32) {
+        let budget = load_budget();
+        let started = std::time::Instant::now();
+        let mut phase = |name: &'static str| -> bool {
+            let left = budget.saturating_sub(started.elapsed());
+            if left.is_zero() {
+                tracing::warn!(
+                    "load budget of {:.1}s exhausted — painting without {name}. The page renders; \
+                     the subresource was an enhancement, not a hostage.",
+                    budget.as_secs_f32()
+                );
+                return false;
+            }
+            true
+        };
+        if phase("external CSS") {
+            self.fetch_and_apply_stylesheets(fonts, viewport_width).await;
+        }
+        if phase("dynamic scripts") {
+            self.fetch_and_run_dynamic_scripts(fonts, viewport_width, 4).await;
+        }
+        if phase("images") {
+            self.fetch_and_apply_images(fonts, viewport_width).await;
+        }
+        if phase("icon masks") {
+            self.fetch_and_apply_masks().await;
+        }
+        if phase("background images") {
+            self.fetch_and_apply_background_images().await;
+        }
     }
 
     /// Without SpiderMonkey there are no dynamic scripts to run.
     #[cfg(not(feature = "spidermonkey"))]
     pub async fn finish_loading(&mut self, fonts: &FontContext, viewport_width: f32) {
-        self.fetch_and_apply_stylesheets(fonts, viewport_width).await;
-        self.fetch_and_apply_images(fonts, viewport_width).await;
-        self.fetch_and_apply_masks().await;
-        self.fetch_and_apply_background_images().await;
+        let budget = load_budget();
+        let started = std::time::Instant::now();
+        macro_rules! within {
+            () => {
+                !budget.saturating_sub(started.elapsed()).is_zero()
+            };
+        }
+        if within!() {
+            self.fetch_and_apply_stylesheets(fonts, viewport_width).await;
+        }
+        if within!() {
+            self.fetch_and_apply_images(fonts, viewport_width).await;
+        }
+        if within!() {
+            self.fetch_and_apply_masks().await;
+        }
+        if within!() {
+            self.fetch_and_apply_background_images().await;
+        }
     }
 
     /// Fetch + decode this page's `<img>` resources and paint them. An image without an
@@ -1861,7 +1949,9 @@ pub enum Loaded {
 /// `data:`/`file:` URLs are always documents.
 pub async fn fetch_document(url: &str) -> Result<Loaded> {
     if url.starts_with("http://") || url.starts_with("https://") {
-        let resp = manuk_net::fetch(url)
+        // The document gets the long deadline; its subresources get the short one. See
+        // `manuk_net::fetch_document`.
+        let resp = manuk_net::fetch_document(url)
             .await
             .with_context(|| format!("fetching {url}"))?;
         if resp.status >= 400 {
@@ -1888,7 +1978,9 @@ pub async fn fetch_document(url: &str) -> Result<Loaded> {
 
 pub async fn fetch_html(url: &str) -> Result<(String, String)> {
     if url.starts_with("http://") || url.starts_with("https://") {
-        let resp = manuk_net::fetch(url)
+        // The document gets the long deadline; its subresources get the short one. See
+        // `manuk_net::fetch_document`.
+        let resp = manuk_net::fetch_document(url)
             .await
             .with_context(|| format!("fetching {url}"))?;
         if resp.status >= 400 {
