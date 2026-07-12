@@ -1979,7 +1979,12 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
         "caption" => (TableCaption, 0.0, 400, 1.0),
         "colgroup" => (TableColumnGroup, 0.0, 400, 1.0),
         "col" => (TableColumn, 0.0, 400, 1.0),
-        "head" | "title" | "meta" | "link" | "script" | "style" | "base" | "noscript" => {
+        // Keep in lockstep with the UA sheet in `stylo_engine.rs`. The two cascades disagreeing
+        // about which elements render at all is how a `<source>` ends up with 19px of height in one
+        // configuration and none in the other.
+        "head" | "title" | "meta" | "link" | "script" | "style" | "base" | "noscript"
+        | "template" | "source" | "track" | "param" | "area" | "datalist" | "basefont"
+        | "noembed" | "noframes" | "rp" => {
             (None, 0.0, 400, 1.0)
         }
         // Form controls render as replaced-ish inline-block boxes (styled below).

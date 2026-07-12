@@ -124,7 +124,14 @@ html, body, div, section, article, header, footer, nav, main, aside, figure,
 figcaption, address, p, blockquote, ul, ol, li, dd, dt, pre, hr, h1, h2, h3, h4, h5, h6,
 form, fieldset, table, caption, center { display: block; }
 center { text-align: center; }
-head, title, meta, link, script, style, base, noscript, template { display: none; }
+/* The elements that are never rendered. Ours was missing the *media* half of the list, and
+   `<source>` is the one that matters: `<picture><source>` is how the entire modern web serves
+   responsive images, and every one of them was getting a real box with real height. Wikipedia alone
+   invented 152px out of eight of them, in the middle of the article. Same shape as the `<script>`
+   that painted its own source code down rust-lang.org — a metadata element with no `display:none`
+   becomes content. Mirrors Chrome's html.css. */
+head, title, meta, link, script, style, base, noscript, template,
+source, track, param, area, datalist, basefont, noembed, noframes, rp { display: none; }
 /* Form controls are **atomic inline boxes**, not inline elements with children. Left as plain
    `inline`, the inline collector recurses into a `<select>`'s `<option>`s and paints every one of
    them into the surrounding line — rust-lang.org's language picker rendered as a row of twelve
