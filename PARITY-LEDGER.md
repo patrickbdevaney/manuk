@@ -47,7 +47,7 @@ the screenshots supply the priority.
 | ❌ | `transition` | **P0** | same; also hides hover/focus affordances |
 | ❌ | `@container` queries | P2 | |
 | ❌ | `:has()` | P1 | Stylo can match it; not surfaced |
-| 🟡 | Pseudo-classes | P1 | have: hover, checked, disabled, required, nth-child, first/last/only-child, not, root, link, empty, even/odd. **missing: `:focus`, `:focus-visible`, `:active`, `:visited`, `:target`, `:is()`, `:where()`** |
+| ✅ | Pseudo-classes (state) | — | **The shipping Stylo cascade answered `false` to EVERY pseudo-class until Tick 36.** `:checked` is the CSS-only interactivity primitive — the checkbox hack builds a large share of the web's menus, accordions and sidebars with no JS at all, and every one was frozen shut. Now: `:checked`, `:disabled`/`:enabled`, `:required`/`:optional`, `:read-only`/`:read-write`, `:link`/`:any-link`, `:placeholder-shown`, `:valid`, `:defined`, `:open`. `:hover`/`:active`/`:focus` answer false (correct for a static layout); `:visited` answers false deliberately (privacy) |
 | ✅ | **`::before` / `::after` + `content`** | — | Tick 31. Both cascades. `MinimalCascade` *dropped any selector containing `::`*; Stylo needed a real pseudo-element matching pass. Limit: not yet materialised in a block that mixes block+inline children |
 | ❌ | `::placeholder`, `::selection`, `::marker`, `::first-line` | P1 | |
 
@@ -64,7 +64,7 @@ the screenshots supply the priority.
 | ✅ | `background-color` (+ `bgcolor`/`text` presentational) | — | |
 | ✅ | **`background-image` (url)** | — | Tick 30 — fetched + decoded like `<img>` |
 | ✅ | **`linear-gradient` / `radial-gradient`** | 🟡 | Tick 30. No `conic-gradient`; no colour-interpolation hints |
-| 🟡 | `background-size` / `-repeat`, `background` shorthand | P1 | no `-position`/`-clip`/`-origin`, no multiple layers |
+| ✅ | `background-size` / `-repeat`, `background` shorthand | 🟡 | Tick 37 — a background is painted at its NATURAL size and TILED; it is not stretched to fill its box (that is what a replaced `<img>` does, and painting backgrounds that way blew a subreddit banner across the whole page). No `-position`/`-clip`/`-origin`, no multiple layers |
 | ✅ | `border-radius` (uniform), `box-shadow` (single, approximated blur) | 🟡 | no per-corner radii; no multiple/inset shadows; no true Gaussian |
 | 🟡 | `border` | P1 | widths + one colour; **no per-side colour, no `dashed`/`dotted`/`double`** |
 | ✅ | **`text-decoration`** (underline/overline/line-through) | 🟡 | Tick 30. No `-color`/`-style`/`-thickness` |
@@ -201,7 +201,7 @@ SpiderMonkey gives us the *language* for free. Everything below is the **platfor
 | ✅ | session restore, tab hibernation | — | |
 | ✅ | **profile durability** (cookies + localStorage survive the binary) | — | ADR-009; versioned envelopes |
 | ❌ | **element-level scrolling + scrollbars** | **P0** | see §2 |
-| ❌ | text selection + copy | **P0** | you cannot select text in this browser |
+
 | ❌ | context menu (right-click) | **P0** | |
 | ❌ | DevTools (inspect/console/network) | P1 | |
 | ❌ | printing / PDF export | P1 | |
