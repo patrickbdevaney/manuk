@@ -4026,4 +4026,29 @@ mod tests {
         assert!(text.contains("[X]"), "::before content must render (got {text:?})");
         assert!(text.contains("[Y]"), "::after content must render (got {text:?})");
     }
+    /// Regression: `display:none` means **no boxes at all** — including inside a flex/grid container.
+    /// The taffy path filtered children by `is_element` but not by display, so a hidden child got a
+    /// zero slot while our extraction still measured and materialised its content. A `<script>` in a
+    /// flex `<body>` painted its own source code down the page, and every hidden menu, modal and
+    /// template inside any flex or grid container rendered its contents.
+    #[test]
+    fn display_none_children_of_a_flex_container_generate_no_boxes() {
+        let html = r#"<div class="row"><script id="s">let x = 1; alert("hi");</script><p id="p">visible</p></div>"#;
+        let css = ".row{display:flex} script{display:none}";
+        let (dom, root) = layout_html(html, css, 600.0);
+        let mut text = String::new();
+        root.walk(&mut |b| {
+            if let BoxContent::Inline(frags) = &b.content {
+                for f in frags {
+                    text.push_str(&f.text);
+                }
+            }
+        });
+        let _ = &dom;
+        assert!(text.contains("visible"), "the visible sibling must still render");
+        assert!(
+            !text.contains("alert") && !text.contains("let"),
+            "a display:none <script> in a FLEX container must not paint its source (got {text:?})"
+        );
+    }
 }

@@ -124,7 +124,14 @@ html, body, div, section, article, header, footer, nav, main, aside, figure,
 figcaption, address, p, blockquote, ul, ol, li, dd, dt, pre, hr, h1, h2, h3, h4, h5, h6,
 form, fieldset, table, caption, center { display: block; }
 center { text-align: center; }
-head, title, meta, link, script, style, base, noscript { display: none; }
+head, title, meta, link, script, style, base, noscript, template { display: none; }
+/* Form controls are **atomic inline boxes**, not inline elements with children. Left as plain
+   `inline`, the inline collector recurses into a `<select>`'s `<option>`s and paints every one of
+   them into the surrounding line — rust-lang.org's language picker rendered as a row of twelve
+   language names instead of a dropdown. A control shows ITS OWN text (the selected option, the
+   value, the placeholder); its children are its data, not its content. */
+input, select, textarea, button, meter, progress { display: inline-block; }
+option, optgroup { display: none; }
 p, blockquote { margin: 1em 0; }
 h1 { font-size: 2em; font-weight: bold; margin: 0.67em 0; }
 h2 { font-size: 1.5em; font-weight: bold; margin: 0.75em 0; }

@@ -300,7 +300,20 @@ impl<'m> TaffyDom<'m> {
         );
         let children: Vec<TId> = if container {
             dom.children(node)
-                .filter(|&c| dom.is_element(c))
+                // `display: none` is not "lay it out and give it no room" — it means the element
+                // and its subtree **generate no boxes at all**. Adding them to the tree anyway let
+                // taffy hand them a zero slot while our extraction still measured and materialised
+                // their content: a `<script>` inside a flex `<body>` painted its own source code
+                // down the page, and every hidden menu, modal and template inside any flex or grid
+                // container rendered its contents. The block path has always filtered these
+                // (`is_rendered`); the taffy path did not.
+                .filter(|&c| {
+                    dom.is_element(c)
+                        && styles
+                            .get(&c)
+                            .map(|s| s.display != CssDisplay::None)
+                            .unwrap_or(false)
+                })
                 .map(|c| self.add(dom, styles, c))
                 .collect()
         } else {

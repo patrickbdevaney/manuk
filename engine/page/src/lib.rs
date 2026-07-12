@@ -92,8 +92,26 @@ pub struct StreamingLoad {
 /// external `<link>` URL — preserving document order for correct cascade precedence.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum StyleSource {
-    Inline(String),
-    External(String),
+    /// `(css, media)` — the `media` attribute of the `<style>`/`<link>` that carried it.
+    ///
+    /// A `<link media="(prefers-color-scheme: dark)">` is a **conditional** stylesheet: applying it
+    /// unconditionally is not "slightly wrong", it is the wrong theme. docs.python.org ships its
+    /// dark theme exactly this way, and we rendered the entire site dark on a light-scheme device.
+    /// Every print sheet and every mobile sheet on the web is gated the same way.
+    Inline(String, Option<String>),
+    External(String, Option<String>),
+}
+
+/// Wrap a conditional stylesheet in `@media <query> { … }` so the cascade's existing media
+/// evaluation decides whether it applies — rather than reimplementing that decision here, in a
+/// second place, differently.
+fn wrap_media(css: &str, media: &Option<String>) -> String {
+    match media.as_deref().map(str::trim) {
+        Some(m) if !m.is_empty() && !m.eq_ignore_ascii_case("all") => {
+            format!("@media {m} {{\n{css}\n}}")
+        }
+        _ => css.to_string(),
+    }
 }
 
 /// Scan raw HTML for render-blocking subresource URLs to prefetch early (the preload
@@ -358,7 +376,10 @@ fn collect_style_sources(dom: &Dom, base: &str) -> Vec<StyleSource> {
     let mut out = Vec::new();
     for n in dom.descendants(dom.root()) {
         match dom.tag_name(n) {
-            Some("style") => out.push(StyleSource::Inline(dom.text_content(n))),
+            Some("style") => {
+                let media = dom.element(n).and_then(|e| e.attr("media")).map(str::to_string);
+                out.push(StyleSource::Inline(dom.text_content(n), media));
+            }
             Some("link") => {
                 if let Some(el) = dom.element(n) {
                     let is_sheet = el
@@ -371,7 +392,8 @@ fn collect_style_sources(dom: &Dom, base: &str) -> Vec<StyleSource> {
                     if is_sheet {
                         if let Some(href) = el.attr("href").map(str::trim).filter(|h| !h.is_empty())
                         {
-                            out.push(StyleSource::External(resolve_url(base, href)));
+                            let media = el.attr("media").map(str::to_string);
+                            out.push(StyleSource::External(resolve_url(base, href), media));
                         }
                     }
                 }
@@ -1347,8 +1369,11 @@ impl Page {
         let sheets: Vec<Stylesheet> = sources
             .iter()
             .filter_map(|s| match s {
-                StyleSource::Inline(css) => Some(Stylesheet::parse(css)),
-                StyleSource::External(url) => external.get(url).map(|css| Stylesheet::parse(css)),
+                // A conditional sheet is wrapped in its own `@media`, so the cascade decides.
+                StyleSource::Inline(css, m) => Some(Stylesheet::parse(&wrap_media(css, m))),
+                StyleSource::External(url, m) => external
+                    .get(url)
+                    .map(|css| Stylesheet::parse(&wrap_media(css, m))),
             })
             .collect();
         let new_styles = cascade_styles(&self.dom, &sheets, viewport_width);
@@ -1386,7 +1411,7 @@ impl Page {
         let ext_urls: Vec<String> = sources
             .iter()
             .filter_map(|s| match s {
-                StyleSource::External(url) => Some(url.clone()),
+                StyleSource::External(url, _) => Some(url.clone()),
                 _ => None,
             })
             .filter(|url| seen.insert(url.clone()))
@@ -1406,8 +1431,8 @@ impl Page {
         // them BEFORE the relayout, so the cascade's font-family resolves to them.
         for s in &sources {
             let css = match s {
-                StyleSource::Inline(c) => c.clone(),
-                StyleSource::External(url) => external.get(url).cloned().unwrap_or_default(),
+                StyleSource::Inline(c, _) => c.clone(),
+                StyleSource::External(url, _) => external.get(url).cloned().unwrap_or_default(),
             };
             for ff in Stylesheet::parse(&css).font_faces() {
                 for src in &ff.srcs {
@@ -1772,7 +1797,7 @@ pub async fn prefetch_document(url: &str) -> Result<Loaded> {
             let ext: Vec<String> = collect_style_sources(&dom, &final_url)
                 .iter()
                 .filter_map(|s| match s {
-                    StyleSource::External(u) => Some(u.clone()),
+                    StyleSource::External(u, _) => Some(u.clone()),
                     _ => None,
                 })
                 .filter(|u| seen.insert(u.clone()))
