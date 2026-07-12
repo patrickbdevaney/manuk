@@ -1,70 +1,68 @@
-# Manuk — RESUME (deterministic resume pointer)
+# RESUME — where the loop is
 
-_A fresh session reads [[CONSTITUTION]] then this file, and resumes at the named item._
+**Last tick: 32.** All gates green (`scripts/verify.sh --fast`).
 
-## Where the loop is
+## The map
 
-- **TICKS = 18.** Ticks 1–17 done + committed; latest: 15 (`8f76665`), 16 (`e7cd623`),
-  17 (`6e27574`).
-- **>>> EPOCH-1 IS DUE (CONSTITUTION §10 / ADR-005). It is the next action, not a tick. <<<**
-- **Mission amended (ADR-004):** maximal traversal earned by **capability** — a fifth real browser
-  with its own genuine fingerprint (impersonation is *off-strategy*, not merely forbidden); named
-  sites are representative points, **not a checklist**. **Ambidextrous spine:** one engine — a
-  human drives the headful GUI, an agent drives headless *or* the same headful GUI; **no forked
-  page pipeline**. Rank candidates by *traversal-blocking capability*.
-- Working tree: clean, on `main`, pushed. Parity 72/72. Disk: 41G free (86%); nuke
-  `target/debug` only if free < 25G.
-- **NEW verification powers (Tick 13, see [[CONSTITUTION]] §7):** VISUAL via `manuk-wpt render`
-  (paint a page to PNG headlessly, then Read it; `--chrome` for a reference). EXTERNAL via
-  `llama-server` + the Qwen GGUF under `/home/patrickd`. GUI/EXTERNAL items are no longer blocked —
-  grind the visual/model-deferred backlog.
-- Key architecture notes for future ticks:
-  - Page JS runs on a **persistent** `PageContext` (`engine/js/src/dom_bindings.rs`) whose event
-    loop is `event_loop::run_deferred` — microtasks + timers run, but `fetch`/XHR stay queued for
-    the host. Host (shell `pump_fetches`) drains via `Page::take_fetches()`, performs I/O on
-    `manuk-net`, settles via `Page::resolve_fetch`.
-  - **Host-queue + re-enter is the universal pattern.** A native pushes to a thread-local; the
-    host drains (`take_*`) after dispatch/load and calls back into a `PageContext` method that
-    evals a delivery shim + `run_deferred`. Used by: `fetch`, `window.open`
-    (`take_pending_window_opens`), `history` (`take_pending_history`/`handle_history_ops`),
-    `postMessage` (`take_messages`/`pump_messages` → `deliver_message`). **Reuse it — never add a
-    parallel queue** (that mistake cost a rework in Tick 2).
-  - Window events (popstate, message, load) fire via the window-level registry
-    `__fireWindowEvent(type, ev)` in the prelude (added Tick 3) — reuse it for any window event.
-  - Same-document JS surfaces need no host round-trip and live entirely in engine/js, but must
-    deliver via a microtask so they run before the enclosing dispatch/load/fetch call returns
-    (all drain microtasks via `run_deferred`). `MutationObserver` (Tick 7) is the model: native
-    mutation methods call `record_mutation` → `__recordMutation`; `queueMicrotask` delivers.
-  - The document URL reaches JS via `install(..., doc_url)` → `%URL%` in `WINDOW_PRELUDE`.
-    Per-document window identity (id + opener) is seeded post-load via `PageContext::set_identity`.
-  - Navigation returns `manuk_page::Loaded::{Document, Download}` from `fetch_document`; the shell
-    branches in `NavEvent::{Fetched, Prewarmed}`. `build_page` builds a Page off fetched HTML
-    (shared by finish_load + finish_prewarm); prewarmed pages live in the bfcache; `goto` checks
-    it first for an instant click.
+**[PARITY-LEDGER.md](../../PARITY-LEDGER.md) is now the work queue.** It is the complete,
+honest inventory of the web platform with Manuk's true status against each part, prioritised by
+*measured blast radius on real sites*. The loop selects from its "Selection order" until it is empty.
 
-## Next action — **Tick 18** (EPOCH-1 is CLOSED; back to fast feature velocity)
+## Scoreboard (vs headless Chromium, shipping config)
 
-**EPOCH-1 closed** (report: [[EPOCH-1]], ADR-008). Cascade 2.69× faster, pipeline 1.67× faster,
-one dead button killed, floors F1–F3 + no-dead-affordances now binding (§1.7/§1.8).
+| metric | now |
+|---|---|
+| COVERAGE — of the elements Chrome renders, the fraction Manuk renders at all | **99.7%** |
+| VISUAL — coarse block-grid agreement | **~89.7%** |
+| PLACEMENT — median dy, Wikipedia | **1,087px** (was 5,226) |
+| box parity (synthetic corpus) | **72/72** |
 
-**Debt rule is live (§1.9):** ≥1 STAR DEBT item must be retired **every 3 ticks**, and debt
-**outranks new capability work**. Three are outstanding (LEDGER):
+## What this session established, that must not be re-learned
 
-- **DEBT-1** — kill the 4 UI-thread `block_on`s (RELIABILITY: each is a latent hang).
-  *Highest value:* these are the "app not responding" bugs waiting to happen. `gui.rs:754,755`
-  (page load + stylesheets), `1403` (fetch pump), `1800` (agent panel). Pattern already exists:
-  `start_fetch` spawns off-thread and wakes the loop with a `NavEvent` — do the same for these
-  (spawn → `NavEvent::…` → apply on the UI thread).
-- **DEBT-2** — residual cascade superlinearity (still 4.3× worse/node at 19k vs 1.3k nodes).
-- **DEBT-3** — shell-chrome headless paint (a **probe gap**: AESTHETICS/ERGONOMICS are currently
-  unmeasurable, so the star guarantee has a hole).
+1. **THE SCORE GATES; THE EYEBALL DIAGNOSES — but only a MEASUREMENT names the box.**
+   Hours went into staring at a stacked header. Ten minutes went into `boxes --tree`, which
+   printed `label.cdx-button <InlineFlex> [44 17 236×32]` and ended the argument. Build the probe
+   *first*.
 
-**Tick 18 = DEBT-1** (pay debt first; it is also the single biggest RELIABILITY win).
+2. **When a metric will not move, suspect the metric.** Wikipedia's median dy sat at exactly
+   5,122px across four real fixes. Chrome's screenshot and Chrome's box probe were rendering
+   *different pages*; `node_rects` was unioning overflow into every ancestor; and the site was
+   serving us a degraded document. None of those were the engine.
 
-## Then keep going
+3. **The web feature-detects and GRADES the browser.** `'localStorage' in window` is not a
+   feature check, it is an admissions test — MediaWiki fails us out of it and ships the no-script
+   page. Look for the gate before blaming the layout.
 
-Fast feature ticks resume, ranked by traversal-blocking capability (ADR-004), interleaved with the
-debt rate (≥1 per 3 ticks). Queued: **L50 CSS animations/transitions**, **L51 video/audio**,
-**L52 canvas 2D**, **L53 iframes** (the media-rich class the amended mission names), L02b
-Intersection/ResizeObserver (virtualized feeds), L47 HN nav wrap, L18 cookie partitioning, L15 SVG.
-Next epoch: earliest **Tick 30** (min interval 12), or sooner if drift > 25.
+4. **A workaround that hides a crash is a data-loss bug wearing a disguise.** The shell's
+   `libc::_exit()` skipped SpiderMonkey's exit segfault by skipping *every* exit handler — which
+   is where a browser flushes the user's profile.
+
+5. **ADR-011 keeps re-earning itself.** Every gate must run the shipping configuration. It has
+   caught us three times now: MinimalCascade vs Stylo, then no-JS vs SpiderMonkey, and DEBT-4
+   (below) is the same trap still open.
+
+## Useful tools built this session
+
+- `manuk-wpt boxes --html F [--url U] [--tree ID]` — Manuk's rect for every `[id]`, or the layout
+  box subtree with each box's **computed display**. This is the tool that finds the wrong box.
+- `MANUK_TRACE_INTRINSIC=<id>` — what a box told taffy it wanted to be. Flex wrapping is decided
+  by that number and it is otherwise invisible.
+- `manuk-wpt fidelity` now reports PLACEMENT (median dx/dy/dw/dh) and FIRST DIVERGENCE (the first
+  element down the page that breaks agreement).
+
+## Open debts
+
+- **DEBT-2** — no rule index on the **Stylo** (shipping) cascade. EPOCH-1 indexed the one users
+  don't run. **P0.**
+- **DEBT-3** — shell chrome cannot be painted headlessly, so AESTHETICS/ERGONOMICS are unprobeable.
+- **DEBT-4** — dynamic scripts run on `load_async` but not on the shell's prefetch nav path.
+  **The ADR-011 trap, still open. P0.**
+
+## Next
+
+Ledger "Selection order" items 5 onward: scroll **events** + Intersection/ResizeObserver (real-time
+feeds), `fetch`/XHR + URL/FormData (the SPA data path), transitions & animations, then canvas/svg/
+iframe/video, then the security half (CORS, CSP).
+
+Next epoch: earliest Tick 30 has passed — **an EPOCH audit is due**; drift is high (a great deal of
+new capability, little new perf/stability work beyond the two crash fixes).
