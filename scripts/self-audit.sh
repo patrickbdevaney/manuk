@@ -39,7 +39,7 @@ else
 fi
 
 # 2. Oracle breadth. 20 sites is an anecdote; the prescription is 200-500.
-SITES=$(grep -cE '^[a-z-]+\s+https?://' docs/bench/corpus.txt 2>/dev/null || echo 0)
+SITES=$(grep -cE '^[a-z_]+[[:space:]]+https' docs/bench/oracle-corpus.txt 2>/dev/null || echo 0)
 if [ "$SITES" -ge 200 ]; then
   ok "oracle crawl frame: $SITES sites (≥200)"
 else
@@ -63,13 +63,27 @@ gate "G_TEARDOWN"        "g_teardown"         scripts/verify.sh
 gate "G_LOAD"            "g_load_budget"      scripts/verify.sh
 gate "G_INTERACT"        "tab_operations"     scripts/verify.sh
 gate "F1/F2 perf floors" "F1 cascade"         scripts/verify.sh
+gate "G_CONTAIN (Bar 0)" "g_contain"         scripts/verify.sh
+gate "G_RUNTIME_COUNT"  "runtime_instantiations" scripts/verify.sh
 gate "G_SILENT_FAIL"     "g_silent_fail"      scripts/verify.sh
-gate "G_HANG"            "g_hang"             scripts/verify.sh
+# G_HANG lives in the CRAWL, not the wall — a watchdog only means anything across many sites.
+if grep -q "HANG" scripts/oracle-crawl.sh 2>/dev/null; then
+  ok "G_HANG (per-site watchdog in the crawl: a timeout is a hard, COUNTED, ATTRIBUTED failure)"
+else
+  bad "G_HANG — PRESCRIBED BUT NOT BUILT"
+fi
 gate "G_SPAWN"           "g_spawn"            scripts/verify.sh
 gate "G_DEDUP"           "g_dedup"            scripts/verify.sh
 gate "G_POOL_ISOLATION"  "g_pool"             scripts/verify.sh
 
-head_ "Enforcement — is compliance mechanical, or is it my memory?"
+head_ "Enforcement — is compliance mechanical, or is it my memory? (Part 28)"
+grep -q "TICK SHAPE" scripts/hooks/pre-commit && ok "tick-shape claim is CROSS-CHECKED against the cluster registry (28.2)" || bad "tick shape is a self-report, not a check"
+grep -q "SELF-AUDIT OVERDUE" scripts/hooks/pre-commit && ok "self-audit cadence is enforced by the hook, not by memory (28.2)" || bad "audit cadence is a note someone has to remember"
+[ -f docs/loop/CLUSTERS.md ] && ok "cluster registry exists ($(grep -cE '^C[0-9a-f]{4} ' docs/loop/CLUSTERS.md) clusters) — this IS the ledger" || bad "no cluster registry: the ledger is still judgement"
+grep -q "Settled Decisions" STATUS.md && ok "Settled Decisions frozen in STATUS.md (29.2)" || bad "no Settled Decisions — closed questions are open to relitigation"
+grep -q "^## Lessons" STATUS.md && ok "recurring lessons promoted out of the journal (29.1)" || bad "lessons still buried in an append-only journal a fresh session will not open"
+[ -x scripts/status-update.sh ] && ok "STATUS.md is generated, not hand-narrated (28.3)" || bad "STATUS.md is hand-written prose"
+
 [ "$(git config core.hooksPath)" = "scripts/hooks" ] && ok "pre-commit hook wired (core.hooksPath)" || bad "pre-commit hook NOT wired — compliance is back to being a claim"
 [ -x scripts/hooks/pre-commit ] && ok "pre-commit hook executable" || bad "pre-commit hook missing/not executable"
 grep -q "manuk-verify-receipt" scripts/verify.sh && ok "verify.sh writes a gate receipt" || bad "verify.sh writes no receipt — the hook cannot tell WHICH tree was verified"

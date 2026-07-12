@@ -13,11 +13,27 @@ not bugs closed, not features shipped. If you find yourself reaching for a bug f
 like more visible progress than widening the oracle or standing up a gate, **say so out loud**; that
 pull is the exact failure mode Part 21 exists to prevent, and following it quietly is the failure.
 
+**Read `STATUS.md`'s "Settled Decisions" and "Lessons" sections too.** They are short by design and
+they are the only parts of that file written by hand. Settled Decisions are closed questions —
+re-deriving one that was already correctly made is the most expensive kind of drift, because it
+consumes real reasoning and *feels like progress* while producing no new ground truth. Lessons are the
+handful of patterns that recurred often enough to be promoted out of the append-only journal a fresh
+session has no reason to open.
+
 Compliance is mechanical, not remembered:
 - `scripts/hooks/pre-commit` **refuses** any commit whose tree the gates have not verified, and any
   commit for a tick with no journal entry. Do not work around it — it is the point.
 - `./scripts/self-audit.sh` runs every 10 ticks and **exits non-zero** on anything
-  prescribed-but-not-executed. It checks the filesystem, not your memory.
+  prescribed-but-not-executed. It checks the filesystem, not your memory. **The hook refuses all
+  further commits once the audit is overdue** — it is not due because a note says so, it is due
+  because nothing else proceeds.
+- Every tick declares its **shape** in the journal before work starts: `pattern-class` (+ a real
+  `CLUSTER:` id, cross-checked against `docs/loop/CLUSTERS.md`), `infrastructure`, or `single-site`
+  (+ an explicit `REASON:`). The hook enforces this. A pattern-class claim that cannot name a live
+  cluster is a single-site tick wearing a label.
+- `docs/loop/CLUSTERS.md` **is** the priority ledger and the website-class taxonomy. It is generated
+  by the oracle crawl, ranked by distinct sites × distinct classes. Crashes and hangs outrank every
+  visual cluster in it.
 
 ---
 

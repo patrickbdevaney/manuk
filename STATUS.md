@@ -3,14 +3,63 @@
 > **Read this first, every session, before anything else.** State the tier and any blocking items
 > out loud before touching code. Do not proceed on assumed context from a previous session.
 >
-> This file holds *checkable facts*, not narrative. Every line is something that was measured, with
-> the command that measured it. If a line here is stale, that is a compliance failure in itself.
+> **This file is GENERATED (`scripts/status-update.sh`), not hand-written.** A status file someone
+> writes prose into starts describing what we *meant* to do. Every field below is read from the
+> filesystem, git, the crawl output or the verify receipt.
 
 ```
-TICK: 19
-TIER: 0 (Part 21) — ONE of three Tier-0 items still open (the SPA miner)
-UPDATED: 2026-07-12
+TICK:              19
+LAST_AUDIT_TICK:   19          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
+CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
+LAST_WALL_TIME:    104s
+ORACLE_CORPUS:     265 sites
+ORACLE_CRAWLED:    265 sites, 388 clusters  → docs/loop/CLUSTERS.md
+ORACLE_HANGS:      73                    ← Bar 0. Outranks every visual cluster (Part 24.3).
+PENDING_GATES:     G_SILENT_FAIL G_DEDUP G_SPAWN G_POOL_ISOLATION
+SINGLE_SITE_TICKS: 0                    (this audit window — a rising count is the drift signal)
+UPDATED:           2026-07-12
 ```
+
+
+## Settled Decisions — closed questions. Do not relitigate. (Part 29.2)
+
+Re-deriving a decision that was already correctly made is the most expensive kind of drift: it
+consumes real reasoning effort and *feels like progress* while producing no new ground truth.
+
+- **Bar 2 (pixel precision) is deferred.** Breadth beats depth until Bar 1 is real. Pixel-exact on one
+  site and broken on a thousand others is not what "usable" means.
+- **Bar 0 (no crash, no hang, no unrecoverable panic) is the FLOOR**, checked before Bar 1 is even
+  asked, for any pattern class. (Part 23.)
+- **Stylo and SpiderMonkey are never patched internally.** Sanctioned FFI dependencies only.
+- **No Blink/Gecko code is copied, ever, under any framing.** Algorithm extraction only, cited by
+  reference. This one stays discipline, not a hook: a script cannot tell "extraction" from "close
+  paraphrase" (Part 28.4), and pretending it could would be worse than naming it.
+- **The oracle's cluster ranking IS the priority ledger** (`docs/loop/CLUSTERS.md`) — not a suggestion
+  judgment may override outside of tie-breaking.
+- **Crashes and hangs outrank every visual divergence** in that ledger (Part 24.3).
+
+## Lessons — promoted out of the journal because they recurred (Part 29.1)
+
+Short by construction. If this grows without bound, lessons are being added that should have become
+**gates** instead — which is always the better outcome, and is where most of these ended up.
+
+1. **A gate that does not measure what the user feels reports green while the user suffers.** Every
+   gate here was born this way: G_ALLOC (the wheel-event clone freeze), G_LOAD (the frozen tab),
+   G_INTERACT, G_CONTAIN (the apple.com core dump). Before adding a feature, name the gate that would
+   have gone red if it were already broken. If you cannot, add it first.
+2. **The symptom names the wrong organ.** rust-lang.org's columns *looked* stacked — they were in a
+   perfect row, overflowing off-screen. The oracle's font-width divergence *looked* like a metrics
+   bug — `font-family` was never mapped at all. Measure the boxes before theorising from a screenshot.
+3. **When every instrument says a bug is impossible, they are all sampling the same layer.** The reddit
+   grey was in no display item, no decoded image, no rect — because it was a *letter*, rasterised from
+   an unscaled outline at `font-size: 0`. Bisect the layer below; do not reason harder about the one
+   you are in.
+4. **An oracle must never be able to charge its own slowness to your account.** One wall-clock budget
+   per site cannot tell "we hung" from "Chromium hung", and will confidently tell you the wrong one.
+   Time each engine separately, always.
+5. **A fix for one instance is not containment of a class.** Fixing apple.com's panic was necessary and
+   was not Bar 0. You will not prevent every crash-class bug before Bar 1 — the tail of uncovered
+   patterns is where the panics live, and it is infinite.
 
 ## Tier 0 — nothing in the backlog starts until these are done or genuinely blocked
 

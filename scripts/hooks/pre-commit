@@ -40,7 +40,80 @@ if ! grep -qE "^## Tick $TICK\b" docs/loop/JOURNAL.md 2>/dev/null; then
 fi
 
 # ---------------------------------------------------------------------------------------------
-# 2. THE GATE RECEIPT — the gates must have seen exactly this code.
+# 2. THE TICK SHAPE — a claim, cross-checked. (METHODOLOGY Part 28.2.)
+# ---------------------------------------------------------------------------------------------
+# `TICK SHAPE: pattern-class` was free text, and nothing verified it. A tick that spent its whole
+# session micro-tuning one site could write it with a straight face and nothing would catch it —
+# which makes it a self-report, not a check, and self-reports are exactly the category a long session
+# quietly degrades on.
+#
+# So a pattern-class tick must NAME the oracle cluster it claims to be closing, and the id is
+# cross-checked against the last crawl's registry. **A journal entry that cannot name a real, current
+# cluster id is a single-site tick by definition** — and that is fine, but it has to be declared as
+# one, with a reason, in the open, where a rising count of them is visible.
+# Extract this tick's journal entry. Plain prefix match with a trailing space — `\b` is not portable
+# in awk, and a word-boundary that silently matches nothing makes the hook report "no shape declared"
+# for a tick that declared one perfectly well. The trailing space is also what keeps "## Tick 1 " from
+# matching "## Tick 19".
+ENTRY=$(awk -v t="## Tick $TICK " 'index($0,t)==1 {p=1} p && index($0,"## Tick ")==1 && index($0,t)!=1 {exit} p' docs/loop/JOURNAL.md)
+SHAPE=$(echo "$ENTRY" | grep -oiP 'TICK SHAPE[^:]*:\s*\**\K[a-z-]+' | head -1 | tr 'A-Z' 'a-z')
+case "$SHAPE" in
+  pattern-class|infrastructure)
+    # Infrastructure ticks (Part 21: wall compression, oracle, gates) multiply every future tick and
+    # are in scope by definition — they close no cluster because they are not meant to.
+    if echo "$ENTRY" | grep -qiE '^\s*(CLUSTER|CLOSES):' ; then
+      CID=$(echo "$ENTRY" | grep -oiP '^\s*(CLUSTER|CLOSES):\s*\K[Cc][0-9a-fA-F]{4}' | head -1)
+      if [ -n "$CID" ] && ! grep -qi "^$CID " docs/loop/CLUSTERS.md 2>/dev/null; then
+        red "✗ TICK SHAPE: journal names cluster '$CID', which is NOT in docs/loop/CLUSTERS.md."
+        red "  A cluster id that does not exist in the last crawl is not a pattern-class tick —"
+        red "  it is a single-site tick with a pattern-class label on it. Say so instead."
+        exit 1
+      fi
+    fi
+    ;;
+  single-site)
+    if ! echo "$ENTRY" | grep -qiE 'REASON:'; then
+      red "✗ TICK SHAPE: single-site ticks require an explicit 'REASON:' line (Part 26.1)."
+      red "  \"This site is disproportionately representative of an uncovered pattern class\" is a"
+      red "  reason. \"It bothered me\" is not."
+      exit 1
+    fi
+    ;;
+  "")
+    red "✗ TICK SHAPE missing from the Tick $TICK journal entry (Part 26.1)."
+    red ""
+    red "  Every tick states its shape BEFORE implementation:"
+    red "    TICK SHAPE: pattern-class     (+ CLUSTER: Cxxxx, cross-checked against the last crawl)"
+    red "    TICK SHAPE: infrastructure    (multiplies every future tick — in scope by definition)"
+    red "    TICK SHAPE: single-site       (+ REASON: <why this one site is worth it>)"
+    red ""
+    red "  The check is cheap and the drift it catches is not: a tick that starts as breadth and"
+    red "  drifts into matching one site's pixels is the failure Part 21 was written to prevent."
+    exit 1
+    ;;
+esac
+
+# ---------------------------------------------------------------------------------------------
+# 3. THE SELF-AUDIT CADENCE — due because the tooling says so, not because someone remembered.
+# ---------------------------------------------------------------------------------------------
+# "Due at tick 20" lived as a note in STATUS.md, which is exactly the kind of instruction that decays
+# under session pressure. A note that has to be remembered and voluntarily acted on is not different
+# in kind from any other clause that quietly stops being applied. Now the hook refuses to let anything
+# else proceed until the audit runs.
+LAST_AUDIT=$(grep -oP '^LAST_AUDIT_TICK:\s*\K[0-9]+' STATUS.md 2>/dev/null || echo 0)
+AUDIT_EVERY="${MANUK_AUDIT_EVERY:-10}"
+if [ $((TICK - LAST_AUDIT)) -gt "$AUDIT_EVERY" ]; then
+  red "✗ SELF-AUDIT OVERDUE: last run at tick $LAST_AUDIT, now tick $TICK (cadence: every $AUDIT_EVERY)."
+  red ""
+  red "  Run ./scripts/self-audit.sh, fix or explicitly accept what it finds, and set"
+  red "  LAST_AUDIT_TICK in STATUS.md. No further commits until then."
+  red ""
+  red "  The audit is not due because a note says so. It is due because nothing else proceeds."
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------------------------
+# 4. THE GATE RECEIPT — the gates must have seen exactly this code.
 # ---------------------------------------------------------------------------------------------
 # Docs and scripts alone cannot regress an engine gate; requiring a 3-minute wall run to fix a typo
 # in STATUS.md would make the hook something people disable, and a disabled hook enforces nothing.
