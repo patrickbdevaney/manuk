@@ -505,6 +505,11 @@ pub struct Page {
     /// `<style>`, and silently lost every `<link>`ed stylesheet on the page. A re-cascade that
     /// quietly strips the site's CSS is worse than no re-cascade.
     external_css: HashMap<String, String>,
+    /// Mask/background URLs already fetched for this navigation. Same discipline as `external_css`
+    /// and `images`: `fetch_and_apply_masks` and `fetch_and_apply_background_images` run once for
+    /// `finish_loading` and AGAIN after every round of dynamic scripts, and each call was re-fetching
+    /// every mask and every background image on the page from scratch. Part 22.3.
+    fetched_urls: std::collections::HashSet<String>,
     /// Fingerprint of the inputs to the last full cascade — the style sources and the shape of the
     /// tree. If neither has changed, re-cascading produces byte-identical output, and on a large
     /// document that is not a small waste: see `apply_stylesheets`.
@@ -998,6 +1003,7 @@ impl Page {
             .values()
             .filter_map(|s| s.mask_image.clone())
             .filter(|raw| seen.insert(raw.clone()))
+            .filter(|raw| !self.fetched_urls.contains(raw))
             .map(|raw| {
                 let abs = if raw.starts_with("data:") {
                     raw.clone()
@@ -1009,6 +1015,9 @@ impl Page {
             .collect();
         if targets.is_empty() {
             return 0;
+        }
+        for (raw, _) in &targets {
+            self.fetched_urls.insert(raw.clone());
         }
         let owned = fetch_masks_owned(targets).await;
         let rc: HashMap<String, std::rc::Rc<manuk_paint::DecodedImage>> =
@@ -1022,9 +1031,11 @@ impl Page {
     /// `url()` background is never also a replaced image, so they cannot collide. Gradients need no
     /// fetch at all; they are painted from the computed value directly.
     pub async fn fetch_and_apply_background_images(&mut self) -> usize {
+        let have: std::collections::HashSet<manuk_dom::NodeId> = self.images.keys().copied().collect();
         let targets: Vec<(manuk_dom::NodeId, String)> = self
             .styles
             .iter()
+            .filter(|(n, _)| !have.contains(n))
             .filter_map(|(&n, s)| match s.background_image.as_ref()? {
                 manuk_css::BackgroundImage::Url(u) => {
                     let abs = if u.starts_with("data:") {
@@ -1152,6 +1163,7 @@ impl Page {
             zoom: 1.0,
             images: std::collections::HashMap::new(),
             external_css: HashMap::new(),
+            fetched_urls: std::collections::HashSet::new(),
             last_cascade: None,
         }
     }
@@ -1748,7 +1760,14 @@ impl Page {
                 return count;
             }
         } else {
-            self.relayout(fonts, viewport_width);
+            // **Nothing arrived and nothing is dirty — so there is nothing to do.**
+            //
+            // This branch used to relayout the whole document anyway. `fetch_and_apply_stylesheets`
+            // runs once for `finish_loading` and then again after EVERY round of dynamic scripts, so
+            // a page whose scripts touch nothing still paid a full-document layout per round. On
+            // bbc.co.uk that is 257ms a go, for a tree that did not change, several times per
+            // navigation. A relayout that cannot change the output is not conservatism, it is waste
+            // with a safety story attached to it.
         }
         count
     }
