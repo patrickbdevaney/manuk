@@ -1204,3 +1204,233 @@ until these are done or genuinely blocked:**
     asymptotically wrong today (O(page) per event), not merely incomplete, so it's a priority
     once infrastructure is in place, but it depends on a deliberate build-vs-adopt decision, not
     a mid-implementation default.
+
+---
+
+## Part 30 — JS Runtime: SpiderMonkey Confirmed, Compat Gap Closed by Shim
+
+This is a two-part decision, and both parts got investigated rather than assumed, which is why
+both belong in Part 29.2's Settled Decisions list. Record the reasoning here so it doesn't need
+re-deriving later.
+
+### 30.1 SpiderMonkey vs. V8: the capability gap people assume exists mostly doesn't
+
+The intuition that "some sites only work on Chromium, so V8 must be more capable" doesn't hold
+up. Sites broken on Firefox and working on Chromium are overwhelmingly explained by intentional
+browser-sniffing and untested library assumptions, not JS-engine conformance gaps — both engines
+are near-fully ECMAScript-conformant, and the old "V8 is just faster" narrative traces back to a
+retired, V8-over-tuned synthetic benchmark that modern holistic benchmarks don't reproduce.
+For this project's specific architecture — a Rust engine embedding a JS runtime via FFI — the
+more decision-relevant fact is that SpiderMonkey's Rust bindings are the most mature,
+"browser-grade" JS-engine integration in the Rust ecosystem, more proven than V8's own Rust
+embedding path, which has documented integration gaps (missing host objects, challenges
+supporting `ExternalArrayBuffer`) in other projects that tried it. SpiderMonkey was the right
+choice, and this isn't a hedge — the leanness this project chose it for was never actually in
+tension with capability at the ECMAScript-conformance level.
+
+### 30.2 The bar rules out lean/embedded-tier engines entirely, not just SpiderMonkey vs. V8
+
+Worth stating explicitly since it closes off a broader class of "what if we went leaner"
+questions before they get relitigated one at a time: engines like QuickJS, Hermes, and
+JerryScript are real, well-built, and genuinely lean — but they're built for IoT/mobile/embedded
+scripting workloads, not for clearing full browser-grade capability. They trade away modern
+JIT tiering, full built-in debugger/profiler support, and depth of spec/API coverage for
+footprint, which is exactly the right trade for their target use case and exactly the wrong
+trade for this one. **The stated bar is Chromium capability parity, which is itself a superset
+of what Firefox/Gecko can do — clearing that bar requires a full, modern, browser-grade JIT
+engine, full stop.** That leaves exactly two real candidates, SpiderMonkey and V8, and 30.1
+settles which of those two. Don't let "but this other engine is leaner" reopen the question
+later without new evidence that the capability bar itself has changed — leanness that costs
+capability isn't a trade this project can make, given what Bar 1 already requires.
+
+### 30.3 The one real, narrow gap — and it's a shim, not a rewrite
+
+The one concrete, well-documented compatibility gap that *is* real: `Error.captureStackTrace`,
+`Error.prepareStackTrace`, and `Error.stackTraceLimit` are non-standard V8-only APIs that a
+meaningful number of popular JS libraries feature-detect and depend on for custom error classes
+— real, recurring "works in Chrome, throws in Firefox" bug reports exist against exactly this
+API family across multiple widely-used libraries. It's currently a TC39 standardization proposal
+precisely because it's become enough of a web-compatibility problem to need standardizing, which
+means implementing it now is adopting something headed toward the spec, not chasing a
+V8-specific quirk. A smaller, related gap: V8 parses some non-ISO-8601 date-time string formats
+more leniently than SpiderMonkey does; some real-world code depends on that leniency.
+
+**The fix, concretely:** implement the `Error.captureStackTrace` family as custom globals in the
+JS-environment setup code — the same mechanism used to expose any other API to scripts, not a
+SpiderMonkey-internals patch, fully consistent with the "never patch Stylo/SpiderMonkey" rule.
+Do the same for the Date-parsing leniency gap if/when the oracle or Framework Exception Miner
+surfaces real sites depending on it. Both are bounded, cheap, embedding-layer work.
+
+### 30.4 Extend the Framework Exception Miner to catch this class of gap, not just missing IDL
+
+Part 9's Framework Exception Miner was specified to catch missing standard DOM/IDL surface (the
+`a.protocol`/`document.scrollingElement` pattern). Extend its scope explicitly to also catch
+non-standard-but-widely-depended-upon API gaps like this one — a library throwing
+`TypeError: Error.captureStackTrace is not a function` against a real starter app or a real
+crawled site is the identical signal shape (a thrown exception naming exactly what's missing),
+and the miner already knows how to surface and rank this kind of signal. Don't build a separate
+mechanism for "non-standard API compat" — route it through the same exception-mining pipeline
+and let real code, not a hand-maintained list, determine which non-standard shims are actually
+worth implementing.
+
+---
+
+## Part 31 — Interaction Surface Knowledge Base: Institutional Memory for What Makes the Web Clickable/Automatable in This Engine
+
+Part 12 specifies the *mechanism* for agent-native automation (WebDriver BiDi, the a11y tree as
+single source of truth). It does not, by itself, accumulate the *empirical knowledge* this
+project is generating every tick about what actually makes a real page's interaction surface
+work correctly here — which button-selection patterns resolve correctly, which scroll/click/
+form-fill techniques hold up, which hit-testing edge cases break, and why. That knowledge is
+currently scattered across `JOURNAL.md` entries (tick-narrative, write-heavy, per Part 29) and
+gate pass/fail history (G5, G6 — which record *that* something broke, not the accumulated
+pattern-level understanding of *why*, generalized). This is a real, distinct gap: the oracle's
+cluster registry (Parts 2, 24) already serves this role for *rendering* knowledge — a cluster
+*is* an empirically-discovered rendering pattern class. There is no equivalent structured,
+growing artifact for *interaction* knowledge, and interaction correctness is the direct
+substrate of this project's agent-native north star (Part 0's mission statement), not a
+side concern to it.
+
+### 31.1 What this artifact is, and why it's separate from what exists
+
+Create `INTERACTION-SURFACE.md` (or a structured directory if a single file outgrows it) as a
+peer artifact to `STATUS.md`, `JOURNAL.md`, and `PARITY-LEDGER.md` — not a replacement for any
+of them. It differs from the journal in the same way Part 29 already distinguishes lesson
+promotion from journal archiving: this is **curated and structured, indexed by
+pattern/technique, not by tick** — a fresh session or an external consumer should be able to
+look up "how does this engine handle click targets under CSS transforms" or "what's the
+`:checked`-class interactivity story" and get a direct answer, not have to search N journal
+entries hoping one of them covered it.
+
+### 31.2 Entry schema
+Each entry records, at minimum:
+- **Pattern/technique name** (e.g., "checkbox-hack CSS-only interactivity," "click targets
+  inside `display:none`-then-toggled containers," "hit-testing under `transform: scale()`,"
+  "label/form-control association for autofill and programmatic fill," "focus order across
+  shadow-DOM-equivalent boundaries," "scroll-anchor stability during dynamic content
+  insertion").
+- **Status**: solved / partially solved / known gap.
+- **What makes it work correctly here**, or what's still broken and why — stated as the
+  underlying mechanism, not just "fixed in tick N."
+- **Which gate or oracle signal would catch a regression** (G5, G6, the a11y-tree consistency
+  check, or a named synthetic test) — this ties every entry back to something mechanical that
+  protects it, per Part 28's discipline: knowledge without a gate behind it is exactly the kind
+  of thing that regresses silently.
+- **Source**: the tick/commit/journal entry it was learned from, for provenance back into
+  `JOURNAL.md` per Part 7/29.
+
+### 31.3 Mechanical maintenance — not context-dependent, per Part 28's discipline
+The failure mode this must avoid is the one Part 29 named for the journal generally: a lesson
+that only exists in someone's memory of a session is not memory, it's an archive nobody
+reliably reopens. For this specific knowledge base, the capture policy is stricter than Part
+29.1's "promote on recurrence" rule, because interaction-surface knowledge is directly
+load-bearing for the project's stated agent-native mission, not a general lesson that may or
+may not generalize: **any commit touching interaction-relevant code paths** — event dispatch,
+hit-testing, focus/click/scroll/form-handling logic, a11y-tree computation, or the `agent`
+crate — **must either reference an existing `INTERACTION-SURFACE.md` entry it's fixing/extending,
+or add a new entry**, enforced by the same pre-commit hook mechanism as the journal-entry
+requirement (Part 28.2). Determine "interaction-relevant" via the change-coupling matrix (Part
+3.3) plus a fixed starting path list (the crates named above) rather than guessing case by case.
+
+### 31.4 Backfill now, not just going forward
+Do a one-time retroactive pass — the same shape as Part 29's action item for lesson promotion —
+over the existing journal and gate history to extract everything already learned about
+interaction correctness into this structured form now: the `:checked` stub and its fix, any
+absolute-positioning/click-target bugs already found, any G6 clickability failures already
+resolved, anything already known about form controls, scroll behavior, or focus handling. This
+knowledge already exists in the project's history; it just isn't in the form that makes it
+reusable yet.
+
+### 31.5 Downstream consumers — named explicitly, including ones not yet built
+State plainly why this is worth building now rather than deferring: this knowledge base is
+consumed by (a) the a11y-tree-as-oracle work (Part 12) — it's the closest thing this project has
+to a spec for what "correctly interactable" means here, and should directly inform G5/G6 test
+design going forward rather than the tests and the knowledge evolving separately; (b) any
+future in-browser prompt-to-action agent surface — noted here as a named future consumer without
+committing to its design, since it doesn't exist yet, but the knowledge base should be built as
+if it will need to be read by that surface eventually; (c) the external-framework-facing
+automation surface (WebDriver BiDi, Part 12); (d) uses not yet anticipated. On (d) specifically:
+entries do not need to justify themselves against a currently-known downstream consumer to be
+worth capturing — the whole point of institutional knowledge is that its highest-value uses are
+often not the ones foreseen when it was recorded. Capture broadly per 31.3's mandatory scope;
+let future consumers decide what's useful to them rather than pre-filtering for only what seems
+useful now.
+
+### 31.6 Cadence
+Fold a review of `INTERACTION-SURFACE.md`'s growth and coverage into the same EPOCH-audit
+cadence as everything else (Parts 3.3, 22.4, 25.3) — check that commits touching
+interaction-relevant paths are actually producing entries (per 31.3), not just that the file
+exists. A knowledge base that stopped growing while interaction-relevant commits kept landing is
+the same class of silent drift Part 26 names for tick-shape claims, and should be caught the
+same way: mechanically, not by someone happening to notice.
+
+---
+
+## Immediate Action Items (first sessions under this methodology)
+
+**Tier 0 — do these before touching the backlog, per Part 21.2. Nothing below this line starts
+until these are done or genuinely blocked:**
+1. Cut the verify wall to under five minutes: mold/lld, cargo-nextest, workspace-hack, and the
+   risk-based gate scheduler (Part 5.4). Full wall runs only on a timer or before release
+   banking from this point forward, never on every tick unconditionally.
+2. Widen the oracle's crawl frame to 200–500 sites (Part 2, Part 21.2 item 2) and regenerate the
+   priority ledger from its cluster ranking — stop hand-selecting what to fix next.
+3. Load ten real SPA starter apps and run the Framework Exception Miner (Part 9) against all of
+   them, in parallel with items 1–2, not sequenced after the document-web work.
+
+**Tier 1 — cheap, high-value, do alongside Tier 0, not blocked by it:**
+4. Add G_ALLOC and G_TEARDOWN to the verify wall (Part 5.2–5.3).
+5. Stand up G_SPAWN, G_DEDUP, and G_POOL_ISOLATION (Part 19.5).
+6. Stand up G_SILENT_FAIL and G_HANG (Part 22.1–22.2) — same "cheap, closes a proven gap"
+   justification as the gates above.
+7. Compute the change-coupling matrix from this repo's own git history (Part 3.3).
+8. Audit the current `text` crate for Skrifa + HarfBuzz (Part 15) before further font work.
+9. Audit every existing `tokio::spawn` call reachable from layout/paint/style for the
+   Tokio/Rayon isolation violation (Part 19.2) — likely latent debt predating this rule.
+10. Begin journaling in the Part 7 structure now, so the removal-model estimate has real data at
+    the next EPOCH audit.
+11. Generate the tree-sitter orientation layer (Part 16.2) once, now; use LSP as the default
+    precise-navigation tool (Part 16.1) from this session forward.
+12. Build the per-tab supervised panic/hang containment boundary (Part 23.2) — this is what
+    makes shipping against 99%-pattern-coverage (Part 24) safe rather than reckless, and it's
+    Tier-1 cheap: a `catch_unwind` boundary per tab task plus a watchdog, not full process
+    isolation.
+13. Stand up G_RUNTIME_COUNT (Part 25.2) and audit existing code for the "new Tokio runtime per
+    action" failure pattern specifically — check `net`, `page`, and anywhere a search/navigation
+    handler exists.
+14. Start stating tick-shape (pattern-class fix vs. single-site tuning, Part 26.1) in every
+    journal entry from this point forward — this is a zero-cost habit change, not a build task,
+    so there's no reason to delay it to a later tier.
+15. Extend the journal schema and pre-commit hook per Part 28.2: require a real oracle cluster
+    ID for any `pattern-class`-tagged tick, cross-checked against the last crawl's output — this
+    converts the tick-shape self-check from a stated claim into a verified one.
+16. Add the tick-counter-driven self-audit trigger per Part 28.2: the pre-commit hook refuses
+    further commits once the tick gap since `last_audit_tick` exceeds N, forcing
+    `scripts/self-audit.sh` to run rather than depending on anyone remembering it's due.
+17. Formalize `STATUS.md`'s schema per Part 28.3 (generated/updated by scripts, never
+    hand-narrated) if it doesn't already match — this is what 15 and 16 both read from and
+    write to.
+18. Do a one-time pass over `JOURNAL.md`'s existing ~19 ticks for recurring lessons (Part 29.1)
+    and promote whatever qualifies now — don't wait for the next EPOCH audit to do this
+    retroactively once, since real lessons are already sitting unpromoted.
+19. Add the Settled-Decisions section to `STATUS.md` (Part 29.2) with at minimum the six
+    listed lines — this is a five-minute addition with an outsized effect on preventing
+    relitigation drift.
+20. Implement the `Error.captureStackTrace`/`Error.prepareStackTrace`/`Error.stackTraceLimit`
+    shim (Part 30.3) as JS-environment setup code — cheap, bounded, and closes a real,
+    documented compat gap against widely-used libraries.
+21. Extend the Framework Exception Miner's scope (Part 30.4) to route non-standard-API
+    exceptions through the same pipeline as missing-IDL exceptions, rather than building a
+    separate mechanism for this class of gap.
+22. Create `INTERACTION-SURFACE.md` (Part 31.1) and wire the pre-commit hook requirement from
+    Part 31.3 — commits touching interaction-relevant paths must reference or add an entry.
+23. Run the one-time backfill pass over existing journal/gate history for interaction-surface
+    knowledge (Part 31.4) — this is real, already-learned knowledge sitting unstructured, same
+    priority as item 18's lesson-promotion backfill.
+
+**Tier 2 — sequenced after Tier 0 lands, per Part 21.2 item 4:**
+12. Evaluate the Salsa-based incremental computation architecture (Part 19.1) as the replacement
+    for hand-rolled invalidation sets — this is the one item on the original list that's
+    asymptotically wrong today (O(page) per event), not merely incomplete, so it's a priority
+    once infrastructure is in place, but it depends on a deliberate build-vs-adopt decision, not
+    a mid-implementation default.

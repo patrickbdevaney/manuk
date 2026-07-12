@@ -11,7 +11,7 @@
 TICK:              20
 LAST_AUDIT_TICK:   19          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
-LAST_WALL_TIME:    85s
+LAST_WALL_TIME:    91s
 ORACLE_CORPUS:     265 sites
 ORACLE_CRAWLED:    265 sites, 379 clusters  → docs/loop/CLUSTERS.md
 ORACLE_HANGS:      84                    ← Bar 0. Outranks every visual cluster (Part 24.3).
@@ -37,6 +37,13 @@ consumes real reasoning effort and *feels like progress* while producing no new 
 - **The oracle's cluster ranking IS the priority ledger** (`docs/loop/CLUSTERS.md`) — not a suggestion
   judgment may override outside of tie-breaking.
 - **Crashes and hangs outrank every visual divergence** in that ledger (Part 24.3).
+- **SpiderMonkey is settled** (Part 30). The "V8 is more capable" intuition does not survive contact
+  with the evidence — sites broken on Firefox are overwhelmingly browser-sniffing, not conformance.
+  And the capability bar (Chromium parity) rules out the lean/embedded tier — QuickJS, Hermes,
+  JerryScript — **entirely**, not just against V8. Leanness that costs capability is not a trade this
+  project can make. Do not reopen without evidence the BAR changed.
+- **The app web is ADDITIVE substrate, not a scheduling subsystem** (measured, tick 20: 0/8 → 3/8
+  frameworks rendering from ~6 IDL fixes). This was the open question the whole schedule hung on.
 
 ## Lessons — promoted out of the journal because they recurred (Part 29.1)
 

@@ -748,3 +748,21 @@ custom-elements upgrade path returns the element under construction from `super(
 constructor" broke every custom element and every `attachShadow`, and G2 went red inside a minute. The
 fix is the general rule: **extend what exists, never clobber it** — attach `Symbol.hasInstance` to
 whatever is already defined, and only *define* what is not.
+
+### Tick 20 — and a Part 27 violation I have to own
+
+The re-crawl reports **84 hangs, up from 73** — and the number is **contaminated and I caused it.**
+I launched the crawl and then spent the next two hours compiling, testing and running SpiderMonkey
+under it. **Part 27.1 says, in plain words, not to do that**: "sequence or throttle oracle crawling
+against active compilation… risks swapping/thrashing rather than either finishing faster." RAM is the
+binding constraint on this box, not cores, and I knew that because the methodology I had just folded in
+says so.
+
+So 84 is not a regression and it is not an improvement — it is a measurement taken with a thumb on the
+scale, which is worse than no measurement, because it invites exactly the wrong conclusion. The clean
+re-crawl runs with the machine idle, and until it does, **the hang count is unknown**, not 84 and not
+73. Recording it here rather than quietly re-running and reporting only the good number.
+
+The generalisable half: a benchmark that shares a machine with a build is not a benchmark. That belongs
+in the same family as "an oracle must never be able to charge its own slowness to your account", and it
+is the same mistake wearing different clothes.

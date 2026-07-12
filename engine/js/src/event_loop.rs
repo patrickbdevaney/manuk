@@ -212,6 +212,29 @@ const PRELUDE: &str = r#"
           this.port1 = p1; this.port2 = p2;
         };
       }
+      // **`Error.captureStackTrace` — V8-only, and a meaningful number of popular libraries
+      // feature-detect it and depend on it for custom error classes** (METHODOLOGY Part 30.3). Real,
+      // recurring "works in Chrome, throws in Firefox" bugs exist against exactly this API family
+      // across widely-used libraries — which is why it is now a TC39 proposal, and why implementing it
+      // is adopting something headed for the spec rather than chasing a V8 quirk.
+      //
+      // A shim in the embedding layer, not a SpiderMonkey patch. Consistent with "never patch
+      // Stylo/SpiderMonkey", which is a settled decision and not up for relitigation.
+      if (typeof Error.captureStackTrace !== 'function') {
+        Error.captureStackTrace = function(target, ctor) {
+          // SpiderMonkey already puts a `stack` on every Error; the V8 contract is only that `target`
+          // ends up WITH one. Handing back the real stack is strictly better than the empty string
+          // most shims settle for.
+          try {
+            var e = new Error();
+            Object.defineProperty(target, 'stack', {
+              value: (e.stack || ''), writable: true, configurable: true
+            });
+          } catch (_) { try { target.stack = ''; } catch (__) {} }
+        };
+      }
+      if (typeof Error.stackTraceLimit !== 'number') { Error.stackTraceLimit = 10; }
+
       if (typeof globalThis.requestIdleCallback === 'undefined') {
         globalThis.requestIdleCallback = function(cb){
           return setTimeout(function(){ cb({ didTimeout: false, timeRemaining: function(){ return 5; } }); }, 0);
