@@ -463,6 +463,10 @@ struct Ctx<'a> {
     /// Flex/grid items whose **used border-box width taffy has already decided**. Their own `width`
     /// style must NOT be resolved a second time — see the width resolution in `layout_block`.
     taffy_item_width: RefCell<HashMap<NodeId, f32>>,
+    /// **Static positions of out-of-flow boxes** — where an `absolute` box *would* have gone had it
+    /// stayed in flow. Recorded as normal flow walks past it, because that is the only moment the
+    /// information exists.
+    static_pos: RefCell<HashMap<NodeId, (f32, f32)>>,
 }
 
 /// Lay out a whole document into a fragment tree, given a viewport width in px.
@@ -482,6 +486,7 @@ pub fn layout_document(
         measure_cache: RefCell::new(HashMap::new()),
         min_content_cache: RefCell::new(HashMap::new()),
         taffy_item_width: RefCell::new(HashMap::new()),
+        static_pos: RefCell::new(HashMap::new()),
     };
     let root_el = dom
         .find_first("body")
@@ -1421,8 +1426,18 @@ impl Ctx<'_> {
                 let fbox = self.layout_float(k, cw, cur_y + prev_margin.max(0.0), floats);
                 boxes.push(fbox);
             } else if is_out_of_flow_positioned(ks) {
-                // Absolutely/fixed positioned: skipped here, handled in D1 sub-feature
-                // 2. Leaving them out keeps normal flow correct in the meantime.
+                // Absolutely/fixed positioned: taken out of flow here and placed in the later pass.
+                //
+                // **But record where it WOULD have been first.** An abs box with `auto` on every
+                // inset sits at its *static position* — its would-be in-flow spot — and this is the
+                // only moment in the whole layout when that is known. Discarding it meant the later
+                // pass had nothing to place the box against, so it dropped the box entirely, and
+                // every `position:absolute` element with no insets simply vanished: React portal
+                // roots, JS-positioned dropdowns and tooltips, and every `.sr-only` accessibility
+                // node on the web.
+                self.static_pos
+                    .borrow_mut()
+                    .insert(k, (cx, cur_y + prev_margin.max(0.0)));
                 continue;
             } else if is_block_level(self.dom, self.styles, k) {
                 (cur_y, prev_margin) = self.flush_inline_run(
@@ -2259,22 +2274,28 @@ impl Ctx<'_> {
         let mut new_boxes = Vec::new();
         for node in positioned {
             let s = &self.styles[&node];
-            // A box with no inset on any edge is at its *static position* (its
-            // would-be in-flow spot). Computing that needs in-flow tracking we don't
-            // have yet, so such boxes are left unplaced (documented) rather than
-            // dropped at the CB origin, which would render them in the wrong place.
-            if s.inset.left.is_auto()
+            let all_auto = s.inset.left.is_auto()
                 && s.inset.right.is_auto()
                 && s.inset.top.is_auto()
-                && s.inset.bottom.is_auto()
-            {
-                continue;
-            }
-            let cb = if s.position == Position::Fixed {
+                && s.inset.bottom.is_auto();
+            let mut cb = if s.position == Position::Fixed {
                 viewport
             } else {
                 self.abs_containing_block(node, &rects, viewport)
             };
+            // All insets `auto` → the box sits at its STATIC position, which normal flow recorded on
+            // its way past. Anchor the containing block there so `layout_abs` resolves the box in the
+            // right place instead of at the containing block's origin (which would put every
+            // dropdown in the top-left corner) — and, before this, instead of nowhere at all.
+            if all_auto {
+                if let Some(&(sx, sy)) = self.static_pos.borrow().get(&node) {
+                    cb = Rect { x: sx, y: sy, width: cb.width, height: cb.height };
+                } else if s.position != Position::Fixed {
+                    // Never reached in flow layout; a box we truly cannot place is still better
+                    // dropped than rendered in the wrong corner.
+                    continue;
+                }
+            }
             let b = self.layout_abs(node, cb);
             rects.insert(node, b.rect); // enable nested abs to use it as CB
             new_boxes.push(b);
@@ -3270,6 +3291,57 @@ mod tests {
         let fonts = FontContext::new();
         let root = layout_document(&dom, &styles, &fonts, width);
         (dom, root)
+    }
+
+    /// Regression: **an `absolute` box with no insets must be placed at its STATIC position**, not
+    /// dropped.
+    ///
+    /// Computing the static position needs to know where normal flow had got to when it walked past
+    /// the box — so the abs pass, running later, had nothing to place it against and simply
+    /// `continue`d. Every `position: absolute` element with all-`auto` insets vanished from the page:
+    /// React portal roots, JS-positioned dropdowns and tooltips, and every `.sr-only` accessibility
+    /// node on the web. github.com alone was missing eight elements to it.
+    ///
+    /// Flow now records the cursor as it steps over the box, which is the only moment that
+    /// information exists.
+    #[test]
+    fn an_absolute_box_with_no_insets_sits_at_its_static_position() {
+        let html = r#"<div id="first"></div><div id="drop"></div><div id="after"></div>"#;
+        let css = "#first{width:20px;height:40px}                    #drop{position:absolute;width:30px;height:12px}                    #after{width:20px;height:10px}";
+        let (dom, root) = layout_html(html, css, 400.0);
+        let rects = root.node_rects(&dom);
+        let get = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .and_then(|n| rects.get(&n).copied())
+        };
+        let d = get("drop").expect(
+            "an absolute box with no insets must still GENERATE A BOX — dropping it is how every \
+             portal root and dropdown on the web disappeared",
+        );
+        assert!((d.width - 30.0).abs() < 0.5 && (d.height - 12.0).abs() < 0.5, "its own size: {d:?}");
+
+        let f = get("first").expect("#first");
+        let a = get("after").expect("#after");
+        // The static position is the would-be in-flow spot: directly below #first. Asserted as a
+        // RELATIONSHIP, not a magic number, so the body's default margin cannot make the test lie.
+        assert!(
+            (d.y - (f.y + f.height)).abs() < 1.0,
+            "static position must be the would-be in-flow spot (just under #first, y={}), got y={} \
+             — placing it at the containing block's origin instead would put every dropdown in the \
+             top-left corner",
+            f.y + f.height,
+            d.y
+        );
+        // And it must still be OUT of flow: #after ignores it and follows #first directly, so it
+        // lands at exactly the same y as the abs box rather than being pushed below it.
+        assert!(
+            (a.y - d.y).abs() < 1.0,
+            "an out-of-flow box must not push its siblings down: #after (y={}) should sit at the \
+             same y as the abs box (y={})",
+            a.y,
+            d.y
+        );
     }
 
     /// Regression: **a replaced element's auto height comes from its USED width and its intrinsic
