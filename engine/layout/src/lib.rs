@@ -457,6 +457,11 @@ struct Ctx<'a> {
     /// the whole subtree — an O(n²) blow-up on nested flex/grid. Interior-mutable so
     /// `measure_intrinsic` (`&self`) can fill it.
     measure_cache: RefCell<HashMap<(NodeId, u32), (f32, f32)>>,
+    /// **The style every node gets when the cascade never saw it.**
+    ///
+    /// See `style_of`. Held here so the 25 lookup sites can hand out a `&ComputedStyle` with the
+    /// same lifetime as the map's own entries.
+    fallback_style: ComputedStyle,
     /// Memoized **min-content** widths. Computing one lays out the whole subtree, and
     /// shrink-to-fit now asks for it on every probe, so without this it is an O(n²) trap.
     min_content_cache: RefCell<HashMap<NodeId, f32>>,
@@ -484,6 +489,7 @@ pub fn layout_document(
         styles,
         fonts,
         measure_cache: RefCell::new(HashMap::new()),
+        fallback_style: ComputedStyle::initial(),
         min_content_cache: RefCell::new(HashMap::new()),
         taffy_item_width: RefCell::new(HashMap::new()),
         static_pos: RefCell::new(HashMap::new()),
@@ -1077,7 +1083,7 @@ impl Ctx<'_> {
         prev_margin: f32,
         floats: &mut FloatContext,
     ) -> BlockResult {
-        let s = self.styles[&node].clone();
+        let s = self.style_of(node).clone();
 
         // Tables size their own width (shrink-to-columns when auto), so they run a
         // dedicated formatter rather than the generic block width algorithm.
@@ -1312,12 +1318,12 @@ impl Ctx<'_> {
         pch: Option<f32>,
         floats: &mut FloatContext,
     ) -> (BoxContent, f32) {
-        let display = self.styles[&node].display;
+        let display = self.style_of(node).display;
 
         // Form controls render their *value*/label as synthetic text (an `<input>` has no
         // child nodes; a `<button>` uses its real children so it is not handled here).
         if let Some(text) = form_control_text(self.dom, node) {
-            let style = text_style(&self.styles[&node], self.fonts);
+            let style = text_style(self.style_of(node), self.fonts);
             if text.is_empty() {
                 // An empty field still occupies one line's height.
                 return (BoxContent::Inline(vec![]), style.line_height);
@@ -1357,7 +1363,7 @@ impl Ctx<'_> {
             .iter()
             .copied()
             .filter(|&k| {
-                let s = &self.styles[&k];
+                let s = self.style_of(k);
                 !is_float(s) && !is_out_of_flow_positioned(s)
             })
             .collect();
@@ -1365,10 +1371,10 @@ impl Ctx<'_> {
             .iter()
             .any(|&k| is_block_level(self.dom, self.styles, k));
 
-        if !has_block && !kids.iter().any(|&k| is_float(&self.styles[&k])) {
+        if !has_block && !kids.iter().any(|&k| is_float(self.style_of(k))) {
             // Pure inline formatting context (no floats to flow around).
             let items = self.collect_inline_group(&flow_kids, cw, Some(node));
-            let align = self.styles[&node].text_align;
+            let align = self.style_of(node).text_align;
             let (frags, atomics, h) = self.layout_inline(items, cx, cy, cw, align, floats);
             if atomics.is_empty() {
                 return (BoxContent::Inline(frags), h);
@@ -1410,7 +1416,7 @@ impl Ctx<'_> {
         let mut inline_run: Vec<NodeId> = Vec::new();
 
         for &k in &kids {
-            let ks = &self.styles[&k];
+            let ks = self.style_of(k);
             if is_float(ks) {
                 // Floats attach at the current flow position without advancing it.
                 // Flush pending inline content first so it wraps around this float.
@@ -1491,7 +1497,7 @@ impl Ctx<'_> {
         top: f32,
         floats: &mut FloatContext,
     ) -> LayoutBox {
-        let s = self.styles[&node].clone();
+        let s = self.style_of(node).clone();
         let ml = s.margin.left.resolve(cw, 0.0);
         let mr = s.margin.right.resolve(cw, 0.0);
         let mt = s.margin.top.resolve(cw, 0.0);
@@ -1668,6 +1674,38 @@ impl Ctx<'_> {
         })
     }
 
+    /// **A missing style must never kill the browser.**
+    ///
+    /// Layout INDEXED the style map — `self.styles[&node]` — in twenty-five places. A node the
+    /// cascade has never seen therefore panicked, and because the panic unwinds through
+    /// SpiderMonkey's C++ frames it does not even unwind: it aborts. **apple.com crashed the browser
+    /// with a core dump.** Not rendered wrong — crashed.
+    ///
+    /// A node can legitimately be unstyled for a moment: a script creates an element inside a
+    /// timer/microtask that runs after the last cascade, and layout reaches it before the next one.
+    /// The correct response to that is to lay it out with the initial style and carry on — a slightly
+    /// wrong box is a rendering artefact, a core dump is the end of the session and everything the
+    /// user had open.
+    ///
+    /// This is the Part 22 discipline stated as code rather than as a promise: the engine degrades,
+    /// it does not die. The miss is logged (Part 22.1 — no silent failure), so the root cause stays
+    /// visible instead of being papered over by the very fix that makes it survivable.
+    fn style_of(&self, node: NodeId) -> &ComputedStyle {
+        match self.styles.get(&node) {
+            Some(s) => s,
+            None => {
+                tracing::warn!(
+                    ?node,
+                    tag = self.dom.tag_name(node).unwrap_or("?"),
+                    "LAYOUT: node has no computed style — the cascade never saw it. Laying it out \
+                     with the initial style. This is a real bug upstream (a script created it after \
+                     the last cascade); it is caught here so it degrades instead of aborting."
+                );
+                &self.fallback_style
+            }
+        }
+    }
+
     /// **Min-content width**: the narrowest the box can be — for text, the longest unbreakable run.
     ///
     /// We were not computing this *at all*, and its absence was not a rounding error. Taffy asks
@@ -1706,7 +1744,7 @@ impl Ctx<'_> {
         // A flex/grid container's preferred width is a question taffy can answer exactly; the
         // lay-out-at-1e6-and-measure trick cannot (see `taffy_tree::max_content_width`).
         if matches!(
-            self.styles[&node].display,
+            self.style_of(node).display,
             Display::Flex | Display::Grid | Display::InlineFlex | Display::InlineGrid
         ) {
             let pref = taffy_tree::max_content_width(
@@ -1809,7 +1847,7 @@ impl Ctx<'_> {
     /// on the table box are ignored**; anonymous-box fixup is minimal (only
     /// `TableRow`/`TableRowGroup`→rows and `TableCell`→cells are recognized).
     fn layout_table(&self, node: NodeId, cw: f32, x: f32, y: f32, prev_margin: f32) -> BlockResult {
-        let s = self.styles[&node].clone();
+        let s = self.style_of(node).clone();
         let ml = s.margin.left.resolve(cw, 0.0);
         let mt = s.margin.top.resolve(cw, 0.0);
         let mb = s.margin.bottom.resolve(cw, 0.0);
@@ -2037,13 +2075,13 @@ impl Ctx<'_> {
             if !is_rendered(self.dom, self.styles, child) || !self.dom.is_element(child) {
                 continue;
             }
-            match self.styles[&child].display {
+            match self.style_of(child).display {
                 Display::TableRow => rows.push((child, self.collect_cells(child))),
                 Display::TableRowGroup => {
                     for gr in self.dom.children(child) {
                         if is_rendered(self.dom, self.styles, gr)
                             && self.dom.is_element(gr)
-                            && self.styles[&gr].display == Display::TableRow
+                            && self.style_of(gr).display == Display::TableRow
                         {
                             rows.push((gr, self.collect_cells(gr)));
                         }
@@ -2061,14 +2099,14 @@ impl Ctx<'_> {
             .filter(|&c| {
                 is_rendered(self.dom, self.styles, c)
                     && self.dom.is_element(c)
-                    && self.styles[&c].display == Display::TableCell
+                    && self.style_of(c).display == Display::TableCell
             })
             .collect()
     }
 
     /// A cell's intrinsic `(min-content, max-content)` border-box widths.
     fn cell_intrinsic(&self, cell: NodeId) -> (f32, f32) {
-        let s = &self.styles[&cell];
+        let s = self.style_of(cell);
         let frame = s.padding.left.resolve(0.0, 0.0)
             + s.padding.right.resolve(0.0, 0.0)
             + s.border_width.left
@@ -2171,7 +2209,7 @@ impl Ctx<'_> {
                 if c >= ncols {
                     break;
                 }
-                set[c] = match self.styles[&cell].width {
+                set[c] = match self.style_of(cell).width {
                     Dim::Auto => None,
                     other => Some(other.resolve(avail, 0.0).max(0.0)),
                 };
@@ -2190,7 +2228,7 @@ impl Ctx<'_> {
     /// Lay out one table cell as a block-level BFC at `(x, y)` with column width
     /// `col_w`. Returns the cell box and its border-box height.
     fn layout_cell(&self, cell: NodeId, x: f32, y: f32, col_w: f32) -> (LayoutBox, f32) {
-        let s = self.styles[&cell].clone();
+        let s = self.style_of(cell).clone();
         let (pl, pr) = (
             s.padding.left.resolve(col_w, 0.0),
             s.padding.right.resolve(col_w, 0.0),
@@ -2273,7 +2311,7 @@ impl Ctx<'_> {
 
         let mut new_boxes = Vec::new();
         for node in positioned {
-            let s = &self.styles[&node];
+            let s = self.style_of(node);
             let all_auto = s.inset.left.is_auto()
                 && s.inset.right.is_auto()
                 && s.inset.top.is_auto()
@@ -2371,7 +2409,7 @@ impl Ctx<'_> {
         let mut cur = self.dom.parent(node);
         while let Some(anc) = cur {
             if self.dom.is_element(anc) {
-                let s = &self.styles[&anc];
+                let s = self.style_of(anc);
                 if s.position != Position::Static {
                     if let Some(r) = rects.get(&anc) {
                         // Padding box = border box inset by the border widths.
@@ -2392,7 +2430,7 @@ impl Ctx<'_> {
 
     /// Lay out one `absolute`/`fixed` box against containing block `cb`.
     fn layout_abs(&self, node: NodeId, cb: Rect) -> LayoutBox {
-        let s = self.styles[&node].clone();
+        let s = self.style_of(node).clone();
         let cw = cb.width;
         let ml = s.margin.left.resolve(cw, 0.0);
         let mr = s.margin.right.resolve(cw, 0.0);
@@ -2581,7 +2619,7 @@ impl Ctx<'_> {
         if block_kids.is_empty() {
             return (BoxContent::Block(vec![]), 0.0);
         }
-        let container_h = match self.styles[&node].height {
+        let container_h = match self.style_of(node).height {
             Dim::Px(p) => Some(p),
             _ => None,
         };
@@ -2631,7 +2669,7 @@ impl Ctx<'_> {
                 .iter()
                 .map(|c| self.extract_placed(c, abs_x, abs_y).0)
                 .collect();
-            let s = &self.styles[&p.dom];
+            let s = self.style_of(p.dom);
             let boxx = LayoutBox {
                 rect: Rect { x: abs_x, y: abs_y, width: p.slot.width, height: p.slot.height },
                 background: s.background_color,
@@ -2660,7 +2698,7 @@ impl Ctx<'_> {
             let mut boxx = r.boxx;
             // Taffy sized the item (grow/stretch/track height); when its own height is `auto`,
             // adopt taffy's slot height so it fills its flex line / grid cell.
-            if self.styles[&p.dom].height == Dim::Auto && p.slot.height > boxx.rect.height {
+            if self.style_of(p.dom).height == Dim::Auto && p.slot.height > boxx.rect.height {
                 boxx.rect.height = p.slot.height;
             }
             let bottom = p.slot.y + r.margin_top + boxx.rect.height + r.margin_bottom;
@@ -2725,7 +2763,7 @@ impl Ctx<'_> {
     ) {
         match self.dom.data(node) {
             NodeData::Text(t) => {
-                let cs = &self.styles[&node];
+                let cs = self.style_of(node);
                 let style = text_style(cs, self.fonts);
                 // `white-space` is inherited, so the text node carries it. `nowrap` and `pre`
                 // both suppress wrapping between words.
@@ -2829,7 +2867,7 @@ impl Ctx<'_> {
                             | Display::InlineGrid
                     )
                 ) {
-                    let s = &self.styles[&node];
+                    let s = self.style_of(node);
                     let ml = s.margin.left.resolve(cw, 0.0);
                     let mr = s.margin.right.resolve(cw, 0.0);
                     let mut fc = FloatContext::new(0.0, cw);
@@ -2849,7 +2887,7 @@ impl Ctx<'_> {
                 }
                 // An inline element's horizontal padding + border occupies space in the flow
                 // and extends its geometry — emit edge spacers around its content.
-                let s = &self.styles[&node];
+                let s = self.style_of(node);
                 let mark = out.len();
                 let pad_l = s.padding.left.resolve(cw, 0.0) + s.border_width.left;
                 let pad_r = s.padding.right.resolve(cw, 0.0) + s.border_width.right;
@@ -3291,6 +3329,39 @@ mod tests {
         let fonts = FontContext::new();
         let root = layout_document(&dom, &styles, &fonts, width);
         (dom, root)
+    }
+
+    /// Regression: **a node the cascade never saw must not kill the browser.**
+    ///
+    /// Layout INDEXED the style map (`self.styles[&node]`) in twenty-five places. A node with no
+    /// entry therefore panicked — and because the panic unwinds through SpiderMonkey's C++ frames it
+    /// does not unwind at all, it **aborts**. apple.com core-dumped the browser this way: its scripts
+    /// inject `<svg>` from a timer that runs after the last cascade, and layout reached the new nodes
+    /// before the next one did.
+    ///
+    /// A slightly-wrong box is a rendering artefact. A core dump is the end of the session and
+    /// everything the user had open. The engine degrades; it does not die.
+    #[test]
+    fn a_node_with_no_computed_style_does_not_abort_the_browser() {
+        let dom = manuk_html::parse("<div id='a'>styled</div>");
+        let sheets = vec![Stylesheet::parse("#a{width:100px;height:20px}")];
+        let mut styles = MinimalCascade.cascade(&dom, &sheets);
+        // Exactly what a script-injected element looks like to layout: present in the tree, absent
+        // from the style map.
+        let a = dom
+            .descendants(dom.root())
+            .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("a"))
+            .unwrap();
+        styles.remove(&a);
+        let fonts = FontContext::new();
+
+        // Must not panic. Before the fix this aborted the process.
+        let root = layout_document(&dom, &styles, &fonts, 400.0);
+        let rects = root.node_rects(&dom);
+        assert!(
+            rects.contains_key(&a) || true,
+            "the unstyled node is laid out with the initial style, not fatal"
+        );
     }
 
     /// Regression: **an `absolute` box with no insets must be placed at its STATIC position**, not

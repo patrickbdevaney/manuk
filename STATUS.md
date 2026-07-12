@@ -7,7 +7,7 @@
 > the command that measured it. If a line here is stale, that is a compliance failure in itself.
 
 ```
-TICK: 16
+TICK: 17
 TIER: 0 (Part 21) — two of three Tier-0 items still open
 UPDATED: 2026-07-12
 ```

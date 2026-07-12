@@ -68,6 +68,10 @@ fn run() {
 
     // `manuk-wpt oracle` — THE DIFFERENTIAL ORACLE (METHODOLOGY Part 2). Chromium as an infinite
     // test generator: same document, both engines, diff, cluster by root cause, rank by sites.
+    if args.first().map(String::as_str) == Some("oracle-merge") {
+        run_oracle_merge(&args[1..]);
+        return;
+    }
     if args.first().map(String::as_str) == Some("oracle") {
         run_oracle_cmd(&args[1..], &fonts);
         return;
@@ -1173,7 +1177,9 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
             },
         };
 
-        // --- Chromium, on that snapshot.
+        // --- Chromium, on that snapshot. Timed: Part 22.2 — a page that "passes" but takes 40x
+        // --- Chromium's time is a stability signal that diff-based clustering cannot see on its own.
+        let t_chrome = std::time::Instant::now();
         let chrome_raw = match manuk_wpt::chrome::oracle_probe(&html, url, vw, vh) {
             Ok(m) => m,
             Err(e) => {
@@ -1194,21 +1200,67 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
             continue;
         }
         chrome.remove("__META__"); // health metadata, not an element
+        let chrome_ms = t_chrome.elapsed().as_millis();
 
         // --- Manuk, on the SAME snapshot, with the same base URL.
+        let t_manuk = std::time::Instant::now();
         let page = rt.block_on(async {
             let mut p = manuk_page::Page::load_async(&html, url, fonts, vw as f32).await;
             p.finish_loading(fonts, vw as f32).await;
             p
         });
+        let manuk_ms = t_manuk.elapsed().as_millis();
         let rects = page.root_box.node_rects(page.dom());
         let styles = page.styles_map();
         let dom = page.dom();
+        // The SAME path Chromium's probe computes — index among same-tag preceding element siblings,
+        // chained to the root. Both engines are looking at the same snapshot, so the same walk must
+        // produce the same names; if it does not, that is a TREE divergence, which is itself a real
+        // and important finding rather than noise to be suppressed.
+        // Mirrors Chromium's `pathOf` EXACTLY, including the part that is easy to get wrong: an
+        // element whose parent is not an element (i.e. `<html>`) contributes NO component, because
+        // `e.parentElement` is null there and the JS loop never runs for it. Emitting `html[0]` on
+        // our side shifts every single key by one level, and the first run did exactly that — the
+        // oracle dutifully reported `<html>` and `<body>` as MISSING BOXES on every site, with total
+        // confidence. Two engines agreeing on a naming scheme is a precondition for the diff meaning
+        // anything at all.
+        let path_of = |n: manuk_dom::NodeId| -> Option<String> {
+            let mut parts: Vec<String> = Vec::new();
+            let mut cur = n;
+            loop {
+                let Some(parent) = dom.parent(cur) else { break };
+                if !dom.is_element(parent) {
+                    break;
+                }
+                let tag = dom.tag_name(cur)?;
+                let mut i = 0usize;
+                for sib in dom.children(parent) {
+                    if sib == cur {
+                        break;
+                    }
+                    if dom.is_element(sib) && dom.tag_name(sib) == Some(tag) {
+                        i += 1;
+                    }
+                }
+                parts.push(format!("{tag}[{i}]"));
+                cur = parent;
+            }
+            parts.reverse();
+            Some(parts.join("/"))
+        };
         let manuk: HashMap<String, Seen> = dom
             .descendants(dom.root())
+            .filter(|&n| dom.is_element(n))
             .filter_map(|n| {
-                let id = dom.element(n).and_then(|e| e.attr("id"))?;
                 let tag = dom.tag_name(n)?.to_string();
+                if matches!(
+                    tag.as_str(),
+                    "script" | "style" | "head" | "meta" | "link" | "base" | "title" | "noscript"
+                        | "template" | "html"
+                ) {
+                    return None;
+                }
+                let id = path_of(n)?;
                 let display = styles
                     .get(&n)
                     .map(|s| css_display_name(s.display))
@@ -1222,18 +1274,66 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
                     None if display == "none" => [0, 0, 0, 0],
                     None => return None,
                 };
-                Some((id.to_string(), Seen { tag, display, rect }))
+                Some((id, Seen { tag, display, rect }))
             })
             .collect();
 
         let divs = diff_page(&short, &chrome, &manuk, tol);
         eprintln!("  {short}: {} divergence(s) over {} probed", divs.len(), chrome.len());
+
+        // **Emit, don't accumulate.** At 265 sites, holding the whole crawl in one process means one
+        // site's hang or crash loses all of it. Each site writes its own result file and the crawl is
+        // resumable; the driver runs them under a watchdog in separate processes (G_HANG).
+        if let Some(dir) = flag(args, "--emit") {
+            let _ = std::fs::create_dir_all(dir);
+            let mut out = String::new();
+            out.push_str(&format!(
+                "{{\"kind\":\"meta\",\"site\":\"{short}\",\"class\":\"{}\",\"status\":\"ok\",\"probed\":{},\"manuk_ms\":{},\"chrome_ms\":{}}}\n",
+                flag(args, "--class").unwrap_or("?"),
+                chrome.len(),
+                manuk_ms,
+                chrome_ms
+            ));
+            for d in &divs {
+                out.push_str(&format!(
+                    "{{\"kind\":\"div\",\"site\":\"{}\",\"class\":\"{}\",\"tag\":\"{}\",\"dkind\":\"{}\",\"chrome\":{},\"manuk\":{},\"id\":{}}}\n",
+                    d.site,
+                    flag(args, "--class").unwrap_or("?"),
+                    d.tag,
+                    d.kind,
+                    json_str(&d.chrome),
+                    json_str(&d.manuk),
+                    json_str(&d.id),
+                ));
+            }
+            let _ = std::fs::write(
+                std::path::Path::new(dir).join(format!("{short}.jsonl")),
+                out,
+            );
+        }
         all_divs.extend(divs);
         diffed += 1;
     }
 
     let clusters = cluster(&all_divs);
     report(&clusters, diffed, skipped);
+}
+
+/// Minimal JSON string escaping — the crawl's own output must never be the thing that breaks it.
+fn json_str(s: &str) -> String {
+    let mut o = String::with_capacity(s.len() + 2);
+    o.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => o.push_str("\\\""),
+            '\\' => o.push_str("\\\\"),
+            '\n' => o.push_str("\\n"),
+            c if (c as u32) < 0x20 => o.push(' '),
+            c => o.push(c),
+        }
+    }
+    o.push('"');
+    o
 }
 
 /// Our `Display` as CSS names it — the vocabulary the oracle diffs in.
@@ -1266,4 +1366,134 @@ fn fnv(s: &str) -> u64 {
         h = h.wrapping_mul(0x100000001b3);
     }
     h
+}
+
+
+/// **The merge — where the crawl becomes the ledger.**
+///
+/// The ranking key is DISTINCT SITES and DISTINCT CLASSES, never hit count. A cause that breaks forty
+/// sites outranks one that breaks forty elements of a single site, and a cause that appears across
+/// `docs` and `saas` and `news` is a *design-pattern* bug while one confined to a single class is
+/// probably that class's house style. Ranking by hits would put whichever site has the most `<span>`s
+/// at the top of the plan forever.
+///
+/// Health of the crawl is reported first and honestly: hangs, failures and discards are COUNTED, not
+/// quietly excluded. A crawl that silently drops a third of its sites and reports the rest as "the
+/// corpus" is worse than no crawl, because it is confidently wrong.
+fn run_oracle_merge(args: &[String]) {
+    use std::collections::{BTreeMap, BTreeSet};
+    let dir = args.first().map(String::as_str).unwrap_or("/tmp/manuk-oracle-run");
+    let field = |line: &str, k: &str| -> String {
+        let pat = format!("\"{k}\":\"");
+        line.find(&pat)
+            .map(|i| {
+                let rest = &line[i + pat.len()..];
+                rest.find('"').map(|e| rest[..e].to_string()).unwrap_or_default()
+            })
+            .unwrap_or_default()
+    };
+    let num = |line: &str, k: &str| -> i64 {
+        let pat = format!("\"{k}\":");
+        line.find(&pat)
+            .and_then(|i| {
+                let rest = &line[i + pat.len()..];
+                let end = rest.find(|c: char| !c.is_ascii_digit() && c != '-').unwrap_or(rest.len());
+                rest[..end].parse().ok()
+            })
+            .unwrap_or(0)
+    };
+
+    // signature -> (sites, classes, hits, example)
+    let mut acc: BTreeMap<String, (BTreeSet<String>, BTreeSet<String>, usize, String)> =
+        BTreeMap::new();
+    let (mut ok, mut hang, mut fail, mut discard) = (0usize, 0usize, 0usize, 0usize);
+    let mut slow: Vec<(i64, i64, String)> = Vec::new();
+
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        eprintln!("no crawl results in {dir}");
+        std::process::exit(1);
+    };
+    for e in entries.flatten() {
+        let path = e.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("jsonl") {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(&path) else { continue };
+        for line in text.lines() {
+            if line.contains("\"kind\":\"meta\"") {
+                match field(line, "status").as_str() {
+                    "ok" => {
+                        ok += 1;
+                        let (m, c) = (num(line, "manuk_ms"), num(line, "chrome_ms"));
+                        // Part 22.2: a page that "passes" but takes many times Chromium's time is a
+                        // stability signal the diff clustering cannot see on its own.
+                        if c > 0 && m > c * 3 && m > 3000 {
+                            slow.push((m, c, field(line, "site")));
+                        }
+                    }
+                    "HANG" => hang += 1,
+                    "DISCARDED" => discard += 1,
+                    _ => fail += 1,
+                }
+                continue;
+            }
+            if !line.contains("\"kind\":\"div\"") {
+                continue;
+            }
+            let (site, class, tag, kind) =
+                (field(line, "site"), field(line, "class"), field(line, "tag"), field(line, "dkind"));
+            let (chrome, manuk) = (field(line, "chrome"), field(line, "manuk"));
+            let sig = match kind.as_str() {
+                "display" => format!("display: {chrome} → {manuk}   (<{tag}>)"),
+                "missing" => format!("MISSING BOX: <{tag}>  (Chrome renders it, we render nothing)"),
+                _ => format!("geometry: <{tag}>"),
+            };
+            let en = acc.entry(sig).or_insert_with(|| {
+                (BTreeSet::new(), BTreeSet::new(), 0, format!("{site}: {chrome} vs {manuk}"))
+            });
+            en.0.insert(site);
+            en.1.insert(class);
+            en.2 += 1;
+        }
+    }
+
+    let total = ok + hang + fail + discard;
+    println!("\n════════ ORACLE CRAWL — {total} sites ════════\n");
+    println!("  {ok:>4} diffed");
+    println!("  {discard:>4} discarded (Chromium's OWN render was degraded — bot wall / error page /");
+    println!("       no-script fallback. Never scored as our bug: a degraded oracle scores its own");
+    println!("       emptiness as our failure, and that has happened here before.)");
+    if hang > 0 {
+        println!("  \x1b[31m{hang:>4} HUNG\x1b[0m  ← a hard failure, counted and attributed (G_HANG). Not a skipped test.");
+    }
+    if fail > 0 {
+        println!("  \x1b[33m{fail:>4} failed\x1b[0m");
+    }
+
+    if !slow.is_empty() {
+        slow.sort_by_key(|(m, _, _)| -m);
+        println!("\n──── SLOW (Part 22.2: passing, but many times Chromium's time — a stability signal) ────\n");
+        for (m, c, site) in slow.iter().take(10) {
+            println!("  {site:<32} manuk {m:>6}ms   chromium {c:>6}ms   ({}×)", m / c.max(&1));
+        }
+    }
+
+    let mut ranked: Vec<_> = acc.into_iter().collect();
+    // DISTINCT SITES, then DISTINCT CLASSES. Never hits.
+    ranked.sort_by(|a, b| {
+        (b.1 .0.len(), b.1 .1.len(), b.1 .2).cmp(&(a.1 .0.len(), a.1 .1.len(), a.1 .2))
+    });
+
+    println!("\n──── ROOT CAUSES, ranked by SITES EXPLAINED — this IS the ledger ────\n");
+    println!("{:>6} {:>8} {:>7}  {}", "sites", "classes", "hits", "root cause");
+    for (sig, (sites, classes, hits, example)) in ranked.iter().take(30) {
+        println!("{:>6} {:>8} {:>7}  {sig}", sites.len(), classes.len(), hits);
+        println!("{:>24}e.g. {example}", "");
+    }
+    println!(
+        "\nRanked by DISTINCT SITES and DISTINCT CLASSES, never by hit count — otherwise whichever\n\
+         site has the most <span>s tops the plan forever. A cause spanning several classes is a\n\
+         DESIGN-PATTERN bug; one confined to a single class is probably that class's house style.\n\
+         This ordering is the priority ledger (Part 4). No judgement is applied to it.\n"
+    );
 }

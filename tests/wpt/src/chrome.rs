@@ -62,17 +62,44 @@ pre.textContent=JSON.stringify(out);document.documentElement.appendChild(pre);})
 pub fn oracle_probe(html: &str, base_url: &str, vw: u32, vh: u32) -> Result<HashMap<String, (String, String, [i64; 4])>> {
     let chrome = chrome_bin().ok_or_else(|| anyhow!("no Chrome/Chromium found"))?;
     let base = format!("<base href=\"{base_url}\">");
+    // **Key on STRUCTURAL PATH, not on `id`.**
+    //
+    // The probe used to diff only elements carrying an `id`. Widening the crawl frame exposed what
+    // that costs immediately: text.npr.org reported **one probed element**, because most of the web
+    // does not put ids on things. Across 265 sites the oracle was about to be very nearly blind —
+    // and, worse, it would have reported "no divergences" with complete confidence.
+    //
+    // A path (`div[0]/main[0]/p[3]`) is computable identically by both engines from the same
+    // snapshot, and it names EVERY element rather than the handful an author chose to label. The
+    // 6,000-element cap is a bound on probe cost, not on ambition, and it is reported so a truncated
+    // page can never masquerade as a complete one.
     let probe = r#"<script>
 (function(){
   var out = {};
-  document.querySelectorAll('[id]').forEach(function(e){
+  function pathOf(e){
+    var p = [];
+    while (e && e.nodeType === 1 && e.parentElement) {
+      var i = 0, s = e;
+      while ((s = s.previousElementSibling)) { if (s.tagName === e.tagName) i++; }
+      p.unshift(e.tagName.toLowerCase() + '[' + i + ']');
+      e = e.parentElement;
+    }
+    return p.join('/');
+  }
+  var all = document.querySelectorAll('*');
+  var n = Math.min(all.length, 6000);
+  for (var k = 0; k < n; k++) {
+    var e = all[k];
+    var t = e.tagName.toLowerCase();
+    if (t === 'script' || t === 'style' || t === 'head' || t === 'meta' || t === 'link' ||
+        t === 'base' || t === 'title' || t === 'noscript' || t === 'template' || t === 'html') continue;
     var r = e.getBoundingClientRect();
     var cs = getComputedStyle(e);
-    if (r.width === 0 && r.height === 0 && cs.display !== 'none') return;
-    out[e.id] = [e.tagName.toLowerCase(), cs.display,
+    if (r.width === 0 && r.height === 0 && cs.display !== 'none') continue;
+    out[pathOf(e)] = [t, cs.display,
                  Math.round(r.x + window.scrollX), Math.round(r.y + window.scrollY),
                  Math.round(r.width), Math.round(r.height)];
-  });
+  }
   // Health of the ORACLE ITSELF, not of the diff: is what Chromium rendered a real document, or a
   // bot wall / error page / no-script shell? Answered by what Chromium DREW, not by how many
   // elements happened to carry an id.

@@ -608,3 +608,24 @@ not a mechanism.
 Also landed this tick, before the redirect: the cascade tested **every rule against every element**
 (the `Stylist` was built and then never used for matching) — 339ms → 199ms on Wikipedia; and a page
 load ran the full cascade **four** times, twice with byte-identical inputs.
+
+## Tick 17 — the oracle stops being an anecdote (2026-07-12)
+
+**Hypothesis, stated before the work:** the 20-site corpus has been telling us what to fix, and it
+cannot. Twenty sites is a story about the web, not a measurement of it. Every class bug found so far
+was found because *some site in the corpus happened to use that pattern* — which means the bugs we
+have NOT found are exactly the ones no corpus site happens to use. Widening the crawl frame to
+200–500 sites should surface divergence clusters that twenty sites structurally cannot see, and the
+cluster ranking — sites-explained, not judgement — becomes the ledger.
+
+**What I expect to be wrong about:** I expect the top clusters to be things I would not have guessed,
+and I expect several of my current PARITY-LEDGER priorities to drop off the list entirely. If the
+ranking merely confirms what I already planned to fix, the corpus is still too narrow or the
+clustering is too coarse, and that is itself the finding.
+
+**Also this tick, because a 300-site crawl makes them non-optional:**
+- **G_HANG** — a watchdog on every site. At twenty sites a hang is an annoyance you notice; at three
+  hundred it silently eats the run and the harness reports a smaller corpus as if that were the
+  corpus. A timeout must be a HARD failure that is counted and attributed, never a skipped test.
+- **G_SILENT_FAIL** — a 300-site crawl is exactly where swallowed errors hide. Every discarded
+  `Result` on the load path becomes a site that "rendered fine" because nothing was rendered.

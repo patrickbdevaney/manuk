@@ -486,6 +486,12 @@ pub struct Page {
     zoom: f32,
     /// Decoded raster images keyed by their `<img>` node, painted into each element's box.
     images: std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
+    /// **The external stylesheets, kept.** They used to live only in a local map inside
+    /// `fetch_and_apply_stylesheets` and were dropped on the floor afterwards — so every LATER
+    /// cascade rebuilt its sheet list from `collect_style_elements`, which sees only inline
+    /// `<style>`, and silently lost every `<link>`ed stylesheet on the page. A re-cascade that
+    /// quietly strips the site's CSS is worse than no re-cascade.
+    external_css: HashMap<String, String>,
     /// Fingerprint of the inputs to the last full cascade — the style sources and the shape of the
     /// tree. If neither has changed, re-cascading produces byte-identical output, and on a large
     /// document that is not a small waste: see `apply_stylesheets`.
@@ -1080,6 +1086,7 @@ impl Page {
             has_sticky,
             zoom: 1.0,
             images: std::collections::HashMap::new(),
+            external_css: HashMap::new(),
             last_cascade: None,
         }
     }
@@ -1308,6 +1315,42 @@ impl Page {
     /// repeatedly never compounds. `zoom` is clamped to a usable range.
     pub fn relayout_zoomed(&mut self, fonts: &FontContext, viewport_width: f32, zoom: f32) {
         self.zoom = zoom.clamp(MIN_ZOOM, MAX_ZOOM);
+        // **Never lay out a tree the cascade has not seen all of.**
+        //
+        // Layout indexes the style map. A node the cascade has never seen is a node layout cannot
+        // lay out — and until now it did not *fail* to lay it out, it PANICKED, and because the
+        // panic unwinds through SpiderMonkey's C++ frames it aborted the process outright.
+        // apple.com core-dumped the browser this way: its scripts inject `<svg>` from a timer that
+        // runs after the last cascade, and layout reached the new nodes first.
+        //
+        // `layout` now degrades on a miss rather than dying (see `style_of`), which is the stability
+        // guarantee. This is the correctness half: if the tree has grown since the cascade, cascade
+        // it. The check is a node count, which is O(n) and trivially cheap next to a layout — and it
+        // is only ever *true* when something really did change, so the common path pays nothing.
+        let nodes = self.dom.descendants(self.dom.root()).count();
+        if nodes > self.styles.len() {
+            tracing::debug!(
+                nodes,
+                styled = self.styles.len(),
+                "tree grew since the last cascade — restyling before layout"
+            );
+            // With the EXTERNAL sheets, not just the inline ones. `collect_style_elements` sees only
+            // `<style>` blocks; rebuilding from it would strip every `<link>`ed stylesheet from the
+            // page, which is a far worse bug than the one being fixed.
+            let sources = collect_style_sources(&self.dom, &self.final_url);
+            let sheets: Vec<Stylesheet> = sources
+                .iter()
+                .filter_map(|src| match src {
+                    StyleSource::Inline(css, m) => Some(Stylesheet::parse(&wrap_media(css, m))),
+                    StyleSource::External(url, m) => self
+                        .external_css
+                        .get(url)
+                        .map(|css| Stylesheet::parse(&wrap_media(css, m))),
+                })
+                .collect();
+            self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
+            self.last_cascade = None; // the fingerprint no longer describes this tree
+        }
         let scaled;
         let styles = if (self.zoom - 1.0).abs() < 1e-6 {
             &self.styles
@@ -1517,6 +1560,7 @@ impl Page {
             }
             h.finish()
         };
+        self.external_css = external.clone();
         if self.last_cascade == Some(fp) && !self.styles.is_empty() {
             tracing::debug!("cascade inputs unchanged — skipping a full restyle");
             return RestyleDamage::None;
