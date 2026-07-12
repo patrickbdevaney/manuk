@@ -518,3 +518,48 @@ flush left a dangling symlink into tmpfs and broke the next build — in a commi
 that failure was "designed out". It is now, actually.
 
 Banked: `manuk-readable-web-2026-07-12`.
+
+## Tick 15 — the invisible-content class (2026-07-12)
+
+Four bugs, one family: **content that was laid out perfectly and could not be seen.** Every geometry
+probe in the codebase called these pages correct. The boxes were right, the colours were right, the
+text was in the display list at full alpha. The user saw a blank space.
+
+- **`font-size: 0` painted glyph-shaped CONTINENTS.** At 0px, swash falls back to the face's
+  *unscaled* outline and returns a 1,227×1,450 bitmap per glyph, which `blit_glyph` floods with the
+  run's text colour. One zeroed word buried old.reddit's post titles under 27,000px of #888888. And
+  `font-size:0` is not exotic — it is the inline-block whitespace killer and half of the
+  image-replacement recipe. Underneath it, a second bug: **MinimalCascade could not parse a unitless
+  zero at all**, so the size stayed *inherited* and the text rendered at full size. Stylo was right;
+  the two cascades disagreed about whether text is visible. That is what ADR-011 exists for.
+- **Anonymous boxes were stranded in stacking layer 0.** `z` and `clip` are keyed by NodeId and a
+  synthesised box has no node — so the box holding a `z-index`'d element's TEXT sorted below that
+  element's own background and got painted over.
+- **Every `position:absolute` element with no insets was DELETED.** Its static position needs flow's
+  cursor, flow discarded it, so the abs pass had nothing to place against and dropped the box. That
+  is every React portal root, every JS-positioned dropdown, and every `.sr-only` node on the web.
+  github: coverage 91.4% → 97.8%.
+- **Every CSS background image was stretched to its element** — backgrounds share the `<img>` bitmap
+  map, so the replaced-element blit painted a scaled copy over the correctly-tiled one.
+
+**The method that finally worked, after four rounds of reasoning failed.** For the reddit grey I had
+proof it was impossible: the display list was *correct*, no decoded image was flat, no Rect/RoundRect/
+MaskedRect/Shadow carried the colour. Every instrument agreed the pixels could not exist. What found
+it was bisecting the RASTERIZER — disable one display-item type at a time and re-render. Rects off:
+still there. Backgrounds off: still there. **Text off: gone.** Then one `eprintln!` on any glyph
+bitmap bigger than 3× its font size.
+
+> When every instrument says the bug is impossible, they are all looking at the same layer, and the
+> bug is one layer down.
+
+**New gate G_INTERACT** (METHODOLOGY 5.2's lesson, again): UI-thread cost of tab open/switch/close,
+with REAL pages in thirty tabs — an empty `Browser` measures a `Vec` and proves nothing. open 0.94ms,
+switch 0.02ms, close 0.01ms, all far under a frame. It asserts the SHAPE too: closing the thirtieth
+tab must not cost more than the first. Audited clean alongside: the hamburger is a flag flip, scroll
+is 0.01ms, click 0.27ms, document fetch is off-thread. The only UI-thread cost a person can still
+feel is the page *build* on navigation (~100ms on a large document) — that is the next target.
+
+Corpus (18 sites): MEAN COVERAGE **99.0%**, MEAN VISUAL **81.1%**.
+old.reddit 45.7 → 56.9 · github coverage 91.4 → 97.8 · rust-lang 68.6 · users.rust-lang 98.8.
+
+Banked: `manuk-legible-web-2026-07-12`.
