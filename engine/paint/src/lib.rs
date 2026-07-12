@@ -343,7 +343,20 @@ impl DisplayList {
                 edge(r.x, r.y, l, r.height); // left
                 edge(r.x + r.width - rr, r.y, rr, r.height); // right
             }
-            if let Some(node) = b.node.filter(|_| mask.is_none()) {
+            // **This blit is for REPLACED elements, and only for them.**
+            //
+            // It stretches the bitmap to fill the box, which is exactly right for an `<img>` and
+            // exactly wrong for a `background-image: url()` — and a `url()` background's bitmap is
+            // stored in the SAME `images` map, keyed by the same node. So every element with a CSS
+            // background image got its correctly-tiled `BackgroundImage` item painted first, and
+            // then this one stretched over the top of it. Every sprite, texture, pattern and icon
+            // on the web was scaled to the size of its element; old.reddit.com's small header art
+            // became a page-sized blob covering the content.
+            //
+            // A `url()` background on the box is the signal that this node's bitmap belongs to the
+            // background layer, which already painted it properly.
+            let bg_is_url = matches!(b.background_image, Some(manuk_css::BackgroundImage::Url(_)));
+            if let Some(node) = b.node.filter(|_| mask.is_none() && !bg_is_url) {
                 if let Some(img) = images.get(&node) {
                     items.push(DisplayItem::Image {
                         rect: b.rect,
@@ -1028,6 +1041,60 @@ fn lerp(dst: u8, src: u8, a: f32) -> u8 {
     (src as f32 * a + dst as f32 * (1.0 - a))
         .round()
         .clamp(0.0, 255.0) as u8
+}
+
+#[cfg(test)]
+mod bg_tests {
+    use super::*;
+    use manuk_css::{MinimalCascade, StyleEngine, Stylesheet};
+
+    /// Regression: **a `background-image: url()` must not ALSO be blitted as a replaced image.**
+    ///
+    /// A `url()` background's decoded bitmap lives in the same `images` map, keyed by the same node,
+    /// as an `<img>`'s does. The replaced-element blit — which stretches the bitmap to fill the box,
+    /// and is exactly right for an `<img>` — therefore fired for backgrounds too, painting a
+    /// stretched copy on top of the correctly-tiled background beneath it. Every sprite, texture,
+    /// pattern and icon on the web was scaled up to the size of its element; old.reddit.com's small
+    /// header art became a page-sized blob over the content.
+    #[test]
+    fn a_url_background_is_not_also_painted_as_a_replaced_image() {
+        let dom = manuk_html::parse(r#"<div id="d">x</div>"#);
+        let styles = MinimalCascade.cascade(
+            &dom,
+            &[Stylesheet::parse("#d{width:300px;height:120px;background-image:url(t.png)}")],
+        );
+        let fonts = FontContext::new();
+        let root = manuk_layout::layout_document(&dom, &styles, &fonts, 400.0);
+
+        // Stand in for the decoded bitmap the page layer would have fetched.
+        let node = dom
+            .descendants(dom.root())
+            .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("d"))
+            .expect("the div");
+        let mut images = std::collections::HashMap::new();
+        images.insert(
+            node,
+            std::rc::Rc::new(DecodedImage { width: 40, height: 30, rgba: vec![255; 40 * 30 * 4] }),
+        );
+
+        let items = DisplayList::build_with_images(&root, &images).items;
+        let backgrounds = items
+            .iter()
+            .filter(|i| matches!(i, DisplayItem::BackgroundImage { .. }))
+            .count();
+        let replaced = items.iter().filter(|i| matches!(i, DisplayItem::Image { .. })).count();
+
+        assert_eq!(
+            backgrounds, 1,
+            "the background layer must paint the bitmap — tiled, at its natural size, honouring \
+             background-size/-repeat"
+        );
+        assert_eq!(
+            replaced, 0,
+            "and the REPLACED-element blit must NOT also fire: it stretches the bitmap to fill the \
+             box, painting a scaled copy straight over the tiled background"
+        );
+    }
 }
 
 #[cfg(test)]
