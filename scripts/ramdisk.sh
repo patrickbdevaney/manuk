@@ -72,12 +72,29 @@ status() {
 # Flush is a DISCIPLINE, not a cleanup: RAM that is never reclaimed is just a slower OOM. Every mode
 # below calls this, and disk-hygiene.sh calls it too, so the ceiling is enforced continuously rather
 # than at the moment someone remembers.
+# Wipe, then IMMEDIATELY re-create the directories the symlinks point at.
+#
+# Not a tidiness detail — it is the whole safety property. `rm -rf $RAM_ROOT/*` removes the
+# `*-incremental` directories themselves, and `target/<prof>/incremental` is a symlink INTO one of
+# them. A symlink to a directory that no longer exists is not an empty directory; it is a dangling
+# path, and cargo does not recover from it:
+#
+#     error: couldn't prepare build directories
+#     Caused by: failed to create directory `target/release/incremental`
+#     Caused by: File exists (os error 17)
+#
+# The build simply stops, with an error that names the filesystem and not the cause. I wrote the
+# flush, ran it, and broke the next build with it — so the recreate lives INSIDE flush, where it
+# cannot be forgotten by a caller, rather than in the callers, where it already was.
+reseat() { mkdir -p "$RAM_ROOT/debug-incremental" "$RAM_ROOT/release-incremental"; }
+
 flush() {
   local used
   used=$(dir_mb "$RAM_ROOT")
   if [ "${1:-}" = "--force" ]; then
     echo "  · flushing all RAM build output (${used}MB)"
     rm -rf "${RAM_ROOT:?}"/* 2>/dev/null
+    reseat
     return
   fi
   if [ "$used" -gt "$INCR_CAP_MB" ]; then
@@ -85,6 +102,7 @@ flush() {
     echo "    (incremental fragments accumulate one set per feature-flag permutation and are"
     echo "     never read again; the cost of dropping them is one slower compile)"
     rm -rf "${RAM_ROOT:?}"/* 2>/dev/null
+    reseat
   else
     echo "  · RAM build output ${used}MB / ${INCR_CAP_MB}MB cap — within budget"
   fi
@@ -92,7 +110,12 @@ flush() {
 
 case "${1:-}" in
   --status) status; exit 0 ;;
-  --flush)  mkdir -p "$RAM_ROOT"; flush --force; status; exit 0 ;;
+  --flush)  mkdir -p "$RAM_ROOT"; flush --force
+            for prof in debug release; do
+              mkdir -p "target/$prof"
+              ln -sfn "$RAM_ROOT/$prof-incremental" "target/$prof/incremental"
+            done
+            status; exit 0 ;;
 esac
 
 mkdir -p "$RAM_ROOT"
