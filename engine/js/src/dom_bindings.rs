@@ -57,15 +57,21 @@ use mozjs::rust::{evaluate_script, CompileOptionsWrapper, RealmOptions, Runtime,
 use manuk_dom::{Dom, NodeData, NodeId};
 
 thread_local! {
-    /// Pre-script layout snapshot (`NodeId` → `[x, y, width, height]`) exposed to
-    /// `element.getBoundingClientRect()`. Set by [`run_scripts`] for the current document.
-    static LAYOUT_RECTS: std::cell::RefCell<std::collections::HashMap<NodeId, [f32; 4]>> =
-        std::cell::RefCell::new(std::collections::HashMap::new());
-
-    /// Pre-script computed styles (`NodeId` → `ComputedStyle`) exposed to
-    /// `getComputedStyle(el)`. Set by [`run_scripts`] for the current document.
-    static STYLES: std::cell::RefCell<std::collections::HashMap<NodeId, manuk_css::ComputedStyle>> =
-        std::cell::RefCell::new(std::collections::HashMap::new());
+    /// The layout snapshot (`NodeId` → `[x, y, width, height]`) behind `getBoundingClientRect()`,
+    /// and the computed styles behind `getComputedStyle()`.
+    ///
+    /// **Borrowed, not cloned.** These used to be owned copies, refreshed on every entry into JS —
+    /// which meant every click *and every wheel event* deep-cloned a 19,000-entry rect map and, far
+    /// worse, the entire style map: 19,000 `ComputedStyle` structs, each with heap-allocated font
+    /// lists and boxed pseudo-element styles. That is megabytes of allocation per scroll tick, and
+    /// it is what turned scrolling a large page from smooth into unusable.
+    ///
+    /// They are raw pointers into the caller's maps, valid only for the duration of one re-entry —
+    /// exactly the lifetime of `CURRENT_DOM`, and set and cleared at the same places.
+    static LAYOUT_RECTS_PTR: std::cell::Cell<*const std::collections::HashMap<NodeId, [f32; 4]>> =
+        const { std::cell::Cell::new(std::ptr::null()) };
+    static STYLES_PTR: std::cell::Cell<*const std::collections::HashMap<NodeId, manuk_css::ComputedStyle>> =
+        const { std::cell::Cell::new(std::ptr::null()) };
 
     /// The document's URL — the origin `document.cookie` reads and writes against.
     static DOC_URL: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
@@ -113,6 +119,35 @@ pub fn take_focus_requests() -> Vec<Option<NodeId>> {
 /// Point every DOM binding at `dom` for the duration of this re-entry into JS.
 pub(crate) fn set_current_dom(dom: *mut Dom) {
     CURRENT_DOM.with(|c| c.set(dom));
+}
+
+/// Publish the caller's layout + style maps **by reference** for the duration of one re-entry.
+/// The caller owns them and outlives the call; nothing here may retain them past it.
+fn set_view_maps(
+    layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+) {
+    LAYOUT_RECTS_PTR.with(|c| c.set(layout as *const _));
+    STYLES_PTR.with(|c| c.set(styles as *const _));
+}
+
+/// Read one node's layout rect from the borrowed snapshot.
+fn layout_rect(node: NodeId) -> Option<[f32; 4]> {
+    LAYOUT_RECTS_PTR.with(|c| {
+        let p = c.get();
+        (!p.is_null()).then(|| unsafe { (*p).get(&node).copied() }).flatten()
+    })
+}
+
+/// Read one node's computed style from the borrowed snapshot.
+fn with_style<R>(node: NodeId, f: impl FnOnce(&manuk_css::ComputedStyle) -> R) -> Option<R> {
+    STYLES_PTR.with(|c| {
+        let p = c.get();
+        if p.is_null() {
+            return None;
+        }
+        unsafe { (*p).get(&node).map(f) }
+    })
 }
 
 /// A `Dim` as a CSS string.
@@ -227,7 +262,7 @@ unsafe extern "C" fn window_get_computed_style(
     vp: *mut Value,
 ) -> bool {
     let node = arg_object(vp, argc, 0).and_then(|o| node_and_dom(o).map(|(_, n)| n));
-    let js = node.and_then(|n| STYLES.with(|s| s.borrow().get(&n).map(computed_style_js)));
+    let js = node.and_then(|n| with_style(n, computed_style_js));
     let src = js.unwrap_or_else(|| "({})".to_string());
     match eval_in_current_global(cx, &src) {
         Some(v) => *vp = v,
@@ -666,7 +701,7 @@ unsafe extern "C" fn el_set_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut
 unsafe extern "C" fn el_get_bounding_rect(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     let node = this_node(vp).map(|(_, n)| n);
     let [x, y, w, h] = node
-        .and_then(|n| LAYOUT_RECTS.with(|l| l.borrow().get(&n).copied()))
+        .and_then(layout_rect)
         .unwrap_or([0.0, 0.0, 0.0, 0.0]);
     let js = format!(
         "({{x:{x},y:{y},width:{w},height:{h},left:{x},top:{y},right:{r},bottom:{b}}})",
@@ -1439,7 +1474,7 @@ unsafe extern "C" fn host_scroll_to(cx: *mut RawJSContext, argc: u32, vp: *mut V
 /// to put it at the top of the viewport.
 unsafe extern "C" fn el_scroll_into_view(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     if let Some((_, node)) = this_node(vp) {
-        if let Some(r) = LAYOUT_RECTS.with(|l| l.borrow().get(&node).copied()) {
+        if let Some(r) = layout_rect(node) {
             PENDING_SCROLLS.with(|q| q.borrow_mut().push((r[0], r[1])));
         }
     }
@@ -1505,7 +1540,7 @@ unsafe extern "C" fn host_rect(cx: *mut RawJSContext, argc: u32, vp: *mut Value)
         return true;
     }
     let node = NodeId(id as usize);
-    match LAYOUT_RECTS.with(|l| l.borrow().get(&node).copied()) {
+    match layout_rect(node) {
         Some(r) => match eval_in_current_global(cx, &format!("[{},{},{},{}]", r[0], r[1], r[2], r[3])) {
             Some(v) => *vp = v,
             None => *vp = NullValue(),
@@ -1917,8 +1952,7 @@ pub fn run_scripts(
     }
     // Publish the pre-script layout + style snapshots for getBoundingClientRect /
     // getComputedStyle.
-    LAYOUT_RECTS.with(|l| *l.borrow_mut() = layout.clone());
-    STYLES.with(|s| *s.borrow_mut() = styles.clone());
+    set_view_maps(layout, styles);
 
     let options = RealmOptions::default();
     rooted!(&in(runtime.cx()) let global = unsafe {
@@ -1993,8 +2027,7 @@ impl PageContext {
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
         styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
     ) -> Result<(Self, usize), String> {
-        LAYOUT_RECTS.with(|l| *l.borrow_mut() = layout.clone());
-        STYLES.with(|s| *s.borrow_mut() = styles.clone());
+        set_view_maps(layout, styles);
 
         let options = RealmOptions::default();
         rooted!(&in(runtime.cx()) let global = unsafe {
@@ -2057,8 +2090,7 @@ impl PageContext {
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
         styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
     ) -> Result<(), String> {
-        LAYOUT_RECTS.with(|l| *l.borrow_mut() = layout.clone());
-        STYLES.with(|s| *s.borrow_mut() = styles.clone());
+        set_view_maps(layout, styles);
         // The arena the bindings dereference must be the CURRENT one: the `Dom` this context was
         // built against was moved into the `Page` the moment `from_dom` returned.
         set_current_dom(dom as *mut Dom);
@@ -2072,6 +2104,25 @@ impl PageContext {
         }
         crate::event_loop::run_deferred(runtime, global.handle())?;
         Ok(())
+    }
+
+    /// Does this page have anything that *wants* to know the view changed — a `scroll` listener, an
+    /// IntersectionObserver, a ResizeObserver?
+    ///
+    /// The overwhelming majority of pages have none. Re-entering JS on every wheel event for those
+    /// pages is pure cost: a rect-map rebuild, a JS call, and a timer pump, sixty times a second, to
+    /// tell a page that is not listening. Ask first.
+    pub fn wants_view_events(&self, runtime: &mut Runtime) -> bool {
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        let src = "(((globalThis.__ioList||[]).length + (globalThis.__roList||[]).length                     + (((globalThis.__winListeners||{}).scroll)||[]).length) > 0)";
+        rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
+        let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"probe.js".to_owned(), 1);
+        match evaluate_script(runtime.cx(), global.handle(), src, rval.handle_mut(), opts) {
+            Ok(()) => rval.get().is_boolean() && rval.get().to_boolean(),
+            Err(()) => false,
+        }
     }
 
     /// Tell the page the **view changed** — it scrolled, or it was laid out again.
@@ -2091,8 +2142,7 @@ impl PageContext {
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
         styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
     ) -> Result<(), String> {
-        LAYOUT_RECTS.with(|l| *l.borrow_mut() = layout.clone());
-        STYLES.with(|s| *s.borrow_mut() = styles.clone());
+        set_view_maps(layout, styles);
         set_current_dom(dom as *mut Dom);
         SCROLL.with(|c| c.set((0.0, scroll_y)));
 
@@ -2121,8 +2171,7 @@ impl PageContext {
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
         styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
     ) -> Result<bool, String> {
-        LAYOUT_RECTS.with(|l| *l.borrow_mut() = layout.clone());
-        STYLES.with(|s| *s.borrow_mut() = styles.clone());
+        set_view_maps(layout, styles);
         set_current_dom(dom as *mut Dom);
 
         let raw_cx = unsafe { runtime.cx().raw_cx() };
@@ -2181,8 +2230,7 @@ impl PageContext {
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
         styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
     ) -> Result<(), String> {
-        LAYOUT_RECTS.with(|l| *l.borrow_mut() = layout.clone());
-        STYLES.with(|s| *s.borrow_mut() = styles.clone());
+        set_view_maps(layout, styles);
         let _ = dom;
 
         let raw_cx = unsafe { runtime.cx().raw_cx() };
@@ -2249,8 +2297,7 @@ impl PageContext {
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
         styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
     ) -> Result<(), String> {
-        LAYOUT_RECTS.with(|l| *l.borrow_mut() = layout.clone());
-        STYLES.with(|s| *s.borrow_mut() = styles.clone());
+        set_view_maps(layout, styles);
         let _ = dom;
 
         let raw_cx = unsafe { runtime.cx().raw_cx() };
@@ -2286,8 +2333,7 @@ impl PageContext {
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
         styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
     ) -> Result<(), String> {
-        LAYOUT_RECTS.with(|l| *l.borrow_mut() = layout.clone());
-        STYLES.with(|s| *s.borrow_mut() = styles.clone());
+        set_view_maps(layout, styles);
         let _ = dom; // reflectors cache the stable `*mut Dom` from `load`; kept for API symmetry.
 
         let raw_cx = unsafe { runtime.cx().raw_cx() };

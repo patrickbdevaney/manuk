@@ -552,6 +552,13 @@ impl Dom {
     }
 
     /// Clear every dirty bit in the tree (call after a full clean layout pass).
+    /// Is anything in the tree dirty? The cheap question the load path asks before deciding whether
+    /// a full re-cascade is warranted — the cascade is the most expensive stage in the pipeline, and
+    /// running it when nothing changed is pure latency.
+    pub fn has_dirty(&self) -> bool {
+        self.is_dirty(self.root()) || self.has_dirty_descendants(self.root())
+    }
+
     pub fn clear_all_dirty(&mut self) {
         for n in &mut self.nodes {
             n.dirty = false;

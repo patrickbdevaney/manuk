@@ -161,3 +161,57 @@ pub fn report(rows: &[StageTimes]) {
     }
     println!();
 }
+
+
+/// **F4 — INTERACTIVE LATENCY.** The cost of one scroll notification and one click dispatch on a
+/// real page.
+///
+/// The static pipeline bench measures *loading*. It says nothing about what happens once the page is
+/// on screen — and that is where a browser is actually judged. A page that loads in 80ms and then
+/// takes 200ms to acknowledge a wheel event is not fast; it is broken, and the load number will
+/// happily report that everything is fine.
+///
+/// This is the number that caught it: publishing the layout and style snapshots into the JS world
+/// used to CLONE them — a 19,000-entry rect map and 19,000 `ComputedStyle` structs — on every entry.
+/// Per wheel event. The load bench never saw it.
+///
+/// Floor: **one frame (16ms)**. Anything slower is felt.
+pub fn bench_interactive(name: &str, html: &str, url: &str, vw: f32, vh: u32, fonts: &FontContext, runs: usize) -> (f64, f64) {
+    let ms = |d: Duration| d.as_secs_f64() * 1000.0;
+    let mut page = manuk_page::Page::load(html, url, fonts, vw);
+    // Scroll: what the shell does once per frame while the wheel is turning.
+    let scroll = time_median(runs, || {
+        page.publish_view_state(0.0, 500.0, None);
+        page.view_changed(500.0, vw, vh as f32, true);
+    });
+    // Click: what the shell does when the user hits a link.
+    let root = page.dom().root();
+    let target = manuk_css::query_selector_all(page.dom(), root, "a")
+        .first()
+        .copied();
+    let click = match target {
+        Some(n) => time_median(runs, || {
+            page.dispatch_click(n, fonts, vw);
+        }),
+        None => Duration::ZERO,
+    };
+    // What the old path did on EVERY entry, measured so the regression is a number and not a story:
+    // deep-clone the style map and the rect map.
+    let styles = page.styles_map();
+    let clone_cost = time_median(runs, || {
+        let _ = styles.clone();
+    });
+    let rects = page.root_box.node_rects(page.dom());
+    let rect_clone = time_median(runs, || {
+        let _ = rects.clone();
+    });
+    eprintln!(
+        "    (the removed per-entry work: styles.clone() {:.2}ms + rects.clone() {:.2}ms \
+         on {} nodes — this ran on every wheel event)",
+        ms(clone_cost),
+        ms(rect_clone),
+        page.dom().descendants(page.dom().root()).count()
+    );
+    let _ = name;
+    (ms(scroll), ms(click))
+}

@@ -357,6 +357,31 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
 /// EPOCH probe (CONSTITUTION §10.2): per-stage hot-path timings on pages of increasing size, with
 /// per-KB / per-node costs so **superlinear scaling** is visible by inspection.
 fn run_bench_cmd(args: &[String], fonts: &FontContext) {
+    // F4 — INTERACTIVE LATENCY. Reported apart from the load stages, because a browser that loads
+    // fast and then stutters on every wheel event is not fast — and the load bench cannot see it.
+    if args.iter().any(|a| a == "--interactive") {
+        let pages = flag(args, "--pages").unwrap_or_default();
+        let runs: usize = flag(args, "--runs").and_then(|s| s.parse().ok()).unwrap_or(5);
+        println!("\n=== F4 · INTERACTIVE LATENCY (median of {runs}, ms) — floor: ONE FRAME (16ms) ===\n");
+        println!("{:<20}{:>12}{:>12}", "page", "scroll", "click");
+        for p in pages.split(',').filter(|p| !p.trim().is_empty()) {
+            let Ok(html) = std::fs::read_to_string(p.trim()) else {
+                eprintln!("cannot read {p}");
+                continue;
+            };
+            let name = std::path::Path::new(p.trim())
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let (scroll, click) = manuk_wpt::bench::bench_interactive(
+                &name, &html, "https://bench.test/", 1200.0, 800, fonts, runs,
+            );
+            let over = if scroll.max(click) > 16.0 { "   <-- OVER ONE FRAME" } else { "" };
+            println!("{:<20}{:>12.2}{:>12.2}{over}", name, scroll, click);
+        }
+        println!();
+        return;
+    }
     let runs: usize = flag(args, "--runs").and_then(|s| s.parse().ok()).unwrap_or(5);
     let vw: f32 = flag(args, "--width").and_then(|s| s.parse().ok()).unwrap_or(1280.0);
     let vh: u32 = flag(args, "--height").and_then(|s| s.parse().ok()).unwrap_or(900);

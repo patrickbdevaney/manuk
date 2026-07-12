@@ -196,6 +196,18 @@ pub fn run_document_scripts(
 /// `window.open(...)` requests since the last call, each `(win_id, url)` — the host opens each as
 /// a new tab/window (recording `win_id → tab` for `postMessage` routing). Empty without the JS
 /// feature.
+/// Does this page have a `scroll` listener or any observer? If not, the whole view-notification
+/// path can be skipped — which for most pages it can.
+#[cfg(feature = "_sm")]
+pub fn wants_view_events(ctx: &PageContext) -> bool {
+    with_runtime(|rt| Ok(ctx.wants_view_events(rt))).unwrap_or(false)
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn wants_view_events(_ctx: &PageContext) -> bool {
+    false
+}
+
 /// Tell the page its view changed (scroll / relayout): run the observers, fire `scroll`.
 #[cfg(feature = "_sm")]
 #[allow(clippy::too_many_arguments)]

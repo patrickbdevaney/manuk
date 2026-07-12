@@ -249,6 +249,9 @@ struct App {
     focused_input: Option<manuk_dom::NodeId>,
     /// Whether the cursor is currently over a clickable link (drives the hand cursor).
     over_link: bool,
+    /// A scroll happened and the page has not been told yet. Coalesced to one notification per
+    /// frame — a trackpad delivers dozens of wheel events per frame.
+    scroll_dirty: bool,
     /// The previous frame's canvas bytes (size + RGBA), for a row-level damage diff so
     /// `paint_and_upload` uploads only the rows that actually changed (#2). Correctness is
     /// exact — the uploaded rows are precisely those that differ — so it can't corrupt the
@@ -324,6 +327,7 @@ impl App {
             viewport: Viewport::new(width as f32, 768.0),
             scroll_y: 0.0,
             needs_paint: true,
+            scroll_dirty: false,
             browser,
             tab_id,
             frame: manuk_compositor::FrameTimer::new(240),
@@ -960,6 +964,10 @@ impl App {
     /// Do the actual CPU paint of the current page/scroll/overlays and upload it to the GPU
     /// texture. Called once per frame from `RedrawRequested` when `needs_paint` is set.
     fn paint_and_upload(&mut self) {
+        // Once per frame, tell the page it scrolled (if it asked to know). Doing this here rather
+        // than per wheel event is the difference between one JS re-entry per painted frame and
+        // dozens per frame that no one will ever see.
+        self.flush_scroll_notification();
         let Some(gpu) = &self.gpu else {
             return;
         };
@@ -1874,6 +1882,16 @@ impl App {
         manuk_net::webstorage::save();
     }
 
+    /// Flush a pending scroll notification — called once per frame, from the paint path. A page that
+    /// registered no `scroll` listener and no observer costs nothing here: `view_changed` asks
+    /// before it does any work.
+    fn flush_scroll_notification(&mut self) {
+        if !std::mem::take(&mut self.scroll_dirty) {
+            return;
+        }
+        self.notify_view_scrolled();
+    }
+
     /// Notify the page that the viewport scrolled, then apply whatever its callbacks asked for
     /// (an infinite-scroll handler routinely scrolls again, or focuses the new content).
     fn notify_view_scrolled(&mut self) {
@@ -2581,10 +2599,11 @@ impl ApplicationHandler<NavEvent> for App {
                 };
                 self.scroll_y -= dy;
                 self.clamp_scroll();
-                // Tell the page it scrolled: fire `scroll`, run the observers. A feed built on
-                // IntersectionObserver loads its first screenful and then stops forever without
-                // this — nothing else can tell it the sentinel came into view.
-                self.notify_view_scrolled();
+                // The page is told it scrolled ONCE PER FRAME, not once per wheel event. A trackpad
+                // delivers dozens of events per frame, and notifying the page on each one means
+                // re-entering JS dozens of times to report scroll positions nobody will ever paint.
+                // Mark it and let the frame flush it.
+                self.scroll_dirty = true;
                 self.rerender();
             }
             WindowEvent::CursorMoved { position, .. } => {

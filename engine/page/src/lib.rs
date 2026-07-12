@@ -692,6 +692,12 @@ impl Page {
     #[cfg(feature = "spidermonkey")]
     pub fn view_changed(&mut self, scroll_y: f32, vw: f32, vh: f32, scrolled: bool) {
         let Some(ctx) = &self.js else { return };
+        // Most pages have no scroll listener and no observer. For those, every part of what follows
+        // — rebuilding the rect map, re-entering JS, pumping timers — is work done to inform a page
+        // that is not listening. Sixty times a second, on the UI thread. Ask first.
+        if !manuk_js::wants_view_events(ctx) {
+            return;
+        }
         let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
             .root_box
             .node_rects(&self.dom)
@@ -1415,11 +1421,18 @@ impl Page {
         }
 
         let count = external.len();
-        // Always re-cascade, even with no external CSS. Scripts add nodes (a module loader's
-        // `<script>`, a framework's fragment) and layout indexes the style map — a node the cascade
-        // has never seen is a node layout cannot lay out. Re-scanning the DOM for `<link>`s each
-        // time makes this idempotent: the external sheets are simply refetched from cache.
-        self.apply_stylesheets(&external, fonts, viewport_width);
+        // Re-cascade when there is a reason to: external CSS arrived, or a script mutated the tree
+        // (layout INDEXES the style map, so a node the cascade has never seen is a node layout
+        // cannot lay out — that was a real crash). Otherwise relayout only.
+        //
+        // Doing it unconditionally costs a *full extra cascade* on every load, and on a 19,000-node
+        // page the cascade is the single most expensive stage in the pipeline. Correctness did not
+        // need it; only the mutated-tree case did.
+        if count > 0 || self.dom.has_dirty() {
+            self.apply_stylesheets(&external, fonts, viewport_width);
+        } else {
+            self.relayout(fonts, viewport_width);
+        }
         count
     }
 
