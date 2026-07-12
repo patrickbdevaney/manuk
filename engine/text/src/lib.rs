@@ -212,14 +212,22 @@ fn resolve_generic_families(db: &mut fontdb::Database) {
     if let Some(f) = pick(
         db,
         "MANUK_FONT_SANS",
-        &["Noto Sans", "DejaVu Sans", "Liberation Sans", "Arial", "Helvetica", "FreeSans"],
+        // **Chrome's order, not fontconfig's.** `fc-match sans-serif` answers "Noto Sans" on this
+        // machine — but Chrome never asks fontconfig for the bare generic. It asks for its own
+        // default family, *Arial*, and fontconfig substitutes the metric-compatible Liberation Sans.
+        // The difference is not cosmetic: Noto's line box is 1.362em against Liberation's 1.150em,
+        // an 18% error on the height of every line on every page. Measured against Chromium, not
+        // assumed. This is why the naive `fc-match` list turned the box-parity wall red — it was
+        // red for a real reason.
+        &["Arial", "Liberation Sans", "Arimo", "Helvetica", "DejaVu Sans", "Noto Sans", "FreeSans"],
     ) {
         db.set_sans_serif_family(f);
     }
     if let Some(f) = pick(
         db,
         "MANUK_FONT_SERIF",
-        &["Noto Serif", "DejaVu Serif", "Liberation Serif", "Times New Roman", "FreeSerif"],
+        // Chrome's default serif is *Times New Roman* → Liberation Serif.
+        &["Times New Roman", "Liberation Serif", "Tinos", "DejaVu Serif", "Noto Serif", "FreeSerif"],
     ) {
         db.set_serif_family(f);
     }
@@ -265,26 +273,24 @@ impl FontContext {
         // metrics engine — is where it starts. Pick the same physical faces the system's own
         // resolver picks, in its own preference order.
         //
-        // **HELD BEHIND A FLAG, deliberately.** Switching to the system's real faces is correct and
-        // measurably closes the width gap (a sans-serif sentence went from 305px to Chrome's 317px)
-        // — but it immediately turned the box-parity wall red (72/72 → 69/72) on `valign` and
-        // `white-space-nowrap`, which are LINE-HEIGHT and ADVANCE probes. The wall is right: the
-        // font selection is fixed, and the metrics computed on top of it are not.
+        // **Un-flagged, and the flag's red wall turned out to be telling the truth.**
         //
-        // `swash`'s advances disagree with Chromium's by ~11% on monospace (6.9px/char where
-        // Chromium measures 7.83), and our `normal` line-height is a 1.2× guess rather than the
-        // font's own ascent/descent/lineGap. Both are the metrics layer, and METHODOLOGY Part 15
-        // says to solve that by ADOPTING Skrifa — the library Chromium itself ships — not by
-        // re-deriving advance math. Landing the selection fix on top of a broken metrics layer
-        // would trade a measured regression for an unmeasured improvement, which is precisely the
-        // trade the wall exists to refuse (METHODOLOGY Part 18: no gate is ever loosened to make a
-        // feature land).
+        // This was held back because turning it on took box-parity from 72/72 to 69/72 on `valign`
+        // and `white-space-nowrap` — both LINE-HEIGHT probes. The reading at the time was "font
+        // selection is right, the metrics under it are wrong; adopt Skrifa (METHODOLOGY Part 15)".
         //
-        // Enable with MANUK_FONT_SYSTEM=1 to reproduce the measurement; remove the flag with the
-        // Skrifa migration.
-        if std::env::var("MANUK_FONT_SYSTEM").is_ok() {
-            resolve_generic_families(&mut db);
-        }
+        // That reading was wrong, and measuring Chromium instead of reasoning about it said so. The
+        // metrics engine was never the problem. The preference lists were: they were built from
+        // `fc-match <generic>`, which answers "Noto Sans" here — and Chrome never asks fontconfig
+        // for the bare generic. It asks for its own default family (Arial / Times New Roman), which
+        // fontconfig substitutes to the metric-compatible Liberation faces. Noto's line box is
+        // 1.362em against Liberation's 1.150em, so every line on every page came out 18% too tall,
+        // and two line-height probes noticed.
+        //
+        // Fix the lists and the same change is green. Skrifa would have replaced a metrics engine
+        // that was working, and left the real bug in place. The wall was not an obstacle to route
+        // around; it was the finding.
+        resolve_generic_families(&mut db);
         FontContext {
             db: RefCell::new(db),
             cache: RefCell::new(HashMap::new()),

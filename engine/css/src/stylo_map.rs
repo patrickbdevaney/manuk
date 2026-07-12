@@ -237,6 +237,43 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     s.font_size = cv.clone_font_size().computed_size().px();
     s.font_weight = cv.clone_font_weight().value().round().clamp(1.0, 1000.0) as u16;
     s.italic = cv.clone_font_style() != FontStyle::NORMAL;
+
+    // **`font-family` — the shipping cascade was not mapping it AT ALL.**
+    //
+    // Every page on the web therefore rendered in one default sans-serif face, whatever its CSS
+    // said: serif prose in sans, code blocks in a proportional font, every `@font-face` webfont
+    // ignored. It is the largest text bug there is, and it is the true source of every "font
+    // metrics" divergence the oracle reported — we were not mismeasuring the font, we were not
+    // *using* it.
+    //
+    // Generic keywords are carried through by name (`serif`, `monospace`, …) so the text layer's
+    // own generic resolution applies to them; a named family is carried verbatim, in author order,
+    // so the fallback list is honoured rather than flattened to its first entry.
+    {
+        use stylo::values::computed::font::{GenericFontFamily, SingleFontFamily};
+        let ff = cv.clone_font_family();
+        let mut names: Vec<String> = Vec::new();
+        for f in ff.families.list.iter() {
+            match f {
+                SingleFontFamily::FamilyName(n) => names.push(n.name.to_string()),
+                SingleFontFamily::Generic(g) => names.push(
+                    match g {
+                        GenericFontFamily::Serif => "serif",
+                        GenericFontFamily::SansSerif => "sans-serif",
+                        GenericFontFamily::Monospace => "monospace",
+                        GenericFontFamily::Cursive => "cursive",
+                        GenericFontFamily::Fantasy => "fantasy",
+                        GenericFontFamily::SystemUi => "system-ui",
+                        _ => "sans-serif",
+                    }
+                    .to_string(),
+                ),
+            }
+        }
+        if !names.is_empty() {
+            s.font_family = names;
+        }
+    }
     s.text_align = map_text_align(cv.clone_text_align());
 
     // Display.
