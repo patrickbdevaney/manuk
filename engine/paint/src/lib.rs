@@ -51,6 +51,7 @@ impl DisplayList {
                 | DisplayItem::Image { rect, .. }
                 | DisplayItem::MaskedRect { rect, .. }
                 | DisplayItem::Gradient { rect, .. }
+                | DisplayItem::BackgroundImage { rect, .. }
                 | DisplayItem::RoundRect { rect, .. } => *rect,
                 DisplayItem::TextLine { x, y, width, thickness, .. } => Rect {
                     x: *x,
@@ -130,6 +131,17 @@ pub enum DisplayItem {
     Image {
         rect: Rect,
         image: std::rc::Rc<DecodedImage>,
+    },
+    /// A `background-image: url(...)` layer. **Not** an `<img>`: a background is painted at its
+    /// natural size and TILED by default — it is not stretched to fill its box. Treating it like a
+    /// replaced image blew a subreddit's banner up to the size of the page and painted the content
+    /// underneath it.
+    BackgroundImage {
+        rect: Rect,
+        image: std::rc::Rc<DecodedImage>,
+        size: manuk_css::BackgroundSize,
+        repeat: manuk_css::BackgroundRepeat,
+        radius: f32,
     },
     /// A **gradient** filling `rect`. `angle_deg` uses CSS's convention (0° points up, clockwise);
     /// a radial gradient ignores it and runs from the centre outwards.
@@ -296,11 +308,19 @@ impl DisplayList {
                         });
                     }
                     // A `url()` background is keyed by node in the same bitmap map as `<img>` —
-                    // the page layer fetches and decodes it there.
+                    // the page layer fetches and decodes it there. It is painted as a BACKGROUND
+                    // (natural size, tiled, honouring `background-size`/`-repeat`), not blitted to
+                    // fill the box like a replaced image.
                     manuk_css::BackgroundImage::Url(_) => {
                         if let Some(node) = b.node {
                             if let Some(bmp) = images.get(&node) {
-                                items.push(DisplayItem::Image { rect: b.rect, image: bmp.clone() });
+                                items.push(DisplayItem::BackgroundImage {
+                                    rect: b.rect,
+                                    image: bmp.clone(),
+                                    size: b.background_size,
+                                    repeat: b.background_repeat,
+                                    radius,
+                                });
                             }
                         }
                     }
@@ -644,6 +664,11 @@ impl CpuPainter<'_> {
                         let mut r = *rect;
                         r.y -= scroll_y;
                         blit_masked(&mut pixmap, mask, *color, r, clip);
+                    }
+                    DisplayItem::BackgroundImage { rect, image, size, repeat, radius } => {
+                        let mut r = *rect;
+                        r.y -= scroll_y;
+                        blit_background(&mut pixmap, image, r, *size, *repeat, *radius, clip);
                     }
                     DisplayItem::Gradient { rect, stops, angle_deg, radial, radius } => {
                         let mut r = *rect;
@@ -1330,4 +1355,97 @@ fn inside_round_rect(x: f32, y: f32, r: &Rect, rad: f32) -> bool {
         return corner(rt - rad, b - rad);
     }
     true
+}
+
+
+/// Paint a `background-image` into `rect`: at its **natural size** by default, **tiled** by default,
+/// clipped to the box, honouring `background-size` and `background-repeat`.
+///
+/// The distinction from `blit_image` is the whole point. An `<img>` is a *replaced element*: the
+/// bitmap IS the box, so it scales to fill it. A background is a *decoration*: it keeps its own
+/// size and repeats. Painting a background the first way stretched a subreddit's banner across the
+/// entire page and buried the content beneath it.
+#[allow(clippy::too_many_arguments)]
+fn blit_background(
+    pixmap: &mut tiny_skia::Pixmap,
+    img: &DecodedImage,
+    rect: Rect,
+    size: manuk_css::BackgroundSize,
+    repeat: manuk_css::BackgroundRepeat,
+    radius: f32,
+    clip: Option<Rect>,
+) {
+    use manuk_css::{BackgroundRepeat as R, BackgroundSize as S};
+    if rect.width <= 0.0 || rect.height <= 0.0 || img.width == 0 || img.height == 0 {
+        return;
+    }
+    let (iw, ih) = (img.width as f32, img.height as f32);
+    let (tw, th) = match size {
+        S::Auto => (iw, ih),
+        S::Px(w, h) => (w.max(1.0), h.max(1.0)),
+        S::Cover => {
+            let k = (rect.width / iw).max(rect.height / ih);
+            (iw * k, ih * k)
+        }
+        S::Contain => {
+            let k = (rect.width / iw).min(rect.height / ih);
+            (iw * k, ih * k)
+        }
+    };
+    if tw < 0.5 || th < 0.5 {
+        return;
+    }
+
+    let mut r = rect;
+    if let Some(cl) = clip {
+        r = r.intersect(&cl);
+    }
+    let (pw, ph) = (pixmap.width() as i32, pixmap.height() as i32);
+    let x0 = r.x.floor().max(0.0) as i32;
+    let y0 = r.y.floor().max(0.0) as i32;
+    let x1 = (r.x + r.width).ceil().min(pw as f32) as i32;
+    let y1 = (r.y + r.height).ceil().min(ph as f32) as i32;
+    if x1 <= x0 || y1 <= y0 {
+        return;
+    }
+    let rad = radius.min(rect.width / 2.0).min(rect.height / 2.0).max(0.0);
+    let tile = matches!(repeat, R::Repeat);
+    let data = pixmap.pixels_mut();
+    for py in y0..y1 {
+        for px in x0..x1 {
+            let (fx, fy) = (px as f32 + 0.5, py as f32 + 0.5);
+            if rad > 0.0 && !inside_round_rect(fx, fy, &rect, rad) {
+                continue;
+            }
+            // Position within the tile, measured from the box's origin.
+            let mut lx = fx - rect.x;
+            let mut ly = fy - rect.y;
+            if tile {
+                lx = lx.rem_euclid(tw);
+                ly = ly.rem_euclid(th);
+            } else if lx < 0.0 || lx >= tw || ly < 0.0 || ly >= th {
+                continue; // no-repeat: outside the single tile, paint nothing
+            }
+            let u = ((lx / tw) * iw) as i32;
+            let v = ((ly / th) * ih) as i32;
+            if u < 0 || v < 0 || u >= img.width as i32 || v >= img.height as i32 {
+                continue;
+            }
+            let si = ((v as u32 * img.width + u as u32) * 4) as usize;
+            let Some(px4) = img.rgba.get(si..si + 4) else { continue };
+            let a = px4[3] as f32 / 255.0;
+            if a <= 0.002 {
+                continue;
+            }
+            let di = (py * pw + px) as usize;
+            let Some(dst) = data.get_mut(di) else { continue };
+            let inv = 1.0 - a;
+            let blend = |s: u8, d: u8| ((s as f32 * a) + (d as f32 * inv)).round().clamp(0.0, 255.0) as u8;
+            let na = ((a * 255.0) + (dst.alpha() as f32 * inv)).round().clamp(0.0, 255.0) as u8;
+            let (rr, gg, bb) = (blend(px4[0], dst.red()), blend(px4[1], dst.green()), blend(px4[2], dst.blue()));
+            if let Some(p) = tiny_skia::PremultipliedColorU8::from_rgba(rr.min(na), gg.min(na), bb.min(na), na) {
+                *dst = p;
+            }
+        }
+    }
 }
