@@ -357,3 +357,57 @@ The shell called `libc::_exit()` to skip SpiderMonkey's atexit crash. That is no
 skips *every* exit handler, and in a browser those handlers flush the user's profile. The crash was
 real (exit code 139, after `main` returned, with perfect output). `JS_ShutDown()` now runs in order.
 **A workaround that hides a crash is a data-loss bug wearing a disguise.**
+
+## Reassessment (2026-07-11) — the bottleneck was never verification
+
+The directive assumed parallel verification throughput was the constraint, and asked for a
+re-derived timeline once the harness, the three passes and reference-source discovery had run for a
+real stretch. They have. The honest finding is that **the constraint was somewhere else entirely.**
+
+### What actually compressed the work
+
+Every one of the ~26 class bugs closed today was found by one of three things, and **none of them is
+parallelism**:
+
+1. **Corpus breadth.** Three sites said COVERAGE 99.7% and everything was fine. Twenty sites said a
+   page was printing its own JavaScript, `:checked` never matched anywhere, checkboxes were
+   invisible, and docs.python.org rendered entirely dark. A three-site sample is not a benchmark; it
+   is an anecdote that confidently reports that a bug on one of those three is the most important bug
+   on the web.
+2. **Better probes.** `boxes --tree` printing a box's COMPUTED display ended a multi-hour argument
+   in ten minutes. `MANUK_TRACE_INTRINSIC` printed the number flex wrapping is decided by, which is
+   otherwise invisible.
+3. **Printing the exception.** `"a page <script> threw; continuing"` is a shrug. Printing the message
+   turned it into two exact TypeErrors and replaced an hour of bisecting. **The browser was naming
+   its own bugs out loud and we were discarding the message.**
+
+### What did NOT compress it
+
+* **The verification harness.** Built, validated (13 PASS / 13 FAIL / 0 escalate against ground
+  truth; 429s and dead keys fail over cleanly; nothing is ever dropped). It has not yet been the
+  bottleneck-breaker, because **verification was never the bottleneck** — deciding *what is wrong* was,
+  and that is the one thing the harness is explicitly forbidden from doing. It is the right tool and
+  it is correctly scoped; its value will arrive when the work becomes wide and shallow (Pass 3's long
+  tail), not while it is narrow and deep.
+* **Reference-source discovery.** Not yet used. The bugs found were not ambiguous-algorithm bugs
+  (margin collapsing, line breaking); they were *absent-feature* bugs — a stub returning `false`, a
+  missing property, a filter that omitted a condition. Reading Blink would not have found a single
+  one of them faster than rendering the page and looking at it. It will earn its keep on the
+  edge-case-heavy items (float/BFC interaction, event ordering), which is exactly where the ADR says
+  to reach for it — and nowhere else.
+
+### The re-derived numbers, and their ceiling
+
+**Bar 1 (functional breadth): 17/20 sites usable, from a standing start today.** The remaining three
+are named with what each is waiting on. Bar 1 across the corpus is close.
+
+**Bar 2 (pixel precision): 7/20.** This is a different problem and it will not go at the same rate.
+The residual is dominated by **font metrics** — our glyph advances differ from Chrome's, so text
+wraps at different points, so every box below it moves. That is not twenty-six small bugs; it is one
+deep one, and no amount of parallel checking or algorithm-reading shortens it.
+
+**Do not extrapolate Tier 2/3 from Tier 1's pace.** Tier 1 went fast because it was made of absent
+features, and absent features are cheap once you can SEE that they are absent — which is what the
+corpus and the probes bought. Tier 3's real blockers (codec licensing, GPU driver integration, DRM)
+are external-integration problems. Reading Chromium's approach to them substitutes for none of the
+licensing or certification work, and no verification fan-out touches them at all.
