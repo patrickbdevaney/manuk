@@ -132,6 +132,30 @@ head, title, meta, link, script, style, base, noscript, template { display: none
    value, the placeholder); its children are its data, not its content. */
 input, select, textarea, button, meter, progress { display: inline-block; }
 option, optgroup { display: none; }
+/* Form controls are WIDGETS: a browser draws them, the page does not. Without a border, a
+   background and an intrinsic size, a checkbox is nothing at all — every form on the web rendered
+   its labels next to empty space. (These are UA rules, lowest specificity: any author styling
+   still wins.) */
+input, textarea, select {
+  border: 1px solid #767676;
+  background-color: #ffffff;
+  padding: 1px 2px;
+  color: #000000;
+}
+input[type=checkbox], input[type=radio] {
+  padding: 0;
+  background-color: #ffffff;
+}
+/* `:checked` now matches (it did not, until this tick) — so a ticked box can finally LOOK ticked. */
+input[type=checkbox]:checked, input[type=radio]:checked { background-color: #1a73e8; }
+input[type=radio] { border-radius: 7px; }
+input[type=submit], input[type=reset], input[type=button], button {
+  background-color: #efefef;
+  border: 1px solid #767676;
+  padding: 1px 6px;
+  text-align: center;
+}
+input[type=hidden] { display: none; }
 p, blockquote { margin: 1em 0; }
 h1 { font-size: 2em; font-weight: bold; margin: 0.67em 0; }
 h2 { font-size: 1.5em; font-weight: bold; margin: 0.75em 0; }
@@ -410,6 +434,45 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
         if let Some(cp) = table_cellpadding {
             s.padding = crate::Sides::all(crate::Dim::Px(cp));
         }
+    }
+    // A form control has an INTRINSIC size — the browser's, not the content's. A text field is
+    // `size` characters wide (20 by default), and a checkbox is a 13px square. Sized from their
+    // content instead, a text field collapses to the width of its value ("hi" → 12px) and a
+    // checkbox, having no content at all, disappears entirely.
+    if tag == "input" {
+        let ty = el.attr("type").unwrap_or("text").to_ascii_lowercase();
+        match ty.as_str() {
+            "checkbox" | "radio" => {
+                if s.width == crate::Dim::Auto {
+                    s.width = crate::Dim::Px(13.0);
+                }
+                if s.height == crate::Dim::Auto {
+                    s.height = crate::Dim::Px(13.0);
+                }
+            }
+            "hidden" | "submit" | "reset" | "button" | "image" | "file" | "range" | "color" => {}
+            // Text-like: `size` characters wide. The 8px-per-character figure is the average
+            // advance of the default UI font at 16px — the same approximation Chrome's own default
+            // ends up at (`size=20` → ~173px).
+            _ => {
+                if s.width == crate::Dim::Auto {
+                    let cols = el
+                        .attr("size")
+                        .and_then(|v| v.trim().parse::<f32>().ok())
+                        .filter(|n| *n > 0.0)
+                        .unwrap_or(20.0);
+                    s.width = crate::Dim::Px(cols * 8.0 + 13.0);
+                }
+            }
+        }
+    }
+    if tag == "textarea" && s.width == crate::Dim::Auto {
+        let cols = el
+            .attr("cols")
+            .and_then(|v| v.trim().parse::<f32>().ok())
+            .filter(|n| *n > 0.0)
+            .unwrap_or(20.0);
+        s.width = crate::Dim::Px(cols * 8.0 + 13.0);
     }
     if matches!(tag, "img" | "canvas" | "video" | "svg" | "object" | "embed") {
         if s.display == crate::Display::Inline {
