@@ -629,3 +629,31 @@ clustering is too coarse, and that is itself the finding.
   corpus. A timeout must be a HARD failure that is counted and attributed, never a skipped test.
 - **G_SILENT_FAIL** — a 300-site crawl is exactly where swallowed errors hide. Every discarded
   `Result` on the load path becomes a site that "rendered fine" because nothing was rendered.
+
+## Tick 18 — the crawl's verdict: we crash and we hang (2026-07-12)
+
+The 265-site crawl was supposed to rank rendering divergences. It found something that outranks all of
+them, which is exactly why the corpus had to be widened: **twenty sites could not see this.**
+
+- **73 of 265 sites HANG (27.5%).** A browser that hangs on one site in four is not a browser. This is
+  now the top of the ledger, above every geometry cluster.
+- **apple.com CRASHED — SIGSEGV, core dump.** `layout` indexed the style map in 25 places; a node the
+  cascade never saw panicked, and a panic through SpiderMonkey's C++ frames does not unwind, it
+  aborts. apple.com injects `<svg>` from a timer that runs after the last cascade. Fixed in both
+  halves: layout degrades to the initial style and LOGS the miss (Part 22.1), and a tree that grew
+  since the last cascade gets re-cascaded before layout (unstyled nodes 3+ → 0).
+- **The hangs are ours, and they are duplicate work.** Attributed properly this time — same snapshot,
+  each engine timed separately, because I made exactly the opposite mistake with w3schools and will
+  not make it twice. Per navigation on bbc.co.uk: **9 full-document layouts, 4 full cascades, 487
+  fetches of which 302 are DUPLICATES.** One pipeline pass is 332ms; the navigation takes 17.5s. Part
+  22.3 asked whether the call graph does redundant work. It does, by a factor of dozens.
+
+Landed against it: stylesheets and images are no longer re-fetched every script round; external
+scripts fetch in PARALLEL and execute in order (they were fetched one at a time, each under the 30s
+*document* deadline — 9.3s of bbc's load was a `for` loop waiting); and `load_async`, which had no
+budget at all, now runs under the load budget like everything else.
+
+**Where I stopped, deliberately.** I was three levels into the call graph chasing the last duplicate
+fetches when the session's real wins — a fixed core dump, a 265-site oracle, G_HANG — were still
+uncommitted. That is the pull Part 21 exists to name, and naming it is the discipline: the remaining
+duplicate-work reduction (9 layouts → 2-3) is the next tick's headline, not this one's footnote.

@@ -245,6 +245,7 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
         stylist.flush(&StylesheetGuards::same(&guard));
     }
 
+    CASCADES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let store = ElementDataStore::new();
     let guard = lock.read();
     let guards = StylesheetGuards::same(&guard);
@@ -529,6 +530,9 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
 /// (`@supports`, `@layer`, …) are skipped for now (their inner rules are not applied), matching
 /// the prior flat behavior except that media rules now work.
 #[allow(clippy::type_complexity)]
+
+/// Part 22.3: full-document cascades per navigation. Counted, not assumed.
+pub static CASCADES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 /// **A rule index — so an element only tests rules it could possibly match.**
 ///

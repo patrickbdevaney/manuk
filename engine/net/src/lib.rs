@@ -393,7 +393,37 @@ pub fn request_timeout() -> std::time::Duration {
     })
 }
 
+/// **Part 22.3: no URL is fetched twice for one navigation.** A duplicate fetch is both a
+/// performance bug and a correctness risk (two copies of a resource can disagree). Counted here so
+/// the claim is a measurement rather than an assertion.
+pub static FETCHES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+pub static FETCH_DUPES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static SEEN: OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> = OnceLock::new();
+
+pub fn fetch_stats() -> (usize, usize) {
+    (
+        FETCHES.load(std::sync::atomic::Ordering::Relaxed),
+        FETCH_DUPES.load(std::sync::atomic::Ordering::Relaxed),
+    )
+}
+pub fn reset_fetch_stats() {
+    FETCHES.store(0, std::sync::atomic::Ordering::Relaxed);
+    FETCH_DUPES.store(0, std::sync::atomic::Ordering::Relaxed);
+    if let Some(m) = SEEN.get() {
+        m.lock().unwrap().clear();
+    }
+}
+
 pub async fn fetch(url: &str) -> Result<Response> {
+    FETCHES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    {
+        let seen = SEEN.get_or_init(Default::default);
+        let mut g = seen.lock().unwrap();
+        if !g.insert(url.to_string()) {
+            FETCH_DUPES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            tracing::debug!(%url, "DUPLICATE FETCH for one navigation");
+        }
+    }
     fetch_with_deadline(url, request_timeout()).await
 }
 

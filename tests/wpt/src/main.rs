@@ -585,13 +585,18 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
             });
             std::hint::black_box(&p);
             let total = t.elapsed().as_secs_f64() * 1000.0;
+            let (n, dup) = manuk_net::fetch_stats();
+            let layouts = manuk_layout::LAYOUTS.swap(0, std::sync::atomic::Ordering::Relaxed);
+            let cascades = manuk_css::stylo_engine::CASCADES.swap(0, std::sync::atomic::Ordering::Relaxed);
             if total < best {
                 best = total;
                 println!(
-                    "  load_async {t_load:7.1}ms   finish_loading {:7.1}ms   TOTAL {total:7.1}ms",
+                    "  load_async {t_load:7.1}ms   finish_loading {:7.1}ms   TOTAL {total:7.1}ms   \
+                     fetches {n} (DUP {dup})  LAYOUTS {layouts}  CASCADES {cascades}",
                     total - t_load
                 );
             }
+            manuk_net::reset_fetch_stats();
         }
         println!("build (best of {runs}): {best:.1}ms");
         return;

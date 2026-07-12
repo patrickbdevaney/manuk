@@ -7,8 +7,8 @@
 > the command that measured it. If a line here is stale, that is a compliance failure in itself.
 
 ```
-TICK: 17
-TIER: 0 (Part 21) — two of three Tier-0 items still open
+TICK: 18
+TIER: 0 (Part 21) — ONE of three Tier-0 items still open (the SPA miner)
 UPDATED: 2026-07-12
 ```
 
@@ -17,7 +17,7 @@ UPDATED: 2026-07-12
 | # | Item | Status | The fact |
 |---|------|--------|----------|
 | 1 | Verify wall under 5 minutes | ✅ **MET** | **181s (3m 01s)** worst realistic tick (touch `engine/css`, the shared-type edit that cascades furthest); **57s** warm. Measured by timing `./scripts/verify.sh`. mold/nextest/workspace-hack **not needed** — the target is already met, and doing that work anyway would be infrastructure theatre. Re-measure if it ever crosses 300s. |
-| 2 | Oracle crawl frame at 200–500 sites | ❌ **OPEN** | Currently **20 sites** (`docs/bench/corpus.txt`). A 20-site corpus is an anecdote about the web, not a measurement of it. This is the next thing I do. |
+| 2 | Oracle crawl frame at 200–500 sites | ✅ **DONE** | **265 sites, 15 design-pattern classes** (`docs/bench/oracle-corpus.txt`). `scripts/oracle-crawl.sh` — process-isolated, watchdogged, resumable, snapshot-cached. First run: 129 diffed, 63 discarded (degraded oracle), **73 HUNG**. The cluster ranking is now the ledger. |
 | 3 | Ten SPA starter apps through the Framework Exception Miner | ❌ **OPEN** | **0 apps run.** This is the single largest *unmeasured* unknown in the whole schedule and it is cheap to measure. Not started. |
 
 **Definition of a productive session while TIER 0 is open: Tier 0 advanced.** Not bugs closed, not
@@ -36,7 +36,7 @@ loud rather than quietly following the pull.
 | G_INTERACT | ✅ in the wall | UI-thread stall on tab open/switch/close |
 | F1 / F2 perf floors | ✅ in the wall | cascade ≤40ms, pipeline ≤125ms (asserted, not eyeballed) |
 | **G_SILENT_FAIL** | ❌ **pending** | any caught error on the load/render/script path that is not surfaced |
-| **G_HANG** | ❌ **pending** | a watchdog on every load/interaction test; a hang is a hard fail, not a slow pass |
+| **G_HANG** | ✅ **live** | every oracle site runs in its own process under a watchdog. A timeout is a HARD, COUNTED, ATTRIBUTED failure — never a skipped test. **73/265 sites currently hang.** |
 | **G_SPAWN / G_DEDUP / G_POOL_ISOLATION** | ❌ **pending** | tokio/rayon isolation, duplicate passes, pool contention |
 
 ## Enforcement — compliance is mechanical, not remembered
@@ -56,7 +56,24 @@ loud rather than quietly following the pull.
 - **Tick 12** — in-process automation surface (selectors/wait/assert).
 - **Tick 11** — file uploads.
 
-## Corpus (18 sites — an anecdote, not a measurement; see Tier 0 item 2)
+## THE NUMBER THAT MATTERS RIGHT NOW
+
+```
+73 of 265 sites HANG  (27.5%)     ← a browser that hangs on one site in four is not a browser
+```
+
+Attributed, not guessed: same snapshot, each engine timed separately. bbc.co.uk **26,128ms** vs
+Chromium's 7,695ms. apple.com **5,560ms** vs 287ms (19×). It is not the network and it is not the
+oracle — **it is us, and it is CPU and duplicate work.** Per navigation, measured:
+
+```
+bbc.co.uk:  9 full-document LAYOUTS · 4 full CASCADES · 487 fetches (302 DUPLICATE)
+```
+
+Part 22.3 asked whether we do duplicate work in the call graph. We do, enormously. This is the top of
+the ledger and the next thing after the SPA miner.
+
+## Corpus (18 sites — the OLD frame, kept for per-site fidelity scores)
 
 ```
 MEAN COVERAGE  99.0%   (Bar 1 — of what Chrome renders, what do we render at all)

@@ -174,7 +174,18 @@ async fn fetch_images(
     dom: &Dom,
     base: &str,
 ) -> std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>> {
-    fetch_images_owned(dom, base)
+    fetch_images_except(dom, base, &std::collections::HashSet::new()).await
+}
+
+/// The same, minus the nodes whose image we have ALREADY fetched and decoded for this navigation.
+/// See the call site: this method runs once per dynamic-script round, and without this it re-fetched
+/// and re-decoded every `<img>` on the page every single time.
+async fn fetch_images_except(
+    dom: &Dom,
+    base: &str,
+    already: &std::collections::HashSet<manuk_dom::NodeId>,
+) -> std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>> {
+    fetch_images_owned(dom, base, already)
         .await
         .into_iter()
         .map(|(n, img)| (n, std::rc::Rc::new(img)))
@@ -188,12 +199,14 @@ async fn fetch_images(
 async fn fetch_images_owned(
     dom: &Dom,
     base: &str,
+    already: &std::collections::HashSet<manuk_dom::NodeId>,
 ) -> std::collections::HashMap<manuk_dom::NodeId, manuk_paint::DecodedImage> {
     let mut out: std::collections::HashMap<manuk_dom::NodeId, manuk_paint::DecodedImage> =
         std::collections::HashMap::new();
     let targets: Vec<(manuk_dom::NodeId, String)> = dom
         .descendants(dom.root())
         .filter(|&n| dom.tag_name(n) == Some("img"))
+        .filter(|n| !already.contains(n))
         .filter_map(|n| {
             let src = dom.element(n)?.attr("src")?.trim().to_string();
             if src.is_empty() {
@@ -658,7 +671,12 @@ impl Page {
         fonts: &FontContext,
         viewport_width: f32,
     ) -> usize {
-        let images = fetch_images(&self.dom, &self.final_url).await;
+        // Same discipline for images: `finish_loading` and every script round both call this, and
+        // re-fetching an image we have already decoded is pure waste — and, for a `<img>` whose src
+        // a script has not touched, it is waste on every single round.
+        let already: std::collections::HashSet<manuk_dom::NodeId> =
+            self.images.keys().copied().collect();
+        let images = fetch_images_except(&self.dom, &self.final_url, &already).await;
         self.apply_images(images, fonts, viewport_width)
     }
 
@@ -1616,13 +1634,23 @@ impl Page {
                 _ => None,
             })
             .filter(|url| seen.insert(url.clone()))
+            // **Part 22.3: no URL is fetched twice for one navigation.** This method is called once
+            // by `finish_loading` and then AGAIN after every round of dynamic scripts — and each
+            // call was re-fetching every stylesheet on the page from scratch. Across all phases,
+            // apple.com issued 282 fetches for 58 distinct URLs (224 duplicates, 79%) and bbc.co.uk
+            // issued 484 for 124 (360 duplicates, 74%). The HTTP cache made most of them cheap, which
+            // is exactly why nobody noticed: "cheap" is not "free", and every one still costs a body
+            // clone of a multi-megabyte script.
+            .filter(|url| !self.external_css.contains_key(url))
             .collect();
         let fetched = futures_util::future::join_all(ext_urls.into_iter().map(|url| async move {
             let text = manuk_net::fetch(&url).await.ok().map(|r| r.decoded_text());
             (url, text)
         }))
         .await;
-        let mut external: HashMap<String, String> = HashMap::new();
+        // Start from what we already have — a re-entry must ADD sheets, never rebuild the set from
+        // scratch (which would drop the ones it just decided not to re-fetch).
+        let mut external: HashMap<String, String> = self.external_css.clone();
         for (url, text) in fetched {
             match text {
                 Some(t) => {
@@ -1662,7 +1690,16 @@ impl Page {
         // page the cascade is the single most expensive stage in the pipeline. Correctness did not
         // need it; only the mutated-tree case did.
         if count > 0 || self.dom.has_dirty() {
-            self.apply_stylesheets(&external, fonts, viewport_width);
+            // **Part 22.3: no duplicate tree renders.** `apply_stylesheets` now returns
+            // `RestyleDamage::None` when the cascade's inputs have not moved (same sheets, same
+            // tree). Laying out anyway threw that away: a full-document layout ran after EVERY round
+            // of dynamic scripts whether or not the round changed anything. bbc.co.uk performed
+            // **nine** full-document layouts for one navigation at 257ms each — over two seconds of
+            // relaying-out a tree that had not changed.
+            let damage = self.apply_stylesheets(&external, fonts, viewport_width);
+            if damage == RestyleDamage::None && !self.dom.has_dirty() {
+                return count;
+            }
         } else {
             self.relayout(fonts, viewport_width);
         }
@@ -1949,15 +1986,48 @@ async fn fetch_external_scripts(dom: &mut Dom, base: &str) {
             }
         }
     }
-    for (node, url) in targets {
-        match fetch_html(&url).await {
-            Ok((js, _)) => {
+    // **Fetch in PARALLEL; execute in ORDER.** These were fetched one at a time, in a `for` loop,
+    // each awaiting a full round-trip before the next one started — and each under the *document*
+    // deadline (30s), not the subresource one. bbc.co.uk has dozens of scripts, and that loop was
+    // **9.3 seconds** of its load, all of it spent waiting.
+    //
+    // The classic-script model requires ordered EXECUTION, not ordered fetching. Every browser has
+    // fetched these concurrently since the 2000s; we were the only ones queuing. Execution order is
+    // preserved exactly, because the results are applied to the DOM in document order below.
+    //
+    // The whole phase runs under one deadline as well: `load_async` had no budget at all, so the
+    // 12s budget on `finish_loading` was guarding the back half of a navigation whose front half
+    // could run indefinitely. A page that cannot get its scripts in time renders without them —
+    // which is what a browser does, and is strictly better than not rendering at all.
+    let budget = load_budget();
+    let fetched = match tokio::time::timeout(
+        budget,
+        futures_util::future::join_all(
+            targets
+                .iter()
+                .map(|(n, url)| async move { (*n, manuk_net::fetch(url).await.ok()) }),
+        ),
+    )
+    .await
+    {
+        Ok(f) => f,
+        Err(_) => {
+            tracing::warn!(
+                "script fetch exceeded the {:.0}s load budget — rendering with what arrived",
+                budget.as_secs_f32()
+            );
+            Vec::new()
+        }
+    };
+    for (node, resp) in fetched {
+        match resp {
+            Some(r) => {
+                let js = r.decoded_text();
                 dom.remove_attr(node, "src");
                 let text = dom.create_text(js);
                 dom.append_child(node, text);
-                tracing::debug!(%url, "fetched external script");
             }
-            Err(e) => tracing::warn!(%url, "external script fetch failed: {e:#}"),
+            None => tracing::warn!("external script fetch failed"),
         }
     }
 }
@@ -2024,7 +2094,7 @@ pub async fn prefetch_document(url: &str) -> Result<Loaded> {
             // anywhere inside this async fn would make the whole future `!Send`, which is exactly
             // what pinned image fetching to the UI thread and blocked it.
             let images: HashMap<manuk_dom::NodeId, manuk_paint::DecodedImage> =
-                fetch_images_owned(&dom, &final_url).await;
+                fetch_images_owned(&dom, &final_url, &std::collections::HashSet::new()).await;
 
             // Masks (icons). Scanned from the CSS text rather than the cascade: this thread has no
             // styles, and a URL-keyed cache is all the cascade needs later to bind them to nodes.

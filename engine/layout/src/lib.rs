@@ -478,12 +478,18 @@ struct Ctx<'a> {
 ///
 /// The root box is `<body>` (falling back to `<html>` or the first element), laid
 /// out in an initial containing block of `viewport_width`.
+/// **Part 22.3: how many full-document layouts does ONE navigation perform?** More than one, absent
+/// an explicit re-navigation, is duplicate work. Counted, because the answer turned out to be
+/// "dozens".
+pub static LAYOUTS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 pub fn layout_document(
     dom: &Dom,
     styles: &StyleMap,
     fonts: &FontContext,
     viewport_width: f32,
 ) -> LayoutBox {
+    LAYOUTS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let ctx = Ctx {
         dom,
         styles,
