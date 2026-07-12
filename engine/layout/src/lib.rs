@@ -460,6 +460,9 @@ struct Ctx<'a> {
     /// Memoized **min-content** widths. Computing one lays out the whole subtree, and
     /// shrink-to-fit now asks for it on every probe, so without this it is an O(n²) trap.
     min_content_cache: RefCell<HashMap<NodeId, f32>>,
+    /// Flex/grid items whose **used border-box width taffy has already decided**. Their own `width`
+    /// style must NOT be resolved a second time — see the width resolution in `layout_block`.
+    taffy_item_width: RefCell<HashMap<NodeId, f32>>,
 }
 
 /// Lay out a whole document into a fragment tree, given a viewport width in px.
@@ -478,6 +481,7 @@ pub fn layout_document(
         fonts,
         measure_cache: RefCell::new(HashMap::new()),
         min_content_cache: RefCell::new(HashMap::new()),
+        taffy_item_width: RefCell::new(HashMap::new()),
     };
     let root_el = dom
         .find_first("body")
@@ -1095,22 +1099,42 @@ impl Ctx<'_> {
         // (inline-block, inline-flex, inline-grid), which is atomic and shrinks to fit its content,
         // so a `<button>` hugs its label and an icon button stays icon-sized.
         let extra = ml + mr + pl + pr + bl + br;
-        let mut width = match s.width {
-            Dim::Auto
-                if matches!(
-                    s.display,
-                    Display::InlineBlock | Display::InlineFlex | Display::InlineGrid
-                ) =>
-            {
-                self.shrink_to_fit(node, (cw - extra).max(0.0))
-            }
-            Dim::Auto => (cw - extra).max(0.0),
-            other => other.resolve(cw, (cw - extra).max(0.0)),
+        // **A flex/grid item's width was already decided by taffy — do not resolve it a second time.**
+        //
+        // `extract_placed` hands the item's taffy-assigned width in as `cw`. But `cw` means
+        // *containing block* width everywhere else in this function, so the item's own `width: 30%`
+        // got resolved against it AGAIN: a `width:30%` column in a 1000px flex row came out
+        // 30% of 300 = **90px**. The used width was the SQUARE of the intended one.
+        //
+        // It survived this long because the two most common cases are exactly the two that are
+        // immune to it: `auto` (nothing to re-resolve) and `100%` (100% of 100% is still 100%).
+        // Every *other* percentage — the 30/70 split, the 50/50 column, which is how most page
+        // layouts are actually structured — was silently wrong, and rust-lang.org's `w-30-l`
+        // sidebar is one of them: its "Get Started" button came out 102px against Chrome's 338.
+        //
+        // Taffy's slot is a border box and excludes margins, so the content width is the slot less
+        // this box's own padding and border. `box-sizing` is already accounted for by that
+        // subtraction, so the border-box adjustment below must not run for these.
+        let taffy_known = self.taffy_item_width.borrow().get(&node).copied();
+        let mut width = match taffy_known {
+            Some(border_box) => (border_box - pl - pr - bl - br).max(0.0),
+            None => match s.width {
+                Dim::Auto
+                    if matches!(
+                        s.display,
+                        Display::InlineBlock | Display::InlineFlex | Display::InlineGrid
+                    ) =>
+                {
+                    self.shrink_to_fit(node, (cw - extra).max(0.0))
+                }
+                Dim::Auto => (cw - extra).max(0.0),
+                other => other.resolve(cw, (cw - extra).max(0.0)),
+            },
         };
         // `box-sizing:border-box` — the specified width is the border box, so the content
         // width is that minus padding + border. (`auto` already resolves to content width.)
         let bs_extra_w = if s.box_sizing == BoxSizing::BorderBox { pl + pr + bl + br } else { 0.0 };
-        if s.box_sizing == BoxSizing::BorderBox && s.width != Dim::Auto {
+        if s.box_sizing == BoxSizing::BorderBox && s.width != Dim::Auto && taffy_known.is_none() {
             width -= bs_extra_w;
         }
         width = width.max(0.0);
@@ -2591,7 +2615,11 @@ impl Ctx<'_> {
             (boxx, p.slot.y + p.slot.height)
         } else {
             let mut item_floats = FloatContext::new(abs_x, abs_x + p.slot.width);
+            // Record taffy's verdict BEFORE laying the item out, so `layout_block` uses it instead
+            // of re-resolving the item's own `width` against it.
+            self.taffy_item_width.borrow_mut().insert(p.dom, p.slot.width);
             let r = self.layout_block(p.dom, p.slot.width, Some(p.slot.height), abs_x, abs_y, 0.0, &mut item_floats);
+            self.taffy_item_width.borrow_mut().remove(&p.dom);
             let mut boxx = r.boxx;
             // Taffy sized the item (grow/stretch/track height); when its own height is `auto`,
             // adopt taffy's slot height so it fills its flex line / grid cell.
@@ -3226,6 +3254,49 @@ mod tests {
         let fonts = FontContext::new();
         let root = layout_document(&dom, &styles, &fonts, width);
         (dom, root)
+    }
+
+    /// Regression: **a percentage width on a flex item must not be resolved twice.**
+    ///
+    /// `extract_placed` hands taffy's assigned width to `layout_block` as its `cw`, and `cw` means
+    /// *containing block* width everywhere else in that function — so the item's own `width: 30%`
+    /// was resolved against it a second time and the used width came out as the SQUARE of the
+    /// intended one: 30% of 30% of 1000px = 90px, not 300px.
+    ///
+    /// The reason this needs its own test, and the reason it survived so long, is that the two most
+    /// common cases are exactly the two that are IMMUNE: `auto` has nothing to re-resolve, and
+    /// `100%` of `100%` is still `100%`. Every existing flex test used one of those. Only an
+    /// in-between percentage — the 30/70 split, the 50/50 column, which is how most page layouts are
+    /// actually structured — can see the bug at all, so only an in-between percentage can guard it.
+    #[test]
+    fn a_percentage_width_on_a_flex_item_is_resolved_once_not_twice() {
+        let html = r#"<div class="row">
+            <div class="side"><div class="half"></div></div>
+            <div class="main"></div>
+        </div>"#;
+        let css = ".row{display:flex;width:1000px} .side{width:30%} .main{width:70%} .half{width:50%;height:20px}";
+        let (dom, root) = layout_html(html, css, 1000.0);
+        let rects = root.node_rects(&dom);
+        let w = |class: &str| -> f32 {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("class")) == Some(class))
+                .and_then(|n| rects.get(&n).map(|r| r.width))
+                .unwrap_or_else(|| panic!("no box for .{class}"))
+        };
+        assert!(
+            (w("side") - 300.0).abs() < 1.0,
+            "a 30% flex item of a 1000px row is 300px, got {} — a percentage resolved twice gives \
+             30% of 300 = 90",
+            w("side")
+        );
+        assert!((w("main") - 700.0).abs() < 1.0, "70% of 1000px = 700, got {}", w("main"));
+        // And the item's own children must then resolve THEIR percentages against the corrected
+        // width — the error compounds down the subtree, it does not stop at the item.
+        assert!(
+            (w("half") - 150.0).abs() < 1.0,
+            "50% of the 300px item = 150px, got {} — if the item is wrong, everything inside it is",
+            w("half")
+        );
     }
 
     /// Regression (found via the headless screenshot discipline): `flex: 1` items that contain a
