@@ -336,15 +336,14 @@ and the inference backend**:
 
 Default model: `qwen/qwen3.6-27b` (multimodal, Groq), overridable via `GROQ_MODEL`.
 
-### Runners and keys
+### Runners
 
-- **`agent-run`** (committed) drives the agent with a **single** `GROQ_API_KEY`
-  (falls back to `GROQ_API_KEY` from `.env`).
-- **`agent-run`** is a **local-only** capability harness that cycles
-  `GROQ_API_KEY..N` (one key per test, to spread rate limits) across the full
-  capability set. It is **gitignored** — only the single-key runner is committed.
-  It reuses the exact same `run_task`; it is just a driver.
-- `.env` (holding keys) is gitignored and never committed; see `.env.example`.
+- **`agent-run`** (committed) drives the agent against a single inference backend.
+- Local-only **parallel verification harnesses** exist for capability sweeps and for the
+  differential oracle's delta-debugging queue. They are **gitignored** — only the
+  single-backend runner is committed. They reuse the exact same `run_task`; they are
+  just drivers.
+- Credentials live in `.env`, which is gitignored and never committed; see `.env.example`.
 
 Live capability run (qwen/qwen3.6-27b, screenshots rendered by our own engine):
 

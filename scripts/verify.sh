@@ -63,6 +63,14 @@ if [ -s "$G6HTML" ]; then
   printf '    then stutters on every wheel event is not fast, and G1/G2/G3 cannot see it.\n'
 fi
 
+head_ "G_ALLOC · allocation rate per input event (METHODOLOGY 5.2 — the load bench is BLIND to this)"
+GA=$(cargo test -q -p manuk-page --features spidermonkey --test g_alloc -- --ignored 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GA" ]; then ok "per-event allocation: $GA"; else bad "G_ALLOC failed — an input event allocates per DOM node"; fi
+
+head_ "G_TEARDOWN · no exit path bypasses Drop (METHODOLOGY 5.3 — a hidden crash is a data-loss bug)"
+GT=$(cargo test -q -p manuk-shell --test g_teardown 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GT" ]; then ok "teardown: $GT"; else bad "G_TEARDOWN failed — an exit path skips the profile flush"; fi
+
 head_ "T · crate tests"
 for c in manuk-css manuk-layout manuk-paint manuk-dom manuk-net manuk-agent manuk-shell; do
   R=$(cargo test -q -p "$c" 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)

@@ -135,11 +135,15 @@ pub fn run(url: String, width: u32, measure_frames: Option<usize>) -> Result<()>
     let proxy = event_loop.create_proxy();
     let mut app = App::new(url, width, measure_frames, proxy);
     event_loop.run_app(&mut app).context("running event loop")?;
-    // Fast-exit like a real browser: session + cookies are already flushed on quit, and the
-    // deliberately-leaked SpiderMonkey runtime crashes if its C++ statics run destructors at
-    // process teardown. `exit(0)` skips all destructors cleanly (nothing left needs flushing).
-    let _ = &app;
-    std::process::exit(0);
+    // **Return normally.** This used to `std::process::exit(0)` to skip SpiderMonkey's teardown
+    // crash — and in doing so it skipped every destructor and every line of `main`'s ordered
+    // shutdown, which is where the cookie jar and `localStorage` are flushed to the profile. The
+    // browser was discarding the user's data on every quit and the exit code said 0.
+    //
+    // The teardown crash is fixed at its cause (`JS_ShutDown` now runs, in order). A workaround
+    // that hides a crash is a data-loss bug wearing a disguise, and this one was.
+    drop(app);
+    Ok(())
 }
 
 /// A back-forward-cached page: the fully constructed [`Page`] plus the scroll offset to

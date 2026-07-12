@@ -7,8 +7,7 @@
 /target
 **/*.rs.bk
 
-# The parallel multi-key test harness is a local-only tool (see CLAUDE.md /
-# README): only the single-GROQ_API_KEY runner is committed.
+# Local-only agent tooling. Not part of the shipped engine.
 agent/src/bin/agent-run.rs
 
 # Local render/debug output.
@@ -38,3 +37,10 @@ parley/
 v8/
 
 ladybird/
+# Deep-research provenance for docs/loop/METHODOLOGY.md — local working notes.
+METHODOLOGY.MD
+METHODOLOGY_RESEARCH.MD
+METHODOLOGY_RESULT.MD
+
+agent/src/bin/agent-parallel.rs
+agent/src/bin/parity-verify.rs
