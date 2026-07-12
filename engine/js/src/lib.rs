@@ -196,6 +196,38 @@ pub fn run_document_scripts(
 /// `window.open(...)` requests since the last call, each `(win_id, url)` — the host opens each as
 /// a new tab/window (recording `win_id → tab` for `postMessage` routing). Empty without the JS
 /// feature.
+/// Publish the viewport's scroll offset + the focused element into the JS world before a re-entry.
+#[cfg(feature = "_sm")]
+pub fn set_view_state(scroll_x: f32, scroll_y: f32, active: Option<manuk_dom::NodeId>) {
+    dom_bindings::set_view_state(scroll_x, scroll_y, active);
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn set_view_state(_scroll_x: f32, _scroll_y: f32, _active: Option<manuk_dom::NodeId>) {}
+
+/// Scroll requests the page made (`scrollTo`, `scrollBy`, `scrollIntoView`) — the host performs
+/// them, because the host owns the viewport.
+#[cfg(feature = "_sm")]
+pub fn take_scrolls() -> Vec<(f32, f32)> {
+    dom_bindings::take_scrolls()
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn take_scrolls() -> Vec<(f32, f32)> {
+    Vec::new()
+}
+
+/// Focus requests the page made (`el.focus()`, `el.blur()`).
+#[cfg(feature = "_sm")]
+pub fn take_focus_requests() -> Vec<Option<manuk_dom::NodeId>> {
+    dom_bindings::take_focus_requests()
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn take_focus_requests() -> Vec<Option<manuk_dom::NodeId>> {
+    Vec::new()
+}
+
 #[cfg(feature = "_sm")]
 pub fn take_window_opens() -> Vec<(u64, String)> {
     dom_bindings::take_pending_window_opens()

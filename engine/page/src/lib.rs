@@ -649,6 +649,31 @@ impl Page {
         ran
     }
 
+    /// Publish the viewport's scroll offset and the focused element into the JS world.
+    ///
+    /// A page reads `window.scrollY` to decide what to render, which header to stick, and when to
+    /// load the next screenful. It must see the CURRENT offset, not the one at load — so this is
+    /// called before every re-entry into script.
+    pub fn publish_view_state(
+        &self,
+        scroll_x: f32,
+        scroll_y: f32,
+        active: Option<manuk_dom::NodeId>,
+    ) {
+        manuk_js::set_view_state(scroll_x, scroll_y, active);
+    }
+
+    /// Scroll requests the page's script made (`scrollTo`, `scrollBy`, `scrollIntoView`). The host
+    /// owns the viewport, so a script asks and the shell performs — the same shape as `window.open`.
+    pub fn take_scroll_requests(&self) -> Vec<(f32, f32)> {
+        manuk_js::take_scrolls()
+    }
+
+    /// Focus requests the page's script made (`el.focus()`, `el.blur()`).
+    pub fn take_focus_requests(&self) -> Vec<Option<manuk_dom::NodeId>> {
+        manuk_js::take_focus_requests()
+    }
+
     /// The computed styles, keyed by node — the input to layout, and the thing to look at when a
     /// box is the wrong size (a filled box vs a hugged one is a `display` question, not a layout
     /// bug). Read-only; used by the render/box-dump harness.
@@ -2315,6 +2340,42 @@ mod js_interactive_tests {
             "a style written by script must drive the CASCADE, not just the attribute \
              (got {w19}px, want 123px)"
         );
+
+        // (20) **Events the page constructs itself.** A page does not merely *listen* — component
+        // libraries signal through `CustomEvent`, and `dispatchEvent(new Event('input'))` is how a
+        // framework tells a control it changed. `dispatchEvent` took only a *string*, so an Event
+        // object was coerced to `"[object Object]"` and its whole payload — detail, key,
+        // coordinates — was thrown away. `new CustomEvent(...)` was a ReferenceError besides.
+        //
+        // Also asserted: `stopPropagation` stops the WALK but not the remaining listeners on the
+        // same node (that is `stopImmediatePropagation`) — conflating them silences handlers that
+        // should still run.
+        let html20 = r#"<!doctype html><html><body>
+            <div id="host"><button id="b">go</button></div><p id="o">?</p>
+            <script>
+              var log = [];
+              var host = document.getElementById('host');
+              var b = document.getElementById('b');
+              host.addEventListener('pick', function (e) { log.push('detail=' + e.detail + ',trusted=' + e.isTrusted); });
+              b.addEventListener('click', function (e) { log.push('phase=' + e.eventPhase + ',x=' + e.clientX); e.stopPropagation(); });
+              host.addEventListener('click', function () { log.push('LEAKED'); });
+              b.dispatchEvent(new CustomEvent('pick', { bubbles: true, detail: 42 }));
+              b.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 5 }));
+              b.focus();
+              log.push('scrollY=' + window.scrollY);
+              log.push('active=' + document.activeElement.id);
+              document.getElementById('o').textContent = log.join('|');
+            </script></body></html>"#;
+        let page20 = Page::load(html20, "https://example.test/", &fonts, 600.0);
+        let r20 = page20.dom().root();
+        let o20 = manuk_css::query_selector_all(page20.dom(), r20, "#o")[0];
+        assert_eq!(
+            page20.dom().text_content(o20),
+            "detail=42,trusted=false|phase=2,x=5|scrollY=0|active=b",
+            "a page-constructed event must keep its payload, bubble, and be untrusted; \
+             stopPropagation must stop the walk (no LEAKED); focus/activeElement must work"
+        );
+        drop(page20);
 
         // Tear SpiderMonkey down before this process exits, exactly as the shell and the harness do.
         // Every page above is out of scope by now, so no rooted object outlives its runtime. Leaving

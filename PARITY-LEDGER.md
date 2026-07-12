@@ -153,9 +153,9 @@ SpiderMonkey gives us the *language* for free. Everything below is the **platfor
 | ❌ | **`fetch` / `XMLHttpRequest`** (real) | **P0** | queued to the host but not resolved — every SPA data load |
 | ❌ | `FormData`, `URL`, `URLSearchParams`, `Headers`, `Blob`, `File` | **P0** | |
 | ❌ | `IntersectionObserver`, `ResizeObserver` | **P0** | lazy-loading, infinite scroll, sticky headers — huge on real-time feeds |
-| ❌ | `Event`/`CustomEvent` constructors; Keyboard/Mouse/Pointer/Touch event detail | **P0** | we synthesise clicks but pages cannot construct or read events properly |
-| ❌ | `scrollTo`/`scrollBy`/`scrollIntoView`, `window.scrollY`, `scroll` events | **P0** | virtualized feeds are driven entirely by scroll |
-| ❌ | `focus()` / `blur()` / `document.activeElement` / tab order | **P0** | keyboard operability |
+| ✅ | `Event`/`CustomEvent`/`MouseEvent`/`KeyboardEvent`/`PointerEvent`/`InputEvent` constructors | 🟡 | Tick 32. `dispatchEvent` took only a *string* — an Event object was coerced to `"[object Object]"`. No Touch events yet |
+| 🟡 | `scrollTo`/`scrollBy`/`scrollIntoView`, `window.scrollX/Y` | **P0** | Tick 32 — the script reads the live offset and *requests* a scroll; the shell performs it. **Still missing: `scroll` EVENTS** (a feed cannot know it was scrolled) |
+| 🟡 | `focus()` / `blur()` / `document.activeElement` | P1 | Tick 32. **Still missing: tab order / keyboard traversal** |
 | ❌ | `structuredClone`, `queueMicrotask`, `requestIdleCallback` | P1 | |
 | ❌ | Web Workers | P1 | |
 | ❌ | WebSocket / EventSource | P1 | live feeds |

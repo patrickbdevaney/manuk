@@ -453,10 +453,16 @@ impl App {
         let mut prevented = false;
         if let Some(hit) = hit {
             let width = self.viewport.width;
+            let (sy, focus) = (self.scroll_y, self.focused_input);
             if let Some(page) = self.page.as_mut() {
+                // The handler is about to read `window.scrollY` and `document.activeElement`; give
+                // it the CURRENT ones, not the ones from page load.
+                page.publish_view_state(0.0, sy, focus);
                 prevented = !page.dispatch_click(hit, &self.fonts, width);
             }
         }
+        // A handler may have scrolled the page (`scrollTo`, `scrollIntoView`) or moved focus.
+        self.apply_view_requests();
         // A handler may have called window.open — open those as new tabs.
         self.handle_window_opens();
         // A handler may have issued fetch/XHR — perform them and settle the page's Promises.
@@ -1866,6 +1872,25 @@ impl App {
         // Persist login cookies alongside the session so they survive a restart.
         manuk_net::save_cookies();
         manuk_net::webstorage::save();
+    }
+
+    /// Apply the view changes a script asked for: scrolling and focus. The host owns the viewport
+    /// and the caret, so a script *requests* and the shell *performs* — which is also what keeps a
+    /// hostile page from moving the user's view behind their back at will.
+    fn apply_view_requests(&mut self) {
+        let (scrolls, focuses) = match self.page.as_ref() {
+            Some(p) => (p.take_scroll_requests(), p.take_focus_requests()),
+            None => return,
+        };
+        if let Some(&(_, y)) = scrolls.last() {
+            let max = (self.viewport.content_height - self.viewport.height).max(0.0);
+            self.scroll_y = y.clamp(0.0, max);
+            self.needs_paint = true;
+        }
+        if let Some(&f) = focuses.last() {
+            self.focused_input = f;
+            self.needs_paint = true;
+        }
     }
 
     /// Focus a tab and **wake it on focus**: a hibernated (restored/background) tab holds no

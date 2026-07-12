@@ -82,6 +82,32 @@ thread_local! {
     /// A reflector's *node id* is stable, so that stays in its slot. The arena pointer is not, so it
     /// lives here instead — set once per entry (load / dispatch / eval), read by every binding.
     static CURRENT_DOM: std::cell::Cell<*mut Dom> = const { std::cell::Cell::new(std::ptr::null_mut()) };
+
+    /// The page's current scroll offset, published before each re-entry into JS. Virtualized feeds,
+    /// sticky headers, infinite scroll and "back to top" buttons are all driven by reading this.
+    static SCROLL: std::cell::Cell<(f32, f32)> = const { std::cell::Cell::new((0.0, 0.0)) };
+    /// Scroll requests the page made — the host performs them (it owns the viewport).
+    static PENDING_SCROLLS: std::cell::RefCell<Vec<(f32, f32)>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// The focused element, and focus requests the page made.
+    static ACTIVE_ELEMENT: std::cell::Cell<Option<NodeId>> = const { std::cell::Cell::new(None) };
+    static PENDING_FOCUS: std::cell::RefCell<Vec<Option<NodeId>>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Publish the viewport's scroll offset and the focused element into the JS world. Called before
+/// every re-entry, so a page always reads the *current* state rather than the state at load.
+pub fn set_view_state(scroll_x: f32, scroll_y: f32, active: Option<NodeId>) {
+    SCROLL.with(|c| c.set((scroll_x, scroll_y)));
+    ACTIVE_ELEMENT.with(|c| c.set(active));
+}
+
+/// Drain the scroll requests a page made (`scrollTo`, `scrollBy`, `scrollIntoView`).
+pub fn take_scrolls() -> Vec<(f32, f32)> {
+    PENDING_SCROLLS.with(|q| std::mem::take(&mut *q.borrow_mut()))
+}
+
+/// Drain the focus requests a page made (`el.focus()`, `el.blur()`).
+pub fn take_focus_requests() -> Vec<Option<NodeId>> {
+    PENDING_FOCUS.with(|q| std::mem::take(&mut *q.borrow_mut()))
 }
 
 /// Point every DOM binding at `dom` for the duration of this re-entry into JS.
@@ -463,6 +489,7 @@ unsafe fn define_members(
         prop(c"body", doc_get_body, None);
         prop(c"head", doc_get_head, None);
         prop(c"cookie", doc_get_cookie, Some(doc_set_cookie));
+        prop(c"activeElement", doc_get_active_element, None);
         def(c"getElementById", doc_get_by_id, 1);
         def(c"querySelector", doc_query, 1);
         def(c"querySelectorAll", doc_query_all, 1);
@@ -544,6 +571,9 @@ unsafe fn define_members(
         def(c"matches", el_matches, 1);
         def(c"closest", el_closest, 1);
         def(c"contains", el_contains, 1);
+        def(c"scrollIntoView", el_scroll_into_view, 0);
+        def(c"focus", el_focus, 0);
+        def(c"blur", el_blur, 0);
     }
 }
 
@@ -1125,11 +1155,24 @@ unsafe extern "C" fn el_dispatch_event(cx: *mut RawJSContext, argc: u32, vp: *mu
         *vp = BooleanValue(false);
         return true;
     };
-    let Some(ty) = arg_string(cx, vp, argc, 0) else {
+    if argc == 0 {
         *vp = BooleanValue(false);
         return true;
-    };
-    let script = format!("__dispatchEvent({}, {})", node.0, js_string_literal(&ty));
+    }
+    // The argument is an **Event object** in every real use (`dispatchEvent(new CustomEvent(...))`),
+    // and coercing it to a string would throw away its `detail`, its key, its coordinates — the
+    // whole payload. Hand the value itself across, via a global slot, rather than its stringform.
+    // (A bare string is still accepted; the JS side takes either.)
+    let arg = *vp.add(2);
+    rooted!(in(cx) let v = arg);
+    rooted!(in(cx) let global = mozjs::jsapi::CurrentGlobalOrNull(cx));
+    JS_SetProperty(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__pendingEvent".as_ptr(),
+        v.handle(),
+    );
+    let script = format!("__dispatchEvent({}, __pendingEvent)", node.0);
     let ran = eval_in_current_global(cx, &script)
         .map(|v| v.is_boolean() && v.to_boolean())
         .unwrap_or(false);
@@ -1371,6 +1414,87 @@ reflect_attr!(el_get_content, el_set_content, "content");
 reflect_attr!(el_get_media, el_set_media, "media");
 reflect_attr!(el_get_srcset, el_set_srcset, "srcset");
 reflect_attr!(el_get_html_for, el_set_html_for, "for");
+
+/// `__scrollState()` → `[scrollX, scrollY, innerWidth-independent]`. Read by `window.scrollX/Y`.
+unsafe extern "C" fn host_scroll_state(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let (x, y) = SCROLL.with(|c| c.get());
+    match eval_in_current_global(cx, &format!("[{x},{y}]")) {
+        Some(v) => *vp = v,
+        None => *vp = NullValue(),
+    }
+    true
+}
+
+/// `__scrollTo(x, y)` — a REQUEST. The host owns the viewport, so the page asks and the shell
+/// performs it, exactly as with `window.open`.
+unsafe extern "C" fn host_scroll_to(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let x = arg_f64(cx, vp, argc, 0).unwrap_or(0.0) as f32;
+    let y = arg_f64(cx, vp, argc, 1).unwrap_or(0.0) as f32;
+    PENDING_SCROLLS.with(|q| q.borrow_mut().push((x, y)));
+    *vp = UndefinedValue();
+    true
+}
+
+/// `element.scrollIntoView()` — resolve the element's box from the layout snapshot and ask the host
+/// to put it at the top of the viewport.
+unsafe extern "C" fn el_scroll_into_view(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    if let Some((_, node)) = this_node(vp) {
+        if let Some(r) = LAYOUT_RECTS.with(|l| l.borrow().get(&node).copied()) {
+            PENDING_SCROLLS.with(|q| q.borrow_mut().push((r[0], r[1])));
+        }
+    }
+    let _ = cx;
+    *vp = UndefinedValue();
+    true
+}
+
+/// `element.focus()` / `.blur()` — a request; the host owns the focus ring and the caret.
+unsafe extern "C" fn el_focus(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    if let Some((_, node)) = this_node(vp) {
+        PENDING_FOCUS.with(|q| q.borrow_mut().push(Some(node)));
+        ACTIVE_ELEMENT.with(|c| c.set(Some(node)));
+    }
+    let _ = cx;
+    *vp = UndefinedValue();
+    true
+}
+
+unsafe extern "C" fn el_blur(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    if this_node(vp).is_some() {
+        PENDING_FOCUS.with(|q| q.borrow_mut().push(None));
+        ACTIVE_ELEMENT.with(|c| c.set(None));
+    }
+    let _ = cx;
+    *vp = UndefinedValue();
+    true
+}
+
+/// `document.activeElement`.
+unsafe extern "C" fn doc_get_active_element(
+    cx: *mut RawJSContext,
+    _argc: u32,
+    vp: *mut Value,
+) -> bool {
+    match (this_node(vp), ACTIVE_ELEMENT.with(|c| c.get())) {
+        (Some((dom, _)), Some(n)) => return_node_or_null(cx, vp, dom, Some(n)),
+        _ => *vp = NullValue(),
+    }
+    true
+}
+
+/// Extract numeric argument `i`, or `None`.
+unsafe fn arg_f64(cx: *mut RawJSContext, vp: *mut Value, argc: u32, i: u32) -> Option<f64> {
+    if i >= argc {
+        return None;
+    }
+    let v = *vp.add(2 + i as usize);
+    if v.is_number() {
+        Some(v.to_number())
+    } else {
+        let _ = cx;
+        None
+    }
+}
 
 /// `element.matches(sel)` — does this element match the selector?
 unsafe extern "C" fn el_matches(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
@@ -1631,6 +1755,22 @@ pub unsafe fn install(
         c"__storage".as_ptr(),
         Some(host_storage),
         4,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__scrollState".as_ptr(),
+        Some(host_scroll_state),
+        0,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__scrollTo".as_ptr(),
+        Some(host_scroll_to),
+        2,
         0,
     );
     JS_DefineFunction(
@@ -2274,24 +2414,38 @@ const LISTENER_PRELUDE: &str = r#"
     // A real Event with capture/bubble propagation, target/currentTarget, preventDefault
     // and stopPropagation. Returns false iff preventDefault was called (so the engine can
     // decide whether to run the default action).
-    globalThis.__dispatchEvent = function(nid, type) {
+    globalThis.__dispatchEvent = function(nid, typeOrEvent) {
         var target = (globalThis.__nodes && __nodes[nid]) || null;
         // Ancestor path: target, parent, ... root.
         var path = [];
         for (var cur = target; cur; cur = cur.parentNode) path.push(cur);
-        var ev = {
-            type: type, target: target, currentTarget: null, eventPhase: 0,
-            bubbles: true, cancelable: true, defaultPrevented: false, _stop: false,
-            preventDefault: function () { this.defaultPrevented = true; },
-            stopPropagation: function () { this._stop = true; },
-            stopImmediatePropagation: function () { this._stop = true; }
-        };
+        // The argument is either a type string (a trusted event the engine synthesised) or an
+        // Event the PAGE constructed and passed to `dispatchEvent`. In the second case the object
+        // is the event: its `detail`, its key, its coordinates all have to survive.
+        var supplied = (typeOrEvent && typeof typeOrEvent === 'object') ? typeOrEvent : null;
+        var type = supplied ? supplied.type : typeOrEvent;
+        var ev = supplied || {};
+        ev.type = type;
+        ev.target = target;
+        ev.currentTarget = null;
+        ev.eventPhase = 0;
+        if (ev.bubbles === undefined) ev.bubbles = true;
+        if (ev.cancelable === undefined) ev.cancelable = true;
+        if (ev.isTrusted === undefined) ev.isTrusted = !supplied;
+        ev.defaultPrevented = false;
+        ev._stop = false;
+        ev._stopImmediate = false;
+        ev.preventDefault = function () { if (this.cancelable) this.defaultPrevented = true; };
+        ev.stopPropagation = function () { this._stop = true; };
+        ev.stopImmediatePropagation = function () { this._stop = true; this._stopImmediate = true; };
         var invoke = function (node, phase) {
             if (!node || ev._stop) return;
             var arr = __listeners[node.__nodeId + ':' + type + ':' + phase];
             if (!arr) return;
             ev.currentTarget = node;
-            for (var i = 0; i < arr.length && !ev._stop; i++) {
+            // `stopPropagation` stops the WALK; only `stopImmediatePropagation` stops the remaining
+            // listeners on this same node. Conflating them silences handlers that should still run.
+            for (var i = 0; i < arr.length && !ev._stopImmediate; i++) {
                 try { arr[i].call(node, ev); } catch (e) {}
             }
         };
@@ -2377,6 +2531,70 @@ const WINDOW_PRELUDE: &str = r#"
         };
         if (typeof g.localStorage === 'undefined') g.localStorage = mkStorage('local');
         if (typeof g.sessionStorage === 'undefined') g.sessionStorage = mkStorage('session');
+
+        // ---- Event constructors -------------------------------------------------------------
+        // A page cannot merely *listen*; it constructs and dispatches events of its own. Component
+        // libraries signal through CustomEvent, and `dispatchEvent(new Event('input'))` is how
+        // frameworks tell a control it changed. Without these, `new CustomEvent(...)` is a
+        // ReferenceError that takes the rest of the script with it.
+        var defEvent = function (name, extraDefaults) {
+            if (typeof g[name] !== 'undefined') return;
+            g[name] = function (type, init) {
+                init = init || {};
+                this.type = String(type);
+                this.bubbles = !!init.bubbles;
+                this.cancelable = !!init.cancelable;
+                this.composed = !!init.composed;
+                this.defaultPrevented = false;
+                this.isTrusted = false;
+                this.target = null;
+                this.currentTarget = null;
+                this.eventPhase = 0;
+                this.timeStamp = 0;
+                for (var k in extraDefaults) {
+                    this[k] = (init[k] !== undefined) ? init[k] : extraDefaults[k];
+                }
+                this.preventDefault = function () { if (this.cancelable) this.defaultPrevented = true; };
+                this.stopPropagation = function () { this._stop = true; };
+                this.stopImmediatePropagation = function () { this._stop = true; this._stopImmediate = true; };
+            };
+        };
+        defEvent('Event', {});
+        defEvent('CustomEvent', { detail: null });
+        defEvent('MouseEvent', {
+            clientX: 0, clientY: 0, screenX: 0, screenY: 0, pageX: 0, pageY: 0,
+            button: 0, buttons: 0, altKey: false, ctrlKey: false, metaKey: false, shiftKey: false
+        });
+        defEvent('PointerEvent', { clientX: 0, clientY: 0, pointerId: 1, pointerType: 'mouse', button: 0 });
+        defEvent('KeyboardEvent', {
+            key: '', code: '', keyCode: 0, which: 0, repeat: false,
+            altKey: false, ctrlKey: false, metaKey: false, shiftKey: false
+        });
+        defEvent('InputEvent', { data: null, inputType: '' });
+        defEvent('FocusEvent', { relatedTarget: null });
+
+        // ---- Scrolling ----------------------------------------------------------------------
+        // Reading the scroll offset is how virtualized feeds, sticky headers, infinite scroll and
+        // "back to top" buttons all work. The host owns the viewport, so a scroll is a REQUEST.
+        var readScroll = function () { try { return g.__scrollState() || [0, 0]; } catch (e) { return [0, 0]; } };
+        Object.defineProperty(g, 'scrollX', { get: function () { return readScroll()[0]; }, configurable: true });
+        Object.defineProperty(g, 'scrollY', { get: function () { return readScroll()[1]; }, configurable: true });
+        Object.defineProperty(g, 'pageXOffset', { get: function () { return readScroll()[0]; }, configurable: true });
+        Object.defineProperty(g, 'pageYOffset', { get: function () { return readScroll()[1]; }, configurable: true });
+        g.scrollTo = function (a, b) {
+            var x, y;
+            if (a && typeof a === 'object') { x = a.left || 0; y = a.top || 0; }
+            else { x = a || 0; y = b || 0; }
+            g.__scrollTo(Number(x) || 0, Number(y) || 0);
+        };
+        g.scroll = g.scrollTo;
+        g.scrollBy = function (a, b) {
+            var cur = readScroll();
+            var dx, dy;
+            if (a && typeof a === 'object') { dx = a.left || 0; dy = a.top || 0; }
+            else { dx = a || 0; dy = b || 0; }
+            g.__scrollTo(cur[0] + (Number(dx) || 0), cur[1] + (Number(dy) || 0));
+        };
         // -----------------------------------------------------------------------------------
 
         var mk = function (level) {
