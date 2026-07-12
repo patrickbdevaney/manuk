@@ -306,3 +306,28 @@ Remaining P0, ordered by measured blast radius:
 9. **DEBT-2 / DEBT-4** — the gate and the shipping path must be the same browser.
 
 *Each entry above becomes a tick. A tick that has not run `scripts/verify.sh` has not landed.*
+
+## OPEN — old.reddit.com: a flat #888888 fill that is NOT in the display list (2026-07-12)
+
+Post titles now render (fixed: anonymous boxes were stranded in stacking layer 0 and buried under
+their ancestor's background). What remains is stranger and is written down rather than guessed at.
+
+A flat `#888888` region covers ~18,000px of each sticky post. Every probe says it should not exist:
+
+  * The display list for that band contains exactly the right items and nothing else — the body
+    background `#e8e8be`, the `BackgroundImage 315x330 [0 0 1200x2432]`, the content `#ffffff`, the
+    post `#f7f5ff`, and the flair chip `RoundRect #f5f5f5 [228 281 273x13]`. **There is no grey item.**
+  * No `Rect`, `RoundRect`, `MaskedRect` or `Shadow` anywhere in the list carries `#888888`.
+  * No decoded image is a flat grey (`boxes --images` reports flat-fill decodes explicitly).
+  * The flair chip itself rasterizes correctly — `#f5f5f5` appears at exactly y=282..293, its right
+    rows — with the grey filling above and below it.
+
+So the raster is producing a colour the display list never asked for. The probe builds its list with
+`DisplayList::build_with_images`; the real render goes through `CpuPainter::with_layers` with the
+page's z-index AND **clip** maps. That is the only difference left standing, which makes the clip
+path the first place to look — but it has not been demonstrated, and this note is deliberately not
+pretending otherwise.
+
+Not chased further because reddit is at 94.7% structural coverage and this is one site's cosmetic
+artifact, while page-load latency and broad-web parity are worth more. Next step is to render once
+through each painter and diff the two canvases, which localises it in one run.

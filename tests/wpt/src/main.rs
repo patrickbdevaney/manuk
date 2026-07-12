@@ -564,12 +564,65 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
         }
     }
 
+    // `--images` — every decoded bitmap the page actually got, with its box and whether its pixels
+    // are a single flat colour (a decode that "succeeded" into a grey rectangle looks exactly like a
+    // successful decode from every angle except the screen).
+    if args.iter().any(|a| a == "--images") {
+        let rects = page.root_box.node_rects(page.dom());
+        let dom = page.dom();
+        println!("{:<28} {:<12} {:<22} {}", "element", "natural", "pixels", "box");
+        for (&n, img) in page.decoded_images() {
+            let tag = dom.tag_name(n).unwrap_or("?");
+            let cls = dom
+                .element(n)
+                .and_then(|e| e.attr("class"))
+                .unwrap_or("")
+                .split_whitespace()
+                .next()
+                .unwrap_or("");
+            let px = &img.rgba;
+            let flat = px.len() >= 4 && px.chunks_exact(4).all(|c| c[..3] == px[..3]);
+            let desc = if flat && px.len() >= 4 {
+                format!("FLAT #{:02x}{:02x}{:02x}", px[0], px[1], px[2])
+            } else {
+                "(real content)".to_string()
+            };
+            let bx = rects
+                .get(&n)
+                .map(|r| format!("[{:.0} {:.0} {:.0}x{:.0}]", r.x, r.y, r.width, r.height))
+                .unwrap_or_else(|| "(no box)".into());
+            println!(
+                "{:<28} {:<12} {desc:<22} {bx}",
+                format!("{tag}.{cls}"),
+                format!("{}x{}", img.width, img.height)
+            );
+        }
+        return;
+    }
     // `--paint SUBSTR` — what the RASTERIZER is actually asked to draw. The gap between "the box is
     // laid out correctly" and "the user can see it" is where invisible-content bugs live, and no
     // geometry probe can see into it.
     if let Some(want) = flag(args, "--paint") {
         let dl = manuk_paint::DisplayList::build_with_images(&page.root_box, page.decoded_images());
         let mut n = 0;
+        if want == "IMAGES" {
+            for it in &dl.items {
+                match it {
+                    manuk_paint::DisplayItem::Image { rect, image } => println!(
+                        "IMAGE      {}x{} -> [{:.0} {:.0} {:.0}x{:.0}]  (STRETCHED to the box)",
+                        image.width, image.height, rect.x, rect.y, rect.width, rect.height
+                    ),
+                    manuk_paint::DisplayItem::BackgroundImage { rect, image, size, repeat, .. } => {
+                        println!(
+                            "BACKGROUND {}x{} -> [{:.0} {:.0} {:.0}x{:.0}]  size={size:?} repeat={repeat:?}",
+                            image.width, image.height, rect.x, rect.y, rect.width, rect.height
+                        )
+                    }
+                    _ => {}
+                }
+            }
+            return;
+        }
         for it in &dl.items {
             if let manuk_paint::DisplayItem::Text { x, baseline, text, style } = it {
                 if text.contains(want) {
@@ -628,10 +681,15 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
                                 } else {
                                     ""
                                 };
+                                let bg = s
+                                    .background_color
+                                    .filter(|b| b.a > 0)
+                                    .map(|b| format!(" bg=#{:02x}{:02x}{:02x}", b.r, b.g, b.b))
+                                    .unwrap_or_default();
                                 (
                                     format!("{:?}", s.display),
                                     format!(
-                                        " #{:02x}{:02x}{:02x}{}{}",
+                                        " #{:02x}{:02x}{:02x}{}{bg}{}",
                                         c.r,
                                         c.g,
                                         c.b,
