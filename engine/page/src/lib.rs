@@ -2543,6 +2543,51 @@ mod js_interactive_tests {
         );
         drop(page21);
 
+        // (22) **State pseudo-classes, and the URL decomposition IDL.** Two gaps that each killed a
+        // whole class of page.
+        //
+        // `:checked` is the CSS-only interactivity primitive — `#toggle:checked ~ .panel` is how a
+        // large part of the web builds a menu, an accordion, a dropdown or a sidebar with NO
+        // JavaScript at all. The shipping cascade answered `false` to every pseudo-class, so every
+        // one of those was frozen shut.
+        //
+        // `a.protocol` is not obscure either: a link is the web's canonical URL object. mdbook's
+        // table-of-contents script does `a.protocol.replace(...)`; with `protocol` undefined that is
+        // a TypeError, the script dies, and the navigation column of every mdbook site on the
+        // internet never gets built.
+        let html22 = r#"<!doctype html><html><body>
+            <style>#t:not(:checked) ~ #s { display: none } #s { height: 40px }</style>
+            <input type="checkbox" id="t">
+            <div id="s">panel</div>
+            <a id="a" href="/x/y?q=1#f">link</a>
+            <p id="o">?</p>
+            <script>
+              document.getElementById('t').checked = true;
+              var a = document.getElementById('a');
+              document.getElementById('o').textContent =
+                [a.protocol, a.hostname, a.pathname, a.search, a.hash,
+                 document.scrollingElement.tagName, document.body.clientWidth > 0].join('|');
+            </script></body></html>"#;
+        let page22 = Page::load(html22, "https://ex.test/base/", &fonts, 800.0);
+        let r22 = page22.dom().root();
+        let o22 = manuk_css::query_selector_all(page22.dom(), r22, "#o")[0];
+        assert_eq!(
+            page22.dom().text_content(o22),
+            "https:|ex.test|/x/y|?q=1|#f|HTML|true",
+            "a link is a URL object; document.scrollingElement is <html>; body has a width"
+        );
+        // The checkbox hack: a script set `.checked`, so `:checked` must now MATCH and the panel
+        // must be revealed. This is the assertion that a whole class of JS-free UI depends on.
+        let s22 = manuk_css::query_selector_all(page22.dom(), r22, "#s")[0];
+        let h22 = page22.root_box.node_rects(page22.dom()).get(&s22).map(|r| r.height);
+        assert_eq!(
+            h22,
+            Some(40.0),
+            "`#t:checked ~ #s` must reveal the panel once a script checks the box — the CSS-only \
+             toggle is how much of the web builds menus and sidebars with no JS at all"
+        );
+        drop(page22);
+
         // Tear SpiderMonkey down before this process exits, exactly as the shell and the harness do.
         // Every page above is out of scope by now, so no rooted object outlives its runtime. Leaving
         // the engine up means its C++ static destructors run at exit against a live context and

@@ -207,6 +207,19 @@ mod selector_impl {
     use selectors::{Element, OpaqueElement};
     use stylo::selector_parser::SelectorImpl;
 
+    /// Which elements a `:disabled`/`:enabled`/`:required` selector may apply to at all.
+    fn is_form_control(tag: &str) -> bool {
+        matches!(
+            tag,
+            "input" | "select" | "textarea" | "button" | "fieldset" | "optgroup" | "option"
+        )
+    }
+
+    /// Which elements `:read-write` can describe.
+    fn is_editable(tag: &str) -> bool {
+        matches!(tag, "input" | "textarea")
+    }
+
     /// Compare `a` and `b` under the requested case sensitivity.
     fn eq_case(a: &str, b: &str, case: CaseSensitivity) -> bool {
         match case {
@@ -294,12 +307,68 @@ mod selector_impl {
             }
         }
 
+        /// State pseudo-classes.
+        ///
+        /// This returned `false` for **every** pseudo-class, which is not a small omission: the
+        /// "checkbox hack" — `#toggle:checked ~ .panel` — is how a large part of the web builds a
+        /// menu, an accordion, a dropdown or a sidebar **without any JavaScript at all**. With
+        /// `:checked` never matching, every one of those is stuck in its closed state forever.
+        /// mdbook's sidebar is exactly this, so the navigation column of every mdbook site on the
+        /// internet was translated off-screen and stayed there.
+        ///
+        /// The statically-determinable ones are answered from the DOM. The genuinely *dynamic* ones
+        /// (`:hover`, `:active`, `:focus`) are answered `false`, which is the correct answer for a
+        /// static render — a page is not being hovered when it is laid out — and is where the shell
+        /// will later feed real state.
         fn match_non_ts_pseudo_class(
             &self,
-            _pc: &stylo::selector_parser::NonTSPseudoClass,
+            pc: &stylo::selector_parser::NonTSPseudoClass,
             _context: &mut MatchingContext<'_, SelectorImpl>,
         ) -> bool {
-            false // pseudo-classes (:hover/:focus/:link…) not modelled yet
+            use stylo::selector_parser::NonTSPseudoClass as P;
+            let tag = self.dom.tag_name(self.node).unwrap_or("");
+            let has = |a: &str| self.attr(a).is_some();
+            match pc {
+                // A checkbox/radio is checked; an <option> is selected. This is the one that
+                // matters most: it is the CSS-only interactivity primitive.
+                P::Checked => match tag {
+                    "input" => has("checked"),
+                    "option" => has("selected"),
+                    _ => false,
+                },
+                P::Disabled => is_form_control(tag) && has("disabled"),
+                P::Enabled => is_form_control(tag) && !has("disabled"),
+                P::Required => is_form_control(tag) && has("required"),
+                P::Optional => is_form_control(tag) && !has("required"),
+                P::ReadOnly => has("readonly") || !is_editable(tag),
+                P::ReadWrite => !has("readonly") && is_editable(tag),
+                // A link is an <a>/<area>/<link> WITH an href. Without one it is an anchor, not a
+                // link, and `a:link` must not style it.
+                P::Link | P::AnyLink => matches!(tag, "a" | "area" | "link") && has("href"),
+                // We do not track visited history in the cascade — deliberately: `:visited` is the
+                // web's oldest privacy leak, and every engine restricts it. Reporting "not visited"
+                // is the safe answer and the one Chrome gives to `getComputedStyle`.
+                P::Visited => false,
+                P::PlaceholderShown => {
+                    tag == "input"
+                        && has("placeholder")
+                        && self
+                            .dom
+                            .element(self.node)
+                            .and_then(|e| e.attr("value"))
+                            .is_none_or(str::is_empty)
+                }
+                // An <input> with no `checked`/`value` and a <form> with no invalid control are
+                // "valid" by default; we do not run constraint validation, so say so honestly.
+                P::Valid => true,
+                P::Invalid | P::UserInvalid | P::InRange | P::OutOfRange => false,
+                P::UserValid => false,
+                P::Defined => true,
+                P::Open => has("open"),
+                // Genuinely dynamic: correct answer for a static layout is "no".
+                P::Hover | P::Active | P::Focus | P::FocusWithin | P::FocusVisible => false,
+                _ => false,
+            }
         }
 
         fn match_pseudo_element(

@@ -116,6 +116,23 @@ pub fn take_focus_requests() -> Vec<Option<NodeId>> {
     PENDING_FOCUS.with(|q| std::mem::take(&mut *q.borrow_mut()))
 }
 
+/// The pending JS exception as a string, clearing it. "A page script threw" is not a diagnostic —
+/// it is a shrug. The message and the line are what turn an hour of bisecting into a minute.
+fn pending_exception(cx: *mut RawJSContext) -> String {
+    unsafe {
+        rooted!(in(cx) let mut ex = UndefinedValue());
+        if !mozjs::jsapi::JS_GetPendingException(cx, ex.handle_mut().into()) {
+            return "(no exception object)".to_string();
+        }
+        mozjs::jsapi::JS_ClearPendingException(cx);
+        let mut c = wrap_cx(cx);
+        match String::safe_from_jsval(&mut c, ex.handle(), ()) {
+            Ok(ConversionResult::Success(s)) => s,
+            _ => "(unstringifiable exception)".to_string(),
+        }
+    }
+}
+
 /// Point every DOM binding at `dom` for the duration of this re-entry into JS.
 pub(crate) fn set_current_dom(dom: *mut Dom) {
     CURRENT_DOM.with(|c| c.set(dom));
@@ -525,6 +542,7 @@ unsafe fn define_members(
         prop(c"head", doc_get_head, None);
         prop(c"cookie", doc_get_cookie, Some(doc_set_cookie));
         prop(c"activeElement", doc_get_active_element, None);
+        prop(c"scrollingElement", doc_get_scrolling_element, None);
         def(c"getElementById", doc_get_by_id, 1);
         def(c"querySelector", doc_query, 1);
         def(c"querySelectorAll", doc_query_all, 1);
@@ -600,6 +618,24 @@ unsafe fn define_members(
         prop(c"srcset", el_get_srcset, Some(el_set_srcset));
         prop(c"htmlFor", el_get_html_for, Some(el_set_html_for));
         // CSSOM + the DOM ergonomics every framework and hand-written handler depends on.
+        // URL decomposition — a link is the web's canonical URL object.
+        prop(c"protocol", el_get_protocol, None);
+        prop(c"hostname", el_get_hostname, None);
+        prop(c"port", el_get_port, None);
+        prop(c"host", el_get_host, None);
+        prop(c"pathname", el_get_pathname, None);
+        prop(c"search", el_get_search, None);
+        prop(c"hash", el_get_hash, None);
+        prop(c"origin", el_get_origin, None);
+        // Element metrics.
+        prop(c"offsetLeft", el_get_offset_left, None);
+        prop(c"offsetTop", el_get_offset_top, None);
+        prop(c"offsetWidth", el_get_offset_width, None);
+        prop(c"offsetHeight", el_get_offset_height, None);
+        prop(c"clientWidth", el_get_offset_width, None);
+        prop(c"clientHeight", el_get_offset_height, None);
+        prop(c"scrollWidth", el_get_offset_width, None);
+        prop(c"scrollHeight", el_get_offset_height, None);
         prop(c"style", el_get_style, None);
         prop(c"classList", el_get_class_list, None);
         prop(c"dataset", el_get_dataset, None);
@@ -1678,6 +1714,118 @@ unsafe extern "C" fn el_get_dataset(cx: *mut RawJSContext, _argc: u32, vp: *mut 
     lazy_view(cx, vp, "__mkDataset")
 }
 
+/// One part of an `<a>`'s **URL decomposition IDL** — `a.protocol`, `a.hostname`, `a.pathname`,
+/// `a.search`, `a.hash`, `a.host`, `a.port`, `a.origin`.
+///
+/// These are not obscure: a link is the web's canonical URL object, and any script that classifies
+/// its own links reads them. mdbook's table-of-contents script does `a.protocol.replace(...)` — with
+/// `protocol` undefined that is a TypeError, the script dies, and **the entire sidebar of every
+/// mdbook site on the internet never gets built**. One missing property, one dead navigation column.
+unsafe fn anchor_url_part(cx: *mut RawJSContext, vp: *mut Value, part: &str) -> bool {
+    let raw = match this_node(vp) {
+        Some((dom, node)) => (*dom)
+            .element(node)
+            .and_then(|e| e.attr("href"))
+            .unwrap_or("")
+            .to_string(),
+        None => String::new(),
+    };
+    if raw.is_empty() {
+        return_string(cx, vp, "");
+        return true;
+    }
+    let base = DOC_URL.with(|u| u.borrow().clone());
+    let parsed = url::Url::parse(&base)
+        .and_then(|b| b.join(&raw))
+        .or_else(|_| url::Url::parse(&raw));
+    let Ok(u) = parsed else {
+        return_string(cx, vp, "");
+        return true;
+    };
+    let out = match part {
+        "protocol" => format!("{}:", u.scheme()),
+        "hostname" => u.host_str().unwrap_or("").to_string(),
+        "port" => u.port().map(|p| p.to_string()).unwrap_or_default(),
+        "host" => match u.port() {
+            Some(p) => format!("{}:{}", u.host_str().unwrap_or(""), p),
+            None => u.host_str().unwrap_or("").to_string(),
+        },
+        "pathname" => u.path().to_string(),
+        "search" => u.query().map(|q| format!("?{q}")).unwrap_or_default(),
+        "hash" => u.fragment().map(|f| format!("#{f}")).unwrap_or_default(),
+        "origin" => u.origin().ascii_serialization(),
+        _ => String::new(),
+    };
+    return_string(cx, vp, &out);
+    true
+}
+
+macro_rules! url_part {
+    ($f:ident, $p:literal) => {
+        unsafe extern "C" fn $f(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+            anchor_url_part(cx, vp, $p)
+        }
+    };
+}
+url_part!(el_get_protocol, "protocol");
+url_part!(el_get_hostname, "hostname");
+url_part!(el_get_port, "port");
+url_part!(el_get_host, "host");
+url_part!(el_get_pathname, "pathname");
+url_part!(el_get_search, "search");
+url_part!(el_get_hash, "hash");
+url_part!(el_get_origin, "origin");
+
+/// The element **metrics** every script reads: `offsetWidth`/`offsetHeight`/`offsetTop`/`offsetLeft`,
+/// `clientWidth`/`clientHeight`, `scrollWidth`/`scrollHeight`. All come from the same layout
+/// snapshot `getBoundingClientRect` reads; a page that cannot measure its own boxes cannot lay
+/// itself out.
+unsafe fn el_metric(cx: *mut RawJSContext, vp: *mut Value, which: u8) -> bool {
+    let v = match this_node(vp) {
+        Some((_, node)) => layout_rect(node)
+            .map(|r| match which {
+                0 => r[0], // offsetLeft / scrollLeft-ish
+                1 => r[1], // offsetTop
+                2 => r[2], // width
+                _ => r[3], // height
+            })
+            .unwrap_or(0.0),
+        None => 0.0,
+    };
+    let _ = cx;
+    *vp = mozjs::jsval::DoubleValue(v as f64);
+    true
+}
+
+macro_rules! metric {
+    ($f:ident, $w:literal) => {
+        unsafe extern "C" fn $f(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+            el_metric(cx, vp, $w)
+        }
+    };
+}
+metric!(el_get_offset_left, 0);
+metric!(el_get_offset_top, 1);
+metric!(el_get_offset_width, 2);
+metric!(el_get_offset_height, 3);
+
+/// `document.scrollingElement` — the element whose `scrollTop` scrolls the page. In standards mode
+/// that is `<html>`. A script that scrolls the document reads this first.
+unsafe extern "C" fn doc_get_scrolling_element(
+    cx: *mut RawJSContext,
+    _argc: u32,
+    vp: *mut Value,
+) -> bool {
+    match this_node(vp) {
+        Some((dom, _)) => {
+            let html = (*dom).find_first("html");
+            return_node_or_null(cx, vp, dom, html);
+        }
+        None => *vp = NullValue(),
+    }
+    true
+}
+
 /// `document.documentElement` → the `<html>` element.
 unsafe extern "C" fn doc_get_document_element(
     cx: *mut RawJSContext,
@@ -2055,7 +2203,7 @@ impl PageContext {
                 rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
                 let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"inline.js".to_owned(), 1);
                 if evaluate_script(runtime.cx(), global.handle(), &src, rval.handle_mut(), opts).is_err() {
-                    tracing::warn!("a page <script> threw; continuing with the rest");
+                    tracing::warn!(error = %pending_exception(raw_cx), "a page <script> threw");
                 }
             }
             ran += 1;
