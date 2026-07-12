@@ -311,11 +311,32 @@ impl<'a> TElement for StyloElement<'a> {
         None
     }
 
-    fn each_class<F>(&self, _callback: F)
+    /// **This is the fast path, and stubbing it out was costing us the entire cascade.**
+    ///
+    /// The old comment here said "class matching uses `selectors::Element::has_class`, not this
+    /// (bloom/invalidation)". That is only half true, and the half it gets wrong is the expensive
+    /// half. Stylo uses `each_class` in two places that decide how much work a cascade does:
+    ///
+    ///   * `SelectorMap::lookup_with_state` (selector_map.rs:540) — to look up the **class-bucketed
+    ///     rules**. Rules are filed under their rightmost class at insertion time; if the element
+    ///     never enumerates its classes, that bucket is never consulted, and every one of those rules
+    ///     has to be found the slow way instead.
+    ///   * `each_relevant_element_hash` (bloom.rs:127) — to feed the **ancestor Bloom filter**, which
+    ///     is what lets a descendant selector like `.mw-body .reference` be rejected in one hash
+    ///     probe instead of a walk up the ancestor chain. With no classes in the filter, essentially
+    ///     nothing can be rejected early.
+    ///
+    /// Wikipedia: 18,631 elements, and the cascade took **339ms** — about 18µs per element, roughly
+    /// twenty times what it should be. `has_class` was doing all the work, one rule at a time.
+    fn each_class<F>(&self, mut callback: F)
     where
         F: FnMut(&AtomIdent),
     {
-        // Class *matching* uses selectors::Element::has_class, not this (bloom/invalidation).
+        if let Some(e) = self.dom.element(self.node) {
+            for c in e.classes() {
+                callback(&AtomIdent::from(c));
+            }
+        }
     }
     fn each_custom_state<F>(&self, _callback: F)
     where

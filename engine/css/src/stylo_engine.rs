@@ -249,6 +249,22 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
     let guard = lock.read();
     let guards = StylesheetGuards::same(&guard);
 
+    // Built ONCE for the document, not once per element. This is what turns the cascade from
+    // O(elements × rules) into O(elements × rules-that-could-match).
+    let _ti = std::time::Instant::now();
+    let index = RuleIndex::build(&stylo_sheets, &guard, stylist.device());
+    tracing::debug!(
+        ms = _ti.elapsed().as_millis(),
+        rules = index.rules.len(),
+        universal = index.universal.len(),
+        by_class = index.by_class.len(),
+        by_tag = index.by_tag.len(),
+        by_id = index.by_id.len(),
+        "RULEINDEX"
+    );
+    let mut candidates: Vec<u32> = Vec::new();
+    let mut caches = SelectorCaches::default();
+
     let mut map: StyleMap = StyleMap::new();
     // Preorder walk so a parent's ComputedValues exists before its children's cascade.
     let mut parent_cv: std::collections::HashMap<NodeId, ServoArc<ComputedValues>> =
@@ -274,7 +290,8 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
         }
         let el = StyloElement::new(dom, node, &store);
         let cv = cascade_one_element(
-            &stylist, &stylo_sheets, &lock, &url_data, &guard, &guards, &el, node, &parent_cv,
+            &stylist, &index, &mut candidates, &mut caches, &lock, &url_data, &guard, &guards, &el,
+            node, &parent_cv, dom,
         );
         // **`rem` is root-relative.** The device carries the root font size that every `rem` in the
         // document resolves against, and it starts at the initial 16px. Unless it is updated once
@@ -512,6 +529,164 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
 /// (`@supports`, `@layer`, …) are skipped for now (their inner rules are not applied), matching
 /// the prior flat behavior except that media rules now work.
 #[allow(clippy::type_complexity)]
+
+/// **A rule index — so an element only tests rules it could possibly match.**
+///
+/// `cascade_one_element` used to walk **every rule in every stylesheet, for every element**. We built
+/// a full `Stylist` — with its bucketed `SelectorMap`, its rule hashes and its ancestor Bloom filter —
+/// and then never used it for matching, borrowing only its `Device`. The cascade was therefore
+/// O(elements × rules): on Wikipedia, 18,631 elements against thousands of rules, **339ms**, which is
+/// ~18µs per element and about twenty times what it should cost.
+///
+/// (It also explains why implementing `TElement::each_class` changed nothing: the fast path it feeds
+/// was never entered.)
+///
+/// This is the same trick `SelectorMap` plays, and the same one `MinimalCascade::build_index`
+/// already played on the other cascade: file each rule under the **rightmost** simple selector that
+/// must match — its id, else a class, else a tag — and at match time only look in the buckets that
+/// this element could be in, plus the universal one. A `.reference` rule is never tested against a
+/// `<div>` that has no classes.
+///
+/// Correctness is unchanged because the *matching* is unchanged: every candidate still goes through
+/// `matches_selector`, and winners are still ordered by `(specificity, source order)`. The index only
+/// removes candidates that could not have matched.
+struct RuleIndex {
+    rules: Vec<IndexedRule>,
+    by_id: std::collections::HashMap<String, Vec<u32>>,
+    by_class: std::collections::HashMap<String, Vec<u32>>,
+    by_tag: std::collections::HashMap<String, Vec<u32>>,
+    universal: Vec<u32>,
+}
+
+struct IndexedRule {
+    sel: selectors::parser::Selector<stylo::selector_parser::SelectorImpl>,
+    spec: u32,
+    order: usize,
+    block: ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>,
+}
+
+impl RuleIndex {
+    fn build(
+        sheets: &[ServoArc<StyloStylesheet>],
+        guard: &SharedRwLockReadGuard<'_>,
+        device: &Device,
+    ) -> Self {
+        let mut idx = RuleIndex {
+            rules: Vec::new(),
+            by_id: Default::default(),
+            by_class: Default::default(),
+            by_tag: Default::default(),
+            universal: Vec::new(),
+        };
+        let mut order = 0usize;
+        for sheet in sheets {
+            let rules = sheet.contents.read_with(guard).rules(guard);
+            idx.add_rules(rules, guard, device, &mut order);
+        }
+        idx
+    }
+
+    fn add_rules(
+        &mut self,
+        rules: &[CssRule],
+        guard: &SharedRwLockReadGuard<'_>,
+        device: &Device,
+        order: &mut usize,
+    ) {
+        use selectors::parser::Component;
+        for rule in rules {
+            match rule {
+                CssRule::Style(style_rule) => {
+                    let sr = style_rule.read_with(guard);
+                    for sel in sr.selectors.slice() {
+                        // The rightmost compound is the one that must match THIS element; anything
+                        // to its left is an ancestor/sibling constraint checked afterwards.
+                        let mut key: Option<(u8, String)> = None;
+                        for comp in sel.iter() {
+                            let cand = match comp {
+                                Component::ID(v) => Some((0u8, v.to_string())),
+                                Component::Class(v) => Some((1u8, v.to_string())),
+                                Component::LocalName(n) => {
+                                    Some((2u8, n.lower_name.to_string()))
+                                }
+                                _ => None,
+                            };
+                            // Prefer the most selective key available: id > class > tag.
+                            if let Some(c) = cand {
+                                if key.as_ref().map(|k| c.0 < k.0).unwrap_or(true) {
+                                    key = Some(c);
+                                }
+                            }
+                        }
+                        let i = self.rules.len() as u32;
+                        self.rules.push(IndexedRule {
+                            sel: sel.clone(),
+                            spec: sel.specificity(),
+                            order: *order,
+                            block: sr.block.clone(),
+                        });
+                        match key {
+                            Some((0, v)) => self.by_id.entry(v).or_default().push(i),
+                            Some((1, v)) => self.by_class.entry(v).or_default().push(i),
+                            Some((2, v)) => self.by_tag.entry(v).or_default().push(i),
+                            // `*`, `:hover`, `[attr]` and friends have no cheap key: they must be
+                            // tried against everything, which is correct and is what `SelectorMap`
+                            // does too.
+                            _ => self.universal.push(i),
+                        }
+                        *order += 1;
+                    }
+                }
+                CssRule::Media(media_rule) => {
+                    let ml = media_rule.media_queries.read_with(guard);
+                    let mut custom = CustomMediaEvaluator::none();
+                    if ml.evaluate(device, QuirksMode::NoQuirks, &mut custom) {
+                        let nested = media_rule.rules.read_with(guard);
+                        self.add_rules(&nested.0, guard, device, order);
+                    }
+                }
+                CssRule::Supports(supports_rule) => {
+                    if supports_rule.enabled {
+                        let nested = supports_rule.rules.read_with(guard);
+                        self.add_rules(&nested.0, guard, device, order);
+                    }
+                }
+                CssRule::LayerBlock(layer) => {
+                    let nested = layer.rules.read_with(guard);
+                    self.add_rules(&nested.0, guard, device, order);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Candidate rules for one element: the universal bucket plus the buckets this element's own
+    /// tag, id and classes can be in. Every candidate is still fully matched afterwards.
+    fn candidates(&self, dom: &Dom, node: NodeId, out: &mut Vec<u32>) {
+        out.clear();
+        out.extend_from_slice(&self.universal);
+        if let Some(tag) = dom.tag_name(node) {
+            if let Some(v) = self.by_tag.get(tag) {
+                out.extend_from_slice(v);
+            }
+        }
+        if let Some(e) = dom.element(node) {
+            if let Some(id) = e.attr("id") {
+                if let Some(v) = self.by_id.get(id) {
+                    out.extend_from_slice(v);
+                }
+            }
+            for c in e.classes() {
+                if let Some(v) = self.by_class.get(c) {
+                    out.extend_from_slice(v);
+                }
+            }
+        }
+        // Source order, so the `(specificity, order)` sort downstream is stable and correct.
+        out.sort_unstable();
+    }
+}
+
 fn match_rules_recursive(
     rules: &[CssRule],
     guard: &SharedRwLockReadGuard<'_>,
@@ -693,9 +868,12 @@ fn match_pseudo_rules(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn cascade_one_element(
     stylist: &Stylist,
-    stylo_sheets: &[ServoArc<StyloStylesheet>],
+    index: &RuleIndex,
+    candidates: &mut Vec<u32>,
+    caches: &mut SelectorCaches,
     lock: &SharedRwLock,
     url_data: &UrlExtraData,
     guard: &SharedRwLockReadGuard<'_>,
@@ -703,18 +881,31 @@ fn cascade_one_element(
     el: &StyloElement<'_>,
     node: NodeId,
     parent_cv: &std::collections::HashMap<NodeId, ServoArc<ComputedValues>>,
+    dom: &Dom,
 ) -> ServoArc<ComputedValues> {
-    // Gather matching (specificity, order, block) across all sheets, document order —
-    // descending into `@media` blocks whose query matches the current viewport (see
-    // `match_rules_recursive`).
+    // Only the rules this element could possibly match — see `RuleIndex`. Everything below is
+    // unchanged: each candidate is still fully matched by `matches_selector`, and winners are still
+    // ordered by (specificity, source order).
     let mut winners: Vec<(u32, usize, ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>)> =
         Vec::new();
-    let mut order = 0usize;
-    let mut caches = SelectorCaches::default();
-    let device = stylist.device();
-    for sheet in stylo_sheets {
-        let rules = sheet.contents.read_with(guard).rules(guard);
-        match_rules_recursive(rules, guard, device, el, &mut caches, &mut winners, &mut order);
+    index.candidates(dom, node, candidates);
+    // ONE `MatchingContext` for the whole element, not one per candidate rule. `SelectorCaches` is a
+    // real allocation (it is the ancestor/nth-index cache), and it was being built fresh for every
+    // rule of every element — thrown away before it could cache anything, which is the exact
+    // opposite of what a cache is for.
+    let mut ctx = MatchingContext::new(
+        MatchingMode::Normal,
+        None,
+        caches,
+        selectors::context::QuirksMode::NoQuirks,
+        NeedsSelectorFlags::No,
+        MatchingForInvalidation::No,
+    );
+    for &i in candidates.iter() {
+        let r = &index.rules[i as usize];
+        if matches_selector(&r.sel, 0, None, el, &mut ctx) {
+            winners.push((r.spec, r.order, r.block.clone()));
+        }
     }
     winners.sort_by_key(|(spec, ord, _)| (*spec, *ord));
 

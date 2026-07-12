@@ -564,6 +564,34 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
         }
     }
 
+    // `--build` — the UI-THREAD cost of a navigation: everything between "the bytes are here" and
+    // "the page is on screen". This is the number a person feels when they click a link, and it is
+    // the one number no existing bench reported, because `bench` measures ONE parse+cascade+layout
+    // and a real load runs several.
+    if args.iter().any(|a| a == "--build") {
+        let runs = 3;
+        let mut best = f64::MAX;
+        for _ in 0..runs {
+            let t = std::time::Instant::now();
+            let (p, t_load) = rt.block_on(async {
+                let mut p = manuk_page::Page::load_async(&html, &url, fonts, vw as f32).await;
+                let a = t.elapsed().as_secs_f64() * 1000.0;
+                p.finish_loading(fonts, vw as f32).await;
+                (p, a)
+            });
+            std::hint::black_box(&p);
+            let total = t.elapsed().as_secs_f64() * 1000.0;
+            if total < best {
+                best = total;
+                println!(
+                    "  load_async {t_load:7.1}ms   finish_loading {:7.1}ms   TOTAL {total:7.1}ms",
+                    total - t_load
+                );
+            }
+        }
+        println!("build (best of {runs}): {best:.1}ms");
+        return;
+    }
     // `--images` — every decoded bitmap the page actually got, with its box and whether its pixels
     // are a single flat colour (a decode that "succeeded" into a grey rectangle looks exactly like a
     // successful decode from every angle except the screen).

@@ -29,7 +29,6 @@ use url::Url;
 /// same `Stylesheet`s (collected via [`MinimalCascade::collect_style_elements`]), so only
 /// the cascade step swaps — the rest of the pipeline is engine-agnostic.
 fn cascade_styles(dom: &Dom, sheets: &[Stylesheet], viewport_width: f32) -> StyleMap {
-    tracing::debug!(sheets = sheets.len(), "cascade");
     manuk_css::values::set_viewport_width(viewport_width);
     #[cfg(feature = "stylo")]
     {
@@ -487,6 +486,10 @@ pub struct Page {
     zoom: f32,
     /// Decoded raster images keyed by their `<img>` node, painted into each element's box.
     images: std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
+    /// Fingerprint of the inputs to the last full cascade — the style sources and the shape of the
+    /// tree. If neither has changed, re-cascading produces byte-identical output, and on a large
+    /// document that is not a small waste: see `apply_stylesheets`.
+    last_cascade: Option<u64>,
 }
 
 /// E1 full-page zoom bounds (matching what mainstream browsers offer).
@@ -1077,6 +1080,7 @@ impl Page {
             has_sticky,
             zoom: 1.0,
             images: std::collections::HashMap::new(),
+            last_cascade: None,
         }
     }
 
@@ -1474,6 +1478,51 @@ impl Page {
         viewport_width: f32,
     ) -> RestyleDamage {
         let sources = collect_style_sources(&self.dom, &self.final_url);
+
+        // **Do not re-cascade a document whose inputs have not changed.**
+        //
+        // A page load ran the FULL cascade four times: once initially, once after the inline scripts
+        // mutated the tree (both justified), and then twice more with byte-identical inputs — 19
+        // sheets over 18,634 nodes, then 19 sheets over 18,634 nodes again. `finish_loading` applies
+        // the stylesheets, and the dynamic-script pass applies them again after each round of
+        // scripts, whether or not those scripts touched anything.
+        //
+        // On Wikipedia that duplicate is ~44ms of cascade plus ~25ms of relayout, thrown away. It is
+        // the single largest avoidable cost in a navigation, and it is invisible in every profile
+        // that only looks at one stage at a time, because each individual cascade is perfectly fast.
+        //
+        // So fingerprint what the cascade actually depends on — the style sources and the shape of
+        // the tree — and skip the work when neither moved. A script that DID mutate the DOM or inject
+        // a sheet changes the fingerprint and gets its restyle, which is the whole point.
+        let fp = {
+            use std::hash::{Hash, Hasher};
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            for src in &sources {
+                match src {
+                    StyleSource::Inline(css, m) => (0u8, css, m).hash(&mut h),
+                    // The URL is not enough: the same href can resolve to different bytes across a
+                    // load (a 404 the first time, a hit the second). Hash the CONTENT we will
+                    // actually cascade, which is the thing the result depends on.
+                    StyleSource::External(url, m) => (1u8, url, m, external.get(url)).hash(&mut h),
+                }
+            }
+            self.dom.descendants(self.dom.root()).count().hash(&mut h);
+            viewport_width.to_bits().hash(&mut h);
+            // A mutation that keeps the node count identical (an attribute or class change, which is
+            // how every SPA toggles state) must still invalidate.
+            for n in self.dom.descendants(self.dom.root()) {
+                if self.dom.is_dirty(n) {
+                    n.hash(&mut h);
+                }
+            }
+            h.finish()
+        };
+        if self.last_cascade == Some(fp) && !self.styles.is_empty() {
+            tracing::debug!("cascade inputs unchanged — skipping a full restyle");
+            return RestyleDamage::None;
+        }
+        self.last_cascade = Some(fp);
+
         let sheets: Vec<Stylesheet> = sources
             .iter()
             .filter_map(|s| match s {
