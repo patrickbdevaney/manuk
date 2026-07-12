@@ -463,3 +463,58 @@ it produced a number (11% advance error) that turns "fonts feel off" into a boun
   whole mechanism of the Framework Exception Miner (Part 9) — it only works if nothing is discarded.
 * METHODOLOGY Parts 15–20 folded in; §4.1 **saltatory breadth first** made an explicit selection rule:
   an item that unlocks a whole *class* of design pattern outranks everything narrow or deep, always.
+
+## Tick 14 — the oracle pays for itself: fonts, flex, and the frozen tab (2026-07-12)
+
+Six landings, all chosen by measurement rather than by plan, and all Pass-1 breadth (METHODOLOGY
+4.1). Every one of them was a *whole class* of page failing, not a pixel gap.
+
+- **`font-family` was never mapped from the cascade.** Not partially — at all. Every page on the
+  web rendered in one fallback face regardless of its CSS. Every "font metrics" divergence the
+  oracle had ever reported was this bug in a costume: we were not mismeasuring the font, we were
+  not *using* it. Ten `i` at 100px now match Chromium exactly across default/serif/sans/mono
+  (278/278/222/602 vs 277.84/277.84/222.17/602.06) — including the fact, which I did not believe
+  until I measured it, that **Chrome's default font is a serif**.
+- **The generic-family flag was right to be red.** Held behind `MANUK_FONT_SYSTEM` because it took
+  the wall 72/72 → 69/72. The reading was "adopt Skrifa (Part 15)". Wrong: the preference lists came
+  from `fc-match <generic>`, and Chrome never asks fontconfig for the bare generic — it asks for
+  *Arial* / *Times New Roman*, which resolve to the Liberation faces. Noto's line box is 1.362em
+  against Liberation's 1.150em, so every line on every page was 18% too tall. Skrifa would have
+  replaced a working metrics engine and left the real bug in place. **The wall was not an obstacle
+  to route around; the wall was the finding.**
+- **The network layer had no timeout of any kind.** One blackholed tracker stalled the page until
+  the kernel gave up. w3schools: 37.8s → 15.0s (Chromium: 15.2s), and coverage went *up*, 95.7% →
+  100%, because the stalls were losing elements too. New gate **G_LOAD**.
+- **Flex items could never shrink.** Asked "how narrow can you get?", we answered with the
+  max-content width, so taffy took that as the item's minimum. Three cards in a row each demanded
+  their full `width:100%` and overflowed to x=2388 — off-screen. We had no min-content computation
+  anywhere in the engine.
+- **A percentage width on a flex item resolved TWICE** — used width came out squared (30% of a
+  1000px row → 90px, not 300). Survived because `auto` and `100%` are the two values immune to it.
+- **Every responsive image rendered stretched**: a replaced element's auto height came from the
+  image's natural pixels instead of its used width × intrinsic ratio, so `img{max-width:100%}` — the
+  most common reset on the web — narrowed the box and left the height alone.
+
+**Corpus (19 sites): MEAN VISUAL 78.2% → 79.8%, MEAN COVERAGE 97.8%, and every site now renders.**
+rust-lang.org 45.2 → 68.6 · blog.rust-lang.org 61.0 → 71.2 · old.reddit 36.3 → 45.8 · w3schools was
+a hang and is now a page.
+
+**Two lessons, both about instruments rather than code.**
+
+1. *The symptom names the wrong organ.* rust-lang.org's columns **looked stacked**, so I chased media
+   queries, `em` breakpoints, external-vs-inline stylesheets and the re-cascade path. The boxes said
+   they were in a perfect row, overflowing off-screen. Measure the boxes before theorising from a
+   screenshot.
+2. *An oracle must never be able to charge its own slowness to your account.* The sweep reported
+   w3schools and go.dev as HANG/FAIL, and a local-snapshot bisect said "Chromium is the slow one, the
+   bug does not exist" — because the snapshot had no network and skipped the very fetches that were
+   hanging. Timing the two engines *separately on the live URL* found our real 37.8s. `fidelity` now
+   attributes load time to whichever engine spent it, in code. Same hazard as `oracle_is_healthy`.
+
+**And two gates that were not gates.** F1-F3 had been *silently skipping* for their whole existence —
+the bench corpus they named did not exist, so `bench` printed empty tables and `verify.sh` printed a
+yellow dash. The corpus is now committed and the floors are asserted. Separately, `disk-hygiene`'s
+flush left a dangling symlink into tmpfs and broke the next build — in a commit whose message claimed
+that failure was "designed out". It is now, actually.
+
+Banked: `manuk-readable-web-2026-07-12`.
