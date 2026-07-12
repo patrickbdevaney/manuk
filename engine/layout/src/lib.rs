@@ -679,6 +679,21 @@ fn is_rendered(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
 }
 
 fn text_style(cs: &ComputedStyle, fonts: &FontContext) -> TextStyle {
+    let key = FontKey {
+        family: fonts.resolve_family(&cs.font_family),
+        bold: cs.font_weight >= 600,
+        italic: cs.italic,
+    };
+    // `line-height: normal` is the FONT's business, not arithmetic's. Every engine derives it from
+    // the face's ascent + descent + lineGap; a 1.2× multiplier is a guess that makes every line box
+    // on every page the wrong height, and it is a first-order source of vertical drift.
+    let line_height = if cs.line_height_normal {
+        let lm = fonts.line_metrics(key, cs.font_size);
+        let h = lm.ascent + lm.descent + lm.line_gap;
+        if h > 0.0 { h } else { cs.line_height }
+    } else {
+        cs.line_height
+    };
     TextStyle {
         decoration: cs.text_decoration,
         font_key: FontKey {
@@ -690,7 +705,7 @@ fn text_style(cs: &ComputedStyle, fonts: &FontContext) -> TextStyle {
         },
         font_size: cs.font_size,
         color: cs.color,
-        line_height: cs.line_height,
+        line_height,
     }
 }
 

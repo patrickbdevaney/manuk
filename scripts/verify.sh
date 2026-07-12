@@ -18,6 +18,14 @@ ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; }
 bad()  { printf '  \033[31m✗ %s\033[0m\n' "$1"; FAIL=1; }
 head_() { printf '\n\033[1m%s\033[0m\n' "$1"; }
 
+# Disk hygiene is a gate, not a chore. A full disk is a build failure that looks like a code
+# failure, and this tree grows tens of gigabytes a week.
+PCT=$(df /home 2>/dev/null | awk 'NR==2 {gsub(/%/,""); print $5}')
+if [ -n "${PCT:-}" ] && [ "$PCT" -ge 88 ]; then
+  head_ "D · disk (${PCT}% full — reclaiming before the build fails on ENOSPC)"
+  bash scripts/disk-hygiene.sh | sed 's/^/  /'
+fi
+
 head_ "B · build (workspace)"
 if cargo build -q --workspace 2>&1 | grep -qE '^error'; then bad "workspace does not compile"; else ok "workspace compiles"; fi
 

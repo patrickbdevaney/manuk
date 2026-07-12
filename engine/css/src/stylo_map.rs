@@ -519,9 +519,20 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     // line-height: a fixed 1.2×font-size approximation (Stylo's `normal` needs font
     // metrics we stub); explicit lengths/numbers are honoured.
     s.line_height = match cv.clone_line_height() {
-        stylo::values::computed::font::LineHeight::Length(l) => l.px(),
-        stylo::values::computed::font::LineHeight::Number(n) => s.font_size * n.0,
-        _ => s.font_size * 1.2,
+        stylo::values::computed::font::LineHeight::Length(l) => {
+            s.line_height_normal = false;
+            l.px()
+        }
+        stylo::values::computed::font::LineHeight::Number(n) => {
+            s.line_height_normal = false;
+            s.font_size * n.0
+        }
+        // `normal` — the FONT decides, not a multiplier. Layout substitutes the face's real
+        // ascent + descent + lineGap; this value is only a fallback for when no face is available.
+        _ => {
+            s.line_height_normal = true;
+            s.font_size * 1.2
+        }
     };
 
     s

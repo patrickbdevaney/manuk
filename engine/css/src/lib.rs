@@ -432,6 +432,10 @@ pub struct ComputedStyle {
     pub border_radius: f32,
     /// `visibility` (inherited). `Hidden`/`Collapse` boxes still take space but are not painted.
     pub visibility: Visibility,
+    /// `line-height: normal` — the value was NOT authored, so it must come from the FONT's own
+    /// ascent/descent/lineGap rather than a multiple of the font size. A 1.2× guess is not what any
+    /// browser does, and it makes every line box the wrong height on every page.
+    pub line_height_normal: bool,
     /// `mask-image` / `-webkit-mask-image` `url(...)`. The modern web draws **icons** as an empty
     /// element with a `background-color` shaped by a mask. Ignoring the mask paints the raw
     /// background — a solid black square where every icon should be.
@@ -523,6 +527,7 @@ impl ComputedStyle {
             border_color: Rgba::BLACK,
             border_radius: 0.0,
             visibility: Visibility::Visible,
+            line_height_normal: true,
             mask_image: None,
             background_image: None,
             background_size: BackgroundSize::Auto,
@@ -587,6 +592,10 @@ impl ComputedStyle {
         s.font_family = parent.font_family.clone();
         s.italic = parent.italic;
         s.line_height = parent.line_height;
+        // The FLAG is inherited with the value. Inheriting the number but not "was this authored?"
+        // means a child re-derives its line box from the font while its parent uses the author's —
+        // two different line heights for the same inherited property.
+        s.line_height_normal = parent.line_height_normal;
         s.text_align = parent.text_align;
         s.white_space = parent.white_space;
         // `list-style-*` is inherited (that is how `ul{list-style:none}` silences its `li`s).
@@ -2164,6 +2173,16 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             }
         }
         "line-height" => {
+            // An AUTHORED line-height wins over the font's own metrics. Both cascades must agree on
+            // this or they disagree about every line box on the page — MinimalCascade left the
+            // `normal` flag set, so an explicit `line-height: 20px` was silently overridden by the
+            // face's ascent+descent.
+            if v.trim().eq_ignore_ascii_case("normal") {
+                s.line_height_normal = true;
+                s.line_height = s.font_size * 1.2;
+                return;
+            }
+            s.line_height_normal = false;
             if let Ok(n) = v.parse::<f32>() {
                 s.line_height = n * s.font_size; // unitless multiplier
             } else if let Some(px) = values::parse_length_px(v, s.font_size) {

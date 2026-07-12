@@ -74,6 +74,14 @@ RANGE="${PREV_TAG:+$PREV_TAG..}HEAD"
 
 git tag -f "bank-${SLUG}-${DATE}" -m "$HEADLINE" >/dev/null
 
+# Keep the bank bounded. A 50MB binary per milestone fills a disk quietly, and a full disk is a
+# build failure that looks like a code failure. Keep the newest N and their notes; drop the rest.
+KEEP="${MANUK_BANK_KEEP:-6}"
+ls -1t "$BANK"/manuk-*-* 2>/dev/null | grep -v '\.md$' | tail -n +$((KEEP + 1)) | while read -r old; do
+  rm -f "$old" "$old.md"
+  echo "  pruned  $(basename "$old")"
+done
+
 echo
 echo "  banked → $BANK/$NAME  ($SIZE)"
 echo "  notes  → $BANK/$NAME.md"
