@@ -259,19 +259,35 @@ element's position while scrolling gets a stale answer from us.
 That is a real gap, not a metric artifact — but it is a **Pass 3** one (it affects what a script can
 *measure*, not whether the page works). Recorded here rather than fixed out of order.
 
-## The measured scoreboard (update every tick)
+## The measured scoreboard — FULL CORPUS (20 sites, 2026-07-11)
 
-| metric | now | Chromium |
-|---|---|---|
-| COVERAGE — of elements Chrome renders, the fraction Manuk renders at all | **99.7%** | 100% |
-| VISUAL — coarse block-grid agreement | **89.6%** | 100% |
-| PLACEMENT — median dy, Wikipedia | **1,087px** (was 5,226) | 0 |
-| PLACEMENT — median dx/dw/dh, HN | **7 / 1 / 1 px** | 0 |
-| box parity (synthetic corpus) | **72/72** | — |
+Reported as **two bars** (ADR-013), never one as the other.
 
-COVERAGE is nearly saturated: *we now draw almost everything Chrome draws.* The frontier has moved
-to **placement and paint fidelity** (§2 is where the remaining visual error lives) and to
-**interaction** (§6 — the page cannot even set a style or read a scroll position).
+```
+Functional-breadth (Bar 1):  17/20 sites usable
+Pixel-precision   (Bar 2):   7/20 sites within tolerance
+```
+
+| metric | now |
+|---|---|
+| MEAN COVERAGE — of the elements Chrome renders, the fraction Manuk renders at all | **98.4%** |
+| MEAN VISUAL — coarse block-grid agreement | **78.2%** |
+| box parity (synthetic corpus) | **72/72** |
+| G5 post-interaction coverage | **98.4%** (2 dead interactions: `position:sticky` geometry) |
+| G6 clickability | **99.2%** |
+| F4 interactive latency | scroll **0.01ms** · click **0.27ms** (floor: one frame) |
+
+**The three sites below Bar 1**, and what each is actually waiting on:
+
+| site | visual | coverage | blocked on |
+|---|---|---|---|
+| old.reddit.com | 40.7% | 94.7% | an oversized replaced image escaping its container (`overflow` clipping) |
+| www.rust-lang.org | 50.3% | 100% | fonts + a hero image; content is correct and legible |
+| github.com | 86.6% | 82.0% | 9 elements missing — not yet diagnosed |
+
+**Do not read the mean visual as a quality score.** It is dominated by font-metric differences on
+text-heavy pages, which Bar 1 does not care about and Bar 2 will. COVERAGE and the eyeball are what
+say whether a page is usable.
 
 ## Selection order (what the loop takes next)
 
