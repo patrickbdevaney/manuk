@@ -1,58 +1,134 @@
 # Manuk
 
-A browser engine, built from first principles in Rust, per the directive in
-[`CLAUDE.md`](./CLAUDE.md). One shared engine core drives two front-ends:
+A browser engine built from scratch in Rust — ~48k lines across 16 crates — with one shared engine
+core driving two front-ends: a **headful GUI browser** (`shell`) and a **headless agentic browser**
+(`agent`) an LLM can drive.
 
-- a **headful, human-operator GUI browser** (`shell`), and
-- a **headless agentic browser** (`agent`) that an LLM can drive.
+The goal is a **daily driver**: fast, lean, and correct enough on the *breadth* of the real web to
+actually use — not pixel-exact on a handful of sites. Chromium parity across the whole web platform is
+the scope of a large team; what follows is an honest account of how far this has actually got, measured
+rather than asserted.
 
-This is a **working foundation**, not a finished browser — a standards-complete
-engine is the scope of Servo/Chromium. What exists is the full crate architecture
-the directive mandates, real dependencies wired in, and two working vertical slices
-that load real pages over HTTPS and render them.
+---
 
-> **Snapshot (kept current):** 13 workspace crates · **329 tests pass, 0 warnings** ·
-> renders real sites to pixels with **±3px box-geometry parity to headless Chrome**
-> across the layout primitives (block/flex/grid/positioning/box-model/inline) ·
-> the agent is live-tested end-to-end against Groq `qwen/qwen3.6-27b`.
-> This README documents the **entire stack as it actually is**, and is updated on
-> every major change (see [Maintenance](#maintenance)).
+## Where this actually is
 
-## The interactive browser (headful `manuk browse`)
+Development runs on a differential oracle: **265 real sites across 15 design-pattern classes** are
+rendered by *both* Chromium and this engine from **one snapshot**, diffed by structural path, and the
+divergences **clustered by root cause**. The cluster ranking — ranked by *distinct sites explained*, not
+by hit count — **is** the priority ledger (`docs/loop/CLUSTERS.md`). No feature gets picked by judgement.
 
-The GUI is a usable browser, not just a renderer:
+Three bars, and they are never conflated:
 
-- **Visible chrome** — a toolbar with back/forward/reload and an editable
-  **address/search bar** (type a URL or a search; the omnibox disambiguates).
-- **Mouse interactivity** — click links to navigate, click a text field to focus and
-  type, click a button / press Enter to **submit a form** (GET), toggle checkboxes.
-  Clicks hit-test the real layout.
-- **Form controls render** — bordered text inputs (with placeholder/value), buttons
-  that hug their label, checkboxes; borders paint for every box.
-- **JavaScript** — with `--features spidermonkey`, a page's inline `<script>`s run
-  against the DOM (getElementById/querySelector/createElement/appendChild/textContent/
-  innerHTML …) before layout, so script-built content renders.
-- **Launches as an app** — `manuk` with no URL opens a home/new-tab page with the
-  address bar focused; `packaging/manuk.desktop` installs a launcher.
-- **Layout parity is measured** — `manuk-wpt parity` compares box geometry to headless
-  Chrome and gates against regressions (`tests/wpt/corpus`).
+| | | |
+|---|---|---|
+| **Bar 0** | *Does the engine ever take the browser down?* | The floor. Checked before correctness is even asked. |
+| **Bar 1** | *Is the page legible, navigable, not visibly broken?* | The near-term target. |
+| **Bar 2** | *Is it pixel-exact?* | **Deliberately deferred.** Breadth beats depth until Bar 1 is real. |
 
-Chrome/Gecko parity across the *whole* web platform is the scope of Servo/Chromium and
-is not claimed; the honest frontier is documented per feature (text selection, `<select>`
-dropdowns, external scripts, most of the DOM/BOM/CSSOM surface, …).
+### Measured, on the 265-site frame
 
 ```
-                          ┌── shell → winit/wgpu window       (headful)
- net → html → dom → css → layout → text → paint ──┤
-                          └── agent → screenshot + LLM loop   (headless)
+structural coverage   ~99%     of the elements Chromium renders, we render
+hangs                 ~73/265  ← the number that matters, and the current focus
+crashes               0        (contained: a panic kills the page, not the browser)
 ```
 
-Rendering `https://example.com/` and a local test page (the CPU raster tier —
-the same rasterizer the agent screenshots):
+**~1 site in 4 still hangs.** That is the headline, it is ours (attributed by timing each engine
+separately on the same bytes), and it outranks every rendering bug in the ledger — a browser that hangs
+on one site in four is not a browser. It is CPU and duplicate work, not the network, and it is what the
+current ticks are about.
 
-![Rendered example.com](docs/example.png)
+### The app web (SPA frameworks)
 
-![Rendered local sample page](docs/sample.png)
+Eight **real** framework bundles (Vite production output, not toys). Before recent work: **0 of 8
+rendered anything** — every one mounted an empty `<div id="root">` and threw *zero exceptions* doing it.
+The silence was the bug.
+
+```
+✓ Vue    ✓ Preact    ✓ Vanilla        ✗ React   ✗ Svelte   ✗ Solid   ✗ Lit
+```
+
+It turned out to be **missing substrate, not a missing subsystem** — `import.meta` (SpiderMonkey needs a
+metadata hook; every Vite bundle emits `import.meta.url`), `nodeType` (React's `isValidContainer` checks
+it — without it, React error #299), `ownerDocument`, DOM interface constructors (`x instanceof
+HTMLIFrameElement` throws when the constructor is `undefined`), `createElementNS`/`createComment`.
+Additive, bounded work. The rest of the frameworks are the next tick.
+
+---
+
+## What works
+
+**Rendering.** Real sites over HTTPS: block/inline/flex/grid/table/float/positioning, the box model,
+`@media`/`@supports`/`@layer`, `var()`, real font selection and shaping, images (incl. SVG), gradients,
+backgrounds, shadows, `border-radius`, stacking contexts, `overflow` clipping. Stylo (Firefox's cascade)
+and SpiderMonkey are embedded as sanctioned FFI dependencies — never patched.
+
+**Interactivity.** Click links, focus and type into fields, submit forms, toggle checkboxes, scroll,
+tabs (open/close/switch, hibernated background tabs), history, bookmarks, find-in-page, zoom, cookies
+(RFC 6265, public-suffix-aware), partitioned storage, session restore.
+
+**JavaScript.** Inline and external scripts, ES modules, the DOM/BOM/CSSOM surface real sites use, event
+dispatch and bubbling, `fetch`/XHR, timers, promises/microtasks, custom elements + shadow DOM,
+`IntersectionObserver`/`ResizeObserver`.
+
+**Agent-native.** The same engine core, headless: a11y-tree observation, in-process automation
+(selectors/wait/assert), WebDriver BiDi, and an `InferenceBackend` trait so any provider — local
+`llama-server`, Ollama, or a hosted endpoint — drives it identically.
+
+## What doesn't
+
+Stated plainly, because a README that only lists wins is marketing:
+
+- **~1 site in 4 hangs.** The single biggest problem. Ours, CPU-bound, actively being fixed.
+- **React, Svelte, Solid, Lit don't render yet.** Vue/Preact do. Bounded substrate work.
+- **Bar 2 (pixel precision) is deferred**, not achieved. Mean visual similarity to Chromium is ~80%.
+- **No multi-process isolation.** A panic is contained per-navigation; a fault *inside* SpiderMonkey's
+  C++ frames still cannot be caught in-process. That needs a per-tab process, and is deferred.
+- **No extensions, no DevTools, no WebGL/WebGPU content, no video playback.**
+
+---
+
+## How it is developed
+
+The methodology (`docs/loop/METHODOLOGY.md`) exists because a solo project cannot hand-verify the web.
+Its central claim: **automated, self-correcting measurement substitutes for the headcount this project
+doesn't have.** Two rules govern everything:
+
+> **A gate that does not measure what the user feels will report green while the user suffers.**
+> Every gate here was born from a user-visible failure that every existing gate slept through.
+
+> **The discovery rate has not flattened.** Every "done" is provisional until the oracle has looked at it.
+
+**The gates** run as one wall (`scripts/verify.sh`, ~60–190s) and are all-or-nothing:
+
+| | |
+|---|---|
+| `parity` | 72/72 box-geometry probes within ±3px of headless Chrome |
+| `G1`–`G3`, `G6` | real-site fidelity · JS conformance · affordances · clickability |
+| `G_ALLOC` | per-input-event allocation rate (born from a scroll freeze every other gate called green) |
+| `G_LOAD` | a dead subresource cannot hold the document hostage |
+| `G_INTERACT` | tab open/switch/close stay under one frame — *with real pages in 30 tabs* |
+| `G_CONTAIN` | **Bar 0** — a panic kills the page, not the process |
+| `G_RUNTIME_COUNT` | one async runtime for the process, not one per action |
+| `G_HANG` | every crawled site under a watchdog; a timeout is a **hard, counted** failure |
+| `F1`/`F2` | cascade ≤40ms, full pipeline ≤125ms — asserted, not eyeballed |
+
+**Compliance is mechanical, not remembered.** A long session degrades on exactly the clauses that
+depend on being recalled, so they were moved into tooling:
+
+- **The gate receipt.** `verify.sh` records the git *tree* it verified; the pre-commit hook recomputes
+  it from what is staged and **refuses the commit if they differ**. Verifying one version of a diff and
+  committing another is impossible, not merely discouraged.
+- **The journal is enforced.** No commit without an entry for the current tick — written *before* the
+  work, so it states a hypothesis rather than narrating a success.
+- **The tick's shape is cross-checked.** A tick claiming to be a pattern-class fix must name the oracle
+  cluster it closes; the hook validates the id against the last crawl. A claim that cannot name a real
+  cluster is a single-site tick, and must say so.
+- **The self-audit is unavoidable.** Overdue by more than 10 ticks and the hook refuses everything until
+  it runs. It checks the filesystem, not anyone's memory.
+
+Every one of these has refused *its own author* at least once. That is the mechanism working.
 
 ---
 
@@ -65,8 +141,8 @@ cargo run -p manuk-shell --no-default-features -- render https://example.com/ -o
 # Interactive GPU window (winit + wgpu; needs a display):
 cargo run -p manuk-shell -- browse https://example.com/
 
-# Agentic browser (needs a Groq API key) ------------------------------------
-cp .env.example .env            # then put GROQ_API_KEY=... in it
+# Agentic browser (needs a provider API key, or a local llama-server) ------------------------------------
+cp .env.example .env            # then set your provider credential in it
 cargo run -p manuk-agent --bin agent-run -- "What is this page's main heading?" https://example.com/
 
 # JavaScript via SpiderMonkey (heavy feature) -------------------------------
