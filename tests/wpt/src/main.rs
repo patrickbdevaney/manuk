@@ -605,6 +605,66 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
     if let Some(want) = flag(args, "--paint") {
         let dl = manuk_paint::DisplayList::build_with_images(&page.root_box, page.decoded_images());
         let mut n = 0;
+        if want == "BIGTEXT" {
+            // A glyph rasterized at an absurd size paints a flat blob the size of a paragraph. It is
+            // a TEXT item, so every rect-oriented probe steps straight over it.
+            for it in &dl.items {
+                if let manuk_paint::DisplayItem::Text { x, baseline, text, style } = it {
+                    if style.font_size > 40.0 {
+                        println!(
+                            "size={:6.1} #{:02x}{:02x}{:02x} at [{x:.0} {baseline:.0}] {:?}",
+                            style.font_size,
+                            style.color.r,
+                            style.color.g,
+                            style.color.b,
+                            text.chars().take(24).collect::<String>()
+                        );
+                    }
+                }
+            }
+            return;
+        }
+        if want == "BAND" {
+            for it in &dl.items {
+                let (r, kind) = match it {
+                    manuk_paint::DisplayItem::Rect { rect, color } => (*rect, format!("Rect #{:02x}{:02x}{:02x}a{}", color.r, color.g, color.b, color.a)),
+                    manuk_paint::DisplayItem::RoundRect { rect, color, .. } => (*rect, format!("RoundRect #{:02x}{:02x}{:02x}", color.r, color.g, color.b)),
+                    manuk_paint::DisplayItem::MaskedRect { rect, color, .. } => (*rect, format!("MaskedRect #{:02x}{:02x}{:02x}", color.r, color.g, color.b)),
+                    manuk_paint::DisplayItem::Gradient { rect, stops, .. } => (*rect, format!("Gradient {} stops", stops.len())),
+                    manuk_paint::DisplayItem::Image { rect, image } => (*rect, format!("Image {}x{}", image.width, image.height)),
+                    manuk_paint::DisplayItem::BackgroundImage { rect, image, size, repeat, .. } => (*rect, format!("BgImage {}x{} {size:?} {repeat:?}", image.width, image.height)),
+                    manuk_paint::DisplayItem::Shadow { rect, color, blur, .. } => (*rect, format!("Shadow #{:02x}{:02x}{:02x} blur={blur:.0}", color.r, color.g, color.b)),
+                    manuk_paint::DisplayItem::TextLine { x, y, width, thickness, color } => (manuk_layout::Rect { x: *x, y: *y, width: *width, height: *thickness }, format!("TextLine #{:02x}{:02x}{:02x}", color.r, color.g, color.b)),
+                    manuk_paint::DisplayItem::Text { x, baseline, text, style } => {
+                        if *baseline > 240.0 && *baseline < 360.0 {
+                            println!(
+                                "TEXT size={:5.1} #{:02x}{:02x}{:02x} at [{x:.0} {baseline:.0}] {:?}",
+                                style.font_size, style.color.r, style.color.g, style.color.b,
+                                text.chars().take(18).collect::<String>()
+                            );
+                        }
+                        continue;
+                    }
+                };
+                if r.y < 350.0 && r.y + r.height > 250.0 && r.x < 500.0 && r.x + r.width > 230.0 {
+                    println!("{kind:<34} [{:.0} {:.0} {:.0}x{:.0}]", r.x, r.y, r.width, r.height);
+                }
+            }
+            return;
+        }
+        if want == "NOCLIP" {
+            // The one difference left between the probe's display list (which is CORRECT) and the
+            // real render (which is not): the real one goes through `with_layers` with the page's
+            // z-index and clip maps. Render once with the clip map emptied and diff.
+            let z = std::collections::HashMap::new();
+            let clip = std::collections::HashMap::new();
+            use manuk_paint::Painter;
+            let c = manuk_paint::CpuPainter::with_layers(fonts, page.decoded_images(), &z, &clip)
+                .render(&page.root_box, vw, 800, manuk_css::Rgba::WHITE);
+            let _ = c.save_png(std::path::Path::new("/tmp/manuk-noclip.png"));
+            println!("wrote /tmp/manuk-noclip.png (empty z + clip maps)");
+            return;
+        }
         if want == "IMAGES" {
             for it in &dl.items {
                 match it {

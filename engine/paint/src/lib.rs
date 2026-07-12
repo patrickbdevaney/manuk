@@ -751,6 +751,21 @@ impl CpuPainter<'_> {
         style: &TextStyle,
         clip: Option<Rect>,
     ) {
+        // **`font-size: 0` renders NOTHING.** Not "a very small glyph" — nothing.
+        //
+        // Asked to rasterize at 0px, swash falls back to the face's *unscaled* outline, in font
+        // units, and hands back a bitmap of 1,000-1,500px per glyph. `blit_glyph` then floods every
+        // one of those pixels with the run's text colour. A single `font-size: 0` word painted a
+        // page-sized blob of flat colour over the content — on old.reddit.com, ~27,000px of #888888
+        // squarely on top of the post titles.
+        //
+        // And `font-size: 0` is not exotic. It is one of the most common tricks on the web: killing
+        // the whitespace gap between `inline-block`s, and image-replacement
+        // (`text-indent: -9999px; font-size: 0`) for logos and icon buttons. Every site that uses it
+        // was getting glyph-shaped continents painted across the viewport.
+        if style.font_size < 0.5 {
+            return;
+        }
         let run = self.fonts.shape(text, style.font_key, style.font_size);
         for g in &run.glyphs {
             let pen_x = origin_x + g.x;
@@ -1085,6 +1100,49 @@ fn lerp(dst: u8, src: u8, a: f32) -> u8 {
 mod bg_tests {
     use super::*;
     use manuk_css::{MinimalCascade, StyleEngine, Stylesheet};
+
+    /// Regression: **`font-size: 0` renders NOTHING** — not a tiny glyph, nothing.
+    ///
+    /// Asked to rasterize at 0px, swash falls back to the face's *unscaled* outline, in font units,
+    /// and returns a bitmap of 1,000-1,500px **per glyph**. `blit_glyph` then floods every one of
+    /// those pixels with the run's text colour. One `font-size: 0` word painted a page-sized
+    /// continent of flat colour over the content — ~27,000px of #888888 sitting squarely on top of
+    /// old.reddit.com's post titles.
+    ///
+    /// `font-size: 0` is not exotic. It is one of the most common tricks on the web: killing the
+    /// whitespace gap between `inline-block`s, and image-replacement (`text-indent: -9999px;
+    /// font-size: 0`) for logos and icon buttons.
+    #[test]
+    fn font_size_zero_paints_nothing_at_all() {
+        let dom = manuk_html::parse(r#"<div id="hidden">Submit</div><p id="ok">visible</p>"#);
+        let styles = MinimalCascade.cascade(
+            &dom,
+            &[Stylesheet::parse("#hidden{font-size:0;color:#888888} #ok{font-size:16px}")],
+        );
+        let fonts = FontContext::new();
+        let root = manuk_layout::layout_document(&dom, &styles, &fonts, 400.0);
+        let canvas = CpuPainter::new(&fonts).render(&root, 400, 200, Rgba::WHITE);
+
+        // Nothing anywhere on the canvas may be the zero-sized run's colour. A single stray glyph
+        // at unscaled em units is over a million pixels; there is no "a few is fine" here.
+        let grey = canvas
+            .rgba_bytes()
+            .chunks_exact(4)
+            .filter(|p| p[0] == 0x88 && p[1] == 0x88 && p[2] == 0x88)
+            .count();
+        assert_eq!(
+            grey, 0,
+            "a `font-size: 0` run painted {grey} pixels — swash rasterizes a 0px glyph from the \
+             UNSCALED outline, so each one is a 1000px+ bitmap flood-filled with the text colour"
+        );
+        // And the guard must not have silenced ordinary text along with it.
+        let inked = canvas
+            .rgba_bytes()
+            .chunks_exact(4)
+            .filter(|p| p[0] < 250 || p[1] < 250 || p[2] < 250)
+            .count();
+        assert!(inked > 40, "the 16px paragraph must still paint; only {inked}px inked");
+    }
 
     /// Regression: **an anonymous box must inherit its ancestors' stacking layer and clip.**
     ///

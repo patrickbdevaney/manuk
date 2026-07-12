@@ -325,6 +325,13 @@ pub fn resolve_font_size(input: &str, parent_font_size: f32) -> Option<f32> {
     with_first_token(input, |tok| match tok {
         Token::Percentage { unit_value, .. } => Some(parent_font_size * unit_value),
         Token::Dimension { value, unit, .. } => dimension_to_px(*value, unit, parent_font_size),
+        // **A unitless zero is a valid CSS length**, and `font-size: 0` is one of the most common
+        // idioms on the web — it kills the whitespace gap between `inline-block`s and it is half of
+        // the image-replacement recipe (`text-indent: -9999px; font-size: 0`). Falling through to
+        // `None` here left the size INHERITED, so text the author had explicitly zeroed rendered at
+        // full size. Stylo gets this right; MinimalCascade did not, and the two cascades disagreeing
+        // about whether text is visible is exactly the class of divergence ADR-011 exists for.
+        Token::Number { value, .. } if *value == 0.0 => Some(0.0),
         _ => None,
     })
 }
