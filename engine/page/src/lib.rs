@@ -879,6 +879,14 @@ impl Page {
     /// The computed styles, keyed by node — the input to layout, and the thing to look at when a
     /// box is the wrong size (a filled box vs a hugged one is a `display` question, not a layout
     /// bug). Read-only; used by the render/box-dump harness.
+    /// The decoded bitmaps, keyed by node — for probes that need to ask "how big is the image the
+    /// page actually got?", which is a different question from "how big is the box".
+    pub fn decoded_images(
+        &self,
+    ) -> &std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>> {
+        &self.images
+    }
+
     pub fn styles_map(&self) -> &StyleMap {
         &self.styles
     }

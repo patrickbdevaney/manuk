@@ -514,6 +514,43 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
         p
     });
     let _ = vh;
+    // `--backgrounds` lists every element that carries a `background-image`, with its box. A page
+    // that looks like one enormous image is either one enormous element or one badly-placed layer,
+    // and this is the two-second way to tell which.
+    if args.iter().any(|a| a == "--backgrounds") {
+        let rects = page.root_box.node_rects(page.dom());
+        let dom = page.dom();
+        println!(
+            "{:<26} {:<14} {:<10} {:<10} {:<32} {}",
+            "element", "natural", "size", "repeat", "url", "box"
+        );
+        for (&n, st) in page.styles_map().iter() {
+            let Some(manuk_css::BackgroundImage::Url(u)) = st.background_image.as_ref() else {
+                continue;
+            };
+            let tag = dom.tag_name(n).unwrap_or("?");
+            let id = dom.element(n).and_then(|e| e.attr("id")).unwrap_or("");
+            let cls = dom.element(n).and_then(|e| e.attr("class")).unwrap_or("");
+            let name = format!("{tag}#{id}.{}", cls.split_whitespace().next().unwrap_or(""));
+            let bx = rects
+                .get(&n)
+                .map(|r| format!("[{:.0} {:.0} {:.0}x{:.0}]", r.x, r.y, r.width, r.height))
+                .unwrap_or_else(|| "(no box)".into());
+            let u = if u.len() > 30 { &u[u.len() - 30..] } else { u.as_str() };
+            let nat = page
+                .decoded_images()
+                .get(&n)
+                .map(|i| format!("{}x{}", i.width, i.height))
+                .unwrap_or_else(|| "(not loaded)".into());
+            println!(
+                "{name:<26} {:<14} {:<10} {:<10} {u:<32} {bx}",
+                nat,
+                format!("{:?}", st.background_size),
+                format!("{:?}", st.background_repeat)
+            );
+        }
+        return;
+    }
     // The <html> class is the page's own switch board (`client-nojs` → `client-js`, dark mode,
     // feature flags). If a script failed to flip it, everything downstream is styled for the wrong
     // world — so print what it ended up as.
@@ -527,6 +564,28 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
         }
     }
 
+    // `--paint SUBSTR` — what the RASTERIZER is actually asked to draw. The gap between "the box is
+    // laid out correctly" and "the user can see it" is where invisible-content bugs live, and no
+    // geometry probe can see into it.
+    if let Some(want) = flag(args, "--paint") {
+        let dl = manuk_paint::DisplayList::build_with_images(&page.root_box, page.decoded_images());
+        let mut n = 0;
+        for it in &dl.items {
+            if let manuk_paint::DisplayItem::Text { x, baseline, text, style } = it {
+                if text.contains(want) {
+                    let c = style.color;
+                    println!(
+                        "TEXT {text:?} at x={x:.0} baseline={baseline:.0} size={:.1} \
+                         colour=#{:02x}{:02x}{:02x} alpha={}",
+                        style.font_size, c.r, c.g, c.b, c.a
+                    );
+                    n += 1;
+                }
+            }
+        }
+        println!("({n} text item(s) containing {want:?} in the display list)");
+        return;
+    }
     // `--tree ID` — print the LAYOUT BOX SUBTREE under one element (tag.class + rect), which is the
     // only view that shows *which* box is the wrong size. An id-keyed dump tells you the container
     // is 442px wide; this tells you which child made it so.
@@ -556,11 +615,33 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
                             .unwrap_or_default();
                         // The COMPUTED display is what decides whether a box fills or hugs — the
                         // difference between an icon button and a full-width bar. Show it.
-                        let d = styles
+                        // Display decides whether a box fills or hugs. COLOUR and VISIBILITY decide
+                        // whether the user can see it at all — and "laid out correctly, painted
+                        // invisibly" is a failure mode that a geometry-only probe reports as
+                        // perfect.
+                        let (d, extra) = styles
                             .get(&n)
-                            .map(|s| format!("{:?}", s.display))
-                            .unwrap_or_else(|| "?".into());
-                        format!("{tag}{cls} <{d}>")
+                            .map(|s| {
+                                let c = s.color;
+                                let vis = if s.visibility != manuk_css::Visibility::Visible {
+                                    " HIDDEN"
+                                } else {
+                                    ""
+                                };
+                                (
+                                    format!("{:?}", s.display),
+                                    format!(
+                                        " #{:02x}{:02x}{:02x}{}{}",
+                                        c.r,
+                                        c.g,
+                                        c.b,
+                                        if c.a < 255 { format!("a{}", c.a) } else { String::new() },
+                                        vis
+                                    ),
+                                )
+                            })
+                            .unwrap_or_else(|| ("?".into(), String::new()));
+                        format!("{tag}{cls} <{d}>{extra}")
                     })
                     .unwrap_or_else(|| "(anon)".into());
                 out.push(format!(
@@ -582,10 +663,21 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
                 if hit {
                     for f in frags {
                         if !f.text.trim().is_empty() {
+                            // The fragment's OWN colour — a text run takes its style from the inline
+                            // element it came from, not from the block box above it, so a blue <p>
+                            // full of invisible <a> text looks perfect in a block-level probe.
                             out.push(format!(
-                                "{:indent$}\"{}\"  [{:.0} {:.0} w={:.0}]",
+                                "{:indent$}\"{}\" #{:02x}{:02x}{:02x}{} [{:.0} {:.0} w={:.0}]",
                                 "",
                                 f.text.trim(),
+                                f.style.color.r,
+                                f.style.color.g,
+                                f.style.color.b,
+                                if f.style.color.a < 255 {
+                                    format!("a{}", f.style.color.a)
+                                } else {
+                                    String::new()
+                                },
                                 f.x,
                                 f.line_top,
                                 f.width,

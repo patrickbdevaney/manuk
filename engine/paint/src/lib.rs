@@ -209,15 +209,54 @@ impl DisplayList {
     /// `clip` is the intersection of any `overflow`-clipping ancestors' boxes (from
     /// `clip_map`), applied to this box's items at paint time.
     #[allow(clippy::type_complexity)]
-    fn layered_groups(
+    pub(crate) fn layered_groups(
         root: &LayoutBox,
         images: &std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<DecodedImage>>,
         z_index: &std::collections::HashMap<manuk_dom::NodeId, i32>,
         clip_map: &std::collections::HashMap<manuk_dom::NodeId, Rect>,
     ) -> Vec<(i32, Option<Rect>, Vec<DisplayItem>)> {
         // One group of paint items per box, tagged with its layer (effective z).
+        //
+        // **An anonymous box has no node, and therefore was falling out of its own subtree's layer.**
+        // `z` and `clip` are looked up by NodeId; a box the layout engine synthesised (the inline
+        // formatting context inside a block, for instance) has none, so it got `z = 0` and no clip
+        // no matter what stacking context it was actually inside.
+        //
+        // That is not a corner case — it is where the TEXT lives. A `z-index`'d ancestor put its own
+        // background in layer 1 while the anonymous box holding its text stayed in layer 0, so the
+        // background sorted *after* the text and painted straight over it. old.reddit.com's post
+        // titles were laid out at the right place, in the right colour, at full alpha, present in the
+        // display list — and buried under their own ancestor's background. The identical hole in the
+        // clip lookup means an anonymous box also escaped every `overflow: hidden` above it.
+        //
+        // So z and clip are INHERITED down the tree, and a node's own entry (when it has one) wins.
         let mut groups: Vec<(i32, Option<Rect>, Vec<DisplayItem>)> = Vec::new();
-        root.walk(&mut |b| {
+        fn visit(
+            b: &LayoutBox,
+            inherited_z: i32,
+            inherited_clip: Option<Rect>,
+            z_index: &std::collections::HashMap<manuk_dom::NodeId, i32>,
+            clip_map: &std::collections::HashMap<manuk_dom::NodeId, Rect>,
+            emit: &mut impl FnMut(&LayoutBox, i32, Option<Rect>),
+        ) {
+            let z = b
+                .node
+                .and_then(|n| z_index.get(&n))
+                .copied()
+                .unwrap_or(inherited_z);
+            let clip = b
+                .node
+                .and_then(|n| clip_map.get(&n))
+                .copied()
+                .or(inherited_clip);
+            emit(b, z, clip);
+            if let BoxContent::Block(children) = &b.content {
+                for c in children {
+                    visit(c, z, clip, z_index, clip_map, emit);
+                }
+            }
+        }
+        let mut push_group = |b: &LayoutBox, z: i32, clip: Option<Rect>| {
             let mut items = Vec::new();
             // `visibility: hidden` / `opacity: 0` — the box still occupies its space (layout already
             // accounted for it) but paints NOTHING. Without this, every dropdown, modal and tooltip
@@ -422,11 +461,10 @@ impl DisplayList {
                 }
             }
             if !items.is_empty() {
-                let z = b.node.and_then(|n| z_index.get(&n)).copied().unwrap_or(0);
-                let clip = b.node.and_then(|n| clip_map.get(&n)).copied();
                 groups.push((z, clip, items));
             }
-        });
+        };
+        visit(root, 0, None, z_index, clip_map, &mut push_group);
         // Stable sort keeps tree (document) order within each layer.
         groups.sort_by_key(|(z, _, _)| *z);
         groups
@@ -1047,6 +1085,80 @@ fn lerp(dst: u8, src: u8, a: f32) -> u8 {
 mod bg_tests {
     use super::*;
     use manuk_css::{MinimalCascade, StyleEngine, Stylesheet};
+
+    /// Regression: **an anonymous box must inherit its ancestors' stacking layer and clip.**
+    ///
+    /// `z` and `clip` are looked up by NodeId, and a box the layout engine synthesised has no node —
+    /// so it got `z = 0` and no clip regardless of what stacking context it was actually inside. That
+    /// is not a corner case: the anonymous box is where the TEXT lives. A `z-index`'d ancestor put
+    /// its own background in layer 1 while the anonymous box holding its text stayed in layer 0, so
+    /// the background sorted AFTER the text and painted straight over it.
+    ///
+    /// old.reddit.com's post titles were laid out at the right place, in the right colour, at full
+    /// alpha, and present in the display list — and buried under their own ancestor's background.
+    /// Every geometry probe called it perfect.
+    #[test]
+    fn an_anonymous_box_inherits_its_ancestors_stacking_layer() {
+        // **MIXED inline + block content** is what makes the layout engine synthesise an anonymous
+        // box (`flush_inline_run`) to hold the inline run. A block whose children are all inline
+        // does not, and a test written that way cannot fail — I wrote two of those first, and both
+        // passed with the bug deliberately reintroduced.
+        let dom = manuk_html::parse(
+            r##"<div id="card">Title<a id="lnk" href="#x"> link</a><div id="blk">block</div></div>"##,
+        );
+        let styles = MinimalCascade.cascade(
+            &dom,
+            &[Stylesheet::parse(
+                "#card{position:relative;z-index:1;background:#fff;width:200px}",
+            )],
+        );
+        let fonts = FontContext::new();
+        let root = manuk_layout::layout_document(&dom, &styles, &fonts, 400.0);
+
+        let node = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .unwrap()
+        };
+        let mut z = std::collections::HashMap::new();
+        // What the page layer computes: the z-index'd element applies its layer to its whole subtree.
+        z.insert(node("card"), 1);
+        z.insert(node("lnk"), 1);
+        z.insert(node("blk"), 1);
+
+        let groups = DisplayList::layered_groups(
+            &root,
+            &std::collections::HashMap::new(),
+            &z,
+            &std::collections::HashMap::new(),
+        );
+        // Find the layer of the group that actually carries the text.
+        let text_layer = groups
+            .iter()
+            .find(|(_, _, items)| {
+                items
+                    .iter()
+                    .any(|i| matches!(i, DisplayItem::Text { text, .. } if text.contains("Title")))
+            })
+            .map(|(z, _, _)| *z)
+            .expect("the text must be somewhere in the display list");
+        let card_layer = groups
+            .iter()
+            .find(|(_, _, items)| items.iter().any(|i| matches!(i, DisplayItem::Rect { .. })))
+            .map(|(z, _, _)| *z)
+            .expect("the card background");
+
+        assert_eq!(
+            text_layer, 1,
+            "the anonymous box holding the text must be in its ancestor's layer (1), not stranded in \
+             layer 0 — in layer 0 it sorts BEFORE the card's background and gets painted over"
+        );
+        assert!(
+            text_layer >= card_layer,
+            "text (layer {text_layer}) must not sort below the background of its own ancestor \
+             (layer {card_layer})"
+        );
+    }
 
     /// Regression: **a `background-image: url()` must not ALSO be blitted as a replaced image.**
     ///
