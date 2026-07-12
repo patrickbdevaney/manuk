@@ -1279,7 +1279,7 @@ impl Ctx<'_> {
 
         if !has_block && !kids.iter().any(|&k| is_float(&self.styles[&k])) {
             // Pure inline formatting context (no floats to flow around).
-            let items = self.collect_inline_group(&flow_kids, cw);
+            let items = self.collect_inline_group(&flow_kids, cw, Some(node));
             let align = self.styles[&node].text_align;
             let (frags, atomics, h) = self.layout_inline(items, cx, cy, cw, align, floats);
             if atomics.is_empty() {
@@ -2379,7 +2379,7 @@ impl Ctx<'_> {
         if run.is_empty() {
             return (cur_y, prev_margin);
         }
-        let items = self.collect_inline_group(run, cw);
+        let items = self.collect_inline_group(run, cw, None);
         run.clear();
         if items.is_empty() {
             return (cur_y, prev_margin); // whitespace-only: keep the pending margin
@@ -2513,12 +2513,43 @@ impl Ctx<'_> {
 
     /// Collect inline tokens (words) from a run of inline-level siblings, tracking
     /// inter-word spacing.
-    fn collect_inline_group(&self, nodes: &[NodeId], cw: f32) -> Vec<InlineItem> {
+    ///
+    /// `owner` is the element whose inline formatting context this is, when the run is *all* of its
+    /// content. Its `::before` / `::after` generated content is materialised here, at the two ends —
+    /// generated content is not in the DOM (script must never see it), so this is the only place it
+    /// can enter the flow. A block whose children are a *mix* of blocks and inlines passes `None`;
+    /// its pseudos would otherwise be emitted once per run.
+    fn collect_inline_group(&self, nodes: &[NodeId], cw: f32, owner: Option<NodeId>) -> Vec<InlineItem> {
         let mut out = Vec::new();
         let mut pending_space = false;
         let mut first = true;
+        let pseudo = |which: fn(&ComputedStyle) -> &Option<Box<ComputedStyle>>| -> Option<(String, TextStyle)> {
+            let s = owner.and_then(|n| self.styles.get(&n))?;
+            let p = which(s).as_ref()?;
+            let text = p.content.clone()?;
+            (!text.is_empty()).then(|| (text, text_style(p, self.fonts)))
+        };
+        if let Some((text, style)) = pseudo(|s| &s.before) {
+            out.push(InlineItem::Word {
+                text,
+                style,
+                space_before: false,
+                node: owner,
+                no_wrap: true,
+            });
+            first = false;
+        }
         for &n in nodes {
             self.collect_inline_node(n, &mut out, &mut pending_space, &mut first, None, cw);
+        }
+        if let Some((text, style)) = pseudo(|s| &s.after) {
+            out.push(InlineItem::Word {
+                text,
+                style,
+                space_before: pending_space && !first,
+                node: owner,
+                no_wrap: true,
+            });
         }
         out
     }
@@ -3955,5 +3986,25 @@ mod tests {
             }
         });
         assert!(seen, "the underline must reach the text fragment, which is what paints it");
+    }
+    /// Regression: `::before` / `::after` generated content enters the flow. It is how the web draws
+    /// icons, quotation marks, counters and dividers — and it is NOT in the DOM, so this is the only
+    /// place it can appear.
+    #[test]
+    fn pseudo_element_content_renders() {
+        let html = r#"<p id="p">body</p>"#;
+        let css = r#"#p::before{content:"[X] "} #p::after{content:" [Y]"}"#;
+        let (dom, root) = layout_html(html, css, 400.0);
+        let _ = &dom;
+        let mut text = String::new();
+        root.walk(&mut |b| {
+            if let BoxContent::Inline(frags) = &b.content {
+                for f in frags {
+                    text.push_str(&f.text);
+                }
+            }
+        });
+        assert!(text.contains("[X]"), "::before content must render (got {text:?})");
+        assert!(text.contains("[Y]"), "::after content must render (got {text:?})");
     }
 }

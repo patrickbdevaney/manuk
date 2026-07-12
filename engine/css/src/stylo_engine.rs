@@ -245,6 +245,16 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
         }
         let mut cs = to_computed_style(&cv);
         apply_presentational_hints(dom, node, &mut cs);
+        // `::before` / `::after` — generated content, cascaded against this element as its parent.
+        use stylo::selector_parser::PseudoElement as Pe;
+        cs.before = cascade_pseudo(
+            &stylist, &stylo_sheets, &lock, &guard, &guards, &el, &cv, Pe::Before,
+        )
+        .map(Box::new);
+        cs.after = cascade_pseudo(
+            &stylist, &stylo_sheets, &lock, &guard, &guards, &el, &cv, Pe::After,
+        )
+        .map(Box::new);
         map.insert(node, cs);
         parent_cv.insert(node, cv);
     }
@@ -480,6 +490,125 @@ fn match_rules_recursive(
 
 /// Compute one element's `ComputedValues`: match author rules, merge, cascade.
 #[allow(clippy::too_many_arguments)]
+/// Cascade a `::before` / `::after` **pseudo-element** and return its style, if any rule gives it
+/// `content`.
+///
+/// Generated content is not a DOM node — script must never see it — so it is computed here and
+/// carried on the originating element's style, then materialised as inline items at layout time.
+/// Without it the web loses its icons, its quotation marks, its counters, its dividers and a great
+/// deal of its layout scaffolding, all silently.
+#[allow(clippy::too_many_arguments)]
+fn cascade_pseudo(
+    stylist: &Stylist,
+    stylo_sheets: &[ServoArc<StyloStylesheet>],
+    lock: &SharedRwLock,
+    guard: &SharedRwLockReadGuard<'_>,
+    guards: &StylesheetGuards<'_>,
+    el: &StyloElement<'_>,
+    parent_cv: &ServoArc<ComputedValues>,
+    want: stylo::selector_parser::PseudoElement,
+) -> Option<crate::ComputedStyle> {
+    let mut winners: Vec<(u32, usize, ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>)> =
+        Vec::new();
+    let mut order = 0usize;
+    let mut caches = SelectorCaches::default();
+    let device = stylist.device();
+    for sheet in stylo_sheets {
+        let rules = sheet.contents.read_with(guard).rules(guard);
+        match_pseudo_rules(
+            rules, guard, device, el, &want, &mut caches, &mut winners, &mut order,
+        );
+    }
+    if winners.is_empty() {
+        return None;
+    }
+    winners.sort_by_key(|(spec, ord, _)| (*spec, *ord));
+    let mut merged = PropertyDeclarationBlock::new();
+    for (_, _, block) in &winners {
+        for (decl, importance) in block.read_with(guard).declaration_importance_iter() {
+            merged.push(decl.clone(), importance);
+        }
+    }
+    let arc = ServoArc::new(lock.wrap(merged));
+    let cv = stylist.compute_for_declarations::<StyloElement>(guards, parent_cv, arc);
+    let mut cs = to_computed_style(&cv);
+    // Only a pseudo with `content` generates a box at all.
+    use stylo::values::generics::counters::{Content, ContentItem};
+    let text = match cv.get_counters().clone_content() {
+        Content::Items(items) => {
+            let mut out = String::new();
+            for it in items.items.iter() {
+                if let ContentItem::String(sv) = it {
+                    out.push_str(sv);
+                }
+            }
+            out
+        }
+        _ => return None,
+    };
+    cs.content = Some(text);
+    Some(cs)
+}
+
+/// Like [`match_rules_recursive`], but matches only selectors whose rightmost part is the wanted
+/// **pseudo-element**, in `ForStatelessPseudoElement` mode.
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
+fn match_pseudo_rules(
+    rules: &[CssRule],
+    guard: &SharedRwLockReadGuard<'_>,
+    device: &Device,
+    el: &StyloElement<'_>,
+    want: &stylo::selector_parser::PseudoElement,
+    caches: &mut SelectorCaches,
+    winners: &mut Vec<(u32, usize, ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>)>,
+    order: &mut usize,
+) {
+    for rule in rules {
+        match rule {
+            CssRule::Style(style_rule) => {
+                let sr = style_rule.read_with(guard);
+                for sel in sr.selectors.slice() {
+                    if sel.pseudo_element() != Some(want) {
+                        *order += 1;
+                        continue;
+                    }
+                    let mut ctx = MatchingContext::new(
+                        MatchingMode::ForStatelessPseudoElement,
+                        None,
+                        caches,
+                        selectors::context::QuirksMode::NoQuirks,
+                        NeedsSelectorFlags::No,
+                        MatchingForInvalidation::No,
+                    );
+                    if matches_selector(sel, 0, None, el, &mut ctx) {
+                        winners.push((sel.specificity(), *order, sr.block.clone()));
+                    }
+                    *order += 1;
+                }
+            }
+            CssRule::Media(media_rule) => {
+                let ml = media_rule.media_queries.read_with(guard);
+                let mut custom = CustomMediaEvaluator::none();
+                if ml.evaluate(device, QuirksMode::NoQuirks, &mut custom) {
+                    let nested = media_rule.rules.read_with(guard);
+                    match_pseudo_rules(&nested.0, guard, device, el, want, caches, winners, order);
+                }
+            }
+            CssRule::Supports(supports_rule) => {
+                if supports_rule.enabled {
+                    let nested = supports_rule.rules.read_with(guard);
+                    match_pseudo_rules(&nested.0, guard, device, el, want, caches, winners, order);
+                }
+            }
+            CssRule::LayerBlock(layer_rule) => {
+                let nested = layer_rule.rules.read_with(guard);
+                match_pseudo_rules(&nested.0, guard, device, el, want, caches, winners, order);
+            }
+            _ => {}
+        }
+    }
+}
+
 fn cascade_one_element(
     stylist: &Stylist,
     stylo_sheets: &[ServoArc<StyloStylesheet>],

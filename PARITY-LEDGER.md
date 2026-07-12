@@ -48,7 +48,7 @@ the screenshots supply the priority.
 | ❌ | `@container` queries | P2 | |
 | ❌ | `:has()` | P1 | Stylo can match it; not surfaced |
 | 🟡 | Pseudo-classes | P1 | have: hover, checked, disabled, required, nth-child, first/last/only-child, not, root, link, empty, even/odd. **missing: `:focus`, `:focus-visible`, `:active`, `:visited`, `:target`, `:is()`, `:where()`** |
-| ❌ | **`::before` / `::after` + `content`** | **P0** | **(seen)** icons, quotes, counters, clearfix, layout scaffolding — a huge share of the visual web |
+| ✅ | **`::before` / `::after` + `content`** | — | Tick 31. Both cascades. `MinimalCascade` *dropped any selector containing `::`*; Stylo needed a real pseudo-element matching pass. Limit: not yet materialised in a block that mixes block+inline children |
 | ❌ | `::placeholder`, `::selection`, `::marker`, `::first-line` | P1 | |
 
 ## 2. CSS — box, paint, visual
@@ -62,18 +62,18 @@ the screenshots supply the priority.
 | ✅ | `z-index` stacking | 🟡 | approximate stacking contexts (subtree layer), not the full CSS2 §E algorithm |
 | ✅ | `visibility`, `opacity` | — | Tick 19 — without them every dropdown/modal painted on top of the page |
 | ✅ | `background-color` (+ `bgcolor`/`text` presentational) | — | |
-| ❌ | **`background-image` (url)** | **P0** | **(seen)** renders *nothing* |
-| ❌ | **`linear-gradient` / `radial-gradient` / `conic-gradient`** | **P0** | **(seen)** renders *nothing*. Hero sections, buttons, cards |
-| ❌ | `background-size` / `-position` / `-repeat` / `-clip` / `-origin`, multiple backgrounds | **P0** | |
+| ✅ | **`background-image` (url)** | — | Tick 30 — fetched + decoded like `<img>` |
+| ✅ | **`linear-gradient` / `radial-gradient`** | 🟡 | Tick 30. No `conic-gradient`; no colour-interpolation hints |
+| 🟡 | `background-size` / `-repeat`, `background` shorthand | P1 | no `-position`/`-clip`/`-origin`, no multiple layers |
 | ✅ | `border-radius` (uniform), `box-shadow` (single, approximated blur) | 🟡 | no per-corner radii; no multiple/inset shadows; no true Gaussian |
 | 🟡 | `border` | P1 | widths + one colour; **no per-side colour, no `dashed`/`dotted`/`double`** |
-| ❌ | **`text-decoration`** (underline/line-through) | **P0** | **(seen)** links are not underlined. Also `text-decoration-color/style/thickness` |
-| ❌ | **`list-style`** — markers/bullets/numbers | **P0** | **(seen)** every `<ul>`/`<ol>` on the web renders as bare indented text |
+| ✅ | **`text-decoration`** (underline/overline/line-through) | 🟡 | Tick 30. No `-color`/`-style`/`-thickness` |
+| ✅ | **`list-style`** — markers/bullets/numbers | — | Tick 30. disc/circle/square/decimal/alpha/roman, `<ol start>`, `<li value>`, inside/outside |
 | ✅ | `mask-image` | — | Tick 25 — the modern icon: an empty element, a background colour, a mask |
 | ❌ | `filter` / `backdrop-filter` | P1 | blur/brightness on overlays and cards |
 | 🟡 | `transform` | P1 | parsed + mapped; **rotate/scale/skew not applied in paint** (translate approximated) |
 | ❌ | `object-fit` / `object-position` | P1 | images render stretched |
-| ❌ | `outline` (incl. focus rings) | **P0** | accessibility + keyboard nav: focus is invisible |
+| ✅ | `outline` (incl. focus rings) | — | Tick 30 |
 | ❌ | `cursor` | P1 | ergonomics — pointer never changes over a link/button |
 | ❌ | `text-transform`, `letter-spacing`, `word-spacing`, `text-indent` | P1 | |
 | ❌ | `overflow: hidden/auto/scroll` as a **scroll container** | **P0** | clipping exists; *scrolling inside an element* does not |
@@ -146,9 +146,9 @@ SpiderMonkey gives us the *language* for free. Everything below is the **platfor
 | ✅ | `window.open` / `opener` / `postMessage` | — | |
 | ✅ | MutationObserver, `matchMedia`, `requestAnimationFrame` | — | |
 | ✅ | **dynamic `<script src>` execution** | — | Tick 28 — how every code-split bundle ships |
-| ❌ | **`element.style` (CSSOM inline style)** | **P0** | **(seen)** *the script throws*. Assigning `el.style.width` is the single most common DOM write on the web |
-| ❌ | **`classList`** (`add`/`remove`/`toggle`/`contains`) | **P0** | **(seen)** *the script throws.* Ubiquitous |
-| ❌ | `dataset`, `closest()`, `matches()`, `contains()` | **P0** | **(seen)** |
+| ✅ | **`element.style` (CSSOM inline style)** | — | Tick 29. A style written by script reaches the **cascade**, not just the attribute |
+| ✅ | **`classList`** | — | Tick 29 |
+| ✅ | `dataset`, `closest()`, `matches()`, `contains()` | — | Tick 29 |
 | ❌ | `CSSStyleSheet` / `document.styleSheets` / `insertRule` | P1 | CSS-in-JS |
 | ❌ | **`fetch` / `XMLHttpRequest`** (real) | **P0** | queued to the host but not resolved — every SPA data load |
 | ❌ | `FormData`, `URL`, `URLSearchParams`, `Headers`, `Blob`, `File` | **P0** | |
@@ -253,13 +253,12 @@ to **placement and paint fidelity** (§2 is where the remaining visual error liv
 
 ## Selection order (what the loop takes next)
 
-The P0 list, ordered by measured blast radius:
+~~1. CSSOM + DOM ergonomics~~ — **done, Tick 29.**
+~~2. Paint completeness~~ — **done, Tick 30.**
+~~3. `::before` / `::after`~~ — **done, Tick 31.**
 
-1. **CSSOM + DOM ergonomics** — `element.style`, `classList`, `dataset`, `closest`, `matches`.
-   *A script that touches any of these throws and takes the rest of the page's JS with it.*
-2. **Paint completeness** — `background-image`, gradients, `text-decoration`, list markers,
-   `outline`. *Every one is visible on the first screenful of most sites.*
-3. **`::before` / `::after` + `content`.**
+Remaining P0, ordered by measured blast radius:
+
 4. **Events & scrolling** — real event objects, `scrollTo`/`scrollY`/scroll events,
    `focus()`/`activeElement`, `IntersectionObserver`/`ResizeObserver`.
 5. **`fetch`/XHR** + `URL`/`FormData` — the SPA data path.

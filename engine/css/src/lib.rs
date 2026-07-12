@@ -400,6 +400,16 @@ pub struct ComputedStyle {
     pub list_style_type: ListStyleType,
     /// `list-style-position: inside` puts the marker in the principal box's content flow.
     pub list_style_inside: bool,
+    /// `content` — only meaningful on a `::before`/`::after` pseudo-element.
+    pub content: Option<String>,
+    /// The computed style of this element's `::before` / `::after` pseudo-elements, when they have
+    /// `content`. Generated content is not in the DOM (script must never see it), so it rides on
+    /// the element's style and is materialised as inline items at layout time.
+    ///
+    /// This is not a decorative corner of CSS: it is how the web draws icons, quotation marks,
+    /// counters, dividers, clearfixes and a great deal of layout scaffolding.
+    pub before: Option<Box<ComputedStyle>>,
+    pub after: Option<Box<ComputedStyle>>,
     /// `outline` — the focus ring. Without it keyboard focus is invisible, which is not a cosmetic
     /// bug but an accessibility one.
     pub outline_width: f32,
@@ -520,6 +530,9 @@ impl ComputedStyle {
             text_decoration: TextDecoration::default(),
             list_style_type: ListStyleType::Disc,
             list_style_inside: false,
+            content: None,
+            before: None,
+            after: None,
             outline_width: 0.0,
             outline_color: Rgba { r: 0, g: 0, b: 0, a: 0 },
             opacity: 1.0,
@@ -743,6 +756,12 @@ enum Pseudo {
     Link,
     /// `:not(<compound>)` — a single inner compound (no combinators).
     Not(Box<Compound>),
+    /// `::before` / `::after` — a **pseudo-ELEMENT**, not a pseudo-class. It does not filter which
+    /// elements match; it says the rule styles a *generated box* hanging off the matched element.
+    /// Treating it as an unknown pseudo-class (never matches) silently dropped every icon, quote,
+    /// counter and divider the web draws this way.
+    Before,
+    After,
     /// `:hover`/`:focus`/`:active`/`:visited`/`:target`/… — never matches statically.
     NeverStatic,
 }
@@ -889,6 +908,9 @@ fn pseudo_matches(p: &Pseudo, dom: &Dom, node: NodeId) -> bool {
             matches!(el.name.as_str(), "a" | "area" | "link") && el.attr("href").is_some()
         }
         Pseudo::Not(inner) => !compound_matches(inner, dom, node),
+        // A pseudo-ELEMENT never *filters* the element — the rule matches the originating element
+        // and styles its generated box. The cascade routes those declarations to `before`/`after`.
+        Pseudo::Before | Pseudo::After => true,
         Pseudo::NeverStatic => false,
     }
 }
@@ -1362,8 +1384,11 @@ fn parse_selector(text: &str) -> Option<Selector> {
             slotted: true,
         });
     }
-    // A pseudo-element we do not model must not silently match its subject.
-    if text.contains("::") {
+    // A pseudo-element we do not model must not silently match its subject — a rule for
+    // `::first-line` would otherwise restyle the whole element. But `::before` / `::after` we DO
+    // model: they are routed to a generated box, not to the subject. Dropping them here is what
+    // silently erased every icon, quotation mark, counter and divider the web generates.
+    if text.contains("::") && !text.contains("::before") && !text.contains("::after") {
         return None;
     }
 
@@ -1506,6 +1531,12 @@ fn parse_compound(token: &str) -> Option<Compound> {
             }
             ':' => {
                 chars.next(); // consume ':'
+                // `::before` — a pseudo-ELEMENT is written with two colons. Bailing on the second
+                // one dropped the whole selector, and with it every icon, quote and divider the web
+                // generates this way. (One colon is legal CSS2 syntax for these too.)
+                if chars.peek() == Some(&':') {
+                    chars.next();
+                }
                 // Read the pseudo name, then an optional parenthesised argument.
                 let name = take_ident(&mut chars);
                 if name.is_empty() {
@@ -1599,6 +1630,10 @@ fn parse_pseudo(name: &str, arg: Option<&str>) -> Option<Pseudo> {
         "enabled" => Pseudo::Enabled,
         "required" => Pseudo::Required,
         "link" | "any-link" => Pseudo::Link,
+        // Pseudo-ELEMENTS. `::before`/`::after` are legal with one colon too (CSS2 syntax), and
+        // plenty of real sheets still write them that way.
+        "before" => Pseudo::Before,
+        "after" => Pseudo::After,
         // Dynamic / state pseudos we can't evaluate in a static render → never match, so a
         // rule gated on them just doesn't apply (rather than dropping the whole rule).
         "hover" | "focus" | "active" | "visited" | "target" | "focus-within"
@@ -1829,11 +1864,25 @@ impl MinimalCascade {
                 // says could possibly match this element are tested (EPOCH-1: this is the fix for
                 // the O(nodes × rules) cascade).
                 let mut matched: Vec<(u32, usize, &Declaration)> = Vec::new();
+                // A rule whose subject carries `::before`/`::after` does NOT style the element — it
+                // styles a generated box hanging off it. Those declarations are routed to their own
+                // cascade below.
+                let mut pseudo_before: Vec<(u32, usize, &Declaration)> = Vec::new();
+                let mut pseudo_after: Vec<(u32, usize, &Declaration)> = Vec::new();
                 index.for_each_candidate(dom, node, |cand| {
                     if selector_matches_scoped(cand.sel, dom, node, cand.scope) {
                         let spec = cand.sel.specificity();
+                        let subject = cand.sel.parts.last();
+                        let is = |p: &Pseudo| subject.is_some_and(|c| c.pseudos.contains(p));
+                        let sink = if is(&Pseudo::Before) {
+                            &mut pseudo_before
+                        } else if is(&Pseudo::After) {
+                            &mut pseudo_after
+                        } else {
+                            &mut matched
+                        };
                         for d in &cand.rule.declarations {
-                            matched.push((spec, cand.order, d));
+                            sink.push((spec, cand.order, d));
                         }
                     }
                 });
@@ -1852,6 +1901,27 @@ impl MinimalCascade {
                 for (_, _, d) in matched.iter().filter(|(_, _, d)| d.important) {
                     apply_declaration(&mut s, d, parent_fs);
                 }
+                // `::before` / `::after` — generated content, cascaded against this element as its
+                // parent. Only a pseudo with `content` generates a box at all.
+                fn cascade_pseudo(
+                    base: &ComputedStyle,
+                    mut decls: Vec<(u32, usize, &Declaration)>,
+                ) -> Option<Box<ComputedStyle>> {
+                    if decls.is_empty() {
+                        return None;
+                    }
+                    decls.sort_by_key(|(spec, ord, _)| (*spec, *ord));
+                    let mut ps = ComputedStyle::inherit_from(base);
+                    for (_, _, d) in &decls {
+                        apply_declaration(&mut ps, d, base.font_size);
+                    }
+                    ps.content.as_ref()?;
+                    Some(Box::new(ps))
+                }
+                let (pb, pa) = (cascade_pseudo(&s, pseudo_before), cascade_pseudo(&s, pseudo_after));
+                s.before = pb;
+                s.after = pa;
+
                 // CSS `opacity` applies to the whole SUBTREE (it forms a group). We fold that in
                 // here so every box carries its *effective* opacity and paint needs no ancestor
                 // context: effective = own × parent's effective.
@@ -2069,7 +2139,7 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 s.color = c;
             }
         }
-        "background-color" | "background" => {
+        "background-color" => {
             if let Some(c) = values::parse_color(v) {
                 s.background_color = Some(c);
             }
@@ -2399,6 +2469,16 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 line_through: v.contains("line-through"),
             };
         }
+        "content" => {
+            let t = v.trim();
+            s.content = if t.eq_ignore_ascii_case("none") || t.eq_ignore_ascii_case("normal") {
+                None
+            } else {
+                // A quoted string; escapes like "\f101" (icon fonts) decode to the code point.
+                let inner = t.trim_matches('"').trim_matches('\'');
+                Some(decode_css_escapes(inner))
+            };
+        }
         "list-style-type" => s.list_style_type = parse_list_style_type(v),
         "list-style-position" => s.list_style_inside = v.trim().eq_ignore_ascii_case("inside"),
         "list-style" => {
@@ -2514,6 +2594,42 @@ fn parse_border_shorthand(v: &str, fs: f32) -> (Option<f32>, Option<Rgba>) {
 }
 
 /// Split `v` on top-level whitespace, keeping parenthesised groups (`rgba(0, 0, 0, .3)`) intact.
+/// Decode CSS string escapes — `\f101` is how every icon font names its glyph.
+fn decode_css_escapes(s: &str) -> String {
+    let mut out = String::new();
+    let mut it = s.chars().peekable();
+    while let Some(c) = it.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        let mut hex = String::new();
+        while hex.len() < 6 {
+            match it.peek() {
+                Some(h) if h.is_ascii_hexdigit() => {
+                    hex.push(*h);
+                    it.next();
+                }
+                _ => break,
+            }
+        }
+        if hex.is_empty() {
+            if let Some(n) = it.next() {
+                out.push(n);
+            }
+        } else {
+            // One optional whitespace terminates the escape.
+            if it.peek() == Some(&' ') {
+                it.next();
+            }
+            if let Some(ch) = u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32) {
+                out.push(ch);
+            }
+        }
+    }
+    out
+}
+
 fn parse_list_style_type_opt(v: &str) -> Option<ListStyleType> {
     Some(match v.trim().to_ascii_lowercase().as_str() {
         "disc" => ListStyleType::Disc,
@@ -3481,5 +3597,22 @@ mod shadow_scoping_tests {
         assert!(m("p + p", ps[1]), "beta follows a p");
         assert!(!m("p + p", ps[0]), "alpha has no preceding p sibling");
         assert!(m("a ~ p", ps[2]), "gamma has a preceding a sibling");
+    }
+}
+
+/// `::before` / `::after` — generated content. Not a decorative corner of CSS: it is how the web
+/// draws icons, quotation marks, counters, dividers and much of its layout scaffolding.
+#[cfg(test)]
+mod pseudo_tests {
+    use super::*;
+    #[test]
+    fn before_is_cascaded() {
+        let dom = manuk_html::parse(r#"<p id="p">body</p>"#);
+        let sheets = vec![Stylesheet::parse(r#"#p::before{content:"[X] "}"#)];
+        let styles = MinimalCascade.cascade(&dom, &sheets);
+        let p = dom.descendants(dom.root()).find(|&n| dom.tag_name(n) == Some("p")).unwrap();
+        let s = &styles[&p];
+        assert!(s.before.is_some(), "::before must cascade");
+        assert_eq!(s.before.as_ref().unwrap().content.as_deref(), Some("[X] "));
     }
 }
