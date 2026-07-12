@@ -25,8 +25,11 @@ before=$(df -h /home | awk 'NR==2 {print $4}')
 pct=$(df /home | awk 'NR==2 {gsub(/%/,""); print $5}')
 echo "▶ /home is ${pct}% full ($before free)"
 
-echo "  · incremental fragments"
-rm -rf target/debug/incremental target/release/incremental 2>/dev/null
+# Incremental fragments live in RAM now (METHODOLOGY 10.1) — flush them there, and reclaim any that
+# a build made before the ramdisk was wired up. `rm -rf` through the symlink would delete the RAM
+# contents and leave a live symlink, which is exactly what we want either way.
+echo "  · incremental fragments (RAM-resident; flushed, not written to disk at all)"
+./scripts/ramdisk.sh --flush >/dev/null 2>&1 || rm -rf target/debug/incremental target/release/incremental 2>/dev/null
 
 # The debug tree is the hog and the least valuable: nothing ships from it and nothing gates on it.
 if [ "${1:-}" = "--aggressive" ] || [ "$pct" -ge 85 ]; then

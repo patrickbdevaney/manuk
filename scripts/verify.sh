@@ -24,6 +24,11 @@ PCT=$(df /home 2>/dev/null | awk 'NR==2 {gsub(/%/,""); print $5}')
 if [ -n "${PCT:-}" ] && [ "$PCT" -ge 88 ]; then
   head_ "D · disk (${PCT}% full — reclaiming before the build fails on ENOSPC)"
   bash scripts/disk-hygiene.sh | sed 's/^/  /'
+
+# Ephemeral build output in RAM (METHODOLOGY 10.1). Idempotent, and it must run BEFORE the build:
+# tmpfs does not survive a reboot, so the symlink into it has to be re-pointed or the compile fails
+# on a dangling path. Disk-wear elimination, NOT a speed win — see scripts/ramdisk.sh.
+./scripts/ramdisk.sh >/dev/null 2>&1 || true
 fi
 
 head_ "B · build (workspace)"
