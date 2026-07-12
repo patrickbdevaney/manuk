@@ -196,6 +196,25 @@ pub fn run_document_scripts(
 /// `window.open(...)` requests since the last call, each `(win_id, url)` — the host opens each as
 /// a new tab/window (recording `win_id → tab` for `postMessage` routing). Empty without the JS
 /// feature.
+/// Tell the page its view changed (scroll / relayout): run the observers, fire `scroll`.
+#[cfg(feature = "_sm")]
+#[allow(clippy::too_many_arguments)]
+pub fn view_changed(
+    ctx: &PageContext,
+    dom: &mut manuk_dom::Dom,
+    scroll_y: f32,
+    vw: f32,
+    vh: f32,
+    scrolled: bool,
+    layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<(), JsError> {
+    with_runtime(|rt| {
+        ctx.view_changed(rt, dom, scroll_y, vw, vh, scrolled, layout, styles)
+            .map_err(|message| JsError { message })
+    })
+}
+
 /// Publish the viewport's scroll offset + the focused element into the JS world before a re-entry.
 #[cfg(feature = "_sm")]
 pub fn set_view_state(scroll_x: f32, scroll_y: f32, active: Option<manuk_dom::NodeId>) {

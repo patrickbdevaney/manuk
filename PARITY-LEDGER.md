@@ -152,9 +152,9 @@ SpiderMonkey gives us the *language* for free. Everything below is the **platfor
 | ❌ | `CSSStyleSheet` / `document.styleSheets` / `insertRule` | P1 | CSS-in-JS |
 | ❌ | **`fetch` / `XMLHttpRequest`** (real) | **P0** | queued to the host but not resolved — every SPA data load |
 | ❌ | `FormData`, `URL`, `URLSearchParams`, `Headers`, `Blob`, `File` | **P0** | |
-| ❌ | `IntersectionObserver`, `ResizeObserver` | **P0** | lazy-loading, infinite scroll, sticky headers — huge on real-time feeds |
+| ✅ | `IntersectionObserver`, `ResizeObserver` | — | Tick 33 — driven by the ENGINE after every layout/scroll, the only honest moment to ask "did this box move into view?" |
 | ✅ | `Event`/`CustomEvent`/`MouseEvent`/`KeyboardEvent`/`PointerEvent`/`InputEvent` constructors | 🟡 | Tick 32. `dispatchEvent` took only a *string* — an Event object was coerced to `"[object Object]"`. No Touch events yet |
-| 🟡 | `scrollTo`/`scrollBy`/`scrollIntoView`, `window.scrollX/Y` | **P0** | Tick 32 — the script reads the live offset and *requests* a scroll; the shell performs it. **Still missing: `scroll` EVENTS** (a feed cannot know it was scrolled) |
+| ✅ | `scrollTo`/`scrollBy`/`scrollIntoView`, `window.scrollX/Y`, **`scroll` events** | — | Ticks 32–33. The script reads the live offset and *requests* a scroll; the shell performs it and tells the page |
 | 🟡 | `focus()` / `blur()` / `document.activeElement` | P1 | Tick 32. **Still missing: tab order / keyboard traversal** |
 | ❌ | `structuredClone`, `queueMicrotask`, `requestIdleCallback` | P1 | |
 | ❌ | Web Workers | P1 | |

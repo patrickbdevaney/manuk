@@ -1496,6 +1496,25 @@ unsafe fn arg_f64(cx: *mut RawJSContext, vp: *mut Value, argc: u32, i: u32) -> O
     }
 }
 
+/// `__rect(nodeId)` → `[x, y, w, h]` from the layout snapshot, or `null`. The seam the observers
+/// are built on: an observer's whole job is to answer "where is this box now?".
+unsafe extern "C" fn host_rect(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let id = arg_f64(cx, vp, argc, 0).unwrap_or(-1.0);
+    if id < 0.0 {
+        *vp = NullValue();
+        return true;
+    }
+    let node = NodeId(id as usize);
+    match LAYOUT_RECTS.with(|l| l.borrow().get(&node).copied()) {
+        Some(r) => match eval_in_current_global(cx, &format!("[{},{},{},{}]", r[0], r[1], r[2], r[3])) {
+            Some(v) => *vp = v,
+            None => *vp = NullValue(),
+        },
+        None => *vp = NullValue(),
+    }
+    true
+}
+
 /// `element.matches(sel)` — does this element match the selector?
 unsafe extern "C" fn el_matches(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let ok = match (this_node(vp), arg_string(cx, vp, argc, 0)) {
@@ -1776,6 +1795,14 @@ pub unsafe fn install(
     JS_DefineFunction(
         &mut wrap_cx(cx),
         global.handle(),
+        c"__rect".as_ptr(),
+        Some(host_rect),
+        1,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
         c"getComputedStyle".as_ptr(),
         Some(window_get_computed_style),
         1,
@@ -1990,6 +2017,44 @@ impl PageContext {
         let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"dynamic.js".to_owned(), 1);
         if evaluate_script(runtime.cx(), global.handle(), src, rval.handle_mut(), opts).is_err() {
             tracing::warn!("a dynamically loaded <script> threw; continuing");
+        }
+        crate::event_loop::run_deferred(runtime, global.handle())?;
+        Ok(())
+    }
+
+    /// Tell the page the **view changed** — it scrolled, or it was laid out again.
+    ///
+    /// This is the honest moment to run the observers and fire `scroll`: only the engine knows when
+    /// a box moved. A feed built on `IntersectionObserver` does not merely look wrong without this
+    /// — it never loads its second screenful, because nothing ever tells it the sentinel came into
+    /// view.
+    pub fn view_changed(
+        &self,
+        runtime: &mut Runtime,
+        dom: &mut Dom,
+        scroll_y: f32,
+        vw: f32,
+        vh: f32,
+        scrolled: bool,
+        layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    ) -> Result<(), String> {
+        LAYOUT_RECTS.with(|l| *l.borrow_mut() = layout.clone());
+        STYLES.with(|s| *s.borrow_mut() = styles.clone());
+        set_current_dom(dom as *mut Dom);
+        SCROLL.with(|c| c.set((0.0, scroll_y)));
+
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        let mut src = format!("__runObservers({scroll_y},{vh},{vw});");
+        if scrolled {
+            src.push_str("__fireWindowEvent('scroll',{type:'scroll'});");
+        }
+        rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
+        let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"view.js".to_owned(), 1);
+        if evaluate_script(runtime.cx(), global.handle(), &src, rval.handle_mut(), opts).is_err() {
+            tracing::warn!("observer/scroll callback threw; continuing");
         }
         crate::event_loop::run_deferred(runtime, global.handle())?;
         Ok(())
@@ -2594,6 +2659,106 @@ const WINDOW_PRELUDE: &str = r#"
             if (a && typeof a === 'object') { dx = a.left || 0; dy = a.top || 0; }
             else { dx = a || 0; dy = b || 0; }
             g.__scrollTo(cur[0] + (Number(dx) || 0), cur[1] + (Number(dy) || 0));
+        };
+
+        // ---- IntersectionObserver / ResizeObserver -------------------------------------------
+        // These are how the real-time web works: lazy images, infinite scroll, "load more" at the
+        // bottom of a feed, sticky headers that latch, sentinels that trigger the next page,
+        // components that re-layout when their container changes. A feed built on them does not
+        // merely look wrong without them — it never loads its second screenful.
+        //
+        // The engine drives them: after a layout or a scroll it calls `__runObservers`, which is
+        // the only honest moment to ask "did this box move into view / change size?".
+        g.__ioList = [];
+        g.__roList = [];
+        var rectOf = function (el) {
+            try { return el && el.__nodeId != null ? g.__rect(el.__nodeId) : null; } catch (e) { return null; }
+        };
+        g.IntersectionObserver = function (cb, opts) {
+            opts = opts || {};
+            this._cb = cb;
+            this._targets = [];
+            this._prev = new Map();
+            // `rootMargin` grows the viewport rectangle, which is exactly how a feed asks to be
+            // told *before* the sentinel is actually visible. Only a px value is honoured.
+            var m = String(opts.rootMargin || '0px').trim().split(/\s+/)[0];
+            this._margin = parseFloat(m) || 0;
+            var th = opts.threshold;
+            this._thresholds = (th === undefined) ? [0] : (Array.isArray(th) ? th.slice() : [th]);
+            this.observe = function (el) { if (el && this._targets.indexOf(el) < 0) this._targets.push(el); };
+            this.unobserve = function (el) {
+                var i = this._targets.indexOf(el);
+                if (i >= 0) this._targets.splice(i, 1);
+            };
+            this.disconnect = function () { this._targets.length = 0; };
+            this.takeRecords = function () { return []; };
+            g.__ioList.push(this);
+        };
+        g.ResizeObserver = function (cb) {
+            this._cb = cb;
+            this._targets = [];
+            this._prev = new Map();
+            this.observe = function (el) { if (el && this._targets.indexOf(el) < 0) this._targets.push(el); };
+            this.unobserve = function (el) {
+                var i = this._targets.indexOf(el);
+                if (i >= 0) this._targets.splice(i, 1);
+            };
+            this.disconnect = function () { this._targets.length = 0; };
+            g.__roList.push(this);
+        };
+        // Called by the engine after every layout or scroll. `scrollY`/`vh`/`vw` describe the
+        // viewport in document coordinates.
+        g.__runObservers = function (scrollY, vh, vw) {
+            var top = scrollY, bottom = scrollY + vh;
+            for (var i = 0; i < g.__ioList.length; i++) {
+                var o = g.__ioList[i];
+                var entries = [];
+                for (var j = 0; j < o._targets.length; j++) {
+                    var el = o._targets[j];
+                    var r = rectOf(el);
+                    if (!r) continue;
+                    var t = r[1], b = r[1] + r[3];
+                    var visible = Math.max(0, Math.min(b, bottom + o._margin) - Math.max(t, top - o._margin));
+                    var ratio = r[3] > 0 ? visible / r[3] : 0;
+                    var isInt = visible > 0;
+                    var was = o._prev.get(el);
+                    if (was === undefined || was.isIntersecting !== isInt || Math.abs(was.ratio - ratio) > 0.01) {
+                        o._prev.set(el, { isIntersecting: isInt, ratio: ratio });
+                        entries.push({
+                            target: el,
+                            isIntersecting: isInt,
+                            intersectionRatio: ratio,
+                            boundingClientRect: { x: r[0], y: r[1] - scrollY, width: r[2], height: r[3],
+                                                  top: r[1] - scrollY, left: r[0],
+                                                  bottom: r[1] - scrollY + r[3], right: r[0] + r[2] },
+                            rootBounds: { x: 0, y: 0, width: vw, height: vh, top: 0, left: 0, bottom: vh, right: vw },
+                            time: 0
+                        });
+                    }
+                }
+                if (entries.length) { try { o._cb(entries, o); } catch (e) {} }
+            }
+            for (var k = 0; k < g.__roList.length; k++) {
+                var ro = g.__roList[k];
+                var res = [];
+                for (var n = 0; n < ro._targets.length; n++) {
+                    var e2 = ro._targets[n];
+                    var r2 = rectOf(e2);
+                    if (!r2) continue;
+                    var p = ro._prev.get(e2);
+                    if (!p || Math.abs(p[0] - r2[2]) > 0.5 || Math.abs(p[1] - r2[3]) > 0.5) {
+                        ro._prev.set(e2, [r2[2], r2[3]]);
+                        var box = { inlineSize: r2[2], blockSize: r2[3] };
+                        res.push({
+                            target: e2,
+                            contentRect: { x: 0, y: 0, width: r2[2], height: r2[3],
+                                           top: 0, left: 0, bottom: r2[3], right: r2[2] },
+                            borderBoxSize: [box], contentBoxSize: [box]
+                        });
+                    }
+                }
+                if (res.length) { try { ro._cb(res, ro); } catch (e) {} }
+            }
         };
         // -----------------------------------------------------------------------------------
 

@@ -649,6 +649,45 @@ impl Page {
         ran
     }
 
+    /// Tell the page its **view changed** — it scrolled, or it was laid out again — so the
+    /// observers run and `scroll` fires. Returns any scroll the callbacks then requested.
+    ///
+    /// Nothing else tells a page that a box came into view. Without this call, a feed built on
+    /// `IntersectionObserver` loads its first screenful and stops forever.
+    #[cfg(feature = "spidermonkey")]
+    pub fn view_changed(&mut self, scroll_y: f32, vw: f32, vh: f32, scrolled: bool) {
+        let Some(ctx) = &self.js else { return };
+        let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+            .root_box
+            .node_rects(&self.dom)
+            .into_iter()
+            .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+            .collect();
+        if let Err(e) = manuk_js::view_changed(
+            ctx, &mut self.dom, scroll_y, vw, vh, scrolled, &rects, &self.styles,
+        ) {
+            tracing::warn!("view_changed: {e}");
+        }
+    }
+
+    /// Without SpiderMonkey there is nothing to notify.
+    #[cfg(not(feature = "spidermonkey"))]
+    pub fn view_changed(&mut self, _scroll_y: f32, _vw: f32, _vh: f32, _scrolled: bool) {}
+
+    /// Evaluate a script in the page's context. Used by the conformance suite to read state back
+    /// out of the JS world through the DOM, which is the only channel a test has into a page.
+    #[cfg(feature = "spidermonkey")]
+    pub fn eval_for_test(&mut self, src: &str) {
+        let Some(ctx) = &self.js else { return };
+        let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+            .root_box
+            .node_rects(&self.dom)
+            .into_iter()
+            .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+            .collect();
+        let _ = manuk_js::eval_in_page(ctx, &mut self.dom, src, &rects, &self.styles);
+    }
+
     /// Publish the viewport's scroll offset and the focused element into the JS world.
     ///
     /// A page reads `window.scrollY` to decide what to render, which header to stick, and when to
@@ -2376,6 +2415,60 @@ mod js_interactive_tests {
              stopPropagation must stop the walk (no LEAKED); focus/activeElement must work"
         );
         drop(page20);
+
+        // (21) **IntersectionObserver + ResizeObserver + the `scroll` event** — the machinery the
+        // real-time web is built on: lazy images, infinite scroll, a sentinel at the bottom of a
+        // feed, sticky headers that latch, components that re-layout with their container.
+        //
+        // A feed built on these does not merely *look* wrong without them — it loads its first
+        // screenful and then stops forever, because nothing ever tells it the sentinel came into
+        // view. Only the ENGINE knows when a box moved, so the engine drives them.
+        let html21 = r#"<!doctype html><html><body>
+            <div id="top" style="height:40px">top</div>
+            <div id="sentinel" style="height:20px;margin-top:2000px">end</div>
+            <p id="o">?</p>
+            <script>
+              var log = [];
+              window.addEventListener('scroll', function () { log.push('scroll@' + window.scrollY); });
+              new IntersectionObserver(function (entries) {
+                entries.forEach(function (e) {
+                  log.push('io:' + e.target.id + '=' + e.isIntersecting);
+                });
+              }).observe(document.getElementById('sentinel'));
+              new ResizeObserver(function (entries) {
+                entries.forEach(function (e) { log.push('ro:' + e.target.id + '=' + Math.round(e.contentRect.height)); });
+              }).observe(document.getElementById('top'));
+              window.__log = log;
+              document.getElementById('o').textContent = 'ready';
+            </script></body></html>"#;
+        let mut page21 = Page::load(html21, "https://example.test/", &fonts, 600.0);
+        // First pass at the top of the document: the sentinel is 2,000px down, so it is NOT in view;
+        // the observed div IS its size. Then scroll to it.
+        page21.view_changed(0.0, 600.0, 400.0, false);
+        page21.view_changed(2000.0, 600.0, 400.0, true);
+        let r21 = page21.dom().root();
+        let o21 = manuk_css::query_selector_all(page21.dom(), r21, "#o")[0];
+        // Read the log back out through the DOM (the only channel the test has into the page).
+        page21.eval_for_test("document.getElementById('o').textContent = window.__log.join('|')");
+        let got = page21.dom().text_content(o21);
+        assert!(
+            got.contains("ro:top=40"),
+            "ResizeObserver must report the observed box's size (got {got:?})"
+        );
+        assert!(
+            got.contains("io:sentinel=false"),
+            "the sentinel is 2,000px down — it must start OUT of view (got {got:?})"
+        );
+        assert!(
+            got.contains("scroll@2000"),
+            "the `scroll` event must fire with the live offset (got {got:?})"
+        );
+        assert!(
+            got.contains("io:sentinel=true"),
+            "scrolling to the sentinel must report it INTERSECTING — this is the moment an \
+             infinite feed loads its next screenful (got {got:?})"
+        );
+        drop(page21);
 
         // Tear SpiderMonkey down before this process exits, exactly as the shell and the harness do.
         // Every page above is out of scope by now, so no rooted object outlives its runtime. Leaving

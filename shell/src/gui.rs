@@ -1874,6 +1874,24 @@ impl App {
         manuk_net::webstorage::save();
     }
 
+    /// Notify the page that the viewport scrolled, then apply whatever its callbacks asked for
+    /// (an infinite-scroll handler routinely scrolls again, or focuses the new content).
+    fn notify_view_scrolled(&mut self) {
+        let (sy, vw, vh, focus) = (
+            self.scroll_y,
+            self.viewport.width,
+            self.viewport.height,
+            self.focused_input,
+        );
+        if let Some(page) = self.page.as_mut() {
+            page.publish_view_state(0.0, sy, focus);
+            page.view_changed(sy, vw, vh, true);
+        }
+        self.apply_view_requests();
+        self.handle_window_opens();
+        self.pump_fetches();
+    }
+
     /// Apply the view changes a script asked for: scrolling and focus. The host owns the viewport
     /// and the caret, so a script *requests* and the shell *performs* — which is also what keeps a
     /// hostile page from moving the user's view behind their back at will.
@@ -2563,6 +2581,10 @@ impl ApplicationHandler<NavEvent> for App {
                 };
                 self.scroll_y -= dy;
                 self.clamp_scroll();
+                // Tell the page it scrolled: fire `scroll`, run the observers. A feed built on
+                // IntersectionObserver loads its first screenful and then stops forever without
+                // this — nothing else can tell it the sentinel came into view.
+                self.notify_view_scrolled();
                 self.rerender();
             }
             WindowEvent::CursorMoved { position, .. } => {
