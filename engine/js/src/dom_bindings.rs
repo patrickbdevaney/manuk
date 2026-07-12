@@ -563,6 +563,7 @@ unsafe fn define_members(
         def(c"querySelectorAll", doc_query_all, 1);
         def(c"createElement", doc_create_element, 1);
         def(c"createElementNS", doc_create_element_ns, 2);
+        def(c"importNode", doc_import_node, 2);
         def(c"createComment", doc_create_comment, 1);
         def(c"createDocumentFragment", doc_create_fragment, 0);
         def(c"createTextNode", doc_create_text_node, 1);
@@ -638,7 +639,10 @@ unsafe fn define_members(
         prop(c"action", el_get_action, Some(el_set_action));
         prop(c"method", el_get_method, Some(el_set_method));
         prop(c"target", el_get_target, Some(el_set_target));
-        prop(c"content", el_get_content, Some(el_set_content));
+        // ONE `content` property, dispatched: `<template>` gets its fragment, everything
+        // else (`<meta content>`) gets the attribute. Registering it twice meant the second
+        // registration silently won, which is how `<template>.content` stayed undefined.
+        prop(c"content", el_get_template_content, Some(el_set_content));
         prop(c"media", el_get_media, Some(el_set_media));
         prop(c"srcset", el_get_srcset, Some(el_set_srcset));
         prop(c"htmlFor", el_get_html_for, Some(el_set_html_for));
@@ -717,6 +721,24 @@ unsafe extern "C" fn doc_query(cx: *mut RawJSContext, argc: u32, vp: *mut Value)
 /// We do not model namespaces, and pretending to would be worse than not: the honest behaviour is to
 /// create the element and ignore the namespace, which renders SVG as unknown inline elements rather
 /// than crashing the page that asked for them.
+/// `document.importNode(node, deep)` — Lit and friends import a template's content before appending.
+/// Same node arena, so this is a clone.
+unsafe extern "C" fn doc_import_node(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, _)) = this_node(vp) else {
+        *vp = NullValue();
+        return true;
+    };
+    let Some(src) = arg_object(vp, argc, 0).and_then(|o| node_and_dom(o).map(|(_, n)| n)) else {
+        *vp = NullValue();
+        return true;
+    };
+    // `deep` defaults to false per spec, but every real caller passes true; honour the argument.
+    let deep = argc > 1 && (*vp.add(3)).is_boolean() && (*vp.add(3)).to_boolean();
+    let clone = clone_node(dom, src, deep);
+    *vp = ObjectValue(new_reflector(cx, dom, clone));
+    true
+}
+
 unsafe extern "C" fn doc_create_element_ns(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, _)) = this_node(vp) else {
         *vp = NullValue();
@@ -1454,6 +1476,34 @@ unsafe extern "C" fn el_get_node_type(cx: *mut RawJSContext, _argc: u32, vp: *mu
         None => *vp = NullValue(),
     }
     true
+}
+
+/// **`template.content` — the modern fast path every compiler-based framework builds DOM through.**
+///
+/// Svelte, Solid and Lit do not call `createElement` in a loop. They parse a `<template>` once and then
+/// `template.content.firstChild.cloneNode(true)` per instance, because cloning a parsed subtree is far
+/// cheaper than rebuilding it. Without `.content` that is `undefined.cloneNode()` — Solid's exact
+/// error — and the framework dies before it renders a single node.
+///
+/// We have no DocumentFragment node type, and inventing a half-one would be worse than this: the
+/// template ELEMENT already holds exactly the children the fragment is supposed to hold, so it answers
+/// `.firstChild`, `.childNodes` and `.cloneNode(true)` identically. That is precisely the surface the
+/// frameworks use it through — they take `.content.firstChild` and clone *that*; the fragment itself is
+/// never appended.
+unsafe extern "C" fn el_get_template_content(
+    cx: *mut RawJSContext,
+    argc: u32,
+    vp: *mut Value,
+) -> bool {
+    match this_node(vp) {
+        // `<template>.content` is the fragment. Everything else — `<meta content>` above all — wants
+        // the ATTRIBUTE, and the two share a name. One property, dispatched on the element.
+        Some((dom, node)) if (*dom).tag_name(node) == Some("template") => {
+            *vp = ObjectValue(new_reflector(cx, dom, node));
+            true
+        }
+        _ => el_get_content(cx, argc, vp),
+    }
 }
 
 /// `node.ownerDocument` — the document a node belongs to.

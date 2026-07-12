@@ -766,3 +766,59 @@ re-crawl runs with the machine idle, and until it does, **the hang count is unkn
 The generalisable half: a benchmark that shares a machine with a build is not a benchmark. That belongs
 in the same family as "an oracle must never be able to charge its own slowness to your account", and it
 is the same mistake wearing different clothes.
+
+## Tick 21 — the four frameworks that still don't render (2026-07-12)
+
+**TICK SHAPE: pattern-class.** No cluster id is named and none is needed: this closes a *substrate*
+class, not a rendering divergence — the same class Tick 20 opened, where each missing IDL property was
+worth an entire framework ecosystem. Vue, Preact and Vanilla render; React, Svelte, Solid and Lit do
+not. Four frameworks is not four bugs; it is a small number of missing properties, each of which the
+framework will name for me if I let it.
+
+**Hypothesis:** React gets furthest (it mounts, schedules, and throws nothing) and is therefore the most
+informative. Svelte and Solid compile to direct DOM calls, so their failures should name a specific
+missing method rather than a scheduling problem. Lit is custom-elements-based and may be tripping the
+`HTMLElement` shim I nearly broke last tick.
+
+**What I expect to be wrong about:** I expect at least one of these to be a *silent* failure again — no
+exception, nothing rendered — and that is the one that will take the longest, because the miner's
+signal is the exception and a silent failure gives it nothing to work with. If so, the fix is to make
+the miner detect "mounted but empty", not to reason harder.
+
+### Tick 21 result — 3/8 → 4/8, and the remaining three are now NAMED, not mysterious
+
+**Solid renders.** `template.content` was the whole thing. Svelte, Solid and Lit do not call
+`createElement` in a loop — they parse a `<template>` once and clone `template.content.firstChild` per
+instance, because cloning a parsed subtree is far cheaper than rebuilding it. Without `.content` that is
+`undefined.cloneNode()`, which was Solid's exact error.
+
+We have no DocumentFragment node type, and inventing half of one would have been worse: the `<template>`
+ELEMENT already holds exactly the children the fragment is supposed to hold, so it answers `.firstChild`,
+`.childNodes` and `.cloneNode(true)` identically — which is precisely the surface the frameworks use it
+through. They take `.content.firstChild` and clone *that*; the fragment itself is never appended.
+
+(A second bug hid inside it: `content` was registered as a property **twice** — once for `<meta content>`
+and once by me — and the later registration silently won. One dispatching getter now: `<template>` gets
+its fragment, everything else gets the attribute.)
+
+Also landed: `document.createTreeWalker` + `NodeFilter` (how lit-html finds the dynamic holes in a cloned
+template), `document.importNode`, and constructable stylesheets (`new CSSStyleSheet()` + `replaceSync` —
+how every modern web-component library ships styles; Lit's `static styles = css\`…\`` needs it to exist
+before it renders a single node).
+
+**The remaining three are no longer mysteries. Each has a name:**
+
+- **Lit — shadow DOM is not laid out.** It throws nothing now and produces **zero boxes**, because it
+  renders into `this.shadowRoot` and *layout does not traverse shadow trees*. The DOM has the content
+  (G2 asserts it), the layout never sees it. This is a real, general gap — every web component on the
+  web — and it is a layout change, not a shim.
+- **Svelte — `a(...) is undefined`** inside its minified runtime. Still opaque; needs a source-mapped
+  build to name.
+- **React — silent.** Mounts, schedules, throws nothing, renders nothing. The hardest of the three,
+  precisely because the miner's signal is the exception and React gives it none.
+
+**The honest read on my own hypothesis:** I predicted the silent failure would be the one that took
+longest, and it is — React is still silent after two ticks. The lesson I wrote down last tick applies to
+me now: *when every instrument says the bug is impossible, they are all sampling the same layer.* The
+next move on React is not to reason harder about the JS; it is to instrument the layer below — count the
+DOM mutations React actually performs, and see whether it is building a tree we then fail to lay out.

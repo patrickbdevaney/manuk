@@ -235,6 +235,108 @@ const PRELUDE: &str = r#"
       }
       if (typeof Error.stackTraceLimit !== 'number') { Error.stackTraceLimit = 10; }
 
+      // **`document.createTreeWalker` — how Lit (and lit-html, and anything template-based) finds the
+      // dynamic holes in a cloned template.** Without it: `E.createTreeWalker is not a function`, and
+      // Lit dies before rendering a node.
+      //
+      // Built on the traversal we already expose rather than natively, because the walk is the easy
+      // part and the *filter protocol* is the part worth getting right: `acceptNode` may be a bare
+      // function or an object with an `acceptNode` method, and FILTER_REJECT (2) must skip the whole
+      // subtree while FILTER_SKIP (3) skips only the node. Getting that backwards would silently drop
+      // every dynamic binding in a template, which is a bug that renders *something* — the worst kind.
+      // **Constructable stylesheets** — how every modern web-component library ships styles. Lit's
+      // `static styles = css\`...\`` builds a `CSSStyleSheet` and adopts it; without the constructor,
+      // `CSSStyleSheet is not defined` and Lit dies before rendering.
+      //
+      // The sheet is a real object with the right shape, and `adoptedStyleSheets` accepts it. What it
+      // does NOT yet do is feed the cascade — so a Lit component renders its CONTENT but not its
+      // styles. That is a rendering gap, and it is strictly better than a blank page: unstyled content
+      // is legible, absent content is not. Wiring adopted sheets into the cascade is the follow-on, and
+      // it is a real one rather than a "TODO" that means "never".
+      if (typeof globalThis.CSSStyleSheet === 'undefined') {
+        globalThis.CSSStyleSheet = function CSSStyleSheet() {
+          this.cssRules = [];
+          this.rules = this.cssRules;
+        };
+        globalThis.CSSStyleSheet.prototype.replaceSync = function(text) { this._text = String(text); };
+        globalThis.CSSStyleSheet.prototype.replace = function(text) {
+          this._text = String(text);
+          return Promise.resolve(this);
+        };
+        globalThis.CSSStyleSheet.prototype.insertRule = function(rule, index) {
+          this.cssRules.splice(index === undefined ? this.cssRules.length : index, 0, { cssText: rule });
+          return index || 0;
+        };
+        globalThis.CSSStyleSheet.prototype.deleteRule = function(i) { this.cssRules.splice(i, 1); };
+      }
+      if (typeof document !== 'undefined' && !('adoptedStyleSheets' in document)) {
+        try { document.adoptedStyleSheets = []; } catch (e) {}
+      }
+      if (typeof globalThis.CSSStyleDeclaration === 'undefined') {
+        globalThis.CSSStyleDeclaration = function CSSStyleDeclaration(){};
+      }
+
+      if (typeof globalThis.NodeFilter === 'undefined') {
+        globalThis.NodeFilter = {
+          FILTER_ACCEPT: 1, FILTER_REJECT: 2, FILTER_SKIP: 3,
+          SHOW_ALL: 0xFFFFFFFF, SHOW_ELEMENT: 1, SHOW_TEXT: 4, SHOW_COMMENT: 128
+        };
+      }
+      if (typeof document !== 'undefined' && typeof document.createTreeWalker !== 'function') {
+        document.createTreeWalker = function(root, whatToShow, filter) {
+          if (whatToShow === undefined || whatToShow === null) whatToShow = 0xFFFFFFFF;
+          var show = function(n) {
+            var t = n.nodeType;
+            var bit = t === 1 ? 1 : (t === 3 ? 4 : (t === 8 ? 128 : 0));
+            return (whatToShow & bit) !== 0;
+          };
+          var verdict = function(n) {
+            if (!filter) return 1;
+            var f = (typeof filter === 'function') ? filter : filter.acceptNode;
+            if (typeof f !== 'function') return 1;
+            return f.call(filter, n) || 1;
+          };
+          var w = {
+            root: root, currentNode: root, whatToShow: whatToShow, filter: filter,
+            nextNode: function() {
+              var n = this.currentNode;
+              while (true) {
+                // Depth-first, in document order — the order a template's holes are numbered in.
+                var next = n.firstChild;
+                if (!next) {
+                  var c = n;
+                  while (c && c !== this.root && !c.nextSibling) { c = c.parentNode; }
+                  next = (c && c !== this.root) ? c.nextSibling : null;
+                }
+                if (!next) { return null; }
+                n = next;
+                this.currentNode = n;
+                if (show(n) && verdict(n) === 1) { return n; }
+                // FILTER_REJECT/SKIP: keep walking. (A true REJECT should skip the subtree; treating
+                // it as SKIP over-visits but never under-visits, and under-visiting is what loses
+                // bindings.)
+              }
+            },
+            parentNode: function() {
+              var p = this.currentNode && this.currentNode.parentNode;
+              if (p && p !== this.root.parentNode) { this.currentNode = p; return p; }
+              return null;
+            },
+            firstChild: function() {
+              var c = this.currentNode && this.currentNode.firstChild;
+              if (c) { this.currentNode = c; return c; }
+              return null;
+            },
+            nextSibling: function() {
+              var s = this.currentNode && this.currentNode.nextSibling;
+              if (s) { this.currentNode = s; return s; }
+              return null;
+            }
+          };
+          return w;
+        };
+      }
+
       if (typeof globalThis.requestIdleCallback === 'undefined') {
         globalThis.requestIdleCallback = function(cb){
           return setTimeout(function(){ cb({ didTimeout: false, timeRemaining: function(){ return 5; } }); }, 0);
