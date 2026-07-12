@@ -665,14 +665,25 @@ impl Page {
         if images.is_empty() {
             return 0;
         }
-        // Natural sizing: fill in only dimensions the cascade left auto (explicit
-        // attr/CSS width/height already resolved to a definite value and must win).
+        // Natural sizing. The *aspect ratio* is the load-bearing part: an `auto` dimension of a
+        // replaced element is derived from the USED value of the other one, not from the image's
+        // natural pixels. Pinning `height` to the natural height here — which is what this did —
+        // means a `max-width: 100%` clamp narrows the box and leaves the height alone, and the image
+        // renders stretched. That reset is on essentially every site on the web.
+        //
+        // So: record the ratio, give `width` its natural value only when BOTH axes are auto (the
+        // unconstrained case), and otherwise leave the auto axis auto for layout to derive.
         for (&node, img) in &images {
             if let Some(style) = self.styles.get_mut(&node) {
-                if style.width == manuk_css::Dim::Auto {
+                if img.width > 0 && img.height > 0 {
+                    style.aspect_ratio = Some(img.width as f32 / img.height as f32);
+                }
+                if style.width == manuk_css::Dim::Auto && style.height == manuk_css::Dim::Auto {
+                    style.width = manuk_css::Dim::Px(img.width as f32);
+                } else if style.width == manuk_css::Dim::Auto && style.aspect_ratio.is_none() {
                     style.width = manuk_css::Dim::Px(img.width as f32);
                 }
-                if style.height == manuk_css::Dim::Auto {
+                if style.height == manuk_css::Dim::Auto && style.aspect_ratio.is_none() {
                     style.height = manuk_css::Dim::Px(img.height as f32);
                 }
             }

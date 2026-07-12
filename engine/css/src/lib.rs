@@ -392,6 +392,14 @@ pub struct ComputedStyle {
     /// gradient heroes, washed cards and CSS-only icons rendered as blank rectangles.
     pub background_image: Option<BackgroundImage>,
     pub background_size: BackgroundSize,
+    /// **Intrinsic aspect ratio (width / height) of a REPLACED element** — an `<img>`, `<video>`,
+    /// `<canvas>`. Set from the decoded image once it arrives; `None` for everything else.
+    ///
+    /// Without it, constraining a replaced element's width does nothing to its height: a 400×300
+    /// image under the near-universal `img { max-width: 100% }` reset came out **150×300** in a
+    /// 150px column — the right width and its full natural height, stretched to twice its correct
+    /// size. Every responsive image on the web was wrong.
+    pub aspect_ratio: Option<f32>,
     pub background_repeat: BackgroundRepeat,
     /// `text-decoration-line` (INHERITED in effect: a decoration set on a block draws through its
     /// inline descendants).
@@ -531,6 +539,7 @@ impl ComputedStyle {
             mask_image: None,
             background_image: None,
             background_size: BackgroundSize::Auto,
+            aspect_ratio: None,
             background_repeat: BackgroundRepeat::Repeat,
             text_decoration: TextDecoration::default(),
             list_style_type: ListStyleType::Disc,

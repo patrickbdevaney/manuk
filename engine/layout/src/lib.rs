@@ -1131,6 +1131,15 @@ impl Ctx<'_> {
                 other => other.resolve(cw, (cw - extra).max(0.0)),
             },
         };
+        // The mirror case: an `auto` width on a replaced element with a definite height comes from
+        // that height and the ratio.
+        if s.width == Dim::Auto && taffy_known.is_none() {
+            if let (Some(r), Dim::Px(h)) = (s.aspect_ratio, s.height) {
+                if r > 0.0 {
+                    width = h * r;
+                }
+            }
+        }
         // `box-sizing:border-box` — the specified width is the border box, so the content
         // width is that minus padding + border. (`auto` already resolves to content width.)
         let bs_extra_w = if s.box_sizing == BoxSizing::BorderBox { pl + pr + bl + br } else { 0.0 };
@@ -1193,7 +1202,14 @@ impl Ctx<'_> {
         } else {
             self.layout_children(node, content_x, content_y, width, own_definite_h, floats)
         };
-        let mut content_height = own_definite_h.unwrap_or(content_height);
+        // **A replaced element's auto height comes from its USED width and its intrinsic ratio**
+        // (CSS2 §10.6.2) — not from the image's natural pixel height. `width` here is already
+        // resolved and already clamped by min/max, so `max-width: 100%` narrowing the box scales the
+        // height with it, which is the entire point of that reset.
+        let mut content_height = match (own_definite_h, s.aspect_ratio) {
+            (None, Some(r)) if r > 0.0 => width / r,
+            _ => own_definite_h.unwrap_or(content_height),
+        };
         // min-height / max-height clamp (content-box).
         let min_h = (s.min_height.resolve(pch.unwrap_or(0.0), 0.0) - bs_extra_h).max(0.0);
         let max_h = match s.max_height {
@@ -3254,6 +3270,45 @@ mod tests {
         let fonts = FontContext::new();
         let root = layout_document(&dom, &styles, &fonts, width);
         (dom, root)
+    }
+
+    /// Regression: **a replaced element's auto height comes from its USED width and its intrinsic
+    /// ratio** (CSS2 §10.6.2), not from the image's natural pixel height.
+    ///
+    /// `img { max-width: 100% }` is in essentially every CSS reset on the web. Before this, that
+    /// reset narrowed the box and left the height at the image's natural value, so a 400×300 image
+    /// in a 150px column rendered **150×300** — correct width, and more than twice its correct
+    /// height. Every responsive image on every site was stretched vertically.
+    #[test]
+    fn a_constrained_replaced_element_keeps_its_aspect_ratio() {
+        let dom = manuk_html::parse(r#"<div class="box"><img class="pic"></div>"#);
+        let sheets = vec![Stylesheet::parse(".box{width:150px} .pic{max-width:100%}")];
+        let mut styles = MinimalCascade.cascade(&dom, &sheets);
+        // What the image loader does once the bytes arrive: record the intrinsic ratio and give the
+        // natural width. The *layout contract* is what is under test, so supply that directly rather
+        // than decoding a PNG in a unit test.
+        let img = dom
+            .descendants(dom.root())
+            .find(|&n| dom.tag_name(n) == Some("img"))
+            .expect("img in the tree");
+        if let Some(st) = styles.get_mut(&img) {
+            st.aspect_ratio = Some(400.0 / 300.0);
+            st.width = Dim::Px(400.0);
+        }
+        let fonts = FontContext::new();
+        let root = layout_document(&dom, &styles, &fonts, 800.0);
+        let r = *root.node_rects(&dom).get(&img).expect("img box");
+        assert!(
+            (r.width - 150.0).abs() < 1.0,
+            "max-width:100% of a 150px column clamps the image to 150px, got {}",
+            r.width
+        );
+        assert!(
+            (r.height - 112.5).abs() < 2.0,
+            "the height must follow the CLAMPED width through the 4:3 ratio → 112.5px, got {} \
+             (300 means the natural height was kept and the image renders stretched)",
+            r.height
+        );
     }
 
     /// Regression: **a percentage width on a flex item must not be resolved twice.**
