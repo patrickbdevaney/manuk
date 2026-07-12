@@ -578,3 +578,116 @@ mod resource_tests {
         );
     }
 }
+
+/// **G_INTERACT — the UI thread must never stall on a tab operation.**
+///
+/// Every gate this project has added came after a user felt something a green gate could not see.
+/// The scroll freeze was invisible to G1/G2/G3 because none of them measured per-event cost. The
+/// frozen tab was invisible because none of them measured a page with a dead subresource. The
+/// pattern never changes: *a gate that does not measure what the user feels reports green while the
+/// user suffers.*
+///
+/// So this measures what a person actually does to a browser dozens of times an hour — open a tab,
+/// switch tabs, close a tab — and asserts that none of it lands on the UI thread as a stall.
+#[cfg(test)]
+mod g_interact {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    /// Not two tabs. The tab bar is where people accumulate.
+    const TABS: usize = 30;
+
+    fn median(mut v: Vec<Duration>) -> Duration {
+        v.sort();
+        v[v.len() / 2]
+    }
+    fn worst(v: &[Duration]) -> Duration {
+        *v.iter().max().unwrap()
+    }
+
+    #[test]
+    fn tab_operations_stay_far_under_one_frame() {
+        // **The floor is one frame, and it is deliberately generous.** These operations touch a Vec
+        // of tabs and a tier policy; they have no business being anywhere near 16ms. The floor is
+        // not a target, it is a tripwire: crossing it means something has quietly started doing real
+        // work — cloning a `Page`, re-laying-out, walking the DOM — inside an operation whose cost
+        // the user believes is zero.
+        let frame = Duration::from_millis(16);
+
+        // **With real pages in them.** An empty `Browser` measures a `Vec<TabId>` and proves
+        // nothing: the cost that bites is `apply_tiers` walking every tab and freezing/discarding
+        // its `Page`, and a tab with no page has no page to walk. So each tab gets a document of
+        // roughly the size of a real article.
+        let fonts = manuk_text::FontContext::new();
+        let html = {
+            let mut h = String::from("<style>.c{display:flex}.i{flex:1;padding:8px}</style><body>");
+            for i in 0..300 {
+                h.push_str(&format!(
+                    "<div class=c><div class=i><h3>Item {i}</h3><p>Some body text for item {i} \
+                     that wraps across a couple of lines like real prose does.</p></div></div>"
+                ));
+            }
+            h.push_str("</body>");
+            h
+        };
+
+        let mut b = Browser::new(6);
+        let mut opens = Vec::new();
+        let mut ids = Vec::new();
+        for i in 0..TABS {
+            let t = Instant::now();
+            let id = b.open(format!("https://example.com/{i}"));
+            opens.push(t.elapsed());
+            let page = Page::load(&html, &format!("https://example.com/{i}"), &fonts, 1200.0);
+            b.load(id, page, html.clone());
+            ids.push(id);
+        }
+
+        // Focusing re-runs the tier policy across every tab — the operation most likely to quietly
+        // acquire O(tabs × page) cost as the browser grows features.
+        let mut switches = Vec::new();
+        for &id in &ids {
+            let t = Instant::now();
+            b.focus(id);
+            switches.push(t.elapsed());
+        }
+
+        let mut closes = Vec::new();
+        for &id in &ids {
+            let t = Instant::now();
+            b.close(id);
+            closes.push(t.elapsed());
+        }
+
+        for (name, v) in [("open", &opens), ("switch", &switches), ("close", &closes)] {
+            println!(
+                "  {name:<7} median {:>7.3}ms   worst {:>7.3}ms   (one frame = 16ms)",
+                median(v.to_vec()).as_secs_f64() * 1000.0,
+                worst(v).as_secs_f64() * 1000.0
+            );
+        }
+
+        for (name, v) in [("open", &opens), ("switch", &switches), ("close", &closes)] {
+            let w = worst(v);
+            assert!(
+                w < frame,
+                "the WORST {name} took {:.1}ms — over a frame. A tab operation stalling the UI \
+                 thread is exactly the 'the browser feels laggy' report that no rendering gate can \
+                 see.",
+                w.as_secs_f64() * 1000.0
+            );
+        }
+
+        // Scaling, not just the absolute number: closing the thirtieth tab must not cost more than
+        // closing the first. A per-operation cost that GROWS with the tab count is the shape of the
+        // bug this gate exists for, and a fixed ceiling would not notice it until the user had 200
+        // tabs open and the browser was already unusable.
+        let first: Duration = closes[..5].iter().sum();
+        let last: Duration = closes[closes.len() - 5..].iter().sum();
+        assert!(
+            last <= first * 4 + Duration::from_micros(300),
+            "closing the LAST tabs ({last:?}) costs far more than closing the FIRST ({first:?}) — \
+             the per-tab cost is growing with the number of tabs open"
+        );
+    }
+}
