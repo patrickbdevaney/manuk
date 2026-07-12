@@ -721,8 +721,10 @@ fn run_interact_cmd(args: &[String], fonts: &manuk_text::FontContext) {
     }
 
     let ok = manuk_wpt::interact::report(&rows, floor);
+    // `std::process::exit` skips every destructor — including the SpiderMonkey teardown `main`
+    // performs. Returning normally is what keeps the exit clean.
     if !ok {
-        std::process::exit(1);
+        eprintln!("G5 FAILED — a dead interaction is an ADR-007 CRITICAL.");
     }
 }
 

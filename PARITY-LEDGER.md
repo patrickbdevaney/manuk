@@ -237,6 +237,28 @@ SpiderMonkey gives us the *language* for free. Everything below is the **platfor
 
 ---
 
+## G5 — INTERACTION PARITY (first run, 2026-07-11)
+
+| scenario | post-interaction COVERAGE | chrome Δ | manuk Δ |
+|---|---|---|---|
+| wikipedia-scroll | 99.2% | 31 | **0** ← dead |
+| github-scroll | 91.4% | 1 | **0** ← dead |
+| hn-scroll | 100.0% | 0 | 0 |
+| mdn-scroll | 100.0% | 0 | 0 |
+| httpbin-form-fill | 100.0% | 0 | 0 |
+| wikipedia-search-type | 99.2% | 0 | 0 |
+
+**MEAN POST-INTERACTION COVERAGE: 98.4%. DEAD INTERACTIONS: 2.**
+
+What the two dead ones actually are: **`position: sticky` is not reflected in the geometry a page
+can read.** Chromium's `getBoundingClientRect` moves a sticky element as the page scrolls (in
+document coordinates it genuinely does move); ours does not, because sticky is applied at *paint*
+and the layout tree the snapshot is built from is scroll-independent. So a page that reads a sticky
+element's position while scrolling gets a stale answer from us.
+
+That is a real gap, not a metric artifact — but it is a **Pass 3** one (it affects what a script can
+*measure*, not whether the page works). Recorded here rather than fixed out of order.
+
 ## The measured scoreboard (update every tick)
 
 | metric | now | Chromium |
