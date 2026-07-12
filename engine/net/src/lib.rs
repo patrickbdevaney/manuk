@@ -107,6 +107,33 @@ fn connector() -> HttpsConnector<HttpConnector> {
     .clone()
 }
 
+/// **THE async runtime. Singular. (METHODOLOGY Part 25.1.)**
+///
+/// There should be exactly one Tokio runtime, one Rayon pool, for the life of the process — created
+/// once at startup and reused. The shell was building **two** multi-threaded runtimes: one in `main`
+/// and one in `App`. On a 32-thread machine that is 64 worker threads, two schedulers and ~128MB of
+/// stacks, for a browser that needs one of each.
+///
+/// The canonical failure this guards against is worse and is the reason for the gate rather than a
+/// one-off fix: a runtime created *per navigation* or *per search*. That is invisible at idle,
+/// invisible in a profile of a single action, and lethal after an hour of browsing — precisely the
+/// shape of the wheel-event clone regression, one layer up the stack. `G_RUNTIME_COUNT` asserts the
+/// instantiation count stays FLAT across a scripted session, so "one runtime" is a measured fact and
+/// not an architectural intention.
+pub static RUNTIME_INSTANTIATIONS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+pub fn runtime() -> &'static tokio::runtime::Runtime {
+    static RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+    RT.get_or_init(|| {
+        RUNTIME_INSTANTIATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("the process-wide async runtime")
+    })
+}
+
 fn client() -> &'static NetClient {
     static CLIENT: OnceLock<NetClient> = OnceLock::new();
     CLIENT.get_or_init(|| Client::builder(TokioExecutor::new()).build(connector()))

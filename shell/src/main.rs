@@ -122,9 +122,9 @@ fn cmd_render(args: &[String]) -> Result<()> {
         .and_then(|s| s.parse().ok())
         .unwrap_or(DEFAULT_WIDTH);
 
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()?;
+    // ONE runtime for the process (Part 25.1). `App` shares this exact instance rather than
+    // building a second multi-threaded scheduler beside it.
+    let rt = manuk_net::runtime();
     let fonts = FontContext::new();
     if fonts.face_count() == 0 {
         eprintln!("warning: no system fonts found; text will not render");

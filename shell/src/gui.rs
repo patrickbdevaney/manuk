@@ -167,7 +167,7 @@ struct App {
     /// connection pool, DNS cache, and TLS session cache on every load — so each
     /// navigation paid a cold DNS + TCP + TLS handshake. Keeping one runtime alive lets
     /// the process-global pooled client actually reuse warm connections.
-    rt: tokio::runtime::Runtime,
+    rt: &'static tokio::runtime::Runtime,
     page: Option<Page>,
     viewport: Viewport,
     scroll_y: f32,
@@ -323,10 +323,9 @@ impl App {
             window: None,
             gpu: None,
             fonts: FontContext::new(),
-            rt: tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-                .expect("failed to build the shared async runtime"),
+            // ONE runtime for the process (Part 25.1) — this used to build a second multi-threaded
+            // runtime alongside `main`'s, doubling the worker-thread pool for no reason.
+            rt: manuk_net::runtime(),
             page: None,
             viewport: Viewport::new(width as f32, 768.0),
             scroll_y: 0.0,
@@ -780,7 +779,13 @@ impl App {
             Some(g) => (g.config.width, g.config.height),
             None => (self.width, 768),
         };
-        let page = self.build_page(&html, &final_url, w);
+        let Some(page) = self.build_page_contained(&html, &final_url, w) else {
+            // The page's own content brought its build down. Show that, and keep the browser — and
+            // every other tab — alive. This is the Bar 0 contract.
+            tracing::error!(%final_url, "navigation panicked and was CONTAINED — showing an error page");
+            self.show_error(&final_url, "This page could not be displayed (the renderer failed on it).");
+            return;
+        };
         if let Some(win) = &self.window {
             win.set_title(&format!("{} — manuk", page.title));
         }
@@ -888,6 +893,44 @@ impl App {
         let mut page = Page::from_prefetched(pre, &self.fonts, w as f32);
         page.relayout_zoomed(&self.fonts, w as f32, self.zoom);
         page
+    }
+
+    /// **The supervised navigation boundary (Part 23.2).** Building a page runs the site's own
+    /// scripts against our parser, cascade and layout — which is to say it runs OUR code on
+    /// adversarial input, on every navigation, forever. A panic in there used to abort the process
+    /// and take every other tab with it. Now it takes the page.
+    /// The graceful half of Bar 0. A contained failure the user cannot see is just a blank window;
+    /// the contract is "this tab tells you it failed and the browser keeps working", not "this tab
+    /// silently shows nothing".
+    fn show_error(&mut self, url: &str, message: &str) {
+        let html = format!(
+            "<html><body style=\"font:16px system-ui;padding:48px;color:#333\">\
+             <h1 style=\"font-size:22px\">This page could not be displayed</h1>\
+             <p>{message}</p>\
+             <p style=\"color:#777;font-size:13px\">{url}</p>\
+             <p style=\"color:#777;font-size:13px\">The browser is fine — only this page failed. \
+             Other tabs are unaffected.</p></body></html>"
+        );
+        let (w, h) = match &self.gpu {
+            Some(g) => (g.config.width, g.config.height),
+            None => (self.width, 768),
+        };
+        if let Some(page) = self.build_page_contained(&html, url, w) {
+            self.viewport = Viewport::new(w as f32, (h as f32 - CHROME_TOP).max(1.0));
+            self.viewport.content_height = page.content_height;
+            self.page = Some(page);
+        }
+        self.rerender();
+    }
+
+    fn build_page_contained(&self, html: &str, final_url: &str, w: u32) -> Option<Page> {
+        let fonts = &self.fonts;
+        let zoom = self.zoom;
+        manuk_page::contained("navigation", || {
+            let mut page = Page::load(html, final_url, fonts, w as f32);
+            page.relayout_zoomed(fonts, w as f32, zoom);
+            page
+        })
     }
 
     /// Fallback for a plain (non-prefetched) document — self-contained HTML only, still no network.

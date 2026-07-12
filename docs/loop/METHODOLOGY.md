@@ -955,3 +955,252 @@ until these are done or genuinely blocked:**
     asymptotically wrong today (O(page) per event), not merely incomplete, so it's a priority
     once infrastructure is in place, but it depends on a deliberate build-vs-adopt decision, not
     a mid-implementation default.
+
+---
+
+## Part 23 — Bar 0: The Stability Floor (prior to and independent of Bar 1)
+
+Bar 1 asks "does this look broken." That's a correctness question. There's a distinct,
+more fundamental question that has to be true first: **does the engine ever crash the process,
+panic unrecoverably, or hang with no way out, on any page matching a covered pattern class —
+and does it degrade gracefully rather than catastrophically on the tail of patterns it doesn't
+yet cover.** A page can look wrong and still satisfy Bar 0. A page that renders perfectly nine
+times out of ten and hangs the whole browser the tenth time violates Bar 0 regardless of how
+good the other nine renders looked. Treat Bar 0 as the floor everything else stands on, checked
+before Bar 1 correctness is even asked about for a given pattern class.
+
+### 23.1 What Bar 0 requires
+- **No SpiderMonkey-originated crash cascades.** A script that triggers a SpiderMonkey fault
+  must not take down the browser process. This needs an explicit containment boundary at the
+  FFI edge — catch what can be caught, and where a genuine SpiderMonkey-side fault can't be
+  caught in-process, the containment has to happen at the tab/task level (23.2), not by hoping
+  it never happens.
+- **No unrecoverable Rust panics at the process level.** A panic within a single page's
+  render/script/layout work must not unwind past that page's task boundary and take the whole
+  process down with it.
+- **No unrecoverable hangs.** Covered by G_HANG (Part 22.2) for the verify wall's own tests;
+  Bar 0 extends the same expectation to production behavior — a hung page load or hung script
+  must be interruptible (by the user, or by an internal watchdog) rather than freezing the
+  browser with no recourse.
+
+### 23.2 Containment, not just prevention
+You will not prevent every crash-class bug before Bar 1 — that's not the goal. The goal is that
+a failure in one page/tab is *contained* to that page/tab: a supervised task boundary per
+tab/navigation (Rust `catch_unwind` at the render-task level, or an internal watchdog that can
+terminate and restart a hung renderer task) so the failure mode for an uncovered pattern is
+"this tab closes or reloads with a graceful message," never "the whole browser crashes or
+hangs." This is a narrower, cheaper version of full multi-process isolation (correctly deferred
+per the "walk before we run" security decision) — it doesn't require process-level sandboxing,
+just a supervised task/panic boundary per tab, and it should be built now rather than deferred,
+because it's what makes the 99%-pattern-coverage strategy in Part 24 actually safe to ship
+against the uncovered 1%.
+
+### 23.3 Where this fits the gate structure
+Extend G_HANG and G_TEARDOWN (Parts 5.3, 22.2) to explicitly assert containment: a synthetic
+test that deliberately triggers a panic or a hang inside one simulated tab's task must result in
+that tab closing/reloading, with the rest of the harness (and, in a real session, other tabs)
+continuing to function. If containment isn't yet built, this is a Tier 0/1-class item — build it
+alongside G_HANG, not after.
+
+---
+
+## Part 24 — Website-Class Corpus: Pattern Coverage, Not Per-Site Tuning
+
+This section makes explicit something the differential oracle (Part 2) has been doing
+implicitly since it was specified, so it's understood as one mechanism, not built twice under
+two names.
+
+### 24.1 A cluster *is* a website class
+Chromium and Gecko engineers don't write bespoke code per website — they cover representative
+HTML/CSS/JS *patterns*, and the vast majority of real sites are combinations of a comparatively
+small number of recurring patterns. The oracle's clustering step (Part 2.1, step 4) already does
+exactly this: a cluster with N site-hits and one root cause **is** a website-class, empirically
+discovered rather than hand-enumerated. Do not build a separate "website class taxonomy" as a
+new artifact — the oracle's cluster registry already is that taxonomy, and it's better than a
+hand-written one because it's derived from what actually diverges across real sites rather than
+guessed at.
+
+### 24.2 The target, stated precisely
+The goal is not "render every website correctly." It's: **cover enough pattern classes,
+weighted by real-world prevalence (Part 4's usage-frequency data), that the covered classes
+represent something like the large majority of real-world page structure — and for whatever
+falls outside that coverage, Bar 0 containment (Part 23) ensures the failure mode is graceful,
+not catastrophic.** This reframes "breadth of the internet" from an open-ended, unbounded goal
+into a measurable one: coverage percentage of the oracle's crawl frame, weighted by cluster
+site-count, is the actual metric — track it explicitly as part of the priority ledger's output,
+not just the ranked list of what to fix next.
+
+### 24.3 Crashes and hangs are oracle signals too, and outrank visual divergence
+Extend the oracle's diff/cluster pipeline (Part 2.1) to capture a third signal category
+alongside DOM-geometry and coarse-pixel diff: **did the engine crash, panic, or hang on this
+page at all, independent of whether the render was otherwise correct.** Cluster and rank these
+the same way as visual divergence clusters, but weight them above visual divergence in the
+priority ledger (Part 4) — a pattern class that crashes the engine is a Bar 0 violation and is
+categorically more urgent than a pattern class that merely renders with a visual bug, which is
+"only" a Bar 1 gap.
+
+---
+
+## Part 25 — Process & Runtime Minimization Audit
+
+G_SPAWN (Part 19.5) governs per-event task-spawn counts on interactive hot paths. This section
+extends the same discipline to the **process-level and runtime-level** structure of the engine
+as a whole, which is a distinct failure class: not "too many tasks per click," but "too many
+long-lived runtimes/pools/executors existing at all."
+
+### 25.1 The rule
+Enumerate every long-lived runtime, thread pool, or executor the process creates: the Tokio
+runtime(s), the Rayon pool, any spawned subprocess, any per-tab or per-navigation thread. There
+should be **exactly one of each**, created once at process startup and reused for the life of
+the process, unless multiplicity is architecturally justified and explicitly documented (e.g.,
+one supervised task per tab per Part 23.2 is justified isolation, not proliferation — the
+distinction is that a *task* running on a shared runtime is fine; a *new runtime* per action is
+not). The canonical failure case to check for explicitly: a new Tokio runtime instantiated per
+search, per navigation, or per any other repeated user action, instead of one runtime created
+once and reused. This is exactly the kind of latent, invisible-at-idle bug the wheel-event
+clone regression already taught this project to watch for, one layer up the stack.
+
+### 25.2 G_RUNTIME_COUNT
+Add a gate, alongside G_SPAWN: instrument the process to count distinct runtime/pool/executor
+instantiations over a scripted session (multiple navigations, multiple searches, multiple tab
+opens). Assert the count stays flat regardless of how many user actions occur — one Tokio
+runtime, one Rayon pool, for the whole session, not one per action. A rising count under
+repeated action is a hard failure.
+
+### 25.3 Standing audit cadence
+Fold this into the same EPOCH-audit cadence as the runtime-health sweep (Part 22.4) and the
+change-coupling matrix refresh (Part 3.3) — new code is where new proliferation gets introduced
+(a new feature that "just spawns a quick runtime to handle this one thing" is the natural way
+this regresses), so the audit target grows with the codebase rather than being a one-time check.
+
+---
+
+## Part 26 — Standing Depth/Breadth Self-Check (continuous, not just reactive)
+
+Part 21 corrected a specific instance of this failure after the fact — time spent on pixel-level
+parity against a 20-site suite when the oracle's crawl frame and the SPA frontier were both
+still unmeasured. The reactive correction was necessary once, but the underlying judgment call —
+"is this tick going deep on something narrow, or wide on something that generalizes" — recurs
+every tick, and waiting for another audit to catch the next instance is strictly worse than
+catching it before it happens.
+
+### 26.1 The standing check
+At the start of every tick, before starting implementation work, state explicitly (in the
+journal entry, per Part 7) which of these two shapes the tick is:
+- **A pattern-class fix**: targets a root cause the oracle's clustering (Part 2, Part 24)
+  identified as explaining multiple sites, or closes a Bar 0 containment gap (Part 23), or
+  builds/compresses infrastructure that multiplies future ticks (Part 21). This is in scope by
+  default.
+- **Single-site or single-instance tuning**: matching one specific site's exact pixel output,
+  or fixing a divergence the oracle hasn't clustered as recurring. This is Bar 2 or lower
+  priority by default, and doing it now requires an explicit reason stated in the journal (e.g.,
+  "this site is disproportionately representative of an uncovered pattern class" — a real
+  reason; "it bothered me" is not).
+- If a tick starts as the first shape and drifts into the second (a pattern-class fix that turns
+  into hours of matching one site's exact rendering), that drift is itself the signal Part 21
+  was built to catch — name it in the journal and pivot back, don't let the sunk cost of the
+  session carry it forward.
+
+### 26.2 Why this is cheap to enforce
+This doesn't require new tooling — it requires one additional line in the journal structure
+(Part 7) per tick, stating the tick's shape before work starts. A journal that never states "Bar
+2 / single-site, and here's why" is a journal where every tick defaulted to breadth, which is
+the desired steady state; a journal that starts accumulating unexplained single-site ticks is a
+visible, checkable signal in `STATUS.md` (per the enforcement discussion) that the pull toward
+depth is happening again, well before it costs a whole session's worth of drift.
+
+---
+
+## Part 27 — Resource-Budget-Aware Scheduling for the Actual Hardware
+
+The methodology so far assumes parallelism (Rayon sized to core count, the verification key
+pool, concurrent oracle crawl workers) without accounting for the fact that these consumers
+share one finite, concrete resource envelope: a 24-core/32-thread CPU and 32GB of RAM. RAM, not
+core count, is very likely the binding constraint here, given rustc/LLVM codegen for large
+crates (mozjs bindings especially), N concurrent headless-Chromium instances for oracle
+crawling, the rust-analyzer LSP server, and the tmpfs-mounted build directory (Part 10.1) all
+draw from the same physical pool simultaneously.
+
+### 27.1 Don't let RAM-heavy activities run uncoordinated
+- **Sequence or throttle oracle crawling against active compilation.** A full mozjs/Stylo
+  rebuild and a wide oracle crawl (many concurrent headless Chromium workers) competing for the
+  same RAM risks swapping/thrashing rather than either finishing faster. Start oracle crawl
+  concurrency conservatively (a small worker count) and tune up empirically by watching actual
+  memory headroom during a real crawl, rather than assuming the full 32GB is available to
+  whichever process asks for it first.
+- **The tmpfs target directory (Part 10.1) is itself a RAM consumer** — its size budget and the
+  oracle crawl's worker count both draw from the same 32GB, so size one with the other in mind,
+  not independently.
+
+### 27.2 Turn idle time into scheduled background work
+The 24 cores are a fixed, scarce resource for a solo operator — unlike a datacenter, there's no
+elastic burst capacity, so idle time between interactive sessions is real, recoverable throughput
+being wasted if nothing is scheduled to use it. Queue background jobs — oracle re-crawl, the
+nightly/async full WPT run (Part 8), delta-debug reduction backlog (Part 2.1) — to run
+automatically whenever Claude Code is not actively mid-edit, rather than only running them when
+explicitly invoked in an interactive session.
+
+### 27.3 The verification key pool is this project's actual "distributed compute"
+Restate explicitly what Part 6 already implies: the ~25-key, two-provider verification pool is
+not a minor convenience, it's the practical answer to "what does this solo project have that
+looks like Chromium-team-scale automated capacity." It offloads narrow, closed-question work
+(delta-debug reduction, WPT triage, exception parsing) off the local 24-core machine entirely,
+onto compute this project doesn't have to provision, cool, or maintain. Treat it as the primary
+lever for anything narrow and parallelizable, before reaching for more local-machine
+parallelism — it doesn't compete with the local RAM/CPU budget in Part 27.1 at all.
+
+### 27.4 If the resource envelope ever changes
+If more compute ever becomes available (cloud burst capacity, a distributed sccache backend, a
+larger local machine), the things that change are: oracle crawl frame size (Part 2, currently
+targeting 200–500 sites, could scale toward the tens of thousands used by industry differential
+fuzzers), WPT running continuously rather than nightly (Part 8), and wider speculative/redundant
+implementation attempts (Part 3.4) for narrow items with a decisive oracle verdict. None of the
+*architecture* changes — Salsa, the Tokio/Rayon split, the gate structure, the oracle's
+clustering logic all scale up unchanged; only the parallelism width and crawl breadth would
+grow. Note this explicitly so a future decision to add resources is additive to this
+methodology, not a reason to redesign it.
+
+---
+
+## Immediate Action Items (first sessions under this methodology)
+
+**Tier 0 — do these before touching the backlog, per Part 21.2. Nothing below this line starts
+until these are done or genuinely blocked:**
+1. Cut the verify wall to under five minutes: mold/lld, cargo-nextest, workspace-hack, and the
+   risk-based gate scheduler (Part 5.4). Full wall runs only on a timer or before release
+   banking from this point forward, never on every tick unconditionally.
+2. Widen the oracle's crawl frame to 200–500 sites (Part 2, Part 21.2 item 2) and regenerate the
+   priority ledger from its cluster ranking — stop hand-selecting what to fix next.
+3. Load ten real SPA starter apps and run the Framework Exception Miner (Part 9) against all of
+   them, in parallel with items 1–2, not sequenced after the document-web work.
+
+**Tier 1 — cheap, high-value, do alongside Tier 0, not blocked by it:**
+4. Add G_ALLOC and G_TEARDOWN to the verify wall (Part 5.2–5.3).
+5. Stand up G_SPAWN, G_DEDUP, and G_POOL_ISOLATION (Part 19.5).
+6. Stand up G_SILENT_FAIL and G_HANG (Part 22.1–22.2) — same "cheap, closes a proven gap"
+   justification as the gates above.
+7. Compute the change-coupling matrix from this repo's own git history (Part 3.3).
+8. Audit the current `text` crate for Skrifa + HarfBuzz (Part 15) before further font work.
+9. Audit every existing `tokio::spawn` call reachable from layout/paint/style for the
+   Tokio/Rayon isolation violation (Part 19.2) — likely latent debt predating this rule.
+10. Begin journaling in the Part 7 structure now, so the removal-model estimate has real data at
+    the next EPOCH audit.
+11. Generate the tree-sitter orientation layer (Part 16.2) once, now; use LSP as the default
+    precise-navigation tool (Part 16.1) from this session forward.
+12. Build the per-tab supervised panic/hang containment boundary (Part 23.2) — this is what
+    makes shipping against 99%-pattern-coverage (Part 24) safe rather than reckless, and it's
+    Tier-1 cheap: a `catch_unwind` boundary per tab task plus a watchdog, not full process
+    isolation.
+13. Stand up G_RUNTIME_COUNT (Part 25.2) and audit existing code for the "new Tokio runtime per
+    action" failure pattern specifically — check `net`, `page`, and anywhere a search/navigation
+    handler exists.
+14. Start stating tick-shape (pattern-class fix vs. single-site tuning, Part 26.1) in every
+    journal entry from this point forward — this is a zero-cost habit change, not a build task,
+    so there's no reason to delay it to a later tier.
+
+**Tier 2 — sequenced after Tier 0 lands, per Part 21.2 item 4:**
+12. Evaluate the Salsa-based incremental computation architecture (Part 19.1) as the replacement
+    for hand-rolled invalidation sets — this is the one item on the original list that's
+    asymptotically wrong today (O(page) per event), not merely incomplete, so it's a priority
+    once infrastructure is in place, but it depends on a deliberate build-vs-adopt decision, not
+    a mid-implementation default.

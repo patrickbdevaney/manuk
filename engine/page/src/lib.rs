@@ -515,6 +515,53 @@ pub struct Page {
 pub const MIN_ZOOM: f32 = 0.25;
 pub const MAX_ZOOM: f32 = 5.0;
 
+/// **Bar 0 containment (METHODOLOGY Part 23.2): a panic kills the PAGE, not the process.**
+///
+/// You will not prevent every crash-class bug before Bar 1. That is not pessimism, it is the premise
+/// of the whole 99%-pattern-coverage strategy (Part 24): the tail of patterns we do not yet cover is
+/// where the panics live, and the tail is infinite. So the requirement is not "never panic" — it is
+/// that a failure on ONE page is contained to that page.
+///
+/// apple.com core-dumped this browser. The specific cause (a node the cascade never saw) is fixed,
+/// and fixing it was right — but a fix for one instance is not containment of a class, and the next
+/// uncovered pattern will find the next panic. The failure mode for an uncovered pattern must be
+/// "this tab shows an error and the browser carries on", never "everything the user had open is
+/// gone".
+///
+/// Returns `None` if the page's own code brought it down. The caller shows an error page; the
+/// browser lives. `panic = "unwind"` in the release profile is what makes this possible at all — with
+/// `abort` it could not exist, which is precisely why it was removed.
+///
+/// **What this does NOT cover, stated honestly:** a fault raised inside SpiderMonkey's own C++ frames
+/// cannot be caught here, because unwinding across that FFI boundary is undefined behaviour rather
+/// than a catchable panic. Containing *that* needs the panic caught inside the Rust callback before
+/// it returns to C++ (done at the six binding catch sites) or, ultimately, a per-tab process. This
+/// boundary covers the Rust render path — parse, cascade, layout, paint — which is where every crash
+/// this project has actually seen has come from.
+pub fn contained<T>(what: &str, f: impl FnOnce() -> T) -> Option<T> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+        Ok(v) => Some(v),
+        Err(e) => {
+            let msg = e
+                .downcast_ref::<&str>()
+                .map(|s| s.to_string())
+                .or_else(|| e.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "(non-string panic payload)".into());
+            // Part 22.1: no silent failure. A contained panic is still a BUG, and it must reach the
+            // discovery pipeline rather than being quietly absorbed by the thing that makes it
+            // survivable.
+            tracing::error!(
+                %what,
+                panic = %msg,
+                "CONTAINED PANIC — this page died, the browser did not. This is a real bug and it \
+                 belongs in the oracle's crash signal (Part 24.3), which outranks every visual \
+                 divergence in the ledger."
+            );
+            None
+        }
+    }
+}
+
 /// How long a page's *enhancements* get, in total, before the document paints regardless.
 pub fn load_budget() -> std::time::Duration {
     static B: std::sync::OnceLock<std::time::Duration> = std::sync::OnceLock::new();

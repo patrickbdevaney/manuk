@@ -109,14 +109,26 @@ manuk-compositor = { path = "engine/compositor" }
 manuk-page = { path = "engine/page" }
 
 # Performance targets (CLAUDE.md § Performance targets):
-# static linking + LTO + stripped symbols; panic = "abort" in release.
+# static linking + LTO + stripped symbols.
 # musl (Linux) / static-CRT (Windows) are selected per-target in .cargo/config.toml
 # and are NOT forced here so the default host build stays simple.
 [profile.release]
 opt-level = "s"     # size-biased; binary-size is a first-class target
 lto = true
 codegen-units = 1
-panic = "abort"
+# **`panic = "abort"` was here, and it made Bar 0 impossible by construction.**
+#
+# With abort, `catch_unwind` cannot exist: ANY panic anywhere — one missing style entry on one
+# element of one page — kills the browser and everything the user had open. apple.com produced a core
+# dump exactly this way. Fixing that specific panic was prevention of one instance; METHODOLOGY Part
+# 23.2 asks for CONTAINMENT of the class, because you will not prevent every crash-class bug before
+# Bar 1 and pretending otherwise is how a browser ships that dies on one bad page.
+#
+# Unwinding buys the supervised per-navigation boundary (`G_CONTAIN`): a panic in parse/cascade/
+# layout/paint closes or reloads THAT page, and the browser — and every other tab — carries on. The
+# cost is a slightly larger binary and landing-pad codegen. Binary size is a first-class target here;
+# not crashing is a zeroth-class one.
+panic = "unwind"
 strip = true
 
 # A dev profile that still builds the heavy dependency graph quickly.

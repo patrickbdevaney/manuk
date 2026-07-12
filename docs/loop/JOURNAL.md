@@ -657,3 +657,33 @@ budget at all, now runs under the load budget like everything else.
 fetches when the session's real wins — a fixed core dump, a 265-site oracle, G_HANG — were still
 uncommitted. That is the pull Part 21 exists to name, and naming it is the discipline: the remaining
 duplicate-work reduction (9 layouts → 2-3) is the next tick's headline, not this one's footnote.
+
+## Tick 19 — Bar 0: the floor everything else stands on (2026-07-12)
+
+**TICK SHAPE (Part 26.1, stated before implementation): PATTERN-CLASS + INFRASTRUCTURE.** Nothing in
+this tick targets a single site. Every item is either a Bar 0 containment gap (Part 23) or a
+call-graph leanness fix that generalizes to every navigation (Part 22.3). If it drifts into matching
+one site's rendering, that drift is the signal and I pivot back.
+
+**Why Bar 0 first, ahead of the 73 hangs' root causes and ahead of every visual cluster.** Part 24.3
+is explicit: a pattern class that crashes the engine is categorically more urgent than one that
+renders wrong. Last tick apple.com produced a SIGSEGV core dump. I fixed the *specific* panic — a
+missing style entry — and that was necessary, but it was prevention of one instance, not containment
+of the class. Part 23.2 is the real requirement and it is the honest reading of what happened: **I
+will not prevent every crash-class bug before Bar 1, and pretending otherwise is how a browser ships
+that takes the whole session down with one bad page.** The failure mode for an uncovered pattern must
+be "this tab reloads with a message", never "the browser dies and everything the user had open dies
+with it".
+
+Planned, in Part 24.3's priority order:
+1. **Bar 0 containment** (Part 23.2): a supervised panic boundary per navigation, so a render/layout/
+   script panic kills the page, not the process. Plus **G_CONTAIN** to prove it with a deliberately
+   panicking page (Part 23.3).
+2. **G_RUNTIME_COUNT** (Part 25.2): one Tokio runtime and one Rayon pool for the process, not one per
+   navigation. The wheel-event clone regression taught this project exactly this lesson one layer down
+   the stack; Part 25 is that lesson applied to runtimes.
+3. **Duplicate work** (Part 22.3): bbc.co.uk does **9 full-document layouts and 4 cascades** for ONE
+   navigation against a 332ms pipeline pass. Target 2-3.
+
+**What I expect to be wrong about:** I expect to find more than one Tokio runtime being created, and
+I expect at least one of them to be per-navigation.

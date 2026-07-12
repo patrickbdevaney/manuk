@@ -88,6 +88,14 @@ head_ "G_LOAD · the page renders when its subresources never answer (METHODOLOG
 GL=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_load_budget 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GL" ]; then ok "load budget: $GL"; else bad "G_LOAD failed — a dead subresource can hold the document hostage"; fi
 
+head_ "G_CONTAIN · Bar 0 — a panic kills the PAGE, not the process (Part 23.2)"
+GC=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_contain 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GC" ]; then ok "containment: $GC"; else bad "G_CONTAIN failed — a page can take the whole browser down"; fi
+
+head_ "G_RUNTIME_COUNT · one async runtime for the process, not one per action (Part 25.2)"
+GR=$(cargo test -q -p manuk-shell runtime_instantiations 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GR" ]; then ok "runtime count flat: $GR"; else bad "G_RUNTIME_COUNT failed — runtimes are proliferating"; fi
+
 head_ "G_INTERACT · UI-thread cost of tab open/switch/close (the 'browser feels laggy' report)"
 GI=$(cargo test -q -p manuk-shell tab_operations -- --nocapture 2>&1 | grep -E "^  (open|switch|close)")
 if [ -n "$GI" ]; then echo "$GI" | sed 's/^/  /'; ok "every tab operation under one frame"

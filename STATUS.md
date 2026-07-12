@@ -7,7 +7,7 @@
 > the command that measured it. If a line here is stale, that is a compliance failure in itself.
 
 ```
-TICK: 18
+TICK: 19
 TIER: 0 (Part 21) — ONE of three Tier-0 items still open (the SPA miner)
 UPDATED: 2026-07-12
 ```
@@ -25,6 +25,14 @@ features shipped. If I find myself reaching for a bug fix because it feels like 
 than widening the oracle, that is the exact failure mode Part 21 exists to prevent, and I say so out
 loud rather than quietly following the pull.
 
+## Bar 0 — the stability floor (Part 23). Checked BEFORE Bar 1 is even asked.
+
+| Requirement | Status |
+|---|---|
+| No unrecoverable Rust panic at process level | ✅ **contained** — `panic = "unwind"` + a supervised per-navigation boundary. A panic in parse/cascade/layout/paint kills the PAGE and shows an error; the browser and every other tab carry on. Proven by `G_CONTAIN`, which deliberately panics a build. |
+| No SpiderMonkey crash cascade | ⚠️ **partial** — caught at the six binding sites; a fault raised inside SpiderMonkey's own C++ frames still cannot be caught in-process (unwinding across that FFI edge is UB). Full containment needs a per-tab process, correctly deferred. Stated honestly rather than claimed. |
+| No unrecoverable hang | ⚠️ **73/265 sites hang.** G_HANG counts them; production interruptibility is not yet built. |
+
 ## Gates — standing up vs. pending
 
 | Gate | Status | What it catches |
@@ -37,6 +45,8 @@ loud rather than quietly following the pull.
 | F1 / F2 perf floors | ✅ in the wall | cascade ≤40ms, pipeline ≤125ms (asserted, not eyeballed) |
 | **G_SILENT_FAIL** | ❌ **pending** | any caught error on the load/render/script path that is not surfaced |
 | **G_HANG** | ✅ **live** | every oracle site runs in its own process under a watchdog. A timeout is a HARD, COUNTED, ATTRIBUTED failure — never a skipped test. **73/265 sites currently hang.** |
+| **G_CONTAIN** | ✅ **live** | Bar 0 — a panic kills the page, not the process (Part 23.2) |
+| **G_RUNTIME_COUNT** | ✅ **live** | one async runtime for the process, not one per action (Part 25.2). The shell was building **two**. |
 | **G_SPAWN / G_DEDUP / G_POOL_ISOLATION** | ❌ **pending** | tokio/rayon isolation, duplicate passes, pool contention |
 
 ## Enforcement — compliance is mechanical, not remembered

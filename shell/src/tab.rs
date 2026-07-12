@@ -691,3 +691,50 @@ mod g_interact {
         );
     }
 }
+
+
+/// **G_RUNTIME_COUNT — one runtime, one pool, for the life of the process (METHODOLOGY Part 25.2).**
+///
+/// G_SPAWN governs how many *tasks* a click creates. This governs something categorically worse: how
+/// many long-lived *runtimes* exist at all. A task on a shared runtime is fine; a new runtime per
+/// action is not.
+///
+/// The canonical failure — a Tokio runtime built per navigation or per search — is invisible at idle,
+/// invisible in a profile of any single action, and lethal after an hour of browsing. That is exactly
+/// the shape of the wheel-event clone regression that this project already learned once, one layer
+/// further down the stack. So the gate does not check "is there one runtime"; it checks that the
+/// count stays FLAT while a scripted session does the things a person does.
+#[cfg(test)]
+mod g_runtime_count {
+    use super::*;
+
+    #[test]
+    fn runtime_instantiations_stay_flat_across_a_whole_session() {
+        use std::sync::atomic::Ordering;
+
+        // Touch it once so the singleton exists, then take the baseline.
+        let _ = manuk_net::runtime();
+        let base = manuk_net::RUNTIME_INSTANTIATIONS.load(Ordering::Relaxed);
+        assert_eq!(base, 1, "there must be exactly ONE async runtime for the process, got {base}");
+
+        // A session: navigations, searches, tab opens, tab closes. Repeatedly.
+        let mut b = Browser::new(6);
+        for round in 0..25 {
+            let id = b.open(format!("https://example.com/{round}"));
+            let _ = manuk_net::runtime(); // what a navigation/search does
+            b.focus(id);
+            let _ = manuk_net::runtime();
+            if round % 3 == 0 {
+                b.close(id);
+            }
+        }
+
+        let after = manuk_net::RUNTIME_INSTANTIATIONS.load(Ordering::Relaxed);
+        assert_eq!(
+            after, base,
+            "the runtime count ROSE from {base} to {after} across a scripted session — something is \
+             building a runtime per user action. That is invisible at idle and lethal after an hour \
+             of browsing, and it is the exact shape of the wheel-event clone regression one layer up."
+        );
+    }
+}
