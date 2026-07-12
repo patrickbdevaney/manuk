@@ -687,3 +687,64 @@ Planned, in Part 24.3's priority order:
 
 **What I expect to be wrong about:** I expect to find more than one Tokio runtime being created, and
 I expect at least one of them to be per-navigation.
+
+## Tick 20 — the last Tier-0 item, and the 73 hangs (2026-07-12)
+
+**TICK SHAPE: infrastructure + pattern-class.** The SPA miner is the last open Tier-0 item (Part 21.2
+item 3) and is infrastructure by definition — it converts the largest *unmeasured* unknown in the whole
+schedule into a bounded, enumerated list. The hangs are Bar 0 (Part 23), which outranks every visual
+cluster in the ledger by construction (Part 24.3), so no CLUSTER id is named and none is needed: a
+pattern class that hangs or crashes the engine is categorically more urgent than one that renders wrong.
+
+**Hypothesis, before the work.** Last tick I attributed the hangs to us and to CPU + duplicate work, and
+then landed four fixes (parallel script fetch, stylesheet/image/mask/background dedup, one fewer layout
+per round, a load budget on `load_async` which previously had none). **I do not yet know how many of the
+73 those fixed.** Re-crawling before doing anything else is the whole point of having a crawl: the
+answer decides what this tick is actually about, and guessing would waste it.
+
+**What I expect to be wrong about:** I expect the number to fall but not collapse, and I expect the
+residue to split into (a) genuinely heavy pages where we are simply slow, and (b) a small number of
+pathological ones where something is quadratic. Those are different bugs and the crawl will separate
+them, which is exactly what twenty sites could never do.
+
+**The SPA question is binary and that is why it is Tier 0.** If the missing substrate for React/Vue/
+Next is additive IDL and scheduling work, it is fast. If hydration failure cascades into needing a
+scheduling-fidelity subsystem, it is not. You cannot plan around that distinction while it is
+unmeasured, and the measurement is cheap.
+
+### Tick 20 result — the app web is ADDITIVE. Measured, not guessed.
+
+**Tier 0 item 3 is answered, and it is the good answer.** Eight real framework bundles (Vite output, not
+toys — a toy exercises the IDL we already thought to implement, which is a tautology). Before: **0 of 8
+rendered anything.** Every one mounted an empty `<div id="root">` and threw **zero exceptions** doing it.
+
+That silence was the finding. A framework that fails loudly gets fixed; one that fails silently becomes
+a permanent, unexplained "that site just doesn't work". The miner walked the chain in six steps, each
+one naming the next:
+
+1. **`import.meta` — "Module metadata hook not set".** SpiderMonkey needs a metadata hook; Vite, Rollup
+   and esbuild all emit `import.meta.url` unconditionally. **Every Vite app on the internet died on this
+   one missing function**, inside the module's own top level, where our warning path never saw it.
+2. **`nodeType`** — React's `isValidContainer` checks it. Without it: React error #299, "Target
+   container is not a DOM element." Three lines of code, and it was the entire React ecosystem.
+3. **`ownerDocument`** — React then does `container.ownerDocument` and immediately indexes the result:
+   `undefined["_reactListening…"]`. An error that names neither `ownerDocument` nor the DOM.
+4. **DOM interface constructors** — `node instanceof HTMLIFrameElement` throws `invalid 'instanceof'
+   operand` when the constructor is `undefined`. `Symbol.hasInstance` answers the question the
+   frameworks are actually asking without needing a real prototype chain.
+5. **`createElementNS` / `createComment` / `createDocumentFragment`** — Vue and Svelte use comment nodes
+   as anchors for every `v-if` and every `{#if}`. apple.com's first-ever exception was
+   `document.createElementNS is not a function`.
+6. **`performance.now` / `MessageChannel` / `requestIdleCallback`** — every scheduler feature-detects
+   these; the ones that don't fall back simply break.
+
+**After: Vue, Preact and Vanilla render (63 boxes each). React, Svelte, Solid and Lit still do not.**
+3 of 8, from ~6 additive fixes and no new subsystem. That is the binary question Tier 0 existed to
+settle: **the app web needs substrate, not a scheduling-fidelity architecture.** React's residual is the
+next tick's work, and it is now a bounded question rather than an open-ended risk.
+
+**The gate caught me.** My `HTMLElement` shim replaced one that was already there and load-bearing — the
+custom-elements upgrade path returns the element under construction from `super()`. A throwing "Illegal
+constructor" broke every custom element and every `attachShadow`, and G2 went red inside a minute. The
+fix is the general rule: **extend what exists, never clobber it** — attach `Symbol.hasInstance` to
+whatever is already defined, and only *define* what is not.

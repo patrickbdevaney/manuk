@@ -44,3 +44,8 @@ METHODOLOGY_RESULT.MD
 
 agent/src/bin/agent-parallel.rs
 agent/src/bin/parity-verify.rs
+
+# SPA corpus: the framework SOURCE (build.sh + package manifests) is versioned; node_modules and the
+# built dist/ are not. A 300MB node_modules in git is not a corpus, it is a mistake.
+tests/spa/apps/*/node_modules/
+tests/spa/apps/*/dist/

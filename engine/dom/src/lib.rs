@@ -693,6 +693,12 @@ impl Dom {
         }
     }
 
+    /// Is this a text node? (`nodeType === 3`, and the difference between `nodeValue` returning the
+    /// text and returning null — both of which frameworks read directly.)
+    pub fn is_text(&self, id: NodeId) -> bool {
+        matches!(self.nodes[id.index()].data, NodeData::Text(_))
+    }
+
     pub fn is_element(&self, id: NodeId) -> bool {
         matches!(self.nodes[id.index()].data, NodeData::Element(_))
     }

@@ -113,6 +113,112 @@ const PRELUDE: &str = r#"
         if (__fetchCb[id]) { globalThis.__deliverFetch(id, status, text); return; }
         if (__xhrObj[id]) { globalThis.__deliverXhr(id, status, text); return; }
     };
+
+    // ---------------------------------------------------------------------------------------------
+    // **DOM interface constructors — because frameworks `instanceof` constantly.**
+    //
+    // React's scheduled work throws `invalid 'instanceof' operand` on `node instanceof
+    // HTMLIFrameElement` — not because the node is wrong, but because the CONSTRUCTOR is `undefined`,
+    // and `x instanceof undefined` is a TypeError. That single missing global stops React's render
+    // dead, after `nodeType` and `ownerDocument` have already let it get that far.
+    //
+    // Our reflectors are plain objects, so there is no real prototype chain to hang these off. But
+    // `instanceof` does not require one: `Symbol.hasInstance` lets a constructor answer the question
+    // directly, which is exactly the question the frameworks are asking — "is this an iframe?", "is
+    // this an input?" — and answering it correctly matters far more than the prototype chain they are
+    // using to ask it.
+    //
+    // (Also `MessageChannel` and `performance`, both of which the schedulers feature-detect. React
+    // falls back gracefully without them; plenty of libraries do not.)
+    (function(){
+      // **Never clobber a constructor that already exists — it is load-bearing.**
+      //
+      // `HTMLElement` is not an inert marker here: the custom-elements shim defines it, and its
+      // constructor RETURNS the element under upgrade so that `class X extends HTMLElement` gets the
+      // real element as its `this`. Replacing it with a throwing "Illegal constructor" broke every
+      // custom element and every `attachShadow` in the JS conformance suite — the gate caught it
+      // immediately, which is the entire reason the gate exists.
+      //
+      // So: attach `Symbol.hasInstance` to whatever is already there, and only *define* the ones that
+      // do not exist. The frameworks get their `instanceof` either way, and nothing that already works
+      // stops working.
+      function iface(name, test) {
+        var C = globalThis[name];
+        if (typeof C !== 'function') {
+          // Constructible and inert — NOT throwing. A base class that throws on `super()` is
+          // indistinguishable, from the author's side, from a browser that does not support classes.
+          C = function(){ return this; };
+          Object.defineProperty(C, 'name', { value: name });
+          C.prototype = {};
+          globalThis[name] = C;
+        }
+        try { Object.defineProperty(C, Symbol.hasInstance, { value: test, configurable: true }); }
+        catch (e) { /* a frozen builtin: its own instanceof is already right */ }
+        return C;
+      }
+      var isEl   = function(o){ return !!o && o.nodeType === 1; };
+      var isNode = function(o){ return !!o && typeof o.nodeType === 'number'; };
+      var tagIs  = function(t){ return function(o){ return isEl(o) && o.tagName === t; }; };
+
+      iface('Node', isNode);
+      iface('Element', isEl);
+      iface('HTMLElement', isEl);
+      iface('SVGElement', function(o){ return isEl(o) && o.tagName === 'SVG'; });
+      iface('Text', function(o){ return !!o && o.nodeType === 3; });
+      iface('Comment', function(o){ return !!o && o.nodeType === 8; });
+      iface('DocumentFragment', function(o){ return !!o && o.nodeType === 11; });
+      iface('Document', function(o){ return o === document; });
+      iface('Window', function(o){ return o === globalThis; });
+
+      iface('HTMLIFrameElement',   tagIs('IFRAME'));
+      iface('HTMLInputElement',    tagIs('INPUT'));
+      iface('HTMLTextAreaElement', tagIs('TEXTAREA'));
+      iface('HTMLSelectElement',   tagIs('SELECT'));
+      iface('HTMLOptionElement',   tagIs('OPTION'));
+      iface('HTMLButtonElement',   tagIs('BUTTON'));
+      iface('HTMLAnchorElement',   tagIs('A'));
+      iface('HTMLImageElement',    tagIs('IMG'));
+      iface('HTMLFormElement',     tagIs('FORM'));
+      iface('HTMLCanvasElement',   tagIs('CANVAS'));
+      iface('HTMLScriptElement',   tagIs('SCRIPT'));
+      iface('HTMLStyleElement',    tagIs('STYLE'));
+      iface('HTMLLinkElement',     tagIs('LINK'));
+      iface('HTMLTemplateElement', tagIs('TEMPLATE'));
+      iface('HTMLDivElement',      tagIs('DIV'));
+      iface('HTMLSpanElement',     tagIs('SPAN'));
+
+      // `performance.now()` — schedulers, profilers and animation libraries all feature-detect it and
+      // most fall back to `Date.now()`. The ones that don't simply break.
+      if (typeof globalThis.performance === 'undefined') {
+        var t0 = Date.now();
+        globalThis.performance = {
+          now: function(){ return Date.now() - t0; },
+          mark: function(){}, measure: function(){},
+          getEntriesByName: function(){ return []; }, getEntriesByType: function(){ return []; },
+          timeOrigin: t0
+        };
+      }
+
+      // `MessageChannel` — React's scheduler prefers it over setTimeout for yielding. Implemented on
+      // the microtask queue, which is the closest thing we have to "after the current task, before
+      // paint" and is what the schedulers actually want it for.
+      if (typeof globalThis.MessageChannel === 'undefined') {
+        globalThis.MessageChannel = function() {
+          var p1 = { onmessage: null }, p2 = {};
+          p1.postMessage = function(d){ queueMicrotask(function(){ if (p2.onmessage) p2.onmessage({ data: d }); }); };
+          p2.postMessage = function(d){ queueMicrotask(function(){ if (p1.onmessage) p1.onmessage({ data: d }); }); };
+          p1.close = function(){}; p2.close = function(){};
+          p1.start = function(){}; p2.start = function(){};
+          this.port1 = p1; this.port2 = p2;
+        };
+      }
+      if (typeof globalThis.requestIdleCallback === 'undefined') {
+        globalThis.requestIdleCallback = function(cb){
+          return setTimeout(function(){ cb({ didTimeout: false, timeRemaining: function(){ return 5; } }); }, 0);
+        };
+        globalThis.cancelIdleCallback = function(){};
+      }
+    })();
 "#;
 
 /// Run the next macrotask if any; report whether one ran.
