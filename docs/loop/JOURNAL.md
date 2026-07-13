@@ -822,3 +822,60 @@ longest, and it is — React is still silent after two ticks. The lesson I wrote
 me now: *when every instrument says the bug is impossible, they are all sampling the same layer.* The
 next move on React is not to reason harder about the JS; it is to instrument the layer below — count the
 DOM mutations React actually performs, and see whether it is building a tree we then fail to lay out.
+
+## Tick 22 — shadow DOM is not laid out (2026-07-12)
+
+**TICK SHAPE: pattern-class.** Not a framework fix. Layout does not traverse shadow trees, so **every
+web component on the web renders nothing** — Lit is simply the framework that made it visible. The DOM
+holds the content (G2 asserts `shadowRoot.innerHTML` populates the shadow tree); layout never looks at
+it. Custom elements are not a niche: they are how design systems ship (Material, Fluent, Shoelace,
+Spectrum, every `<*-*>` element on a bank or a government site), and a browser that renders none of them
+is not a browser for those sites.
+
+**Hypothesis:** layout walks `dom.children(node)`, which returns light-DOM children only. The fix is that
+an element with a shadow root lays out its SHADOW children instead of its light children, and `<slot>`
+projects the light children back in. Slots are the part that will be wrong first.
+
+**What I expect to be wrong about:** I expect the naive fix (lay out the shadow tree instead) to render
+Lit immediately, and to break something involving `<slot>` — because a component whose light children
+vanish is a worse bug than a component that renders nothing, and it is the kind that renders *something*
+and therefore hides.
+
+### Tick 22 result — shadow DOM renders. Every web component on the web.
+
+**The flat tree was BUILT, TESTED, and wired to nothing that draws pixels.** `Dom::flat_children` has
+been correct all along — a shadow host yields its shadow tree, a `<slot>` yields its assigned light
+nodes — and the HTML crate used it. **Layout and the cascade walked `children()` instead**, which does
+not contain the shadow root, because a shadow root hangs off its host in its own field rather than among
+its children.
+
+And an unstyled node is not merely mis-styled: `is_rendered` drops it from the render tree outright. So
+the whole component produced **zero boxes**. The mechanism that would have rendered it was sitting right
+there the entire time.
+
+That is a different and more uncomfortable failure than a missing feature. The feature existed. Nobody
+had ever drawn a line from it to the renderer, and no gate asked.
+
+**Four bugs in the custom-element upgrade path, each hiding the next**, and all four were invisible:
+
+1. **`try { el.connectedCallback(); } catch (e) {}` — an EMPTY catch.** Lit does its entire first render
+   from `connectedCallback`: that is where `attachShadow` happens and where the component's content
+   comes into existence. Swallowing that exception meant a Lit component silently produced nothing, with
+   no shadow root, no boxes and no message. **Part 22.1 is not an abstract principle — this was exactly
+   the failure it names, sitting in our own code**, and it cost two ticks of looking in the wrong place.
+2. **Only the class's OWN prototype was copied.** Real component libraries are deep:
+   `MyElement extends LitElement extends ReactiveElement extends HTMLElement`, and the machinery that
+   runs the component lives on the BASE prototype. We gave the element a subclass with no superclass.
+3. **`el[k] = proto[k]` READS the property** — which, for an accessor, invokes the getter with `this`
+   bound to the *prototype* and stores the result as a plain value. Every reactive property would have
+   been frozen at whatever the prototype's getter happened to return. Descriptors are copied now.
+4. **`this.constructor` was not the custom class.** Component libraries read their static configuration
+   through it (`this.constructor.elementProperties`, `.observedAttributes`, `.styles`). All `undefined`.
+
+Shadow DOM now renders end-to-end: the host sizes to its shadow content, the text paints, and a
+light-DOM sibling is pushed down by it — the shadow tree *participates in layout*, it is not merely
+present. The regression test asserts both, and was verified by sabotage (`got 0`).
+
+Lit still does not complete its render (its `performUpdate` is scheduled, like React's) — but its
+shadow root now attaches and holds content, which is a different and much smaller problem than the one
+this tick started with.

@@ -299,7 +299,10 @@ impl<'m> TaffyDom<'m> {
             CssDisplay::Flex | CssDisplay::Grid | CssDisplay::InlineFlex | CssDisplay::InlineGrid
         );
         let children: Vec<TId> = if container {
-            dom.children(node)
+            // The FLAT tree, exactly as the block path does — a shadow host that is also a flex or
+            // grid container must lay out its shadow content, not its light children.
+            dom.flat_children(node)
+                .into_iter()
                 // `display: none` is not "lay it out and give it no room" — it means the element
                 // and its subtree **generate no boxes at all**. Adding them to the tree anyway let
                 // taffy hand them a zero slot while our extraction still measured and materialised

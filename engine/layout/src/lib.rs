@@ -3337,6 +3337,60 @@ mod tests {
         (dom, root)
     }
 
+    /// Regression: **a shadow tree must be laid out.**
+    ///
+    /// `flat_children` — the flat tree — existed, was correct, was tested, and was used by the HTML
+    /// crate. Layout and the CASCADE walked `children()` instead, which does not contain the shadow
+    /// root (it hangs off its host in its own field). So every node inside every web component went
+    /// unstyled, and an unstyled node is not merely mis-styled: `is_rendered` drops it from the render
+    /// tree entirely. **Zero boxes.** The mechanism that would have rendered them was sitting right
+    /// there, wired to nothing that draws pixels.
+    ///
+    /// Custom elements are how design systems ship — Material, Fluent, Shoelace, Spectrum, every
+    /// `<x-y>` element on a bank or a government site. A browser that renders none of them is not a
+    /// browser for those sites.
+    #[test]
+    fn a_shadow_tree_is_laid_out_and_sizes_its_host() {
+        let mut dom = manuk_html::parse(r#"<div id="host"></div><p id="after">after</p>"#);
+        let host = dom
+            .descendants(dom.root())
+            .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("host"))
+            .expect("host");
+        // What `attachShadow` + `shadowRoot.innerHTML` does from script.
+        let sr = dom.attach_shadow(host, manuk_dom::ShadowRootMode::Open);
+        let inner = dom.create_element("div");
+        dom.set_attr(inner, "id", "inshadow");
+        dom.set_attr(inner, "style", "height:40px");
+        dom.append_child(sr, inner);
+
+        let sheets = vec![Stylesheet::parse("")];
+        let styles = MinimalCascade.cascade(&dom, &sheets);
+        let fonts = FontContext::new();
+        let root = layout_document(&dom, &styles, &fonts, 600.0);
+        let rects = root.node_rects(&dom);
+
+        let h = rects.get(&host).expect("the host must have a box");
+        assert!(
+            (h.height - 40.0).abs() < 2.0,
+            "the host must size to its SHADOW content (40px), got {} — a host that measures 0 is a \
+             host whose shadow tree layout never looked at",
+            h.height
+        );
+        // And the light-DOM sibling is pushed down by it, which is the whole point: the shadow content
+        // is not merely present, it participates in layout.
+        let after = dom
+            .descendants(dom.root())
+            .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("after"))
+            .and_then(|n| rects.get(&n).copied())
+            .expect("#after");
+        assert!(
+            after.y >= 38.0,
+            "#after must sit below the shadow content (y>=38), got y={} — if it does not, the shadow \
+             tree took up no space and is being rendered on top of the page rather than in it",
+            after.y
+        );
+    }
+
     /// Regression: **a node the cascade never saw must not kill the browser.**
     ///
     /// Layout INDEXED the style map (`self.styles[&node]`) in twenty-five places. A node with no

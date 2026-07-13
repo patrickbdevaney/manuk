@@ -273,7 +273,12 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
     let mut stack: Vec<NodeId> = vec![dom.root()];
     while let Some(node) = stack.pop() {
         // Push children (reverse so we pop them in document order).
-        let kids: Vec<NodeId> = dom.children(node).collect();
+        // **The FLAT tree.** Walking `children()` skips shadow roots entirely — they hang off the
+        // host in their own field — so every node inside every web component went unstyled. And an
+        // unstyled node is not merely mis-styled: `is_rendered` drops it from the render tree, so the
+        // whole component produced ZERO boxes. Lit rendered nothing; so does every design system on
+        // the web.
+        let kids: Vec<NodeId> = dom.flat_children(node);
         for &k in kids.iter().rev() {
             stack.push(k);
         }

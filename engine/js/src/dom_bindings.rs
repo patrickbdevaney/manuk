@@ -3671,15 +3671,57 @@ const WINDOW_PRELUDE: &str = r#"
             g.__upgradeEl = function (el, ctor) {
                 if (!el || el.__ceUpgraded) return;
                 el.__ceUpgraded = true;
+                // **Walk the whole prototype CHAIN, and copy DESCRIPTORS, not values.**
+                //
+                // Two bugs lived here, and both were invisible:
+                //
+                // 1. Only the class's OWN prototype was copied. Real component libraries are deep:
+                //    `MyElement extends LitElement extends ReactiveElement extends HTMLElement`, and
+                //    the machinery that actually runs the component (`_$Ev` and friends) lives on the
+                //    BASE class's prototype. Copying one level gave the element a subclass with no
+                //    superclass, and its constructor died on the first inherited method it called.
+                //
+                // 2. `el[k] = proto[k]` READS the property — which, for an accessor, *invokes the
+                //    getter with `this` bound to the prototype* and then stores the result as a plain
+                //    value. Every reactive property on the component would be frozen at whatever the
+                //    prototype's getter happened to return. Descriptors are copied instead, so getters
+                //    stay getters.
+                //
+                // Walking up to (but not including) `HTMLElement.prototype` and `Object.prototype`
+                // keeps the native surface — `appendChild`, `attachShadow` — coming from the real
+                // element rather than being shadowed by a shim.
                 var proto = ctor && ctor.prototype;
-                if (proto) {
-                    var keys = Object.getOwnPropertyNames(proto);
+                var stop = (typeof HTMLElement === 'function' && HTMLElement.prototype) || null;
+                var chain = [];
+                for (var pr = proto; pr && pr !== Object.prototype && pr !== stop; pr = Object.getPrototypeOf(pr)) {
+                    chain.push(pr);
+                }
+                // Base-most first, so a subclass override wins over the class it overrides.
+                for (var ci = chain.length - 1; ci >= 0; ci--) {
+                    var pr2 = chain[ci];
+                    var keys = Object.getOwnPropertyNames(pr2);
                     for (var i = 0; i < keys.length; i++) {
                         var k = keys[i];
                         if (k === 'constructor') continue;
-                        try { el[k] = proto[k]; } catch (e) {}
+                        try {
+                            var d = Object.getOwnPropertyDescriptor(pr2, k);
+                            if (d) { Object.defineProperty(el, k, d); }
+                        } catch (e) {}
                     }
                 }
+                // **`this.constructor` must be the custom class.**
+                //
+                // We skip `constructor` when copying the prototype (copying it would be nonsense), and
+                // so the upgraded element's `.constructor` stayed whatever the native reflector's was.
+                // But a component library reads its own STATIC configuration through it —
+                // `this.constructor.elementProperties`, `this.constructor.observedAttributes`,
+                // `this.constructor.styles`. With the wrong constructor those are all `undefined`, and
+                // Lit dies on `undefined.keys`. Non-enumerable, exactly as a real prototype's is.
+                try {
+                    Object.defineProperty(el, 'constructor', {
+                        value: ctor, writable: true, configurable: true, enumerable: false
+                    });
+                } catch (e) {}
                 var prev = g.__ceUnderConstruction;
                 g.__ceUnderConstruction = el;
                 try { new ctor(); } catch (e) { try { g.__hostLog('warn', 'custom element ctor: ' + e); } catch (x) {} }
@@ -3690,13 +3732,22 @@ const WINDOW_PRELUDE: &str = r#"
                     for (var j = 0; j < obs.length; j++) {
                         var a = obs[j], v = el.getAttribute(a);
                         if (v !== null) {
-                            try { el.attributeChangedCallback(a, null, v); } catch (e) {}
+                            try { el.attributeChangedCallback(a, null, v); }
+                            catch (e) { try { g.__hostLog('warn', 'custom element attributeChangedCallback: ' + e); } catch (x) {} }
                         }
                     }
                 }
                 // It is already in the document (we only scan the live tree), so connect it.
+                //
+                // **This `catch` used to be EMPTY.** Lit does its entire first render from
+                // `connectedCallback` — that is where `attachShadow` happens and where the component's
+                // content comes into existence. Swallowing the exception meant a Lit component silently
+                // produced nothing at all, with no shadow root, no boxes, and no message. Part 22.1 is
+                // not an abstract principle: this is exactly the failure it names, sitting in our own
+                // code, and it cost two ticks of looking in the wrong place.
                 if (typeof el.connectedCallback === 'function') {
-                    try { el.connectedCallback(); } catch (e) {}
+                    try { el.connectedCallback(); }
+                    catch (e) { try { g.__hostLog('warn', 'custom element connectedCallback: ' + e); } catch (x) {} }
                 }
             };
             g.__upgradeTag = function (name) {

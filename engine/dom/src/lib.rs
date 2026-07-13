@@ -685,6 +685,33 @@ impl Dom {
         self.nodes[id.index()].parent
     }
 
+    /// **The flat tree was BUILT and then never used by the thing that matters.**
+    ///
+    /// `flat_children` (above) has been correct all along. Layout and the cascade walked `children()`
+    /// instead — which does not contain the shadow root, because a shadow root hangs off its host in
+    /// its own field rather than among its children. So **every web component on the web rendered
+    /// nothing**, and the mechanism that would have rendered them was sitting right here, tested, in
+    /// use by the HTML crate, and wired to nothing that draws pixels.
+    ///
+    /// Custom elements are not a niche. They are how design systems ship — Material, Fluent, Shoelace,
+    /// Spectrum, every `<x-y>` on a bank or a government site — and Lit is merely the framework that
+    /// made the gap visible.
+    /// Every node in the flattened tree under `id`, in render order — shadow trees included. This is
+    /// what the CASCADE must walk: a node the cascade never sees is a node layout cannot style, and
+    /// before this the entire shadow tree was exactly that.
+    pub fn flat_descendants(&self, id: NodeId) -> Vec<NodeId> {
+        let mut out = Vec::new();
+        let mut stack = vec![id];
+        while let Some(n) = stack.pop() {
+            out.push(n);
+            let kids = self.flat_children(n);
+            for &k in kids.iter().rev() {
+                stack.push(k);
+            }
+        }
+        out
+    }
+
     /// Iterator over the direct children of `id`.
     pub fn children(&self, id: NodeId) -> Children<'_> {
         Children {
