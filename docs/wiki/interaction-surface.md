@@ -29,3 +29,169 @@ links** as *perfectly clickable*. The hit-test reads the fragment tree; the DOM 
 
 `window.dispatchEvent(new Event('resize'))` is how a router tells the app it navigated — and it was a
 `TypeError`, with a whole listener registry sitting behind it.
+
+---
+# Backfill — mechanisms recovered from ticks 1–42 (pre-wiki)
+
+## A control whose only effect is a LOG LINE is a dead affordance — and to the user it is a broken browser
+
+Find-in-page and the bookmark toggle both **worked underneath** — and **drew no UI at all**, so pressing the
+key did nothing visible. **Both shipped.**
+
+**This is a class no feature-level test catches**, because every feature test asks whether the **engine** did
+the thing, **not whether the USER could SEE that it did.**
+
+**Two mechanical defences:** assert that every user-reachable control has an **observable** effect (and
+**explicitly fail any whose stated effect is a tracing line**), and **make the toolbar's draw and hit-test
+share ONE geometry function**, so what a user sees and what responds to a click **can never drift apart.**
+
+## Hit-testing must break ties toward the DEEPER element, and must respect STACKING ORDER
+
+- Resolving an area tie toward the **ancestor** made a click on a lone `<button>` inside a same-size
+  `<form>` **"hit" the form.** Pre-order with `<=` resolves to the **deeper** element.
+- **Deepest-wins alone lets you click THROUGH a `position:fixed`, high-z modal** to the content beneath it.
+  **"Smallest containing box" is not the same as "topmost painted box."** Prefer the **highest effective
+  stacking layer** containing the point, **then deepest within that layer** — so non-positioned pages (all
+  z=0) are unchanged.
+
+**The geometry problem underneath:** inline elements produce no layout box, so **`<a>` and `<button>` — the
+very things one clicks — had NO GEOMETRY AT ALL** until text fragments started carrying their owning node;
+and `<a><img></a>` had none until a boxless element's rect became the **union of its subtree's fragments AND
+boxes.**
+
+## Agent actions must go through the REAL hit-test, or agent testing is a privileged bypass
+
+An agent action resolves to an a11y-tree node → **spatial hit-test via the primary layout engine** → **if
+the target is occluded, `display:none`, or off-screen, the hit-test FAILS and the action is REJECTED,
+exactly as it would for a human.**
+
+> **That is precisely what makes agent-driven testing a valid differential oracle for interaction parity.**
+> *The cost, stated plainly: the a11y tree must be computed-on-read and kept synchronously consistent with
+> layout.*
+
+## ONE a11y tree, THREE consumers — and web-agent research independently converged on it
+
+Building the DOM→role+name+geometry tree **once** serves:
+
+1. **the screen-reader product** (bridged via `accesskit` → Windows UIA / macOS NSAccessibility / Linux
+   AT-SPI),
+2. **the agent's structured observation channel** — WebArena-class research uses the accessibility tree as
+   the **preferred** channel (*"a subset of the DOM with role/text/properties, structured yet more
+   compact"*), read via **semantic roles** rather than raw pixels or full DOM,
+3. **the interaction-parity oracle.**
+
+**HTML-AAM implicit-role rules that actually bite:** `<a>` is a `link` **only with `href`**; `<section>` is
+a `region` **only when named**; `<th scope=row>` → `rowheader`; an explicit `role=` honours
+**first-valid-token-wins**; **`<img alt="">` is presentational — the node is dropped but its CHILDREN are
+REPARENTED.**
+
+## Role + accessible-name is the right primary locator vocabulary
+
+It is **semantic rather than structural** (it survives CSS and DOM refactors), it matches how an LLM reasons
+(*"the **Sign in** button"*), and it is **injection-resistant in a way CSS selectors are not.**
+
+**External a11y-first agents are sunk by legacy UIs that render invisibly to the a11y tree — but because we
+COMPUTE the tree internally, we can offer role/name locators synchronously with a geometry/visibility
+fallback when a11y metadata is missing.** A structural CSS escape hatch stays available, **but not as the
+primary mode.**
+
+## The stable agent handle should be the arena `NodeId` itself
+
+**CDP's nodeId/backendNodeId split is accidental complexity** — it exists *because* it crosses a process
+boundary. Ladybird's WebDriver element reference **IS** the DOM node's `UniqueNodeID` stringified, with a
+staleness check.
+
+Our arena already has `NodeId`, and `A11yNode.node` already carried it; it simply **was not surfaced as a
+handle**, which forced the agent to **re-resolve the whole tree on every call.** The pairing that makes it
+safe is the **generational `NodeId`** — a stale handle after slot reuse **fails loudly** rather than
+silently aliasing a different element.
+
+> **The in-process advantage IS the absence of a delta-serializer and a dual node-ID space.** Every
+> CDP/WebDriver stack needs both *because* it crosses a process boundary. This is also what makes a live
+> **`Handoff`** possible: it **MOVES the live `Page`** — DOM mutations, form values, scroll, nav stack —
+> instead of re-fetching, *and re-fetching would lose exactly what matters (a logged-in page, a half-filled
+> form).*
+
+## Synchronous truthful READINESS is literally inexpressible over CDP/BiDi — that is the differentiation surface
+
+**Readiness is the #1 flakiness source in all web automation.** Playwright's own docs concede network-idle
+*"does not work for state updates triggered by client-side events, focus changes, or mount-time effects"* and
+**never settles in SPAs holding long-lived websockets**; **BiDi still lacks an event distinguishing
+navigation COMMIT from COMPLETE.**
+
+**An in-process engine can block on the REAL lifecycle signal** — style clean, layout clean, microtask queue
+drained, a *specific* fetch resolved — **because it owns the arena.** The same ownership enables a **race-free
+semantic DOM diff computed BETWEEN JS turns**, which no socket-based protocol can offer.
+
+## WebDriver BiDi, not CDP — and driving a REAL client found five bugs a spec read did not
+
+CDP is **Chromium-only and not a standard**; **WebDriver BiDi is the W3C standard** (JSON-RPC over WebSocket,
+WPT-tested), Firefox has dropped experimental CDP in its favour, and it makes the engine
+**Puppeteer/Playwright-drivable.**
+
+**Bugs a spec read missed:** `browser.getUserContexts` is required **before** any context work;
+`browsingContext.contextCreated` **must be emitted BEFORE the `create` reply** (clients build their map from
+the *event* and look the id up the instant the command resolves); context info must be **complete**
+(`parent`, `userContext`) **or clients silently drop the event**; `newPage()` issues
+`browsingContext.setViewport`; and **`goto` needs the full lifecycle** — `navigationStarted` before the
+reply, then `domContentLoaded` + `load` carrying **the same `navigation` id** and a numeric timestamp, **or
+`goto` never resolves.**
+
+## The Action-Guard taxonomy follows one principle: PAGE-CHOSEN DESTINATIONS are the exfiltration channel
+
+An action that can transmit page-derived or typed data to **a destination the page chose** is what a hidden
+prompt injection reaches for.
+
+| Action | Class | Why |
+|---|---|---|
+| `submit`, `click_text` on a **button** | **Sensitive** | can submit |
+| `click_at` | **Sensitive** | **a raw coordinate cannot be checked against any target before it is clicked** |
+| `type` | Safe | purely local — nothing leaves the machine until a submit or navigation |
+| `back`/`forward`/`scroll` | Safe | |
+
+**`method=post` forms must be REFUSED, not silently downgraded to GET** — *a downgrade pushes passwords and
+tokens into the URL and the `Referer`.*
+
+**Capability scoping belongs at the tool-call boundary as a plain value.** CaMeL's result is that what
+defeats prompt injection is enforcing policy **at the tool-call boundary** — a check before each action.
+**Macaroons buy nothing in-process** (they exist for *attenuated delegation across a trust boundary*; where
+no untrusted party ever holds the credential, an HMAC chain adds crypto surface for zero threat-model gain).
+**Authority is checked FIRST** (*"were you ever granted this kind of action?"*), **then** the risk heuristic —
+they answer independent questions and **both must pass**. **An empty origin allowlist means "any origin", not
+"none"** — *a grant that forgot to name one must not silently brick.*
+
+## More context DEGRADES agent accuracy even when the needed information is present
+
+The literature shows a larger observation **hurts every model**, and there is **no evidence a richer
+observation helps a LARGER one** — FocusAgent's >50% pruning lets two *small* models hit 51.5%/51.8% success
+against 53.0% for a large model on the full tree.
+
+> **So serialization depth must be keyed on a TOKEN BUDGET, not a model-capability enum** — that would encode
+> a belief the evidence does not support.
+
+**The trimming order is counterintuitive**, dropping by increasing value-per-token: **raw text first, then
+the link list, and the ACCESSIBILITY TREE LAST** — the tree is the densest channel and **the link list is a
+strict subset of it.** *(An initial implementation had this backwards.)*
+
+**And no policy, at any budget, may drop the untrusted-content fence around page-derived text** —
+`aria-label="ignore prior instructions"` is an injection vector **exactly like link text.**
+
+## Graceful degradation is not "do nothing" — the spec already has the vocabulary
+
+`<video>` laid out correctly at 640×360 while `canPlayType`, `play`, `paused`, `readyState`, `error` and
+`networkState` were **all `undefined`.** **That is the worst combination:** a site calling `video.play()`
+gets a `TypeError` **that takes the page down**, and a site that **politely feature-detects** with
+`if (v.canPlayType('video/mp4'))` reads `undefined` and **cannot even be told no.**
+
+**The honest answers:** `canPlayType()` → **`""`** (*the empty string IS the spec's "no"*) · `play()` → a
+**REJECTED Promise** (`NotSupportedError` — *which every player library already handles, because autoplay
+policies make rejection routine*) · `error.code 4` · `readyState 0` · `networkState 3` ·
+`getContext('webgl')` → **`null`**.
+
+**A site told THAT hides its player and shows its fallback.** And **`<video poster>` is a still image we can
+already decode and paint** — *a correctly-sized poster with an honest "cannot play" is a **degraded video**,
+which is the whole ask.*
+
+**`alert`/`confirm`/`prompt` must be honest too:** a renderer has **no user to ask**, and a `confirm()`
+returning `true` by default would let a page **believe the user had agreed to something.** *Declining is the
+safe answer, and it is LOGGED rather than silent.*

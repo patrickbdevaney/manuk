@@ -56,6 +56,16 @@ that **ebbs and flows with the context window instead of accumulating anywhere.*
 - **`docs/loop/PROCESS.md`** records *process* defects (how we work). This records *domain* knowledge
   (how the web and the engine work). A tick can produce both.
 
+## The backfill (tick 45)
+
+The wiki was instituted in tick 43, so everything learned in **ticks 1–42 was trapped** in the journal, the
+git history, and — worse — in **files that had since been deleted or rewritten**. Five parallel readers mined
+all of it: the full commit history, `JOURNAL.md`, the research/methodology docs, the capability ledgers and
+gate doc-comments, and **the archaeology of deleted/superseded doc versions**.
+
+Every topic file carries a **`# Backfill`** section holding those recovered mechanisms. **From here it
+accumulates by construction**, because the pre-commit hook requires a `WIKI:` trailer on every tick.
+
 ## The topics
 
 | File | Covers |
@@ -69,3 +79,5 @@ that **ebbs and flows with the context window instead of accumulating anywhere.*
 | [`architecture.md`](architecture.md) | concurrency, process model, memory — decisions *and their reasoning* |
 | [`conformance-and-oracles.md`](conformance-and-oracles.md) | how we MEASURE: WPT, the Chromium oracle, falsification |
 | [`interaction-surface.md`](interaction-surface.md) | the interaction/automation surface (agent-native mission) |
+| [`performance.md`](performance.md) | what is actually slow, and why — measured, never assumed |
+| [`build-and-dependencies.md`](build-and-dependencies.md) | what is actually compiled, and what only *looks* like it is |

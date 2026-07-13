@@ -48,3 +48,128 @@ Which makes the **jQuery-core surface** the empirically-justified first tranche 
 
 **jQuery survives a missing `DOMContentLoaded` by checking `document.readyState`** — which is precisely
 why the missing document lifecycle went unnoticed for 40+ ticks: *it worked often enough to look fine.*
+
+---
+# Backfill — mechanisms recovered from ticks 1–42 (pre-wiki)
+
+## Eight real framework bundles rendered NOTHING and threw ZERO exceptions — the silence WAS the finding
+
+Vue, React, Preact, Svelte, Solid, Lit and vanilla Vite output **all mounted an empty `<div id="root">`
+with no error of any kind.**
+
+> **A framework that fails LOUDLY gets fixed. One that fails SILENTLY becomes a permanent, unexplained
+> "that site just doesn't work."**
+
+The chain — **each step naming the next** — was **entirely additive substrate, not a missing scheduling
+subsystem**:
+
+`import.meta` → **`nodeType`** (React's `isValidContainer` checks it; without it you get React error #299)
+→ **`ownerDocument`** (React then indexes the result: `undefined["_reactListening…"]` — *an error naming
+neither `ownerDocument` nor the DOM*) → **DOM interface constructors** (`node instanceof HTMLIFrameElement`
+**throws** `invalid 'instanceof' operand` when the constructor is undefined) →
+`createElementNS`/`createComment`/`createDocumentFragment` →
+`performance.now`/`MessageChannel`/`requestIdleCallback`.
+
+**0/8 → 8/8 on roughly ten additive WebIDL fixes and NO new architecture.**
+
+> **No amount of spec-reading would have picked `nodeType` out of the DOM standard as *the* load-bearing
+> property.** *This settles the binary question the whole schedule hung on: hydration failure does NOT
+> cascade into needing a scheduling architecture.*
+
+## When a framework fails silently, the bug is BELOW the framework
+
+**Four of the five real blockers were in our own primitives**: a use-after-GC in `ownerDocument`, an
+unsupported `file://` scheme, a missing `CharacterData.data`, and a shadow root reporting `nodeType 8`
+instead of 11. **The framework was never once the thing that was broken** — yet *"React renders nothing"*
+and *"Lit's template doesn't commit"* sat in the ledger as **framework** problems for several ticks.
+
+> **The prior is now: test your OWN primitives before blaming the framework. It has paid three times.**
+
+## An empty `catch` around `connectedCallback` silently deletes a whole component library
+
+**Lit does its ENTIRE first render from `connectedCallback`** — that is where `attachShadow` happens and
+where the component's content comes into existence. `try { el.connectedCallback(); } catch (e) {}` meant a
+Lit component produced **no shadow root, no boxes and no message**, and it cost two ticks of looking in the
+wrong place.
+
+> **The general form: every swallowed exception must report its message.** *"A page `<script>` threw;
+> continuing"* **is a shrug.** Printing the message turned an hour of bisecting into two exact TypeErrors.
+> **The browser was naming its own bugs out loud and the messages were being discarded.**
+
+**Errors were being discarded in THREE distinct places:** empty `catch` blocks, swallowed exception
+messages, and **unhandled promise rejections.**
+
+## The web FEATURE-DETECTS and *grades* the browser — one missing BOM object downgrades whole platforms
+
+MediaWiki's startup script runs
+`isCompatible() = 'querySelector' in document && 'localStorage' in window && …` and, on failure, reverts
+`client-js` → `client-nojs` and **ships the degraded page**.
+
+Failing on `localStorage` meant **every MediaWiki site on earth was serving the no-script fallback**:
+Wikipedia's table of contents never collapsed (**1,949px instead of 364px**) and dragged the whole page
+**~5,000px out of alignment.** *It looked like a layout bug for an hour. It was a missing BOM object.*
+
+> **Corollary — the "admissions test" bug class:** the web probes `'localStorage' in window` and friends,
+> then falls back to a no-script path — **so the engine looks catastrophically broken when it is merely
+> incomplete.** *Honest present-but-inert stubs for admission-test properties are worth shipping BEFORE the
+> underlying implementation, purely to close that gap.*
+
+## Constructable stylesheets are a PREREQUISITE for web-component libraries
+
+`new CSSStyleSheet()` + `replaceSync` is how **every** modern web-component library ships styles; Lit's
+`static styles = css\`…\`` needs it to **exist** before the component renders a single node. Alongside it,
+`document.createTreeWalker` + `NodeFilter` is how lit-html finds the holes in a cloned template, and
+`document.importNode` is how it commits one.
+
+⚠ **`adoptedStyleSheets` accepted-but-dropped** means components render **unstyled** — the deliberate
+trade-off recorded at the time was *"legible beats absent"*, and it is why design-system sites (banks, gov,
+enterprise portals) render **without their styles**.
+
+## SSR'd HTML renders with NO JavaScript at all — what breaks is client-side ROUTING, not rendering
+
+Hydration only attaches handlers. **This reordered the whole roadmap.** The History API turned out to be
+**pure host state with zero SpiderMonkey dependency** beyond binding it:
+
+- `pushState` **updates the URL WITHOUT fetching**
+- it does **NOT** fire `popstate` — **only traversal does**. *(Firing it on `pushState` would make a router
+  RECURSE.)*
+- it is **same-origin only**
+- **`pushState` creates an entry even for an UNCHANGED URL** (a router pushes the same URL with new state) —
+  *a naive session-history `push` that dedupes will silently swallow it.*
+
+## The Framework Exception Miner — an unthrown exception is a discovery signal you threw away
+
+Drive barebones starter templates (CRA, Next App+Pages Router, Vite+React, Vue/SvelteKit, Angular)
+headlessly; **the engine must PRINT thrown exceptions rather than discard them**; parse each stack;
+auto-generate a ticket for the missing IDL member named in the error; and **rank the backlog by how many of
+the N templates each missing item unblocks.**
+
+The same pipeline catches non-standard-API gaps (`Error.captureStackTrace is not a function`) — **an
+identical signal shape, so no second mechanism is needed.**
+
+## Prioritise the binding surface from Chrome UseCounter + HTTP Archive, not by instrumenting Chrome
+
+And since **jQuery is on ~74% of pages**, the empirically-justified first tranche is the **jQuery-core
+surface**: `querySelector`/`getElementById`, `createElement`/`appendChild`/`textContent`/`innerHTML`,
+`addEventListener`, XHR/`fetch`, `classList`/`style`.
+
+## The measured capability list that ranked the whole backlog
+
+`<form>` submit **50%** · `<picture>`/`srcset` **47%** · CSS transition/`@keyframes` **38%** · `<iframe>`
+**23%** · `position:sticky` **14%** · WebSocket **5%** · Service Worker **5%** · `<dialog>`/`showModal`
+**3%** · Web Worker **2%** · IndexedDB **1%**.
+
+> **A capability that THROWS is strictly worse than one that is MISSING.** *"A missing feature degrades a
+> page. A thrown `TypeError` at the top of a bundle kills every line of script after it — so a
+> 27%-of-the-web feature that throws is a 27%-of-the-web **outage**, not a 27%-of-the-web **gap**."*
+
+## The first named hydration failure: aljazeera, and React discarding its own server-rendered tree
+
+`remove_child` took out **2,131 elements in one call** — which is **normal**: `createRoot` clears its
+container. **The bug was that the client re-render then came up empty**, because a chain of
+`ReferenceError`s (WebSocket → Blob → FileList) threw inside React's render and hit an **error boundary**,
+leaving **141 of 2,131 elements (5%)**. Fixing the ~40-name interface surface brought it to **470 (3.3×)**.
+
+**Every other measured site — github, HN, bbc, wikipedia, techcrunch, vimeo, deviantart, replit — retained
+100%** of its parsed elements through script execution. *So this is one site's class, not a general
+hydration collapse.*

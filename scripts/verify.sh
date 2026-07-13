@@ -104,6 +104,29 @@ head_ "G_GLOBALS · a missing constructor is a THROWN EXCEPTION, not a missing f
 GG=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_globals 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GG" ]; then ok "globals: $GG"; else bad "G_GLOBALS failed — a global a real bundle references is missing, or one of them is LYING"; fi
 
+head_ "G_NO_PHANTOM_FORK · an edit that LOOKS load-bearing and is inert"
+# `./stylo` is a gitignored REFERENCE CLONE of servo/stylo. Nothing in this workspace builds it: it is
+# not a member, there is no [patch.crates-io], there is no path dependency, and Cargo.lock pins
+# `stylo 0.19.0` from the crates.io registry. So an edit under ./stylo reaches NOTHING.
+#
+# This already cost a tick: tick 42 began by flipping `parse_has() -> true` in there, rebuilding, and
+# observing no change — which re-priced :has() from "a one-line flag" to "vendor Stylo", and is why it
+# was ultimately solved with a hand-rolled supplement instead.
+#
+# A DIRTY reference checkout is, by definition, someone believing an edit matters when it cannot.
+PHANTOM=0
+if [ -d stylo ] && [ -n "$(git -C stylo status --short 2>/dev/null)" ]; then
+  bad "G_NO_PHANTOM_FORK: ./stylo has LOCAL MODIFICATIONS — and nothing builds it. That edit reaches no binary, is not committed, and vanishes on a fresh clone. Revert it (git -C stylo checkout .) or vendor Stylo properly via [patch.crates-io] with the fork TRACKED IN THIS REPO."
+  PHANTOM=1
+fi
+# And if a real fork ever DOES appear, it must be declared in STATUS.md's fork surface — a fork nobody
+# recorded is a capability that a dependency bump can silently delete.
+if grep -q "^\[patch.crates-io\]" Cargo.toml 2>/dev/null && ! grep -q "patch.crates-io" STATUS.md 2>/dev/null; then
+  bad "G_NO_PHANTOM_FORK: Cargo.toml has a [patch.crates-io] that STATUS.md's fork surface does not record. An undeclared fork is a capability a dependency bump can silently delete."
+  PHANTOM=1
+fi
+[ "$PHANTOM" -eq 0 ] && ok "no phantom fork: ./stylo is pristine reference-only; Stylo comes from crates.io"
+
 head_ "G_CHARDATA · element.click() and CharacterData — neither existed"
 # `element.click()` is how the web ACTIVATES things (menus, modals, carousels, hidden file inputs, every
 # framework's programmatic activation). It was missing: a TypeError on the call, taking down whatever was

@@ -87,3 +87,178 @@ Fixing it made **5 real crashes visible** that had been invisible from the start
 
 **A crash is a finding, not an accident.** Both a hang and a crash must name the test they died on and
 step over it.
+
+---
+# Backfill — mechanisms recovered from ticks 1–42 (pre-wiki)
+
+## ONE SNAPSHOT, BOTH ENGINES — and never diff against a DEGRADED oracle
+
+**Fetching the page separately per engine compares two DIFFERENT documents and calls the difference a
+bug.** The live origin injects a fundraising banner that a saved copy does not — and a metric stayed pinned
+at **exactly 5,122px across four genuinely-correct fixes** because of it.
+
+Equally: **the oracle's health check must ask what Chromium actually DREW** (elements drawn, visible text
+length), **not how many elements carried an id** — otherwise a **bot wall is scored as YOUR rendering
+bug.**
+
+**Both hazards are made impossible IN CODE, rather than left as things to remember.**
+
+## Probing only `[id]` elements makes the oracle nearly BLIND
+
+**Most of the web does not put ids on things.** `text.npr.org` reported **ONE** probed element — and across
+a 265-site corpus the oracle was about to report *"no divergences"* **with total confidence.**
+
+Keying on a **structural path** (`div[0]/main[0]/p[3]`), computed identically by both engines from the same
+snapshot, took npr **1 → 75** probed elements, lite.cnn → **226**, the Rust book → **540**.
+
+⚠ **Getting the two path functions to agree is a precondition for the diff meaning anything.** **Chromium's
+walk stops at `parentElement === null`, so `<html>` contributes NO component** — emitting `html[0]` shifts
+every key by one level and reports **`<html>` and `<body>` as MISSING on every site.**
+
+## THE SCORE GATES; THE EYEBALL DIAGNOSES — a pixel score is a poor proxy for correctness
+
+Recorded **four separate times in one arc**:
+
+- Wikipedia scored **75%** while being **visibly, structurally broken**.
+- A massive structural repair (hidden dropdowns no longer painting over the article) moved it **81.0% →
+  81.7%**.
+- Restoring an **entire missing TOC sidebar** moved it **81.7% → 80.7%** — *it went DOWN.*
+- **An entirely absent sidebar moved the visual score by less than ONE POINT.**
+
+**The honest metric is COVERAGE**: *of everything Chromium renders, what fraction do we render **at all**?*
+**A missing region cannot hide in COVERAGE.** Placement drift is reported **separately**, because on real
+pages it is dominated by **font-metric differences** — a fidelity concern, not a correctness one.
+
+**Corollary:** a coverage number can be **100% while the page is wrong** — coverage said every element was
+present on rust-lang.org while the page was **printing its own JavaScript source down the left margin.**
+*That is what a second bar is for.*
+
+## Cluster by ROOT CAUSE, not by tag name — and rank by DISTINCT SITES
+
+Naive differential diffing runs at **90%+ false positives** before clustering. A clusters file whose top
+entries are `geometry: <div>` / `<a>` / `<body>` is **a ranking by tag name** — a restatement of *"the
+oracle found divergences"* — and **cannot be worked on.**
+
+Cluster by: **(1)** first-divergence signature, **(2)** computed-`display`-mismatch class, **(3)** the CSS
+property/selector implicated. **Then rank by how many DISTINCT SITES each cluster explains** — one site with
+500 `<div>`s must not outvote 200 sites with one `<iframe>`.
+
+> **A cluster IS a website class, so the cluster registry IS the taxonomy** — empirically derived rather
+> than hand-enumerated. **Crashes and hangs are a third category and outrank every visual cluster.**
+
+**And never score timing.** A first-pass report that lumped all divergence kinds together printed
+*"structural agreement: 2.8%"* for a browser rendering fine — because **`geometry` (123,796 nodes, 70% of
+the total) means the node EXISTS, at the same SIZE, in a different place.** The real Bar 1 number was
+**92.2%**.
+
+## Gates must run the SHIPPING configuration
+
+The parity harness **defaulted to the simple cascade while the shell shipped Stylo** — so parity, fidelity
+and the perf bench were all validating **a cascade no user had ever seen.** Fixing it changed the numbers
+**in both directions at once**: fidelity was **understated** (81.2% → 86.3%) *while simultaneously hiding a
+near-total Wikipedia layout failure* that only a screenshot revealed.
+
+Later amended: **gating without the JS engine charges the ENGINE for the absence of the SCRIPT engine.**
+
+## A gate that CANNOT FAIL is a decoration — and they go vacuous SILENTLY
+
+A coverage gate returned **1.0 when `probed == 0`**, and its own default URL list contained **`example.com`,
+which has NO `[id]` elements at all** — so it probed nothing, **scored a perfect 100%**, and *inflated the
+mean of the very gate meant to catch missing content.*
+
+**Proven by mutation: emptying `node_rects()` so the browser rendered NOTHING still scored 100% there.**
+The clickability gate had the identical shape (a browser that finds **zero links** scores as *perfectly
+clickable*).
+
+## MUTATION-TEST THE WALL — and then verify the mutation tester
+
+`falsify.sh` installs, for each gate, **the exact bug that gate exists to catch**, and asserts it goes
+**RED**. Its first run found **five** defects, including a **Bar 0 gate — the one between the user and a
+frozen tab — that was VACUOUS**: deleting the page-budget function outright left it **green**, because it
+was being protected by an unrelated per-request timeout.
+
+**Three further traps, all real:**
+
+1. **A mutation that fails to COMPILE returns non-zero exactly like a failing assertion** — so a typo
+   *certifies the gate by nothing*. The falsifier must **BUILD first** and report a build failure as
+   **FALSIFIER BROKEN**, never as evidence about the gate.
+2. **Two gates racing over a process-global `OnceLock`** made the verdict depend on **thread scheduling**.
+   (`request_timeout()`/`load_budget()` memoise process-wide: **the first caller to read them wins,
+   forever.** One test file = one binary = its own `OnceLock`.)
+3. **A killed run left a mutated constant in the tree** (`MAX_TASKS_PER_DRAIN = u32::MAX`, in a Bar 0
+   path), which the next run then **"backed up" and "restored" as if it were the original.**
+
+> **A "VACUOUS" verdict is a CLAIM ABOUT THE GATE. Verify it before believing it.** Six times the verdict
+> was false and *the gate was right while the mutation was wrong* (aimed at a dead function, an unscanned
+> file, the wrong score axis). **The tool that checks the instruments is an instrument.**
+
+**And a linker OOM is not evidence about your code:** `ld terminated with signal 9` made the harness report
+FALSIFIER BROKEN for two perfectly good mutations. Retrying at `CARGO_BUILD_JOBS=2` proved both.
+
+## "The probe didn't say yes" is NOT "the probe said no"
+
+Made **three times in four ticks**. `localStorage`, `FormData`/`URLSearchParams` and `position: sticky` were
+each recorded as **"❌ missing"** and each **already worked** — **twice the replacement was written before
+anyone noticed.**
+
+One read as missing only because **the capability probe was served from a `file://` URL — an OPAQUE ORIGIN,
+which correctly answers `QuotaExceededError` in EVERY browser.**
+
+> **Serve capability probes over real HTTP, through the real pipeline. And if the probe does not test it,
+> its status is UNKNOWN — which is not "missing".**
+> **An absent measurement is not a negative measurement.**
+
+## Corpus BREADTH, not verification throughput, surfaces class bugs
+
+- **3 sites** reported COVERAGE 99.7% and *"everything is fine."*
+- **20 sites** found that a page was **printing its own JavaScript**, that `:checked` never matched
+  anywhere, that checkboxes were invisible, and that docs.python.org rendered **entirely dark**.
+- **265 sites** found a **SIGSEGV core dump** (apple.com) and the whole hang class.
+
+> **A three-site sample is not a benchmark; it is an anecdote that confidently reports that a bug on one of
+> those three is the most important bug on the web.** *The bugs a corpus cannot find are exactly the ones no
+> corpus site happens to use.*
+
+## Every number has a HARNESS, and the harness is part of the number
+
+- **Job count is part of the measurement.** 4 jobs → 11 hangs/88 sites (**12.5%**); 12 jobs → 22/45
+  (**49%**) — **same binary, same corpus, same hour.** (Twelve parallel oracle runs meant **189 concurrent
+  Chromium processes**, and the watchdog fired on *manufactured contention*.)
+- **`export -f` + xargs workers SURVIVE the death of their driver** — a previous crawl's workers kept
+  writing into the new run's results directory. Caught **only by luck** (the two script versions used
+  different labels). Every record now carries a **`RUN_ID`**, and the crawl **refuses to start on live
+  workers**.
+- **An interrupted crawl always UNDER-reports**, because *the sites that hang are the ones still running
+  when you kill it.* The status script **refuses to print a partial run.**
+- **A benchmark that shares a machine with a compile is not a benchmark** — and **RAM, not cores, was the
+  binding constraint.**
+
+## Residual-bug estimation must use a REMOVAL model, because discovery is SERIAL
+
+Each tick's fix changes the codebase, so this is **not** independent sampling of a frozen artifact — a naive
+Lincoln-Petersen estimator will **UNDERESTIMATE** the residual. Use a **removal model (Zippin/Moran)**: fit
+the declining discovery-rate curve; the x-intercept estimates the total population.
+
+**Report it as a LOWER BOUND, scoped to the current capability surface — and EXPECT the estimate to GROW as
+the crawl frame expands.** *A rising number from better instrumentation is the method working, not
+failing.*
+
+## Read Blink/Gecko for the ALGORITHM; never copy the CODE — and know what that buys
+
+For any ambiguous, edge-case-heavy behaviour (margin collapsing, line breaking, float/BFC interaction, event
+dispatch order, IDL reflection), read the reference source **first** and extract the *algorithm and its
+edge-case list*, **citing the file/function in the commit.**
+
+**Stated ceiling, so it is not over-extrapolated:** this compresses **DISCOVERY, not IMPLEMENTATION** — the
+Rust still has to be written — and it does **nothing** for external-integration problems (codec licensing,
+GPU drivers, DRM), which are not algorithm-discovery problems.
+
+## Three gates that exist because green gates coexisted with real bugs
+
+- **G_ALLOC** — every perf floor stayed green through a clone-per-wheel-event regression, because **a
+  load-time bench measures throughput on an idle queue, not the marginal cost of an EVENT.**
+- **G_TEARDOWN** — forbids `libc::_exit()` or any process-exit path bypassing Rust `Drop`. *A workaround
+  that hides a crash is a data-loss bug wearing a disguise.*
+- **G_SILENT_FAIL** — a swallowed script exception hid two missing IDL properties that were killing
+  navigation on **every mdbook site**. *A caught error that is not logged or surfaced is a gate violation,
+  not defensive coding.*

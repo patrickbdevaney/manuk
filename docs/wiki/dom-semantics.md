@@ -83,3 +83,126 @@ importantly, is not what real code catches.
 `do { … } while (delta == 0)` — it **busy-waits for the clock to advance**. A frozen clock is not a
 wrong value; it is a **hang**. The same trap exists for `performance.now()`, `Date.now()` under a
 virtual clock, and any monotonically-increasing counter a page polls.
+
+---
+# Backfill — mechanisms recovered from ticks 1–42 (pre-wiki)
+
+## The FLAT TREE and the node tree are different trees, and every renderer must walk the flat one
+
+A **shadow root is NOT a child of its host** (it hangs off the host in its own field), while the host's
+**light children REMAIN its children in the node tree** even though they render at a `<slot>`.
+
+`Dom::flat_children` was **correct, tested, and used by the HTML crate** — while layout and the cascade
+walked `children()`. So the cascade never styled a single node inside any web component, and **an
+unstyled node is dropped from the render tree outright: zero boxes for every custom element on the web**
+(Material, Fluent, Shoelace, Spectrum, every `<x-y>` on a bank or government site).
+
+**The mechanism existed. Nothing had drawn a line from it to the renderer, and no gate asked.**
+
+**Scoping rule:** matching is scoped, **inheritance is not**. A document `p{}` cannot reach inside a shadow
+root and a shadow `p{}` cannot escape — but the cascade recurses over the **flat** tree, so a slotted node
+is visited at its slot and inherits from its **flat** ancestors. `::slotted(<compound>)` is the one
+selector that deliberately crosses; written outside a shadow tree it matches nothing.
+
+## html5ever ALREADY implements Declarative Shadow DOM — the hook just defaults to `false`
+
+html5ever's tree builder checks `shadowrootmode` on a `<template>` start tag and calls
+`TreeSink::attach_declarative_shadow` — but **that trait method defaults to `false`**, and
+`markup5ever_rcdom` never overrides it. So `<template shadowrootmode="open">` parses as an ordinary
+template and the shadow root is **silently dropped**. *A mis-wired reuse, not a missing capability.*
+
+**The non-obvious second half:** the hook fires at the template's **START tag**, and html5ever then keeps
+inserting content into `get_template_contents(template)`. So a hook that tries to *move* the template's
+children into the shadow root **moves zero nodes — none exist yet.** You must point the template's
+**contents at the shadow root**.
+
+## A DocumentFragment's defining property is what happens when you INSERT it
+
+**Its children move into the parent and the fragment itself does not.** That single rule is why every
+framework builds a subtree in a fragment and commits it in **one** insertion.
+
+We had a `NodeData::Fragment` type documented in our own source — while `createDocumentFragment()`
+returned a **`<div>`**, `template.content` returned the `<template>` **element** (which is `display:none`,
+so inserting it inserted an inert wrapper), a fragment reported **`nodeType 8`** (comment) instead of
+**11**, and `cloneNode`/`importNode` fell through to `create_element("div")` for anything that was not an
+element or text.
+
+`importNode(template.content, true)` is the single call **every compiler-based framework** commits a
+template through.
+
+## Comment nodes are load-bearing INFRASTRUCTURE, not annotations
+
+**lit-html** finds the dynamic holes in a cloned template with `createTreeWalker(SHOW_ELEMENT | SHOW_COMMENT)`
+and reads `node.data`. **Vue and Svelte** anchor every `v-if`/`{#if}` and every list on comment nodes.
+
+**A comment draws no box — which is precisely why frameworks use it as an anchor: a position in the tree
+that costs nothing.** `document.createComment()` was returning an empty **text** node, which is invisible
+to that walk, so lit-html found **zero parts**, rendered nothing, and threw nothing.
+
+A shadow root must be `nodeType` **11**, not 8 — reporting 8 is how a component wrongly concludes it is
+**not** in a shadow tree.
+
+## `textContent` is a node-tree API, so any "visible text" built on it is wrong
+
+Switching `visible_text` to read the **fragment tree** made it respect `display:none`, exclude `<head>`
+content, and honour shadow DOM and slot assignment **for free**. The bug that exposed this: shadow content
+laid out correctly with real geometry but was missing from both `visible_text` **and the a11y tree**,
+because both were walking the node tree.
+
+## Generational `NodeId` buys use-after-free safety while staying a bare integer for JS
+
+The arena packs `generation<<32 | index`. A freed slot bumps its generation, so a stale handle to a reused
+slot **fails `is_alive` (returns `None`) instead of aliasing a new node**. Crucially, **generation-0
+(never-reused) nodes are byte-identical to a bare index**, so JS reflectors' `i32` slot encoding stays
+valid.
+
+There is deliberately **no auto-free** — the parser reparents and JS `removeChild` often re-inserts — so
+reclamation is opt-in at proven-discard sites.
+
+> **This also dissolves the classic C++↔JS cycle**: because the DOM is `NodeId`-indexed rather than
+> refcounted, a JS wrapper holding a `NodeId` **cannot form a native refcount cycle** — the problem
+> `nsCycleCollector` exists to solve largely does not arise. Gecko's cycle collector was declined for
+> exactly this reason.
+
+## `document.readyState` is the most-checked property on the web, and `undefined` makes half of it work BY ACCIDENT
+
+Half the scripts on the internet open with
+`if (document.readyState === 'loading') { wait } else { init() }`. An **undefined** value makes that
+comparison false, so those scripts take the `else` and initialise immediately — **right by accident.** The
+libraries that instead wait for `'complete'` **wait forever.**
+
+**This masking is why nobody noticed that `DOMContentLoaded` and `load` were never dispatched anywhere in
+the engine** (grep returned zero) for forty ticks. jQuery — on ~74% of pages — survived by checking
+`readyState`. Any site whose init lived in `addEventListener('load', …)` **simply never initialised**.
+
+> *A gap that works often enough to look fine is the hardest kind to find, and the population that hides it
+> is disjoint from the population it destroys.*
+
+## The "detached document" checks frameworks use are string/identity comparisons that `undefined` fails silently
+
+- **`document.defaultView`** — frameworks get `window` from a **node** (`el.ownerDocument.defaultView`)
+  precisely so they work inside an iframe. `null` makes them think they are in a **detached document** and
+  skip everything.
+- **`document.visibilityState`** — video players and animation loops compare against the *string*
+  `'visible'`. `undefined !== 'visible'` makes a player believe the tab is **backgrounded** and refuse to
+  start.
+- **`nodeType`** — React's `isValidContainer` checks it; without it you get **React error #299**, *"Target
+  container is not a DOM element"*.
+- **`isConnected`** — React and Vue check it **before every commit**.
+
+## Registering a DOM property twice lets the later registration silently win
+
+`content` was registered once for `<meta content>` and once for `<template>.content`; **the later one won
+and broke the other.** The fix is one dispatching getter. *This is a general hazard of a flat
+property-registration table with no collision check.*
+
+## Two form-encoding details servers actually branch on
+
+- **A checked checkbox with NO `value` submits the string `"on"`**, not `""`. *"The box was ticked"
+  arriving as an empty string reads at the far end as "ticked, and the user typed nothing" — a different
+  claim.* An **unchecked** box is not a successful control at all and contributes **nothing**.
+- **`application/x-www-form-urlencoded` encodes a space as `+`, not `%20`.** `encodeURIComponent` alone
+  gets this wrong — quietly, and **only for values containing spaces**.
+
+`form.submit()` and `form.requestSubmit()` differ exactly as spec'd: **`requestSubmit()` fires `submit`
+(the page may cancel); `submit()` does not** — a script calling it has already decided.

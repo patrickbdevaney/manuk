@@ -2363,3 +2363,67 @@ suite it did not run.*
 | files measured | 457 (33 silently dropped) | **458** |
 
 **No capability lost, no perf floor moved, and the instrument got more honest rather than less.**
+
+## Tick 45 — the phantom fork, and forty-two ticks of knowledge recovered from the dead (2026-07-13)
+
+**TICK SHAPE: infrastructure** — it multiplies every future tick, which is what puts it in scope by
+definition.
+
+**Hypothesis (the phantom fork):** `./stylo` looks like source we build, and it is not. It is a plain clone
+of `github.com/servo/stylo`, **gitignored, zero files tracked**, not a workspace member, with no
+`[patch.crates-io]` and no path dependency — while `Cargo.lock` pins **`stylo 0.19.0` from the crates.io
+registry with a checksum.** *Editing anything under it changes nothing.*
+
+**It had already cost a tick** (42: flip `parse_has() -> true`, rebuild, observe nothing, re-price the whole
+`:has()` decision) — **and the clone was still DIRTY, carrying that orphaned edit.**
+
+> **A dirty reference checkout is, by definition, someone believing an edit matters when it cannot.**
+
+**RESULT:** the clone is restored to pristine upstream, the topology is written down
+(`docs/wiki/build-and-dependencies.md`), and **`G_NO_PHANTOM_FORK` now fails the wall** if `./stylo` has
+local modifications, or if a `[patch.crates-io]` ever appears that STATUS.md's fork surface does not record.
+*Proven to go red by dirtying the clone and watching it fire.* **If a fork is ever genuinely needed there is
+exactly one sanctioned way, and it is written down: `[patch.crates-io]` → a fork TRACKED IN THIS REPO, with
+a gate that fails when a dependency bump silently reverts it.**
+
+---
+
+**THE BACKFILL — and this is the larger half of the tick.**
+
+The wiki was instituted in tick 43, which meant **everything learned in ticks 1–42 was trapped**: in the
+journal (a *log*), in STATUS (a *snapshot*), in the git history — and, worst, **in files that had since been
+deleted or rewritten out of existence.** Neither a log nor a snapshot answers *"what do we now durably KNOW
+about how this engine, and the web platform, actually work?"*
+
+Five readers mined it in parallel: the **full commit history**, **`JOURNAL.md`**, the
+**research/methodology docs**, the **capability ledgers + every gate's doc-comment**, and — the one that
+mattered most — **the archaeology of deleted and superseded doc versions.**
+
+**~2,400 lines across 12 topic files**, organised **by subsystem, never by tick.** A sample of what would
+otherwise have been lost with the next compaction:
+
+- **`Dom::flat_children` was correct, tested, and used by the HTML crate — while layout and the cascade
+  walked `children()`.** Every web component on the web produced **zero boxes**. *The mechanism existed;
+  nothing had drawn a line from it to the renderer.* **That happened THREE times in three ticks** (comments,
+  fragments, the flat tree) — **one gate-shaped hole, not three bug-shaped ones.**
+- **Chromium never asks fontconfig for a bare generic family — it asks for *Arial* and *Times New Roman*.**
+  And the instinct to "just ask `fc-match sans-serif`" is **also wrong**: that returns Noto, whose line box
+  is **1.362em against Liberation's 1.150em**, so every line on every page comes out **18% too tall**.
+- **Answering `MinContent` with max-content means no flex item containing a paragraph can ever shrink** —
+  taffy uses the min-content answer as the item's automatic minimum size.
+- **`import.meta` needs an embedder module-metadata hook**, and Vite/Rollup/esbuild emit `import.meta.url`
+  **unconditionally** — so one missing callback made **every bundler-produced app on the internet** fail
+  silently.
+- **A `<template>`'s DSD hook fires at the START tag**, so moving its children in the hook **moves nothing**
+  — you must point the template's *contents* at the shadow root.
+- **"73 of 265 sites HANG (27.5%)" was measuring CHROMIUM'S clock** — the watchdog wrapped both engines, and
+  Chromium is the slower one on 84% of this corpus. *The real number was nine.* **That wrong number set the
+  schedule for several ticks.**
+- **Two design decisions recorded as DECIDED-BUT-UNDONE**, which would otherwise have been silently
+  re-derived: the DOM bindings are still **string-`eval`** bindings, and methods are still defined
+  **per-instance** rather than on one shared prototype per interface — *which is what breaks the
+  `instanceof`/`constructor` semantics pages test for.*
+
+**From here it accumulates by construction:** the pre-commit hook requires a **`WIKI:`** trailer on every
+tick, with an explicit escape hatch (`WIKI: none — <why>`) so **skipping is an auditable CHOICE rather than
+a silent gap.**
