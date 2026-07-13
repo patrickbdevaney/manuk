@@ -247,6 +247,91 @@ const PRELUDE: &str = r#"
       iface('Comment', function(o){ return !!o && o.nodeType === 8; });
       iface('DocumentFragment', function(o){ return !!o && o.nodeType === 11; });
 
+      // ── HTMLMediaElement — **an honest NO, not a TypeError.**
+      //
+      // We cannot decode video or audio. That is a real limit and it is not going away this tick. What
+      // is NOT acceptable is the shape the limit currently takes: `video.play` is `undefined`, so a
+      // site that calls it throws and takes the whole page down, and a site that *politely feature-
+      // detects* with `if (v.canPlayType('video/mp4'))` reads `undefined` and cannot even be told no.
+      //
+      // Graceful degradation is not doing nothing. It is **answering the question honestly**, and the
+      // spec already has the exact vocabulary for a browser that cannot play a thing:
+      //
+      //   canPlayType(t)  →  ''   the empty string IS the spec's "no"
+      //   play()          →  a REJECTED promise (NotSupportedError). Every player library on the web
+      //                      already handles this path, because autoplay policies make rejection
+      //                      routine in real browsers — so this is the best-tested failure mode there is.
+      //   error           →  MediaError { code: 4 }  (MEDIA_ERR_SRC_NOT_SUPPORTED)
+      //   readyState      →  0 (HAVE_NOTHING)   networkState → 3 (NETWORK_NO_SOURCE)
+      //
+      // A site told *that* hides its player and shows its fallback. A site told `undefined` throws.
+      // The poster still renders (see `fetch_images_owned`), so what the user sees is the frame the
+      // author chose — which is exactly what a real browser shows before you press play.
+      if (typeof globalThis.MediaError === 'undefined') {
+        globalThis.MediaError = function MediaError(code) { this.code = code || 4; this.message = ''; };
+        globalThis.MediaError.MEDIA_ERR_ABORTED = 1;
+        globalThis.MediaError.MEDIA_ERR_NETWORK = 2;
+        globalThis.MediaError.MEDIA_ERR_DECODE = 3;
+        globalThis.MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED = 4;
+      }
+      iface('HTMLMediaElement', function(o){
+        return !!o && o.nodeType === 1 && (o.tagName === 'VIDEO' || o.tagName === 'AUDIO');
+      });
+      iface('HTMLVideoElement', function(o){ return !!o && o.nodeType === 1 && o.tagName === 'VIDEO'; });
+      iface('HTMLAudioElement', function(o){ return !!o && o.nodeType === 1 && o.tagName === 'AUDIO'; });
+
+      // Installed on every media element as it is reflected. Own properties, like the rest of our DOM
+      // surface — see the prototype bridge above for why that is not the same as having a prototype.
+      globalThis.__manukMedia = function(el) {
+        if (!el || el.__mediaReady) { return el; }
+        Object.defineProperty(el, '__mediaReady', { value: true, enumerable: false });
+
+        var err = new globalThis.MediaError(4);   // MEDIA_ERR_SRC_NOT_SUPPORTED — and it is the truth
+        var ro = function(name, value) {
+          Object.defineProperty(el, name, { get: function(){ return value; }, configurable: true });
+        };
+        ro('error', err);
+        ro('readyState', 0);        // HAVE_NOTHING
+        ro('networkState', 3);      // NETWORK_NO_SOURCE
+        ro('paused', true);
+        ro('ended', false);
+        ro('seeking', false);
+        ro('duration', NaN);
+        ro('buffered',  { length: 0, start: function(){ return 0; }, end: function(){ return 0; } });
+        ro('played',    { length: 0, start: function(){ return 0; }, end: function(){ return 0; } });
+        ro('seekable',  { length: 0, start: function(){ return 0; }, end: function(){ return 0; } });
+        ro('textTracks', []);
+        ro('videoWidth', 0);
+        ro('videoHeight', 0);
+
+        // Writable, because scripts set them and expect them to stick. They just do not do anything.
+        el.currentTime = 0; el.volume = 1; el.muted = false; el.playbackRate = 1;
+        el.autoplay = el.autoplay || false; el.loop = el.loop || false;
+
+        el.HAVE_NOTHING = 0; el.HAVE_METADATA = 1; el.HAVE_CURRENT_DATA = 2;
+        el.HAVE_FUTURE_DATA = 3; el.HAVE_ENOUGH_DATA = 4;
+        el.NETWORK_EMPTY = 0; el.NETWORK_IDLE = 1; el.NETWORK_LOADING = 2; el.NETWORK_NO_SOURCE = 3;
+
+        // `''` is the spec's "no". `'probably'` / `'maybe'` are the only other answers, and both
+        // would be lies.
+        el.canPlayType = function() { return ''; };
+
+        el.play = function() {
+          var e = new Error('media playback is not supported by this browser');
+          e.name = 'NotSupportedError';
+          return Promise.reject(e);
+        };
+        el.pause = function() {};
+        el.load  = function() {};
+        el.addTextTrack = function() { return { cues: [], activeCues: [], mode: 'disabled' }; };
+        el.requestPictureInPicture = function() {
+          var e = new Error('picture-in-picture is not supported');
+          e.name = 'NotSupportedError';
+          return Promise.reject(e);
+        };
+        return el;
+      };
+
       // Install the bridges once every interface exists (see `bridge` above).
       try {
         bridge(globalThis.Node.prototype, NODE_ACCESSORS);

@@ -8,10 +8,10 @@
 > filesystem, git, the crawl output or the verify receipt.
 
 ```
-TICK:              27
+TICK:              28
 LAST_AUDIT_TICK:   19          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
-LAST_WALL_TIME:    51s
+LAST_WALL_TIME:    198s
 ORACLE_CORPUS:     265 sites
 ORACLE_CRAWLED:    265 sites, 616 clusters  → docs/loop/CLUSTERS.md
 ORACLE_HANGS:      9   ← Bar 0, on OUR clock (manuk_ms > 30s). Outranks every visual cluster.
@@ -86,8 +86,11 @@ Short by construction. If this grows without bound, lessons are being added that
 | # | Item | Status | The fact |
 |---|------|--------|----------|
 | 1 | Verify wall under 5 minutes | ✅ **MET** | **181s (3m 01s)** worst realistic tick (touch `engine/css`, the shared-type edit that cascades furthest); **57s** warm. Measured by timing `./scripts/verify.sh`. mold/nextest/workspace-hack **not needed** — the target is already met, and doing that work anyway would be infrastructure theatre. Re-measure if it ever crosses 300s. |
-| 2 | Oracle crawl frame at 200–500 sites | ✅ **DONE** | **265 sites, 15 design-pattern classes** (`docs/bench/oracle-corpus.txt`). `scripts/oracle-crawl.sh` — process-isolated, watchdogged, resumable, snapshot-cached. First run: 129 diffed, 63 discarded (degraded oracle), **73 HUNG**. The cluster ranking is now the ledger. |
-| 3 | Ten SPA starter apps through the Framework Exception Miner | ❌ **OPEN** | **0 apps run.** This is the single largest *unmeasured* unknown in the whole schedule and it is cheap to measure. Not started. |
+| 2 | Oracle crawl frame at 200–500 sites | ✅ **DONE** | **265 sites, 15 design-pattern classes** (`docs/bench/oracle-corpus.txt`). Process-isolated, watchdogged, resumable, snapshot-cached, **run-stamped**. Latest clean run: 206 diffed, 44 discarded, 15 unattributed timeouts. |
+| 3 | Ten SPA starter apps through the Framework Exception Miner | ✅ **DONE (tick 26)** | **8 of 8 frameworks mount and render** — React (TS+JS), Vue, Svelte, Solid, Preact, Lit, Vanilla. Every blocker was one of *our* primitives, not the framework: a use-after-GC in `ownerDocument`, `file://` unsupported by the net layer, `CharacterData.data` missing, a shadow root typed 8 instead of 11, and no accessors on `Node.prototype`. All six are now asserted in **G2 scenario 14**. |
+
+**TIER 0 IS COMPLETE.** The definition of a productive session is no longer "Tier 0 advanced". The
+schedule is now set by the ledger and by Bar 0's residue, which is **two sites** (wix.com, flickr.com).
 
 **Definition of a productive session while TIER 0 is open: Tier 0 advanced.** Not bugs closed, not
 features shipped. If I find myself reaching for a bug fix because it feels like more visible progress

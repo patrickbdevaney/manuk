@@ -214,3 +214,23 @@ bug is below the framework.* Four of the five above were in our own primitives �
 use-after-GC, one an unsupported URL scheme, one a missing character-data accessor. The framework was
 never once the thing that was broken. Stop reading the framework's source and go test the primitive it
 sits on.
+
+## Tick 28 — media: degrade honestly
+
+| Pattern | Where it appears | Status |
+|---|---|---|
+| `<video>` / `<audio>` **layout** | Everywhere | ✅ the element reserves its box and the page flows around it (was already true) |
+| `<video poster>` | Every video on the web | ✅ (tick 28) — a poster is a still image, and we decode still images. The user sees the frame the author chose. |
+| `HTMLMediaElement` **API** | Every player library, every feature-detect | ✅ (tick 28) — **an honest NO.** `canPlayType()` → `''` · `play()` → **rejected** `NotSupportedError` · `error.code` → 4 · `readyState` 0 · `networkState` 3 |
+| Actual video **decode/playback** | — | ❌ not this tick, and openly so |
+
+**The point, which took a measurement to see:** the layout was already right and the API was entirely
+absent, and *that is the worst combination*. A site calling `video.play()` got a `TypeError` and lost
+the whole page. A site that politely feature-detected read `undefined` and could not even be told no.
+
+**Graceful degradation is not doing nothing — it is answering the question honestly.** The spec already
+has the vocabulary for a browser that cannot play a thing, and `play()` returning a rejected promise is
+the *best-tested failure path on the web*, because autoplay policies make rejection routine in real
+browsers. Every player library is already written to handle it.
+
+Asserted in **G2 scenario 15**. A missing codec is an acceptable limit; a thrown exception is not.

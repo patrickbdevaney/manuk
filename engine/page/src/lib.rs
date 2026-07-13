@@ -223,9 +223,22 @@ async fn fetch_images_owned(
     let targets: Vec<(manuk_dom::NodeId, String)> = dom
         .flat_descendants(dom.root())
         .into_iter()
-        .filter(|&n| dom.tag_name(n) == Some("img"))
         .filter_map(|n| {
-            let src = dom.element(n)?.attr("src")?.trim().to_string();
+            // **`<video poster>` is a still image, and we can already decode still images.**
+            //
+            // We cannot decode the video. We can decode the poster — so a `<video>` renders its poster
+            // frame at the right size, with an honest "cannot play" behind it (see the HTMLMediaElement
+            // surface in `dom_bindings`). That is what graceful degradation *is*: not a blank rectangle,
+            // and not a thrown exception. It is the frame the author chose to represent the video,
+            // which is exactly what a real browser shows before you press play.
+            let el = dom.element(n)?;
+            let src = match dom.tag_name(n)? {
+                "img" => el.attr("src")?,
+                "video" => el.attr("poster")?,
+                _ => return None,
+            }
+            .trim()
+            .to_string();
             if src.is_empty() {
                 return None;
             }
@@ -2429,6 +2442,7 @@ mod js_interactive_tests {
         //  12  matchMedia — width features evaluate against the viewport
         //  13  Custom Elements + Shadow DOM — upgrade, attachShadow, lifecycle callbacks
         //  14  The framework primitives — each one named by the framework it actually broke (tick 26)
+        //  15  HTMLMediaElement — an honest NO, not a TypeError (tick 28)
         js_conformance_body();
     }
 
@@ -2675,6 +2689,59 @@ mod js_interactive_tests {
             Some("false,true,true"),
             "matchMedia: not-narrow, is-wide, and in-range at 1280px wide"
         );
+
+        // (15) **Media: graceful degradation means answering honestly, not staying silent.**
+        //
+        // We cannot decode video or audio, and that is fine — a browser is allowed to lack a codec.
+        // What is not fine is the shape the limit took: `video.play` was `undefined`, so a site calling
+        // it threw a TypeError and took the whole page down, and a site that *politely feature-detected*
+        // with `canPlayType` read `undefined` and could not even be told no.
+        //
+        // Every assertion below is the spec's own vocabulary for a browser that cannot play a thing.
+        // `play()` rejecting is the best-tested failure path on the web — autoplay policies make
+        // rejection routine in real browsers, so every player library already handles it.
+        let html15 = r#"<!doctype html><html><body>
+            <video id="v" width="640" height="360" poster="p.png" controls>
+              <source src="m.mp4" type="video/mp4">
+            </video>
+            <div id="out">-</div>
+            <script>
+              var v = document.getElementById('v'), r = [];
+              // '' is the spec's "no". 'probably'/'maybe' are the only other answers and both are lies.
+              r.push('cannot:' + (v.canPlayType('video/mp4') === ''));
+              r.push('state:' + (v.paused === true && v.readyState === 0 && v.networkState === 3));
+              r.push('err:' + (v.error && v.error.code === 4));      // MEDIA_ERR_SRC_NOT_SUPPORTED
+              r.push('iface:' + (v instanceof HTMLMediaElement));
+              // Setters must not throw. Scripts assign these unconditionally.
+              v.pause(); v.currentTime = 5; v.volume = 0.5; v.load();
+              r.push('setters:' + (v.currentTime === 5));
+              // play() must return a REJECTED promise, never throw and never resolve.
+              var p = v.play();
+              r.push('promise:' + (p && typeof p.then === 'function'));
+              p.then(function(){ document.getElementById('out').textContent = 'PLAY RESOLVED (a lie)'; })
+               .catch(function(e){
+                 r.push('rejected:' + (e.name === 'NotSupportedError'));
+                 document.getElementById('out').textContent = r.join(' ');
+               });
+            </script></body></html>"#;
+        let page15 = Page::load(html15, "https://app.test/", &fonts, 800.0);
+        let root15 = page15.dom().root();
+        let out15 = manuk_css::query_selector_all(page15.dom(), root15, "#out")[0];
+        let got15 = page15.dom().text_content(out15);
+        for claim in [
+            "cannot:true",   // canPlayType() === '' — an honest no
+            "state:true",    // paused / HAVE_NOTHING / NETWORK_NO_SOURCE
+            "err:true",      // MediaError code 4
+            "iface:true",    // instanceof HTMLMediaElement
+            "setters:true",  // currentTime/volume/pause/load do not throw
+            "promise:true",  // play() returns a thenable
+            "rejected:true", // ...and it REJECTS with NotSupportedError
+        ] {
+            assert!(
+                got15.contains(claim),
+                "G2/15 media degradation failed: expected {claim} in {got15:?}"
+            );
+        }
 
         // (14) **The framework primitives.** Every assertion here is a bug that shipped, and each is
         // labelled with the framework that found it — because none of them would have been picked out

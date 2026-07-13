@@ -1388,3 +1388,51 @@ job count · reporting a killed run · overlapping xargs workers. Each is now a 
 
 > **The instrument is part of the experiment, and it is the part that lies to you.** It gets the same
 > scrutiny as the code under test — more, because nothing is watching *it*.
+
+## Tick 28 — media: an honest NO beats a TypeError (2026-07-13)
+
+**TICK SHAPE: pattern-class.** CLUSTER: C01ca (replaced elements / the media surface).
+
+The user's north star asks for *graceful degradation for unsupported media/codecs*. Measured, that is
+not where we are — it is worse and better than expected in different places:
+
+```
+<video width=640 height=360 poster=... controls>   →  box: 640x360  ✅ laid out correctly
+video.canPlayType   undefined      video.play        undefined
+video.paused        undefined      video.readyState  undefined
+video.error         undefined      video.networkState undefined
+```
+
+**The layout is right and the API is absent.** That combination is the worst one: a site that calls
+`video.play()` gets a `TypeError` and takes the whole page down with it, and a site that *politely
+feature-detects* with `if (v.canPlayType('video/mp4'))` reads `undefined` and cannot even be told no.
+
+Graceful degradation is not "do nothing". It is **answering the question honestly**. The spec already
+has the vocabulary for a browser that cannot play a thing:
+
+- `canPlayType(t)` returns `""` — the empty string IS the spec's "no".
+- `play()` returns a **rejected** Promise (`NotSupportedError`), which is what every player library is
+  already written to handle, because autoplay policies make rejection routine in real browsers.
+- `error` is a `MediaError` with `code: 4` (`MEDIA_ERR_SRC_NOT_SUPPORTED`), and an `error` event fires.
+- `readyState: 0` (HAVE_NOTHING), `networkState: 3` (NETWORK_NO_SOURCE).
+
+A site told *that* will hide its player and show its fallback. A site told `undefined` will throw.
+
+And the poster: `<video poster>` is a still image, and we can already decode, lay out and paint still
+images. A video element that shows its poster frame, sized correctly, with an honest "cannot play" is
+not a broken video — it is a **degraded** one, which is the whole ask.
+
+**RESULT.** Media degrades honestly now:
+
+```
+canPlayType('video/mp4') → ""            (the spec's "no")
+paused true · readyState 0 · networkState 3 · error.code 4
+v instanceof HTMLMediaElement → true
+v.play() → REJECTED NotSupportedError    (the site can now fall back)
+v.pause() / v.currentTime = 5 / v.volume = .5 / v.load()  → all survive
+layout: <video> keeps its 640x360 box; the page flows around it
+<video poster> → decoded and painted — the frame the author chose
+```
+
+Asserted in **G2 scenario 15**. A missing codec is an acceptable limit for a browser to have. A thrown
+`TypeError` is not, and the difference between them is entirely in what we say when asked.

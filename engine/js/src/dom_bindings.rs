@@ -489,6 +489,22 @@ unsafe fn new_reflector(cx: *mut RawJSContext, dom: *mut Dom, node: NodeId) -> *
                  __pending_node.__nodeId={id}"
             ),
         );
+        // **A `<video>` or `<audio>` gets the HTMLMediaElement surface — an honest NO.**
+        //
+        // We cannot decode media. The failure mode that matters is not the missing decoder, it is what
+        // a *script* gets when it asks: `video.play` is otherwise `undefined`, so a site that calls it
+        // throws and takes the page down, and a site that politely feature-detects with `canPlayType`
+        // reads `undefined` and cannot even be told no.
+        //
+        // `__manukMedia` (see the JS prelude) answers with the spec's own vocabulary for a browser that
+        // cannot play a thing: `canPlayType() === ''`, `play()` returns a REJECTED promise, `error` is a
+        // MediaError with code 4. The poster still renders. That is a degraded video, not a broken page.
+        if matches!((*dom).tag_name(node), Some("video") | Some("audio")) {
+            let _ = eval_in_current_global(
+                cx,
+                &format!("globalThis.__manukMedia&&__manukMedia(__nodes[{id}])"),
+            );
+        }
     }
     obj.get()
 }
