@@ -1764,3 +1764,42 @@ vacuous gate, and the `file://` probe:
 
 The probe is the authority. It now tests `FormData`, `URLSearchParams`, `requestSubmit` and the `submit`
 event, *before* anyone touches them.
+
+## Tick 35 — `<iframe>`, and a priority list that corrected itself (2026-07-13)
+
+**TICK SHAPE: pattern-class.** CLUSTER: C01ca.
+
+**The plan said `<picture>`/`srcset` was #2 (47% of the web). Measuring it removed it from the list.**
+
+Per the rule that cost two ticks to learn — *measure before you implement* — I checked the **damage**
+number rather than the usage number:
+
+```
+<img srcset> used by                     82/237 sites  (34%)
+<img srcset> with NO src fallback         2/237 sites  ( 0%)   ← we load NOTHING for these
+<img srcset> with a placeholder src       1/237 sites  ( 0%)   ← we load the PLACEHOLDER
+<picture>                                64/237 sites  (27%)   ← its <img> fallback is REQUIRED
+```
+
+233 of 237 sites ship a working `src`, which is exactly what `src` is *for*. So our missing `srcset`
+costs a possibly-wrong-**resolution** image, not a **missing** one. Usage 34%, damage ~1%. It is worth
+doing and it is not worth doing next.
+
+> **USAGE IS NOT DAMAGE.** They are different columns and only one of them is a priority. `srcset` is
+> used by 34% of sites and breaks ~1% of them, because `src` is a fallback and it works. `<canvas>` was
+> used by 3% and broke *all* 3%, because it threw. **Rank by what happens to the user, not by what
+> appears in the markup** — otherwise you build the popular thing instead of the load-bearing one.
+
+**So the real #1 is `<iframe>`: 23% of sites, and here usage and damage are the SAME number**, because we
+render a 0-height box with nothing in it. It is the gateway to embeds, maps, video players, payment
+frames and comment widgets — most of what makes a page feel like the modern web.
+
+**Hypothesis for the implementation:** an iframe is a *replaced element with a nested document*. The
+pieces we need already exist — a `Page` can be built from HTML, laid out, and turned into a display list.
+What is missing is (a) the box (spec default **300×150** when unsized, and we currently give it **zero
+width**, so it is invisible even before any content question), (b) fetching the child document, and (c)
+compositing the child's display list into the parent's, translated and clipped to the iframe's rect.
+
+The risks I expect, in order: **depth** (an iframe containing an iframe), **budget** (a heavy third-party
+embed must not hold the parent's paint hostage — the same lesson as G_FIRST_PAINT), and **isolation** (a
+child's script must not be able to reach the parent's DOM).

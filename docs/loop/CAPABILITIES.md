@@ -11,9 +11,14 @@
 The priority order is what falls out of putting those two columns next to each other. It is not a
 roadmap someone wrote; it is a subtraction.
 
-> **A capability that THROWS is worse than one that is missing.** A missing feature degrades a page.
-> A thrown `TypeError` at the top of a bundle kills every line of script after it — so a 27%-of-the-web
-> feature that throws is a 27%-of-the-web *outage*, not a 27%-of-the-web *gap*.
+> **A capability that THROWS is worse than one that is missing.** A missing feature degrades a page. A
+> thrown `TypeError` at the top of a bundle kills every line of script after it — so a 3%-of-the-web
+> feature that throws (canvas) outranks a 34%-of-the-web feature that degrades (srcset).
+>
+> **USAGE IS NOT DAMAGE.** They are different columns and only one of them is a priority. `srcset` is
+> used by 34% of sites and *breaks* ~1% of them, because `src` is a fallback and it works. `<canvas>` is
+> used by 3% and *broke* all 3%, because it threw. **Rank by what happens to the user, not by what
+> appears in the markup** — otherwise you build the popular thing instead of the load-bearing one.
 
 ## ⚠️ How this file was nearly a lie, on its first day
 
@@ -39,16 +44,16 @@ Measured from a real HTTP origin. Every "we do" below is what the engine *answer
 
 | # | Capability | Usage | We do | Consequence |
 |---|---|---|---|---|
-| 1 | **`<form>` submit** | **50%** | ❌ `form.submit` missing | Search boxes, logins, checkouts. **Without it this is a reader, not a browser** — you cannot search, log in, or buy anything. |
-| 2 | **`<picture>` / `srcset`** | **47%** | ❌ `img.currentSrc` missing | Nearly half the web's images. If `srcset` is unparsed we fetch the wrong asset, or none. |
-| 3 | **`<iframe>`** | **23%** | ❌ 0-height box, no `contentWindow` | Embeds, maps, video players, payment frames, comment widgets. A nested browsing context is real work and it is unavoidable. |
-| 4 | **CSS transition / `@keyframes`** | **38%** | ⚠️ static end-state | Renders legibly but is visibly wrong the moment anyone hovers. |
-| 5 | **`position: sticky`** | 14% | ⚠️ laid out, does not stick | Every modern site header. Wrong the moment anyone scrolls. |
-| 6 | **WebSocket** | 5% | ❌ missing | Live feeds, chat, collaboration. **Social platforms live here.** |
-| 7 | **Service Worker** | 5% | ❌ missing | Offline, PWA install, push. Usually feature-guarded. |
-| 8 | **`<dialog>` / `showModal`** | 3% | ❌ missing | Modals. Growing fast; will not stay at 3%. |
-| 9 | **Web Worker** | 2% | ❌ missing | Heavy apps move work off the main thread. |
-| 10 | **IndexedDB** | 1% | ❌ missing | Offline-first apps. Low usage, high cost. |
+| ✅ | ~~`<form>` submit~~ | 50% | ✅ **DONE (tick 34)** | The `submit` event is dispatched and `preventDefault()` honoured, so an AJAX form no longer performs the navigation its author cancelled. `method=POST` still open. |
+| — | ~~`<picture>` / `srcset`~~ | 34% used | ❌ unparsed | **DOWNGRADED — measured.** Usage 34%, **damage ~1%**. Only **2 of 237** sites have an `<img srcset>` with no `src`; everyone else ships a working `src` fallback, which is what `src` is *for*. We load a possibly-wrong-*resolution* image, not a missing one. Worth doing; not worth doing next. |
+| **1** | **`<iframe>`** | **23%** | ❌ 0-height box, no `contentWindow` | Embeds, maps, video players, payment frames, comment widgets. A nested browsing context is real work and it is unavoidable. |
+| 2 | **CSS transition / `@keyframes`** | **38%** | ⚠️ static end-state | Renders legibly but is visibly wrong the moment anyone hovers. |
+| 3 | **`position: sticky`** | 14% | ⚠️ laid out, does not stick | Every modern site header. Wrong the moment anyone scrolls. |
+| 4 | **WebSocket** | 5% | ❌ missing | Live feeds, chat, collaboration. **Social platforms live here.** |
+| 5 | **Service Worker** | 5% | ❌ missing | Offline, PWA install, push. Usually feature-guarded. |
+| 6 | **`<dialog>` / `showModal`** | 3% | ❌ missing | Modals. Growing fast; will not stay at 3%. |
+| 7 | **Web Worker** | 2% | ❌ missing | Heavy apps move work off the main thread. |
+| 8 | **IndexedDB** | 1% | ❌ missing | Offline-first apps. Low usage, high cost. |
 
 **Fixed this tick** (they were genuinely throwing, and a throw takes the page with it):
 
@@ -88,15 +93,12 @@ Measured from a real HTTP origin. Every "we do" below is what the engine *answer
 
 Read down the two tables and the shape is clear, and it is **not** "make the pixels match Chrome":
 
-1. **Make the browser writable.** `<form>` submission is 50% of the corpus, and it is the difference
-   between a *reader* and a *browser*: you cannot search, log in, or buy anything. This is the single
-   largest capability gap by usage, and it is not exotic work.
-2. **Responsive images.** `<picture>`/`srcset` is 47%. Getting it wrong means fetching the wrong asset —
-   or, on a `<picture>` whose `<img>` is only a fallback, none at all.
-3. **Nested browsing contexts.** `<iframe>` is 23% and it is the gateway to embeds, maps, video players,
-   payment frames and comment widgets — i.e. to most of what makes a page feel like the modern web.
-4. **Motion.** `transition`/`@keyframes` is 38% and `position:sticky` is 14%. Both currently render their
-   *static end-state*, which is legible but visibly wrong the moment a user scrolls or hovers.
+1. ~~**Make the browser writable.**~~ ✅ **Done, tick 34.** The `submit` event fires and is cancellable.
+2. **Nested browsing contexts (`<iframe>`).** 23% of sites, and we render a **0-height box with nothing
+   in it** — the damage number and the usage number are the same here, which is what makes it the real #2.
+3. **Motion.** `transition`/`@keyframes` is 38% and `position:sticky` is 14%.
+4. **Responsive images.** `<picture>`/`srcset`, once the above are done. Real, but a *quality* bug, not
+   an *outage* — the fallback `src` is doing its job on 233 of 237 sites.
 5. **Then** the long tail: WebSocket, Workers, Service Workers, IndexedDB — the substrate of social
    platforms and offline apps, and the right thing to do *after* the above, not before.
 
