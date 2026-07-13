@@ -2214,3 +2214,93 @@ rest a swap rather than a rewrite.
 `MediaSource` before it works — its absence is what makes YouTube serve the progressive fallback.**
 Advertising MSE we cannot honour turns a working YouTube into a black rectangle. Same discipline as
 `canPlayType() === ""`.
+
+## Tick 43 — WPT, wired up. And it found four bugs in the first twenty-five tests. (2026-07-13)
+
+**Hypothesis:** the oracle's *scope* is the ceiling on what can be found, and the oracle is a
+265-site box-diff against Chromium. It has two structural blind spots and neither is fixable by
+running it harder: it can only see what those sites happen to exercise, and it needs Chromium to say
+what "right" is — so it can never tell us that **both** engines are wrong, or that we are wrong in a
+way that does not move a box. **WPT has neither blind spot: the tests carry their own verdict.**
+Wiring it up therefore outranks any individual fix. `tests/wpt` and `blitz/wpt/runner` have sat in
+the tree, unused, since the beginning.
+
+**RESULT — the instrument works, and the first thing it measured was itself.**
+
+The first run: **0 of 25 files reported anything.** The runner's own guard fired —
+
+> *"Above ~25% this number is not measuring the engine's conformance — it is measuring whether
+> testharness.js can RUN here at all."*
+
+— and it was right, four times over. **Four engine defects stood between us and a readable score, and
+not one of them moves a box**, which is exactly why forty ticks of Chromium diffing never saw them:
+
+1. **`window.parent` was undefined.** At the top level `window.parent === window`, and that
+   self-reference is how a page knows it is the top: `while (w != w.parent) w = w.parent;` terminates
+   *because* the top is its own parent. With `parent` undefined the loop does not fail to terminate —
+   **it walks straight off the end.** It is the literal first thing `testharness.js` does. **One
+   missing self-reference failed 100% of Web Platform Tests**, and it presented as *"our JS engine
+   cannot run testharness.js"* — a far scarier and far wronger diagnosis than the truth.
+
+2. **`DOMContentLoaded` and `load` were NEVER DISPATCHED.** Not once, anywhere in the engine — grep
+   returned zero. **A site whose init lives in `window.addEventListener('load', …)` simply never
+   initialised**, silently, for the entire life of this project. jQuery survived it by checking
+   `document.readyState`, **which is precisely why nobody noticed: it worked often enough to look
+   fine.** That is the worst failure shape there is.
+
+3. **`setTimeout` threw its delay away.** Every timer was a FIFO push, so `setTimeout(f, 10000)` ran
+   *before* a `setTimeout(g, 0)` queued after it. Insertion order, not time order — every debounce,
+   throttle, retry-backoff and staged animation on the open web, in the wrong order, **without ever
+   erroring.** testharness arms a 10s harness timeout at setup; ours fired it *before the tests it was
+   guarding*, so every file reported TIMEOUT.
+
+4. **`insertAdjacentText` was missing** while both its siblings shipped. *Nobody feature-detects the
+   third member of a family when the first two are present.* testharness uses it to render its results
+   table, so the throw aborted the loop invoking the completion callbacks and **29 of the first 40
+   files reported nothing at all.**
+
+**And a Bar 0 hang, found in the first 25 tests.** `ChildNode-after` calls `child.after(child)` **on
+purpose**. Our `insert_before(parent, X, X)` detached X and then set `X.next_sibling = X` — **a
+self-cycle**, so every subsequent `children()` walk spun forever. The DOM spec has the step we never
+implemented: *"if referenceChild is node, set referenceChild to node's next sibling."* **No real site
+inserts a node before itself**, so the 265-site crawl could never have found this. *That is the
+argument for conformance testing, in one bug.*
+
+**The clock had to learn about the lifecycle.** Fixing the delay exposed the next layer: a *virtual*
+clock (we never sleep; we jump to whatever is due next) will happily run **ahead of the document** —
+it drains everything else, leaps to the 10s timer, and fires it **before `load` ever happens**. So the
+budget is 0 during load (only tasks due *now*, which is what a real browser does anyway since real
+time has barely advanced), and **`load` is what opens it.** Ordering is the property that matters;
+waiting is not.
+
+**A throwing task also used to kill the entire event loop** — the exception propagated out of the
+eval, the Rust `?` aborted `run()`, and every task queued after it never ran. One bad callback stopped
+the page's clock forever. The spec says: report the exception and **keep going**. The errors now
+accumulate in `globalThis.__errors`, which is the storage the **unhandled-error harvester** wanted.
+
+**THE BASELINE (`docs/loop/WPT-BASELINE.md`):** `dom/` — **457 files, 1,429/6,284 subtests = 22.7%,
+NO_REPORT 0, HANG/TIMEOUT 90.** `NO_REPORT 0` is the load-bearing number: **every file reports**, so
+the 22.7% is a real measurement rather than a shadow of a broken runner. The 90 hangs outrank all of
+it (Bar 0) and are the next tick.
+
+**A hang can only be contained by a PROCESS boundary.** `tokio::time::timeout` cannot interrupt
+synchronous JavaScript — a spinning test never yields, so the timeout future never runs. The runner
+forks a child per batch and flushes one line per finished test, so the test *after* the last flushed
+line is the one that hung: named, recorded, stepped over. **This is the same conclusion the tab process
+model reached, arrived at independently and for the same reason.**
+
+---
+
+**PROCESS #32, and it is the ugliest one yet: I destroyed working code chasing a regression that did
+not exist.** `G_GLOBALS` "failed", so I `git checkout`'d two files to bisect — losing the browsing-
+context tree, the whole document lifecycle, `insertAdjacentText` and `Page::fire_lifecycle`. **The gate
+was never broken.** I had run `cargo test -p manuk-page --test g_globals`, and **`manuk-page` does not
+enable `spidermonkey` by default** — `verify.sh` runs it with `--features stylo,spidermonkey`. So the
+engine had **no JS engine at all**, no script ran, and `"-"` was the *correct* output. **I was
+measuring a browser no user has — the exact defect ADR-011 exists to prevent — and I trusted it enough
+to delete code.**
+
+*PROCESS #29's rule was written for green and VACUOUS verdicts. It applies to **RED** ones too: a
+verdict is a CLAIM.* Now a hard rule in CLAUDE.MD: **never `git checkout`/`git stash` a file with
+uncommitted work to test a hypothesis** — bisect by copying aside or commenting out, never by reverting
+the only copy. And: **run a gate the way `verify.sh` runs it, or you are not running the gate.**

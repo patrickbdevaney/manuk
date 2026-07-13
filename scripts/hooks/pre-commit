@@ -248,6 +248,43 @@ if [ "$WANT" != "$GOT" ]; then
   exit 1
 fi
 
+# ── THE WIKI TRAILER — cumulative knowledge must be CAPTURED, or skipping it must be a CHOICE.
+#
+# `docs/wiki/` holds what we durably KNOW, by topic. The journal is a log and STATUS is a snapshot;
+# neither answers "what do we now know about how this engine, or the web platform, actually works" —
+# and that knowledge is exactly what ebbs away with the context window instead of accumulating.
+#
+# So every tick must say one of two things, and BOTH are legitimate:
+#
+#     WIKI: docs/wiki/js-engine.md — <what durable mechanism was added or revised>
+#     WIKI: none — <why this tick produced no durable, generalisable knowledge>
+#
+# **"None" is an expected outcome, not a failure.** Plenty of ticks are mechanical. The point is not to
+# force every commit to invent something for the wiki; it is to make **capture the default** and make
+# **skipping an explicit, auditable choice** rather than a silent gap nobody notices until it is gone.
+MSG_FILE="${1:-}"
+if [ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ]; then
+  if ! grep -qiE '^WIKI:' "$MSG_FILE"; then
+    red "✗ WIKI: the commit message has no WIKI: trailer."
+    red ""
+    red "  Add ONE of:"
+    red "    WIKI: docs/wiki/<topic>.md — what durable mechanism was added or revised"
+    red "    WIKI: none — why this tick produced no durable, generalisable knowledge"
+    red ""
+    red "  'none' is a legitimate and expected answer. A SILENT gap is not."
+    red "  The bar for an entry is a reusable MECHANISM ('SpiderMonkey's X behaves like Y because Z'),"
+    red "  not a restatement of the journal ('fixed bug in tick N')."
+    exit 1
+  fi
+  # A trailer that NAMES a file must name one that exists — otherwise the trailer is decoration.
+  WIKI_F=$(grep -ioE '^WIKI:[[:space:]]*docs/wiki/[A-Za-z0-9._-]+' "$MSG_FILE" | head -1 | sed -E 's/^[Ww][Ii][Kk][Ii]:[[:space:]]*//')
+  if [ -n "$WIKI_F" ] && [ ! -f "$WIKI_F" ]; then
+    red "✗ WIKI: the trailer names '$WIKI_F', which does not exist."
+    exit 1
+  fi
+fi
+
 grn "✓ gates green on exactly this tree ($(grep -oP '^at:\s*\K.*' "$RECEIPT"))"
 grn "✓ journal entry present for tick $TICK"
+grn "✓ wiki trailer present"
 exit 0

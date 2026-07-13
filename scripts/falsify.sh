@@ -256,6 +256,38 @@ s = s.replace(
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+# G_LIFECYCLE — throw the setTimeout DELAY away again. That is what the engine did for 40 ticks: every
+# timer was a FIFO push, so `setTimeout(f, 10000)` ran BEFORE a `setTimeout(g, 0)` queued after it —
+# and testharness's own 10s harness timeout fired before the tests it was guarding, so 100% of WPT
+# reported TIMEOUT. It never errors; it just happens in the wrong order, silently, on every debounce
+# and retry-backoff on the web.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_LIFECYCLE; then
+  mutate engine/js/src/event_loop.rs '
+s = s.replace(
+    "__tasks.push({ f: fn, w: __now + ms, s: ++__seq });",
+    "__tasks.push({ f: fn, w: __now, s: ++__seq });   // MUTATION: throw the DELAY away",
+    1)
+'
+  expect_red G_LIFECYCLE cargo test -q -p manuk-page --features stylo,spidermonkey --test g_lifecycle
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+# G_LIFECYCLE (load half) — stop firing the `load` event. For forty ticks this engine dispatched
+# NEITHER `DOMContentLoaded` NOR `load`, anywhere, and every site whose init lived in an onload
+# handler simply never initialised — in silence, with nothing in any log to say so.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_LIFECYCLE_LOAD; then
+  mutate engine/page/src/lib.rs '
+s = s.replace(
+    "        page.fire_lifecycle(\"load\");",
+    "        // MUTATION: never fire load on the sync path",
+    1)
+'
+  expect_red G_LIFECYCLE_LOAD cargo test -q -p manuk-page --features stylo,spidermonkey --test g_lifecycle
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 # G_SELECTOR — stop descending into nested rules again, which is what dropped 41% of the web's CSS.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_SELECTOR; then

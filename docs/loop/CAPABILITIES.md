@@ -127,3 +127,19 @@ Re-run the two probes and paste the numbers. Both are cheap and both are in the 
 opinion — the moment one of them becomes a claim rather than a measurement, this is just a roadmap with
 extra steps, and roadmaps are how a project ends up pixel-tuning one site while a quarter of the web
 throws on line one.
+
+## Tick 43 — the document lifecycle, the clock, and WPT
+
+| Capability | Reach | Status |
+|---|---|---|
+| **`window.parent` / `top` / `frames` / `opener`** | **100% of WPT; every framed page** | ✅ (tick 43) — the self-reference is a *termination condition*, not a nicety |
+| **`DOMContentLoaded`** | **most of the web** | ✅ (tick 43) — **was never dispatched, ever** |
+| **`load` / `window.onload`** | **most of the web** | ✅ (tick 43) — **was never dispatched, ever** |
+| **`document.readyState`** | jQuery + every "am I loaded?" check | ✅ (tick 43) — loading → interactive → complete |
+| **`setTimeout` honours its DELAY** | **every debounce/throttle/backoff on the web** | ✅ (tick 43) — was a FIFO; the delay was discarded |
+| **A throwing task does not kill the loop** | **Bar 0** | ✅ (tick 43) |
+| **`DOMException`** | every DOM method specified to fail | ✅ (tick 43) — *exists*; our methods still do not throw it (that is the WPT work list) |
+| **`insertAdjacentText`** | — | ✅ (tick 43) — the third sibling of two we already shipped |
+| **`insert_before(X, X)`** | adversarial/self-referential input | ✅ (tick 43) — was an **infinite loop** (Bar 0) |
+| **`Range`** | `dom/ranges` = 3.9% | ❌ **inert stub** — exists, does nothing. Now *visible* rather than assumed. |
+| **WPT `testharness.js` runner** | the oracle's ceiling | ✅ (tick 43) — `docs/loop/WPT-BASELINE.md` |

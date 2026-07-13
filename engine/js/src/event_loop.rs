@@ -47,10 +47,52 @@ const PRELUDE: &str = r#"
     // that is not running a live UI thread.
     globalThis.__timerId = 0;
     globalThis.__cancelled = {};
+
+    // ── **THE DELAY IS NOT DECORATION. `setTimeout(cb, ms)` USED TO THROW `ms` AWAY.** ────────────
+    //
+    // Every timer was a bare FIFO push, so `setTimeout(f, 10000)` ran BEFORE a `setTimeout(g, 0)`
+    // queued after it. Insertion order, not time order. That silently mis-orders every debounce,
+    // throttle, retry-backoff, staged animation and "show the spinner, then check again in 5s" on the
+    // open web — and none of it *errors*, it just happens in the wrong order, which is precisely the
+    // kind of bug a box-diff against Chromium cannot see.
+    //
+    // WPT found it instantly and unmistakably: `testharness.js` arms its own 10-second harness
+    // timeout up front, so OUR loop fired the timeout *before the async tests it was guarding*. The
+    // whole suite reported TIMEOUT and the score looked like a conformance problem. It was a clock
+    // problem.
+    //
+    // **The clock is VIRTUAL.** Tasks are ordered by `(due, seq)` and time jumps forward to whatever
+    // is due next — we never actually sleep. A headless load must not take ten real seconds because
+    // the page armed a ten-second timer; it must only run that timer LAST. Ordering is the property
+    // that matters; waiting is not.
+    globalThis.__now = 0;      // the virtual clock, in ms. Monotonic, never rewinds.
+    globalThis.__seq = 0;      // ties at the same due time break FIFO, as the spec requires.
+
+    // **The virtual clock may not run AHEAD OF THE PAGE'S LIFECYCLE.**
+    //
+    // Collapsing time is what makes a headless load fast — we never sleep, we just run the next-due
+    // task. But it has a trap, and WPT walked straight into it: while the page is still loading, the
+    // only task left is often a LONG timer, so the clock leaps to it and fires it **before `load`
+    // ever happens.**
+    //
+    // `testharness.js` arms a 10-second harness timeout at setup. Our loop drained everything else,
+    // jumped the clock to 10s, fired the timeout, and testharness declared TIMEOUT — *and only then*
+    // did we fire `load`, into a page that had already given up. Every single test file reported
+    // TIMEOUT and it looked like a conformance catastrophe. It was a **clock that ran ahead of the
+    // document**.
+    //
+    // So during load the budget is 0: only tasks due NOW may run — which is exactly what a real
+    // browser does, since real time has barely advanced. `load` opens the budget, and the delayed
+    // timers then run in correct order behind it.
+    globalThis.__timeBudget = 0;
+    globalThis.__enqueue = function(fn, ms) {
+        ms = (typeof ms === 'number' && ms > 0) ? ms : 0;
+        __tasks.push({ f: fn, w: __now + ms, s: ++__seq });
+    };
     globalThis.setTimeout = function(cb, ms) {
         if (typeof cb !== 'function') { return 0; }
         var id = ++__timerId;
-        __tasks.push(function(){ if (!__cancelled[id]) { cb(); } });
+        __enqueue(function(){ if (!__cancelled[id]) { cb(); } }, ms);
         return id;
     };
     globalThis.clearTimeout = function(id) { if (id) { __cancelled[id] = true; } };
@@ -60,9 +102,10 @@ const PRELUDE: &str = r#"
         var tick = function() {
             if (__cancelled[id]) { return; }
             cb();
-            if (!__cancelled[id]) { __tasks.push(tick); }
+            // Reschedule at +ms from NOW, so an interval is a cadence rather than a tight loop.
+            if (!__cancelled[id]) { __enqueue(tick, ms); }
         };
-        __tasks.push(tick);
+        __enqueue(tick, ms);
         return id;
     };
     globalThis.clearInterval = function(id) { if (id) { __cancelled[id] = true; } };
@@ -616,6 +659,25 @@ const PRELUDE: &str = r#"
       // answers `false`, which is the truth. The ones that need a real `Symbol.hasInstance` (Node,
       // Element, HTMLElement, Text, Comment, DocumentFragment) get it from `iface()` above — those are
       // load-bearing for custom elements and framework dispatch, and are not in this list.
+      //
+      // ⚠ **THE NAMES ARE ONLY COLLECTED HERE. THEY ARE INSTALLED AT THE VERY END OF THIS PRELUDE.**
+      // This is not a style choice — it is a bug fix, and the bug is instructive:
+      //
+      //   `AbortSignal` was in this list. The list ran FIRST, so by the time the *real* `AbortSignal`
+      //   (a few hundred lines below, with a working listener array) checked
+      //   `typeof globalThis.AbortSignal === 'undefined'`, the answer was **false** — its own inert
+      //   stub was already sitting there. The real implementation never installed. Every
+      //   `new AbortController().abort()` then threw `TypeError: s.__ls is undefined`.
+      //
+      // **A stub meant to prevent a ReferenceError had silently DISABLED a working implementation.**
+      // And `G_GLOBALS` could not see it: that gate asserts `typeof X !== 'undefined'`, which an inert
+      // stub satisfies *perfectly*. Existence was never the property worth asserting — **behaviour**
+      // was.
+      //
+      // Installing last makes the `typeof === 'undefined'` guard mean what it was always supposed to
+      // mean: **"fill in only what nobody actually implemented."** The ordering is now the mechanism,
+      // so this cannot recur the next time someone adds a real implementation for a name on this list.
+      var __inertNames = [];
       [
         // Files / data transfer
         'FileList', 'DataTransfer', 'DataTransferItem', 'DataTransferItemList',
@@ -638,14 +700,7 @@ const PRELUDE: &str = r#"
         'MessagePort', 'Range', 'Selection', 'DOMTokenList', 'NamedNodeMap', 'Attr',
         'CSSRule', 'CSSStyleRule', 'MediaQueryList', 'PerformanceEntry', 'IdleDeadline',
         'Screen', 'History', 'Location', 'VisualViewport'
-      ].forEach(function (n) {
-        if (typeof globalThis[n] === 'undefined') {
-          var C = function () {};
-          Object.defineProperty(C, 'name', { value: n });
-          C.prototype = {};
-          globalThis[n] = C;
-        }
-      });
+      ].forEach(function (n) { __inertNames.push(n); });
 
       // ── **`WebSocket` — it did not exist, and on a live-news site that is the whole page.**
       //
@@ -1135,16 +1190,114 @@ const PRELUDE: &str = r#"
         };
         globalThis.cancelIdleCallback = function(){};
       }
+      // ── **A THROWING TASK MUST NOT KILL THE EVENT LOOP.** ──────────────────────────────────
+      //
+      // It did. `NEXT_TASK` called `t()` bare; the exception propagated out of the eval, the Rust
+      // `?` on it aborted `run()`, and **every task queued after the throwing one never ran.** One
+      // bad `setTimeout` callback silently stopped the page's clock.
+      //
+      // The spec says: **report the exception, then keep going.** The loop is not allowed to care.
+      // A real browser fires `window.onerror` / an `error` event and takes the next task.
+      //
+      // Found by WPT: dozens of `dom/nodes` files reported NOTHING, because a test threw, the loop
+      // died, and `testharness.js`'s completion callback — itself a queued task — never ran. The
+      // score looked like "we fail these tests". The truth was "we stopped running".
+      //
+      // `__errors` is deliberately kept: it is the storage the **unhandled-error harvester** wants,
+      // and it means a page's silent breakage is now a thing that can be READ OUT rather than
+      // guessed at.
+      globalThis.__errors = [];
+      globalThis.__reportError = function (e) {
+        try {
+          var msg = String((e && e.message) ? e.message : e);
+          __errors.push(String((e && e.stack) ? e.stack : msg));
+          if (typeof globalThis.onerror === 'function') {
+            try { globalThis.onerror(msg, '', 0, 0, e); } catch (x) {}
+          }
+          if (typeof globalThis.dispatchEvent === 'function') {
+            var ev;
+            try { ev = new ErrorEvent('error', { message: msg, error: e }); }
+            catch (x) { ev = { type: 'error', message: msg, error: e }; }
+            try { globalThis.dispatchEvent(ev); } catch (x) {}
+          }
+        } catch (x) { /* reporting must never itself throw — that would kill the loop again */ }
+      };
+
+      // ── **`DOMException` — it did not exist at all.** ───────────────────────────────────────
+      //
+      // Every DOM method that is specified to *fail* fails by throwing one of these. Without it,
+      // `e instanceof DOMException` is a ReferenceError, and WPT's `assert_throws_dom` — which a
+      // very large fraction of `dom/` uses — cannot even express its assertion.
+      //
+      // **Defining it does NOT make our methods throw.** They still do not, and the tests that
+      // demand a throw will now honestly FAIL rather than error out the whole file. That is the
+      // point: the failures become a *work list* (which methods must validate their arguments)
+      // instead of a wall of NO_REPORT that hides everything behind it.
+      if (typeof globalThis.DOMException === 'undefined') {
+        var DOM_CODES = {
+          IndexSizeError: 1, HierarchyRequestError: 3, WrongDocumentError: 4,
+          InvalidCharacterError: 5, NoModificationAllowedError: 7, NotFoundError: 8,
+          NotSupportedError: 9, InUseAttributeError: 10, InvalidStateError: 11,
+          SyntaxError: 12, InvalidModificationError: 13, NamespaceError: 14,
+          InvalidAccessError: 15, TypeMismatchError: 17, SecurityError: 18, NetworkError: 19,
+          AbortError: 20, URLMismatchError: 21, QuotaExceededError: 22, TimeoutError: 23,
+          InvalidNodeTypeError: 24, DataCloneError: 25
+        };
+        var DE = function DOMException(message, name) {
+          var e = Error.call(this, message);
+          this.message = message === undefined ? '' : String(message);
+          this.name = name === undefined ? 'Error' : String(name);
+          this.code = DOM_CODES[this.name] || 0;
+          if (e.stack) { this.stack = e.stack; }
+        };
+        DE.prototype = Object.create(Error.prototype);
+        DE.prototype.constructor = DE;
+        DE.prototype.toString = function () { return this.name + ': ' + this.message; };
+        Object.keys(DOM_CODES).forEach(function (n) {
+          Object.defineProperty(DE, n, { value: DOM_CODES[n] });
+        });
+        globalThis.DOMException = DE;
+      }
+
+      // ── **THE INERT INTERFACE SURFACE, INSTALLED LAST.** ────────────────────────────────────
+      // Everything real has had its chance to define itself by now. Whatever is still `undefined`
+      // gets a named, inert constructor so that referencing it is not a ReferenceError.
+      //
+      // **Last is the whole point.** Installed first (as it was until the WPT tick), a stub here
+      // shadowed the real `AbortSignal` defined further down and silently disabled it. See the long
+      // comment at the list itself.
+      __inertNames.forEach(function (n) {
+        if (typeof globalThis[n] === 'undefined') {
+          var C = function () {};
+          Object.defineProperty(C, 'name', { value: n });
+          C.prototype = {};
+          globalThis[n] = C;
+        }
+      });
     })();
+
 "#;
 
 /// Run the next macrotask if any; report whether one ran.
-const NEXT_TASK: &str =
-    "(function(){ if (__tasks.length === 0) return false; var t = __tasks.shift(); t(); return true; })()";
+const NEXT_TASK: &str = "(function(){ \
+     var bi = -1; \
+     for (var i = 0; i < __tasks.length; i++) { \
+       var a = __tasks[i]; \
+       if (a.w > __timeBudget) { continue; } \
+       if (bi < 0) { bi = i; continue; } \
+       var b = __tasks[bi]; \
+       if (a.w < b.w || (a.w === b.w && a.s < b.s)) { bi = i; } \
+     } \
+     if (bi < 0) return false; \
+     var t = __tasks.splice(bi, 1)[0]; \
+     if (t.w > __now) { __now = t.w; } \
+     try { t.f(); } catch (e) { __reportError(e); } \
+     return true; })()";
 
 /// Drain the microtask queue completely (microtasks may enqueue more microtasks).
-const DRAIN_MICRO: &str =
-    "(function(){ while (__micro.length) { var m = __micro.shift(); m(); } })()";
+const DRAIN_MICRO: &str = "(function(){ \
+     while (__micro.length) { var m = __micro.shift(); \
+       try { m(); } catch (e) { __reportError(e); } } })()";
 
 /// Shift the next pending network request as `"id\x01kind\x01method\x01url"`, or null.
 const NEXT_PENDING: &str =

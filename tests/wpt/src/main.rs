@@ -53,6 +53,12 @@ fn run() {
 
     let args: Vec<String> = std::env::args().skip(1).collect();
 
+    // `manuk-wpt wpt <subset>` — the UPSTREAM testharness.js suite. See `harness.rs`.
+    if args.first().map(String::as_str) == Some("wpt") {
+        run_wpt_cmd(&args[1..], &fonts);
+        return;
+    }
+
     // `manuk-wpt parity` — layout-parity vs headless Chrome over a corpus.
     if args.first().map(String::as_str) == Some("parity") {
         run_parity_cmd(&args[1..], &fonts);
@@ -1599,4 +1605,202 @@ fn run_oracle_merge(args: &[String]) {
          DESIGN-PATTERN bug; one confined to a single class is probably that class's house style.\n\
          This ordering is the priority ledger (Part 4). No judgement is applied to it.\n"
     );
+}
+
+/// `manuk-wpt wpt <subset> [--wpt DIR] [--timeout S] [--limit N] [--start N] [--json OUT]`
+///
+/// Runs the **upstream** WPT `testharness.js` suite. See `harness.rs` for why this is the highest-
+/// leverage instrument available: it is the only one that does not need Chromium to tell it what
+/// "right" is, and the only one that can see an API no site in the crawl corpus happens to call.
+///
+/// ## Why this forks a child process per batch
+///
+/// **`tokio::time::timeout` cannot interrupt synchronous JavaScript.** A test that spins inside
+/// SpiderMonkey never yields, so the timeout future never gets to run, and the whole run wedges —
+/// which is exactly what happened on the very first pass (`ChildNode-after` hit an infinite loop in
+/// our own `insert_before`).
+///
+/// A hang is a **result**, not an accident: it is Bar 0 signal, and it is the single most valuable
+/// thing this suite can tell us. So it has to be *survivable* and *attributable*. The only thing
+/// that can reliably contain a spinning C++ JIT frame is an **OS process boundary** — the same
+/// conclusion the process model reached for tabs (`docs/loop/PROCESS-MODEL.md`), arrived at here
+/// independently and for the same reason.
+///
+/// So: the driver forks a child per batch; the child appends one JSON line per finished test and
+/// flushes. If the child stops making progress, the driver kills it, and **the test after the last
+/// flushed line is the one that hung** — named, recorded, and stepped over so the run continues.
+fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
+    let Some(dir) = flag(args, "--wpt").map(PathBuf::from).or_else(manuk_wpt::find_wpt_checkout) else {
+        eprintln!("no WPT checkout.  export WPT_DIR=/path/to/wpt   (or ./scripts/wpt-setup.sh)");
+        std::process::exit(2);
+    };
+    let known: Vec<Option<&str>> = ["--wpt", "--timeout", "--limit", "--start", "--json", "--batch"]
+        .iter().map(|f| flag(args, f)).collect();
+    let subset = args.iter()
+        .find(|a| !a.starts_with("--") && !known.iter().any(|k| *k == Some(a.as_str())))
+        .cloned().unwrap_or_else(|| "dom".into());
+    let secs: u64 = flag(args, "--timeout").and_then(|s| s.parse().ok()).unwrap_or(10);
+    let timeout = std::time::Duration::from_secs(secs);
+    let limit: usize = flag(args, "--limit").and_then(|s| s.parse().ok()).unwrap_or(usize::MAX);
+    let start: usize = flag(args, "--start").and_then(|s| s.parse().ok()).unwrap_or(0);
+    let batch: usize = flag(args, "--batch").and_then(|s| s.parse().ok()).unwrap_or(40);
+
+    let disc = manuk_wpt::harness::discover(&dir, &subset);
+    let all: Vec<String> = disc.tests.iter().skip(start).take(limit).cloned().collect();
+
+    // ── CHILD: run a slice in-process, append one flushed JSON line per finished test.
+    let show_fail = args.iter().any(|a| a == "--show-failures");
+    if args.iter().any(|a| a == "--child") {
+        let out = PathBuf::from(flag(args, "--out").expect("--child needs --out"));
+        let rt = tokio::runtime::Runtime::new().expect("tokio");
+        rt.block_on(async move {
+            let (addr, _srv) = manuk_wpt::harness::serve(dir.clone()).await.expect("server");
+            let base = format!("http://{addr}");
+            for rel in &all {
+                let r = manuk_wpt::harness::run_one(&base, rel, fonts, timeout).await;
+                let (p, t) = r.counts();
+                // **The failure MESSAGE is the whole product.** "0/3" tells you nothing you can act
+                // on; `assert_equals: expected "flex" but got "block"` is a work item. Without this
+                // the suite is a scoreboard, and a scoreboard does not fix anything.
+                if show_fail {
+                    if let Some(ts) = &r.subtests {
+                        for (name, st) in ts {
+                            match st {
+                                manuk_wpt::harness::Sub::Pass => {}
+                                manuk_wpt::harness::Sub::Fail(m) => eprintln!("    FAIL {name}\n         {m}"),
+                                other => eprintln!("    {other:?} {name}"),
+                            }
+                        }
+                    }
+                }
+                // Append + flush per test. If the NEXT test hangs and we are killed, this file is
+                // the record of exactly how far we got — so the hang is attributable to one file.
+                use std::io::Write;
+                let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&out).unwrap();
+                let _ = writeln!(f, "{{\"path\":{:?},\"pass\":{p},\"total\":{t},\"harness\":{:?},\"ms\":{}}}",
+                                 rel, r.harness_status, r.ms);
+                let _ = f.flush();
+            }
+        });
+        return;
+    }
+
+    // ── DRIVER
+    eprintln!("WPT {subset}: {} runnable testharness files", all.len());
+    for (why, n) in &disc.skipped {
+        eprintln!("   skip {n:>5}  {why}");
+    }
+
+    let exe = std::env::current_exe().expect("exe");
+    let tmp = std::env::temp_dir().join(format!("manuk-wpt-{}.jsonl", std::process::id()));
+    let _ = std::fs::remove_file(&tmp);
+
+    let mut results: Vec<(String, usize, usize, String, u128)> = Vec::new();
+    let mut i = 0usize;
+    while i < all.len() {
+        let take = batch.min(all.len() - i);
+        let before = results.len();
+        let mut child = std::process::Command::new(&exe)
+            .arg("wpt").arg(&subset)
+            .arg("--wpt").arg(&dir)
+            .arg("--child").arg("--out").arg(&tmp)
+            .arg("--start").arg((start + i).to_string())
+            .arg("--limit").arg(take.to_string())
+            .arg("--timeout").arg(secs.to_string())
+            .args(if show_fail { vec!["--show-failures"] } else { vec![] })
+            .stdout(std::process::Stdio::null())
+            .stderr(if show_fail { std::process::Stdio::inherit() } else { std::process::Stdio::null() })
+            .spawn().expect("spawn child");
+
+        // Watchdog: kill the child when it stops making PROGRESS, not on a fixed total budget — a
+        // batch of slow-but-fine tests must not be mistaken for a hang.
+        let mut lines_seen = read_jsonl(&tmp).len();
+        let mut last_progress = std::time::Instant::now();
+        let stall = timeout + std::time::Duration::from_secs(15);
+        let hung = loop {
+            match child.try_wait() {
+                Ok(Some(_)) => break false,
+                Ok(None) => {}
+                Err(_) => break false,
+            }
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            let n = read_jsonl(&tmp).len();
+            if n > lines_seen { lines_seen = n; last_progress = std::time::Instant::now(); }
+            if last_progress.elapsed() > stall { let _ = child.kill(); let _ = child.wait(); break true; }
+        };
+
+        let done = read_jsonl(&tmp);
+        for r in done.iter().skip(before) { results.push(r.clone()); }
+        let completed = results.len() - before;
+
+        if hung {
+            // The test after the last flushed line is the culprit. Name it, record it, step over it.
+            let idx = i + completed;
+            if idx < all.len() {
+                eprintln!("  \x1b[31mHANG\x1b[0m  {}", all[idx]);
+                results.push((all[idx].clone(), 0, 0, "HANG".into(), 0));
+            }
+            i = idx + 1;
+        } else {
+            i += take;
+        }
+    }
+    let _ = std::fs::remove_file(&tmp);
+
+    // ── Report
+    let mut by_dir: std::collections::BTreeMap<String, (usize, usize, usize)> = Default::default();
+    let (mut pass, mut total, mut no_report, mut hangs) = (0usize, 0usize, 0usize, 0usize);
+    let mut jsonl = String::new();
+    for (rel, p, t, h, ms) in &results {
+        pass += p; total += t;
+        match h.as_str() {
+            "HANG" | "TIMEOUT" => hangs += 1,
+            "NO_REPORT" | "HARNESS_NOT_LOADED" | "BAD_REPORT" | "FETCH_FAILED" => no_report += 1,
+            _ => {}
+        }
+        let d = rel.rsplit_once('/').map(|(d, _)| d.to_string()).unwrap_or_default();
+        let e = by_dir.entry(d).or_default();
+        e.0 += p; e.1 += t; e.2 += 1;
+        jsonl.push_str(&format!("{{\"path\":{rel:?},\"pass\":{p},\"total\":{t},\"harness\":{h:?},\"ms\":{ms}}}\n"));
+        if h != "OK" && h != "ERROR" { continue; }
+    }
+    if let Some(path) = flag(args, "--json") {
+        let _ = std::fs::write(&path, &jsonl);
+        eprintln!("wrote {path}");
+    }
+
+    println!("\n── WPT {subset} ──────────────────────────────────────────");
+    for (d, (p, t, n)) in &by_dir {
+        if *t == 0 { continue; }
+        println!("  {:>5.1}%  {p:>5}/{t:<5}  ({n} files)  {d}", 100.0 * *p as f64 / *t as f64);
+    }
+    let rate = if total == 0 { 0.0 } else { 100.0 * pass as f64 / total as f64 };
+    println!("\n  FILES  {}   subtests {pass}/{total}  =  {rate:.1}%", results.len());
+    println!("  NO_REPORT {no_report}   HANG/TIMEOUT {hangs}   \x1b[1m(a HANG is Bar 0 — it outranks every failing assertion)\x1b[0m");
+    if no_report * 4 > results.len() && results.len() > 20 {
+        println!("\n  ⚠ {no_report}/{} files reported NOTHING. Above ~25% this is not measuring the engine's\n    \
+                  conformance — it is measuring whether testharness.js can RUN here at all.", results.len());
+    }
+}
+
+/// Read the child's incremental JSONL. Tolerates a torn final line (we may have killed it mid-write).
+fn read_jsonl(p: &std::path::Path) -> Vec<(String, usize, usize, String, u128)> {
+    let Ok(s) = std::fs::read_to_string(p) else { return Vec::new() };
+    let mut out = Vec::new();
+    for line in s.lines() {
+        let g = |k: &str| -> Option<String> {
+            let at = line.find(&format!("\"{k}\":"))? + k.len() + 3;
+            let rest = &line[at..];
+            if rest.starts_with('"') {
+                let end = rest[1..].find('"')? + 1;
+                Some(rest[1..end].to_string())
+            } else {
+                Some(rest.chars().take_while(|c| c.is_ascii_digit()).collect())
+            }
+        };
+        let (Some(path), Some(p1), Some(t1), Some(h)) = (g("path"), g("pass"), g("total"), g("harness")) else { continue };
+        out.push((path, p1.parse().unwrap_or(0), t1.parse().unwrap_or(0), h,
+                  g("ms").and_then(|m| m.parse().ok()).unwrap_or(0)));
+    }
+    out
 }

@@ -14,6 +14,7 @@
 use std::path::PathBuf;
 
 pub mod bench;
+pub mod harness;
 pub mod fidelity;
 pub mod interact;
 pub mod oracle;

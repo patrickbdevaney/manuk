@@ -638,6 +638,7 @@ unsafe fn define_members(
         def(c"replaceChildren", el_replace_children, 0);
         def(c"insertAdjacentHTML", el_insert_adjacent_html, 2);
         def(c"insertAdjacentElement", el_insert_adjacent_element, 2);
+        def(c"insertAdjacentText", el_insert_adjacent_text, 2);
         def(c"getAttributeNames", el_get_attribute_names, 0);
         prop(c"data", el_get_char_data, Some(el_set_char_data));
         prop(c"nodeValue", el_get_char_data, Some(el_set_char_data));
@@ -1767,6 +1768,33 @@ unsafe extern "C" fn el_insert_adjacent_html(
 }
 
 /// `el.insertAdjacentElement(position, element)` → the element.
+/// `el.insertAdjacentText(position, text)` — **the third sibling, and we shipped only two.**
+///
+/// `insertAdjacentHTML` and `insertAdjacentElement` were both here; this one was not. **Nobody
+/// feature-detects the third member of a family when the first two are present** — so the call throws,
+/// and the blast radius is whatever was running. `testharness.js` uses it to render its results table,
+/// so the throw aborted the loop invoking the completion callbacks and **29 of the first 40 WPT files
+/// reported nothing at all** — every one of them looking like a conformance failure rather than one
+/// missing method.
+unsafe extern "C" fn el_insert_adjacent_text(
+    cx: *mut RawJSContext,
+    argc: u32,
+    vp: *mut Value,
+) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let pos = arg_string(cx, vp, argc, 0).and_then(|p| adjacent_position(&p));
+        let text = arg_string(cx, vp, argc, 1).unwrap_or_default();
+        if let Some(pos) = pos {
+            let t = (*dom).create_text(&text);
+            if let Some(parent) = insert_adjacent(dom, node, pos, &[t]) {
+                record_mutation(cx, dom, "childList", parent, None, None, &[t], &[]);
+            }
+        }
+    }
+    *vp = UndefinedValue();
+    true
+}
+
 unsafe extern "C" fn el_insert_adjacent_element(
     cx: *mut RawJSContext,
     argc: u32,
@@ -4130,6 +4158,83 @@ const WINDOW_PRELUDE: &str = r#"
         var g = globalThis;
         if (typeof g.window === 'undefined') g.window = g;
         if (typeof g.self === 'undefined') g.self = g;
+
+        // ---- **THE BROWSING-CONTEXT TREE. Its self-references are LOAD-BEARING.** ---------------
+        // At the top level the spec says `window.parent === window` and `window.top === window`, and
+        // that self-reference IS how a page knows it is the top. The universal idiom for walking up
+        // is `while (w != w.parent) { w = w.parent; }` — it terminates *because* the top is its own
+        // parent. With `parent` undefined the loop does not fail to terminate, it walks straight OFF
+        // THE END: `w` becomes `undefined` and the next `w.parent` is a TypeError.
+        //
+        // **This one missing self-reference failed 100% of Web Platform Tests.** It is the literal
+        // first thing `testharness.js` does (`_forEach_windows`), so every one of ~50,000 tests threw
+        // before a single assertion ran — and it presented as "our JS engine cannot run
+        // testharness.js", which is a far scarier and far wronger diagnosis than the truth.
+        //
+        // `opener` is **null**, not undefined: `if (window.opener)` is the guard everything uses, and
+        // `null` is the spec's "no opener".
+        if (typeof g.parent === 'undefined') g.parent = g;
+        if (typeof g.top === 'undefined') g.top = g;
+        if (typeof g.frames === 'undefined') g.frames = g;
+        if (typeof g.opener === 'undefined') g.opener = null;
+
+        // ---- **THE DOCUMENT LIFECYCLE. NONE OF IT EXISTED.** -----------------------------------
+        // `document.readyState`, `DOMContentLoaded` and `load` were **not dispatched anywhere in the
+        // engine** — grep found zero occurrences. These are the two most-used lifecycle hooks on the
+        // web: a site whose init lives in `window.addEventListener('load', …)` simply **never
+        // initialised**, in silence, with no error to see.
+        //
+        // Libraries that check `document.readyState` (jQuery does) got away with it, because the
+        // property was `undefined` and their "already loaded?" test fell through to running
+        // immediately. Libraries that *only* listen for the event got nothing at all. **That is the
+        // worst possible failure shape: it works often enough to look fine** — which is why it
+        // survived forty ticks.
+        g.__readyState = 'loading';
+        g.__setReadyState = function (s) {
+            g.__readyState = s;
+            try { document.dispatchEvent(new Event('readystatechange')); } catch (e) {}
+            if (typeof document.onreadystatechange === 'function') {
+                try { document.onreadystatechange(); } catch (e) {}
+            }
+        };
+        try {
+            Object.defineProperty(document, 'readyState', {
+                get: function () { return g.__readyState; }, configurable: true
+            });
+        } catch (e) { try { document.readyState = 'loading'; } catch (e2) {} }
+
+        // Fired by the HOST at the two real moments (see `Page::fire_lifecycle`), because only the
+        // host knows when they are true: "the document finished parsing" and "the subresources
+        // finished" are facts about the loader, not about JS.
+        g.__fireDOMContentLoaded = function () {
+            if (g.__dclFired) { return; }          // idempotent: several load paths may reach it
+            g.__dclFired = true;
+            g.__setReadyState('interactive');
+            var ev;
+            try { ev = new Event('DOMContentLoaded', { bubbles: true }); }
+            catch (e) { ev = { type: 'DOMContentLoaded', bubbles: true }; }
+            // It must reach BOTH registries: jQuery listens on `document`, testharness.js listens on
+            // `window`, and in a real browser the event bubbles document → window.
+            try { document.dispatchEvent(ev); } catch (e) { g.__reportError && g.__reportError(e); }
+            try { g.dispatchEvent(ev); } catch (e) { g.__reportError && g.__reportError(e); }
+        };
+        g.__fireLoad = function () {
+            if (g.__loadFired) { return; }         // `load` fires exactly once, ever
+            g.__loadFired = true;
+            g.__setReadyState('complete');
+            var ev;
+            try { ev = new Event('load'); } catch (e) { ev = { type: 'load' }; }
+            try { g.dispatchEvent(ev); } catch (e) { g.__reportError && g.__reportError(e); }
+            try { document.dispatchEvent(ev); } catch (e) {}
+            if (typeof g.onload === 'function') {
+                try { g.onload(ev); } catch (e) { g.__reportError && g.__reportError(e); }
+            }
+            // The document is done — NOW the virtual clock may run ahead. The delayed timers the page
+            // armed during load become eligible, in due order, BEHIND the `load` they were always
+            // meant to follow. (See `__timeBudget` in event_loop.rs: a clock that outruns the
+            // lifecycle fires a 10s timer before `load` and every WPT file reports TIMEOUT.)
+            g.__timeBudget = Infinity;
+        };
 
         // ---- Web Storage -------------------------------------------------------------------
         // The web FEATURE-DETECTS this and grades the browser on it. MediaWiki's startup script

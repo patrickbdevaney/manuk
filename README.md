@@ -91,6 +91,12 @@ Stated plainly, because a README that only lists wins is marketing:
 
 ## How it is developed
 
+> **Two instruments, and they see different things.** The **differential oracle** (265 real sites vs
+> Chromium) finds what real pages do; **Web Platform Tests** finds what the *spec* says, needs no
+> oracle at all, and sees the adversarial cases no real site generates. The second was wired up in tick
+> 43 and immediately found a Bar 0 hang — `child.after(child)` — that no amount of crawling could have
+> surfaced. Cumulative findings are captured by topic in **`docs/wiki/`**.
+
 The methodology (`docs/loop/METHODOLOGY.md`) exists because a solo project cannot hand-verify the web.
 Its central claim: **automated, self-correcting measurement substitutes for the headcount this project
 doesn't have.** Two rules govern everything:
@@ -342,11 +348,20 @@ See [The agentic browser](#the-agentic-browser).
 
 ### Conformance
 
-#### `tests/wpt` — Web Platform Tests harness
-- **Does:** `run_layout_suite` runs built-in layout reftests (expressed against the
-  real engine) and reports pass/fail/skip as text + JSON (`Report`).
-  `find_wpt_checkout` (via `$WPT_DIR`) is the hook for the upstream runner.
-- **Runner:** `cargo run -p manuk-wpt` (5 reftests pass today).
+#### `tests/wpt` — the **upstream** Web Platform Tests runner
+- **Does:** runs the real `testharness.js` suite — serves a WPT checkout over HTTP, supplies its own
+  `resources/testharnessreport.js` (the **vendor hook WPT itself documents**), and reads results back
+  through the DOM. Forks a child process per batch, because **`tokio::time::timeout` cannot interrupt
+  synchronous JavaScript** — only a process boundary contains a spinning JIT frame, so a hang is
+  *attributable* rather than fatal.
+- **Baseline (tick 43):** `dom/` — **457 files, 1,429/6,284 subtests = 22.7%, NO_REPORT 0, 90 hangs**
+  (`docs/loop/WPT-BASELINE.md`). `NO_REPORT 0` is the load-bearing figure: **every file reports**, so
+  the percentage is a measurement rather than a shadow of a broken runner.
+- **Runner:** `./scripts/wpt-setup.sh && cargo run --release -p manuk-wpt -- wpt dom --show-failures`
+- **Why it matters:** the 265-site Chromium diff can only see what those sites exercise, and it needs
+  Chromium to say what "right" is. **WPT tests carry their own verdict.** Its first run found four
+  engine defects — none of which move a box — including that **`DOMContentLoaded` and `load` had never
+  been dispatched, ever**, and an **infinite loop** when a node is inserted before itself.
 
 ---
 

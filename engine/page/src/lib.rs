@@ -721,6 +721,11 @@ impl Page {
         // The SHELL is the only caller that separates them: blocking → paint → deferred → repaint. That
         // is the only place a human is waiting, and it is the only place the difference is visible.
         page.run_deferred_scripts(fonts, viewport_width);
+        // Parsing is done and the deferred scripts have executed — that IS DOMContentLoaded.
+        page.fire_lifecycle("DOMContentLoaded");
+        // On the SYNC path there is no subresource phase to wait for, so loading is over. The call is
+        // idempotent, so the async path firing `load` again later is harmless.
+        page.fire_lifecycle("load");
         page
     }
 
@@ -761,6 +766,11 @@ impl Page {
         // must still run all the scripts.** There is exactly one caller allowed to split them, and it is
         // the shell, because it is the only one with a human waiting.
         page.run_deferred_scripts(fonts, viewport_width);
+        // Parsing is done and the deferred scripts have executed — that IS DOMContentLoaded.
+        page.fire_lifecycle("DOMContentLoaded");
+        // On the SYNC path there is no subresource phase to wait for, so loading is over. The call is
+        // idempotent, so the async path firing `load` again later is harmless.
+        page.fire_lifecycle("load");
 
         // **The enhancement phases run under the load budget, exactly as they do in `finish_loading`.**
         //
@@ -827,6 +837,10 @@ impl Page {
                 budget.as_secs_f32()
             );
         }
+        // **`load` fires either way.** A real browser fires it when loading settles; it does not
+        // withhold the event forever because one subresource was slow. Withholding it would leave
+        // every `window.onload` handler on the page unrun — which is the bug this exists to fix.
+        self.fire_lifecycle("load");
     }
 
     #[cfg(feature = "spidermonkey")]
@@ -1451,6 +1465,27 @@ impl Page {
         let _ = manuk_js::eval_in_page(ctx, &mut self.dom, src, &rects, &self.styles);
     }
 
+    /// **Fire the document lifecycle: `DOMContentLoaded`, then `load`.**
+    ///
+    /// Neither event was EVER dispatched by this engine — grep found zero occurrences. A site whose
+    /// init lives in `window.addEventListener('load', …)` — a very large fraction of the web —
+    /// simply **never initialised**, silently, with nothing in any log to say so.
+    ///
+    /// The host must fire these because **only the host knows when they are true**: *"the document
+    /// finished parsing"* and *"the subresources finished"* are facts about the loader, not about JS.
+    #[cfg(feature = "spidermonkey")]
+    pub fn fire_lifecycle(&mut self, which: &str) {
+        let src = match which {
+            "DOMContentLoaded" => "globalThis.__fireDOMContentLoaded && __fireDOMContentLoaded()",
+            _ => "globalThis.__fireLoad && __fireLoad()",
+        };
+        self.eval_for_test(src);
+    }
+
+    /// Without SpiderMonkey there is no JS to notify, so the lifecycle is a no-op — not a lie.
+    #[cfg(not(feature = "spidermonkey"))]
+    pub fn fire_lifecycle(&mut self, _which: &str) {}
+
     /// Publish the viewport's scroll offset and the focused element into the JS world.
     ///
     /// A page reads `window.scrollY` to decide what to render, which header to stick, and when to
@@ -1594,6 +1629,11 @@ impl Page {
         // Both passes, back to back — see `load`. Only the shell separates them.
         let mut page = Page::from_prefetched_inner(pre, fonts, viewport_width);
         page.run_deferred_scripts(fonts, viewport_width);
+        // Parsing is done and the deferred scripts have executed — that IS DOMContentLoaded.
+        page.fire_lifecycle("DOMContentLoaded");
+        // On the SYNC path there is no subresource phase to wait for, so loading is over. The call is
+        // idempotent, so the async path firing `load` again later is harmless.
+        page.fire_lifecycle("load");
         page
     }
 

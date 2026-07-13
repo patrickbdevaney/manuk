@@ -52,7 +52,7 @@ async-trait = "0.1"
 
 # --- networking (Reuse) ---
 tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "macros", "sync", "time"] }
-hyper = { version = "1", features = ["client", "http1", "http2"] }
+hyper = { version = "1", features = ["client", "server", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "http2", "tokio"] }
 hyper-rustls = { version = "0.27", default-features = false, features = ["http1", "http2", "ring", "webpki-roots", "tls12"] }
 http = "1"

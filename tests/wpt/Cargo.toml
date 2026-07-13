@@ -25,6 +25,15 @@ default = ["stylo", "spidermonkey"]
 stylo = ["manuk-page/stylo"]
 spidermonkey = ["manuk-page/spidermonkey"]
 
+[dependencies.http-body-util]
+workspace = true
+
+[dependencies.hyper]
+workspace = true
+
+[dependencies.hyper-util]
+workspace = true
+
 [lib]
 path = "src/lib.rs"
 

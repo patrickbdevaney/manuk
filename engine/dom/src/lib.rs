@@ -750,6 +750,36 @@ impl Dom {
             }
             return;
         }
+        // **DOM spec, "pre-insert", step 2:** *"If referenceChild is node, then set referenceChild to
+        // node's next sibling."*
+        //
+        // Inserting a node **before itself** is not an error and not a no-op — it is a *move*, and
+        // the reference point has to slide past the node before we unlink it. Without this step the
+        // sequence below builds a **self-cycle**:
+        //
+        //   detach(X)                      → X's sibling links are cleared
+        //   X.next_sibling = Some(sibling) → sibling IS X, so **X.next_sibling = X**
+        //
+        // …and every subsequent `children()` walk spins forever. That is a **hang**, not a wrong
+        // answer, so it takes the whole page down with it — Bar 0.
+        //
+        // No real site inserts a node before itself, which is exactly why the 265-site Chromium diff
+        // could never have found this. **WPT found it in the first 25 tests** (`ChildNode-after`,
+        // which calls `child.after(child)` on purpose). This is the argument for the instrument, in
+        // one bug.
+        let sibling = if new_node == sibling {
+            match self.nodes[sibling.index()].next_sibling {
+                Some(next) => next,
+                // It was already last: "before its own next sibling" means "at the end".
+                None => {
+                    self.append_child(parent, new_node);
+                    return;
+                }
+            }
+        } else {
+            sibling
+        };
+
         self.detach(new_node);
         let prev = self.nodes[sibling.index()].prev_sibling;
         self.nodes[new_node.index()].parent = Some(parent);

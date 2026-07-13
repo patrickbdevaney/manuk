@@ -104,6 +104,20 @@ head_ "G_GLOBALS · a missing constructor is a THROWN EXCEPTION, not a missing f
 GG=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_globals 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GG" ]; then ok "globals: $GG"; else bad "G_GLOBALS failed — a global a real bundle references is missing, or one of them is LYING"; fi
 
+head_ "G_LIFECYCLE · the document lifecycle, the clock, and the loop that must not die"
+# Found by wiring up upstream WPT (tick 43). NONE of these move a box, which is why the 265-site
+# Chromium differential could not see any of them for forty ticks:
+#   * `window.parent` was undefined — and `while (w != w.parent) w = w.parent;` is how every page walks
+#     to the top. It does not fail to terminate, it walks OFF THE END. This alone failed 100% of WPT.
+#   * `DOMContentLoaded` and `load` were NEVER DISPATCHED. Anywhere. A site whose init lives in an
+#     onload handler simply never initialised — silently. jQuery survived by checking `readyState`,
+#     which is exactly why nobody noticed: it worked often enough to look fine.
+#   * `setTimeout` threw its DELAY away — every timer was a FIFO push, so a 10s timer ran before a 0ms
+#     one queued after it. Every debounce and retry-backoff on the web, in the wrong order, silently.
+#   * A throwing task KILLED THE EVENT LOOP: one bad callback and every task after it never ran.
+GL=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_lifecycle 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GL" ]; then ok "lifecycle: $GL"; else bad "G_LIFECYCLE failed — the document lifecycle, the timer clock, or the event loop's survival of a throwing task"; fi
+
 head_ "G_SELECTOR · the cascade must not silently DROP rules (CSS nesting)"
 # RuleIndex — a cascade OPTIMISATION — read each StyleRule's selectors and block and never looked at its
 # `rules` field: its NESTED rules. 41% of the corpus uses CSS nesting (a floor — external sheets are not

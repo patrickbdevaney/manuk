@@ -8,6 +8,27 @@ simply had not been done, while backlog work carried on, and nobody noticed unti
 asked about. `STATUS.md` exists so that gap is visible in five seconds instead of requiring an
 interrogation.
 
+## COMMIT AND PUSH CADENCE — the interval is the TICK, and it is not negotiable
+
+- **Commit exactly once per tick, at the tick boundary.** The commit is what makes a tick *exist*. It
+  is admissible only when all three hold: **`verify.sh` green on exactly this tree** (the receipt is
+  tree-hashed — "the gates passed" cannot be a memory of an earlier version of the diff), **a journal
+  entry with a RESULT**, and **a `WIKI:` trailer**. The hook enforces all three.
+- **Never commit mid-tick on `main`.** A half-tick commit is a claim about a gate that has not run.
+  If a tick is long, checkpoint on a **branch**, never on `main`.
+- **Update `README.md` every tick, as appropriate.** It is the only file an outside reader opens, and a
+  README that describes an engine two months stale is a *claim*, not documentation. If the tick changed
+  what the engine can do, what it measures, or how it is run — the README says so before the commit.
+- **Push after every tick commit.** The loop runs unattended for hours; the remote is the only copy
+  that survives a machine loss. **Pushing is cheap. Re-deriving a day of ticks is not.**
+- ⚠ **NEVER `git checkout <file>` or `git stash` a file with uncommitted work to "test a hypothesis".**
+  This is not a style preference — **tick 43 destroyed real, working code this way**, reverting two
+  files to chase a "regression" that turned out to be a *misconfigured test command* (the gate had been
+  run without `--features spidermonkey`, so the engine had no JS at all and every script "failed").
+  **Bisect by copying the file aside, or by commenting code out — never by reverting the only copy.**
+  And see PROCESS: *a RED verdict is a claim too, and destructive action on an unverified claim is how
+  work gets lost.*
+
 ## THE STANDING OPERATING LOOP — adopt as written
 
 **Work perpetually on the tick/eval loop. Do not hand back.** Not at a milestone, not when a tick feels

@@ -436,3 +436,21 @@ property. That is strictly better than the rule not existing — and it is writt
 
 **The ladder this establishes** (STATUS.md): *pref → minimal flag delta → **hand-rolled supplement** →
 hand-rolled module.* **Never: give up the capability.**
+
+## Tick 43 — the document lifecycle: the class of site that never initialised
+
+| Pattern | % of the web | Status |
+|---|---|---|
+| **`window.addEventListener('load', init)`** — the classic init idiom | **most of the web** | ✅ (tick 43) — **`load` was NEVER dispatched. Ever.** Every site initialising this way ran nothing. |
+| **`document.addEventListener('DOMContentLoaded', init)`** | **most of the web** | ✅ (tick 43) — never dispatched either |
+| **`document.readyState`** guards (`if (readyState !== 'loading') init()`) | jQuery = ~74% of pages | ✅ (tick 43) — **this is why the gap survived 40 ticks**: libraries that *check* readyState fell through to running immediately, so it *worked often enough to look fine*. Libraries that only *listen* got nothing. |
+| **Delay-ordered timers** — debounce, throttle, retry-backoff, staged animation, carousels | **effectively all interactive sites** | ✅ (tick 43) — `setTimeout` **discarded its delay**; timers ran in *insertion* order. Nothing errored; it simply happened in the wrong order. |
+| **A page whose first timer callback throws** | long tail | ✅ (tick 43) — one throwing callback used to **stop the page's clock forever** (Bar 0) |
+| **Self-referential DOM mutation** (`node.after(node)`) | adversarial / library-internal | ✅ (tick 43) — was an **infinite loop** (Bar 0). No real site does this — **which is why only WPT could find it.** |
+| **`Range`** (`dom/ranges` = 3.9%) | rich-text editors, selection APIs | ❌ **inert stub** — exists, does nothing. Now *visible* rather than assumed. |
+
+**The class this unlocks is not a *kind of site* — it is a *stage of every site*.** A page whose
+scripts parse, whose DOM builds, and whose init handler is never called renders its **skeleton**: the
+server-rendered HTML, with nothing wired up. That is indistinguishable, from the outside, from a
+hydration failure — and it is a large part of what the oracle has been reporting as "missing nodes" for
+forty ticks.
