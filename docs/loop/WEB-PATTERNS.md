@@ -85,7 +85,7 @@ architecture. Each one below was *named by a framework*, not guessed at.
 | **Unhandled promise rejections surfaced** | Every framework renders inside an `async` fn — a throw there is a *rejected promise*, and ours went into a void | ✅ |
 | `Error.captureStackTrace` (V8-only, TC39 proposal) | Libraries with custom error classes | ✅ |
 | React committing its render | React | ❌ **still silent.** Mounts, schedules, throws nothing, renders nothing. |
-| Lit committing its template | Lit | ❌ shadow root + styles + markers land; template does not commit |
+| Lit committing its template | Lit | ✅ (tick 26) — it needed `CharacterData.data` on its comment markers |
 | Svelte's runtime | Svelte | ❌ opaque error in minified code |
 | Hydration (SSR → interactive) | Next.js, Nuxt, SvelteKit | ❓ **unmeasured** |
 
@@ -190,3 +190,27 @@ ledger as a framework problem. It was a string-formatting bug in the test harnes
 failure was indistinguishable from the framework's.
 
 *Test your own primitives before blaming the framework.* Third time this prior has paid.
+
+## Tick 26 — the app web is open: 8 of 8 frameworks mount
+
+React · React (JS) · Vue · Svelte · Solid · Preact · Lit · Vanilla. Every one of them was blocked by a
+**primitive**, not by anything framework-shaped, and not one of the five would have been found by
+reading the DOM standard:
+
+| Framework | What it actually needed | What its failure looked like |
+|---|---|---|
+| **React** | `ownerDocument` surviving a **GC** | `o.createElement is not a function` — true, and pointing at nothing wrong with React |
+| **Svelte 5** | `get_descriptor(Node.prototype,'firstChild').get` | `can't access property "get", a(...) is undefined` |
+| **Lit** | `CharacterData.data` on its comment markers | `i.hasAttributes is not a function`, then `i.data is undefined` |
+| **Lit** | a shadow root being `nodeType` **11**, not 8 | (silent) |
+| **all of them** | `file://` being a scheme the net layer supports | (silent — the bundle never loaded) |
+
+**Every one of these is now asserted in G2 scenario 14**, each labelled with the framework that found
+it. The `ownerDocument` case **allocates 60,000 objects to force a collection**, because a test that
+does not allocate cannot see that bug at all — which is precisely why it survived several ticks.
+
+**The rule this produces, and it is the tick's real output:** *when a framework fails silently, the
+bug is below the framework.* Four of the five above were in our own primitives — one of them a
+use-after-GC, one an unsupported URL scheme, one a missing character-data accessor. The framework was
+never once the thing that was broken. Stop reading the framework's source and go test the primitive it
+sits on.

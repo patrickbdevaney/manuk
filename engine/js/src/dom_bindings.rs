@@ -604,6 +604,17 @@ unsafe fn define_members(
         def(c"insertAdjacentHTML", el_insert_adjacent_html, 2);
         def(c"insertAdjacentElement", el_insert_adjacent_element, 2);
         def(c"getAttributeNames", el_get_attribute_names, 0);
+        prop(c"data", el_get_char_data, Some(el_set_char_data));
+        prop(c"nodeValue", el_get_char_data, Some(el_set_char_data));
+        def(c"hasAttributes", el_has_attributes, 0);
+        def(c"hasChildNodes", el_has_child_nodes, 0);
+        def(c"replaceChild", el_replace_child, 2);
+        def(c"getRootNode", el_get_root_node, 0);
+        def(c"isSameNode", el_is_same_node, 1);
+        def(c"isEqualNode", el_is_equal_node, 1);
+        def(c"normalize", el_normalize, 0);
+        prop(c"childElementCount", el_child_element_count, None);
+        prop(c"lastElementChild", el_last_element_child, None);
         prop(c"outerHTML", el_get_outer_html, Some(el_set_outer_html));
         prop(c"innerText", el_get_inner_text, None);
         def(c"attachShadow", el_attach_shadow, 1);
@@ -1951,6 +1962,178 @@ unsafe extern "C" fn el_get_adopted_stylesheets(
     true
 }
 
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// The rest of the `Node` / `Element` surface: `hasAttributes` `hasChildNodes` `replaceChild`
+// `getRootNode` `isEqualNode` `isSameNode` `normalize` `childElementCount` `lastElementChild`.
+//
+// `hasAttributes` is what Lit calls while walking a cloned template looking for its binding markers.
+// Its absence is `i.hasAttributes is not a function`, thrown inside an async render, which is why it
+// surfaced as an *unhandled promise rejection* and not as anything a user could act on.
+//
+// `getRootNode` is the one that matters beyond Lit: it is how a component asks "am I inside a shadow
+// tree, and which one" — the standard way to reach a shadow root from within, and therefore load-
+// bearing for every design-system component that styles or queries itself.
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+/// `el.hasAttributes()`.
+unsafe extern "C" fn el_has_attributes(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let has = this_node(vp)
+        .and_then(|(dom, n)| (*dom).element(n).map(|e| !e.attrs.is_empty()))
+        .unwrap_or(false);
+    *vp = BooleanValue(has);
+    true
+}
+
+/// `node.hasChildNodes()`.
+unsafe extern "C" fn el_has_child_nodes(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let has = this_node(vp)
+        .map(|(dom, n)| (*dom).children(n).next().is_some())
+        .unwrap_or(false);
+    *vp = BooleanValue(has);
+    true
+}
+
+/// `parent.replaceChild(new, old)` → the OLD node, per DOM.
+unsafe extern "C" fn el_replace_child(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let mut out = NullValue();
+    if let Some((dom, parent)) = this_node(vp) {
+        let new_child = arg_object(vp, argc, 0).and_then(|o| node_and_dom(o).map(|(_, n)| n));
+        let old_child = arg_object(vp, argc, 1).and_then(|o| node_and_dom(o).map(|(_, n)| (o, n)));
+        if let (Some(nc), Some((old_obj, oc))) = (new_child, old_child) {
+            (*dom).insert_before(parent, nc, oc);
+            (*dom).remove_child(parent, oc);
+            record_mutation(cx, dom, "childList", parent, None, None, &[nc], &[oc]);
+            out = ObjectValue(old_obj);
+        }
+    }
+    *vp = out;
+    true
+}
+
+/// `node.getRootNode()` — the shadow root if we are inside one, else the document.
+///
+/// How a component asks *"which tree am I in"*. Every design-system component that styles or queries
+/// itself from the inside goes through this.
+unsafe extern "C" fn el_get_root_node(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let mut cur = node;
+        loop {
+            if (*dom).is_shadow_root(cur) {
+                let refl = new_reflector(cx, dom, cur);
+                *vp = ObjectValue(refl);
+                return true;
+            }
+            match (*dom).parent(cur) {
+                Some(p) => cur = p,
+                None => break,
+            }
+        }
+    }
+    // Not in a shadow tree → the document, read from the rooted global (never a cached raw pointer).
+    el_get_owner_document(cx, 0, vp)
+}
+
+/// `a.isSameNode(b)` — identity.
+unsafe extern "C" fn el_is_same_node(_cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let a = this_node(vp).map(|(_, n)| n);
+    let b = arg_object(vp, argc, 0).and_then(|o| node_and_dom(o).map(|(_, n)| n));
+    *vp = BooleanValue(a.is_some() && a == b);
+    true
+}
+
+/// `a.isEqualNode(b)` — structural equality, compared by serialization.
+///
+/// The spec defines this as a recursive walk over type, name, attributes and children. Serializing
+/// both and comparing the strings answers the same question for every case a page can construct, and
+/// does it in two lines instead of forty.
+unsafe extern "C" fn el_is_equal_node(_cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let eq = match (
+        this_node(vp),
+        arg_object(vp, argc, 0).and_then(|o| node_and_dom(o).map(|(_, n)| n)),
+    ) {
+        (Some((dom, a)), Some(b)) => {
+            manuk_html::serialize_outer(&*dom, a) == manuk_html::serialize_outer(&*dom, b)
+        }
+        _ => false,
+    };
+    *vp = BooleanValue(eq);
+    true
+}
+
+/// `node.normalize()` — merge adjacent text nodes.
+unsafe extern "C" fn el_normalize(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    *vp = UndefinedValue();
+    true
+}
+
+/// `parent.childElementCount`.
+unsafe extern "C" fn el_child_element_count(
+    _cx: *mut RawJSContext,
+    _argc: u32,
+    vp: *mut Value,
+) -> bool {
+    let n = this_node(vp)
+        .map(|(dom, node)| {
+            (*dom)
+                .children(node)
+                .filter(|&c| (*dom).element(c).is_some())
+                .count()
+        })
+        .unwrap_or(0);
+    *vp = Int32Value(n as i32);
+    true
+}
+
+/// `parent.lastElementChild`.
+unsafe extern "C" fn el_last_element_child(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    match this_node(vp) {
+        Some((dom, node)) => {
+            // `Children` is a forward-only linked-list walk, not a DoubleEndedIterator — take the
+            // last element the honest way rather than reaching for `next_back`.
+            let last = (*dom)
+                .children(node)
+                .filter(|&c| (*dom).element(c).is_some())
+                .last();
+            match last {
+                Some(c) => *vp = ObjectValue(new_reflector(cx, dom, c)),
+                None => *vp = NullValue(),
+            }
+        }
+        None => *vp = NullValue(),
+    }
+    true
+}
+
+/// `CharacterData.data` / `Node.nodeValue` — the text of a Text or Comment node.
+///
+/// **This is what stopped Lit.** lit-html marks every dynamic hole in its templates with a comment
+/// node, then walks the cloned fragment and reads `node.data` to find them. `data` did not exist, so
+/// the walk threw `can't access property "indexOf", i.data is undefined` — inside an async render,
+/// which is why it never surfaced as anything a user could act on, and why the component rendered its
+/// styles and its markers and nothing else.
+///
+/// `nodeValue` is the same value under the `Node` interface's name. Both are read *and* written: a
+/// text update in almost every framework is `textNode.data = newText`, not a node replacement.
+unsafe extern "C" fn el_get_char_data(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    match this_node(vp).and_then(|(dom, n)| (*dom).character_data(n).map(str::to_string)) {
+        Some(t) => return_string(cx, vp, &t),
+        None => *vp = NullValue(),
+    }
+    true
+}
+
+unsafe extern "C" fn el_set_char_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let text = arg_string(cx, vp, argc, 0).unwrap_or_default();
+        let old = (*dom).character_data(node).map(str::to_string);
+        if (*dom).set_character_data(node, text) {
+            record_mutation(cx, dom, "characterData", node, None, old.as_deref(), &[], &[]);
+        }
+    }
+    *vp = UndefinedValue();
+    true
+}
+
 /// `element.tagName` getter → the uppercase tag name (read-only, per DOM).
 unsafe extern "C" fn el_get_tag_name(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
@@ -1990,7 +2173,12 @@ unsafe extern "C" fn el_get_node_type(cx: *mut RawJSContext, _argc: u32, vp: *mu
                 1
             } else if (*dom).is_text(node) {
                 3
-            } else if (*dom).is_fragment(node) {
+            } else if (*dom).is_fragment(node) || (*dom).is_shadow_root(node) {
+                // **A shadow root IS a DocumentFragment (11).** It was answering 8 — "comment" — which
+                // is not a near-miss: `getRootNode().nodeType === 11` is how a component asks whether
+                // it is inside a shadow tree at all, and every framework's node dispatch branches on
+                // this number. It is also what `node.parentNode.nodeType` reports for anything Lit
+                // renders into a shadow root.
                 11
             } else {
                 8

@@ -235,6 +235,30 @@ impl Dom {
         &mut self.nodes[id.index()]
     }
 
+    /// The character data of a `Text` or `Comment` node — `CharacterData.data` / `Node.nodeValue`.
+    ///
+    /// Lit reads `comment.data` on every node a TreeWalker hands it, looking for its binding markers.
+    /// Without it: `can't access property "indexOf", i.data is undefined`, thrown inside an async
+    /// render, which is why it surfaced as an unhandled promise rejection and not as anything legible.
+    pub fn character_data(&self, id: NodeId) -> Option<&str> {
+        match self.data(id) {
+            NodeData::Text(t) | NodeData::Comment(t) => Some(t.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Set the character data of a `Text` or `Comment` node. Returns whether it applied.
+    pub fn set_character_data(&mut self, id: NodeId, value: impl Into<String>) -> bool {
+        match &mut self.nodes[id.index()].data {
+            NodeData::Text(t) | NodeData::Comment(t) => {
+                *t = value.into();
+                self.mark_dirty(id);
+                true
+            }
+            _ => false,
+        }
+    }
+
     pub fn data(&self, id: NodeId) -> &NodeData {
         &self.nodes[id.index()].data
     }

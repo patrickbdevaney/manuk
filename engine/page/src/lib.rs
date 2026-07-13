@@ -2428,6 +2428,7 @@ mod js_interactive_tests {
         //  11  MutationObserver — batched records (attributes, subtree, childList)
         //  12  matchMedia — width features evaluate against the viewport
         //  13  Custom Elements + Shadow DOM — upgrade, attachShadow, lifecycle callbacks
+        //  14  The framework primitives — each one named by the framework it actually broke (tick 26)
         js_conformance_body();
     }
 
@@ -2674,6 +2675,80 @@ mod js_interactive_tests {
             Some("false,true,true"),
             "matchMedia: not-narrow, is-wide, and in-range at 1280px wide"
         );
+
+        // (14) **The framework primitives.** Every assertion here is a bug that shipped, and each is
+        // labelled with the framework that found it — because none of them would have been picked out
+        // of the DOM standard by reading. The browser telling us its own bug is a discovery mechanism
+        // that nothing else replaces (Part 31).
+        //
+        // The `ownerDocument` case is the one that matters most, and it is why this scenario forces a
+        // GC rather than merely calling the getter. `DOC_REFLECTOR` was an UNROOTED `*mut JSObject`:
+        // it worked perfectly until the collector moved the document, after which `ownerDocument`
+        // returned whatever now occupied that address. React allocates hard enough to trigger that
+        // reliably, and got back one of our own MutationRecords — an object on which `createElement`
+        // is genuinely not a function. **A test that does not allocate cannot see this bug at all**,
+        // which is exactly why it survived so long.
+        let html14 = r#"<!doctype html><html><body>
+            <div id="host"></div><div id="out">-</div>
+            <script>
+              var r = [];
+
+              // React — ownerDocument must survive a garbage collection. Allocate hard first.
+              var host = document.getElementById('host');
+              for (var i = 0; i < 60000; i++) { var junk = { a: i, b: 'x' + i, c: [i, i, i] }; }
+              var od = host.ownerDocument;
+              r.push('ownerDoc:' + (od === document && typeof od.createElement === 'function'));
+
+              // Svelte 5 — lifts the raw accessor straight off Node.prototype and .call()s it.
+              var d = Object.getOwnPropertyDescriptor(Node.prototype, 'firstChild');
+              var getter = d && d.get;
+              var probe = document.createElement('div');
+              probe.appendChild(document.createElement('span'));
+              r.push('protoAccessor:' + (!!getter && getter.call(probe).tagName === 'SPAN'));
+
+              // Lit — reads `.data` off the comment markers a TreeWalker hands it.
+              var cmt = document.createComment('marker');
+              r.push('commentData:' + (cmt.data === 'marker' && cmt.nodeType === 8));
+
+              // Lit — a shadow root is a DocumentFragment (11), not a comment (8).
+              var sr = host.attachShadow({ mode: 'open' });
+              r.push('shadowType:' + (sr.nodeType === 11 && host.getRootNode() === document));
+
+              // lit-html — a fragment inserted before a null reference contributes its CHILDREN.
+              var t = document.createElement('template');
+              t.innerHTML = '<b>A</b><i>B</i>';
+              var frag = t.content.cloneNode(true);
+              var marker = sr.insertBefore(document.createComment(''), null);
+              marker.parentNode.insertBefore(frag, null);
+              r.push('fragInsert:' + (sr.childNodes.length === 3));
+
+              // The ChildNode / ParentNode mixins — all eleven were missing.
+              var m = document.createElement('div');
+              m.append('x');
+              m.prepend(document.createElement('em'));
+              m.insertAdjacentHTML('beforeend', '<u>u</u>');
+              r.push('mixins:' + (m.outerHTML === '<div><em></em>x<u>u</u></div>' &&
+                                  m.hasAttributes() === false && m.hasChildNodes() === true));
+
+              document.getElementById('out').textContent = r.join(' ');
+            </script></body></html>"#;
+        let page14 = Page::load(html14, "https://app.test/", &fonts, 800.0);
+        let root14 = page14.dom().root();
+        let out14 = manuk_css::query_selector_all(page14.dom(), root14, "#out")[0];
+        let got = page14.dom().text_content(out14);
+        for claim in [
+            "ownerDoc:true",     // React   — a raw *mut JSObject cached across a GC is a bug
+            "protoAccessor:true",// Svelte 5 — get_descriptor(Node.prototype,'firstChild').get
+            "commentData:true",  // Lit      — CharacterData.data on its binding markers
+            "shadowType:true",   // Lit      — a shadow root is a DocumentFragment
+            "fragInsert:true",   // lit-html — every template commits through this call
+            "mixins:true",       // everyone — append/prepend/insertAdjacentHTML/outerHTML
+        ] {
+            assert!(
+                got.contains(claim),
+                "G2/14 framework primitive failed: expected {claim} in {got:?}"
+            );
+        }
 
         // (13) Custom elements + Shadow DOM: a class extending HTMLElement is defined, the
         // existing element upgrades (its constructor runs with `this` === the real element),

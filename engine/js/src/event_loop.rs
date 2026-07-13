@@ -188,13 +188,74 @@ const PRELUDE: &str = r#"
       var isNode = function(o){ return !!o && typeof o.nodeType === 'number'; };
       var tagIs  = function(t){ return function(o){ return isEl(o) && o.tagName === t; }; };
 
+      // ── The prototype accessor bridge — what Svelte 5 needs, and what nothing else asks for.
+      //
+      // Our reflectors carry their DOM members as OWN properties: `define_members` installs them on
+      // each object, and there is no shared prototype chain. That is fine for every framework that
+      // simply *uses* the DOM — `node.firstChild` finds the own accessor and works.
+      //
+      // Svelte 5 does not use the DOM that way. For speed it reaches past the instance and lifts the
+      // raw accessor functions straight off the interface prototypes, once, at startup:
+      //
+      //     first_child_getter = get_descriptor(Node.prototype, 'firstChild').get;
+      //     next_sibling_getter = get_descriptor(Node.prototype, 'nextSibling').get;
+      //
+      // and then calls them as `first_child_getter.call(node)` on every node it walks. With an empty
+      // `Node.prototype`, `get_descriptor(...)` is `undefined` and `.get` throws:
+      //
+      //     TypeError: can't access property "get", a(...) is undefined
+      //
+      // — thrown inside an async mount, so it surfaced only as an unhandled promise rejection, and
+      // `#app` stayed empty with nothing to point at.
+      //
+      // So: put real accessor descriptors on the prototypes. Each one looks up the OWN descriptor of
+      // whatever `this` it was called with and delegates. It reads the own descriptor rather than the
+      // property, which is what keeps this from recursing infinitely when `this` has no own accessor.
+      // The prototypes are not in our reflectors' chain, so these exist purely to be *lifted* — which
+      // is precisely the use Svelte makes of them.
+      function bridge(proto, names) {
+        names.forEach(function(name) {
+          if (Object.getOwnPropertyDescriptor(proto, name)) return;
+          Object.defineProperty(proto, name, {
+            configurable: true,
+            get: function() {
+              var d = Object.getOwnPropertyDescriptor(this, name);
+              return d && d.get ? d.get.call(this) : (d ? d.value : undefined);
+            },
+            set: function(v) {
+              var d = Object.getOwnPropertyDescriptor(this, name);
+              if (d && d.set) { d.set.call(this, v); }
+              else { Object.defineProperty(this, name, { value: v, writable: true, configurable: true }); }
+            }
+          });
+        });
+      }
+      var NODE_ACCESSORS = ['firstChild','lastChild','nextSibling','previousSibling','parentNode',
+                            'parentElement','childNodes','textContent','nodeValue','nodeType',
+                            'nodeName','ownerDocument','isConnected'];
+      var EL_ACCESSORS   = ['className','id','innerHTML','outerHTML','innerText','children',
+                            'firstElementChild','lastElementChild','nextElementSibling',
+                            'previousElementSibling','tagName','attributes'];
+      var CD_ACCESSORS   = ['data','nodeValue','textContent'];
+
       iface('Node', isNode);
       iface('Element', isEl);
       iface('HTMLElement', isEl);
       iface('SVGElement', function(o){ return isEl(o) && o.tagName === 'SVG'; });
       iface('Text', function(o){ return !!o && o.nodeType === 3; });
+
       iface('Comment', function(o){ return !!o && o.nodeType === 8; });
       iface('DocumentFragment', function(o){ return !!o && o.nodeType === 11; });
+
+      // Install the bridges once every interface exists (see `bridge` above).
+      try {
+        bridge(globalThis.Node.prototype, NODE_ACCESSORS);
+        bridge(globalThis.Element.prototype, NODE_ACCESSORS.concat(EL_ACCESSORS));
+        bridge(globalThis.HTMLElement.prototype, NODE_ACCESSORS.concat(EL_ACCESSORS));
+        bridge(globalThis.Text.prototype, NODE_ACCESSORS.concat(CD_ACCESSORS));
+        bridge(globalThis.Comment.prototype, NODE_ACCESSORS.concat(CD_ACCESSORS));
+        bridge(globalThis.DocumentFragment.prototype, NODE_ACCESSORS);
+      } catch (e) { /* a frozen builtin prototype: leave it alone */ }
       iface('Document', function(o){ return o === document; });
       iface('Window', function(o){ return o === globalThis; });
 

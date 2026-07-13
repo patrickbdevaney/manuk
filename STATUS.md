@@ -11,10 +11,10 @@
 TICK:              25
 LAST_AUDIT_TICK:   19          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
-LAST_WALL_TIME:    167s
+LAST_WALL_TIME:    197s
 ORACLE_CORPUS:     265 sites
-ORACLE_CRAWLED:    250 sites, 379 clusters  → docs/loop/CLUSTERS.md
-ORACLE_HANGS:      29                    ← Bar 0. Outranks every visual cluster (Part 24.3).
+ORACLE_CRAWLED:    265 sites, 379 clusters  → docs/loop/CLUSTERS.md
+ORACLE_HANGS:      33                    ← Bar 0. Outranks every visual cluster (Part 24.3).
 PENDING_GATES:     G_SILENT_FAIL G_DEDUP G_SPAWN G_POOL_ISOLATION
 SINGLE_SITE_TICKS: 0                    (this audit window — a rising count is the drift signal)
 UPDATED:           2026-07-12

@@ -1145,3 +1145,41 @@ applied to every node and not to the document.
   that the correct pattern was already in the file, applied to the neighbouring case, is the tell. When
   a codebase does the right thing *next to* the wrong thing, the wrong thing is an oversight, not a
   design.
+
+## Tick 26 — the app web is open (2026-07-12)
+
+**TICK SHAPE: pattern-class.** CLUSTER: C01ca (the app web / SPA substrate).
+
+**8 of 8 frameworks mount and render.** React, React(JS), Vue, Svelte, Solid, Preact, Lit, Vanilla.
+
+Svelte and Lit were the last two, and both were blocked by a primitive:
+
+- **Svelte 5** does not use the DOM the way everything else does. For speed it lifts the raw accessor
+  functions off the interface prototypes once at startup — `get_descriptor(Node.prototype,
+  'firstChild').get` — and then `.call(node)`s them on every node it walks. Our reflectors carry their
+  members as *own* properties with no shared prototype, so `Node.prototype` was an empty object,
+  `get_descriptor` returned `undefined`, and `.get` threw. Fixed with a prototype accessor bridge:
+  each prototype accessor looks up the OWN descriptor of whatever `this` it is handed and delegates to
+  it. (Reading the *descriptor* and not the property is what keeps it from recursing.)
+
+- **Lit** marks every dynamic hole in its templates with a comment node and then reads `node.data` to
+  find them. **`CharacterData.data` did not exist.** Neither did `nodeValue`. Also: a shadow root was
+  reporting `nodeType` **8** (comment) instead of **11** (DocumentFragment), which is how a component
+  asks whether it is inside a shadow tree at all.
+
+**The lesson, and it is the whole tick:** *when a framework fails silently, the bug is below the
+framework.* Of the five things that were actually blocking the app web, **four were in our own
+primitives** — a use-after-GC in `ownerDocument`, an unsupported `file://` scheme, a missing
+character-data accessor, a mis-typed shadow root. The framework was never once the thing that was
+broken. Several ticks were spent with "React renders nothing" and "Lit's template doesn't commit"
+sitting in the ledger as *framework* problems. They were ours.
+
+**Named the gate.** G2 scenario 14 now asserts all six primitives, each labelled with the framework
+that found it. The `ownerDocument` assertion **allocates 60,000 objects to force a collection** —
+because a test that does not allocate cannot see a use-after-GC at all, which is exactly why that bug
+survived. Per the standing rule: before adding a feature, name the gate that would have gone red if it
+were already broken. This is that gate.
+
+**Still open:** `getBoundingClientRect` returns a stale (zero) rect immediately after a mount — it does
+not force layout when the tree is dirty, as a real browser does. Not a Bar 0 issue, but it is a thing
+real code depends on, and it will be the next tick's start.
