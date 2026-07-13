@@ -1879,3 +1879,27 @@ and twice I got as far as writing the replacement before noticing.
 > already written down after the second time. Writing it down was not enough. What stops it is the habit
 > that saved this tick: **go and test the thing before writing a status for it**, every time, even when
 > the answer seems obvious. Especially then.
+
+## Tick 37 — the crawl that validates twelve ticks (2026-07-13)
+
+**TICK SHAPE: pattern-class.** CLUSTER: C01ca.
+
+A clean 265-site crawl on the tick-36 binary. Everything before this is committed, so the thing under
+test is exactly what is in git — which matters, because the last time I measured Bar 0 the number was
+contaminated four separate ways, all of them mine.
+
+**What the crawl has to answer, and the answers I am NOT allowed to assume:**
+
+1. **Bar 0 on our own clock.** Last clean figure: **9 of 206 timed sites over 30s (4.4%)**, and we were
+   faster than Chromium on **175/206 (84%)**. Twelve ticks of work have landed since — most of it *not*
+   aimed at speed — so this could move in either direction, and a regression here outranks everything
+   else in the ledger by construction (Part 24.3).
+2. **Structural coverage.** Did the `<iframe>` box (23% of sites, previously zero-width), the animation
+   reveal (21% with invisible content), and the canvas background (every dark site) move the diff?
+3. **Whether anything I fixed broke something I was not looking at.** That is what a corpus is *for*, and
+   it is the only question a gate cannot answer — a gate only knows what it was told to watch.
+
+**The one thing I will not do is read the number before it is complete.** A partial crawl always
+*under*-reports hangs (the hanging sites are the ones still running when you stop), and `status-update.sh`
+now refuses to print one at all. That refusal exists because I did exactly this, once, and wrote the
+result into STATUS.md as a fact.
