@@ -628,6 +628,9 @@ pub struct Page {
     /// A failure that is not remembered is a fetch that repeats on every round; see
     /// `fetch_images_owned`.
     image_attempts: std::collections::HashSet<(manuk_dom::NodeId, String)>,
+    /// `<iframe>`s already rendered, by node → the URL they show. Prevents re-fetching an embed on
+    /// every round, which is the same storm `image_by_url` exists to stop.
+    iframes: std::collections::HashMap<manuk_dom::NodeId, String>,
     /// Decoded images keyed by **resolved URL**. `None` means "we asked and did not get it" — a
     /// remembered failure, which is what stops a blocked tracker being re-fetched on every round.
     /// Nine elements naming one sprite share one entry, one fetch and one decode.
@@ -690,6 +693,11 @@ pub fn contained<T>(what: &str, f: impl FnOnce() -> T) -> Option<T> {
 }
 
 /// How long a page's *enhancements* get, in total, before the document paints regardless.
+/// How deep an `<iframe>` tree may go. An iframe containing an iframe is normal; a page that frames
+/// itself is a fork bomb. Each level is rasterized to a bitmap here, so the cost compounds and the
+/// returns do not.
+pub const MAX_IFRAME_DEPTH: u8 = 2;
+
 pub fn load_budget() -> std::time::Duration {
     static B: std::sync::OnceLock<std::time::Duration> = std::sync::OnceLock::new();
     *B.get_or_init(|| {
@@ -940,6 +948,85 @@ impl Page {
     #[cfg(not(feature = "spidermonkey"))]
     pub fn run_deferred_scripts(&mut self, _fonts: &FontContext, _viewport_width: f32) -> usize {
         0
+    }
+
+    /// **The `<iframe>`s this page wants to load** — `(node, resolved url, width, height)`.
+    ///
+    /// Cheap (a DOM walk plus a rect lookup), and taken on the UI thread so the *fetch* can happen off
+    /// it. An iframe is 23% of the corpus and it is the gateway to embeds, maps, players, payment frames
+    /// and comment widgets — most of what makes a page feel like the modern web.
+    ///
+    /// **Fetched AFTER first paint, exactly like images.** A heavy third-party embed must not hold the
+    /// parent's article hostage; that is the same lesson `G_FIRST_PAINT` exists to enforce, and an
+    /// `<iframe>` is the single most likely thing on a page to be slow.
+    pub fn pending_iframes(&self) -> Vec<(manuk_dom::NodeId, String, u32, u32)> {
+        let rects = self.root_box.node_rects(&self.dom);
+        let mut out = Vec::new();
+        for n in self.dom.flat_descendants(self.dom.root()) {
+            if self.dom.tag_name(n) != Some("iframe") {
+                continue;
+            }
+            if self.iframes.contains_key(&n) {
+                continue; // already rendered
+            }
+            let Some(el) = self.dom.element(n) else { continue };
+            // `srcdoc` beats `src`, per spec. A `src` of `about:blank` has nothing to fetch.
+            let src = el.attr("src").unwrap_or("").trim();
+            if src.is_empty() || src.starts_with("about:") || src.starts_with("javascript:") {
+                continue;
+            }
+            let Some(r) = rects.get(&n).copied() else { continue };
+            let (w, h) = (r.width.round() as u32, r.height.round() as u32);
+            if w == 0 || h == 0 {
+                continue;
+            }
+            out.push((n, resolve_url(&self.final_url, src), w, h));
+        }
+        out
+    }
+
+    /// Render a fetched iframe document into the iframe's box.
+    ///
+    /// **The child is a whole `Page`** — its own DOM, its own cascade, its own layout, and (crucially)
+    /// **its own JS context**. That is the isolation, and it comes for free from the architecture rather
+    /// than from a policy anyone has to remember: a `PageContext` is per-`Page`, so a child's script has
+    /// no path to the parent's DOM. It cannot reach it because it does not have it.
+    ///
+    /// The child is then **rasterized to a bitmap and blitted through the replaced-element path** — the
+    /// same one an `<img>` uses. That is a deliberate scope choice and its limits are real and should be
+    /// stated rather than discovered: the embed renders, but it does not scroll, and it does not update.
+    /// A rendered embed you cannot scroll is enormously better than a 300×150 hole, and it is a fraction
+    /// of the work of a live nested browsing context — which is where this goes next.
+    pub fn render_iframe(
+        &mut self,
+        node: manuk_dom::NodeId,
+        html: &str,
+        url: &str,
+        fonts: &FontContext,
+        depth: u8,
+    ) {
+        // **Depth limit.** An iframe whose document contains an iframe is normal; a page that frames
+        // itself is a fork bomb. Chromium's limit is far higher, but ours renders each level to a
+        // bitmap, so the cost compounds and the returns do not.
+        if depth >= MAX_IFRAME_DEPTH {
+            tracing::warn!(depth, "iframe nesting limit reached — not rendering deeper");
+            return;
+        }
+        let rects = self.root_box.node_rects(&self.dom);
+        let Some(r) = rects.get(&node).copied() else { return };
+        let (w, h) = (r.width.round().max(1.0) as u32, r.height.round().max(1.0) as u32);
+
+        // A whole page, at the iframe's own viewport width — so its media queries and its layout see the
+        // size of the frame, not the size of the window. That is what makes a responsive embed responsive.
+        let child = Page::load(html, url, fonts, w as f32);
+        let canvas = child.paint(fonts, w, h);
+        let img = manuk_paint::DecodedImage {
+            width: canvas.width(),
+            height: canvas.height(),
+            rgba: canvas.rgba_bytes().to_vec(),
+        };
+        self.images.insert(node, std::rc::Rc::new(img));
+        self.iframes.insert(node, url.to_string());
     }
 
     /// **The images this page still wants** — resolved URLs, distinct, none already resolved.
@@ -1533,6 +1620,7 @@ impl Page {
             fetched_urls: std::collections::HashSet::new(),
             image_attempts: std::collections::HashSet::new(),
             image_by_url: std::collections::HashMap::new(),
+            iframes: std::collections::HashMap::new(),
             last_cascade: None,
         }
     }
@@ -2226,11 +2314,41 @@ impl Page {
     }
 
     /// Rasterize the whole page to a canvas of the given pixel size (CPU tier).
+    /// Every laid-out node's rect. Used by gates and by the automation surface — the same numbers the
+    /// painter works from, so a test cannot pass against a different set of boxes than the user sees.
+    pub fn node_rects(&self) -> std::collections::HashMap<manuk_dom::NodeId, manuk_layout::Rect> {
+        self.root_box.node_rects(&self.dom)
+    }
+
+    /// **The canvas background — `<body>`'s background propagates to the whole viewport.**
+    ///
+    /// CSS says the root element's background paints the *canvas*, and if the root has none, `<body>`'s
+    /// is propagated up to it. This is not a detail: it is why a dark-themed page is dark **all the way
+    /// down**, and not just as far as its content happens to reach.
+    ///
+    /// We hard-coded white. So any page whose content is shorter than the viewport — and any page with
+    /// `body { background: #111 }`, which is most of the dark web — painted its content on a correct
+    /// dark box floating in a **white void**. It was found through an `<iframe>`, whose child document
+    /// is exactly "a page shorter than its viewport", and it was never an iframe bug at all.
+    fn canvas_background(&self) -> Rgba {
+        let root = self.dom.root();
+        for sel in ["html", "body"] {
+            let Some(n) = self.dom.find_first(sel) else { continue };
+            let _ = root;
+            if let Some(bg) = self.styles.get(&n).and_then(|st| st.background_color) {
+                if bg.a > 0 {
+                    return bg;
+                }
+            }
+        }
+        Rgba::WHITE
+    }
+
     pub fn paint(&self, fonts: &FontContext, width: u32, height: u32) -> Canvas {
         let z = self.z_index_map();
         let clip = self.clip_map();
         CpuPainter::with_layers(fonts, &self.images, &z, &clip)
-            .render(&self.root_box, width, height, Rgba::WHITE)
+            .render(&self.root_box, width, height, self.canvas_background())
     }
 
     /// Rasterize the visible viewport with the content scrolled up by `scroll_y`.
@@ -2256,7 +2374,7 @@ impl Page {
             &self.root_box
         };
         CpuPainter::with_layers(fonts, &self.images, &z, &clip)
-            .render_scrolled(boxes, width, height, Rgba::WHITE, scroll_y)
+            .render_scrolled(boxes, width, height, self.canvas_background(), scroll_y)
     }
 
     /// All `<a href>` links, in document order, with hrefs resolved absolute.

@@ -306,3 +306,26 @@ and a capability that throws outranks capabilities used by ten times as many sit
 
 **Forms are 50% of the corpus, and they are the difference between a reader and a browser.** You cannot
 search, log in, or buy anything without them.
+
+## Tick 35 — `<iframe>`, and the white void
+
+| Pattern | % of the web | Status |
+|---|---|---|
+| `<iframe>` **box** | 23% | ✅ (tick 35) — **`iframe` was in NO replaced-element list**, so it laid out at **zero width**. The box was gone before we ever got as far as failing to fetch its document. Unsized is now **300×150**, the spec's default. |
+| `<iframe>` **content** | 23% | ✅ (tick 35) — the child document is fetched **after first paint**, rendered as a whole `Page` (its own DOM, cascade, layout **and JS context**) and blitted through the replaced-element path |
+| iframe **isolation** | — | ✅ **by construction** — a `PageContext` is per-`Page`, so a child's script has no path to the parent's DOM. It cannot reach it because it does not have it. Gated, so a refactor cannot turn a guarantee back into a coincidence. |
+| `<body>` background → **canvas** | **every dark site on the web** | ✅ (tick 35) — see below |
+| iframe **scrolling / live updates** | — | ❌ the embed renders as a bitmap; it does not scroll and does not update. A live nested browsing context is where this goes next. |
+
+### The bug that was not an iframe bug
+
+The child document painted **white**. Chasing it found this:
+
+> **`<body>`'s background never propagated to the canvas.** CSS says the root element's background paints
+> the whole canvas, and if the root has none, `<body>`'s is propagated up to it. We hard-coded `WHITE`.
+
+So **every dark-themed page whose content is shorter than the viewport** was painting its content on a
+correct dark box **floating in a white void**. It was found through an iframe only because a child
+document is, by definition, "a page shorter than its viewport" — and it was never an iframe bug at all.
+
+*The symptom names the wrong organ*, for the fourth time in this project.

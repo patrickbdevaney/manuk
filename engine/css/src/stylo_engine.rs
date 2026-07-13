@@ -511,7 +511,7 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
             .unwrap_or(20.0);
         s.width = crate::Dim::Px(cols * 8.0 + 13.0);
     }
-    if matches!(tag, "img" | "canvas" | "video" | "svg" | "object" | "embed") {
+    if matches!(tag, "img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe") {
         if s.display == crate::Display::Inline {
             s.display = crate::Display::InlineBlock;
         }
@@ -523,6 +523,19 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
         if s.height == crate::Dim::Auto {
             if let Some(h) = el.attr("height").and_then(crate::parse_dimension_attr_dim) {
                 s.height = h;
+            }
+        }
+        // **An unsized `<iframe>` is 300x150.** That is the spec's default, and it is not arbitrary
+        // trivia: an iframe has no intrinsic size to fall back on, so with no default it collapses to
+        // nothing and the embed is invisible *before* any question of content arises. `iframe` was not
+        // in this list at all, which is why it laid out at ZERO WIDTH — 23% of sites, and the box was
+        // gone before we ever got as far as failing to fetch its document.
+        if tag == "iframe" {
+            if s.width == crate::Dim::Auto {
+                s.width = crate::Dim::Px(300.0);
+            }
+            if s.height == crate::Dim::Auto {
+                s.height = crate::Dim::Px(150.0);
             }
         }
     }

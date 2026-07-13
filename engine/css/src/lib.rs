@@ -2095,13 +2095,24 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
     // its presentational width/height attributes (author CSS width/height still overrides,
     // as those are applied after UA defaults). Natural (intrinsic) sizing from the decoded
     // bitmap is layered on in the image pipeline.
-    if matches!(tag, "img" | "canvas" | "video" | "svg" | "object" | "embed") {
+    if matches!(tag, "img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe") {
         s.display = Display::InlineBlock;
         if let Some(w) = el.attr("width").and_then(parse_dimension_attr) {
             s.width = Dim::Px(w);
         }
         if let Some(h) = el.attr("height").and_then(parse_dimension_attr) {
             s.height = Dim::Px(h);
+        }
+        // An unsized `<iframe>` is 300x150 — the spec's default. It has no intrinsic size to fall back
+        // on, so without this it collapses to nothing and the embed is invisible before any question of
+        // its content arises. See the twin of this block in `stylo_engine`.
+        if tag == "iframe" {
+            if s.width == Dim::Auto {
+                s.width = Dim::Px(300.0);
+            }
+            if s.height == Dim::Auto {
+                s.height = Dim::Px(150.0);
+            }
         }
     }
 }

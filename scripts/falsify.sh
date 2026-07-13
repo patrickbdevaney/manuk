@@ -230,6 +230,19 @@ s = s.replace(
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+# G_IFRAME — take `iframe` back out of the replaced-element list, which is where it was NOT.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_IFRAME; then
+  mutate engine/css/src/stylo_engine.rs '
+s = s.replace(
+    "        if tag == \"iframe\" {\n            if s.width == crate::Dim::Auto {\n                s.width = crate::Dim::Px(300.0);\n            }",
+    "        if false {   // MUTATION: no iframe default size\n            if s.width == crate::Dim::Auto {\n                s.width = crate::Dim::Px(300.0);\n            }",
+    1)
+'
+  expect_red G_IFRAME cargo test -q -p manuk-page --features stylo,spidermonkey --test g_iframe
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 # G_RUNAWAY — remove the task-drain ceiling. A self-rescheduling timer must then hang the engine.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_RUNAWAY; then

@@ -119,6 +119,9 @@ enum NavEvent {
     /// `gen` guards against a stale response landing in a page the user has since navigated away
     /// from. This used to `block_on` the UI thread: a slow API call froze the whole browser.
     PageFetch { gen: u64, id: u32, status: u16, body: String },
+    /// An `<iframe>`'s document arrived — AFTER first paint, for the same reason images do. A heavy
+    /// third-party embed must not hold the parent's article hostage.
+    IframeReady { gen: u64, tab: manuk_compositor::TabId, node: usize, html: String, url: String },
     /// **Images arrived AFTER first paint.** The document is already on screen; these fill it in.
     ///
     /// The load path used to fetch and decode every image before the shell was handed anything, so the
@@ -968,6 +971,55 @@ impl App {
         // The document is on screen NOW. Only then do the deferred scripts run and the images load.
         self.run_deferred_scripts();
         self.spawn_image_load();
+        self.spawn_iframe_load();
+    }
+
+    /// Fetch each `<iframe>`'s document on a background task. **After first paint**, always: an iframe is
+    /// the single most likely thing on a page to be slow, and 23% of pages have one.
+    fn spawn_iframe_load(&mut self) {
+        let Some(page) = self.page.as_ref() else { return };
+        let frames = page.pending_iframes();
+        if frames.is_empty() {
+            return;
+        }
+        let gen = self.nav_gen;
+        let tab = self.tab_id;
+        for (node, url, _w, _h) in frames {
+            let proxy = self.proxy.clone();
+            let id = node.0;
+            self.rt.spawn(async move {
+                match manuk_net::fetch(&url).await {
+                    Ok(resp) => {
+                        let html = resp.decoded_text();
+                        let final_url = resp.final_url.to_string();
+                        let _ = proxy.send_event(NavEvent::IframeReady {
+                            gen, tab, node: id, html, url: final_url,
+                        });
+                    }
+                    // Named, never swallowed (G_SILENT_FAIL). An embed that silently shows nothing is
+                    // indistinguishable from a page that has no embed.
+                    Err(e) => tracing::warn!(%url, "iframe document fetch failed: {e}"),
+                }
+            });
+        }
+    }
+
+    /// An iframe's document arrived: render it into its box and repaint.
+    fn finish_iframe(
+        &mut self,
+        gen: u64,
+        tab: manuk_compositor::TabId,
+        node: usize,
+        html: String,
+        url: String,
+    ) {
+        if gen != self.nav_gen || tab != self.tab_id {
+            return; // a stale embed must not land in a page the user has navigated away from
+        }
+        if let Some(p) = self.page.as_mut() {
+            p.render_iframe(manuk_dom::NodeId(node), &html, &url, &self.fonts, 0);
+        }
+        self.rerender();
     }
 
     /// Run the page's `defer` / `async` / `module` scripts — **after** it has been painted — and
@@ -2723,6 +2775,9 @@ impl ApplicationHandler<NavEvent> for App {
             }
             NavEvent::Prewarmed { url, result } => self.finish_prewarm(url, result),
             NavEvent::ImagesReady { gen, tab, images } => self.finish_images(gen, tab, images),
+            NavEvent::IframeReady { gen, tab, node, html, url } => {
+                self.finish_iframe(gen, tab, node, html, url)
+            }
             NavEvent::PageFetch { gen, id, status, body } => {
                 // A response for a page the user has navigated away from must not be applied.
                 if gen != self.nav_gen {

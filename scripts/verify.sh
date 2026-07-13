@@ -88,6 +88,12 @@ head_ "G_LOAD · the page renders when its subresources never answer (METHODOLOG
 GL=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_load_budget 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GL" ]; then ok "load budget: $GL"; else bad "G_LOAD failed — a dead subresource can hold the document hostage"; fi
 
+head_ "G_IFRAME · an <iframe> has a box, shows its document, and cannot touch its parent"
+# 23% of the corpus, and usage == damage: `iframe` was in NO replaced-element list, so it laid out at
+# ZERO WIDTH — the box was gone before we ever got as far as failing to fetch its document.
+GIF=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_iframe 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GIF" ]; then ok "iframes: $GIF"; else bad "G_IFRAME failed — an embed does not render, blocks paint, or can reach its parent"; fi
+
 head_ "G_FORM · the browser must be WRITABLE — submit is cancellable, and forms serialize correctly"
 # Forms are 50% of the corpus. The load-bearing assertion is that `preventDefault()` on `submit` is
 # HONOURED: without it, every AJAX form on the web performs the full page navigation its author

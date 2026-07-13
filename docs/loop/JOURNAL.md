@@ -1803,3 +1803,39 @@ compositing the child's display list into the parent's, translated and clipped t
 The risks I expect, in order: **depth** (an iframe containing an iframe), **budget** (a heavy third-party
 embed must not hold the parent's paint hostage — the same lesson as G_FIRST_PAINT), and **isolation** (a
 child's script must not be able to reach the parent's DOM).
+
+**RESULT — tick 35.** `<iframe>` renders. 23% of the corpus, and the two bugs were:
+
+1. **`iframe` was in no replaced-element list, in either cascade path.** It laid out at **zero width** —
+   the box was gone before we ever got as far as failing to fetch its document. An unsized iframe is
+   **300×150** by spec, which is not trivia: an iframe has no intrinsic size to fall back on, so with no
+   default it collapses to nothing.
+2. Nothing fetched or rendered the child document. Now it is fetched **after first paint** (an iframe is
+   the single most likely thing on a page to be slow — G_FIRST_PAINT's rule, and an embed is exactly what
+   would break it), rendered as a whole `Page`, and blitted through the replaced-element path.
+
+**Isolation comes free from the architecture**, which is the nicest thing about this design: a
+`PageContext` is per-`Page`, so a child's script has no path to the parent's DOM — *it cannot reach it
+because it does not have it*. The gate pins that, because "it happens to be true" and "it is guaranteed"
+are different claims and only one survives a refactor.
+
+**Honest limits, stated rather than discovered later:** the embed is a **bitmap**. It renders; it does
+not scroll, and it does not update. That is a fraction of the work of a live nested browsing context, and
+a rendered embed you cannot scroll is enormously better than a 300×150 hole.
+
+---
+
+**And the bug that was not an iframe bug at all.**
+
+The child document painted white. Chasing that found:
+
+> **`<body>`'s background never propagated to the canvas.** CSS says the root element's background paints
+> the whole canvas, and if the root has none, `<body>`'s is propagated up to it. We hard-coded `WHITE`.
+
+**Every dark-themed page whose content is shorter than the viewport** was painting its content on a
+correct dark box **floating in a white void**. It has presumably been that way for the entire life of the
+project, on every dark site, and no gate asked — because every gate compared *boxes*, and the boxes were
+right. The pixels were wrong in the space between them.
+
+It was found through an iframe only because a child document is, by definition, "a page shorter than its
+viewport". *The symptom names the wrong organ* — fourth time.
