@@ -446,6 +446,24 @@ pub fn load_document(
     })
 }
 
+/// Run the scripts that do NOT block first paint — `defer`, `async`, and `type="module"` (deferred by
+/// default in every real browser, and what every Vite bundle ships as).
+///
+/// The shell calls this *after* the document is on screen. `Page::load` calls it immediately, so every
+/// gate sees the behaviour it has always seen.
+#[cfg(feature = "_sm")]
+pub fn run_deferred_scripts(
+    ctx: &PageContext,
+    dom: &mut manuk_dom::Dom,
+    layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<usize, JsError> {
+    with_runtime(|rt| {
+        ctx.run_deferred_scripts(rt, dom, layout, styles)
+            .map_err(|message| JsError { message })
+    })
+}
+
 /// Dispatch a trusted `ty` event to `node` in `ctx`'s document. Returns `true` if the engine
 /// should still perform the element's default action (no listener called `preventDefault`).
 /// Evaluate a dynamically fetched script in an existing page context.

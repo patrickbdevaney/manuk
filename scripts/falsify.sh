@@ -203,6 +203,19 @@ s = s.replace(
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+# G_DEFER — make every script block paint again, which is what it did before tick 32.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_DEFER; then
+  mutate engine/js/src/dom_bindings.rs '
+s = s.replace(
+    "            blocks_paint =\n                !is_module && el.attr(\"defer\").is_none() && el.attr(\"async\").is_none();",
+    "            blocks_paint = true;   // MUTATION: every script blocks paint again",
+    1)
+'
+  expect_red G_DEFER cargo test -q -p manuk-page --features stylo,spidermonkey --test g_defer
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 # G_RUNAWAY — remove the task-drain ceiling. A self-rescheduling timer must then hang the engine.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_RUNAWAY; then

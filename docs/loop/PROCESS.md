@@ -11,7 +11,7 @@ The rule it enforces:
 
 ## Why this file exists
 
-In a single session (ticks 25–29), the *process* — not the code — produced **sixteen** false or unusable
+In a single session (ticks 25–29), the *process* — not the code — produced **eighteen** false or unusable
 conclusions. Every one of them made the browser look better or worse than it is, and not one was a bug
 in the browser:
 
@@ -38,7 +38,10 @@ in the browser:
 | 15 | **A non-compiling mutation read as "gate goes red"** | `cargo test` returns non-zero for a compile error exactly as it does for a failing assertion. I wrote a mutation calling a function that did not exist; it would have "proven" `G_FIRST_PAINT` falsifiable while testing **nothing**. The tool that certifies the gates was itself uncertified. | `falsify.sh` **builds first**, and a build failure is reported as **FALSIFIER BROKEN**, loudly — never as evidence about the gate |
 | 16 | **`G_FIRST_PAINT`'s first version was vacuous** | It called `Page::load`, which has never fetched an image in its life. It would have passed before the fix, after the fix, and with the fix reverted. The images were on the paint path in exactly one place — `prefetch_document`, the function the *shell* calls — and the gate was not testing it. | The gate now drives `prefetch_document` over real HTTP, and additionally asserts the images are **still pending** (deferred, not dropped — "fast" must not mean "never loads them") |
 
-Eight of the sixteen were **found by an accounting check, not by the gate that was supposed to catch them**.
+| 17 | **Two JS tests in one binary segfault NONDETERMINISTICALLY** | `g_defer` had two `#[test]`s, each standing up a SpiderMonkey context. The leaked per-process runtime tears down messily when they co-run: the binary passed, then segfaulted, then passed. **A flaky gate is worse than a missing one** — it gets ignored, and an ignored gate protects nothing. | One test per JS gate binary, on purpose. `js_conformance` has been one giant test for exactly this reason, and the reason is now written where the next person will look |
+| 18 | **A split behaviour change was applied to 2 of its 3 call sites** | `Page::load` and `from_prefetched` got the new deferred pass; `load_async` did not. **Every SPA in the suite silently stopped mounting** — a Vite bundle is a module, deferred by default, nothing ran the deferred pass, and the root element sat there correctly sized and empty. | `G_DEFER` asserts `Page::load` still runs **every** script. The rule: *every path that used to run all the scripts must still run all the scripts.* Exactly one caller may split them — the shell — because it is the only one with a human waiting |
+
+Eight of the eighteen were **found by an accounting check, not by the gate that was supposed to catch them**.
 
 Defect #14 is the one to be frightened of. Every other entry here produced a *wrong number*. This one
 produced **wrong code, in the working tree, in a Bar 0 path**, and the failure it caused was

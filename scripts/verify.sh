@@ -88,6 +88,14 @@ head_ "G_LOAD · the page renders when its subresources never answer (METHODOLOG
 GL=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_load_budget 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GL" ]; then ok "load budget: $GL"; else bad "G_LOAD failed — a dead subresource can hold the document hostage"; fi
 
+head_ "G_DEFER · defer/async/module must not block paint — and must still RUN"
+# `defer` and `is_async` were parsed and used for NOTHING. Every script blocked first paint, including
+# `type=module`, which is deferred by DEFAULT in every real browser and is what every Vite bundle ships
+# as. The second half of this gate is the important one: when the split first landed I forgot it on
+# `load_async` and every SPA in the suite silently stopped mounting.
+GDF=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_defer 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GDF" ]; then ok "defer/async: $GDF"; else bad "G_DEFER failed — a deferred script is blocking paint, or is never running at all"; fi
+
 head_ "G_FIRST_PAINT · the document reaches the screen without waiting for its images"
 # nytimes.com: the document was parsed, cascaded and laid out in 1.7s — and the user saw it at 14s,
 # because the load path fetched every image first. A browser that does this feels broken while every

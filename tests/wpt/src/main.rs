@@ -120,13 +120,21 @@ fn run() {
         let loaded = rt.block_on(manuk_page::prefetch_document(&url)).expect("prefetch");
         let t_fetch = t0.elapsed().as_secs_f64() * 1000.0;
         let page = match loaded {
-            manuk_page::Loaded::Prefetched(pre) => manuk_page::Page::from_prefetched(*pre, &fonts, 1200.0),
+            // The SHELL's path: blocking scripts only. The deferred ones run after paint.
+            manuk_page::Loaded::Prefetched(pre) => {
+                manuk_page::Page::from_prefetched_blocking_only(*pre, &fonts, 1200.0)
+            }
             manuk_page::Loaded::Document { html, final_url } => {
                 manuk_page::Page::load(&html, &final_url, &fonts, 1200.0)
             }
             _ => panic!("not a document"),
         };
         let t_paint = t0.elapsed().as_secs_f64() * 1000.0;
+        // Everything below happens with the document already on the screen.
+        let mut page = page;
+        let t2 = std::time::Instant::now();
+        let n_def = page.run_deferred_scripts(&fonts, 1200.0);
+        let t_def = t2.elapsed().as_secs_f64() * 1000.0;
         // Now the images, which in a real browser arrive AFTER the page is on screen.
         let urls = page.pending_image_urls();
         let n_img = urls.len();
@@ -135,10 +143,9 @@ fn run() {
         let t_img = t1.elapsed().as_secs_f64() * 1000.0;
         println!(
             "  FIRST PAINT {t_paint:7.1}ms  (fetch+parse {t_fetch:7.1}ms)   \
-             then {n_img} images in {t_img:7.1}ms ({} decoded)   nodes {}",
-            imgs.len(),
-            page.dom().descendants(page.dom().root()).count()
+             then {n_def} deferred scripts in {t_def:7.1}ms, {n_img} images in {t_img:7.1}ms",
         );
+        let _ = imgs.len();
         return;
     }
 

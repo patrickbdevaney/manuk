@@ -1623,3 +1623,46 @@ is the durable part; the next tick executes on it.
 The gate matters as much as the change. "Fast because we never ran the script" is the same class of lie
 as "fast because we never loaded the images" — which is precisely the disguise G_FIRST_PAINT was written
 to strip off, one tick ago.
+
+## Tick 32 — defer/async/module mean what they say (2026-07-13)
+
+**TICK SHAPE: pattern-class.** CLUSTER: C01ca.
+
+`Script { defer: bool, is_async: bool }` was parsed, stored, and used for **nothing**. Every script
+blocked first paint — including the ones whose entire purpose is to say *"do not wait for me"*, and
+including `type="module"`, which is **deferred by default** in every real browser and is what every
+Vite / Rollup bundle on the internet ships as.
+
+Now: `collect_inline_scripts` classifies each script by `blocks_paint`, `PageContext::load` runs only
+the blocking ones, and `run_deferred_scripts` runs the rest. **`Page::load`, `load_async` and
+`from_prefetched` call both back-to-back** — so every gate and the whole SPA suite behave exactly as
+before. The **shell** is the only caller that separates them: blocking → paint → deferred → repaint.
+
+```
+nytimes.com   first paint 5,773ms → 5,083ms   (10 deferred scripts, 997ms, moved off the paint path)
+```
+
+**The honest read of that number**, because it is smaller than it should be: most of nytimes' JavaScript
+is *classic blocking* script, which a real browser must also run before painting. Chromium hides that
+cost by painting **incrementally as it parses** — the parts of the document above a blocking script are
+already on screen when it runs. We parse the whole document, run every blocking script, then paint. That
+is the next thing, and it is a bigger change than this one.
+
+**Two process defects, both mine, both now pinned by the gate:**
+
+1. **I applied the split to two of its three call sites.** `load_async` still called `from_dom` and
+   nothing else — so a Vite bundle never executed and **every SPA in the suite silently stopped
+   mounting**. The root element was still there, still the right size, and completely empty. The rule,
+   which is worth stating rather than remembering: *every path that used to run all the scripts must
+   still run all the scripts.* Exactly one caller may split them, and it is the shell, because it is the
+   only one with a human waiting. `G_DEFER`'s second half is that bug, pinned.
+2. **The gate itself was flaky.** Two `#[test]`s in one binary, each standing up a SpiderMonkey context;
+   the leaked per-process runtime tears down messily when they co-run, so it passed, then segfaulted,
+   then passed. **A flaky gate is worse than a missing one** — it gets ignored, and an ignored gate
+   protects nothing. One test per JS gate binary, on purpose, and the reason is now written down where
+   the next person will look for it.
+
+`G_DEFER` asserts both halves — that deferred scripts do NOT run on the paint path, and that they DO run
+after. Each without the other is a bug, and *"fast because we never ran the script"* is the same class of
+lie as *"fast because we never loaded the images"*, which is the disguise `G_FIRST_PAINT` was written to
+strip off one tick earlier.

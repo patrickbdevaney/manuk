@@ -894,8 +894,38 @@ impl App {
         self.handle_history_ops();
         self.pump_messages();
         self.rerender();
-        // The document is on screen NOW. Only then do we go and get the images.
+        // The document is on screen NOW. Only then do the deferred scripts run and the images load.
+        self.run_deferred_scripts();
         self.spawn_image_load();
+    }
+
+    /// Run the page's `defer` / `async` / `module` scripts — **after** it has been painted — and
+    /// repaint if they changed anything.
+    ///
+    /// This is synchronous on the UI thread, which is where script execution has to happen (the JS
+    /// context owns the DOM). It is not free — on a news front page it is seconds of ad and analytics
+    /// JavaScript — but the user is now *reading the article* while it runs, instead of watching a blank
+    /// window, and that is the entire point. Making the execution itself yield is a separate problem
+    /// with a separate name (a cancellable long task), and it is not this one.
+    fn run_deferred_scripts(&mut self) {
+        let (w, _h) = match &self.gpu {
+            Some(g) => (g.config.width, g.config.height),
+            None => (self.width, 768),
+        };
+        let ran = match self.page.as_mut() {
+            Some(p) => p.run_deferred_scripts(&self.fonts, w as f32),
+            None => 0,
+        };
+        if ran == 0 {
+            return;
+        }
+        if let Some(p) = self.page.as_ref() {
+            self.viewport.content_height = p.content_height;
+        }
+        self.pump_fetches();
+        self.handle_history_ops();
+        self.pump_messages();
+        self.rerender();
     }
 
     /// Fetch the page's images on a background task and apply them when they land.
@@ -957,7 +987,14 @@ impl App {
     /// then external CSS) *on the UI thread*, freezing the window for the whole round-trip. That is
     /// what made the reload button lag.
     fn build_prefetched(&self, pre: manuk_page::Prefetched, w: u32) -> Page {
-        let mut page = Page::from_prefetched(pre, &self.fonts, w as f32);
+        // **Only the scripts that BLOCK paint.** The deferred ones — `defer`, `async`, and
+        // `type="module"` (deferred by default in every real browser, and what every Vite bundle ships
+        // as) — run in `spawn_deferred_scripts`, AFTER this page is on the screen.
+        //
+        // Measured on nytimes.com: ~1MB of JavaScript was executing while the window sat blank, with the
+        // document already parsed, cascaded and laid out. That JS has no business being between the user
+        // and the article, and no browser a person would use puts it there.
+        let mut page = Page::from_prefetched_blocking_only(pre, &self.fonts, w as f32);
         page.relayout_zoomed(&self.fonts, w as f32, self.zoom);
         page
     }

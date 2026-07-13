@@ -704,7 +704,16 @@ pub fn load_budget() -> std::time::Duration {
 impl Page {
     /// Parse + style + lay out `html` for a viewport of `viewport_width` px.
     pub fn load(html: &str, final_url: &str, fonts: &FontContext, viewport_width: f32) -> Page {
-        Page::from_dom(manuk_html::parse(html), final_url, fonts, viewport_width)
+        let mut page = Page::from_dom(manuk_html::parse(html), final_url, fonts, viewport_width);
+        // **Both passes, back to back.** `from_dom` runs only the scripts that block first paint; the
+        // deferred ones (`defer`, `async`, `type=module`) run here. So this function behaves exactly as
+        // it always has — every gate, and the whole SPA suite, sees all scripts run before it asserts
+        // anything.
+        //
+        // The SHELL is the only caller that separates them: blocking → paint → deferred → repaint. That
+        // is the only place a human is waiting, and it is the only place the difference is visible.
+        page.run_deferred_scripts(fonts, viewport_width);
+        page
     }
 
     /// As [`load`](Self::load), but first **fetches external `<script src>`** so they run
@@ -733,6 +742,17 @@ impl Page {
         #[cfg(feature = "spidermonkey")]
         fetch_external_scripts(&mut dom, final_url).await;
         let mut page = Page::from_dom(dom, final_url, fonts, viewport_width);
+        // **Both passes, back to back** — see `load`. `from_dom` runs only the scripts that block first
+        // paint; the deferred ones (`defer`, `async`, `type=module`) run here.
+        //
+        // Missing this call broke every SPA in the suite the moment the split landed, and did it
+        // *silently*: a Vite bundle is `type="module"`, which is deferred by default, so with nothing
+        // running the deferred pass the app simply never mounted. The root element was still there, the
+        // right size, empty. That is the exact shape of failure this project keeps re-learning — so the
+        // rule is worth stating rather than remembering: **every path that used to run all the scripts
+        // must still run all the scripts.** There is exactly one caller allowed to split them, and it is
+        // the shell, because it is the only one with a human waiting.
+        page.run_deferred_scripts(fonts, viewport_width);
 
         // **The enhancement phases run under the load budget, exactly as they do in `finish_loading`.**
         //
@@ -880,6 +900,46 @@ impl Page {
         .await;
         self.image_attempts.extend(tried);
         self.apply_images(images, fonts, viewport_width)
+    }
+
+    /// **Run the scripts that do not block first paint** — `defer`, `async`, `type="module"`.
+    ///
+    /// The shell calls this *after* the document is on screen; `Page::load` and `from_prefetched` call
+    /// it immediately, so every gate and the whole SPA suite see exactly the behaviour they always have.
+    ///
+    /// Returns how many scripts ran. A non-zero count means the tree may have changed, so the cascade
+    /// and layout are redone — the same thing the blocking pass already does, for the same reason.
+    #[cfg(feature = "spidermonkey")]
+    pub fn run_deferred_scripts(&mut self, fonts: &FontContext, viewport_width: f32) -> usize {
+        let Some(ctx) = self.js.as_ref() else { return 0 };
+        let rects: std::collections::HashMap<manuk_dom::NodeId, [f32; 4]> = self
+            .root_box
+            .node_rects(&self.dom)
+            .into_iter()
+            .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+            .collect();
+        let ran = match manuk_js::run_deferred_scripts(ctx, &mut self.dom, &rects, &self.styles) {
+            Ok(n) => n,
+            Err(e) => {
+                // Surfaced, never swallowed — G_SILENT_FAIL. A deferred script that dies silently is
+                // how "the app renders nothing and throws nothing" happens, and that cost several ticks.
+                tracing::warn!("deferred scripts: {e}");
+                0
+            }
+        };
+        if ran > 0 {
+            tracing::debug!(scripts = ran, "executed deferred page scripts");
+            let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
+            self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
+            self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            self.content_height = self.root_box.rect.height;
+        }
+        ran
+    }
+
+    #[cfg(not(feature = "spidermonkey"))]
+    pub fn run_deferred_scripts(&mut self, _fonts: &FontContext, _viewport_width: f32) -> usize {
+        0
     }
 
     /// **The images this page still wants** — resolved URLs, distinct, none already resolved.
@@ -1284,6 +1344,13 @@ impl Page {
     /// **zero network calls**, so the UI thread never blocks. This is the path the shell uses for
     /// every navigation and reload.
     pub fn from_prefetched(pre: Prefetched, fonts: &FontContext, viewport_width: f32) -> Page {
+        // Both passes, back to back — see `load`. Only the shell separates them.
+        let mut page = Page::from_prefetched_inner(pre, fonts, viewport_width);
+        page.run_deferred_scripts(fonts, viewport_width);
+        page
+    }
+
+    fn from_prefetched_inner(pre: Prefetched, fonts: &FontContext, viewport_width: f32) -> Page {
         let Prefetched { dom, final_url, css, images, masks } = pre;
         let mut page = Page::from_dom(dom, &final_url, fonts, viewport_width);
         if !css.is_empty() {
@@ -1323,6 +1390,20 @@ impl Page {
             }
         }
         page
+    }
+
+    /// **DEBT-1 / tick 31.** As [`from_prefetched`](Self::from_prefetched), but stops at first paint:
+    /// only the scripts that BLOCK paint have run. The caller paints, then calls
+    /// [`run_deferred_scripts`](Self::run_deferred_scripts).
+    ///
+    /// This is the shell's path, and it is the only one that separates the two. `from_prefetched` runs
+    /// both back-to-back so that nothing else in the codebase has to know this distinction exists.
+    pub fn from_prefetched_blocking_only(
+        pre: Prefetched,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> Page {
+        Page::from_prefetched_inner(pre, fonts, viewport_width)
     }
 
     /// Build a page from an already-parsed [`Dom`] (shared by [`load`](Self::load) and

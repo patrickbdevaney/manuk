@@ -3103,7 +3103,7 @@ pub fn run_scripts(
     }
 
     let mut ran = 0usize;
-    for (src, is_module) in &scripts {
+    for (_node, src, is_module, _blocks) in &scripts {
         if *is_module {
             // `<script type=module>`: compile + link + evaluate as an ES module, so
             // import/export syntax is valid and self-contained modules run.
@@ -3140,6 +3140,10 @@ pub fn run_scripts(
 /// cache a raw `*mut Dom`. A navigation builds a fresh `PageContext` over the new document.
 pub struct PageContext {
     global: RootedTraceableBox<Heap<*mut JSObject>>,
+    /// Scripts already executed, by node. The blocking pass and the deferred pass are disjoint by
+    /// construction — but a blocking script can *insert* a script, and a page can be re-entered, so
+    /// "I have run this one" is a fact worth storing rather than a property worth assuming.
+    ran: std::cell::RefCell<std::collections::HashSet<NodeId>>,
 }
 
 impl PageContext {
@@ -3180,29 +3184,80 @@ impl PageContext {
             );
         }
 
+        // **Only the scripts that BLOCK PAINT run here.**
+        //
+        // A classic `<script>` with neither `defer` nor `async` blocks the parser, and so it must run
+        // before the document can be painted — that is the spec, and pages depend on it (a blocking
+        // script that writes into the DOM must have done so before anything is measured or shown).
+        //
+        // Everything else — `defer`, `async`, and `type="module"` (deferred by DEFAULT) — runs in
+        // `run_deferred_scripts`, AFTER the shell has put the document on screen. That is what a real
+        // browser does, and it is the difference between nytimes appearing in a second and appearing in
+        // six: ~1MB of its JavaScript has no business being between the user and the article.
+        let ran_set: std::collections::HashSet<NodeId> = std::collections::HashSet::new();
+        let ctx = Self {
+            global: {
+                let boxed = RootedTraceableBox::new(Heap::default());
+                boxed.set(global.get());
+                boxed
+            },
+            ran: std::cell::RefCell::new(ran_set),
+        };
+
         let mut ran = 0usize;
-        for (src, is_module) in collect_inline_scripts(dom) {
-            if is_module {
-                if !unsafe { run_module(raw_cx, &src) } {
-                    tracing::warn!(error = %pending_exception(raw_cx), "a page module failed");
-                }
-            } else {
-                rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
-                let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"inline.js".to_owned(), 1);
-                if evaluate_script(runtime.cx(), global.handle(), &src, rval.handle_mut(), opts).is_err() {
-                    tracing::warn!(error = %pending_exception(raw_cx), "a page <script> threw");
-                }
+        for (node, src, is_module, blocks_paint) in collect_inline_scripts(dom) {
+            if !blocks_paint {
+                continue;
             }
+            run_one_script(runtime, raw_cx, global.handle(), &src, is_module);
+            ctx.ran.borrow_mut().insert(node);
             ran += 1;
         }
         // Deferred: load-time fetch/XHR stays queued for the host to perform (see run_deferred);
         // resolving inline would settle every request with status 0 (no real network here).
         crate::event_loop::run_deferred(runtime, global.handle())?;
 
-        // Promote the stack-rooted global to a persistent root so it outlives this call.
-        let boxed = RootedTraceableBox::new(Heap::default());
-        boxed.set(global.get());
-        Ok((Self { global: boxed }, ran))
+        Ok((ctx, ran))
+    }
+
+    /// **The scripts that do NOT block paint** — `defer`, `async`, and `type="module"`.
+    ///
+    /// Called by the shell *after* the document is on screen, and by `Page::load` immediately after
+    /// the blocking pass (so every gate and the whole SPA suite see exactly the behaviour they saw
+    /// before: all scripts run, in order, before anything is asserted).
+    ///
+    /// Also picks up any script a blocking script *inserted* — a real browser runs those too — which is
+    /// why the executed set is tracked by node rather than assumed from the classification.
+    pub fn run_deferred_scripts(
+        &self,
+        runtime: &mut Runtime,
+        dom: &mut Dom,
+        layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    ) -> Result<usize, String> {
+        set_view_maps(layout, styles);
+        set_current_dom(dom as *mut Dom);
+
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+
+        let pending: Vec<(NodeId, String, bool)> = collect_inline_scripts(dom)
+            .into_iter()
+            .filter(|(n, _, _, _)| !self.ran.borrow().contains(n))
+            .map(|(n, src, is_module, _)| (n, src, is_module))
+            .collect();
+
+        let mut ran = 0usize;
+        for (node, src, is_module) in pending {
+            run_one_script(runtime, raw_cx, global.handle(), &src, is_module);
+            self.ran.borrow_mut().insert(node);
+            ran += 1;
+        }
+        if ran > 0 {
+            crate::event_loop::run_deferred(runtime, global.handle())?;
+        }
+        Ok(ran)
     }
 
     /// Dispatch a trusted `ty` event (e.g. `"click"`, `"input"`) to `node`, running its
@@ -3596,14 +3651,54 @@ unsafe extern "C" fn module_resolve_hook(
 
 /// The inline JavaScript sources of a document, in tree order. Skips `src=` scripts and
 /// non-JS `type`s (e.g. `application/json`).
-fn collect_inline_scripts(dom: &Dom) -> Vec<(String, bool)> {
+/// Run one script. **One place**, called by both passes — because two copies of "how to run a script"
+/// is how the blocking path and the deferred path silently stop agreeing about modules, or about which
+/// exceptions are reported.
+fn run_one_script(
+    runtime: &mut Runtime,
+    raw_cx: *mut mozjs::jsapi::JSContext,
+    global: mozjs::rust::HandleObject,
+    src: &str,
+    is_module: bool,
+) {
+    if is_module {
+        if !unsafe { run_module(raw_cx, src) } {
+            tracing::warn!(error = %pending_exception(raw_cx), "a page module failed");
+        }
+    } else {
+        rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
+        let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"inline.js".to_owned(), 1);
+        if evaluate_script(runtime.cx(), global, src, rval.handle_mut(), opts).is_err() {
+            tracing::warn!(error = %pending_exception(raw_cx), "a page <script> threw");
+        }
+    }
+}
+
+/// Every runnable `<script>` in the document, with the two facts that decide *when* it runs.
+///
+/// Returns `(node, source, is_module, blocks_paint)`.
+///
+/// **`blocks_paint` was the whole bug.** `defer` and `async` were parsed into a struct in
+/// `manuk_page` and then used for **nothing** — every script ran before first paint, including the ones
+/// whose entire purpose is to say *"do not wait for me"*. And `type="module"` is **deferred by default**
+/// in every real browser, which is what every Vite/Rollup bundle on the internet ships as. Measured on
+/// nytimes.com: ~1MB of JavaScript executing while the window sat blank, with the document already
+/// parsed, cascaded and laid out.
+///
+/// The spec is simple and this follows it: a classic `<script>` with neither `defer` nor `async` blocks;
+/// everything else does not.
+fn collect_inline_scripts(dom: &Dom) -> Vec<(NodeId, String, bool, bool)> {
     let mut out = Vec::new();
     for n in dom.descendants(dom.root()) {
         if dom.tag_name(n) != Some("script") {
             continue;
         }
         let mut is_module = false;
+        let mut blocks_paint = true;
         if let Some(el) = dom.element(n) {
+            // A `src` that is still present means the fetch failed — there is nothing to run.
+            // (`fetch_external_scripts` inlines the text and REMOVES `src`, leaving `defer`/`async`
+            // and `type` in place, which is exactly what we need to classify it here.)
             if el.attr("src").is_some() {
                 continue;
             }
@@ -3616,10 +3711,13 @@ fn collect_inline_scripts(dom: &Dom) -> Vec<(String, bool)> {
             if !is_js {
                 continue;
             }
+            // A module is deferred by DEFAULT. `defer` and `async` both mean "do not block me".
+            blocks_paint =
+                !is_module && el.attr("defer").is_none() && el.attr("async").is_none();
         }
         let src = dom.text_content(n);
         if !src.trim().is_empty() {
-            out.push((src, is_module));
+            out.push((n, src, is_module, blocks_paint));
         }
     }
     out

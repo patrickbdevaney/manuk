@@ -257,3 +257,21 @@ parsed, cascaded and laid out — everything needed to paint — **in 1.7s**, an
 Gated by **G_FIRST_PAINT**, which drives the shell's actual path and additionally asserts the images are
 still *pending* — because "fast" achieved by never loading them is a different bug wearing this one's
 success as a disguise.
+
+## Tick 32 — `defer` / `async` / `type=module` mean what they say
+
+| Pattern | % of the web that uses it | Status |
+|---|---|---|
+| `<script defer>` | very common | ✅ (tick 32) — runs after paint |
+| `<script async>` | ubiquitous (every analytics/ad tag) | ✅ (tick 32) |
+| `<script type="module">` | **every Vite/Rollup/esbuild bundle** — deferred by DEFAULT | ✅ (tick 32) |
+| Classic blocking `<script>` | ubiquitous | ✅ still blocks, as the spec requires |
+| Incremental paint *during* parse (paint what is above a blocking script) | how Chromium hides blocking-script cost | ❌ **not done** — we parse the whole document, run every blocking script, then paint |
+
+`defer` and `is_async` had been parsed into a struct and used for **nothing**. nytimes: 5,773ms → 5,083ms
+to first paint, with 10 deferred scripts (997ms) moved off the paint path.
+
+**The honest read of that number:** most of nytimes' JavaScript is *classic blocking* script, which a
+real browser must also run before painting — it just paints **incrementally as it parses**, so the parts
+above a blocking script are already on screen. That is the next thing, and it is a bigger change than
+this one.

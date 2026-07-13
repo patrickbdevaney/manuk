@@ -8,10 +8,10 @@
 > filesystem, git, the crawl output or the verify receipt.
 
 ```
-TICK:              31
+TICK:              32
 LAST_AUDIT_TICK:   29          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
-LAST_WALL_TIME:    58s
+LAST_WALL_TIME:    64s
 ORACLE_CORPUS:     265 sites
 ORACLE_CRAWLED:    265 sites, 616 clusters  → docs/loop/CLUSTERS.md
 ORACLE_HANGS:      9   ← Bar 0, on OUR clock (manuk_ms > 30s). Outranks every visual cluster.
