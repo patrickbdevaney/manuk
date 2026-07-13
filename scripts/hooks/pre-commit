@@ -94,7 +94,21 @@ fi
 # in awk, and a word-boundary that silently matches nothing makes the hook report "no shape declared"
 # for a tick that declared one perfectly well. The trailing space is also what keeps "## Tick 1 " from
 # matching "## Tick 19".
-ENTRY=$(awk -v t="## Tick $TICK " 'index($0,t)==1 {p=1} p && index($0,"## Tick ")==1 && index($0,t)!=1 {exit} p' docs/loop/JOURNAL.md)
+#
+# **The LAST matching entry, not the first.** The journal is append-only and the tick counter has been
+# reset at least once, so `## Tick 38` exists twice — once from an earlier epoch (2026-07-12) and once
+# from now. Taking the FIRST match handed the hook a stale entry from a different numbering scheme, which
+# declared no shape (the rule did not exist yet) — so it refused a tick that had declared its shape
+# perfectly well, and blamed the author.
+#
+# A check that fails closed on its own bug is still a broken check. The current entry for tick N is the
+# most recent one, always: that is what "append-only" means.
+ENTRY=$(awk -v t="## Tick $TICK " '
+  index($0,t)==1 { buf = $0 "\n"; p = 1; next }
+  p && index($0,"## Tick ")==1 { p = 0; next }
+  p { buf = buf $0 "\n" }
+  END { printf "%s", buf }
+' docs/loop/JOURNAL.md)
 SHAPE=$(echo "$ENTRY" | grep -oiP 'TICK SHAPE[^:]*:\s*\**\K[a-z-]+' | head -1 | tr 'A-Z' 'a-z')
 case "$SHAPE" in
   pattern-class|infrastructure)

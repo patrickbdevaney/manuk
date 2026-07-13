@@ -2316,6 +2316,13 @@ impl Page {
     /// Rasterize the whole page to a canvas of the given pixel size (CPU tier).
     /// Every laid-out node's rect. Used by gates and by the automation surface — the same numbers the
     /// painter works from, so a test cannot pass against a different set of boxes than the user sees.
+    /// The computed style of a node, if the cascade produced one. `None` means **no style at all** —
+    /// itself a finding: a node with no computed style falls back to a default, so a `<div>` that should
+    /// be `block` (or `flex`) renders as `inline`.
+    pub fn styles_of(&self, n: manuk_dom::NodeId) -> Option<&manuk_css::ComputedStyle> {
+        self.styles.get(&n)
+    }
+
     pub fn node_rects(&self) -> std::collections::HashMap<manuk_dom::NodeId, manuk_layout::Rect> {
         self.root_box.node_rects(&self.dom)
     }

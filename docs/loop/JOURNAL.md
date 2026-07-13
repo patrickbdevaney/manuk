@@ -412,7 +412,7 @@ corpus and the probes bought. Tier 3's real blockers (codec licensing, GPU drive
 are external-integration problems. Reading Chromium's approach to them substitutes for none of the
 licensing or certification work, and no verification fan-out touches them at all.
 
-## Tick 38 (2026-07-12) — the differential oracle is live, and it changed what "next" means
+## Tick 38 [EPOCH 1] (2026-07-12) — the differential oracle is live, and it changed what "next" means
 
 **Discovery method: THE ORACLE** (first tick where that is true).
 
@@ -1955,3 +1955,49 @@ here. None of them get to be trusted on sight, including the ones I write to enf
 **Next: the 27% `display` disagreement** — 33,825 nodes where we render the node but disagree with Chrome
 about whether it is *shown*. Unlike geometry, that is a **real** difference: a node we hide that Chrome
 shows is content the user cannot see.
+
+## Tick 38 — what the 27% `display` gap actually is (2026-07-13)
+
+**TICK SHAPE: pattern-class.** CLUSTER: C01ca. Measured before touching anything, and the measurement
+overturned my hypothesis twice.
+
+**Hypothesis 1 — "the load budget is cutting off stylesheets on slow sites."** *Wrong.* The sites losing
+flex (deviantart, aljazeera, vimeo, techcrunch, replit) are all slow, and aljazeera runs 35s against a 12s
+budget, so this was a good guess. Tested it: **zero stylesheet failures, zero budget expiries.** The CSS
+is applied. A tempting story, killed in one command.
+
+**Hypothesis 2 — "the scripts are destroying the DOM."** Found by accident, and *true for exactly one
+site*:
+
+```
+aljazeera.com   parse → 2,591 elements   after scripts → 141   (5%)   ← SCRIPTS DESTROYED THE PAGE
+github, HN, bbc, wikipedia, techcrunch, vimeo, deviantart, replit → 100% retained
+```
+
+aljazeera is server-rendered; something in its boot **clears the container** and our client-side re-render
+does not put it back, leaving 5% of the document. That is severe and it is *one site so far* — it is the
+**hydration** gap, and it is now a named, reproducible case rather than an unmeasured unknown.
+
+**And the 27% `display` gap is mostly not what it looks like.** Split by whether it is *real*:
+
+```
+  11,324   we lose flex/grid on this node      ← REAL. The biggest one.
+  13,736   other layout-mode mismatch
+   4,299   representational: replaced elements ← NOISE. Chrome computes `inline` for <img>/<svg>;
+                                                 we use `inline-block` to make them atomic. Same
+                                                 rendering, different label.
+   2,433   we SHOW what Chrome HIDES           ← REAL. Extra content.
+   2,033   we HIDE what Chrome SHOWS           ← REAL, and the WORST: content the user cannot see.
+```
+
+**The cascade is not broken.** deviantart computes `Flex` on 915 nodes, `Grid` on 51, and has **zero**
+nodes with no style. So flex is not being lost wholesale — it is being lost on *particular nodes*, which
+means **selector matching**, not cascade plumbing. That is a completely different investigation than the
+one I would have started an hour ago.
+
+**Next, in order, and each is now a specific thing rather than a percentage:**
+1. **`we HIDE what Chrome SHOWS` (2,033)** — smallest and worst. Content the user cannot see.
+2. **flex/grid lost on specific nodes (11,324)** — a selector-matching question. `:is()`, `:where()`,
+   attribute selectors, CSS nesting are the suspects.
+3. **aljazeera's hydration wipe** — one site, 95% of a document, and the first real hydration failure with
+   a name.
