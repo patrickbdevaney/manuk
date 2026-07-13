@@ -1562,3 +1562,64 @@ load path silently puts the images back on it.
 
 > **A gate must exercise the path the user waits on.** Measuring the wrong function is how "the browser
 > feels slow" survives a green benchmark: the number was real, it was just a number about something else.
+
+## Tick 31 — every script blocks first paint, including the ones that say not to (2026-07-13)
+
+**TICK SHAPE: pattern-class.** CLUSTER: C01ca.
+
+First paint on nytimes is **5,773ms**, of which fetch+parse is **1,195ms**. The other ~4.6 seconds is
+CPU inside `from_prefetched`. Measured, before theorising:
+
+```
+                nodes   parse   cascade   layout   paint   TOTAL
+nytimes          7482   16.1     26.1     245.4    54.0    341.8ms      ← the whole pipeline
+nytimes (scripts stripped)  7415   11.6     26.6     242.2    45.9    326.4ms
+```
+
+**The render pipeline is 342ms and it barely moves when the scripts are removed.** The document is
+1,433KB with scripts and 447KB without — so **~1MB of JavaScript is being parsed and executed before a
+single pixel reaches the screen**, and that is the 4.6 seconds.
+
+And here is the part that makes it a *bug* rather than a *cost*:
+
+```rust
+Script { defer: bool, is_async: bool },     // engine/page/src/lib.rs:571
+```
+
+**`defer` and `is_async` are parsed, stored, and never used for anything.** Nothing schedules on them.
+Every script blocks first paint — including the ones whose entire purpose is to say *"do not wait for
+me"*, and including `type="module"`, which is **deferred by default in every real browser** and is what
+every Vite/Rollup bundle on the internet ships as.
+
+A real browser paints the document and *then* runs the deferred scripts. That is not an optimisation, it
+is the specified behaviour, and it is why a news site appears instantly in Chrome and then fills in.
+
+**The fix is a two-phase script execution:** blocking scripts (classic, no `defer`, no `async`) run
+before paint, exactly as the spec requires; everything else — `defer`, `async`, `type=module` — runs
+after, and the page repaints. `Page::load` (the gate path) will still run both, so the SPA suite is
+unaffected: it asserts that the app eventually mounts, and it still will.
+
+Expected: nytimes' first paint from ~5.8s to ~1.5s, which is the document's own cost and nothing else's.
+
+**Checkpointing the finding, not half the change.** The split lives in `manuk_js::load_document`, which
+today walks the DOM and executes every `<script>` it finds, inside `from_dom`. Splitting it is a careful
+change to the JS entry point (scripts must be marked executed so a deferred pass cannot re-run a blocking
+one), and starting it at the end of a long session is how a tree ends up half-migrated. The measurement
+is the durable part; the next tick executes on it.
+
+**The plan, precisely:**
+
+1. `manuk_js::load_document(dom, url, rects, styles, Phase::Blocking)` — runs only classic scripts with
+   neither `defer` nor `async` nor `type=module`. Each executed script is marked, so nothing runs twice.
+2. `Page::run_deferred_scripts(&mut self, fonts, vw)` — runs the rest (`defer`, `async`, `type=module`),
+   re-cascades and re-lays-out if the tree changed, exactly as the current post-script path already does.
+3. `Page::load` and `from_prefetched` call **both**, back to back — so every existing gate, and the whole
+   SPA suite, sees identical behaviour and identical results. Nothing about the app web changes.
+4. The **shell** calls them apart: blocking → paint → deferred → repaint. That is the only place the new
+   behaviour is visible, and it is the only place a user is waiting.
+5. **G_DEFER** asserts it: a page with a slow `defer`ed script must paint before that script has run, and
+   the script must still run afterwards. And its falsifier makes the deferred script blocking again.
+
+The gate matters as much as the change. "Fast because we never ran the script" is the same class of lie
+as "fast because we never loaded the images" — which is precisely the disguise G_FIRST_PAINT was written
+to strip off, one tick ago.
