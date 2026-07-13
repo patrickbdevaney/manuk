@@ -341,3 +341,33 @@ document is, by definition, "a page shorter than its viewport" — and it was ne
 
 **The rule, and it is the spec's own** (`prefers-reduced-motion: reduce` says the same thing):
 **show the destination, skip the journey.**
+
+## Tick 39 — the cascade was silently dropping 41% of the web's CSS
+
+| Pattern | % of the web | Status |
+|---|---|---|
+| **CSS nesting** (`.card { & .x { … } }` and the implicit `.card { .x { … } }`) | **≥41%** of sites | ✅ (tick 39) — **every nested rule was being THROWN AWAY** |
+| `:is()` / `:where()` / `:not()` | common | ✅ already worked |
+| attribute selectors (`=`, `^=`, `*=`, `$=`, presence) | common | ✅ already worked |
+| `+` / `~` combinators | common | ✅ already worked |
+| **`:has()`** | 13% of sites | ❌ **rules are DROPPED** — Stylo's *servo* build hardcodes `parse_has() -> false`. Enabling it means editing Stylo, which a **settled decision forbids**. See STATUS.md. |
+
+### What happened
+
+`RuleIndex` — added in tick 14 as a **cascade optimisation** (339ms → 199ms) — walked each stylesheet's
+rules, read every `StyleRule`'s `selectors` and `block`, and **never looked at its `rules` field.** That
+field holds the rule's **nested** rules. Stylo parses them correctly and always has. We threw every one
+of them away before it could match anything.
+
+Measured: **41% of the corpus uses CSS nesting** in its inline `<style>` blocks *alone* — external
+stylesheets are not even scanned, so that is a **floor**. It is the single largest cause of the two real
+rendering divergences the oracle found:
+
+- *"we lose flex/grid on this node"* (**11,324**) — a nested `display: flex` never applied.
+- *"we show what Chrome hides"* (**2,433**) — a nested `display: none` never applied either, so we
+  render menus, modals and off-screen panels that Chrome correctly hides.
+
+> **An optimisation that makes a data structure smaller must be asked what it DROPPED.** This one was
+> measured for speed and never once asked whether the rules it indexed were all the rules there were.
+> No gate could see it: every gate compared *boxes*, and the boxes were internally consistent — they
+> were just consistently wrong.

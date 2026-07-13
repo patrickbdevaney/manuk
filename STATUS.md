@@ -8,10 +8,10 @@
 > filesystem, git, the crawl output or the verify receipt.
 
 ```
-TICK:              38
+TICK:              39
 LAST_AUDIT_TICK:   29          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
-LAST_WALL_TIME:    61s
+LAST_WALL_TIME:    234s
 ORACLE_CORPUS:     265 sites
 ORACLE_CRAWLED:    265 sites, 640 clusters  → docs/loop/CLUSTERS.md
 ORACLE_HANGS:      4   ← Bar 0, on OUR clock (manuk_ms > 30s). Outranks every visual cluster.
@@ -48,6 +48,38 @@ So the mechanical form: **a speed claim is only admissible next to a coverage nu
 `scripts/crawl-report.sh` prints coverage FIRST and has no flag to print speed alone. If coverage holds
 and we are faster, we are faster. If coverage moved, the speed is a measurement of the thing we stopped
 doing.
+
+## ⚖️ OPEN DECISION — `:has()` needs a one-line Stylo patch, and a settled decision forbids it
+
+**The finding (tick 39):** `:has()` rules are not merely unmatched — they are **never parsed**, so the
+whole rule is dropped. **13% of the corpus uses `:has()`.**
+
+**The cause:** Stylo's **servo** build hardcodes it off. Gecko's build turns it on.
+
+```rust
+// stylo/style/servo/selector_parser.rs
+fn parse_has(&self) -> bool { false }     // ← servo:  OFF
+// stylo/style/gecko/selector_parser.rs
+fn parse_has(&self) -> bool { true }      // ← gecko:  ON
+```
+
+There is **no pref** for it — unlike `layout.grid.enabled`, which we already flip with
+`stylo_static_prefs::set_pref!`. Enabling `:has()` requires **editing Stylo's source**.
+
+**The conflict:** that is forbidden by a settled decision — *"Stylo and SpiderMonkey are never patched
+internally. Sanctioned FFI dependencies only."* Its purpose is to stop us maintaining a fork.
+
+**The trade-off, stated honestly:**
+
+| For patching | Against |
+|---|---|
+| It is **one line**, and it enables a feature **Gecko already ships** — not an algorithmic change | It *is* a fork delta, and forks start at one line |
+| 13% of sites, and `:has()` is increasingly load-bearing rather than an enhancement | `:has()` rules usually degrade gracefully; the page still renders |
+| The alternative is being permanently behind on a shipped CSS feature | It weakens a rule that has kept this project out of engine-maintenance quicksand |
+| `parse_nth_child_of` is `false` in the same file — so this will recur | Every future Stylo bump has to re-apply it |
+
+**I have not done it.** A settled decision is not relitigated silently, and this is exactly the kind of
+call that should be made deliberately rather than absorbed into a tick. **It needs a decision.**
 
 ## Settled Decisions — closed questions. Do not relitigate. (Part 29.2)
 

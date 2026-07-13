@@ -256,6 +256,19 @@ s = s.replace(
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+# G_SELECTOR — stop descending into nested rules again, which is what dropped 41% of the web's CSS.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_SELECTOR; then
+  mutate engine/css/src/stylo_engine.rs '
+s = s.replace(
+    "                        self.add_rules(&nested.0, guard, device, order);",
+    "                        let _ = &nested;   // MUTATION: stop descending into nested rules",
+    1)
+'
+  expect_red G_SELECTOR cargo test -q -p manuk-page --features stylo,spidermonkey --test g_selector
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 # G_RUNAWAY — remove the task-drain ceiling. A self-rescheduling timer must then hang the engine.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_RUNAWAY; then

@@ -88,6 +88,13 @@ head_ "G_LOAD · the page renders when its subresources never answer (METHODOLOG
 GL=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_load_budget 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GL" ]; then ok "load budget: $GL"; else bad "G_LOAD failed — a dead subresource can hold the document hostage"; fi
 
+head_ "G_SELECTOR · the cascade must not silently DROP rules (CSS nesting)"
+# RuleIndex — a cascade OPTIMISATION — read each StyleRule's selectors and block and never looked at its
+# `rules` field: its NESTED rules. 41% of the corpus uses CSS nesting (a floor — external sheets are not
+# even scanned). Every one of those rules was thrown away before it could match.
+GSL=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_selector 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GSL" ]; then ok "selectors: $GSL"; else bad "G_SELECTOR failed — the cascade is dropping rules (nested rules, or a selector that used to work)"; fi
+
 head_ "G_ANIMATION · an animated element renders its END state, not its first frame"
 # 52 of 237 corpus sites (21%) pair `opacity:0` with an animation. Rendering the first frame literally
 # means a fifth of the web has content nobody can see. The second half of the gate is the important one:

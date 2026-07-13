@@ -2001,3 +2001,50 @@ one I would have started an hour ago.
    attribute selectors, CSS nesting are the suspects.
 3. **aljazeera's hydration wipe** — one site, 95% of a document, and the first real hydration failure with
    a name.
+
+## Tick 39 — the cascade was silently dropping 41% of the web's CSS (2026-07-13)
+
+**TICK SHAPE: pattern-class.** CLUSTER: C01ca.
+
+Chasing the oracle's two *real* rendering divergences — *"we lose flex/grid"* (11,324 nodes) and *"we show
+what Chrome hides"* (2,433) — I built a selector conformance probe. Two selectors failed. One of them was
+mine.
+
+**`RuleIndex` was throwing away every nested rule in every stylesheet.**
+
+It was added in tick 14 as a **cascade optimisation** (339ms → 199ms): bucket rules by their rightmost
+simple selector so the cascade stops walking every rule for every element. It walks each sheet's rules,
+reads every `StyleRule`'s `selectors` and `block`... and **never looks at its `rules` field.** That field
+holds the rule's **nested** rules. Stylo parses them correctly and always has.
+
+```
+sheet with 4 class rules                     → by_class = 4   ✓
+the same 4 rules, written with CSS nesting   → by_class = 0   ← all four gone
+```
+
+Measured: **41% of the corpus uses CSS nesting** in its inline `<style>` blocks *alone* — external
+stylesheets are not even scanned, so that is a **floor, not an estimate**. And it explains both real
+divergences at once: a nested `display: flex` never applied (so we lose flex), and a nested
+`display: none` never applied either (so we render menus, modals and off-screen panels that Chrome
+correctly hides).
+
+> **An optimisation that makes a data structure smaller must be asked what it DROPPED.** This one was
+> measured for speed and never once asked whether the rules it indexed were all the rules there were. It
+> shipped, and it passed every gate for 25 ticks — because **every gate compared *boxes*, and the boxes
+> were internally consistent. They were just consistently wrong.**
+
+`G_SELECTOR` now asserts that a nested rule applies (including the implicit-`&` form, which is by far the
+commonest), *and* that every selector which already worked still does — a fix that silently breaks the
+selectors the cascade already handled would be worse than the bug it repaired, and would be invisible.
+
+**And `:has()` is broken — but I am not going to fix it unilaterally.**
+
+`.a:has(.probe)` does not fail to *match*; the rule is **never parsed**, and is dropped. The cause:
+Stylo's **servo** build hardcodes `fn parse_has(&self) -> bool { false }`. Gecko's returns `true`. There
+is no pref — unlike `layout.grid.enabled`, which we already flip.
+
+Enabling it means **editing Stylo's source**, and that collides head-on with a settled decision:
+*"Stylo and SpiderMonkey are never patched internally."* My own methodology says a settled decision is not
+relitigated silently, so it is written up in STATUS.md as a decision to be made, with the exact one-line
+diff and the trade-off, rather than quietly done. It is 13% of sites, and it is the last known selector
+gap.
