@@ -346,8 +346,15 @@ pub async fn run_one(
                 harness_status: "FETCH_FAILED".into(), ms: t0.elapsed().as_millis() }
         }
         Err(_) => {
+            // **`SLOW`, not `TIMEOUT`.** This is OUR budget expiring — the page took longer than we
+            // allowed. It is NOT the same event as testharness reporting its own `TIMEOUT` status
+            // (an async test that never completed), and it is NOT a hang (a hang is the driver
+            // killing a child that stopped making progress at all).
+            //
+            // Collapsing all three into the word "TIMEOUT" made 89 slow files read as 89 Bar 0 hangs
+            // in the first baseline. **Three different findings must not share a name.**
             return TestFile { path: rel.into(), subtests: None,
-                harness_status: "TIMEOUT".into(), ms: t0.elapsed().as_millis() }
+                harness_status: "SLOW".into(), ms: t0.elapsed().as_millis() }
         }
     };
 

@@ -3,10 +3,35 @@
 **Measured 2026-07-13 (tick 43), release build, `dom/` subset, WPT @ sparse clone of `main`.**
 
 ```
-FILES 457    subtests 1429 / 6284  =  22.7%
-NO_REPORT 0                            ← every file reports. This is the number that makes the rest real.
-HANG/TIMEOUT 90                        ← Bar 0. Outranks every failing assertion below.
+tick 43 (first):   FILES 457   1429/6284 = 22.7%   NO_REPORT 0   HANG 1   TH_TIMEOUT 89
+tick 44 (current): FILES 458   1547/6280 = 24.6%   NO_REPORT 0   HANG 0   CRASH 5   TH_TIMEOUT 90
 ```
+
+## ⚠ THE TICK-43 NUMBER SAID "90 HANGS". IT WAS ONE.
+
+**And the lie was in the instrument, not the engine.** `run_one` assigned the string `TIMEOUT` to two
+completely different events — *our* budget expiring, and *testharness's own* status-2 verdict (an async
+test that never completed) — and the driver then lumped those in with real driver-killed hangs. **Three
+distinct findings shared one word**, so 89 async-incomplete tests read as 89 Bar 0 hangs.
+
+They are now four separate columns, and they mean four separate things:
+
+| Column | Means | Class |
+|---|---|---|
+| **HANG** | the child stopped making progress; the driver killed it | **Bar 0** |
+| **CRASH** | the child *died* — SpiderMonkey fault, abort, OOM | **Bar 0** |
+| **SLOW** | our own budget expired | perf |
+| **TH_TIMEOUT** | testharness's verdict: an `async_test` never completed | conformance |
+
+**The real Bar 0 count in tick 43 was 1**, and it was a **frozen clock**: `event.timeStamp` was
+hardcoded to `0`, so `Event-timestamp-safe-resolution`'s `do { … } while (delta == 0)` — which
+busy-waits for the clock to advance — spun forever. Fixed in tick 44 (`timeStamp` = `performance.now()`).
+
+**And the file count was lying too.** When a child *crashed* rather than hung, the driver advanced past
+the whole batch — **33 files silently vanished** from a 457-file suite and the pass rate was computed
+over what was left. Fixed: a dead child now names the test it died on and steps over it, which is how
+the **5 real crashes** below became visible at all. *A runner that quietly skips what it cannot run
+reports a pass rate for a suite it did not run.*
 
 ## Why `NO_REPORT 0` is the load-bearing figure
 

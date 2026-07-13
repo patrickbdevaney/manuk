@@ -143,3 +143,15 @@ throws on line one.
 | **`insert_before(X, X)`** | adversarial/self-referential input | ✅ (tick 43) — was an **infinite loop** (Bar 0) |
 | **`Range`** | `dom/ranges` = 3.9% | ❌ **inert stub** — exists, does nothing. Now *visible* rather than assumed. |
 | **WPT `testharness.js` runner** | the oracle's ceiling | ✅ (tick 43) — `docs/loop/WPT-BASELINE.md` |
+
+## Tick 44 — activation and text mutation
+
+| Capability | Reach | Status |
+|---|---|---|
+| **`element.click()`** | every interactive site | ✅ (tick 44) — **did not exist** |
+| **`CharacterData` (6 methods + `length`)** | every text-editing surface | ✅ (tick 44) — only `data` existed |
+| **UTF-16 text offsets** | emoji, CJK, combining marks | ✅ (tick 44) |
+| **`DOMException` thrown from natives** | `try/catch` around DOM calls | ⚠️ partial — CharacterData only |
+| **`event.timeStamp`** | anything that measures event timing | ✅ (tick 44) — was a constant `0`, which is an **infinite loop** for code that waits for it to change |
+| **Activation behaviour** (checkbox toggle, link follow, form submit on click) | forms, nav | ❌ follow-on |
+| **5 engine CRASHES under WPT** | Bar 0 | ❌ **open** — surfaced in tick 44 (previously hidden by a silent file-drop); next tick |

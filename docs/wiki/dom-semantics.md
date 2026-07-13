@@ -59,3 +59,27 @@ moments:
 Both must be **idempotent** (several load paths can reach them) and `DOMContentLoaded` must reach
 **both** registries — jQuery listens on `document`, `testharness.js` listens on `window`, and in a real
 browser the event bubbles document → window.
+
+## CharacterData offsets are UTF-16 CODE UNITS — not bytes, not `char`s
+
+`"😀".length === 2` in JavaScript. An offset of 1 lands **inside the surrogate pair**. Rust strings are
+UTF-8, so an implementation that counts `char`s produces the wrong answer for **every emoji, every CJK
+surrogate and every combining sequence** — silently, and **only for the users who write in those
+scripts**, which is the worst possible distribution of a bug. Convert through `encode_utf16`.
+
+The same unit applies to `Range` offsets, `Selection`, `splitText`, and `normalize`. **Get it wrong once
+and it is wrong everywhere text is addressed by index.**
+
+## A native can throw a real `DOMException`
+
+Evaluate the `throw` in the current global and return `false`: the exception is left **pending on the
+context**, and returning `false` from a `JSNative` propagates it. That is the sanctioned failure path —
+`JS_ReportErrorUTF8` would throw a plain `Error`, which fails `e instanceof DOMException` and, more
+importantly, is not what real code catches.
+
+## A CONSTANT is an infinite loop for any code that waits for it to change
+
+`event.timeStamp` was hardcoded to `0`. `Event-timestamp-safe-resolution` does
+`do { … } while (delta == 0)` — it **busy-waits for the clock to advance**. A frozen clock is not a
+wrong value; it is a **hang**. The same trap exists for `performance.now()`, `Date.now()` under a
+virtual clock, and any monotonically-increasing counter a page polls.

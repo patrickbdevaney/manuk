@@ -18,6 +18,14 @@ rendered by *both* Chromium and this engine from **one snapshot**, diffed by str
 divergences **clustered by root cause**. The cluster ranking — ranked by *distinct sites explained*, not
 by hit count — **is** the priority ledger (`docs/loop/CLUSTERS.md`). No feature gets picked by judgement.
 
+**The first principle is a ratchet.** Every tick must leave the engine strictly more capable than it
+found it, and nothing that worked before may work less well after — across **capability**,
+**performance**, and **instrument fidelity**. A capability is only *banked* once a gate proves it can go
+red; that proven gate is the ratchet tooth. The trajectory it produced: *nothing but Wikipedia (and
+crashes elsewhere) → dedup and lean efficiency → 20 doc-web sites at parity → SPA/app-web support → a
+265-site differential oracle → Web Platform Tests in the pipeline → next, the platform web (lazy-loaded
+feeds, iframes, media).*
+
 Three bars, and they are never conflated:
 
 | | | |

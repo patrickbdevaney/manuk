@@ -262,6 +262,20 @@ fi
 # reported TIMEOUT. It never errors; it just happens in the wrong order, silently, on every debounce
 # and retry-backoff on the web.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_CHARDATA; then
+  # Count the offsets in Rust `char`s instead of UTF-16 code units — which silently corrupts every
+  # emoji, every CJK surrogate and every combining sequence on the web, and ONLY for the users who
+  # write in those scripts. The gate must catch it via `a😀b`.length === 4.
+  mutate engine/js/src/dom_bindings.rs '
+s = s.replace(
+    "    (*dom).character_data(node).map(|t| t.encode_utf16().collect())",
+    "    (*dom).character_data(node).map(|t| t.chars().map(|c| c as u16).collect())   // MUTATION: chars, not UTF-16",
+    1)
+'
+  expect_red G_CHARDATA cargo test -q -p manuk-page --features stylo,spidermonkey --test g_chardata
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_LIFECYCLE; then
   mutate engine/js/src/event_loop.rs '
 s = s.replace(

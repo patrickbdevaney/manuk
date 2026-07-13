@@ -64,3 +64,26 @@ The runner prints a warning when >25% of files report nothing:
 verified before they are believed. The first `cold-read.sh` run reported "tick 42 has no hypothesis"
 about a journal entry that plainly had one — `awk` has no `\b` word-boundary escape, so the pattern
 matched nothing. **The auditor was wrong, not the file.**
+
+## THREE DIFFERENT FINDINGS MUST NEVER SHARE A NAME
+
+The WPT runner called all of these `TIMEOUT`:
+
+- **our** budget expiring (a *perf* finding),
+- **testharness's** own status-2 verdict — an `async_test` that never completed (a *conformance* finding),
+- a driver-killed **hang** (a *Bar 0* finding).
+
+So a baseline reported **"90 Bar 0 hangs"** when the real number was **one**. The engine was fine; the
+*word* was overloaded. Four columns now: `HANG`, `CRASH`, `SLOW`, `TH_TIMEOUT`.
+
+> **The general rule: an instrument that collapses distinct findings into one label is not a coarse
+> instrument — it is a WRONG one**, because the label is what gets acted on.
+
+## A runner must account for the child that DIED, not just the one that hung
+
+When a batch child *crashed* (rather than hanging), the driver advanced past the whole batch — **33 of
+457 files silently vanished**, and the pass rate was computed over the remainder with nothing to say so.
+Fixing it made **5 real crashes visible** that had been invisible from the start.
+
+**A crash is a finding, not an accident.** Both a hang and a crash must name the test they died on and
+step over it.

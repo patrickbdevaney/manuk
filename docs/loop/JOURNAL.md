@@ -2304,3 +2304,62 @@ to delete code.**
 verdict is a CLAIM.* Now a hard rule in CLAUDE.MD: **never `git checkout`/`git stash` a file with
 uncommitted work to test a hypothesis** — bisect by copying aside or commenting out, never by reverting
 the only copy. And: **run a gate the way `verify.sh` runs it, or you are not running the gate.**
+
+## Tick 44 — the instrument said "90 hangs". It was one. Then: click(), and CharacterData. (2026-07-13)
+
+**TICK SHAPE: pattern-class** · **CLUSTER: C00wpt** — the classes are *programmatic activation*
+(`element.click()`: menus, modals, carousels, hidden file inputs) and *text mutation*
+(`CharacterData`: every text-editing surface), both found by WPT rather than by any single site.
+
+**Hypothesis:** WPT's 90 hangs are Bar 0 and outrank every failing assertion, so they are the tick.
+
+**They were not 90.** They were **one** — and finding that out was the first honest thing this tick did.
+`run_one` assigned the word `TIMEOUT` to two different events (our budget expiring, and *testharness's
+own* status-2 verdict), and the driver lumped both in with real driver-killed hangs. **Three distinct
+findings shared one word.** Give one file 20s instead of 10 and it completed: they were never hung.
+
+> **Three findings must never share a name.** They are now four columns — HANG (Bar 0), CRASH (Bar 0),
+> SLOW (perf), TH_TIMEOUT (conformance) — and each means exactly one thing.
+
+**The one real hang was a FROZEN CLOCK.** `Event-timestamp-safe-resolution` does
+`do { … } while (deltaInMicroSeconds == 0)` — it **busy-waits for time to advance**. `event.timeStamp`
+was hardcoded to `0`, so the delta was always zero and the loop spun forever. *A constant is an
+infinite loop for any code that waits for it to change.* Fixed: `timeStamp = performance.now()`.
+
+**And the file count was lying.** When a child **crashed** rather than hung, the driver advanced past
+the whole batch — **33 files silently vanished** from a 457-file suite, and the pass rate was computed
+over what was left, with nothing to say so. Fixing it surfaced **5 real crashes** that had been
+invisible the entire time. *A runner that quietly skips what it cannot run reports a pass rate for a
+suite it did not run.*
+
+**Then the capability, which is the point:**
+
+- **`element.click()` DID NOT EXIST.** It is how the web *activates* things — menus, modals, carousels,
+  "click the hidden file input", every framework's programmatic activation. Its absence is a `TypeError`
+  on the call, so whatever was running dies with it, and any `async_test` awaiting the event **never
+  completes**. It now dispatches a bubbling, cancelable `click` through the same registry
+  `dispatchEvent` uses, so delegated handlers see it. *(Honest limit, stated not discovered: it fires
+  the event; full **activation behaviour** — toggling a checkbox, following a link — is the follow-on.)*
+
+- **CharacterData was `data` and nothing else.** No `length`, `substringData`, `appendData`,
+  `insertData`, `deleteData`, `replaceData` — WPT scored `CharacterData-replaceData` **0/34**, which is
+  what "the method does not exist" looks like from outside. All six now exist and **throw a real
+  `DOMException`** on a bad offset (natives throw by evaluating the `throw` and returning `false`,
+  leaving the exception pending — the sanctioned JSNative failure path).
+
+  **The offsets are UTF-16 code units, and that is the whole difficulty.** `"😀".length === 2` in JS, and
+  offset 1 lands *inside* the surrogate pair. Rust strings are UTF-8, so counting `char`s corrupts every
+  emoji, every CJK surrogate and every combining sequence — **silently, and only for the users who write
+  in those scripts.** `G_CHARDATA` asserts `'a😀b'.length === 4` and is proven falsifiable against
+  exactly that mutation.
+
+**MEASURED — the ratchet turned, on all three faces:**
+
+| | tick 43 | tick 44 |
+|---|---|---|
+| `dom/` subtests | 1429/6284 = **22.7%** | **1547/6280 = 24.6%** |
+| Bar 0 hangs | 1 | **0** |
+| crashes | *hidden* | **5, visible** |
+| files measured | 457 (33 silently dropped) | **458** |
+
+**No capability lost, no perf floor moved, and the instrument got more honest rather than less.**

@@ -104,6 +104,15 @@ head_ "G_GLOBALS · a missing constructor is a THROWN EXCEPTION, not a missing f
 GG=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_globals 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GG" ]; then ok "globals: $GG"; else bad "G_GLOBALS failed — a global a real bundle references is missing, or one of them is LYING"; fi
 
+head_ "G_CHARDATA · element.click() and CharacterData — neither existed"
+# `element.click()` is how the web ACTIVATES things (menus, modals, carousels, hidden file inputs, every
+# framework's programmatic activation). It was missing: a TypeError on the call, taking down whatever was
+# running. CharacterData was `data` and nothing else — WPT scored CharacterData-replaceData 0/34.
+# The offsets are UTF-16 CODE UNITS: "😀".length === 2, so counting Rust chars silently corrupts every
+# emoji and surrogate pair on the web — and only for the scripts that use them.
+GCD=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_chardata 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GCD" ]; then ok "chardata+click: $GCD"; else bad "G_CHARDATA failed — element.click(), the CharacterData interface, or its UTF-16 offsets"; fi
+
 head_ "G_LIFECYCLE · the document lifecycle, the clock, and the loop that must not die"
 # Found by wiring up upstream WPT (tick 43). NONE of these move a box, which is why the 265-site
 # Chromium differential could not see any of them for forty ticks:

@@ -8,6 +8,57 @@ simply had not been done, while backlog work carried on, and nobody noticed unti
 asked about. `STATUS.md` exists so that gap is visible in five seconds instead of requiring an
 interrogation.
 
+## FIRST PRINCIPLE — THE RATCHET: bank additive step-changes, never regress
+
+> **Every tick must leave the browser strictly more capable than it found it, and nothing that worked
+> before may work less well after. Progress is a RATCHET: it only turns one way.**
+
+This is the north star that sits *above* the three bars, and it is what the whole mechanism stack
+exists to enforce. It has three faces, and **all three are non-negotiable**:
+
+| Never regress | Measured by |
+|---|---|
+| **Capability** — a class of site that rendered must not stop rendering | the gate wall (`verify.sh`), the oracle crawl, WPT |
+| **Performance** — a page that was fast must not get slow | F1/F2 perf floors, the crawl's own clock |
+| **Instrument fidelity** — a number that was honest must not start lying | `falsify.sh`, the accounting reconciliations, `NO_REPORT`-style self-guards |
+
+**"Additive" is the operative word.** The unit of progress is not a diff, it is a **qualitative
+capability step-change**: *"this class of the web now works."* `<iframe>` renders. `:has()` matches.
+`load` fires. `click()` activates. Each is banked — gated, falsified, journalled, committed, pushed —
+and **cannot silently come back**, because a gate that has been proven to go red is a ratchet tooth.
+
+**The trajectory this has actually produced, and why the discipline is the reason:**
+
+> nothing but Wikipedia, crashing elsewhere on duplicated cascades → dedup + lean efficiency →
+> parity on 20 doc-web sites → SPA/app-web support → the 265-site differential oracle →
+> **WPT in the mechanical pipeline** → categorical support of the doc web and app web →
+> *(next)* the **platform web**: lazy-loaded feeds, iframes, media.
+
+**A tick that produces a better description of the same browser is a tax, not a turn of the ratchet.**
+A tick that buys capability by losing performance, or buys a number by degrading an instrument, is
+**not additive — it is a trade**, and trades are refused. If a change cannot be shown to be strictly
+additive on all three faces, it is not done.
+
+## INSTRUMENTS HAVE A DONE. THE BROWSER IS THE POINT.
+
+An instrument is **finished** when it (a) reports every input, (b) does not collapse different findings
+into one word, and (c) produces a ranked work list. **At that moment you stop working on it and start
+working through its output.** WPT reached that state in tick 43: `NO_REPORT 0`, `HANG`/`SLOW`/
+`TH_TIMEOUT` disambiguated, per-directory ranking. **It is done. Do not polish it.**
+
+> **The goal is a daily driver that handles basically the whole internet** — the doc web, the app web,
+> and the platform web — with **qualitative capability step-changes** and performance that beats
+> Chromium. The oracle and WPT exist **only** to say *which capability to build next*. They are not
+> the work.
+
+**The failure mode to refuse by name: epistemological fog.** Endlessly refining how we measure, so that
+every tick produces a better *description* of the same broken browser. If a tick's output is a more
+accurate number and no new capability, **that tick was a tax, not progress** — it is justified only when
+the number was actively *lying* (as it was once, and that is now fixed).
+
+**The test for any proposed instrument work:** *"does this change which capability I build next?"* If
+no — **it is not the tick.** Go build the capability.
+
 ## COMMIT AND PUSH CADENCE — the interval is the TICK, and it is not negotiable
 
 - **Commit exactly once per tick, at the tick boundary.** The commit is what makes a tick *exist*. It

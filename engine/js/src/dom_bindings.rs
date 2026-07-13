@@ -382,6 +382,26 @@ unsafe fn arg_string(cx: *mut RawJSContext, vp: *mut Value, argc: u32, i: u32) -
     }
 }
 
+/// Numeric argument `i`, coerced the way the DOM does: `undefined` → 0, negatives and NaN → 0
+/// (the IDL type is `unsigned long`, so the coercion is modular and clamped, not an error).
+unsafe fn arg_u32(_cx: *mut RawJSContext, vp: *mut Value, argc: u32, i: u32) -> Option<u32> {
+    if i >= argc {
+        return None;
+    }
+    let v = *vp.add(2 + i as usize);
+    if v.is_int32() {
+        return Some(v.to_int32().max(0) as u32);
+    }
+    if v.is_double() {
+        let d = v.to_double();
+        if d.is_nan() || d < 0.0 {
+            return Some(0);
+        }
+        return Some(d as u32);
+    }
+    None
+}
+
 /// Object argument `i` (e.g. a child element), or `None`.
 unsafe fn arg_object(vp: *mut Value, argc: u32, i: u32) -> Option<*mut JSObject> {
     if i >= argc {
@@ -639,8 +659,16 @@ unsafe fn define_members(
         def(c"insertAdjacentHTML", el_insert_adjacent_html, 2);
         def(c"insertAdjacentElement", el_insert_adjacent_element, 2);
         def(c"insertAdjacentText", el_insert_adjacent_text, 2);
+        def(c"click", el_click, 0);
         def(c"getAttributeNames", el_get_attribute_names, 0);
         prop(c"data", el_get_char_data, Some(el_set_char_data));
+        // CharacterData — the whole interface, in UTF-16 code units, throwing IndexSizeError.
+        prop(c"length", el_char_length, None);
+        def(c"substringData", el_substring_data, 2);
+        def(c"appendData", el_append_data, 1);
+        def(c"insertData", el_insert_data, 2);
+        def(c"deleteData", el_delete_data, 2);
+        def(c"replaceData", el_replace_data, 3);
         prop(c"nodeValue", el_get_char_data, Some(el_set_char_data));
         // Forms — 50% of the corpus, and the difference between a reader and a browser.
         def(c"submit", el_form_submit, 0);
@@ -1442,6 +1470,32 @@ unsafe extern "C" fn el_dispatch_event(cx: *mut RawJSContext, argc: u32, vp: *mu
     true
 }
 
+/// `element.click()` — **it did not exist**, and it is how the web activates things.
+///
+/// Menus, modals, carousels, "click the hidden file input", analytics shims, every framework's
+/// programmatic activation, and *every* test that drives a UI. Its absence is a `TypeError` on the
+/// call, so whatever was running dies with it — and an `async_test` waiting for the resulting event
+/// simply **never completes**, which is why 89 WPT files reported a testharness TIMEOUT rather than a
+/// failure.
+///
+/// This dispatches a bubbling, cancelable `click` through the same registry `dispatchEvent` uses, so a
+/// listener added by any means sees it.
+///
+/// **Honest limit, stated rather than discovered:** this fires the *event*. It does not yet run the
+/// full **activation behaviour** (toggling a checkbox, following a link, submitting a form) — that is
+/// the follow-on, and it is real work rather than a "TODO" meaning never.
+unsafe extern "C" fn el_click(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    if let Some((_, node)) = this_node(vp) {
+        let script = format!(
+            "__dispatchEvent({}, new Event('click', {{ bubbles: true, cancelable: true }}))",
+            node.0
+        );
+        let _ = eval_in_current_global(cx, &script);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
 /// `document.querySelectorAll(sel)` / `element.querySelectorAll(sel)` → a JS `Array`
 /// of element reflectors (a static NodeList, per this tranche).
 unsafe extern "C" fn doc_query_all(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
@@ -2197,6 +2251,129 @@ unsafe extern "C" fn el_set_char_data(cx: *mut RawJSContext, argc: u32, vp: *mut
             record_mutation(cx, dom, "characterData", node, None, old.as_deref(), &[], &[]);
         }
     }
+    *vp = UndefinedValue();
+    true
+}
+
+// ── **CharacterData — the whole interface was missing except `data`.** ─────────────────────────────
+//
+// `length`, `substringData`, `appendData`, `insertData`, `deleteData`, `replaceData`. These are how
+// every text-editing surface on the web mutates text without rebuilding nodes — and how the DOM's own
+// `normalize`/range machinery is specified. WPT scored `CharacterData-replaceData` **0/34** and
+// `-substringData` **2/28**, which is what "the method does not exist" looks like from the outside.
+//
+// **They are specified in UTF-16 code units**, not bytes and not chars. `"😀".length === 2` in JS, and
+// an offset of 1 lands *inside* the surrogate pair. Rust strings are UTF-8, so every offset here is
+// converted through `encode_utf16` — doing this in `char`s would silently corrupt every emoji, every
+// CJK surrogate, and every combining sequence on the web.
+//
+// And they **throw `IndexSizeError`** when the offset is past the end. That is not decoration: it is
+// what `assert_throws_dom` checks, and more importantly it is what real code catches.
+
+/// Throw a real `DOMException` from a native. Evaluating the `throw` leaves the exception pending on
+/// the context; returning `false` propagates it — which is the sanctioned way for a JSNative to fail.
+unsafe fn throw_dom(cx: *mut RawJSContext, name: &str, msg: &str) -> bool {
+    let script = format!("(function(){{ throw new DOMException({msg:?}, {name:?}); }})()");
+    let _ = eval_in_current_global(cx, &script);
+    false
+}
+
+/// The node's data as UTF-16 code units — the unit the DOM spec counts in.
+unsafe fn char_units(dom: *mut Dom, node: NodeId) -> Option<Vec<u16>> {
+    (*dom).character_data(node).map(|t| t.encode_utf16().collect())
+}
+
+unsafe fn set_from_units(cx: *mut RawJSContext, dom: *mut Dom, node: NodeId, units: &[u16]) {
+    let new = String::from_utf16_lossy(units);
+    let old = (*dom).character_data(node).map(str::to_string);
+    if (*dom).set_character_data(node, new) {
+        record_mutation(cx, dom, "characterData", node, None, old.as_deref(), &[], &[]);
+    }
+}
+
+/// `cd.length` — in UTF-16 code units.
+unsafe extern "C" fn el_char_length(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let n = this_node(vp).and_then(|(d, n)| char_units(d, n)).map(|u| u.len()).unwrap_or(0);
+    *vp = Int32Value(n as i32);
+    true
+}
+
+/// `cd.substringData(offset, count)`
+unsafe extern "C" fn el_substring_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, node)) = this_node(vp) else { *vp = UndefinedValue(); return true };
+    let Some(u) = char_units(dom, node) else { *vp = UndefinedValue(); return true };
+    let offset = arg_u32(cx, vp, argc, 0).unwrap_or(0) as usize;
+    if offset > u.len() {
+        return throw_dom(cx, "IndexSizeError", "offset is greater than length");
+    }
+    let count = arg_u32(cx, vp, argc, 1).unwrap_or(0) as usize;
+    let end = (offset + count).min(u.len());   // "greater than length" clamps, per spec
+    return_string(cx, vp, &String::from_utf16_lossy(&u[offset..end]));
+    true
+}
+
+/// `cd.appendData(data)`
+unsafe extern "C" fn el_append_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        if let Some(mut u) = char_units(dom, node) {
+            let add = arg_string(cx, vp, argc, 0).unwrap_or_default();
+            u.extend(add.encode_utf16());
+            set_from_units(cx, dom, node, &u);
+        }
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `cd.insertData(offset, data)`
+unsafe extern "C" fn el_insert_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, node)) = this_node(vp) else { *vp = UndefinedValue(); return true };
+    let Some(u) = char_units(dom, node) else { *vp = UndefinedValue(); return true };
+    let offset = arg_u32(cx, vp, argc, 0).unwrap_or(0) as usize;
+    if offset > u.len() {
+        return throw_dom(cx, "IndexSizeError", "offset is greater than length");
+    }
+    let add: Vec<u16> = arg_string(cx, vp, argc, 1).unwrap_or_default().encode_utf16().collect();
+    let mut out = u[..offset].to_vec();
+    out.extend_from_slice(&add);
+    out.extend_from_slice(&u[offset..]);
+    set_from_units(cx, dom, node, &out);
+    *vp = UndefinedValue();
+    true
+}
+
+/// `cd.deleteData(offset, count)`
+unsafe extern "C" fn el_delete_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, node)) = this_node(vp) else { *vp = UndefinedValue(); return true };
+    let Some(u) = char_units(dom, node) else { *vp = UndefinedValue(); return true };
+    let offset = arg_u32(cx, vp, argc, 0).unwrap_or(0) as usize;
+    if offset > u.len() {
+        return throw_dom(cx, "IndexSizeError", "offset is greater than length");
+    }
+    let count = arg_u32(cx, vp, argc, 1).unwrap_or(0) as usize;
+    let end = (offset + count).min(u.len());
+    let mut out = u[..offset].to_vec();
+    out.extend_from_slice(&u[end..]);
+    set_from_units(cx, dom, node, &out);
+    *vp = UndefinedValue();
+    true
+}
+
+/// `cd.replaceData(offset, count, data)` — delete then insert, in one mutation record.
+unsafe extern "C" fn el_replace_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, node)) = this_node(vp) else { *vp = UndefinedValue(); return true };
+    let Some(u) = char_units(dom, node) else { *vp = UndefinedValue(); return true };
+    let offset = arg_u32(cx, vp, argc, 0).unwrap_or(0) as usize;
+    if offset > u.len() {
+        return throw_dom(cx, "IndexSizeError", "offset is greater than length");
+    }
+    let count = arg_u32(cx, vp, argc, 1).unwrap_or(0) as usize;
+    let end = (offset + count).min(u.len());
+    let add: Vec<u16> = arg_string(cx, vp, argc, 2).unwrap_or_default().encode_utf16().collect();
+    let mut out = u[..offset].to_vec();
+    out.extend_from_slice(&add);
+    out.extend_from_slice(&u[end..]);
+    set_from_units(cx, dom, node, &out);
     *vp = UndefinedValue();
     true
 }
@@ -4313,7 +4490,11 @@ const WINDOW_PRELUDE: &str = r#"
                 this.target = null;
                 this.currentTarget = null;
                 this.eventPhase = 0;
-                this.timeStamp = 0;
+                // **A frozen clock is an infinite loop.** `timeStamp` was hardcoded to 0, so any
+                // code that samples two events and waits for a non-zero delta — which is exactly what
+                // `Event-timestamp-safe-resolution` does, in a `do { … } while (delta == 0)` — spins
+                // **forever**. That was the only true Bar 0 hang in the whole `dom/` suite.
+                this.timeStamp = (globalThis.performance && performance.now) ? performance.now() : 0;
                 for (var k in extraDefaults) {
                     this[k] = (init[k] !== undefined) ? init[k] : extraDefaults[k];
                 }

@@ -1741,6 +1741,18 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
                 results.push((all[idx].clone(), 0, 0, "HANG".into(), 0));
             }
             i = idx + 1;
+        } else if completed < take {
+            // **The child DIED — it did not hang.** It exited on its own without finishing the batch:
+            // a SpiderMonkey crash, an abort, an OOM. That is Bar 0, and it is a *finding*.
+            //
+            // Advancing by `take` here (as this did on its first run) silently DROPS every remaining
+            // test in the batch — 33 files vanished from a 457-file suite and the pass rate was
+            // computed over what was left, with nothing to say so. **A runner that quietly skips what
+            // it cannot run reports a pass rate for a suite it did not run.**
+            let idx = i + completed;
+            eprintln!("  \x1b[31mCRASH\x1b[0m {}", all[idx]);
+            results.push((all[idx].clone(), 0, 0, "CRASH".into(), 0));
+            i = idx + 1;
         } else {
             i += take;
         }
@@ -1750,11 +1762,14 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
     // ── Report
     let mut by_dir: std::collections::BTreeMap<String, (usize, usize, usize)> = Default::default();
     let (mut pass, mut total, mut no_report, mut hangs) = (0usize, 0usize, 0usize, 0usize);
+    let (mut slow, mut th_timeout) = (0usize, 0usize);
     let mut jsonl = String::new();
     for (rel, p, t, h, ms) in &results {
         pass += p; total += t;
         match h.as_str() {
-            "HANG" | "TIMEOUT" => hangs += 1,
+            "HANG" | "CRASH" => hangs += 1,             // Bar 0: the child stopped, or died
+            "SLOW" => slow += 1,                        // our budget expired — a PERF finding
+            "TIMEOUT" => th_timeout += 1,               // testharness's own verdict: an async test never completed
             "NO_REPORT" | "HARNESS_NOT_LOADED" | "BAD_REPORT" | "FETCH_FAILED" => no_report += 1,
             _ => {}
         }
@@ -1776,7 +1791,8 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
     }
     let rate = if total == 0 { 0.0 } else { 100.0 * pass as f64 / total as f64 };
     println!("\n  FILES  {}   subtests {pass}/{total}  =  {rate:.1}%", results.len());
-    println!("  NO_REPORT {no_report}   HANG/TIMEOUT {hangs}   \x1b[1m(a HANG is Bar 0 — it outranks every failing assertion)\x1b[0m");
+    // Three DIFFERENT findings. Never one word.
+    println!("  NO_REPORT {no_report}   \x1b[1mHANG/CRASH {hangs}\x1b[0m (Bar 0)   SLOW {slow} (our budget)   TH_TIMEOUT {th_timeout} (an async test never completed)");
     if no_report * 4 > results.len() && results.len() > 20 {
         println!("\n  ⚠ {no_report}/{} files reported NOTHING. Above ~25% this is not measuring the engine's\n    \
                   conformance — it is measuring whether testharness.js can RUN here at all.", results.len());

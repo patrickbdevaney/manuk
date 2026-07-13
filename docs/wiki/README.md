@@ -12,6 +12,12 @@ difference is the whole point:
 Neither a log nor a snapshot can answer the third question, and that knowledge is exactly the kind
 that **ebbs and flows with the context window instead of accumulating anywhere.**
 
+## The principle this all serves
+
+> **THE RATCHET: bank additive step-changes; never regress capability, performance, or instrument
+> fidelity.** This wiki is the *memory* half of that — a capability is only truly banked when a future
+> session, with no memory of this one, can find out *why* it works and not undo it by accident.
+
 ## The rules, and they are what keep this from becoming a second journal
 
 1. **Organised by TOPIC, never by tick.** A tick that learns something about font metrics **edits
