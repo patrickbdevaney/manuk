@@ -11,7 +11,7 @@ The rule it enforces:
 
 ## Why this file exists
 
-In a single session (ticks 25–29), the *process* — not the code — produced **fourteen** false or unusable
+In a single session (ticks 25–29), the *process* — not the code — produced **sixteen** false or unusable
 conclusions. Every one of them made the browser look better or worse than it is, and not one was a bug
 in the browser:
 
@@ -35,7 +35,10 @@ in the browser:
 
 | 14 | **The falsifier POISONED the source tree** | A falsify run was killed before its EXIT trap fired, leaving `MAX_TASKS_PER_DRAIN = u32::MAX` in `event_loop.rs`. The **next** run then backed up the already-mutated file, mutated it again, and faithfully "restored" the corruption. A Bar 0 code path was now broken *in the tree*, and the next `verify.sh` hung on a genuinely broken engine — looking exactly like a real regression. **The safety tool corrupted the thing it was protecting.** | Every mutation carries a `MUTATION` marker. `falsify.sh` **refuses to start** if a target file already contains one (a previous run died), and **verifies its own restore** afterwards — a restore that silently fails is the same bug one layer down |
 
-Seven of the fourteen were **found by an accounting check, not by the gate that was supposed to catch them**.
+| 15 | **A non-compiling mutation read as "gate goes red"** | `cargo test` returns non-zero for a compile error exactly as it does for a failing assertion. I wrote a mutation calling a function that did not exist; it would have "proven" `G_FIRST_PAINT` falsifiable while testing **nothing**. The tool that certifies the gates was itself uncertified. | `falsify.sh` **builds first**, and a build failure is reported as **FALSIFIER BROKEN**, loudly — never as evidence about the gate |
+| 16 | **`G_FIRST_PAINT`'s first version was vacuous** | It called `Page::load`, which has never fetched an image in its life. It would have passed before the fix, after the fix, and with the fix reverted. The images were on the paint path in exactly one place — `prefetch_document`, the function the *shell* calls — and the gate was not testing it. | The gate now drives `prefetch_document` over real HTTP, and additionally asserts the images are **still pending** (deferred, not dropped — "fast" must not mean "never loads them") |
+
+Eight of the sixteen were **found by an accounting check, not by the gate that was supposed to catch them**.
 
 Defect #14 is the one to be frightened of. Every other entry here produced a *wrong number*. This one
 produced **wrong code, in the working tree, in a Bar 0 path**, and the failure it caused was

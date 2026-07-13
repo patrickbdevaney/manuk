@@ -88,6 +88,13 @@ head_ "G_LOAD · the page renders when its subresources never answer (METHODOLOG
 GL=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_load_budget 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GL" ]; then ok "load budget: $GL"; else bad "G_LOAD failed — a dead subresource can hold the document hostage"; fi
 
+head_ "G_FIRST_PAINT · the document reaches the screen without waiting for its images"
+# nytimes.com: the document was parsed, cascaded and laid out in 1.7s — and the user saw it at 14s,
+# because the load path fetched every image first. A browser that does this feels broken while every
+# other gate stays green.
+GF=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_first_paint 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GF" ]; then ok "first paint: $GF"; else bad "G_FIRST_PAINT failed — first paint is waiting for subresources again"; fi
+
 head_ "G_SILENT_FAIL · an error on the load/render/script path must never be swallowed"
 # Named by an expensive failure: "React mounts, throws nothing, renders nothing" sat in the ledger for
 # several ticks as a REACT bug. React was throwing, truthfully, inside an async render — and nothing was

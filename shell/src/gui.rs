@@ -119,6 +119,17 @@ enum NavEvent {
     /// `gen` guards against a stale response landing in a page the user has since navigated away
     /// from. This used to `block_on` the UI thread: a slow API call froze the whole browser.
     PageFetch { gen: u64, id: u32, status: u16, body: String },
+    /// **Images arrived AFTER first paint.** The document is already on screen; these fill it in.
+    ///
+    /// The load path used to fetch and decode every image before the shell was handed anything, so the
+    /// window stayed blank until the last tracking pixel on a news front page had arrived or timed out.
+    /// Measured on nytimes.com: the document was parsed, cascaded and laid out — everything needed to
+    /// paint — in **1.7s**, and the user saw it at **14s**. No browser a person would use does that.
+    ImagesReady {
+        gen: u64,
+        tab: manuk_compositor::TabId,
+        images: std::collections::HashMap<String, manuk_paint::DecodedImage>,
+    },
 }
 
 /// A completed download, shown in the hamburger menu's Downloads section.
@@ -882,6 +893,62 @@ impl App {
         self.pump_fetches();
         self.handle_history_ops();
         self.pump_messages();
+        self.rerender();
+        // The document is on screen NOW. Only then do we go and get the images.
+        self.spawn_image_load();
+    }
+
+    /// Fetch the page's images on a background task and apply them when they land.
+    ///
+    /// Called only *after* the page has been painted. The URL list is taken on the UI thread (a cheap
+    /// DOM walk, no network); the fetch and decode happen off-thread on owned data — not one `Rc`
+    /// crosses the boundary, because an `Rc` held across an `.await` would make the future `!Send` and
+    /// pin it right back to the UI thread, which is the mistake this exists to undo.
+    fn spawn_image_load(&mut self) {
+        let Some(page) = self.page.as_ref() else { return };
+        let urls = page.pending_image_urls();
+        if urls.is_empty() {
+            return;
+        }
+        let gen = self.nav_gen;
+        let tab = self.tab_id;
+        let proxy = self.proxy.clone();
+        self.rt.spawn(async move {
+            let images = manuk_page::fetch_image_urls(urls).await;
+            if !images.is_empty() {
+                let _ = proxy.send_event(NavEvent::ImagesReady { gen, tab, images });
+            }
+        });
+    }
+
+    /// Apply images that landed after first paint, then repaint ONCE.
+    fn finish_images(
+        &mut self,
+        gen: u64,
+        tab: manuk_compositor::TabId,
+        images: std::collections::HashMap<String, manuk_paint::DecodedImage>,
+    ) {
+        // A stale response must not land in a page the user has since navigated away from.
+        if gen != self.nav_gen || tab != self.tab_id {
+            return;
+        }
+        let (w, h) = match &self.gpu {
+            Some(g) => (g.config.width, g.config.height),
+            None => (self.width, 768),
+        };
+        let filled = match self.page.as_mut() {
+            Some(p) => p.apply_images_by_url(images, &self.fonts, w as f32),
+            None => 0,
+        };
+        if filled == 0 {
+            return;
+        }
+        // The layout reflowed (an `<img>` without intrinsic dimensions changes the box it sits in —
+        // which is what happens in a real browser too), so the scroll extent moved with it.
+        if let Some(p) = self.page.as_ref() {
+            self.viewport.content_height = p.content_height;
+        }
+        let _ = h;
         self.rerender();
     }
 
@@ -2547,6 +2614,7 @@ impl ApplicationHandler<NavEvent> for App {
                 }
             }
             NavEvent::Prewarmed { url, result } => self.finish_prewarm(url, result),
+            NavEvent::ImagesReady { gen, tab, images } => self.finish_images(gen, tab, images),
             NavEvent::PageFetch { gen, id, status, body } => {
                 // A response for a page the user has navigated away from must not be applied.
                 if gen != self.nav_gen {

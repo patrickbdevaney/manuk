@@ -103,9 +103,28 @@ restore_all() {
 # way a gate can tell you the browser no longer terminates.
 FALSIFY_TIMEOUT="${MANUK_FALSIFY_TIMEOUT:-420}"
 
-expect_red() {  # expect_red <gate-name> <command...>
+expect_red() {  # expect_red <gate-name> <cargo-test-command...>
   local name="$1"; shift
   printf "  %-18s " "$name"
+
+  # **A mutation that does not COMPILE is not a red gate — it is a broken falsifier.**
+  #
+  # `cargo test` returns non-zero for a compile error exactly as it does for a failing assertion, so a
+  # typo in a mutation reads as "✓ goes red when broken" and the gate is certified by nothing at all.
+  # I wrote precisely that bug: a mutation calling a function that does not exist would have "proven"
+  # G_FIRST_PAINT falsifiable while testing nothing.
+  #
+  # So: build first, and treat a build failure as an ERROR IN THE FALSIFIER, loudly, rather than as
+  # evidence about the gate. The tool that certifies the gates cannot itself be uncertified.
+  if ! cargo build -q -p manuk-page --features stylo,spidermonkey --tests >/dev/null 2>&1; then
+    printf "%sFALSIFIER BROKEN — the mutation does not COMPILE%s\n" "$RED$BLD" "$OFF"
+    printf "                     %sThis proves nothing about the gate. A compile error and a failing%s\n" "$RED" "$OFF"
+    printf "                     %sassertion are the same exit code, and that is a trap. Fix the MUTATION.%s\n" "$RED" "$OFF"
+    FAIL=$((FAIL + 1))
+    restore_all
+    return
+  fi
+
   if timeout -k 5 "$FALSIFY_TIMEOUT" "$@" >/dev/null 2>&1; then
     printf "%sVACUOUS — it passed with the bug INSTALLED%s\n" "$RED$BLD" "$OFF"
     printf "                     %sThis gate does not test what it claims. Absent would be honest;%s\n" "$RED" "$OFF"
@@ -167,6 +186,20 @@ s = s.replace(
     1)
 '
   expect_red G_LOAD cargo test -q -p manuk-page --features stylo,spidermonkey --test g_load_budget
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+# G_FIRST_PAINT — put the image fetch back ON the paint path, which is where it used to be. The page
+# must then wait for twenty black holes before it can be painted, and the gate must notice.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_FIRST_PAINT; then
+  mutate engine/page/src/lib.rs '
+s = s.replace(
+    "            let images: HashMap<String, manuk_paint::DecodedImage> = HashMap::new();",
+    "            let images: HashMap<String, manuk_paint::DecodedImage> =   // MUTATION: images back on the paint path\n                fetch_images_owned(&dom, &final_url, &std::collections::HashSet::new(), &std::collections::HashSet::new()).await.0;",
+    1)
+'
+  expect_red G_FIRST_PAINT cargo test -q -p manuk-page --features stylo,spidermonkey --test g_first_paint
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────

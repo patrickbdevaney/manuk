@@ -1511,3 +1511,54 @@ And its corollary, learned the hard way:
 that closes it. Seven of the fourteen were found by an *accounting check* — by squinting at a number
 that did not add up — and not by any gate. That ratio is the thing to drive down, and it is what the
 falsifier is for.
+
+## Tick 30 — first paint does not wait for images (2026-07-13)
+
+**TICK SHAPE: pattern-class.** CLUSTER: C01ca.
+
+First: **Bar 0's residue closed itself.** The two sites that were slower than Chromium — the entire
+remaining Bar 0 list — were fixed by tick 29's dedup work: **wix.com 39.1s → 8.7s, flickr.com 31.1s →
+1.6s.** The URL-keyed image cache and single-flight coalescing did it.
+
+Then the thing that actually decides whether this is a browser a person would use:
+
+```
+nytimes.com:  document parsed, cascaded, laid out — everything needed to PAINT — in 1.7s
+              user sees it at                                                       14s
+```
+
+**The load path fetched and decoded every image before the shell was handed anything.** Twelve seconds
+of blank window while the article sat there, laid out, waiting for tracking pixels nobody was looking at
+because there was nothing on the screen to look at. No browser a person would use does this: Chromium
+puts the article up and lets the assets land afterwards, reflowing as they arrive — which is what an
+`<img>` without intrinsic dimensions does anyway.
+
+`prefetch_document` no longer fetches images. The shell paints, *then* fetches them on a background task
+(`Page::pending_image_urls` → `fetch_image_urls` off-thread on owned data → `NavEvent::ImagesReady` →
+`apply_images_by_url` → one repaint). Measured:
+
+```
+nytimes      14,000ms → 5,773ms     then 42 images in 452ms — after the page is up
+theguardian           → 6,488ms     then 135 images in 8,006ms — the user is READING for those 8s
+wikipedia             → 2,044ms
+```
+
+**And the falsifier caught me writing two bad gates in the same hour**, which is the entire argument for
+it existing:
+
+1. **My mutation did not compile.** `cargo test` returns non-zero for a compile error exactly as it does
+   for a failing assertion — so a typo in a mutation reads as *"✓ goes red when broken"* and the gate is
+   certified by nothing. `falsify.sh` now **builds first**, and a build failure is reported as
+   **FALSIFIER BROKEN**, never as evidence about the gate.
+2. **G_FIRST_PAINT's first version was vacuous.** It called `Page::load`, which has never fetched an
+   image in its life — it would have passed before the fix, after the fix, and with the fix reverted.
+   The images were on the paint path in exactly ONE place: `prefetch_document`, the function the *shell*
+   calls. **The gate was not testing the path the user waits on.** It now drives real HTTP through
+   `prefetch_document`, and additionally asserts the images are still *pending* — because "fast"
+   achieved by never loading them is a different bug wearing this gate's success as a disguise.
+
+Without the falsifier, that gate ships green, the number looks good, and the next person to touch the
+load path silently puts the images back on it.
+
+> **A gate must exercise the path the user waits on.** Measuring the wrong function is how "the browser
+> feels slow" survives a green benchmark: the number was real, it was just a number about something else.

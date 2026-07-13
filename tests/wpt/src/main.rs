@@ -106,6 +106,42 @@ fn run() {
     // `getBoundingClientRect` probe: annotate any element with an id and the two engines' geometry
     // becomes directly comparable. A screenshot shows THAT the layout is wrong; this shows BY HOW
     // MUCH, and for which box.
+    // **`firstpaint` — how long until there is something on the screen.**
+    //
+    // `boxes --fetch` measures `load_async` + `finish_loading`, which is NOT the path the shell takes.
+    // The shell uses `prefetch_document` + `from_prefetched`, and that is what a user's first pixel
+    // actually waits for. Measuring the wrong path is how "the browser feels slow" survives a green
+    // benchmark — the number was real, it was just a number about something else.
+    if args.first().map(String::as_str) == Some("firstpaint") {
+        let url: String = flag(&args, "--url").expect("--url required").to_string();
+        let fonts = manuk_text::FontContext::new();
+        let rt = manuk_net::runtime();
+        let t0 = std::time::Instant::now();
+        let loaded = rt.block_on(manuk_page::prefetch_document(&url)).expect("prefetch");
+        let t_fetch = t0.elapsed().as_secs_f64() * 1000.0;
+        let page = match loaded {
+            manuk_page::Loaded::Prefetched(pre) => manuk_page::Page::from_prefetched(*pre, &fonts, 1200.0),
+            manuk_page::Loaded::Document { html, final_url } => {
+                manuk_page::Page::load(&html, &final_url, &fonts, 1200.0)
+            }
+            _ => panic!("not a document"),
+        };
+        let t_paint = t0.elapsed().as_secs_f64() * 1000.0;
+        // Now the images, which in a real browser arrive AFTER the page is on screen.
+        let urls = page.pending_image_urls();
+        let n_img = urls.len();
+        let t1 = std::time::Instant::now();
+        let imgs = rt.block_on(manuk_page::fetch_image_urls(urls));
+        let t_img = t1.elapsed().as_secs_f64() * 1000.0;
+        println!(
+            "  FIRST PAINT {t_paint:7.1}ms  (fetch+parse {t_fetch:7.1}ms)   \
+             then {n_img} images in {t_img:7.1}ms ({} decoded)   nodes {}",
+            imgs.len(),
+            page.dom().descendants(page.dom().root()).count()
+        );
+        return;
+    }
+
     if args.first().map(String::as_str) == Some("boxes") {
         run_boxes_cmd(&args[1..], &fonts);
         return;

@@ -234,3 +234,26 @@ the *best-tested failure path on the web*, because autoplay policies make reject
 browsers. Every player library is already written to handle it.
 
 Asserted in **G2 scenario 15**. A missing codec is an acceptable limit; a thrown exception is not.
+
+## Tick 30 — first paint does not wait for images
+
+| Pattern | Status |
+|---|---|
+| Document painted before subresources land | ✅ (tick 30) — `prefetch_document` no longer fetches images; the shell streams them in after (`NavEvent::ImagesReady`) and repaints once |
+| `<img>` reflow on late arrival | ✅ — which is what an `<img>` without intrinsic dimensions does in a real browser anyway |
+
+**Measured, time to a paintable document (the shell's real path):**
+
+```
+nytimes.com      14,000ms → 5,773ms     then 42 images in 452ms, after the page is up
+theguardian.com            → 6,488ms    then 135 images in 8,006ms — the user is reading, not waiting
+wikipedia.org              → 2,044ms
+```
+
+The load path used to fetch and decode **every image** before the shell was handed anything, so the
+window stayed blank until the last tracking pixel had arrived or timed out. On nytimes the document was
+parsed, cascaded and laid out — everything needed to paint — **in 1.7s**, and the user saw it at **14s**.
+
+Gated by **G_FIRST_PAINT**, which drives the shell's actual path and additionally asserts the images are
+still *pending* — because "fast" achieved by never loading them is a different bug wearing this one's
+success as a disguise.

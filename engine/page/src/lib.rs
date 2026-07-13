@@ -182,6 +182,37 @@ async fn fetch_images(
 /// The same, minus the nodes whose image we have ALREADY fetched and decoded for this navigation.
 /// See the call site: this method runs once per dynamic-script round, and without this it re-fetched
 /// and re-decoded every `<img>` on the page every single time.
+/// Fetch + decode a list of image URLs off the UI thread. **Owned data only** — not one `Rc` appears
+/// here, because an `Rc` held across an `.await` makes the whole future `!Send` and pins it to the UI
+/// thread, which is the exact mistake that made image loading block the window.
+pub async fn fetch_image_urls(
+    urls: Vec<String>,
+) -> std::collections::HashMap<String, manuk_paint::DecodedImage> {
+    let fetched = futures_util::future::join_all(
+        urls.into_iter()
+            .map(|url| async move { (url.clone(), fetch_image_bytes(&url).await, url) }),
+    )
+    .await;
+    let mut out = std::collections::HashMap::new();
+    for (key, bytes, url) in fetched {
+        let Some(bytes) = bytes else { continue };
+        let decoded = match image::load_from_memory(&bytes) {
+            Ok(img) => {
+                let rgba = img.to_rgba8();
+                let (w, h) = rgba.dimensions();
+                Some(manuk_paint::DecodedImage { width: w, height: h, rgba: rgba.into_raw() })
+            }
+            Err(_) => decode_svg(&bytes, &url),
+        };
+        if let Some(img) = decoded {
+            if img.width > 0 && img.height > 0 {
+                out.insert(key, img);
+            }
+        }
+    }
+    out
+}
+
 async fn fetch_images_except(
     dom: &Dom,
     base: &str,
@@ -849,6 +880,70 @@ impl Page {
         .await;
         self.image_attempts.extend(tried);
         self.apply_images(images, fonts, viewport_width)
+    }
+
+    /// **The images this page still wants** — resolved URLs, distinct, none already resolved.
+    ///
+    /// Cheap: a DOM walk, no network. The point is that it can be taken on the UI thread, handed to a
+    /// background task, and the decoded result applied later — so **first paint never waits for an
+    /// image**. That is the difference between a browser that feels fast and one that does not, and it
+    /// is what Chromium does: the article is on screen long before the last tracking pixel arrives.
+    pub fn pending_image_urls(&self) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        for n in self.dom.flat_descendants(self.dom.root()) {
+            let Some(el) = self.dom.element(n) else { continue };
+            let src = match self.dom.tag_name(n) {
+                Some("img") => el.attr("src"),
+                Some("video") => el.attr("poster"),   // a poster is a still, and we decode stills
+                _ => None,
+            };
+            let Some(src) = src else { continue };
+            let src = src.trim();
+            if src.is_empty() {
+                continue;
+            }
+            let url = resolve_url(&self.final_url, src);
+            if self.image_by_url.contains_key(&url) || out.contains(&url) {
+                continue;
+            }
+            out.push(url);
+        }
+        out
+    }
+
+    /// Apply images that a background task fetched, binding each URL to every node that names it.
+    /// Returns how many nodes were newly filled — 0 means nothing changed and no repaint is owed.
+    pub fn apply_images_by_url(
+        &mut self,
+        by_url: std::collections::HashMap<String, manuk_paint::DecodedImage>,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> usize {
+        for (url, img) in by_url {
+            self.image_by_url.insert(url, Some(std::rc::Rc::new(img)));
+        }
+        let mut rc: std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>> =
+            std::collections::HashMap::new();
+        for n in self.dom.flat_descendants(self.dom.root()) {
+            let Some(el) = self.dom.element(n) else { continue };
+            let src = match self.dom.tag_name(n) {
+                Some("img") => el.attr("src"),
+                Some("video") => el.attr("poster"),
+                _ => None,
+            };
+            let Some(src) = src else { continue };
+            let url = resolve_url(&self.final_url, src.trim());
+            if let Some(Some(img)) = self.image_by_url.get(&url) {
+                if !self.images.contains_key(&n) {
+                    rc.insert(n, img.clone());
+                }
+            }
+            self.image_attempts.insert((n, url));
+        }
+        if rc.is_empty() {
+            return 0;
+        }
+        self.apply_images(rc, fonts, viewport_width)
     }
 
     /// The **pure** half of image application (DEBT-1): given already-fetched+decoded images,
@@ -2304,15 +2399,20 @@ pub async fn prefetch_document(url: &str) -> Result<Loaded> {
             // Images: fetch + decode off-thread as OWNED data. Never touch `Rc` here — an `Rc`
             // anywhere inside this async fn would make the whole future `!Send`, which is exactly
             // what pinned image fetching to the UI thread and blocked it.
-            let images: HashMap<String, manuk_paint::DecodedImage> =
-                fetch_images_owned(
-                    &dom,
-                    &final_url,
-                    &std::collections::HashSet::new(),
-                    &std::collections::HashSet::new(),
-                )
-                .await
-                .0;
+            // **FIRST PAINT DOES NOT WAIT FOR IMAGES.**
+            //
+            // This used to fetch and decode every image on the page before the shell was handed
+            // anything at all — so the window showed nothing until the last tracking pixel on a news
+            // front page had either arrived or timed out. Measured on nytimes.com: the document was
+            // parsed, cascaded and laid out — *everything needed to paint* — in **1.7s**, and the user
+            // saw it at **14s**. Twelve of those seconds were images nobody was looking at yet.
+            //
+            // Chromium does not do this, and neither does any browser a person would use: the article
+            // is on screen long before the last asset lands. So the images are left to the shell, which
+            // fetches them on a background task and applies them with `apply_images_by_url` when they
+            // arrive (`NavEvent::ImagesReady`), repainting once. The layout reflows then — which is
+            // exactly what an `<img>` without intrinsic dimensions does in a real browser too.
+            let images: HashMap<String, manuk_paint::DecodedImage> = HashMap::new();
 
             // Masks (icons). Scanned from the CSS text rather than the cascade: this thread has no
             // styles, and a URL-keyed cache is all the cascade needs later to bind them to nodes.
