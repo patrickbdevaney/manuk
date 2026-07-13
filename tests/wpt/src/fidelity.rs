@@ -191,7 +191,18 @@ pub fn compare_structure_detail(
     // drift (`misplaced`) is reported separately because on real pages it is dominated by font-
     // metric differences, which are a *fidelity* concern, not a *correctness* one.
     let rendered = probed.saturating_sub(missing);
-    let coverage = if probed == 0 { 1.0 } else { rendered as f64 / probed as f64 };
+    // **A page we cannot PROBE must not score 100%.**
+    //
+    // `probed` counts the `[id]` elements Chrome rendered. `example.com` — which was in this gate's
+    // DEFAULT url list — has **no `id` attributes at all**, so it probed nothing, returned a perfect
+    // 1.0, and inflated the mean of a gate whose whole job is to catch missing content.
+    //
+    // Found by mutation-testing: emptying `node_rects()` entirely — so the browser renders NOTHING —
+    // still scored 100% coverage on that URL. A gate that cannot fail on a blank render is not a gate.
+    //
+    // `f64::NAN` is the honest answer to "what fraction did we render, of nothing?", and `report`
+    // excludes it from the mean rather than counting it as success.
+    let coverage = if probed == 0 { f64::NAN } else { rendered as f64 / probed as f64 };
     missing_ids.sort();
     (coverage, missing, misplaced, probed, missing_ids)
 }
@@ -271,6 +282,20 @@ pub fn report(rows: &[Fidelity], floor: f64) -> bool {
     for r in rows {
         // Gate on structure when we have it (a missing sidebar must FAIL, not be averaged away).
         let gated = r.structure.unwrap_or(r.score);
+        // **A page we could not PROBE is a broken gate CONFIG, not a pass.** `coverage` is NaN when
+        // Chrome rendered no `[id]` elements — and `example.com`, which was in this gate's default URL
+        // list, has none. It scored a perfect 100% and inflated the mean of the gate whose entire job is
+        // to catch missing content. Mutation-testing found it: emptying `node_rects()` so the browser
+        // renders NOTHING still scored 100% there.
+        if gated.is_nan() {
+            eprintln!(
+                "  ⚠ {}: Chrome rendered NO [id] elements — this URL cannot be structurally probed, \
+                 so it measures nothing. Choose a URL with ids. Counting it as a pass is how a gate \
+                 that cannot fail looks green forever.",
+                r.name
+            );
+            all_ok = false;
+        }
         let ok = gated >= floor;
         if !ok {
             all_ok = false;

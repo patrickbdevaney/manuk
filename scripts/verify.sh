@@ -39,7 +39,10 @@ PAR=$(cargo run -q -p manuk-wpt --release -- parity 2>&1 | tail -1)
 if echo "$PAR" | grep -q "72/72"; then ok "$PAR"; else bad "$PAR"; fi
 
 head_ "G1 · real-site visual fidelity vs Chromium (ADR-010/011 — SHIPPING config)"
-G1URLS="${MANUK_FIDELITY_URLS:-https://example.com,https://news.ycombinator.com}"
+# `example.com` was here and it has NO `[id]` elements — so it probed NOTHING, scored a perfect 100%,
+# and inflated the mean of the gate whose job is to catch missing content. Mutation-testing found it.
+# Every URL in this list must be one the gate can actually measure.
+G1URLS="${MANUK_FIDELITY_URLS:-https://news.ycombinator.com,https://en.wikipedia.org/wiki/Terrier}"
 G1FLOOR="${MANUK_FIDELITY_FLOOR:-0.75}"
 G1OUT="${MANUK_FIDELITY_OUT:-/tmp/manuk-fidelity}"
 if cargo run -q -p manuk-wpt --release -- fidelity --urls "$G1URLS" --out "$G1OUT" --floor "$G1FLOOR" >/tmp/manuk-g1.txt 2>&1; then
@@ -61,10 +64,16 @@ head_ "G6 · clickability (a link the browser cannot find is a link the user can
 G6URL="${MANUK_CLICK_URL:-https://en.wikipedia.org/wiki/Terrier}"
 G6HTML="/tmp/manuk-g6.html"
 if curl -sL "$G6URL" -o "$G6HTML" 2>/dev/null && [ -s "$G6HTML" ]; then
-  CLK=$(cargo run -q -p manuk-wpt --release -- hittest --html "$G6HTML" --url "$G6URL" 2>/dev/null | grep -E "CLICKABILITY|MISSED")
+  CLK=$(cargo run -q -p manuk-wpt --release -- hittest --html "$G6HTML" --url "$G6URL" 2>/dev/null | grep -E "CLICKABILITY|MISSED|links on page")
   MISS=$(echo "$CLK" | grep -oE 'MISSED \(unclickable\): [0-9]+' | grep -oE '[0-9]+$' || echo 0)
   PCT=$(echo "$CLK" | grep -oE 'CLICKABILITY: [0-9.]+' | grep -oE '[0-9.]+' || echo 0)
-  if [ "${MISS:-99}" -le 5 ]; then ok "clickability ${PCT}% (${MISS} unclickable links)"; else bad "clickability ${PCT}% — ${MISS} links the browser cannot find"; fi
+  # **The gate must have MEASURED something.** `MISSED` is 0 when the page has no links at all — so a
+  # browser that finds NOTHING scores a perfect clickability of 0-missed and sails through. That is the
+  # same vacuity `G_DEDUP` shipped with (PROCESS #7), and it was found here by mutation-testing.
+  TOTAL=$(echo "$CLK" | grep -oE 'links on page: +[0-9]+' | grep -oE '[0-9]+$' || echo 0)
+  if [ "${TOTAL:-0}" -lt 50 ]; then
+    bad "G6 is VACUOUS: only ${TOTAL:-0} links found on the page, so 'MISSED: 0' proves nothing. A browser that finds NO links scores a perfect clickability. Fix the harness, not the threshold."
+  elif [ "${MISS:-99}" -le 5 ]; then ok "clickability ${PCT}% (${MISS} unclickable of ${TOTAL} links)"; else bad "clickability ${PCT}% — ${MISS} links the browser cannot find"; fi
 else
   printf '  \033[33m—\033[0m could not fetch %s (skipped)\n' "$G6URL"
 fi

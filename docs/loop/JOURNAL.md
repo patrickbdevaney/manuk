@@ -2048,3 +2048,44 @@ Enabling it means **editing Stylo's source**, and that collides head-on with a s
 relitigated silently, so it is written up in STATUS.md as a decision to be made, with the exact one-line
 diff and the trade-off, rather than quietly done. It is 13% of sites, and it is the last known selector
 gap.
+
+## Tick 40 — the self-audit was certifying a third of the wall (2026-07-13)
+
+**TICK SHAPE: infrastructure.** The self-audit came due. It reported everything green. It was checking
+**four of twelve gates.**
+
+Its falsifier check **hardcoded** `G_DEDUP G_LOAD G_RUNAWAY G2` — the four gates that existed the day it
+was written. Six more had shipped since (G_FIRST_PAINT, G_DEFER, G_FORM, G_IFRAME, G_ANIMATION,
+G_SELECTOR) and it knew about **none of them**. It would have gone on reporting the wall as certified
+forever, while certifying a third of it.
+
+> **A check that keeps its own copy of the list it is checking will drift from reality, and it will do it
+> silently.** Same defect as a test re-deriving the constant it checks, and as a capability ledger whose
+> ✅ was never tested. The gate list is now **derived from `verify.sh`**.
+
+Deriving it turned the audit red on **nine gates with no falsifier**. Closing them found two gates that
+**could not fail**:
+
+**`G1` — visual fidelity — was structurally incapable of failing.** Its floor applies to the *structural*
+score, and `coverage` returned **1.0 when `probed == 0`**. `example.com` — **in G1's own default URL
+list** — has **no `[id]` elements at all**. It probed nothing, scored a perfect 100%, and inflated the
+mean of the gate whose entire job is catching missing content. Proven by mutation: emptying
+`node_rects()` so the browser renders **nothing at all** still scored 100% on that URL.
+
+**`G6` — clickability — the same shape.** `MISSED` is 0 when the page has no links, so a browser that
+finds **nothing** scores perfectly. It now refuses fewer than 50 links as vacuous, and reports
+*3 unclickable of 484*.
+
+**`G_CONTAIN` is exempt, and that is a fact rather than an excuse:** it deliberately panics a build and
+asserts the *page* dies while the process lives. Its test input **is** the bug. That is strictly stronger
+than a mutation — it is the standard the others are being held to.
+
+**And three more false "VACUOUS" verdicts, all from weak mutations** — aimed at `Page::links()` (G6 reads
+the DOM directly), a dead function nobody calls, a file G_TEARDOWN doesn't scan, and a black canvas
+against a *structural* floor. Every time, **the gate was right and the mutation was wrong**.
+
+> **A "VACUOUS" verdict is a claim about the gate. Verify it before believing it** — exactly as you would
+> any other measurement. The tool that checks the instruments is an instrument.
+
+**All twelve gates now go red when their bug is put back.** For the first time, that is a fact rather
+than an assumption.

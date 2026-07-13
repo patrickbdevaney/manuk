@@ -117,7 +117,34 @@ head_ "Falsifiability (Part 33) — is each gate PROVEN to go red, or only known
 # caught by squinting at the output, not by anything mechanical.
 if [ -x scripts/falsify.sh ]; then
   ok "scripts/falsify.sh exists — the gates are mutation-tested against themselves"
-  for g in G_DEDUP G_LOAD G_RUNAWAY G2; do
+  # **The gate list is DERIVED from the wall, never carried as a copy.**
+  #
+  # This check used to hardcode `G_DEDUP G_LOAD G_RUNAWAY G2` — the four gates that existed when it was
+  # written. Six more have shipped since (G_FIRST_PAINT, G_DEFER, G_FORM, G_IFRAME, G_ANIMATION,
+  # G_SELECTOR) and it did not know about a single one of them. It was reporting "every gate is proven"
+  # while checking 40% of them, and it would have kept saying so forever.
+  #
+  # That is the same defect as a test re-deriving the constant it checks (PROCESS #12) and the same as a
+  # capability ledger whose ✅ was never tested (#19, #20, #21, #25). **A check that keeps its own copy of
+  # the list it is checking will drift from reality, and it will do it silently.** Read the wall.
+  GATES=$(grep -oE 'head_ "(G[A-Z_0-9]+) ' scripts/verify.sh | grep -oE 'G[A-Z_0-9]+' | sort -u)
+  #
+  # **SELF-PROVING gates need no mutation, and saying so is not an excuse — it is the point.**
+  #
+  # `G_CONTAIN` deliberately panics a build and asserts the PAGE dies while the process lives. It cannot
+  # pass unless the thing it protects works, because the bug IS the test input. That is strictly stronger
+  # than a mutation, and it is the standard every other gate is being held to.
+  #
+  # An exemption stays a NAMED, SHORT list. The moment it starts growing, it has stopped being a fact
+  # about those gates and started being a place to put gates nobody wants to falsify.
+  SELF_PROVING="G_CONTAIN"
+  for g in $GATES; do
+    if [[ " $SELF_PROVING " == *" $g "* ]]; then
+      ok "  $g is SELF-PROVING (its test input IS the bug — stronger than a mutation)"
+      continue
+    fi
+    # Gates whose falsifier is the build itself (parity/F-floors/crate suites) have no mutation; only
+    # the named G_* gates in falsify.sh are claimed.
     if grep -q "want $g" scripts/falsify.sh 2>/dev/null; then
       ok "  $g declares how to break it"
     else

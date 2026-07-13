@@ -269,6 +269,142 @@ s = s.replace(
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+# G_SILENT_FAIL — unregister the promise-rejection tracker. Every async framework error then goes
+# nowhere, which is exactly how "React mounts, throws nothing, renders nothing" happened.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_SILENT_FAIL; then
+  mutate engine/js/src/dom_bindings.rs '
+s = s.replace(
+    "        mozjs::jsapi::SetPromiseRejectionTrackerCallback(\n            raw_cx,\n            Some(promise_rejection_tracker),\n            std::ptr::null_mut(),\n        );",
+    "        // MUTATION: nothing listens for unhandled rejections\n        let _ = promise_rejection_tracker as *const ();",
+    1)
+'
+  expect_red G_SILENT_FAIL cargo test -q -p manuk-page --features stylo,spidermonkey --test g_silent_fail
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+# G_RUNTIME_COUNT — build a second async runtime. One per process is the promise (Part 25.2); the
+# shell was building two, and that is what this gate exists to keep at one.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_RUNTIME_COUNT; then
+  mutate engine/net/src/lib.rs '
+s = s.replace(
+    "pub fn runtime() -> &\x27static tokio::runtime::Runtime {",
+    "pub fn runtime() -> &\x27static tokio::runtime::Runtime {\n    // MUTATION: count a fresh runtime on every call\n    RUNTIME_INSTANTIATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);",
+    1)
+'
+  expect_red G_RUNTIME_COUNT cargo test -q -p manuk-shell runtime_instantiations
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+# G_ALLOC — remove the "ask first" guard, so every scroll rebuilds the rect map for a page that is not
+# listening. Sixty times a second, on the UI thread. That was the wheel-event freeze.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_ALLOC; then
+  mutate engine/page/src/lib.rs '
+s = s.replace(
+    "        if !manuk_js::wants_view_events(ctx) {\n            return;\n        }",
+    "        // MUTATION: do the work even when nobody is listening\n        let _ = manuk_js::wants_view_events(ctx);",
+    1)
+'
+  expect_red G_ALLOC cargo test -q -p manuk-page --features spidermonkey --test g_alloc -- --ignored
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+# G_TEARDOWN — put a `process::exit` back in the shell. It skips every destructor, so the profile
+# (cookies, localStorage, session) is never flushed: a data-loss bug wearing a crash-fix disguise.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_TEARDOWN; then
+  # **Mutate a file the gate actually SCANS.** The first version of this falsifier put the
+  # `process::exit` in `shell/src/tab.rs` — and the gate reported VACUOUS, because it deliberately scans
+  # only the SHIPPING exit paths (`src/main.rs`, `src/gui.rs`). The gate's scope was right and the
+  # mutation was wrong: a weak mutation produces a false "vacuous" verdict, which is PROCESS #9, again.
+  mutate shell/src/gui.rs '
+s = s.replace(
+    "use ",
+    "#[allow(dead_code)]\nfn _mutation_exit() { std::process::exit(0); }   // MUTATION: skips the profile flush\nuse ",
+    1)
+'
+  expect_red G_TEARDOWN cargo test -q -p manuk-shell --test g_teardown
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+# G6 — clickability. Break HIT-TESTING, which is what the gate actually guards. A link the browser
+# cannot find under the cursor is a link the user cannot click, and no box-comparing gate can see it.
+#
+# My first mutation emptied `Page::links()` and the falsifier reported VACUOUS — because `hittest`
+# enumerates links from the DOM, not from that function. The mutation was wrong. **But the check that
+# proved it wrong also found a REAL hole:** with zero links, `MISSED` is 0 and the gate passes. A browser
+# that finds NOTHING scored perfectly. `verify.sh` now refuses fewer than 50 links as vacuous.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G6; then
+  mutate engine/a11y/src/lib.rs '
+s = s.replace(
+    "    pub fn hit_test(&self, x: f32, y: f32) -> Option<&A11yNode> {",
+    "    pub fn hit_test(&self, x: f32, y: f32) -> Option<&A11yNode> {\n        if true { let _ = (x, y); return None; }   // MUTATION: nothing is clickable\n        #[allow(unreachable_code)]",
+    1)
+'
+  expect_red G6 bash -c '
+    curl -sL "${MANUK_CLICK_URL:-https://en.wikipedia.org/wiki/Terrier}" -o /tmp/manuk-g6f.html || exit 1
+    M=$(cargo run -q -p manuk-wpt --release -- hittest --html /tmp/manuk-g6f.html \
+          --url "${MANUK_CLICK_URL:-https://en.wikipedia.org/wiki/Terrier}" 2>/dev/null \
+        | grep -oE "MISSED \(unclickable\): [0-9]+" | grep -oE "[0-9]+$")
+    [ "${M:-99}" -le 5 ]'
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+# G_INTERACT — stall the UI thread inside the tab-open path itself. "The browser feels laggy" is a
+# report that no box-comparing gate can ever produce, which is exactly why this gate exists.
+#
+# The FIRST version of this mutation added a `_mutation_stall()` function that nothing called, and the
+# falsifier duly reported the gate VACUOUS. It was not: the mutation was. A weak mutation produces a
+# false verdict — PROCESS #9, for the third time. Mutate the path the gate actually drives.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_INTERACT; then
+  mutate shell/src/tab.rs '
+s = s.replace(
+    "    pub fn open(&mut self, url: impl Into<String>) -> TabId {",
+    "    pub fn open(&mut self, url: impl Into<String>) -> TabId {\n        std::thread::sleep(std::time::Duration::from_millis(50));   // MUTATION: stall the UI thread",
+    1)
+'
+  expect_red G_INTERACT cargo test -q -p manuk-shell tab_operations
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+# G3 — affordances. Give a control an EMPTY effect: a button in the UI that does nothing when pressed.
+# "No dead buttons" is the promise, and a dead button is invisible to every other gate here.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G3; then
+  mutate shell/src/chrome.rs '
+import re
+s = re.sub(
+    r"const AFFORDANCES: &\[\(&str, &str\)\] = &\[\n",
+    "const AFFORDANCES: &[(&str, &str)] = &[\n        (\"mutation-dead-button\", \"\"),   // MUTATION: a control that does nothing\n",
+    s, count=1)
+'
+  expect_red G3 cargo test -q -p manuk-shell affordance
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+# G1 — real-site fidelity vs Chromium. Its floor is applied to the **STRUCTURAL** score: *what fraction
+# of what Chrome renders do we render AT ALL*. So the mutation must make us render FEWER elements.
+#
+# My first attempt painted every page on a black canvas — and the falsifier reported VACUOUS. It was not:
+# a black background changes no element's existence, so the structural score stayed at 100%. The gate's
+# floor was right and the mutation was aimed at the wrong property. Third time a weak mutation has
+# produced a false "vacuous" verdict (PROCESS #9), and the third time it was the mutation that was wrong.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G1; then
+  mutate engine/layout/src/lib.rs '
+s = s.replace(
+    "    pub fn node_rects(&self, dom: &Dom) -> std::collections::HashMap<NodeId, Rect> {",
+    "    pub fn node_rects(&self, dom: &Dom) -> std::collections::HashMap<NodeId, Rect> {\n        if true { let _ = dom; return Default::default(); }   // MUTATION: the page renders nothing\n        #[allow(unreachable_code)]",
+    1)
+'
+  expect_red G1 cargo run -q -p manuk-wpt --release -- fidelity --urls "https://news.ycombinator.com" --out /tmp/manuk-fid-f --floor 0.75
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 # G_RUNAWAY — remove the task-drain ceiling. A self-rescheduling timer must then hang the engine.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_RUNAWAY; then
