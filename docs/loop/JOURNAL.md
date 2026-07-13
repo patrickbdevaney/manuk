@@ -912,3 +912,52 @@ and it fires (verified against a deliberate `async` throw).
 **Where Lit still stands:** its shadow root attaches, its styles adopt, its comment markers appear — and
 `render()` still does not commit the template. That is a narrower problem than the one this tick started
 with, and the next instrument to point at it is the DOM mutation counter, not more reading.
+
+## Tick 23 — lit-html's template commit, and then React (2026-07-12)
+
+**TICK SHAPE: pattern-class.** Template cloning + comment markers + fragments is the substrate every
+compiler-based framework commits DOM through; Lit is the framework exercising the last unfixed corner of
+it. Not a single-site fix.
+
+**Hypothesis:** my fragment/comment plumbing has a bug, and lit-html is telling the truth. Before
+blaming lit-html I test my own primitives — `createTreeWalker` over a cloned template, comment markers,
+and `insertBefore(fragment, marker)` — because the last three ticks all ended with "the mechanism
+existed and was wrong", and the prior on that is now high.
+
+### Tick 23 — the primitives were wrong, and `setInterval` did not exist
+
+**My prior was right, and it is now a rule.** Before blaming lit-html, I tested my own primitives. All
+three were broken:
+
+- **A DocumentFragment reported `nodeType = 8`** (comment) instead of 11. Not a near-miss: every
+  framework's node dispatch branches on that number, and a fragment claiming to be a comment gets
+  treated as an inert marker.
+- **`cloneNode`/`importNode` fell through to `create_element("div")`** for anything that was not an
+  element or text. So `importNode(template.content, true)` — the single call every compiler-based
+  framework commits a template through — returned a **`<div>`**, and cloning lit-html's comment markers
+  turned every template hole into an empty div.
+- Fixed, and the primitive now does what the spec says: `<!--start--><b>A</b><i>B</i>` — the fragment's
+  children move, no wrapper.
+
+**And then the real find, which is worth more than all of Lit: `setInterval`, `clearInterval` and
+`clearTimeout` DID NOT EXIST.**
+
+Not "were subtly wrong" — were not defined. Every carousel, clock, poller, progress bar, countdown, live
+score and "checking again in 5 seconds" on the web. **A page could not even STOP a timer it had
+started.** Along with them: `AbortController` (every modern `fetch` passes a signal, and a library that
+constructs one unconditionally throws before it ever reaches the request), `TextEncoder`/`TextDecoder`,
+`crypto.randomUUID`, `CSS.escape`/`CSS.supports`.
+
+**Adding `setInterval` would have hung the browser, so the ceiling came first.** The event loop drains
+to quiescence — correct, right up until a page schedules work that reschedules itself. Without a
+ceiling, "drain to quiescence" means "never return", and the tab is gone with no recourse. **G_RUNAWAY**
+asserts a page with `setInterval(fn, 0)` *and* a hand-rolled self-reposting `setTimeout` still renders,
+and still returns (1s, not never). It also asserts the page RENDERED — a ceiling that returns a blank
+page has traded a hang for a different kind of nothing.
+
+**`WebSocket` and `Worker` are deliberately left absent.** A page that feature-detects and falls back is
+better served by honest absence than by a stub that lies about what it can do. That is a decision, not
+an omission.
+
+Lit still does not commit its template. Four ticks in, and the frameworks have paid for themselves many
+times over in things that were never about frameworks at all.

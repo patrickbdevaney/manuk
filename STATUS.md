@@ -8,7 +8,7 @@
 > filesystem, git, the crawl output or the verify receipt.
 
 ```
-TICK: 22
+TICK: 23
 LAST_AUDIT_TICK:   19          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
 LAST_WALL_TIME:    91s

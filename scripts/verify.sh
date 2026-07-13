@@ -88,6 +88,10 @@ head_ "G_LOAD · the page renders when its subresources never answer (METHODOLOG
 GL=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_load_budget 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GL" ]; then ok "load budget: $GL"; else bad "G_LOAD failed — a dead subresource can hold the document hostage"; fi
 
+head_ "G_RUNAWAY · Bar 0 — a self-rescheduling timer must not hang the browser"
+GRA=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_runaway 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GRA" ]; then ok "runaway timer: $GRA"; else bad "G_RUNAWAY failed — a page can freeze the browser with one line of JS"; fi
+
 head_ "G_CONTAIN · Bar 0 — a panic kills the PAGE, not the process (Part 23.2)"
 GC=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_contain 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GC" ]; then ok "containment: $GC"; else bad "G_CONTAIN failed — a page can take the whole browser down"; fi

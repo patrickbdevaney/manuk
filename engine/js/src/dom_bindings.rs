@@ -1063,6 +1063,13 @@ unsafe fn clone_node(dom: *mut Dom, node: NodeId, deep: bool) -> NodeId {
             el
         }
         NodeData::Text(t) => (*dom).create_text(t.clone()),
+        // **A clone must be the same KIND of node.** These fell through to `create_element("div")`,
+        // so `importNode(template.content, true)` — the single call every compiler-based framework
+        // commits a template through — returned a `<div>` instead of a fragment. Inserting it wrapped
+        // the entire component in a spurious div, and cloning a comment marker turned lit-html's
+        // template holes into empty divs.
+        NodeData::Comment(c) => (*dom).create_comment(c.clone()),
+        NodeData::Fragment => (*dom).create_fragment(),
         _ => (*dom).create_element("div"),
     };
     if deep {
@@ -1459,10 +1466,15 @@ unsafe extern "C" fn el_get_node_type(cx: *mut RawJSContext, _argc: u32, vp: *mu
             // ELEMENT_NODE = 1, TEXT_NODE = 3, COMMENT_NODE = 8. A node that is neither an element
             // nor text is a comment as far as anything here can tell, and answering 8 is closer than
             // answering nothing.
+            // DOM node types. A DocumentFragment is 11, and answering 8 (comment) for it is not a
+            // near-miss: `isValidContainer` and every framework's node dispatch branch on this number,
+            // and a fragment that claims to be a comment gets treated as an inert marker.
             let t = if (*dom).is_element(node) {
                 1
             } else if (*dom).is_text(node) {
                 3
+            } else if (*dom).is_fragment(node) {
+                11
             } else {
                 8
             };

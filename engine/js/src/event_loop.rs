@@ -31,13 +31,41 @@ use mozjs::rust::Runtime;
 /// The host prelude: the macrotask + microtask FIFOs and their schedulers, plus the
 /// `fetch`/`XMLHttpRequest` APIs whose I/O the Rust [`run_with_fetcher`] loop performs.
 /// Evaluated once per global.
+/// A runaway task chain must not hang the browser. See `run_deferred`.
+const MAX_TASKS_PER_DRAIN: u32 = 20_000;
+
 const PRELUDE: &str = r#"
     globalThis.__tasks = [];
     globalThis.__micro = [];
-    globalThis.setTimeout = function(cb) {
-        if (typeof cb === 'function') { __tasks.push(cb); }
-        return __tasks.length;   // a fake, monotonic timer id
+    // **Timers, with cancellation and repetition.** `clearTimeout`, `setInterval` and `clearInterval`
+    // did not exist at all — so every carousel, clock, poller, progress bar and "check again in 5s" on
+    // the web either threw or silently never ran. A page cannot even STOP a timer it started.
+    //
+    // Intervals reschedule themselves, which is exactly the shape that turns "drain to quiescence" into
+    // "never return" — the drain is capped for that reason (see MAX_TASKS_PER_DRAIN). An interval that
+    // outlives the load simply stops when the page does, which is the honest behaviour for a renderer
+    // that is not running a live UI thread.
+    globalThis.__timerId = 0;
+    globalThis.__cancelled = {};
+    globalThis.setTimeout = function(cb, ms) {
+        if (typeof cb !== 'function') { return 0; }
+        var id = ++__timerId;
+        __tasks.push(function(){ if (!__cancelled[id]) { cb(); } });
+        return id;
     };
+    globalThis.clearTimeout = function(id) { if (id) { __cancelled[id] = true; } };
+    globalThis.setInterval = function(cb, ms) {
+        if (typeof cb !== 'function') { return 0; }
+        var id = ++__timerId;
+        var tick = function() {
+            if (__cancelled[id]) { return; }
+            cb();
+            if (!__cancelled[id]) { __tasks.push(tick); }
+        };
+        __tasks.push(tick);
+        return id;
+    };
+    globalThis.clearInterval = function(id) { if (id) { __cancelled[id] = true; } };
     globalThis.queueMicrotask = function(cb) {
         if (typeof cb === 'function') { __micro.push(cb); }
     };
@@ -253,6 +281,109 @@ const PRELUDE: &str = r#"
       // styles. That is a rendering gap, and it is strictly better than a blank page: unstyled content
       // is legible, absent content is not. Wiring adopted sheets into the cascade is the follow-on, and
       // it is a real one rather than a "TODO" that means "never".
+      // **`AbortController` — every modern `fetch` passes a signal.** Its absence is not a missing
+      // nicety: a library that constructs one unconditionally (and most do) throws before it ever gets
+      // to the request.
+      if (typeof globalThis.AbortSignal === 'undefined') {
+        globalThis.AbortSignal = function AbortSignal() {
+          this.aborted = false; this.reason = undefined; this.onabort = null; this.__ls = [];
+        };
+        globalThis.AbortSignal.prototype.addEventListener = function(t, f) {
+          if (t === 'abort' && typeof f === 'function') { this.__ls.push(f); }
+        };
+        globalThis.AbortSignal.prototype.removeEventListener = function(t, f) {
+          this.__ls = this.__ls.filter(function(x){ return x !== f; });
+        };
+        globalThis.AbortSignal.prototype.throwIfAborted = function() {
+          if (this.aborted) { throw this.reason; }
+        };
+        globalThis.AbortSignal.abort = function(reason) {
+          var s = new AbortSignal(); s.aborted = true; s.reason = reason; return s;
+        };
+        globalThis.AbortSignal.timeout = function(ms) {
+          var s = new AbortSignal();
+          setTimeout(function(){ s.aborted = true; }, ms);
+          return s;
+        };
+      }
+      if (typeof globalThis.AbortController === 'undefined') {
+        globalThis.AbortController = function AbortController() { this.signal = new AbortSignal(); };
+        globalThis.AbortController.prototype.abort = function(reason) {
+          var s = this.signal;
+          if (s.aborted) { return; }
+          s.aborted = true;
+          s.reason = reason !== undefined ? reason : new Error('AbortError');
+          var e = { type: 'abort', target: s };
+          if (typeof s.onabort === 'function') { try { s.onabort(e); } catch (x) {} }
+          s.__ls.slice().forEach(function(f){ try { f(e); } catch (x) {} });
+        };
+      }
+
+      // `TextEncoder`/`TextDecoder` — UTF-8 only, which is what the web is.
+      if (typeof globalThis.TextEncoder === 'undefined') {
+        globalThis.TextEncoder = function TextEncoder(){ this.encoding = 'utf-8'; };
+        globalThis.TextEncoder.prototype.encode = function(str) {
+          str = String(str === undefined ? '' : str);
+          var out = [], i, c;
+          for (i = 0; i < str.length; i++) {
+            c = str.charCodeAt(i);
+            if (c < 0x80) { out.push(c); }
+            else if (c < 0x800) { out.push(0xc0 | (c >> 6), 0x80 | (c & 63)); }
+            else if (c >= 0xd800 && c <= 0xdbff && i + 1 < str.length) {
+              var c2 = str.charCodeAt(++i);
+              var cp = 0x10000 + ((c - 0xd800) << 10) + (c2 - 0xdc00);
+              out.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 63), 0x80 | ((cp >> 6) & 63), 0x80 | (cp & 63));
+            } else { out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63)); }
+          }
+          return new Uint8Array(out);
+        };
+        globalThis.TextDecoder = function TextDecoder(){ this.encoding = 'utf-8'; };
+        globalThis.TextDecoder.prototype.decode = function(buf) {
+          if (!buf) { return ''; }
+          var b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+          var s = '', i = 0;
+          while (i < b.length) {
+            var c = b[i++];
+            if (c < 0x80) { s += String.fromCharCode(c); }
+            else if (c < 0xe0) { s += String.fromCharCode(((c & 31) << 6) | (b[i++] & 63)); }
+            else if (c < 0xf0) { s += String.fromCharCode(((c & 15) << 12) | ((b[i++] & 63) << 6) | (b[i++] & 63)); }
+            else {
+              var cp = ((c & 7) << 18) | ((b[i++] & 63) << 12) | ((b[i++] & 63) << 6) | (b[i++] & 63);
+              cp -= 0x10000;
+              s += String.fromCharCode(0xd800 + (cp >> 10), 0xdc00 + (cp & 1023));
+            }
+          }
+          return s;
+        };
+      }
+
+      // `crypto.randomUUID` is now everywhere (React keys, request ids, cache busting).
+      if (typeof globalThis.crypto === 'undefined') {
+        globalThis.crypto = {
+          getRandomValues: function(a) {
+            for (var i = 0; i < a.length; i++) { a[i] = (Math.random() * 256) | 0; }
+            return a;
+          },
+          randomUUID: function() {
+            var h = '0123456789abcdef', s = '';
+            for (var i = 0; i < 36; i++) {
+              s += (i === 8 || i === 13 || i === 18 || i === 23) ? '-'
+                 : (i === 14) ? '4'
+                 : h[(Math.random() * 16) | 0];
+            }
+            return s;
+          }
+        };
+      }
+
+      // `CSS.escape` / `CSS.supports` — feature detection, and the correct way to build a selector.
+      if (typeof globalThis.CSS === 'undefined') {
+        globalThis.CSS = {
+          escape: function(v) { return String(v).replace(/([^\w-])/g, '\\$1'); },
+          supports: function() { return true; }
+        };
+      }
+
       if (typeof globalThis.CSSStyleSheet === 'undefined') {
         globalThis.CSSStyleSheet = function CSSStyleSheet() {
           this.cssRules = [];
@@ -401,6 +532,25 @@ pub fn run_deferred(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Resu
         let ran = eval(rt, global, NEXT_TASK, "event_loop_tick.js")?;
         if ran.is_boolean() && ran.to_boolean() {
             count += 1;
+            // **A runaway task chain must not hang the browser (Bar 0).**
+            //
+            // This loop drains to quiescence, which is correct — right up until a page schedules work
+            // that reschedules itself. `setInterval(fn, 0)` is the obvious one, and it is on carousels,
+            // clocks and pollers all over the web; a self-reposting `requestAnimationFrame` is another.
+            // Without a ceiling, "drain to quiescence" means "never return", and the tab is gone with no
+            // recourse — which is precisely the failure Bar 0 exists to forbid.
+            //
+            // The ceiling is deliberately generous: a real page's load-time task chain is tens of
+            // tasks, not tens of thousands. Crossing it means the page is not converging, and the right
+            // answer is to render what we have rather than to keep spinning forever.
+            if count >= MAX_TASKS_PER_DRAIN {
+                tracing::warn!(
+                    count,
+                    "event loop hit its task ceiling — the page is not converging (a self-rescheduling \
+                     timer, most likely). Painting what we have. The alternative is a frozen tab."
+                );
+                break;
+            }
             continue;
         }
         break;
