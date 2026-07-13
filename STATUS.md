@@ -122,6 +122,18 @@ looked at. Optimising hard under a fixed ceiling *feels* like progress and is ev
 **This reframes tick selection:** once the backlog under the current ceiling thins, a tick that **expands
 what the oracle can see** outranks a tick that fixes something it already sees.
 
+## THE STANDING 100-TAB RSS BENCHMARK — the memory claim, proven rather than asserted
+
+Extend the differential oracle to open **N tabs (20 → 100) in both Manuk and real Chromium**, drive to a
+realistic idle/backgrounded steady state, and measure **aggregate RSS across all processes.** Track it
+alongside the performance floors. **Linux-validated is NOT cross-platform-validated** — record the
+per-platform status explicitly and label the gap rather than letting one platform's number stand in for
+three. See `docs/loop/PROCESS-MODEL.md` §7.
+
+The claim it exists to defend is **structural, not incremental:** *at 100 tabs the question is how many
+tabs have a live process at all* — a correctly hibernated tab costs a few KB of restore token, not a
+process. A 100-tab session should look like a handful of live tabs' worth of memory.
+
 ## THE SEVEN META-INSTRUMENTS (build in this order)
 
 | # | Instrument | Why it is ranked here |
@@ -193,11 +205,38 @@ consumes real reasoning effort and *feels like progress* while producing no new 
   is scoped as its own work, honestly labelled. **This is stated once and is not relitigated at each
   audit.**
 
-- **Full per-tab PROCESS isolation is architecturally impossible in-process.** A fault inside
-  SpiderMonkey's own C++ frames cannot be contained the way a Rust panic can — Bar 0's containment handles
-  *"a panic kills the page"*; it **cannot** handle *"a segfault kills the page"*. Closing this gap requires
-  a **multi-process rearchitecture**: a real, deliberate decision point, **not a tick**, and not something
-  to be quietly attempted piecemeal.
+- **PROCESS-PER-TAB IS DECIDED.** *(Supersedes the tick-42 entry, which was wrong — see below.)*
+  In-process **containment of a SpiderMonkey memory-corruption fault is not achievable.** That is not a
+  SpiderMonkey defect; it is true of **every production C++ JS engine**. Chromium's own model *assumes V8
+  has such bugs* and relies on **OS process boundaries**, not on V8's own safety. Google's in-process
+  alternative — the V8 Sandbox — took **3+ years by the team that wrote V8** and is *still not a declared
+  security boundary*. In-process containment is the **harder** path, not the shortcut.
+
+  **The decision: one OS process per tab, SpiderMonkey embedded in each** — the architecture Chrome itself
+  shipped 2008–2018, before Site Isolation. Scoped, committed work: **process spawning, an IPC layer to a
+  coordinating process, and a state-ownership redesign across that boundary.** A definite roadmap
+  milestone, **sequenced after the current breadth work.** Full detail: `docs/loop/PROCESS-MODEL.md`.
+
+  **A from-scratch memory-safe JS engine is RULED OUT** as the way around this. It would not even solve it
+  (**JIT-generated code safety is a separate problem regardless of implementation language**) and costs
+  more than the rest of the browser combined.
+
+  ⚠ **What tick 42's version of this entry got wrong, recorded because the error is instructive:** it said
+  per-tab process isolation was *"architecturally impossible in-process"* — which conflates two different
+  things and is nearly meaningless. Process isolation **requires processes**; it is not "impossible
+  in-process," it is *what you do instead of* in-process. What is impossible is **containing the fault
+  without a process boundary.** *A settled decision that is fuzzy in its wording will be read as settled
+  in its conclusion.*
+
+- **PER-ORIGIN SITE ISOLATION IS REJECTED — not deferred.** Extending process-per-*tab* to process-per-
+  *origin* is architecturally straightforward (same mechanism, finer grain). We are not doing it. **Chromium's
+  own documentation names Site Isolation as the primary reason Chrome uses more memory than Firefox and
+  Safari**, and Chromium's security team has said they are hitting the limits of what more process
+  granularity buys, because **processes are not cheap.** That is Chromium — with vastly more budget for
+  process overhead than this project has — naming this as a real cost. **Our stated goal is to be leaner
+  than Chromium; adopting Chromium's own named bloat driver works directly against it.**
+  **Accepted trade-off, stated plainly:** a compromised cross-origin iframe shares its tab's process. That
+  is **the same trade-off Chrome itself accepted for a decade.**
 
 - **Bar 2 (pixel precision) is deferred.** Breadth beats depth until Bar 1 is real. Pixel-exact on one
   site and broken on a thousand others is not what "usable" means.

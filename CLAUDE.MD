@@ -135,7 +135,7 @@ Reuse mature components where reinventing them adds security/correctness risk wi
 | GPU abstraction | Reuse | `wgpu` — Vulkan (Linux/Windows), Metal (macOS), DX12 (Windows). No Linux-desktop or specific graphics-package assumptions |
 | Windowing / event loop | Reuse | `winit` |
 | Compositor | Build | Layer compositing, scroll, damage tracking, animations — built on Vello + wgpu |
-| Concurrency/process model | Build | Isolate/compartment-per-tab (SpiderMonkey compartments) multiplexed across a small number of OS processes — not one OS process per tab. Share startup snapshots across isolates to cut per-tab baseline memory |
+| Concurrency/process model | Build | **REVISED — one OS process per tab, SpiderMonkey embedded in each** (`docs/loop/PROCESS-MODEL.md`). The former "compartments multiplexed over a few processes — *not* one process per tab" is **superseded**: in-process containment of a memory-corruption fault is not achievable in *any* production C++ JS engine, so the process boundary **is** the containment. **Per-*origin* Site Isolation is REJECTED** (Chromium names it as its own primary memory-bloat driver). The lean-memory claim is defended by **tiered hibernation**, not by fewer processes: at 100 tabs the question is *how many tabs have a live process at all*, not how small a live tab is. |
 
 ## Compatibility verification methodology
 
