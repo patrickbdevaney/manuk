@@ -88,6 +88,13 @@ head_ "G_LOAD · the page renders when its subresources never answer (METHODOLOG
 GL=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_load_budget 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GL" ]; then ok "load budget: $GL"; else bad "G_LOAD failed — a dead subresource can hold the document hostage"; fi
 
+head_ "G_FORM · the browser must be WRITABLE — submit is cancellable, and forms serialize correctly"
+# Forms are 50% of the corpus. The load-bearing assertion is that `preventDefault()` on `submit` is
+# HONOURED: without it, every AJAX form on the web performs the full page navigation its author
+# explicitly cancelled, and the user loses what they typed while nothing says why.
+GFM=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_form 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GFM" ]; then ok "forms: $GFM"; else bad "G_FORM failed — submit is not cancellable, or a form does not serialize correctly"; fi
+
 head_ "G_DEFER · defer/async/module must not block paint — and must still RUN"
 # `defer` and `is_async` were parsed and used for NOTHING. Every script blocked first paint, including
 # `type=module`, which is deferred by DEFAULT in every real browser and is what every Vite bundle ships

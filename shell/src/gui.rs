@@ -605,17 +605,87 @@ impl App {
     /// form's successful controls and navigate. `method=post` and formless buttons are no-ops
     /// (logged), matching the agent's form model.
     fn submit_owning_form(&mut self, node: manuk_dom::NodeId) {
+        let Some(form) = self
+            .page
+            .as_ref()
+            .and_then(|page| manuk_agent::forms::owning_form(page.dom(), node))
+        else {
+            tracing::info!("submit: the control is in no form (ignored)");
+            return;
+        };
+
+        // **Fire `submit` FIRST, and honour `preventDefault()`.**
+        //
+        // This was missing, and its absence broke essentially every modern form on the web. A form on a
+        // React/Vue/Svelte page is not submitted by the browser at all: the page listens for `submit`,
+        // cancels the default, and does its own `fetch`. With no event, that handler never ran — so we
+        // performed the **full GET navigation the author had explicitly cancelled**, throwing away the
+        // page and everything the user had typed. The site appeared to reload itself whenever anyone
+        // pressed a button.
+        let w = self.viewport.width;
+        let proceed = match self.page.as_mut() {
+            Some(p) => p.dispatch_submit(form, &self.fonts, w),
+            None => true,
+        };
+        // The handler may have re-rendered the page — that is the entire point of intercepting submit.
+        self.pump_fetches();
+        self.pump_messages();
+        self.rerender();
+
+        if !proceed {
+            tracing::info!("submit: the page called preventDefault() — no navigation, as intended");
+            return;
+        }
+
         let action = self.page.as_ref().and_then(|page| {
-            let dom = page.dom();
-            let form = manuk_agent::forms::owning_form(dom, node)?;
-            manuk_agent::forms::submission_url(dom, form, &page.final_url).ok()
+            manuk_agent::forms::submission_url(page.dom(), form, &page.final_url).ok()
         });
         match action {
             Some(url) => {
                 tracing::info!(url = %url, "submit: form GET");
                 self.goto(&url);
             }
-            None => tracing::info!("submit: no form / non-GET method (ignored)"),
+            // POST is still unimplemented, and it is named rather than silently ignored: a login that
+            // does nothing and says nothing is the worst possible failure for the person trying to use it.
+            None => tracing::warn!(
+                "submit: this form uses method=POST, which is not implemented yet — nothing was sent"
+            ),
+        }
+    }
+
+    /// Drain `form.submit()` / `form.requestSubmit()` calls that scripts queued.
+    ///
+    /// `submit()` does NOT fire the event (a script calling it has already decided); `requestSubmit()`
+    /// does. The spec draws that distinction and it is not pedantry — one is "submit this", the other is
+    /// "ask the page whether to submit this".
+    fn pump_form_submits(&mut self) {
+        let (direct, requested) = match self.page.as_ref() {
+            Some(p) => p.take_form_submits(),
+            None => (Vec::new(), Vec::new()),
+        };
+        let w = self.viewport.width;
+        for form in requested {
+            let proceed = match self.page.as_mut() {
+                Some(p) => p.dispatch_submit(form, &self.fonts, w),
+                None => true,
+            };
+            if proceed {
+                self.navigate_form(form);
+            }
+        }
+        for form in direct {
+            self.navigate_form(form);
+        }
+    }
+
+    /// Perform the navigation for a form, with no event — the caller has already decided.
+    fn navigate_form(&mut self, form: manuk_dom::NodeId) {
+        let action = self.page.as_ref().and_then(|page| {
+            manuk_agent::forms::submission_url(page.dom(), form, &page.final_url).ok()
+        });
+        match action {
+            Some(url) => self.goto(&url),
+            None => tracing::warn!("form.submit(): method=POST is not implemented yet — nothing sent"),
         }
     }
 
@@ -893,6 +963,7 @@ impl App {
         self.pump_fetches();
         self.handle_history_ops();
         self.pump_messages();
+        self.pump_form_submits();
         self.rerender();
         // The document is on screen NOW. Only then do the deferred scripts run and the images load.
         self.run_deferred_scripts();

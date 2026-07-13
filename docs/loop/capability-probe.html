@@ -33,5 +33,12 @@ t('form.submit',         function(){ return typeof document.getElementById('f').
 t('el.scrollIntoView',   function(){ return typeof document.getElementById('d').scrollIntoView === 'function'; });
 t('img.currentSrc',      function(){ return 'currentSrc' in document.getElementById('ss'); });
 t('iframe.contentWindow',function(){ return 'contentWindow' in document.getElementById('ifr'); });
+// **These are here because I twice implemented a duplicate of a feature that already worked.**
+// The probe is the authority. If it does not test something, that capability's status is UNKNOWN — and
+// "unknown" must never be silently read as "missing", which is how you ship a worse copy of working code.
+t('FormData',            function(){ return typeof FormData === 'function' && new FormData(document.getElementById('f')).get('q') === 'x'; });
+t('URLSearchParams',     function(){ return typeof URLSearchParams === 'function'; });
+t('form.requestSubmit',  function(){ return typeof document.getElementById('f').requestSubmit === 'function'; });
+t('submit event',        function(){ var ok=false; var f=document.getElementById('f'); f.addEventListener('submit',function(e){e.preventDefault();ok=true;}); return true; });
 console.log('CAPS ' + r.join(' | '));
 </script></body></html>

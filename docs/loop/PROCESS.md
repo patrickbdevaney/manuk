@@ -11,7 +11,7 @@ The rule it enforces:
 
 ## Why this file exists
 
-In a single session (ticks 25–29), the *process* — not the code — produced **nineteen** false or unusable
+In a single session (ticks 25–29), the *process* — not the code — produced **twenty** false or unusable
 conclusions. Every one of them made the browser look better or worse than it is, and not one was a bug
 in the browser:
 
@@ -43,7 +43,16 @@ in the browser:
 
 | 19 | **A capability audit run from the wrong ORIGIN reported the browser as broken** | The first `CAPABILITIES.md` opened with *"`localStorage` — 27% of the web — THROWS. Not a gap, an outage."* **False.** A real, persisted, per-origin `localStorage` had existed for ages; it threw because the probe was a `file://` URL — an opaque origin, which gets no storage *in every browser*. **I had already written a replacement shim.** One more step and I would have shipped a worse duplicate of a working feature and reported a 27%-of-the-web win that did not exist. | The capability probe is **served over real HTTP** (`docs/loop/capability-probe.html`), never opened from disk. Support numbers are measured from a real origin or they are not measured |
 
-Eight of the nineteen were **found by an accounting check, not by the gate that was supposed to catch them**.
+| 20 | **I implemented a duplicate of a working feature. Twice, in two ticks.** | `localStorage` (tick 33) and `FormData`/`URLSearchParams` (tick 34) both already existed and both worked. I wrote replacements for both. The second time the shim was dead on arrival — guarded by `typeof === 'undefined'` — and I only noticed because **the behaviour did not change when I "fixed" it**. | The cause was never carelessness about the code: it was **trusting a capability probe that did not test the capability**. The probe is the AUTHORITY. If it does not test something, that capability's status is **UNKNOWN** — and *"unknown" must never be silently read as "missing"*, which is exactly how you ship a worse copy of working code. `capability-probe.html` now tests everything before I touch it. |
+
+Eight of the twenty were **found by an accounting check, not by the gate that was supposed to catch them**.
+
+**Defect #20 is the one with a general shape worth naming**, because it is the same shape as #5 (the Bar 0
+metric), #16 (the vacuous gate) and #19 (the file:// probe):
+
+> **An absent measurement is not a negative measurement.** "The probe did not say yes" and "the probe
+> said no" are different facts, and treating the first as the second is how a project spends a tick
+> rebuilding something it already had — or, worse, reports the rebuild as a win.
 
 Defect #14 is the one to be frightened of. Every other entry here produced a *wrong number*. This one
 produced **wrong code, in the working tree, in a Bar 0 path**, and the failure it caused was

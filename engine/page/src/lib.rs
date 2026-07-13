@@ -1128,6 +1128,56 @@ impl Page {
     /// that matters. A framework does not read the DOM; it listens. Setting the value without
     /// dispatching the events leaves the page's own model of the form untouched, so the box shows
     /// the text and the site behaves as though the field were still empty.
+    /// **Dispatch a real `submit` event to `form`.** Returns `true` if the browser should go ahead and
+    /// navigate — i.e. **no listener called `preventDefault()`**.
+    ///
+    /// This was missing entirely, and its absence broke essentially every modern form on the web. A form
+    /// on a React/Vue/Svelte page is not submitted by the browser: the page listens for `submit`, calls
+    /// `preventDefault()`, and does its own `fetch()`. With no `submit` event, that handler never runs —
+    /// so we performed a **full GET navigation** the author never intended, throwing away the page and
+    /// its state, and the site appeared to "reload itself" whenever anyone pressed a button.
+    ///
+    /// Forms are **50% of the corpus** (`docs/loop/CAPABILITIES.md`), and this is the difference between
+    /// a reader and a browser: search boxes, logins, checkouts.
+    #[cfg(feature = "spidermonkey")]
+    pub fn dispatch_submit(
+        &mut self,
+        form: manuk_dom::NodeId,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
+        let Some(ctx) = self.js.as_ref() else { return true };
+        let rects: std::collections::HashMap<manuk_dom::NodeId, [f32; 4]> = self
+            .root_box
+            .node_rects(&self.dom)
+            .into_iter()
+            .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+            .collect();
+        let proceed =
+            match manuk_js::dispatch_event(ctx, &mut self.dom, form, "submit", &rects, &self.styles) {
+                Ok(default_ok) => default_ok,
+                Err(e) => {
+                    // Surfaced, never swallowed (G_SILENT_FAIL). A submit handler that dies silently is
+                    // a form that mysteriously navigates away, and the user loses what they typed.
+                    tracing::warn!("submit dispatch: {e}");
+                    true
+                }
+            };
+        // The handler may have re-rendered the page (that is the entire point of intercepting submit).
+        self.relayout(fonts, viewport_width);
+        proceed
+    }
+
+    #[cfg(not(feature = "spidermonkey"))]
+    pub fn dispatch_submit(
+        &mut self,
+        _form: manuk_dom::NodeId,
+        _fonts: &FontContext,
+        _viewport_width: f32,
+    ) -> bool {
+        true
+    }
+
     pub fn dispatch_type(
         &mut self,
         node: manuk_dom::NodeId,
@@ -1562,6 +1612,20 @@ impl Page {
         match &self.js {
             Some(ctx) => manuk_js::take_fetches(ctx),
             None => Vec::new(),
+        }
+    }
+
+    /// Forms a script asked to submit: `(direct, requested)`. See `manuk_js::take_form_submits`.
+    pub fn take_form_submits(&self) -> (Vec<manuk_dom::NodeId>, Vec<manuk_dom::NodeId>) {
+        match &self.js {
+            Some(ctx) => {
+                let (d, r) = manuk_js::take_form_submits(ctx);
+                (
+                    d.into_iter().map(manuk_dom::NodeId).collect(),
+                    r.into_iter().map(manuk_dom::NodeId).collect(),
+                )
+            }
+            None => (Vec::new(), Vec::new()),
         }
     }
 

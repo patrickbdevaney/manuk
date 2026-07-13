@@ -632,6 +632,10 @@ unsafe fn define_members(
         def(c"getAttributeNames", el_get_attribute_names, 0);
         prop(c"data", el_get_char_data, Some(el_set_char_data));
         prop(c"nodeValue", el_get_char_data, Some(el_set_char_data));
+        // Forms — 50% of the corpus, and the difference between a reader and a browser.
+        def(c"submit", el_form_submit, 0);
+        def(c"requestSubmit", el_form_request_submit, 0);
+        def(c"reset", el_form_reset, 0);
         def(c"hasAttributes", el_has_attributes, 0);
         def(c"hasChildNodes", el_has_child_nodes, 0);
         def(c"replaceChild", el_replace_child, 2);
@@ -2160,6 +2164,66 @@ unsafe extern "C" fn el_set_char_data(cx: *mut RawJSContext, argc: u32, vp: *mut
     true
 }
 
+/// `form.submit()` / `form.requestSubmit()` — queue a real submission for the host.
+///
+/// The distinction the spec draws is the one that matters here and it is not pedantry:
+///
+/// - **`requestSubmit()`** fires a `submit` event first, so the page's own handler gets to
+///   `preventDefault()` and do its own `fetch`. This is what a well-behaved script calls.
+/// - **`submit()`** does **not** fire the event — it submits, full stop. A script calling this has
+///   already decided.
+///
+/// Both hand the form's node id to the host (`__formSubmits`), which owns navigation. The JS layer
+/// cannot navigate and should not try: it does not know about tabs, history, or the network stack.
+unsafe extern "C" fn el_form_submit(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    if let Some((_, node)) = this_node(vp) {
+        let id = node.0;
+        let _ = eval_in_current_global(
+            cx,
+            &format!("(globalThis.__formSubmits||(globalThis.__formSubmits=[])).push({id})"),
+        );
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `form.requestSubmit()` — fire `submit` first, then (if not cancelled) submit. The event is
+/// dispatched by the host, which is the only thing that can then act on the result.
+unsafe extern "C" fn el_form_request_submit(
+    cx: *mut RawJSContext,
+    _argc: u32,
+    vp: *mut Value,
+) -> bool {
+    if let Some((_, node)) = this_node(vp) {
+        let id = node.0;
+        let _ = eval_in_current_global(
+            cx,
+            &format!("(globalThis.__formRequests||(globalThis.__formRequests=[])).push({id})"),
+        );
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `form.reset()` — clear the form's controls back to their default values.
+unsafe extern "C" fn el_form_reset(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, form)) = this_node(vp) {
+        for n in (*dom).flat_descendants(form) {
+            let Some(el) = (*dom).element(n) else { continue };
+            if !matches!((*dom).tag_name(n), Some("input") | Some("textarea") | Some("select")) {
+                continue;
+            }
+            // The DEFAULT value is the content attribute; the CURRENT value is what the user typed.
+            // Reset restores the former, which is why the two must not be the same storage.
+            let default = el.attr("data-default-value").unwrap_or("").to_string();
+            (*dom).set_attr(n, "value", default);
+        }
+    }
+    let _ = cx;
+    *vp = UndefinedValue();
+    true
+}
+
 /// `element.tagName` getter → the uppercase tag name (read-only, per DOM).
 unsafe extern "C" fn el_get_tag_name(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
@@ -3411,6 +3475,38 @@ impl PageContext {
         crate::event_loop::drain_pending(runtime, global.handle())
     }
 
+    /// Drain `form.submit()` / `form.requestSubmit()` calls that scripts queued, as node ids.
+    ///
+    /// Two queues, because the spec draws a distinction that is not pedantry: `requestSubmit()` fires a
+    /// `submit` event first (the page may cancel it); `submit()` does not (the script has already
+    /// decided). Collapsing them would either make `submit()` cancellable — so a page could refuse its
+    /// own script's submission — or make `requestSubmit()` uncancellable, which defeats its entire
+    /// purpose.
+    pub fn take_form_queue(&self, runtime: &mut Runtime, which: &str) -> Vec<usize> {
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        let js = format!(
+            "(function(){{var q=globalThis.{which}||[];globalThis.{which}=[];return q.join(',');}})()"
+        );
+        let Some(v) = (unsafe { eval_in_current_global(raw_cx, &js) }) else {
+            return Vec::new();
+        };
+        if !v.is_string() {
+            return Vec::new();
+        }
+        let mut c = unsafe { wrap_cx(raw_cx) };
+        rooted!(&in(runtime.cx()) let val = v);
+        let s = match unsafe { String::safe_from_jsval(&mut c, val.handle(), ()) } {
+            Ok(ConversionResult::Success(s)) => s,
+            _ => return Vec::new(),
+        };
+        s.split(',')
+            .filter(|t| !t.is_empty())
+            .filter_map(|t| t.parse::<usize>().ok())
+            .collect()
+    }
+
     /// Drain this document's queued `history` ops as `(kind, state_json, url)` (see
     /// [`take_pending_history`]). Host-side thread-local, so no realm entry is needed.
     pub fn take_history_ops(&self) -> Vec<(u8, String, String)> {
@@ -4102,7 +4198,10 @@ const WINDOW_PRELUDE: &str = r#"
                     else for (var k in init) pairs.push([k, String(init[k])]);
                 }
                 this._p = pairs;
-                var enc = function (x) { return encodeURIComponent(String(x)); };
+                // `application/x-www-form-urlencoded`: a space is `+`, not `%20`. That is what a
+                // server's form parser expects. `encodeURIComponent` alone gets it wrong — quietly, and
+                // only for values containing spaces, which is the worst possible distribution of a bug.
+                var enc = function (x) { return encodeURIComponent(String(x)).replace(/%20/g, '+'); };
                 this.append = function (k, v) { this._p.push([String(k), String(v)]); };
                 this.set = function (k, v) {
                     var found = false;
@@ -4211,15 +4310,22 @@ const WINDOW_PRELUDE: &str = r#"
                         if (!n) continue;
                         var ty = (e.getAttribute('type') || '').toLowerCase();
                         if ((ty === 'checkbox' || ty === 'radio') && !e.checked) continue;
-                        pairs.push([n, e.value === undefined ? '' : e.value]);
+                        var v = e.value;
+                        // **A checked checkbox with no `value` submits the string `"on"`.** Not `""` —
+                        // servers branch on the difference, and "the box was ticked" arriving as an empty
+                        // string reads at the far end as "ticked, and the user typed nothing", which is a
+                        // different claim. It is in the spec precisely because nobody would guess it.
+                        if ((ty === 'checkbox' || ty === 'radio') && (v === undefined || v === null || v === '')) {
+                            v = 'on';
+                        }
+                        pairs.push([n, v === undefined || v === null ? '' : v]);
                     }
                 }
                 // urlencoded serialisation, which is what `fetch(url, {body: fd})` sends until
                 // multipart is wired through the JS boundary.
                 this.toString = function () {
-                    return pairs.map(function (p) {
-                        return encodeURIComponent(p[0]) + '=' + encodeURIComponent(String(p[1]));
-                    }).join('&');
+                    var enc = function (x) { return encodeURIComponent(String(x)).replace(/%20/g, '+'); };
+                    return pairs.map(function (p) { return enc(p[0]) + '=' + enc(p[1]); }).join('&');
                 };
             };
         }

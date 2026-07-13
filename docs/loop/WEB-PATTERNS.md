@@ -292,3 +292,17 @@ unlocked.
 **The rule this tick added, and it is about scoring not coding:** *3% of sites USING a feature is 3% of
 sites BROKEN when that feature throws.* The usage number and the damage number are not the same number,
 and a capability that throws outranks capabilities used by ten times as many sites.
+
+## Tick 34 — the browser becomes writable
+
+| Pattern | % of the web | Status |
+|---|---|---|
+| `submit` event + `preventDefault()` | **~every modern form** | ✅ (tick 34) — **this was the bug.** No `submit` event was ever dispatched, so a React/Vue form's handler never ran, and we performed the **full GET navigation the author had explicitly cancelled**. The user watched the site "reload itself" and lose what they typed. |
+| `form.submit()` / `requestSubmit()` | common | ✅ (tick 34) — and they differ, as the spec requires: `requestSubmit()` fires `submit` (the page may cancel); `submit()` does not (the script has decided) |
+| `form.reset()` | common | ✅ (tick 34) |
+| `FormData` from a `<form>` | every AJAX form | ✅ **already existed** — fixed: a checked checkbox with no `value` submits `"on"`, not `""` |
+| `URLSearchParams` / form-urlencoded | ubiquitous | ✅ **already existed** — fixed: a space is `+`, not `%20`, which is what a server's form parser expects |
+| `<form method=POST>` | logins, checkouts | ❌ **still not implemented** — and now it says so out loud instead of being silently ignored |
+
+**Forms are 50% of the corpus, and they are the difference between a reader and a browser.** You cannot
+search, log in, or buy anything without them.

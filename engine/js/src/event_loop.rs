@@ -361,6 +361,18 @@ const PRELUDE: &str = r#"
       // experiment.** A capability audit run from the wrong origin reports the browser as broken, and I
       // would have "fixed" a 27%-of-the-web outage that did not exist, and reported the win.)
 
+      // (No `FormData` / `URLSearchParams` here. **Real ones already exist**, in the `dom_bindings`
+      // prelude, and they harvest a form's successful controls exactly as they should.
+      //
+      // I wrote duplicates anyway, behind a `typeof === 'undefined'` guard, so they were dead the moment
+      // they compiled — and I only noticed because the behaviour did not change when I "fixed" them.
+      // This is the SECOND time in two ticks: `localStorage` was the first. Both times the cause was the
+      // same, and it was not carelessness about the code — it was **trusting a capability probe that did
+      // not test the capability.**
+      //
+      // The probe is the authority. If it does not test something, its status is UNKNOWN, and "unknown"
+      // must not be silently read as "missing". `docs/loop/capability-probe.html` now tests these.)
+
       // **`Notification`** — 14% of the corpus. Almost always feature-detected, so the honest answer is
       // the useful one: the constructor exists, permission is `"denied"`, and `requestPermission()`
       // resolves to `"denied"`. A site asked, and was told no. Nothing throws, and no user is nagged.

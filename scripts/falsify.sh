@@ -216,6 +216,20 @@ s = s.replace(
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+# G_FORM — ignore preventDefault() on submit, which is what we did before tick 34. Every AJAX form on
+# the web then performs the navigation its author cancelled.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_FORM; then
+  mutate engine/page/src/lib.rs '
+s = s.replace(
+    "        // The handler may have re-rendered the page (that is the entire point of intercepting submit).\n        self.relayout(fonts, viewport_width);\n        proceed",
+    "        self.relayout(fonts, viewport_width);\n        let _ = proceed;\n        true   // MUTATION: navigate anyway, ignoring preventDefault()",
+    1)
+'
+  expect_red G_FORM cargo test -q -p manuk-page --features stylo,spidermonkey --test g_form
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 # G_RUNAWAY — remove the task-drain ceiling. A self-rescheduling timer must then hang the engine.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_RUNAWAY; then

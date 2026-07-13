@@ -1714,3 +1714,53 @@ of a working feature and reported a 27%-of-the-web win that did not exist.
 
 > **The instrument is part of the experiment.** The probe is now **served over real HTTP**, never opened
 > from disk. Support numbers are measured from a real origin, or they are not measured.
+
+## Tick 34 — the browser becomes writable (2026-07-13)
+
+**TICK SHAPE: pattern-class.** CLUSTER: C01ca. The #1 item on the measured capability list: **forms, 50%
+of the corpus** — the difference between a *reader* and a *browser*. You cannot search, log in, or buy
+anything without them.
+
+**The bug was not "forms are missing".** GET forms had submitted on click for ages. What was missing was
+the **`submit` event** — and its absence broke essentially every *modern* form on the web.
+
+A form on a React/Vue/Svelte page is not submitted by the browser at all. The page listens for `submit`,
+calls `preventDefault()`, and does its own `fetch`. With no event ever dispatched, **that handler never
+ran** — so we performed the **full GET navigation the author had explicitly cancelled**, throwing away
+the page and everything the user had typed. From the user's side, the site "reloads itself" whenever
+anyone presses a button, and nothing anywhere says why.
+
+Now: `Page::dispatch_submit` fires a real `submit` event and returns whether to navigate; the shell
+honours it. Plus `form.submit()` / `requestSubmit()` / `reset()`, which differ exactly as the spec
+requires (`requestSubmit()` fires the event and may be cancelled; `submit()` does not, because a script
+calling it has already decided).
+
+**And two spec details that servers actually branch on, both of which were wrong:**
+- A **checked checkbox with no `value`** submits the string `"on"`, not `""`. "The box was ticked"
+  arriving as an empty string reads at the far end as "ticked, and the user typed nothing". Different
+  claims.
+- `application/x-www-form-urlencoded` encodes a space as **`+`**, not `%20`. `encodeURIComponent` alone
+  gets this wrong — quietly, and *only for values containing spaces*, which is the worst possible
+  distribution for a bug.
+
+`method=POST` is still unimplemented — and it now **says so out loud** rather than being silently ignored.
+A login that does nothing and reports nothing is the worst failure available to the person trying to use it.
+
+---
+
+**The process defect, and it is the second time in two ticks.**
+
+I implemented a duplicate of `FormData`/`URLSearchParams`. They already existed and already worked. The
+shim was dead on arrival — guarded by `typeof === 'undefined'` — and **I only noticed because the
+behaviour did not change when I "fixed" it**. `localStorage` was the same story one tick earlier.
+
+The cause was never carelessness about the code. It was **trusting a capability probe that did not test
+the capability**. And that has a general shape, shared with the Bar 0 metric that measured Chromium, the
+vacuous gate, and the `file://` probe:
+
+> **An absent measurement is not a negative measurement.** "The probe did not say yes" and "the probe
+> said no" are different facts. Treating the first as the second is how a project spends a tick
+> rebuilding something it already had — and then reports the rebuild as a win.
+
+The probe is the authority. It now tests `FormData`, `URLSearchParams`, `requestSubmit` and the `submit`
+event, *before* anyone touches them.

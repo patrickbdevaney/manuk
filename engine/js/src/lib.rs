@@ -294,6 +294,24 @@ pub fn take_fetches(_ctx: &PageContext) -> Vec<(u32, String, String, String)> {
     Vec::new()
 }
 
+/// Node ids of forms a script asked to submit. `direct` = `form.submit()` (no event, the script has
+/// decided); `requested` = `form.requestSubmit()` (fire `submit` first, the page may cancel).
+#[cfg(feature = "_sm")]
+pub fn take_form_submits(ctx: &PageContext) -> (Vec<usize>, Vec<usize>) {
+    with_runtime(|rt| {
+        Ok::<_, JsError>((
+            ctx.take_form_queue(rt, "__formSubmits"),
+            ctx.take_form_queue(rt, "__formRequests"),
+        ))
+    })
+    .unwrap_or_default()
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn take_form_submits(_ctx: &PageContext) -> (Vec<usize>, Vec<usize>) {
+    (Vec::new(), Vec::new())
+}
+
 /// Settle the `fetch`/`XHR` request `id` in `ctx`'s document with an HTTP `status` and response
 /// `body` (`status == 0` = network failure). Runs the page's `.then`/`onload` reactions and any
 /// DOM mutations they make. No-op without the JS feature.
