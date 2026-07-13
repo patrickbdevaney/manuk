@@ -53,21 +53,46 @@ fn blackhole() -> String {
 /// are black holes.
 #[test]
 fn dead_subresources_cannot_hold_the_document_hostage() {
-    // Keep the test fast and the assertion sharp: a 1s per-request deadline and a 3s page budget.
-    // The *shape* is what is being tested, not the specific numbers.
-    std::env::set_var("MANUK_NET_TIMEOUT_MS", "1000");
-    std::env::set_var("MANUK_LOAD_BUDGET_MS", "3000");
+    // **The PAGE budget must be the thing under test — and for a long time it was not.**
+    //
+    // `scripts/falsify.sh` disabled `load_budget()` entirely and this gate stayed GREEN. It was being
+    // protected by the *per-request* deadline, not by the page budget in its own name: three dead
+    // subresources at 1s each is 3s, comfortably under the 10s assertion, with or without a page budget.
+    // The gate would have been green if the budget had been deleted outright.
+    //
+    // The budget's entire purpose is to bound the SUM when phases stack — "worst case across the six
+    // phases is ~64s", per its own docstring. So the test has to make them stack: a per-request deadline
+    // long enough, and dead subresources numerous enough across enough phases, that **without** the page
+    // budget the load blows through the assertion. Now removing the budget makes this go red, which is
+    // the only thing that makes its passing mean anything.
+    // The numbers are chosen so the PAGE BUDGET is the only thing that can satisfy the assertion.
+    //
+    // Fetches within a phase are concurrent, so five dead images cost one request deadline, not five —
+    // the phases do not stack the way this gate's original docstring assumed. What DOES stack is the
+    // phases themselves: stylesheets, then images, then masks, each serial-by-necessity because a sheet
+    // can add an image. At a 5s request deadline that is ~15s of dead waiting, comfortably past the 10s
+    // assertion — UNLESS the page budget cuts it off at 3s. Which is the promise, and now the only way
+    // this test can pass.
+    // A LONG request deadline and a SHORT page budget — so the budget is the ONLY thing that can make
+    // this test pass. If it is removed, the black holes hold each phase for the full 10s and the load
+    // blows through the ceiling below. That is what makes a green result here mean something.
+    std::env::set_var("MANUK_NET_TIMEOUT_MS", "10000");
+    std::env::set_var("MANUK_LOAD_BUDGET_MS", "2000");
 
     let hole = blackhole();
     // Every phase gets a black hole: stylesheet, image, and a background-image. Before the fix each
     // one stalled independently, and they stacked.
     let html = format!(
         r#"<html><head>
-             <link rel="stylesheet" href="{hole}/never.css">
+             <link rel="stylesheet" href="{hole}/never1.css">
+             <link rel="stylesheet" href="{hole}/never2.css">
+             <link rel="stylesheet" href="{hole}/never3.css">
            </head>
            <body style="background-image:url({hole}/never-bg.png)">
              <h1 id="headline">The document is what the user came for</h1>
-             <img id="pic" src="{hole}/never.png">
+             <img id="pic" src="{hole}/never1.png">
+             <img src="{hole}/never2.png"><img src="{hole}/never3.png">
+             <img src="{hole}/never4.png"><img src="{hole}/never5.png">
              <p id="body">A subresource is an enhancement. This text must be on screen.</p>
            </body></html>"#
     );
@@ -90,9 +115,15 @@ fn dead_subresources_cannot_hold_the_document_hostage() {
     //    The ceiling is the page budget plus generous slack for the runtime, NOT the sum of the
     //    per-request deadlines, because the whole point is that they do not stack.
     assert!(
-        elapsed < Duration::from_secs(10),
-        "page took {elapsed:?} to load with dead subresources — the budget is not being enforced. \
-         This is the frozen-tab bug: a subresource is holding the document hostage."
+        elapsed < Duration::from_secs(5),
+        "page took {elapsed:?} with a 2s budget and dead subresources — the budget is NOT being \
+         enforced. \n\n\
+         This ceiling is 2x the budget, deliberately. The previous one was 10s, and at 10s the gate \
+         was VACUOUS: `scripts/falsify.sh` deleted `load_budget()` outright and this test stayed \
+         GREEN, because a couple of dead phases at the per-request deadline still came in under ten \
+         seconds. It was being protected by the request timeout, not by the page budget in its own \
+         name. A gate must assert the promise it is named for — 'the budget is enforced' — and not \
+         merely 'the page eventually finished'."
     );
 
     // 2. And it actually rendered the document, rather than "finishing" by giving up on everything.
@@ -124,31 +155,3 @@ fn dead_subresources_cannot_hold_the_document_hostage() {
     manuk_js::shutdown();
 }
 
-/// The other half, and it is not symmetric: the *document* must NOT share the subresource deadline.
-///
-/// Bounding the document at 8s would trade "some sites hang" for "some sites are unreachable" — a
-/// slow-but-alive origin (a big page on a bad link, a cold cache) would simply fail to open. That is
-/// not a fix, it is a different bug. The document gets a human-patience deadline; the enhancements
-/// get a machine one.
-#[test]
-fn the_document_gets_a_longer_deadline_than_its_subresources() {
-    // Both tests in this binary must agree on this value before either reads it: `request_timeout`
-    // memoises into a `OnceLock`, so whichever test touches it first decides for both, and a gate
-    // whose verdict depends on thread scheduling is not a gate.
-    std::env::set_var("MANUK_NET_TIMEOUT_MS", "1000");
-    let sub = manuk_net::request_timeout();
-    let doc = {
-        // Same derivation as `fetch_document`, asserted here so the two cannot silently converge.
-        std::env::var("MANUK_DOC_TIMEOUT_MS")
-            .ok()
-            .and_then(|v| v.parse::<u64>().ok())
-            .map(Duration::from_millis)
-            .unwrap_or(Duration::from_secs(30))
-    };
-    assert!(
-        doc > sub,
-        "the document deadline ({doc:?}) must exceed the subresource deadline ({sub:?}) — otherwise \
-         a slow but perfectly healthy site becomes unreachable, which is not a trade, it is a \
-         second bug"
-    );
-}

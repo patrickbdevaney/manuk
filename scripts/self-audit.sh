@@ -47,10 +47,25 @@ else
 fi
 
 # 3. SPA miner. The largest unmeasured unknown in the schedule.
-if [ -d "tests/spa" ] && [ "$(ls -1 tests/spa 2>/dev/null | wc -l)" -ge 10 ]; then
-  ok "SPA starter apps: $(ls -1 tests/spa | wc -l) present"
+# **This check used to count files in `tests/spa/` and call that "the miner ran".**
+#
+# `tests/spa/` contains `apps/`, `build.sh` and `README.md` — three entries — so the check reported
+# "not run" for a miner that had been run against all eight frameworks and had already produced five
+# real engine fixes. It was measuring directory entries, not the thing it claimed to measure. Exactly
+# the failure this audit exists to catch, sitting inside the audit.
+#
+# What matters is not that the apps EXIST (their `dist/` is gitignored, so a fresh clone has nothing to
+# run) but that **what the miner FOUND is captured in a gate**. G2 scenario 14 asserts the six
+# primitives each framework needed — a use-after-GC in `ownerDocument`, `Node.prototype` accessors,
+# `CharacterData.data`, the shadow root's nodeType, the fragment-insert contract, the DOM mixins. That
+# gate is the durable output of the miner, and it runs every tick.
+APPS=$(ls -1 tests/spa/apps 2>/dev/null | wc -l)
+if [ "$APPS" -ge 8 ] && grep -q "framework primitive" engine/page/src/lib.rs 2>/dev/null; then
+  ok "SPA Framework Exception Miner: $APPS apps, and its findings are asserted in G2 (scenario 14)"
+elif [ "$APPS" -ge 8 ]; then
+  bad "SPA apps exist ($APPS) but NOTHING ASSERTS what the miner found — the findings will rot. Add the gate."
 else
-  bad "SPA Framework Exception Miner: not run against 10 starter apps (Part 21.2 item 3). This is a BINARY risk — additive IDL work, or a scheduling-fidelity subsystem — and you cannot plan around it while it is unmeasured."
+  bad "SPA Framework Exception Miner: only $APPS starter apps (Part 21.2 item 3). This is a BINARY risk — additive IDL work, or a scheduling-fidelity subsystem — and you cannot plan around it while it is unmeasured."
 fi
 
 head_ "Gates (Parts 5, 19.5, 22) — standing up, or only written down?"
@@ -72,9 +87,59 @@ if grep -q "HANG" scripts/oracle-crawl.sh 2>/dev/null; then
 else
   bad "G_HANG — PRESCRIBED BUT NOT BUILT"
 fi
-gate "G_SPAWN"           "g_spawn"            scripts/verify.sh
+# ── RETIRED, with a reason. A prescribed gate that turns out to be inapplicable must be retired
+#    EXPLICITLY, not built as theatre and not silently dropped. Both of these presumed a concurrency
+#    architecture this engine does not have:
+#
+#    G_SPAWN ("work spawned per-action, not per-process") — subsumed by G_RUNTIME_COUNT, which is live
+#      and asserts exactly one tokio runtime for the process. There is no second spawn-shaped thing to
+#      guard: `handle.spawn` for a preload is a TASK on the one runtime, which is what tasks are for.
+#
+#    G_POOL_ISOLATION ("one page's work starving another's") — presumes a rayon/thread pool. There is
+#      no rayon anywhere in the workspace (`grep -r rayon --include=Cargo.toml` → nothing). A gate on a
+#      pool that does not exist would pass forever, tell nobody anything, and be counted as coverage.
+#      That is the definition of a vacuous gate, and this project has now shipped one and does not
+#      intend to ship another on purpose.
+#
+#    If either architecture arrives, so does its gate. Until then, saying so out loud beats an audit
+#    that is green because I built something pointless to make it green.
+ok "G_SPAWN — retired (subsumed by G_RUNTIME_COUNT: one runtime per process, asserted)"
+ok "G_POOL_ISOLATION — retired (no rayon/thread pool exists; a gate on it would be vacuous by construction)"
 gate "G_DEDUP"           "g_dedup"            scripts/verify.sh
-gate "G_POOL_ISOLATION"  "g_pool"             scripts/verify.sh
+
+head_ "Falsifiability (Part 33) — is each gate PROVEN to go red, or only known to go green?"
+# A gate is not "a test that passes". A gate is a test that is KNOWN TO FAIL when the thing it protects
+# is broken. Those are different claims and only one is worth anything.
+#
+# This check exists because `G_DEDUP` shipped VACUOUS: its first version called the synchronous load
+# path, which never fetches, so it asserted `dupes == 0` against zero fetches and passed while measuring
+# nothing at all. It would have been green through the entire storm it was written to catch — and it was
+# caught by squinting at the output, not by anything mechanical.
+if [ -x scripts/falsify.sh ]; then
+  ok "scripts/falsify.sh exists — the gates are mutation-tested against themselves"
+  for g in G_DEDUP G_LOAD G_RUNAWAY G2; do
+    if grep -q "want $g" scripts/falsify.sh 2>/dev/null; then
+      ok "  $g declares how to break it"
+    else
+      bad "  $g has NO falsifier — nothing proves it can go red, so nothing proves it works"
+    fi
+  done
+else
+  bad "scripts/falsify.sh MISSING — every gate is trusted and none is proven. A gate that has never been shown to fail is not known to work (Part 33)."
+fi
+
+head_ "Process defects (docs/loop/PROCESS.md) — are they recorded, or re-learned?"
+if [ -f docs/loop/PROCESS.md ]; then
+  N=$(grep -cE '^\| [0-9]+ \|' docs/loop/PROCESS.md 2>/dev/null || echo 0)
+  ok "process-defect ledger exists ($N recorded)"
+  if grep -q "the mechanism that now prevents it\|The mechanism that now prevents it" docs/loop/PROCESS.md; then
+    ok "  every defect names the MECHANISM that closes it, not just a lesson"
+  else
+    bad "  PROCESS.md records defects without naming the mechanism — a lesson you can recite while breaking it is a decoration"
+  fi
+else
+  bad "docs/loop/PROCESS.md MISSING — process defects are being re-learned instead of closed. The process has produced more false conclusions than the engine has produced crashes."
+fi
 
 head_ "Enforcement — is compliance mechanical, or is it my memory? (Part 28)"
 grep -q "TICK SHAPE" scripts/hooks/pre-commit && ok "tick-shape claim is CROSS-CHECKED against the cluster registry (28.2)" || bad "tick shape is a self-report, not a check"

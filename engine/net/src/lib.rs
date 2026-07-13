@@ -425,7 +425,25 @@ pub fn request_timeout() -> std::time::Duration {
 /// the claim is a measurement rather than an assertion.
 pub static FETCHES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 pub static FETCH_DUPES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+/// Requests that actually reached the **network** — past the HTTP cache. `FETCHES` counts calls;
+/// this counts bandwidth. They are different numbers and only one of them is a browser's problem.
+pub static NET_REQUESTS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+/// The same URL put on the wire **twice** in one navigation. This is the one that must be zero.
+pub static NET_DUPES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static NETWORKED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+    std::sync::OnceLock::new();
+/// Per-URL locks, so two concurrent callers for one URL make ONE request. See `fetch`.
+#[allow(clippy::type_complexity)]
+static INFLIGHT: std::sync::OnceLock<
+    std::sync::Mutex<
+        std::collections::HashMap<String, std::sync::Arc<tokio::sync::Mutex<()>>>,
+    >,
+> = std::sync::OnceLock::new();
 static SEEN: OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> = OnceLock::new();
+/// URLs that FAILED during this navigation. A failure remembered is a fetch not repeated; see
+/// `fetch`. Cleared per navigation, so a reload really does retry.
+static FAILED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+    std::sync::OnceLock::new();
 
 pub fn fetch_stats() -> (usize, usize) {
     (
@@ -436,22 +454,95 @@ pub fn fetch_stats() -> (usize, usize) {
 pub fn reset_fetch_stats() {
     FETCHES.store(0, std::sync::atomic::Ordering::Relaxed);
     FETCH_DUPES.store(0, std::sync::atomic::Ordering::Relaxed);
+    NET_REQUESTS.store(0, std::sync::atomic::Ordering::Relaxed);
+    NET_DUPES.store(0, std::sync::atomic::Ordering::Relaxed);
+    if let Some(m) = NETWORKED.get() {
+        m.lock().unwrap().clear();
+    }
+    if let Some(m) = INFLIGHT.get() {
+        m.lock().unwrap().clear();
+    }
     if let Some(m) = SEEN.get() {
+        m.lock().unwrap().clear();
+    }
+    // The negative cache is per-NAVIGATION. Pressing reload must genuinely retry a dead subresource —
+    // that is what the user is asking for when they press it.
+    if let Some(m) = FAILED.get() {
         m.lock().unwrap().clear();
     }
 }
 
 pub async fn fetch(url: &str) -> Result<Response> {
     FETCHES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    {
+    let repeat = {
         let seen = SEEN.get_or_init(Default::default);
         let mut g = seen.lock().unwrap();
-        if !g.insert(url.to_string()) {
-            FETCH_DUPES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            tracing::debug!(%url, "DUPLICATE FETCH for one navigation");
+        !g.insert(url.to_string())
+    };
+
+    // **A subresource that FAILED is not retried within the same navigation.**
+    //
+    // A successful response is remembered by `http_cache`, so a second `fetch()` of it costs nothing.
+    // A *failure* was remembered by nothing — so a dead URL went to the wire again for every caller
+    // that asked, and on a page whose preload scanner warms a URL the loader then fetches anyway, that
+    // is two network attempts for one dead resource. Multiply by a news front page's several hundred
+    // blocked trackers and six render rounds and you get the storm G_DEDUP was written to kill
+    // (nytimes: 813 fetches, 507 duplicate).
+    //
+    // Remembering the "no" is exactly what a browser does: it will not re-resolve a DNS failure six
+    // times while loading one page. The set is cleared per navigation (`reset_fetch_stats`), so a
+    // reload genuinely retries — which is the behaviour a user expects from pressing reload.
+    if repeat {
+        FETCH_DUPES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        tracing::debug!(%url, "DUPLICATE FETCH for one navigation");
+        let failed = FAILED.get_or_init(Default::default);
+        let known_bad = failed.lock().unwrap().contains(url);
+        if known_bad {
+            bail!("already failed this navigation (not retried): {url}");
         }
     }
-    fetch_with_deadline(url, request_timeout()).await
+
+    // **Single-flight: the same URL never goes to the wire twice CONCURRENTLY.**
+    //
+    // The negative cache above stops a *sequential* retry of a dead URL, but it cannot stop a race —
+    // and a race is exactly what we have. The preload scanner fires a fetch for a stylesheet, the
+    // loader fires its own moments later, and both pass every "have we already got this?" check
+    // because neither has finished yet. Two connections, one resource. The HTTP cache does not save
+    // you here: it is only populated *after* the first response lands.
+    //
+    // So the second caller takes the URL's lock and waits. By the time it wakes, the first has either
+    // populated `http_cache` (success) or `FAILED` (failure), and the re-check below turns the second
+    // request into a cache read. One resource, one connection — which is what "no duplicate loads"
+    // has to mean if it means anything.
+    let gate = {
+        let map = INFLIGHT.get_or_init(Default::default);
+        let mut g = map.lock().unwrap();
+        g.entry(url.to_string()).or_default().clone()
+    };
+    let _held = gate.lock().await;
+
+    // Re-check now that any in-flight request for this URL has completed.
+    if let Some(cached) = http_cache::get(url) {
+        return Ok(cached);
+    }
+    if FAILED
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap()
+        .contains(url)
+    {
+        bail!("already failed this navigation (not retried): {url}");
+    }
+
+    let out = fetch_with_deadline(url, request_timeout()).await;
+    if out.is_err() {
+        FAILED
+            .get_or_init(Default::default)
+            .lock()
+            .unwrap()
+            .insert(url.to_string());
+    }
+    out
 }
 
 /// **The document is not an enhancement, and must not share the enhancement's deadline.**
@@ -463,13 +554,22 @@ pub async fn fetch(url: &str) -> Result<Response> {
 ///
 /// So the document gets a human-patience deadline and the subresources get a machine one. Nothing
 /// is unbounded either way; that was the actual defect.
-pub async fn fetch_document(url: &str) -> Result<Response> {
-    let d = std::env::var("MANUK_DOC_TIMEOUT_MS")
+/// The document's deadline. **Public, and the ONLY derivation of it** — because the gate that asserts
+/// `document_timeout() > request_timeout()` used to carry its own copy of the `30`, which meant it was
+/// asserting a relationship between two constants it had written down itself. Change the real default
+/// to 5s and that test would still have passed, cheerfully, against its own private copy.
+///
+/// A test that re-derives the value it is checking is not checking anything. One function, one truth.
+pub fn document_timeout() -> std::time::Duration {
+    std::env::var("MANUK_DOC_TIMEOUT_MS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
         .map(std::time::Duration::from_millis)
-        .unwrap_or(std::time::Duration::from_secs(30));
-    fetch_with_deadline(url, d).await
+        .unwrap_or(std::time::Duration::from_secs(30))
+}
+
+pub async fn fetch_document(url: &str) -> Result<Response> {
+    fetch_with_deadline(url, document_timeout()).await
 }
 
 /// **`file://` — reading a local file, which is a thing a browser does.**
@@ -524,6 +624,23 @@ async fn fetch_inner(url: &str) -> Result<Response> {
     if let Some(cached) = http_cache::get(url) {
         tracing::debug!(%url, "served from HTTP cache");
         return Ok(cached);
+    }
+    // **NET_REQUESTS is the number that matters, and it is not the same as FETCHES.**
+    //
+    // `FETCHES` counts calls; a call served from the HTTP cache (or from the per-navigation negative
+    // cache) costs no bandwidth and no latency, and counting it as "duplicate work" conflates a cheap
+    // repeat with an expensive one. What a browser must never do is put the SAME URL on the WIRE twice
+    // for one navigation — that is bandwidth, that is latency, and on a metered connection it is money.
+    //
+    // So the wire is counted here, past the cache, and G_DEDUP asserts on THIS.
+    NET_REQUESTS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    {
+        let netted = NETWORKED.get_or_init(Default::default);
+        let mut g = netted.lock().unwrap();
+        if !g.insert(url.to_string()) {
+            NET_DUPES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            tracing::warn!(%url, "DUPLICATE NETWORK REQUEST — the same URL went to the wire twice");
+        }
     }
     let mut current = Url::parse(url).with_context(|| format!("invalid URL: {url}"))?;
     for _ in 0..=MAX_REDIRECTS {

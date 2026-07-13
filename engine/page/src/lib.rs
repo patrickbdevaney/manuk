@@ -174,7 +174,9 @@ async fn fetch_images(
     dom: &Dom,
     base: &str,
 ) -> std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>> {
-    fetch_images_except(dom, base, &std::collections::HashSet::new()).await.0
+    fetch_images_except(dom, base, &std::collections::HashSet::new(), &mut std::collections::HashMap::new())
+        .await
+        .0
 }
 
 /// The same, minus the nodes whose image we have ALREADY fetched and decoded for this navigation.
@@ -184,15 +186,34 @@ async fn fetch_images_except(
     dom: &Dom,
     base: &str,
     attempted: &std::collections::HashSet<(manuk_dom::NodeId, String)>,
+    cache: &mut std::collections::HashMap<String, Option<std::rc::Rc<manuk_paint::DecodedImage>>>,
 ) -> (
     std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
     Vec<(manuk_dom::NodeId, String)>,
 ) {
-    let (imgs, tried) = fetch_images_owned(dom, base, attempted).await;
-    (
-        imgs.into_iter().map(|(n, img)| (n, std::rc::Rc::new(img))).collect(),
-        tried,
-    )
+    let known: std::collections::HashSet<String> = cache.keys().cloned().collect();
+    let (by_url, tried) = fetch_images_owned(dom, base, attempted, &known).await;
+
+    // Fold the answers into the page's URL cache. **A URL we asked for and did not get back is a
+    // FAILURE, and it is recorded as `None`.** Remembering the "no" is the difference between one
+    // fetch and one fetch per render round forever — that was the nytimes storm (507 duplicates
+    // of 813 fetches), and it is what G_DEDUP exists to keep dead.
+    for (url, img) in by_url {
+        cache.insert(url, Some(std::rc::Rc::new(img)));
+    }
+    for (_, url) in &tried {
+        cache.entry(url.clone()).or_insert(None);
+    }
+
+    // Every node that wanted an image is resolved from the ONE decoded copy for its URL. Nine elements
+    // pointing at the same sprite share one `Rc`, and cost one fetch and one decode between them.
+    let mut out = std::collections::HashMap::new();
+    for (node, url) in &tried {
+        if let Some(Some(img)) = cache.get(url) {
+            out.insert(*node, img.clone());
+        }
+    }
+    (out, tried)
 }
 
 /// DEBT-1 — the **owned, `Send`** image fetch. Not one `Rc` appears inside this async body: an
@@ -203,11 +224,12 @@ async fn fetch_images_owned(
     dom: &Dom,
     base: &str,
     attempted: &std::collections::HashSet<(manuk_dom::NodeId, String)>,
+    known_urls: &std::collections::HashSet<String>,
 ) -> (
-    std::collections::HashMap<manuk_dom::NodeId, manuk_paint::DecodedImage>,
+    std::collections::HashMap<String, manuk_paint::DecodedImage>,
     Vec<(manuk_dom::NodeId, String)>,
 ) {
-    let mut out: std::collections::HashMap<manuk_dom::NodeId, manuk_paint::DecodedImage> =
+    let mut out: std::collections::HashMap<String, manuk_paint::DecodedImage> =
         std::collections::HashMap::new();
     // **Skip anything already ATTEMPTED — not merely anything already SUCCEEDED.**
     //
@@ -250,12 +272,26 @@ async fn fetch_images_owned(
         })
         .collect();
     let tried: Vec<(manuk_dom::NodeId, String)> = targets.clone();
-    // Fetch every image concurrently (I/O-bound; the shared client pools + multiplexes),
-    // then decode sequentially (CPU-bound). Serial awaits here were a real latency cost.
+
+    // **Fetch by URL, not by node.** A browser does not fetch the same sprite nine times because nine
+    // elements point at it — but that is exactly what this did, keyed by `(node, url)`. G_DEDUP caught
+    // it the moment it was written: a page naming one image from nine elements issued **14 duplicate
+    // fetches of 17**. The per-round storm was fixed in tick 25; the same-URL storm was not, and news
+    // sites mention their placeholders and sprites constantly.
+    //
+    // So: reduce to the DISTINCT urls we do not already have an answer for, and fetch each exactly once.
+    let mut wanted: Vec<String> = Vec::new();
+    for (_, url) in &targets {
+        if !known_urls.contains(url) && !wanted.contains(url) {
+            wanted.push(url.clone());
+        }
+    }
+
+    // Concurrent (I/O-bound; the shared client pools + multiplexes), then decode sequentially (CPU).
     let fetched = futures_util::future::join_all(
-        targets
+        wanted
             .into_iter()
-            .map(|(node, url)| async move { (node, fetch_image_bytes(&url).await, url) }),
+            .map(|url| async move { (url.clone(), fetch_image_bytes(&url).await, url) }),
     )
     .await;
     for (node, bytes, url) in fetched {
@@ -277,7 +313,7 @@ async fn fetch_images_owned(
         };
         if let Some(img) = decoded {
             if img.width > 0 && img.height > 0 {
-                out.insert(node, img);
+                out.insert(node, img); // `node` is the URL key here — see the signature
             }
         }
     }
@@ -561,6 +597,10 @@ pub struct Page {
     /// A failure that is not remembered is a fetch that repeats on every round; see
     /// `fetch_images_owned`.
     image_attempts: std::collections::HashSet<(manuk_dom::NodeId, String)>,
+    /// Decoded images keyed by **resolved URL**. `None` means "we asked and did not get it" — a
+    /// remembered failure, which is what stops a blocked tracker being re-fetched on every round.
+    /// Nine elements naming one sprite share one entry, one fetch and one decode.
+    image_by_url: std::collections::HashMap<String, Option<std::rc::Rc<manuk_paint::DecodedImage>>>,
     /// Fingerprint of the inputs to the last full cascade — the style sources and the shape of the
     /// tree. If neither has changed, re-cascading produces byte-identical output, and on a large
     /// document that is not a small waste: see `apply_stylesheets`.
@@ -800,8 +840,13 @@ impl Page {
         // Same discipline for images: `finish_loading` and every script round both call this, and
         // re-fetching an image we have already decoded is pure waste — and, for a `<img>` whose src
         // a script has not touched, it is waste on every single round.
-        let (images, tried) =
-            fetch_images_except(&self.dom, &self.final_url, &self.image_attempts).await;
+        let (images, tried) = fetch_images_except(
+            &self.dom,
+            &self.final_url,
+            &self.image_attempts,
+            &mut self.image_by_url,
+        )
+        .await;
         self.image_attempts.extend(tried);
         self.apply_images(images, fonts, viewport_width)
     }
@@ -1156,9 +1201,31 @@ impl Page {
             page.apply_masks(&rc);
         }
         if !images.is_empty() {
-            let rc: HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>> =
-                images.into_iter().map(|(n, img)| (n, std::rc::Rc::new(img))).collect();
-            page.apply_images(rc, fonts, viewport_width);
+            // Bind the URL-keyed bitmaps to the nodes that name them. One decoded image, shared by
+            // every element pointing at it — the flat tree, so a shadow-root `<img>` is not skipped.
+            let by_url: HashMap<String, std::rc::Rc<manuk_paint::DecodedImage>> =
+                images.into_iter().map(|(u, i)| (u, std::rc::Rc::new(i))).collect();
+            let mut rc: HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>> =
+                HashMap::new();
+            for n in page.dom.flat_descendants(page.dom.root()) {
+                let Some(el) = page.dom.element(n) else { continue };
+                let src = match page.dom.tag_name(n) {
+                    Some("img") => el.attr("src"),
+                    Some("video") => el.attr("poster"),
+                    _ => None,
+                };
+                if let Some(src) = src {
+                    let url = resolve_url(&final_url, src.trim());
+                    if let Some(img) = by_url.get(&url) {
+                        rc.insert(n, img.clone());
+                        page.image_by_url.insert(url.clone(), Some(img.clone()));
+                        page.image_attempts.insert((n, url));
+                    }
+                }
+            }
+            if !rc.is_empty() {
+                page.apply_images(rc, fonts, viewport_width);
+            }
         }
         page
     }
@@ -1239,6 +1306,7 @@ impl Page {
             external_css: HashMap::new(),
             fetched_urls: std::collections::HashSet::new(),
             image_attempts: std::collections::HashSet::new(),
+            image_by_url: std::collections::HashMap::new(),
             last_cascade: None,
         }
     }
@@ -2190,8 +2258,10 @@ pub struct Prefetched {
     pub final_url: String,
     /// External stylesheet URL → CSS text.
     pub css: HashMap<String, String>,
-    /// `<img>` node → decoded bitmap.
-    pub images: HashMap<manuk_dom::NodeId, manuk_paint::DecodedImage>,
+    /// resolved image URL → decoded bitmap. **Keyed by URL, not node** — for the same reason `masks`
+    /// is: nine elements naming one sprite are one fetch and one decode, not nine. The binding to
+    /// nodes happens on the UI thread in `from_prefetched`, where the DOM is available.
+    pub images: HashMap<String, manuk_paint::DecodedImage>,
     /// raw `mask-image` url → decoded bitmap (icons). Keyed by URL, not node, because the
     /// off-thread prefetch has no cascade — the nodes are bound to it once styles exist.
     pub masks: HashMap<String, manuk_paint::DecodedImage>,
@@ -2234,8 +2304,15 @@ pub async fn prefetch_document(url: &str) -> Result<Loaded> {
             // Images: fetch + decode off-thread as OWNED data. Never touch `Rc` here — an `Rc`
             // anywhere inside this async fn would make the whole future `!Send`, which is exactly
             // what pinned image fetching to the UI thread and blocked it.
-            let images: HashMap<manuk_dom::NodeId, manuk_paint::DecodedImage> =
-                fetch_images_owned(&dom, &final_url, &std::collections::HashSet::new()).await.0;
+            let images: HashMap<String, manuk_paint::DecodedImage> =
+                fetch_images_owned(
+                    &dom,
+                    &final_url,
+                    &std::collections::HashSet::new(),
+                    &std::collections::HashSet::new(),
+                )
+                .await
+                .0;
 
             // Masks (icons). Scanned from the CSS text rather than the cascade: this thread has no
             // styles, and a URL-keyed cache is all the cascade needs later to bind them to nodes.

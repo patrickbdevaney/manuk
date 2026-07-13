@@ -88,6 +88,20 @@ head_ "G_LOAD · the page renders when its subresources never answer (METHODOLOG
 GL=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_load_budget 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GL" ]; then ok "load budget: $GL"; else bad "G_LOAD failed — a dead subresource can hold the document hostage"; fi
 
+head_ "G_SILENT_FAIL · an error on the load/render/script path must never be swallowed"
+# Named by an expensive failure: "React mounts, throws nothing, renders nothing" sat in the ledger for
+# several ticks as a REACT bug. React was throwing, truthfully, inside an async render — and nothing was
+# listening. A browser that fails silently sends you looking in the wrong codebase.
+GS=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_silent_fail 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GS" ]; then ok "silent failure: $GS"; else bad "G_SILENT_FAIL failed — an error is being swallowed on the load/render/script path"; fi
+
+head_ "G_DEDUP · the same resource must not go to the WIRE twice for one navigation (Part 22.3)"
+# Measured on real sites before this gate existed: nytimes issued 813 fetches, and one sprite was pulled
+# down once per element that named it. The gate asserts on NET_DUPES — the wire, not the call — because
+# a repeat `fetch()` served from cache costs nothing and counting it conflates free with expensive.
+GD=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_dedup 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GD" ]; then ok "dedup: $GD"; else bad "G_DEDUP failed — a resource is being fetched more than once per navigation"; fi
+
 head_ "G_RUNAWAY · Bar 0 — a self-rescheduling timer must not hang the browser"
 GRA=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_runaway 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GRA" ]; then ok "runaway timer: $GRA"; else bad "G_RUNAWAY failed — a page can freeze the browser with one line of JS"; fi

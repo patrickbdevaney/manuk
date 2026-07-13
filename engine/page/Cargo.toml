@@ -40,6 +40,7 @@ spidermonkey = ["manuk-js/spidermonkey"]
 spidermonkey-noicu = ["manuk-js/spidermonkey-noicu"]
 
 [dev-dependencies]
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
 tokio = { workspace = true, features = ["rt", "macros"] }
 # Parse the decoded sfnt in the live web-font test (A3, #[ignore]d network test).

@@ -1436,3 +1436,78 @@ layout: <video> keeps its 640x360 box; the page flows around it
 
 Asserted in **G2 scenario 15**. A missing codec is an acceptable limit for a browser to have. A thrown
 `TypeError` is not, and the difference between them is entirely in what we say when asked.
+
+## Tick 29 — the self-audit, and the four gates it says are owed (2026-07-13)
+
+**TICK SHAPE: pattern-class.** CLUSTER: C01ca. Part 21.3: *closing the gap between what the methodology
+prescribes and what has actually been built OUTRANKS the ledger.* The audit was due at tick 29 and the
+hook would have blocked every commit at tick 30. It reports six gaps.
+
+**One of them was the audit lying about itself.** The SPA-miner check counted *files in `tests/spa/`* —
+which are `apps/`, `build.sh`, `README.md`, i.e. three — and concluded the miner had never run. It had
+run against all eight frameworks and produced five real engine fixes. The check was measuring directory
+entries and calling that a measurement. *Inside the audit whose entire job is to catch that.* Fixed to
+assert the thing that actually matters: the apps exist **and** what the miner found is pinned by a gate
+(G2 scenario 14), which is the only form in which a finding survives.
+
+**The other four are real, and all four are about duplicated or hidden work:**
+
+| Gate | What it must catch |
+|---|---|
+| `G_DEDUP` | the same resource fetched twice, the same pass run twice, for one navigation |
+| `G_SILENT_FAIL` | an error caught on the load/render/script path and never surfaced |
+| `G_SPAWN` | work spawned per-action instead of per-process (runtimes, pools) |
+| `G_POOL_ISOLATION` | one page's work starving another's |
+
+`G_DEDUP` is the one with a body count. Tick 25 measured **nytimes issuing 813 fetches of which 507 were
+duplicates**, and theguardian 431 of 576 — because the image skip-list was built from *successes*, so
+every blocked tracker was re-fetched on all six rounds. I fixed it and **nothing stops it coming back.**
+That is precisely the standing rule: *before adding a feature, name the gate that would have gone red if
+it were already broken.* This one would have been red for months.
+
+**RESULT — tick 29. The audit is green, and it is green honestly.**
+
+Two gates BUILT, two RETIRED with reasons, one meta-mechanism added, and **five process defects found by
+the meta-mechanism on its first day.**
+
+*Built:*
+- **`G_DEDUP`** — the same URL must not reach the **wire** twice per navigation. It found a real bug the
+  moment it existed: I had keyed the image skip-list by `(node, url)`, so nine elements naming one sprite
+  still cost nine fetches. **14 duplicate fetches of 17.** Now keyed by URL, with single-flight
+  coalescing (the preload scanner and the loader were racing for the same stylesheet) and a
+  per-navigation negative cache (a failure not remembered is a fetch repeated forever). Real sites:
+  **theguardian 19,175ms → 3,110ms**; nytimes 863 calls but only **335 network requests, 4 duplicate**.
+- **`G_SILENT_FAIL`** — an error on the load/render/script path must be said out loud. Named by the
+  failure that cost several ticks: *"React mounts, throws nothing, renders nothing"* was React throwing
+  **truthfully**, inside an async render, with nothing listening.
+
+*Retired, with reasons:* `G_SPAWN` (subsumed by G_RUNTIME_COUNT) and `G_POOL_ISOLATION` (guards a rayon
+pool that **does not exist** — a gate on absent machinery passes forever and is counted as coverage,
+which is the definition of vacuous). **A prescribed gate that turns out to be inapplicable is retired
+explicitly, not built as theatre to make an audit green.**
+
+*The meta-mechanism — `scripts/falsify.sh`.* Mutation-tests the gate wall against itself: for each gate,
+install the bug it exists to catch, and assert it goes **RED**. On its first run:
+
+| It found | Which is |
+|---|---|
+| `G_LOAD` was **vacuous** — it had never tested the page budget in its own name, only the per-request timeout. Delete `load_budget()` outright and it stayed green. | a **Bar 0** gate, standing between the user and a frozen tab |
+| Two gates **raced over a process-global `OnceLock`** — one set the request timeout to 5s, the other to 1s, cargo runs them in parallel, and whichever touched it first decided for both | a gate whose verdict depended on thread scheduling |
+| A gate **re-derived the constant it was checking** — it carried its own copy of the `30`, so changing the real default to 5s would not have failed it | a test asserting a relationship between two numbers it had itself written down |
+| The falsifier's own first mutation was **too weak**, producing a FALSE "vacuous" verdict | the instrument that checks instruments is also an instrument |
+| The falsifier **POISONED THE TREE** — a killed run left `MAX_TASKS_PER_DRAIN = u32::MAX` in `event_loop.rs`; the next run backed up the mutated file and "restored" the corruption | **the worst one.** Wrong code, in a Bar 0 path, indistinguishable from a real regression |
+
+**The rule, and it is the tick's output:**
+
+> **A test that can pass without the code it protects is not a test.** Not a weak test — *not a test*.
+> The only way to know is to take the code away and watch it fail.
+
+And its corollary, learned the hard way:
+
+> **A tool that can leave the tree worse than it found it must be able to PROVE it did not.** Not "be
+> careful" — prove it: a marker it looks for on the way in, and a check it runs on the way out.
+
+`docs/loop/PROCESS.md` now carries all fourteen process defects of this session, each with the mechanism
+that closes it. Seven of the fourteen were found by an *accounting check* — by squinting at a number
+that did not add up — and not by any gate. That ratio is the thing to drive down, and it is what the
+falsifier is for.

@@ -8,15 +8,15 @@
 > filesystem, git, the crawl output or the verify receipt.
 
 ```
-TICK:              28
-LAST_AUDIT_TICK:   19          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
+TICK:              29
+LAST_AUDIT_TICK:   29          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
-LAST_WALL_TIME:    198s
+LAST_WALL_TIME:    208s
 ORACLE_CORPUS:     265 sites
 ORACLE_CRAWLED:    265 sites, 616 clusters  → docs/loop/CLUSTERS.md
 ORACLE_HANGS:      9   ← Bar 0, on OUR clock (manuk_ms > 30s). Outranks every visual cluster.
 ORACLE_UNATTRIB:   15   ← oracle process hit its watchdog. Whose time? UNKNOWN — never ours by default.
-PENDING_GATES:     G_SILENT_FAIL G_DEDUP G_SPAWN G_POOL_ISOLATION
+PENDING_GATES:     G_SPAWN G_POOL_ISOLATION
 SINGLE_SITE_TICKS: 0                    (this audit window — a rising count is the drift signal)
 UPDATED:           2026-07-13
 ```
@@ -115,11 +115,13 @@ loud rather than quietly following the pull.
 | G_LOAD | ✅ in the wall | a dead subresource holding the document hostage |
 | G_INTERACT | ✅ in the wall | UI-thread stall on tab open/switch/close |
 | F1 / F2 perf floors | ✅ in the wall | cascade ≤40ms, pipeline ≤125ms (asserted, not eyeballed) |
-| **G_SILENT_FAIL** | ❌ **pending** | any caught error on the load/render/script path that is not surfaced |
+| **G_SILENT_FAIL** | ✅ **live** | an error on the load/render/script path that is swallowed. Named by the failure that cost several ticks: "React mounts, throws nothing, renders nothing" was React throwing *truthfully* inside an async render, with nothing listening. |
+| **G_DEDUP** | ✅ **live** | the same URL on the **wire** twice for one navigation (nytimes was pulling one sprite down once per element that named it) |
 | **G_HANG** | ✅ **live, and now honest** | Every oracle site runs in its own process under a watchdog. The watchdog is a **backstop against a true infinite loop** — it wraps our render *and Chromium's*, so when it fires it is recorded as `TIMEOUT` and **attributed to nobody**. The Bar 0 hang count comes from `manuk_ms`. A metric that cannot say whose time it measured must not name a culprit. |
 | **G_CONTAIN** | ✅ **live** | Bar 0 — a panic kills the page, not the process (Part 23.2) |
 | **G_RUNTIME_COUNT** | ✅ **live** | one async runtime for the process, not one per action (Part 25.2). The shell was building **two**. |
-| **G_SPAWN / G_DEDUP / G_POOL_ISOLATION** | ❌ **pending** | tokio/rayon isolation, duplicate passes, pool contention |
+| **G_SPAWN / G_POOL_ISOLATION** | ⏹ **retired, with a reason** | G_SPAWN is subsumed by G_RUNTIME_COUNT; G_POOL_ISOLATION guards a rayon pool that **does not exist**. A gate on absent machinery passes forever and is counted as coverage — which is the definition of vacuous. Saying so beats building theatre to make an audit green. |
+| **FALSIFY** | ✅ **live** | **a gate that cannot go red.** `scripts/falsify.sh` mutation-tests the wall against itself. On its first run it found `G_LOAD` — a *Bar 0* gate — had **never tested the thing it was named for**. |
 
 ## Enforcement — compliance is mechanical, not remembered
 
