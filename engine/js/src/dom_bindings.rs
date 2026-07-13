@@ -592,6 +592,15 @@ unsafe fn define_members(
         prop(c"body", doc_get_body, None);
         prop(c"head", doc_get_head, None);
         prop(c"cookie", doc_get_cookie, Some(doc_set_cookie));
+        // Standard document properties that were UNDEFINED. Each is read (and `title` written) by a
+        // large amount of ordinary web code, and `undefined.split(...)` is a TypeError that takes the
+        // rest of the bundle with it.
+        prop(c"title", doc_get_title, Some(doc_set_title));
+        prop(c"referrer", doc_get_referrer, None);
+        prop(c"characterSet", doc_get_charset, None);
+        prop(c"charset", doc_get_charset, None);
+        prop(c"inputEncoding", doc_get_charset, None);
+        prop(c"currentScript", doc_get_current_script, None);
         prop(c"activeElement", doc_get_active_element, None);
         prop(c"scrollingElement", doc_get_scrolling_element, None);
         def(c"getElementById", doc_get_by_id, 1);
@@ -2221,6 +2230,72 @@ unsafe extern "C" fn el_form_reset(cx: *mut RawJSContext, _argc: u32, vp: *mut V
     }
     let _ = cx;
     *vp = UndefinedValue();
+    true
+}
+
+/// `document.title` — read AND written, by an enormous amount of code.
+///
+/// It was **undefined**. Every SPA router, every `react-helmet`-shaped library, and every analytics tag
+/// touches it, and `document.title.split(...)` on `undefined` is a `TypeError` that takes the rest of
+/// the bundle with it.
+unsafe extern "C" fn doc_get_title(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let t = this_node(vp)
+        .and_then(|(dom, _)| (*dom).find_first("title").map(|n| (*dom).text_content(n)))
+        .unwrap_or_default();
+    return_string(cx, vp, t.split_whitespace().collect::<Vec<_>>().join(" ").as_str());
+    true
+}
+
+unsafe extern "C" fn doc_set_title(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, _)) = this_node(vp) {
+        let text = arg_string(cx, vp, argc, 0).unwrap_or_default();
+        // Reuse the existing `<title>` if there is one; otherwise create it under `<head>`. A router
+        // that sets the title on a page which never had one must still end up with a title.
+        let existing = (*dom).find_first("title");
+        let node = match existing {
+            Some(n) => n,
+            None => {
+                let head = (*dom).find_first("head");
+                let t = (*dom).create_element("title");
+                if let Some(h) = head {
+                    (*dom).append_child(h, t);
+                }
+                t
+            }
+        };
+        let kids: Vec<NodeId> = (*dom).children(node).collect();
+        for k in kids {
+            (*dom).remove_child(node, k);
+        }
+        let txt = (*dom).create_text(text);
+        (*dom).append_child(node, txt);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `document.referrer` — **the empty string**, which is what a direct navigation reports.
+///
+/// It was `undefined`, and `document.referrer.split('/')` is the single most common thing an analytics
+/// tag does on the first line of its boot. `undefined` there is a `TypeError`; `""` is a fact.
+unsafe extern "C" fn doc_get_referrer(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    return_string(cx, vp, "");
+    true
+}
+
+/// `document.characterSet` / `.charset` / `.inputEncoding` — we decode to UTF-8, so that is the answer.
+unsafe extern "C" fn doc_get_charset(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    return_string(cx, vp, "UTF-8");
+    true
+}
+
+/// `document.currentScript` — **`null`**, not `undefined`.
+///
+/// The difference is the whole point. `null` is the spec's answer for a module or an async script, so
+/// every library on the web already branches on it (`document.currentScript?.src`). `undefined` is not
+/// an answer to anything, and code that has correctly guarded against `null` still throws on it.
+unsafe extern "C" fn doc_get_current_script(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    *vp = NullValue();
     true
 }
 
@@ -4471,7 +4546,15 @@ const WINDOW_PRELUDE: &str = r#"
             appName: "Netscape", appCodeName: "Mozilla", appVersion: "5.0",
             product: "Gecko", platform: "%PLATFORM%",
             language: "en-US", languages: ["en-US", "en"],
-            onLine: true, cookieEnabled: false, doNotTrack: null
+            onLine: true, cookieEnabled: true, doNotTrack: null,
+            // `vendor` was UNDEFINED, and it is one of the handful of things a UA-sniffing bundle
+            // reads on its first line. `navigator.vendor.indexOf('Apple')` on `undefined` is a
+            // TypeError that takes the rest of the bundle with it — and sniffing code is, by nature,
+            // the code that runs before anything else.
+            vendor: "Google Inc.", vendorSub: "", productSub: "20030107",
+            maxTouchPoints: 0, hardwareConcurrency: 4, webdriver: false,
+            // `cookieEnabled` is now TRUE, because it IS: we have a real per-origin cookie jar. Saying
+            // `false` invites a page to take its no-cookie path, which is a different site.
         };
         // window.open → the host opens a real tab/window (OAuth-popup pattern). Returns a
         // stub window handle so `var w = window.open(...)` and `w.close()` work.
@@ -4562,6 +4645,46 @@ const WINDOW_PRELUDE: &str = r#"
                 for (var i = 0; i < a.length; i++) { try { a[i].call(g, ev); } catch (e) {} }
                 var on = g['on' + type];
                 if (typeof on === 'function') { try { on.call(g, ev); } catch (e) {} }
+            };
+
+            // **`window.dispatchEvent` — it did not exist, and it is not optional.**
+            //
+            // There was a whole window-listener registry here and NOTHING a page could use to fire into
+            // it. `window.dispatchEvent(new Event('resize'))` is how a router tells the app it navigated,
+            // how a UI library re-measures, and how half the web signals anything at all — and it was a
+            // `TypeError`, which takes the rest of the bundle with it.
+            //
+            // Returns `!ev.defaultPrevented`, per spec: `dispatchEvent` reports whether the default
+            // action should still happen, and callers branch on it.
+            g.dispatchEvent = function (ev) {
+                if (!ev || !ev.type) { return true; }
+                if (ev.target == null) { try { ev.target = g; } catch (e) {} }
+                if (ev.currentTarget == null) { try { ev.currentTarget = g; } catch (e) {} }
+                g.__fireWindowEvent(ev.type, ev);
+                return !ev.defaultPrevented;
+            };
+        }
+
+        // `ErrorEvent` / `PopStateEvent` — constructed by libraries that re-dispatch failures and
+        // history changes. Missing constructors are a `ReferenceError` at boot.
+        if (typeof g.ErrorEvent === 'undefined') {
+            g.ErrorEvent = function ErrorEvent(type, init) {
+                init = init || {};
+                this.type = String(type); this.message = init.message || '';
+                this.filename = init.filename || ''; this.lineno = init.lineno || 0;
+                this.colno = init.colno || 0; this.error = init.error || null;
+                this.defaultPrevented = false;
+                this.preventDefault = function(){ this.defaultPrevented = true; };
+                this.stopPropagation = function(){};
+            };
+        }
+        if (typeof g.PopStateEvent === 'undefined') {
+            g.PopStateEvent = function PopStateEvent(type, init) {
+                init = init || {};
+                this.type = String(type); this.state = init.state === undefined ? null : init.state;
+                this.defaultPrevented = false;
+                this.preventDefault = function(){ this.defaultPrevented = true; };
+                this.stopPropagation = function(){};
             };
         }
 

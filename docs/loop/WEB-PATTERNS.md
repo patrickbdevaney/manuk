@@ -371,3 +371,45 @@ rendering divergences the oracle found:
 > measured for speed and never once asked whether the rules it indexed were all the rules there were.
 > No gate could see it: every gate compared *boxes*, and the boxes were internally consistent — they
 > were just consistently wrong.
+
+## Tick 41 — a missing constructor is a thrown exception
+
+| Pattern | Status |
+|---|---|
+| `WebSocket` | ✅ (tick 41) — constructs, then **honestly reports it cannot connect** (`error` + `close`, on a macrotask so a reconnecting client cannot spin the queue). Never throws at construction. |
+| `Blob` / `File` / `FileReader` / `FileList` | ✅ (tick 41) — real enough to be used, honest about what they hold |
+| `Image` / `Audio` / `Option` | ✅ (tick 41) — element factories. `new Image().src = …` is the commonest preload on the web. |
+| `DOMParser` / `XMLSerializer` | ✅ (tick 41) — every sanitiser and markdown renderer parses an HTML string |
+| `PerformanceObserver` | ✅ (tick 41) — every RUM bundle constructs one on its first line |
+| `EventSource` / `BroadcastChannel` / `Worker` | ✅ (tick 41) — construct, then report they cannot do the thing |
+| `DOMRect` / `getSelection` | ✅ (tick 41) |
+| **`window.dispatchEvent`** | ✅ (tick 41) — **it did not exist**, with a whole window-listener registry sitting behind it. `window.dispatchEvent(new Event('resize'))` is how a router tells the app it navigated. |
+| `document.title` (get **and set**) / `.referrer` / `.characterSet` / `.currentScript` | ✅ (tick 41) — all were `undefined`, and `undefined.split(…)` is a `TypeError` |
+| `navigator.vendor` | ✅ (tick 41) — read on the first line of every UA-sniffing bundle |
+| ~40 interface names (`ProgressEvent`, `HTMLFormElement`, `NodeList`, …) | ✅ (tick 41) — inert but **present**: a referenced name that does not exist is a `ReferenceError`, not a `false` |
+| **The page's own `fetch()`/XHR — actually PERFORMED during load** | ✅ (tick 41) — see below. This one is bigger than it looks. |
+
+### A missing constructor is a thrown exception, and its blast radius is whatever was rendering
+
+`canvas.getContext` was used by **3%** of sites and **broke 100% of them**. `WebSocket` was missing and
+took an entire **news front page** with it: aljazeera.com's **2,591 server-rendered elements became 141**,
+because a live-blog client constructed one at boot, React's render threw, and its error boundary showed a
+skeleton where the article had been.
+
+Fixing that revealed `Blob`. Fixing `Blob` revealed `FileList`. **Each was a different library's first
+line.** A page does not get to run its fallback path if the *check* for the fallback throws.
+
+**Construct successfully, and answer honestly.** A blank canvas, an unopened socket, an empty `Blob` are
+all survivable — every library on the web is written to survive them, because real browsers produce
+exactly those behind captive portals and in private windows. **A `ReferenceError` is survivable by
+nothing.** Gated by `G_GLOBALS`.
+
+### The page's own fetches were never performed outside the shell
+
+`take_fetches()` handed a page's `fetch()`/XHR calls to the **shell**, and the shell alone performed them.
+So the **oracle**, `boxes`, the agent — every consumer that is not the shell — queued a data-driven SPA's
+API calls and **never made them**. The app sat in its loading state and rendered a skeleton.
+
+**This is why the oracle reported 13,741 "missing" nodes.** A measurement harness that cannot load a
+modern site's content is not measuring the browser; it is measuring itself. `finish_loading` now performs
+them, in rounds, inside the load budget.

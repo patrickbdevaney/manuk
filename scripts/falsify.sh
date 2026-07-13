@@ -405,6 +405,20 @@ s = s.replace(
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+# G_GLOBALS — take WebSocket back out. That single absence turned a 2,591-element news front page into
+# a 141-element skeleton, because the constructor threw inside React's render.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_GLOBALS; then
+  mutate engine/js/src/event_loop.rs '
+s = s.replace(
+    "      if (typeof globalThis.WebSocket === \x27undefined\x27) {",
+    "      if (false) {   // MUTATION: WebSocket does not exist",
+    1)
+'
+  expect_red G_GLOBALS cargo test -q -p manuk-page --features stylo,spidermonkey --test g_globals
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 # G_RUNAWAY — remove the task-drain ceiling. A self-rescheduling timer must then hang the engine.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_RUNAWAY; then

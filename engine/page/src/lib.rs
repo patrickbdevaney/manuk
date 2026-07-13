@@ -851,6 +851,23 @@ impl Page {
         if phase("dynamic scripts") {
             self.fetch_and_run_dynamic_scripts(fonts, viewport_width, 4).await;
         }
+        // **The page's own `fetch()`/XHR calls — PERFORMED, not just queued.**
+        //
+        // They never were. `take_fetches()` handed them to the SHELL, and the shell alone performed
+        // them. So every consumer that is not the shell — the oracle, `boxes`, the agent, any headless
+        // render — queued a data-driven SPA's API calls and **never made them.** The app sat in its
+        // loading state forever and rendered a skeleton.
+        //
+        // Found through aljazeera.com: 2,131 server-rendered elements were replaced by a 19-element
+        // shell. React had cleared its container (normal for `createRoot`) and re-rendered — correctly —
+        // with no data, because the data request was sitting in a queue nobody was draining.
+        //
+        // **This is why the oracle reported 13,741 "missing" nodes.** A measurement harness that cannot
+        // load a modern site's content is not measuring the browser; it is measuring itself. Every
+        // data-driven SPA in the corpus was being scored against a skeleton.
+        if phase("page fetches") {
+            self.pump_page_fetches(fonts, viewport_width, &started, budget).await;
+        }
         if phase("images") {
             self.fetch_and_apply_images(fonts, viewport_width).await;
         }
@@ -860,6 +877,99 @@ impl Page {
         if phase("background images") {
             self.fetch_and_apply_background_images().await;
         }
+    }
+
+    /// Perform the `fetch()`/XHR requests the page's scripts issued, settle them, and repeat — because
+    /// settling one request routinely issues the next (a page fetches its config, then its content).
+    ///
+    /// Bounded three ways, because an app that fetches in a loop must not own the tab:
+    ///   * the **load budget**, shared with every other phase;
+    ///   * a **round ceiling** — a page that keeps issuing new requests after this many rounds is not
+    ///     converging, and waiting longer will not help;
+    ///   * `manuk_net`'s per-request deadline, and its single-flight + negative caches, so a dead
+    ///     endpoint is asked once and remembered.
+    #[cfg(feature = "spidermonkey")]
+    async fn pump_page_fetches(
+        &mut self,
+        fonts: &FontContext,
+        viewport_width: f32,
+        started: &std::time::Instant,
+        budget: std::time::Duration,
+    ) {
+        const MAX_ROUNDS: usize = 6;
+        for round in 0..MAX_ROUNDS {
+            if budget.saturating_sub(started.elapsed()).is_zero() {
+                tracing::warn!(round, "load budget exhausted with page fetches still in flight");
+                return;
+            }
+            let mut reqs = self.take_fetches();
+            if reqs.is_empty() {
+                return;
+            }
+            // **A ceiling per round.** An analytics-heavy page can queue hundreds of beacons in one
+            // tick; performing all of them is work the user did not ask for and will not see. The
+            // document's own data requests come first (they are issued first), so a prefix is the right
+            // truncation — and it is LOGGED, because a silent cap reads as "we did everything".
+            const MAX_PER_ROUND: usize = 40;
+            if reqs.len() > MAX_PER_ROUND {
+                tracing::warn!(
+                    queued = reqs.len(),
+                    performed = MAX_PER_ROUND,
+                    "page queued more fetches than one round performs — the rest are dropped"
+                );
+                reqs.truncate(MAX_PER_ROUND);
+            }
+            tracing::debug!(round, n = reqs.len(), "performing page fetches");
+
+            // Concurrent — a page's requests are independent of one another, and serialising them is
+            // how a five-request page becomes a five-deadline page.
+            let base = self.final_url.clone();
+            let left = budget.saturating_sub(started.elapsed());
+            let all = futures_util::future::join_all(reqs.into_iter().map(|(id, raw, method, body)| {
+                let url = resolve_url(&base, &raw);
+                async move {
+                    let out = if method.eq_ignore_ascii_case("GET") || method.is_empty() {
+                        // GET goes through `fetch`, which carries the HTTP cache, the single-flight
+                        // coalescer and the per-navigation negative cache. A POST must not: it is not
+                        // idempotent, and de-duplicating one would drop a real request.
+                        manuk_net::fetch(&url).await
+                    } else {
+                        manuk_net::request(
+                            &method,
+                            &url,
+                            &[("content-type", "application/json")],
+                            body.clone().into_bytes().into(),
+                        )
+                        .await
+                    };
+                    match out {
+                        Ok(r) => (id, r.status, r.decoded_text()),
+                        // status 0 is the fetch API's "network failure" — the page's `.catch` runs, which
+                        // is a path it was written for. Silence is not.
+                        Err(e) => {
+                            tracing::warn!(%url, "page fetch failed: {e}");
+                            (id, 0u16, String::new())
+                        }
+                    }
+                }
+            }));
+
+            // **The ROUND lives inside the budget, not merely between rounds.** Checking the clock only
+            // at the top of the loop let a single round run unbounded — a 20s budget produced a 200s+
+            // load, which is a Bar 0 regression and not a slow path. Whatever arrived by the deadline is
+            // what the page gets, which is the same promise every other phase makes.
+            let Ok(results) = tokio::time::timeout(left, all).await else {
+                tracing::warn!(round, "page fetches exceeded the load budget — settling with what arrived");
+                return;
+            };
+
+            for (id, status, body) in results {
+                self.resolve_fetch(id, status, &body, fonts, viewport_width);
+            }
+        }
+        tracing::debug!(
+            "page fetches hit the {MAX_ROUNDS}-round ceiling — the page is still issuing requests"
+        );
     }
 
     /// Without SpiderMonkey there are no dynamic scripts to run.

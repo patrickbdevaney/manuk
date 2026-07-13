@@ -11,7 +11,7 @@ The rule it enforces:
 
 ## Why this file exists
 
-In a single session (ticks 25–29), the *process* — not the code — produced **twenty-nine** false or unusable
+In a single session (ticks 25–29), the *process* — not the code — produced **thirty** false or unusable
 conclusions. Every one of them made the browser look better or worse than it is, and not one was a bug
 in the browser:
 
@@ -56,6 +56,7 @@ in the browser:
 | 27 | **`G1` — the visual-fidelity gate — could not fail** | Its floor is applied to the **structural** score, and `coverage` returned **1.0 when `probed == 0`**. `example.com` was in G1's **default URL list** and has **no `[id]` elements at all** — so it probed nothing, scored a perfect 100%, and inflated the mean of the gate whose entire job is catching missing content. Mutation-testing found it: emptying `node_rects()` so the browser renders **nothing** still scored 100% there. | `coverage` is `NaN` when nothing was probed, `report` **fails loudly** on it, and G1's URL list now contains only pages it can actually measure. |
 | 28 | **`G6` — clickability — could not fail either** | `MISSED` is 0 when the page has **no links at all**, so a browser that finds **nothing** scored a perfect clickability. Found by the same mutation pass. | The gate now **refuses fewer than 50 links as vacuous** ("fix the harness, not the threshold") — the same "did it measure anything?" guard `G_DEDUP` needed (#7). It now reports *3 unclickable of 484 links*. |
 | 29 | **Three more weak mutations, three more false "VACUOUS" verdicts** | Falsifiers aimed at `Page::links()` (G6 uses the DOM directly), a dead `_mutation_stall()` nobody calls (G_INTERACT), `shell/src/tab.rs` (G_TEARDOWN scans only the shipping exit paths), and a black canvas (G1's floor is structural, not visual). Each time the gate was **right** and the mutation was **wrong**. | Restated, because it keeps recurring: **mutate the guarantee at its SOURCE, and confirm the mutation reaches the code the gate drives.** A "VACUOUS" verdict is a claim about the gate — verify it before believing it, exactly as you would any other measurement. |
+| 30 | **I "fixed" a file that is not compiled** | Flipped `parse_has() -> true` in `./stylo/style/servo/selector_parser.rs` and rebuilt clean — and `:has()` rules were **still dropped**. The workspace depends on **`stylo = "0.19"` from crates.io**; `./stylo` is a *reference checkout* that nothing builds. The edit was inert. | **Before editing a vendored directory, confirm the build actually uses it** (`grep` the Cargo.toml for a `path =` or `[patch.crates-io]`). A source tree sitting in the repo is not evidence that it is the source. This also **re-prices the `:has()` decision**: it is not a one-line flag delta, it is *vendoring Stylo* — a genuine fork — or a hand-rolled supplement. |
 
 Eight of the twenty-three were **found by an accounting check, not by the gate that was supposed to catch them**.
 

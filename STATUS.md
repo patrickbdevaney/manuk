@@ -8,10 +8,10 @@
 > filesystem, git, the crawl output or the verify receipt.
 
 ```
-TICK:              40
+TICK:              41
 LAST_AUDIT_TICK:   40          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
-LAST_WALL_TIME:    75s
+LAST_WALL_TIME:    277s
 ORACLE_CORPUS:     265 sites
 ORACLE_CRAWLED:    265 sites, 640 clusters  → docs/loop/CLUSTERS.md
 ORACLE_HANGS:      4   ← Bar 0, on OUR clock (manuk_ms > 30s). Outranks every visual cluster.
@@ -49,37 +49,55 @@ So the mechanical form: **a speed claim is only admissible next to a coverage nu
 and we are faster, we are faster. If coverage moved, the speed is a measurement of the thing we stopped
 doing.
 
-## ⚖️ OPEN DECISION — `:has()` needs a one-line Stylo patch, and a settled decision forbids it
+## A BORROWED ENGINE IS A MEANS, NOT A CONSTRAINT (settled, tick 41)
 
-**The finding (tick 39):** `:has()` rules are not merely unmatched — they are **never parsed**, so the
-whole rule is dropped. **13% of the corpus uses `:has()`.**
+**When a vendored dependency cannot do something the web requires, the capability wins.** The question is
+never *whether* to close the gap — it is *at what cost*, and the options are tried in this order:
 
-**The cause:** Stylo's **servo** build hardcodes it off. Gecko's build turns it on.
+| # | Option | Cost | Example |
+|---|---|---|---|
+| 1 | **Flip a pref** | none | `layout.grid.enabled` — Stylo ships grid off under `servo`; we turn it on |
+| 2 | **A named, minimal flag delta** in the vendored source | a diff to re-apply on bump | `parse_has()` — Stylo's *servo* build says `false`, its *gecko* build says `true`. We take Gecko's answer. |
+| 3 | **A hand-rolled supplement** for the specific gap | real code, real tests | e.g. matching a selector class the dependency drops, in our own engine |
+| 4 | **A hand-rolled module** | large | only when 1–3 cannot reach parity |
+| — | **Give up the capability** | ❌ **never** | this is not on the list |
 
-```rust
-// stylo/style/servo/selector_parser.rs
-fn parse_has(&self) -> bool { false }     // ← servo:  OFF
-// stylo/style/gecko/selector_parser.rs
-fn parse_has(&self) -> bool { true }      // ← gecko:  ON
-```
+**What the old rule actually meant.** *"Stylo and SpiderMonkey are never patched internally"* was written to
+prevent two specific things, and **both remain absolutely in force**:
 
-There is **no pref** for it — unlike `layout.grid.enabled`, which we already flip with
-`stylo_static_prefs::set_pref!`. Enabling `:has()` requires **editing Stylo's source**.
+- **Never copy Blink/Gecko *code*.** Algorithm extraction only, cited by reference. Unchanged.
+- **Never fork an engine's *algorithms*** — no rewriting the cascade, no reimplementing the JIT. Unchanged.
 
-**The conflict:** that is forbidden by a settled decision — *"Stylo and SpiderMonkey are never patched
-internally. Sanctioned FFI dependencies only."* Its purpose is to stop us maintaining a fork.
+It was **not** written to make us permanently worse than Firefox at CSS because a build flag defaults the
+other way. Reading it that way turned a guard-rail into a ceiling, and I did read it that way for a tick.
 
-**The trade-off, stated honestly:**
+**The discipline that replaces it, for options 2–4:**
 
-| For patching | Against |
-|---|---|
-| It is **one line**, and it enables a feature **Gecko already ships** — not an algorithmic change | It *is* a fork delta, and forks start at one line |
-| 13% of sites, and `:has()` is increasingly load-bearing rather than an enhancement | `:has()` rules usually degrade gracefully; the page still renders |
-| The alternative is being permanently behind on a shipped CSS feature | It weakens a rule that has kept this project out of engine-maintenance quicksand |
-| `parse_nth_child_of` is `false` in the same file — so this will recur | Every future Stylo bump has to re-apply it |
+1. The delta is **named and minimal** — one flag, not a refactor.
+2. It is **justified by the upstream itself** where possible: Gecko already ships `:has()`. We are not
+   inventing behaviour, we are declining to inherit a *build* default.
+3. It is **guarded by a test that fails if a dependency bump silently reverts it** — otherwise a
+   `git checkout` of the vendor directory quietly deletes a capability and nothing says so.
+4. It is **recorded here**, so the fork surface is a short, visible list and never a discovery.
 
-**I have not done it.** A settled decision is not relitigated silently, and this is exactly the kind of
-call that should be made deliberately rather than absorbed into a tick. **It needs a decision.**
+**The fork surface (keep this SHORT — a growing list is the signal the rule is being abused):**
+
+| Delta | Why | Guarded by |
+|---|---|---|
+| *(none yet)* | — | — |
+
+**`:has()` is RE-PRICED, and it is not option 2.** I flipped `parse_has() -> true` in `./stylo/...` and it
+changed nothing: the workspace depends on **`stylo = "0.19"` from crates.io**, and `./stylo` is a
+*reference checkout that nothing builds*. So the real choices are:
+
+- **Vendor Stylo** (`[patch.crates-io]` → a local fork) for one flag. Big surface, every bump re-applies.
+- **Hand-roll a supplement** (option 3): Stylo *discards* `:has()` rules at parse, so we scan the
+  stylesheet sources ourselves, parse the `:has()` rules with **our own** selector engine (which already
+  backs `querySelectorAll`), and apply them as a second cascade pass. Contained, no fork, and the
+  engine we would extend is one we own.
+
+**The supplement is the right call** — it is smaller than a fork and it does not put a permanent tax on
+every dependency bump. It is scoped as its own tick, not smuggled into this one.
 
 ## Settled Decisions — closed questions. Do not relitigate. (Part 29.2)
 
@@ -90,7 +108,9 @@ consumes real reasoning effort and *feels like progress* while producing no new 
   site and broken on a thousand others is not what "usable" means.
 - **Bar 0 (no crash, no hang, no unrecoverable panic) is the FLOOR**, checked before Bar 1 is even
   asked, for any pattern class. (Part 23.)
-- **Stylo and SpiderMonkey are never patched internally.** Sanctioned FFI dependencies only.
+- **Never copy Blink/Gecko CODE, and never fork an engine's ALGORITHMS.** Both absolute. But a *build
+  flag* that leaves us behind Firefox is not an algorithm — see "A BORROWED ENGINE IS A MEANS, NOT A
+  CONSTRAINT" above. The fork surface is a named, short, guarded list.
 - **No Blink/Gecko code is copied, ever, under any framing.** Algorithm extraction only, cited by
   reference. This one stays discipline, not a hook: a script cannot tell "extraction" from "close
   paraphrase" (Part 28.4), and pretending it could would be worse than naming it.

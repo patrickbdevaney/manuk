@@ -2089,3 +2089,58 @@ against a *structural* floor. Every time, **the gate was right and the mutation 
 
 **All twelve gates now go red when their bug is put back.** For the first time, that is a fact rather
 than an assumption.
+
+## Tick 41 — a missing constructor is a thrown exception (2026-07-13)
+
+**TICK SHAPE: pattern-class.** CLUSTER: C01ca.
+
+**The aljazeera wipe, traced.** `remove_child` was taking out 2,131 elements in one call — React clearing
+its container, which is *normal* for `createRoot`. The bug was that the **re-render then came up empty**.
+
+Peeled one `ReferenceError` at a time:
+
+```
+WebSocket missing  → React's render throws → error boundary → 141 elements
+  fix → Blob missing     → 141
+  fix → FileList missing → 122
+  fix → (the ~40-name interface surface) → 470   ← 3.3x
+```
+
+**Each one was a different library's first line.** A live-blog client constructs a `WebSocket`. A sanitiser
+constructs a `Blob`. A form library references `FileList` in an `instanceof`. **A page does not get to run
+its fallback path if the *check* for the fallback throws.**
+
+> **A missing constructor is not a missing feature — it is a thrown exception, and its blast radius is
+> whatever was rendering at the time.** `canvas.getContext` was used by 3% of sites and broke 100% of
+> them. `WebSocket` was used by one script on one page and took the whole front page.
+>
+> **Construct successfully, and answer honestly.** A blank canvas, an unopened socket, an empty `Blob` are
+> survivable — every library on the web is written to survive them, because real browsers produce exactly
+> those behind captive portals and in private windows. **A `ReferenceError` is survivable by nothing.**
+
+Also found and fixed on the way: **`window.dispatchEvent` did not exist** — with an entire window-listener
+registry sitting behind it, unreachable. And `document.title` (read *and* write), `.referrer`,
+`.characterSet`, `.currentScript`, `navigator.vendor` were all `undefined`, and `undefined.split(…)` is a
+`TypeError` that takes the rest of a bundle with it.
+
+**And the bigger one, which was hiding underneath.**
+
+> **The page's own `fetch()`/XHR calls were never performed outside the shell.**
+
+`take_fetches()` handed them to the shell, and the shell alone made them. So the **oracle**, `boxes`, the
+agent — every consumer that is not the shell — queued a data-driven SPA's API calls and **never made
+them**. The app sat in its loading state forever and rendered a skeleton.
+
+**That is very likely a large share of the oracle's 13,741 "missing" nodes.** A measurement harness that
+cannot load a modern site's content is not measuring the browser, it is measuring itself — and it has
+been scoring every data-driven SPA in the corpus against a skeleton. `finish_loading` now performs them,
+in rounds, **inside the load budget**.
+
+I introduced a **Bar 0 regression doing it** and caught it immediately: the budget was checked only
+*between* rounds, so a single round ran unbounded and a 20s budget produced a 200s+ load. The round now
+lives inside the budget, with a per-round request ceiling that is **logged** when it truncates — a silent
+cap reads as "we did everything".
+
+**Honest status on aljazeera: narrowed, not closed.** 141 → **470** elements. React discards the
+server-rendered tree (its own choice) and its client render still comes up short of the 2,131 it replaced.
+The remaining gap is the app's *data*, not its *code* — and the fetch pump is the first half of that.

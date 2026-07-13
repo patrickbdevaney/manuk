@@ -97,6 +97,13 @@ head_ "G_LOAD · the page renders when its subresources never answer (METHODOLOG
 GL=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_load_budget 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GL" ]; then ok "load budget: $GL"; else bad "G_LOAD failed — a dead subresource can hold the document hostage"; fi
 
+head_ "G_GLOBALS · a missing constructor is a THROWN EXCEPTION, not a missing feature"
+# WebSocket's absence took an entire news front page down: aljazeera's 2,591 server-rendered elements
+# became 141, because a live-blog client constructed one at boot and React's error boundary showed a
+# skeleton. Fixing it revealed Blob; fixing Blob revealed FileList. They come in a long tail.
+GG=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_globals 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GG" ]; then ok "globals: $GG"; else bad "G_GLOBALS failed — a global a real bundle references is missing, or one of them is LYING"; fi
+
 head_ "G_SELECTOR · the cascade must not silently DROP rules (CSS nesting)"
 # RuleIndex — a cascade OPTIMISATION — read each StyleRule's selectors and block and never looked at its
 # `rules` field: its NESTED rules. 41% of the corpus uses CSS nesting (a floor — external sheets are not

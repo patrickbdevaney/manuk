@@ -373,6 +373,359 @@ const PRELUDE: &str = r#"
       // The probe is the authority. If it does not test something, its status is UNKNOWN, and "unknown"
       // must not be silently read as "missing". `docs/loop/capability-probe.html` now tests these.)
 
+      // ── **A MISSING CONSTRUCTOR IS A THROWN EXCEPTION, and its blast radius is whatever was
+      //    rendering at the time.**
+      //
+      // This is the single most expensive shape of gap in this project, and it keeps recurring:
+      // `canvas.getContext` was used by 3% of sites and BROKE 100% of them. `WebSocket` was missing and
+      // took an entire news front page with it — 2,591 server-rendered elements down to 141, because a
+      // live-blog client constructed one at boot, React's render threw, and the error boundary showed a
+      // skeleton where the article had been.
+      //
+      // So: **construct successfully, and answer honestly.** A blank canvas, an unopened socket, an
+      // empty Blob are all survivable — every library on the web is written to survive them, because
+      // real browsers produce them behind captive portals, in private windows, and with permissions
+      // denied. A `ReferenceError` is survivable by nothing.
+      //
+      // Each of these is what a page gets when it *asks*; none of them pretends to work.
+      if (typeof globalThis.Blob === 'undefined') {
+        globalThis.Blob = function Blob(parts, opts) {
+          parts = parts || [];
+          var text = '';
+          for (var i = 0; i < parts.length; i++) {
+            var p = parts[i];
+            text += (p && p.__blobText !== undefined) ? p.__blobText : String(p);
+          }
+          this.__blobText = text;
+          this.size = text.length;
+          this.type = (opts && opts.type) || '';
+        };
+        globalThis.Blob.prototype.slice = function (a, b, t) {
+          return new globalThis.Blob([String(this.__blobText).slice(a, b)], { type: t || this.type });
+        };
+        globalThis.Blob.prototype.text = function () { return Promise.resolve(this.__blobText); };
+        globalThis.Blob.prototype.arrayBuffer = function () {
+          var s = this.__blobText, buf = new ArrayBuffer(s.length), v = new Uint8Array(buf);
+          for (var i = 0; i < s.length; i++) { v[i] = s.charCodeAt(i) & 0xff; }
+          return Promise.resolve(buf);
+        };
+        globalThis.Blob.prototype.stream = function () { return null; };
+      }
+      if (typeof globalThis.File === 'undefined') {
+        globalThis.File = function File(parts, name, opts) {
+          globalThis.Blob.call(this, parts, opts);
+          this.name = String(name || '');
+          this.lastModified = 0;
+        };
+        globalThis.File.prototype = Object.create(globalThis.Blob.prototype);
+        globalThis.File.prototype.constructor = globalThis.File;
+      }
+      if (typeof globalThis.FileReader === 'undefined') {
+        globalThis.FileReader = function FileReader() {
+          this.result = null; this.error = null; this.readyState = 0;
+          this.onload = null; this.onloadend = null; this.onerror = null;
+          this.__ls = {};
+        };
+        var FRp = globalThis.FileReader.prototype;
+        FRp.addEventListener = function (t, fn) { (this.__ls[t] = this.__ls[t] || []).push(fn); };
+        FRp.removeEventListener = function (t, fn) {
+          var a = this.__ls[t]; if (a) { var i = a.indexOf(fn); if (i >= 0) { a.splice(i, 1); } }
+        };
+        FRp.__done = function (result) {
+          var self = this;
+          self.result = result; self.readyState = 2;
+          setTimeout(function () {
+            var ev = { type: 'load', target: self };
+            if (typeof self.onload === 'function') { try { self.onload(ev); } catch (e) {} }
+            (self.__ls['load'] || []).forEach(function (f) { try { f.call(self, ev); } catch (e) {} });
+            var e2 = { type: 'loadend', target: self };
+            if (typeof self.onloadend === 'function') { try { self.onloadend(e2); } catch (e) {} }
+            (self.__ls['loadend'] || []).forEach(function (f) { try { f.call(self, e2); } catch (e) {} });
+          }, 0);
+        };
+        FRp.readAsText = function (b) { this.__done(b && b.__blobText !== undefined ? b.__blobText : ''); };
+        FRp.readAsDataURL = function (b) {
+          var t = (b && b.__blobText) || '';
+          this.__done('data:' + ((b && b.type) || 'application/octet-stream') + ';base64,' + btoa(t));
+        };
+        FRp.readAsArrayBuffer = function (b) { this.__done(new ArrayBuffer(0)); };
+        FRp.abort = function () { this.readyState = 2; };
+      }
+
+      // `new Image()` / `new Audio()` / `new Option()` — these are ELEMENT factories, and a page that
+      // preloads with `new Image().src = …` is doing the single most common thing in web performance.
+      if (typeof globalThis.Image === 'undefined') {
+        globalThis.Image = function Image(w, h) {
+          var el = document.createElement('img');
+          if (w !== undefined) { el.setAttribute('width', String(w)); }
+          if (h !== undefined) { el.setAttribute('height', String(h)); }
+          return el;
+        };
+      }
+      if (typeof globalThis.Audio === 'undefined') {
+        globalThis.Audio = function Audio(src) {
+          var el = document.createElement('audio');
+          if (src !== undefined) { el.setAttribute('src', String(src)); }
+          return el;   // gets the honest HTMLMediaElement surface — see __manukMedia
+        };
+      }
+      if (typeof globalThis.Option === 'undefined') {
+        globalThis.Option = function Option(text, value) {
+          var el = document.createElement('option');
+          if (text !== undefined) { el.textContent = String(text); }
+          if (value !== undefined) { el.setAttribute('value', String(value)); }
+          return el;
+        };
+      }
+
+      // `DOMParser` / `XMLSerializer` — parsing an HTML string into nodes is what every sanitiser,
+      // every markdown renderer and every template engine does.
+      if (typeof globalThis.DOMParser === 'undefined') {
+        globalThis.DOMParser = function DOMParser() {};
+        globalThis.DOMParser.prototype.parseFromString = function (str, type) {
+          // Build a real detached tree by going through the parser we already have.
+          var host = document.createElement('html');
+          host.innerHTML = String(str == null ? '' : str);
+          // Enough of a Document for the things scripts actually do with the result.
+          var doc = {
+            documentElement: host,
+            body: host.querySelector('body') || host,
+            head: host.querySelector('head') || host,
+            querySelector: function (s) { return host.querySelector(s); },
+            querySelectorAll: function (s) { return host.querySelectorAll(s); },
+            getElementById: function (id) { return host.querySelector('#' + id); },
+            getElementsByTagName: function (t) { return host.querySelectorAll(t); },
+            createElement: function (t) { return document.createElement(t); },
+            createTextNode: function (t) { return document.createTextNode(t); },
+            contentType: type || 'text/html',
+            nodeType: 9
+          };
+          return doc;
+        };
+      }
+      if (typeof globalThis.XMLSerializer === 'undefined') {
+        globalThis.XMLSerializer = function XMLSerializer() {};
+        globalThis.XMLSerializer.prototype.serializeToString = function (node) {
+          return (node && (node.outerHTML || node.innerHTML)) || '';
+        };
+      }
+
+      // `DOMRect` — constructed by every layout/measurement library.
+      if (typeof globalThis.DOMRect === 'undefined') {
+        globalThis.DOMRect = function DOMRect(x, y, w, h) {
+          this.x = x || 0; this.y = y || 0; this.width = w || 0; this.height = h || 0;
+          this.left = this.x; this.top = this.y;
+          this.right = this.x + this.width; this.bottom = this.y + this.height;
+        };
+        globalThis.DOMRect.fromRect = function (r) {
+          r = r || {}; return new globalThis.DOMRect(r.x, r.y, r.width, r.height);
+        };
+        globalThis.DOMRectReadOnly = globalThis.DOMRect;
+      }
+
+      // **`PerformanceObserver`** — every RUM/analytics bundle constructs one on its first line. It
+      // observes nothing here, and it says so by never delivering an entry — which is exactly what it
+      // does in a browser where the entry types are unsupported.
+      if (typeof globalThis.PerformanceObserver === 'undefined') {
+        globalThis.PerformanceObserver = function PerformanceObserver(cb) { this.__cb = cb; };
+        globalThis.PerformanceObserver.prototype.observe = function () {};
+        globalThis.PerformanceObserver.prototype.disconnect = function () {};
+        globalThis.PerformanceObserver.prototype.takeRecords = function () { return []; };
+        globalThis.PerformanceObserver.supportedEntryTypes = [];
+      }
+
+      // `EventSource` (SSE) and `BroadcastChannel` — same honesty as WebSocket: construct, then report
+      // that we cannot connect. Never throw at construction.
+      if (typeof globalThis.EventSource === 'undefined') {
+        globalThis.EventSource = function EventSource(url) {
+          this.url = String(url || ''); this.readyState = 0;
+          this.onopen = null; this.onmessage = null; this.onerror = null;
+          this.__ls = {};
+          var self = this;
+          setTimeout(function () {
+            self.readyState = 2;   // CLOSED
+            var ev = { type: 'error', target: self };
+            if (typeof self.onerror === 'function') { try { self.onerror(ev); } catch (e) {} }
+            (self.__ls['error'] || []).forEach(function (f) { try { f.call(self, ev); } catch (e) {} });
+          }, 0);
+        };
+        globalThis.EventSource.prototype.addEventListener = function (t, fn) {
+          (this.__ls[t] = this.__ls[t] || []).push(fn);
+        };
+        globalThis.EventSource.prototype.removeEventListener = function () {};
+        globalThis.EventSource.prototype.close = function () { this.readyState = 2; };
+        globalThis.EventSource.CONNECTING = 0;
+        globalThis.EventSource.OPEN = 1;
+        globalThis.EventSource.CLOSED = 2;
+      }
+      if (typeof globalThis.BroadcastChannel === 'undefined') {
+        globalThis.BroadcastChannel = function BroadcastChannel(name) {
+          this.name = String(name || ''); this.onmessage = null; this.onmessageerror = null;
+        };
+        globalThis.BroadcastChannel.prototype.postMessage = function () {};
+        globalThis.BroadcastChannel.prototype.close = function () {};
+        globalThis.BroadcastChannel.prototype.addEventListener = function () {};
+        globalThis.BroadcastChannel.prototype.removeEventListener = function () {};
+      }
+
+      // **`Worker`** — constructs, then fires `error`, which is what a browser does when the worker
+      // script fails to load. A page that offloads work to a worker takes its main-thread fallback; a
+      // page that gets a `ReferenceError` takes nothing.
+      if (typeof globalThis.Worker === 'undefined') {
+        globalThis.Worker = function Worker(url) {
+          this.__url = String(url || '');
+          this.onmessage = null; this.onerror = null; this.__ls = {};
+          var self = this;
+          setTimeout(function () {
+            var ev = { type: 'error', message: 'workers are not supported', target: self };
+            if (typeof self.onerror === 'function') { try { self.onerror(ev); } catch (e) {} }
+            (self.__ls['error'] || []).forEach(function (f) { try { f.call(self, ev); } catch (e) {} });
+          }, 0);
+        };
+        globalThis.Worker.prototype.postMessage = function () {};
+        globalThis.Worker.prototype.terminate = function () {};
+        globalThis.Worker.prototype.addEventListener = function (t, fn) {
+          (this.__ls[t] = this.__ls[t] || []).push(fn);
+        };
+        globalThis.Worker.prototype.removeEventListener = function () {};
+        globalThis.SharedWorker = globalThis.Worker;
+      }
+
+      // `window.getSelection()` — editors and "copy link" widgets call it unconditionally.
+      if (typeof globalThis.getSelection === 'undefined') {
+        globalThis.getSelection = function () {
+          return {
+            rangeCount: 0, isCollapsed: true, type: 'None', anchorNode: null, focusNode: null,
+            toString: function () { return ''; },
+            removeAllRanges: function () {}, addRange: function () {}, getRangeAt: function () { return null; },
+            collapse: function () {}, selectAllChildren: function () {}
+          };
+        };
+      }
+
+      // ── **The interface surface.** Every name here is one a bundle may *reference* — in an
+      //    `instanceof`, a `typeof`, a prototype patch — and **a referenced name that does not exist is a
+      //    `ReferenceError`, not a `false`.**
+      //
+      // That distinction is the whole point and it took a news front page to learn it. The wipe on
+      // aljazeera.com peeled one layer at a time: `WebSocket` missing → fix → `Blob` missing → fix →
+      // `FileList` missing → … Each was a *different* library's first line, and each took down whatever
+      // was rendering. A page does not get to run its fallback path if the check for the fallback throws.
+      //
+      // These are **inert**: they exist, they are named, and they claim nothing. `x instanceof FileList`
+      // answers `false`, which is the truth. The ones that need a real `Symbol.hasInstance` (Node,
+      // Element, HTMLElement, Text, Comment, DocumentFragment) get it from `iface()` above — those are
+      // load-bearing for custom elements and framework dispatch, and are not in this list.
+      [
+        // Files / data transfer
+        'FileList', 'DataTransfer', 'DataTransferItem', 'DataTransferItemList',
+        // Streams / requests
+        'NodeList', 'HTMLCollection', 'ShadowRoot', 'StyleSheet', 'ResizeObserverEntry',
+        'Request', 'Response', 'Headers', 'ReadableStream', 'WritableStream', 'TransformStream',
+        'ReadableStreamDefaultReader', 'AbortSignal',
+        // Events — a bundle that patches or sniffs one of these references it by name
+        'UIEvent', 'FocusEvent', 'InputEvent', 'CompositionEvent', 'WheelEvent', 'PointerEvent',
+        'TouchEvent', 'Touch', 'TouchList', 'DragEvent', 'ClipboardEvent', 'ProgressEvent',
+        'StorageEvent', 'CloseEvent', 'HashChangeEvent', 'PageTransitionEvent', 'SubmitEvent',
+        'AnimationEvent', 'TransitionEvent', 'BeforeUnloadEvent', 'SecurityPolicyViolationEvent',
+        // Element interfaces referenced by name in type checks
+        'HTMLFormElement', 'HTMLAnchorElement', 'HTMLButtonElement', 'HTMLSelectElement',
+        'HTMLTextAreaElement', 'HTMLLabelElement', 'HTMLIFrameElement', 'HTMLLinkElement',
+        'HTMLStyleElement', 'HTMLTableElement', 'HTMLVideoElement', 'HTMLAudioElement',
+        'HTMLSourceElement', 'HTMLPictureElement', 'HTMLTemplateElement', 'HTMLSlotElement',
+        'SVGSVGElement', 'SVGGraphicsElement',
+        // Misc platform objects
+        'MessagePort', 'Range', 'Selection', 'DOMTokenList', 'NamedNodeMap', 'Attr',
+        'CSSRule', 'CSSStyleRule', 'MediaQueryList', 'PerformanceEntry', 'IdleDeadline',
+        'Screen', 'History', 'Location', 'VisualViewport'
+      ].forEach(function (n) {
+        if (typeof globalThis[n] === 'undefined') {
+          var C = function () {};
+          Object.defineProperty(C, 'name', { value: n });
+          C.prototype = {};
+          globalThis[n] = C;
+        }
+      });
+
+      // ── **`WebSocket` — it did not exist, and on a live-news site that is the whole page.**
+      //
+      // Found by the aljazeera.com wipe: 2,591 server-rendered elements became 141. React had cleared its
+      // container and re-rendered to a 19-element skeleton — the classic hydration-failure fallback. The
+      // only page-level error in the whole load was **"WebSocket implementation missing"**. A live-blog
+      // client constructs one at boot; the constructor was a `ReferenceError`; React's render threw; the
+      // error boundary showed a skeleton; and the article was gone.
+      //
+      // **A missing constructor is not a missing feature — it is a thrown exception**, and the blast
+      // radius is whatever was rendering at the time. That is the same lesson as `canvas.getContext`
+      // (3% of sites, 100% of them broken) and it keeps being the most expensive kind of gap.
+      //
+      // This does not connect. It **honestly reports that it cannot**: the socket constructs, sits in
+      // CONNECTING, and then asynchronously fires `error` and `close` — which is exactly what a real
+      // browser does behind a captive portal, and every client on the web is written to survive it. What
+      // it must not do is throw at construction, because then nothing is written to survive anything.
+      if (typeof globalThis.WebSocket === 'undefined') {
+        var WS = function WebSocket(url, protocols) {
+          this.url = String(url || '');
+          this.protocol = Array.isArray(protocols) ? (protocols[0] || '') : (protocols || '');
+          this.readyState = 0;                    // CONNECTING
+          this.bufferedAmount = 0;
+          this.extensions = '';
+          this.binaryType = 'blob';
+          this.onopen = null; this.onmessage = null; this.onerror = null; this.onclose = null;
+          this.__ls = {};
+          var self = this;
+          // Report the failure on a MACROtask, not a microtask: a client that reconnects in its `close`
+          // handler would otherwise spin the microtask queue without ever yielding, and the page would
+          // hang instead of degrade. `setTimeout` lets the drain make progress between attempts, and the
+          // task ceiling (MAX_TASKS_PER_DRAIN) is the backstop if it still will not converge.
+          setTimeout(function () {
+            if (self.readyState === 3) { return; }
+            self.readyState = 3;                  // CLOSED
+            var err = { type: 'error', target: self, message: 'websocket is not supported' };
+            self.__fire('error', err);
+            self.__fire('close', {
+              type: 'close', target: self, code: 1006, reason: 'unsupported', wasClean: false
+            });
+          }, 0);
+        };
+        WS.prototype.__fire = function (type, ev) {
+          var on = this['on' + type];
+          if (typeof on === 'function') { try { on.call(this, ev); } catch (e) {} }
+          var a = (this.__ls[type] || []).slice();
+          for (var i = 0; i < a.length; i++) { try { a[i].call(this, ev); } catch (e) {} }
+        };
+        WS.prototype.addEventListener = function (t, fn) {
+          if (typeof fn === 'function') { (this.__ls[t] = this.__ls[t] || []).push(fn); }
+        };
+        WS.prototype.removeEventListener = function (t, fn) {
+          var a = this.__ls[t]; if (!a) { return; }
+          var i = a.indexOf(fn); if (i >= 0) { a.splice(i, 1); }
+        };
+        WS.prototype.dispatchEvent = function (ev) { this.__fire(ev && ev.type, ev); return true; };
+        // `send` on a socket that is not open THROWS in a real browser (InvalidStateError), and clients
+        // are written for it. Ours is never open, so this is the honest answer — but it is a *caught*
+        // error in every client, not a boot-time ReferenceError, and that is the entire difference.
+        WS.prototype.send = function () {
+          var e = new Error('websocket is not connected');
+          e.name = 'InvalidStateError';
+          throw e;
+        };
+        WS.prototype.close = function (code, reason) {
+          if (this.readyState === 3) { return; }
+          this.readyState = 3;
+          var self = this;
+          setTimeout(function () {
+            self.__fire('close', {
+              type: 'close', target: self, code: code || 1000, reason: reason || '', wasClean: true
+            });
+          }, 0);
+        };
+        WS.CONNECTING = 0; WS.OPEN = 1; WS.CLOSING = 2; WS.CLOSED = 3;
+        WS.prototype.CONNECTING = 0; WS.prototype.OPEN = 1;
+        WS.prototype.CLOSING = 2; WS.prototype.CLOSED = 3;
+        globalThis.WebSocket = WS;
+      }
+
       // **`Notification`** — 14% of the corpus. Almost always feature-detected, so the honest answer is
       // the useful one: the constructor exists, permission is `"denied"`, and `requestPermission()`
       // resolves to `"denied"`. A site asked, and was told no. Nothing throws, and no user is nagged.
