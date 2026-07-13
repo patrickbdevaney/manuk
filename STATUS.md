@@ -8,10 +8,10 @@
 > filesystem, git, the crawl output or the verify receipt.
 
 ```
-TICK:              41
+TICK:              42
 LAST_AUDIT_TICK:   40          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
-LAST_WALL_TIME:    277s
+LAST_WALL_TIME:    284s
 ORACLE_CORPUS:     265 sites
 ORACLE_CRAWLED:    265 sites, 640 clusters  → docs/loop/CLUSTERS.md
 ORACLE_HANGS:      4   ← Bar 0, on OUR clock (manuk_ms > 30s). Outranks every visual cluster.
@@ -99,10 +99,105 @@ changed nothing: the workspace depends on **`stylo = "0.19"` from crates.io**, a
 **The supplement is the right call** — it is smaller than a fork and it does not put a permanent tax on
 every dependency bump. It is scoped as its own tick, not smuggled into this one.
 
+## THE ORACLE'S SCOPE IS THE CEILING (settled, tick 42)
+
+> **Raising what the instrument can SEE outranks fixing what it already sees.**
+
+The oracle is a **static, single-snapshot, box-diffing** instrument. It is not under-resourced — it is
+**structurally blind** to everything that happens *after first paint*:
+
+| Axis | What it has ever observed |
+|---|---|
+| **time** (animation, timers, polling) | nothing |
+| **interaction** (click, hover, focus, keyboard) | nothing |
+| **scroll** (lazy-load, virtualization, sticky, infinite) | nothing |
+| **session / auth** (logged-in surfaces, app shells) | nothing |
+| **media** (playback, codecs) | nothing |
+| **adversarial input** (malformed, hostile, edge-case) | nothing |
+| **network reality** (HTTP/2, HTTP/3, TLS fingerprint, CORS/CSP) | nothing |
+
+**Null is not zero.** A category with no data is not a category that is fine — it is a category nobody has
+looked at. Optimising hard under a fixed ceiling *feels* like progress and is eventually a trap.
+
+**This reframes tick selection:** once the backlog under the current ceiling thins, a tick that **expands
+what the oracle can see** outranks a tick that fixes something it already sees.
+
+## THE SEVEN META-INSTRUMENTS (build in this order)
+
+| # | Instrument | Why it is ranked here |
+|---|---|---|
+| 1 | **Unhandled-error harvester across the whole corpus** | Cheapest, highest yield, **already proven**: it turned Lit and Svelte from mysteries into named error messages in one move, and the aljazeera wipe peeled one layer per fix this way. Aggregate every throw, rejection and `console.error` across all 265 sites; cluster by message shape; rank by **distinct sites affected**. |
+| 2 | **The capability probe, moved into every real corpus page** | Record what each site's own bundles *actually touch* — every global read, every method call. Turns "MDN lists 4,000 APIs" into "**these 180 are what 265 real sites call, and we are missing 12**". A measured, usage-weighted surface instead of an imagined one. |
+| 3 | **Accounting reconciliation, as a first-class MECHANISM** | **8 of 30 process defects were caught by a number that did not add up — not by any gate.** That is the single most informative statistic in this project. Every measurement must reconcile: *parsed vs rendered elements · probed vs scored nodes · fetches issued vs performed · sites in corpus vs sites diffed.* Build gates for these over time; keep the manual check running as the backstop, **not** as a replacement. |
+| 4 | **`falsify.sh`, generalised from the gate wall to the CORPUS** | It found `G_LOAD` had never tested its own budget, `G1` was structurally incapable of failing, and `G6` scored a browser finding **zero links** as perfect clickability. Extend it outward: **deliberately break the engine and see which sites' divergence scores do not move.** A site whose score is unmoved by a real regression is measuring nothing — and there will be more of those than expected. |
+| 5 | **Scope expansion as a SCHEDULED tick, not an inspiration** | A standing audit check: *"which axes has this instrument never observed?"* Track time / interaction / scroll / session / media / adversarial / network explicitly. |
+| 6 | **Wire up WPT** | `tests/wpt` and `blitz/wpt/runner` **already exist in the tree and are unused.** Densest signal-per-token available anywhere — written by the people who wrote the specs, naming exactly which behaviour each test checks. **Probably the single highest-leverage tick on the board. Do it early, not last.** |
+| 7 | **Web research as a narrow, TRIGGERED disambiguator** | Never a substitute for the oracle, never a reason to seed the repo with the internet's source. Use only when a probe surfaces something the corpus cannot explain: *"what does x.com actually require to render", "which codec does Instagram serve to Chrome"*. **The oracle finds that something is broken; research finds why.** |
+
+## THE PLATFORM MAP (priority order — each unlocks a CATEGORY, not a site)
+
+1. **Loading & viewport awareness** — **the single biggest breadth-per-tick item on the board**, because
+   it is *one missing primitive, not six missing features*: the browser paints at scroll 0 and **never
+   tells anything the viewport moved**. That one gap is why lazy-loading, virtualization, sticky headers,
+   scroll-linked animation and infinite scroll are **all simultaneously unsupported**. Build the live
+   viewport once; it unlocks all five.
+2. **Nested browsing contexts** — isolation is already free (a `PageContext` is per-`Page`; the hard part
+   is done). What remains is *plumbing*: live child pages composited rather than rasterized, event routing
+   with coordinate translation, `postMessage`, `contentWindow`/`contentDocument`, `sandbox`, nested scroll.
+3. **Session, identity, and the network's real behaviour** — **the invisible category**, and the reason
+   **41 of 265 sites were discarded and 13 timed out unattributed**. The corpus is systematically biased
+   toward *sites that are easy to load* — the exact opposite of the sites that matter. Needs: a real cookie
+   jar, a **believable TLS/HTTP fingerprint** (a "correct" browser that fingerprints wrong is a **bot** to
+   Cloudflare/Akamai), **HTTP/2 and HTTP/3** (their absence is itself a bot signal, not just a speed
+   issue), Service Workers, IndexedDB, real CORS/CSP.
+4. **Real-time & background** — WebSocket (today: constructs, honestly reports it cannot connect → make it
+   *actually* connect), SSE, Web Workers (today: honest but non-functional), `structuredClone`.
+   **WebRTC is explicitly OUT OF SCOPE** rather than left ambiguous.
+5. **Graphics** — **Canvas 2D is genuinely within reach**: `tiny_skia` already backs the painter with
+   paths, fills and strokes. Today's no-op drawing calls are the honest correct trade *until it lands*.
+   WebGL is a real subsystem (wgpu + GLSL translation). OffscreenCanvas/WebGPU are the frontier.
+6. **Input & text** — IME/composition (**CJK input is impossible without it**), clipboard, drag & drop,
+   `contenteditable` (the substrate of every rich editor), Selection/Range (a stub today), and bidi/complex
+   shaping — **swash/fontdb are already doing this and nobody has verified it is correct.**
+7. **Correctness under adversarial input** — this is *exactly* what WPT is for (#6 above), not a separate
+   effort.
+8. **Accessibility** — `engine/a11y` exists and `hit_test` uses it, but whether the **tree itself** is
+   correct (roles, names, focus order) is **unmeasured** — and it matters directly for the agent-native
+   architecture.
+9. **Print, zoom, high-DPI, RTL, i18n text** — same unverified-correctness situation as bidi shaping.
+
 ## Settled Decisions — closed questions. Do not relitigate. (Part 29.2)
 
 Re-deriving a decision that was already correctly made is the most expensive kind of drift: it
 consumes real reasoning effort and *feels like progress* while producing no new ground truth.
+
+- **Frameworks are debugged by RUNNING them, not by cloning their repos.** Every framework blocker this
+  session — React, Svelte, Lit, and the `file://` scheme wall that silenced all of them at once — was
+  found by running the thing and **reading what it said**. Four of five app-web blockers were bugs in
+  **our own primitives** (an unrooted `*mut JSObject` surviving a GC; missing prototype accessors; a
+  missing `CharacterData.data`), not framework internals. **When a framework fails silently, the bug is
+  below the framework — which makes the framework's source precisely the place the answer is not.** WPT
+  and a richer real-site corpus are the higher-signal investment. Do not seed the repo with framework
+  source.
+
+- **Media playback is TICK-SIZED, not a subsystem — and the plan is written** (`docs/loop/MEDIA.md`).
+  A video frame **is** a `DecodedImage`; playing a video is swapping the `Rc` in the map the poster already
+  occupies and calling `request_redraw`. **No new paint code.** `re_mp4` + `openh264` + `yuvutils-rs`
+  lands muted looping `<video>` — *most of the `<video>` elements on the open web* — in ~2–3 days.
+  **MSE is genuinely 2–4 weeks** and must come after. ⚠ **Never advertise `MediaSource` before it works:
+  its absence is what makes YouTube serve the progressive fallback.**
+
+- **EME/DRM is OUT OF SCOPE. Permanently.** Widevine is a proprietary binary CDM requiring an actual
+  licensing relationship. Netflix, Spotify and Disney+ are **unreachable**, and no amount of engineering
+  changes that. *Everything else in media* — demux, decode, A/V sync, adaptive bitrate — is achievable and
+  is scoped as its own work, honestly labelled. **This is stated once and is not relitigated at each
+  audit.**
+
+- **Full per-tab PROCESS isolation is architecturally impossible in-process.** A fault inside
+  SpiderMonkey's own C++ frames cannot be contained the way a Rust panic can — Bar 0's containment handles
+  *"a panic kills the page"*; it **cannot** handle *"a segfault kills the page"*. Closing this gap requires
+  a **multi-process rearchitecture**: a real, deliberate decision point, **not a tick**, and not something
+  to be quietly attempted piecemeal.
 
 - **Bar 2 (pixel precision) is deferred.** Breadth beats depth until Bar 1 is real. Pixel-exact on one
   site and broken on a thousand others is not what "usable" means.

@@ -11,7 +11,7 @@ The rule it enforces:
 
 ## Why this file exists
 
-In a single session (ticks 25–29), the *process* — not the code — produced **thirty** false or unusable
+In a single session (ticks 25–29), the *process* — not the code — produced **thirty-one** false or unusable
 conclusions. Every one of them made the browser look better or worse than it is, and not one was a bug
 in the browser:
 
@@ -57,6 +57,7 @@ in the browser:
 | 28 | **`G6` — clickability — could not fail either** | `MISSED` is 0 when the page has **no links at all**, so a browser that finds **nothing** scored a perfect clickability. Found by the same mutation pass. | The gate now **refuses fewer than 50 links as vacuous** ("fix the harness, not the threshold") — the same "did it measure anything?" guard `G_DEDUP` needed (#7). It now reports *3 unclickable of 484 links*. |
 | 29 | **Three more weak mutations, three more false "VACUOUS" verdicts** | Falsifiers aimed at `Page::links()` (G6 uses the DOM directly), a dead `_mutation_stall()` nobody calls (G_INTERACT), `shell/src/tab.rs` (G_TEARDOWN scans only the shipping exit paths), and a black canvas (G1's floor is structural, not visual). Each time the gate was **right** and the mutation was **wrong**. | Restated, because it keeps recurring: **mutate the guarantee at its SOURCE, and confirm the mutation reaches the code the gate drives.** A "VACUOUS" verdict is a claim about the gate — verify it before believing it, exactly as you would any other measurement. |
 | 30 | **I "fixed" a file that is not compiled** | Flipped `parse_has() -> true` in `./stylo/style/servo/selector_parser.rs` and rebuilt clean — and `:has()` rules were **still dropped**. The workspace depends on **`stylo = "0.19"` from crates.io**; `./stylo` is a *reference checkout* that nothing builds. The edit was inert. | **Before editing a vendored directory, confirm the build actually uses it** (`grep` the Cargo.toml for a `path =` or `[patch.crates-io]`). A source tree sitting in the repo is not evidence that it is the source. This also **re-prices the `:has()` decision**: it is not a one-line flag delta, it is *vendoring Stylo* — a genuine fork — or a hand-rolled supplement. |
+| 31 | **The falsifier reported FALSIFIER BROKEN for a linker OOM** | `expect_red` builds the mutation first and treats a build failure as "the mutation is broken" — correctly, for a compile error. But `ld terminated with signal 9 [Killed]` is **the machine running out of memory**, not a bad mutation. It reported two perfectly good falsifiers as broken. | The verdict was **not believed on sight** (PROCESS #29's rule, applied), and a retry at `CARGO_BUILD_JOBS=2` proved both. A build failure is still the right *default* — it is loud and it stops the run — but **"the falsifier is broken" is a claim, and claims get verified.** |
 
 Eight of the twenty-three were **found by an accounting check, not by the gate that was supposed to catch them**.
 

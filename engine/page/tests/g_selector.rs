@@ -32,6 +32,13 @@ const HTML: &str = r#"<!doctype html><html><head><style>
       .implicit-descendant { display: grid }
     }
 
+    /* ── `:has()` — Stylo DISCARDS these rules; we match them with our own engine (tick 42). */
+    .card:has(.probe)              { color: blue }
+    .card:has(.probe) .has-desc    { display: flex }
+    .card:has(> .probe) .has-child { display: flex }
+    .row:has(+ .after)             { display: grid }
+    .card:has(.nope) .has-nomatch  { display: flex }   /* must NOT match — there is no .nope */
+
     /* ── The selectors that already worked. Here so that "fixed nesting" cannot quietly break them. */
     :is(.card) .is-sel        { display: flex }
     :where(.card) .where-sel  { display: flex }
@@ -42,6 +49,12 @@ const HTML: &str = r#"<!doctype html><html><head><style>
     .card > .a ~ .sib-sel     { display: flex }
   </style></head><body>
     <div class="card" data-k="v">
+      <div class="probe"></div>
+      <div class="has-desc"></div>
+      <div class="has-child"></div>
+      <div class="has-nomatch"></div>
+      <div class="row"></div>
+      <div class="after"></div>
       <div class="a"></div>
       <div class="adj-sel"></div>
       <div class="sib-sel"></div>
@@ -92,6 +105,38 @@ fn nested_rules_are_not_dropped_and_the_selectors_that_worked_still_work() {
         "grid",
         "G_SELECTOR: a nested rule with an IMPLICIT `&` (no ampersand written) did not apply. \
          `.card {{ .x {{ … }} }}` means `.card .x`, and it is by far the commonest form."
+    );
+
+    // ── (1b) **`:has()`** — Stylo's *servo* build hardcodes `parse_has() -> false`, so these rules fail
+    //         to parse and error-recovery discards the WHOLE rule: the declarations never reach the
+    //         cascade. 13% of the corpus. We match them with our own selector engine instead of
+    //         vendoring Stylo — see STATUS.md, "a borrowed engine is a means, not a constraint".
+    assert_eq!(
+        display_of("has-desc"),
+        "flex",
+        "G_SELECTOR: `.card:has(.probe) .has-desc` did not match. `:has()` with a DESCENDANT argument is \
+         by far the commonest form, and Stylo drops the rule entirely rather than merely failing to \
+         match it."
+    );
+    assert_eq!(
+        display_of("has-child"),
+        "flex",
+        "G_SELECTOR: `:has(> .probe)` (child combinator) did not match."
+    );
+    assert_eq!(
+        display_of("row"),
+        "grid",
+        "G_SELECTOR: `.row:has(+ .after)` (next-sibling combinator) did not match. The leading combinator \
+         decides the SEARCH SPACE, and searching the subtree for a sibling selector would be both wrong \
+         and slow."
+    );
+    // **And a `:has()` that should NOT match must not match.** A supplement that applies its rules
+    // indiscriminately would be a far worse bug than the missing feature: it would restyle the page.
+    assert_eq!(
+        display_of("has-nomatch"),
+        "block",
+        "G_SELECTOR: `.card:has(.nope) .has-nomatch` MATCHED — but there is no `.nope` anywhere. The \
+         supplement is applying `:has()` rules without checking them, which restyles the page."
     );
 
     // ── (2) **And everything that already worked still works.** A fix that silently breaks the

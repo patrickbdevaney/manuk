@@ -327,6 +327,42 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
         parent_cv.insert(node, cv);
     }
 
+    // ── **`:has()` — the rules Stylo THREW AWAY.**
+    //
+    // Stylo's *servo* build hardcodes `parse_has() -> false` (Gecko's returns `true`), so a selector
+    // containing `:has()` fails to parse and CSS error-recovery discards the **whole rule**. Its
+    // declarations never reach the cascade at all. **13% of the corpus uses `:has()`.**
+    //
+    // Enabling it upstream costs **vendoring Stylo** — `./stylo` in this repo is a reference checkout
+    // that nothing builds; the dependency is `stylo = "0.19"` from crates.io. So this extends the
+    // selector engine we already own (the one behind `querySelectorAll`), which is the cheaper rung on
+    // the ladder in STATUS.md: *pref → flag delta → **supplement** → module.*
+    //
+    // Skipped entirely — no walk, no cost — for the ~87% of sheets that contain no `:has()` at all.
+    let has_sheets: Vec<&Stylesheet> = sheets.iter().filter(|sh| sh.has_relative_rules()).collect();
+    if !has_sheets.is_empty() {
+        let mut applied = 0usize;
+        let nodes: Vec<NodeId> = dom.flat_descendants(dom.root());
+        for node in nodes {
+            if !dom.is_element(node) {
+                continue;
+            }
+            let parent_fs = dom
+                .parent(node)
+                .and_then(|p| map.get(&p).map(|s| s.font_size))
+                .unwrap_or(16.0);
+            let Some(cs) = map.get_mut(&node) else { continue };
+            for sh in &has_sheets {
+                applied += sh.apply_has_rules(dom, node, cs, parent_fs);
+            }
+        }
+        tracing::debug!(
+            sheets = has_sheets.len(),
+            declarations = applied,
+            "applied :has() rules that Stylo discarded"
+        );
+    }
+
     // `vertical-align` has no computed longhand accessor in stylo 0.19 (it became a
     // CSS-Inline-3 shorthand of alignment-baseline/baseline-shift/baseline-source, and the
     // legacy line-relative `top`/`bottom` keywords aren't exposed there). Recover *only*

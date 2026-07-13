@@ -91,7 +91,7 @@ Measured from a real HTTP origin. Every "we do" below is what the engine *answer
 | `@font-face` | 19% | ✅ |
 | `matchMedia` | 17% | ✅ |
 | `<video>` | 16% | ✅ **degrades honestly** — poster + an honest "cannot play" (tick 28) |
-| CSS `:has()` | 13% | ❌ **rules DROPPED** — the ✅ here was never tested (fifth time). Stylo's *servo* build hardcodes `parse_has() -> false`; Gecko's returns `true`. Enabling it requires editing Stylo, which a settled decision forbids — **this needs a decision, not a patch.** |
+| CSS `:has()` | 13% | ✅ **DONE (tick 42)** — hand-rolled supplement, no Stylo fork. ~~rules DROPPED~~ — the ✅ here was never tested (fifth time). Stylo's *servo* build hardcodes `parse_has() -> false`; Gecko's returns `true`. Enabling it requires editing Stylo, which a settled decision forbids — **this needs a decision, not a patch.** |
 | `<template>` | 14% | ✅ (tick 26 — Lit needed it) |
 | `position: sticky` | 14% | ⚠️ box laid out; **does not stick on scroll** |
 | MutationObserver | 13% | ✅ |

@@ -2144,3 +2144,73 @@ cap reads as "we did everything".
 **Honest status on aljazeera: narrowed, not closed.** 141 → **470** elements. React discards the
 server-rendered tree (its own choice) and its client render still comes up short of the 2,131 it replaced.
 The remaining gap is the app's *data*, not its *code* — and the fetch pump is the first half of that.
+
+## Tick 42 — `:has()`, hand-rolled rather than forked (2026-07-13)
+
+**TICK SHAPE: pattern-class.** CLUSTER: C01ca.
+
+**The decision, made and recorded rather than absorbed:** `:has()` rules are **dropped at parse** by
+Stylo's *servo* build (`parse_has() -> false`; Gecko's returns `true`). **13% of the corpus.**
+
+Enabling it upstream costs **vendoring Stylo** — I confirmed the hard way that `./stylo` in this repo is a
+*reference checkout that nothing builds* (we depend on `stylo = "0.19"` from crates.io), so the "one-line
+flag" is really a fork with a per-bump tax. Per the settled rule — *a borrowed engine is a means, not a
+constraint*, tried in order **pref → minimal flag delta → hand-rolled supplement → hand-rolled module** —
+the supplement is the right rung.
+
+**Hypothesis:** Stylo *discards* `:has()` rules, so they never reach the cascade at all. But we already own
+a selector engine — the one behind `querySelectorAll`. So:
+
+1. Scan the stylesheet **sources** (which we already collect) for rules whose selector contains `:has(`.
+   Stylo threw the parsed form away; the *text* is still ours.
+2. Parse those with **our** engine, extended with `:has()`.
+3. Apply their declarations as a **second cascade pass**, ordered by `(specificity, source order)` — the
+   same ordering rule the main cascade uses.
+
+**The risk I expect, and will measure rather than assume:** specificity interleaving between two engines.
+A `:has()` rule must not blindly win over a higher-specificity normal rule. If that cannot be made correct,
+applying it only where the property is otherwise *unset* is a smaller, honest subset — and I will say so
+rather than ship a rule that wins fights it should lose.
+
+**RESULT — tick 42.** `:has()` works: subject (`.a:has(.probe)`), descendant, `>`, `+`, `~`, and the
+forgiving list. Gated by `G_SELECTOR` (both halves proven falsifiable), and the gate asserts the **negative**
+case too — a `:has()` that should not match must not match, because a supplement that applies its rules
+indiscriminately would *restyle the page*, which is far worse than the missing feature.
+
+**The bug inside the fix, and it is a nice one:** `Dom::descendants()` seeds with the node's **children** —
+it does not yield the node itself. My `:has()` descendant branch had `.skip(1)` to "skip the anchor", which
+silently dropped the **first descendant** — exactly where `:has(.probe)` finds `.probe` in
+`<div class=a><div class=probe>`. Child and sibling `:has()` worked; the commonest form did not. *An
+off-by-one in a skip is invisible until the thing you are looking for happens to be first.*
+
+**Cascade cost: none measurable** (F1 floor still 4.16ms). The supplement is skipped entirely for the ~87%
+of sheets containing no `:has()` at all.
+
+**And a process defect:** the falsifier reported **FALSIFIER BROKEN** for both mutations — and it was a
+**linker OOM** (`ld terminated with signal 9`), not a bad mutation. Per PROCESS #29 I did not believe the
+verdict on sight; a retry at `CARGO_BUILD_JOBS=2` proved both. *"The falsifier is broken" is a claim, and
+claims get verified.*
+
+---
+
+**Media (researched, `docs/loop/MEDIA.md`): it is tick-sized, and the reason is structural.**
+
+> A video frame **is** a `DecodedImage`. Playing a video is swapping the `Rc` in the map the **poster
+> already occupies** (tick 28) and calling `request_redraw`. **No new paint code.**
+
+`re_mp4` + `openh264` + `yuvutils-rs` → **first real frame** (½–1 day) → **muted looping `<video>` plays**
+(1–2 days), which is *most of the `<video>` elements on the open web* — none of them have an audio track,
+need a clock, or need ABR. Then audio (`symphonia` + `cpal`, and `<audio>` comes free), seek, then
+High-profile via `cros-codecs`/ffmpeg **behind a trait defined in tick 1**.
+
+**The finding that overturned the obvious plan:** there is **no pure-Rust H.264 decoder that can decode the
+H.264 the web actually serves.** `openh264` and `rusty_h264` are both **Constrained Baseline only** — which
+is exactly why *Firefox uses OpenH264 for WebRTC and never for `<video>`*. But YouTube's no-MSE fallback is
+`avc1.42001E` — Baseline — so the cheap decoder is the right *first* rung, and the trait is what makes the
+rest a swap rather than a rewrite.
+
+**Two walls, now stated once and not relitigated:** MSE is genuinely 2–4 weeks and must come *after*.
+**EME/DRM is never.** And the sharpest operational note in the whole report: ⚠ **do not advertise
+`MediaSource` before it works — its absence is what makes YouTube serve the progressive fallback.**
+Advertising MSE we cannot honour turns a working YouTube into a black rectangle. Same discipline as
+`canPlayType() === ""`.

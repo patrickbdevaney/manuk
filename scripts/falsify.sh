@@ -259,6 +259,7 @@ fi
 # G_SELECTOR — stop descending into nested rules again, which is what dropped 41% of the web's CSS.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_SELECTOR; then
+  # Stop descending into nested rules — which dropped 41% of the web's CSS.
   mutate engine/css/src/stylo_engine.rs '
 s = s.replace(
     "                        self.add_rules(&nested.0, guard, device, order);",
@@ -266,6 +267,20 @@ s = s.replace(
     1)
 '
   expect_red G_SELECTOR cargo test -q -p manuk-page --features stylo,spidermonkey --test g_selector
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+# G_SELECTOR (:has half) — disable the supplement pass. Stylo DISCARDS `:has()` rules at parse, so
+# without our own pass they do not exist at all. 13% of the corpus.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_HAS; then
+  mutate engine/css/src/stylo_engine.rs '
+s = s.replace(
+    "    let has_sheets: Vec<&Stylesheet> = sheets.iter().filter(|sh| sh.has_relative_rules()).collect();",
+    "    let has_sheets: Vec<&Stylesheet> = Vec::new();   // MUTATION: no :has() supplement\n    let _ = sheets;",
+    1)
+'
+  expect_red G_HAS cargo test -q -p manuk-page --features stylo,spidermonkey --test g_selector
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────

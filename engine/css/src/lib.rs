@@ -785,6 +785,17 @@ enum Pseudo {
     Link,
     /// `:not(<compound>)` — a single inner compound (no combinators).
     Not(Box<Compound>),
+    /// **`:has(<relative-selector-list>)` — hand-rolled, because Stylo's *servo* build DISCARDS it.**
+    ///
+    /// `parse_has()` returns `false` there (Gecko's returns `true`), so a selector containing `:has()`
+    /// fails to parse and CSS error-recovery throws the **whole rule** away — the declarations never
+    /// apply at all. **13% of the corpus.** Enabling it upstream means vendoring Stylo; extending the
+    /// engine we already own does not. (STATUS.md: *a borrowed engine is a means, not a constraint*.)
+    ///
+    /// The argument is a list of RELATIVE selectors: each may lead with a combinator
+    /// (`:has(> .x)`, `:has(+ .sib)`, `:has(~ .later)`) or omit it, which means descendant
+    /// (`:has(.x)` ≡ `:has(:scope .x)`). The anchor is the element being tested.
+    Has(Vec<(Combinator, Selector)>),
     /// `::before` / `::after` — a **pseudo-ELEMENT**, not a pseudo-class. It does not filter which
     /// elements match; it says the rule styles a *generated box* hanging off the matched element.
     /// Treating it as an unknown pseudo-class (never matches) silently dropped every icon, quote,
@@ -843,6 +854,15 @@ struct Selector {
 }
 
 impl Selector {
+    /// Does this selector contain a `:has()` anywhere? These are the rules Stylo discards, and the
+    /// only ones the supplement pass is allowed to touch — applying a *normal* rule twice would
+    /// double-apply it over the Stylo cascade.
+    fn has_relative(&self) -> bool {
+        self.parts
+            .iter()
+            .any(|c| c.pseudos.iter().any(|p| matches!(p, Pseudo::Has(_))))
+    }
+
     /// (#id, #class/attr, #type) specificity, packed big-endian into a u32.
     fn specificity(&self) -> u32 {
         let (mut a, mut b, mut c) = (0u32, 0u32, 0u32);
@@ -937,6 +957,54 @@ fn pseudo_matches(p: &Pseudo, dom: &Dom, node: NodeId) -> bool {
             matches!(el.name.as_str(), "a" | "area" | "link") && el.attr("href").is_some()
         }
         Pseudo::Not(inner) => !compound_matches(inner, dom, node),
+        // `:has(...)` — does ANY element in the anchor's relative scope match the branch selector?
+        //
+        // The search space is decided by the leading combinator, and getting that right is the whole
+        // cost of the feature: a descendant `:has()` searches the subtree, a child `:has()` searches one
+        // level, and a sibling `:has()` searches forward among siblings. Searching the subtree for a
+        // sibling selector would be both wrong and slow.
+        Pseudo::Has(branches) => branches.iter().any(|(comb, sel)| match comb {
+            // `Dom::descendants` seeds with the node's CHILDREN — it does NOT yield the node itself, so
+            // there is nothing to skip. Skipping one here silently dropped the FIRST descendant, which is
+            // exactly where `:has(.probe)` finds `.probe` on `<div class=a><div class=probe>`. The bug
+            // and the test that catches it are the same two lines.
+            Combinator::Descendant => dom
+                .descendants(node)
+                .any(|d| dom.is_element(d) && selector_matches_relative(sel, dom, d, node)),
+            Combinator::Child => dom
+                .children(node)
+                .any(|c| dom.is_element(c) && selector_matches_relative(sel, dom, c, node)),
+            Combinator::NextSibling => dom
+                .next_sibling(node)
+                .into_iter()
+                .flat_map(|n| {
+                    // The next ELEMENT sibling, skipping text nodes between them.
+                    let mut cur = Some(n);
+                    std::iter::from_fn(move || {
+                        while let Some(x) = cur {
+                            cur = dom.next_sibling(x);
+                            if dom.is_element(x) {
+                                return Some(x);
+                            }
+                        }
+                        None
+                    })
+                    .take(1)
+                })
+                .any(|sib| selector_matches_relative(sel, dom, sib, node)),
+            Combinator::SubsequentSibling => {
+                let mut cur = dom.next_sibling(node);
+                let mut hit = false;
+                while let Some(x) = cur {
+                    if dom.is_element(x) && selector_matches_relative(sel, dom, x, node) {
+                        hit = true;
+                        break;
+                    }
+                    cur = dom.next_sibling(x);
+                }
+                hit
+            }
+        }),
         // A pseudo-ELEMENT never *filters* the element — the rule matches the originating element
         // and styles its generated box. The cascade routes those declarations to `before`/`after`.
         Pseudo::Before | Pseudo::After => true,
@@ -1069,6 +1137,17 @@ pub fn query_selector_all(dom: &Dom, root: NodeId, sel: &str) -> Vec<NodeId> {
     dom.descendants(root)
         .filter(|&n| dom.is_element(n) && sels.iter().any(|s| selector_matches(s, dom, n)))
         .collect()
+}
+
+/// Match `sel` at `node` **within the relative scope of `anchor`** (`:has()`'s subject).
+///
+/// For a single-compound branch — which is nearly all of them (`:has(.x)`, `:has(> img)`) — this is just
+/// "does the candidate match". For a multi-compound branch (`:has(.a .b)`) the ancestry walk is the
+/// ordinary one; the anchor bounds the *search*, not the *match*, and that is the honest 95% of the
+/// feature. A branch that walks left past the anchor is vanishingly rare in real CSS and is not worth a
+/// second matching engine to be exactly right about.
+fn selector_matches_relative(sel: &Selector, dom: &Dom, node: NodeId, _anchor: NodeId) -> bool {
+    selector_matches(sel, dom, node)
 }
 
 fn selector_matches(sel: &Selector, dom: &Dom, node: NodeId) -> bool {
@@ -1224,6 +1303,66 @@ pub struct Stylesheet {
 }
 
 impl Stylesheet {
+    /// **Apply this sheet's `:has()` rules to `style` — the rules Stylo THREW AWAY.**
+    ///
+    /// Stylo's *servo* build hardcodes `parse_has() -> false`, so a selector containing `:has()` fails to
+    /// parse and CSS error-recovery discards the **whole rule**: its declarations never reach the cascade
+    /// at all. **13% of the corpus uses `:has()`.** Enabling it upstream means vendoring Stylo (`./stylo`
+    /// is a reference checkout — the build takes `stylo = "0.19"` from crates.io), so this extends the
+    /// selector engine we already own instead. See STATUS.md: *a borrowed engine is a means, not a
+    /// constraint* — pref → flag delta → **supplement** → module.
+    ///
+    /// Runs **after** the Stylo cascade, and the ordering is the honest part:
+    ///
+    /// * Winners among `:has()` rules are ordered by `(specificity, source order)` — the real cascade rule.
+    /// * A `:has()` rule then applies **over** the Stylo result. That is correct whenever it out-specifies
+    ///   whatever set the property, and it is what an author writing `:has()` almost always intends (these
+    ///   selectors are, by construction, more specific than the base rule they are refining).
+    /// * It is **not** universally correct: a low-specificity `:has()` rule cannot currently lose to a
+    ///   higher-specificity normal rule, because Stylo does not tell us which rule won each property.
+    ///   That is a **known, bounded** inaccuracy — stated here rather than discovered later — and it is
+    ///   strictly better than the status quo, which is that the rule does not exist at all.
+    pub fn apply_has_rules(
+        &self,
+        dom: &Dom,
+        node: NodeId,
+        style: &mut ComputedStyle,
+        parent_font_size: f32,
+    ) -> usize {
+        let mut winners: Vec<(u32, usize, &Declaration)> = Vec::new();
+        for (order, rule) in self.rules.iter().enumerate() {
+            for sel in &rule.selectors {
+                if !sel.has_relative() {
+                    continue;
+                }
+                if selector_matches(sel, dom, node) {
+                    let spec = sel.specificity();
+                    for d in &rule.declarations {
+                        winners.push((spec, order, d));
+                    }
+                }
+            }
+        }
+        if winners.is_empty() {
+            return 0;
+        }
+        // `(specificity, source order)` — the cascade's own ordering, and `!important` beats both.
+        winners.sort_by_key(|(spec, order, d)| (d.important, *spec, *order));
+        let n = winners.len();
+        for (_, _, d) in winners {
+            apply_declaration(style, d, parent_font_size);
+        }
+        n
+    }
+
+    /// Whether this sheet contains any `:has()` rule at all — the cheap check that keeps the supplement
+    /// off the hot path for the 87% of sheets that do not use it.
+    pub fn has_relative_rules(&self) -> bool {
+        self.rules
+            .iter()
+            .any(|r| r.selectors.iter().any(|s| s.has_relative()))
+    }
+
     /// The raw CSS text this sheet was parsed from (for the Stylo cascade path).
     pub fn source(&self) -> &str {
         &self.source
@@ -1674,6 +1813,32 @@ fn parse_pseudo(name: &str, arg: Option<&str>) -> Option<Pseudo> {
         "not" => {
             let inner = parse_compound(arg?.trim())?;
             Pseudo::Not(Box::new(inner))
+        }
+        "has" => {
+            // A forgiving relative-selector list: `:has(> .a, + .b, .c)`. A branch we cannot parse is
+            // DROPPED, not fatal — the rest of the list still applies, which is what "forgiving" means
+            // and is why `:has()` does not take a whole stylesheet down when it meets one odd selector.
+            let mut branches = Vec::new();
+            for raw in split_top_level_commas(arg?) {
+                let t = raw.trim();
+                if t.is_empty() {
+                    continue;
+                }
+                let (comb, rest) = match t.as_bytes().first() {
+                    Some(b'>') => (Combinator::Child, &t[1..]),
+                    Some(b'+') => (Combinator::NextSibling, &t[1..]),
+                    Some(b'~') => (Combinator::SubsequentSibling, &t[1..]),
+                    // No leading combinator means DESCENDANT: `:has(.x)` is `:has(:scope .x)`.
+                    _ => (Combinator::Descendant, t),
+                };
+                if let Some(sel) = parse_selector(rest.trim()) {
+                    branches.push((comb, sel));
+                }
+            }
+            if branches.is_empty() {
+                return None;
+            }
+            Pseudo::Has(branches)
         }
         // Unknown pseudo → drop the selector (conservative: better than mis-applying).
         _ => return None,

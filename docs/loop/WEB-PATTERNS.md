@@ -413,3 +413,26 @@ API calls and **never made them**. The app sat in its loading state and rendered
 **This is why the oracle reported 13,741 "missing" nodes.** A measurement harness that cannot load a
 modern site's content is not measuring the browser; it is measuring itself. `finish_loading` now performs
 them, in rounds, inside the load budget.
+
+## Tick 42 — `:has()`, hand-rolled rather than forked
+
+| Pattern | % of the web | Status |
+|---|---|---|
+| **`:has()`** — subject, descendant, `>`, `+`, `~`, forgiving list | **13% of sites** | ✅ (tick 42) — **Stylo DISCARDS these rules at parse.** Matched by our own selector engine in a supplement pass. |
+| CSS nesting | ≥41% | ✅ (tick 39) |
+
+**Stylo's *servo* build hardcodes `parse_has() -> false`** (Gecko's returns `true`), so a selector
+containing `:has()` **fails to parse and CSS error-recovery discards the whole rule** — its declarations
+never reach the cascade at all.
+
+Enabling it upstream costs **vendoring Stylo** (`./stylo` is a *reference checkout that nothing builds*;
+the dependency is `stylo = "0.19"` from crates.io). So instead we extended **the selector engine we already
+own** — the one behind `querySelectorAll` — and apply the discarded rules in a second cascade pass, ordered
+by `(specificity, source order)`.
+
+**The known, bounded inaccuracy, stated rather than discovered:** a low-specificity `:has()` rule cannot
+currently *lose* to a higher-specificity normal rule, because Stylo does not tell us which rule won each
+property. That is strictly better than the rule not existing — and it is written down.
+
+**The ladder this establishes** (STATUS.md): *pref → minimal flag delta → **hand-rolled supplement** →
+hand-rolled module.* **Never: give up the capability.**

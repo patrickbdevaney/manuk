@@ -8,6 +8,48 @@ simply had not been done, while backlog work carried on, and nobody noticed unti
 asked about. `STATUS.md` exists so that gap is visible in five seconds instead of requiring an
 interrogation.
 
+## THE STANDING OPERATING LOOP — adopt as written
+
+**Work perpetually on the tick/eval loop. Do not hand back.** Not at a milestone, not when a tick feels
+complete, not when unsure what is next — **the ledgers say what is next.** Only an explicit instruction
+to stop ends the loop.
+
+**Each tick:**
+1. Pick the top open item from `docs/loop/CAPABILITIES.md` (ranked by **damage, not usage**) or STATUS.md's
+   Bar 0 residue.
+2. **Measure before implementing.** Three times running, "❌ missing" turned out to be "✅ works, untested".
+3. **Write the journal entry stating the HYPOTHESIS — before the code.** State it while you can still be
+   wrong about it.
+4. Add a gate. **Prove it falsifiable** (`scripts/falsify.sh`). Run the wall. Commit.
+
+**Every 10 ticks:** self-audit · re-crawl the corpus · update the ledgers with **measured numbers, never
+claims**.
+
+**Every tick, also:** if the process produced a false conclusion, record it in `docs/loop/PROCESS.md`
+**with the mechanism that now prevents it**. *A lesson without a mechanism is a decoration.*
+
+**Grow the oracle when the current scope can no longer see the next class of bug** — scroll, interaction,
+time, media, session. **The oracle's scope is the ceiling; raising it outranks filling in beneath it.**
+
+**SURFACE, DO NOT DECIDE.** If a fix requires changing a settled decision — forking a dependency, copying
+engine code, dropping a bar — **stop and write it up as an OPEN DECISION** in STATUS.md, with the diff and
+the trade-off. **Do not absorb it into a tick.**
+
+---
+
+## WHY THESE FILES EXIST (and it is not bookkeeping)
+
+**The real constraint is not tokens. It is that context compacts every few hours — and the loop survives
+because THE MECHANISMS ARE THE MEMORY.** `STATUS.md`, `JOURNAL.md`, `PROCESS.md`, `CAPABILITIES.md`, the
+gate wall, `falsify.sh`.
+
+This is not aspiration. It has been **confirmed in production**: a session compacted *mid-tick* and picked
+up cleanly, because the state lived in the files and the gates, not in the context. **That is the
+mechanical-enforcement architecture working exactly as designed — not luck.** Anything you learn that does
+not end up in one of these files did not happen.
+
+---
+
 While **Tier 0** (METHODOLOGY Part 21) is open, a productive session is defined as *Tier 0 advanced* —
 not bugs closed, not features shipped. If you find yourself reaching for a bug fix because it feels
 like more visible progress than widening the oracle or standing up a gate, **say so out loud**; that
