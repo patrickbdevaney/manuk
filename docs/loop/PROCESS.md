@@ -11,7 +11,7 @@ The rule it enforces:
 
 ## Why this file exists
 
-In a single session (ticks 25–29), the *process* — not the code — produced **eighteen** false or unusable
+In a single session (ticks 25–29), the *process* — not the code — produced **nineteen** false or unusable
 conclusions. Every one of them made the browser look better or worse than it is, and not one was a bug
 in the browser:
 
@@ -41,7 +41,9 @@ in the browser:
 | 17 | **Two JS tests in one binary segfault NONDETERMINISTICALLY** | `g_defer` had two `#[test]`s, each standing up a SpiderMonkey context. The leaked per-process runtime tears down messily when they co-run: the binary passed, then segfaulted, then passed. **A flaky gate is worse than a missing one** — it gets ignored, and an ignored gate protects nothing. | One test per JS gate binary, on purpose. `js_conformance` has been one giant test for exactly this reason, and the reason is now written where the next person will look |
 | 18 | **A split behaviour change was applied to 2 of its 3 call sites** | `Page::load` and `from_prefetched` got the new deferred pass; `load_async` did not. **Every SPA in the suite silently stopped mounting** — a Vite bundle is a module, deferred by default, nothing ran the deferred pass, and the root element sat there correctly sized and empty. | `G_DEFER` asserts `Page::load` still runs **every** script. The rule: *every path that used to run all the scripts must still run all the scripts.* Exactly one caller may split them — the shell — because it is the only one with a human waiting |
 
-Eight of the eighteen were **found by an accounting check, not by the gate that was supposed to catch them**.
+| 19 | **A capability audit run from the wrong ORIGIN reported the browser as broken** | The first `CAPABILITIES.md` opened with *"`localStorage` — 27% of the web — THROWS. Not a gap, an outage."* **False.** A real, persisted, per-origin `localStorage` had existed for ages; it threw because the probe was a `file://` URL — an opaque origin, which gets no storage *in every browser*. **I had already written a replacement shim.** One more step and I would have shipped a worse duplicate of a working feature and reported a 27%-of-the-web win that did not exist. | The capability probe is **served over real HTTP** (`docs/loop/capability-probe.html`), never opened from disk. Support numbers are measured from a real origin or they are not measured |
+
+Eight of the nineteen were **found by an accounting check, not by the gate that was supposed to catch them**.
 
 Defect #14 is the one to be frightened of. Every other entry here produced a *wrong number*. This one
 produced **wrong code, in the working tree, in a Bar 0 path**, and the failure it caused was

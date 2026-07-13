@@ -1666,3 +1666,51 @@ is the next thing, and it is a bigger change than this one.
 after. Each without the other is a bug, and *"fast because we never ran the script"* is the same class of
 lie as *"fast because we never loaded the images"*, which is the disguise `G_FIRST_PAINT` was written to
 strip off one tick earlier.
+
+## Tick 33 — a capability priority list, measured (2026-07-13)
+
+**TICK SHAPE: pattern-class.** CLUSTER: C01ca.
+
+"What should we build to support the breadth of the web" was being answered from imagination. It is now
+answered from **237 real site snapshots** (`docs/loop/CAPABILITIES.md`), with two measured columns:
+
+- **Usage** — how many *distinct sites* use the feature (never hit counts: one site with 500 `<div>`s
+  must not outvote 200 sites with one `<iframe>`).
+- **Support** — what the engine *answers when asked*, from a feature-detection probe run through the real
+  pipeline. Not what the code looks like it does.
+
+The priority order is not a roadmap anyone wrote. It is a **subtraction**:
+
+```
+<form> submit           50% used   ❌  ← the difference between a reader and a browser
+<picture>/srcset        47% used   ❌  ← half the web's images
+transition/@keyframes   38% used   ⚠️  static end-state
+<iframe>                23% used   ❌  ← embeds, maps, players, payments, comments
+position:sticky         14% used   ⚠️  laid out, does not stick
+WebSocket                5% used   ❌  ← where social platforms live
+```
+
+And what the corpus confirms we were right to have: inline `<svg>` **72%**, CSS custom properties **53%**,
+transform 45%, `@media` 42%, flex 41%, `type=module` **31%**, grid 28%, custom elements 19%, `:has()` 15%,
+`@container` 11%.
+
+**Fixed this tick, because a throw takes the page with it:**
+- **`canvas.getContext('2d')` THREW.** Only 3% of sites use `<canvas>` — but `ctx.fillRect(…)` on the
+  next line was a `TypeError`, so a charting library that initialises at boot took the **whole bundle**
+  down. *3% of sites using a feature is 3% of sites BROKEN when it throws* — the usage number and the
+  damage number are not the same number. Now: a real context, drawing ops are no-ops, `measureText`
+  returns a real shape (layout code multiplies by `.width`, and `undefined * n` is `NaN` propagating into
+  every coordinate downstream). A blank chart on a working page. `getContext('webgl')` → `null`, which is
+  the spec's "cannot" and what every library already branches on.
+- **`Notification`** (14%) — honest: `permission === 'denied'`. The site asked and was told no.
+
+**And the file was nearly a lie on its first day.** Its first version opened with *"`localStorage` — 27%
+of the web — THROWS. Not a gap, an outage."* **It was false.** A real, persisted, per-origin
+`localStorage` had existed for ages. It threw because **I ran the probe from a `file://` URL** — an
+opaque origin, which gets no storage in *every* browser and correctly answers `QuotaExceededError`.
+
+**I had already written the replacement shim.** One more step and I would have shipped a worse duplicate
+of a working feature and reported a 27%-of-the-web win that did not exist.
+
+> **The instrument is part of the experiment.** The probe is now **served over real HTTP**, never opened
+> from disk. Support numbers are measured from a real origin, or they are not measured.

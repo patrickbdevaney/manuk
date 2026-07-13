@@ -275,3 +275,20 @@ to first paint, with 10 deferred scripts (997ms) moved off the paint path.
 real browser must also run before painting — it just paints **incrementally as it parses**, so the parts
 above a blocking script are already on screen. That is the next thing, and it is a bigger change than
 this one.
+
+## Tick 33 — the capability ledger, and canvas stops throwing
+
+**`docs/loop/CAPABILITIES.md` is now the answer to "what unlocks the most of the web"**, and it is
+measured (237 real site snapshots × a feature probe run through the real pipeline), not imagined. That
+file supersedes guesswork for prioritisation; this one continues to record what each tick actually
+unlocked.
+
+| Pattern | % of the web | Status |
+|---|---|---|
+| `<canvas>` + `getContext('2d')` | 3% use canvas | ✅ (tick 33) — **it THREW.** A real context; drawing ops are no-ops; `measureText` returns a real shape. A blank chart on a **working page**. `getContext('webgl')` → `null`, the spec's "cannot". |
+| `Notification` | 14% | ✅ (tick 33) — honest: `permission === 'denied'`. The site asked and was told no. |
+| `localStorage` / `sessionStorage` | 27% / 12% | ✅ (already worked — persisted, per-origin. My probe said otherwise because it ran from `file://`, an opaque origin, which gets no storage in *any* browser.) |
+
+**The rule this tick added, and it is about scoring not coding:** *3% of sites USING a feature is 3% of
+sites BROKEN when that feature throws.* The usage number and the damage number are not the same number,
+and a capability that throws outranks capabilities used by ten times as many sites.

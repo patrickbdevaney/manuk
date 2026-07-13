@@ -505,6 +505,16 @@ unsafe fn new_reflector(cx: *mut RawJSContext, dom: *mut Dom, node: NodeId) -> *
                 &format!("globalThis.__manukMedia&&__manukMedia(__nodes[{id}])"),
             );
         }
+        // A `<canvas>` gets `getContext`, which was UNDEFINED — so `ctx.fillRect(...)` on the next line
+        // was a TypeError and a charting library that initialises at boot took the whole bundle with it.
+        // See `__manukCanvas`: a real context whose drawing operations are no-ops. A blank chart on a
+        // working page beats an exception, every time.
+        if (*dom).tag_name(node) == Some("canvas") {
+            let _ = eval_in_current_global(
+                cx,
+                &format!("globalThis.__manukCanvas&&__manukCanvas(__nodes[{id}])"),
+            );
+        }
     }
     obj.get()
 }

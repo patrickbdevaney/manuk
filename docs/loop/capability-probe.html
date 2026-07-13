@@ -1,0 +1,37 @@
+<html><body>
+<img id="ss" srcset="a-1x.png 1x, a-2x.png 2x" src="a.png">
+<picture><source srcset="b.webp" type="image/webp"><img id="pic" src="b.png"></picture>
+<iframe id="ifr" src="about:blank" width="100" height="50"></iframe>
+<form id="f"><input name="q" value="x"><button type="submit">go</button></form>
+<details id="d"><summary>s</summary>body</details>
+<dialog id="dlg">hi</dialog>
+<canvas id="cv" width="50" height="50"></canvas>
+<div id="sticky" style="position:sticky;top:0">s</div>
+<script>
+var r = [];
+function t(name, fn){ try { r.push(name + '=' + (fn() ? 'YES' : 'no')); } catch(e){ r.push(name + '=THROW'); } }
+t('localStorage',        function(){ localStorage.setItem('k','v'); return localStorage.getItem('k')==='v'; });
+t('sessionStorage',      function(){ sessionStorage.setItem('k','v'); return sessionStorage.getItem('k')==='v'; });
+t('IntersectionObserver',function(){ return typeof IntersectionObserver === 'function'; });
+t('ResizeObserver',      function(){ return typeof ResizeObserver === 'function'; });
+t('MutationObserver',    function(){ return typeof MutationObserver === 'function'; });
+t('requestAnimationFrame',function(){ return typeof requestAnimationFrame === 'function'; });
+t('matchMedia',          function(){ return typeof matchMedia === 'function'; });
+t('fetch',               function(){ return typeof fetch === 'function'; });
+t('XMLHttpRequest',      function(){ return typeof XMLHttpRequest === 'function'; });
+t('WebSocket',           function(){ return typeof WebSocket === 'function'; });
+t('Worker',              function(){ return typeof Worker === 'function'; });
+t('serviceWorker',       function(){ return !!(navigator && navigator.serviceWorker); });
+t('indexedDB',           function(){ return typeof indexedDB !== 'undefined'; });
+t('Notification',        function(){ return typeof Notification === 'function'; });
+t('clipboard',           function(){ return !!(navigator && navigator.clipboard); });
+t('canvas.getContext2d', function(){ return !!document.getElementById('cv').getContext('2d'); });
+t('CSS.supports',        function(){ return typeof CSS !== 'undefined' && typeof CSS.supports === 'function'; });
+t('getComputedStyle',    function(){ return typeof getComputedStyle === 'function'; });
+t('dialog.showModal',    function(){ return typeof document.getElementById('dlg').showModal === 'function'; });
+t('form.submit',         function(){ return typeof document.getElementById('f').submit === 'function'; });
+t('el.scrollIntoView',   function(){ return typeof document.getElementById('d').scrollIntoView === 'function'; });
+t('img.currentSrc',      function(){ return 'currentSrc' in document.getElementById('ss'); });
+t('iframe.contentWindow',function(){ return 'contentWindow' in document.getElementById('ifr'); });
+console.log('CAPS ' + r.join(' | '));
+</script></body></html>

@@ -267,6 +267,109 @@ const PRELUDE: &str = r#"
       // A site told *that* hides its player and shows its fallback. A site told `undefined` throws.
       // The poster still renders (see `fetch_images_owned`), so what the user sees is the frame the
       // author chose — which is exactly what a real browser shows before you press play.
+      // ── **`<canvas>.getContext()` — it THREW, and a throw takes the page with it.**
+      //
+      // Only ~3% of the corpus uses `<canvas>`, which is why this is not a rasterizer yet. But
+      // `getContext` was **undefined**, so `ctx.fillRect(...)` on the next line was a `TypeError`, and a
+      // charting library that initialises at boot took the whole bundle down with it. **3% of sites
+      // using a feature is 3% of sites BROKEN when that feature throws** — the usage number and the
+      // damage number are not the same number.
+      //
+      // So: a real 2D context object, with the real surface, whose drawing operations are no-ops. A
+      // blank chart on a working page. That is the same trade as `<video>` (poster + an honest "cannot
+      // play") and it is the right one: legible beats absent, and absent beats an exception.
+      //
+      // `getContext('webgl')` returns **null**, which is the spec's way of saying "this browser cannot
+      // give you that context" — every library on the web already branches on it, because that is what
+      // a machine without a GPU returns.
+      //
+      // Rasterizing this for real is genuinely within reach — `tiny-skia` already backs our painter and
+      // has paths, fills and strokes — and it is on the list. It is not on TODAY's list, because
+      // `localStorage` is 27% and forms are 50%.
+      globalThis.__manukCanvas = function(el) {
+        if (!el || el.__canvasReady) { return el; }
+        Object.defineProperty(el, '__canvasReady', { value: true, enumerable: false });
+        var warned = false;
+        el.getContext = function(kind) {
+          kind = String(kind || '2d').toLowerCase();
+          if (kind !== '2d') {
+            return null;   // the spec's "cannot": every library already handles a null WebGL context
+          }
+          if (!warned) {
+            warned = true;
+            console.warn('canvas 2D drawing is not rasterized yet — the canvas will be blank, but the page runs');
+          }
+          if (el.__ctx) { return el.__ctx; }
+          var noop = function(){};
+          var ctx = {
+            canvas: el,
+            // State
+            save: noop, restore: noop, scale: noop, rotate: noop, translate: noop, transform: noop,
+            setTransform: noop, resetTransform: noop,
+            // Paths
+            beginPath: noop, closePath: noop, moveTo: noop, lineTo: noop, bezierCurveTo: noop,
+            quadraticCurveTo: noop, arc: noop, arcTo: noop, ellipse: noop, rect: noop, roundRect: noop,
+            fill: noop, stroke: noop, clip: noop, isPointInPath: function(){ return false; },
+            // Rects
+            clearRect: noop, fillRect: noop, strokeRect: noop,
+            // Text — `measureText` must return a real shape, because layout code multiplies by `.width`
+            // and `undefined * n` is NaN, which propagates into every coordinate downstream.
+            fillText: noop, strokeText: noop,
+            measureText: function(t){
+              var w = String(t == null ? '' : t).length * 7;
+              return { width: w, actualBoundingBoxLeft: 0, actualBoundingBoxRight: w,
+                       actualBoundingBoxAscent: 10, actualBoundingBoxDescent: 3,
+                       fontBoundingBoxAscent: 10, fontBoundingBoxDescent: 3 };
+            },
+            // Images / pixels
+            drawImage: noop,
+            createImageData: function(w, h){
+              w = w|0; h = h|0;
+              return { width: w, height: h, data: new Uint8ClampedArray(Math.max(w*h*4, 0)) };
+            },
+            getImageData: function(x, y, w, h){ return ctx.createImageData(w, h); },
+            putImageData: noop,
+            // Gradients / patterns — objects, because scripts assign them to fillStyle and then use them
+            createLinearGradient: function(){ return { addColorStop: noop }; },
+            createRadialGradient: function(){ return { addColorStop: noop }; },
+            createConicGradient: function(){ return { addColorStop: noop }; },
+            createPattern: function(){ return null; },
+            // Line/shadow/composite state — plain writable properties, which is what they are
+            fillStyle: '#000', strokeStyle: '#000', lineWidth: 1, lineCap: 'butt', lineJoin: 'miter',
+            miterLimit: 10, lineDashOffset: 0, setLineDash: noop, getLineDash: function(){ return []; },
+            font: '10px sans-serif', textAlign: 'start', textBaseline: 'alphabetic', direction: 'inherit',
+            globalAlpha: 1, globalCompositeOperation: 'source-over', imageSmoothingEnabled: true,
+            shadowBlur: 0, shadowColor: 'rgba(0,0,0,0)', shadowOffsetX: 0, shadowOffsetY: 0,
+            filter: 'none',
+          };
+          Object.defineProperty(el, '__ctx', { value: ctx, enumerable: false });
+          return ctx;
+        };
+        el.toDataURL = function(){ return 'data:image/png;base64,'; };
+        el.toBlob = function(cb){ if (typeof cb === 'function') { cb(null); } };
+        return el;
+      };
+
+      // (No `localStorage` shim here. A REAL one already exists — `manuk_net::webstorage`, persisted
+      // and per-origin, behind the `__storage` native seam in `dom_bindings`. I nearly wrote a worse
+      // duplicate on the strength of a capability probe that reported `localStorage=THROW`.
+      //
+      // It threw because **the probe was a `file://` URL** — an opaque origin, which gets no storage in
+      // *every* browser, and correctly returns a QuotaExceededError. The bug was in the measurement.
+      //
+      // Which is the whole lesson of this project stated one more time: **the instrument is part of the
+      // experiment.** A capability audit run from the wrong origin reports the browser as broken, and I
+      // would have "fixed" a 27%-of-the-web outage that did not exist, and reported the win.)
+
+      // **`Notification`** — 14% of the corpus. Almost always feature-detected, so the honest answer is
+      // the useful one: the constructor exists, permission is `"denied"`, and `requestPermission()`
+      // resolves to `"denied"`. A site asked, and was told no. Nothing throws, and no user is nagged.
+      if (typeof globalThis.Notification === 'undefined') {
+        globalThis.Notification = function Notification(){ this.close = function(){}; };
+        globalThis.Notification.permission = 'denied';
+        globalThis.Notification.requestPermission = function(){ return Promise.resolve('denied'); };
+      }
+
       if (typeof globalThis.MediaError === 'undefined') {
         globalThis.MediaError = function MediaError(code) { this.code = code || 4; this.message = ''; };
         globalThis.MediaError.MEDIA_ERR_ABORTED = 1;
