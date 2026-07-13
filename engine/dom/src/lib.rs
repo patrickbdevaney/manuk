@@ -100,7 +100,13 @@ pub enum NodeData {
     /// tree, reachable via [`Dom::shadow_root`]. Its `parent` link points at the host so
     /// upward walks work, but the host's `children()` never yields it.
     ShadowRoot { mode: ShadowRootMode },
-    /// A `DocumentFragment` — a `<template>`'s contents. Also not a child of the template.
+    /// A **DocumentFragment** — a `<template>`'s contents, and what every framework builds a subtree
+    /// in before committing it.
+    ///
+    /// Its defining property is not that it holds children; it is what happens when you INSERT it:
+    /// **the fragment's children move, and the fragment itself does not.** Get that wrong and you
+    /// insert an inert wrapper where the content should be — which is exactly what lit-html got, and
+    /// why it rendered an empty component with no error at all.
     Fragment,
 }
 
@@ -306,6 +312,38 @@ impl Dom {
 
     pub fn create_text(&mut self, text: impl Into<String>) -> NodeId {
         self.alloc(NodeData::Text(text.into()))
+    }
+
+    /// A DocumentFragment. See [`NodeData::Fragment`] — inserting it moves its CHILDREN.
+    pub fn create_fragment(&mut self) -> NodeId {
+        self.alloc(NodeData::Fragment)
+    }
+
+    pub fn is_fragment(&self, id: NodeId) -> bool {
+        matches!(self.nodes[id.index()].data, NodeData::Fragment)
+    }
+
+    /// **`<template>.content`** — a real fragment holding the template's children.
+    ///
+    /// Created lazily, once, and the template's children are MOVED into it. That is safe precisely
+    /// because a `<template>`'s children never render anyway (it is `display:none` by definition), and
+    /// it is what makes `importNode(tpl.content, true)` followed by `insertBefore(fragment, ...)` —
+    /// the exact sequence lit-html commits every template through — insert the CONTENT rather than an
+    /// inert `<template>` wrapper.
+    pub fn template_content(&mut self, template: NodeId) -> NodeId {
+        if let Some(existing) = self.nodes[template.index()].shadow_root {
+            if self.is_fragment(existing) {
+                return existing;
+            }
+        }
+        let frag = self.create_fragment();
+        let kids: Vec<NodeId> = self.children(template).collect();
+        for k in kids {
+            self.append_child(frag, k);
+        }
+        self.nodes[frag.index()].parent = Some(template);
+        self.nodes[template.index()].shadow_root = Some(frag);
+        frag
     }
 
     pub fn create_comment(&mut self, text: impl Into<String>) -> NodeId {
@@ -587,6 +625,18 @@ impl Dom {
     }
 
     pub fn append_child(&mut self, parent: NodeId, child: NodeId) {
+        // **Inserting a DocumentFragment moves its CHILDREN, not itself.** That single rule is the
+        // whole reason fragments exist, and it is what every framework relies on to commit a built
+        // subtree in one insertion. Insert the fragment itself and you have inserted an inert wrapper
+        // where the content should be — which is exactly what lit-html got, and why it rendered an
+        // empty component with no error.
+        if self.is_fragment(child) {
+            let kids: Vec<NodeId> = self.children(child).collect();
+            for k in kids {
+                self.append_child(parent, k);
+            }
+            return;
+        }
         self.detach(child);
         self.nodes[child.index()].parent = Some(parent);
         match self.nodes[parent.index()].last_child {
@@ -667,6 +717,15 @@ impl Dom {
     /// Insert `new_node` into `parent`'s child list immediately before `sibling`.
     pub fn insert_before(&mut self, parent: NodeId, new_node: NodeId, sibling: NodeId) {
         debug_assert_eq!(self.nodes[sibling.index()].parent, Some(parent));
+        // Same rule as `append_child`: a fragment contributes its CHILDREN, in order, and does not
+        // itself enter the tree. lit-html commits every template through exactly this call.
+        if self.is_fragment(new_node) {
+            let kids: Vec<NodeId> = self.children(new_node).collect();
+            for k in kids {
+                self.insert_before(parent, k, sibling);
+            }
+            return;
+        }
         self.detach(new_node);
         let prev = self.nodes[sibling.index()].prev_sibling;
         self.nodes[new_node.index()].parent = Some(parent);

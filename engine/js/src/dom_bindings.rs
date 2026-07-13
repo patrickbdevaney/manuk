@@ -760,10 +760,8 @@ unsafe extern "C" fn doc_create_comment(cx: *mut RawJSContext, argc: u32, vp: *m
         *vp = NullValue();
         return true;
     };
-    let _ = arg_string(cx, vp, argc, 0);
-    // We have no comment node type; an empty text node is an anchor with the same tree position and
-    // no rendered output, which is exactly what the frameworks use it for.
-    let node = (*dom).create_text(String::new());
+    let text = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    let node = (*dom).create_comment(text);
     *vp = ObjectValue(new_reflector(cx, dom, node));
     true
 }
@@ -775,10 +773,7 @@ unsafe extern "C" fn doc_create_fragment(cx: *mut RawJSContext, _argc: u32, vp: 
         *vp = NullValue();
         return true;
     };
-    // Modelled as a detached container: `appendChild` into it works, and appending IT somewhere moves
-    // the container rather than splicing its children. Not spec-exact, and it is the difference
-    // between a framework rendering and a framework throwing.
-    let node = (*dom).create_element("div".to_string());
+    let node = (*dom).create_fragment();
     *vp = ObjectValue(new_reflector(cx, dom, node));
     true
 }
@@ -1499,7 +1494,13 @@ unsafe extern "C" fn el_get_template_content(
         // `<template>.content` is the fragment. Everything else — `<meta content>` above all — wants
         // the ATTRIBUTE, and the two share a name. One property, dispatched on the element.
         Some((dom, node)) if (*dom).tag_name(node) == Some("template") => {
-            *vp = ObjectValue(new_reflector(cx, dom, node));
+            // A REAL fragment holding the template's children — not the `<template>` element. Handing
+            // back the element meant `importNode(tpl.content, true)` cloned a `<template>` (which is
+            // `display:none`), and inserting it inserted an inert wrapper instead of the content. That
+            // is why Lit rendered an empty component, silently: Solid survived only because it takes
+            // `.firstChild` and clones *that*, never the fragment.
+            let frag = (*dom).template_content(node);
+            *vp = ObjectValue(new_reflector(cx, dom, frag));
             true
         }
         _ => el_get_content(cx, argc, vp),
@@ -2339,6 +2340,11 @@ pub fn run_scripts(
             mozjs::jsapi::JS_GetRuntime(raw_cx),
             Some(module_metadata_hook),
         );
+        mozjs::jsapi::SetPromiseRejectionTrackerCallback(
+            raw_cx,
+            Some(promise_rejection_tracker),
+            std::ptr::null_mut(),
+        );
     }
 
     let mut ran = 0usize;
@@ -2411,6 +2417,11 @@ impl PageContext {
             mozjs::jsapi::SetModuleMetadataHook(
                 mozjs::jsapi::JS_GetRuntime(raw_cx),
                 Some(module_metadata_hook),
+            );
+            mozjs::jsapi::SetPromiseRejectionTrackerCallback(
+                raw_cx,
+                Some(promise_rejection_tracker),
+                std::ptr::null_mut(),
             );
         }
 
@@ -2754,6 +2765,44 @@ unsafe fn run_module(cx: *mut RawJSContext, source: &str) -> bool {
 /// The Framework Exception Miner found it in one run. That is the whole argument for Tier 0 item 3, and
 /// the answer it returns is the one that matters: the app web needed **additive substrate**, not a
 /// scheduling-fidelity subsystem. One hook.
+/// **An unhandled promise rejection must never be silent (METHODOLOGY Part 22.1).**
+///
+/// Every modern framework does its render inside an `async` function. A throw in there does not raise
+/// an exception anyone sees — it becomes a **rejected promise**, and we reported those nowhere at all.
+///
+/// So Lit attached its shadow root, adopted its styles, scheduled `performUpdate()`, threw inside it,
+/// and rendered *only a `<style>` element* — with no error, no warning, no signal of any kind. It was
+/// the third silent failure in three ticks, and every one of them cost more to find than the bug was
+/// worth fixing.
+///
+/// The Framework Exception Miner's entire premise is that the browser names its own bugs out loud. A
+/// swallowed rejection is the browser naming its bug into a void.
+unsafe extern "C" fn promise_rejection_tracker(
+    cx: *mut RawJSContext,
+    _muted: bool,
+    promise: mozjs::jsapi::JS::HandleObject,
+    state: mozjs::jsapi::PromiseRejectionHandlingState,
+    _data: *mut std::os::raw::c_void,
+) {
+    // `Handled` means a rejection that WAS reported now has a handler — not news.
+    if state != mozjs::jsapi::PromiseRejectionHandlingState::Unhandled {
+        return;
+    }
+    rooted!(in(cx) let p = promise.get());
+    rooted!(in(cx) let mut val = UndefinedValue());
+    mozjs::glue::JS_GetPromiseResult(p.handle().into(), val.handle_mut().into());
+    let mut c = wrap_cx(cx);
+    let msg = match String::safe_from_jsval(&mut c, val.handle(), ()) {
+        Ok(ConversionResult::Success(s)) => s,
+        _ => "(unstringifiable rejection)".to_string(),
+    };
+    tracing::warn!(
+        error = %msg,
+        "UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every \
+         modern framework renders inside an async function, so this is where their failures go to die."
+    );
+}
+
 unsafe extern "C" fn module_metadata_hook(
     cx: *mut RawJSContext,
     _private_value: mozjs::jsapi::JS::Handle<mozjs::jsapi::Value>,

@@ -879,3 +879,36 @@ present. The regression test asserts both, and was verified by sabotage (`got 0`
 Lit still does not complete its render (its `performUpdate` is scheduled, like React's) — but its
 shadow root now attaches and holds content, which is a different and much smaller problem than the one
 this tick started with.
+
+### Tick 22 (cont) — three more mechanisms that existed and were wired to nothing
+
+A pattern is now unmistakable, and it is the most valuable thing this tick produced. **Three separate
+times, the mechanism was already there:**
+
+- `Dom::flat_children` — the flat tree. Correct, tested, used by the HTML crate. Layout and the cascade
+  walked `children()` instead. Every web component rendered nothing.
+- `NodeData::Comment` — a real comment node type. `document.createComment()` returned an **empty text
+  node** instead. lit-html finds the dynamic parts of a template by walking to COMMENT markers
+  (`createTreeWalker` with `SHOW_ELEMENT | SHOW_COMMENT`); text markers are invisible to that walk, so it
+  found zero parts and rendered nothing, silently. Vue and Svelte anchor every conditional and every list
+  on comments for the same reason.
+- `NodeData::Fragment` — a DocumentFragment, documented in our own source as "a `<template>`'s contents".
+  `createDocumentFragment()` returned a **`<div>`**, and `template.content` returned the `<template>`
+  ELEMENT. So `importNode(tpl.content, true)` cloned a `<template>` — which is `display:none` — and
+  inserting it inserted an inert wrapper where the content should be. Solid survived only by accident:
+  it takes `.firstChild` and clones *that*, never the fragment itself.
+
+**A fragment's defining property is not that it holds children. It is what happens when you INSERT it:
+the children move and the fragment does not.** That one rule is why every framework builds a subtree in
+a fragment and commits it in a single insertion, and `append_child`/`insert_before` now implement it.
+
+**And the third silent failure in three ticks is now closed at the source.** An unhandled promise
+rejection was reported *nowhere*. Every modern framework renders inside an `async` function, so a throw
+in there is not an exception anyone sees — it is a rejected promise, and ours went into a void. The
+Framework Exception Miner's whole premise is that the browser names its own bugs out loud; a swallowed
+rejection is the browser naming its bug into a void. `SetPromiseRejectionTrackerCallback` is wired now,
+and it fires (verified against a deliberate `async` throw).
+
+**Where Lit still stands:** its shadow root attaches, its styles adopt, its comment markers appear — and
+`render()` still does not commit the template. That is a narrower problem than the one this tick started
+with, and the next instrument to point at it is the DOM mutation counter, not more reading.
