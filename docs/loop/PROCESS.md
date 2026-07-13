@@ -11,7 +11,7 @@ The rule it enforces:
 
 ## Why this file exists
 
-In a single session (ticks 25–29), the *process* — not the code — produced **twenty-one** false or unusable
+In a single session (ticks 25–29), the *process* — not the code — produced **twenty-two** false or unusable
 conclusions. Every one of them made the browser look better or worse than it is, and not one was a bug
 in the browser:
 
@@ -47,7 +47,9 @@ in the browser:
 
 | 21 | **A third untested assumption in three ticks** | `CAPABILITIES.md` said `position: sticky` was "laid out, does not stick". **It was never tested.** `apply_sticky` had existed all along and works — a sticky header pins correctly at scroll 500. Same shape as `localStorage` (#19) and `FormData` (#20). | The pattern is now unmistakable and it is one rule: **if the probe does not test it, its status is UNKNOWN — and I must go and test it before writing a status, not after.** Three ticks in a row I wrote "❌ missing" where the truth was "✅ works, untested". |
 
-Eight of the twenty-one were **found by an accounting check, not by the gate that was supposed to catch them**.
+| 22 | **The crawl report announced "coverage 2.8%" for a browser that renders fine** | I wrote `crawl-report.sh` to make the speed/coverage rule mechanical — and on its **first run** it lumped all three divergence kinds together and called the result Bar 1. `geometry` (123,796 of them) means *the node exists, at the same size, in a different place* — that is **Bar 2, deferred by settled decision**, not a rendering failure. The real Bar 1 number is **92.2% node presence**. I nearly reported a catastrophic regression that did not exist. | The report now separates `missing` (the node is not there → Bar 1), `display` (there, shown differently → Bar 1) and `geometry` (there, same size, moved → **Bar 2, reported, never scored**). The instrument built to stop me trusting bad numbers produced one on its first run — which is the fourth time an instrument has done that here, and the reason none of them get to be trusted on sight. |
+
+Eight of the twenty-two were **found by an accounting check, not by the gate that was supposed to catch them**.
 
 **Defect #20 is the one with a general shape worth naming**, because it is the same shape as #5 (the Bar 0
 metric), #16 (the vacuous gate) and #19 (the file:// probe):

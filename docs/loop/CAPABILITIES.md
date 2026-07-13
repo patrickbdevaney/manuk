@@ -1,5 +1,17 @@
 # CAPABILITIES — what the web actually uses, and what we actually support
 
+> **This file is the ONLY axis on which Chromium is the target.**
+>
+> Chromium is the **ceiling on capability** and the **floor on everything else**. Whatever a page can do
+> in Chrome it must be able to do here — the scripts run, the layout resolves, the forms submit, the
+> embeds render. That is what this file tracks, and on this axis we are behind and are catching up.
+>
+> On **speed, stability, resource use and honesty of failure**, Chromium is the baseline to *beat*, not
+> the number to converge on. Being faster is not a divergence. (See THE NORTH STAR in `STATUS.md`.)
+>
+> **The trap:** a speed win is only real if it comes from doing the same work *better* and not from **not
+> doing the work**. Every ❌ in this file is a place where "we're fast" might just mean "we skipped it".
+
 **This file is measured, not imagined.** Two numbers per row, and neither is a judgement:
 
 - **Usage** — how many of **237 real site snapshots** (the oracle corpus: news, ecommerce, social, docs,

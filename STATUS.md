@@ -11,16 +11,43 @@
 TICK:              37
 LAST_AUDIT_TICK:   29          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
-LAST_WALL_TIME:    247s
+LAST_WALL_TIME:    253s
 ORACLE_CORPUS:     265 sites
-ORACLE_CRAWLED:    265 sites, 616 clusters  → docs/loop/CLUSTERS.md
-ORACLE_HANGS:      9   ← Bar 0, on OUR clock (manuk_ms > 30s). Outranks every visual cluster.
-ORACLE_UNATTRIB:   15   ← oracle process hit its watchdog. Whose time? UNKNOWN — never ours by default.
+ORACLE_CRAWLED:    265 sites, 640 clusters  → docs/loop/CLUSTERS.md
+ORACLE_HANGS:      4   ← Bar 0, on OUR clock (manuk_ms > 30s). Outranks every visual cluster.
+ORACLE_UNATTRIB:   13   ← oracle process hit its watchdog. Whose time? UNKNOWN — never ours by default.
 PENDING_GATES:     G_SPAWN G_POOL_ISOLATION
 SINGLE_SITE_TICKS: 0                    (this audit window — a rising count is the drift signal)
 UPDATED:           2026-07-13
 ```
 
+
+## THE NORTH STAR — one sentence, and it decides what "done" means
+
+> **Chromium is the CEILING on capability, and the FLOOR on everything else.**
+
+- **Capability — MATCH it.** Whatever a page can do in Chrome, it must be able to do here: the scripts
+  run, the layout resolves, the forms submit, the embeds render. This is the only axis where Chromium is
+  the *target*, and on this axis we are behind and must catch up.
+- **Performance, stability, resource use, honesty of failure — EXCEED it.** On these, Chromium is the
+  *baseline to beat*, not the number to converge on. Being faster is not a divergence. There is nothing
+  to regress toward.
+
+This resolves the question the oracle's diff can never answer on its own, and it resolves it *in advance*
+rather than case by case: **a structural divergence is a bug; a timing divergence in our favour is the
+point.** The oracle diffs structure. It has never scored timing, and it must not start.
+
+**The trap, and it is the one this project keeps catching itself in.** A speed advantage is only real if
+it comes from doing the same work *better* — dedup, caching, single-flight, deferring what the author
+said to defer — and **not from not doing the work at all.** *"Fast because we never loaded the images"*
+and *"fast because we never ran the script"* are two lies already told and caught here; `G_FIRST_PAINT`
+and `G_DEFER` exist for exactly that reason, because a speed number achieved by **skipping a capability**
+is indistinguishable, on the clock, from one achieved by an optimisation.
+
+So the mechanical form: **a speed claim is only admissible next to a coverage number**, and
+`scripts/crawl-report.sh` prints coverage FIRST and has no flag to print speed alone. If coverage holds
+and we are faster, we are faster. If coverage moved, the speed is a measurement of the thing we stopped
+doing.
 
 ## Settled Decisions — closed questions. Do not relitigate. (Part 29.2)
 
@@ -43,6 +70,10 @@ consumes real reasoning effort and *feels like progress* while producing no new 
   And the capability bar (Chromium parity) rules out the lean/embedded tier — QuickJS, Hermes,
   JerryScript — **entirely**, not just against V8. Leanness that costs capability is not a trade this
   project can make. Do not reopen without evidence the BAR changed.
+- **Chromium is the CEILING on capability, the FLOOR on everything else** — see THE NORTH STAR above.
+  Match its capability; beat it on speed, stability and resource use. A timing divergence in our favour is
+  not a bug to close. Do not reopen this.
+
 - **The app web is ADDITIVE substrate, not a scheduling subsystem** (measured, tick 20: 0/8 → 3/8
   frameworks rendering from ~6 IDL fixes). This was the open question the whole schedule hung on.
 
@@ -142,42 +173,31 @@ loud rather than quietly following the pull.
 
 ## THE NUMBER THAT MATTERS RIGHT NOW
 
-**Measured: 265 sites, one clean run, on OUR clock (`manuk_ms`).**
+**Clean 265-site crawl, tick-36 binary, one RUN_ID, our own clock.** (`scripts/crawl-report.sh`)
 
 ```
-9 of 206 timed sites exceed 30s        (4.4%)   ← Bar 0, and this is a claim about THIS browser
-we are FASTER than Chromium on 175/206 (84%)
-median render:  ours 21.7s   ·   Chromium 35.7s
-p90:            ours 28.4s   ·   Chromium 98.4s
+BAR 1 — is the node THERE?          92.2%   (162,570 of 176,311 probed)
+        ...and `display` agrees     73.0%   ← the next real gap
+BAR 2 — geometry (DEFERRED)        123,796  the node exists, SAME SIZE, moved. Not a failure.
+
+BAR 0 — over 30s on our clock       4/211   (1.9%)   was 4.4%
+FASTER than Chromium              195/211   (92%)    was 84%
+median render        ours 16.1s  ·  Chromium 36.5s
+p90                  ours 24.7s  ·  Chromium 99.5s
 ```
 
-**The previous headline said `73 of 265 sites HANG (27.5%)`. It was wrong**, and it set the schedule for
-several ticks. It was the oracle *process* hitting a 90s watchdog — and that process runs **Chromium
-too**, which is the slower engine on 84% of this corpus. A news front page in cold headless Chromium
-takes 30–110 seconds; the watchdog fired on *its* time and booked the result against *us*.
+**We are slower than Chromium on exactly one site** (atlassian.com, 34.6s vs 32.2s). Median **2.3×
+faster**. That is the north star, measured: *capability approached, performance exceeded.*
 
-The nine that are genuinely slow on our clock — and note Chromium is slower still on seven of them:
+**The next Bar 1 target is the 27% `display` disagreement** — 33,825 nodes where we render the node but
+Chrome and we disagree about whether it is *shown*. `display: none` vs shown is the likely bulk of it, and
+unlike geometry it is a **real** rendering difference: a node we hide that Chrome shows is content the
+user cannot see.
 
-| site | class | ours | Chromium |
-|---|---|---|---|
-| wix.com | saas | 39.1s | 22.4s ← **we are slower** |
-| flickr.com | media | 31.1s | 14.8s ← **we are slower** |
-| vox.com | news | 37.5s | 46.9s |
-| atlassian.com | saas | 37.0s | 98.4s |
-| cnn.com | news | 36.4s | 64.3s |
-| aljazeera.com | news | 35.4s | 110.4s |
-| hubspot.com | saas | 33.5s | 52.0s |
-| webflow.com | saas | 32.0s | 113.8s |
-| whitehouse.gov | gov_edu | 30.4s | 61.8s |
-
-**So the remaining Bar 0 work is two sites, not seventy-three.** (Absolute times here are inflated for
-*both* engines by the 6-way crawl concurrency — standalone, nytimes is 14.1s and apple 2.1s. The ratio
-is the trustworthy part, which is exactly the point of running both engines on the same bytes.)
-
-Unattributed: 15 process TIMEOUTs (whose time? unknown — never ours by default) · 44 discarded
-(degraded oracle: bot wall, error page).
-
-> *Every number has a harness, and the harness is part of the number.*
+> **This report lied on its first run.** It lumped `geometry` into "coverage" and announced **2.8%** for a
+> browser that renders fine. The instrument built to stop me trusting bad numbers produced one immediately
+> — the fourth time an instrument has done that here (see `docs/loop/PROCESS.md`). None of them get to be
+> trusted on sight.
 
 ## Corpus (18 sites — the OLD frame, kept for per-site fidelity scores)
 

@@ -1903,3 +1903,55 @@ contaminated four separate ways, all of them mine.
 *under*-reports hangs (the hanging sites are the ones still running when you stop), and `status-update.sh`
 now refuses to print one at all. That refusal exists because I did exactly this, once, and wrote the
 result into STATUS.md as a fact.
+
+**RESULT — tick 37. The crawl, and a report that lied on its first run.**
+
+```
+BAR 1 — node PRESENT              92.2%   (162,570 of 176,311 probed)
+        ...and `display` agrees   73.0%   ← the next real gap
+BAR 2 — geometry (DEFERRED)      123,796  the node exists, SAME SIZE, moved. Not a failure.
+
+BAR 0 — over 30s on our clock     4/211   (1.9%)    was 4.4%
+FASTER than Chromium            195/211   (92%)     was 84%
+median          ours 16.1s  ·  Chromium 36.5s
+p90             ours 24.7s  ·  Chromium 99.5s
+```
+
+**We are slower than Chromium on exactly one site** (atlassian.com, 34.6s vs 32.2s). Median **2.3× faster**.
+
+**The north star, sharpened this tick** (and it is the user's formulation, which is better than the one I
+was carrying):
+
+> **Chromium is the CEILING on capability, and the FLOOR on everything else.**
+
+Match its capability — the scripts run, the layout resolves, the forms submit, the embeds render. **Beat**
+it on speed, stability, resource use and honesty of failure. A timing divergence in our favour is not a
+bug to close; there is nothing to regress toward. The oracle diffs **structure**, and it must never score
+timing.
+
+I had been carrying a quieter version of the opposite assumption — treating Chromium's *behaviour* as the
+target rather than its *capabilities* — and it is exactly the kind of thing that produces work nobody
+needed.
+
+**And the report lied on its first run.**
+
+`scripts/crawl-report.sh` exists to make one rule mechanical: *a speed claim is only admissible next to a
+coverage number*, because "fast because we never loaded the images" and "fast because we never ran the
+script" are two lies this project has already told and caught. It printed:
+
+```
+  structural agreement : 2.8%
+```
+
+**For a browser that renders fine.** It had lumped all three divergence kinds together. But
+`geometry` — 123,796 of them, 70% of the total — means *the node exists, at the same size, in a different
+place*. bbc's `<h3>` is 208×88 in **both** engines and sits at a different y. **That is Bar 2, deferred by
+settled decision.** It is not a rendering failure and it must never be counted as one.
+
+The real Bar 1 number is **92.2%**. I nearly reported a catastrophic regression that did not exist —
+**with the instrument I had just built to stop exactly that.** Fourth time an instrument has done this
+here. None of them get to be trusted on sight, including the ones I write to enforce not trusting things.
+
+**Next: the 27% `display` disagreement** — 33,825 nodes where we render the node but disagree with Chrome
+about whether it is *shown*. Unlike geometry, that is a **real** difference: a node we hide that Chrome
+shows is content the user cannot see.
