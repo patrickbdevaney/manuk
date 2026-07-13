@@ -1183,3 +1183,208 @@ were already broken. This is that gate.
 **Still open:** `getBoundingClientRect` returns a stale (zero) rect immediately after a mount — it does
 not force layout when the tree is dirty, as a real browser does. Not a Bar 0 issue, but it is a thing
 real code depends on, and it will be the next tick's start.
+
+## Tick 27 — the ledger is ranked by symptom, and I should say so (2026-07-12)
+
+Before the crawl lands, an honest note about the instrument it feeds.
+
+`CLUSTERS.md` opens by declaring itself "ranked by DISTINCT SITES then DISTINCT CLASSES ... clustered by
+**root cause**." It is not. Its top ten entries are:
+
+```
+C01ca  123 sites  geometry: <div>      C990e  118  geometry: <a>
+C7eb9  117 sites  geometry: <body>     Ca725  104  geometry: <span>
+```
+
+**That is a ranking by TAG NAME, not by cause.** "Our `<div>`s are in different places than Chrome's,
+on 123 sites" is a restatement of *the oracle found divergences*, and it cannot be worked on. Every
+real fix of the last several ticks — `font-family` never mapped, flex items resolving width twice,
+`position:absolute` elements deleted, the intrinsic-sizing quadratic — was found by *measuring a
+specific page*, not by reading this file. The ledger has been decorative for the Bar 1 work while
+claiming, in its own header, to be the thing that sets priority.
+
+I am not going to quietly keep using it while pretending otherwise. Two things follow:
+
+1. **Bar 0 does not depend on it.** The hang count is measured directly and is the number that has been
+   driving the schedule. That part of the methodology is working exactly as designed.
+2. **The clustering needs a root-cause key, not a tag key.** A useful key would name the *kind* of
+   divergence — "flex item width", "accumulated y-offset below a mis-sized ancestor", "replaced element
+   aspect ratio" — so that one entry corresponds to one thing a person can go and fix. That is a real
+   piece of work on the oracle itself, and it belongs on the schedule rather than in a complaint.
+
+**The rule this is an instance of:** *a gate that does not measure what it claims to measure is worse
+than no gate, because it is trusted.* The same sentence already appears in STATUS.md's Lessons about
+gates that go green while the user suffers. This is that failure applied to a ledger instead of a test.
+
+**And then I did it again, within the hour.** Having just written that the ledger must not be trusted
+past what it measures, I widened the crawl from 4 jobs to 12 to make it finish faster, and watched the
+hang rate "rise":
+
+```
+ 4 jobs → 11 hangs /  88 sites  (12.5%)
+12 jobs → 22 hangs /  45 sites  (49.0%)     ← same binary. same corpus. same web. same hour.
+```
+
+Twelve parallel oracle runs means **189 concurrent Chromium processes**, and the 90s watchdog wraps the
+whole oracle process — *ours and Chromium's together*. So the watchdog fired on contention I had
+manufactured, and every site it killed was recorded as a hang, attributed to us.
+
+If I had not stopped to compute the rate before reading the number, I would have reported a 49% hang
+rate — a regression from 27.5% — on a tick whose entire content was **fixing the hangs**. The fix would
+have looked like a catastrophe, and the next thing I did would have been to go and "repair" working code.
+
+**This is Lesson 4, for the third time, and the third time is the signal.** The lesson as written —
+*an oracle must never be able to charge its own slowness to your account* — is true and I have now
+violated it while able to recite it. A lesson I can quote and still break is not a lesson, it is a
+decoration. So it becomes a mechanism:
+
+- **The crawl pins its own concurrency.** A hang count is only a measurement *relative to a baseline
+  taken the same way*, so the job count is part of the measurement, not a knob for making it finish
+  sooner. Re-measuring at a different width is not a faster measurement — it is a different one.
+- **STATUS.md now refuses to print a partial crawl as a number** (`scripts/status-update.sh`). It was
+  reporting `ORACLE_HANGS: 33` from a run I had killed at 92/265, and an interrupted crawl always
+  UNDER-reports, because the sites that hang are the ones still running when you kill it.
+
+The general form, which is the one worth keeping: **every number has a harness, and the harness is part
+of the number.** Before believing a metric moved, ask what else moved.
+
+## Tick 27 — Bar 0's headline number was measuring Chromium (2026-07-12)
+
+**TICK SHAPE: pattern-class.** CLUSTER: C01ca. This is the tick where the instrument turned out to be
+the bug, and it is the largest correction the project has had.
+
+For several ticks the top line of STATUS.md has read:
+
+```
+73 of 265 sites HANG (27.5%)   ← a browser that hangs on one site in four is not a browser
+```
+
+That sentence set the schedule. It is what made "the hangs" the top of the ledger, ahead of every
+visual cluster, by Part 24.3. **It was substantially measuring Chromium.**
+
+`oracle-crawl.sh` ran each site under a 90s `timeout`. That watchdog wraps the *whole oracle process*:
+our render, **Chromium's render**, and the diff. When it fired, the site was recorded as `HANG` and
+attributed to us. But the oracle has been recording each engine's time separately all along, and the
+record says:
+
+```
+site            manuk_ms    chrome_ms
+bloomberg.com     15,507      60,600     ← Chromium 3.9x slower
+vox.com            7,551      59,715     ← 7.9x
+economist.com     15,078      53,895     ← 3.6x
+bbc.co.uk         18,788      54,964     ← 2.9x
+cnn.com           29,527      59,247     ← 2.0x
+lite.cnn.com          77       9,593     ← 124x
+```
+
+**Chromium was the slower engine on 9 of the 10 news sites that completed.** A news front page in cold
+headless Chromium takes 30–60 seconds. Add our 8–30s and the diff, and the 90s watchdog fires — on
+*Chromium's* time, recorded as *our* hang.
+
+**So the honest position on Bar 0, stated plainly:** I do not yet know our hang count, and the number I
+have been quoting for several ticks was not one. What I do know, measured directly on our engine alone:
+every previously-"hanging" site returns — nytimes 14.1s, bbc 12.3s, guardian 11.2s, apple 2.1s,
+go.dev 2.8s. Slow, and slower than I want. **Not hung.**
+
+**The instrument is fixed, not the number massaged:**
+
+1. `HANG` → `TIMEOUT`, and a TIMEOUT is **attributed to nobody**. The process watchdog knows the process
+   was slow; it does not know whose slowness it was, and it must not guess.
+2. The watchdog goes 90s → 240s. It is a **backstop against a true infinite loop**, not the metric.
+3. **Bar 0 is computed from `manuk_ms` — our own clock** (`status-update.sh`). A hang is now a claim
+   about *this browser*, which is what Bar 0 was always supposed to be a claim about.
+4. The crawl **warns loudly if run at a non-baseline job count**, because I proved within the hour that
+   concurrency I add shows up as hangs attributed to us (4 jobs → 12.5%, 12 jobs → 49%, same binary).
+
+**The lesson, and it is the same one three times in one day, which is why it is now four mechanisms and
+not a fourth reminder:**
+
+> *Every number has a harness, and the harness is part of the number.*
+
+The work the bad number provoked was not wasted — the intrinsic-sizing quadratic, the unbudgeted
+`load_async`, the image-refetch storm were all real, and the engine is several times faster for them.
+But it was prioritised by a lie, and I should be plain about that rather than let the good outcome
+launder the process. **The right work for the wrong reason is luck, not method.**
+
+**And a fourth contamination, in the same tick, caught only by an accounting check.**
+
+The corrected crawl finished and reported **3 hangs of 265 (3%)** — a beautiful number, and I very
+nearly wrote it down. Then the accounting didn't add up: 265 result files, but only 76 with both
+engines' times, 39 `TIMEOUT`, 37 `DISCARDED` — and **113 records labelled `HANG`**, a label the current
+script does not emit at all.
+
+**`oracle-crawl.sh` does `export -f one_site`.** The xargs workers carry the function they were forked
+with. Killing the driver does not kill them. So the *previous* crawl's workers — with the previous
+crawl's 90s watchdog and the previous crawl's HANG semantics — were still running, and were writing
+into the results directory of the new run. The output was two different experiments wearing one name.
+
+It was caught only by luck: the two script versions happened to use *different status labels*. Had I
+changed the watchdog from 90s to 240s and **not** renamed HANG→TIMEOUT, the records would have merged
+silently, the totals would have added up, and I would have believed a number produced by two different
+instruments averaged together.
+
+**So it becomes mechanical, not vigilant:**
+
+- Every record is stamped with a `RUN_ID`. More than one in a directory → not a measurement.
+- `status-update.sh` **refuses to print anything** from a mixed-run directory (verified: it refuses the
+  real one).
+- `oracle-crawl.sh` **refuses to start** while another crawl's workers are alive, naming the `pkill`.
+
+**Four contaminations in one tick** — compiling during the crawl; widening the job count; reporting a
+killed run; and now overlapping workers. Every one of them made the browser look *worse or better* than
+it is, and not one was a bug in the browser.
+
+> **The instrument is part of the experiment, and it is the part that lies to you.** A measurement
+> harness gets the same scrutiny as the code under test — more, because nothing is watching *it*.
+
+That sentence is the actual output of this tick. The engine work (intrinsic-sizing cache, load budget,
+image-refetch storm, the whole app web) was tick 25 and 26. **Tick 27 is the discovery that the number
+driving all of it was never measuring this browser.**
+
+## Tick 27 — RESULT: Bar 0 was never 27.5%. It is 4.4%.
+
+Clean crawl, 265 sites, one `RUN_ID`, corrected instrument, on our own clock:
+
+```
+9 of 206 timed sites exceed 30s        (4.4%)     ← the honest Bar 0 number
+we are FASTER than Chromium on 175/206 (84%)
+median render:  ours 21.7s   ·  Chromium 35.7s
+p90:            ours 28.4s   ·  Chromium 98.4s
+```
+
+Of the nine, **Chromium is slower still on seven** (aljazeera: ours 35.4s, its 110.4s. webflow: ours
+32.0s, its 113.8s). **Only two sites are both slow and slower than Chromium: wix.com and flickr.com.**
+
+**The remaining Bar 0 work is two sites, not seventy-three.**
+
+That is what the metric said all along, if it had been asked the right question. The old headline —
+"73 of 265 sites HANG, a browser that hangs on one site in four is not a browser" — was the oracle
+*process* hitting a 90s watchdog that wraps Chromium's render too, on a corpus where Chromium is the
+slower engine 84% of the time.
+
+**What I want to be careful not to do here is launder this into a victory.** Three things are true at
+once and all three should be said:
+
+1. **The engine really did get much faster this session** — the intrinsic-sizing cache, the budget on
+   `load_async`, the image-refetch storm. Those were real bugs, found by real measurement, and nytimes
+   went 43s → 14.1s standalone because of them.
+2. **The work was prioritised by a broken instrument.** Bar 0 was at the top of the ledger for several
+   ticks on the strength of a number that was measuring Chromium. The right work for the wrong reason
+   is luck, not method.
+3. **Absolute times here are inflated for BOTH engines** by the 6-way crawl concurrency — standalone,
+   nytimes is 14.1s and apple 2.1s, not 21.7s median. The *ratio* is the trustworthy part, and it is
+   trustworthy precisely because both engines ran on the same bytes on the same machine in the same
+   minute. That is the whole design of the differential oracle, and it is the part that worked.
+
+**Four contaminations in one tick**, every one of them mine: compiling during the crawl · widening the
+job count · reporting a killed run · overlapping xargs workers. Each is now a mechanism, not a memory:
+
+| Failure | Mechanism |
+|---|---|
+| watchdog blamed us for Chromium's time | `TIMEOUT` is attributed to **nobody**; Bar 0 counts `manuk_ms` |
+| more jobs → more "hangs" | crawl **warns loudly** at a non-baseline job count |
+| partial run reported as a number | `status-update.sh` **refuses** to print it |
+| stragglers wrote into the new run | every record carries a `RUN_ID`; the crawl **refuses to start** on live workers |
+
+> **The instrument is part of the experiment, and it is the part that lies to you.** It gets the same
+> scrutiny as the code under test — more, because nothing is watching *it*.
