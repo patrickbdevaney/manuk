@@ -97,6 +97,22 @@ for t in $(seq $((TICK-4)) "$TICK"); do
 done
 [ -z "$MISSING" ] && ok "journal entries present for the last 5 ticks" || bad "journal MISSING for tick(s):$MISSING"
 
+head_ "Pattern ledger (WEB-PATTERNS.md) — is coverage tracked, or just claimed?"
+if [ -f docs/loop/WEB-PATTERNS.md ]; then
+  ok "pattern ledger exists ($(grep -cE '^\| ' docs/loop/WEB-PATTERNS.md) rows)"
+  # A ledger nobody edits is a ledger nobody believes. It must move as capability moves.
+  LEDGER_AGE=$(git log -1 --format=%ct -- docs/loop/WEB-PATTERNS.md 2>/dev/null || echo 0)
+  ENGINE_AGE=$(git log -1 --format=%ct -- engine/ 2>/dev/null || echo 0)
+  if [ "$ENGINE_AGE" -gt "$LEDGER_AGE" ] && [ $((ENGINE_AGE - LEDGER_AGE)) -gt 86400 ]; then
+    bad "the engine has changed but WEB-PATTERNS.md has not been touched in over a day — coverage is drifting from reality"
+  else
+    ok "pattern ledger moves with the engine"
+  fi
+  grep -q "% of web" docs/loop/WEB-PATTERNS.md && ok "coverage estimates present, and marked as JUDGEMENTS the crawl corrects" || bad "no coverage estimate — the roadmap has no denominator"
+else
+  bad "no docs/loop/WEB-PATTERNS.md — we are tracking bugs instead of coverage, which is the unanswerable question"
+fi
+
 head_ "Part 22 — runtime health (audited, or assumed?)"
 grep -rq "duplicate" docs/loop/JOURNAL.md 2>/dev/null && ok "duplicate-work audit has been journaled at least once" \
   || bad "no call-graph leanness audit journaled (Part 22.3: duplicate fetches / tree renders / JS module execution)"

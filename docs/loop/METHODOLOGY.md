@@ -1449,3 +1449,46 @@ until these are done or genuinely blocked:**
     asymptotically wrong today (O(page) per event), not merely incomplete, so it's a priority
     once infrastructure is in place, but it depends on a deliberate build-vs-adopt decision, not
     a mid-implementation default.
+
+---
+
+## Part 32 — The Pattern Ledger: coverage, not bug count
+
+`docs/loop/WEB-PATTERNS.md` is the coverage ledger, and it exists because **"how many bugs are left" is
+the unanswerable question and "which pattern classes do we cover" is the answerable one.**
+
+Chromium's team does not write bespoke code per website. They cover representative HTML/CSS/JS
+*patterns*, and the vast majority of real sites are recombinations of a comparatively small number of
+them. That is the only reason a solo project can attempt this at all: the denominator is not "the
+internet", it is "the pattern classes the internet is built from", and that set is finite.
+
+### 32.1 What the file is
+Every recurring pattern we have encountered — `font-family` resolution, flex shrink, `<template>.content`,
+comment-node markers, `setInterval`, `document.readyState`, shadow-tree layout — with **what class of
+site it unlocks** and whether we support it. A row is not "a bug we fixed"; it is "a kind of website we
+can now open."
+
+### 32.2 The coverage estimate is a judgement, and says so
+The "% of web" column is explicitly a judgement, not a measurement — and the **oracle's 265-site crawl is
+what corrects it.** When the estimate and the crawl disagree, the crawl wins and the estimate is edited.
+A number in that file which the crawl has never contradicted is a number that has never been tested, and
+should be read that way.
+
+### 32.3 Enforced, because a ledger that drifts is worse than none
+A ledger nobody edits is a ledger nobody believes — and worse, it becomes a *confident* record of a
+coverage we no longer have.
+
+- **The pre-commit hook refuses** any commit that changes engine capability (`engine/{js,css,layout,
+  paint,dom,html,text}/src/`) without touching `WEB-PATTERNS.md`. The commit must say which class of the
+  web it unlocks. That is the difference between "I fixed a bug" and "we can now open this kind of site",
+  and only the second is what this project is scored on.
+- A change that genuinely alters no capability (perf, refactor, gate, tooling) uses the explicit
+  `[no-pattern]` marker in the commit message — which keeps the exemption **visible** rather than letting
+  it quietly become the default.
+- `scripts/self-audit.sh` fails if the engine has moved and the ledger has not.
+
+### 32.4 It is also the roadmap
+Ordering the open rows by *web-coverage bought per unit of work* is the roadmap, and it falls out of the
+file rather than being decided separately. Crashes and hangs (Part 24.3) sit above every rendering row in
+it by construction: a pattern class that hangs the engine is a Bar 0 violation, and no amount of coverage
+elsewhere compensates for a browser that freezes on one site in four.

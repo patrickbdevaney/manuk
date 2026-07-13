@@ -357,6 +357,53 @@ const PRELUDE: &str = r#"
         };
       }
 
+      // **`btoa` / `atob`** — base64. Used constantly: data URLs, JWT decoding, image inlining, every
+      // "encode this small thing into a string" on the web.
+      if (typeof globalThis.btoa === 'undefined') {
+        var B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+        globalThis.btoa = function(input) {
+          var str = String(input), out = '', i = 0;
+          while (i < str.length) {
+            var c1 = str.charCodeAt(i++), c2 = str.charCodeAt(i++), c3 = str.charCodeAt(i++);
+            if (c1 > 255 || c2 > 255 || c3 > 255) {
+              throw new Error("btoa: string contains characters outside of the Latin1 range");
+            }
+            var e1 = c1 >> 2;
+            var e2 = ((c1 & 3) << 4) | (isNaN(c2) ? 0 : (c2 >> 4));
+            var e3 = isNaN(c2) ? 64 : (((c2 & 15) << 2) | (isNaN(c3) ? 0 : (c3 >> 6)));
+            var e4 = isNaN(c3) ? 64 : (c3 & 63);
+            out += B64.charAt(e1) + B64.charAt(e2) +
+                   (e3 === 64 ? '=' : B64.charAt(e3)) + (e4 === 64 ? '=' : B64.charAt(e4));
+          }
+          return out;
+        };
+        globalThis.atob = function(input) {
+          var str = String(input).replace(/[=]+$/, ''), out = '', bits = 0, acc = 0;
+          for (var i = 0; i < str.length; i++) {
+            var v = B64.indexOf(str.charAt(i));
+            if (v < 0) { continue; }
+            acc = (acc << 6) | v; bits += 6;
+            if (bits >= 8) { bits -= 8; out += String.fromCharCode((acc >> bits) & 0xff); }
+          }
+          return out;
+        };
+      }
+
+      // Dialogs. A renderer has no user to ask, and **silently returning the wrong answer is worse
+      // than doing nothing**: `confirm()` returning `true` by default would let a page believe the user
+      // agreed to something. `false`/`null` is the honest, safe answer, and it is logged.
+      if (typeof globalThis.alert === 'undefined') {
+        globalThis.alert = function(m){ try { __hostLog('info', 'alert: ' + m); } catch(e){} };
+        globalThis.confirm = function(m){ try { __hostLog('info', 'confirm (auto-declined): ' + m); } catch(e){} return false; };
+        globalThis.prompt = function(m){ try { __hostLog('info', 'prompt (auto-declined): ' + m); } catch(e){} return null; };
+      }
+      if (typeof globalThis.postMessage === 'undefined') {
+        globalThis.postMessage = function(){};
+      }
+      if (typeof globalThis.reportError === 'undefined') {
+        globalThis.reportError = function(e){ try { __hostLog('warn', 'reportError: ' + e); } catch(x){} };
+      }
+
       // `crypto.randomUUID` is now everywhere (React keys, request ids, cache busting).
       if (typeof globalThis.crypto === 'undefined') {
         globalThis.crypto = {

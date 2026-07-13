@@ -961,3 +961,46 @@ an omission.
 
 Lit still does not commit its template. Four ticks in, and the frameworks have paid for themselves many
 times over in things that were never about frameworks at all.
+
+## Tick 24 — audit the whole API surface, not one framework at a time (2026-07-12)
+
+**TICK SHAPE: pattern-class + infrastructure.** Last tick found `setInterval` missing by pointing the
+miner's logic at the *global object* instead of at a framework. That found more breadth in ten minutes
+than three ticks of chasing Lit. So do it properly and exhaustively: enumerate the DOM/BOM/CSSOM surface
+real sites actually call, and see what is absent. Each missing entry is a class of site that breaks.
+
+**Hypothesis:** the remaining gaps cluster in (a) element/document methods frameworks use for
+measurement and traversal, (b) event-system surface, and (c) the "modern" APIs (observers, storage,
+media). I expect at least one to be as embarrassing as `setInterval`.
+
+### Tick 24 result — audit the surface, not the framework
+
+**Pointing the miner's logic at the global object found more breadth in ten minutes than three ticks of
+chasing Lit.** The technique generalises and is now the default move: enumerate what real code reaches
+for, and see what is absent. Each missing entry is a *class* of site, not a bug.
+
+Landed:
+
+- **`document.readyState`** — the single most-checked property on the web. Half the scripts on the
+  internet open with `if (document.readyState === 'loading') { wait } else { init() }`. Undefined made
+  that comparison false, so they took the `else` and initialised immediately — *right by accident*. The
+  many libraries that instead wait for `'complete'` waited forever. We report `"complete"`, which is the
+  truth: by the time a page's script sees this DOM, the document IS parsed.
+- **`document.defaultView`** — frameworks get `window` from a NODE (`el.ownerDocument.defaultView`)
+  rather than the global, precisely so they work inside an iframe. `null` made them think they were in a
+  detached document and skip everything.
+- **`document.visibilityState` / `hidden`** — video players and animation loops compare against the
+  *string* `'visible'`; `undefined !== 'visible'` makes a player believe the tab is backgrounded and
+  refuse to start.
+- **`element.click()`** — a programmatic click. Menus, dropdowns, "click the hidden file input", every
+  custom control forwarding to a real one, every Copy button. Routed through the same `__dispatchEvent`
+  path a real click takes, so listeners, bubbling and default actions behave identically — a synthetic
+  click that skipped the event system would be a different bug wearing this one's clothes.
+- **`isConnected`** (React and Vue check it before every commit), **`localName`**, **`toggleAttribute`**,
+  **`btoa`/`atob`**, and honest **`alert`/`confirm`/`prompt`** — a renderer has no user to ask, and a
+  `confirm()` that returned `true` by default would let a page believe the user had agreed to something.
+  Declining is the safe answer, and it is logged rather than silent.
+
+Still absent and enumerated (next): `append`/`prepend`/`before`/`after`/`replaceWith`,
+`insertAdjacentHTML`, `outerHTML`, `innerText`, `scrollTop`/`scrollLeft`, `attributes`,
+`document.styleSheets`, `createRange`, `getSelection`, `Blob`/`FileReader`.

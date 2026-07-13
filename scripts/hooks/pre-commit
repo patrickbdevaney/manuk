@@ -152,6 +152,48 @@ if [ $((TICK - LAST_AUDIT)) -gt "$AUDIT_EVERY" ]; then
 fi
 
 # ---------------------------------------------------------------------------------------------
+# 3b. THE PATTERN LEDGER — a capability change must say WHICH CLASS OF WEB it unlocks.
+# ---------------------------------------------------------------------------------------------
+# `docs/loop/WEB-PATTERNS.md` is the coverage ledger: the recurring HTML/CSS/JS patterns the web is
+# actually built out of, what each unlocks, and whether we support it. It answers the only question
+# that matters — "which pattern classes do we cover, weighted by how much of the web uses them" —
+# instead of the unanswerable one ("how many bugs are left").
+#
+# It is worth nothing if it drifts. So: a commit that changes engine CAPABILITY (the JS bindings, the
+# cascade, layout, paint) must also say which class of the web that capability unlocks. Not a paperwork
+# tax — it is the difference between "I fixed a bug" and "we can now open this kind of site", and the
+# second is the only one the project is actually scored on.
+#
+# Fixes that change no capability (perf, refactors, gates, tooling) are exempt: the marker `[no-pattern]`
+# in the commit message says so explicitly, which keeps the exemption visible rather than silent.
+CAPABILITY=$(echo "$STAGED" | grep -E '^(engine/(js|css|layout|paint|dom|html|text)/src/)' | head -1)
+if [ -n "$CAPABILITY" ]; then
+  # The commit message file is git's first arg to the hook — but a pre-commit hook is not always
+  # given one, and `set -u` turns that into a crash. `${1:-}` is the whole fix, and the hook crashing
+  # on its own argument list would have blocked every commit for a reason that had nothing to do with
+  # the rule it enforces.
+  MSG_FILE="${1:-}"
+  MSG=""
+  [ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ] && MSG=$(cat "$MSG_FILE" 2>/dev/null)
+  # git does not pass the message to pre-commit, so also read where the message is being staged.
+  [ -z "$MSG" ] && [ -f .git/COMMIT_EDITMSG ] && MSG=$(cat .git/COMMIT_EDITMSG 2>/dev/null)
+  if ! echo "$STAGED" | grep -q '^docs/loop/WEB-PATTERNS.md$' && ! echo "$MSG" | grep -q '\[no-pattern\]'; then
+    red "✗ PATTERN LEDGER: this commit changes engine capability but does not touch"
+    red "  docs/loop/WEB-PATTERNS.md."
+    red ""
+    red "    changed: $CAPABILITY"
+    red ""
+    red "  Say which CLASS OF THE WEB this unlocks — that is the difference between 'I fixed a bug'"
+    red "  and 'we can now open this kind of site', and only the second is what the project is scored"
+    red "  on. Add or update the row."
+    red ""
+    red "  If it genuinely changes no capability (perf, refactor, gate, tooling), put [no-pattern] in"
+    red "  the commit message. The exemption stays visible instead of becoming a habit."
+    exit 1
+  fi
+fi
+
+# ---------------------------------------------------------------------------------------------
 # 4. THE GATE RECEIPT — the gates must have seen exactly this code.
 # ---------------------------------------------------------------------------------------------
 # Docs and scripts alone cannot regress an engine gate; requiring a 3-minute wall run to fix a typo
