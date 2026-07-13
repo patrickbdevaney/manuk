@@ -243,6 +243,19 @@ s = s.replace(
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+# G_ANIMATION — render the animation's FIRST frame again, which is what made a fifth of the web invisible.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_ANIMATION; then
+  mutate engine/css/src/stylo_map.rs '
+s = s.replace(
+    "    if s.has_animation && s.opacity == 0.0 {\n        s.opacity = 1.0;\n    }",
+    "    if false {   // MUTATION: render the animation first frame, hiding the content\n        s.opacity = 1.0;\n    }",
+    1)
+'
+  expect_red G_ANIMATION cargo test -q -p manuk-page --features stylo,spidermonkey --test g_animation
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 # G_RUNAWAY — remove the task-drain ceiling. A self-rescheduling timer must then hang the engine.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_RUNAWAY; then

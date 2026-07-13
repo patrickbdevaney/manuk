@@ -1839,3 +1839,43 @@ right. The pixels were wrong in the space between them.
 
 It was found through an iframe only because a child document is, by definition, "a page shorter than its
 viewport". *The symptom names the wrong organ* — fourth time.
+
+## Tick 36 — a fifth of the web had invisible content (2026-07-13)
+
+**TICK SHAPE: pattern-class.** CLUSTER: C01ca.
+
+Two things, and the second is a process failure I have now made three ticks running.
+
+**1. Animated content was invisible — on 21% of the corpus.**
+
+The most common animation on the web is a fade-in: the base rule says `opacity: 0`, the keyframes reveal
+the element. **We rendered the base rule literally**, so the content never appeared at all. Measured: **52
+of 237 sites (21%)** pair `opacity: 0` with an animation. Verified on a real page before fixing anything —
+a fade-in element painted as pure background.
+
+An animated element now renders its **end state**. That is not a hack; it is the spec's own idea, and
+`prefers-reduced-motion: reduce` says exactly the same thing: **show the destination, skip the journey.**
+
+**The narrowness is the whole design.** It would be trivial — and catastrophic — to "fix" this by forcing
+every `opacity: 0` element visible. An author who hides something with **no** animation *meant it*: a
+closed dropdown, an off-screen menu, a screen-reader-only label, a cookie banner that has not fired.
+Revealing those is not a fix, it is a louder bug. So the rule is exactly: *`opacity: 0` **plus** an
+animation → show it.* `opacity: 0` alone stays hidden, and **G_ANIMATION asserts both halves.**
+
+Scoped to opacity, because opacity is the only one of these that makes content *disappear*: a `transform`
+slide-in still renders (merely offset), and a colour transition still renders a colour.
+
+**2. `position: sticky` already worked, and the ledger said it did not.**
+
+`CAPABILITIES.md` said *"laid out, does not stick"*. **It had never been tested.** `apply_sticky` has
+existed all along and works — I painted a page at scroll 0 and scroll 500, and the header pins to the
+viewport top exactly as it should.
+
+**That is the third untested assumption in three ticks** — `localStorage` (tick 33), `FormData` (tick 34),
+`position: sticky` (tick 36). Three times I wrote *"❌ missing"* where the truth was *"✅ works, untested"*,
+and twice I got as far as writing the replacement before noticing.
+
+> **If the probe does not test it, its status is UNKNOWN — and "unknown" is not "missing".** The rule was
+> already written down after the second time. Writing it down was not enough. What stops it is the habit
+> that saved this tick: **go and test the thing before writing a status for it**, every time, even when
+> the answer seems obvious. Especially then.

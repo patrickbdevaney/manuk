@@ -329,3 +329,15 @@ correct dark box **floating in a white void**. It was found through an iframe on
 document is, by definition, "a page shorter than its viewport" — and it was never an iframe bug at all.
 
 *The symptom names the wrong organ*, for the fourth time in this project.
+
+## Tick 36 — a fifth of the web had invisible content
+
+| Pattern | % of the web | Status |
+|---|---|---|
+| CSS animation **reveal** (`opacity:0` → keyframes) | **21% of sites** | ✅ (tick 36) — an animated element renders its **END state**. Rendering the first frame literally meant a fifth of the web had content **nobody could see**. |
+| `opacity: 0` with **no** animation | — | ✅ **stays hidden** — a closed dropdown, an off-screen menu, an un-fired cookie banner. Revealing those would be a louder bug than the one being fixed. |
+| `position: sticky` | 14% | ✅ **already worked** — the ledger claimed otherwise and had never tested it |
+| CSS transition tweening | 13% | ⚠️ end state renders, no tween. Low damage: the end state *is* the content. |
+
+**The rule, and it is the spec's own** (`prefers-reduced-motion: reduce` says the same thing):
+**show the destination, skip the journey.**

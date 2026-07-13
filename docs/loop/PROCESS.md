@@ -11,7 +11,7 @@ The rule it enforces:
 
 ## Why this file exists
 
-In a single session (ticks 25–29), the *process* — not the code — produced **twenty** false or unusable
+In a single session (ticks 25–29), the *process* — not the code — produced **twenty-one** false or unusable
 conclusions. Every one of them made the browser look better or worse than it is, and not one was a bug
 in the browser:
 
@@ -45,7 +45,9 @@ in the browser:
 
 | 20 | **I implemented a duplicate of a working feature. Twice, in two ticks.** | `localStorage` (tick 33) and `FormData`/`URLSearchParams` (tick 34) both already existed and both worked. I wrote replacements for both. The second time the shim was dead on arrival — guarded by `typeof === 'undefined'` — and I only noticed because **the behaviour did not change when I "fixed" it**. | The cause was never carelessness about the code: it was **trusting a capability probe that did not test the capability**. The probe is the AUTHORITY. If it does not test something, that capability's status is **UNKNOWN** — and *"unknown" must never be silently read as "missing"*, which is exactly how you ship a worse copy of working code. `capability-probe.html` now tests everything before I touch it. |
 
-Eight of the twenty were **found by an accounting check, not by the gate that was supposed to catch them**.
+| 21 | **A third untested assumption in three ticks** | `CAPABILITIES.md` said `position: sticky` was "laid out, does not stick". **It was never tested.** `apply_sticky` had existed all along and works — a sticky header pins correctly at scroll 500. Same shape as `localStorage` (#19) and `FormData` (#20). | The pattern is now unmistakable and it is one rule: **if the probe does not test it, its status is UNKNOWN — and I must go and test it before writing a status, not after.** Three ticks in a row I wrote "❌ missing" where the truth was "✅ works, untested". |
+
+Eight of the twenty-one were **found by an accounting check, not by the gate that was supposed to catch them**.
 
 **Defect #20 is the one with a general shape worth naming**, because it is the same shape as #5 (the Bar 0
 metric), #16 (the vacuous gate) and #19 (the file:// probe):

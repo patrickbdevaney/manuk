@@ -47,8 +47,9 @@ Measured from a real HTTP origin. Every "we do" below is what the engine *answer
 | ✅ | ~~`<form>` submit~~ | 50% | ✅ **DONE (tick 34)** | The `submit` event is dispatched and `preventDefault()` honoured, so an AJAX form no longer performs the navigation its author cancelled. `method=POST` still open. |
 | — | ~~`<picture>` / `srcset`~~ | 34% used | ❌ unparsed | **DOWNGRADED — measured.** Usage 34%, **damage ~1%**. Only **2 of 237** sites have an `<img srcset>` with no `src`; everyone else ships a working `src` fallback, which is what `src` is *for*. We load a possibly-wrong-*resolution* image, not a missing one. Worth doing; not worth doing next. |
 | **1** | **`<iframe>`** | **23%** | ❌ 0-height box, no `contentWindow` | Embeds, maps, video players, payment frames, comment widgets. A nested browsing context is real work and it is unavoidable. |
-| 2 | **CSS transition / `@keyframes`** | **38%** | ⚠️ static end-state | Renders legibly but is visibly wrong the moment anyone hovers. |
-| 3 | **`position: sticky`** | 14% | ⚠️ laid out, does not stick | Every modern site header. Wrong the moment anyone scrolls. |
+| ✅ | ~~CSS animation reveal~~ | **21% pair `opacity:0` with an animation** | ✅ **DONE (tick 36)** | A fifth of the web had **invisible content**: the base rule says `opacity:0`, the keyframes reveal it, and we rendered the first frame literally. An animated element now renders its **end state**. Deliberately-hidden elements stay hidden. |
+| ✅ | ~~`position: sticky`~~ | 14% | ✅ **ALREADY WORKED** | The ledger said "does not stick". **It was never tested.** Verified: a sticky header pins to the viewport top at scroll 500. Third untested assumption in three ticks — see PROCESS #20. |
+| 2 | CSS transition **motion** | 13% (transition-only) | ⚠️ end state renders, no tween | Hover/transition effects jump instead of animating. Legible, and low damage: the end state IS the content. |
 | 4 | **WebSocket** | 5% | ❌ missing | Live feeds, chat, collaboration. **Social platforms live here.** |
 | 5 | **Service Worker** | 5% | ❌ missing | Offline, PWA install, push. Usually feature-guarded. |
 | 6 | **`<dialog>` / `showModal`** | 3% | ❌ missing | Modals. Growing fast; will not stay at 3%. |

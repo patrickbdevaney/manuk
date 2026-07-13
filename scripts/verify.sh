@@ -88,6 +88,13 @@ head_ "G_LOAD · the page renders when its subresources never answer (METHODOLOG
 GL=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_load_budget 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GL" ]; then ok "load budget: $GL"; else bad "G_LOAD failed — a dead subresource can hold the document hostage"; fi
 
+head_ "G_ANIMATION · an animated element renders its END state, not its first frame"
+# 52 of 237 corpus sites (21%) pair `opacity:0` with an animation. Rendering the first frame literally
+# means a fifth of the web has content nobody can see. The second half of the gate is the important one:
+# an element the author deliberately hid must STAY hidden.
+GAN=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_animation 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GAN" ]; then ok "animation end-state: $GAN"; else bad "G_ANIMATION failed — fade-in content is invisible, or deliberately-hidden content was revealed"; fi
+
 head_ "G_IFRAME · an <iframe> has a box, shows its document, and cannot touch its parent"
 # 23% of the corpus, and usage == damage: `iframe` was in NO replaced-element list, so it laid out at
 # ZERO WIDTH — the box was gone before we ever got as far as failing to fetch its document.
