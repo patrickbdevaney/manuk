@@ -9,6 +9,24 @@ use std::path::PathBuf;
 
 use manuk_text::FontContext;
 
+/// A `file://` URL for a local path — **absolutized**.
+///
+/// `format!("file://{path}")` on a RELATIVE path silently produces `file://tests/spa/index.html`,
+/// in which `tests` is parsed as the **hostname** and the path is gone. Every subresource then
+/// resolves against a host that does not exist, and the fetch fails.
+///
+/// This had been quietly breaking every local-file test that loads a subresource. It is why the React
+/// app "mounted, threw nothing and rendered nothing": its bundle was never fetched, so **not one line
+/// of React ever ran.** The framework was never the defect — the harness could not load it, and the
+/// harness's failure looked exactly like the framework's.
+///
+/// Lesson, again, and it keeps being the same one: *when the instruments say the bug is impossible,
+/// they are all sampling the same layer.* Test your own primitives before blaming the framework.
+fn file_url(path: &str) -> String {
+    let abs = std::fs::canonicalize(path).unwrap_or_else(|_| std::path::PathBuf::from(path));
+    format!("file://{}", abs.display())
+}
+
 fn main() {
     run();
     // SpiderMonkey's atexit handler segfaults if the process exits with a live JSContext —
@@ -172,7 +190,7 @@ fn run_render_cmd(args: &[String], fonts: &FontContext) {
             eprintln!("cannot read {f}: {e}");
             std::process::exit(1);
         });
-        (html, format!("file://{f}"))
+        (html, file_url(f))
     } else if let Some(inline) = flag(args, "--inline") {
         (inline.to_string(), "about:inline".to_string())
     } else {
@@ -450,7 +468,7 @@ fn run_bench_cmd(args: &[String], fonts: &FontContext) {
         rows.push(manuk_wpt::bench::bench_page(
             &name,
             &html,
-            &format!("file://{path}"),
+            &file_url(path),
             vw,
             vh,
             fonts,
@@ -509,7 +527,7 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
             eprintln!("cannot read {f}: {e}");
             std::process::exit(1);
         });
-        let u = flag(args, "--url").map(String::from).unwrap_or_else(|| format!("file://{f}"));
+        let u = flag(args, "--url").map(String::from).unwrap_or_else(|| file_url(f));
         (h, u)
     };
     let page = rt.block_on(async {
@@ -1051,7 +1069,7 @@ fn run_hittest_cmd(args: &[String], fonts: &FontContext) {
         eprintln!("cannot read {f}: {e}");
         std::process::exit(1);
     });
-    let url = flag(args, "--url").map(String::from).unwrap_or_else(|| format!("file://{f}"));
+    let url = flag(args, "--url").map(String::from).unwrap_or_else(|| file_url(f));
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("rt");
     let page = rt.block_on(async {
         let mut p = manuk_page::Page::load_async(&html, &url, fonts, vw as f32).await;

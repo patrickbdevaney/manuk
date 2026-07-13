@@ -221,7 +221,10 @@ pub fn run_parity(
         let Ok(html) = std::fs::read_to_string(&path) else {
             continue;
         };
-        let url = format!("file://{}", path.display());
+        // Absolutized — a relative path here yields `file://fixtures/x.html`, in which `fixtures` is
+        // the HOSTNAME and every subresource fails to resolve. See `file_url` in `main.rs`.
+        let abs = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
+        let url = format!("file://{}", abs.display());
         let manuk = manuk_boxes(&html, &url, vw, fonts);
 
         // Artifacts: always write the Manuk render; the Chrome shot when available.

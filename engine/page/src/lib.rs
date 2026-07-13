@@ -174,7 +174,7 @@ async fn fetch_images(
     dom: &Dom,
     base: &str,
 ) -> std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>> {
-    fetch_images_except(dom, base, &std::collections::HashSet::new()).await
+    fetch_images_except(dom, base, &std::collections::HashSet::new()).await.0
 }
 
 /// The same, minus the nodes whose image we have ALREADY fetched and decoded for this navigation.
@@ -183,13 +183,16 @@ async fn fetch_images(
 async fn fetch_images_except(
     dom: &Dom,
     base: &str,
-    already: &std::collections::HashSet<manuk_dom::NodeId>,
-) -> std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>> {
-    fetch_images_owned(dom, base, already)
-        .await
-        .into_iter()
-        .map(|(n, img)| (n, std::rc::Rc::new(img)))
-        .collect()
+    attempted: &std::collections::HashSet<(manuk_dom::NodeId, String)>,
+) -> (
+    std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
+    Vec<(manuk_dom::NodeId, String)>,
+) {
+    let (imgs, tried) = fetch_images_owned(dom, base, attempted).await;
+    (
+        imgs.into_iter().map(|(n, img)| (n, std::rc::Rc::new(img))).collect(),
+        tried,
+    )
 }
 
 /// DEBT-1 — the **owned, `Send`** image fetch. Not one `Rc` appears inside this async body: an
@@ -199,23 +202,41 @@ async fn fetch_images_except(
 async fn fetch_images_owned(
     dom: &Dom,
     base: &str,
-    already: &std::collections::HashSet<manuk_dom::NodeId>,
-) -> std::collections::HashMap<manuk_dom::NodeId, manuk_paint::DecodedImage> {
+    attempted: &std::collections::HashSet<(manuk_dom::NodeId, String)>,
+) -> (
+    std::collections::HashMap<manuk_dom::NodeId, manuk_paint::DecodedImage>,
+    Vec<(manuk_dom::NodeId, String)>,
+) {
     let mut out: std::collections::HashMap<manuk_dom::NodeId, manuk_paint::DecodedImage> =
         std::collections::HashMap::new();
+    // **Skip anything already ATTEMPTED — not merely anything already SUCCEEDED.**
+    //
+    // The old filter was `!self.images.contains_key(n)`, i.e. "have we got a decoded image for this
+    // node". An image that FAILS — a blocked tracker, a 404, a timeout — never lands in that map, so
+    // it was re-fetched on every script round, forever. A news front page is *made* of images that
+    // fail, and it runs six rounds: measured, nytimes.com issued **813 fetches of which 507 were
+    // duplicates**, theguardian.com 431 of 576 (75%).
+    //
+    // Keyed by `(node, resolved url)` and not by node alone, so a script that legitimately swaps an
+    // `img.src` still triggers a real fetch. Remembering the failure is not the same as refusing to
+    // retry a *different* request.
     let targets: Vec<(manuk_dom::NodeId, String)> = dom
-        .descendants(dom.root())
+        .flat_descendants(dom.root())
+        .into_iter()
         .filter(|&n| dom.tag_name(n) == Some("img"))
-        .filter(|n| !already.contains(n))
         .filter_map(|n| {
             let src = dom.element(n)?.attr("src")?.trim().to_string();
             if src.is_empty() {
-                None
-            } else {
-                Some((n, resolve_url(base, &src)))
+                return None;
             }
+            let url = resolve_url(base, &src);
+            if attempted.contains(&(n, url.clone())) {
+                return None;
+            }
+            Some((n, url))
         })
         .collect();
+    let tried: Vec<(manuk_dom::NodeId, String)> = targets.clone();
     // Fetch every image concurrently (I/O-bound; the shared client pools + multiplexes),
     // then decode sequentially (CPU-bound). Serial awaits here were a real latency cost.
     let fetched = futures_util::future::join_all(
@@ -247,7 +268,7 @@ async fn fetch_images_owned(
             }
         }
     }
-    out
+    (out, tried)
 }
 
 /// Every raw `url(...)` argument of a `mask-image` / `-webkit-mask-image` declaration in a
@@ -385,9 +406,20 @@ async fn fetch_font_bytes(url: &str) -> Option<Vec<u8>> {
 }
 
 /// Collect the page's stylesheet sources (inline + external) in document order.
+///
+/// **Walks the FLAT tree, not the light tree.** A `<style>` inside a shadow root is not a descendant
+/// in the light DOM — so this walk, which is the only thing that collects stylesheets, could not see
+/// it, and every web component on every page rendered completely unstyled. Not subtly wrong: *no rule
+/// from inside a shadow root reached the cascade at all.*
+///
+/// This is the fifth instance of one shape, and it is worth naming as a shape rather than as five
+/// bugs: `flat_children`, `NodeData::Comment`, `NodeData::Fragment`, the flat tree in the cascade —
+/// and now this. **The mechanism existed and was correct. Nobody had drawn a line from it to the thing
+/// that renders, and no gate asked whether such a line existed.** The feature being present in the
+/// codebase is not the same as the feature being reachable from the pixels.
 fn collect_style_sources(dom: &Dom, base: &str) -> Vec<StyleSource> {
     let mut out = Vec::new();
-    for n in dom.descendants(dom.root()) {
+    for n in dom.flat_descendants(dom.root()) {
         match dom.tag_name(n) {
             Some("style") => {
                 let media = dom.element(n).and_then(|e| e.attr("media")).map(str::to_string);
@@ -431,7 +463,9 @@ fn collect_subresources(dom: &Dom, base: &str) -> Vec<Subresource> {
             .unwrap_or(false)
     };
     let mut out = Vec::new();
-    for n in dom.descendants(dom.root()) {
+    // Flat tree, for the same reason as `collect_style_sources`: a `<link rel=stylesheet>` inside a
+    // shadow root is invisible to a light-DOM walk.
+    for n in dom.flat_descendants(dom.root()) {
         match dom.tag_name(n) {
             Some("link") => {
                 let is_sheet = attr(n, "rel")
@@ -510,6 +544,10 @@ pub struct Page {
     /// `finish_loading` and AGAIN after every round of dynamic scripts, and each call was re-fetching
     /// every mask and every background image on the page from scratch. Part 22.3.
     fetched_urls: std::collections::HashSet<String>,
+    /// Every `(img node, resolved url)` we have TRIED to fetch — successes and failures alike.
+    /// A failure that is not remembered is a fetch that repeats on every round; see
+    /// `fetch_images_owned`.
+    image_attempts: std::collections::HashSet<(manuk_dom::NodeId, String)>,
     /// Fingerprint of the inputs to the last full cascade — the style sources and the shape of the
     /// tree. If neither has changed, re-cascading produces byte-identical output, and on a large
     /// document that is not a small waste: see `apply_stylesheets`.
@@ -611,8 +649,31 @@ impl Page {
         #[cfg(feature = "spidermonkey")]
         fetch_external_scripts(&mut dom, final_url).await;
         let mut page = Page::from_dom(dom, final_url, fonts, viewport_width);
-        page.fetch_and_apply_images(fonts, viewport_width).await;
-        page.fetch_and_apply_masks().await;
+
+        // **The enhancement phases run under the load budget, exactly as they do in `finish_loading`.**
+        //
+        // They did not, and the omission is a Bar 0 hole rather than a slow path: `finish_loading` was
+        // budgeted and `load_async` — which runs the *same two subresource phases* — was not. A page
+        // whose images and masks are slow (or numerous, which for a news front page they always are)
+        // could therefore sit here without any deadline at all, and the tab is frozen for as long as it
+        // takes. Whatever bounds one of these phases must bound both, or the bound is decorative.
+        //
+        // The document is already parsed and `page` already exists at this point, so expiry costs the
+        // enhancements and never the article. That is the same promise `finish_loading` makes, and it
+        // is what a browser actually promises: Chromium does not wait for the last tracking pixel
+        // before showing you the story.
+        let budget = load_budget();
+        let enhancements = async {
+            page.fetch_and_apply_images(fonts, viewport_width).await;
+            page.fetch_and_apply_masks().await;
+        };
+        if tokio::time::timeout(budget, enhancements).await.is_err() {
+            tracing::warn!(
+                "load budget of {:.1}s exhausted during initial subresource load — painting now. \
+                 The article is never the thing we drop.",
+                budget.as_secs_f32()
+            );
+        }
         page
     }
 
@@ -726,9 +787,9 @@ impl Page {
         // Same discipline for images: `finish_loading` and every script round both call this, and
         // re-fetching an image we have already decoded is pure waste — and, for a `<img>` whose src
         // a script has not touched, it is waste on every single round.
-        let already: std::collections::HashSet<manuk_dom::NodeId> =
-            self.images.keys().copied().collect();
-        let images = fetch_images_except(&self.dom, &self.final_url, &already).await;
+        let (images, tried) =
+            fetch_images_except(&self.dom, &self.final_url, &self.image_attempts).await;
+        self.image_attempts.extend(tried);
         self.apply_images(images, fonts, viewport_width)
     }
 
@@ -1164,6 +1225,7 @@ impl Page {
             images: std::collections::HashMap::new(),
             external_css: HashMap::new(),
             fetched_urls: std::collections::HashSet::new(),
+            image_attempts: std::collections::HashSet::new(),
             last_cascade: None,
         }
     }
@@ -2160,7 +2222,7 @@ pub async fn prefetch_document(url: &str) -> Result<Loaded> {
             // anywhere inside this async fn would make the whole future `!Send`, which is exactly
             // what pinned image fetching to the UI thread and blocked it.
             let images: HashMap<manuk_dom::NodeId, manuk_paint::DecodedImage> =
-                fetch_images_owned(&dom, &final_url, &std::collections::HashSet::new()).await;
+                fetch_images_owned(&dom, &final_url, &std::collections::HashSet::new()).await.0;
 
             // Masks (icons). Scanned from the CSS text rather than the cascade: this thread has no
             // styles, and a URL-keyed cache is all the cascade needs later to bind them to nodes.

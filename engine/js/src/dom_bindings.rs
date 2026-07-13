@@ -47,7 +47,8 @@ use mozjs::jsval::{
 use mozjs::rooted;
 use mozjs::rust::wrappers2::{
     CurrentGlobalOrNull, JS_DefineFunction, JS_DefineProperty, JS_DefineProperty1, JS_NewObject,
-    JS_GetProperty, JS_NewGlobalObject, JS_SetElement1, JS_SetProperty, NewArrayObject1,
+    JS_GetElement, JS_GetProperty, JS_NewGlobalObject, JS_SetElement, JS_SetElement1, JS_SetProperty,
+    NewArrayObject1,
 };
 use mozjs::jsapi::OnNewGlobalHookOption;
 use mozjs::gc::RootedTraceableBox;
@@ -94,7 +95,10 @@ thread_local! {
     /// `container.ownerDocument`, then indexes the result — `undefined["_reactListening…"]` — and dies
     /// with an error that names neither `ownerDocument` nor the DOM. The miner walks that back in one
     /// step; reading the React source to find it would have taken an afternoon.
-    static DOC_REFLECTOR: std::cell::Cell<*mut JSObject> = const { std::cell::Cell::new(std::ptr::null_mut()) };
+    // (There was a `DOC_REFLECTOR: Cell<*mut JSObject>` here — an UNROOTED raw pointer to the document
+    // reflector. It was a use-after-GC and it is gone. The document is reachable as
+    // `globalThis.document`, which the collector knows about; see `el_get_owner_document`. Do not
+    // reintroduce a raw `*mut JSObject` cached across a GC boundary.)
 
     /// The page's current scroll offset, published before each re-entry into JS. Virtualized feeds,
     /// sticky headers, infinite scroll and "back to top" buttons are all driven by reading this.
@@ -350,6 +354,12 @@ unsafe fn node_and_dom(obj: *mut JSObject) -> Option<(*mut Dom, NodeId)> {
     Some((dom, NodeId(ns.to_int32() as usize)))
 }
 
+/// The receiver object itself (`this`, at `vp[1]`) — for stashing state on the reflector.
+unsafe fn this_object(vp: *mut Value) -> Option<*mut JSObject> {
+    let this = *vp.add(1);
+    if this.is_object() { Some(this.to_object()) } else { None }
+}
+
 /// `(dom, node)` for the method receiver (`this`, at `vp[1]`).
 unsafe fn this_node(vp: *mut Value) -> Option<(*mut Dom, NodeId)> {
     let this = *vp.add(1);
@@ -566,6 +576,10 @@ unsafe fn define_members(
         def(c"importNode", doc_import_node, 2);
         def(c"createComment", doc_create_comment, 1);
         def(c"createDocumentFragment", doc_create_fragment, 0);
+        prop(c"adoptedStyleSheets", el_get_adopted_stylesheets, Some(el_set_adopted_stylesheets));
+        def(c"append", el_append, 1);
+        def(c"prepend", el_prepend, 1);
+        def(c"replaceChildren", el_replace_children, 0);
         def(c"createTextNode", doc_create_text_node, 1);
         def(c"getElementsByTagName", el_get_by_tag, 1);
         def(c"getElementsByClassName", el_get_by_class, 1);
@@ -580,7 +594,20 @@ unsafe fn define_members(
         def(c"removeAttribute", el_remove_attribute, 1);
         def(c"hasAttribute", el_has_attribute, 1);
         def(c"remove", el_remove, 0);
+        // The ChildNode / ParentNode mixins — see the block above. Absent until now, all eleven.
+        def(c"append", el_append, 1);
+        def(c"prepend", el_prepend, 1);
+        def(c"before", el_before, 1);
+        def(c"after", el_after, 1);
+        def(c"replaceWith", el_replace_with, 1);
+        def(c"replaceChildren", el_replace_children, 0);
+        def(c"insertAdjacentHTML", el_insert_adjacent_html, 2);
+        def(c"insertAdjacentElement", el_insert_adjacent_element, 2);
+        def(c"getAttributeNames", el_get_attribute_names, 0);
+        prop(c"outerHTML", el_get_outer_html, Some(el_set_outer_html));
+        prop(c"innerText", el_get_inner_text, None);
         def(c"attachShadow", el_attach_shadow, 1);
+        prop(c"adoptedStyleSheets", el_get_adopted_stylesheets, Some(el_set_adopted_stylesheets));
         def(c"getElementsByTagName", el_get_by_tag, 1);
         def(c"getElementsByClassName", el_get_by_class, 1);
         def(c"querySelector", doc_query, 1);
@@ -1227,6 +1254,19 @@ unsafe fn node_array(cx: *mut RawJSContext, vp: *mut Value, dom: *mut Dom, nodes
     *vp = ObjectValue(arr.get());
 }
 
+/// A JS `Array` of strings — `getAttributeNames()`, and anything else that answers with a list of
+/// names rather than a list of nodes.
+unsafe fn return_string_array(cx: *mut RawJSContext, vp: *mut Value, items: &[String]) {
+    let arr_ptr = NewArrayObject1(&mut wrap_cx(cx), items.len());
+    rooted!(in(cx) let arr = arr_ptr);
+    for (i, name) in items.iter().enumerate() {
+        rooted!(in(cx) let mut v = UndefinedValue());
+        name.as_str().to_jsval(cx, v.handle_mut());
+        JS_SetElement(&mut wrap_cx(cx), arr.handle(), i as u32, v.handle());
+    }
+    *vp = ObjectValue(arr.get());
+}
+
 /// `element.addEventListener(type, handler)` — register `handler` for `type` on this
 /// node in the JS-side listener registry (keyed by the node's arena id). The handler
 /// is stashed on the global, then a helper appends it — keeping it GC-rooted via the
@@ -1434,6 +1474,483 @@ unsafe extern "C" fn el_set_inner_html(cx: *mut RawJSContext, argc: u32, vp: *mu
     true
 }
 
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// The `ChildNode` / `ParentNode` mixins.
+//
+// `append` `prepend` `before` `after` `replaceWith` `replaceChildren` `insertAdjacentHTML`
+// `insertAdjacentElement` `outerHTML` `innerText` `getAttributeNames`.
+//
+// Eleven methods, and every one of them was missing. They are not exotic — they are what a script
+// reaches for the moment it wants to put something *next to* a node rather than *inside* it, and
+// `insertBefore(newNode, referenceNode.nextSibling)` is the awkward spelling everybody stopped using
+// a decade ago. Their absence does not throw a legible error; it throws
+// `el.append is not a function` from inside a minified bundle, which is exactly the opaque shape of
+// failure the Framework Exception Miner keeps surfacing.
+//
+// All of them compose from `insert_before` / `append_child` / `remove_child`, which we already had.
+// That is the point: this is reach, not new machinery.
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+/// Coerce one argument of a mixin call into a node.
+///
+/// The mixins take `(Node or DOMString)...` — a bare string means "a text node with this text", which
+/// is what makes `el.append('hello')` work. Getting this wrong in the direction of ignoring strings
+/// silently drops content, so a non-node argument is stringified rather than skipped.
+unsafe fn arg_as_node(
+    cx: *mut RawJSContext,
+    dom: *mut Dom,
+    vp: *mut Value,
+    argc: u32,
+    i: u32,
+) -> Option<NodeId> {
+    if let Some((_, n)) = arg_object(vp, argc, i).and_then(|o| node_and_dom(o).map(|(d, n)| (d, n))) {
+        return Some(n);
+    }
+    arg_string(cx, vp, argc, i).map(|t| (*dom).create_text(t))
+}
+
+/// Every argument of a mixin call, in order, as nodes.
+unsafe fn args_as_nodes(
+    cx: *mut RawJSContext,
+    dom: *mut Dom,
+    vp: *mut Value,
+    argc: u32,
+) -> Vec<NodeId> {
+    (0..argc).filter_map(|i| arg_as_node(cx, dom, vp, argc, i)).collect()
+}
+
+/// `parent.append(...nodes)` — append each, after the last child.
+unsafe extern "C" fn el_append(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, parent)) = this_node(vp) {
+        let kids = args_as_nodes(cx, dom, vp, argc);
+        for &k in &kids {
+            (*dom).append_child(parent, k);
+        }
+        record_mutation(cx, dom, "childList", parent, None, None, &kids, &[]);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `parent.prepend(...nodes)` — insert each before the first child, **preserving argument order**.
+unsafe extern "C" fn el_prepend(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, parent)) = this_node(vp) {
+        let kids = args_as_nodes(cx, dom, vp, argc);
+        match (*dom).children(parent).next() {
+            // Insert each before the ORIGINAL first child, not before the running one — otherwise
+            // the arguments come out reversed, which is the classic way to get this wrong.
+            Some(first) => {
+                for &k in &kids {
+                    (*dom).insert_before(parent, k, first);
+                }
+            }
+            None => {
+                for &k in &kids {
+                    (*dom).append_child(parent, k);
+                }
+            }
+        }
+        record_mutation(cx, dom, "childList", parent, None, None, &kids, &[]);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `node.before(...nodes)` — insert into the PARENT, before this node.
+unsafe extern "C" fn el_before(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        if let Some(parent) = (*dom).parent(node) {
+            let kids = args_as_nodes(cx, dom, vp, argc);
+            for &k in &kids {
+                (*dom).insert_before(parent, k, node);
+            }
+            record_mutation(cx, dom, "childList", parent, None, None, &kids, &[]);
+        }
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `node.after(...nodes)` — insert into the PARENT, after this node.
+unsafe extern "C" fn el_after(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        if let Some(parent) = (*dom).parent(node) {
+            let kids = args_as_nodes(cx, dom, vp, argc);
+            // The anchor is this node's ORIGINAL next sibling, and it stays put: inserting each
+            // argument before the same reference yields `a, 1, 2` — inserting before the running
+            // sibling would yield `a, 2, 1`.
+            let anchor = (*dom).next_sibling(node);
+            for &k in &kids {
+                match anchor {
+                    Some(rf) => (*dom).insert_before(parent, k, rf),
+                    None => (*dom).append_child(parent, k),
+                }
+            }
+            record_mutation(cx, dom, "childList", parent, None, None, &kids, &[]);
+        }
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `node.replaceWith(...nodes)` — put the nodes where this one was, then detach it.
+unsafe extern "C" fn el_replace_with(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        if let Some(parent) = (*dom).parent(node) {
+            let kids = args_as_nodes(cx, dom, vp, argc);
+            for &k in &kids {
+                (*dom).insert_before(parent, k, node);
+            }
+            (*dom).remove_child(parent, node);
+            record_mutation(cx, dom, "childList", parent, None, None, &kids, &[node]);
+        }
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `parent.replaceChildren(...nodes)` — the modern "empty it and fill it" in one call.
+unsafe extern "C" fn el_replace_children(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, parent)) = this_node(vp) {
+        let kids = args_as_nodes(cx, dom, vp, argc);
+        let old: Vec<NodeId> = (*dom).children(parent).collect();
+        for &o in &old {
+            (*dom).remove_child(parent, o);
+        }
+        for &k in &kids {
+            (*dom).append_child(parent, k);
+        }
+        record_mutation(cx, dom, "childList", parent, None, None, &kids, &old);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// The four `insertAdjacent*` positions.
+fn adjacent_position(s: &str) -> Option<&'static str> {
+    match s.to_ascii_lowercase().as_str() {
+        "beforebegin" => Some("beforebegin"),
+        "afterbegin" => Some("afterbegin"),
+        "beforeend" => Some("beforeend"),
+        "afterend" => Some("afterend"),
+        _ => None,
+    }
+}
+
+/// Place `nodes` relative to `node` at one of the four `insertAdjacent*` positions.
+unsafe fn insert_adjacent(dom: *mut Dom, node: NodeId, pos: &str, nodes: &[NodeId]) -> Option<NodeId> {
+    match pos {
+        "afterbegin" => match (*dom).children(node).next() {
+            Some(first) => {
+                for &k in nodes {
+                    (*dom).insert_before(node, k, first);
+                }
+            }
+            None => {
+                for &k in nodes {
+                    (*dom).append_child(node, k);
+                }
+            }
+        },
+        "beforeend" => {
+            for &k in nodes {
+                (*dom).append_child(node, k);
+            }
+        }
+        "beforebegin" => {
+            let parent = (*dom).parent(node)?;
+            for &k in nodes {
+                (*dom).insert_before(parent, k, node);
+            }
+            return Some(parent);
+        }
+        "afterend" => {
+            let parent = (*dom).parent(node)?;
+            match (*dom).next_sibling(node) {
+                Some(rf) => {
+                    for &k in nodes {
+                        (*dom).insert_before(parent, k, rf);
+                    }
+                }
+                None => {
+                    for &k in nodes {
+                        (*dom).append_child(parent, k);
+                    }
+                }
+            }
+            return Some(parent);
+        }
+        _ => return None,
+    }
+    Some(node)
+}
+
+/// `el.insertAdjacentHTML(position, html)`.
+///
+/// Parses `html` into a detached container and moves the resulting children into place. This is how a
+/// very large amount of non-framework JavaScript on the web writes markup — every "load more" button,
+/// every server-rendered partial swapped in by hand, and all of htmx.
+unsafe extern "C" fn el_insert_adjacent_html(
+    cx: *mut RawJSContext,
+    argc: u32,
+    vp: *mut Value,
+) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let pos = arg_string(cx, vp, argc, 0).and_then(|p| adjacent_position(&p));
+        let html = arg_string(cx, vp, argc, 1).unwrap_or_default();
+        if let Some(pos) = pos {
+            // Parse into a scratch container, then MOVE the children out. Parsing straight into the
+            // target would clobber the siblings we are supposed to be inserting next to.
+            let scratch = (*dom).create_element("div");
+            manuk_html::set_inner_html(&mut *dom, scratch, &html);
+            let kids: Vec<NodeId> = (*dom).children(scratch).collect();
+            for &k in &kids {
+                (*dom).remove_child(scratch, k);
+            }
+            if let Some(parent) = insert_adjacent(dom, node, pos, &kids) {
+                record_mutation(cx, dom, "childList", parent, None, None, &kids, &[]);
+            }
+        }
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `el.insertAdjacentElement(position, element)` → the element.
+unsafe extern "C" fn el_insert_adjacent_element(
+    cx: *mut RawJSContext,
+    argc: u32,
+    vp: *mut Value,
+) -> bool {
+    let mut out = NullValue();
+    if let Some((dom, node)) = this_node(vp) {
+        let pos = arg_string(cx, vp, argc, 0).and_then(|p| adjacent_position(&p));
+        let el = arg_object(vp, argc, 1).and_then(|o| node_and_dom(o).map(|(_, n)| (o, n)));
+        if let (Some(pos), Some((obj, child))) = (pos, el) {
+            if let Some(parent) = insert_adjacent(dom, node, pos, &[child]) {
+                record_mutation(cx, dom, "childList", parent, None, None, &[child], &[]);
+                out = ObjectValue(obj);
+            }
+        }
+    }
+    *vp = out;
+    true
+}
+
+/// `el.outerHTML` getter — the element's own serialization, tag included.
+unsafe extern "C" fn el_get_outer_html(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    match this_node(vp) {
+        Some((dom, node)) => {
+            let html = manuk_html::serialize_outer(&*dom, node);
+            return_string(cx, vp, &html);
+        }
+        None => *vp = NullValue(),
+    }
+    true
+}
+
+/// `el.outerHTML = html` — replace the element *itself* with the parsed markup.
+unsafe extern "C" fn el_set_outer_html(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let html = arg_string(cx, vp, argc, 0).unwrap_or_default();
+        if let Some(parent) = (*dom).parent(node) {
+            let scratch = (*dom).create_element("div");
+            manuk_html::set_inner_html(&mut *dom, scratch, &html);
+            let kids: Vec<NodeId> = (*dom).children(scratch).collect();
+            for &k in &kids {
+                (*dom).remove_child(scratch, k);
+                (*dom).insert_before(parent, k, node);
+            }
+            (*dom).remove_child(parent, node);
+            record_mutation(cx, dom, "childList", parent, None, None, &kids, &[node]);
+        }
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `el.innerText` — the *rendered* text.
+///
+/// Honestly approximated as `textContent`. The true definition depends on layout (it collapses
+/// whitespace, respects `display:none`, and inserts newlines at block boundaries), and computing it
+/// properly means asking the layout tree, which the binding layer cannot reach from here. Scripts read
+/// `innerText` far more often than they depend on its layout-sensitivity, so the approximation is
+/// worth far more than the absence — but it IS an approximation, and it is written down as one rather
+/// than quietly shipped as if it were the spec.
+unsafe extern "C" fn el_get_inner_text(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    match this_node(vp) {
+        Some((dom, node)) => {
+            let t = (*dom).text_content(node);
+            return_string(cx, vp, &t);
+        }
+        None => *vp = NullValue(),
+    }
+    true
+}
+
+/// `el.getAttributeNames()` → an array of attribute names.
+unsafe extern "C" fn el_get_attribute_names(
+    cx: *mut RawJSContext,
+    _argc: u32,
+    vp: *mut Value,
+) -> bool {
+    let names: Vec<String> = match this_node(vp) {
+        Some((dom, node)) => (*dom)
+            .element(node)
+            .map(|e| e.attrs.iter().map(|a| a.name.clone()).collect())
+            .unwrap_or_default(),
+        None => Vec::new(),
+    };
+    return_string_array(cx, vp, &names);
+    true
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// `adoptedStyleSheets` — constructable stylesheets, wired to the CASCADE.
+//
+// Until now the shim ACCEPTED an adopted sheet and dropped it on the floor: Lit's
+// `static styles = css`...`` built a `CSSStyleSheet`, adopted it, and the component rendered its
+// content completely unstyled. Every modern web-component library ships its styles this way.
+//
+// The bridge is deliberately not a second styling path. The sheet's text is materialized into a real
+// `<style>` node inside the root that adopted it, and the ordinary cascade takes it from there —
+// which works precisely because `collect_style_sources` now walks the FLAT tree and can therefore see
+// inside a shadow root at all. One mechanism, reached two ways; not two mechanisms that must agree.
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+/// The text of one JS `CSSStyleSheet` — whatever `replaceSync`/`replace` stored, plus any rules
+/// inserted individually via `insertRule`.
+unsafe fn sheet_text(cx: *mut RawJSContext, sheet: *mut JSObject) -> String {
+    rooted!(in(cx) let obj = sheet);
+    rooted!(in(cx) let mut v = UndefinedValue());
+    let mut c = wrap_cx(cx);
+    if JS_GetProperty(&mut c, obj.handle(), c"_text".as_ptr(), v.handle_mut())
+        && !v.get().is_undefined()
+    {
+        if let Ok(ConversionResult::Success(t)) = String::safe_from_jsval(&mut c, v.handle(), ()) {
+            return t;
+        }
+    }
+    // No `_text` — the sheet was built rule by rule with `insertRule`.
+    let mut out = String::new();
+    rooted!(in(cx) let mut rules = UndefinedValue());
+    if JS_GetProperty(&mut c, obj.handle(), c"cssRules".as_ptr(), rules.handle_mut())
+        && rules.get().is_object()
+    {
+        rooted!(in(cx) let arr = rules.get().to_object());
+        rooted!(in(cx) let mut len = UndefinedValue());
+        if JS_GetProperty(&mut c, arr.handle(), c"length".as_ptr(), len.handle_mut()) {
+            let n = len.get().to_number() as u32;
+            for i in 0..n {
+                rooted!(in(cx) let mut rule = UndefinedValue());
+                if JS_GetElement(&mut c, arr.handle(), i, rule.handle_mut()) && rule.get().is_object()
+                {
+                    rooted!(in(cx) let ro = rule.get().to_object());
+                    rooted!(in(cx) let mut txt = UndefinedValue());
+                    if JS_GetProperty(&mut c, ro.handle(), c"cssText".as_ptr(), txt.handle_mut()) {
+                        if let Ok(ConversionResult::Success(t)) =
+                            String::safe_from_jsval(&mut c, txt.handle(), ())
+                        {
+                            out.push_str(&t);
+                            out.push('\n');
+                        }
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// `root.adoptedStyleSheets = [sheet, ...]`.
+///
+/// Stashes the array (so the getter round-trips, which libraries check) and materializes the combined
+/// text into a single `<style>` child of the root, replacing any it previously wrote.
+unsafe extern "C" fn el_set_adopted_stylesheets(
+    cx: *mut RawJSContext,
+    argc: u32,
+    vp: *mut Value,
+) -> bool {
+    let Some((dom, node)) = this_node(vp) else {
+        *vp = UndefinedValue();
+        return true;
+    };
+    // Round-trip: `root.adoptedStyleSheets` must give back what was assigned.
+    if let Some(this) = this_object(vp) {
+        rooted!(in(cx) let tobj = this);
+        rooted!(in(cx) let val = if argc > 0 { *vp.add(2) } else { UndefinedValue() });
+        JS_SetProperty(&mut wrap_cx(cx), tobj.handle(), c"__adopted".as_ptr(), val.handle());
+    }
+
+    let mut css = String::new();
+    if let Some(arr) = arg_object(vp, argc, 0) {
+        rooted!(in(cx) let a = arr);
+        rooted!(in(cx) let mut len = UndefinedValue());
+        let mut c = wrap_cx(cx);
+        if JS_GetProperty(&mut c, a.handle(), c"length".as_ptr(), len.handle_mut()) {
+            let n = len.get().to_number() as u32;
+            for i in 0..n {
+                rooted!(in(cx) let mut item = UndefinedValue());
+                if JS_GetElement(&mut c, a.handle(), i, item.handle_mut()) && item.get().is_object() {
+                    css.push_str(&sheet_text(cx, item.get().to_object()));
+                    css.push('\n');
+                }
+            }
+        }
+    }
+
+    // Reuse the `<style>` we wrote last time rather than stacking a new one on every re-adopt —
+    // a component that re-renders would otherwise grow one style node per render.
+    let existing = (*dom)
+        .children(node)
+        .find(|&k| (*dom).element(k).map(|e| e.attr("data-manuk-adopted").is_some()).unwrap_or(false));
+    match existing {
+        Some(st) => {
+            let old: Vec<NodeId> = (*dom).children(st).collect();
+            for o in old {
+                (*dom).remove_child(st, o);
+            }
+            let t = (*dom).create_text(css);
+            (*dom).append_child(st, t);
+        }
+        None => {
+            let st = (*dom).create_element("style");
+            (*dom).set_attr(st, "data-manuk-adopted", "");
+            let t = (*dom).create_text(css);
+            (*dom).append_child(st, t);
+            // First child: adopted sheets sort BEFORE the root's own `<style>` elements in cascade
+            // order, so a component's inline overrides still win.
+            match (*dom).children(node).next() {
+                Some(first) => (*dom).insert_before(node, st, first),
+                None => (*dom).append_child(node, st),
+            }
+        }
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `root.adoptedStyleSheets` getter — whatever was assigned, or `[]`.
+unsafe extern "C" fn el_get_adopted_stylesheets(
+    cx: *mut RawJSContext,
+    _argc: u32,
+    vp: *mut Value,
+) -> bool {
+    if let Some(this) = this_object(vp) {
+        rooted!(in(cx) let tobj = this);
+        rooted!(in(cx) let mut v = UndefinedValue());
+        if JS_GetProperty(&mut wrap_cx(cx), tobj.handle(), c"__adopted".as_ptr(), v.handle_mut())
+            && !v.get().is_undefined()
+        {
+            *vp = v.get();
+            return true;
+        }
+    }
+    let arr = NewArrayObject1(&mut wrap_cx(cx), 0);
+    *vp = ObjectValue(arr);
+    true
+}
+
 /// `element.tagName` getter → the uppercase tag name (read-only, per DOM).
 unsafe extern "C" fn el_get_tag_name(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
@@ -1525,14 +2042,37 @@ unsafe extern "C" fn el_get_template_content(
 /// its event-listener marker. With `ownerDocument` missing that is `undefined["_reactListening…"]`,
 /// and React dies with an error naming neither `ownerDocument` nor the DOM. This is the second of the
 /// two properties standing between us and the entire React ecosystem.
+/// `node.ownerDocument` — read from the GLOBAL, never from a raw pointer.
+///
+/// **This was a use-after-GC, and it is the bug that "React renders nothing" actually was.**
+///
+/// `DOC_REFLECTOR` is a `Cell<*mut JSObject>`: a bare, *unrooted* pointer into the JS heap. Nothing
+/// kept the document reflector alive or told the collector to update the pointer when it moved. So
+/// after enough allocation the slot pointed at whatever object now occupied that address, and
+/// `ownerDocument` began handing back an unrelated object — in the failing React run, one of our own
+/// `MutationRecord`s (`{type, targetId, attrName, oldValue, addedCsv, removedCsv}`), on which
+/// `createElement` is naturally not a function.
+///
+/// React allocates heavily, so it reliably triggered a GC mid-commit and reliably got garbage back.
+/// The error it reported — `o.createElement is not a function` — was *true*, and pointed at nothing
+/// that was wrong with React or with `createElement`.
+///
+/// The correct discipline was already written down, ten lines away, for the node identity cache:
+/// *keep the reflector in a JS-side structure so it is GC-reachable through the global.* It was
+/// applied to every node and not to the document. `globalThis.document` is exactly such a reference
+/// and is already rooted — so read it, and let the collector do its job.
 unsafe extern "C" fn el_get_owner_document(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
-    let _ = cx;
-    let d = DOC_REFLECTOR.with(|d| d.get());
-    if d.is_null() {
-        *vp = NullValue();
-    } else {
-        *vp = ObjectValue(d);
+    rooted!(in(cx) let global = CurrentGlobalOrNull(&wrap_cx(cx)));
+    if !global.get().is_null() {
+        rooted!(in(cx) let mut doc = UndefinedValue());
+        if JS_GetProperty(&mut wrap_cx(cx), global.handle(), c"document".as_ptr(), doc.handle_mut())
+            && doc.get().is_object()
+        {
+            *vp = doc.get();
+            return true;
+        }
     }
+    *vp = NullValue();
     true
 }
 
@@ -2174,7 +2714,6 @@ pub unsafe fn install(
     set_current_dom(dom);
     let root = (*dom).root();
     let doc_ptr = JS_NewObject(&mut wrap_cx(cx), &NODE_CLASS);
-    DOC_REFLECTOR.with(|d| d.set(doc_ptr));
     rooted!(in(cx) let document = doc_ptr);
     let node_val = Int32Value(root.0 as i32);
     JS_SetReservedSlot(document.get(), SLOT_NODE, &node_val);

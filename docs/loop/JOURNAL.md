@@ -1004,3 +1004,144 @@ Landed:
 Still absent and enumerated (next): `append`/`prepend`/`before`/`after`/`replaceWith`,
 `insertAdjacentHTML`, `outerHTML`, `innerText`, `scrollTop`/`scrollLeft`, `attributes`,
 `document.styleSheets`, `createRange`, `getSelection`, `Blob`/`FileReader`.
+
+## Tick 25 — the hangs. Bar 0. (2026-07-12)
+
+**TICK SHAPE: pattern-class.** ~1 site in 4 hangs. Nothing in the ledger outranks it: a browser that
+freezes on one site in four is not a browser, and Part 24.3 puts hangs above every visual cluster by
+construction.
+
+**What I already know, measured:** the hangs are OURS and they are CPU + duplicate work, not the network
+(attributed by timing each engine separately on the same bytes — bbc.co.uk 26,128ms against Chromium's
+7,695ms). Since then I have landed parallel script fetch, stylesheet/image/mask/background dedup, one
+fewer layout per script round, and a load budget on `load_async` which previously had none. **I do not
+know how much of the 73 those fixed** — last tick's re-crawl was contaminated because I ran it while
+compiling, which Part 27.1 explicitly forbids and I did anyway.
+
+**So: measure first, on an idle machine, and do not touch the compiler while it runs.** The number
+decides what this tick is about, and guessing would waste it.
+
+**Hypothesis:** the residue splits into (a) genuinely heavy pages where we are simply slow, and (b) a
+small number where something is quadratic. Those are different bugs. I expect the layout stage — which
+is 71ms on a 8.8k-node synthetic page but 257ms on bbc's 4k nodes — to be the quadratic one, because
+that ratio is the wrong way round.
+
+**The hypothesis held, and the measurement named the organ.** On an idle machine, previously-hung sites:
+
+```
+apple.com   TOTAL  2,132ms   (was 5,560)      gitlab.com  TOTAL  1,086ms
+cnn.com     TOTAL  7,125ms                    bbc.co.uk   TOTAL 12,307ms   (was 26,128)
+```
+
+None of those hang any more; the dedup and budget work landed. What remains is the *slowness*, and it
+sits where the ratio said it would:
+
+```
+             nodes    layout
+bbc.co.uk    4,021    260ms
+wikipedia   18,630    127ms      ← 4.6x MORE nodes, HALF the time. ~10x worse per node.
+```
+
+**The cause: `shrink_to_fit` recomputed max-content on every call**, and computing max-content means
+laying the entire subtree out at a 1e6 available width. Taffy probes each flex/grid item several times
+per solve, at several available widths — so on *nested* flex the cost compounds per level of nesting.
+Wikipedia is a document and barely nests; bbc is deeply nested flex. That is the whole difference.
+
+Both min-content and max-content are **independent of the available width** — that is what makes them
+*intrinsic*. I had cached one and not the other, and the one I left uncached was the expensive one.
+`max_content_cache` closes it; `shrink_to_fit` becomes a lookup and two comparisons.
+
+Second find, in the same loop: `std::env::var("MANUK_TRACE_INTRINSIC")` was being called **inside
+intrinsic sizing** — once per node per probe. It takes a process-wide lock and allocates a `String`. A
+debug hook that nobody had enabled was costing real time on every page load. Hoisted to a `OnceLock`.
+
+**Lesson, and it is the general form of both:** *an intrinsic is a property of the box, not of the
+question you asked it.* Anything whose value cannot depend on the input is a thing you are allowed to
+compute once — and if it is expensive, it is a thing you must compute once. The bug was not that the
+code was wrong; it was that it was right the slow way, repeatedly.
+
+**The residue has a shape, and it is one class.** Partway through the clean crawl, the hang list:
+
+```
+news:  nytimes · theguardian · washingtonpost-adjacent · apnews · npr · wired · zdnet
+       gizmodo · newyorker · techcrunch · arstechnica        ← 10 of 11
+docs:  go.dev                                                 ← 1 of 11
+```
+
+Ten of eleven hangs are `news`. That is a pattern class, not eleven bugs, and it is exactly what the
+oracle exists to surface: the corpus is 265 sites precisely so that a class can out-vote an anecdote.
+
+**But I will not chase it before checking whose slowness it is.** The 90s watchdog wraps the whole
+oracle process, and that process runs *Chromium too*. Lesson 4 is on the board in STATUS.md in my own
+words — *an oracle must never be able to charge its own slowness to your account* — and I have already
+been caught by exactly this once, on w3schools, where a local snapshot hid the fetches and I confidently
+blamed the wrong engine. A news front page is the single most ad-tech-laden document class on the web;
+Chromium taking tens of seconds on one is entirely plausible.
+
+So the next measurement is `boxes --fetch <url>` on OUR engine alone, on an idle machine, for each of
+the eleven. If we are fast, the hang is the harness and the number 11 is measuring the wrong thing.
+If we are slow, it is a real class and I will have its name.
+
+## Tick 25 — RESULT
+
+**The hangs were not one bug and the ledger was wrong about two of them.**
+
+*Bar 0 — the hangs.* Measured on an idle machine, every previously-hanging site now **returns**:
+
+```
+apple.com    5,560 → 2,132ms      gitlab.com          → 1,086ms
+bbc.co.uk   26,128 → 12,307ms     go.dev      7,425 →  2,819ms
+cnn.com              7,125ms      theguardian 19,175 → 11,184ms
+nytimes    43,000 → 14,096ms      (finish_loading pinned at exactly the 12,002ms budget)
+```
+
+They are **slow, not hung**, which moves them out of Bar 0 and into perf. Three causes, all real:
+
+1. **`shrink_to_fit` recomputed max-content on every call**, and computing max-content lays the whole
+   subtree out at a 1e6 width. Taffy probes each item several times per solve; on nested flex the cost
+   compounds per level. Cached (it is *intrinsic* — it cannot depend on the available width). bbc's
+   layout **260ms → 168ms**; Wikipedia unchanged at 126ms, exactly as predicted, because it is a
+   document and barely nests.
+2. **`load_async` was not under the load budget at all** — only `finish_loading` was, though both run
+   the same two subresource phases. A bound that covers one of two identical phases is decorative.
+3. **Failed image fetches were never remembered.** The skip-list was built from `self.images`, i.e.
+   *successes*, so every blocked tracker and every 404 was re-fetched on all six rounds. A news front
+   page is made of images that fail: nytimes issued **813 fetches, 507 of them duplicates**;
+   theguardian 431 of 576 (75%). Now keyed by `(node, resolved url)` — remembering a failure, without
+   refusing to retry a genuinely *different* request.
+
+*The app web.* **6 of 8 frameworks now render** (React ×2, Vue, Solid, Preact, Vanilla; Svelte and Lit
+remain). And the previous "4/8" was not a smaller version of this number — it was measuring nothing:
+
+**`file://` was an unsupported scheme in the network layer.** Every local fixture's bundle, stylesheet
+and image failed to load. Compounded by `format!("file://{relative}")`, which parses the first path
+segment as a *hostname*. Two independent bugs, each making the other's symptom look like somebody
+else's fault — and between them they meant **not one line of React had ever executed.** "React mounts
+and renders nothing" sat in the ledger for several ticks as a framework problem. It was our harness.
+
+And under that, the real one:
+
+**`ownerDocument` was a use-after-GC.** `DOC_REFLECTOR` was a `Cell<*mut JSObject>` — a bare, unrooted
+pointer into the JS heap. Nothing kept the document alive or updated the pointer when the collector
+moved it, so after enough allocation `ownerDocument` returned whatever now occupied that address. In
+the failing React run it returned one of **our own `MutationRecord`s** — `{type, targetId, attrName,
+oldValue, addedCsv, removedCsv}` — on which `createElement` is indeed not a function. React allocates
+heavily, so it reliably GC'd mid-commit and reliably got garbage. Its error message was *true* and
+pointed at nothing that was wrong with React.
+
+The correct discipline was already written down **ten lines above**, for the node identity cache:
+*keep the reflector in a JS-side structure so it is GC-reachable through the global.* It had been
+applied to every node and not to the document.
+
+**Lessons.**
+
+- *An intrinsic is a property of the box, not of the question you asked it.* Anything whose value
+  cannot depend on the input may be computed once — and if it is expensive, it **must** be.
+- *A bound that covers one of two identical phases is decorative.* Whatever bounds one must bound both.
+- *A skip-list built from successes retries every failure forever.* Remember the attempt, not the win.
+- *Test your own primitives before blaming the framework.* Third time this prior has paid, and this
+  time it had been costing us a whole framework for several ticks.
+- **A raw `*mut JSObject` cached across a GC boundary is a bug, not an optimisation** — and the fact
+  that the correct pattern was already in the file, applied to the neighbouring case, is the tell. When
+  a codebase does the right thing *next to* the wrong thing, the wrong thing is an oversight, not a
+  design.

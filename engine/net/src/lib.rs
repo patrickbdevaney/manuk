@@ -472,7 +472,44 @@ pub async fn fetch_document(url: &str) -> Result<Response> {
     fetch_with_deadline(url, d).await
 }
 
+/// **`file://` — reading a local file, which is a thing a browser does.**
+///
+/// This scheme was rejected outright (`unsupported URL scheme: file`), and the consequence was much
+/// larger than "you cannot open a local page": *every subresource of every local fixture failed to
+/// load*. The SPA suite has been running framework apps **whose bundles were never fetched** — so the
+/// "React mounts and renders nothing" finding, which sat in the ledger for several ticks as a React
+/// problem, was this. Not one line of React had ever executed.
+///
+/// Two independent bugs conspired to make that invisible, which is why it survived so long: the URL
+/// was also being built as `file://relative/path` (parsing `relative` as a *hostname*), so even a
+/// `file` branch here would have missed. Fixing either alone would have changed nothing, and each one
+/// made the other's symptom look like somebody else's fault.
+///
+/// No deadline is applied: a local read is not a network request, and a timeout on it would only ever
+/// fire spuriously.
+async fn fetch_file(url: &Url) -> Result<Response> {
+    let path = url
+        .to_file_path()
+        .map_err(|_| anyhow::anyhow!("not a readable file path: {url}"))?;
+    // std::fs, not tokio::fs — the `fs` feature is not enabled, and a local read is fast enough that
+    // making it async would buy nothing but a dependency.
+    let body = std::fs::read(&path)
+        .map_err(|e| anyhow::anyhow!("cannot read {}: {e}", path.display()))?;
+    Ok(Response {
+        status: 200,
+        headers: Vec::new(),
+        body: Bytes::from(body),
+        final_url: url.clone(),
+        http_version: HttpVersion::Http11,
+    })
+}
+
 async fn fetch_with_deadline(url: &str, d: std::time::Duration) -> Result<Response> {
+    if let Ok(u) = Url::parse(url) {
+        if u.scheme() == "file" {
+            return fetch_file(&u).await;
+        }
+    }
     match tokio::time::timeout(d, fetch_inner(url)).await {
         Ok(r) => r,
         Err(_) => {

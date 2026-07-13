@@ -465,6 +465,22 @@ struct Ctx<'a> {
     /// Memoized **min-content** widths. Computing one lays out the whole subtree, and
     /// shrink-to-fit now asks for it on every probe, so without this it is an O(n²) trap.
     min_content_cache: RefCell<HashMap<NodeId, f32>>,
+    /// Memoized **max-content** (preferred) widths.
+    ///
+    /// This was the other half of the same trap, and it was the expensive half. `shrink_to_fit`
+    /// recomputed max-content on EVERY call by laying the whole subtree out at a 1e6 available width —
+    /// and taffy probes each flex/grid item several times per solve, at several available widths. On
+    /// nested flex the cost compounds per level of nesting.
+    ///
+    /// Measured, and the ratio is what gives it away: **bbc.co.uk has 4,021 nodes and takes 260ms to
+    /// lay out; Wikipedia has 18,630 and takes 127ms.** Four-and-a-half times fewer nodes, twice the
+    /// time — about ten times worse per node — and the difference between the two pages is that one is
+    /// deeply nested flex and the other is a document.
+    ///
+    /// Both min-content and max-content are **independent of the available width** — that is what makes
+    /// them *intrinsic*. So both can be cached per node, and `shrink_to_fit` becomes a lookup and two
+    /// comparisons instead of a subtree layout.
+    max_content_cache: RefCell<HashMap<NodeId, f32>>,
     /// Flex/grid items whose **used border-box width taffy has already decided**. Their own `width`
     /// style must NOT be resolved a second time — see the width resolution in `layout_block`.
     taffy_item_width: RefCell<HashMap<NodeId, f32>>,
@@ -497,6 +513,7 @@ pub fn layout_document(
         measure_cache: RefCell::new(HashMap::new()),
         fallback_style: ComputedStyle::initial(),
         min_content_cache: RefCell::new(HashMap::new()),
+        max_content_cache: RefCell::new(HashMap::new()),
         taffy_item_width: RefCell::new(HashMap::new()),
         static_pos: RefCell::new(HashMap::new()),
     };
@@ -1067,6 +1084,16 @@ fn collapse_margins(a: f32, b: f32) -> f32 {
     } else {
         a + b
     }
+}
+
+/// `MANUK_TRACE_INTRINSIC=<id>` — read ONCE, not once per node per probe.
+///
+/// `std::env::var` takes a process-wide lock and allocates a `String`. This was being called from
+/// inside intrinsic sizing, which is the hottest loop in layout: a debug hook that cost real time on
+/// every page whether or not anyone was debugging. A `OnceLock` makes the disabled case a null check.
+fn trace_intrinsic() -> Option<&'static str> {
+    static V: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    V.get_or_init(|| std::env::var("MANUK_TRACE_INTRINSIC").ok()).as_deref()
 }
 
 impl Ctx<'_> {
@@ -1749,11 +1776,37 @@ impl Ctx<'_> {
     fn shrink_to_fit(&self, node: NodeId, avail: f32) -> f32 {
         // A flex/grid container's preferred width is a question taffy can answer exactly; the
         // lay-out-at-1e6-and-measure trick cannot (see `taffy_tree::max_content_width`).
+        let pref = self.max_content_width(node);
+        // **The min-content floor only matters when the box does NOT fit.** If `pref <= avail` then
+        // `min(pref, max(avail, min_content)) == pref` for any min-content value, so computing it
+        // would be pure waste — and computing it means laying out a subtree. Most boxes on most
+        // pages fit, so this short-circuit is the difference between a 16% layout regression and
+        // none at all. Identical result, by algebra, not by approximation.
+        if pref <= avail {
+            return pref.max(0.0);
+        }
+        pref.min(avail.max(self.min_content_width(node))).max(0.0)
+    }
+
+    /// The **max-content** (preferred) width of `node`: how wide the box wants to be with no
+    /// constraint at all. Memoized, and the memo is the whole point — see `max_content_cache`.
+    fn max_content_width(&self, node: NodeId) -> f32 {
+        if let Some(&cached) = self.max_content_cache.borrow().get(&node) {
+            return cached;
+        }
+        let pref = self.max_content_width_uncached(node);
+        self.max_content_cache.borrow_mut().insert(node, pref);
+        pref
+    }
+
+    fn max_content_width_uncached(&self, node: NodeId) -> f32 {
         if matches!(
             self.style_of(node).display,
             Display::Flex | Display::Grid | Display::InlineFlex | Display::InlineGrid
         ) {
-            let pref = taffy_tree::max_content_width(
+            // A flex/grid container's preferred width is a question taffy can answer exactly; the
+            // lay-out-at-1e6-and-measure trick cannot (see `taffy_tree::max_content_width`).
+            return taffy_tree::max_content_width(
                 self.dom,
                 self.styles,
                 node,
@@ -1766,26 +1819,19 @@ impl Ctx<'_> {
                     let (w, h) = self.measure_intrinsic(dn, aw);
                     taffy::Size { width: known.width.unwrap_or(w), height: known.height.unwrap_or(h) }
                 },
-            );
-            if let Ok(want) = std::env::var("MANUK_TRACE_INTRINSIC") {
-                if self.dom.element(node).and_then(|e| e.attr("id")) == Some(want.as_str()) {
-                    eprintln!("[shrink-to-fit/flex] #{want} max-content={pref:.1} avail={avail:.1}");
-                }
-            }
-            if pref <= avail {
-                return pref.max(0.0);
-            }
-            return pref.min(avail.max(self.min_content_width(node))).max(0.0);
+            )
+            .max(0.0);
         }
+        // Lay the subtree out unconstrained and measure how far its content actually reaches.
         let mut fc = FloatContext::new(0.0, 1.0e6);
         let (content, _h) = self.layout_children(node, 0.0, 0.0, 1.0e6, None, &mut fc);
         let pref = content_right_extent(&content, self.fonts, 0.0);
-        // See `MANUK_TRACE_INTRINSIC` in `measure_intrinsic`: shrink-to-fit is the OTHER place an
+        // See `MANUK_TRACE_INTRINSIC` in `measure_intrinsic`: max-content is the OTHER place an
         // intrinsic width is decided (inline-block / inline-flex / float / abs), and a box that
         // fills when it should hug is nearly always this number.
-        if let Ok(want) = std::env::var("MANUK_TRACE_INTRINSIC") {
-            if self.dom.element(node).and_then(|e| e.attr("id")) == Some(want.as_str()) {
-                eprintln!("[shrink-to-fit] #{want} pref={pref:.1} avail={avail:.1} -> {:.1}", pref.min(avail).max(0.0));
+        if let Some(want) = trace_intrinsic() {
+            if self.dom.element(node).and_then(|e| e.attr("id")) == Some(want) {
+                eprintln!("[max-content] #{want} pref={pref:.1}");
                 if let BoxContent::Block(kids) = &content {
                     for k in kids {
                         eprintln!(
@@ -1797,15 +1843,7 @@ impl Ctx<'_> {
                 }
             }
         }
-        // **The min-content floor only matters when the box does NOT fit.** If `pref <= avail` then
-        // `min(pref, max(avail, min_content)) == pref` for any min-content value, so computing it
-        // would be pure waste — and computing it means laying out the subtree. Most boxes on most
-        // pages fit, so this short-circuit is the difference between a 16% layout regression and
-        // none at all. Identical result, by algebra, not by approximation.
-        if pref <= avail {
-            return pref.max(0.0);
-        }
-        pref.min(avail.max(self.min_content_width(node))).max(0.0)
+        pref.max(0.0)
     }
 
     /// The intrinsic **content** size `(width, height)` of `node` for taffy's flex/grid
@@ -1829,8 +1867,8 @@ impl Ctx<'_> {
         // `MANUK_TRACE_INTRINSIC=<id>` prints what a flex/grid item told taffy it wanted to be.
         // Flex WRAPPING is decided by this number, so when a row breaks that Chrome keeps on one
         // line, this is the number that is wrong — and it is otherwise invisible in the output.
-        if let Ok(want) = std::env::var("MANUK_TRACE_INTRINSIC") {
-            if self.dom.element(node).and_then(|e| e.attr("id")) == Some(want.as_str()) {
+        if let Some(want) = trace_intrinsic() {
+            if self.dom.element(node).and_then(|e| e.attr("id")) == Some(want) {
                 eprintln!(
                     "[intrinsic] #{want} avail={avail:.0} -> width={:.1} height={:.1}",
                     result.0, result.1

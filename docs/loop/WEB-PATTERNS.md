@@ -81,7 +81,7 @@ architecture. Each one below was *named by a framework*, not guessed at.
 | `createElementNS` / `createComment` / `createDocumentFragment` | Vue/Svelte/SVG | ✅ |
 | `MessageChannel`, `performance.now`, `queueMicrotask` | Every framework scheduler | ✅ |
 | Custom elements + shadow DOM | **Every design system** — Material, Fluent, Shoelace, Spectrum, every `<x-y>` on a bank or gov site | ✅ (shadow trees are laid out; prototype-chain upgrade fixed) |
-| `adoptedStyleSheets` / constructable stylesheets | How web components ship styles | ⚠️ **accepted but not fed to the cascade** — components render *unstyled*. Legible beats absent. |
+| `adoptedStyleSheets` / constructable stylesheets | How web components ship styles | ✅ **fed to the cascade** (tick 25) — the sheet text is materialized into a real `<style>` in the adopting root, so one cascade serves both paths. |
 | **Unhandled promise rejections surfaced** | Every framework renders inside an `async` fn — a throw there is a *rejected promise*, and ours went into a void | ✅ |
 | `Error.captureStackTrace` (V8-only, TC39 proposal) | Libraries with custom error classes | ✅ |
 | React committing its render | React | ❌ **still silent.** Mounts, schedules, throws nothing, renders nothing. |
@@ -110,7 +110,9 @@ architecture. Each one below was *named by a framework*, not guessed at.
 | `localStorage` / `sessionStorage` / cookies | Sessions, preferences | ✅ (partitioned; RFC 6265) |
 | `history.pushState` (client-side routing) | Every SPA's navigation | ✅ |
 | `append`/`prepend`/`before`/`after`/`replaceWith` | Modern DOM mutation — very common | ❌ |
-| `insertAdjacentHTML` | Extremely common | ❌ |
+| `insertAdjacentHTML` / `insertAdjacentElement` | Extremely common — every hand-rolled "load more", all of htmx | ✅ (tick 25) |
+| `append` `prepend` `before` `after` `replaceWith` `replaceChildren` | The ChildNode/ParentNode mixins — what any script reaches for to place a node *next to* another | ✅ (tick 25) — all eleven were missing |
+| `outerHTML` (get + set) · `innerText` · `getAttributeNames` | Ubiquitous | ✅ (tick 25) — `innerText` is honestly approximated as `textContent`; the true definition needs layout |
 | `outerHTML`, `innerText` | Common | ❌ |
 | `scrollTop`/`scrollLeft` | Scroll containers, virtualised lists | ❌ |
 | `getSelection` / `Range` | Editors, copy handling | ❌ |
@@ -132,7 +134,7 @@ Ranked by how much of the real web each represents. Status is from the 265-site 
 | **Code hosting** | GitHub, GitLab | ✅ mostly | 97.8% coverage; React portals were the gap |
 | **Marketing / landing** | rust-lang.org, most SaaS front pages | ✅ good | |
 | **Academic / paper** | arXiv, PubMed | ✅ expected good (static HTML) | |
-| **Design-system-based** (web components) | Banks, gov, enterprise portals | ⚠️ **renders now**, unstyled where `adoptedStyleSheets` is used |
+| **Design-system-based** (web components) | Banks, gov, enterprise portals | ✅ **renders styled** (tick 25) — a `<style>` inside a shadow root was invisible to the stylesheet walk, which used the light tree. |
 | **SPA app shells** | Linear, Notion, Figma, HuggingFace | ⚠️ **partial** — Vue/Solid/Preact class works; React class does not yet |
 | **Feed / infinite scroll** | X, Mastodon, Bluesky | ❓ needs `scrollTop`, virtualised lists, WebSocket |
 | **Media** | YouTube, Twitch, Spotify | ❌ layout only, no playback |
@@ -162,3 +164,29 @@ Ranked by how much of the real web each represents. Status is from the 265-site 
 - A tick that closes a pattern class **edits this file** (`scripts/self-audit.sh` checks it was touched).
 - The "% of web" judgements are corrected by the **oracle crawl**, not defended.
 - A row that says ✅ but whose class still fails in the crawl is a **lie**, and the crawl is what finds it.
+
+## Tick 25 — the shape that keeps recurring, now named
+
+Five times now the bug has had one shape, and it is not "a feature is missing":
+
+| The mechanism | Existed and was correct | Reached by the renderer |
+|---|---|---|
+| `flat_children` | ✅ | ❌ → nothing that drew pixels called it |
+| `NodeData::Comment` / `NodeData::Fragment` | ✅ | ❌ → `cloneNode` fell through to `<div>` |
+| The flat tree in the cascade | ✅ | ❌ → shadow trees went unstyled |
+| `serialize_node` (i.e. `outerHTML`) | ✅ since the parser was written | ❌ → unreachable from JS |
+| `<style>` inside a shadow root | ✅ parsed, stored | ❌ → `collect_style_sources` walked the **light** tree |
+
+**The feature being present in the codebase is not the same as the feature being reachable from the
+pixels, and no gate was asking whether a line existed between the two.** That is a gate-shaped hole,
+not five bug-shaped ones.
+
+And the sixth, which is worse, because it made a *diagnosis* wrong rather than a feature absent:
+
+**React was never broken. Its bundle was never fetched.** `format!("file://{relative/path}")` parses
+`tests` as a *hostname*; every subresource of every local fixture failed to resolve. React mounted
+nothing because not one line of React ever ran. For several ticks "React renders nothing" sat in this
+ledger as a framework problem. It was a string-formatting bug in the test harness, and the harness's
+failure was indistinguishable from the framework's.
+
+*Test your own primitives before blaming the framework.* Third time this prior has paid.

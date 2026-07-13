@@ -109,6 +109,17 @@ pub fn serialize_inner(dom: &Dom, node: NodeId) -> String {
     out
 }
 
+/// `element.outerHTML` — the element's own serialization, its tag included.
+///
+/// `serialize_node` was already exactly this function and had been since the parser was written; it
+/// was simply never reachable from JavaScript. Another instance of the recurring shape: the mechanism
+/// existed, and nobody had drawn a line from it to the thing that needed it.
+pub fn serialize_outer(dom: &Dom, node: NodeId) -> String {
+    let mut out = String::new();
+    serialize_node(dom, node, &mut out);
+    out
+}
+
 /// Serialize a single node (including itself) into `out`.
 fn serialize_node(dom: &Dom, node: NodeId, out: &mut String) {
     match dom.data(node) {
