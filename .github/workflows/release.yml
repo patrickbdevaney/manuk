@@ -1,0 +1,144 @@
+name: release
+
+# ── SHIPPING A BINARY. When, and why then.
+#
+# **The interval is not a calendar and it is not every tick. It is a CAPABILITY STEP-CHANGE.**
+#
+# The industry answer for a project like this (Firefox's channels, Ladybird's periodic builds, every
+# Rust-tool release-please setup) is a *trigger*, not a cron: you ship when the thing a user can DO
+# changes. Shipping every tick would flood the tags with infrastructure commits nobody can use — and this
+# project has just spent six ticks straight on CI, which no user would ever want a binary of. Shipping on
+# a timer would decouple the artifact from the reason to want it.
+#
+# So the trigger is mechanical and it reads the loop's own ledger:
+#
+#   * a tick whose commit is `TICK SHAPE: pattern-class` or `capability` — i.e. it moved the CAPABILITY
+#     ledger (docs/loop/WEB-PATTERNS.md), which is the definition of "a class of the web now works";
+#   * ...AND the verify wall is green on exactly that tree (the pre-commit hook already guarantees this);
+#   * ...OR a manual `workflow_dispatch`, for when a human wants a build for a reason a machine cannot see.
+#
+# Everything else — CI, instrumentation, refactors, docs — is `[no-pattern]` or `TICK SHAPE:
+# infrastructure` and does NOT cut a release. That is the whole point: **a version number should mean
+# something changed for the user.**
+#
+# The tag is derived, never hand-typed: `v0.<TICK>.0`, read from STATUS.md. The tick number IS the
+# version, because the tick IS the unit of progress in this project.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/loop/WEB-PATTERNS.md'   # the capability ledger. It moves ⇒ a class of the web now works.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_BUILD_JOBS: 2
+  CARGO_NET_RETRY: 10
+  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+
+jobs:
+  # Decide whether this push is a capability step-change. Most are not, and that is correct.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      ship: ${{ steps.check.outputs.ship }}
+      tag: ${{ steps.check.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - id: check
+        run: |
+          MSG=$(git log -1 --format=%B)
+          TICK=$(grep -oP '^TICK:\s*\K[0-9]+' STATUS.md || echo 0)
+          # A capability tick declares itself. Infrastructure ticks say so, and are skipped.
+          if echo "$MSG" | grep -qiE 'TICK SHAPE:[[:space:]]*(pattern-class|capability)' \
+             && ! echo "$MSG" | grep -q '\[no-pattern\]'; then
+            echo "ship=true" >> "$GITHUB_OUTPUT"
+            echo "tag=v0.${TICK}.0" >> "$GITHUB_OUTPUT"
+            echo "→ capability step-change: shipping v0.${TICK}.0"
+          else
+            echo "ship=false" >> "$GITHUB_OUTPUT"
+            echo "→ not a capability tick (infrastructure/docs). No release, by design."
+          fi
+
+  build:
+    needs: gate
+    if: needs.gate.outputs.ship == 'true' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl   # fully static: runs on any Linux, no deps
+            name: manuk-linux-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            name: manuk-macos-arm64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            name: manuk-windows-x86_64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: musl toolchain
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      # Headless: the release binary is the RENDERER (`manuk render <url>`), which needs no display,
+      # no GPU and no JS engine — so it is the one artifact that genuinely runs anywhere.
+      - name: build
+        shell: bash
+        run: |
+          case "${{ matrix.target }}" in
+            *musl|*msvc) export RUSTFLAGS="-C target-feature=+crt-static" ;;
+          esac
+          bash scripts/ci-run.sh "release ${{ matrix.target }}" \
+            cargo build --release --workspace --no-default-features --target ${{ matrix.target }}
+      - name: stage the artifact
+        shell: bash
+        run: |
+          BIN="target/${{ matrix.target }}/release/manuk"
+          [ -f "$BIN.exe" ] && BIN="$BIN.exe"
+          cp "$BIN" "${{ matrix.name }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.name }}
+
+  publish:
+    needs: [gate, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - name: release notes — the CAPABILITY, not the diff
+        run: |
+          TICK=$(grep -oP '^TICK:\s*\K[0-9]+' STATUS.md || echo 0)
+          {
+            echo "## What a user can now do that they could not before"
+            echo
+            # The capability ledger's newest section IS the release note. It is written per tick, in
+            # terms of "this class of the web now works" — which is exactly what a release note should be.
+            awk '/^## Tick '"$TICK"'/,0' docs/loop/WEB-PATTERNS.md | head -40
+            echo
+            echo "---"
+            echo "Engineering detail: [\`docs/loop/JOURNAL.md\`](docs/loop/JOURNAL.md) · "
+            echo "durable findings: [\`docs/wiki/\`](docs/wiki/) · "
+            echo "[run the engine in your browser](https://patrickbdevaney.github.io/manuk/)"
+          } > NOTES.md
+          cat NOTES.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.gate.outputs.tag || format('v0.0.{0}', github.run_number) }}
+          name: ${{ needs.gate.outputs.tag || 'manual build' }}
+          body_path: NOTES.md
+          files: dist/*
+          fail_on_unmatched_files: false

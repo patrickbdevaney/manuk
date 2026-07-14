@@ -59,6 +59,34 @@ the number was actively *lying* (as it was once, and that is now fixed).
 **The test for any proposed instrument work:** *"does this change which capability I build next?"* If
 no — **it is not the tick.** Go build the capability.
 
+## RELEASE CADENCE — ship on a CAPABILITY STEP-CHANGE, not on a calendar and not every tick
+
+> **A version number should mean something changed for the user.**
+
+**The trigger is mechanical, and it reads the loop's own ledger** (`.github/workflows/release.yml`):
+
+- a tick whose commit declares **`TICK SHAPE: pattern-class`** (or `capability`) **and moves
+  `docs/loop/WEB-PATTERNS.md`** — which is this project's *definition* of *"a class of the web now
+  works"*;
+- **plus** a green verify wall on exactly that tree (the pre-commit hook already guarantees it);
+- **or** a manual `workflow_dispatch`, for a reason a machine cannot see.
+
+**Everything else does NOT cut a release** — infrastructure, instrumentation, CI, refactors, docs. That is
+the *point*, not an oversight: this project just spent **six consecutive ticks on CI**, and **no user
+would ever want a binary of that.** Shipping every tick floods the tags with artifacts nobody can use;
+shipping on a timer decouples the artifact from the reason to want it.
+
+**The version is derived, never hand-typed:** `v0.<TICK>.0`, read from `STATUS.md`. **The tick number IS
+the version, because the tick IS the unit of progress here.**
+
+**The release notes are the capability ledger's newest section, verbatim.** It is already written in the
+only terms a release note should be written in — *"this class of the web now works"* — so there is nothing
+to compose and nothing to embellish. *If the ledger entry is not worth reading, the release was not worth
+cutting.*
+
+**The artifact is the headless renderer** (`manuk render <url>`) built static for Linux/macOS/Windows: no
+display, no GPU, no JS engine — the one build that genuinely runs anywhere.
+
 ## COMMIT AND PUSH CADENCE — the interval is the TICK, and it is not negotiable
 
 - **Commit exactly once per tick, at the tick boundary.** The commit is what makes a tick *exist*. It

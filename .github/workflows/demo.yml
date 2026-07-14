@@ -57,13 +57,24 @@ jobs:
       - name: build the engine for wasm
         run: ./scripts/ci-run.sh "wasm demo build" ./scripts/demo-build.sh
 
-      - name: shrink the wasm (optional; the demo works without it)
+      # OPTIONAL — and it must be optional in the exit-code sense too, not just in the comment. The demo
+      # works fine unshrunk; a failing optimiser must never fail the deploy. (It did.)
+      - name: shrink the wasm (best-effort; never fatal)
+        continue-on-error: true
         run: |
-          sudo apt-get update && sudo apt-get install -y binaryen || true
-          if command -v wasm-opt >/dev/null; then
-            wasm-opt -Oz demo/www/manuk_demo_bg.wasm -o demo/www/manuk_demo_bg.wasm --enable-bulk-memory
-            ls -lh demo/www/manuk_demo_bg.wasm | awk '{print "  optimized: "$5}'
-          fi
+          sudo apt-get update && sudo apt-get install -y binaryen || exit 0
+          command -v wasm-opt >/dev/null || exit 0
+          wasm-opt -Oz demo/www/manuk_demo_bg.wasm -o /tmp/opt.wasm --enable-bulk-memory \
+            && mv /tmp/opt.wasm demo/www/manuk_demo_bg.wasm \
+            && ls -lh demo/www/manuk_demo_bg.wasm | awk '{print "  optimized: "$5}'
+          exit 0
+
+      # The snapshots are COMMITTED (see demo/www/.gitignore) — a deploy must not depend on three live
+      # websites still being up and unchanged, nor on a runner having Chromium.
+      - name: sanity — the demo has pages to render
+        run: |
+          test -f demo/www/pages.json || { echo "::error::demo/www/pages.json missing — run scripts/demo-pages.sh and commit"; exit 1; }
+          echo "  pages: $(python3 -c "import json;print(len(json.load(open('demo/www/pages.json'))))")"
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
