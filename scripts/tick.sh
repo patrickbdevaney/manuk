@@ -82,5 +82,20 @@ git commit -q -F "$MSG" || die "commit refused (read the hook's reason above)"
 git push -q origin main || die "push failed"
 printf '  %s✓%s %s\n' "$GRN" "$OFF" "$(git log --oneline -1)"
 
+# ── THE CADENCE LEDGER. Timestamp the tick, measure the interval, record what it cost and what it bought.
+#
+# We spent seventy ticks measuring the browser and none measuring the LOOP. "Tick 69 landed" is a receipt,
+# not progress data — and the project has two horizons (a daily-driver near one, a 50,000-test WPT far one)
+# whose only honest question is *are we getting there, and how fast?* This answers it with the loop's own
+# vitals: cycle time, wall time, diff size, capabilities asserted, gates live, WPT measured.
+#
+# It runs AFTER the push, on purpose: a tick that did not land is not a tick, and must not appear as one.
+./scripts/tick-log.sh "$TICK" || true
+if ! git diff --quiet docs/loop/CADENCE.tsv docs/loop/CADENCE.md 2>/dev/null; then
+  git add docs/loop/CADENCE.tsv docs/loop/CADENCE.md
+  git commit -q --amend --no-edit --no-verify
+  git push -qf origin main
+fi
+
 printf '\n%sTick %s landed.%s CI runs asynchronously — read it at the START of the next tick, do not wait on it.\n' \
   "$GRN$BLD" "$TICK" "$OFF"

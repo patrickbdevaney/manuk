@@ -328,3 +328,65 @@ The ledger cannot drift from reality, because reality is what runs.
 * `getComputedStyle().transform` → `undefined` (the transform itself works).
 * `display: contents` → reports `inline`.
 * `document.createRange`, `document.createEvent`, `URL.createObjectURL` → absent.
+
+## The cadence ledger — measuring the loop, not just the browser
+
+For sixty-nine ticks this project measured the browser exhaustively and **the loop not at all**. "Tick 69
+landed" is a receipt, not progress data — and the project has two horizons whose only honest question is
+*are we getting there, and how fast?*
+
+`scripts/tick-log.sh` runs from `scripts/tick.sh` **after a successful push** (a tick that did not land is
+not a tick) and appends one row of ground truth to `docs/loop/CADENCE.tsv`:
+
+* **when** it landed, and **Δ since the previous tick** — the real cycle of implement → debug →
+  verify-wall → land. This is the loop's clock speed and the denominator of every rate.
+* **what it cost**: wall seconds, files, lines.
+* **what it bought**, measured rather than asserted — NEAR: capabilities asserted by `G_CAPABILITY`, live
+  gates, ✅ rows in the capability ledger, oracle hangs. FAR: WPT subtests.
+* **the shape, and the tick's own headline** — which is already written per tick in terms of what changed
+  for the browser, so it *is* the qualitative impact statement.
+
+`scripts/cadence-report.py` regenerates `docs/loop/CADENCE.md` from it. **The row is not the point. The
+derivative is.**
+
+### Backfilled from git, and what was deliberately left blank
+
+Sixty-two past ticks were reconstructed from history — every tick is a commit, and a commit carries its
+timestamp, its diff and its message; the journal carries the shape and the headline.
+
+**The verify-wall time, the WPT figure, and the gate/capability counts of past ticks were left EMPTY.**
+`STATUS.md` records only the *latest* wall; WPT was measured a handful of times; the counts are obtained by
+grepping the tree, and the tree is *now*. Counting today's tree and labelling it "tick 42" would produce a
+beautiful, entirely fictional curve. **An empty cell is a fact. A guessed one is a lie that gets quoted
+back later as evidence.**
+
+A WPT figure carried forward from an earlier tick is marked (`·`) and is **never counted as a
+measurement**.
+
+### What it found on its first run, and it is strategic
+
+| | |
+|---|---|
+| ticks landed | 62 (ticks 1–69) |
+| median cycle | **19m** (17m over the last 10) |
+| ticks/hour | **0.85** across 71.8h elapsed |
+| capability ticks | **25 of 62** (40%) |
+| median diff | +288 / −10 lines, 7 files |
+| WPT (`dom/`) | 1736/6418 (tick 64) → **1737/6418** (tick 69) |
+
+That last row is the finding, and it is worth more than the rest put together:
+
+> **Ticks 64–69 shipped a 60× DOM speedup, real prototypes, a canvas rasterizer, element scrolling and
+> `display: contents` — every one a genuine daily-driver capability win — and WPT moved by ONE subtest.**
+>
+> The two horizons are **nearly orthogonal**. The far horizon will not arrive as a side-effect of the near
+> one; **it has to be spent on directly.**
+
+That is not a failure. It is the first measurement of the *relationship between the two horizons*, and it
+changes how ticks get allocated. It could not have been made without this ledger.
+
+### The one number it refuses to give
+
+A finish line. The rate is measured on the `dom/` subset (6,418 subtests); the far horizon is ~50,000
+across all of WPT, **which this project has never run**. Multiplying a subset's rate up to the whole is not
+an extrapolation, it is a category error dressed as arithmetic — so the projection is not made.

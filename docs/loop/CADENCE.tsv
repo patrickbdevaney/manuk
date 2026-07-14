@@ -1,0 +1,64 @@
+tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pass	wpt_total	wpt_fresh	patterns_ok	hangs	headline
+1	28e17ce	1783760592	2026-07-11T05:03:12-04:00	0	unknown		2	40	0					0			L14 slice: boot-time window/screen metrics (2026-07-11)
+2	11981e9	1783788371	2026-07-11T12:46:11-04:00	27779	unknown		7	366	27					0			L01: real fetch() + XMLHttpRequest for page JS (2026-07-11)
+3	f83298c	1783788983	2026-07-11T12:56:23-04:00	612	unknown		4	363	6					0			L10: history.pushState/replaceState + popstate + location (2026-07-11)
+4	20a7fc3	1783789464	2026-07-11T13:04:24-04:00	481	unknown		4	336	5					0			L04: downloads to disk (2026-07-11)
+5	6a7461a	1783789932	2026-07-11T13:12:12-04:00	468	unknown		3	193	11					0			L32: predictive prerender of the likely-next navigation (2026-07-11)
+6	0eb91a3	1783790610	2026-07-11T13:23:30-04:00	678	unknown		5	418	24					0			L03: cross-window postMessage + window.opener (2026-07-11)
+7	866d8f2	1783791167	2026-07-11T13:32:47-04:00	557	unknown		2	187	5					0			L02: MutationObserver (2026-07-11)
+8	1f7f5a5	1783791768	2026-07-11T13:42:48-04:00	601	unknown		3	152	23					0			L11: responsive @media (2026-07-11)
+9	58f9565	1783792135	2026-07-11T13:48:55-04:00	367	unknown		2	290	0					0			L17: agent-native targeting (AG2 pruning + AG3 dual targeting) (2026-07-11)
+10	21c4eb4	1783792358	2026-07-11T13:52:38-04:00	223	unknown		4	197	5					0			L31 slice: action grounding (FORCED-HIGHEST-U) (2026-07-11)
+11	8f36855	1783792752	2026-07-11T13:59:12-04:00	394	unknown		3	261	0					0			L05: file uploads (multipart) (2026-07-11)
+12	bfeebe7	1783792972	2026-07-11T14:02:52-04:00	220	unknown		2	246	0					0			L30: in-process automation surface (2026-07-11)
+13	70fbc30	1783793895	2026-07-11T14:18:15-04:00	923	unknown		2	94	1					0			headless screenshot discipline + flex-block-child fix (2026-07-11)
+14	2a646de	1783795428	2026-07-11T14:43:48-04:00	1533	unknown		6	446	18					0			L43: border-radius + box-shadow paint (2026-07-11)
+15	b7f11ed	1783796280	2026-07-11T14:58:00-04:00	852	unknown		5	213	5					0			L16: Custom Elements + Shadow DOM (FORCED-HIGHEST-U) (2026-07-11)
+16	9770ca4	1783796557	2026-07-11T15:02:37-04:00	277	unknown		1	69	4					0			L45: block-in-inline (2026-07-11)
+17	85ad440	1783797006	2026-07-11T15:10:06-04:00	449	unknown		8	85	11					0			the oracle stops being an anecdote (2026-07-12)
+25	1f93fd7	1783909921	2026-07-12T22:32:01-04:00	112915	unknown		11	955	72					0			the hangs are gone, and React was never the bug
+26	d191f26	1783911075	2026-07-12T22:51:15-04:00	1154	pattern-class		7	415	5					0			the app web is open (2026-07-12)
+27	918cef4	1783918765	2026-07-13T00:59:25-04:00	7690	unknown		5	923	303					0			the ledger is ranked by symptom, and I should say so (2026-07-12)
+28	74bf978	1783919326	2026-07-13T01:08:46-04:00	561	pattern-class		6	245	6					0			media: an honest NO beats a TypeError (2026-07-13)
+29	73e7d2b	1783928800	2026-07-13T03:46:40-04:00	9474	pattern-class		15	1130	80					0			the self-audit, and the four gates it says are owed (2026-07-13)
+30	c3c3130	1783929954	2026-07-13T04:05:54-04:00	1154	pattern-class		10	470	14					0			first paint does not wait for images (2026-07-13)
+31	bb600f6	1783930144	2026-07-13T04:09:04-04:00	190	pattern-class		2	63	2					0			every script blocks first paint, including the ones that say not to (2026-07-13)
+32	8c8f872	1783936358	2026-07-13T05:52:38-04:00	6214	pattern-class		12	479	29					0			defer/async/module mean what they say (2026-07-13)
+33	b240e76	1783937084	2026-07-13T06:04:44-04:00	726	pattern-class		8	335	4					0			a capability priority list, measured (2026-07-13)
+34	1077b34	1783938179	2026-07-13T06:22:59-04:00	1095	pattern-class		13	495	13					0			the browser becomes writable (2026-07-13)
+35	1d94ee9	1783939299	2026-07-13T06:41:39-04:00	1120	pattern-class		9	414	4					0			`<iframe>`, and a priority list that corrected itself (2026-07-13)
+36	3c42387	1783940246	2026-07-13T06:57:26-04:00	947	pattern-class		10	183	6					0			a fifth of the web had invisible content (2026-07-13)
+37	6b2b79b	1783967604	2026-07-13T14:33:24-04:00	27358	pattern-class		6	610	380					0			the crawl that validates twelve ticks (2026-07-13)
+38	21f2ab9	1783968746	2026-07-13T14:52:26-04:00	1142	unknown		5	75	6					0			the 27% display gap is mostly not what it looks like
+39	c922506	1783970766	2026-07-13T15:26:06-04:00	2020	pattern-class		9	272	4					0			the cascade was silently dropping 41% of the web's CSS (2026-07-13)
+40	15c84f2	1783973123	2026-07-13T16:05:23-04:00	2357	infrastructure		7	251	9					0			the self-audit was certifying a third of the wall (2026-07-13)
+41	87d65b6	1783977331	2026-07-13T17:15:31-04:00	4208	pattern-class		10	877	28					0			a missing constructor is a thrown exception (2026-07-13)
+42	c4b63f7	1783979268	2026-07-13T17:47:48-04:00	1937	pattern-class		11	603	4					0			`:has()`, hand-rolled rather than forked (2026-07-13)
+43	1d4e822	1783984067	2026-07-13T19:07:47-04:00	4799	unknown		34	2258	23					0			WPT, wired up. And it found four bugs in the first twenty-five tests. (2026-07-13)
+44	4adc6b5	1783985577	2026-07-13T19:32:57-04:00	1510	pattern-class		16	566	9					0			the instrument said "90 hangs". It was one. Then: click(), and CharacterData. (2026-07-13)
+45	35e82bc	1783986685	2026-07-13T19:51:25-04:00	1108	infrastructure		15	1837	2					0			the phantom fork, and forty-two ticks of knowledge recovered from the dead (2026-07-13)
+46	8e8dcaf	1783987816	2026-07-13T20:10:16-04:00	1131	pattern-class		10	254	22					0			a stale handle killed the whole browser, and four of the five "crashes" were mine (2026-07-13)
+47	e38686d	1783989133	2026-07-13T20:32:13-04:00	1317	infrastructure		9	564	275					0			a panic in a JS native killed the browser. Containing the CLASS, not the instance. (2026-07-13)
+48	7ff4184	1783992378	2026-07-13T21:26:18-04:00	3245	pattern-class		10	359	2					0			a second document, and the cycle check that stands between the DOM and an infinite loop (2026-07-13)
+49	58acce7	1783993391	2026-07-13T21:43:11-04:00	1013	infrastructure		90	5741	1700					0			the CI lane, the WPT horizon, and why 8 checks were red (2026-07-13)
+50	f50022b	1783995324	2026-07-13T22:15:24-04:00	1933	infrastructure		17	227	23					0			the engine runs in a browser: wasm feasibility proven, and one 32-bit bug (2026-07-13)
+51	b4d6551	1783997445	2026-07-13T22:50:45-04:00	2121	infrastructure		12	233	16					0			the CI lane actually goes green, and an OOM guard so a killed linker stops lying (2026-07-13)
+52	0d216a6	1783998098	2026-07-13T23:01:38-04:00	653	infrastructure		6	85	7					0			CI could not tell me why it failed, so I made it able to (2026-07-13)
+53	8cb2033	1783998678	2026-07-13T23:11:18-04:00	580	infrastructure		6	92	3					0			every CI job on every OS failed for ONE committed line (2026-07-13)
+54	bd1b01f	1783999959	2026-07-13T23:32:39-04:00	1281	infrastructure		7	68	49					0			the Windows linker died on a crypto backend nobody asked for (2026-07-13)
+55	be17e55	1784000870	2026-07-13T23:47:50-04:00	911	infrastructure		5	73	9					0			CI and the wall must test the same thing, or one of them is lying (2026-07-13)
+56	1ea77dd	1784003172	2026-07-14T00:26:12-04:00	2302	infrastructure		5	133	4					0			the gate PASSED and the process segfaulted on the way out (2026-07-14)
+57	d14bc60	1784004303	2026-07-14T00:45:03-04:00	1131	infrastructure		19	768	30					0			the engine runs in the visitor's browser, and a debug line nearly stopped it (2026-07-14)
+58	1be78bf	1784006676	2026-07-14T01:24:36-04:00	2373	infrastructure		7	285	28					0			the cycle's wall time: 92.6s → 40.3s, and the waste was never the CPU (2026-07-14)
+59	9f06b16	1784007362	2026-07-14T01:36:02-04:00	686	pattern-class		9	222	4					0			the biggest item on the board was already built, and nothing proved it (2026-07-14)
+60	a1dbb0e	1784008179	2026-07-14T01:49:39-04:00	817	pattern-class		6	137	2					0			a Text node could have children (2026-07-14)
+61	6fa1bcc	1784010093	2026-07-14T02:21:33-04:00	1914	instrument		99	52501	179					0			the corpus goes to 41 sites, and three instruments lie in a row
+62	9d73870	1784011637	2026-07-14T02:47:17-04:00	1544	bar-0		11	451	48					0			the exit segfault, closed: to run first at teardown, register last
+63	0f81904	1784012247	2026-07-14T02:57:27-04:00	610	instrument		5	94	13					0			the release cadence was green, and shipping nothing
+64	8697991	1784014270	2026-07-14T03:31:10-04:00	2023	capability		10	536	43			1736	6418	1			the DOM methods were on the wrong objects, and it cost 60× and every prototype patch
+65	2cf0f78	1784015035	2026-07-14T03:43:55-04:00	765	instrument		7	317	23					0			the ledger's top three priorities were all phantoms
+66	839819a	1784016611	2026-07-14T04:10:11-04:00	1576	capability		15	1030	62					0			`<canvas>` paints, and the pixels reach the screen
+67	400d410	1784017802	2026-07-14T04:30:02-04:00	1191	capability		11	717	12					0			`scrollTop` did not merely not work. It lied, and so did `scrollHeight`.
+68	5e1c260	1784018295	2026-07-14T04:38:15-04:00	493	capability		7	226	8					0			the transform was applied all along; it just never reached JavaScript
+69	04d6855	1784019025	2026-07-14T04:50:25-04:00	730	capability	39	12	259	29	27	48	1737	6418	1	144	4	`display: contents` fell through to `inline`, and collapsed the grid
+70	002cd66	1784019419	2026-07-14T04:56:59-04:00	394	instrument	37	10	778	2	27	48	1737	6418	1	144	4	the loop had no odometer

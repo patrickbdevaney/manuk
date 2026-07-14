@@ -3054,6 +3054,54 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 70 — the loop had no odometer
+
+**TICK SHAPE: instrument.** `[no-pattern]`.
+
+Seventy ticks measuring the browser, and **zero measuring the loop.** "Tick 69 landed" is a receipt, not
+progress data — and this project has two horizons whose only honest question is *are we getting there, and
+how fast?*
+
+`scripts/tick-log.sh` now runs from `tick.sh` **after a successful push** and appends one row of ground
+truth per tick: when it landed, **Δ since the last one** (the real implement → debug → wall → land cycle),
+what it cost (wall seconds, files, lines), and what it bought — capabilities asserted, gates live, ✅ rows,
+oracle hangs, and WPT subtests. The journal headline rides along as the qualitative impact statement,
+because it is *already* written per tick in terms of what changed for the browser.
+
+**Sixty-two past ticks were backfilled from git** — every tick is a commit, and a commit carries its
+timestamp, its diff and its message. **What could not be recovered was left blank**: past wall times (only
+the latest is recorded), past WPT figures (measured a handful of times), past gate/capability counts (they
+are grepped from the tree, and the tree is *now*). Counting today's tree and labelling it "tick 42" would
+draw a beautiful, entirely fictional curve. **An empty cell is a fact; a guessed one is a lie that gets
+quoted back later as evidence.**
+
+**And on its first run it found the thing it was built to find.**
+
+| | |
+|---|---|
+| ticks landed | 62 |
+| median cycle | **19m** (17m over the last 10) |
+| ticks/hour | **0.85** over 71.8h |
+| capability ticks | 25 of 62 (40%) |
+| WPT (`dom/`) | 1736/6418 (t64) → **1737/6418** (t69) |
+
+> **Ticks 64–69 shipped a 60× DOM speedup, real prototypes, a canvas rasterizer, element scrolling and
+> `display: contents` — every one a genuine daily-driver capability win — and WPT moved by ONE SUBTEST.**
+>
+> The two horizons are **nearly orthogonal.** The far horizon will not arrive as a side-effect of the near
+> one. **It has to be spent on directly.**
+
+That is the single most consequential thing this loop has learned about *itself*, it changes how ticks get
+allocated from here, and it was invisible until something counted.
+
+**And the instrument caught a flaw in itself before shipping:** its first draft projected a WPT finish line
+by multiplying the `dom/`-subset rate (6,418 subtests) up to the 50,000-test horizon — a suite this project
+**has never run**. That is a category error dressed as arithmetic, and it would have produced a confident
+number about a thing that was never measured. It now refuses to give a finish line at all, and says why.
+
+**The ratchet.** Capability: unchanged. Performance: unchanged. Instrument fidelity: **up** — the loop can
+finally see itself, and the first thing it saw redirects the roadmap.
+
 ## Tick 69 — `display: contents` fell through to `inline`, and collapsed the grid
 
 **TICK SHAPE: capability** — roadmap item #4.
