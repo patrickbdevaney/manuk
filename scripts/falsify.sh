@@ -638,6 +638,20 @@ fi
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_CAPABILITY; then
+  # Take away ONE capability the ledger claims. The ledger is the file that decides what this project
+  # builds next, and it has been wrong six times — always a ❌ nobody measured. G_CAPABILITY makes its
+  # claims executable, so a ✅ that stops being true stops the tick. Prove that it does.
+  mutate engine/js/src/dom_bindings.rs '
+s = s.replace(
+    "        def_guarded!(def, c\"append\", el_append, 1);",
+    "        // MUTATION: the ledger still claims append works",
+)
+'
+  expect_red G_CAPABILITY cargo test -q -p manuk-page --features stylo,spidermonkey --test g_capability
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_PROTOTYPE; then
   # Put the members back on the INSTANCE — the state this engine shipped in for sixty ticks. The own
   # property then shadows the prototype, so `Element.prototype.setAttribute = wrapper` still "succeeds",

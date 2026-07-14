@@ -3054,6 +3054,57 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 65 — the ledger's top three priorities were all phantoms
+
+**TICK SHAPE: instrument** — but the instrument is the one that aims every other tick. `[no-pattern]`
+(no engine change; the pattern ledger was *corrected*, not extended).
+
+Tick 64 caught the ledger being wrong about React. That made me look at the row above it — *"~1 site in 4
+still **hangs**. Bar 0. Nothing else matters at this ratio."* **The measured figure is 4 sites in 265.**
+Off by 16×, and it had been steering the roadmap for many ticks.
+
+So I probed **every remaining `❌`** in `WEB-PATTERNS.md`. The result is hard to read charitably:
+
+| ledger | truth |
+|---|---|
+| `append`/`prepend`/`before`/`after`/`replaceWith` ❌ | **all five work** (plus `insertAdjacentHTML`, `remove`) |
+| `outerHTML`, `innerText` ❌ | **both work** |
+| `Blob` / `File` / `FileReader` ❌ | **all three work** |
+| `getSelection` / `Range` ❌ | both **exist** (only `createRange` missing) |
+| `MutationObserver`, `ResizeObserver`, `structuredClone` | **all work**, unmentioned |
+| CSS `transform` — "not in computed style, a real gap" | the transform **is applied**; the box moves; only the read-back is missing |
+| React's commit ❌ | **renders** |
+| the hangs — "1 in 4" | **4 in 265** |
+
+**Three of the top three priorities were phantoms.** The loop was aiming at ghosts.
+
+**The real gaps, measured, with receipts:**
+
+* **`<canvas>` 2D is a stub that silently draws nothing** — fill it red, read the pixel back, get
+  `0,0,0,0`. It is deliberate and warns in-product (a blank chart beats a `TypeError` that takes the page
+  down), but a site that feature-detects canvas is told **yes** and renders nothing. **This is the next
+  exploit tick**, and tiny-skia already backs our painter.
+* **`scrollTop` lies** — reading gives `undefined`, writing silently creates a plain JS property that
+  scrolls nothing. A virtualised list sets it, reads it back, and believes it worked.
+* `getComputedStyle().transform`, `display:contents`, `createRange`, `createEvent`,
+  `URL.createObjectURL` — absent, named, small.
+
+**The mechanism, because the lesson has failed five times.** *An absent measurement is not a negative
+measurement* is written in PROCESS #19, #20, #21, #35 and #41, and it did not hold. **A rule I can recite
+while breaking it is a decoration.** So it is not a rule any more:
+
+> **`G_CAPABILITY` runs the ledger's claims as assertions.** 42 of them, on every wall. A `✅` that stops
+> being true **fails the tick** — the RATCHET made mechanical. Every `❌` prints a receipt from the same
+> run. The ledger cannot drift from reality, because reality is what runs.
+
+It caught a bug in *itself* on the first run: the claims append children to the shared fixture, so
+`cloneNode(deep)`'s child-count assertion was failing on the test's own side effects. **A shared fixture
+that the assertions mutate is a fixture that lies about the engine.**
+
+**The ratchet.** Capability: unchanged (nothing was added — a good deal was *found*). Performance:
+unchanged. Instrument fidelity: **up, sharply** — the file that decides what gets built next is now
+checked against the engine on every tick, and the roadmap is rebuilt from measurement rather than rumour.
+
 ## Tick 64 — the DOM methods were on the wrong objects, and it cost 60× and every prototype patch
 
 **TICK SHAPE: capability** — and a performance step-function that fell out of the same fix.

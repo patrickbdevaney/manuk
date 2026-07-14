@@ -284,3 +284,47 @@ a regression it finds is an ordinary gate failure at the next check-in, never an
 **badge-bearing Linux lane** (shipping config, must be green) and a **cross-platform known-gap lane**
 (`continue-on-error`, promoted into the badge when a platform goes green). *A green badge that has stopped
 meaning anything is worse than a red one from a real regression.*
+
+## The pattern ledger, and why it is now executable
+
+`docs/loop/WEB-PATTERNS.md` decides what this project builds next. It is the most load-bearing instrument
+in the loop, and for a long time it was **the least verified file in the repo**.
+
+At tick 65 every `❌` in it was probed. The result:
+
+| The ledger said | The truth |
+|---|---|
+| *"~1 site in 4 **hangs** — Bar 0. Nothing else matters at this ratio."* | **4 sites in 265** (1.5%). Off by 16×, and it was steering the roadmap. |
+| *"React committing its render — ❌ still silent. Renders nothing."* | **React renders.** `#root` gets its children, the app's text, zero errors. |
+| *"`append`/`prepend`/`before`/`after`/`replaceWith` ❌"* | **All five work.** So do `insertAdjacentHTML` and `remove`. |
+| *"`outerHTML`, `innerText` ❌"* | **Both work.** |
+| *"`Blob`/`File`/`FileReader` ❌"* | **All three work.** |
+| *"`getSelection`/`Range` ❌"* | Both **exist**; only `document.createRange()` is missing. |
+| *"CSS `transform` — not in computed style, a real gap"* | The transform **is applied** — the box really moves. Only the *computed-style read-back* is missing. |
+
+**Three of its top three priorities were phantoms.** The loop had been aiming at ghosts.
+
+### The mechanism
+
+The lesson — *an absent measurement is not a negative measurement* — had been written down **five times**
+(PROCESS #19, #20, #21, #35, #41) and did not hold. A rule you can recite while breaking it is a
+decoration. So it stopped being a rule:
+
+> **`G_CAPABILITY` runs the ledger's claims as assertions**, on every wall. 42 of them. A `✅` that stops
+> being true **fails the tick** — which is the RATCHET (*never regress capability*) made mechanical. And
+> every `❌` prints a **receipt** from the same run, so the next person reads a measurement instead of
+> inheriting a rumour.
+
+The ledger cannot drift from reality, because reality is what runs.
+
+### The gaps that are real (with receipts, tick 65)
+
+* **`<canvas>` 2D draws nothing.** Not absent — a *stub*: `getContext('2d')` returns a context, `fillRect`
+  is a function, and filling the canvas red then reading a pixel gives `0,0,0,0`. It is deliberate (a
+  blank chart beats a `TypeError` that takes the whole bundle down) and it warns in-product. But a page
+  that feature-detects canvas is told **yes** and renders nothing.
+* **`scrollTop` lies.** Reading gives `undefined`; writing silently creates a plain JS property that
+  scrolls nothing. A virtualised list sets it, reads it back, and believes it worked.
+* `getComputedStyle().transform` → `undefined` (the transform itself works).
+* `display: contents` → reports `inline`.
+* `document.createRange`, `document.createEvent`, `URL.createObjectURL` → absent.

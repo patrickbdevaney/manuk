@@ -29,7 +29,7 @@ that has never been tested.
 | A node the cascade never saw (script-injected `<svg>`) | **SIGSEGV** — a panic through SpiderMonkey's C++ frames aborts | ✅ layout degrades to initial style and *logs* |
 | **Quitting the browser** after any page ran JavaScript | **The process SIGSEGVs on the way out** — and a crash in the exit handlers aborts the handlers that follow it, which is exactly where the cookie jar and `localStorage` are flushed to the profile. The user closes the window and **silently loses their session** (ADR-009). | ✅ `G_CLEAN_EXIT` — the engine tears SpiderMonkey down **itself**, on the thread that owns it, whether or not the caller remembers to ask |
 | A fault *inside* SpiderMonkey's C++ frames | Browser dies | ⚠️ **not containable in-process.** Needs a per-tab process. Deferred, and stated rather than hidden. |
-| ~1 site in 4 still **hangs** (CPU + duplicate work) | Unusable | ❌ **the top open item** |
+| Sites that **hang** (CPU + duplicate work) | Unusable | ⚠️ **4 of 265 (1.5%)**, measured. This row said *"~1 site in 4 — nothing else matters at this ratio"* and **steered the roadmap on a number 16× wrong**. Real, and no longer the top item. |
 
 ---
 
@@ -54,11 +54,11 @@ that has never been tested.
 | `font-size: 0` (inline-block gap killer, image replacement) | Painted **glyph-shaped continents** across the page | ✅ |
 | `<source>`, `<track>`, `<picture>` | Responsive images — got phantom boxes | ✅ |
 | SVG (inline, `<img src=*.svg>`) | Icons everywhere | ✅ renders; namespaces not modelled |
-| `<canvas>` 2D | Charts, games, visualisations | ❌ **not implemented** |
+| `<canvas>` 2D | Charts, games, visualisations | ❌ **a stub that accepts every call and draws nothing.** `getContext('2d')` returns a context, `fillRect` is a function, and reading the pixel back after filling the canvas red gives `0,0,0,0`. Deliberate (a blank chart beats a `TypeError` that takes the page down) and **openly warned about in-product** — but a page that feature-detects canvas gets YES and renders nothing. **The next exploit tick.** |
 | `<video>` / `<audio>` playback | Media sites | ❌ **no codecs.** Element boxes lay out; nothing plays. Graceful, not crashing. |
 | Web fonts (`@font-face`) | Typography-heavy sites | ✅ |
-| `display: contents` | Layout-transparent wrappers | ❌ |
-| CSS transforms / transitions / animations | Motion, and *layout* when transforms shift boxes | ❌ **`transform` not in computed style** — a real gap |
+| `display: contents` | Layout-transparent wrappers | ❌ confirmed — computed style reports `inline` |
+| CSS transforms / transitions / animations | Motion, and *layout* when transforms shift boxes | ⚠️ **`transform` IS applied** — `translateX(100px)` moves the box, and `getBoundingClientRect()` agrees (measured). Only `getComputedStyle().transform` is missing, which is a much smaller claim than this row used to make. |
 
 ---
 
@@ -112,14 +112,14 @@ architecture. Each one below was *named by a framework*, not guessed at.
 | `MutationObserver` / `IntersectionObserver` / `ResizeObserver` | Lazy-loading, infinite scroll, sticky headers | ✅ |
 | `localStorage` / `sessionStorage` / cookies | Sessions, preferences | ✅ (partitioned; RFC 6265) |
 | `history.pushState` (client-side routing) | Every SPA's navigation | ✅ |
-| `append`/`prepend`/`before`/`after`/`replaceWith` | Modern DOM mutation — very common | ❌ |
+| `append`/`prepend`/`before`/`after`/`replaceWith` | Modern DOM mutation — very common | ✅ all five, plus `insertAdjacentHTML`/`remove` — **measured**, `G_CAPABILITY`. The ❌ was never measured. |
 | `insertAdjacentHTML` / `insertAdjacentElement` | Extremely common — every hand-rolled "load more", all of htmx | ✅ (tick 25) |
 | `append` `prepend` `before` `after` `replaceWith` `replaceChildren` | The ChildNode/ParentNode mixins — what any script reaches for to place a node *next to* another | ✅ (tick 25) — all eleven were missing |
 | `outerHTML` (get + set) · `innerText` · `getAttributeNames` | Ubiquitous | ✅ (tick 25) — `innerText` is honestly approximated as `textContent`; the true definition needs layout |
-| `outerHTML`, `innerText` | Common | ❌ |
-| `scrollTop`/`scrollLeft` | Scroll containers, virtualised lists | ❌ |
-| `getSelection` / `Range` | Editors, copy handling | ❌ |
-| `Blob` / `File` / `FileReader` | Uploads, downloads, image preview | ❌ |
+| `outerHTML`, `innerText` | Common | ✅ both — **measured**, `G_CAPABILITY` |
+| `scrollTop`/`scrollLeft` | Scroll containers, virtualised lists | ❌ **and it lies**: reading gives `undefined`, writing silently creates a plain JS property that scrolls nothing. A virtualised list sets it, reads it back, believes it worked. **Silently wrong beats absent only in the sense that it is worse.** |
+| `getSelection` / `Range` | Editors, copy handling | ⚠️ `Range` and `getSelection` **exist** (measured); `document.createRange()` does not. The ❌ was too broad. |
+| `Blob` / `File` / `FileReader` | Uploads, downloads, image preview | ✅ all three — **measured**, `G_CAPABILITY`. (`URL.createObjectURL` is still missing.) |
 | **`WebSocket` / `Worker`** | Live feeds, chat, heavy compute | ❌ **deliberately absent** — a page that feature-detects and falls back is better served by honest absence than a stub that lies |
 
 ---
@@ -147,18 +147,27 @@ Ranked by how much of the real web each represents. Status is from the 265-site 
 
 ## The roadmap, in order of web-coverage bought per unit of work
 
-1. **The hangs** (~1 site in 4). Bar 0. Nothing else matters at this ratio.
-2. **React's commit.** One framework, but it is *the* framework — and the fix will be another missing
-   primitive, on the evidence of the last four ticks.
-3. **`append`/`insertAdjacentHTML`/`outerHTML`/`scrollTop`** — cheap, and used by an enormous amount of
-   ordinary page JS.
-4. **`adoptedStyleSheets` → the cascade.** Turns "web components render unstyled" into "web components
-   render". Every design system on the web.
-5. **CSS `transform`.** Not in computed style at all — and it *moves boxes*, so it is a layout bug, not
-   just a visual one.
-6. **`<canvas>` 2D.** Charts and visualisations are everywhere in docs and dashboards.
-7. **Media.** Codecs are a large, separate problem. The right first step is *graceful*: a `<video>` that
-   lays out, shows a poster, and says it cannot play — rather than one that breaks the page around it.
+**Rebuilt from measurement at tick 65, because the previous version was fiction.** Its #1 was *"the hangs
+(~1 site in 4) — nothing else matters at this ratio"*: the measured figure is **4 sites in 265**. Its #2
+was *"React's commit"*: React renders, and probably had for many ticks. Its #3 was `append` /
+`insertAdjacentHTML` / `outerHTML`: **all three already worked.** Three of the top three were phantoms,
+and the loop was being steered by them.
+
+Every row below has a receipt in `G_CAPABILITY`, which now runs the ledger's claims as assertions.
+
+1. **`<canvas>` 2D — make it actually paint.** It is not absent, it is a **stub that silently draws
+   nothing**: fill the canvas red, read the pixel, get `0,0,0,0`. A page that feature-detects canvas is
+   told YES and then renders a blank chart. tiny-skia already backs the painter and has paths, fills and
+   strokes. Charts and dashboards are everywhere in the doc and platform web.
+2. **`scrollTop`/`scrollLeft` — and it lies today.** Reading gives `undefined`; writing quietly creates a
+   plain JS property that scrolls nothing. Virtualised lists, chat panes, scroll-to-top buttons.
+3. **`getComputedStyle().transform`.** The transform *is applied* — the box really moves — so this is a
+   read-back gap, not the layout bug the old ledger claimed.
+4. **`display: contents`** — reports `inline`. Layout-transparent wrappers are common in modern CSS.
+5. **`document.createRange` / `createEvent` / `URL.createObjectURL`** — small, named, and each one a
+   `TypeError` in code that expects them.
+6. **The hangs** (4/265). Real, Bar 0, and worth doing — but it is not the emergency the old ledger said.
+7. **Media.** Codecs are a large, separate problem. The first step is *graceful*, and already taken.
 
 ---
 
