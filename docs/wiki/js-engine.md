@@ -269,3 +269,74 @@ site just doesn't work."*
 > **This also requires `panic = "unwind"` in the profile.** Under `panic = "abort"`, `catch_unwind` cannot
 > exist and per-page containment is **unreachable by construction** — a build-profile decision *before* it
 > is a code decision.
+
+## Shutting SpiderMonkey down — and the rule that makes teardown work
+
+For sixty ticks the engine carried an open Bar 0 residual: a binary would boot SpiderMonkey, run
+JavaScript perfectly, print correct output, and then **SIGSEGV after `main` returned**.
+
+```
+mozilla::detail::MutexImpl::~MutexImpl: pthread_mutex_destroy failed: Device or resource busy
+process didn't exit successfully (signal: 11, SIGSEGV: invalid memory reference)
+```
+
+SpiderMonkey requires **`JS_ShutDown()` before the process exits**. Skip it and its C++ static
+destructors run against a still-initialized engine and die inside `__run_exit_handlers`.
+
+**This is not cosmetic.** A crash in the exit handlers *aborts the handlers that follow it* — and that is
+precisely where a browser flushes its cookie jar and `localStorage` to the profile (ADR-009). The
+user-visible bug is **silent data loss on quit**: you close the window, and your session is gone.
+
+### The workaround that wasn't
+
+The old answer was a convention: *"every binary must call `manuk_js::shutdown()` last."* `g_runaway`,
+`g_alloc`, `g_load_budget` and the shell remembered. `g_globals` and `g_dedup` did not — and crashed,
+every run, for sixty ticks. **A convention that half the callers forget is not a fix; it is a list of the
+places you have not been bitten yet.**
+
+### The ordering trap (this is the part worth remembering)
+
+The obvious fix is to put the `Runtime` and the `JSEngine` in one struct, in one thread-local, with a
+`Drop` that tears them down in the one correct order — context first, then `JS_ShutDown()`. **It does not
+work**, and it fails in a way that teaches the actual rule:
+
+> **Thread-local destructors run in REVERSE order of registration.** And mozjs keeps thread-locals of its
+> own: `Runtime::drop` → `DestroyContext` → `finishRoots` → **`trace_traceables`**, which is a mozjs
+> thread-local that does not exist until the **first `rooted!`** — i.e. it is registered lazily, *during
+> the first eval*.
+
+Our state has to be initialized *before* any of that (the engine must be parked somewhere the instant
+`JSEngine::init()` returns), so it registers **first**, so it is destroyed **last** — by which time mozjs's
+thread-local is already gone. Teardown then dies with `cannot access a Thread Local Storage value during
+or after destruction`, inside a `nounwind` frame, which is an instant abort. **One exit crash traded for
+another.**
+
+`atexit` does not save you either: glibc's `exit()` runs `__call_tls_dtors()` **before** it walks the
+atexit list, so an atexit handler sees an even deader world.
+
+### The shape that works
+
+Split the **state** from the **trigger**:
+
+* `ENGINE` and `RUNTIME` are thread-locals holding `ManuallyDrop`, which has **no drop glue** — so they
+  register *no destructor at all*, are never torn down by TLS, and stay readable at any point during
+  shutdown.
+* `TeardownGuard` is an empty struct whose only content is its `Drop`. It is first touched **after the
+  first eval has run** — therefore registered *after* mozjs's lazy thread-locals, therefore destroyed
+  *before* them, while everything it needs is still alive.
+
+Teardown then runs in the only correct order: drop the `JSContext`; clear the published engine handle (a
+cached handle is an *outstanding* handle, and `JSEngine::drop` asserts on those); call `JS_ShutDown()`;
+and set a flag so a late request for JS gets an honest error instead of a crash (SpiderMonkey may not be
+re-initialized in a process that has shut it down).
+
+> **To run first at teardown, register last.**
+
+That is the whole rule, and it generalises well past SpiderMonkey — it applies to any C library with lazy
+thread-local state that you must outlive.
+
+`manuk_js::shutdown()` still exists and is still called by the shell, because a *browser* wants to choose
+the moment it stops running JavaScript (before it flushes the profile), rather than inherit whatever
+moment the runtime picks. It is now an optimization, not a requirement. **`G_CLEAN_EXIT`** holds the line:
+it re-executes the test binary as a child that runs real JavaScript and then simply returns from `main`,
+and demands exit code 0.

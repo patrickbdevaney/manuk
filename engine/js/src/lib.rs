@@ -137,26 +137,35 @@ pub mod bindings {
 /// thread-affine; one live runtime per thread). Held in `ManuallyDrop` — leaked deliberately
 /// for the process lifetime, since tearing a runtime down mid-process is the fragile path.
 #[cfg(feature = "_sm")]
-thread_local! {
-    static RUNTIME: std::cell::RefCell<Option<std::mem::ManuallyDrop<mozjs::rust::Runtime>>> =
-        const { std::cell::RefCell::new(None) };
-}
-
 #[cfg(feature = "_sm")]
 fn with_runtime<R>(
     f: impl FnOnce(&mut mozjs::rust::Runtime) -> Result<R, JsError>,
 ) -> Result<R, JsError> {
     use mozjs::rust::Runtime;
-    use std::mem::ManuallyDrop;
 
-    RUNTIME.with(|cell| {
+    // The runtime lives in the SAME thread-local as the engine (`spidermonkey::JS_THREAD`), and that
+    // is the entire fix for the exit segfault: two separate thread-locals have an *unspecified* drop
+    // order relative to one another, so the only way to guarantee "context first, then JS_ShutDown()"
+    // is to put them in one struct and let its `Drop` say so. See `spidermonkey::JsThread`.
+    let handle = spidermonkey::engine_handle()?;
+    spidermonkey::RUNTIME.with(|cell| {
         let mut slot = cell.borrow_mut();
         if slot.is_none() {
-            let handle = spidermonkey::engine_handle()?;
-            *slot = Some(ManuallyDrop::new(Runtime::new(handle)));
+            *slot = Some(std::mem::ManuallyDrop::new(Runtime::new(handle)));
         }
-        let rt: &mut Runtime = &mut *slot.as_mut().expect("runtime just initialized");
-        f(rt)
+        let rt: &mut Runtime = slot.as_mut().expect("runtime just initialized");
+        let out = f(rt);
+
+        // Arm the automatic teardown HERE — after script has actually run, not merely after
+        // `Runtime::new`. Thread-local destructors run in REVERSE registration order, and mozjs
+        // registers thread-locals of its own *lazily*: `trace_traceables` (which `Runtime::drop`
+        // walks, via `finishRoots`) does not exist until the first `rooted!`, which happens inside the
+        // first eval. Arm before that and mozjs registers after us, is destroyed before us, and our
+        // teardown dies reaching for a thread-local that is already gone.
+        //
+        // **To run first at teardown, register last.** So we register after the JS has run.
+        spidermonkey::arm_teardown();
+        out
     })
 }
 
@@ -173,13 +182,8 @@ fn with_runtime<R>(
 pub fn shutdown() {
     #[cfg(feature = "_sm")]
     {
-        // Order matters: the runtime holds an engine handle, and the engine refuses to shut down
-        // while any handle is outstanding.
-        RUNTIME.with(|cell| {
-            if let Some(rt) = cell.borrow_mut().take() {
-                drop(std::mem::ManuallyDrop::into_inner(rt));
-            }
-        });
+        // Order matters — context, then handle, then `JS_ShutDown()` — and it is now stated once, in
+        // `JsThread::drop`, instead of being re-derived by every caller. This just runs it early.
         spidermonkey::shutdown_engine();
     }
 }

@@ -636,6 +636,23 @@ s = s.replace("""    rooted!(in(cx) let global = CurrentGlobalOrNull(&wrap_cx(cx
 fi
 
 echo
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_CLEAN_EXIT; then
+  # Disarm the automatic teardown. SpiderMonkey then never gets its `JS_ShutDown()`, its C++ static
+  # destructors run against a live engine, and the process SIGSEGVs in `__run_exit_handlers` — after
+  # `main` has returned, with every byte of output already correct and only the exit code (139)
+  # betraying it. That is where a browser flushes its cookie jar and localStorage, so the real bug is
+  # silent data loss on quit (ADR-009). This is the exact state the engine was in for 60 ticks.
+  mutate engine/js/src/lib.rs '
+s = s.replace(
+    "        spidermonkey::arm_teardown();",
+    "        // MUTATION: teardown disarmed",
+)
+'
+  expect_red G_CLEAN_EXIT cargo test -q -p manuk-page --features stylo,spidermonkey --test g_clean_exit
+fi
+
 if [ "$FAIL" -gt 0 ]; then
   echo "${RED}${BLD}FALSIFY: $FAIL gate(s) are VACUOUS — they pass with the bug installed.${OFF}"
   echo "A vacuous gate is worse than a missing one: it is trusted. Fix the GATE, not the threshold."

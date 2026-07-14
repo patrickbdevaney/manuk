@@ -3054,6 +3054,68 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 62 — the exit segfault, closed: to run first at teardown, register last
+
+**TICK SHAPE: bar-0** — the stability floor. A sixty-tick-old residual, and it was ours all along.
+
+**The bug.** Any binary that ran JavaScript and did not explicitly call `manuk_js::shutdown()` would do
+its work perfectly, print correct output, and then **SIGSEGV after `main` returned**
+(`pthread_mutex_destroy failed: Device or resource busy`). SpiderMonkey needs `JS_ShutDown()` before the
+process exits; without it, its C++ static destructors run against a live engine and die in
+`__run_exit_handlers`.
+
+**Why it mattered more than it looked.** A crash in the exit handlers *aborts the handlers after it* —
+which is exactly where a browser flushes its cookie jar and `localStorage` to the profile (ADR-009). The
+user-visible bug is **silent data loss on quit**. That is a Bar 0 defect, not a cosmetic exit code.
+
+**Why it survived sixty ticks.** The "fix" was a convention: *every binary must call `shutdown()` last*.
+`g_runaway`, `g_alloc`, `g_load_budget` and the shell remembered. `g_globals` and `g_dedup` did not, and
+crashed every single run. **A convention that half the callers forget is not a fix; it is a list of the
+places you have not been bitten yet.**
+
+**The probe came first, and it is what made the rest possible.** `G_CLEAN_EXIT` re-executes the test
+binary as a child that runs real JavaScript and then simply *returns from `main`* — no shutdown call, on
+purpose — and demands exit code 0. It went **RED at 139** on the engine as it stood.
+
+**The fix, and the trap inside it.** The obvious move — one struct holding the `Runtime` and the
+`JSEngine`, one thread-local, a `Drop` that orders them — **does not work**, and I shipped it and watched
+the gate stay red to find out why:
+
+> **Thread-local destructors run in REVERSE order of registration**, and mozjs registers thread-locals
+> *lazily*: `Runtime::drop` → `finishRoots` → `trace_traceables`, which does not exist until the first
+> `rooted!` — i.e. until the first eval. Our state must be created *before* that, so it registers first,
+> so it is destroyed **last**, reaching for a mozjs thread-local that is already gone. `cannot access a
+> Thread Local Storage value during or after destruction`, in a `nounwind` frame: instant abort. **One
+> exit crash traded for another.**
+
+`atexit` is no escape either — glibc runs `__call_tls_dtors()` *before* the atexit list.
+
+So: split the **state** from the **trigger**. `ENGINE` and `RUNTIME` hold `ManuallyDrop` (no drop glue ⇒
+**no TLS destructor is ever registered** ⇒ readable at any point during shutdown), and a separate empty
+`TeardownGuard` carries the `Drop` — armed **after the first eval**, so it registers *after* mozjs's lazy
+thread-locals and is therefore destroyed *before* them.
+
+> **To run first at teardown, register last.**
+
+`g_globals` and `g_dedup` now exit 0. So does a bare binary that never heard of `shutdown()`.
+
+**A second thing this tick, and it is a repeat offence.** `G_DEMO_LIVE` — the gate I built *last* tick to
+stop the demo shipping unpainted — **broke the GitHub Pages deploy**. It slept 3 seconds and then
+connected to Chrome's debug port; on a runner, Chrome needed longer, so it got `Connection refused` and
+failed the build. That is PROCESS #31 (*my instrument broke the build it was measuring*) for the third
+time, and the root cause is the same as #36: **a fixed sleep standing in for the condition I actually
+care about.** It polls now. The rule, which has cost three defects: *never sleep where you can wait for
+the thing.*
+
+**Wall time.** `G_CLEAN_EXIT`'s first version shelled out to `cargo run --example` and put **215 seconds**
+on the verify wall. Rigor bought with a 6× slower loop is a trade the ratchet does not permit, so the
+child is now this very test binary re-executed with an env var: same evidence, **0.18s**. Wall is 32s,
+which is *better* than the 40s baseline.
+
+**The ratchet.** Capability: **up** — a user can quit the browser without losing their session.
+Performance: unchanged (wall improved). Instrument fidelity: **up** — `G_CLEAN_EXIT` is proven
+falsifiable, and the demo gate can no longer take the deploy down with it.
+
 ## Tick 61 — the corpus goes to 41 sites, and three instruments lie in a row
 
 **TICK SHAPE: instrument** (the engine is unchanged; what changed is what the engine can be *seen* doing,

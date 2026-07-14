@@ -54,6 +54,14 @@ jobs:
           cargo install wasm-bindgen-cli --version "$VER" --locked
 
       # The engine itself, compiled to wasm: Stylo + Taffy + tiny-skia + our DOM/layout/paint.
+      # G_DEMO_LIVE drives the built demo in a real headless Chrome over CDP and refuses to let a
+      # demo ship that cannot be proven to have PAINTED. It needs a browser and a websocket client.
+      # `google-chrome` is preinstalled on ubuntu-latest; `websockets` is not.
+      - name: the gate's dependencies (a browser, and a way to talk to it)
+        run: |
+          python3 -m pip install --quiet --user websockets
+          echo "chrome: $(google-chrome --version 2>/dev/null || chromium --version 2>/dev/null || echo MISSING)"
+
       - name: build the engine for wasm
         run: ./scripts/ci-run.sh "wasm demo build" ./scripts/demo-build.sh
 

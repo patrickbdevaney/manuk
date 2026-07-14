@@ -28,12 +28,40 @@ What it asserts, and why each one is the difference between a demo and a screens
 
 import asyncio
 import json
+import shutil
 import subprocess
 import sys
+import tempfile
 import urllib.request
 
 PORT = 8901
 CDP = 9222
+
+
+def wait_for_cdp(chrome, timeout=40):
+    """Wait for Chrome to actually open its debug port.
+
+    The first version slept 3 seconds and then connected. On my laptop Chrome was up in well under
+    that; on a GitHub runner it was not, so the probe hit `Connection refused` and **failed the demo
+    DEPLOY** — the gate written to protect the demo was the only thing stopping it from shipping.
+    That is PROCESS #31 exactly (*my instrument broke the build it was measuring*), and the cause was
+    the same: a fixed sleep standing in for the condition I actually cared about. So: poll the
+    condition. And if Chrome died, say what it said, rather than reporting a refused connection.
+    """
+    import time
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if chrome.poll() is not None:
+            err = (chrome.stderr.read() or b"").decode(errors="replace")[-800:]
+            fail(f"the browser exited before opening its debug port (rc={chrome.returncode}).\n{err}")
+        try:
+            with urllib.request.urlopen(f"http://localhost:{CDP}/json", timeout=1) as r:
+                if json.load(r):
+                    return
+        except Exception:
+            time.sleep(0.5)
+    fail(f"the browser never opened its debug port on :{CDP} within {timeout}s.")
 
 
 async def probe():
@@ -105,12 +133,18 @@ def main():
         stderr=subprocess.DEVNULL,
     )
     chrome = None
-    for exe in ("chromium", "google-chrome", "chromium-browser"):
+    profile = tempfile.mkdtemp(prefix="manuk-cdp-")
+    for exe in ("chromium", "google-chrome", "google-chrome-stable", "chromium-browser"):
         try:
             chrome = subprocess.Popen(
-                [exe, "--headless", "--no-sandbox", "--disable-gpu",
+                [exe, "--headless=new", "--no-sandbox", "--disable-gpu",
+                 # A CI container has a tiny /dev/shm; without this Chrome dies on startup with a
+                 # crash that looks nothing like the cause.
+                 "--disable-dev-shm-usage",
+                 # And it needs a writable profile it does not have to guess at.
+                 f"--user-data-dir={profile}",
                  f"--remote-debugging-port={CDP}", "about:blank"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
             )
             break
         except FileNotFoundError:
@@ -120,9 +154,7 @@ def main():
         print("   ⚠ no chromium on PATH — the demo is UNVERIFIED, not verified")
         return
     try:
-        import time
-
-        time.sleep(3)
+        wait_for_cdp(chrome)
         st = asyncio.run(probe())
 
         if st["boot"]:
@@ -145,6 +177,7 @@ def main():
     finally:
         chrome.terminate()
         srv.terminate()
+        shutil.rmtree(profile, ignore_errors=True)
 
 
 if __name__ == "__main__":
