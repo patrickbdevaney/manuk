@@ -3054,6 +3054,73 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 82 — the largest gap in the platform, and we had never looked at it
+
+**TICK SHAPE: capability.** **`html/dom` 21.0% → 37.7% — +9,940 subtests in one tick.** Bar 0 clean.
+`dom/` −2 (named below, not hidden).
+
+**Ten ticks were spent on 9% of the ground we already had checked out.**
+
+Ticks 71–81 worked `dom/`: carefully, correctly, +652 subtests. `dom/` is **6,484 subtests**. Sitting in
+the same checkout, **never once measured**, was `html/dom` — **59,818 subtests**, nine times larger. The
+loop optimised the area it happened to be looking at and never asked whether it was the right one.
+
+**One command answered it.** Histogramming all 47,226 failing subtest messages in `html/dom`:
+
+| count | message |
+|---:|---|
+| 23,411 | `IDL get expected (string/boolean/number) X but got (undefined) undefined` |
+| 13,724 | `getAttribute() expected X but got X` — the IDL **set** never reached the attribute |
+| 1,470 | `hasAttribute() expected false but got true` |
+
+**~38,000 subtests — 80% of the failures — are ONE mechanism: HTML attribute reflection.**
+`a.href`. `input.disabled`. `img.width`. `td.colSpan`. `option.selected`. **All `undefined`.**
+
+And it is not a conformance curiosity. **It is how ordinary page code touches the DOM.**
+`if (input.disabled)` reading `undefined` does not throw — *it silently takes the wrong branch.*
+
+**The table is not the work; the rules are.** The table (118 elements, ~400 attributes) is extracted from
+WPT's own `elements-*.js`, which is a transcription of the HTML spec's IDL — the same source Ladybird and
+Servo codegen from. What makes it honest is that the **mechanism is generic**: string / boolean / long /
+unsigned long / limited / clamped / double / enum / url are implemented once, against the spec's
+*algorithms*, and hold for attributes no test covers. Swap the table and the mechanism still stands.
+
+The rules that actually matter, each of which is a classic bug:
+
+* **boolean is PRESENCE, not value.** `el.disabled = false` must **remove** the attribute. Stringifying
+  writes `"false"` — and the element stays disabled, with no error and no way for the page to tell.
+* **URLs resolve against the document base.** `a.href` on `<a href="x">` is absolute.
+* **an invalid `unsigned long` falls back to the default — it is not clamped to zero.** `colspan="0"` is
+  invalid, so `colSpan` reads back as **1**.
+* **enumerated attributes have TWO different defaults** — missing-value and invalid-value — and confusing
+  them is *the* classic reflection bug.
+
+**I introduced a Bar 0 crash and it had to go before anything else could.** The first version checked for a
+name collision on *one* prototype instead of the whole **chain**, so a reflected accessor was defined over
+a native implementation and the two re-entered each other. A WPT child died. **+9,940 subtests is worth
+nothing next to a crash**, and the tick could not ship until `if (idl in proto) return;` — *does this name
+already mean something here?* — replaced the wrong question.
+
+**Two things skipped rather than faked**, and this is the fourth time the same lesson has paid:
+
+* **`tokenlist`** (`relList`, `sandbox`, `htmlFor`) reflects as a live `DOMTokenList`, not a string. The
+  first version returned the raw attribute when it could not build one — and *`dom/lists/DOMTokenList-coverage`
+  fell 129 → 115.* **A caller handed a string where a `DOMTokenList` belongs has been lied to; a caller
+  handed `undefined` at least knows nothing is there.** Skipped, and said so.
+* **The −2 in `dom/historical.html` is real and is named.** Our accessors live on the *shared* prototype,
+  so `'text' in div` is `true` even though the getter returns `undefined`. Browsers put `text` only on
+  `HTMLAnchorElement.prototype`. **This is tick 64's stated limit surfacing** — we have no per-tag
+  prototypes — and building them is the next tick, not a footnote.
+
+**And the policy that should have prevented all of this is now written down**: `docs/loop/GRIND.md`
+(PROCESS #47). *Measure every area every tick. Histogram the failure messages of the largest. Fix the
+MECHANISM with the highest count, never the instance. Go broad until no mechanism ≥500 subtests remains
+anywhere — only then go narrow.* **A mechanism you have not looked for cannot appear in your ranking.**
+
+**The ratchet.** Capability: **up, by an order of magnitude more than any previous tick.** Performance:
+unchanged. Instrument fidelity: **up** — the search policy is mechanical now, and the loop can no longer
+spend ten ticks in the wrong room.
+
 ## Tick 81 — the wall could not tell a killed gate from a failing one
 
 **TICK SHAPE: instrument.** `[no-pattern]`. No engine change; the thing that *judges* every engine change

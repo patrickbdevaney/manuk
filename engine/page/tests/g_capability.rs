@@ -64,6 +64,13 @@ const CLAIMS: &[(&str, &str)] = &[
     ("TreeWalker instance", "document.createTreeWalker(document.body) instanceof TreeWalker"),
     // Live collections (tick 73). A DEAD collection is a Bar 0 hang: `while (el.children.length)
     // el.removeChild(el.firstChild)` never terminates if length is frozen.
+    // HTML attribute reflection (tick 82). ~38,000 WPT subtests, and how ordinary page code touches the
+    // DOM: `if (input.disabled)` reading `undefined` does not throw — it takes the wrong branch.
+    ("reflect string", "(function(){var a=document.createElement('a');a.setAttribute('target','_blank');return a.target==='_blank'})()"),
+    ("reflect boolean removes", "(function(){var i=document.createElement('input');i.disabled=true;if(!i.hasAttribute('disabled'))return false;i.disabled=false;return !i.hasAttribute('disabled')})()"),
+    ("reflect set reaches the attribute", "(function(){var m=document.createElement('img');m.width=200;return m.getAttribute('width')==='200'})()"),
+    ("reflect invalid falls back", "(function(){var m=document.createElement('img');m.setAttribute('height','-5');return m.height===0})()"),
+
     // The *AttributeNS family (tick 79). 160 failing subtests said "setAttributeNS is not a function" —
     // it is how SVG's xlink:href, MathML, and every XML-ish document set an attribute at all.
     ("setAttributeNS", "(function(){var d=document.createElement('i');d.setAttributeNS('http://www.w3.org/1999/xlink','xlink:href','#x');return d.getAttribute('xlink:href')==='#x'})()"),

@@ -1507,6 +1507,21 @@ pub fn install(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<()
     // `Attr` / `NamedNodeMap`. It wraps the element prototype too.
     eval(rt, global, crate::attrs_js::ATTRS_JS, "attrs.js")?;
 
+    // **HTML attribute reflection** — ~38,000 WPT subtests, and how ordinary page code touches the DOM.
+    // After `attrs.js`, because it is built on `setAttribute`/`getAttribute`/`hasAttribute`; before
+    // `mutation.js`, so that a reflected write (`input.disabled = true`) goes through the wrapped
+    // `setAttribute` and is therefore OBSERVED. Install it after the observer and every reflected
+    // mutation becomes invisible to MutationObserver — silently.
+    {
+        let table = format!(
+            "globalThis.__REFLECT_TABLE = {};",
+            serde_json::to_string(crate::reflect_table::REFLECT_TABLE)
+                .unwrap_or_else(|_| "\"\"".to_string())
+        );
+        eval(rt, global, &table, "reflect_table.js")?;
+        eval(rt, global, crate::reflect_js::REFLECT_JS, "reflect.js")?;
+    }
+
     // `MutationObserver` LAST of all: it wraps the mutating methods, and it must wrap the FINAL versions
     // of them — including the ones the collections and attrs layers have already replaced. Install it
     // earlier and it observes a method that is later swapped out from under it, so a page's mutations

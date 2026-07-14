@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **74** | ticks 1–81 |
-| median tick cycle | **17m** | 73 intervals |
+| ticks landed | **75** | ticks 1–82 |
+| median tick cycle | **18m** | 74 intervals |
 | median, last 10 | **15m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.92** | 79.6h elapsed |
-| median verify wall | **3m** | 13 ticks |
+| **ticks per hour** | **0.90** | 82.6h elapsed |
+| median verify wall | **3m** | 14 ticks |
 | wall trend | 39s → 3m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -26,22 +26,22 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 ### Near — the daily driver (doc / app / platform web)
 
-* **capabilities asserted** (`G_CAPABILITY`): 48 → **74**
-* **live gates**: 27 → **34**
-* **✅ rows in the capability ledger**: 144 → **153**
+* **capabilities asserted** (`G_CAPABILITY`): 48 → **78**
+* **live gates**: 27 → **35**
+* **✅ rows in the capability ledger**: 144 → **154**
 * **Bar 0 — oracle hangs**: 4 of 265 sites
 
-**35 of 74 ticks** (47%) moved a
+**36 of 75 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
 
 ### Far — WPT (50,000 tests)
 
-* measured **14** times (a carried-forward number is never counted as a measurement)
+* measured **15** times (a carried-forward number is never counted as a measurement)
 * first, tick 64: **1736/6418** = 27.0%
-* latest, tick 81: **2389/6484** = 36.8%
-* **rate over the measured window: +38.4 subtests / tick** (17 ticks)
+* latest, tick 82: **2387/6484** = 36.8%
+* **rate over the measured window: +36.2 subtests / tick** (18 ticks)
 
 **Interval by interval — and this is the finding, not the average:**
 
@@ -60,6 +60,7 @@ and finding that out redirected everything after it.
 | 78→79 | **+170** | +170.0 | capability |
 | 79→80 | **+44** | +44.0 | capability |
 | 80→81 | **+0** | +0.0 | instrument |
+| 81→82 | **-2** | -2.0 | capability |
 
 > **What this rate is NOT.** It is measured on the `dom/` subset — **6,418 subtests** — and
 > the far horizon is ~50,000 across *all* of WPT, **which this project has never run**.
@@ -84,8 +85,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **35** capability ticks, median cycle **17m**
-* median diff per tick: **+307 / −9** lines across 7 files
+* **36** capability ticks, median cycle **18m**
+* median diff per tick: **+317 / −9** lines across 7 files
 
 ## Every tick
 
@@ -165,5 +166,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **79** | 2026-07-14 12:20 | 8m | capability | 3m | +107/−3 | 34 | 74 | 36.2% | the cheapest instrument is the one you already have and did not run |
 | **80** | 2026-07-14 12:27 | 7m | capability | 3m | +87/−4 | 34 | 74 | 36.8% | a passive listener that cancels is not passive |
 | **81** | 2026-07-14 12:40 | 13m | instrument | 4m | +81/−5 | 34 | 74 | 36.8% | the wall could not tell a killed gate from a failing one |
+| **82** | 2026-07-14 15:39 | 3.0h | capability | 3m | +609/−2 | 35 | 78 | 36.8% | the largest gap in the platform, and we had never looked at it |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

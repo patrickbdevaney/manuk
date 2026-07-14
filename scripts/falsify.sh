@@ -645,6 +645,19 @@ fi
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_REFLECT; then
+  # Make boolean reflection STRINGIFY instead of removing the attribute. `el.disabled = false` then writes
+  # disabled="false" — and the element stays disabled, with no error and no way for the page to tell.
+  # Presence, not value, is the entire boolean rule, and getting it backwards disables half the web.
+  mutate engine/js/src/reflect_js.rs '
+old = "else el.removeAttribute(a);"
+assert old in s, "MUTATION DID NOT APPLY - a falsifier that changes nothing certifies nothing (PROCESS #15)"
+s = s.replace(old, "else el.setAttribute(a, String(v));", 1)
+'
+  expect_red G_REFLECT cargo test -q -p manuk-page --features stylo,spidermonkey --test g_reflect
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_MUTATION; then
   # Stop recording. The observer still constructs, `observe()` still returns, `typeof MutationObserver` is
   # still "function" — and it reports nothing, forever. That is the inert stub it replaced, and it is worse
