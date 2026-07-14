@@ -117,7 +117,12 @@ unsafe extern "C" fn enqueue_promise_job(
     rooted!(in(cx) let job_val = mozjs::jsval::ObjectValue(job.get()));
 
     // Hand the job to JS through a scratch global property, then push it onto the array.
-    if !JS_SetProperty(&mut wrap_cx(cx), g.handle(), c"__pendingJob".as_ptr(), job_val.handle()) {
+    if !JS_SetProperty(
+        &mut wrap_cx(cx),
+        g.handle(),
+        c"__pendingJob".as_ptr(),
+        job_val.handle(),
+    ) {
         return false;
     }
     let script = format!(
@@ -204,7 +209,6 @@ unsafe fn install_with(
     cx: *mut RawJSContext,
     queue: &'static PromiseJobQueue,
 ) -> Result<&'static PromiseJobQueue, String> {
-
     let traps = JobQueueTraps {
         getHostDefinedData: Some(get_host_defined_data),
         enqueuePromiseJob: Some(enqueue_promise_job),
@@ -279,14 +283,22 @@ mod tests {
             "globalThis.done = 0; Promise.resolve(7).then(v => { globalThis.done = v; });",
         );
         let before = eval_val(&mut runtime, global.handle(), "globalThis.done");
-        assert_eq!(before.to_int32(), 0, "a reaction must not run before the drain");
+        assert_eq!(
+            before.to_int32(),
+            0,
+            "a reaction must not run before the drain"
+        );
         assert_eq!(queue.pending(), 1, "SpiderMonkey enqueued exactly one job");
 
         // Drain: SpiderMonkey dispatches into our `run_jobs` trap.
         unsafe { drain(raw_cx) };
 
         let after = eval_val(&mut runtime, global.handle(), "globalThis.done");
-        assert_eq!(after.to_int32(), 7, "the native promise reaction must have run");
+        assert_eq!(
+            after.to_int32(),
+            7,
+            "the native promise reaction must have run"
+        );
         assert_eq!(queue.pending(), 0);
     }
 
@@ -383,7 +395,10 @@ mod tests {
         // by the promise chain rather than aborting the drain.
         assert!(s.contains("a"), "first reaction ran: {s}");
         assert!(s.contains("parallel"), "the independent chain ran too: {s}");
-        assert!(s.contains("caught"), "the rejection was routed to .catch: {s}");
+        assert!(
+            s.contains("caught"),
+            "the rejection was routed to .catch: {s}"
+        );
         assert!(s.contains("b"), "the chain continued after the catch: {s}");
     }
 }

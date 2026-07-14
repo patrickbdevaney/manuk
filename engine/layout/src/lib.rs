@@ -325,18 +325,19 @@ impl LayoutBox {
         // Each contribution walks up only as far as the first ancestor that HAS a box — that
         // ancestor owns its own border box and must not be inflated by content that merely
         // overflows it.
-        let mut lift = |start: NodeId, r: Rect, out: &mut std::collections::HashMap<NodeId, Rect>| {
-            let mut cur = dom.parent(start);
-            while let Some(n) = cur {
-                if boxes.contains_key(&n) {
-                    break;
+        let mut lift =
+            |start: NodeId, r: Rect, out: &mut std::collections::HashMap<NodeId, Rect>| {
+                let mut cur = dom.parent(start);
+                while let Some(n) = cur {
+                    if boxes.contains_key(&n) {
+                        break;
+                    }
+                    if dom.is_element(n) {
+                        add(out, n, r);
+                    }
+                    cur = dom.parent(n);
                 }
-                if dom.is_element(n) {
-                    add(out, n, r);
-                }
-                cur = dom.parent(n);
-            }
-        };
+            };
         for (&owner, &r) in &frags {
             // The fragment's own owner is boxless by construction (an inline element), so it takes
             // the fragment directly before the walk begins.
@@ -407,10 +408,21 @@ impl LayoutBox {
             tp(r.x + r.width, r.y + r.height),
         ];
         let minx = corners.iter().map(|p| p.0).fold(f32::INFINITY, f32::min);
-        let maxx = corners.iter().map(|p| p.0).fold(f32::NEG_INFINITY, f32::max);
+        let maxx = corners
+            .iter()
+            .map(|p| p.0)
+            .fold(f32::NEG_INFINITY, f32::max);
         let miny = corners.iter().map(|p| p.1).fold(f32::INFINITY, f32::min);
-        let maxy = corners.iter().map(|p| p.1).fold(f32::NEG_INFINITY, f32::max);
-        self.rect = Rect { x: minx, y: miny, width: maxx - minx, height: maxy - miny };
+        let maxy = corners
+            .iter()
+            .map(|p| p.1)
+            .fold(f32::NEG_INFINITY, f32::max);
+        self.rect = Rect {
+            x: minx,
+            y: miny,
+            width: maxx - minx,
+            height: maxy - miny,
+        };
         match &mut self.content {
             BoxContent::Block(kids) => {
                 for k in kids {
@@ -558,7 +570,12 @@ pub fn layout_document(
 /// Is `node` a block-level box in its parent's formatting context?
 /// Compose a `transform` function list into an **absolute** affine matrix applied around
 /// `origin` (the transform-origin, default the box center). `w`/`h` resolve `translate` `%`.
-fn resolve_transform(fns: &[manuk_css::TransformFn], w: f32, h: f32, origin: (f32, f32)) -> [f32; 6] {
+fn resolve_transform(
+    fns: &[manuk_css::TransformFn],
+    w: f32,
+    h: f32,
+    origin: (f32, f32),
+) -> [f32; 6] {
     use manuk_css::TransformFn as T;
     // Local matrix = product of the functions in source order (first is outermost).
     let mut local = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
@@ -615,7 +632,12 @@ fn border_of(s: &ComputedStyle) -> Option<Border> {
 fn form_control_text(dom: &Dom, node: NodeId) -> Option<String> {
     let el = dom.element(node)?;
     match dom.tag_name(node)? {
-        "input" => match el.attr("type").unwrap_or("text").to_ascii_lowercase().as_str() {
+        "input" => match el
+            .attr("type")
+            .unwrap_or("text")
+            .to_ascii_lowercase()
+            .as_str()
+        {
             "submit" => Some(el.attr("value").unwrap_or("Submit").to_string()),
             "reset" => Some(el.attr("value").unwrap_or("Reset").to_string()),
             "button" => Some(el.attr("value").unwrap_or("").to_string()),
@@ -655,7 +677,9 @@ fn form_control_text(dom: &Dom, node: NodeId) -> Option<String> {
                     }
                 }
             }
-            selected.or(first).map(|opt| dom.text_content(opt).trim().to_string())
+            selected
+                .or(first)
+                .map(|opt| dom.text_content(opt).trim().to_string())
         }
         _ => None,
     }
@@ -699,7 +723,10 @@ fn inline_contains_block(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
         let Some(d) = styles.get(&k).map(|s| s.display) else {
             continue;
         };
-        if matches!(d, Display::Block | Display::Flex | Display::Grid | Display::Table) {
+        if matches!(
+            d,
+            Display::Block | Display::Flex | Display::Grid | Display::Table
+        ) {
             return true;
         }
         if d == Display::Inline && inline_contains_block(dom, styles, k) {
@@ -737,7 +764,11 @@ fn text_style(cs: &ComputedStyle, fonts: &FontContext) -> TextStyle {
     let line_height = if cs.line_height_normal {
         let lm = fonts.line_metrics(key, cs.font_size);
         let h = lm.ascent + lm.descent + lm.line_gap;
-        if h > 0.0 { h } else { cs.line_height }
+        if h > 0.0 {
+            h
+        } else {
+            cs.line_height
+        }
     } else {
         cs.line_height
     };
@@ -921,7 +952,13 @@ fn is_float(s: &ComputedStyle) -> bool {
 /// block (`cb_bottom`), so it scrolls away with its container. `natural_y`/`box_h` are the
 /// box's in-flow top and height. Returns `0.0` while the box hasn't been scrolled to its
 /// threshold (the common, unshifted case).
-pub fn sticky_shift(natural_y: f32, box_h: f32, top_inset: f32, cb_bottom: f32, scroll_y: f32) -> f32 {
+pub fn sticky_shift(
+    natural_y: f32,
+    box_h: f32,
+    top_inset: f32,
+    cb_bottom: f32,
+    scroll_y: f32,
+) -> f32 {
     let pinned = (scroll_y + top_inset).min(cb_bottom - box_h);
     natural_y.max(pinned) - natural_y
 }
@@ -994,7 +1031,8 @@ fn content_right_extent(content: &BoxContent, fonts: &FontContext, origin: f32) 
     /// span each line from its own leftmost fragment, and keep the line's offset only when it is a
     /// real indent (a padding, a margin) rather than half a million pixels of centring.
     fn inline_extent(frags: &[TextFragment], fonts: &FontContext, rel: &dyn Fn(f32) -> f32) -> f32 {
-        let mut lines: std::collections::HashMap<u32, (f32, f32)> = std::collections::HashMap::new();
+        let mut lines: std::collections::HashMap<u32, (f32, f32)> =
+            std::collections::HashMap::new();
         for f in frags {
             let w = fonts.measure(&f.text, f.style.font_key, f.style.font_size);
             let key = f.line_top.to_bits();
@@ -1053,9 +1091,19 @@ fn alpha_ordinal(n: i64, upper: bool) -> String {
 /// Roman numerals, for `list-style-type: lower-roman|upper-roman`.
 fn roman_ordinal(n: i64, upper: bool) -> String {
     const TABLE: [(i64, &str); 13] = [
-        (1000, "m"), (900, "cm"), (500, "d"), (400, "cd"),
-        (100, "c"), (90, "xc"), (50, "l"), (40, "xl"),
-        (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i"),
+        (1000, "m"),
+        (900, "cm"),
+        (500, "d"),
+        (400, "cd"),
+        (100, "c"),
+        (90, "xc"),
+        (50, "l"),
+        (40, "xl"),
+        (10, "x"),
+        (9, "ix"),
+        (5, "v"),
+        (4, "iv"),
+        (1, "i"),
     ];
     let mut n = n.max(1);
     let mut out = String::new();
@@ -1093,7 +1141,8 @@ fn collapse_margins(a: f32, b: f32) -> f32 {
 /// every page whether or not anyone was debugging. A `OnceLock` makes the disabled case a null check.
 fn trace_intrinsic() -> Option<&'static str> {
     static V: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
-    V.get_or_init(|| std::env::var("MANUK_TRACE_INTRINSIC").ok()).as_deref()
+    V.get_or_init(|| std::env::var("MANUK_TRACE_INTRINSIC").ok())
+        .as_deref()
 }
 
 impl Ctx<'_> {
@@ -1186,7 +1235,11 @@ impl Ctx<'_> {
         }
         // `box-sizing:border-box` — the specified width is the border box, so the content
         // width is that minus padding + border. (`auto` already resolves to content width.)
-        let bs_extra_w = if s.box_sizing == BoxSizing::BorderBox { pl + pr + bl + br } else { 0.0 };
+        let bs_extra_w = if s.box_sizing == BoxSizing::BorderBox {
+            pl + pr + bl + br
+        } else {
+            0.0
+        };
         if s.box_sizing == BoxSizing::BorderBox && s.width != Dim::Auto && taffy_known.is_none() {
             width -= bs_extra_w;
         }
@@ -1226,7 +1279,11 @@ impl Ctx<'_> {
         // percentage-height *child* resolves against (CSS2 §10.5). Computed before laying
         // out children so their `height:%` works; `None` (auto height) means a percent-height
         // child falls back to its content height.
-        let bs_extra_h = if s.box_sizing == BoxSizing::BorderBox { pt + pb + bt + bb } else { 0.0 };
+        let bs_extra_h = if s.box_sizing == BoxSizing::BorderBox {
+            pt + pb + bt + bb
+        } else {
+            0.0
+        };
         let own_definite_h: Option<f32> = match s.height {
             Dim::Px(p) => Some((p - bs_extra_h).max(0.0)),
             Dim::Percent(pct) => pch.map(|h| (h * pct / 100.0 - bs_extra_h).max(0.0)),
@@ -1239,7 +1296,14 @@ impl Ctx<'_> {
         let mut own_bfc;
         let (content, content_height) = if establishes_bfc(&s) {
             own_bfc = FloatContext::new(content_x, content_x + width);
-            let (c, h) = self.layout_children(node, content_x, content_y, width, own_definite_h, &mut own_bfc);
+            let (c, h) = self.layout_children(
+                node,
+                content_x,
+                content_y,
+                width,
+                own_definite_h,
+                &mut own_bfc,
+            );
             // A BFC root grows to contain its floats (CSS2 §10.6.7 auto-height case).
             let float_h = (own_bfc.lowest_bottom() - content_y).max(0.0);
             (c, h.max(float_h))
@@ -1289,7 +1353,8 @@ impl Ctx<'_> {
             background_image: s.background_image.clone(),
             background_size: s.background_size,
             background_repeat: s.background_repeat,
-            outline: (s.outline_width > 0.0 && s.outline_color.a > 0).then_some((s.outline_width, s.outline_color)),
+            outline: (s.outline_width > 0.0 && s.outline_color.a > 0)
+                .then_some((s.outline_width, s.outline_color)),
             marker,
             opacity: s.opacity,
             node: Some(node),
@@ -1368,7 +1433,8 @@ impl Ctx<'_> {
                 node: Some(node),
                 no_wrap: true,
             }];
-            let (frags, _atomics, h) = self.layout_inline(items, cx, cy, cw, TextAlign::Left, floats);
+            let (frags, _atomics, h) =
+                self.layout_inline(items, cx, cy, cw, TextAlign::Left, floats);
             return (BoxContent::Inline(frags), h);
         }
 
@@ -1417,7 +1483,12 @@ impl Ctx<'_> {
             let mut boxes = Vec::new();
             if !frags.is_empty() {
                 boxes.push(LayoutBox {
-                    rect: Rect { x: cx, y: cy, width: cw, height: h },
+                    rect: Rect {
+                        x: cx,
+                        y: cy,
+                        width: cw,
+                        height: h,
+                    },
                     background: None,
                     border: None,
                     radius: 0.0,
@@ -1605,7 +1676,8 @@ impl Ctx<'_> {
             background_image: s.background_image.clone(),
             background_size: s.background_size,
             background_repeat: s.background_repeat,
-            outline: (s.outline_width > 0.0 && s.outline_color.a > 0).then_some((s.outline_width, s.outline_color)),
+            outline: (s.outline_width > 0.0 && s.outline_color.a > 0)
+                .then_some((s.outline_width, s.outline_color)),
             marker: None,
             opacity: s.opacity,
             node: Some(node),
@@ -1695,7 +1767,11 @@ impl Ctx<'_> {
         let lm = self.fonts.line_metrics(style.font_key, style.font_size);
         // `outside`: hang it left of the content edge, with a small gap. `inside`: at the edge.
         const GAP: f32 = 6.0;
-        let x = if s.list_style_inside { content_x } else { content_x - w - GAP };
+        let x = if s.list_style_inside {
+            content_x
+        } else {
+            content_x - w - GAP
+        };
         Some(TextFragment {
             x,
             baseline: content_y + lm.ascent,
@@ -1817,7 +1893,10 @@ impl Ctx<'_> {
                         taffy::AvailableSpace::MaxContent => None,
                     });
                     let (w, h) = self.measure_intrinsic(dn, aw);
-                    taffy::Size { width: known.width.unwrap_or(w), height: known.height.unwrap_or(h) }
+                    taffy::Size {
+                        width: known.width.unwrap_or(w),
+                        height: known.height.unwrap_or(h),
+                    }
                 },
             )
             .max(0.0);
@@ -1837,7 +1916,10 @@ impl Ctx<'_> {
                         eprintln!(
                             "    child {:?} [{:.0} {:.0} {:.0}x{:.0}]",
                             k.node.and_then(|n| self.dom.tag_name(n)),
-                            k.rect.x, k.rect.y, k.rect.width, k.rect.height
+                            k.rect.x,
+                            k.rect.y,
+                            k.rect.width,
+                            k.rect.height
                         );
                     }
                 }
@@ -1862,7 +1944,8 @@ impl Ctx<'_> {
         }
         let width = self.shrink_to_fit(node, avail);
         let mut fc = FloatContext::new(0.0, width.max(1.0));
-        let (_content, height) = self.layout_children(node, 0.0, 0.0, width.max(0.0), None, &mut fc);
+        let (_content, height) =
+            self.layout_children(node, 0.0, 0.0, width.max(0.0), None, &mut fc);
         let result = (width, height);
         // `MANUK_TRACE_INTRINSIC=<id>` prints what a flex/grid item told taffy it wanted to be.
         // Flex WRAPPING is decided by this number, so when a row breaks that Chrome keeps on one
@@ -1912,7 +1995,11 @@ impl Ctx<'_> {
         let content_y = border_y + bt + pt;
 
         // `border-collapse` drops the inter-cell spacing (cells share borders).
-        let spacing = if s.border_collapse { 0.0 } else { s.border_spacing };
+        let spacing = if s.border_collapse {
+            0.0
+        } else {
+            s.border_spacing
+        };
         let rows = self.collect_table_rows(node);
 
         // Placement grid: each cell claims the next free slot in its row, spanning
@@ -1924,7 +2011,12 @@ impl Ctx<'_> {
         for (r, (_rn, row)) in rows.iter().enumerate() {
             let mut col = 0usize;
             for &cell in row {
-                while occ.get(r).and_then(|o| o.get(col)).copied().unwrap_or(false) {
+                while occ
+                    .get(r)
+                    .and_then(|o| o.get(col))
+                    .copied()
+                    .unwrap_or(false)
+                {
                     col += 1;
                 }
                 let cs = self.cell_span(cell, "colspan");
@@ -1940,7 +2032,13 @@ impl Ctx<'_> {
                         occ[rr][cc] = true;
                     }
                 }
-                placed.push(PlacedCell { cell, row: r, col, colspan: cs, rowspan: rs });
+                placed.push(PlacedCell {
+                    cell,
+                    row: r,
+                    col,
+                    colspan: cs,
+                    rowspan: rs,
+                });
                 ncols = ncols.max(col + cs);
                 col += cs;
             }
@@ -2028,17 +2126,27 @@ impl Ctx<'_> {
             let rn = rows.get(r).map(|(n, _)| *n);
             let rs = rn.and_then(|n| self.styles.get(&n));
             row_boxes.push(LayoutBox {
-                rect: Rect { x: content_x, y: row_y[r], width: content_w, height: row_h[r] },
+                rect: Rect {
+                    x: content_x,
+                    y: row_y[r],
+                    width: content_w,
+                    height: row_h[r],
+                },
                 background: rs.and_then(|s| s.background_color),
                 border: rs.and_then(border_of),
                 radius: rs.map(|s| s.border_radius).unwrap_or(0.0),
                 shadow: rs.and_then(|s| s.box_shadow),
-                hidden: rs.map(|s| s.visibility != manuk_css::Visibility::Visible).unwrap_or(false),
+                hidden: rs
+                    .map(|s| s.visibility != manuk_css::Visibility::Visible)
+                    .unwrap_or(false),
                 mask_image: rs.and_then(|s| s.mask_image.clone()),
                 background_image: rs.and_then(|s| s.background_image.clone()),
                 background_size: rs.map(|s| s.background_size).unwrap_or_default(),
                 background_repeat: rs.map(|s| s.background_repeat).unwrap_or_default(),
-                outline: rs.and_then(|s| (s.outline_width > 0.0 && s.outline_color.a > 0).then_some((s.outline_width, s.outline_color))),
+                outline: rs.and_then(|s| {
+                    (s.outline_width > 0.0 && s.outline_color.a > 0)
+                        .then_some((s.outline_width, s.outline_color))
+                }),
                 marker: None,
                 opacity: rs.map(|s| s.opacity).unwrap_or(1.0),
                 node: rn,
@@ -2071,7 +2179,8 @@ impl Ctx<'_> {
             background_image: s.background_image.clone(),
             background_size: s.background_size,
             background_repeat: s.background_repeat,
-            outline: (s.outline_width > 0.0 && s.outline_color.a > 0).then_some((s.outline_width, s.outline_color)),
+            outline: (s.outline_width > 0.0 && s.outline_color.a > 0)
+                .then_some((s.outline_width, s.outline_color)),
             marker: None,
             opacity: s.opacity,
             node: Some(node),
@@ -2312,7 +2421,8 @@ impl Ctx<'_> {
                 background_image: s.background_image.clone(),
                 background_size: s.background_size,
                 background_repeat: s.background_repeat,
-                outline: (s.outline_width > 0.0 && s.outline_color.a > 0).then_some((s.outline_width, s.outline_color)),
+                outline: (s.outline_width > 0.0 && s.outline_color.a > 0)
+                    .then_some((s.outline_width, s.outline_color)),
                 marker: None,
                 opacity: s.opacity,
                 node: Some(cell),
@@ -2371,7 +2481,12 @@ impl Ctx<'_> {
             // dropdown in the top-left corner) — and, before this, instead of nowhere at all.
             if all_auto {
                 if let Some(&(sx, sy)) = self.static_pos.borrow().get(&node) {
-                    cb = Rect { x: sx, y: sy, width: cb.width, height: cb.height };
+                    cb = Rect {
+                        x: sx,
+                        y: sy,
+                        width: cb.width,
+                        height: cb.height,
+                    };
                 } else if s.position != Position::Fixed {
                     // Never reached in flow layout; a box we truly cannot place is still better
                     // dropped than rendered in the wrong corner.
@@ -2557,7 +2672,8 @@ impl Ctx<'_> {
             background_image: s.background_image.clone(),
             background_size: s.background_size,
             background_repeat: s.background_repeat,
-            outline: (s.outline_width > 0.0 && s.outline_color.a > 0).then_some((s.outline_width, s.outline_color)),
+            outline: (s.outline_width > 0.0 && s.outline_color.a > 0)
+                .then_some((s.outline_width, s.outline_color)),
             marker: None,
             opacity: s.opacity,
             node: Some(node),
@@ -2645,12 +2761,26 @@ impl Ctx<'_> {
 
     /// Lay out flex children as a row using taffy for main-axis sizing/positioning.
     /// Each child is then laid out as a block within its taffy-assigned slot.
-    fn layout_flex(&self, node: NodeId, cx: f32, cy: f32, cw: f32, kids: &[NodeId]) -> (BoxContent, f32) {
+    fn layout_flex(
+        &self,
+        node: NodeId,
+        cx: f32,
+        cy: f32,
+        cw: f32,
+        kids: &[NodeId],
+    ) -> (BoxContent, f32) {
         self.layout_flex_or_grid(node, cx, cy, cw, kids)
     }
 
     /// Lay out a `display:grid` container via taffy, then place each item at its grid slot.
-    fn layout_grid(&self, node: NodeId, cx: f32, cy: f32, cw: f32, kids: &[NodeId]) -> (BoxContent, f32) {
+    fn layout_grid(
+        &self,
+        node: NodeId,
+        cx: f32,
+        cy: f32,
+        cw: f32,
+        kids: &[NodeId],
+    ) -> (BoxContent, f32) {
         self.layout_flex_or_grid(node, cx, cy, cw, kids)
     }
 
@@ -2658,8 +2788,19 @@ impl Ctx<'_> {
     /// container and its directly-nested flex/grid descendants are solved in one tree, with
     /// block/inline/float/table children content-measured back into Manuk. Returns the
     /// container's child slots, then places each child (as a block within its slot).
-    fn layout_flex_or_grid(&self, node: NodeId, cx: f32, cy: f32, cw: f32, kids: &[NodeId]) -> (BoxContent, f32) {
-        let block_kids: Vec<NodeId> = kids.iter().copied().filter(|&k| self.dom.is_element(k)).collect();
+    fn layout_flex_or_grid(
+        &self,
+        node: NodeId,
+        cx: f32,
+        cy: f32,
+        cw: f32,
+        kids: &[NodeId],
+    ) -> (BoxContent, f32) {
+        let block_kids: Vec<NodeId> = kids
+            .iter()
+            .copied()
+            .filter(|&k| self.dom.is_element(k))
+            .collect();
         if block_kids.is_empty() {
             return (BoxContent::Block(vec![]), 0.0);
         }
@@ -2684,7 +2825,10 @@ impl Ctx<'_> {
                     taffy::AvailableSpace::MaxContent => None,
                 });
                 let (w, h) = self.measure_intrinsic(dn, aw);
-                taffy::Size { width: known.width.unwrap_or(w), height: known.height.unwrap_or(h) }
+                taffy::Size {
+                    width: known.width.unwrap_or(w),
+                    height: known.height.unwrap_or(h),
+                }
             },
         );
         let mut boxes = Vec::new();
@@ -2715,7 +2859,12 @@ impl Ctx<'_> {
                 .collect();
             let s = self.style_of(p.dom);
             let boxx = LayoutBox {
-                rect: Rect { x: abs_x, y: abs_y, width: p.slot.width, height: p.slot.height },
+                rect: Rect {
+                    x: abs_x,
+                    y: abs_y,
+                    width: p.slot.width,
+                    height: p.slot.height,
+                },
                 background: s.background_color,
                 border: border_of(s),
                 radius: s.border_radius,
@@ -2725,7 +2874,8 @@ impl Ctx<'_> {
                 background_image: s.background_image.clone(),
                 background_size: s.background_size,
                 background_repeat: s.background_repeat,
-                outline: (s.outline_width > 0.0 && s.outline_color.a > 0).then_some((s.outline_width, s.outline_color)),
+                outline: (s.outline_width > 0.0 && s.outline_color.a > 0)
+                    .then_some((s.outline_width, s.outline_color)),
                 marker: None,
                 opacity: s.opacity,
                 node: Some(p.dom),
@@ -2736,8 +2886,18 @@ impl Ctx<'_> {
             let mut item_floats = FloatContext::new(abs_x, abs_x + p.slot.width);
             // Record taffy's verdict BEFORE laying the item out, so `layout_block` uses it instead
             // of re-resolving the item's own `width` against it.
-            self.taffy_item_width.borrow_mut().insert(p.dom, p.slot.width);
-            let r = self.layout_block(p.dom, p.slot.width, Some(p.slot.height), abs_x, abs_y, 0.0, &mut item_floats);
+            self.taffy_item_width
+                .borrow_mut()
+                .insert(p.dom, p.slot.width);
+            let r = self.layout_block(
+                p.dom,
+                p.slot.width,
+                Some(p.slot.height),
+                abs_x,
+                abs_y,
+                0.0,
+                &mut item_floats,
+            );
             self.taffy_item_width.borrow_mut().remove(&p.dom);
             let mut boxx = r.boxx;
             // Taffy sized the item (grow/stretch/track height); when its own height is `auto`,
@@ -2758,7 +2918,12 @@ impl Ctx<'_> {
     /// generated content is not in the DOM (script must never see it), so this is the only place it
     /// can enter the flow. A block whose children are a *mix* of blocks and inlines passes `None`;
     /// its pseudos would otherwise be emitted once per run.
-    fn collect_inline_group(&self, nodes: &[NodeId], cw: f32, owner: Option<NodeId>) -> Vec<InlineItem> {
+    fn collect_inline_group(
+        &self,
+        nodes: &[NodeId],
+        cw: f32,
+        owner: Option<NodeId>,
+    ) -> Vec<InlineItem> {
         let mut out = Vec::new();
         let mut pending_space = false;
         let mut first = true;
@@ -2817,7 +2982,10 @@ impl Ctx<'_> {
                 if matches!(cs.white_space, WhiteSpace::PreWrap | WhiteSpace::PreLine) {
                     for (i, line) in t.split('\n').enumerate() {
                         if i > 0 {
-                            out.push(InlineItem::Break { height: style.line_height, node: owner });
+                            out.push(InlineItem::Break {
+                                height: style.line_height,
+                                node: owner,
+                            });
                             *pending_space = false;
                             *first = true;
                         }
@@ -2825,7 +2993,15 @@ impl Ctx<'_> {
                         for ch in line.chars() {
                             if ch.is_whitespace() {
                                 if !buf.is_empty() {
-                                    push_word(out, &mut buf, style, pending_space, first, owner, false);
+                                    push_word(
+                                        out,
+                                        &mut buf,
+                                        style,
+                                        pending_space,
+                                        first,
+                                        owner,
+                                        false,
+                                    );
                                 }
                                 *pending_space = true;
                             } else {
@@ -2893,7 +3069,10 @@ impl Ctx<'_> {
                         .get(&node)
                         .map(|s| s.line_height)
                         .unwrap_or(16.0);
-                    out.push(InlineItem::Break { height: lh, node: Some(node) });
+                    out.push(InlineItem::Break {
+                        height: lh,
+                        node: Some(node),
+                    });
                     *pending_space = false;
                     *first = true;
                     return;
@@ -2951,7 +3130,12 @@ impl Ctx<'_> {
                     self.collect_inline_node(c, out, pending_space, first, Some(node), cw);
                 }
                 if pad_r > 0.0 {
-                    out.push(InlineItem::Spacer { width: pad_r, node: Some(node), space_before: false, report_height: 0.0 });
+                    out.push(InlineItem::Spacer {
+                        width: pad_r,
+                        node: Some(node),
+                        space_before: false,
+                        report_height: 0.0,
+                    });
                     *pending_space = false;
                 }
                 // An inline element that contributed NOTHING to the flow is still a box. Without
@@ -3028,12 +3212,22 @@ impl Ctx<'_> {
                     let (l, w) = open_band(&mut y, height);
                     line_left = l;
                     line_avail = w;
-                    let key = FontKey { family: FontFamily::SansSerif, bold: false, italic: false };
+                    let key = FontKey {
+                        family: FontFamily::SansSerif,
+                        bold: false,
+                        italic: false,
+                    };
                     cur.push(LineFrag {
                         x: 0.0,
                         width: 0.0,
                         text: String::new(),
-                        style: TextStyle { font_key: key, font_size: 16.0, color: Rgba::BLACK, line_height: height, decoration: Default::default() },
+                        style: TextStyle {
+                            font_key: key,
+                            font_size: 16.0,
+                            color: Rgba::BLACK,
+                            line_height: height,
+                            decoration: Default::default(),
+                        },
                         ascent: 0.0,
                         descent: 0.0,
                         node,
@@ -3042,94 +3236,157 @@ impl Ctx<'_> {
                         valign: VerticalAlign::Baseline,
                     });
                 }
-                y = close_line(&mut frags, &mut atomic_boxes, &mut cur, y, line_left, line_avail, align, self.fonts);
+                y = close_line(
+                    &mut frags,
+                    &mut atomic_boxes,
+                    &mut cur,
+                    y,
+                    line_left,
+                    line_avail,
+                    align,
+                    self.fonts,
+                );
                 pen = 0.0;
                 prev_no_wrap = false;
                 continue;
             }
             // Per-item main-axis advance, leading space, cross-axis height, and the LineFrag
             // builder (positioned once the line's x is known).
-            let (advance, space_w, est_h, no_wrap, make_frag): (f32, f32, f32, bool, Box<dyn FnOnce(f32) -> LineFrag>) =
-                match item {
-                    InlineItem::Word { text, style, space_before, node, no_wrap } => {
-                        let key = style.font_key;
-                        let size = style.font_size;
-                        let lm = self.fonts.line_metrics(key, size);
-                        let word_w = self.fonts.measure(&text, key, size);
-                        let space_w = if space_before { self.fonts.measure(" ", key, size) } else { 0.0 };
-                        let est_h = style.line_height.max(lm.ascent + lm.descent);
-                        (
-                            word_w,
-                            space_w,
-                            est_h,
-                            no_wrap,
-                            Box::new(move |x: f32| LineFrag {
-                                x,
-                                width: word_w,
-                                text,
-                                style,
-                                ascent: lm.ascent,
-                                descent: lm.descent,
-                                node,
-                                atomic: None,
-                                atomic_h: 0.0,
-                                valign: VerticalAlign::Baseline,
-                            }),
-                        )
-                    }
-                    InlineItem::Atomic { box_, advance, height, space_before, valign } => {
-                        // Whitespace around an atomic uses the default text space width.
-                        let key = FontKey { family: FontFamily::SansSerif, bold: false, italic: false };
-                        let space_w = if space_before { self.fonts.measure(" ", key, 16.0) } else { 0.0 };
-                        (
-                            advance,
-                            space_w,
-                            height,
-                            false,
-                            Box::new(move |x: f32| LineFrag {
-                                x,
-                                width: advance,
-                                text: String::new(),
-                                style: TextStyle { font_key: key, font_size: 16.0, color: Rgba::BLACK, line_height: height, decoration: Default::default() },
-                                // Treated as all-ascent so text on the same line shares the top.
-                                ascent: height,
-                                descent: 0.0,
-                                node: None,
-                                atomic: Some(box_),
-                                atomic_h: height,
-                                valign,
-                            }),
-                        )
-                    }
-                    // Handled above: a break never becomes a fragment on the line it ends.
-                    InlineItem::Break { .. } => unreachable!("Break is consumed before this match"),
-                    InlineItem::Spacer { width, node, space_before, report_height } => {
-                        // Inline padding/border: occupies `width`, paints nothing, but its
-                        // (empty-text) fragment carries the owning element's geometry.
-                        let key = FontKey { family: FontFamily::SansSerif, bold: false, italic: false };
-                        let space_w = if space_before { self.fonts.measure(" ", key, 16.0) } else { 0.0 };
-                        (
+            let (advance, space_w, est_h, no_wrap, make_frag): (
+                f32,
+                f32,
+                f32,
+                bool,
+                Box<dyn FnOnce(f32) -> LineFrag>,
+            ) = match item {
+                InlineItem::Word {
+                    text,
+                    style,
+                    space_before,
+                    node,
+                    no_wrap,
+                } => {
+                    let key = style.font_key;
+                    let size = style.font_size;
+                    let lm = self.fonts.line_metrics(key, size);
+                    let word_w = self.fonts.measure(&text, key, size);
+                    let space_w = if space_before {
+                        self.fonts.measure(" ", key, size)
+                    } else {
+                        0.0
+                    };
+                    let est_h = style.line_height.max(lm.ascent + lm.descent);
+                    (
+                        word_w,
+                        space_w,
+                        est_h,
+                        no_wrap,
+                        Box::new(move |x: f32| LineFrag {
+                            x,
+                            width: word_w,
+                            text,
+                            style,
+                            ascent: lm.ascent,
+                            descent: lm.descent,
+                            node,
+                            atomic: None,
+                            atomic_h: 0.0,
+                            valign: VerticalAlign::Baseline,
+                        }),
+                    )
+                }
+                InlineItem::Atomic {
+                    box_,
+                    advance,
+                    height,
+                    space_before,
+                    valign,
+                } => {
+                    // Whitespace around an atomic uses the default text space width.
+                    let key = FontKey {
+                        family: FontFamily::SansSerif,
+                        bold: false,
+                        italic: false,
+                    };
+                    let space_w = if space_before {
+                        self.fonts.measure(" ", key, 16.0)
+                    } else {
+                        0.0
+                    };
+                    (
+                        advance,
+                        space_w,
+                        height,
+                        false,
+                        Box::new(move |x: f32| LineFrag {
+                            x,
+                            width: advance,
+                            text: String::new(),
+                            style: TextStyle {
+                                font_key: key,
+                                font_size: 16.0,
+                                color: Rgba::BLACK,
+                                line_height: height,
+                                decoration: Default::default(),
+                            },
+                            // Treated as all-ascent so text on the same line shares the top.
+                            ascent: height,
+                            descent: 0.0,
+                            node: None,
+                            atomic: Some(box_),
+                            atomic_h: height,
+                            valign,
+                        }),
+                    )
+                }
+                // Handled above: a break never becomes a fragment on the line it ends.
+                InlineItem::Break { .. } => unreachable!("Break is consumed before this match"),
+                InlineItem::Spacer {
+                    width,
+                    node,
+                    space_before,
+                    report_height,
+                } => {
+                    // Inline padding/border: occupies `width`, paints nothing, but its
+                    // (empty-text) fragment carries the owning element's geometry.
+                    let key = FontKey {
+                        family: FontFamily::SansSerif,
+                        bold: false,
+                        italic: false,
+                    };
+                    let space_w = if space_before {
+                        self.fonts.measure(" ", key, 16.0)
+                    } else {
+                        0.0
+                    };
+                    (
+                        width,
+                        space_w,
+                        0.0,
+                        true, // padding never introduces a break within its element
+                        Box::new(move |x: f32| LineFrag {
+                            x,
                             width,
-                            space_w,
-                            0.0,
-                            true, // padding never introduces a break within its element
-                            Box::new(move |x: f32| LineFrag {
-                                x,
-                                width,
-                                text: String::new(),
-                                // `line_height` is only what the fragment's RECT reports; ascent/
-                                // descent stay 0 so a spacer never grows the line box.
-                                style: TextStyle { font_key: key, font_size: 16.0, color: Rgba::BLACK, line_height: report_height, decoration: Default::default() },
-                                ascent: 0.0,
-                                descent: 0.0,
-                                node,
-                                atomic: None,
-                                atomic_h: 0.0,
-                                valign: VerticalAlign::Baseline,
-                            }),
-                        )
-                    }
-                };
+                            text: String::new(),
+                            // `line_height` is only what the fragment's RECT reports; ascent/
+                            // descent stay 0 so a spacer never grows the line box.
+                            style: TextStyle {
+                                font_key: key,
+                                font_size: 16.0,
+                                color: Rgba::BLACK,
+                                line_height: report_height,
+                                decoration: Default::default(),
+                            },
+                            ascent: 0.0,
+                            descent: 0.0,
+                            node,
+                            atomic: None,
+                            atomic_h: 0.0,
+                            valign: VerticalAlign::Baseline,
+                        }),
+                    )
+                }
+            };
 
             if cur.is_empty() {
                 let (l, w) = open_band(&mut y, est_h);
@@ -3142,7 +3399,16 @@ impl Ctx<'_> {
             let breakable = !(no_wrap && prev_no_wrap);
             if !cur.is_empty() && breakable && pen + space_w + advance > line_avail {
                 // Close the current line, then open a fresh band for this item.
-                y = close_line(&mut frags, &mut atomic_boxes, &mut cur, y, line_left, line_avail, align, self.fonts);
+                y = close_line(
+                    &mut frags,
+                    &mut atomic_boxes,
+                    &mut cur,
+                    y,
+                    line_left,
+                    line_avail,
+                    align,
+                    self.fonts,
+                );
                 let (l, w) = open_band(&mut y, est_h);
                 line_left = l;
                 line_avail = w;
@@ -3156,7 +3422,16 @@ impl Ctx<'_> {
             prev_no_wrap = no_wrap;
         }
         if !cur.is_empty() {
-            y = close_line(&mut frags, &mut atomic_boxes, &mut cur, y, line_left, line_avail, align, self.fonts);
+            y = close_line(
+                &mut frags,
+                &mut atomic_boxes,
+                &mut cur,
+                y,
+                line_left,
+                line_avail,
+                align,
+                self.fonts,
+            );
         }
 
         (frags, atomic_boxes, y - cy)
@@ -3305,7 +3580,6 @@ enum InlineItem {
     },
 }
 
-
 /// Split a whitespace-delimited word at intra-word **UAX #14** break opportunities — after a
 /// hyphen (`well-known`), at a soft-hyphen or zero-width space, and between CJK ideographs —
 /// so long unspaced tokens can wrap at the right points instead of overflowing. A word with
@@ -3346,7 +3620,11 @@ fn push_word(
 ) {
     let text = std::mem::take(buf);
     // `nowrap`/`pre` forbid breaks inside the run, so never split those.
-    let segs = if no_wrap { vec![text] } else { break_segments(&text) };
+    let segs = if no_wrap {
+        vec![text]
+    } else {
+        break_segments(&text)
+    };
     for (i, seg) in segs.into_iter().enumerate() {
         out.push(InlineItem::Word {
             text: seg,
@@ -3488,7 +3766,10 @@ mod tests {
             "an absolute box with no insets must still GENERATE A BOX — dropping it is how every \
              portal root and dropdown on the web disappeared",
         );
-        assert!((d.width - 30.0).abs() < 0.5 && (d.height - 12.0).abs() < 0.5, "its own size: {d:?}");
+        assert!(
+            (d.width - 30.0).abs() < 0.5 && (d.height - 12.0).abs() < 0.5,
+            "its own size: {d:?}"
+        );
 
         let f = get("first").expect("#first");
         let a = get("after").expect("#after");
@@ -3585,7 +3866,11 @@ mod tests {
              30% of 300 = 90",
             w("side")
         );
-        assert!((w("main") - 700.0).abs() < 1.0, "70% of 1000px = 700, got {}", w("main"));
+        assert!(
+            (w("main") - 700.0).abs() < 1.0,
+            "70% of 1000px = 700, got {}",
+            w("main")
+        );
         // And the item's own children must then resolve THEIR percentages against the corrected
         // width — the error compounds down the subtree, it does not stop at the item.
         assert!(
@@ -3653,7 +3938,11 @@ mod tests {
             "the block spans the container width, got {} (widths collapse if it stayed inline)",
             r.width
         );
-        assert!(r.height > 12.0, "6px padding top+bottom plus a line, got {}", r.height);
+        assert!(
+            r.height > 12.0,
+            "6px padding top+bottom plus a line, got {}",
+            r.height
+        );
     }
 
     /// W1 regression: the modern web hides dropdowns/modals/tooltips with `visibility:hidden` and
@@ -3674,7 +3963,10 @@ mod tests {
         };
         // Space is still occupied: #c sits below both, i.e. layout is unchanged.
         let (a, b, c) = (by_id("a"), by_id("b"), by_id("c"));
-        assert_eq!(rects[&a].height, 20.0, "a hidden box still occupies its box");
+        assert_eq!(
+            rects[&a].height, 20.0,
+            "a hidden box still occupies its box"
+        );
         assert!(
             rects[&c].y >= rects[&b].y + 20.0,
             "the visible box after them is NOT pulled up (that would be display:none)"
@@ -3693,7 +3985,10 @@ mod tests {
             }
             None
         }
-        assert!(find_box(&root, a).is_some_and(|bx| bx.hidden), "visibility:hidden marks the box");
+        assert!(
+            find_box(&root, a).is_some_and(|bx| bx.hidden),
+            "visibility:hidden marks the box"
+        );
         assert!(
             find_box(&root, b).is_some_and(|bx| bx.opacity <= 0.01),
             "opacity:0 gives the box zero effective opacity"
@@ -3721,10 +4016,16 @@ mod tests {
         };
         let (l1, d1, l2) = (by("l1"), by("d1"), by("l2"));
         // Cells form COLUMNS: the value sits to the right of its label, on the same row.
-        assert!(d1.x > l1.x, "the value cell is to the right of its label (columns, not inline flow)");
+        assert!(
+            d1.x > l1.x,
+            "the value cell is to the right of its label (columns, not inline flow)"
+        );
         assert!((d1.y - l1.y).abs() < 2.0, "label and value share a row");
         // Rows STACK: row 2 is below row 1.
-        assert!(l2.y >= l1.y + l1.height - 1.0, "the second row is below the first");
+        assert!(
+            l2.y >= l1.y + l1.height - 1.0,
+            "the second row is below the first"
+        );
     }
 
     #[test]
@@ -3734,7 +4035,7 @@ mod tests {
         assert_eq!(sticky_shift(200.0, 40.0, 0.0, 1000.0, 100.0), 0.0);
         // Scrolled past its top → it pins at the viewport top (shift keeps it at scroll_y+0).
         assert_eq!(sticky_shift(200.0, 40.0, 0.0, 1000.0, 300.0), 100.0); // 300 - 200
-        // With a top:10 inset, it pins 10px lower.
+                                                                          // With a top:10 inset, it pins 10px lower.
         assert_eq!(sticky_shift(200.0, 40.0, 10.0, 1000.0, 300.0), 110.0);
         // Near the container bottom it stops sticking (can't exceed cb_bottom - box_h = 960).
         assert_eq!(sticky_shift(200.0, 40.0, 0.0, 1000.0, 5000.0), 760.0); // 960 - 200
@@ -3769,7 +4070,10 @@ mod tests {
         );
         let rects = root.node_rects(&dom);
         let by_id = |id: &str| {
-            let n = dom.descendants(dom.root()).find(|&n| dom.element(n).and_then(|e| e.id()) == Some(id)).unwrap();
+            let n = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.id()) == Some(id))
+                .unwrap();
             *rects.get(&n).unwrap_or_else(|| panic!("no rect for #{id}"))
         };
 
@@ -3781,7 +4085,10 @@ mod tests {
         assert!((b.y - 0.0).abs() < 0.5, "same line as the first");
         // The block after the inline run drops below the 30px line.
         let below = by_id("below");
-        assert!((below.y - 30.0).abs() < 1.0, "block drops below the inline line: {below:?}");
+        assert!(
+            (below.y - 30.0).abs() < 1.0,
+            "block drops below the inline line: {below:?}"
+        );
     }
 
     /// §4a — inline elements never produce a `LayoutBox`, so without threading node
@@ -3800,27 +4107,42 @@ mod tests {
         let p = dom.find_first("p").unwrap();
 
         let ar = rects.get(&a).expect("the inline <a> must have geometry");
-        assert!(ar.width > 0.0 && ar.height > 0.0, "degenerate <a> rect: {ar:?}");
+        assert!(
+            ar.width > 0.0 && ar.height > 0.0,
+            "degenerate <a> rect: {ar:?}"
+        );
 
         // The <a> is strictly narrower than its containing <p> block box, and sits
         // inside it — i.e. it is a genuine sub-rect, not the parent's box copied.
         let pr = rects.get(&p).unwrap();
-        assert!(ar.width < pr.width, "a={ar:?} should be narrower than p={pr:?}");
+        assert!(
+            ar.width < pr.width,
+            "a={ar:?} should be narrower than p={pr:?}"
+        );
         assert!(ar.x >= pr.x && ar.right() <= pr.right() + 0.01);
 
         // "before" precedes the link on the same line, so the link starts to its right.
-        assert!(ar.x > pr.x, "link should not start at the paragraph's left edge");
+        assert!(
+            ar.x > pr.x,
+            "link should not start at the paragraph's left edge"
+        );
     }
 
     /// A run is unioned into its element ancestors, so `<a><em>x</em></a>` gives the
     /// `<a>` a rect too — not only the innermost `<em>`.
     #[test]
     fn node_rects_propagates_runs_to_element_ancestors() {
-        let (dom, root) = layout_html("<body><p><a href='/x'><em>hi</em></a></p></body>", "", 800.0);
+        let (dom, root) = layout_html(
+            "<body><p><a href='/x'><em>hi</em></a></p></body>",
+            "",
+            800.0,
+        );
         let rects = root.node_rects(&dom);
         let a = dom.find_first("a").unwrap();
         let em = dom.find_first("em").unwrap();
-        let ar = rects.get(&a).expect("<a> gets geometry from its descendant run");
+        let ar = rects
+            .get(&a)
+            .expect("<a> gets geometry from its descendant run");
         let er = rects.get(&em).expect("<em> carries the run itself");
         assert_eq!(ar, er, "a single run means <a> and <em> share the rect");
     }
@@ -4321,7 +4643,8 @@ mod tests {
     /// the page down.
     #[test]
     fn inline_flex_icon_button_hugs_its_content() {
-        let html = r#"<div class="bar"><label class="btn"><span class="icon"></span></label></div>"#;
+        let html =
+            r#"<div class="bar"><label class="btn"><span class="icon"></span></label></div>"#;
         let css = ".bar{width:900px}                    .btn{display:inline-flex;align-items:center;justify-content:center;max-width:28rem}                    .icon{display:block;width:20px;height:20px}";
         let (dom, root) = layout_html(html, css, 1000.0);
         let rects = root.node_rects(&dom);
@@ -4420,7 +4743,11 @@ mod tests {
         });
         assert_eq!(
             markers,
-            vec!["\u{2022}".to_string(), "\u{2022}".to_string(), "3.".to_string()],
+            vec![
+                "\u{2022}".to_string(),
+                "\u{2022}".to_string(),
+                "3.".to_string()
+            ],
             "two bullets and an <ol start=3> numbering from 3"
         );
     }
@@ -4444,7 +4771,10 @@ mod tests {
                 }
             }
         });
-        assert!(seen, "the underline must reach the text fragment, which is what paints it");
+        assert!(
+            seen,
+            "the underline must reach the text fragment, which is what paints it"
+        );
     }
     /// Regression: `::before` / `::after` generated content enters the flow. It is how the web draws
     /// icons, quotation marks, counters and dividers — and it is NOT in the DOM, so this is the only
@@ -4463,8 +4793,14 @@ mod tests {
                 }
             }
         });
-        assert!(text.contains("[X]"), "::before content must render (got {text:?})");
-        assert!(text.contains("[Y]"), "::after content must render (got {text:?})");
+        assert!(
+            text.contains("[X]"),
+            "::before content must render (got {text:?})"
+        );
+        assert!(
+            text.contains("[Y]"),
+            "::after content must render (got {text:?})"
+        );
     }
     /// Regression: `display:none` means **no boxes at all** — including inside a flex/grid container.
     /// The taffy path filtered children by `is_element` but not by display, so a hidden child got a
@@ -4485,7 +4821,10 @@ mod tests {
             }
         });
         let _ = &dom;
-        assert!(text.contains("visible"), "the visible sibling must still render");
+        assert!(
+            text.contains("visible"),
+            "the visible sibling must still render"
+        );
         assert!(
             !text.contains("alert") && !text.contains("let"),
             "a display:none <script> in a FLEX container must not paint its source (got {text:?})"

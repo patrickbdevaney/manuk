@@ -123,7 +123,9 @@ fn run() {
         let fonts = manuk_text::FontContext::new();
         let rt = manuk_net::runtime();
         let t0 = std::time::Instant::now();
-        let loaded = rt.block_on(manuk_page::prefetch_document(&url)).expect("prefetch");
+        let loaded = rt
+            .block_on(manuk_page::prefetch_document(&url))
+            .expect("prefetch");
         let t_fetch = t0.elapsed().as_secs_f64() * 1000.0;
         let page = match loaded {
             // The SHELL's path: blocking scripts only. The deferred ones run after paint.
@@ -199,9 +201,15 @@ fn run_parity_cmd(args: &[String], fonts: &FontContext) {
         .map(PathBuf::from)
         .unwrap_or_else(default_corpus_dir);
     let out = flag(args, "--out").map(PathBuf::from);
-    let tol = flag(args, "--tol").and_then(|s| s.parse().ok()).unwrap_or(manuk_wpt::parity::DEFAULT_TOL);
-    let vw: u32 = flag(args, "--width").and_then(|s| s.parse().ok()).unwrap_or(800);
-    let vh: u32 = flag(args, "--height").and_then(|s| s.parse().ok()).unwrap_or(600);
+    let tol = flag(args, "--tol")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(manuk_wpt::parity::DEFAULT_TOL);
+    let vw: u32 = flag(args, "--width")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(800);
+    let vh: u32 = flag(args, "--height")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(600);
 
     if !manuk_wpt::chrome::available() {
         eprintln!(
@@ -229,9 +237,15 @@ fn run_parity_cmd(args: &[String], fonts: &FontContext) {
 fn run_render_cmd(args: &[String], fonts: &FontContext) {
     use manuk_page::Page;
 
-    let vw: u32 = flag(args, "--width").and_then(|s| s.parse().ok()).unwrap_or(1280);
-    let vh: u32 = flag(args, "--height").and_then(|s| s.parse().ok()).unwrap_or(800);
-    let out = flag(args, "--out").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("render.png"));
+    let vw: u32 = flag(args, "--width")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1280);
+    let vh: u32 = flag(args, "--height")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(800);
+    let out = flag(args, "--out")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("render.png"));
     let has_chrome = args.iter().any(|a| a == "--chrome");
 
     let (html, mut url) = if let Some(f) = flag(args, "--html") {
@@ -300,17 +314,28 @@ fn run_render_cmd(args: &[String], fonts: &FontContext) {
 fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
     use manuk_page::Page;
 
-    let vw: u32 = flag(args, "--width").and_then(|s| s.parse().ok()).unwrap_or(1200);
-    let vh: u32 = flag(args, "--height").and_then(|s| s.parse().ok()).unwrap_or(800);
-    let floor: f64 = flag(args, "--floor").and_then(|s| s.parse().ok()).unwrap_or(0.0);
-    let out = flag(args, "--out").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
+    let vw: u32 = flag(args, "--width")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1200);
+    let vh: u32 = flag(args, "--height")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(800);
+    let floor: f64 = flag(args, "--floor")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0.0);
+    let out = flag(args, "--out")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
     let Some(urls) = flag(args, "--urls") else {
         eprintln!("usage: manuk-wpt fidelity --urls URL[,URL...] [--out DIR] [--floor 0.9]");
         std::process::exit(2);
     };
     let _ = std::fs::create_dir_all(&out);
 
-    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("rt");
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("rt");
     let mut rows = Vec::new();
 
     for url in urls.split(',').map(str::trim).filter(|u| !u.is_empty()) {
@@ -405,7 +430,12 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                     }
                     let cmap: std::collections::HashMap<String, [i64; 4]> = cboxes
                         .iter()
-                        .map(|(k, v)| (k.clone(), [v[0] as i64, v[1] as i64, v[2] as i64, v[3] as i64]))
+                        .map(|(k, v)| {
+                            (
+                                k.clone(),
+                                [v[0] as i64, v[1] as i64, v[2] as i64, v[3] as i64],
+                            )
+                        })
                         .collect();
                     let (sc, missing, misplaced, probed, missing_ids) =
                         manuk_wpt::fidelity::compare_structure_detail(&cmap, &mboxes, 8);
@@ -419,7 +449,10 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                             let tag = page
                                 .dom()
                                 .descendants(page.dom().root())
-                                .find(|&n| page.dom().element(n).and_then(|e| e.attr("id")) == Some(id.as_str()))
+                                .find(|&n| {
+                                    page.dom().element(n).and_then(|e| e.attr("id"))
+                                        == Some(id.as_str())
+                                })
                                 .and_then(|n| page.dom().tag_name(n))
                                 .unwrap_or("(not-in-dom)")
                                 .to_string();
@@ -427,13 +460,26 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                         }
                         let mut v: Vec<_> = by_tag.into_iter().collect();
                         v.sort_by(|a, b| b.1.cmp(&a.1));
-                        eprintln!("  MISSING by tag: {}", v.iter().take(8)
-                            .map(|(t, c)| format!("{t}×{c}")).collect::<Vec<_>>().join("  "));
+                        eprintln!(
+                            "  MISSING by tag: {}",
+                            v.iter()
+                                .take(8)
+                                .map(|(t, c)| format!("{t}×{c}"))
+                                .collect::<Vec<_>>()
+                                .join("  ")
+                        );
                         // A count says *how much* is missing; only the ids say *what*. 1,402 missing
                         // elements are never 1,402 bugs — they are a few CLASS bugs, and a sample of
                         // the actual ids is what identifies the class.
-                        eprintln!("  MISSING sample: {}", missing_ids.iter().take(12)
-                            .map(|s| s.as_str()).collect::<Vec<_>>().join(", "));
+                        eprintln!(
+                            "  MISSING sample: {}",
+                            missing_ids
+                                .iter()
+                                .take(12)
+                                .map(|s| s.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        );
                     }
                     f.structure = Some(sc);
                     f.missing = missing;
@@ -473,8 +519,12 @@ fn run_bench_cmd(args: &[String], fonts: &FontContext) {
     // fast and then stutters on every wheel event is not fast — and the load bench cannot see it.
     if args.iter().any(|a| a == "--interactive") {
         let pages = flag(args, "--pages").unwrap_or_default();
-        let runs: usize = flag(args, "--runs").and_then(|s| s.parse().ok()).unwrap_or(5);
-        println!("\n=== F4 · INTERACTIVE LATENCY (median of {runs}, ms) — floor: ONE FRAME (16ms) ===\n");
+        let runs: usize = flag(args, "--runs")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(5);
+        println!(
+            "\n=== F4 · INTERACTIVE LATENCY (median of {runs}, ms) — floor: ONE FRAME (16ms) ===\n"
+        );
         println!("{:<20}{:>12}{:>12}", "page", "scroll", "click");
         for p in pages.split(',').filter(|p| !p.trim().is_empty()) {
             let Ok(html) = std::fs::read_to_string(p.trim()) else {
@@ -486,17 +536,33 @@ fn run_bench_cmd(args: &[String], fonts: &FontContext) {
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_default();
             let (scroll, click) = manuk_wpt::bench::bench_interactive(
-                &name, &html, "https://bench.test/", 1200.0, 800, fonts, runs,
+                &name,
+                &html,
+                "https://bench.test/",
+                1200.0,
+                800,
+                fonts,
+                runs,
             );
-            let over = if scroll.max(click) > 16.0 { "   <-- OVER ONE FRAME" } else { "" };
+            let over = if scroll.max(click) > 16.0 {
+                "   <-- OVER ONE FRAME"
+            } else {
+                ""
+            };
             println!("{:<20}{:>12.2}{:>12.2}{over}", name, scroll, click);
         }
         println!();
         return;
     }
-    let runs: usize = flag(args, "--runs").and_then(|s| s.parse().ok()).unwrap_or(5);
-    let vw: f32 = flag(args, "--width").and_then(|s| s.parse().ok()).unwrap_or(1280.0);
-    let vh: u32 = flag(args, "--height").and_then(|s| s.parse().ok()).unwrap_or(900);
+    let runs: usize = flag(args, "--runs")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(5);
+    let vw: f32 = flag(args, "--width")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1280.0);
+    let vh: u32 = flag(args, "--height")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(900);
     let Some(list) = flag(args, "--pages") else {
         eprintln!("usage: manuk-wpt bench --pages f1.html,f2.html [--runs N] [--width W]");
         std::process::exit(2);
@@ -542,12 +608,15 @@ fn flag<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
     None
 }
 
-
 /// `manuk-wpt boxes --html FILE [--url URL] [--width W] [--height H]` — print `id x y w h` for every
 /// element carrying an `id`, in document-y order.
 fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
-    let vw: u32 = flag(args, "--width").and_then(|s| s.parse().ok()).unwrap_or(1200);
-    let vh: u32 = flag(args, "--height").and_then(|s| s.parse().ok()).unwrap_or(800);
+    let vw: u32 = flag(args, "--width")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1200);
+    let vh: u32 = flag(args, "--height")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(800);
     // `--fetch URL` probes a LIVE page — the boxes of the document as a user would actually get it,
     // subresources and scripts included. A local snapshot cannot stand in for it: relative `<link>`s
     // do not resolve from `file://`, so the CSS silently does not load and every box you measure is
@@ -576,7 +645,9 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
             eprintln!("cannot read {f}: {e}");
             std::process::exit(1);
         });
-        let u = flag(args, "--url").map(String::from).unwrap_or_else(|| file_url(f));
+        let u = flag(args, "--url")
+            .map(String::from)
+            .unwrap_or_else(|| file_url(f));
         (h, u)
     };
     let page = rt.block_on(async {
@@ -607,7 +678,11 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
                 .get(&n)
                 .map(|r| format!("[{:.0} {:.0} {:.0}x{:.0}]", r.x, r.y, r.width, r.height))
                 .unwrap_or_else(|| "(no box)".into());
-            let u = if u.len() > 30 { &u[u.len() - 30..] } else { u.as_str() };
+            let u = if u.len() > 30 {
+                &u[u.len() - 30..]
+            } else {
+                u.as_str()
+            };
             let nat = page
                 .decoded_images()
                 .get(&n)
@@ -660,7 +735,8 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
             let net = manuk_net::NET_REQUESTS.load(std::sync::atomic::Ordering::Relaxed);
             let netdup = manuk_net::NET_DUPES.load(std::sync::atomic::Ordering::Relaxed);
             let layouts = manuk_layout::LAYOUTS.swap(0, std::sync::atomic::Ordering::Relaxed);
-            let cascades = manuk_css::stylo_engine::CASCADES.swap(0, std::sync::atomic::Ordering::Relaxed);
+            let cascades =
+                manuk_css::stylo_engine::CASCADES.swap(0, std::sync::atomic::Ordering::Relaxed);
             if total < best {
                 best = total;
                 println!(
@@ -681,7 +757,10 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
     if args.iter().any(|a| a == "--images") {
         let rects = page.root_box.node_rects(page.dom());
         let dom = page.dom();
-        println!("{:<28} {:<12} {:<22} {}", "element", "natural", "pixels", "box");
+        println!(
+            "{:<28} {:<12} {:<22} {}",
+            "element", "natural", "pixels", "box"
+        );
         for (&n, img) in page.decoded_images() {
             let tag = dom.tag_name(n).unwrap_or("?");
             let cls = dom
@@ -720,7 +799,13 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
             // A glyph rasterized at an absurd size paints a flat blob the size of a paragraph. It is
             // a TEXT item, so every rect-oriented probe steps straight over it.
             for it in &dl.items {
-                if let manuk_paint::DisplayItem::Text { x, baseline, text, style } = it {
+                if let manuk_paint::DisplayItem::Text {
+                    x,
+                    baseline,
+                    text,
+                    style,
+                } = it
+                {
                     if style.font_size > 40.0 {
                         println!(
                             "size={:6.1} #{:02x}{:02x}{:02x} at [{x:.0} {baseline:.0}] {:?}",
@@ -738,15 +823,70 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
         if want == "BAND" {
             for it in &dl.items {
                 let (r, kind) = match it {
-                    manuk_paint::DisplayItem::Rect { rect, color } => (*rect, format!("Rect #{:02x}{:02x}{:02x}a{}", color.r, color.g, color.b, color.a)),
-                    manuk_paint::DisplayItem::RoundRect { rect, color, .. } => (*rect, format!("RoundRect #{:02x}{:02x}{:02x}", color.r, color.g, color.b)),
-                    manuk_paint::DisplayItem::MaskedRect { rect, color, .. } => (*rect, format!("MaskedRect #{:02x}{:02x}{:02x}", color.r, color.g, color.b)),
-                    manuk_paint::DisplayItem::Gradient { rect, stops, .. } => (*rect, format!("Gradient {} stops", stops.len())),
-                    manuk_paint::DisplayItem::Image { rect, image } => (*rect, format!("Image {}x{}", image.width, image.height)),
-                    manuk_paint::DisplayItem::BackgroundImage { rect, image, size, repeat, .. } => (*rect, format!("BgImage {}x{} {size:?} {repeat:?}", image.width, image.height)),
-                    manuk_paint::DisplayItem::Shadow { rect, color, blur, .. } => (*rect, format!("Shadow #{:02x}{:02x}{:02x} blur={blur:.0}", color.r, color.g, color.b)),
-                    manuk_paint::DisplayItem::TextLine { x, y, width, thickness, color } => (manuk_layout::Rect { x: *x, y: *y, width: *width, height: *thickness }, format!("TextLine #{:02x}{:02x}{:02x}", color.r, color.g, color.b)),
-                    manuk_paint::DisplayItem::Text { x, baseline, text, style } => {
+                    manuk_paint::DisplayItem::Rect { rect, color } => (
+                        *rect,
+                        format!(
+                            "Rect #{:02x}{:02x}{:02x}a{}",
+                            color.r, color.g, color.b, color.a
+                        ),
+                    ),
+                    manuk_paint::DisplayItem::RoundRect { rect, color, .. } => (
+                        *rect,
+                        format!("RoundRect #{:02x}{:02x}{:02x}", color.r, color.g, color.b),
+                    ),
+                    manuk_paint::DisplayItem::MaskedRect { rect, color, .. } => (
+                        *rect,
+                        format!("MaskedRect #{:02x}{:02x}{:02x}", color.r, color.g, color.b),
+                    ),
+                    manuk_paint::DisplayItem::Gradient { rect, stops, .. } => {
+                        (*rect, format!("Gradient {} stops", stops.len()))
+                    }
+                    manuk_paint::DisplayItem::Image { rect, image } => {
+                        (*rect, format!("Image {}x{}", image.width, image.height))
+                    }
+                    manuk_paint::DisplayItem::BackgroundImage {
+                        rect,
+                        image,
+                        size,
+                        repeat,
+                        ..
+                    } => (
+                        *rect,
+                        format!(
+                            "BgImage {}x{} {size:?} {repeat:?}",
+                            image.width, image.height
+                        ),
+                    ),
+                    manuk_paint::DisplayItem::Shadow {
+                        rect, color, blur, ..
+                    } => (
+                        *rect,
+                        format!(
+                            "Shadow #{:02x}{:02x}{:02x} blur={blur:.0}",
+                            color.r, color.g, color.b
+                        ),
+                    ),
+                    manuk_paint::DisplayItem::TextLine {
+                        x,
+                        y,
+                        width,
+                        thickness,
+                        color,
+                    } => (
+                        manuk_layout::Rect {
+                            x: *x,
+                            y: *y,
+                            width: *width,
+                            height: *thickness,
+                        },
+                        format!("TextLine #{:02x}{:02x}{:02x}", color.r, color.g, color.b),
+                    ),
+                    manuk_paint::DisplayItem::Text {
+                        x,
+                        baseline,
+                        text,
+                        style,
+                    } => {
                         if *baseline > 240.0 && *baseline < 360.0 {
                             println!(
                                 "TEXT size={:5.1} #{:02x}{:02x}{:02x} at [{x:.0} {baseline:.0}] {:?}",
@@ -758,7 +898,10 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
                     }
                 };
                 if r.y < 350.0 && r.y + r.height > 250.0 && r.x < 500.0 && r.x + r.width > 230.0 {
-                    println!("{kind:<34} [{:.0} {:.0} {:.0}x{:.0}]", r.x, r.y, r.width, r.height);
+                    println!(
+                        "{kind:<34} [{:.0} {:.0} {:.0}x{:.0}]",
+                        r.x, r.y, r.width, r.height
+                    );
                 }
             }
             return;
@@ -783,7 +926,13 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
                         "IMAGE      {}x{} -> [{:.0} {:.0} {:.0}x{:.0}]  (STRETCHED to the box)",
                         image.width, image.height, rect.x, rect.y, rect.width, rect.height
                     ),
-                    manuk_paint::DisplayItem::BackgroundImage { rect, image, size, repeat, .. } => {
+                    manuk_paint::DisplayItem::BackgroundImage {
+                        rect,
+                        image,
+                        size,
+                        repeat,
+                        ..
+                    } => {
                         println!(
                             "BACKGROUND {}x{} -> [{:.0} {:.0} {:.0}x{:.0}]  size={size:?} repeat={repeat:?}",
                             image.width, image.height, rect.x, rect.y, rect.width, rect.height
@@ -795,7 +944,13 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
             return;
         }
         for it in &dl.items {
-            if let manuk_paint::DisplayItem::Text { x, baseline, text, style } = it {
+            if let manuk_paint::DisplayItem::Text {
+                x,
+                baseline,
+                text,
+                style,
+            } = it
+            {
                 if text.contains(want) {
                     let c = style.color;
                     println!(
@@ -835,7 +990,12 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
                         let cls = dom
                             .element(n)
                             .and_then(|e| e.attr("class"))
-                            .map(|c| format!(".{}", c.split_whitespace().take(2).collect::<Vec<_>>().join(".")))
+                            .map(|c| {
+                                format!(
+                                    ".{}",
+                                    c.split_whitespace().take(2).collect::<Vec<_>>().join(".")
+                                )
+                            })
                             .unwrap_or_default();
                         // The COMPUTED display is what decides whether a box fills or hugs — the
                         // difference between an icon button and a full-width bar. Show it.
@@ -864,7 +1024,11 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
                                         c.r,
                                         c.g,
                                         c.b,
-                                        if c.a < 255 { format!("a{}", c.a) } else { String::new() },
+                                        if c.a < 255 {
+                                            format!("a{}", c.a)
+                                        } else {
+                                            String::new()
+                                        },
                                         vis
                                     ),
                                 )
@@ -885,7 +1049,15 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
             }
             if let manuk_layout::BoxContent::Block(kids) = &b.content {
                 for k in kids {
-                    walk(k, dom, styles, if hit { depth + 1 } else { depth }, hit, want_node, out);
+                    walk(
+                        k,
+                        dom,
+                        styles,
+                        if hit { depth + 1 } else { depth },
+                        hit,
+                        want_node,
+                        out,
+                    );
                 }
             }
             if let manuk_layout::BoxContent::Inline(frags) = &b.content {
@@ -943,7 +1115,11 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
             }
         }
     }
-    rows.sort_by(|a, b| a.1.y.partial_cmp(&b.1.y).unwrap_or(std::cmp::Ordering::Equal));
+    rows.sort_by(|a, b| {
+        a.1.y
+            .partial_cmp(&b.1.y)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     for (id, r) in rows {
         println!(
             "{id}\t{}\t{}\t{}\t{}",
@@ -955,7 +1131,6 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
     }
 }
 
-
 /// `manuk-wpt interact --url U --steps "click:#a;type:#q=hi;scroll:400" [--name N] [--width W]`
 ///
 /// Runs the SAME scripted interaction in Manuk and in Chromium, then compares the two resulting
@@ -963,9 +1138,15 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
 fn run_interact_cmd(args: &[String], fonts: &manuk_text::FontContext) {
     use manuk_wpt::interact::{changed_boxes, InteractionResult, Step};
 
-    let vw: u32 = flag(args, "--width").and_then(|s| s.parse().ok()).unwrap_or(1200);
-    let vh: u32 = flag(args, "--height").and_then(|s| s.parse().ok()).unwrap_or(800);
-    let floor: f64 = flag(args, "--floor").and_then(|s| s.parse().ok()).unwrap_or(0.75);
+    let vw: u32 = flag(args, "--width")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1200);
+    let vh: u32 = flag(args, "--height")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(800);
+    let floor: f64 = flag(args, "--floor")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0.75);
     let Some(spec) = flag(args, "--scenarios") else {
         eprintln!("usage: manuk-wpt interact --scenarios FILE [--width W] [--floor F]");
         eprintln!("  each line:  <name> <url> <step>;<step>;...");
@@ -1007,7 +1188,11 @@ fn run_interact_cmd(args: &[String], fonts: &manuk_text::FontContext) {
         eprintln!("G5: {name}  ({} step(s))", steps.len());
 
         // --- Chromium: the same steps, in the same document, before/after. ---
-        let js: String = steps.iter().map(|s| s.to_js()).collect::<Vec<_>>().join("\n");
+        let js: String = steps
+            .iter()
+            .map(|s| s.to_js())
+            .collect::<Vec<_>>()
+            .join("\n");
         let (c_before, c_after) =
             match manuk_wpt::chrome::capture_boxes_interaction(url, vw, vh, &js) {
                 Ok(p) => p,
@@ -1102,12 +1287,18 @@ fn run_interact_cmd(args: &[String], fonts: &manuk_text::FontContext) {
 }
 
 /// The structural comparator speaks `i64`; the probes speak `i32`.
-fn to64(m: &std::collections::HashMap<String, [i32; 4]>) -> std::collections::HashMap<String, [i64; 4]> {
+fn to64(
+    m: &std::collections::HashMap<String, [i32; 4]>,
+) -> std::collections::HashMap<String, [i64; 4]> {
     m.iter()
-        .map(|(k, v)| (k.clone(), [v[0] as i64, v[1] as i64, v[2] as i64, v[3] as i64]))
+        .map(|(k, v)| {
+            (
+                k.clone(),
+                [v[0] as i64, v[1] as i64, v[2] as i64, v[3] as i64],
+            )
+        })
         .collect()
 }
-
 
 /// `manuk-wpt hittest --html F [--url U]` — reproduce the LINK-CLICK flow without a window.
 ///
@@ -1116,7 +1307,9 @@ fn to64(m: &std::collections::HashMap<String, [i32; 4]>) -> std::collections::Ha
 /// without a GUI: for every link on the page, hit-test its own centre and ask whether the browser
 /// finds it again. A link the browser cannot find is a link the user cannot click.
 fn run_hittest_cmd(args: &[String], fonts: &FontContext) {
-    let vw: u32 = flag(args, "--width").and_then(|s| s.parse().ok()).unwrap_or(1200);
+    let vw: u32 = flag(args, "--width")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1200);
     let Some(f) = flag(args, "--html") else {
         eprintln!("usage: manuk-wpt hittest --html FILE [--url URL]");
         std::process::exit(2);
@@ -1125,8 +1318,13 @@ fn run_hittest_cmd(args: &[String], fonts: &FontContext) {
         eprintln!("cannot read {f}: {e}");
         std::process::exit(1);
     });
-    let url = flag(args, "--url").map(String::from).unwrap_or_else(|| file_url(f));
-    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("rt");
+    let url = flag(args, "--url")
+        .map(String::from)
+        .unwrap_or_else(|| file_url(f));
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("rt");
     let page = rt.block_on(async {
         let mut p = manuk_page::Page::load_async(&html, &url, fonts, vw as f32).await;
         p.finish_loading(fonts, vw as f32).await;
@@ -1137,7 +1335,9 @@ fn run_hittest_cmd(args: &[String], fonts: &FontContext) {
     let dom = page.dom();
     let links: Vec<manuk_dom::NodeId> = dom
         .descendants(dom.root())
-        .filter(|&n| dom.tag_name(n) == Some("a") && dom.element(n).and_then(|e| e.attr("href")).is_some())
+        .filter(|&n| {
+            dom.tag_name(n) == Some("a") && dom.element(n).and_then(|e| e.attr("href")).is_some()
+        })
         .collect();
 
     let (mut hit, mut no_box, mut miss) = (0usize, 0usize, 0usize);
@@ -1157,7 +1357,8 @@ fn run_hittest_cmd(args: &[String], fonts: &FontContext) {
         let mut resolved = None;
         let mut cur = found;
         while let Some(n) = cur {
-            if dom.tag_name(n) == Some("a") && dom.element(n).and_then(|e| e.attr("href")).is_some() {
+            if dom.tag_name(n) == Some("a") && dom.element(n).and_then(|e| e.attr("href")).is_some()
+            {
                 resolved = Some(n);
                 break;
             }
@@ -1171,7 +1372,10 @@ fn run_hittest_cmd(args: &[String], fonts: &FontContext) {
                     let text = dom.text_content(a);
                     misses.push(format!(
                         "  MISS  <a> at [{:.0} {:.0} {:.0}x{:.0}] {:?}",
-                        r.x, r.y, r.width, r.height,
+                        r.x,
+                        r.y,
+                        r.width,
+                        r.height,
                         text.trim().chars().take(40).collect::<String>()
                     ));
                 }
@@ -1196,7 +1400,6 @@ fn run_hittest_cmd(args: &[String], fonts: &FontContext) {
     }
 }
 
-
 /// `manuk-wpt oracle --corpus FILE [--snapshots DIR] [--tol 8] [--width W]`
 ///
 /// The discovery engine. For each site: fetch ONCE, feed the identical snapshot to both engines,
@@ -1205,15 +1408,24 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
     use manuk_wpt::oracle::{cluster, diff_page, oracle_is_healthy, report, Seen};
     use std::collections::HashMap;
 
-    let vw: u32 = flag(args, "--width").and_then(|s| s.parse().ok()).unwrap_or(1200);
-    let vh: u32 = flag(args, "--height").and_then(|s| s.parse().ok()).unwrap_or(800);
-    let tol: i64 = flag(args, "--tol").and_then(|s| s.parse().ok()).unwrap_or(8);
+    let vw: u32 = flag(args, "--width")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1200);
+    let vh: u32 = flag(args, "--height")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(800);
+    let tol: i64 = flag(args, "--tol")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(8);
     let snap_dir = flag(args, "--snapshots").unwrap_or("/tmp/manuk-oracle-snapshots");
     let _ = std::fs::create_dir_all(snap_dir);
 
     // The crawl frame. A corpus file, or explicit --urls.
     let urls: Vec<String> = if let Some(u) = flag(args, "--urls") {
-        u.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+        u.split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
     } else if let Some(c) = flag(args, "--corpus") {
         let text = std::fs::read_to_string(c).unwrap_or_else(|e| {
             eprintln!("cannot read {c}: {e}");
@@ -1229,12 +1441,17 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
         std::process::exit(2);
     };
 
-    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("rt");
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("rt");
     let mut all_divs = Vec::new();
     let (mut diffed, mut skipped) = (0usize, 0usize);
 
     for url in &urls {
-        let short = url.trim_start_matches("https://").trim_start_matches("http://");
+        let short = url
+            .trim_start_matches("https://")
+            .trim_start_matches("http://");
         let short = short.split('/').next().unwrap_or(short).to_string();
 
         // --- ONE snapshot. Cached on disk, so a re-run diffs the SAME document and a fix is
@@ -1334,8 +1551,16 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
                 let tag = dom.tag_name(n)?.to_string();
                 if matches!(
                     tag.as_str(),
-                    "script" | "style" | "head" | "meta" | "link" | "base" | "title" | "noscript"
-                        | "template" | "html"
+                    "script"
+                        | "style"
+                        | "head"
+                        | "meta"
+                        | "link"
+                        | "base"
+                        | "title"
+                        | "noscript"
+                        | "template"
+                        | "html"
                 ) {
                     return None;
                 }
@@ -1358,7 +1583,11 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
             .collect();
 
         let divs = diff_page(&short, &chrome, &manuk, tol);
-        eprintln!("  {short}: {} divergence(s) over {} probed", divs.len(), chrome.len());
+        eprintln!(
+            "  {short}: {} divergence(s) over {} probed",
+            divs.len(),
+            chrome.len()
+        );
 
         // **Emit, don't accumulate.** At 265 sites, holding the whole crawl in one process means one
         // site's hang or crash loses all of it. Each site writes its own result file and the crawl is
@@ -1447,7 +1676,6 @@ fn fnv(s: &str) -> u64 {
     h
 }
 
-
 /// **The merge — where the crawl becomes the ledger.**
 ///
 /// The ranking key is DISTINCT SITES and DISTINCT CLASSES, never hit count. A cause that breaks forty
@@ -1461,13 +1689,18 @@ fn fnv(s: &str) -> u64 {
 /// corpus" is worse than no crawl, because it is confidently wrong.
 fn run_oracle_merge(args: &[String]) {
     use std::collections::{BTreeMap, BTreeSet};
-    let dir = args.first().map(String::as_str).unwrap_or("/tmp/manuk-oracle-run");
+    let dir = args
+        .first()
+        .map(String::as_str)
+        .unwrap_or("/tmp/manuk-oracle-run");
     let field = |line: &str, k: &str| -> String {
         let pat = format!("\"{k}\":\"");
         line.find(&pat)
             .map(|i| {
                 let rest = &line[i + pat.len()..];
-                rest.find('"').map(|e| rest[..e].to_string()).unwrap_or_default()
+                rest.find('"')
+                    .map(|e| rest[..e].to_string())
+                    .unwrap_or_default()
             })
             .unwrap_or_default()
     };
@@ -1476,7 +1709,9 @@ fn run_oracle_merge(args: &[String]) {
         line.find(&pat)
             .and_then(|i| {
                 let rest = &line[i + pat.len()..];
-                let end = rest.find(|c: char| !c.is_ascii_digit() && c != '-').unwrap_or(rest.len());
+                let end = rest
+                    .find(|c: char| !c.is_ascii_digit() && c != '-')
+                    .unwrap_or(rest.len());
                 rest[..end].parse().ok()
             })
             .unwrap_or(0)
@@ -1497,7 +1732,9 @@ fn run_oracle_merge(args: &[String]) {
         if path.extension().and_then(|s| s.to_str()) != Some("jsonl") {
             continue;
         }
-        let Ok(text) = std::fs::read_to_string(&path) else { continue };
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
         for line in text.lines() {
             if line.contains("\"kind\":\"meta\"") {
                 match field(line, "status").as_str() {
@@ -1519,16 +1756,27 @@ fn run_oracle_merge(args: &[String]) {
             if !line.contains("\"kind\":\"div\"") {
                 continue;
             }
-            let (site, class, tag, kind) =
-                (field(line, "site"), field(line, "class"), field(line, "tag"), field(line, "dkind"));
+            let (site, class, tag, kind) = (
+                field(line, "site"),
+                field(line, "class"),
+                field(line, "tag"),
+                field(line, "dkind"),
+            );
             let (chrome, manuk) = (field(line, "chrome"), field(line, "manuk"));
             let sig = match kind.as_str() {
                 "display" => format!("display: {chrome} → {manuk}   (<{tag}>)"),
-                "missing" => format!("MISSING BOX: <{tag}>  (Chrome renders it, we render nothing)"),
+                "missing" => {
+                    format!("MISSING BOX: <{tag}>  (Chrome renders it, we render nothing)")
+                }
                 _ => format!("geometry: <{tag}>"),
             };
             let en = acc.entry(sig).or_insert_with(|| {
-                (BTreeSet::new(), BTreeSet::new(), 0, format!("{site}: {chrome} vs {manuk}"))
+                (
+                    BTreeSet::new(),
+                    BTreeSet::new(),
+                    0,
+                    format!("{site}: {chrome} vs {manuk}"),
+                )
             });
             en.0.insert(site);
             en.1.insert(class);
@@ -1539,8 +1787,12 @@ fn run_oracle_merge(args: &[String]) {
     let total = ok + hang + fail + discard;
     println!("\n════════ ORACLE CRAWL — {total} sites ════════\n");
     println!("  {ok:>4} diffed");
-    println!("  {discard:>4} discarded (Chromium's OWN render was degraded — bot wall / error page /");
-    println!("       no-script fallback. Never scored as our bug: a degraded oracle scores its own");
+    println!(
+        "  {discard:>4} discarded (Chromium's OWN render was degraded — bot wall / error page /"
+    );
+    println!(
+        "       no-script fallback. Never scored as our bug: a degraded oracle scores its own"
+    );
     println!("       emptiness as our failure, and that has happened here before.)");
     if hang > 0 {
         println!("  \x1b[31m{hang:>4} HUNG\x1b[0m  ← a hard failure, counted and attributed (G_HANG). Not a skipped test.");
@@ -1553,7 +1805,10 @@ fn run_oracle_merge(args: &[String]) {
         slow.sort_by_key(|(m, _, _)| -m);
         println!("\n──── SLOW (Part 22.2: passing, but many times Chromium's time — a stability signal) ────\n");
         for (m, c, site) in slow.iter().take(10) {
-            println!("  {site:<32} manuk {m:>6}ms   chromium {c:>6}ms   ({}×)", m / c.max(&1));
+            println!(
+                "  {site:<32} manuk {m:>6}ms   chromium {c:>6}ms   ({}×)",
+                m / c.max(&1)
+            );
         }
     }
 
@@ -1576,7 +1831,10 @@ fn run_oracle_merge(args: &[String]) {
         "# ORACLE CLUSTER REGISTRY — generated by `manuk-wpt oracle-merge`. Do not hand-edit.\n         #\n         # This IS the priority ledger (Part 4) and the website-class taxonomy (Part 24.1). Ranked by\n         # DISTINCT SITES then DISTINCT CLASSES, never by hit count. A pattern class that CRASHES or\n         # HANGS outranks every visual divergence here (Part 24.3) — those live in STATUS.md's Bar 0.\n         #\n         # id            sites  classes  hits  root cause\n",
     );
     println!("\n──── ROOT CAUSES, ranked by SITES EXPLAINED — this IS the ledger ────\n");
-    println!("{:>6} {:>8} {:>7}  {:<10} {}", "sites", "classes", "hits", "cluster", "root cause");
+    println!(
+        "{:>6} {:>8} {:>7}  {:<10} {}",
+        "sites", "classes", "hits", "cluster", "root cause"
+    );
     for (i, (sig, (sites, classes, hits, example))) in ranked.iter().enumerate() {
         // Stable, human-quotable, and derived from the signature so the same root cause keeps the
         // same id across crawls even as its rank moves.
@@ -1598,7 +1856,10 @@ fn run_oracle_merge(args: &[String]) {
         }
     }
     let _ = std::fs::write("docs/loop/CLUSTERS.md", &registry);
-    println!("\n  cluster registry → docs/loop/CLUSTERS.md ({} clusters)", ranked.len());
+    println!(
+        "\n  cluster registry → docs/loop/CLUSTERS.md ({} clusters)",
+        ranked.len()
+    );
     println!(
         "\nRanked by DISTINCT SITES and DISTINCT CLASSES, never by hit count — otherwise whichever\n\
          site has the most <span>s tops the plan forever. A cause spanning several classes is a\n\
@@ -1630,20 +1891,42 @@ fn run_oracle_merge(args: &[String]) {
 /// flushes. If the child stops making progress, the driver kills it, and **the test after the last
 /// flushed line is the one that hung** — named, recorded, and stepped over so the run continues.
 fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
-    let Some(dir) = flag(args, "--wpt").map(PathBuf::from).or_else(manuk_wpt::find_wpt_checkout) else {
+    let Some(dir) = flag(args, "--wpt")
+        .map(PathBuf::from)
+        .or_else(manuk_wpt::find_wpt_checkout)
+    else {
         eprintln!("no WPT checkout.  export WPT_DIR=/path/to/wpt   (or ./scripts/wpt-setup.sh)");
         std::process::exit(2);
     };
-    let known: Vec<Option<&str>> = ["--wpt", "--timeout", "--limit", "--start", "--json", "--batch"]
-        .iter().map(|f| flag(args, f)).collect();
-    let subset = args.iter()
+    let known: Vec<Option<&str>> = [
+        "--wpt",
+        "--timeout",
+        "--limit",
+        "--start",
+        "--json",
+        "--batch",
+    ]
+    .iter()
+    .map(|f| flag(args, f))
+    .collect();
+    let subset = args
+        .iter()
         .find(|a| !a.starts_with("--") && !known.iter().any(|k| *k == Some(a.as_str())))
-        .cloned().unwrap_or_else(|| "dom".into());
-    let secs: u64 = flag(args, "--timeout").and_then(|s| s.parse().ok()).unwrap_or(10);
+        .cloned()
+        .unwrap_or_else(|| "dom".into());
+    let secs: u64 = flag(args, "--timeout")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(10);
     let timeout = std::time::Duration::from_secs(secs);
-    let limit: usize = flag(args, "--limit").and_then(|s| s.parse().ok()).unwrap_or(usize::MAX);
-    let start: usize = flag(args, "--start").and_then(|s| s.parse().ok()).unwrap_or(0);
-    let batch: usize = flag(args, "--batch").and_then(|s| s.parse().ok()).unwrap_or(40);
+    let limit: usize = flag(args, "--limit")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(usize::MAX);
+    let start: usize = flag(args, "--start")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    let batch: usize = flag(args, "--batch")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(40);
 
     let disc = manuk_wpt::harness::discover(&dir, &subset);
     let all: Vec<String> = disc.tests.iter().skip(start).take(limit).cloned().collect();
@@ -1654,7 +1937,9 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
         let out = PathBuf::from(flag(args, "--out").expect("--child needs --out"));
         let rt = tokio::runtime::Runtime::new().expect("tokio");
         rt.block_on(async move {
-            let (addr, _srv) = manuk_wpt::harness::serve(dir.clone()).await.expect("server");
+            let (addr, _srv) = manuk_wpt::harness::serve(dir.clone())
+                .await
+                .expect("server");
             let base = format!("http://{addr}");
             for rel in &all {
                 let r = manuk_wpt::harness::run_one(&base, rel, fonts, timeout).await;
@@ -1667,7 +1952,9 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
                         for (name, st) in ts {
                             match st {
                                 manuk_wpt::harness::Sub::Pass => {}
-                                manuk_wpt::harness::Sub::Fail(m) => eprintln!("    FAIL {name}\n         {m}"),
+                                manuk_wpt::harness::Sub::Fail(m) => {
+                                    eprintln!("    FAIL {name}\n         {m}")
+                                }
                                 other => eprintln!("    {other:?} {name}"),
                             }
                         }
@@ -1676,9 +1963,16 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
                 // Append + flush per test. If the NEXT test hangs and we are killed, this file is
                 // the record of exactly how far we got — so the hang is attributable to one file.
                 use std::io::Write;
-                let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&out).unwrap();
-                let _ = writeln!(f, "{{\"path\":{:?},\"pass\":{p},\"total\":{t},\"harness\":{:?},\"ms\":{}}}",
-                                 rel, r.harness_status, r.ms);
+                let mut f = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&out)
+                    .unwrap();
+                let _ = writeln!(
+                    f,
+                    "{{\"path\":{:?},\"pass\":{p},\"total\":{t},\"harness\":{:?},\"ms\":{}}}",
+                    rel, r.harness_status, r.ms
+                );
                 let _ = f.flush();
             }
         });
@@ -1711,16 +2005,32 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
     while i < all.len() {
         let take = batch.min(all.len() - i);
         let mut child = std::process::Command::new(&exe)
-            .arg("wpt").arg(&subset)
-            .arg("--wpt").arg(&dir)
-            .arg("--child").arg("--out").arg(&tmp)
-            .arg("--start").arg((start + i).to_string())
-            .arg("--limit").arg(take.to_string())
-            .arg("--timeout").arg(secs.to_string())
-            .args(if show_fail { vec!["--show-failures"] } else { vec![] })
+            .arg("wpt")
+            .arg(&subset)
+            .arg("--wpt")
+            .arg(&dir)
+            .arg("--child")
+            .arg("--out")
+            .arg(&tmp)
+            .arg("--start")
+            .arg((start + i).to_string())
+            .arg("--limit")
+            .arg(take.to_string())
+            .arg("--timeout")
+            .arg(secs.to_string())
+            .args(if show_fail {
+                vec!["--show-failures"]
+            } else {
+                vec![]
+            })
             .stdout(std::process::Stdio::null())
-            .stderr(if show_fail { std::process::Stdio::inherit() } else { std::process::Stdio::null() })
-            .spawn().expect("spawn child");
+            .stderr(if show_fail {
+                std::process::Stdio::inherit()
+            } else {
+                std::process::Stdio::null()
+            })
+            .spawn()
+            .expect("spawn child");
 
         // Watchdog: kill the child when it stops making PROGRESS, not on a fixed total budget — a
         // batch of slow-but-fine tests must not be mistaken for a hang.
@@ -1733,19 +2043,31 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
         let mut exit_code: Option<i32> = None;
         let hung = loop {
             match child.try_wait() {
-                Ok(Some(st)) => { exit_code = st.code(); break false }
+                Ok(Some(st)) => {
+                    exit_code = st.code();
+                    break false;
+                }
                 Ok(None) => {}
                 Err(_) => break false,
             }
             std::thread::sleep(std::time::Duration::from_millis(150));
             let n = read_jsonl(&tmp).len();
-            if n > lines_seen { lines_seen = n; last_progress = std::time::Instant::now(); }
-            if last_progress.elapsed() > stall { let _ = child.kill(); let _ = child.wait(); break true; }
+            if n > lines_seen {
+                lines_seen = n;
+                last_progress = std::time::Instant::now();
+            }
+            if last_progress.elapsed() > stall {
+                let _ = child.kill();
+                let _ = child.wait();
+                break true;
+            }
         };
 
         let done = read_jsonl(&tmp);
-        for r in done.iter().skip(lines_read) { results.push(r.clone()); }
-        let completed = done.len() - lines_read;   // FILE lines this batch produced — not results.len()
+        for r in done.iter().skip(lines_read) {
+            results.push(r.clone());
+        }
+        let completed = done.len() - lines_read; // FILE lines this batch produced — not results.len()
         lines_read = done.len();
 
         if hung {
@@ -1770,7 +2092,10 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
             //             an INSTRUMENT fault, not an engine fault. Say which.
             let (label, note) = match exit_code {
                 None => ("CRASH", "killed by a signal — Bar 0"),
-                Some(0) => ("SHORT", "child exited 0 but wrote fewer rows than asked — INSTRUMENT fault"),
+                Some(0) => (
+                    "SHORT",
+                    "child exited 0 but wrote fewer rows than asked — INSTRUMENT fault",
+                ),
                 Some(c) => ("EXIT", if c == 101 { "panic" } else { "nonzero exit" }),
             };
             eprintln!("  \x1b[31m{label}\x1b[0m {} ({note})", all[idx]);
@@ -1788,20 +2113,30 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
     let (mut slow, mut th_timeout, mut short) = (0usize, 0usize, 0usize);
     let mut jsonl = String::new();
     for (rel, p, t, h, ms) in &results {
-        pass += p; total += t;
+        pass += p;
+        total += t;
         match h.as_str() {
-            "HANG" | "CRASH" | "EXIT" => hangs += 1,    // Bar 0: the child stopped, or died
-            "SHORT" => short += 1,                      // the INSTRUMENT lost a row — not the engine
-            "SLOW" => slow += 1,                        // our budget expired — a PERF finding
-            "TIMEOUT" => th_timeout += 1,               // testharness's own verdict: an async test never completed
+            "HANG" | "CRASH" | "EXIT" => hangs += 1, // Bar 0: the child stopped, or died
+            "SHORT" => short += 1,                   // the INSTRUMENT lost a row — not the engine
+            "SLOW" => slow += 1,                     // our budget expired — a PERF finding
+            "TIMEOUT" => th_timeout += 1, // testharness's own verdict: an async test never completed
             "NO_REPORT" | "HARNESS_NOT_LOADED" | "BAD_REPORT" | "FETCH_FAILED" => no_report += 1,
             _ => {}
         }
-        let d = rel.rsplit_once('/').map(|(d, _)| d.to_string()).unwrap_or_default();
+        let d = rel
+            .rsplit_once('/')
+            .map(|(d, _)| d.to_string())
+            .unwrap_or_default();
         let e = by_dir.entry(d).or_default();
-        e.0 += p; e.1 += t; e.2 += 1;
-        jsonl.push_str(&format!("{{\"path\":{rel:?},\"pass\":{p},\"total\":{t},\"harness\":{h:?},\"ms\":{ms}}}\n"));
-        if h != "OK" && h != "ERROR" { continue; }
+        e.0 += p;
+        e.1 += t;
+        e.2 += 1;
+        jsonl.push_str(&format!(
+            "{{\"path\":{rel:?},\"pass\":{p},\"total\":{t},\"harness\":{h:?},\"ms\":{ms}}}\n"
+        ));
+        if h != "OK" && h != "ERROR" {
+            continue;
+        }
     }
     if let Some(path) = flag(args, "--json") {
         let _ = std::fs::write(&path, &jsonl);
@@ -1810,11 +2145,23 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
 
     println!("\n── WPT {subset} ──────────────────────────────────────────");
     for (d, (p, t, n)) in &by_dir {
-        if *t == 0 { continue; }
-        println!("  {:>5.1}%  {p:>5}/{t:<5}  ({n} files)  {d}", 100.0 * *p as f64 / *t as f64);
+        if *t == 0 {
+            continue;
+        }
+        println!(
+            "  {:>5.1}%  {p:>5}/{t:<5}  ({n} files)  {d}",
+            100.0 * *p as f64 / *t as f64
+        );
     }
-    let rate = if total == 0 { 0.0 } else { 100.0 * pass as f64 / total as f64 };
-    println!("\n  FILES  {}   subtests {pass}/{total}  =  {rate:.1}%", results.len());
+    let rate = if total == 0 {
+        0.0
+    } else {
+        100.0 * pass as f64 / total as f64
+    };
+    println!(
+        "\n  FILES  {}   subtests {pass}/{total}  =  {rate:.1}%",
+        results.len()
+    );
     // Three DIFFERENT findings. Never one word.
     println!("  NO_REPORT {no_report}   \x1b[1mHANG/CRASH {hangs}\x1b[0m (Bar 0)   SHORT {short} (instrument)   SLOW {slow} (our budget)   TH_TIMEOUT {th_timeout} (async test never completed)");
     if no_report * 4 > results.len() && results.len() > 20 {
@@ -1825,7 +2172,9 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
 
 /// Read the child's incremental JSONL. Tolerates a torn final line (we may have killed it mid-write).
 fn read_jsonl(p: &std::path::Path) -> Vec<(String, usize, usize, String, u128)> {
-    let Ok(s) = std::fs::read_to_string(p) else { return Vec::new() };
+    let Ok(s) = std::fs::read_to_string(p) else {
+        return Vec::new();
+    };
     let mut out = Vec::new();
     for line in s.lines() {
         let g = |k: &str| -> Option<String> {
@@ -1838,9 +2187,18 @@ fn read_jsonl(p: &std::path::Path) -> Vec<(String, usize, usize, String, u128)> 
                 Some(rest.chars().take_while(|c| c.is_ascii_digit()).collect())
             }
         };
-        let (Some(path), Some(p1), Some(t1), Some(h)) = (g("path"), g("pass"), g("total"), g("harness")) else { continue };
-        out.push((path, p1.parse().unwrap_or(0), t1.parse().unwrap_or(0), h,
-                  g("ms").and_then(|m| m.parse().ok()).unwrap_or(0)));
+        let (Some(path), Some(p1), Some(t1), Some(h)) =
+            (g("path"), g("pass"), g("total"), g("harness"))
+        else {
+            continue;
+        };
+        out.push((
+            path,
+            p1.parse().unwrap_or(0),
+            t1.parse().unwrap_or(0),
+            h,
+            g("ms").and_then(|m| m.parse().ok()).unwrap_or(0),
+        ));
     }
     out
 }

@@ -41,8 +41,8 @@ use stylo::device::servo::FontMetricsProvider;
 use stylo::device::Device;
 use stylo::font_metrics::FontMetrics;
 use stylo::media_queries::{MediaList, MediaType};
-use stylo::properties::style_structs::Font;
 use stylo::properties::declaration_block::parse_style_attribute;
+use stylo::properties::style_structs::Font;
 use stylo::properties::{ComputedValues, PropertyDeclarationBlock};
 use stylo::queries::values::PrefersColorScheme;
 use stylo::servo_arc::Arc as ServoArc;
@@ -296,8 +296,18 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
         }
         let el = StyloElement::new(dom, node, &store);
         let cv = cascade_one_element(
-            &stylist, &index, &mut candidates, &mut caches, &lock, &url_data, &guard, &guards, &el,
-            node, &parent_cv, dom,
+            &stylist,
+            &index,
+            &mut candidates,
+            &mut caches,
+            &lock,
+            &url_data,
+            &guard,
+            &guards,
+            &el,
+            node,
+            &parent_cv,
+            dom,
         );
         // **`rem` is root-relative.** The device carries the root font size that every `rem` in the
         // document resolves against, and it starts at the initial 16px. Unless it is updated once
@@ -316,11 +326,25 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
         // `::before` / `::after` — generated content, cascaded against this element as its parent.
         use stylo::selector_parser::PseudoElement as Pe;
         cs.before = cascade_pseudo(
-            &stylist, &stylo_sheets, &lock, &guard, &guards, &el, &cv, Pe::Before,
+            &stylist,
+            &stylo_sheets,
+            &lock,
+            &guard,
+            &guards,
+            &el,
+            &cv,
+            Pe::Before,
         )
         .map(Box::new);
         cs.after = cascade_pseudo(
-            &stylist, &stylo_sheets, &lock, &guard, &guards, &el, &cv, Pe::After,
+            &stylist,
+            &stylo_sheets,
+            &lock,
+            &guard,
+            &guards,
+            &el,
+            &cv,
+            Pe::After,
         )
         .map(Box::new);
         map.insert(node, cs);
@@ -351,7 +375,9 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
                 .parent(node)
                 .and_then(|p| map.get(&p).map(|s| s.font_size))
                 .unwrap_or(16.0);
-            let Some(cs) = map.get_mut(&node) else { continue };
+            let Some(cs) = map.get_mut(&node) else {
+                continue;
+            };
             for sh in &has_sheets {
                 applied += sh.apply_has_rules(dom, node, cs, parent_fs);
             }
@@ -477,12 +503,15 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
         }
         // `align="center"` centres the table; `<center>` does the same thing to its table child
         // (Chrome implements it as `text-align: -webkit-center`, which centres block children too).
-        let centered = el.attr("align").is_some_and(|a| a.eq_ignore_ascii_case("center"))
+        let centered = el
+            .attr("align")
+            .is_some_and(|a| a.eq_ignore_ascii_case("center"))
             || dom
                 .parent(node)
                 .and_then(|p| dom.tag_name(p))
                 .is_some_and(|t| t == "center");
-        if centered && s.margin.left == crate::Dim::Px(0.0) && s.margin.right == crate::Dim::Px(0.0) {
+        if centered && s.margin.left == crate::Dim::Px(0.0) && s.margin.right == crate::Dim::Px(0.0)
+        {
             s.margin.left = crate::Dim::Auto;
             s.margin.right = crate::Dim::Auto;
         }
@@ -547,7 +576,10 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
             .unwrap_or(20.0);
         s.width = crate::Dim::Px(cols * 8.0 + 13.0);
     }
-    if matches!(tag, "img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe") {
+    if matches!(
+        tag,
+        "img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe"
+    ) {
         if s.display == crate::Display::Inline {
             s.display = crate::Display::InlineBlock;
         }
@@ -664,9 +696,7 @@ impl RuleIndex {
                             let cand = match comp {
                                 Component::ID(v) => Some((0u8, v.to_string())),
                                 Component::Class(v) => Some((1u8, v.to_string())),
-                                Component::LocalName(n) => {
-                                    Some((2u8, n.lower_name.to_string()))
-                                }
+                                Component::LocalName(n) => Some((2u8, n.lower_name.to_string())),
                                 _ => None,
                             };
                             // Prefer the most selective key available: id > class > tag.
@@ -772,7 +802,11 @@ fn match_rules_recursive(
     device: &Device,
     el: &StyloElement<'_>,
     caches: &mut SelectorCaches,
-    winners: &mut Vec<(u32, usize, ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>)>,
+    winners: &mut Vec<(
+        u32,
+        usize,
+        ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>,
+    )>,
     order: &mut usize,
 ) {
     for rule in rules {
@@ -846,15 +880,25 @@ fn cascade_pseudo(
     parent_cv: &ServoArc<ComputedValues>,
     want: stylo::selector_parser::PseudoElement,
 ) -> Option<crate::ComputedStyle> {
-    let mut winners: Vec<(u32, usize, ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>)> =
-        Vec::new();
+    let mut winners: Vec<(
+        u32,
+        usize,
+        ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>,
+    )> = Vec::new();
     let mut order = 0usize;
     let mut caches = SelectorCaches::default();
     let device = stylist.device();
     for sheet in stylo_sheets {
         let rules = sheet.contents.read_with(guard).rules(guard);
         match_pseudo_rules(
-            rules, guard, device, el, &want, &mut caches, &mut winners, &mut order,
+            rules,
+            guard,
+            device,
+            el,
+            &want,
+            &mut caches,
+            &mut winners,
+            &mut order,
         );
     }
     if winners.is_empty() {
@@ -898,7 +942,11 @@ fn match_pseudo_rules(
     el: &StyloElement<'_>,
     want: &stylo::selector_parser::PseudoElement,
     caches: &mut SelectorCaches,
-    winners: &mut Vec<(u32, usize, ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>)>,
+    winners: &mut Vec<(
+        u32,
+        usize,
+        ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>,
+    )>,
     order: &mut usize,
 ) {
     for rule in rules {
@@ -965,8 +1013,11 @@ fn cascade_one_element(
     // Only the rules this element could possibly match — see `RuleIndex`. Everything below is
     // unchanged: each candidate is still fully matched by `matches_selector`, and winners are still
     // ordered by (specificity, source order).
-    let mut winners: Vec<(u32, usize, ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>)> =
-        Vec::new();
+    let mut winners: Vec<(
+        u32,
+        usize,
+        ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>,
+    )> = Vec::new();
     index.candidates(dom, node, candidates);
     // ONE `MatchingContext` for the whole element, not one per candidate rule. `SelectorCaches` is a
     // real allocation (it is the ancestor/nth-index cache), and it was being built fresh for every
@@ -1057,21 +1108,41 @@ mod tests {
         let map = cascade_via_stylo(&dom, std::slice::from_ref(&sheet), 800.0, 600.0);
 
         let ps = &map[&p];
-        assert_eq!(ps.color, Rgba::new(10, 20, 30, 255), "var() resolved on .lead");
+        assert_eq!(
+            ps.color,
+            Rgba::new(10, 20, 30, 255),
+            "var() resolved on .lead"
+        );
         assert_eq!(ps.font_weight, 700, "author weight applied");
-        assert_eq!(ps.width, crate::Dim::Px(200.0), "width mapped through the cascade");
+        assert_eq!(
+            ps.width,
+            crate::Dim::Px(200.0),
+            "width mapped through the cascade"
+        );
         assert_eq!(ps.margin.top, crate::Dim::Px(10.0), "margin-top mapped");
-        assert_eq!(ps.padding.left, crate::Dim::Px(4.0), "padding shorthand mapped");
+        assert_eq!(
+            ps.padding.left,
+            crate::Dim::Px(4.0),
+            "padding shorthand mapped"
+        );
         assert_eq!(ps.display, crate::Display::Block, "display mapped");
         // UA defaults flow through Stylo: <body> is block even with no author rule; the
         // inline <em> stays inline (CSS initial).
-        assert_eq!(map[&body].display, crate::Display::Block, "UA default: body is block");
+        assert_eq!(
+            map[&body].display,
+            crate::Display::Block,
+            "UA default: body is block"
+        );
         assert_eq!(map[&em].display, crate::Display::Inline, "em stays inline");
         // Both color and font-weight are inherited CSS properties, so <em> gets them
         // from .lead even though no rule targets <em> directly.
         let ems = &map[&em];
         // Inline style on <em> overrides the inherited color; weight still inherits.
-        assert_eq!(ems.color, Rgba::new(0, 128, 0, 255), "inline style= overrides inherited color");
+        assert_eq!(
+            ems.color,
+            Rgba::new(0, 128, 0, 255),
+            "inline style= overrides inherited color"
+        );
         assert_eq!(ems.font_weight, 700, "font-weight inherited by <em>");
     }
 
@@ -1132,12 +1203,20 @@ mod tests {
 
         // Mid (800px): neither media block matches → base rule only.
         let mid = cascade_via_stylo(&dom, std::slice::from_ref(&sheet), 800.0, 800.0);
-        assert_eq!(mid[&bx].display, crate::Display::Block, "no @media matches at 800px");
+        assert_eq!(
+            mid[&bx].display,
+            crate::Display::Block,
+            "no @media matches at 800px"
+        );
         assert_eq!(mid[&bx].width, crate::Dim::Px(500.0));
 
         // Wide (1200px): the min-width:1000 block matches → width:900 (later rule wins over base).
         let wide = cascade_via_stylo(&dom, std::slice::from_ref(&sheet), 1200.0, 800.0);
-        assert_eq!(wide[&bx].display, crate::Display::Block, "base display at 1200px");
+        assert_eq!(
+            wide[&bx].display,
+            crate::Display::Block,
+            "base display at 1200px"
+        );
         assert_eq!(
             wide[&bx].width,
             crate::Dim::Px(900.0),

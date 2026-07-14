@@ -45,7 +45,9 @@
 
 use anyhow::Result;
 use manuk_agent::capabilities::{ActionKind, Capabilities};
-use manuk_agent::{AgentBrowser, AgentConfig, AgentOutcome, Handoff, InferenceBackend, Observation};
+use manuk_agent::{
+    AgentBrowser, AgentConfig, AgentOutcome, Handoff, InferenceBackend, Observation,
+};
 
 /// What a single panel invocation is permitted to do. A thin, intention-revealing wrapper
 /// over [`Capabilities`]: the presets name the *use case* ("read this page", "browse within
@@ -95,7 +97,7 @@ impl PanelScope {
         use ActionKind::*;
         let caps = Capabilities::with_actions([
             Scroll, ScrollTo, Back, Forward, Finish, // read-only page
-            CloseTabs, OpenTab, SearchTab,           // tab management (H3)
+            CloseTabs, OpenTab, SearchTab, // tab management (H3)
         ]);
         PanelScope {
             caps,
@@ -338,7 +340,10 @@ mod tests {
     #[test]
     fn opening_the_panel_does_not_touch_the_page() {
         let panel = AgentPanel::read_only(1024, 768);
-        assert!(!panel.is_engaged(), "a freshly opened panel holds no session");
+        assert!(
+            !panel.is_engaged(),
+            "a freshly opened panel holds no session"
+        );
         assert!(
             panel.observation_prompt().is_none(),
             "with no session there is nothing to observe"
@@ -350,20 +355,31 @@ mod tests {
     #[test]
     fn take_over_and_hand_back_are_explicit_and_preserve_the_session() {
         let mut panel = AgentPanel::read_only(1024, 768);
-        panel.take_over(handoff_for("<title>Dash</title><h1>Welcome back</h1>"), HandoffConsent::user_approved());
+        panel.take_over(
+            handoff_for("<title>Dash</title><h1>Welcome back</h1>"),
+            HandoffConsent::user_approved(),
+        );
         assert!(panel.is_engaged());
 
         // The adopted page is real and observable.
         let prompt = panel.observation_prompt().expect("engaged panel observes");
-        assert!(prompt.contains("Welcome back"), "the live page's content is present");
+        assert!(
+            prompt.contains("Welcome back"),
+            "the live page's content is present"
+        );
 
         // Handing back yields a Handoff — exactly what AgentBrowser::adopt (the standalone
         // binary's entry point) consumes, proving the session can travel between front-ends.
-        let returned = panel.hand_back(HandoffConsent::user_approved()).expect("a session comes back");
+        let returned = panel
+            .hand_back(HandoffConsent::user_approved())
+            .expect("a session comes back");
         assert!(!panel.is_engaged(), "the panel is idle after handing back");
         let mut standalone = AgentBrowser::new(1280, 800);
         standalone.adopt(returned); // the standalone agent binary resumes the same session
-        assert_eq!(standalone.current_url(), Some("https://acme.example/dashboard"));
+        assert_eq!(
+            standalone.current_url(),
+            Some("https://acme.example/dashboard")
+        );
     }
 
     /// Constraint 2: page content is fenced as untrusted, so an embedded injection is data.
@@ -374,9 +390,15 @@ mod tests {
         panel.take_over(handoff_for(injected), HandoffConsent::user_approved());
 
         let prompt = panel.observation_prompt().unwrap();
-        let fence_start = prompt.find("=== UNTRUSTED PAGE CONTENT").expect("fence opens");
-        let fence_end = prompt.find("=== END UNTRUSTED PAGE CONTENT").expect("fence closes");
-        let injection = prompt.find("IGNORE THE USER").expect("the injected text is present");
+        let fence_start = prompt
+            .find("=== UNTRUSTED PAGE CONTENT")
+            .expect("fence opens");
+        let fence_end = prompt
+            .find("=== END UNTRUSTED PAGE CONTENT")
+            .expect("fence closes");
+        let injection = prompt
+            .find("IGNORE THE USER")
+            .expect("the injected text is present");
         assert!(
             fence_start < injection && injection < fence_end,
             "injected page text must sit inside the untrusted fence, not the instruction channel"
@@ -401,7 +423,10 @@ mod tests {
         ]);
         let outcome = panel.run(&backend, "What is this page?").await.unwrap();
 
-        assert_eq!(outcome.answer.as_deref(), Some("This is an invoice with total $0."));
+        assert_eq!(
+            outcome.answer.as_deref(),
+            Some("This is an invoice with total $0.")
+        );
         assert!(
             outcome.transcript.iter().any(|l| l.contains("BLOCKED")),
             "the submit must be blocked by the read-only scope: {:?}",
@@ -432,13 +457,19 @@ mod tests {
         }
 
         let mut panel = AgentPanel::new(PanelScope::assistant(), 1024, 768);
-        panel.take_over(handoff_for("<title>Hub</title><h1>Hub</h1>"), HandoffConsent::user_approved());
+        panel.take_over(
+            handoff_for("<title>Hub</title><h1>Hub</h1>"),
+            HandoffConsent::user_approved(),
+        );
         let backend = ReplayBackend::new(vec![
             r#"{"action":"search_tab","query":"rust"}"#.to_string(),
             r#"{"action":"finish","answer":"opened a search tab"}"#.to_string(),
         ]);
         let mut tabs = FakeTabs::default();
-        let outcome = panel.run_with_tabs(&backend, "search for rust", &mut tabs).await.unwrap();
+        let outcome = panel
+            .run_with_tabs(&backend, "search for rust", &mut tabs)
+            .await
+            .unwrap();
 
         assert_eq!(outcome.answer.as_deref(), Some("opened a search tab"));
         assert_eq!(tabs.opened, vec!["https://s.test/?q=rust".to_string()]);
@@ -448,9 +479,18 @@ mod tests {
     /// with neither there is no backend (the GUI reports that, rather than failing opaquely).
     #[test]
     fn panel_backend_prefers_local_then_groq_then_none() {
-        assert_eq!(resolve_panel_backend(Some(8080), true), Some(PanelBackendKind::LocalLlama(8080)));
-        assert_eq!(resolve_panel_backend(Some(8080), false), Some(PanelBackendKind::LocalLlama(8080)));
-        assert_eq!(resolve_panel_backend(None, true), Some(PanelBackendKind::Groq));
+        assert_eq!(
+            resolve_panel_backend(Some(8080), true),
+            Some(PanelBackendKind::LocalLlama(8080))
+        );
+        assert_eq!(
+            resolve_panel_backend(Some(8080), false),
+            Some(PanelBackendKind::LocalLlama(8080))
+        );
+        assert_eq!(
+            resolve_panel_backend(None, true),
+            Some(PanelBackendKind::Groq)
+        );
         assert_eq!(resolve_panel_backend(None, false), None);
     }
 
@@ -464,19 +504,34 @@ mod tests {
         let scope = PanelScope::browse_within(["https://acme.example"]);
         let obs = {
             let mut panel = AgentPanel::new(scope.clone(), 1024, 768);
-            panel.take_over(handoff_for("<a href='https://evil.example/x'>x</a>"), HandoffConsent::user_approved());
+            panel.take_over(
+                handoff_for("<a href='https://evil.example/x'>x</a>"),
+                HandoffConsent::user_approved(),
+            );
             panel.browser.as_ref().unwrap().observe().unwrap()
         };
 
         // In-origin navigation is allowed (a plain content path, so the risk heuristic —
         // a separate gate — doesn't independently flag it)…
         assert_eq!(
-            check(&Action::Navigate { url: "https://acme.example/articles/browser-engines".into() }, &obs, &scope.caps),
+            check(
+                &Action::Navigate {
+                    url: "https://acme.example/articles/browser-engines".into()
+                },
+                &obs,
+                &scope.caps
+            ),
             Ok(())
         );
         // …but leaving it is refused, even though the risk heuristic alone would allow it.
         assert!(matches!(
-            check(&Action::Navigate { url: "https://evil.example/x".into() }, &obs, &scope.caps),
+            check(
+                &Action::Navigate {
+                    url: "https://evil.example/x".into()
+                },
+                &obs,
+                &scope.caps
+            ),
             Err(Denial::OriginNotGranted(_))
         ));
     }

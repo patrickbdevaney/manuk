@@ -236,10 +236,19 @@ mod tests {
 
     #[test]
     fn origin_partitions_by_scheme_host_port() {
-        assert_eq!(origin_of("https://a.example/x?y=1").unwrap(), "https://a.example");
-        assert_eq!(origin_of("http://a.example:8080/").unwrap(), "http://a.example:8080");
+        assert_eq!(
+            origin_of("https://a.example/x?y=1").unwrap(),
+            "https://a.example"
+        );
+        assert_eq!(
+            origin_of("http://a.example:8080/").unwrap(),
+            "http://a.example:8080"
+        );
         // Different scheme, different origin — one cannot read the other.
-        assert_ne!(origin_of("https://a.example/").unwrap(), origin_of("http://a.example/").unwrap());
+        assert_ne!(
+            origin_of("https://a.example/").unwrap(),
+            origin_of("http://a.example/").unwrap()
+        );
     }
 
     #[test]
@@ -263,7 +272,10 @@ mod tests {
     fn quota_is_enforced() {
         let o = "https://quota.test";
         let big = "x".repeat(QUOTA_BYTES);
-        assert!(!set(Area::Session, o, "k", &big), "over-quota write must be refused");
+        assert!(
+            !set(Area::Session, o, "k", &big),
+            "over-quota write must be refused"
+        );
         assert!(set(Area::Session, o, "k", "small"));
     }
 }

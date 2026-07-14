@@ -176,7 +176,6 @@ impl HistoryHost {
     }
 }
 
-
 #[cfg(test)]
 mod host_tests {
     //! The host model is testable **without a JS engine at all** — which is the point of
@@ -219,7 +218,9 @@ mod host_tests {
     #[test]
     fn a_cross_origin_url_is_rejected_with_a_security_error() {
         let mut h = host();
-        let err = h.push_state("null", Some("https://evil.test/x")).unwrap_err();
+        let err = h
+            .push_state("null", Some("https://evil.test/x"))
+            .unwrap_err();
         assert!(err.contains("SecurityError"), "{err}");
         // ...and nothing moved.
         assert_eq!(h.current_url().as_str(), "https://ex.test/a?q=1");
@@ -238,7 +239,11 @@ mod host_tests {
         assert_eq!(h.len(), 3);
         assert_eq!(h.state_json(), r#"{"s":2}"#);
         h.traverse(-1).unwrap();
-        assert_eq!(h.state_json(), r#"{"s":1}"#, "each entry keeps its own state");
+        assert_eq!(
+            h.state_json(),
+            r#"{"s":1}"#,
+            "each entry keeps its own state"
+        );
     }
 
     #[test]
@@ -268,7 +273,11 @@ mod host_tests {
         let mut h = host();
         assert_eq!(h.state_json(), "null");
         h.push_state(r#"{"a":1}"#, None).unwrap();
-        assert_eq!(h.current_url().as_str(), "https://ex.test/a?q=1", "url unchanged");
+        assert_eq!(
+            h.current_url().as_str(),
+            "https://ex.test/a?q=1",
+            "url unchanged"
+        );
         assert_eq!(h.state_json(), r#"{"a":1}"#);
         h.traverse(-1).unwrap();
         assert_eq!(h.state_json(), "null");

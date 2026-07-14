@@ -108,9 +108,16 @@ impl ObservationRecord {
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum Event {
     /// The run's parameters, written once at the head.
-    Start { task: String, backend: String, max_steps: usize },
+    Start {
+        task: String,
+        backend: String,
+        max_steps: usize,
+    },
     /// What the agent perceived at the start of a step.
-    Observed { step: usize, observation: Box<ObservationRecord> },
+    Observed {
+        step: usize,
+        observation: Box<ObservationRecord>,
+    },
     /// The model's **raw** reply. This is the non-reproducible part, so it is verbatim.
     Model { step: usize, raw: String },
     /// The action parsed from that reply (or the parse error).
@@ -118,7 +125,10 @@ pub enum Event {
     /// The Action-Guard refused the action.
     Blocked { step: usize, reason: String },
     /// The run ended.
-    Finished { steps: usize, answer: Option<String> },
+    Finished {
+        steps: usize,
+        answer: Option<String>,
+    },
 }
 
 /// An append-only event log. Serializes as **JSON Lines** so it can be appended to a
@@ -163,7 +173,10 @@ impl EventLog {
     /// The recorded observation for `step`, if any.
     pub fn observation(&self, step: usize) -> Option<&ObservationRecord> {
         self.events.iter().find_map(|e| match e {
-            Event::Observed { step: s, observation } if *s == step => Some(&**observation),
+            Event::Observed {
+                step: s,
+                observation,
+            } if *s == step => Some(&**observation),
             _ => None,
         })
     }
@@ -225,7 +238,9 @@ impl InferenceBackend for ReplayBackend {
             .lock()
             .expect("replay lock")
             .pop_front()
-            .context("replay log exhausted: the run asked for more model replies than were recorded")
+            .context(
+                "replay log exhausted: the run asked for more model replies than were recorded",
+            )
     }
     fn name(&self) -> String {
         self.name.clone()
@@ -344,8 +359,14 @@ mod tests {
     #[test]
     fn a_truncated_log_parses_up_to_the_last_whole_line() {
         let mut log = EventLog::new();
-        log.push(Event::Model { step: 0, raw: "a".into() });
-        log.push(Event::Model { step: 1, raw: "b".into() });
+        log.push(Event::Model {
+            step: 0,
+            raw: "a".into(),
+        });
+        log.push(Event::Model {
+            step: 1,
+            raw: "b".into(),
+        });
         let text = log.to_jsonl();
         // Simulate a crash mid-write: drop the last (partial) line.
         let truncated = &text[..text.rfind('\n').unwrap()];
@@ -363,8 +384,14 @@ mod tests {
     #[tokio::test]
     async fn replay_backend_returns_recorded_replies_in_order_then_errors() {
         let mut log = EventLog::new();
-        log.push(Event::Model { step: 0, raw: "first".into() });
-        log.push(Event::Model { step: 1, raw: "second".into() });
+        log.push(Event::Model {
+            step: 0,
+            raw: "first".into(),
+        });
+        log.push(Event::Model {
+            step: 1,
+            raw: "second".into(),
+        });
 
         let b = ReplayBackend::from_log(&log);
         assert_eq!(b.remaining(), 2);
@@ -428,8 +455,22 @@ mod tests {
         });
 
         let mut report = ReplayReport::default();
-        check_step(&log, 0, &obs_rec("https://a.test/", "hello"), ReplayMode::Lenient, &mut report).unwrap();
-        check_step(&log, 1, &obs_rec("https://OTHER/", "world"), ReplayMode::Lenient, &mut report).unwrap();
+        check_step(
+            &log,
+            0,
+            &obs_rec("https://a.test/", "hello"),
+            ReplayMode::Lenient,
+            &mut report,
+        )
+        .unwrap();
+        check_step(
+            &log,
+            1,
+            &obs_rec("https://OTHER/", "world"),
+            ReplayMode::Lenient,
+            &mut report,
+        )
+        .unwrap();
 
         assert_eq!(report.steps_checked, 2);
         assert_eq!(report.divergences.len(), 1);
@@ -440,7 +481,10 @@ mod tests {
     #[test]
     fn a_screenshot_difference_is_a_divergence() {
         let mut a = obs_rec("https://a.test/", "x");
-        let b = ObservationRecord { screenshot_digest: Some(43), ..a.clone() };
+        let b = ObservationRecord {
+            screenshot_digest: Some(43),
+            ..a.clone()
+        };
         assert!(a.diff(&b).unwrap().contains("screenshot"));
         // ...and identical screenshots are not.
         a.screenshot_digest = Some(43);

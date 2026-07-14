@@ -81,3 +81,4 @@ accumulates by construction**, because the pre-commit hook requires a `WIKI:` tr
 | [`interaction-surface.md`](interaction-surface.md) | the interaction/automation surface (agent-native mission) |
 | [`performance.md`](performance.md) | what is actually slow, and why — measured, never assumed |
 | [`build-and-dependencies.md`](build-and-dependencies.md) | what is actually compiled, and what only *looks* like it is |
+| [`wpt-horizon.md`](wpt-horizon.md) | the parity-scope roadmap, counted live from the WPT tree |

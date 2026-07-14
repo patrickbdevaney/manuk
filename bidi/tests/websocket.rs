@@ -20,7 +20,9 @@ async fn start() -> String {
 }
 
 struct Client {
-    ws: tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+    ws: tokio_tungstenite::WebSocketStream<
+        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+    >,
     next_id: u64,
 }
 
@@ -77,15 +79,24 @@ async fn a_websocket_client_drives_a_full_bidi_session() {
 
     // the session came with one context
     let r = c.call("browsingContext.getTree", json!({})).await;
-    let ctx = r["result"]["contexts"][0]["context"].as_str().unwrap().to_string();
+    let ctx = r["result"]["contexts"][0]["context"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     // subscribe, then navigate: reply first, then the load event
-    c.call("session.subscribe", json!({"events": ["browsingContext.load"]}))
-        .await;
+    c.call(
+        "session.subscribe",
+        json!({"events": ["browsingContext.load"]}),
+    )
+    .await;
 
     let page = data_url("<title>Hello</title><body><h1>Hi there</h1></body>");
     let r = c
-        .call("browsingContext.navigate", json!({"context": ctx, "url": page}))
+        .call(
+            "browsingContext.navigate",
+            json!({"context": ctx, "url": page}),
+        )
         .await;
     assert_eq!(r["result"]["url"], page);
 
@@ -104,15 +115,20 @@ async fn a_websocket_client_drives_a_full_bidi_session() {
         .await;
     let b64 = r["result"]["data"].as_str().unwrap();
     use base64::Engine as _;
-    let png = base64::engine::general_purpose::STANDARD.decode(b64).unwrap();
+    let png = base64::engine::general_purpose::STANDARD
+        .decode(b64)
+        .unwrap();
     assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
 
     // a second context, then close it
-    let r = c.call("browsingContext.create", json!({"type": "tab"})).await;
+    let r = c
+        .call("browsingContext.create", json!({"type": "tab"}))
+        .await;
     let ctx2 = r["result"]["context"].as_str().unwrap().to_string();
     let r = c.call("browsingContext.getTree", json!({})).await;
     assert_eq!(r["result"]["contexts"].as_array().unwrap().len(), 2);
-    c.call("browsingContext.close", json!({"context": ctx2})).await;
+    c.call("browsingContext.close", json!({"context": ctx2}))
+        .await;
     let r = c.call("browsingContext.getTree", json!({})).await;
     assert_eq!(r["result"]["contexts"].as_array().unwrap().len(), 1);
 }
@@ -147,7 +163,10 @@ async fn two_clients_get_independent_sessions() {
 
     let ctx_a = {
         let r = a.call("browsingContext.getTree", json!({})).await;
-        r["result"]["contexts"][0]["context"].as_str().unwrap().to_string()
+        r["result"]["contexts"][0]["context"]
+            .as_str()
+            .unwrap()
+            .to_string()
     };
     a.call(
         "browsingContext.navigate",

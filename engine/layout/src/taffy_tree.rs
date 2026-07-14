@@ -13,8 +13,8 @@
 
 use manuk_css::{
     AlignItems as CssAlign, BoxSizing, ComputedStyle, Dim, Display as CssDisplay,
-    FlexDirection as CssDir, FlexWrap as CssWrap, GridLine as CssGridLine, JustifyContent as CssJustify,
-    Position as CssPosition, TrackSize as CssTrackSize, TrackUnit,
+    FlexDirection as CssDir, FlexWrap as CssWrap, GridLine as CssGridLine,
+    JustifyContent as CssJustify, Position as CssPosition, TrackSize as CssTrackSize, TrackUnit,
 };
 use taffy::prelude::*;
 use taffy::style::{BoxSizing as TaffyBoxSizing, Position as TaffyPosition};
@@ -166,7 +166,10 @@ fn grid_line(pair: (CssGridLine, CssGridLine)) -> Line<GridPlacement> {
             CssGridLine::Span(n) => span(n),
         }
     }
-    Line { start: one(pair.0), end: one(pair.1) }
+    Line {
+        start: one(pair.0),
+        end: one(pair.1),
+    }
 }
 
 /// Map a Manuk [`ComputedStyle`] onto a taffy [`Style`], covering the box model + flex + grid
@@ -187,9 +190,18 @@ pub fn to_taffy_style(cs: &ComputedStyle) -> Style {
             top: lp_auto(cs.inset.top),
             bottom: lp_auto(cs.inset.bottom),
         },
-        size: Size { width: dimension(cs.width), height: dimension(cs.height) },
-        min_size: Size { width: dimension(cs.min_width), height: dimension(cs.min_height) },
-        max_size: Size { width: dimension(cs.max_width), height: dimension(cs.max_height) },
+        size: Size {
+            width: dimension(cs.width),
+            height: dimension(cs.height),
+        },
+        min_size: Size {
+            width: dimension(cs.min_width),
+            height: dimension(cs.min_height),
+        },
+        max_size: Size {
+            width: dimension(cs.max_width),
+            height: dimension(cs.max_height),
+        },
         margin: Rect {
             left: lp_auto(cs.margin.left),
             right: lp_auto(cs.margin.right),
@@ -211,14 +223,25 @@ pub fn to_taffy_style(cs: &ComputedStyle) -> Style {
         align_items: Some(map_align(cs.align_items)),
         align_self: cs.align_self.map(map_align),
         justify_content: Some(map_justify(cs.justify_content)),
-        gap: Size { width: length(cs.column_gap), height: length(cs.row_gap) },
+        gap: Size {
+            width: length(cs.column_gap),
+            height: length(cs.row_gap),
+        },
         flex_direction: map_direction(cs.flex_direction),
         flex_wrap: map_wrap(cs.flex_wrap),
         flex_grow: cs.flex_grow,
         flex_shrink: cs.flex_shrink,
         flex_basis: dimension(cs.flex_basis),
-        grid_template_columns: cs.grid_template_columns.iter().map(|t| GridTemplateComponent::Single(track(t))).collect(),
-        grid_template_rows: cs.grid_template_rows.iter().map(|t| GridTemplateComponent::Single(track(t))).collect(),
+        grid_template_columns: cs
+            .grid_template_columns
+            .iter()
+            .map(|t| GridTemplateComponent::Single(track(t)))
+            .collect(),
+        grid_template_rows: cs
+            .grid_template_rows
+            .iter()
+            .map(|t| GridTemplateComponent::Single(track(t)))
+            .collect(),
         grid_column: grid_line(cs.grid_column),
         grid_row: grid_line(cs.grid_row),
         ..Default::default()
@@ -237,7 +260,8 @@ use taffy::{
 
 /// A callback that content-measures a Manuk-leaf DOM node (block/inline/table/float) for
 /// the taffy tree — `(dom_node, known_dims, available_space) -> size`.
-type MeasureFn<'m> = dyn FnMut(DomNodeId, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32> + 'm;
+type MeasureFn<'m> =
+    dyn FnMut(DomNodeId, Size<Option<f32>>, Size<AvailableSpace>) -> Size<f32> + 'm;
 
 /// A node placed by the unified taffy tree: its DOM node, its taffy-assigned rectangle
 /// (`slot`, relative to its parent's border box), whether it is a flex/grid **container**
@@ -277,7 +301,10 @@ impl<'m> TaffyDom<'m> {
         container: DomNodeId,
         measure: Box<MeasureFn<'m>>,
     ) -> (Self, TId) {
-        let mut tree = TaffyDom { nodes: Vec::new(), measure };
+        let mut tree = TaffyDom {
+            nodes: Vec::new(),
+            measure,
+        };
         let root = tree.add(dom, styles, container);
         // The container's own margin/padding/border/inset are applied by Manuk's block
         // layout around this subtree; the tree just positions children from the content
@@ -332,10 +359,14 @@ impl<'m> TaffyDom<'m> {
                 if let Some(name) = styles[&cdom].grid_area.clone() {
                     if let Some(r) = cs.grid_template_areas.iter().find(|a| a.name == name) {
                         let n = &mut self.nodes[usize::from(child)];
-                        n.style.grid_row =
-                            Line { start: line(r.row.0 as i16), end: line(r.row.1 as i16) };
-                        n.style.grid_column =
-                            Line { start: line(r.col.0 as i16), end: line(r.col.1 as i16) };
+                        n.style.grid_row = Line {
+                            start: line(r.row.0 as i16),
+                            end: line(r.row.1 as i16),
+                        };
+                        n.style.grid_column = Line {
+                            start: line(r.col.0 as i16),
+                            end: line(r.col.1 as i16),
+                        };
                     }
                 }
             }
@@ -360,7 +391,12 @@ impl<'m> TaffyDom<'m> {
         let l = n.layout;
         Placed {
             dom: n.dom,
-            slot: Slot { x: l.location.x, y: l.location.y, width: l.size.width, height: l.size.height },
+            slot: Slot {
+                x: l.location.x,
+                y: l.location.y,
+                width: l.size.width,
+                height: l.size.height,
+            },
             container: n.container,
             children: n.children.iter().map(|&c| self.placed(c)).collect(),
         }
@@ -378,7 +414,12 @@ impl<'m> TaffyDom<'m> {
             let style = self.nodes[idx].style.clone();
             let dom_node = self.nodes[idx].dom;
             let measure = &mut self.measure;
-            compute_leaf_layout(inputs, &style, |_, _| 0.0, |known, avail| measure(dom_node, known, avail))
+            compute_leaf_layout(
+                inputs,
+                &style,
+                |_, _| 0.0,
+                |known, avail| measure(dom_node, known, avail),
+            )
         }
     }
 }
@@ -413,7 +454,9 @@ impl LayoutPartialTree for TaffyDom<'_> {
         self.nodes[usize::from(node_id)].layout = *layout;
     }
     fn compute_child_layout(&mut self, node_id: TId, inputs: LayoutInput) -> LayoutOutput {
-        compute_cached_layout(self, node_id, inputs, |tree, id, inputs| tree.dispatch(id, inputs))
+        compute_cached_layout(self, node_id, inputs, |tree, id, inputs| {
+            tree.dispatch(id, inputs)
+        })
     }
 }
 
@@ -526,11 +569,17 @@ pub fn max_content_width<'m>(
     let (mut tree, root) = TaffyDom::build(dom, styles, container, Box::new(measure));
     let r: usize = root.into();
     // Auto-size the root (do not pin it), then solve against MAX-CONTENT available space.
-    tree.nodes[r].style.size = Size { width: auto(), height: auto() };
+    tree.nodes[r].style.size = Size {
+        width: auto(),
+        height: auto(),
+    };
     compute_root_layout(
         &mut tree,
         root,
-        Size { width: AvailableSpace::MaxContent, height: AvailableSpace::MaxContent },
+        Size {
+            width: AvailableSpace::MaxContent,
+            height: AvailableSpace::MaxContent,
+        },
     );
     tree.nodes[r].layout.size.width
 }

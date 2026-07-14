@@ -132,6 +132,28 @@ looked at. Optimising hard under a fixed ceiling *feels* like progress and is ev
 **This reframes tick selection:** once the backlog under the current ceiling thins, a tick that **expands
 what the oracle can see** outranks a tick that fixes something it already sees.
 
+## THE ASYNC CI LANE — redundant verification, and a real credibility signal
+
+`.github/workflows/ci.yml` runs the **full verify wall on every push**, in parallel, at **zero cost to
+iteration speed**: nothing in the local tick loop ever waits on it. A regression it finds is handled at the
+next tick's *"read STATUS.md first"* check-in as an ordinary gate failure — **never an interrupt**.
+
+**Two lanes, and the split is a deliberate honesty choice** (per the process-model directive:
+*Linux-validated is NOT cross-platform-validated*):
+
+- **`verify-linux` is the BADGE.** The shipping configuration (stylo + spidermonkey) on the primary target;
+  it must be **green**, and a green badge means exactly *"this builds and its gate wall passes on Linux."*
+- **`cross-platform` + `static-binary` are TRACKED KNOWN-GAPS** (`continue-on-error`). mozjs's cross-OS CI
+  build is genuinely unverified, so these are visible, non-blocking trackers rather than a red badge on
+  honestly-labelled in-progress work. **When a platform goes green, promote it into the badge lane and drop
+  `continue-on-error`** — the same ratchet as everything else.
+
+**Repo uplift:** the README badge is the fastest way an outside visitor confirms *"real, actively
+maintained, currently building"* without reading code — and every commit's public full-wall pass makes the
+tick-loop discipline something a visitor can **watch happen**, not just a claim in a doc. ⚠ **The badge is a
+byproduct of running the lane correctly, never a reason to change what it checks. A red badge from a real
+regression is more credible than a green one that has stopped meaning anything.**
+
 ## THE STANDING 100-TAB RSS BENCHMARK — the memory claim, proven rather than asserted
 
 Extend the differential oracle to open **N tabs (20 → 100) in both Manuk and real Chromium**, drive to a

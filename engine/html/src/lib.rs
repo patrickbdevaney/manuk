@@ -20,7 +20,6 @@ use manuk_dom::{Dom, NodeData, NodeId};
 /// N3 — our `TreeSink` directly over the arena DOM (enables Declarative Shadow DOM).
 pub mod sink;
 
-
 /// HTML **void elements** (no closing tag, no children) — used by serialization.
 const VOID_ELEMENTS: &[&str] = &[
     "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source",
@@ -199,7 +198,9 @@ pub fn set_inner_html(dom: &mut Dom, node: NodeId, html: &str) {
     // fragment's synthetic root element.
     let context = dom.tag_name(node).unwrap_or("div").to_string();
     let fragment = parse_fragment_in(html, &context);
-    let root = fragment.find_first("html").unwrap_or_else(|| fragment.root());
+    let root = fragment
+        .find_first("html")
+        .unwrap_or_else(|| fragment.root());
     let roots: Vec<NodeId> = fragment.children(root).collect();
     for r in roots {
         clone_into(&fragment, r, dom, node);
@@ -211,10 +212,16 @@ pub fn set_inner_html(dom: &mut Dom, node: NodeId, html: &str) {
 /// root element holds the parsed nodes.
 pub fn parse_fragment_in(html: &str, context_tag: &str) -> Dom {
     let context = sink::html_name(context_tag);
-    parse_fragment(sink::ArenaSink::new(), ParseOpts::default(), context, vec![], false)
-        .from_utf8()
-        .read_from(&mut std::io::Cursor::new(html.as_bytes()))
-        .expect("parsing is infallible for in-memory input")
+    parse_fragment(
+        sink::ArenaSink::new(),
+        ParseOpts::default(),
+        context,
+        vec![],
+        false,
+    )
+    .from_utf8()
+    .read_from(&mut std::io::Cursor::new(html.as_bytes()))
+    .expect("parsing is infallible for in-memory input")
 }
 
 /// Deep-copy `src_node`'s subtree from `src` into `dst` under `dst_parent`
@@ -406,8 +413,15 @@ mod shadow_tests {
         // The slot is filled by the host's light-DOM children. Whitespace text nodes are
         // slottable too (per spec), so compare the *element* view.
         let slotted = dom.flat_children(slot);
-        assert!(slotted.contains(&p), "the slot must be filled by the light-DOM <p>");
-        let slotted_elems: Vec<NodeId> = slotted.iter().copied().filter(|&n| dom.is_element(n)).collect();
+        assert!(
+            slotted.contains(&p),
+            "the slot must be filled by the light-DOM <p>"
+        );
+        let slotted_elems: Vec<NodeId> = slotted
+            .iter()
+            .copied()
+            .filter(|&n| dom.is_element(n))
+            .collect();
         assert_eq!(slotted_elems, vec![p]);
     }
 
@@ -425,12 +439,21 @@ mod shadow_tests {
     fn a_plain_template_is_not_a_shadow_root_and_its_contents_are_not_rendered() {
         let dom = parse(r#"<div><template><b>hidden</b></template><i>shown</i></div>"#);
         let host = dom.find_first("div").unwrap();
-        assert!(dom.shadow_root(host).is_none(), "no shadowrootmode => no shadow root");
+        assert!(
+            dom.shadow_root(host).is_none(),
+            "no shadowrootmode => no shadow root"
+        );
 
         let tpl = dom.find_first("template").unwrap();
-        let frag = dom.get_template_contents(tpl).expect("template has contents");
+        let frag = dom
+            .get_template_contents(tpl)
+            .expect("template has contents");
         let inner: Vec<&str> = dom.children(frag).filter_map(|c| dom.tag_name(c)).collect();
-        assert_eq!(inner, vec!["b"], "contents live in the fragment, not the light DOM");
+        assert_eq!(
+            inner,
+            vec!["b"],
+            "contents live in the fragment, not the light DOM"
+        );
 
         // The template's contents are NOT children of the template in the node tree.
         assert_eq!(dom.children(tpl).count(), 0);
@@ -456,7 +479,11 @@ mod shadow_tests {
         );
         let host = dom.find_first("div").unwrap();
         let flat = dom.flat_children(host);
-        let slots: Vec<NodeId> = flat.iter().copied().filter(|&n| dom.tag_name(n) == Some("slot")).collect();
+        let slots: Vec<NodeId> = flat
+            .iter()
+            .copied()
+            .filter(|&n| dom.tag_name(n) == Some("slot"))
+            .collect();
         assert_eq!(slots.len(), 3);
 
         let h1 = dom.find_first("h1").unwrap();
@@ -465,7 +492,10 @@ mod shadow_tests {
         // named slot gets the h1; default slot gets the p (plus the source's whitespace
         // text nodes, which are slottable per spec — hence the element-only view).
         let elems = |n: NodeId| -> Vec<NodeId> {
-            dom.flat_children(n).into_iter().filter(|&c| dom.is_element(c)).collect()
+            dom.flat_children(n)
+                .into_iter()
+                .filter(|&c| dom.is_element(c))
+                .collect()
         };
         assert_eq!(elems(slots[0]), vec![h1]);
         assert_eq!(elems(slots[1]), vec![p]);
@@ -481,7 +511,8 @@ mod shadow_tests {
     /// incidental.
     #[test]
     fn text_children_of_the_host_are_slotted() {
-        let dom = parse(r#"<div><template shadowrootmode="open"><slot></slot></template>hello</div>"#);
+        let dom =
+            parse(r#"<div><template shadowrootmode="open"><slot></slot></template>hello</div>"#);
         let host = dom.find_first("div").unwrap();
         let slot = dom.flat_children(host)[0];
         assert_eq!(dom.tag_name(slot), Some("slot"));

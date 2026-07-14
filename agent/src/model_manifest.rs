@@ -137,7 +137,10 @@ pub fn autodetect(ram_gb: u32) -> &'static ModelEntry {
 
 /// A model file's canonical HuggingFace download URL.
 pub fn download_url(entry: &ModelEntry, file: &str) -> String {
-    format!("https://huggingface.co/{}/resolve/main/{}", entry.repo, file)
+    format!(
+        "https://huggingface.co/{}/resolve/main/{}",
+        entry.repo, file
+    )
 }
 
 #[cfg(test)]
@@ -194,12 +197,20 @@ mod tests {
     fn no_decensored_or_excluded_variants() {
         for m in MANIFEST {
             let repo = m.repo.to_lowercase();
-            for banned in ["heretic", "uncensored", "decensored", "abliterated", "ornith"] {
+            for banned in [
+                "heretic",
+                "uncensored",
+                "decensored",
+                "abliterated",
+                "ornith",
+            ] {
                 assert!(!repo.contains(banned), "{} is banned in {}", banned, m.repo);
             }
             // Only the two vetted publishers.
             assert!(
-                m.repo.starts_with("unsloth/") || m.repo.starts_with("google/") || m.repo.starts_with("Qwen/"),
+                m.repo.starts_with("unsloth/")
+                    || m.repo.starts_with("google/")
+                    || m.repo.starts_with("Qwen/"),
                 "unvetted publisher: {}",
                 m.repo
             );
@@ -214,7 +225,11 @@ mod tests {
             assert!(m.gguf.ends_with(".gguf"), "{}", m.key);
             assert!(m.download_gb > 0.5, "{} has an implausible size", m.key);
             assert!(m.min_ram_gb >= 4, "{}", m.key);
-            assert!(!m.source.is_empty(), "{} must record its quant source", m.key);
+            assert!(
+                !m.source.is_empty(),
+                "{} must record its quant source",
+                m.key
+            );
         }
     }
 

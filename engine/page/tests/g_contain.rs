@@ -35,7 +35,10 @@ fn a_panic_during_a_page_build_does_not_kill_the_process() {
     // And — the whole point — we are still running. Everything below this line executing at all is
     // the assertion. Under `panic = "abort"` the process would be gone.
     let still_alive: u32 = (1..=10).sum();
-    assert_eq!(still_alive, 55, "the process is alive and doing arithmetic after a contained panic");
+    assert_eq!(
+        still_alive, 55,
+        "the process is alive and doing arithmetic after a contained panic"
+    );
 }
 
 /// Containment must not swallow SUCCESS, which is the obvious way to write this wrong: a `contained`

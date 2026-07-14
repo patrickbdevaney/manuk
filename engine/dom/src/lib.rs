@@ -92,14 +92,18 @@ impl ElementData {
 #[derive(Clone, Debug)]
 pub enum NodeData {
     Document,
-    Doctype { name: String },
+    Doctype {
+        name: String,
+    },
     Element(ElementData),
     Text(String),
     Comment(String),
     /// N3 — a shadow root. It is **not** a child of its host: it is the root of a separate
     /// tree, reachable via [`Dom::shadow_root`]. Its `parent` link points at the host so
     /// upward walks work, but the host's `children()` never yields it.
-    ShadowRoot { mode: ShadowRootMode },
+    ShadowRoot {
+        mode: ShadowRootMode,
+    },
     /// A **DocumentFragment** — a `<template>`'s contents, and what every framework builds a subtree
     /// in before committing it.
     ///
@@ -373,7 +377,10 @@ impl Dom {
     /// Is this node a Document? Decides whether its JS reflector gets the *document* method set
     /// (`createElement`, `getElementById`, `documentElement`, `body`, …) rather than the element one.
     pub fn is_document(&self, id: NodeId) -> bool {
-        matches!(self.nodes.get(id.index()).map(|n| &n.data), Some(NodeData::Document))
+        matches!(
+            self.nodes.get(id.index()).map(|n| &n.data),
+            Some(NodeData::Document)
+        )
     }
 
     pub fn is_fragment(&self, id: NodeId) -> bool {
@@ -442,7 +449,10 @@ impl Dom {
     }
 
     pub fn is_shadow_root(&self, id: NodeId) -> bool {
-        matches!(self.nodes.get(id.index()).map(|n| &n.data), Some(NodeData::ShadowRoot { .. }))
+        matches!(
+            self.nodes.get(id.index()).map(|n| &n.data),
+            Some(NodeData::ShadowRoot { .. })
+        )
     }
 
     pub fn shadow_root_mode(&self, id: NodeId) -> Option<ShadowRootMode> {
@@ -518,7 +528,10 @@ impl Dom {
     pub fn assigned_slot(&self, node: NodeId) -> Option<NodeId> {
         let host = self.parent(node)?;
         let shadow = self.shadow_root(host)?;
-        let want = self.element(node).and_then(|e| e.attr("slot")).unwrap_or("");
+        let want = self
+            .element(node)
+            .and_then(|e| e.attr("slot"))
+            .unwrap_or("");
         self.descendants(shadow).find(|&s| {
             self.tag_name(s) == Some("slot")
                 && self.element(s).and_then(|e| e.attr("name")).unwrap_or("") == want
@@ -627,7 +640,9 @@ impl Dom {
 
     /// Does `node`'s subtree contain a dirty node (the skip-this-subtree summary bit)?
     pub fn has_dirty_descendants(&self, node: NodeId) -> bool {
-        self.nodes.get(node.index()).is_some_and(|n| n.dirty_descendants)
+        self.nodes
+            .get(node.index())
+            .is_some_and(|n| n.dirty_descendants)
     }
 
     /// Is `node` clean *and* free of dirty descendants — i.e. a traversal may skip its
@@ -895,7 +910,10 @@ impl Dom {
     }
 
     pub fn is_element(&self, id: NodeId) -> bool {
-        matches!(self.nodes.get(id.index()).map(|n| &n.data), Some(NodeData::Element(_)))
+        matches!(
+            self.nodes.get(id.index()).map(|n| &n.data),
+            Some(NodeData::Element(_))
+        )
     }
 
     pub fn element(&self, id: NodeId) -> Option<&ElementData> {
@@ -1037,13 +1055,19 @@ mod tests {
         // Discard the subtree: `a` is now stale, its slot freed for reuse.
         dom.discard_subtree(a);
         assert!(!dom.is_alive(a), "handle to a discarded node is stale");
-        assert!(dom.element(a).is_none(), "stale handle resolves to no element");
+        assert!(
+            dom.element(a).is_none(),
+            "stale handle resolves to no element"
+        );
 
         // Next allocation reuses the freed slot with a bumped generation, so the new
         // handle differs from the stale one even though it shares the slot index.
         let b = dom.create_element("span");
         assert_eq!(b.index(), a_index, "freed slot was reused");
-        assert_ne!(b, a, "reused slot yields a distinct (newer-generation) handle");
+        assert_ne!(
+            b, a,
+            "reused slot yields a distinct (newer-generation) handle"
+        );
         assert!(dom.is_alive(b));
         assert!(!dom.is_alive(a), "the old handle stays stale after reuse");
         // The current live handle for that slot is recoverable by index.
@@ -1180,7 +1204,10 @@ mod stale_handle_tests {
         );
         // Each of these is reachable from JS. None may panic. (`is_fragment` is the one that actually
         // aborted the process: `appendChild` calls it on its argument.)
-        assert!(!small.is_fragment(foreign), "is_fragment must not index blindly");
+        assert!(
+            !small.is_fragment(foreign),
+            "is_fragment must not index blindly"
+        );
         assert!(small.parent(foreign).is_none());
         assert!(small.first_child(foreign).is_none());
         assert!(small.next_sibling(foreign).is_none());

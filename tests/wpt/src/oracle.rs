@@ -122,7 +122,10 @@ pub fn diff_page(
                 id: id.clone(),
                 tag: c.tag.clone(),
                 kind: "missing".into(),
-                chrome: format!("{} [{} {} {}×{}]", c.display, c.rect[0], c.rect[1], c.rect[2], c.rect[3]),
+                chrome: format!(
+                    "{} [{} {} {}×{}]",
+                    c.display, c.rect[0], c.rect[1], c.rect[2], c.rect[3]
+                ),
                 manuk: "(no box)".into(),
                 delta: [0; 4],
             }),
@@ -153,7 +156,10 @@ pub fn diff_page(
                         id: id.clone(),
                         tag: c.tag.clone(),
                         kind: "geometry".into(),
-                        chrome: format!("[{} {} {}×{}]", c.rect[0], c.rect[1], c.rect[2], c.rect[3]),
+                        chrome: format!(
+                            "[{} {} {}×{}]",
+                            c.rect[0], c.rect[1], c.rect[2], c.rect[3]
+                        ),
                         manuk: format!("[{} {} {}×{}]", m.rect[0], m.rect[1], m.rect[2], m.rect[3]),
                         delta: d,
                     });
@@ -183,8 +189,15 @@ fn display_agrees(chrome: &str, manuk: &str) -> bool {
 /// **Cluster the firehose into root causes**, ranked by how many distinct sites each explains.
 pub fn cluster(divs: &[Divergence]) -> Vec<Cluster> {
     // signature -> (kind, sites, hits, examples)
-    let mut acc: BTreeMap<String, (String, std::collections::BTreeSet<String>, usize, Vec<String>)> =
-        BTreeMap::new();
+    let mut acc: BTreeMap<
+        String,
+        (
+            String,
+            std::collections::BTreeSet<String>,
+            usize,
+            Vec<String>,
+        ),
+    > = BTreeMap::new();
 
     for d in divs {
         let sig = match d.kind.as_str() {
@@ -208,7 +221,9 @@ pub fn cluster(divs: &[Divergence]) -> Vec<Cluster> {
                 format!("geometry: {axis} wrong   (<{}>)", d.tag)
             }
         };
-        let e = acc.entry(sig).or_insert_with(|| (d.kind.clone(), Default::default(), 0, Vec::new()));
+        let e = acc
+            .entry(sig)
+            .or_insert_with(|| (d.kind.clone(), Default::default(), 0, Vec::new()));
         e.1.insert(d.site.clone());
         e.2 += 1;
         if e.3.len() < 3 {
@@ -235,7 +250,9 @@ pub fn cluster(divs: &[Divergence]) -> Vec<Cluster> {
 /// The report a tick actually reads.
 pub fn report(clusters: &[Cluster], sites: usize, skipped: usize) {
     println!("\n=== DIFFERENTIAL ORACLE — root causes, ranked by sites explained ===\n");
-    println!("  {sites} site(s) diffed, {skipped} discarded (Chromium's own render was degraded)\n");
+    println!(
+        "  {sites} site(s) diffed, {skipped} discarded (Chromium's own render was degraded)\n"
+    );
     println!("{:>6} {:>6}  {}", "sites", "hits", "root cause");
     for c in clusters.iter().take(30) {
         println!("{:>6} {:>6}  {}", c.sites, c.hits, c.signature);

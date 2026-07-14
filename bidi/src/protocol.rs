@@ -74,9 +74,22 @@ impl BidiError {
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(untagged)]
 pub enum Outgoing {
-    Success { r#type: String, id: u64, result: Value },
-    Error { r#type: String, id: u64, error: String, message: String },
-    Event { r#type: String, method: String, params: Value },
+    Success {
+        r#type: String,
+        id: u64,
+        result: Value,
+    },
+    Error {
+        r#type: String,
+        id: u64,
+        error: String,
+        message: String,
+    },
+    Event {
+        r#type: String,
+        method: String,
+        params: Value,
+    },
 }
 
 impl Outgoing {
@@ -140,10 +153,18 @@ struct Reply {
 
 impl Reply {
     fn plain(result: Value) -> Self {
-        Reply { result, before: Vec::new(), after: Vec::new() }
+        Reply {
+            result,
+            before: Vec::new(),
+            after: Vec::new(),
+        }
     }
     fn with_before(result: Value, before: Vec<Outgoing>) -> Self {
-        Reply { result, before, after: Vec::new() }
+        Reply {
+            result,
+            before,
+            after: Vec::new(),
+        }
     }
 }
 
@@ -208,21 +229,26 @@ impl Session {
         self.contexts
             .get_mut(ctx)
             .map(|c| &mut c.browser)
-            .ok_or_else(|| BidiError::new(ErrorCode::NoSuchFrame, format!("no such context: {ctx}")))
+            .ok_or_else(|| {
+                BidiError::new(ErrorCode::NoSuchFrame, format!("no such context: {ctx}"))
+            })
     }
 
     fn browser(&self, ctx: &str) -> Result<&AgentBrowser, BidiError> {
-        self.contexts
-            .get(ctx)
-            .map(|c| &c.browser)
-            .ok_or_else(|| BidiError::new(ErrorCode::NoSuchFrame, format!("no such context: {ctx}")))
+        self.contexts.get(ctx).map(|c| &c.browser).ok_or_else(|| {
+            BidiError::new(ErrorCode::NoSuchFrame, format!("no such context: {ctx}"))
+        })
     }
 
     /// Dispatch one command. Never panics; protocol errors become `Outgoing::Error`.
     pub async fn dispatch(&mut self, cmd: Command) -> Dispatched {
         let id = cmd.id;
         match self.run(&cmd).await {
-            Ok(Reply { result, before, after }) => Dispatched {
+            Ok(Reply {
+                result,
+                before,
+                after,
+            }) => Dispatched {
                 before,
                 reply: Outgoing::success(id, result),
                 events: after,
@@ -239,7 +265,9 @@ impl Session {
         let p = &cmd.params;
         match cmd.method.as_str() {
             // ---- session ----
-            "session.status" => Ok(Reply::plain(json!({"ready": true, "message": "manuk BiDi remote end ready"}))),
+            "session.status" => Ok(Reply::plain(
+                json!({"ready": true, "message": "manuk BiDi remote end ready"}),
+            )),
             "session.new" => {
                 let sid = "manuk-session-1".to_string();
                 self.session_id = Some(sid.clone());
@@ -282,7 +310,9 @@ impl Session {
             // ---- browser ----
             // Manuk has no user-context (profile) partitioning wired into BiDi yet, so
             // it reports exactly the one "default" user context that always exists.
-            "browser.getUserContexts" => Ok(Reply::plain(json!({"userContexts": [{"userContext": "default"}]}))),
+            "browser.getUserContexts" => Ok(Reply::plain(
+                json!({"userContexts": [{"userContext": "default"}]}),
+            )),
             "browser.getClientWindows" => Ok(Reply::plain(json!({"clientWindows": []}))),
             "browser.close" => {
                 self.contexts.clear();
@@ -630,12 +660,18 @@ mod tests {
         let url = data_url("<title>T</title><body><h1>Hi</h1></body>");
 
         let d = s
-            .dispatch(cmd(2, "browsingContext.navigate", json!({"context": ctx, "url": url})))
+            .dispatch(cmd(
+                2,
+                "browsingContext.navigate",
+                json!({"context": ctx, "url": url}),
+            ))
             .await;
         assert_eq!(result_of(&d)["url"], url);
         assert!(result_of(&d)["navigation"].is_string());
 
-        let d = s.dispatch(cmd(3, "browsingContext.getTree", json!({}))).await;
+        let d = s
+            .dispatch(cmd(3, "browsingContext.getTree", json!({})))
+            .await;
         let contexts = result_of(&d)["contexts"].as_array().unwrap();
         assert_eq!(contexts.len(), 1);
         assert_eq!(contexts[0]["context"], ctx);
@@ -652,14 +688,26 @@ mod tests {
         let url = data_url("<body>x</body>");
 
         let d = s
-            .dispatch(cmd(2, "browsingContext.navigate", json!({"context": ctx, "url": url})))
+            .dispatch(cmd(
+                2,
+                "browsingContext.navigate",
+                json!({"context": ctx, "url": url}),
+            ))
             .await;
         assert!(d.events.is_empty(), "no subscription => no events");
 
-        s.dispatch(cmd(3, "session.subscribe", json!({"events": ["browsingContext.load"]})))
-            .await;
+        s.dispatch(cmd(
+            3,
+            "session.subscribe",
+            json!({"events": ["browsingContext.load"]}),
+        ))
+        .await;
         let d = s
-            .dispatch(cmd(4, "browsingContext.navigate", json!({"context": ctx, "url": url})))
+            .dispatch(cmd(
+                4,
+                "browsingContext.navigate",
+                json!({"context": ctx, "url": url}),
+            ))
             .await;
         assert_eq!(d.events.len(), 1);
         match &d.events[0] {
@@ -671,10 +719,18 @@ mod tests {
         }
 
         // Unsubscribing stops them again.
-        s.dispatch(cmd(5, "session.unsubscribe", json!({"events": ["browsingContext.load"]})))
-            .await;
+        s.dispatch(cmd(
+            5,
+            "session.unsubscribe",
+            json!({"events": ["browsingContext.load"]}),
+        ))
+        .await;
         let d = s
-            .dispatch(cmd(6, "browsingContext.navigate", json!({"context": ctx, "url": url})))
+            .dispatch(cmd(
+                6,
+                "browsingContext.navigate",
+                json!({"context": ctx, "url": url}),
+            ))
             .await;
         assert!(d.events.is_empty());
     }
@@ -684,8 +740,12 @@ mod tests {
         let mut s = Session::new(800, 600);
         s.dispatch(cmd(1, "session.new", json!({}))).await;
         let ctx = s.context_ids()[0].clone();
-        s.dispatch(cmd(2, "session.subscribe", json!({"events": ["browsingContext"]})))
-            .await;
+        s.dispatch(cmd(
+            2,
+            "session.subscribe",
+            json!({"events": ["browsingContext"]}),
+        ))
+        .await;
         let d = s
             .dispatch(cmd(
                 3,
@@ -718,7 +778,9 @@ mod tests {
     async fn create_and_close_contexts() {
         let mut s = Session::new(800, 600);
         s.dispatch(cmd(1, "session.new", json!({}))).await;
-        let d = s.dispatch(cmd(2, "browsingContext.create", json!({"type":"tab"}))).await;
+        let d = s
+            .dispatch(cmd(2, "browsingContext.create", json!({"type":"tab"})))
+            .await;
         let new_ctx = result_of(&d)["context"].as_str().unwrap().to_string();
         assert_eq!(s.context_ids().len(), 2);
 
@@ -746,10 +808,16 @@ mod tests {
         .await;
 
         let d = s
-            .dispatch(cmd(3, "browsingContext.captureScreenshot", json!({"context": ctx})))
+            .dispatch(cmd(
+                3,
+                "browsingContext.captureScreenshot",
+                json!({"context": ctx}),
+            ))
             .await;
         let b64 = result_of(&d)["data"].as_str().unwrap();
-        let png = base64::engine::general_purpose::STANDARD.decode(b64).unwrap();
+        let png = base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .unwrap();
         // Real PNG magic, not a placeholder.
         assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
     }
@@ -796,7 +864,9 @@ mod tests {
         assert!(matches!(d.reply, Outgoing::Success { .. }), "{:?}", d.reply);
 
         // The click really navigated the context.
-        let d = s.dispatch(cmd(4, "browsingContext.getTree", json!({}))).await;
+        let d = s
+            .dispatch(cmd(4, "browsingContext.getTree", json!({})))
+            .await;
         assert_eq!(result_of(&d)["contexts"][0]["url"], dest);
     }
 
@@ -809,7 +879,9 @@ mod tests {
         let d = s.dispatch(cmd(2, "nonsense.command", json!({}))).await;
         assert_eq!(error_of(&d).0, "unknown command");
 
-        let d = s.dispatch(cmd(3, "browsingContext.navigate", json!({}))).await;
+        let d = s
+            .dispatch(cmd(3, "browsingContext.navigate", json!({})))
+            .await;
         assert_eq!(error_of(&d).0, "invalid argument");
 
         // The error envelope carries the id, as BiDi requires.
@@ -838,16 +910,30 @@ mod tests {
         let ctx = s.context_ids()[0].clone();
         let a = data_url("<body>AAA</body>");
         let b = data_url("<body>BBB</body>");
-        s.dispatch(cmd(2, "browsingContext.navigate", json!({"context": ctx, "url": a})))
-            .await;
-        s.dispatch(cmd(3, "browsingContext.navigate", json!({"context": ctx, "url": b})))
-            .await;
+        s.dispatch(cmd(
+            2,
+            "browsingContext.navigate",
+            json!({"context": ctx, "url": a}),
+        ))
+        .await;
+        s.dispatch(cmd(
+            3,
+            "browsingContext.navigate",
+            json!({"context": ctx, "url": b}),
+        ))
+        .await;
 
         let d = s
-            .dispatch(cmd(4, "browsingContext.traverseHistory", json!({"context": ctx, "delta": -1})))
+            .dispatch(cmd(
+                4,
+                "browsingContext.traverseHistory",
+                json!({"context": ctx, "delta": -1}),
+            ))
             .await;
         assert!(matches!(d.reply, Outgoing::Success { .. }));
-        let d = s.dispatch(cmd(5, "browsingContext.getTree", json!({}))).await;
+        let d = s
+            .dispatch(cmd(5, "browsingContext.getTree", json!({})))
+            .await;
         assert_eq!(result_of(&d)["contexts"][0]["url"], a);
     }
 }

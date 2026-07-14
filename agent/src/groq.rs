@@ -20,7 +20,10 @@ pub fn groq(api_key: impl Into<String>) -> OpenAiCompatBackend {
 }
 
 /// The Groq preset with an explicit model, overriding `GROQ_MODEL`.
-pub fn groq_with_model(api_key: impl Into<String>, model: impl Into<String>) -> OpenAiCompatBackend {
+pub fn groq_with_model(
+    api_key: impl Into<String>,
+    model: impl Into<String>,
+) -> OpenAiCompatBackend {
     OpenAiCompatBackend::groq(api_key).with_model(model)
 }
 
@@ -32,7 +35,10 @@ mod tests {
     #[test]
     fn the_groq_preset_is_the_generic_backend_with_a_fixed_endpoint() {
         let b = groq_with_model("k", "qwen/qwen3.6-27b");
-        assert_eq!(b.endpoint(), "https://api.groq.com/openai/v1/chat/completions");
+        assert_eq!(
+            b.endpoint(),
+            "https://api.groq.com/openai/v1/chat/completions"
+        );
         assert_eq!(b.name(), "groq:qwen/qwen3.6-27b");
         assert_eq!(b.model().as_deref(), Some("qwen/qwen3.6-27b"));
     }

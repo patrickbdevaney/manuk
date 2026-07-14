@@ -116,12 +116,12 @@ fn the_document_lifecycle_fires_the_clock_orders_and_a_throwing_task_does_not_ki
         "openerNull:true",
         "walkTerminates:true",
         // (2) the lifecycle
-        "readyLoading:true",     // an inline script runs while the document is still parsing
-        "readyComplete:true",    // …and `load` means loading is over
+        "readyLoading:true", // an inline script runs while the document is still parsing
+        "readyComplete:true", // …and `load` means loading is over
         "seen:dcl-doc,dcl-win,load",
         // (3) the clock
         "timersDeferred:true",
-        "order:early,late",      // 0ms before 100ms, REGARDLESS of the order they were queued in
+        "order:early,late", // 0ms before 100ms, REGARDLESS of the order they were queued in
         // (4) the loop survives a throwing task
         "afterThrow:true",
         // (5)/(6) the DOM surface WPT needs

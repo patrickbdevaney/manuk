@@ -224,14 +224,22 @@ impl TreeSink for ArenaSink {
         let mut dom = self.dom.borrow_mut();
         for a in attrs {
             let name = a.name.local.to_string();
-            let missing = dom.element(*target).map(|e| e.attr(&name).is_none()).unwrap_or(false);
+            let missing = dom
+                .element(*target)
+                .map(|e| e.attr(&name).is_none())
+                .unwrap_or(false);
             if missing {
                 dom.set_attr(*target, name, a.value.to_string());
             }
         }
     }
 
-    fn associate_with_form(&self, _target: &NodeId, _form: &NodeId, _nodes: (&NodeId, Option<&NodeId>)) {
+    fn associate_with_form(
+        &self,
+        _target: &NodeId,
+        _form: &NodeId,
+        _nodes: (&NodeId, Option<&NodeId>),
+    ) {
         // No form-owner tracking yet; `agent::forms` finds the enclosing <form> by walking up.
     }
 
@@ -284,7 +292,6 @@ impl TreeSink for ArenaSink {
         dom.set_template_contents(*template, shadow);
         true
     }
-
 }
 
 /// A `QualName` in the HTML namespace, for callers building names by hand.

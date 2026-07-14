@@ -37,13 +37,13 @@ impl Step {
             return Ok(Step::Click(sel.trim().to_string()));
         }
         if let Some(rest) = s.strip_prefix("type:") {
-            let (sel, text) = rest
-                .split_once('=')
-                .context("type: needs <css>=<text>")?;
+            let (sel, text) = rest.split_once('=').context("type: needs <css>=<text>")?;
             return Ok(Step::Type(sel.trim().to_string(), text.to_string()));
         }
         if let Some(px) = s.strip_prefix("scroll:") {
-            return Ok(Step::Scroll(px.trim().parse().context("scroll: needs a number")?));
+            return Ok(Step::Scroll(
+                px.trim().parse().context("scroll: needs a number")?,
+            ));
         }
         bail!("unknown step {s:?} (want click:/type:/scroll:)")
     }
@@ -155,7 +155,11 @@ pub fn report(rows: &[InteractionResult], floor: f64) -> bool {
             r.moved_after,
             r.chrome_changed,
             r.manuk_changed,
-            if dead { "   <-- DEAD INTERACTION (CRITICAL)" } else { "" }
+            if dead {
+                "   <-- DEAD INTERACTION (CRITICAL)"
+            } else {
+                ""
+            }
         );
     }
     let n = rows.len().max(1) as f64;

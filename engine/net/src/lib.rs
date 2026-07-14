@@ -33,9 +33,9 @@ use tokio::io::AsyncReadExt;
 use tokio_util::io::StreamReader;
 use url::Url;
 
+pub mod cookies;
 /// E7 storage layer — RFC 6265 cookie jar.
 pub mod webstorage;
-pub mod cookies;
 
 pub mod downloads;
 
@@ -328,7 +328,10 @@ mod http_cache {
         if response.status != 200 {
             return;
         }
-        let cc = response.header("cache-control").unwrap_or("").to_ascii_lowercase();
+        let cc = response
+            .header("cache-control")
+            .unwrap_or("")
+            .to_ascii_lowercase();
         if cc.contains("no-store") || cc.contains("private") || cc.contains("no-cache") {
             return;
         }
@@ -339,7 +342,11 @@ mod http_cache {
         if let Ok(mut map) = store().lock() {
             map.insert(
                 url.to_string(),
-                Entry { response: response.clone(), stored: Instant::now(), fresh_for: Duration::from_secs(secs) },
+                Entry {
+                    response: response.clone(),
+                    stored: Instant::now(),
+                    fresh_for: Duration::from_secs(secs),
+                },
             );
         }
     }
@@ -379,13 +386,22 @@ mod http_cache {
         fn caches_fresh_and_skips_uncacheable() {
             let u = "https://e.test/max-age";
             put(u, &resp("max-age=300"));
-            assert!(get(u).is_some(), "fresh max-age response is served from cache");
+            assert!(
+                get(u).is_some(),
+                "fresh max-age response is served from cache"
+            );
 
             put("https://e.test/nostore", &resp("no-store, max-age=300"));
-            assert!(get("https://e.test/nostore").is_none(), "no-store is not cached");
+            assert!(
+                get("https://e.test/nostore").is_none(),
+                "no-store is not cached"
+            );
 
             put("https://e.test/zero", &resp("max-age=0"));
-            assert!(get("https://e.test/zero").is_none(), "max-age=0 is not cached");
+            assert!(
+                get("https://e.test/zero").is_none(),
+                "max-age=0 is not cached"
+            );
         }
     }
 }
@@ -435,9 +451,7 @@ static NETWORKED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet
 /// Per-URL locks, so two concurrent callers for one URL make ONE request. See `fetch`.
 #[allow(clippy::type_complexity)]
 static INFLIGHT: std::sync::OnceLock<
-    std::sync::Mutex<
-        std::collections::HashMap<String, std::sync::Arc<tokio::sync::Mutex<()>>>,
-    >,
+    std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<tokio::sync::Mutex<()>>>>,
 > = std::sync::OnceLock::new();
 static SEEN: OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> = OnceLock::new();
 /// URLs that FAILED during this navigation. A failure remembered is a fetch not repeated; see
@@ -593,8 +607,8 @@ async fn fetch_file(url: &Url) -> Result<Response> {
         .map_err(|_| anyhow::anyhow!("not a readable file path: {url}"))?;
     // std::fs, not tokio::fs — the `fs` feature is not enabled, and a local read is fast enough that
     // making it async would buy nothing but a dependency.
-    let body = std::fs::read(&path)
-        .map_err(|e| anyhow::anyhow!("cannot read {}: {e}", path.display()))?;
+    let body =
+        std::fs::read(&path).map_err(|e| anyhow::anyhow!("cannot read {}: {e}", path.display()))?;
     Ok(Response {
         status: 200,
         headers: Vec::new(),
@@ -829,7 +843,9 @@ impl Preconnector {
 /// hover or the omnibox: the subsequent real request reuses the warm TLS connection.
 pub async fn preconnect(current_page: &str, target: &str) -> Preconnect {
     static P: std::sync::OnceLock<Preconnector> = std::sync::OnceLock::new();
-    P.get_or_init(Preconnector::new).preconnect(current_page, target).await
+    P.get_or_init(Preconnector::new)
+        .preconnect(current_page, target)
+        .await
 }
 
 /// Origin key `scheme://host:port` for the warmed-origins map.
@@ -888,7 +904,8 @@ pub fn cookie_store_path() -> std::path::PathBuf {
 }
 
 fn cookie_jar() -> &'static std::sync::Mutex<cookies::CookieJar> {
-    static JAR: std::sync::OnceLock<std::sync::Mutex<cookies::CookieJar>> = std::sync::OnceLock::new();
+    static JAR: std::sync::OnceLock<std::sync::Mutex<cookies::CookieJar>> =
+        std::sync::OnceLock::new();
     // Load persistent cookies from disk on first use, so a prior session's logins survive.
     JAR.get_or_init(|| std::sync::Mutex::new(cookies::CookieJar::load_from(&cookie_store_path())))
 }

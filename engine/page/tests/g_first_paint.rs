@@ -95,7 +95,9 @@ fn first_paint_does_not_wait_for_images() {
         .unwrap();
 
     let started = Instant::now();
-    let loaded = rt.block_on(manuk_page::prefetch_document(&url)).expect("prefetch");
+    let loaded = rt
+        .block_on(manuk_page::prefetch_document(&url))
+        .expect("prefetch");
     let page = match loaded {
         manuk_page::Loaded::Prefetched(pre) => {
             manuk_page::Page::from_prefetched(*pre, &fonts, 800.0)
@@ -120,7 +122,10 @@ fn first_paint_does_not_wait_for_images() {
     // (2) And it is a real page, not an empty one that "finished" by giving up.
     let root = page.dom().root();
     let h = manuk_css::query_selector_all(page.dom(), root, "#headline");
-    assert!(!h.is_empty(), "the headline must be in the painted document");
+    assert!(
+        !h.is_empty(),
+        "the headline must be in the painted document"
+    );
 
     // (3) The images are still WANTED — deferred, not dropped. The shell fetches them on a background
     //     task and applies them when they land. "Fast" must not be achieved by quietly never loading

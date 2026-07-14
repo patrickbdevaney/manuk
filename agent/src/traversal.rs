@@ -133,7 +133,9 @@ impl Traversal {
         // 5. (reserved) JS pass under the narrow JS permit — a no-op today (see module docs),
         //    but acquired so the scheduling shape is already correct for when JS lands.
         if report.needs_js {
-            self.pool.with_js_permit(|| async { /* per-page JS execution slots here */ }).await;
+            self.pool
+                .with_js_permit(|| async { /* per-page JS execution slots here */ })
+                .await;
         }
 
         // 4. Record, keyed by extracted content — updates learned volatility.
@@ -163,7 +165,10 @@ impl Traversal {
             let v = self.visit(fetcher, u, freshness, now_ms).await;
             (u.clone(), v)
         });
-        futures_util::future::join_all(jobs).await.into_iter().collect()
+        futures_util::future::join_all(jobs)
+            .await
+            .into_iter()
+            .collect()
     }
 }
 
@@ -182,7 +187,10 @@ mod tests {
     impl FixtureFetch {
         fn new(pages: &[(&str, &str)]) -> Self {
             FixtureFetch {
-                pages: pages.iter().map(|(u, h)| (u.to_string(), h.to_string())).collect(),
+                pages: pages
+                    .iter()
+                    .map(|(u, h)| (u.to_string(), h.to_string()))
+                    .collect(),
                 fetches: AtomicUsize::new(0),
             }
         }
@@ -203,30 +211,57 @@ mod tests {
     }
 
     fn ssr_page(body: &str) -> String {
-        format!("<html><body><article><p>{}</p></article></html>", body.repeat(1))
+        format!(
+            "<html><body><article><p>{}</p></article></html>",
+            body.repeat(1)
+        )
     }
 
     /// The headline integration property: a fresh cache entry suppresses the network fetch
     /// entirely.
     #[tokio::test]
     async fn a_fresh_url_is_served_from_cache_without_fetching() {
-        let long = "This is a server-rendered article with plenty of real text content to read. ".repeat(4);
+        let long = "This is a server-rendered article with plenty of real text content to read. "
+            .repeat(4);
         let f = FixtureFetch::new(&[("https://a.test/", &ssr_page(&long))]);
         let t = Traversal::new(ConcurrencyLimits { net: 8, js: 2 });
 
         // First visit fetches.
-        let v1 = t.visit(&f, "https://a.test/", Freshness::MaxAge(10_000), 0).await;
-        assert!(matches!(v1, Visit::Fetched { outcome: FetchOutcome::New, needs_js: false, .. }));
+        let v1 = t
+            .visit(&f, "https://a.test/", Freshness::MaxAge(10_000), 0)
+            .await;
+        assert!(matches!(
+            v1,
+            Visit::Fetched {
+                outcome: FetchOutcome::New,
+                needs_js: false,
+                ..
+            }
+        ));
         assert_eq!(f.fetch_count(), 1);
 
         // Second visit within the TTL is served from cache — no new fetch.
-        let v2 = t.visit(&f, "https://a.test/", Freshness::MaxAge(10_000), 1_000).await;
+        let v2 = t
+            .visit(&f, "https://a.test/", Freshness::MaxAge(10_000), 1_000)
+            .await;
         assert_eq!(v2, Visit::ServedFromCache);
-        assert_eq!(f.fetch_count(), 1, "the cache must suppress the redundant fetch");
+        assert_eq!(
+            f.fetch_count(),
+            1,
+            "the cache must suppress the redundant fetch"
+        );
 
         // Past the TTL it fetches again; identical extraction ⇒ Unchanged, volatility decays.
-        let v3 = t.visit(&f, "https://a.test/", Freshness::MaxAge(10_000), 20_000).await;
-        assert!(matches!(v3, Visit::Fetched { outcome: FetchOutcome::Unchanged, .. }));
+        let v3 = t
+            .visit(&f, "https://a.test/", Freshness::MaxAge(10_000), 20_000)
+            .await;
+        assert!(matches!(
+            v3,
+            Visit::Fetched {
+                outcome: FetchOutcome::Unchanged,
+                ..
+            }
+        ));
         assert_eq!(f.fetch_count(), 2);
     }
 
@@ -236,26 +271,45 @@ mod tests {
         let long = "Real server-rendered prose that the traversal can read directly. ".repeat(4);
         let f = FixtureFetch::new(&[
             ("https://ssr.test/", &ssr_page(&long)),
-            ("https://spa.test/", "<html><body><div id=\"root\"></div><script src=\"/b.js\"></script></body></html>"),
+            (
+                "https://spa.test/",
+                "<html><body><div id=\"root\"></div><script src=\"/b.js\"></script></body></html>",
+            ),
         ]);
         let t = Traversal::new(ConcurrencyLimits::default());
 
         let ssr = t.visit(&f, "https://ssr.test/", Freshness::Always, 0).await;
-        assert!(matches!(ssr, Visit::Fetched { needs_js: false, .. }), "{ssr:?}");
+        assert!(
+            matches!(
+                ssr,
+                Visit::Fetched {
+                    needs_js: false,
+                    ..
+                }
+            ),
+            "{ssr:?}"
+        );
 
         let spa = t.visit(&f, "https://spa.test/", Freshness::Always, 0).await;
-        assert!(matches!(spa, Visit::Fetched { needs_js: true, .. }), "{spa:?}");
+        assert!(
+            matches!(spa, Visit::Fetched { needs_js: true, .. }),
+            "{spa:?}"
+        );
     }
 
     /// A batch re-traversal of a mostly-unchanged frontier does almost no network work: the
     /// second pass serves every fresh URL from cache.
     #[tokio::test]
     async fn a_second_batch_pass_is_mostly_cache_hits() {
-        let long = "Frontier page body text that is long enough to be meaningful content here. ".repeat(3);
+        let long =
+            "Frontier page body text that is long enough to be meaningful content here. ".repeat(3);
         let pages: Vec<(String, String)> = (0..10)
             .map(|i| (format!("https://n{i}.test/"), ssr_page(&long)))
             .collect();
-        let refs: Vec<(&str, &str)> = pages.iter().map(|(u, h)| (u.as_str(), h.as_str())).collect();
+        let refs: Vec<(&str, &str)> = pages
+            .iter()
+            .map(|(u, h)| (u.as_str(), h.as_str()))
+            .collect();
         let f = FixtureFetch::new(&refs);
         let urls: Vec<String> = pages.iter().map(|(u, _)| u.clone()).collect();
 
@@ -265,12 +319,18 @@ mod tests {
         assert!(first.values().all(|v| v.was_fetched()));
         assert_eq!(f.fetch_count(), 10);
 
-        let second = t.visit_all(&f, &urls, Freshness::MaxAge(10_000), 1_000).await;
+        let second = t
+            .visit_all(&f, &urls, Freshness::MaxAge(10_000), 1_000)
+            .await;
         assert!(
             second.values().all(|v| *v == Visit::ServedFromCache),
             "every fresh URL should be a cache hit on the second pass"
         );
-        assert_eq!(f.fetch_count(), 10, "no extra network work on the second pass");
+        assert_eq!(
+            f.fetch_count(),
+            10,
+            "no extra network work on the second pass"
+        );
     }
 
     /// A failed fetch is isolated: the run continues and the URL reports Failed.
@@ -278,7 +338,10 @@ mod tests {
     async fn a_failed_fetch_does_not_abort_the_batch() {
         let f = FixtureFetch::new(&[("https://ok.test/", &ssr_page(&"good content ".repeat(30)))]);
         let t = Traversal::new(ConcurrencyLimits::default());
-        let urls = vec!["https://ok.test/".to_string(), "https://missing.test/".to_string()];
+        let urls = vec![
+            "https://ok.test/".to_string(),
+            "https://missing.test/".to_string(),
+        ];
 
         let out = t.visit_all(&f, &urls, Freshness::Always, 0).await;
         assert!(out["https://ok.test/"].was_fetched());

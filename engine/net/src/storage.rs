@@ -181,7 +181,9 @@ impl StorageLayer {
         ctx: &RequestContext,
         request_url: &Url,
     ) -> Option<String> {
-        let jar = self.jars.get(&Self::key(profile, container, &ctx.top_level))?;
+        let jar = self
+            .jars
+            .get(&Self::key(profile, container, &ctx.top_level))?;
         let cross_site = ctx.is_cross_site(request_url);
         let top_nav = ctx.is_top_level_navigation;
         jar.cookie_header_where(request_url, SystemTime::now(), |c: &Cookie| {
@@ -243,7 +245,10 @@ impl StorageLayer {
     }
 
     pub fn history(&self, profile: &str) -> &[HistoryEntry] {
-        self.history.get(profile).map(|v| v.as_slice()).unwrap_or(&[])
+        self.history
+            .get(profile)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
     }
 
     /// Forget everything a container ever stored (the "close container" action).
@@ -297,7 +302,13 @@ mod tests {
         let url = u("https://example.com/");
 
         s.store_set_cookie("default", "work", &ctx, &url, "sid=work-session; Path=/");
-        s.store_set_cookie("default", "personal", &ctx, &url, "sid=personal-session; Path=/");
+        s.store_set_cookie(
+            "default",
+            "personal",
+            &ctx,
+            &url,
+            "sid=personal-session; Path=/",
+        );
 
         assert_eq!(
             s.cookie_header("default", "work", &ctx, &url),
@@ -357,7 +368,13 @@ mod tests {
 
         s.store_set_cookie("p", "c", &own, &site, "strict=1; Path=/; SameSite=Strict");
         s.store_set_cookie("p", "c", &own, &site, "lax=1; Path=/; SameSite=Lax");
-        s.store_set_cookie("p", "c", &own, &site, "none=1; Path=/; SameSite=None; Secure");
+        s.store_set_cookie(
+            "p",
+            "c",
+            &own,
+            &site,
+            "none=1; Path=/; SameSite=None; Secure",
+        );
 
         let hdr = s.cookie_header("p", "c", &own, &site).unwrap();
         assert!(hdr.contains("strict=1") && hdr.contains("lax=1") && hdr.contains("none=1"));
@@ -371,7 +388,13 @@ mod tests {
         let tracker = u("https://tracker.example/pixel");
         // Partition: browsing news-site.org. The tracker sets three cookies from there.
         let on_news = RequestContext::subresource(u("https://news-site.org/"));
-        s.store_set_cookie("p", "c", &on_news, &tracker, "strict=1; Path=/; SameSite=Strict");
+        s.store_set_cookie(
+            "p",
+            "c",
+            &on_news,
+            &tracker,
+            "strict=1; Path=/; SameSite=Strict",
+        );
         s.store_set_cookie("p", "c", &on_news, &tracker, "lax=1; Path=/; SameSite=Lax");
         s.store_set_cookie(
             "p",
@@ -383,7 +406,10 @@ mod tests {
 
         // A later subresource request to the tracker, still on news-site.org.
         let hdr = s.cookie_header("p", "c", &on_news, &tracker).unwrap();
-        assert_eq!(hdr, "none=1", "Strict/Lax must not ride a cross-site subresource");
+        assert_eq!(
+            hdr, "none=1",
+            "Strict/Lax must not ride a cross-site subresource"
+        );
     }
 
     /// The rule that the naive `top_level` comparison gets wrong: on a **cross-site
@@ -397,7 +423,13 @@ mod tests {
         let own = RequestContext::subresource(u("https://example.com/"));
         s.store_set_cookie("p", "c", &own, &dest, "strict=1; Path=/; SameSite=Strict");
         s.store_set_cookie("p", "c", &own, &dest, "lax=1; Path=/; SameSite=Lax");
-        s.store_set_cookie("p", "c", &own, &dest, "none=1; Path=/; SameSite=None; Secure");
+        s.store_set_cookie(
+            "p",
+            "c",
+            &own,
+            &dest,
+            "none=1; Path=/; SameSite=None; Secure",
+        );
 
         // Clicking a link on evil.org that points at example.com/account (the CSRF shape).
         let clicked = RequestContext::navigation(dest.clone(), Some(u("https://evil.org/")));
@@ -457,7 +489,10 @@ mod tests {
             Some("home-val")
         );
         // A different origin in the same container sees nothing.
-        assert_eq!(s.local_get("p", "work", &tl, "https://other.org", "k"), None);
+        assert_eq!(
+            s.local_get("p", "work", &tl, "https://other.org", "k"),
+            None
+        );
     }
 
     #[test]
@@ -473,7 +508,10 @@ mod tests {
         s.clear_container("p", "work");
 
         assert_eq!(s.cookie_header("p", "work", &ctx, &tl), None);
-        assert_eq!(s.local_get("p", "work", &tl, "https://example.com", "k"), None);
+        assert_eq!(
+            s.local_get("p", "work", &tl, "https://example.com", "k"),
+            None
+        );
         assert_eq!(
             s.cookie_header("p", "home", &ctx, &tl),
             Some("b=2".to_string())

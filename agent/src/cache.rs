@@ -215,7 +215,10 @@ mod tests {
         // Simulate extraction: the caller passes the extracted text, so two pages whose
         // ads/nonces differ but whose article text matches produce the same input here.
         let extracted = "Breaking: the article body that actually matters.";
-        assert_eq!(c.record_fetch("https://news.test/a", extracted, 0), FetchOutcome::New);
+        assert_eq!(
+            c.record_fetch("https://news.test/a", extracted, 0),
+            FetchOutcome::New
+        );
         assert_eq!(
             c.record_fetch("https://news.test/a", extracted, 1_000),
             FetchOutcome::Unchanged
@@ -244,7 +247,10 @@ mod tests {
         c.record_fetch(url, "same", 1);
         c.record_fetch(url, "same", 2);
         let after_stable = c.volatility(url).unwrap();
-        assert!(after_stable < start, "stable re-fetches decay volatility: {after_stable} !< {start}");
+        assert!(
+            after_stable < start,
+            "stable re-fetches decay volatility: {after_stable} !< {start}"
+        );
 
         c.record_fetch(url, "different now", 3);
         let after_change = c.volatility(url).unwrap();

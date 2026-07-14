@@ -26,7 +26,15 @@ pub const MEANINGFUL_TEXT_CHARS: usize = 200;
 
 /// Element `id`s conventionally used as the single mount point of a client-rendered app. An
 /// *empty* one of these in an otherwise text-poor page is a strong "needs JS" signal.
-const SPA_MOUNT_IDS: &[&str] = &["root", "app", "__next", "__nuxt", "__layout", "___gatsby", "q-app"];
+const SPA_MOUNT_IDS: &[&str] = &[
+    "root",
+    "app",
+    "__next",
+    "__nuxt",
+    "__layout",
+    "___gatsby",
+    "q-app",
+];
 
 /// A single reason the triage decision went the way it did.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -121,9 +129,9 @@ pub fn triage(html: &str) -> TriageReport {
     let static_text_len = extracted_text.len();
 
     // An SPA mount is only a signal if it is *empty* (no meaningful text under it).
-    let empty_mount = mount_candidates.iter().any(|&m| {
-        collapse_ws(&dom.text_content(m)).len() < 20
-    });
+    let empty_mount = mount_candidates
+        .iter()
+        .any(|&m| collapse_ws(&dom.text_content(m)).len() < 20);
 
     let mut signals = Vec::new();
     let needs_js;
@@ -207,13 +215,18 @@ mod tests {
             <div id=\"root\"></div>\
             <script src=\"/bundle.js\"></script></body></html>";
         let r = triage(html);
-        assert!(r.needs_js, "empty #root shell must need JS: {:?}", r.signals);
+        assert!(
+            r.needs_js,
+            "empty #root shell must need JS: {:?}",
+            r.signals
+        );
         assert!(r.signals.contains(&Signal::EmptySpaMount));
     }
 
     #[test]
     fn a_noscript_enable_js_notice_needs_js() {
-        let html = "<html><body><noscript>You need to enable JavaScript to run this app.</noscript>\
+        let html =
+            "<html><body><noscript>You need to enable JavaScript to run this app.</noscript>\
             <div id=\"main\"></div><script src=\"/a.js\"></script></body></html>";
         let r = triage(html);
         assert!(r.needs_js);
@@ -237,7 +250,11 @@ mod tests {
             "Full server-rendered product description text that is already present in the HTML payload. ".repeat(3)
         );
         let r = triage(&html);
-        assert!(r.is_fast_path(), "prerendered #__next is content, not a shell: {:?}", r.signals);
+        assert!(
+            r.is_fast_path(),
+            "prerendered #__next is content, not a shell: {:?}",
+            r.signals
+        );
         assert!(r.signals.contains(&Signal::ServerRenderedText));
     }
 

@@ -292,7 +292,9 @@ pub async fn translate_page(
         let translated = match backend.complete(&messages).await {
             Ok(t) => t.trim().to_string(),
             Err(e) => {
-                report.skipped.push(format!("{}: backend error: {e:#}", block.marked_text));
+                report
+                    .skipped
+                    .push(format!("{}: backend error: {e:#}", block.marked_text));
                 continue;
             }
         };
@@ -382,7 +384,9 @@ mod tests {
             ),
         ]);
 
-        let report = translate_page(&mut dom, &backend, "en", "fr").await.unwrap();
+        let report = translate_page(&mut dom, &backend, "en", "fr")
+            .await
+            .unwrap();
         assert_eq!(report.blocks_total, 2);
         assert_eq!(report.blocks_translated, 2);
         assert!(report.skipped.is_empty());
@@ -416,9 +420,14 @@ mod tests {
     async fn a_block_with_mangled_placeholders_is_left_untouched_and_reported() {
         let mut dom = manuk_html::parse(r#"<body><p>A <b>bold</b> claim.</p></body>"#);
         // The model dropped the placeholder entirely.
-        let backend = Dict(vec![("A <0>bold</0> claim.", "Une affirmation audacieuse.")]);
+        let backend = Dict(vec![(
+            "A <0>bold</0> claim.",
+            "Une affirmation audacieuse.",
+        )]);
 
-        let report = translate_page(&mut dom, &backend, "en", "fr").await.unwrap();
+        let report = translate_page(&mut dom, &backend, "en", "fr")
+            .await
+            .unwrap();
         assert_eq!(report.blocks_translated, 0);
         assert_eq!(report.skipped.len(), 1);
         assert!(report.skipped[0].contains("leaving it untranslated"));
@@ -435,7 +444,9 @@ mod tests {
     async fn a_backend_error_skips_only_that_block() {
         let mut dom = manuk_html::parse("<body><h1>Hello</h1><p>Untranslatable</p></body>");
         let backend = Dict(vec![("Hello", "Bonjour")]);
-        let report = translate_page(&mut dom, &backend, "en", "fr").await.unwrap();
+        let report = translate_page(&mut dom, &backend, "en", "fr")
+            .await
+            .unwrap();
         assert_eq!(report.blocks_total, 2);
         assert_eq!(report.blocks_translated, 1);
         assert_eq!(report.skipped.len(), 1);

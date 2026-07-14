@@ -145,7 +145,8 @@ pub fn write_side_by_side(manuk: &Path, chrome: &Path, dest: &Path) -> Result<()
         }
     }
     let img = image::RgbaImage::from_raw(w, h, out).context("composite")?;
-    img.save(dest).with_context(|| format!("writing {}", dest.display()))?;
+    img.save(dest)
+        .with_context(|| format!("writing {}", dest.display()))?;
     Ok(())
 }
 
@@ -202,7 +203,11 @@ pub fn compare_structure_detail(
     //
     // `f64::NAN` is the honest answer to "what fraction did we render, of nothing?", and `report`
     // excludes it from the mean rather than counting it as success.
-    let coverage = if probed == 0 { f64::NAN } else { rendered as f64 / probed as f64 };
+    let coverage = if probed == 0 {
+        f64::NAN
+    } else {
+        rendered as f64 / probed as f64
+    };
     missing_ids.sort();
     (coverage, missing, misplaced, probed, missing_ids)
 }
@@ -241,8 +246,18 @@ pub fn placement_stats(
         v.sort_unstable();
         v[v.len() / 2]
     };
-    let frac = if n == 0 { 1.0 } else { within as f64 / n as f64 };
-    (med(&mut d[0]), med(&mut d[1]), med(&mut d[2]), med(&mut d[3]), frac)
+    let frac = if n == 0 {
+        1.0
+    } else {
+        within as f64 / n as f64
+    };
+    (
+        med(&mut d[0]),
+        med(&mut d[1]),
+        med(&mut d[2]),
+        med(&mut d[3]),
+        frac,
+    )
 }
 
 /// **Where does the layout first diverge?** Sort every element both engines render by Chrome's `y`
@@ -304,7 +319,9 @@ pub fn report(rows: &[Fidelity], floor: f64) -> bool {
             "{:<24} {:>7.1}% {:>8} {:>8} {:>9} {:>7}",
             r.name,
             r.score * 100.0,
-            r.structure.map(|s| format!("{:.1}%", s * 100.0)).unwrap_or_else(|| "—".into()),
+            r.structure
+                .map(|s| format!("{:.1}%", s * 100.0))
+                .unwrap_or_else(|| "—".into()),
             r.missing,
             r.misplaced,
             if ok { "ok" } else { "BELOW" }

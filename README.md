@@ -1,5 +1,7 @@
 # Manuk
 
+[![CI](https://github.com/patrickbdevaney/manuk/actions/workflows/ci.yml/badge.svg)](https://github.com/patrickbdevaney/manuk/actions/workflows/ci.yml)
+
 A browser engine built from scratch in Rust — ~48k lines across 16 crates — with one shared engine
 core driving two front-ends: a **headful GUI browser** (`shell`) and a **headless agentic browser**
 (`agent`) an LLM can drive.

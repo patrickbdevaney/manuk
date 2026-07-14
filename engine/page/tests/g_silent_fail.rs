@@ -94,7 +94,10 @@ fn a_script_error_is_never_swallowed() {
     //     a browser that blanks the page on a script error is not a safer browser, it is a worse one.
     let root = page.dom().root();
     let h = manuk_css::query_selector_all(page.dom(), root, "#headline");
-    assert!(!h.is_empty(), "the document must still render when a script throws");
+    assert!(
+        !h.is_empty(),
+        "the document must still render when a script throws"
+    );
     assert_eq!(page.dom().text_content(h[0]), "The document still renders");
 
     // (1) The synchronous error was SAID OUT LOUD.

@@ -224,7 +224,8 @@ fn openai_message(m: &Message) -> Value {
 impl InferenceBackend for OpenAiCompatBackend {
     async fn complete(&self, messages: &[Message]) -> Result<String> {
         let model = self.resolve_model().await?;
-        let body = serde_json::to_vec(&self.body(&model, messages)).context("serializing request")?;
+        let body =
+            serde_json::to_vec(&self.body(&model, messages)).context("serializing request")?;
         let auth = self.api_key.as_ref().map(|k| format!("Bearer {k}"));
         let mut headers: Vec<(&str, &str)> = vec![("Content-Type", "application/json")];
         if let Some(a) = &auth {
@@ -335,7 +336,11 @@ impl InferenceBackend for OllamaBackend {
         .with_context(|| format!("POST to {}", self.endpoint))?;
 
         if resp.status != 200 {
-            bail!("ollama HTTP {}: {}", resp.status, truncate(&resp.text(), 400));
+            bail!(
+                "ollama HTTP {}: {}",
+                resp.status,
+                truncate(&resp.text(), 400)
+            );
         }
         let v: Value = serde_json::from_slice(&resp.body).context("parsing ollama response")?;
         // Native shape: {"message": {"role": "...", "content": "..."}}
@@ -363,9 +368,18 @@ mod tests {
     #[test]
     fn openai_endpoint_is_derived_from_several_base_shapes() {
         let e = |b: &str| OpenAiCompatBackend::new(b, "m").endpoint().to_string();
-        assert_eq!(e("http://localhost:8080"), "http://localhost:8080/v1/chat/completions");
-        assert_eq!(e("http://localhost:8080/"), "http://localhost:8080/v1/chat/completions");
-        assert_eq!(e("http://localhost:11434/v1"), "http://localhost:11434/v1/chat/completions");
+        assert_eq!(
+            e("http://localhost:8080"),
+            "http://localhost:8080/v1/chat/completions"
+        );
+        assert_eq!(
+            e("http://localhost:8080/"),
+            "http://localhost:8080/v1/chat/completions"
+        );
+        assert_eq!(
+            e("http://localhost:11434/v1"),
+            "http://localhost:11434/v1/chat/completions"
+        );
         // An already-complete endpoint is left alone.
         assert_eq!(
             e("http://x/v1/chat/completions"),
@@ -392,7 +406,10 @@ mod tests {
 
         let m = Message {
             role: Role::User,
-            content: vec![Content::Text("look".into()), Content::ImagePng(vec![1, 2, 3])],
+            content: vec![
+                Content::Text("look".into()),
+                Content::ImagePng(vec![1, 2, 3]),
+            ],
         };
         let v = openai_message(&m);
         assert_eq!(v["content"][0]["type"], "text");
@@ -408,14 +425,19 @@ mod tests {
     fn ollama_images_are_a_bare_base64_array() {
         let m = Message {
             role: Role::User,
-            content: vec![Content::Text("look".into()), Content::ImagePng(vec![1, 2, 3])],
+            content: vec![
+                Content::Text("look".into()),
+                Content::ImagePng(vec![1, 2, 3]),
+            ],
         };
         let v = ollama_message(&m);
         assert_eq!(v["content"], "look");
         let img = v["images"][0].as_str().unwrap();
         assert!(!img.starts_with("data:"), "must not be a data URL");
         assert_eq!(
-            base64::engine::general_purpose::STANDARD.decode(img).unwrap(),
+            base64::engine::general_purpose::STANDARD
+                .decode(img)
+                .unwrap(),
             vec![1, 2, 3]
         );
     }
@@ -491,17 +513,22 @@ mod tests {
         )
         .await;
 
-        let backend = OpenAiCompatBackend::new(&format!("http://{addr}"), "qwen2.5")
-            .with_label("llama.cpp");
+        let backend =
+            OpenAiCompatBackend::new(&format!("http://{addr}"), "qwen2.5").with_label("llama.cpp");
         let mut browser = crate::AgentBrowser::new(400, 300);
-        browser.navigate("data:text/html,<body>x</body>").await.unwrap();
+        browser
+            .navigate("data:text/html,<body>x</body>")
+            .await
+            .unwrap();
 
         let cfg = crate::AgentConfig {
             max_steps: 2,
             send_screenshots: false,
             ..crate::AgentConfig::default()
         };
-        let outcome = crate::run_task(&mut browser, &backend, "t", &cfg).await.unwrap();
+        let outcome = crate::run_task(&mut browser, &backend, "t", &cfg)
+            .await
+            .unwrap();
         assert_eq!(outcome.answer.as_deref(), Some("done locally"));
     }
 
@@ -527,7 +554,10 @@ mod tests {
         });
 
         let backend = OllamaBackend::new(&format!("http://{addr}"), "nope");
-        let err = backend.complete(&[Message::text(Role::User, "x")]).await.unwrap_err();
+        let err = backend
+            .complete(&[Message::text(Role::User, "x")])
+            .await
+            .unwrap_err();
         let msg = format!("{err:#}");
         assert!(msg.contains("404"), "{msg}");
         assert!(msg.contains("model not found"), "{msg}");
@@ -563,19 +593,25 @@ mod tests {
     async fn an_endpoint_advertising_no_models_is_an_error() {
         let addr = spawn_http(r#"{"data":[]}"#).await;
         let b = OpenAiCompatBackend::at(&format!("http://{addr}"));
-        assert!(b.resolve_model().await.unwrap_err().to_string().contains("advertises none"));
+        assert!(b
+            .resolve_model()
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("advertises none"));
     }
 
     /// An explicitly configured model is used without ever querying `/v1/models`. The
     /// server here would 404 that path, so a query would fail the test.
     #[tokio::test]
     async fn a_configured_model_is_never_overridden_by_a_models_query() {
-        let addr = spawn_http(
-            r#"{"choices":[{"message":{"role":"assistant","content":"ok"}}]}"#,
-        )
-        .await;
+        let addr =
+            spawn_http(r#"{"choices":[{"message":{"role":"assistant","content":"ok"}}]}"#).await;
         let b = OpenAiCompatBackend::new(&format!("http://{addr}"), "chosen-model");
-        assert_eq!(b.complete(&[Message::text(Role::User, "x")]).await.unwrap(), "ok");
+        assert_eq!(
+            b.complete(&[Message::text(Role::User, "x")]).await.unwrap(),
+            "ok"
+        );
         assert_eq!(b.model().as_deref(), Some("chosen-model"));
     }
 
@@ -589,7 +625,10 @@ mod tests {
             "llama.cpp:qwen"
         );
         // An unresolved model says so rather than inventing a name.
-        assert_eq!(OpenAiCompatBackend::at("http://x").name(), "openai-compat:<unresolved>");
+        assert_eq!(
+            OpenAiCompatBackend::at("http://x").name(),
+            "openai-compat:<unresolved>"
+        );
     }
 
     #[test]

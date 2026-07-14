@@ -44,19 +44,23 @@ async fn main() -> Result<()> {
         .unwrap_or(8080);
     let key = flag(&args, "--key").unwrap_or_else(|| model_manifest::DEFAULT_KEY.to_string());
 
-    let entry = model_manifest::by_key(&key)
-        .ok_or_else(|| anyhow::anyhow!("unknown model key {key}; see --list on the setup script"))?;
+    let entry = model_manifest::by_key(&key).ok_or_else(|| {
+        anyhow::anyhow!("unknown model key {key}; see --list on the setup script")
+    })?;
 
     let backend = OpenAiCompatBackend::local_llama(port);
     // Resolving the model proves the server is up AND that §1's `/v1/models` fallback works
     // against a real server, with no API key.
-    let probe = backend.complete(&[manuk_agent::Message::text(
-        manuk_agent::Role::User,
-        "reply with the single word: ok",
-    )])
-    .await;
+    let probe = backend
+        .complete(&[manuk_agent::Message::text(
+            manuk_agent::Role::User,
+            "reply with the single word: ok",
+        )])
+        .await;
     if let Err(e) = &probe {
-        bail!("no llama-server on 127.0.0.1:{port} ({e:#}). Run scripts/setup-local-model.sh first.");
+        bail!(
+            "no llama-server on 127.0.0.1:{port} ({e:#}). Run scripts/setup-local-model.sh first."
+        );
     }
 
     println!("local suite: {} [{}]", entry.name, entry.key);
@@ -132,7 +136,10 @@ async fn main() -> Result<()> {
             Ok(outcome) => {
                 let ans = outcome.answer.unwrap_or_default();
                 let low = ans.to_lowercase();
-                let ok = case.expect_any.iter().any(|e| low.contains(&e.to_lowercase()));
+                let ok = case
+                    .expect_any
+                    .iter()
+                    .any(|e| low.contains(&e.to_lowercase()));
                 if ok {
                     passed += 1;
                     println!("PASS  ({} steps)  answer: {}", outcome.steps, oneline(&ans));
@@ -156,5 +163,10 @@ async fn main() -> Result<()> {
 }
 
 fn oneline(s: &str) -> String {
-    s.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(120).collect()
+    s.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .take(120)
+        .collect()
 }

@@ -59,7 +59,12 @@ pre.textContent=JSON.stringify(out);document.documentElement.appendChild(pre);})
 /// to both engines. Fetching independently per engine compares two different documents and calls
 /// the difference a bug — which is exactly what pinned a metric at 5,122px across four correct
 /// fixes, because the live origin injected a banner the `file://` copy never saw.
-pub fn oracle_probe(html: &str, base_url: &str, vw: u32, vh: u32) -> Result<HashMap<String, (String, String, [i64; 4])>> {
+pub fn oracle_probe(
+    html: &str,
+    base_url: &str,
+    vw: u32,
+    vh: u32,
+) -> Result<HashMap<String, (String, String, [i64; 4])>> {
     let chrome = chrome_bin().ok_or_else(|| anyhow!("no Chrome/Chromium found"))?;
     let base = format!("<base href=\"{base_url}\">");
     // **Key on STRUCTURAL PATH, not on `id`.**
@@ -127,7 +132,10 @@ pub fn oracle_probe(html: &str, base_url: &str, vw: u32, vh: u32) -> Result<Hash
     let out = cmd.output().context("chrome --dump-dom (oracle probe)")?;
     let _ = std::fs::remove_file(&tmp);
     if !out.status.success() {
-        bail!("chrome --dump-dom failed: {}", String::from_utf8_lossy(&out.stderr).trim());
+        bail!(
+            "chrome --dump-dom failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
     }
     let dumped = String::from_utf8_lossy(&out.stdout);
     let dom = manuk_html::parse(&dumped);
@@ -214,7 +222,10 @@ pub fn capture_boxes_interaction(
     let out = cmd.output().context("chrome --dump-dom (G5 probe)")?;
     let _ = std::fs::remove_file(&tmp);
     if !out.status.success() {
-        bail!("chrome --dump-dom failed: {}", String::from_utf8_lossy(&out.stderr).trim());
+        bail!(
+            "chrome --dump-dom failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
     }
     // Read the probe's payload back through the HTML parser — it is the thing that already knows
     // how to undo the entity escaping Chrome applied on the way out.
@@ -275,10 +286,15 @@ pub fn capture_boxes_all_ids(url: &str, vw: u32, vh: u32) -> Result<HashMap<Stri
         .arg("--virtual-time-budget=6000")
         .arg("--dump-dom")
         .arg(format!("file://{}", tmp.display()));
-    let out = cmd.output().context("chrome --dump-dom (structural probe)")?;
+    let out = cmd
+        .output()
+        .context("chrome --dump-dom (structural probe)")?;
     let _ = std::fs::remove_file(&tmp);
     if !out.status.success() {
-        bail!("chrome --dump-dom failed: {}", String::from_utf8_lossy(&out.stderr).trim());
+        bail!(
+            "chrome --dump-dom failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
     }
     parse_probe_json(&String::from_utf8_lossy(&out.stdout))
 }
@@ -286,7 +302,14 @@ pub fn capture_boxes_all_ids(url: &str, vw: u32, vh: u32) -> Result<HashMap<Stri
 /// Minimal blocking GET (the harness already links reqwest-free; use curl for zero new deps).
 fn ureq_get(url: &str) -> Result<String> {
     let out = Command::new("curl")
-        .args(["-sL", "--max-time", "25", "-A", "Mozilla/5.0 (X11; Linux x86_64) Manuk/0.1", url])
+        .args([
+            "-sL",
+            "--max-time",
+            "25",
+            "-A",
+            "Mozilla/5.0 (X11; Linux x86_64) Manuk/0.1",
+            url,
+        ])
         .output()
         .context("curl")?;
     if !out.status.success() {
@@ -394,7 +417,9 @@ pub fn capture_url_screenshot(url: &str, vw: u32, vh: u32, dest: &Path) -> Resul
         .arg("--virtual-time-budget=6000") // let the page settle (webfonts, JS) before the shot
         .arg(format!("--screenshot={}", dest.display()))
         .arg(format!("file://{}", tmp.display()));
-    let out = cmd.output().context("running headless Chrome --screenshot <url>")?;
+    let out = cmd
+        .output()
+        .context("running headless Chrome --screenshot <url>")?;
     let _ = std::fs::remove_file(&tmp);
     if !out.status.success() {
         bail!(
@@ -417,7 +442,9 @@ pub fn capture_screenshot_png(html: &str, vw: u32, vh: u32, dest: &Path) -> Resu
     cmd.args(base_flags(vw, vh))
         .arg(format!("--screenshot={}", dest.display()))
         .arg(&url);
-    let out = cmd.output().context("running headless Chrome --screenshot")?;
+    let out = cmd
+        .output()
+        .context("running headless Chrome --screenshot")?;
     let _ = std::fs::remove_file(&tmp);
     if !out.status.success() {
         bail!(
@@ -455,7 +482,9 @@ fn parse_probe_json(dumped_dom: &str) -> Result<HashMap<String, Box4>> {
             }
         }
     }
-    let json = json.ok_or_else(|| anyhow!("no __PARITY__ probe output in dumped DOM (did Chrome run the script?)"))?;
+    let json = json.ok_or_else(|| {
+        anyhow!("no __PARITY__ probe output in dumped DOM (did Chrome run the script?)")
+    })?;
     let map: HashMap<String, Box4> =
         serde_json::from_str(json.trim()).with_context(|| format!("parsing probe JSON: {json}"))?;
     Ok(map)

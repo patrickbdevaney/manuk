@@ -72,7 +72,10 @@ fn defer_async_module_do_not_block_paint_but_do_run() {
     for (sel, what) in [
         ("#deferred", "<script defer>"),
         ("#asyncd", "<script async>"),
-        ("#module", "<script type=module> (deferred by DEFAULT in every real browser)"),
+        (
+            "#module",
+            "<script type=module> (deferred by DEFAULT in every real browser)",
+        ),
     ] {
         assert_eq!(
             text(&page, sel),
@@ -90,7 +93,11 @@ fn defer_async_module_do_not_block_paint_but_do_run() {
          Speed achieved by never running the script is not speed, it is a missing feature with good \
          benchmarks."
     );
-    for (sel, what) in [("#deferred", "defer"), ("#asyncd", "async"), ("#module", "module")] {
+    for (sel, what) in [
+        ("#deferred", "defer"),
+        ("#asyncd", "async"),
+        ("#module", "module"),
+    ] {
         assert_eq!(
             text(&page, sel),
             "ran",

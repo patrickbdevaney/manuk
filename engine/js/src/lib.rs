@@ -143,9 +143,11 @@ thread_local! {
 }
 
 #[cfg(feature = "_sm")]
-fn with_runtime<R>(f: impl FnOnce(&mut mozjs::rust::Runtime) -> Result<R, JsError>) -> Result<R, JsError> {
-    use std::mem::ManuallyDrop;
+fn with_runtime<R>(
+    f: impl FnOnce(&mut mozjs::rust::Runtime) -> Result<R, JsError>,
+) -> Result<R, JsError> {
     use mozjs::rust::Runtime;
+    use std::mem::ManuallyDrop;
 
     RUNTIME.with(|cell| {
         let mut slot = cell.borrow_mut();
@@ -286,7 +288,8 @@ pub fn next_window_id() -> u64 {
 /// [`resolve_fetch`]. Empty without the JS feature.
 #[cfg(feature = "_sm")]
 pub fn take_fetches(ctx: &PageContext) -> Vec<(u32, String, String, String)> {
-    with_runtime(|rt| ctx.take_fetches(rt).map_err(|message| JsError { message })).unwrap_or_default()
+    with_runtime(|rt| ctx.take_fetches(rt).map_err(|message| JsError { message }))
+        .unwrap_or_default()
 }
 
 #[cfg(not(feature = "_sm"))]
@@ -404,7 +407,10 @@ pub fn take_messages(_ctx: &PageContext) -> Vec<(u64, String, String, u64)> {
 /// right `source` and `window.opener` resolves. No-op without the JS feature.
 #[cfg(feature = "_sm")]
 pub fn set_identity(ctx: &PageContext, win_id: u64, opener_win: u64) -> Result<(), JsError> {
-    with_runtime(|rt| ctx.set_identity(rt, win_id, opener_win).map_err(|message| JsError { message }))
+    with_runtime(|rt| {
+        ctx.set_identity(rt, win_id, opener_win)
+            .map_err(|message| JsError { message })
+    })
 }
 
 #[cfg(not(feature = "_sm"))]
@@ -460,7 +466,8 @@ pub fn load_document(
     styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
 ) -> Result<(PageContext, usize), JsError> {
     with_runtime(|rt| {
-        dom_bindings::PageContext::load(rt, dom, url, layout, styles).map_err(|message| JsError { message })
+        dom_bindings::PageContext::load(rt, dom, url, layout, styles)
+            .map_err(|message| JsError { message })
     })
 }
 
@@ -509,7 +516,8 @@ pub fn dispatch_event(
     styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
 ) -> Result<bool, JsError> {
     with_runtime(|rt| {
-        ctx.dispatch(rt, dom, node, ty, layout, styles).map_err(|message| JsError { message })
+        ctx.dispatch(rt, dom, node, ty, layout, styles)
+            .map_err(|message| JsError { message })
     })
 }
 

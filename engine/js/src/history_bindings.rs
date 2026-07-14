@@ -138,7 +138,14 @@ unsafe fn eval(cx: *mut RawJSContext, script: &str) -> Option<Value> {
     rooted!(in(cx) let g = global);
     rooted!(in(cx) let mut rval = UndefinedValue());
     let opts = CompileOptionsWrapper::new(&wrap_cx(cx), c"history.js".to_owned(), 1);
-    evaluate_script(&mut wrap_cx(cx), g.handle(), script, rval.handle_mut(), opts).ok()?;
+    evaluate_script(
+        &mut wrap_cx(cx),
+        g.handle(),
+        script,
+        rval.handle_mut(),
+        opts,
+    )
+    .ok()?;
     Some(rval.get())
 }
 
@@ -156,7 +163,12 @@ unsafe fn stringify_arg(cx: *mut RawJSContext, vp: *mut Value, argc: u32, i: u32
         return "null".to_string();
     }
     rooted!(in(cx) let g = global);
-    if !JS_SetProperty(&mut wrap_cx(cx), g.handle(), c"__histTmp".as_ptr(), slot.handle()) {
+    if !JS_SetProperty(
+        &mut wrap_cx(cx),
+        g.handle(),
+        c"__histTmp".as_ptr(),
+        slot.handle(),
+    ) {
         return "null".to_string();
     }
     match eval(cx, "JSON.stringify(globalThis.__histTmp) ?? 'null'") {
@@ -175,7 +187,12 @@ unsafe fn js_string_to_rust(cx: *mut RawJSContext, v: Value) -> String {
     }
 }
 
-unsafe fn opt_string_arg(cx: *mut RawJSContext, vp: *mut Value, argc: u32, i: u32) -> Option<String> {
+unsafe fn opt_string_arg(
+    cx: *mut RawJSContext,
+    vp: *mut Value,
+    argc: u32,
+    i: u32,
+) -> Option<String> {
     let v = arg(vp, argc, i);
     if v.is_undefined() || v.is_null() {
         return None;
@@ -317,7 +334,11 @@ unsafe extern "C" fn location_pathname_get(
     to_js_string(cx, vp, &s)
 }
 
-unsafe extern "C" fn location_search_get(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe extern "C" fn location_search_get(
+    cx: *mut RawJSContext,
+    _argc: u32,
+    vp: *mut Value,
+) -> bool {
     let s = host_of(this_obj(vp))
         .map(|h| {
             h.current_url()
@@ -392,18 +413,19 @@ pub unsafe fn install(
                   n: u32| {
         JS_DefineFunction(&mut wrap_cx(cx), obj.handle(), name.as_ptr(), Some(f), n, 0);
     };
-    let def_get = |obj: &mozjs::rust::RootedGuard<'_, *mut JSObject>,
-                   name: &std::ffi::CStr,
-                   g: unsafe extern "C" fn(*mut RawJSContext, u32, *mut Value) -> bool| {
-        JS_DefineProperty1(
-            &mut wrap_cx(cx),
-            obj.handle(),
-            name.as_ptr(),
-            Some(g),
-            None,
-            JSPROP_ENUMERATE as u32,
-        );
-    };
+    let def_get =
+        |obj: &mozjs::rust::RootedGuard<'_, *mut JSObject>,
+         name: &std::ffi::CStr,
+         g: unsafe extern "C" fn(*mut RawJSContext, u32, *mut Value) -> bool| {
+            JS_DefineProperty1(
+                &mut wrap_cx(cx),
+                obj.handle(),
+                name.as_ptr(),
+                Some(g),
+                None,
+                JSPROP_ENUMERATE as u32,
+            );
+        };
 
     // ---- history ----
     rooted!(in(cx) let hist = JS_NewObject(&mut wrap_cx(cx), &HISTORY_CLASS));
@@ -420,7 +442,12 @@ pub unsafe fn install(
     def_get(&hist, c"state", history_state_get);
 
     rooted!(in(cx) let hist_val = ObjectValue(hist.get()));
-    if !JS_SetProperty(&mut wrap_cx(cx), global, c"history".as_ptr(), hist_val.handle()) {
+    if !JS_SetProperty(
+        &mut wrap_cx(cx),
+        global,
+        c"history".as_ptr(),
+        hist_val.handle(),
+    ) {
         return Err("defining globalThis.history failed".to_string());
     }
 
@@ -436,7 +463,12 @@ pub unsafe fn install(
     def_get(&loc, c"hash", location_hash_get);
 
     rooted!(in(cx) let loc_val = ObjectValue(loc.get()));
-    if !JS_SetProperty(&mut wrap_cx(cx), global, c"location".as_ptr(), loc_val.handle()) {
+    if !JS_SetProperty(
+        &mut wrap_cx(cx),
+        global,
+        c"location".as_ptr(),
+        loc_val.handle(),
+    ) {
         return Err("defining globalThis.location failed".to_string());
     }
 
@@ -509,10 +541,17 @@ mod js_tests {
              (location.pathname === '/one' && pops === 0 && history.length === 2)",
         )
         .unwrap();
-        assert!(is_true(r), "pushState must change the URL and not fire popstate");
+        assert!(
+            is_true(r),
+            "pushState must change the URL and not fire popstate"
+        );
 
         // ...and it performed no network request. The host counter is the ground truth.
-        assert_eq!(unsafe { (*host_ptr).fetches() }, 0, "pushState must not fetch");
+        assert_eq!(
+            unsafe { (*host_ptr).fetches() },
+            0,
+            "pushState must not fetch"
+        );
 
         // back(): exactly one popstate, carrying the previous entry's state (null).
         let r = eval_val(
@@ -544,7 +583,10 @@ mod js_tests {
               && history.state.page === 9)",
         )
         .unwrap();
-        assert!(is_true(r), "replaceState must not add an entry or fire popstate");
+        assert!(
+            is_true(r),
+            "replaceState must not add an entry or fire popstate"
+        );
 
         // A cross-origin state URL throws and changes nothing.
         let r = eval_val(
@@ -555,7 +597,10 @@ mod js_tests {
              (threw && location.pathname === '/one-b')",
         )
         .unwrap();
-        assert!(is_true(r), "a cross-origin state URL must throw and move nothing");
+        assert!(
+            is_true(r),
+            "a cross-origin state URL must throw and move nothing"
+        );
 
         // An out-of-range traversal moves nowhere and fires nothing.
         let r = eval_val(
@@ -576,7 +621,9 @@ mod js_tests {
              (pops === p + 1 && hashes === h + 1)",
         )
         .unwrap();
-        assert!(is_true(r), "a fragment-only traversal must fire hashchange too");
+        assert!(
+            is_true(r),
+            "a fragment-only traversal must fire hashchange too"
+        );
     }
 }
-

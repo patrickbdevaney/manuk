@@ -121,8 +121,8 @@ impl Capabilities {
         use ActionKind::*;
         Capabilities {
             allowed: [
-                Navigate, Click, Scroll, Finish, Type, ClickText, ClickAt, Submit, Back,
-                Forward, ScrollTo, CloseTabs, OpenTab, SearchTab,
+                Navigate, Click, Scroll, Finish, Type, ClickText, ClickAt, Submit, Back, Forward,
+                ScrollTo, CloseTabs, OpenTab, SearchTab,
             ]
             .into_iter()
             .collect(),
@@ -137,7 +137,9 @@ impl Capabilities {
     pub fn read_only() -> Self {
         use ActionKind::*;
         Capabilities {
-            allowed: [Scroll, ScrollTo, Back, Forward, Finish].into_iter().collect(),
+            allowed: [Scroll, ScrollTo, Back, Forward, Finish]
+                .into_iter()
+                .collect(),
             origins: HashSet::new(),
             allow_sensitive_actions: false,
         }
@@ -215,7 +217,11 @@ impl std::fmt::Display for Denial {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Denial::KindNotGranted(k) => {
-                write!(f, "action {:?} was not granted to this invocation", k.as_str())
+                write!(
+                    f,
+                    "action {:?} was not granted to this invocation",
+                    k.as_str()
+                )
             }
             Denial::OriginNotGranted(u) => {
                 write!(f, "target {u} is outside the granted origins")
@@ -447,12 +453,20 @@ mod tests {
 
         assert_eq!(check(&Action::Scroll { dy: 1.0 }, &o, &caps), Ok(()));
         assert_eq!(check(&Action::Back, &o, &caps), Ok(()));
-        assert_eq!(check(&Action::Finish { answer: "a".into() }, &o, &caps), Ok(()));
+        assert_eq!(
+            check(&Action::Finish { answer: "a".into() }, &o, &caps),
+            Ok(())
+        );
 
         for a in [
-            Action::Navigate { url: "https://example.com/".into() },
+            Action::Navigate {
+                url: "https://example.com/".into(),
+            },
             Action::Click { index: 0 },
-            Action::Type { field: "q".into(), text: "x".into() },
+            Action::Type {
+                field: "q".into(),
+                text: "x".into(),
+            },
             Action::Submit { field: None },
             Action::ClickAt { x: 1.0, y: 1.0 },
         ] {

@@ -36,7 +36,12 @@ pub fn is_attachment(content_disposition: Option<&str>, content_type: Option<&st
         }
     }
     if let Some(ct) = content_type {
-        let mime = ct.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
+        let mime = ct
+            .split(';')
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_ascii_lowercase();
         return matches!(
             mime.as_str(),
             "application/octet-stream"
@@ -215,7 +220,10 @@ mod tests {
             suggested_filename(Some("attachment; filename=\"../../etc/passwd\""), "u"),
             "passwd"
         );
-        assert_eq!(suggested_filename(Some("attachment; filename=\"..\""), "https://x/safe.txt"), "safe.txt");
+        assert_eq!(
+            suggested_filename(Some("attachment; filename=\"..\""), "https://x/safe.txt"),
+            "safe.txt"
+        );
     }
 
     #[test]

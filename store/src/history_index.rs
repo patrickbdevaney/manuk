@@ -91,9 +91,7 @@ impl Embedding {
     /// return 0 rather than panic, since a mismatched index is recoverable by re-embedding.
     pub fn dot(&self, other: &Embedding) -> f32 {
         match (self, other) {
-            (Embedding::Dense(a), Embedding::Dense(b)) => {
-                a.iter().zip(b).map(|(x, y)| x * y).sum()
-            }
+            (Embedding::Dense(a), Embedding::Dense(b)) => a.iter().zip(b).map(|(x, y)| x * y).sum(),
             (Embedding::Sparse(a), Embedding::Sparse(b)) => {
                 // Merge-join on sorted keys.
                 let (mut i, mut j, mut acc) = (0usize, 0usize, 0.0f32);
@@ -162,14 +160,14 @@ impl Embedder for HashingEmbedder {
         }
         // Bigrams give word order *some* weight, which pure bag-of-words throws away.
         for w in tokens.windows(2) {
-            *counts.entry(feature_hash(&format!("{} {}", w[0], w[1]))).or_default() += 1.0;
+            *counts
+                .entry(feature_hash(&format!("{} {}", w[0], w[1])))
+                .or_default() += 1.0;
         }
         // Sublinear TF: the tenth occurrence of a word matters far less than the second,
         // so long pages do not drown short ones.
-        let features: Vec<(u64, f32)> = counts
-            .into_iter()
-            .map(|(h, c)| (h, 1.0 + c.ln()))
-            .collect();
+        let features: Vec<(u64, f32)> =
+            counts.into_iter().map(|(h, c)| (h, 1.0 + c.ln())).collect();
         Embedding::sparse(features)
     }
 }
@@ -229,7 +227,12 @@ impl<E: Embedder> SemanticIndex<E> {
 
     /// Index a page. Re-indexing the same URL **replaces** it rather than duplicating,
     /// so revisiting a page that changed does not leave a stale copy behind.
-    pub fn add(&mut self, url: impl Into<String>, title: impl Into<String>, text: impl Into<String>) {
+    pub fn add(
+        &mut self,
+        url: impl Into<String>,
+        title: impl Into<String>,
+        text: impl Into<String>,
+    ) {
         let entry = Entry {
             url: url.into(),
             title: title.into(),
@@ -283,7 +286,11 @@ impl<E: Embedder> SemanticIndex<E> {
             })
             .filter(|h| h.score > 0.0)
             .collect();
-        hits.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        hits.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         hits.truncate(k);
         hits
     }
@@ -486,7 +493,10 @@ mod tests {
         let b = e.embed("the quick brown fox");
         assert_eq!(a, b, "an index built elsewhere must score identically");
         // Normalized => a vector's cosine with itself is 1.
-        assert!((a.dot(&a) - 1.0).abs() < 1e-5, "embeddings must be L2-normalized");
+        assert!(
+            (a.dot(&a) - 1.0).abs() < 1e-5,
+            "embeddings must be L2-normalized"
+        );
 
         // The empty string yields an empty vector, not a NaN.
         assert_eq!(e.embed(""), Embedding::Sparse(vec![]));

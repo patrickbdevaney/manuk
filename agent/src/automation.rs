@@ -27,11 +27,19 @@ pub struct Selector {
 impl Selector {
     /// A selector for the `nth`-first element of `role` whose name contains `name`.
     pub fn role_name(role: Role, name: impl Into<String>) -> Self {
-        Selector { role: Some(role), name: name.into(), nth: 0 }
+        Selector {
+            role: Some(role),
+            name: name.into(),
+            nth: 0,
+        }
     }
     /// A selector matching any role whose name contains `name`.
     pub fn by_name(name: impl Into<String>) -> Self {
-        Selector { role: None, name: name.into(), nth: 0 }
+        Selector {
+            role: None,
+            name: name.into(),
+            nth: 0,
+        }
     }
     /// Take the `n`-th match instead of the first.
     pub fn nth(mut self, n: usize) -> Self {
@@ -42,7 +50,10 @@ impl Selector {
     fn matches_node(&self, node: &A11yNode) -> bool {
         let role_ok = self.role.as_ref().is_none_or(|r| &node.role == r);
         let name_ok = self.name.is_empty()
-            || node.name.to_ascii_lowercase().contains(&self.name.to_ascii_lowercase());
+            || node
+                .name
+                .to_ascii_lowercase()
+                .contains(&self.name.to_ascii_lowercase());
         role_ok && name_ok
     }
 }
@@ -88,7 +99,9 @@ fn any_name_contains(tree: &A11yNode, needle_lc: &str) -> bool {
     if !needle_lc.is_empty() && tree.name.to_ascii_lowercase().contains(needle_lc) {
         return true;
     }
-    tree.children.iter().any(|c| any_name_contains(c, needle_lc))
+    tree.children
+        .iter()
+        .any(|c| any_name_contains(c, needle_lc))
 }
 
 fn count_matches(sel: &Selector, tree: &A11yNode) -> usize {
@@ -145,9 +158,15 @@ pub struct AssertResult {
 /// verify page state after an action. On failure the `detail` names what was expected.
 pub fn assert_that(cond: &Condition, tree: &A11yNode, url: &str) -> AssertResult {
     if evaluate(cond, tree, url) {
-        AssertResult { passed: true, detail: String::new() }
+        AssertResult {
+            passed: true,
+            detail: String::new(),
+        }
     } else {
-        AssertResult { passed: false, detail: format!("expected {cond:?}") }
+        AssertResult {
+            passed: false,
+            detail: format!("expected {cond:?}"),
+        }
     }
 }
 
@@ -161,7 +180,12 @@ mod tests {
             node: NodeId(id as usize),
             role,
             name: name.to_string(),
-            bbox: boxed.then(|| Rect { x: 0.0, y: 0.0, width: 50.0, height: 20.0 }),
+            bbox: boxed.then(|| Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 50.0,
+                height: 20.0,
+            }),
             z: 0,
             children,
         }
@@ -183,13 +207,22 @@ mod tests {
         let id_before = resolve_id(&sel, &before).expect("resolves");
 
         // Insert an unrelated button BEFORE it (a positional index would now be wrong).
-        let after = n(1, Role::Document, "", true, vec![
-            n(9, Role::Button, "Cancel", true, vec![]),
-            n(2, Role::Heading { level: 1 }, "Dashboard", true, vec![]),
-            n(3, Role::Button, "Save", true, vec![]),
-        ]);
+        let after = n(
+            1,
+            Role::Document,
+            "",
+            true,
+            vec![
+                n(9, Role::Button, "Cancel", true, vec![]),
+                n(2, Role::Heading { level: 1 }, "Dashboard", true, vec![]),
+                n(3, Role::Button, "Save", true, vec![]),
+            ],
+        );
         let id_after = resolve_id(&sel, &after).expect("still resolves");
-        assert_eq!(id_before, id_after, "role+name selector survives the sibling insert");
+        assert_eq!(
+            id_before, id_after,
+            "role+name selector survives the sibling insert"
+        );
     }
 
     #[test]
@@ -198,7 +231,10 @@ mod tests {
             n(4, Role::Link, "Item", true, vec![]),
             n(5, Role::Link, "Item", true, vec![]),
         ]);
-        assert_eq!(resolve_id(&Selector::role_name(Role::Link, "Item"), &tree), Some(NodeId(4)));
+        assert_eq!(
+            resolve_id(&Selector::role_name(Role::Link, "Item"), &tree),
+            Some(NodeId(4))
+        );
         assert_eq!(
             resolve_id(&Selector::role_name(Role::Link, "Item").nth(1), &tree),
             Some(NodeId(5))
@@ -209,14 +245,46 @@ mod tests {
     fn conditions_evaluate() {
         let tree = page(vec![]);
         let url = "https://app.test/dashboard";
-        assert!(evaluate(&Condition::Visible(Selector::role_name(Role::Button, "Save")), &tree, url));
-        assert!(evaluate(&Condition::Gone(Selector::role_name(Role::Button, "Delete")), &tree, url));
-        assert!(evaluate(&Condition::TextPresent("dashboard".into()), &tree, url));
-        assert!(!evaluate(&Condition::TextPresent("checkout".into()), &tree, url));
-        assert!(evaluate(&Condition::UrlMatches("/dashboard".into()), &tree, url));
-        assert!(!evaluate(&Condition::UrlMatches("/settings".into()), &tree, url));
-        assert!(evaluate(&Condition::CountAtLeast(Selector::role_name(Role::Button, ""), 1), &tree, url));
-        assert!(!evaluate(&Condition::CountAtLeast(Selector::role_name(Role::Button, ""), 2), &tree, url));
+        assert!(evaluate(
+            &Condition::Visible(Selector::role_name(Role::Button, "Save")),
+            &tree,
+            url
+        ));
+        assert!(evaluate(
+            &Condition::Gone(Selector::role_name(Role::Button, "Delete")),
+            &tree,
+            url
+        ));
+        assert!(evaluate(
+            &Condition::TextPresent("dashboard".into()),
+            &tree,
+            url
+        ));
+        assert!(!evaluate(
+            &Condition::TextPresent("checkout".into()),
+            &tree,
+            url
+        ));
+        assert!(evaluate(
+            &Condition::UrlMatches("/dashboard".into()),
+            &tree,
+            url
+        ));
+        assert!(!evaluate(
+            &Condition::UrlMatches("/settings".into()),
+            &tree,
+            url
+        ));
+        assert!(evaluate(
+            &Condition::CountAtLeast(Selector::role_name(Role::Button, ""), 1),
+            &tree,
+            url
+        ));
+        assert!(!evaluate(
+            &Condition::CountAtLeast(Selector::role_name(Role::Button, ""), 2),
+            &tree,
+            url
+        ));
     }
 
     #[test]
@@ -228,17 +296,32 @@ mod tests {
         let snaps = vec![(&loading, url), (&loading, url), (&done, url)];
         assert_eq!(wait(&cond, snaps), Outcome::Met { at: 2 });
         // Never appears → Timeout.
-        assert_eq!(wait(&cond, vec![(&loading, url), (&loading, url)]), Outcome::Timeout);
+        assert_eq!(
+            wait(&cond, vec![(&loading, url), (&loading, url)]),
+            Outcome::Timeout
+        );
     }
 
     #[test]
     fn assert_reports_failure_detail() {
         let tree = page(vec![]);
         let url = "https://app.test/";
-        let pass = assert_that(&Condition::Visible(Selector::role_name(Role::Button, "Save")), &tree, url);
+        let pass = assert_that(
+            &Condition::Visible(Selector::role_name(Role::Button, "Save")),
+            &tree,
+            url,
+        );
         assert!(pass.passed && pass.detail.is_empty());
-        let fail = assert_that(&Condition::Visible(Selector::role_name(Role::Button, "Publish")), &tree, url);
+        let fail = assert_that(
+            &Condition::Visible(Selector::role_name(Role::Button, "Publish")),
+            &tree,
+            url,
+        );
         assert!(!fail.passed);
-        assert!(fail.detail.contains("Publish"), "detail names the expectation: {}", fail.detail);
+        assert!(
+            fail.detail.contains("Publish"),
+            "detail names the expectation: {}",
+            fail.detail
+        );
     }
 }

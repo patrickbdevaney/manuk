@@ -110,7 +110,12 @@ impl Role {
     pub fn is_interactive(&self) -> bool {
         matches!(
             self,
-            Role::Link | Role::Button | Role::TextBox | Role::CheckBox | Role::Radio | Role::ComboBox
+            Role::Link
+                | Role::Button
+                | Role::TextBox
+                | Role::CheckBox
+                | Role::Radio
+                | Role::ComboBox
         )
     }
 
@@ -351,9 +356,8 @@ impl A11yNode {
     /// (case-insensitive) — models are imprecise about exact label text.
     pub fn find_containing(&self, role: &Role, name: &str) -> Option<&A11yNode> {
         let needle = name.trim().to_ascii_lowercase();
-        self.iter().find(|n| {
-            n.role.matches(role) && n.name.to_ascii_lowercase().contains(needle.as_str())
-        })
+        self.iter()
+            .find(|n| n.role.matches(role) && n.name.to_ascii_lowercase().contains(needle.as_str()))
     }
 
     /// The deepest node whose `bbox` contains `(x, y)` — hit-testing for click-by-
@@ -410,11 +414,18 @@ pub fn is_hidden(dom: &Dom, node: NodeId) -> bool {
     if el.attr("hidden").is_some() {
         return true;
     }
-    if el.attr("aria-hidden").is_some_and(|v| v.eq_ignore_ascii_case("true")) {
+    if el
+        .attr("aria-hidden")
+        .is_some_and(|v| v.eq_ignore_ascii_case("true"))
+    {
         return true;
     }
     // `<input type=hidden>` is not exposed.
-    if el.name == "input" && el.attr("type").is_some_and(|t| t.eq_ignore_ascii_case("hidden")) {
+    if el.name == "input"
+        && el
+            .attr("type")
+            .is_some_and(|t| t.eq_ignore_ascii_case("hidden"))
+    {
         return true;
     }
     false
@@ -428,7 +439,10 @@ pub fn role_of(dom: &Dom, node: NodeId) -> Option<Role> {
 
     if let Some(explicit) = el.attr("role") {
         // ARIA: the first *valid* token wins; invalid tokens fall through to implicit.
-        if let Some(r) = explicit.split_ascii_whitespace().find_map(Role::from_aria_token) {
+        if let Some(r) = explicit
+            .split_ascii_whitespace()
+            .find_map(Role::from_aria_token)
+        {
             return Some(r);
         }
     }
@@ -442,7 +456,12 @@ pub fn role_of(dom: &Dom, node: NodeId) -> Option<Role> {
             }
         }
         "button" => Role::Button,
-        "input" => match el.attr("type").unwrap_or("text").to_ascii_lowercase().as_str() {
+        "input" => match el
+            .attr("type")
+            .unwrap_or("text")
+            .to_ascii_lowercase()
+            .as_str()
+        {
             "checkbox" => Role::CheckBox,
             "radio" => Role::Radio,
             "button" | "submit" | "reset" | "image" => Role::Button,
@@ -474,7 +493,10 @@ pub fn role_of(dom: &Dom, node: NodeId) -> Option<Role> {
         "td" => Role::Cell,
         "th" => {
             // HTML-AAM: scope decides column vs row header; default to column.
-            if el.attr("scope").is_some_and(|s| s.eq_ignore_ascii_case("row")) {
+            if el
+                .attr("scope")
+                .is_some_and(|s| s.eq_ignore_ascii_case("row"))
+            {
                 Role::RowHeader
             } else {
                 Role::ColumnHeader
@@ -508,7 +530,9 @@ fn has_explicit_name(dom: &Dom, node: NodeId) -> bool {
         return false;
     };
     el.attr("aria-label").is_some_and(|v| !v.trim().is_empty())
-        || el.attr("aria-labelledby").is_some_and(|v| !v.trim().is_empty())
+        || el
+            .attr("aria-labelledby")
+            .is_some_and(|v| !v.trim().is_empty())
         || el.attr("title").is_some_and(|v| !v.trim().is_empty())
 }
 
@@ -675,7 +699,11 @@ pub fn build_tree_with_rects(dom: &Dom, rects: &HashMap<NodeId, Rect>) -> A11yNo
 
 /// As [`build_tree_with_rects`], plus a per-node effective stacking layer (`z_index`, from
 /// the page's z-index map) so [`A11yNode::hit_test`] is occlusion-aware.
-pub fn build_tree_with_geometry(dom: &Dom, rects: &HashMap<NodeId, Rect>, z_index: &ZIndex) -> A11yNode {
+pub fn build_tree_with_geometry(
+    dom: &Dom,
+    rects: &HashMap<NodeId, Rect>,
+    z_index: &ZIndex,
+) -> A11yNode {
     let index = id_index(dom);
     let root = dom.root();
     let children = build_children(dom, root, &index, rects, z_index);
@@ -736,7 +764,14 @@ mod tests {
     use super::*;
 
     fn leaf(role: Role, name: &str) -> A11yNode {
-        A11yNode { node: NodeId(0), role, name: name.to_string(), bbox: None, z: 0, children: vec![] }
+        A11yNode {
+            node: NodeId(0),
+            role,
+            name: name.to_string(),
+            bbox: None,
+            z: 0,
+            children: vec![],
+        }
     }
 
     #[test]
@@ -747,7 +782,12 @@ mod tests {
             node: NodeId(1),
             role: Role::Button,
             name: "Buy".into(),
-            bbox: Some(Rect { x: 10.0, y: 10.0, width: 40.0, height: 20.0 }),
+            bbox: Some(Rect {
+                x: 10.0,
+                y: 10.0,
+                width: 40.0,
+                height: 20.0,
+            }),
             z: 0,
             children: vec![],
         };
@@ -755,7 +795,12 @@ mod tests {
             node: NodeId(2),
             role: Role::Generic,
             name: "dialog".into(),
-            bbox: Some(Rect { x: 0.0, y: 0.0, width: 200.0, height: 200.0 }),
+            bbox: Some(Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 200.0,
+                height: 200.0,
+            }),
             z: 10,
             children: vec![],
         };
@@ -833,7 +878,10 @@ mod tests {
             }
         });
 
-        let body = dom.children(dom.children(dom.root()).next().unwrap()).next().unwrap();
+        let body = dom
+            .children(dom.children(dom.root()).next().unwrap())
+            .next()
+            .unwrap();
         let roles: Vec<Role> = dom
             .children(body)
             .map(|c| role_of(&dom, c).unwrap())
@@ -876,8 +924,14 @@ mod tests {
             d.set_attr(c, "role", "not-a-role");
             d.append_child(body, c);
         });
-        let body = dom.children(dom.children(dom.root()).next().unwrap()).next().unwrap();
-        let roles: Vec<Role> = dom.children(body).map(|c| role_of(&dom, c).unwrap()).collect();
+        let body = dom
+            .children(dom.children(dom.root()).next().unwrap())
+            .next()
+            .unwrap();
+        let roles: Vec<Role> = dom
+            .children(body)
+            .map(|c| role_of(&dom, c).unwrap())
+            .collect();
         assert_eq!(
             roles,
             vec![Role::Button, Role::Navigation, Role::Heading { level: 1 }]
@@ -919,11 +973,7 @@ mod tests {
         // gone but its <button> child was reparented. The heading survives with a name.
         assert_eq!(
             lines,
-            vec![
-                "document",
-                "button",
-                "heading level 1 \"Title\"",
-            ]
+            vec!["document", "button", "heading level 1 \"Title\"",]
         );
     }
 
@@ -959,7 +1009,10 @@ mod tests {
             d.append_child(body, a);
         });
 
-        let body = dom.children(dom.children(dom.root()).next().unwrap()).next().unwrap();
+        let body = dom
+            .children(dom.children(dom.root()).next().unwrap())
+            .next()
+            .unwrap();
         let kids: Vec<NodeId> = dom.children(body).collect();
         let name = |n: NodeId| {
             let r = role_of(&dom, n).unwrap();
@@ -999,7 +1052,10 @@ mod tests {
             d.append_child(body, sub);
         });
 
-        let body = dom.children(dom.children(dom.root()).next().unwrap()).next().unwrap();
+        let body = dom
+            .children(dom.children(dom.root()).next().unwrap())
+            .next()
+            .unwrap();
         let kids: Vec<NodeId> = dom.children(body).collect();
         let name = |n: NodeId| {
             let r = role_of(&dom, n).unwrap();
@@ -1019,7 +1075,10 @@ mod tests {
             d.set_attr(named, "aria-label", "Sidebar");
             d.append_child(body, named);
         });
-        let body = dom.children(dom.children(dom.root()).next().unwrap()).next().unwrap();
+        let body = dom
+            .children(dom.children(dom.root()).next().unwrap())
+            .next()
+            .unwrap();
         let kids: Vec<NodeId> = dom.children(body).collect();
         assert_eq!(role_of(&dom, kids[0]), Some(Role::Generic));
         assert_eq!(role_of(&dom, kids[1]), Some(Role::Region));
@@ -1108,16 +1167,22 @@ mod tests {
             d.append_child(b3, t);
             d.append_child(body, b3);
         });
-        let body = dom.children(dom.children(dom.root()).next().unwrap()).next().unwrap();
+        let body = dom
+            .children(dom.children(dom.root()).next().unwrap())
+            .next()
+            .unwrap();
         let kids: Vec<NodeId> = dom.children(body).collect();
 
         let mut rects = HashMap::new();
         rects.insert(kids[0], rect(10.0, 20.0, 100.0, 40.0)); // in viewport
         rects.insert(kids[1], rect(10.0, 5000.0, 100.0, 40.0)); // far below
-        // kids[2] intentionally absent
+                                                                // kids[2] intentionally absent
 
         let tree = build_tree_with_rects(&dom, &rects);
-        assert_eq!(tree.find(&Role::Button, "Near").unwrap().bbox, Some(rects[&kids[0]]));
+        assert_eq!(
+            tree.find(&Role::Button, "Near").unwrap().bbox,
+            Some(rects[&kids[0]])
+        );
         assert_eq!(tree.find(&Role::Button, "Unlaid").unwrap().bbox, None);
 
         // Viewport = the first 800px of the document.
@@ -1140,7 +1205,10 @@ mod tests {
             d.append_child(main, btn);
             d.append_child(body, main);
         });
-        let body = dom.children(dom.children(dom.root()).next().unwrap()).next().unwrap();
+        let body = dom
+            .children(dom.children(dom.root()).next().unwrap())
+            .next()
+            .unwrap();
         let main = dom.children(body).next().unwrap();
         let btn = dom.children(main).next().unwrap();
 
@@ -1150,9 +1218,15 @@ mod tests {
 
         let tree = build_tree_with_rects(&dom, &rects);
         // Inside the button: the button wins over the enclosing main.
-        assert_eq!(tree.hit_test(120.0, 110.0).map(|n| n.role.clone()), Some(Role::Button));
+        assert_eq!(
+            tree.hit_test(120.0, 110.0).map(|n| n.role.clone()),
+            Some(Role::Button)
+        );
         // Outside the button but inside main.
-        assert_eq!(tree.hit_test(500.0, 500.0).map(|n| n.role.clone()), Some(Role::Main));
+        assert_eq!(
+            tree.hit_test(500.0, 500.0).map(|n| n.role.clone()),
+            Some(Role::Main)
+        );
         // Outside everything.
         assert!(tree.hit_test(5000.0, 5000.0).is_none());
     }
@@ -1170,7 +1244,10 @@ mod tests {
             d.append_child(form, btn);
             d.append_child(body, form);
         });
-        let body = dom.children(dom.children(dom.root()).next().unwrap()).next().unwrap();
+        let body = dom
+            .children(dom.children(dom.root()).next().unwrap())
+            .next()
+            .unwrap();
         let form = dom.children(body).next().unwrap();
         let btn = dom.children(form).next().unwrap();
 

@@ -90,18 +90,54 @@ mod tests {
     use super::*;
 
     fn n(id: u64, role: Role, name: &str, bbox: Option<Rect>, children: Vec<A11yNode>) -> A11yNode {
-        A11yNode { node: NodeId(id as usize), role, name: name.to_string(), bbox, z: 0, children }
+        A11yNode {
+            node: NodeId(id as usize),
+            role,
+            name: name.to_string(),
+            bbox,
+            z: 0,
+            children,
+        }
     }
     fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
-        Rect { x, y, width: w, height: h }
+        Rect {
+            x,
+            y,
+            width: w,
+            height: h,
+        }
     }
 
     fn login_form() -> A11yNode {
-        n(1, Role::Document, "", Some(rect(0.0, 0.0, 1000.0, 800.0)), vec![
-            n(2, Role::TextBox, "Email", Some(rect(400.0, 200.0, 200.0, 30.0)), vec![]),
-            n(3, Role::TextBox, "Password", Some(rect(400.0, 250.0, 200.0, 30.0)), vec![]),
-            n(4, Role::Button, "Sign in", Some(rect(400.0, 300.0, 200.0, 40.0)), vec![]),
-        ])
+        n(
+            1,
+            Role::Document,
+            "",
+            Some(rect(0.0, 0.0, 1000.0, 800.0)),
+            vec![
+                n(
+                    2,
+                    Role::TextBox,
+                    "Email",
+                    Some(rect(400.0, 200.0, 200.0, 30.0)),
+                    vec![],
+                ),
+                n(
+                    3,
+                    Role::TextBox,
+                    "Password",
+                    Some(rect(400.0, 250.0, 200.0, 30.0)),
+                    vec![],
+                ),
+                n(
+                    4,
+                    Role::Button,
+                    "Sign in",
+                    Some(rect(400.0, 300.0, 200.0, 40.0)),
+                    vec![],
+                ),
+            ],
+        )
     }
     fn vp() -> Rect {
         rect(0.0, 0.0, 1000.0, 800.0)
@@ -110,9 +146,14 @@ mod tests {
     #[test]
     fn grounds_click_text_to_the_button() {
         let tree = login_form();
-        let a = Action::ClickText { role: "button".into(), name: "Sign in".into() };
+        let a = Action::ClickText {
+            role: "button".into(),
+            name: "Sign in".into(),
+        };
         match ground_action(&a, &tree, vp(), DEFAULT_MIN_CONFIDENCE) {
-            Grounded::Ready { node, name, point, .. } => {
+            Grounded::Ready {
+                node, name, point, ..
+            } => {
                 assert_eq!(node, NodeId(4));
                 assert_eq!(name, "Sign in");
                 assert_eq!(point, (500.0, 320.0));
@@ -124,7 +165,10 @@ mod tests {
     #[test]
     fn grounds_type_to_the_named_field() {
         let tree = login_form();
-        let a = Action::Type { field: "Password".into(), text: "hunter2".into() };
+        let a = Action::Type {
+            field: "Password".into(),
+            text: "hunter2".into(),
+        };
         match ground_action(&a, &tree, vp(), DEFAULT_MIN_CONFIDENCE) {
             Grounded::Ready { node, .. } => assert_eq!(node, NodeId(3), "the Password box"),
             other => panic!("expected Ready, got {other:?}"),
@@ -135,34 +179,71 @@ mod tests {
     fn direct_actions_need_no_target() {
         let tree = login_form();
         for a in [
-            Action::Navigate { url: "https://x".into() },
+            Action::Navigate {
+                url: "https://x".into(),
+            },
             Action::Scroll { dy: 100.0 },
             Action::Back,
             Action::ClickAt { x: 1.0, y: 2.0 },
-            Action::Finish { answer: "done".into() },
+            Action::Finish {
+                answer: "done".into(),
+            },
         ] {
-            assert_eq!(ground_action(&a, &tree, vp(), DEFAULT_MIN_CONFIDENCE), Grounded::Direct);
+            assert_eq!(
+                ground_action(&a, &tree, vp(), DEFAULT_MIN_CONFIDENCE),
+                Grounded::Direct
+            );
         }
     }
 
     #[test]
     fn unmatched_intent_is_unresolved() {
         let tree = login_form();
-        let a = Action::ClickText { role: "button".into(), name: "Checkout".into() };
-        assert_eq!(ground_action(&a, &tree, vp(), DEFAULT_MIN_CONFIDENCE), Grounded::Unresolved);
+        let a = Action::ClickText {
+            role: "button".into(),
+            name: "Checkout".into(),
+        };
+        assert_eq!(
+            ground_action(&a, &tree, vp(), DEFAULT_MIN_CONFIDENCE),
+            Grounded::Unresolved
+        );
     }
 
     #[test]
     fn near_ties_are_flagged_ambiguous() {
         // Two identically-named buttons, equally salient → the winner's lead is tiny.
-        let tree = n(1, Role::Document, "", Some(rect(0.0, 0.0, 1000.0, 800.0)), vec![
-            n(2, Role::Button, "Continue", Some(rect(380.0, 380.0, 100.0, 40.0)), vec![]),
-            n(3, Role::Button, "Continue", Some(rect(520.0, 380.0, 100.0, 40.0)), vec![]),
-        ]);
-        let a = Action::ClickText { role: "button".into(), name: "Continue".into() };
+        let tree = n(
+            1,
+            Role::Document,
+            "",
+            Some(rect(0.0, 0.0, 1000.0, 800.0)),
+            vec![
+                n(
+                    2,
+                    Role::Button,
+                    "Continue",
+                    Some(rect(380.0, 380.0, 100.0, 40.0)),
+                    vec![],
+                ),
+                n(
+                    3,
+                    Role::Button,
+                    "Continue",
+                    Some(rect(520.0, 380.0, 100.0, 40.0)),
+                    vec![],
+                ),
+            ],
+        );
+        let a = Action::ClickText {
+            role: "button".into(),
+            name: "Continue".into(),
+        };
         match ground_action(&a, &tree, vp(), DEFAULT_MIN_CONFIDENCE) {
             Grounded::Ambiguous { confidence, .. } => {
-                assert!(confidence < DEFAULT_MIN_CONFIDENCE, "flagged below threshold: {confidence}");
+                assert!(
+                    confidence < DEFAULT_MIN_CONFIDENCE,
+                    "flagged below threshold: {confidence}"
+                );
             }
             other => panic!("expected Ambiguous, got {other:?}"),
         }

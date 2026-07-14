@@ -72,10 +72,10 @@ fn forms_serialize_correctly_and_submit_is_cancellable() {
     // (1)+(2) Serialization — the details a server branches on.
     let got = text(&page, "#out");
     for claim in [
-        "q:true",                   // a plain named control
-        "checked_on:true",          // a checked box with no `value` is "on", not ""
-        "unchecked_absent:true",    // an unchecked box is not a successful control at all
-        "urlencode_plus:true",      // form-urlencoded: a space is `+`, not %20
+        "q:true",                // a plain named control
+        "checked_on:true",       // a checked box with no `value` is "on", not ""
+        "unchecked_absent:true", // an unchecked box is not a successful control at all
+        "urlencode_plus:true",   // form-urlencoded: a space is `+`, not %20
         "formdata_serializes:true",
         "submit_is_fn:true",
         "requestSubmit_is_fn:true",

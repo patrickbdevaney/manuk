@@ -187,10 +187,14 @@ impl<'a> TNode for StyloNode<'a> {
     type ConcreteShadowRoot = StyloShadowRoot<'a>;
 
     fn parent_node(&self) -> Option<Self> {
-        self.dom.parent(self.node).map(|n| StyloNode::make(self.dom, n, self.store))
+        self.dom
+            .parent(self.node)
+            .map(|n| StyloNode::make(self.dom, n, self.store))
     }
     fn first_child(&self) -> Option<Self> {
-        self.dom.first_child(self.node).map(|n| StyloNode::make(self.dom, n, self.store))
+        self.dom
+            .first_child(self.node)
+            .map(|n| StyloNode::make(self.dom, n, self.store))
     }
     fn last_child(&self) -> Option<Self> {
         let mut last = None;
@@ -205,10 +209,15 @@ impl<'a> TNode for StyloNode<'a> {
         prev_sibling(self.dom, self.node).map(|n| StyloNode::make(self.dom, n, self.store))
     }
     fn next_sibling(&self) -> Option<Self> {
-        self.dom.next_sibling(self.node).map(|n| StyloNode::make(self.dom, n, self.store))
+        self.dom
+            .next_sibling(self.node)
+            .map(|n| StyloNode::make(self.dom, n, self.store))
     }
     fn owner_doc(&self) -> Self::ConcreteDocument {
-        StyloDocument { dom: self.dom, store: self.store }
+        StyloDocument {
+            dom: self.dom,
+            store: self.store,
+        }
     }
     fn is_in_document(&self) -> bool {
         true
@@ -227,13 +236,19 @@ impl<'a> TNode for StyloNode<'a> {
     }
     fn as_document(&self) -> Option<Self::ConcreteDocument> {
         // The arena's Document node is the root; treat only it as the document.
-        (self.node == self.dom.root())
-            .then_some(StyloDocument { dom: self.dom, store: self.store })
+        (self.node == self.dom.root()).then_some(StyloDocument {
+            dom: self.dom,
+            store: self.store,
+        })
     }
     fn as_shadow_root(&self) -> Option<Self::ConcreteShadowRoot> {
         self.dom
             .is_shadow_root(self.node)
-            .then_some(StyloShadowRoot { dom: self.dom, node: self.node, store: self.store })
+            .then_some(StyloShadowRoot {
+                dom: self.dom,
+                node: self.node,
+                store: self.store,
+            })
     }
 }
 

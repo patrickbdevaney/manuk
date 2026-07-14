@@ -139,10 +139,7 @@ impl SessionStore {
     pub fn save_collection(&self, name: &str, tabs: &[TabRecord]) -> Result<()> {
         self.ensure_dir()?;
         let mut all = self.load_collections_map()?;
-        all.insert(
-            name.to_string(),
-            tabs.iter().map(redact_record).collect(),
-        );
+        all.insert(name.to_string(), tabs.iter().map(redact_record).collect());
         write_json(&self.collections_path(), &all)
     }
 
@@ -218,7 +215,11 @@ pub fn tabs_matching(browser: &Browser, selector: &TabSelector) -> Vec<manuk_com
         TabSelector::Domain(d) => {
             let want = normalize_host(d);
             tabs.iter()
-                .filter(|t| host_of(&t.url).map(|h| normalize_host(&h) == want).unwrap_or(false))
+                .filter(|t| {
+                    host_of(&t.url)
+                        .map(|h| normalize_host(&h) == want)
+                        .unwrap_or(false)
+                })
                 .map(|t| t.id)
                 .collect()
         }
@@ -259,7 +260,11 @@ pub struct BrowserTabs<'a> {
 
 impl<'a> BrowserTabs<'a> {
     pub fn new(browser: &'a mut Browser, known: Vec<TabRecord>, settings: Settings) -> Self {
-        BrowserTabs { browser, known, settings }
+        BrowserTabs {
+            browser,
+            known,
+            settings,
+        }
     }
 }
 
@@ -274,7 +279,8 @@ impl manuk_agent::TabController for BrowserTabs<'_> {
 
     fn open_search(&mut self, query: &str) -> String {
         let url = chrome::search_url(query, &self.settings);
-        self.browser.open_restored(url.clone(), format!("Search: {query}"), false);
+        self.browser
+            .open_restored(url.clone(), format!("Search: {query}"), false);
         url
     }
 }
@@ -296,7 +302,11 @@ pub fn open_from_saved(
 /// **Open a tab with a search query.** A convenience wrapper over navigate using the
 /// configurable search template (default Google via [`chrome::GOOGLE_SEARCH_TEMPLATE`]), not
 /// a hardcoded provider. Opens hibernated; returns the new tab id.
-pub fn open_search(browser: &mut Browser, query: &str, settings: &Settings) -> manuk_compositor::TabId {
+pub fn open_search(
+    browser: &mut Browser,
+    query: &str,
+    settings: &Settings,
+) -> manuk_compositor::TabId {
     let url = chrome::search_url(query, settings);
     browser.open_restored(url, format!("Search: {query}"), false)
 }
@@ -394,11 +404,16 @@ fn redact_record(r: &TabRecord) -> TabRecord {
 // -- host helpers ------------------------------------------------------------
 
 fn host_of(url: &str) -> Option<String> {
-    url::Url::parse(url).ok().and_then(|u| u.host_str().map(str::to_string))
+    url::Url::parse(url)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_string))
 }
 
 fn normalize_host(h: &str) -> String {
-    h.trim().to_ascii_lowercase().trim_start_matches("www.").to_string()
+    h.trim()
+        .to_ascii_lowercase()
+        .trim_start_matches("www.")
+        .to_string()
 }
 
 // -- json io -----------------------------------------------------------------
@@ -410,9 +425,10 @@ fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
 
 fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<Option<T>> {
     match std::fs::read(path) {
-        Ok(bytes) => Ok(Some(serde_json::from_slice(&bytes).with_context(|| {
-            format!("parsing {}", path.display())
-        })?)),
+        Ok(bytes) => Ok(Some(
+            serde_json::from_slice(&bytes)
+                .with_context(|| format!("parsing {}", path.display()))?,
+        )),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(e).with_context(|| format!("reading {}", path.display())),
     }
@@ -440,7 +456,13 @@ mod tests {
         let mut browser = Browser::new(8);
         let session = Session {
             tabs: (0..40)
-                .map(|i| TabRecord::new(format!("https://site{i}.test/"), format!("Site {i}"), i == 0))
+                .map(|i| {
+                    TabRecord::new(
+                        format!("https://site{i}.test/"),
+                        format!("Site {i}"),
+                        i == 0,
+                    )
+                })
                 .collect(),
             focused: Some(3),
         };
@@ -456,7 +478,10 @@ mod tests {
         // The focused index maps to the focused tab, and pinned metadata survived.
         let f = focused.expect("a focused tab");
         assert_eq!(browser.active(), Some(f));
-        assert!(browser.tab(browser.tabs()[0].id).unwrap().is_pinned(), "tab 0 was pinned");
+        assert!(
+            browser.tab(browser.tabs()[0].id).unwrap().is_pinned(),
+            "tab 0 was pinned"
+        );
         assert!(!browser.tabs()[1].is_pinned());
     }
 
@@ -504,11 +529,17 @@ mod tests {
 
         assert_eq!(relaunched.tabs().len(), 3);
         let urls: Vec<&str> = relaunched.tabs().iter().map(|t| t.url.as_str()).collect();
-        assert_eq!(urls, vec!["https://a.test/", "https://b.test/", "https://c.test/"]);
+        assert_eq!(
+            urls,
+            vec!["https://a.test/", "https://b.test/", "https://c.test/"]
+        );
         assert!(relaunched.tabs()[0].is_pinned(), "pinned survived");
         // The middle tab was focused, so it is the one restored active.
         assert_eq!(relaunched.active(), restored);
-        assert_eq!(relaunched.tab(restored.unwrap()).unwrap().url, "https://b.test/");
+        assert_eq!(
+            relaunched.tab(restored.unwrap()).unwrap().url,
+            "https://b.test/"
+        );
         // Every tab comes back hibernated — no eager page loads on restore.
         assert!(relaunched.tabs().iter().all(|t| t.page().is_none()));
     }
@@ -548,10 +579,16 @@ mod tests {
 
         assert_eq!(store.load_collection("work").unwrap().unwrap(), work);
         assert_eq!(store.load_collection("reading").unwrap().unwrap(), read);
-        assert_eq!(store.list_collections().unwrap(), vec!["reading".to_string(), "work".to_string()]);
+        assert_eq!(
+            store.list_collections().unwrap(),
+            vec!["reading".to_string(), "work".to_string()]
+        );
 
         // Saving/deleting a collection never disturbs the session.
-        assert_eq!(store.load_session().unwrap().unwrap().tabs[0].url, "https://session.test/");
+        assert_eq!(
+            store.load_session().unwrap().unwrap().tabs[0].url,
+            "https://session.test/"
+        );
         assert!(store.delete_collection("work").unwrap());
         assert!(store.load_collection("work").unwrap().is_none());
         assert_eq!(store.load_collection("reading").unwrap().unwrap(), read); // untouched
@@ -592,7 +629,10 @@ mod tests {
         load(&mut b, t1, "https://b.test/");
         b.set_loaded(t1, "https://b.test/".into(), "Dashboard".into(), 0.0);
 
-        assert_eq!(close_matching(&mut b, &TabSelector::Title("invoice".into())), 1);
+        assert_eq!(
+            close_matching(&mut b, &TabSelector::Title("invoice".into())),
+            1
+        );
         assert_eq!(b.tabs().len(), 1);
         assert_eq!(close_matching(&mut b, &TabSelector::Indices(vec![0])), 1);
         assert!(b.tabs().is_empty());
@@ -659,10 +699,22 @@ mod tests {
         assert_eq!(outcome.answer.as_deref(), Some("ok"));
 
         let urls: Vec<&str> = b.tabs().iter().map(|t| t.url.as_str()).collect();
-        assert!(!urls.iter().any(|u| u.contains("ads.test")), "ads.test closed: {urls:?}");
-        assert!(urls.iter().any(|u| *u == "https://keep.test/"), "keep.test survived");
-        assert!(urls.iter().any(|u| *u == "https://known.test/p"), "known url opened");
-        assert!(urls.iter().any(|u| u.contains("google.com/search")), "search tab opened via default engine");
+        assert!(
+            !urls.iter().any(|u| u.contains("ads.test")),
+            "ads.test closed: {urls:?}"
+        );
+        assert!(
+            urls.iter().any(|u| *u == "https://keep.test/"),
+            "keep.test survived"
+        );
+        assert!(
+            urls.iter().any(|u| *u == "https://known.test/p"),
+            "known url opened"
+        );
+        assert!(
+            urls.iter().any(|u| u.contains("google.com/search")),
+            "search tab opened via default engine"
+        );
     }
 
     #[test]
@@ -708,12 +760,19 @@ mod tests {
         let store = SessionStore::with_dir(&dir);
         store
             .save_session(&Session {
-                tabs: vec![TabRecord::new("https://u:p@host.test/x?token=abc", "T", false)],
+                tabs: vec![TabRecord::new(
+                    "https://u:p@host.test/x?token=abc",
+                    "T",
+                    false,
+                )],
                 focused: Some(0),
             })
             .unwrap();
         let raw = std::fs::read_to_string(dir.join("session.json")).unwrap();
         assert!(!raw.contains("abc"), "token must not be on disk: {raw}");
-        assert!(!raw.contains(":p@") && !raw.contains("u:p"), "creds must not be on disk: {raw}");
+        assert!(
+            !raw.contains(":p@") && !raw.contains("u:p"),
+            "creds must not be on disk: {raw}"
+        );
     }
 }

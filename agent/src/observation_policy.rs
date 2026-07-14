@@ -138,7 +138,9 @@ mod tests {
                     href: format!("https://ex.test/{i}"),
                 })
                 .collect(),
-            semantics: (0..150).map(|i| format!("button \"b{i}\" @(1,{i})")).collect(),
+            semantics: (0..150)
+                .map(|i| format!("button \"b{i}\" @(1,{i})"))
+                .collect(),
             scroll_y: 0.0,
             content_height: 1000.0,
             viewport: (800, 600),
@@ -246,11 +248,20 @@ mod tests {
         // alone is ~950 tokens here, the full rich prompt several thousand.
         let full = estimate_tokens(&o.to_prompt_with(&ObservationPolicy::rich()));
         let budget = 1500;
-        assert!(budget < full, "the budget must actually bind (full = {full})");
+        assert!(
+            budget < full,
+            "the budget must actually bind (full = {full})"
+        );
 
         let prompt = o.to_prompt_with(&ObservationPolicy::rich().with_token_budget(budget));
-        assert!(prompt.contains("ACCESSIBILITY TREE"), "the tree must survive the text");
-        assert!(!prompt.contains("VISIBLE TEXT"), "raw text is dropped first");
+        assert!(
+            prompt.contains("ACCESSIBILITY TREE"),
+            "the tree must survive the text"
+        );
+        assert!(
+            !prompt.contains("VISIBLE TEXT"),
+            "raw text is dropped first"
+        );
         assert!(estimate_tokens(&prompt) <= budget);
     }
 

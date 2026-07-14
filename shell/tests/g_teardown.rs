@@ -61,7 +61,8 @@ fn main_flushes_the_profile_before_tearing_down_js() {
         .expect("shell main.rs");
     let pos = |needle: &str| src.find(needle);
 
-    let cookies = pos("save_cookies()").expect("G_TEARDOWN: main must flush the cookie jar on exit");
+    let cookies =
+        pos("save_cookies()").expect("G_TEARDOWN: main must flush the cookie jar on exit");
     let storage =
         pos("webstorage::save()").expect("G_TEARDOWN: main must flush localStorage on exit");
     let shutdown =

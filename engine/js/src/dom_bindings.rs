@@ -37,7 +37,10 @@ use std::ptr::{self, NonNull};
 
 use mozjs::context::JSContext;
 use mozjs::conversions::{ConversionResult, FromJSValConvertible, ToJSValConvertible};
+use mozjs::gc::RootedTraceableBox;
 use mozjs::glue::JS_GetReservedSlot;
+use mozjs::jsapi::Heap;
+use mozjs::jsapi::OnNewGlobalHookOption;
 use mozjs::jsapi::{
     JSClass, JSContext as RawJSContext, JSObject, JS_SetReservedSlot, Value, JSPROP_ENUMERATE,
 };
@@ -46,14 +49,13 @@ use mozjs::jsval::{
 };
 use mozjs::rooted;
 use mozjs::rust::wrappers2::{
-    CurrentGlobalOrNull, JS_DefineFunction, JS_DefineProperty, JS_DefineProperty1, JS_NewObject,
-    JS_GetElement, JS_GetProperty, JS_NewGlobalObject, JS_SetElement, JS_SetElement1, JS_SetProperty,
-    NewArrayObject1,
+    CurrentGlobalOrNull, JS_DefineFunction, JS_DefineProperty, JS_DefineProperty1, JS_GetElement,
+    JS_GetProperty, JS_NewGlobalObject, JS_NewObject, JS_SetElement, JS_SetElement1,
+    JS_SetProperty, NewArrayObject1,
 };
-use mozjs::jsapi::OnNewGlobalHookOption;
-use mozjs::gc::RootedTraceableBox;
-use mozjs::jsapi::Heap;
-use mozjs::rust::{evaluate_script, CompileOptionsWrapper, RealmOptions, Runtime, SIMPLE_GLOBAL_CLASS};
+use mozjs::rust::{
+    evaluate_script, CompileOptionsWrapper, RealmOptions, Runtime, SIMPLE_GLOBAL_CLASS,
+};
 
 use manuk_dom::{Dom, NodeData, NodeId};
 
@@ -171,7 +173,9 @@ fn set_view_maps(
 fn layout_rect(node: NodeId) -> Option<[f32; 4]> {
     LAYOUT_RECTS_PTR.with(|c| {
         let p = c.get();
-        (!p.is_null()).then(|| unsafe { (*p).get(&node).copied() }).flatten()
+        (!p.is_null())
+            .then(|| unsafe { (*p).get(&node).copied() })
+            .flatten()
     })
 }
 
@@ -292,11 +296,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle) -> String {
 
 /// `getComputedStyle(element)` → a snapshot style object (camelCase props + a
 /// `getPropertyValue("kebab-case")` accessor). Reads the pre-script computed styles.
-unsafe fn window_get_computed_style(
-    cx: *mut RawJSContext,
-    argc: u32,
-    vp: *mut Value,
-) -> bool {
+unsafe fn window_get_computed_style(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let node = arg_object(vp, argc, 0).and_then(|o| node_and_dom(o).map(|(_, n)| n));
     let js = node.and_then(|n| with_style(n, computed_style_js));
     let src = js.unwrap_or_else(|| "({})".to_string());
@@ -374,11 +374,7 @@ unsafe fn el_panic_probe(_cx: *mut RawJSContext, _argc: u32, _vp: *mut Value) ->
 /// function's own `nounwind` boundary before any outer `catch_unwind` is ever reached. **That mistake was
 /// made here first, and the containment silently did not work.** Hence every native below is a plain Rust
 /// `unsafe fn`, and the generated trampoline is the *only* `extern "C"` frame.
-unsafe fn guard_native(
-    f: impl FnOnce() -> bool,
-    name: &'static str,
-    vp: *mut Value,
-) -> bool {
+unsafe fn guard_native(f: impl FnOnce() -> bool, name: &'static str, vp: *mut Value) -> bool {
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
         Ok(ok) => ok,
         Err(_) => {
@@ -477,7 +473,11 @@ unsafe fn node_and_dom(obj: *mut JSObject) -> Option<(*mut Dom, NodeId)> {
 /// The receiver object itself (`this`, at `vp[1]`) — for stashing state on the reflector.
 unsafe fn this_object(vp: *mut Value) -> Option<*mut JSObject> {
     let this = *vp.add(1);
-    if this.is_object() { Some(this.to_object()) } else { None }
+    if this.is_object() {
+        Some(this.to_object())
+    } else {
+        None
+    }
 }
 
 /// `(dom, node)` for the method receiver (`this`, at `vp[1]`).
@@ -603,7 +603,8 @@ unsafe fn new_reflector(cx: *mut RawJSContext, dom: *mut Dom, node: NodeId) -> *
     // Identity cache: one wrapper per node, so `a.firstChild === b`, `event.target === el`
     // and the like hold (real sites rely on node identity). The cache is a JS-side
     // `__nodes` map, so its entries are GC-reachable through the global.
-    if let Some(v) = eval_in_current_global(cx, &format!("(globalThis.__nodes&&__nodes[{id}])||null"))
+    if let Some(v) =
+        eval_in_current_global(cx, &format!("(globalThis.__nodes&&__nodes[{id}])||null"))
     {
         if v.is_object() {
             return v.to_object();
@@ -637,7 +638,12 @@ unsafe fn new_reflector(cx: *mut RawJSContext, dom: *mut Dom, node: NodeId) -> *
     if !global.is_null() {
         rooted!(in(cx) let g = global);
         rooted!(in(cx) let ov = ObjectValue(obj.get()));
-        JS_SetProperty(&mut wrap_cx(cx), g.handle(), c"__pending_node".as_ptr(), ov.handle());
+        JS_SetProperty(
+            &mut wrap_cx(cx),
+            g.handle(),
+            c"__pending_node".as_ptr(),
+            ov.handle(),
+        );
         let _ = eval_in_current_global(
             cx,
             &format!(
@@ -696,10 +702,17 @@ unsafe fn record_mutation(
         let _ = new_reflector(cx, dom, n);
     }
     let ids = |v: &[NodeId]| {
-        v.iter().map(|n| n.0.to_string()).collect::<Vec<_>>().join(",")
+        v.iter()
+            .map(|n| n.0.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
     };
-    let attr_lit = attr.map(js_string_literal).unwrap_or_else(|| "null".to_string());
-    let old_lit = old_value.map(js_string_literal).unwrap_or_else(|| "null".to_string());
+    let attr_lit = attr
+        .map(js_string_literal)
+        .unwrap_or_else(|| "null".to_string());
+    let old_lit = old_value
+        .map(js_string_literal)
+        .unwrap_or_else(|| "null".to_string());
     let script = format!(
         "if(globalThis.__recordMutation)__recordMutation({},{},{},{},{},{})",
         js_string_literal(kind),
@@ -767,7 +780,12 @@ unsafe fn define_members(
         def_guarded!(def, c"importNode", doc_import_node, 2);
         def_guarded!(def, c"createComment", doc_create_comment, 1);
         def_guarded!(def, c"createDocumentFragment", doc_create_fragment, 0);
-        prop_guarded!(prop, c"adoptedStyleSheets", el_get_adopted_stylesheets, Some(el_set_adopted_stylesheets));
+        prop_guarded!(
+            prop,
+            c"adoptedStyleSheets",
+            el_get_adopted_stylesheets,
+            Some(el_set_adopted_stylesheets)
+        );
         def_guarded!(def, c"append", el_append, 1);
         def_guarded!(def, c"prepend", el_prepend, 1);
         def_guarded!(def, c"replaceChildren", el_replace_children, 0);
@@ -824,10 +842,20 @@ unsafe fn define_members(
         def_guarded!(def, c"normalize", el_normalize, 0);
         prop_guarded!(prop, c"childElementCount", el_child_element_count, None);
         prop_guarded!(prop, c"lastElementChild", el_last_element_child, None);
-        prop_guarded!(prop, c"outerHTML", el_get_outer_html, Some(el_set_outer_html));
+        prop_guarded!(
+            prop,
+            c"outerHTML",
+            el_get_outer_html,
+            Some(el_set_outer_html)
+        );
         prop_guarded!(prop, c"innerText", el_get_inner_text, None);
         def_guarded!(def, c"attachShadow", el_attach_shadow, 1);
-        prop_guarded!(prop, c"adoptedStyleSheets", el_get_adopted_stylesheets, Some(el_set_adopted_stylesheets));
+        prop_guarded!(
+            prop,
+            c"adoptedStyleSheets",
+            el_get_adopted_stylesheets,
+            Some(el_set_adopted_stylesheets)
+        );
         def_guarded!(def, c"getElementsByTagName", el_get_by_tag, 1);
         def_guarded!(def, c"getElementsByClassName", el_get_by_class, 1);
         def_guarded!(def, c"querySelector", doc_query, 1);
@@ -856,19 +884,44 @@ unsafe fn define_members(
         prop_guarded!(prop, c"firstElementChild", el_get_first_element_child, None);
         prop_guarded!(prop, c"nextSibling", el_get_next_sibling, None);
         prop_guarded!(prop, c"previousSibling", el_get_prev_sibling, None);
-        prop_guarded!(prop, c"nextElementSibling", el_get_next_element_sibling, None);
-        prop_guarded!(prop, c"previousElementSibling", el_get_prev_element_sibling, None);
+        prop_guarded!(
+            prop,
+            c"nextElementSibling",
+            el_get_next_element_sibling,
+            None
+        );
+        prop_guarded!(
+            prop,
+            c"previousElementSibling",
+            el_get_prev_element_sibling,
+            None
+        );
         prop_guarded!(prop, c"children", el_get_children, None);
         prop_guarded!(prop, c"childNodes", el_get_child_nodes, None);
         // Control IDL reflections.
         prop_guarded!(prop, c"value", el_get_value, Some(el_set_value));
         prop_guarded!(prop, c"checked", el_get_checked, Some(el_set_checked));
         // Accessor properties (jQuery-core read/write surface).
-        prop_guarded!(prop, c"textContent", el_get_text_content, Some(el_set_text_content));
-        prop_guarded!(prop, c"innerHTML", el_get_inner_html, Some(el_set_inner_html));
+        prop_guarded!(
+            prop,
+            c"textContent",
+            el_get_text_content,
+            Some(el_set_text_content)
+        );
+        prop_guarded!(
+            prop,
+            c"innerHTML",
+            el_get_inner_html,
+            Some(el_set_inner_html)
+        );
         prop_guarded!(prop, c"tagName", el_get_tag_name, None); // read-only
         prop_guarded!(prop, c"id", el_get_id, Some(el_set_id));
-        prop_guarded!(prop, c"className", el_get_class_name, Some(el_set_class_name));
+        prop_guarded!(
+            prop,
+            c"className",
+            el_get_class_name,
+            Some(el_set_class_name)
+        );
         // Reflected content attributes. `createElement` → assign → `appendChild` is how the modern
         // web builds elements; without reflection the element that reaches the tree is empty.
         prop_guarded!(prop, c"href", el_get_href, Some(el_set_href));
@@ -878,14 +931,24 @@ unsafe fn define_members(
         prop_guarded!(prop, c"alt", el_get_alt, Some(el_set_alt));
         prop_guarded!(prop, c"title", el_get_title, Some(el_set_title));
         prop_guarded!(prop, c"name", el_get_name, Some(el_set_name));
-        prop_guarded!(prop, c"placeholder", el_get_placeholder, Some(el_set_placeholder));
+        prop_guarded!(
+            prop,
+            c"placeholder",
+            el_get_placeholder,
+            Some(el_set_placeholder)
+        );
         prop_guarded!(prop, c"action", el_get_action, Some(el_set_action));
         prop_guarded!(prop, c"method", el_get_method, Some(el_set_method));
         prop_guarded!(prop, c"target", el_get_target, Some(el_set_target));
         // ONE `content` property, dispatched: `<template>` gets its fragment, everything
         // else (`<meta content>`) gets the attribute. Registering it twice meant the second
         // registration silently won, which is how `<template>.content` stayed undefined.
-        prop_guarded!(prop, c"content", el_get_template_content, Some(el_set_content));
+        prop_guarded!(
+            prop,
+            c"content",
+            el_get_template_content,
+            Some(el_set_content)
+        );
         prop_guarded!(prop, c"media", el_get_media, Some(el_set_media));
         prop_guarded!(prop, c"srcset", el_get_srcset, Some(el_set_srcset));
         prop_guarded!(prop, c"htmlFor", el_get_html_for, Some(el_set_html_for));
@@ -1064,8 +1127,20 @@ unsafe fn el_set_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> 
         return true;
     };
     if let (Some(name), Some(value)) = (arg_string(cx, vp, argc, 0), arg_string(cx, vp, argc, 1)) {
-        let old = (*dom).element(node).and_then(|e| e.attr(&name)).map(|s| s.to_string());
-        record_mutation(cx, dom, "attributes", node, Some(&name), old.as_deref(), &[], &[]);
+        let old = (*dom)
+            .element(node)
+            .and_then(|e| e.attr(&name))
+            .map(|s| s.to_string());
+        record_mutation(
+            cx,
+            dom,
+            "attributes",
+            node,
+            Some(&name),
+            old.as_deref(),
+            &[],
+            &[],
+        );
         (*dom).set_attr(node, name, value);
     }
     *vp = UndefinedValue();
@@ -1076,9 +1151,7 @@ unsafe fn el_set_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> 
 /// snapshot (`{x, y, width, height, top, right, bottom, left}`), or all-zero if unlaid-out.
 unsafe fn el_get_bounding_rect(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     let node = this_node(vp).map(|(_, n)| n);
-    let [x, y, w, h] = node
-        .and_then(layout_rect)
-        .unwrap_or([0.0, 0.0, 0.0, 0.0]);
+    let [x, y, w, h] = node.and_then(layout_rect).unwrap_or([0.0, 0.0, 0.0, 0.0]);
     let js = format!(
         "({{x:{x},y:{y},width:{w},height:{h},left:{x},top:{y},right:{r},bottom:{b}}})",
         r = x + w,
@@ -1162,18 +1235,33 @@ node_getter!(el_get_parent_node, |dom, n| unsafe { (*dom).parent(n) });
 node_getter!(el_get_parent_element, |dom, n| unsafe {
     (*dom).parent(n).filter(|&p| (*dom).is_element(p))
 });
-node_getter!(el_get_first_child, |dom, n| unsafe { (*dom).first_child(n) });
+node_getter!(el_get_first_child, |dom, n| unsafe {
+    (*dom).first_child(n)
+});
 node_getter!(el_get_last_child, |dom, n| unsafe { (*dom).last_child(n) });
-node_getter!(el_get_next_sibling, |dom, n| unsafe { (*dom).next_sibling(n) });
-node_getter!(el_get_prev_sibling, |dom, n| unsafe { (*dom).prev_sibling(n) });
-node_getter!(el_get_first_element_child, |d, n| unsafe { first_element_child(d, n) });
-node_getter!(el_get_next_element_sibling, |d, n| unsafe { next_element(d, n) });
-node_getter!(el_get_prev_element_sibling, |d, n| unsafe { prev_element(d, n) });
+node_getter!(el_get_next_sibling, |dom, n| unsafe {
+    (*dom).next_sibling(n)
+});
+node_getter!(el_get_prev_sibling, |dom, n| unsafe {
+    (*dom).prev_sibling(n)
+});
+node_getter!(el_get_first_element_child, |d, n| unsafe {
+    first_element_child(d, n)
+});
+node_getter!(el_get_next_element_sibling, |d, n| unsafe {
+    next_element(d, n)
+});
+node_getter!(el_get_prev_element_sibling, |d, n| unsafe {
+    prev_element(d, n)
+});
 
 /// `element.children` — element children as a static Array.
 unsafe fn el_get_children(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
-        let kids: Vec<NodeId> = (*dom).children(node).filter(|&c| (*dom).is_element(c)).collect();
+        let kids: Vec<NodeId> = (*dom)
+            .children(node)
+            .filter(|&c| (*dom).is_element(c))
+            .collect();
         node_array(cx, vp, dom, &kids);
     } else {
         *vp = NullValue();
@@ -1195,7 +1283,12 @@ unsafe fn el_get_child_nodes(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) 
 /// `element.value` getter (form controls) — the `value` attribute, else empty string.
 unsafe fn el_get_value(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     let v = this_node(vp)
-        .and_then(|(dom, n)| (*dom).element(n).and_then(|e| e.attr("value")).map(str::to_owned))
+        .and_then(|(dom, n)| {
+            (*dom)
+                .element(n)
+                .and_then(|e| e.attr("value"))
+                .map(str::to_owned)
+        })
         .unwrap_or_default();
     return_string(cx, vp, &v);
     true
@@ -1273,11 +1366,7 @@ unsafe fn el_remove_child(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> b
 }
 
 /// `document.createTextNode(text)` → a detached text-node reflector.
-unsafe fn doc_create_text_node(
-    cx: *mut RawJSContext,
-    argc: u32,
-    vp: *mut Value,
-) -> bool {
+unsafe fn doc_create_text_node(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, _)) = this_node(vp) else {
         *vp = NullValue();
         return true;
@@ -1345,8 +1434,20 @@ unsafe fn el_clone_node(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> boo
 unsafe fn el_remove_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         if let Some(name) = arg_string(cx, vp, argc, 0) {
-            let old = (*dom).element(node).and_then(|e| e.attr(&name)).map(|s| s.to_string());
-            record_mutation(cx, dom, "attributes", node, Some(&name), old.as_deref(), &[], &[]);
+            let old = (*dom)
+                .element(node)
+                .and_then(|e| e.attr(&name))
+                .map(|s| s.to_string());
+            record_mutation(
+                cx,
+                dom,
+                "attributes",
+                node,
+                Some(&name),
+                old.as_deref(),
+                &[],
+                &[],
+            );
             (*dom).remove_attr(node, &name);
         }
     }
@@ -1394,7 +1495,12 @@ unsafe fn el_attach_shadow(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> 
         Some(opts) => {
             rooted!(in(cx) let o = opts);
             rooted!(in(cx) let mut v = UndefinedValue());
-            let got = JS_GetProperty(&mut wrap_cx(cx), o.handle(), c"mode".as_ptr(), v.handle_mut());
+            let got = JS_GetProperty(
+                &mut wrap_cx(cx),
+                o.handle(),
+                c"mode".as_ptr(),
+                v.handle_mut(),
+            );
             let is_closed = got && {
                 let mut c = wrap_cx(cx);
                 matches!(
@@ -1449,10 +1555,7 @@ unsafe fn el_get_by_class(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> b
     };
     let raw = arg_string(cx, vp, argc, 0).unwrap_or_default();
     // "a b" → ".a.b" (all classes must be present), matching the DOM semantics.
-    let sel: String = raw
-        .split_whitespace()
-        .map(|c| format!(".{c}"))
-        .collect();
+    let sel: String = raw.split_whitespace().map(|c| format!(".{c}")).collect();
     let matches = if sel.is_empty() {
         Vec::new()
     } else {
@@ -1491,11 +1594,7 @@ unsafe fn return_string_array(cx: *mut RawJSContext, vp: *mut Value, items: &[St
 /// node in the JS-side listener registry (keyed by the node's arena id). The handler
 /// is stashed on the global, then a helper appends it — keeping it GC-rooted via the
 /// registry. Requires [`install`]'s registry prelude.
-unsafe fn el_add_event_listener(
-    cx: *mut RawJSContext,
-    argc: u32,
-    vp: *mut Value,
-) -> bool {
+unsafe fn el_add_event_listener(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((_, node)) = this_node(vp) else {
         *vp = UndefinedValue();
         return true;
@@ -1538,11 +1637,7 @@ unsafe fn el_add_event_listener(
 }
 
 /// `element.removeEventListener(type, handler[, capture])`.
-unsafe fn el_remove_event_listener(
-    cx: *mut RawJSContext,
-    argc: u32,
-    vp: *mut Value,
-) -> bool {
+unsafe fn el_remove_event_listener(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((_, node)) = this_node(vp) else {
         *vp = UndefinedValue();
         return true;
@@ -1563,7 +1658,12 @@ unsafe fn el_remove_event_listener(
     if !global.is_null() {
         rooted!(in(cx) let g = global);
         rooted!(in(cx) let fnval = *vp.add(3));
-        JS_SetProperty(&mut wrap_cx(cx), g.handle(), c"__pending_fn".as_ptr(), fnval.handle());
+        JS_SetProperty(
+            &mut wrap_cx(cx),
+            g.handle(),
+            c"__pending_fn".as_ptr(),
+            fnval.handle(),
+        );
         let script = format!(
             "__removeEventListener({}, {}, __pending_fn, {})",
             node.0,
@@ -1635,7 +1735,11 @@ unsafe fn insertion_is_valid(
     node: NodeId,
 ) -> bool {
     if (*dom).is_document(node) {
-        throw_dom(cx, "HierarchyRequestError", "a Document cannot be inserted into a node");
+        throw_dom(
+            cx,
+            "HierarchyRequestError",
+            "a Document cannot be inserted into a node",
+        );
         return false;
     }
     if (*dom).is_inclusive_ancestor(node, parent) {
@@ -1661,7 +1765,10 @@ unsafe fn insertion_is_valid(
 /// One arena, several roots: a document is not special storage, it is a node whose *type* is `Document`,
 /// so everything that already walks the tree works on it unchanged.
 unsafe fn doc_create_html_document(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
-    let Some((dom, _)) = this_node(vp) else { *vp = NullValue(); return true };
+    let Some((dom, _)) = this_node(vp) else {
+        *vp = NullValue();
+        return true;
+    };
     let doc = (*dom).create_document();
     let html = (*dom).create_element("html");
     (*dom).append_child(doc, html);
@@ -1733,11 +1840,7 @@ unsafe fn doc_query_all(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> boo
 // ---------------------------------------------------------------------------
 
 /// `element.textContent` getter → the element's concatenated text.
-unsafe fn el_get_text_content(
-    cx: *mut RawJSContext,
-    _argc: u32,
-    vp: *mut Value,
-) -> bool {
+unsafe fn el_get_text_content(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
         Some((dom, node)) => {
             let text = (*dom).text_content(node);
@@ -1819,7 +1922,8 @@ unsafe fn arg_as_node(
     argc: u32,
     i: u32,
 ) -> Option<NodeId> {
-    if let Some((_, n)) = arg_object(vp, argc, i).and_then(|o| node_and_dom(o).map(|(d, n)| (d, n))) {
+    if let Some((_, n)) = arg_object(vp, argc, i).and_then(|o| node_and_dom(o).map(|(d, n)| (d, n)))
+    {
         return Some(n);
     }
     arg_string(cx, vp, argc, i).map(|t| (*dom).create_text(t))
@@ -1832,7 +1936,9 @@ unsafe fn args_as_nodes(
     vp: *mut Value,
     argc: u32,
 ) -> Vec<NodeId> {
-    (0..argc).filter_map(|i| arg_as_node(cx, dom, vp, argc, i)).collect()
+    (0..argc)
+        .filter_map(|i| arg_as_node(cx, dom, vp, argc, i))
+        .collect()
 }
 
 /// `parent.append(...nodes)` — append each, after the last child.
@@ -1954,7 +2060,12 @@ fn adjacent_position(s: &str) -> Option<&'static str> {
 }
 
 /// Place `nodes` relative to `node` at one of the four `insertAdjacent*` positions.
-unsafe fn insert_adjacent(dom: *mut Dom, node: NodeId, pos: &str, nodes: &[NodeId]) -> Option<NodeId> {
+unsafe fn insert_adjacent(
+    dom: *mut Dom,
+    node: NodeId,
+    pos: &str,
+    nodes: &[NodeId],
+) -> Option<NodeId> {
     match pos {
         "afterbegin" => match (*dom).children(node).next() {
             Some(first) => {
@@ -2006,11 +2117,7 @@ unsafe fn insert_adjacent(dom: *mut Dom, node: NodeId, pos: &str, nodes: &[NodeI
 /// Parses `html` into a detached container and moves the resulting children into place. This is how a
 /// very large amount of non-framework JavaScript on the web writes markup — every "load more" button,
 /// every server-rendered partial swapped in by hand, and all of htmx.
-unsafe fn el_insert_adjacent_html(
-    cx: *mut RawJSContext,
-    argc: u32,
-    vp: *mut Value,
-) -> bool {
+unsafe fn el_insert_adjacent_html(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         let pos = arg_string(cx, vp, argc, 0).and_then(|p| adjacent_position(&p));
         let html = arg_string(cx, vp, argc, 1).unwrap_or_default();
@@ -2041,11 +2148,7 @@ unsafe fn el_insert_adjacent_html(
 /// so the throw aborted the loop invoking the completion callbacks and **29 of the first 40 WPT files
 /// reported nothing at all** — every one of them looking like a conformance failure rather than one
 /// missing method.
-unsafe fn el_insert_adjacent_text(
-    cx: *mut RawJSContext,
-    argc: u32,
-    vp: *mut Value,
-) -> bool {
+unsafe fn el_insert_adjacent_text(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         let pos = arg_string(cx, vp, argc, 0).and_then(|p| adjacent_position(&p));
         let text = arg_string(cx, vp, argc, 1).unwrap_or_default();
@@ -2060,11 +2163,7 @@ unsafe fn el_insert_adjacent_text(
     true
 }
 
-unsafe fn el_insert_adjacent_element(
-    cx: *mut RawJSContext,
-    argc: u32,
-    vp: *mut Value,
-) -> bool {
+unsafe fn el_insert_adjacent_element(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let mut out = NullValue();
     if let Some((dom, node)) = this_node(vp) {
         let pos = arg_string(cx, vp, argc, 0).and_then(|p| adjacent_position(&p));
@@ -2132,11 +2231,7 @@ unsafe fn el_get_inner_text(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -
 }
 
 /// `el.getAttributeNames()` → an array of attribute names.
-unsafe fn el_get_attribute_names(
-    cx: *mut RawJSContext,
-    _argc: u32,
-    vp: *mut Value,
-) -> bool {
+unsafe fn el_get_attribute_names(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     let names: Vec<String> = match this_node(vp) {
         Some((dom, node)) => (*dom)
             .element(node)
@@ -2177,8 +2272,12 @@ unsafe fn sheet_text(cx: *mut RawJSContext, sheet: *mut JSObject) -> String {
     // No `_text` — the sheet was built rule by rule with `insertRule`.
     let mut out = String::new();
     rooted!(in(cx) let mut rules = UndefinedValue());
-    if JS_GetProperty(&mut c, obj.handle(), c"cssRules".as_ptr(), rules.handle_mut())
-        && rules.get().is_object()
+    if JS_GetProperty(
+        &mut c,
+        obj.handle(),
+        c"cssRules".as_ptr(),
+        rules.handle_mut(),
+    ) && rules.get().is_object()
     {
         rooted!(in(cx) let arr = rules.get().to_object());
         rooted!(in(cx) let mut len = UndefinedValue());
@@ -2186,7 +2285,8 @@ unsafe fn sheet_text(cx: *mut RawJSContext, sheet: *mut JSObject) -> String {
             let n = len.get().to_number() as u32;
             for i in 0..n {
                 rooted!(in(cx) let mut rule = UndefinedValue());
-                if JS_GetElement(&mut c, arr.handle(), i, rule.handle_mut()) && rule.get().is_object()
+                if JS_GetElement(&mut c, arr.handle(), i, rule.handle_mut())
+                    && rule.get().is_object()
                 {
                     rooted!(in(cx) let ro = rule.get().to_object());
                     rooted!(in(cx) let mut txt = UndefinedValue());
@@ -2209,11 +2309,7 @@ unsafe fn sheet_text(cx: *mut RawJSContext, sheet: *mut JSObject) -> String {
 ///
 /// Stashes the array (so the getter round-trips, which libraries check) and materializes the combined
 /// text into a single `<style>` child of the root, replacing any it previously wrote.
-unsafe fn el_set_adopted_stylesheets(
-    cx: *mut RawJSContext,
-    argc: u32,
-    vp: *mut Value,
-) -> bool {
+unsafe fn el_set_adopted_stylesheets(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, node)) = this_node(vp) else {
         *vp = UndefinedValue();
         return true;
@@ -2222,7 +2318,12 @@ unsafe fn el_set_adopted_stylesheets(
     if let Some(this) = this_object(vp) {
         rooted!(in(cx) let tobj = this);
         rooted!(in(cx) let val = if argc > 0 { *vp.add(2) } else { UndefinedValue() });
-        JS_SetProperty(&mut wrap_cx(cx), tobj.handle(), c"__adopted".as_ptr(), val.handle());
+        JS_SetProperty(
+            &mut wrap_cx(cx),
+            tobj.handle(),
+            c"__adopted".as_ptr(),
+            val.handle(),
+        );
     }
 
     let mut css = String::new();
@@ -2234,7 +2335,8 @@ unsafe fn el_set_adopted_stylesheets(
             let n = len.get().to_number() as u32;
             for i in 0..n {
                 rooted!(in(cx) let mut item = UndefinedValue());
-                if JS_GetElement(&mut c, a.handle(), i, item.handle_mut()) && item.get().is_object() {
+                if JS_GetElement(&mut c, a.handle(), i, item.handle_mut()) && item.get().is_object()
+                {
                     css.push_str(&sheet_text(cx, item.get().to_object()));
                     css.push('\n');
                 }
@@ -2244,9 +2346,12 @@ unsafe fn el_set_adopted_stylesheets(
 
     // Reuse the `<style>` we wrote last time rather than stacking a new one on every re-adopt —
     // a component that re-renders would otherwise grow one style node per render.
-    let existing = (*dom)
-        .children(node)
-        .find(|&k| (*dom).element(k).map(|e| e.attr("data-manuk-adopted").is_some()).unwrap_or(false));
+    let existing = (*dom).children(node).find(|&k| {
+        (*dom)
+            .element(k)
+            .map(|e| e.attr("data-manuk-adopted").is_some())
+            .unwrap_or(false)
+    });
     match existing {
         Some(st) => {
             let old: Vec<NodeId> = (*dom).children(st).collect();
@@ -2274,16 +2379,16 @@ unsafe fn el_set_adopted_stylesheets(
 }
 
 /// `root.adoptedStyleSheets` getter — whatever was assigned, or `[]`.
-unsafe fn el_get_adopted_stylesheets(
-    cx: *mut RawJSContext,
-    _argc: u32,
-    vp: *mut Value,
-) -> bool {
+unsafe fn el_get_adopted_stylesheets(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     if let Some(this) = this_object(vp) {
         rooted!(in(cx) let tobj = this);
         rooted!(in(cx) let mut v = UndefinedValue());
-        if JS_GetProperty(&mut wrap_cx(cx), tobj.handle(), c"__adopted".as_ptr(), v.handle_mut())
-            && !v.get().is_undefined()
+        if JS_GetProperty(
+            &mut wrap_cx(cx),
+            tobj.handle(),
+            c"__adopted".as_ptr(),
+            v.handle_mut(),
+        ) && !v.get().is_undefined()
         {
             *vp = v.get();
             return true;
@@ -2399,11 +2504,7 @@ unsafe fn el_normalize(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bo
 }
 
 /// `parent.childElementCount`.
-unsafe fn el_child_element_count(
-    _cx: *mut RawJSContext,
-    _argc: u32,
-    vp: *mut Value,
-) -> bool {
+unsafe fn el_child_element_count(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     let n = this_node(vp)
         .map(|(dom, node)| {
             (*dom)
@@ -2459,7 +2560,16 @@ unsafe fn el_set_char_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> 
         let text = arg_string(cx, vp, argc, 0).unwrap_or_default();
         let old = (*dom).character_data(node).map(str::to_string);
         if (*dom).set_character_data(node, text) {
-            record_mutation(cx, dom, "characterData", node, None, old.as_deref(), &[], &[]);
+            record_mutation(
+                cx,
+                dom,
+                "characterData",
+                node,
+                None,
+                old.as_deref(),
+                &[],
+                &[],
+            );
         }
     }
     *vp = UndefinedValue();
@@ -2491,34 +2601,54 @@ unsafe fn throw_dom(cx: *mut RawJSContext, name: &str, msg: &str) -> bool {
 
 /// The node's data as UTF-16 code units — the unit the DOM spec counts in.
 unsafe fn char_units(dom: *mut Dom, node: NodeId) -> Option<Vec<u16>> {
-    (*dom).character_data(node).map(|t| t.encode_utf16().collect())
+    (*dom)
+        .character_data(node)
+        .map(|t| t.encode_utf16().collect())
 }
 
 unsafe fn set_from_units(cx: *mut RawJSContext, dom: *mut Dom, node: NodeId, units: &[u16]) {
     let new = String::from_utf16_lossy(units);
     let old = (*dom).character_data(node).map(str::to_string);
     if (*dom).set_character_data(node, new) {
-        record_mutation(cx, dom, "characterData", node, None, old.as_deref(), &[], &[]);
+        record_mutation(
+            cx,
+            dom,
+            "characterData",
+            node,
+            None,
+            old.as_deref(),
+            &[],
+            &[],
+        );
     }
 }
 
 /// `cd.length` — in UTF-16 code units.
 unsafe fn el_char_length(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
-    let n = this_node(vp).and_then(|(d, n)| char_units(d, n)).map(|u| u.len()).unwrap_or(0);
+    let n = this_node(vp)
+        .and_then(|(d, n)| char_units(d, n))
+        .map(|u| u.len())
+        .unwrap_or(0);
     *vp = Int32Value(n as i32);
     true
 }
 
 /// `cd.substringData(offset, count)`
 unsafe fn el_substring_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
-    let Some((dom, node)) = this_node(vp) else { *vp = UndefinedValue(); return true };
-    let Some(u) = char_units(dom, node) else { *vp = UndefinedValue(); return true };
+    let Some((dom, node)) = this_node(vp) else {
+        *vp = UndefinedValue();
+        return true;
+    };
+    let Some(u) = char_units(dom, node) else {
+        *vp = UndefinedValue();
+        return true;
+    };
     let offset = arg_u32(cx, vp, argc, 0).unwrap_or(0) as usize;
     if offset > u.len() {
         return throw_dom(cx, "IndexSizeError", "offset is greater than length");
     }
     let count = arg_u32(cx, vp, argc, 1).unwrap_or(0) as usize;
-    let end = (offset + count).min(u.len());   // "greater than length" clamps, per spec
+    let end = (offset + count).min(u.len()); // "greater than length" clamps, per spec
     return_string(cx, vp, &String::from_utf16_lossy(&u[offset..end]));
     true
 }
@@ -2538,13 +2668,22 @@ unsafe fn el_append_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bo
 
 /// `cd.insertData(offset, data)`
 unsafe fn el_insert_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
-    let Some((dom, node)) = this_node(vp) else { *vp = UndefinedValue(); return true };
-    let Some(u) = char_units(dom, node) else { *vp = UndefinedValue(); return true };
+    let Some((dom, node)) = this_node(vp) else {
+        *vp = UndefinedValue();
+        return true;
+    };
+    let Some(u) = char_units(dom, node) else {
+        *vp = UndefinedValue();
+        return true;
+    };
     let offset = arg_u32(cx, vp, argc, 0).unwrap_or(0) as usize;
     if offset > u.len() {
         return throw_dom(cx, "IndexSizeError", "offset is greater than length");
     }
-    let add: Vec<u16> = arg_string(cx, vp, argc, 1).unwrap_or_default().encode_utf16().collect();
+    let add: Vec<u16> = arg_string(cx, vp, argc, 1)
+        .unwrap_or_default()
+        .encode_utf16()
+        .collect();
     let mut out = u[..offset].to_vec();
     out.extend_from_slice(&add);
     out.extend_from_slice(&u[offset..]);
@@ -2555,8 +2694,14 @@ unsafe fn el_insert_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bo
 
 /// `cd.deleteData(offset, count)`
 unsafe fn el_delete_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
-    let Some((dom, node)) = this_node(vp) else { *vp = UndefinedValue(); return true };
-    let Some(u) = char_units(dom, node) else { *vp = UndefinedValue(); return true };
+    let Some((dom, node)) = this_node(vp) else {
+        *vp = UndefinedValue();
+        return true;
+    };
+    let Some(u) = char_units(dom, node) else {
+        *vp = UndefinedValue();
+        return true;
+    };
     let offset = arg_u32(cx, vp, argc, 0).unwrap_or(0) as usize;
     if offset > u.len() {
         return throw_dom(cx, "IndexSizeError", "offset is greater than length");
@@ -2572,15 +2717,24 @@ unsafe fn el_delete_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bo
 
 /// `cd.replaceData(offset, count, data)` — delete then insert, in one mutation record.
 unsafe fn el_replace_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
-    let Some((dom, node)) = this_node(vp) else { *vp = UndefinedValue(); return true };
-    let Some(u) = char_units(dom, node) else { *vp = UndefinedValue(); return true };
+    let Some((dom, node)) = this_node(vp) else {
+        *vp = UndefinedValue();
+        return true;
+    };
+    let Some(u) = char_units(dom, node) else {
+        *vp = UndefinedValue();
+        return true;
+    };
     let offset = arg_u32(cx, vp, argc, 0).unwrap_or(0) as usize;
     if offset > u.len() {
         return throw_dom(cx, "IndexSizeError", "offset is greater than length");
     }
     let count = arg_u32(cx, vp, argc, 1).unwrap_or(0) as usize;
     let end = (offset + count).min(u.len());
-    let add: Vec<u16> = arg_string(cx, vp, argc, 2).unwrap_or_default().encode_utf16().collect();
+    let add: Vec<u16> = arg_string(cx, vp, argc, 2)
+        .unwrap_or_default()
+        .encode_utf16()
+        .collect();
     let mut out = u[..offset].to_vec();
     out.extend_from_slice(&add);
     out.extend_from_slice(&u[end..]);
@@ -2614,11 +2768,7 @@ unsafe fn el_form_submit(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> b
 
 /// `form.requestSubmit()` — fire `submit` first, then (if not cancelled) submit. The event is
 /// dispatched by the host, which is the only thing that can then act on the result.
-unsafe fn el_form_request_submit(
-    cx: *mut RawJSContext,
-    _argc: u32,
-    vp: *mut Value,
-) -> bool {
+unsafe fn el_form_request_submit(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     if let Some((_, node)) = this_node(vp) {
         let id = node.0;
         let _ = eval_in_current_global(
@@ -2634,8 +2784,13 @@ unsafe fn el_form_request_submit(
 unsafe fn el_form_reset(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, form)) = this_node(vp) {
         for n in (*dom).flat_descendants(form) {
-            let Some(el) = (*dom).element(n) else { continue };
-            if !matches!((*dom).tag_name(n), Some("input") | Some("textarea") | Some("select")) {
+            let Some(el) = (*dom).element(n) else {
+                continue;
+            };
+            if !matches!(
+                (*dom).tag_name(n),
+                Some("input") | Some("textarea") | Some("select")
+            ) {
                 continue;
             }
             // The DEFAULT value is the content attribute; the CURRENT value is what the user typed.
@@ -2658,7 +2813,11 @@ unsafe fn doc_get_title(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bo
     let t = this_node(vp)
         .and_then(|(dom, _)| (*dom).find_first("title").map(|n| (*dom).text_content(n)))
         .unwrap_or_default();
-    return_string(cx, vp, t.split_whitespace().collect::<Vec<_>>().join(" ").as_str());
+    return_string(
+        cx,
+        vp,
+        t.split_whitespace().collect::<Vec<_>>().join(" ").as_str(),
+    );
     true
 }
 
@@ -2783,11 +2942,7 @@ unsafe fn el_get_node_type(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) ->
 /// `.firstChild`, `.childNodes` and `.cloneNode(true)` identically. That is precisely the surface the
 /// frameworks use it through — they take `.content.firstChild` and clone *that*; the fragment itself is
 /// never appended.
-unsafe fn el_get_template_content(
-    cx: *mut RawJSContext,
-    argc: u32,
-    vp: *mut Value,
-) -> bool {
+unsafe fn el_get_template_content(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
         // `<template>.content` is the fragment. Everything else — `<meta content>` above all — wants
         // the ATTRIBUTE, and the two share a name. One property, dispatched on the element.
@@ -2834,8 +2989,12 @@ unsafe fn el_get_owner_document(cx: *mut RawJSContext, _argc: u32, vp: *mut Valu
     rooted!(in(cx) let global = CurrentGlobalOrNull(&wrap_cx(cx)));
     if !global.get().is_null() {
         rooted!(in(cx) let mut doc = UndefinedValue());
-        if JS_GetProperty(&mut wrap_cx(cx), global.handle(), c"document".as_ptr(), doc.handle_mut())
-            && doc.get().is_object()
+        if JS_GetProperty(
+            &mut wrap_cx(cx),
+            global.handle(),
+            c"document".as_ptr(),
+            doc.handle_mut(),
+        ) && doc.get().is_object()
         {
             *vp = doc.get();
             return true;
@@ -3075,11 +3234,7 @@ unsafe fn el_blur(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
 }
 
 /// `document.activeElement`.
-unsafe fn doc_get_active_element(
-    cx: *mut RawJSContext,
-    _argc: u32,
-    vp: *mut Value,
-) -> bool {
+unsafe fn doc_get_active_element(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match (this_node(vp), ACTIVE_ELEMENT.with(|c| c.get())) {
         (Some((dom, _)), Some(n)) => return_node_or_null(cx, vp, dom, Some(n)),
         _ => *vp = NullValue(),
@@ -3111,10 +3266,12 @@ unsafe fn host_rect(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     }
     let node = NodeId(id as usize);
     match layout_rect(node) {
-        Some(r) => match eval_in_current_global(cx, &format!("[{},{},{},{}]", r[0], r[1], r[2], r[3])) {
-            Some(v) => *vp = v,
-            None => *vp = NullValue(),
-        },
+        Some(r) => {
+            match eval_in_current_global(cx, &format!("[{},{},{},{}]", r[0], r[1], r[2], r[3])) {
+                Some(v) => *vp = v,
+                None => *vp = NullValue(),
+            }
+        }
         None => *vp = NullValue(),
     }
     true
@@ -3227,12 +3384,10 @@ unsafe fn el_contains(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool 
 /// aborted the rest of the page's script.
 unsafe fn lazy_view(cx: *mut RawJSContext, vp: *mut Value, maker: &str) -> bool {
     match this_node(vp) {
-        Some((_, node)) => {
-            match eval_in_current_global(cx, &format!("{maker}({})", node.0)) {
-                Some(v) => *vp = v,
-                None => *vp = NullValue(),
-            }
-        }
+        Some((_, node)) => match eval_in_current_global(cx, &format!("{maker}({})", node.0)) {
+            Some(v) => *vp = v,
+            None => *vp = NullValue(),
+        },
         None => *vp = NullValue(),
     }
     true
@@ -3345,11 +3500,7 @@ metric!(el_get_offset_height, 3);
 
 /// `document.scrollingElement` — the element whose `scrollTop` scrolls the page. In standards mode
 /// that is `<html>`. A script that scrolls the document reads this first.
-unsafe fn doc_get_scrolling_element(
-    cx: *mut RawJSContext,
-    _argc: u32,
-    vp: *mut Value,
-) -> bool {
+unsafe fn doc_get_scrolling_element(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
         Some((dom, _)) => {
             let html = (*dom).find_first("html");
@@ -3361,11 +3512,7 @@ unsafe fn doc_get_scrolling_element(
 }
 
 /// `document.documentElement` → the `<html>` element.
-unsafe fn doc_get_document_element(
-    cx: *mut RawJSContext,
-    _argc: u32,
-    vp: *mut Value,
-) -> bool {
+unsafe fn doc_get_document_element(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
         Some((dom, _)) => {
             let html = (*dom).find_first("html");
@@ -3680,7 +3827,9 @@ pub fn run_scripts(
             let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"inline.js".to_owned(), 1);
             match evaluate_script(runtime.cx(), global.handle(), src, rval.handle_mut(), opts) {
                 Ok(()) => {}
-                Err(()) => tracing::warn!(error = %pending_exception(raw_cx), "a page <script> threw"),
+                Err(()) => {
+                    tracing::warn!(error = %pending_exception(raw_cx), "a page <script> threw")
+                }
             }
         }
         ran += 1;
@@ -3940,7 +4089,13 @@ impl PageContext {
         let script = format!("__dispatchEvent({}, {})", node.0, js_string_literal(ty));
         rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
         let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"dispatch.js".to_owned(), 1);
-        let proceed = match evaluate_script(runtime.cx(), global.handle(), &script, rval.handle_mut(), opts) {
+        let proceed = match evaluate_script(
+            runtime.cx(),
+            global.handle(),
+            &script,
+            rval.handle_mut(),
+            opts,
+        ) {
             // `__dispatchEvent` returns `!defaultPrevented`; a non-boolean or error means
             // nothing suppressed the default, so proceed.
             Ok(()) => {
@@ -4036,7 +4191,15 @@ impl PageContext {
         );
         rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
         let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"popstate.js".to_owned(), 1);
-        if evaluate_script(runtime.cx(), global.handle(), &script, rval.handle_mut(), opts).is_err() {
+        if evaluate_script(
+            runtime.cx(),
+            global.handle(),
+            &script,
+            rval.handle_mut(),
+            opts,
+        )
+        .is_err()
+        {
             tracing::warn!(error = %pending_exception(raw_cx), "popstate dispatch threw");
         }
         crate::event_loop::run_deferred(runtime, global.handle())?;
@@ -4046,7 +4209,12 @@ impl PageContext {
     /// Seed this document's window **identity** after load: its own window id (stamped as the
     /// `source` on messages it posts) and its opener's id (`window.opener`, `0` = none). Called
     /// by the host once the tab's id linkage is known.
-    pub fn set_identity(&self, runtime: &mut Runtime, win_id: u64, opener_win: u64) -> Result<(), String> {
+    pub fn set_identity(
+        &self,
+        runtime: &mut Runtime,
+        win_id: u64,
+        opener_win: u64,
+    ) -> Result<(), String> {
         let raw_cx = unsafe { runtime.cx().raw_cx() };
         rooted!(&in(runtime.cx()) let global = self.global.get());
         let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
@@ -4060,7 +4228,13 @@ impl PageContext {
         );
         rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
         let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"identity.js".to_owned(), 1);
-        let _ = evaluate_script(runtime.cx(), global.handle(), &script, rval.handle_mut(), opts);
+        let _ = evaluate_script(
+            runtime.cx(),
+            global.handle(),
+            &script,
+            rval.handle_mut(),
+            opts,
+        );
         Ok(())
     }
 
@@ -4098,7 +4272,15 @@ impl PageContext {
         );
         rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
         let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"message.js".to_owned(), 1);
-        if evaluate_script(runtime.cx(), global.handle(), &script, rval.handle_mut(), opts).is_err() {
+        if evaluate_script(
+            runtime.cx(),
+            global.handle(),
+            &script,
+            rval.handle_mut(),
+            opts,
+        )
+        .is_err()
+        {
             tracing::warn!(error = %pending_exception(raw_cx), "message delivery threw");
         }
         crate::event_loop::run_deferred(runtime, global.handle())?;
@@ -4309,8 +4491,7 @@ fn collect_inline_scripts(dom: &Dom) -> Vec<(NodeId, String, bool, bool)> {
                 continue;
             }
             // A module is deferred by DEFAULT. `defer` and `async` both mean "do not block me".
-            blocks_paint =
-                !is_module && el.attr("defer").is_none() && el.attr("async").is_none();
+            blocks_paint = !is_module && el.attr("defer").is_none() && el.attr("async").is_none();
         }
         let src = dom.text_content(n);
         if !src.trim().is_empty() {

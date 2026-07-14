@@ -145,10 +145,7 @@ pub struct TestFile {
 impl TestFile {
     pub fn counts(&self) -> (usize, usize) {
         match &self.subtests {
-            Some(ts) => (
-                ts.iter().filter(|(_, s)| *s == Sub::Pass).count(),
-                ts.len(),
-            ),
+            Some(ts) => (ts.iter().filter(|(_, s)| *s == Sub::Pass).count(), ts.len()),
             None => (0, 0),
         }
     }
@@ -180,7 +177,9 @@ pub async fn serve(root: PathBuf) -> std::io::Result<(SocketAddr, tokio::task::J
 
     let handle = tokio::spawn(async move {
         loop {
-            let Ok((stream, _)) = listener.accept().await else { continue };
+            let Ok((stream, _)) = listener.accept().await else {
+                continue;
+            };
             let root = root.clone();
             tokio::spawn(async move {
                 let svc = service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
@@ -213,7 +212,11 @@ fn resolve(root: &Path, url_path: &str) -> (u16, &'static str, Vec<u8>) {
         return (200, "text/javascript", REPORT_JS.as_bytes().to_vec());
     }
     // Strip the query — WPT tests pass `?foo` to their own resources routinely.
-    let clean = url_path.split('?').next().unwrap_or("").trim_start_matches('/');
+    let clean = url_path
+        .split('?')
+        .next()
+        .unwrap_or("")
+        .trim_start_matches('/');
     // Path traversal: the corpus is not hostile, but a `..` that escaped the root would read this
     // repo's own files into a test, and the resulting failure would be inexplicable.
     if clean.split('/').any(|c| c == "..") {
@@ -261,8 +264,10 @@ pub fn skip_reason(rel: &str, body: &str) -> Option<&'static str> {
         return Some("manual test (needs a human)");
     }
     // A reftest *is* a real test — it is just a Bar 2 one, and Bar 2 is deferred. Say so.
-    if body.contains("rel=\"match\"") || body.contains("rel=match")
-        || body.contains("rel=\"mismatch\"") || body.contains("rel=mismatch")
+    if body.contains("rel=\"match\"")
+        || body.contains("rel=match")
+        || body.contains("rel=\"mismatch\"")
+        || body.contains("rel=mismatch")
     {
         return Some("reftest (Bar 2 — pixel, deferred)");
     }
@@ -286,7 +291,9 @@ pub fn discover(root: &Path, subset: &str) -> Discovered {
     let base = root.join(subset);
     let mut stack = vec![base];
     while let Some(dir) = stack.pop() {
-        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        let Ok(rd) = std::fs::read_dir(&dir) else {
+            continue;
+        };
         for e in rd.flatten() {
             let p = e.path();
             if p.is_dir() {
@@ -294,9 +301,15 @@ pub fn discover(root: &Path, subset: &str) -> Discovered {
                 continue;
             }
             let ext = p.extension().and_then(|s| s.to_str()).unwrap_or("");
-            let rel = p.strip_prefix(root).unwrap_or(&p).to_string_lossy().to_string();
+            let rel = p
+                .strip_prefix(root)
+                .unwrap_or(&p)
+                .to_string_lossy()
+                .to_string();
             if ext == "js" && (rel.contains(".any.") || rel.contains(".window.")) {
-                *skipped.entry("generated wrapper (.any.js/.window.js — needs wptserve)").or_default() += 1;
+                *skipped
+                    .entry("generated wrapper (.any.js/.window.js — needs wptserve)")
+                    .or_default() += 1;
                 continue;
             }
             if !matches!(ext, "html" | "htm" | "xht" | "xhtml") {
@@ -342,8 +355,12 @@ pub async fn run_one(
     let page = match tokio::time::timeout(timeout, fut).await {
         Ok(Some(p)) => p,
         Ok(None) => {
-            return TestFile { path: rel.into(), subtests: None,
-                harness_status: "FETCH_FAILED".into(), ms: t0.elapsed().as_millis() }
+            return TestFile {
+                path: rel.into(),
+                subtests: None,
+                harness_status: "FETCH_FAILED".into(),
+                ms: t0.elapsed().as_millis(),
+            }
         }
         Err(_) => {
             // **`SLOW`, not `TIMEOUT`.** This is OUR budget expiring — the page took longer than we
@@ -353,8 +370,12 @@ pub async fn run_one(
             //
             // Collapsing all three into the word "TIMEOUT" made 89 slow files read as 89 Bar 0 hangs
             // in the first baseline. **Three different findings must not share a name.**
-            return TestFile { path: rel.into(), subtests: None,
-                harness_status: "SLOW".into(), ms: t0.elapsed().as_millis() }
+            return TestFile {
+                path: rel.into(),
+                subtests: None,
+                harness_status: "SLOW".into(),
+                ms: t0.elapsed().as_millis(),
+            };
         }
     };
 
@@ -370,9 +391,16 @@ pub async fn run_one(
         let dom = page.dom();
         let d = manuk_css::query_selector_all(dom, dom.root(), "#__wpt_diag__");
         let why = d.first().map(|&n| dom.text_content(n)).unwrap_or_default();
-        return TestFile { path: rel.into(), subtests: None,
-                          harness_status: if why.is_empty() { "NO_REPORT".into() }
-                                          else { format!("NO_REPORT {why}") }, ms };
+        return TestFile {
+            path: rel.into(),
+            subtests: None,
+            harness_status: if why.is_empty() {
+                "NO_REPORT".into()
+            } else {
+                format!("NO_REPORT {why}")
+            },
+            ms,
+        };
     }
     let dom = page.dom();
     let hits = manuk_css::query_selector_all(dom, dom.root(), "#__wpt_results__");
@@ -380,13 +408,28 @@ pub async fn run_one(
         // No results node at all. The completion callback never fired: the page threw before
         // testharness.js finished, or the harness never loaded. **This is the number that decides
         // whether the whole suite is measuring the engine or measuring the runner.**
-        return TestFile { path: rel.into(), subtests: None, harness_status: "NO_REPORT".into(), ms };
+        return TestFile {
+            path: rel.into(),
+            subtests: None,
+            harness_status: "NO_REPORT".into(),
+            ms,
+        };
     };
     let json = dom.text_content(node);
 
     match parse_results(&json) {
-        Some((harness, subtests)) => TestFile { path: rel.into(), subtests: Some(subtests), harness_status: harness, ms },
-        None => TestFile { path: rel.into(), subtests: None, harness_status: "BAD_REPORT".into(), ms },
+        Some((harness, subtests)) => TestFile {
+            path: rel.into(),
+            subtests: Some(subtests),
+            harness_status: harness,
+            ms,
+        },
+        None => TestFile {
+            path: rel.into(),
+            subtests: None,
+            harness_status: "BAD_REPORT".into(),
+            ms,
+        },
     }
 }
 
@@ -404,8 +447,11 @@ fn parse_results(json: &str) -> Option<(String, Vec<(String, Sub)>)> {
         let name = field_str(rest, "\"name\":")?;
         let status_at = rest.find("\"status\":")?;
         let after = &rest[status_at + 9..];
-        let num: String = after.chars().skip_while(|c| c.is_whitespace())
-            .take_while(|c| c.is_ascii_digit()).collect();
+        let num: String = after
+            .chars()
+            .skip_while(|c| c.is_whitespace())
+            .take_while(|c| c.is_ascii_digit())
+            .collect();
         let msg = field_str(rest, "\"message\":").unwrap_or_default();
         out.push((
             name,
@@ -427,7 +473,9 @@ fn field_str(s: &str, key: &str) -> Option<String> {
     let at = s.find(key)? + key.len();
     let bytes = s.as_bytes();
     let mut i = at;
-    while i < bytes.len() && bytes[i] != b'"' { i += 1; }
+    while i < bytes.len() && bytes[i] != b'"' {
+        i += 1;
+    }
     i += 1; // past the opening quote
     let mut out = String::new();
     while i < bytes.len() {
@@ -436,13 +484,19 @@ fn field_str(s: &str, key: &str) -> Option<String> {
                 match bytes[i + 1] {
                     b'n' => out.push('\n'),
                     b't' => out.push('\t'),
-                    b'u' => { i += 5; continue; }   // drop \uXXXX — messages only
+                    b'u' => {
+                        i += 5;
+                        continue;
+                    } // drop \uXXXX — messages only
                     c => out.push(c as char),
                 }
                 i += 2;
             }
             b'"' => return Some(out),
-            c => { out.push(c as char); i += 1; }
+            c => {
+                out.push(c as char);
+                i += 1;
+            }
         }
     }
     None
@@ -462,12 +516,18 @@ mod tests {
         ]}"#;
         let (h, ts) = parse_results(json).expect("must parse");
         assert_eq!(h, "OK");
-        assert_eq!(ts.len(), 2, "a comma inside a NAME must not split it into two subtests");
+        assert_eq!(
+            ts.len(),
+            2,
+            "a comma inside a NAME must not split it into two subtests"
+        );
         assert_eq!(ts[0].0, "first, with a comma");
         assert_eq!(ts[0].1, Sub::Pass);
         match &ts[1].1 {
-            Sub::Fail(m) => assert!(m.contains("expected \"a\" but got \"b\""),
-                "the escaped quotes in an assert_equals message must survive: {m}"),
+            Sub::Fail(m) => assert!(
+                m.contains("expected \"a\" but got \"b\""),
+                "the escaped quotes in an assert_equals message must survive: {m}"
+            ),
             other => panic!("expected Fail, got {other:?}"),
         }
     }
@@ -476,9 +536,15 @@ mod tests {
     fn a_reftest_is_skipped_as_bar_2_not_run_as_a_pass() {
         // Silently treating a reftest as "no subtests, no failures" would report it as a PASS.
         let body = r#"<link rel="match" href="foo-ref.html">"#;
-        assert_eq!(skip_reason("css/x.html", body), Some("reftest (Bar 2 — pixel, deferred)"));
+        assert_eq!(
+            skip_reason("css/x.html", body),
+            Some("reftest (Bar 2 — pixel, deferred)")
+        );
         assert_eq!(skip_reason("css/x-ref.html", ""), Some("reftest reference"));
         // ...and a real testharness test is NOT skipped.
-        assert_eq!(skip_reason("dom/x.html", r#"<script src="/resources/testharness.js">"#), None);
+        assert_eq!(
+            skip_reason("dom/x.html", r#"<script src="/resources/testharness.js">"#),
+            None
+        );
     }
 }

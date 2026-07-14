@@ -53,4 +53,3 @@ pub fn model() -> String {
 pub fn single_key() -> Option<String> {
     std::env::var("GROQ_API_KEY").ok().filter(|k| !k.is_empty())
 }
-

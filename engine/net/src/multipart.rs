@@ -95,7 +95,9 @@ pub fn encode(parts: &[Part], boundary: &str) -> (String, Vec<u8>) {
 
 /// Strip characters that would break the `Content-Disposition` header grammar (quotes, CR, LF).
 fn header_escape(s: &str) -> String {
-    s.chars().filter(|&c| c != '"' && c != '\r' && c != '\n').collect()
+    s.chars()
+        .filter(|&c| c != '"' && c != '\r' && c != '\n')
+        .collect()
 }
 
 /// A boundary token unlikely to collide with body content, derived from a caller-supplied `seed`
@@ -132,10 +134,18 @@ mod tests {
 
     #[test]
     fn field_names_cannot_break_the_header() {
-        let parts = vec![Part::file("x\"y", "e\"vil\r\n.txt", "text/plain", b"z".to_vec())];
+        let parts = vec![Part::file(
+            "x\"y",
+            "e\"vil\r\n.txt",
+            "text/plain",
+            b"z".to_vec(),
+        )];
         let (_, body) = encode(&parts, "B");
         let s = String::from_utf8(body).unwrap();
-        assert!(s.contains("name=\"xy\"; filename=\"evil.txt\""), "quotes/newlines stripped: {s}");
+        assert!(
+            s.contains("name=\"xy\"; filename=\"evil.txt\""),
+            "quotes/newlines stripped: {s}"
+        );
         // Exactly one part → exactly one Content-Disposition line.
         assert_eq!(s.matches("Content-Disposition").count(), 1);
     }

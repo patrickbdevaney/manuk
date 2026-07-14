@@ -55,7 +55,8 @@ impl Cookie {
 
 /// Lowercased host of `url`, or `None` for non-host URLs.
 fn host_of(url: &Url) -> Option<String> {
-    url.host_str().map(|h| h.trim_end_matches('.').to_ascii_lowercase())
+    url.host_str()
+        .map(|h| h.trim_end_matches('.').to_ascii_lowercase())
 }
 
 /// RFC 6265 §5.1.3 domain matching.
@@ -440,7 +441,8 @@ mod tests {
         let mut jar2 = CookieJar::new();
         jar2.store(&u("https://example.com/"), "login=xyz; Max-Age=1209600");
         jar2.save_to(&path).unwrap();
-        let expired_load = CookieJar::load_from_at(&path, past + std::time::Duration::from_secs(3 * 1209600));
+        let expired_load =
+            CookieJar::load_from_at(&path, past + std::time::Duration::from_secs(3 * 1209600));
         assert_eq!(expired_load.cookie_header(&u("https://example.com/")), None);
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -576,7 +578,10 @@ mod tests {
         let mut jar = CookieJar::new();
         jar.store(&u("https://example.com/"), "x=1; Path=/app");
         // /application must NOT match Path=/app
-        assert_eq!(jar.cookie_header(&u("https://example.com/application")), None);
+        assert_eq!(
+            jar.cookie_header(&u("https://example.com/application")),
+            None
+        );
         assert!(jar.cookie_header(&u("https://example.com/app/x")).is_some());
         assert!(jar.cookie_header(&u("https://example.com/app")).is_some());
     }

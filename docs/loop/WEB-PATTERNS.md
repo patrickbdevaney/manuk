@@ -495,3 +495,9 @@ a bad page kills the PAGE, not the browser.** Every DOM method written from here
 | **`createHTMLDocument()`** — the sanitizer's safe detached tree | **DOMPurify and every sanitizer** | ✅ (tick 48) — a real second document in the arena |
 | **A cycle-forming insertion** (`node.appendChild(itsAncestor)`) | Bar 0 / adversarial | ✅ (tick 48) — throws `HierarchyRequestError`; was **unguarded and would hang** |
 | **`createEvent`/`initEvent`** | jQuery, GA, legacy code | ❌ deferred — exposes an infinite dispatch loop (Bar 0) |
+
+## Tick 49 — the parity-scope map (infrastructure, no new capability)
+
+No web capability changed this tick (CI lane + WPT horizon map + fmt). Recorded here only so the
+capability ledger stays complete: **`docs/wiki/wpt-horizon.md`** is now the spec-shaped anchor of *which*
+classes of the web to target next, feeding the same `usage × divergence` ranking this ledger uses.

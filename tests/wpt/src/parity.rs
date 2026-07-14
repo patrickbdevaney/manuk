@@ -126,16 +126,24 @@ impl ParityReport {
                     s,
                     "  {:<28} — no reference{}",
                     page.name,
-                    page.note.as_deref().map(|n| format!(" ({n})")).unwrap_or_default()
+                    page.note
+                        .as_deref()
+                        .map(|n| format!(" ({n})"))
+                        .unwrap_or_default()
                 );
                 continue;
             }
             let (w, t) = (page.within(self.tol), page.total());
             let mark = if w == t { "ok " } else { "FAIL" };
-            let _ = writeln!(s, "  [{mark}] {:<28} {w}/{t} probes within ±{}px", page.name, self.tol);
+            let _ = writeln!(
+                s,
+                "  [{mark}] {:<28} {w}/{t} probes within ±{}px",
+                page.name, self.tol
+            );
             // Show the worst few offenders on a failing page.
             if w < t {
-                let mut bad: Vec<&ProbeDelta> = page.probes.iter().filter(|p| !p.within(self.tol)).collect();
+                let mut bad: Vec<&ProbeDelta> =
+                    page.probes.iter().filter(|p| !p.within(self.tol)).collect();
                 bad.sort_by_key(|p| std::cmp::Reverse(p.max_delta));
                 for p in bad.iter().take(4) {
                     let _ = writeln!(
@@ -144,7 +152,11 @@ impl ParityReport {
                         p.id,
                         fmt_box(p.manuk),
                         fmt_box(p.chrome),
-                        if p.max_delta == i32::MAX { "MISSING".to_string() } else { format!("{}px", p.max_delta) }
+                        if p.max_delta == i32::MAX {
+                            "MISSING".to_string()
+                        } else {
+                            format!("{}px", p.max_delta)
+                        }
                     );
                 }
             }
@@ -181,7 +193,12 @@ fn compare(manuk: &HashMap<String, Box4>, chrome: &HashMap<String, Box4>) -> Vec
                 (Some(a), Some(b)) => (0..4).map(|i| (a[i] - b[i]).abs()).max().unwrap_or(0),
                 _ => i32::MAX,
             };
-            ProbeDelta { id: id.clone(), manuk: m, chrome: c, max_delta }
+            ProbeDelta {
+                id: id.clone(),
+                manuk: m,
+                chrome: c,
+                max_delta,
+            }
         })
         .collect()
 }
@@ -198,7 +215,11 @@ pub fn run_parity(
 ) -> ParityReport {
     let have_chrome = chrome::available();
     let reference = chrome::chrome_bin()
-        .map(|p| p.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "chrome".into()))
+        .map(|p| {
+            p.file_name()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "chrome".into())
+        })
         .unwrap_or_else(|| "(no reference browser)".into());
 
     if let Some(dir) = out_dir {
@@ -217,7 +238,11 @@ pub fn run_parity(
 
     let mut pages = Vec::new();
     for path in files {
-        let name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("?").to_string();
+        let name = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("?")
+            .to_string();
         let Ok(html) = std::fs::read_to_string(&path) else {
             continue;
         };
@@ -230,28 +255,54 @@ pub fn run_parity(
         // Artifacts: always write the Manuk render; the Chrome shot when available.
         if let Some(dir) = out_dir {
             let page = Page::load(&html, &url, fonts, vw as f32);
-            let _ = page.paint(fonts, vw, vh).save_png(dir.join(format!("{name}.manuk.png")));
+            let _ = page
+                .paint(fonts, vw, vh)
+                .save_png(dir.join(format!("{name}.manuk.png")));
             if have_chrome {
-                let _ = chrome::capture_screenshot_png(&html, vw, vh, &dir.join(format!("{name}.chrome.png")));
+                let _ = chrome::capture_screenshot_png(
+                    &html,
+                    vw,
+                    vh,
+                    &dir.join(format!("{name}.chrome.png")),
+                );
             }
         }
 
         if !have_chrome {
-            pages.push(PageParity { name, probes: vec![], have_reference: false, note: Some("no Chrome/Chromium installed".into()) });
+            pages.push(PageParity {
+                name,
+                probes: vec![],
+                have_reference: false,
+                note: Some("no Chrome/Chromium installed".into()),
+            });
             continue;
         }
         match chrome::capture_boxes(&html, vw, vh) {
             Ok(chrome_boxes) => {
                 let probes = compare(&manuk, &chrome_boxes);
-                pages.push(PageParity { name, probes, have_reference: true, note: None });
+                pages.push(PageParity {
+                    name,
+                    probes,
+                    have_reference: true,
+                    note: None,
+                });
             }
             Err(e) => {
-                pages.push(PageParity { name, probes: vec![], have_reference: false, note: Some(format!("chrome capture failed: {e}")) });
+                pages.push(PageParity {
+                    name,
+                    probes: vec![],
+                    have_reference: false,
+                    note: Some(format!("chrome capture failed: {e}")),
+                });
             }
         }
     }
 
-    ParityReport { pages, tol, reference }
+    ParityReport {
+        pages,
+        tol,
+        reference,
+    }
 }
 
 /// Manuk's box for a single probe id on an already-loaded page (for unit tests).
@@ -272,7 +323,10 @@ mod tests {
             <div id="p-b" style="width:60px;height:20px"></div></body>"#;
         let b = manuk_boxes(html, "x", 800, &fonts);
         assert_eq!(b["p-a"], [0, 0, 100, 40], "first block at origin, 100×40");
-        assert_eq!(b["p-b"][1], 40, "second block stacks below the first (y=40)");
+        assert_eq!(
+            b["p-b"][1], 40,
+            "second block stacks below the first (y=40)"
+        );
         assert_eq!(b["p-b"][2], 60, "second block is 60 wide");
     }
 
@@ -322,7 +376,16 @@ mod tests {
         assert_eq!(a.max_delta, 2);
         assert!(a.within(3) && !a.within(1));
         // A probe present on only one side is a full miss.
-        assert_eq!(d.iter().find(|p| p.id == "p-only-manuk").unwrap().max_delta, i32::MAX);
-        assert_eq!(d.iter().find(|p| p.id == "p-only-chrome").unwrap().max_delta, i32::MAX);
+        assert_eq!(
+            d.iter().find(|p| p.id == "p-only-manuk").unwrap().max_delta,
+            i32::MAX
+        );
+        assert_eq!(
+            d.iter()
+                .find(|p| p.id == "p-only-chrome")
+                .unwrap()
+                .max_delta,
+            i32::MAX
+        );
     }
 }

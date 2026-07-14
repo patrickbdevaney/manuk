@@ -127,7 +127,12 @@ impl Browser {
     /// and is **not** focused — the caller focuses exactly the one tab that should load
     /// eagerly. Reopening a 40-tab session this way costs 40 URLs' worth of metadata, not 40
     /// page loads, which is the whole point of hibernation-by-default.
-    pub fn open_restored(&mut self, url: impl Into<String>, title: impl Into<String>, pinned: bool) -> TabId {
+    pub fn open_restored(
+        &mut self,
+        url: impl Into<String>,
+        title: impl Into<String>,
+        pinned: bool,
+    ) -> TabId {
         let id = TabId(self.next_id);
         self.next_id += 1;
         self.tabs.push(Tab {
@@ -293,7 +298,10 @@ impl Browser {
     /// Mutable access to a live tab's page by id (for cross-window `postMessage` delivery to a
     /// background tab). `None` if the tab is unknown or discarded.
     pub fn page_mut(&mut self, id: TabId) -> Option<&mut Page> {
-        self.tabs.iter_mut().find(|t| t.id == id).and_then(|t| t.page_mut())
+        self.tabs
+            .iter_mut()
+            .find(|t| t.id == id)
+            .and_then(|t| t.page_mut())
     }
 
     pub fn tier(&self, id: TabId) -> Option<RenderTier> {
@@ -493,10 +501,18 @@ impl ResourceReport {
                 if t.title.is_empty() { &t.url } else { &t.title }
             );
         }
-        let _ = writeln!(s, "\nretained (proxy, sums the column above): {:.2} MB", mb(self.total_retained_bytes));
+        let _ = writeln!(
+            s,
+            "\nretained (proxy, sums the column above): {:.2} MB",
+            mb(self.total_retained_bytes)
+        );
         match self.process_rss_bytes {
             Some(rss) => {
-                let _ = writeln!(s, "process RSS (real, OS-reported):        {:.2} MB", mb(rss));
+                let _ = writeln!(
+                    s,
+                    "process RSS (real, OS-reported):        {:.2} MB",
+                    mb(rss)
+                );
             }
             None => {
                 let _ = writeln!(s, "process RSS: unavailable on this platform");
@@ -527,15 +543,29 @@ mod resource_tests {
         let mut b = Browser::new(8);
 
         let a = b.open("https://a.test/");
-        b.load(a, page("<title>A</title><body><p>aaa</p></body>", &fonts), "<p>aaa</p>".into());
+        b.load(
+            a,
+            page("<title>A</title><body><p>aaa</p></body>", &fonts),
+            "<p>aaa</p>".into(),
+        );
         let c = b.open("https://c.test/");
-        b.load(c, page("<title>C</title><body><p>ccc</p></body>", &fonts), "<p>ccc</p>".into());
+        b.load(
+            c,
+            page("<title>C</title><body><p>ccc</p></body>", &fonts),
+            "<p>ccc</p>".into(),
+        );
         b.focus(a);
 
         let r = b.resource_report();
         assert_eq!(r.tabs.len(), 2);
-        assert!(r.tabs.iter().all(|t| t.retained_bytes > 0), "live tabs cost something");
-        assert_eq!(r.total_retained_bytes, r.tabs.iter().map(|t| t.retained_bytes).sum::<usize>());
+        assert!(
+            r.tabs.iter().all(|t| t.retained_bytes > 0),
+            "live tabs cost something"
+        );
+        assert_eq!(
+            r.total_retained_bytes,
+            r.tabs.iter().map(|t| t.retained_bytes).sum::<usize>()
+        );
 
         // The focused tab is active; the JS heap is honestly absent.
         let ta = r.tabs.iter().find(|t| t.id == a).unwrap();
@@ -545,7 +575,12 @@ mod resource_tests {
 
         // Discarding a tab must show up as reclaimed memory, not as a silent no-op.
         let before = b.resource_report();
-        let c_before = before.tabs.iter().find(|t| t.id == c).unwrap().retained_bytes;
+        let c_before = before
+            .tabs
+            .iter()
+            .find(|t| t.id == c)
+            .unwrap()
+            .retained_bytes;
         b.discard(c);
         let after = b.resource_report();
         let tc = after.tabs.iter().find(|t| t.id == c).unwrap();
@@ -563,11 +598,18 @@ mod resource_tests {
         let fonts = FontContext::new();
         let mut b = Browser::new(8);
         let a = b.open("https://a.test/");
-        b.load(a, page("<title>A</title><body>x</body>", &fonts), "x".into());
+        b.load(
+            a,
+            page("<title>A</title><body>x</body>", &fonts),
+            "x".into(),
+        );
 
         let table = b.resource_report().to_table();
         assert!(table.contains("RETAINED"));
-        assert!(table.contains("proxy"), "the proxy must be labelled as such");
+        assert!(
+            table.contains("proxy"),
+            "the proxy must be labelled as such"
+        );
         assert!(
             table.contains("process RSS"),
             "the real OS figure must be reported separately"
@@ -692,7 +734,6 @@ mod g_interact {
     }
 }
 
-
 /// **G_RUNTIME_COUNT — one runtime, one pool, for the life of the process (METHODOLOGY Part 25.2).**
 ///
 /// G_SPAWN governs how many *tasks* a click creates. This governs something categorically worse: how
@@ -715,7 +756,10 @@ mod g_runtime_count {
         // Touch it once so the singleton exists, then take the baseline.
         let _ = manuk_net::runtime();
         let base = manuk_net::RUNTIME_INSTANTIATIONS.load(Ordering::Relaxed);
-        assert_eq!(base, 1, "there must be exactly ONE async runtime for the process, got {base}");
+        assert_eq!(
+            base, 1,
+            "there must be exactly ONE async runtime for the process, got {base}"
+        );
 
         // A session: navigations, searches, tab opens, tab closes. Repeatedly.
         let mut b = Browser::new(6);

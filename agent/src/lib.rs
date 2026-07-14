@@ -213,15 +213,23 @@ pub enum Activation {
 #[derive(Clone, Debug)]
 pub enum BrowserAction {
     /// Activate the control with this role + accessible name (link/button/checkbox).
-    Click { role: manuk_a11y::Role, name: String },
+    Click {
+        role: manuk_a11y::Role,
+        name: String,
+    },
     /// Activate a control by its stable arena handle (from [`AgentBrowser::resolve_handle`]).
     ClickHandle(manuk_dom::NodeId),
     /// Type `text` into the text field with this accessible name.
     Type { field: String, text: String },
     /// Type `text` into the field addressed by its stable handle.
-    TypeHandle { node: manuk_dom::NodeId, text: String },
+    TypeHandle {
+        node: manuk_dom::NodeId,
+        text: String,
+    },
     /// Submit the form near a control (or the document's first form when `None`).
-    Submit { near: Option<(manuk_a11y::Role, String)> },
+    Submit {
+        near: Option<(manuk_a11y::Role, String)>,
+    },
     /// Navigate to an absolute URL.
     Navigate(String),
     /// Scroll the viewport by `dy` px.
@@ -457,14 +465,21 @@ impl AgentBrowser {
     /// the seam where the shell obtains the user's consent. This type cannot be created
     /// by accident from a stray `Page`.
     pub fn adopt(&mut self, handoff: Handoff) {
-        let Handoff { page, scroll_y, history } = handoff;
+        let Handoff {
+            page,
+            scroll_y,
+            history,
+        } = handoff;
         self.page = Some(page);
         self.scroll_y = scroll_y;
         for url in history {
             self.history.push(url);
         }
         // The adopted page was laid out for the human's viewport; re-lay-out for ours.
-        let (w, zoom) = (self.width as f32, self.page.as_ref().map(|p| p.zoom()).unwrap_or(1.0));
+        let (w, zoom) = (
+            self.width as f32,
+            self.page.as_ref().map(|p| p.zoom()).unwrap_or(1.0),
+        );
         if let Some(p) = self.page.as_mut() {
             p.relayout_zoomed(&self.fonts, w, zoom);
         }
@@ -508,7 +523,9 @@ impl AgentBrowser {
     /// §4b — traverse back one entry. Errors (rather than silently no-op'ing) when
     /// there is nowhere to go, so the agent gets a fact instead of a mystery.
     pub async fn back(&mut self) -> Result<()> {
-        self.traverse(-1).await.context("no earlier page in history")
+        self.traverse(-1)
+            .await
+            .context("no earlier page in history")
     }
 
     pub async fn forward(&mut self) -> Result<()> {
@@ -604,7 +621,11 @@ impl AgentBrowser {
     /// [`Self::resolve_handle`] or the a11y tree's `node`), skipping name re-resolution.
     pub fn type_into_handle(&mut self, node: manuk_dom::NodeId, text: &str) -> Result<()> {
         let page = self.page.as_mut().context("no page loaded")?;
-        if !page.dom().tag_name(node).is_some_and(|t| matches!(t, "input" | "textarea")) {
+        if !page
+            .dom()
+            .tag_name(node)
+            .is_some_and(|t| matches!(t, "input" | "textarea"))
+        {
             return Err(anyhow!("node {} is not a text field", node.0));
         }
         page.dom_mut().set_attr(node, "value", text);
@@ -619,7 +640,9 @@ impl AgentBrowser {
             Some((role, name)) => self.resolve(role, name)?,
             None => {
                 let page = self.page.as_ref().context("no page loaded")?;
-                page.dom().find_first("form").context("page has no <form>")?
+                page.dom()
+                    .find_first("form")
+                    .context("page has no <form>")?
             }
         };
         self.submit_form_at(anchor).await
@@ -698,7 +721,11 @@ impl AgentBrowser {
     }
 
     /// §4b — click the element with this role + accessible name.
-    pub async fn click_by_name(&mut self, role: &manuk_a11y::Role, name: &str) -> Result<Activation> {
+    pub async fn click_by_name(
+        &mut self,
+        role: &manuk_a11y::Role,
+        name: &str,
+    ) -> Result<Activation> {
         let node = self.resolve(role, name)?;
         self.activate(node).await
     }
@@ -789,9 +816,13 @@ impl AgentBrowser {
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum Action {
     /// Load a URL directly.
-    Navigate { url: String },
+    Navigate {
+        url: String,
+    },
     /// Click the link at the given index in the last observation.
-    Click { index: usize },
+    Click {
+        index: usize,
+    },
     /// Scroll by `dy` px (positive = down).
     Scroll {
         #[serde(default)]
@@ -805,11 +836,20 @@ pub enum Action {
 
     // ---- §4b actions ----
     /// Type into the text field with this accessible name. Purely local.
-    Type { field: String, text: String },
+    Type {
+        field: String,
+        text: String,
+    },
     /// Click the element with this role + accessible name (substring match).
-    ClickText { role: String, name: String },
+    ClickText {
+        role: String,
+        name: String,
+    },
     /// Click at an absolute document coordinate (as printed by the a11y tree).
-    ClickAt { x: f32, y: f32 },
+    ClickAt {
+        x: f32,
+        y: f32,
+    },
     /// Submit the form containing `field` (or the page's first form).
     Submit {
         #[serde(default)]
@@ -819,7 +859,10 @@ pub enum Action {
     Back,
     Forward,
     /// Scroll the named element into view.
-    ScrollTo { role: String, name: String },
+    ScrollTo {
+        role: String,
+        name: String,
+    },
 
     // ---- §5 / H3 tab-control actions (shared surface with the headful UI) ----
     /// Close a **set** of tabs — by domain, by title substring, or by explicit indices.
@@ -836,9 +879,13 @@ pub enum Action {
     },
     /// Open a tab for a URL **from the session's history** (the controller refuses a URL not
     /// already known, so this cannot be steered to an arbitrary destination).
-    OpenTab { url: String },
+    OpenTab {
+        url: String,
+    },
     /// Open a new tab searching for `query` via the configured default search engine.
-    SearchTab { query: String },
+    SearchTab {
+        query: String,
+    },
 }
 
 /// Which set of tabs a [`Action::CloseTabs`] targets — the **shared** selector the headful
@@ -859,7 +906,12 @@ impl Action {
     /// precedence domain → title → indices. `None` for any other action or when no non-empty
     /// criterion was given (a `close_tabs` with nothing to match is a no-op, not a wildcard).
     pub fn tab_selector(&self) -> Option<TabSelector> {
-        let Action::CloseTabs { domain, title, indices } = self else {
+        let Action::CloseTabs {
+            domain,
+            title,
+            indices,
+        } = self
+        else {
             return None;
         };
         if let Some(d) = domain.as_ref().filter(|d| !d.is_empty()) {
@@ -947,11 +999,11 @@ pub fn assess_action(action: &Action, obs: &Observation) -> ActionRisk {
         Action::ClickText { role, name } => {
             let role = parse_role(role);
             if role == manuk_a11y::Role::Link {
-                match obs
-                    .links
-                    .iter()
-                    .find(|l| l.text.to_ascii_lowercase().contains(&name.to_ascii_lowercase()))
-                {
+                match obs.links.iter().find(|l| {
+                    l.text
+                        .to_ascii_lowercase()
+                        .contains(&name.to_ascii_lowercase())
+                }) {
                     Some(link) => classify_target(&link.href),
                     None => ActionRisk::Safe,
                 }
@@ -974,9 +1026,7 @@ pub fn assess_action(action: &Action, obs: &Observation) -> ActionRisk {
         // cannot reach a page-chosen destination (the controller refuses unknown URLs), so it
         // is Safe. A search goes to the user's *configured* engine (a fixed, trusted
         // destination, not a page-chosen one), so it is Safe too.
-        Action::CloseTabs { .. } => {
-            ActionRisk::Sensitive("closing tabs discards their live state")
-        }
+        Action::CloseTabs { .. } => ActionRisk::Sensitive("closing tabs discards their live state"),
         Action::OpenTab { .. } | Action::SearchTab { .. } => ActionRisk::Safe,
     }
 }
@@ -1361,7 +1411,9 @@ async fn run_loop(
                 let r = parse_role(&role);
                 match browser.click_by_name(&r, &name).await {
                     Ok(act) => outcome.transcript.push(format!("  click_text -> {act:?}")),
-                    Err(e) => outcome.transcript.push(format!("  click_text error: {e:#}")),
+                    Err(e) => outcome
+                        .transcript
+                        .push(format!("  click_text error: {e:#}")),
                 }
             }
             Action::ClickAt { x, y } => match browser.click_at(x, y).await {
@@ -1398,7 +1450,9 @@ async fn run_loop(
                 match (tabs.as_deref_mut(), sel) {
                     (Some(tc), Some(sel)) => {
                         let n = tc.close_tabs(&sel);
-                        outcome.transcript.push(format!("  close_tabs {sel:?} -> closed {n}"));
+                        outcome
+                            .transcript
+                            .push(format!("  close_tabs {sel:?} -> closed {n}"));
                     }
                     (Some(_), None) => outcome
                         .transcript
@@ -1424,7 +1478,9 @@ async fn run_loop(
             Action::SearchTab { query } => match tabs.as_deref_mut() {
                 Some(tc) => {
                     let url = tc.open_search(&query);
-                    outcome.transcript.push(format!("  search_tab {query:?} -> {url}"));
+                    outcome
+                        .transcript
+                        .push(format!("  search_tab {query:?} -> {url}"));
                 }
                 None => outcome
                     .transcript
@@ -1546,7 +1602,10 @@ mod tests {
         // The typed value is really in the arena DOM.
         let page = b.page.as_ref().unwrap();
         let input = page.dom().find_first("input").unwrap();
-        assert_eq!(page.dom().element(input).unwrap().attr("value"), Some("rust lang"));
+        assert_eq!(
+            page.dom().element(input).unwrap().attr("value"),
+            Some("rust lang")
+        );
 
         // Submitting serializes it into the action URL (and percent-encodes the space).
         let form = page.dom().find_first("form").unwrap();
@@ -1641,7 +1700,9 @@ mod tests {
 
         // The heading must now intersect the viewport.
         let tree = b.a11y_tree().unwrap();
-        let h2 = tree.find(&manuk_a11y::Role::Heading { level: 2 }, "Pricing").unwrap();
+        let h2 = tree
+            .find(&manuk_a11y::Role::Heading { level: 2 }, "Pricing")
+            .unwrap();
         let bb = h2.bbox.unwrap();
         assert!(
             bb.y >= b.scroll_y && bb.y < b.scroll_y + b.height as f32,
@@ -1652,7 +1713,9 @@ mod tests {
         );
 
         // An element that does not exist is an error, not a silent no-op.
-        assert!(b.scroll_to(&manuk_a11y::Role::Button, "Nonexistent").is_err());
+        assert!(b
+            .scroll_to(&manuk_a11y::Role::Button, "Nonexistent")
+            .is_err());
     }
 
     /// Fully hermetic link click: the href is another `data:` URL, so the navigation
@@ -1677,9 +1740,10 @@ mod tests {
 
     #[tokio::test]
     async fn click_at_hit_tests_the_button_under_the_coordinate() {
-        let mut b =
-            browser_with(r#"<body><form action="https://ex.test/go"><button>Go</button></form></body>"#)
-                .await;
+        let mut b = browser_with(
+            r#"<body><form action="https://ex.test/go"><button>Go</button></form></body>"#,
+        )
+        .await;
         let tree = b.a11y_tree().unwrap();
         let btn = tree.find(&manuk_a11y::Role::Button, "Go").unwrap();
         let (x, y) = btn.bbox.expect("button has geometry").center();
@@ -1707,14 +1771,20 @@ mod tests {
 
         // Local-only or read-only: safe.
         assert!(!assess_action(
-            &Action::Type { field: "q".into(), text: "x".into() },
+            &Action::Type {
+                field: "q".into(),
+                text: "x".into()
+            },
             &obs
         )
         .is_sensitive());
         assert!(!assess_action(&Action::Back, &obs).is_sensitive());
         assert!(!assess_action(&Action::Forward, &obs).is_sensitive());
         assert!(!assess_action(
-            &Action::ScrollTo { role: "heading".into(), name: "x".into() },
+            &Action::ScrollTo {
+                role: "heading".into(),
+                name: "x".into()
+            },
             &obs
         )
         .is_sensitive());
@@ -1723,7 +1793,10 @@ mod tests {
         assert!(assess_action(&Action::Submit { field: None }, &obs).is_sensitive());
         // A button can submit, so it inherits that risk.
         assert!(assess_action(
-            &Action::ClickText { role: "button".into(), name: "Go".into() },
+            &Action::ClickText {
+                role: "button".into(),
+                name: "Go".into()
+            },
             &obs
         )
         .is_sensitive());
@@ -1732,13 +1805,19 @@ mod tests {
 
         // A link is judged by its href, exactly like `click`.
         assert!(!assess_action(
-            &Action::ClickText { role: "link".into(), name: "Docs".into() },
+            &Action::ClickText {
+                role: "link".into(),
+                name: "Docs".into()
+            },
             &obs
         )
         .is_sensitive());
         let bad = obs_with_links(vec![("Wipe", "https://ex.test/account/close")]);
         assert!(assess_action(
-            &Action::ClickText { role: "link".into(), name: "Wipe".into() },
+            &Action::ClickText {
+                role: "link".into(),
+                name: "Wipe".into()
+            },
             &bad
         )
         .is_sensitive());
@@ -1800,7 +1879,10 @@ mod tests {
         // The log records both model replies and both actions, plus Start/Finished.
         assert_eq!(log.model_replies().len(), 2);
         assert!(matches!(log.events()[0], replay::Event::Start { .. }));
-        assert!(matches!(log.events().last(), Some(replay::Event::Finished { .. })));
+        assert!(matches!(
+            log.events().last(),
+            Some(replay::Event::Finished { .. })
+        ));
 
         // It survives a JSONL round trip (this is what gets written to disk).
         let log = replay::EventLog::from_jsonl(&log.to_jsonl()).unwrap();
@@ -1810,12 +1892,17 @@ mod tests {
         b2.navigate(&page).await.unwrap();
         let replay_backend = replay::ReplayBackend::from_log(&log);
         let mut log2 = replay::EventLog::new();
-        let outcome2 = run_task_recorded(&mut b2, &replay_backend, "find the price", &cfg, &mut log2)
-            .await
-            .unwrap();
+        let outcome2 =
+            run_task_recorded(&mut b2, &replay_backend, "find the price", &cfg, &mut log2)
+                .await
+                .unwrap();
 
         assert_eq!(outcome2.answer, outcome.answer);
-        assert_eq!(replay_backend.remaining(), 0, "every recorded reply was consumed");
+        assert_eq!(
+            replay_backend.remaining(),
+            0,
+            "every recorded reply was consumed"
+        );
 
         // Strict divergence check: every observation matches the recording.
         let mut report = replay::ReplayReport::default();
@@ -1833,13 +1920,17 @@ mod tests {
     #[tokio::test]
     async fn cpu_raster_screenshot_digest_is_stable_across_identical_renders() {
         let mut b = AgentBrowser::new(200, 150);
-        b.navigate(&data_url("<body><h1>Stable</h1></body>")).await.unwrap();
+        b.navigate(&data_url("<body><h1>Stable</h1></body>"))
+            .await
+            .unwrap();
         let a = replay::digest(&b.screenshot_png().unwrap());
         let c = replay::digest(&b.screenshot_png().unwrap());
         assert_eq!(a, c, "the same page must render to the same bytes");
 
         // A different page must not collide.
-        b.navigate(&data_url("<body><h1>Different</h1></body>")).await.unwrap();
+        b.navigate(&data_url("<body><h1>Different</h1></body>"))
+            .await
+            .unwrap();
         assert_ne!(a, replay::digest(&b.screenshot_png().unwrap()));
     }
 
@@ -1853,17 +1944,25 @@ mod tests {
             ..AgentConfig::default()
         };
         let mut b = AgentBrowser::new(400, 300);
-        b.navigate(&data_url("<body><h1>Original</h1></body>")).await.unwrap();
+        b.navigate(&data_url("<body><h1>Original</h1></body>"))
+            .await
+            .unwrap();
         let backend = ScriptedBackend::new(&[r#"{"action":"finish","answer":"ok"}"#]);
         let mut log = replay::EventLog::new();
-        run_task_recorded(&mut b, &backend, "t", &cfg, &mut log).await.unwrap();
+        run_task_recorded(&mut b, &backend, "t", &cfg, &mut log)
+            .await
+            .unwrap();
 
         // Replay against a *different* page.
         let mut b2 = AgentBrowser::new(400, 300);
-        b2.navigate(&data_url("<body><h1>Changed</h1></body>")).await.unwrap();
+        b2.navigate(&data_url("<body><h1>Changed</h1></body>"))
+            .await
+            .unwrap();
         let rb = replay::ReplayBackend::from_log(&log);
         let mut log2 = replay::EventLog::new();
-        run_task_recorded(&mut b2, &rb, "t", &cfg, &mut log2).await.unwrap();
+        run_task_recorded(&mut b2, &rb, "t", &cfg, &mut log2)
+            .await
+            .unwrap();
 
         let err = replay::check_step(
             &log,
@@ -1907,7 +2006,10 @@ mod tests {
         {
             let dom = agent.page.as_ref().unwrap().dom();
             let q = dom.find_first("input").unwrap();
-            assert_eq!(dom.element(q).unwrap().attr("value"), Some("typed by human"));
+            assert_eq!(
+                dom.element(q).unwrap().attr("value"),
+                Some("typed by human")
+            );
         }
         // The adopted history came along, so `back` is meaningful.
         assert_eq!(agent.history().0.len(), 1);
@@ -1919,13 +2021,25 @@ mod tests {
 
         // --- and hands it back.
         let back = agent.release().expect("a page was loaded");
-        assert!(agent.page.is_none(), "the agent no longer holds the session");
+        assert!(
+            agent.page.is_none(),
+            "the agent no longer holds the session"
+        );
 
         // --- the human resumes: BOTH mutations are present, on one live DOM.
         let dom = back.page.dom();
-        let inputs: Vec<_> = dom.descendants(dom.root()).filter(|n| dom.tag_name(*n) == Some("input")).collect();
-        assert_eq!(dom.element(inputs[0]).unwrap().attr("value"), Some("typed by human"));
-        assert_eq!(dom.element(inputs[1]).unwrap().attr("value"), Some("added by agent"));
+        let inputs: Vec<_> = dom
+            .descendants(dom.root())
+            .filter(|n| dom.tag_name(*n) == Some("input"))
+            .collect();
+        assert_eq!(
+            dom.element(inputs[0]).unwrap().attr("value"),
+            Some("typed by human")
+        );
+        assert_eq!(
+            dom.element(inputs[1]).unwrap().attr("value"),
+            Some("added by agent")
+        );
 
         // The form the human resumes with serializes both fields.
         let form = dom.find_first("form").unwrap();
@@ -1964,7 +2078,9 @@ mod tests {
             ..AgentConfig::default()
         };
 
-        let outcome = run_task(&mut b, &backend, "submit the form", &cfg).await.unwrap();
+        let outcome = run_task(&mut b, &backend, "submit the form", &cfg)
+            .await
+            .unwrap();
 
         // The run did not abort: it reached the finish on step 2.
         assert_eq!(outcome.answer.as_deref(), Some("gave up on submitting"));
@@ -1976,7 +2092,10 @@ mod tests {
             .iter()
             .find(|t| t.contains("BLOCKED"))
             .expect("the refusal is reported");
-        assert!(blocked.contains("submit"), "refusal must name the action: {blocked}");
+        assert!(
+            blocked.contains("submit"),
+            "refusal must name the action: {blocked}"
+        );
     }
 
     /// The origin allowlist is enforced by the real loop, not just the check function.
@@ -1998,7 +2117,9 @@ mod tests {
             ..AgentConfig::default()
         };
 
-        let outcome = run_task(&mut b, &backend, "go to evil.org", &cfg).await.unwrap();
+        let outcome = run_task(&mut b, &backend, "go to evil.org", &cfg)
+            .await
+            .unwrap();
         assert_eq!(outcome.answer.as_deref(), Some("blocked"));
         // The browser never left the original page -- the refusal happened before the act.
         assert!(b.current_url().unwrap().starts_with("data:"));
@@ -2010,9 +2131,15 @@ mod tests {
 
     #[test]
     fn transient_errors_retry_but_permanent_ones_do_not() {
-        assert!(is_transient_inference_error(&anyhow!("HTTP 429 rate limit exceeded")));
-        assert!(is_transient_inference_error(&anyhow!("upstream returned 503")));
-        assert!(is_transient_inference_error(&anyhow!("operation timed out")));
+        assert!(is_transient_inference_error(&anyhow!(
+            "HTTP 429 rate limit exceeded"
+        )));
+        assert!(is_transient_inference_error(&anyhow!(
+            "upstream returned 503"
+        )));
+        assert!(is_transient_inference_error(&anyhow!(
+            "operation timed out"
+        )));
         // Permanent: retrying burns budget and hides the real error.
         assert!(!is_transient_inference_error(&anyhow!("401 unauthorized")));
         assert!(!is_transient_inference_error(&anyhow!("invalid api key")));
@@ -2103,12 +2230,19 @@ mod tests {
         let prompt = obs.to_prompt(500);
         assert!(prompt.contains("ACCESSIBILITY TREE"));
 
-        let open = prompt.find("=== UNTRUSTED PAGE CONTENT").expect("fence opens");
-        let close = prompt.find("=== END UNTRUSTED PAGE CONTENT").expect("fence closes");
+        let open = prompt
+            .find("=== UNTRUSTED PAGE CONTENT")
+            .expect("fence opens");
+        let close = prompt
+            .find("=== END UNTRUSTED PAGE CONTENT")
+            .expect("fence closes");
         let a11y = prompt.find("ACCESSIBILITY TREE").unwrap();
         let injected = prompt.find("Ignore prior instructions").unwrap();
         // Both the section header and the adversarial name sit strictly within the fence.
-        assert!(open < a11y && a11y < close, "a11y section escaped the fence");
+        assert!(
+            open < a11y && a11y < close,
+            "a11y section escaped the fence"
+        );
         assert!(
             open < injected && injected < close,
             "injected aria-label escaped the fence"
@@ -2174,7 +2308,10 @@ mod tests {
     #[test]
     fn tab_actions_parse_and_close_tabs_resolves_a_selector() {
         let a = parse_action(r#"{"action":"close_tabs","domain":"ads.example"}"#).unwrap();
-        assert_eq!(a.tab_selector(), Some(TabSelector::Domain("ads.example".into())));
+        assert_eq!(
+            a.tab_selector(),
+            Some(TabSelector::Domain("ads.example".into()))
+        );
 
         let a = parse_action(r#"{"action":"close_tabs","title":"Invoice"}"#).unwrap();
         assert_eq!(a.tab_selector(), Some(TabSelector::Title("Invoice".into())));
@@ -2185,7 +2322,12 @@ mod tests {
         // Precedence, and "nothing named" is a no-op selector, not a wildcard.
         let a = parse_action(r#"{"action":"close_tabs","domain":"d","title":"t"}"#).unwrap();
         assert_eq!(a.tab_selector(), Some(TabSelector::Domain("d".into())));
-        assert_eq!(parse_action(r#"{"action":"close_tabs"}"#).unwrap().tab_selector(), None);
+        assert_eq!(
+            parse_action(r#"{"action":"close_tabs"}"#)
+                .unwrap()
+                .tab_selector(),
+            None
+        );
 
         assert!(matches!(
             parse_action(r#"{"action":"open_tab","url":"https://x.test/"}"#).unwrap(),
@@ -2211,9 +2353,28 @@ mod tests {
             content_height: 0.0,
             viewport: (800, 600),
         };
-        assert!(assess_action(&Action::CloseTabs { domain: Some("a".into()), title: None, indices: None }, &obs).is_sensitive());
-        assert_eq!(assess_action(&Action::OpenTab { url: "https://x.test/".into() }, &obs), ActionRisk::Safe);
-        assert_eq!(assess_action(&Action::SearchTab { query: "q".into() }, &obs), ActionRisk::Safe);
+        assert!(assess_action(
+            &Action::CloseTabs {
+                domain: Some("a".into()),
+                title: None,
+                indices: None
+            },
+            &obs
+        )
+        .is_sensitive());
+        assert_eq!(
+            assess_action(
+                &Action::OpenTab {
+                    url: "https://x.test/".into()
+                },
+                &obs
+            ),
+            ActionRisk::Safe
+        );
+        assert_eq!(
+            assess_action(&Action::SearchTab { query: "q".into() }, &obs),
+            ActionRisk::Safe
+        );
     }
 
     /// A minimal in-memory [`TabController`] for the execution test.
@@ -2256,7 +2417,10 @@ mod tests {
         use replay::ReplayBackend;
 
         let mut browser = AgentBrowser::new(400, 300);
-        browser.navigate("data:text/html,<title>hub</title><body>hub</body>").await.unwrap();
+        browser
+            .navigate("data:text/html,<title>hub</title><body>hub</body>")
+            .await
+            .unwrap();
 
         let mut tabs = FakeTabs {
             open: vec!["https://ads.example/1".into(), "https://keep.test/".into()],
@@ -2285,12 +2449,21 @@ mod tests {
 
         assert_eq!(outcome.answer.as_deref(), Some("done"));
         // The ads.example tab was closed; keep.test survived.
-        assert_eq!(tabs.open.iter().filter(|u| u.contains("ads.example")).count(), 0);
+        assert_eq!(
+            tabs.open
+                .iter()
+                .filter(|u| u.contains("ads.example"))
+                .count(),
+            0
+        );
         assert!(tabs.open.iter().any(|u| u == "https://keep.test/"));
         // The unknown open was refused; the known one and the search opened.
         assert!(tabs.open.iter().any(|u| u == "https://known.test/page"));
         assert!(!tabs.open.iter().any(|u| u == "https://evil.test/"));
-        assert!(tabs.open.iter().any(|u| u.starts_with("https://search.test/?q=rust")));
+        assert!(tabs
+            .open
+            .iter()
+            .any(|u| u.starts_with("https://search.test/?q=rust")));
     }
 
     /// Without a controller, the plain `run_task` reports tab actions as unavailable and the
@@ -2299,14 +2472,24 @@ mod tests {
     async fn tab_actions_without_a_controller_are_reported_unavailable() {
         use replay::ReplayBackend;
         let mut browser = AgentBrowser::new(400, 300);
-        browser.navigate("data:text/html,<title>t</title><body>t</body>").await.unwrap();
+        browser
+            .navigate("data:text/html,<title>t</title><body>t</body>")
+            .await
+            .unwrap();
         let backend = ReplayBackend::new(vec![
             r#"{"action":"search_tab","query":"x"}"#.into(),
             r#"{"action":"finish","answer":"ok"}"#.into(),
         ]);
-        let cfg = AgentConfig { max_steps: 4, send_screenshots: false, ..AgentConfig::default() };
+        let cfg = AgentConfig {
+            max_steps: 4,
+            send_screenshots: false,
+            ..AgentConfig::default()
+        };
         let outcome = run_task(&mut browser, &backend, "t", &cfg).await.unwrap();
         assert_eq!(outcome.answer.as_deref(), Some("ok"));
-        assert!(outcome.transcript.iter().any(|l| l.contains("no tab context")));
+        assert!(outcome
+            .transcript
+            .iter()
+            .any(|l| l.contains("no tab context")));
     }
 }

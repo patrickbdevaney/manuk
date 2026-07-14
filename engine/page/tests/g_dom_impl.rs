@@ -52,7 +52,7 @@ fn create_html_document_exists_and_insertion_validity_prevents_cycles() {
         "implExists:true",
         "hasFeature:true",
         "docExists:true",
-        "cycleThrows:HierarchyRequestError",     // NOT a hang
+        "cycleThrows:HierarchyRequestError", // NOT a hang
         "ancestorThrows:HierarchyRequestError",
         "intact:true",
     ] {

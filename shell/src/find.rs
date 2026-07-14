@@ -84,7 +84,10 @@ impl FindSession {
 
     /// Every rect to highlight (all matches).
     pub fn all_rects(&self) -> Vec<Rect> {
-        self.matches.iter().flat_map(|m| m.rects.iter().copied()).collect()
+        self.matches
+            .iter()
+            .flat_map(|m| m.rects.iter().copied())
+            .collect()
     }
 }
 

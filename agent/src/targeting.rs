@@ -13,9 +13,9 @@ use manuk_dom::NodeId;
 /// Common filler words that carry no targeting signal — dropped from task/intent keywords so
 /// "click the Sign in button" reduces to `["sign", "in"]`.
 const STOP_WORDS: &[&str] = &[
-    "the", "a", "an", "to", "of", "and", "or", "in", "on", "at", "for", "with", "click",
-    "tap", "press", "button", "link", "please", "go", "then", "this", "that", "my", "your",
-    "it", "is", "be", "into", "onto", "from",
+    "the", "a", "an", "to", "of", "and", "or", "in", "on", "at", "for", "with", "click", "tap",
+    "press", "button", "link", "please", "go", "then", "this", "that", "my", "your", "it", "is",
+    "be", "into", "onto", "from",
 ];
 
 /// Lowercase alphanumeric keywords (length ≥ 2, minus [`STOP_WORDS`]) from a task/intent string.
@@ -57,8 +57,11 @@ pub fn prune_for_task(tree: &A11yNode, task: &str) -> Option<A11yNode> {
 }
 
 fn prune_node(node: &A11yNode, kw: &[String]) -> Option<A11yNode> {
-    let pruned_children: Vec<A11yNode> =
-        node.children.iter().filter_map(|c| prune_node(c, kw)).collect();
+    let pruned_children: Vec<A11yNode> = node
+        .children
+        .iter()
+        .filter_map(|c| prune_node(c, kw))
+        .collect();
     // Keep this node if it is itself relevant, or it is an ancestor of something kept.
     if node_relevant(node, kw) || !pruned_children.is_empty() {
         Some(A11yNode {
@@ -109,8 +112,14 @@ fn semantic_score(name: &str, role: &Role, kw: &[String]) -> f32 {
     let hits = kw.iter().filter(|k| lname.contains(k.as_str())).count();
     let mut s = hits as f32 / kw.len() as f32;
     // Exact match (all keywords are exactly the name's tokens) is a strong signal.
-    let name_tokens: Vec<&str> = lname.split(|c: char| !c.is_alphanumeric()).filter(|t| !t.is_empty()).collect();
-    if !name_tokens.is_empty() && kw.iter().all(|k| name_tokens.contains(&k.as_str())) && name_tokens.len() == kw.len() {
+    let name_tokens: Vec<&str> = lname
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|t| !t.is_empty())
+        .collect();
+    if !name_tokens.is_empty()
+        && kw.iter().all(|k| name_tokens.contains(&k.as_str()))
+        && name_tokens.len() == kw.len()
+    {
         s += EXACT_NAME_BONUS;
     }
     if matches!(role, Role::Button) {
@@ -129,7 +138,7 @@ fn visual_score(bbox: &Rect, viewport: &Rect) -> f32 {
     // Area share (capped): bigger targets are easier/more prominent.
     let area = (bbox.width * bbox.height).max(0.0);
     let area_score = (area / vp_area).sqrt().min(1.0); // sqrt so tiny buttons aren't ~0
-    // Centrality: closer to viewport center = higher.
+                                                       // Centrality: closer to viewport center = higher.
     let (cx, cy) = bbox.center();
     let (vcx, vcy) = viewport.center();
     let dx = (cx - vcx).abs() / (viewport.width / 2.0).max(1.0);
@@ -209,30 +218,108 @@ mod tests {
     use super::*;
 
     fn n(id: u64, role: Role, name: &str, bbox: Option<Rect>, children: Vec<A11yNode>) -> A11yNode {
-        A11yNode { node: NodeId(id as usize), role, name: name.to_string(), bbox, z: 0, children }
+        A11yNode {
+            node: NodeId(id as usize),
+            role,
+            name: name.to_string(),
+            bbox,
+            z: 0,
+            children,
+        }
     }
     fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
-        Rect { x, y, width: w, height: h }
+        Rect {
+            x,
+            y,
+            width: w,
+            height: h,
+        }
     }
 
     fn sample_page() -> A11yNode {
         // A page: a nav with a "Sign in" button + a decorative logo image, a main with a heading
         // and a paragraph, and a footer with a same-text "Sign in" link far down the page.
-        n(1, Role::Document, "", Some(rect(0.0, 0.0, 1000.0, 3000.0)), vec![
-            n(2, Role::Navigation, "", Some(rect(0.0, 0.0, 1000.0, 60.0)), vec![
-                n(3, Role::Image, "logo", Some(rect(10.0, 10.0, 40.0, 40.0)), vec![]),
-                n(4, Role::Button, "Sign in", Some(rect(820.0, 12.0, 140.0, 36.0)), vec![]),
-                n(5, Role::Link, "Products", Some(rect(200.0, 20.0, 90.0, 20.0)), vec![]),
-            ]),
-            n(6, Role::Main, "", Some(rect(0.0, 60.0, 1000.0, 2000.0)), vec![
-                n(7, Role::Heading { level: 1 }, "Welcome", Some(rect(40.0, 100.0, 400.0, 50.0)), vec![]),
-                n(8, Role::Paragraph, "Some marketing copy here", Some(rect(40.0, 160.0, 600.0, 80.0)), vec![]),
-            ]),
-            n(9, Role::ContentInfo, "", Some(rect(0.0, 2900.0, 1000.0, 100.0)), vec![
-                n(10, Role::Link, "Sign in", Some(rect(40.0, 2940.0, 60.0, 16.0)), vec![]),
-                n(11, Role::Paragraph, "Copyright 2026", Some(rect(400.0, 2940.0, 200.0, 16.0)), vec![]),
-            ]),
-        ])
+        n(
+            1,
+            Role::Document,
+            "",
+            Some(rect(0.0, 0.0, 1000.0, 3000.0)),
+            vec![
+                n(
+                    2,
+                    Role::Navigation,
+                    "",
+                    Some(rect(0.0, 0.0, 1000.0, 60.0)),
+                    vec![
+                        n(
+                            3,
+                            Role::Image,
+                            "logo",
+                            Some(rect(10.0, 10.0, 40.0, 40.0)),
+                            vec![],
+                        ),
+                        n(
+                            4,
+                            Role::Button,
+                            "Sign in",
+                            Some(rect(820.0, 12.0, 140.0, 36.0)),
+                            vec![],
+                        ),
+                        n(
+                            5,
+                            Role::Link,
+                            "Products",
+                            Some(rect(200.0, 20.0, 90.0, 20.0)),
+                            vec![],
+                        ),
+                    ],
+                ),
+                n(
+                    6,
+                    Role::Main,
+                    "",
+                    Some(rect(0.0, 60.0, 1000.0, 2000.0)),
+                    vec![
+                        n(
+                            7,
+                            Role::Heading { level: 1 },
+                            "Welcome",
+                            Some(rect(40.0, 100.0, 400.0, 50.0)),
+                            vec![],
+                        ),
+                        n(
+                            8,
+                            Role::Paragraph,
+                            "Some marketing copy here",
+                            Some(rect(40.0, 160.0, 600.0, 80.0)),
+                            vec![],
+                        ),
+                    ],
+                ),
+                n(
+                    9,
+                    Role::ContentInfo,
+                    "",
+                    Some(rect(0.0, 2900.0, 1000.0, 100.0)),
+                    vec![
+                        n(
+                            10,
+                            Role::Link,
+                            "Sign in",
+                            Some(rect(40.0, 2940.0, 60.0, 16.0)),
+                            vec![],
+                        ),
+                        n(
+                            11,
+                            Role::Paragraph,
+                            "Copyright 2026",
+                            Some(rect(400.0, 2940.0, 200.0, 16.0)),
+                            vec![],
+                        ),
+                    ],
+                ),
+            ],
+        )
     }
 
     #[test]
@@ -247,9 +334,18 @@ mod tests {
         // the interactive nodes and the name-matching "Sign in" nodes remain (with ancestors).
         let names: Vec<String> = collect_names(&pruned);
         assert!(names.iter().any(|s| s == "Sign in"), "sign-in target kept");
-        assert!(names.iter().any(|s| s == "Products"), "interactive link kept even if off-task");
-        assert!(!names.iter().any(|s| s == "Some marketing copy here"), "decorative paragraph dropped");
-        assert!(!names.iter().any(|s| s == "Copyright 2026"), "footer copyright dropped");
+        assert!(
+            names.iter().any(|s| s == "Products"),
+            "interactive link kept even if off-task"
+        );
+        assert!(
+            !names.iter().any(|s| s == "Some marketing copy here"),
+            "decorative paragraph dropped"
+        );
+        assert!(
+            !names.iter().any(|s| s == "Copyright 2026"),
+            "footer copyright dropped"
+        );
     }
 
     #[test]
@@ -258,28 +354,68 @@ mod tests {
         // The visible viewport is the top 1000px — both the nav button and (not) the footer link.
         let viewport = rect(0.0, 0.0, 1000.0, 1000.0);
         let t = resolve_target(&tree, "sign in", viewport).expect("a target");
-        assert_eq!(t.node, NodeId(4 as usize), "the prominent nav button, not the footer link");
+        assert_eq!(
+            t.node,
+            NodeId(4 as usize),
+            "the prominent nav button, not the footer link"
+        );
         assert_eq!(t.name, "Sign in");
-        assert!(t.point.0 > 800.0 && t.point.1 < 60.0, "click point is the button center");
+        assert!(
+            t.point.0 > 800.0 && t.point.1 < 60.0,
+            "click point is the button center"
+        );
         assert!(t.confidence > 0.0, "some margin over the runner-up");
     }
 
     #[test]
     fn ambiguous_targets_report_low_confidence() {
         // Two identical buttons side by side, equally central → near-zero confidence margin.
-        let tree = n(1, Role::Document, "", Some(rect(0.0, 0.0, 1000.0, 1000.0)), vec![
-            n(2, Role::Button, "Continue", Some(rect(400.0, 480.0, 100.0, 40.0)), vec![]),
-            n(3, Role::Button, "Continue", Some(rect(520.0, 480.0, 100.0, 40.0)), vec![]),
-        ]);
-        let t = resolve_target(&tree, "continue", rect(0.0, 0.0, 1000.0, 1000.0)).expect("a target");
-        assert!(t.confidence < 0.15, "two equally-good targets are ambiguous (conf {})", t.confidence);
+        let tree = n(
+            1,
+            Role::Document,
+            "",
+            Some(rect(0.0, 0.0, 1000.0, 1000.0)),
+            vec![
+                n(
+                    2,
+                    Role::Button,
+                    "Continue",
+                    Some(rect(400.0, 480.0, 100.0, 40.0)),
+                    vec![],
+                ),
+                n(
+                    3,
+                    Role::Button,
+                    "Continue",
+                    Some(rect(520.0, 480.0, 100.0, 40.0)),
+                    vec![],
+                ),
+            ],
+        );
+        let t =
+            resolve_target(&tree, "continue", rect(0.0, 0.0, 1000.0, 1000.0)).expect("a target");
+        assert!(
+            t.confidence < 0.15,
+            "two equally-good targets are ambiguous (conf {})",
+            t.confidence
+        );
     }
 
     #[test]
     fn no_candidate_returns_none() {
-        let tree = n(1, Role::Document, "", Some(rect(0.0, 0.0, 100.0, 100.0)), vec![
-            n(2, Role::Paragraph, "just text", Some(rect(0.0, 0.0, 50.0, 20.0)), vec![]),
-        ]);
+        let tree = n(
+            1,
+            Role::Document,
+            "",
+            Some(rect(0.0, 0.0, 100.0, 100.0)),
+            vec![n(
+                2,
+                Role::Paragraph,
+                "just text",
+                Some(rect(0.0, 0.0, 50.0, 20.0)),
+                vec![],
+            )],
+        );
         assert!(resolve_target(&tree, "buy now", rect(0.0, 0.0, 100.0, 100.0)).is_none());
     }
 

@@ -219,7 +219,15 @@ fn resolve_generic_families(db: &mut fontdb::Database) {
         // an 18% error on the height of every line on every page. Measured against Chromium, not
         // assumed. This is why the naive `fc-match` list turned the box-parity wall red — it was
         // red for a real reason.
-        &["Arial", "Liberation Sans", "Arimo", "Helvetica", "DejaVu Sans", "Noto Sans", "FreeSans"],
+        &[
+            "Arial",
+            "Liberation Sans",
+            "Arimo",
+            "Helvetica",
+            "DejaVu Sans",
+            "Noto Sans",
+            "FreeSans",
+        ],
     ) {
         db.set_sans_serif_family(f);
     }
@@ -227,7 +235,14 @@ fn resolve_generic_families(db: &mut fontdb::Database) {
         db,
         "MANUK_FONT_SERIF",
         // Chrome's default serif is *Times New Roman* → Liberation Serif.
-        &["Times New Roman", "Liberation Serif", "Tinos", "DejaVu Serif", "Noto Serif", "FreeSerif"],
+        &[
+            "Times New Roman",
+            "Liberation Serif",
+            "Tinos",
+            "DejaVu Serif",
+            "Noto Serif",
+            "FreeSerif",
+        ],
     ) {
         db.set_serif_family(f);
     }
@@ -307,12 +322,8 @@ impl FontContext {
             measure_cache: RefCell::new(LruCache::new(
                 NonZeroUsize::new(MEASURE_CACHE_CAP).unwrap(),
             )),
-            shape_cache: RefCell::new(LruCache::new(
-                NonZeroUsize::new(MEASURE_CACHE_CAP).unwrap(),
-            )),
-            glyph_cache: RefCell::new(LruCache::new(
-                NonZeroUsize::new(GLYPH_CACHE_CAP).unwrap(),
-            )),
+            shape_cache: RefCell::new(LruCache::new(NonZeroUsize::new(MEASURE_CACHE_CAP).unwrap())),
+            glyph_cache: RefCell::new(LruCache::new(NonZeroUsize::new(GLYPH_CACHE_CAP).unwrap())),
             hits: Cell::new(0),
             misses: Cell::new(0),
         }
@@ -410,7 +421,9 @@ impl FontContext {
                     let db = self.db.borrow();
                     let matched = db.query(&q).is_some_and(|id| {
                         db.face(id).is_some_and(|f| {
-                            f.families.iter().any(|(fam, _)| fam.eq_ignore_ascii_case(&n))
+                            f.families
+                                .iter()
+                                .any(|(fam, _)| fam.eq_ignore_ascii_case(&n))
                         })
                     });
                     if matched {
@@ -419,8 +432,11 @@ impl FontContext {
                     if n.contains("mono") || n.contains("courier") || n.contains("consol") {
                         return FontFamily::Monospace;
                     }
-                    if n.contains("times") || n.contains("georgia") || n.contains("serif")
-                        || n.contains("garamond") || n.contains("palatino")
+                    if n.contains("times")
+                        || n.contains("georgia")
+                        || n.contains("serif")
+                        || n.contains("garamond")
+                        || n.contains("palatino")
                     {
                         return FontFamily::Serif;
                     }
@@ -474,7 +490,8 @@ impl FontContext {
                 fontdb::Style::Normal
             },
         };
-        self.db.borrow()
+        self.db
+            .borrow()
             .query(&query)
             .or_else(|| self.db.borrow().faces().next().map(|f| f.id))
     }
@@ -646,7 +663,9 @@ impl FontContext {
         rtl: bool,
         mut emit: impl FnMut(&swash::shape::cluster::Glyph, f32),
     ) -> f32 {
-        let Some(fd) = self.face(face) else { return 0.0 };
+        let Some(fd) = self.face(face) else {
+            return 0.0;
+        };
         let Some(font) = swash::FontRef::from_index(&fd.data, fd.index as usize) else {
             return 0.0;
         };
@@ -795,7 +814,9 @@ mod tests {
         // Rasterize the first shaped glyph of "W" (by its resolved face).
         let wrun = ctx.shape("W", key, 32.0);
         let gp = wrun.glyphs[0];
-        let g = ctx.rasterize(gp.glyph_id, gp.face, 32.0, 0.0).expect("raster W");
+        let g = ctx
+            .rasterize(gp.glyph_id, gp.face, 32.0, 0.0)
+            .expect("raster W");
         assert!(g.width > 0 && !g.coverage.is_empty());
     }
 

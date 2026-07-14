@@ -77,7 +77,8 @@ pub async fn handle_connection(stream: TcpStream, width: u32, height: u32) -> Re
             Message::Binary(_) => {
                 // BiDi is a JSON text protocol.
                 let e = BidiError::new(ErrorCode::InvalidArgument, "expected a text frame");
-                tx.send(Message::Text(Outgoing::error(0, &e).to_json())).await?;
+                tx.send(Message::Text(Outgoing::error(0, &e).to_json()))
+                    .await?;
                 continue;
             }
             Message::Close(_) => break,
@@ -93,7 +94,8 @@ pub async fn handle_connection(stream: TcpStream, width: u32, height: u32) -> Re
                     ErrorCode::InvalidArgument,
                     format!("could not decode command: {err}"),
                 );
-                tx.send(Message::Text(Outgoing::error(0, &e).to_json())).await?;
+                tx.send(Message::Text(Outgoing::error(0, &e).to_json()))
+                    .await?;
                 continue;
             }
         };

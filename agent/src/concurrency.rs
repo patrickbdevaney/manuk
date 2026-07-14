@@ -142,7 +142,12 @@ mod tests {
     #[test]
     fn limits_keep_js_narrow_and_network_wide() {
         let l = ConcurrencyLimits::for_machine();
-        assert!(l.net > l.js, "network tier must be wider than JS: net={} js={}", l.net, l.js);
+        assert!(
+            l.net > l.js,
+            "network tier must be wider than JS: net={} js={}",
+            l.net,
+            l.js
+        );
         assert!(l.js >= 1);
     }
 
@@ -186,14 +191,22 @@ mod tests {
             t.await.unwrap();
         }
 
-        assert!(pool.js_peak() <= 2, "JS tier exceeded its ceiling: {}", pool.js_peak());
+        assert!(
+            pool.js_peak() <= 2,
+            "JS tier exceeded its ceiling: {}",
+            pool.js_peak()
+        );
         assert!(
             pool.net_peak() > pool.js_peak(),
             "network tier ({}) should have run wider than the JS tier ({})",
             pool.net_peak(),
             pool.js_peak()
         );
-        assert!(pool.net_peak() > 4, "network tier should have overlapped widely: {}", pool.net_peak());
+        assert!(
+            pool.net_peak() > 4,
+            "network tier should have overlapped widely: {}",
+            pool.net_peak()
+        );
     }
 
     /// A permit is released when its guarded future completes, so a second wave can proceed.

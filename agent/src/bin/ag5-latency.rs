@@ -42,7 +42,15 @@ struct AxNode {
 /// A realistic page snapshot: ~300 nodes is a content article's accessibility tree
 /// (Wikipedia's rendered a11y tree is a few hundred exposed nodes).
 fn build_snapshot(n: usize) -> Vec<AxNode> {
-    let roles = ["link", "button", "heading", "paragraph", "textbox", "listitem", "image"];
+    let roles = [
+        "link",
+        "button",
+        "heading",
+        "paragraph",
+        "textbox",
+        "listitem",
+        "image",
+    ];
     (0..n)
         .map(|i| AxNode {
             id: i as u64,
@@ -147,6 +155,10 @@ fn main() {
     println!("  iterations:      {ITERS}");
     println!("  in-process:      {inproc_us:8.2} µs/command  (native value, no transport)");
     println!("  CDP-over-socket: {cdp_us:8.2} µs/command  (JSON encode + TCP round trip + decode)");
-    println!("  overhead avoided:{:8.2} µs/command  ({:.1}× faster in-process)", cdp_us - inproc_us, cdp_us / inproc_us);
+    println!(
+        "  overhead avoided:{:8.2} µs/command  ({:.1}× faster in-process)",
+        cdp_us - inproc_us,
+        cdp_us / inproc_us
+    );
     println!("  (checksum {sink})");
 }

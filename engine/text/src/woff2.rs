@@ -357,8 +357,8 @@ fn reconstruct_glyf(data: &[u8]) -> Option<GlyfRecon> {
             if !have_bbox {
                 return None;
             }
-            let (composite_size, have_instructions) = size_of_composite(composite_stream.data
-                .get(composite_stream.pos..)?)?;
+            let (composite_size, have_instructions) =
+                size_of_composite(composite_stream.data.get(composite_stream.pos..)?)?;
             let instr_size = if have_instructions {
                 glyph_stream.u255()? as usize
             } else {
@@ -892,10 +892,18 @@ mod tests {
                 // Some glyph in the reconstructed glyf table must produce outline commands.
                 struct Sink(u32);
                 impl ttf_parser::OutlineBuilder for Sink {
-                    fn move_to(&mut self, _: f32, _: f32) { self.0 += 1; }
-                    fn line_to(&mut self, _: f32, _: f32) { self.0 += 1; }
-                    fn quad_to(&mut self, _: f32, _: f32, _: f32, _: f32) { self.0 += 1; }
-                    fn curve_to(&mut self, _: f32, _: f32, _: f32, _: f32, _: f32, _: f32) { self.0 += 1; }
+                    fn move_to(&mut self, _: f32, _: f32) {
+                        self.0 += 1;
+                    }
+                    fn line_to(&mut self, _: f32, _: f32) {
+                        self.0 += 1;
+                    }
+                    fn quad_to(&mut self, _: f32, _: f32, _: f32, _: f32) {
+                        self.0 += 1;
+                    }
+                    fn curve_to(&mut self, _: f32, _: f32, _: f32, _: f32, _: f32, _: f32) {
+                        self.0 += 1;
+                    }
                     fn close(&mut self) {}
                 }
                 let mut outlined = false;
@@ -909,6 +917,9 @@ mod tests {
                 swash_ok && outlined
             })
             .unwrap_or(false);
-        assert!(ok, "reconstructed face must load in swash and have outlined glyphs");
+        assert!(
+            ok,
+            "reconstructed face must load in swash and have outlined glyphs"
+        );
     }
 }

@@ -111,17 +111,34 @@ fn fs(in: VsOut) -> @location(0) vec4<f32> {
 enum NavEvent {
     /// The main document finished fetching off-thread: a rendered document or a download, or an
     /// error string.
-    Fetched { gen: u64, result: std::result::Result<manuk_page::Loaded, String> },
+    Fetched {
+        gen: u64,
+        result: std::result::Result<manuk_page::Loaded, String>,
+    },
     /// L32 — a speculatively-prewarmed document finished fetching off-thread. `url` is the
     /// *requested* URL (the key a future click will look up). Built into the bfcache, not shown.
-    Prewarmed { url: String, result: std::result::Result<manuk_page::Loaded, String> },
+    Prewarmed {
+        url: String,
+        result: std::result::Result<manuk_page::Loaded, String>,
+    },
     /// DEBT-1 — a page-issued `fetch()`/XHR completed **off-thread**. Settled on the UI thread.
     /// `gen` guards against a stale response landing in a page the user has since navigated away
     /// from. This used to `block_on` the UI thread: a slow API call froze the whole browser.
-    PageFetch { gen: u64, id: u32, status: u16, body: String },
+    PageFetch {
+        gen: u64,
+        id: u32,
+        status: u16,
+        body: String,
+    },
     /// An `<iframe>`'s document arrived — AFTER first paint, for the same reason images do. A heavy
     /// third-party embed must not hold the parent's article hostage.
-    IframeReady { gen: u64, tab: manuk_compositor::TabId, node: usize, html: String, url: String },
+    IframeReady {
+        gen: u64,
+        tab: manuk_compositor::TabId,
+        node: usize,
+        html: String,
+        url: String,
+    },
     /// **Images arrived AFTER first paint.** The document is already on screen; these fill it in.
     ///
     /// The load path used to fetch and decode every image before the shell was handed anything, so the
@@ -314,7 +331,10 @@ impl App {
                 Ok(Some(prior)) => {
                     let n = prior.tabs.len();
                     session::restore_into(&mut browser, &prior);
-                    tracing::info!(tabs = n, "restored prior session (hibernated; only the focused tab loads)");
+                    tracing::info!(
+                        tabs = n,
+                        "restored prior session (hibernated; only the focused tab loads)"
+                    );
                 }
                 Ok(None) => {}
                 Err(e) => tracing::warn!("session restore skipped: {e:#}"),
@@ -577,14 +597,24 @@ impl App {
                 .and_then(|e| e.attr("type"))
                 .is_some_and(|t| t.eq_ignore_ascii_case("radio"));
             if is_radio {
-                let name = dom.element(node).and_then(|e| e.attr("name")).map(str::to_string);
+                let name = dom
+                    .element(node)
+                    .and_then(|e| e.attr("name"))
+                    .map(str::to_string);
                 // Clear the whole radio group, then check this one.
                 let group: Vec<manuk_dom::NodeId> = dom
                     .descendants(dom.root())
                     .filter(|&n| {
                         dom.tag_name(n) == Some("input")
-                            && dom.element(n).and_then(|e| e.attr("type")).is_some_and(|t| t.eq_ignore_ascii_case("radio"))
-                            && dom.element(n).and_then(|e| e.attr("name")).map(str::to_string) == name
+                            && dom
+                                .element(n)
+                                .and_then(|e| e.attr("type"))
+                                .is_some_and(|t| t.eq_ignore_ascii_case("radio"))
+                            && dom
+                                .element(n)
+                                .and_then(|e| e.attr("name"))
+                                .map(str::to_string)
+                                == name
                     })
                     .collect();
                 for n in group {
@@ -592,7 +622,9 @@ impl App {
                 }
                 page.dom_mut().set_attr(node, "checked", "");
             } else {
-                let checked = dom.element(node).is_some_and(|e| e.attr("checked").is_some());
+                let checked = dom
+                    .element(node)
+                    .is_some_and(|e| e.attr("checked").is_some());
                 if checked {
                     page.dom_mut().remove_attr(node, "checked");
                 } else {
@@ -688,7 +720,9 @@ impl App {
         });
         match action {
             Some(url) => self.goto(&url),
-            None => tracing::warn!("form.submit(): method=POST is not implemented yet — nothing sent"),
+            None => {
+                tracing::warn!("form.submit(): method=POST is not implemented yet — nothing sent")
+            }
         }
     }
 
@@ -755,14 +789,22 @@ impl App {
     /// (Before EPOCH-1/Tick-18 this only wrote a log line: the user saw nothing, so it read as
     /// broken. §1.8: a log line is not a UI.)
     fn toggle_bookmark(&mut self) {
-        let title = self.page.as_ref().map(|p| p.title.clone()).unwrap_or_default();
+        let title = self
+            .page
+            .as_ref()
+            .map(|p| p.title.clone())
+            .unwrap_or_default();
         let url = self.url.clone();
         if url.is_empty() || url == "about:blank" {
             return;
         }
         let on = self.bookmarks.toggle(&url, &title);
         self.toast = Some((
-            if on { "Bookmarked".to_string() } else { "Bookmark removed".to_string() },
+            if on {
+                "Bookmarked".to_string()
+            } else {
+                "Bookmark removed".to_string()
+            },
             std::time::Instant::now(),
         ));
         self.rerender();
@@ -813,7 +855,11 @@ impl App {
         } else {
             // Focus the address field: open the omnibox pre-filled with the current URL.
             self.omnibox_open = true;
-            self.omnibox_input = if self.url == "about:blank" { String::new() } else { self.url.clone() };
+            self.omnibox_input = if self.url == "about:blank" {
+                String::new()
+            } else {
+                self.url.clone()
+            };
             self.rerender();
         }
     }
@@ -848,7 +894,9 @@ impl App {
         self.rt.spawn(async move {
             // DEBT-1: fetch the document AND all its subresources (scripts, CSS, images) here,
             // off the UI thread. The UI thread then builds the page with zero network calls.
-            let result = manuk_page::prefetch_document(&url).await.map_err(|e| format!("{e:#}"));
+            let result = manuk_page::prefetch_document(&url)
+                .await
+                .map_err(|e| format!("{e:#}"));
             let _ = proxy.send_event(NavEvent::Fetched { gen, result });
         });
         self.rerender(); // keep the old page visible; chrome stays responsive during the fetch
@@ -867,7 +915,10 @@ impl App {
             // The page's own content brought its build down. Show that, and keep the browser — and
             // every other tab — alive. This is the Bar 0 contract.
             tracing::error!(%final_url, "navigation panicked and was CONTAINED — showing an error page");
-            self.show_error(&final_url, "This page could not be displayed (the renderer failed on it).");
+            self.show_error(
+                &final_url,
+                "This page could not be displayed (the renderer failed on it).",
+            );
             return;
         };
         if let Some(win) = &self.window {
@@ -977,7 +1028,9 @@ impl App {
     /// Fetch each `<iframe>`'s document on a background task. **After first paint**, always: an iframe is
     /// the single most likely thing on a page to be slow, and 23% of pages have one.
     fn spawn_iframe_load(&mut self) {
-        let Some(page) = self.page.as_ref() else { return };
+        let Some(page) = self.page.as_ref() else {
+            return;
+        };
         let frames = page.pending_iframes();
         if frames.is_empty() {
             return;
@@ -993,7 +1046,11 @@ impl App {
                         let html = resp.decoded_text();
                         let final_url = resp.final_url.to_string();
                         let _ = proxy.send_event(NavEvent::IframeReady {
-                            gen, tab, node: id, html, url: final_url,
+                            gen,
+                            tab,
+                            node: id,
+                            html,
+                            url: final_url,
                         });
                     }
                     // Named, never swallowed (G_SILENT_FAIL). An embed that silently shows nothing is
@@ -1058,7 +1115,9 @@ impl App {
     /// crosses the boundary, because an `Rc` held across an `.await` would make the future `!Send` and
     /// pin it right back to the UI thread, which is the mistake this exists to undo.
     fn spawn_image_load(&mut self) {
-        let Some(page) = self.page.as_ref() else { return };
+        let Some(page) = self.page.as_ref() else {
+            return;
+        };
         let urls = page.pending_image_urls();
         if urls.is_empty() {
             return;
@@ -1182,7 +1241,9 @@ impl App {
         let proxy = self.proxy.clone();
         tracing::debug!(%url, "prerender: prewarming predicted next navigation");
         self.rt.spawn(async move {
-            let result = manuk_page::prefetch_document(&url).await.map_err(|e| format!("{e:#}"));
+            let result = manuk_page::prefetch_document(&url)
+                .await
+                .map_err(|e| format!("{e:#}"));
             let _ = proxy.send_event(NavEvent::Prewarmed { url, result });
         });
     }
@@ -1190,7 +1251,11 @@ impl App {
     /// L32 — a prewarm fetch landed: build the page and stash it into the bfcache keyed by the
     /// *requested* URL (what a click will look up), without disturbing the current page. Ignores
     /// downloads and errors.
-    fn finish_prewarm(&mut self, url: String, result: std::result::Result<manuk_page::Loaded, String>) {
+    fn finish_prewarm(
+        &mut self,
+        url: String,
+        result: std::result::Result<manuk_page::Loaded, String>,
+    ) {
         if self.prewarming.as_deref() == Some(url.as_str()) {
             self.prewarming = None;
         }
@@ -1204,7 +1269,8 @@ impl App {
                     return; // navigated there already, or a duplicate — nothing to cache
                 }
                 let page = self.build_prefetched(*pre, w);
-                self.bfcache.push((url.clone(), BfEntry { page, scroll: 0.0 }));
+                self.bfcache
+                    .push((url.clone(), BfEntry { page, scroll: 0.0 }));
                 while self.bfcache.len() > BFCACHE_CAP {
                     self.bfcache.remove(0);
                 }
@@ -1215,7 +1281,8 @@ impl App {
                     return; // navigated there already, or a duplicate — nothing to cache
                 }
                 let page = self.build_page(&html, &final_url, w);
-                self.bfcache.push((url.clone(), BfEntry { page, scroll: 0.0 }));
+                self.bfcache
+                    .push((url.clone(), BfEntry { page, scroll: 0.0 }));
                 while self.bfcache.len() > BFCACHE_CAP {
                     self.bfcache.remove(0);
                 }
@@ -1256,7 +1323,12 @@ impl App {
 
         // Text selection highlight (offset into the page region).
         if self.sel_start.is_some() && self.sel_end.is_some() {
-            const SEL: Rgba = Rgba { r: 66, g: 133, b: 244, a: 90 };
+            const SEL: Rgba = Rgba {
+                r: 66,
+                g: 133,
+                b: 244,
+                a: 90,
+            };
             let dy = CHROME_TOP - self.scroll_y;
             let (_, rects) = self.selection_text_and_rects();
             for (x, y, rw, rh) in rects {
@@ -1266,8 +1338,18 @@ impl App {
 
         // E1 find-in-page highlights (offset into the page region).
         if self.find_open && !self.find_session.is_empty() {
-            const HIGHLIGHT: Rgba = Rgba { r: 255, g: 235, b: 59, a: 110 };
-            const ACTIVE: Rgba = Rgba { r: 255, g: 145, b: 0, a: 255 };
+            const HIGHLIGHT: Rgba = Rgba {
+                r: 255,
+                g: 235,
+                b: 59,
+                a: 110,
+            };
+            const ACTIVE: Rgba = Rgba {
+                r: 255,
+                g: 145,
+                b: 0,
+                a: 255,
+            };
             let dy = CHROME_TOP - self.scroll_y;
             for r in self.find_session.all_rects() {
                 canvas.fill_rect_blended(r.x, r.y + dy, r.width, r.height, HIGHLIGHT);
@@ -1303,11 +1385,20 @@ impl App {
     /// Draw a text caret at the end of the focused field's value (a thin dark bar), in the
     /// page region (offset by the chrome band and scroll).
     fn draw_focus_caret(&self, canvas: &mut Canvas) {
-        let Some(node) = self.focused_input else { return };
-        let Some(page) = self.page.as_ref() else { return };
+        let Some(node) = self.focused_input else {
+            return;
+        };
+        let Some(page) = self.page.as_ref() else {
+            return;
+        };
         let rects = page.root_box.node_rects(page.dom());
         let Some(r) = rects.get(&node) else { return };
-        const INK: Rgba = Rgba { r: 30, g: 30, b: 30, a: 255 };
+        const INK: Rgba = Rgba {
+            r: 30,
+            g: 30,
+            b: 30,
+            a: 255,
+        };
         // Page content is drawn shifted down by the chrome band and up by the scroll.
         let dy = CHROME_TOP - self.scroll_y;
 
@@ -1347,26 +1438,74 @@ impl App {
 
     /// The x of the `+` new-tab button (just past the last tab, clamped into the window).
     fn new_tab_button_x(&self, w: f32) -> f32 {
-        let end = self.tab_layout(w).last().map(|(_, x, tw)| x + tw).unwrap_or(0.0);
+        let end = self
+            .tab_layout(w)
+            .last()
+            .map(|(_, x, tw)| x + tw)
+            .unwrap_or(0.0);
         end.min(w - NEWTAB_W).max(0.0)
     }
 
     /// Draw the full top chrome: the tab strip, then the toolbar (nav buttons + address field
     /// + hamburger). Coordinates for the toolbar are offset below the strip by `TAB_STRIP_H`.
     fn draw_chrome(&self, canvas: &mut Canvas, w: u32) {
-        const STRIP_BG: Rgba = Rgba { r: 222, g: 223, b: 227, a: 255 };
-        const TAB_BG: Rgba = Rgba { r: 236, g: 237, b: 240, a: 255 };
-        const TAB_ACTIVE: Rgba = Rgba { r: 255, g: 255, b: 255, a: 255 };
-        const BAND: Rgba = Rgba { r: 240, g: 240, b: 242, a: 255 };
-        const FIELD: Rgba = Rgba { r: 255, g: 255, b: 255, a: 255 };
-        const BORDER: Rgba = Rgba { r: 205, g: 205, b: 210, a: 255 };
-        const INK: Rgba = Rgba { r: 40, g: 40, b: 45, a: 255 };
-        const HINT: Rgba = Rgba { r: 150, g: 150, b: 155, a: 255 };
+        const STRIP_BG: Rgba = Rgba {
+            r: 222,
+            g: 223,
+            b: 227,
+            a: 255,
+        };
+        const TAB_BG: Rgba = Rgba {
+            r: 236,
+            g: 237,
+            b: 240,
+            a: 255,
+        };
+        const TAB_ACTIVE: Rgba = Rgba {
+            r: 255,
+            g: 255,
+            b: 255,
+            a: 255,
+        };
+        const BAND: Rgba = Rgba {
+            r: 240,
+            g: 240,
+            b: 242,
+            a: 255,
+        };
+        const FIELD: Rgba = Rgba {
+            r: 255,
+            g: 255,
+            b: 255,
+            a: 255,
+        };
+        const BORDER: Rgba = Rgba {
+            r: 205,
+            g: 205,
+            b: 210,
+            a: 255,
+        };
+        const INK: Rgba = Rgba {
+            r: 40,
+            g: 40,
+            b: 45,
+            a: 255,
+        };
+        const HINT: Rgba = Rgba {
+            r: 150,
+            g: 150,
+            b: 155,
+            a: 255,
+        };
         let w = w as f32;
 
         let font = |size: f32, color: Rgba| TextStyle {
             decoration: Default::default(),
-            font_key: FontKey { family: FontFamily::SansSerif, bold: false, italic: false },
+            font_key: FontKey {
+                family: FontFamily::SansSerif,
+                bold: false,
+                italic: false,
+            },
             font_size: size,
             color,
             line_height: size + 3.0,
@@ -1393,8 +1532,20 @@ impl App {
                     (true, true) => "New Tab".to_string(),
                 })
                 .unwrap_or_else(|| "Tab".to_string());
-            canvas.draw_text(&self.fonts, x + 10.0, tab_base, &clip_text(&title, tw - 30.0), &font(13.0, INK));
-            canvas.draw_text(&self.fonts, x + tw - 16.0, tab_base, "\u{00D7}", &font(14.0, HINT)); // × close
+            canvas.draw_text(
+                &self.fonts,
+                x + 10.0,
+                tab_base,
+                &clip_text(&title, tw - 30.0),
+                &font(13.0, INK),
+            );
+            canvas.draw_text(
+                &self.fonts,
+                x + tw - 16.0,
+                tab_base,
+                "\u{00D7}",
+                &font(14.0, HINT),
+            ); // × close
         }
         let ntx = self.new_tab_button_x(w);
         canvas.draw_text(&self.fonts, ntx + 9.0, tab_base, "+", &font(18.0, INK));
@@ -1405,16 +1556,41 @@ impl App {
         canvas.fill_rect(0.0, CHROME_TOP - 1.0, w, 1.0, BORDER);
         let baseline = top + CHROME_HEIGHT / 2.0 + 5.0;
         let back_ink = if self.page.is_some() { INK } else { HINT };
-        canvas.draw_text(&self.fonts, 14.0, baseline, "\u{2039}", &font(15.0, back_ink)); // ‹
-        canvas.draw_text(&self.fonts, 40.0, baseline, "\u{203A}", &font(15.0, back_ink)); // ›
-        canvas.draw_text(&self.fonts, 68.0, baseline - 1.0, "\u{25CB}", &font(15.0, INK)); // ○ reload
+        canvas.draw_text(
+            &self.fonts,
+            14.0,
+            baseline,
+            "\u{2039}",
+            &font(15.0, back_ink),
+        ); // ‹
+        canvas.draw_text(
+            &self.fonts,
+            40.0,
+            baseline,
+            "\u{203A}",
+            &font(15.0, back_ink),
+        ); // ›
+        canvas.draw_text(
+            &self.fonts,
+            68.0,
+            baseline - 1.0,
+            "\u{25CB}",
+            &font(15.0, INK),
+        ); // ○ reload
 
         // Address/search field — width comes from the shared geometry so it never overlaps the
         // right-hand controls.
         let (minus_x, pct_x, plus_x, star_x, _hx, field_w) = Self::toolbar_geom(w);
         let field_x = 100.0;
         canvas.fill_rect(field_x, top + 7.0, field_w, CHROME_HEIGHT - 14.0, FIELD);
-        canvas.stroke_rect(field_x, top + 7.0, field_w, CHROME_HEIGHT - 14.0, BORDER, 1.0);
+        canvas.stroke_rect(
+            field_x,
+            top + 7.0,
+            field_w,
+            CHROME_HEIGHT - 14.0,
+            BORDER,
+            1.0,
+        );
         let (text, ink) = if self.omnibox_open {
             (format!("{}\u{2502}", self.omnibox_input), INK)
         } else if self.url.is_empty() || self.url == "about:blank" {
@@ -1422,12 +1598,33 @@ impl App {
         } else {
             (self.url.clone(), INK)
         };
-        canvas.draw_text(&self.fonts, field_x + 10.0, baseline, &clip_text(&text, field_w - 20.0), &font(15.0, ink));
+        canvas.draw_text(
+            &self.fonts,
+            field_x + 10.0,
+            baseline,
+            &clip_text(&text, field_w - 20.0),
+            &font(15.0, ink),
+        );
 
         // Chromium-style zoom controls: − [ 100% ] +, side by side, clickable repeatedly.
-        const ACCENT: Rgba = Rgba { r: 26, g: 115, b: 232, a: 255 };
-        let zoom_ink = if (self.zoom - 1.0).abs() > 0.01 { ACCENT } else { INK };
-        canvas.draw_text(&self.fonts, minus_x, baseline, "\u{2212}", &font(16.0, zoom_ink)); // −
+        const ACCENT: Rgba = Rgba {
+            r: 26,
+            g: 115,
+            b: 232,
+            a: 255,
+        };
+        let zoom_ink = if (self.zoom - 1.0).abs() > 0.01 {
+            ACCENT
+        } else {
+            INK
+        };
+        canvas.draw_text(
+            &self.fonts,
+            minus_x,
+            baseline,
+            "\u{2212}",
+            &font(16.0, zoom_ink),
+        ); // −
         canvas.draw_text(
             &self.fonts,
             pct_x,
@@ -1482,7 +1679,13 @@ impl App {
             tracing::info!(input = %self.omnibox_input, "omnibox: no suggestions");
         } else {
             for (i, sug) in s.iter().enumerate() {
-                tracing::info!("omnibox {}: [{:?}] {} — {}", i + 1, sug.source, sug.url, sug.title);
+                tracing::info!(
+                    "omnibox {}: [{:?}] {} — {}",
+                    i + 1,
+                    sug.source,
+                    sug.url,
+                    sug.title
+                );
             }
         }
     }
@@ -1504,19 +1707,48 @@ impl App {
                 })
                 .collect()
         } else {
-            chrome::suggestions(&self.omnibox_input, self.history.entries(), &self.bookmarks, 8)
+            chrome::suggestions(
+                &self.omnibox_input,
+                self.history.entries(),
+                &self.bookmarks,
+                8,
+            )
         }
     }
 
     /// Draw the open overlays (omnibox suggestions dropdown, hamburger menu) above the page.
     fn draw_overlays(&self, canvas: &mut Canvas, w: f32) {
-        const WHITE: Rgba = Rgba { r: 255, g: 255, b: 255, a: 255 };
-        const BORDER: Rgba = Rgba { r: 205, g: 205, b: 210, a: 255 };
-        const INK: Rgba = Rgba { r: 40, g: 40, b: 45, a: 255 };
-        const HINT: Rgba = Rgba { r: 130, g: 130, b: 138, a: 255 };
+        const WHITE: Rgba = Rgba {
+            r: 255,
+            g: 255,
+            b: 255,
+            a: 255,
+        };
+        const BORDER: Rgba = Rgba {
+            r: 205,
+            g: 205,
+            b: 210,
+            a: 255,
+        };
+        const INK: Rgba = Rgba {
+            r: 40,
+            g: 40,
+            b: 45,
+            a: 255,
+        };
+        const HINT: Rgba = Rgba {
+            r: 130,
+            g: 130,
+            b: 138,
+            a: 255,
+        };
         let font = |size: f32, color: Rgba| TextStyle {
             decoration: Default::default(),
-            font_key: FontKey { family: FontFamily::SansSerif, bold: false, italic: false },
+            font_key: FontKey {
+                family: FontFamily::SansSerif,
+                bold: false,
+                italic: false,
+            },
             font_size: size,
             color,
             line_height: size + 3.0,
@@ -1526,7 +1758,12 @@ impl App {
         // — no UI was ever drawn, so the user pressed it and saw NOTHING, i.e. it read as broken.
         // A real bar: the query, a live match count, and the keys that drive it.
         if self.find_open {
-            const ACCENT: Rgba = Rgba { r: 26, g: 115, b: 232, a: 255 };
+            const ACCENT: Rgba = Rgba {
+                r: 26,
+                g: 115,
+                b: 232,
+                a: 255,
+            };
             let bw = 380.0f32.min(w - 24.0);
             let x = w - bw - 12.0;
             let y = CHROME_TOP + 8.0;
@@ -1543,7 +1780,13 @@ impl App {
                 format!("{q}\u{2502}")
             };
             let ink = if q.is_empty() { HINT } else { INK };
-            canvas.draw_text(&self.fonts, x + 12.0, y + 24.0, &clip_text(&label, bw - 150.0), &font(14.0, ink));
+            canvas.draw_text(
+                &self.fonts,
+                x + 12.0,
+                y + 24.0,
+                &clip_text(&label, bw - 150.0),
+                &font(14.0, ink),
+            );
 
             // Match count — the feedback that tells the user it is actually working.
             let count = if q.is_empty() {
@@ -1553,9 +1796,30 @@ impl App {
             } else {
                 format!("{cur}/{n}")
             };
-            let count_ink = if n == 0 && !q.is_empty() { Rgba { r: 200, g: 60, b: 60, a: 255 } } else { ACCENT };
-            canvas.draw_text(&self.fonts, x + bw - 132.0, y + 24.0, &count, &font(13.0, count_ink));
-            canvas.draw_text(&self.fonts, x + bw - 66.0, y + 24.0, "\u{2039} \u{203A}  Esc", &font(12.0, HINT));
+            let count_ink = if n == 0 && !q.is_empty() {
+                Rgba {
+                    r: 200,
+                    g: 60,
+                    b: 60,
+                    a: 255,
+                }
+            } else {
+                ACCENT
+            };
+            canvas.draw_text(
+                &self.fonts,
+                x + bw - 132.0,
+                y + 24.0,
+                &count,
+                &font(13.0, count_ink),
+            );
+            canvas.draw_text(
+                &self.fonts,
+                x + bw - 66.0,
+                y + 24.0,
+                "\u{2039} \u{203A}  Esc",
+                &font(12.0, HINT),
+            );
         }
 
         // A brief toast (e.g. "Bookmarked") — an action the user takes must be observable.
@@ -1564,13 +1828,32 @@ impl App {
                 let tw = 150.0f32;
                 let x = (w - tw) / 2.0;
                 let y = CHROME_TOP + 10.0;
-                canvas.fill_rect(x, y, tw, 30.0, Rgba { r: 45, g: 45, b: 50, a: 235 });
+                canvas.fill_rect(
+                    x,
+                    y,
+                    tw,
+                    30.0,
+                    Rgba {
+                        r: 45,
+                        g: 45,
+                        b: 50,
+                        a: 235,
+                    },
+                );
                 canvas.draw_text(
                     &self.fonts,
                     x + 14.0,
                     y + 20.0,
                     msg,
-                    &font(13.0, Rgba { r: 255, g: 255, b: 255, a: 255 }),
+                    &font(
+                        13.0,
+                        Rgba {
+                            r: 255,
+                            g: 255,
+                            b: 255,
+                            a: 255,
+                        },
+                    ),
                 );
             }
         }
@@ -1583,14 +1866,23 @@ impl App {
             let h = 34.0 + rows as f32 * 34.0;
             canvas.fill_rect(x, CHROME_TOP, pw, h, WHITE);
             canvas.stroke_rect(x, CHROME_TOP, pw, h, BORDER, 1.0);
-            canvas.draw_text(&self.fonts, x + 12.0, CHROME_TOP + 22.0, "Downloads", &font(14.0, INK));
+            canvas.draw_text(
+                &self.fonts,
+                x + 12.0,
+                CHROME_TOP + 22.0,
+                "Downloads",
+                &font(14.0, INK),
+            );
             if self.downloads.is_empty() {
                 canvas.draw_text(
                     &self.fonts,
                     x + 12.0,
                     CHROME_TOP + 52.0,
                     &clip_text(
-                        &format!("No downloads yet — saved to {}", manuk_net::downloads::download_dir().display()),
+                        &format!(
+                            "No downloads yet — saved to {}",
+                            manuk_net::downloads::download_dir().display()
+                        ),
                         pw - 24.0,
                     ),
                     &font(12.0, HINT),
@@ -1627,8 +1919,20 @@ impl App {
                 canvas.stroke_rect(x, CHROME_TOP, iw, h, BORDER, 1.0);
                 for (i, s) in sugg.iter().enumerate() {
                     let y = CHROME_TOP + 2.0 + i as f32 * SUGGEST_ITEM_H;
-                    canvas.draw_text(&self.fonts, x + 12.0, y + 19.0, &clip_text(&s.title, iw * 0.42), &font(14.0, INK));
-                    canvas.draw_text(&self.fonts, x + iw * 0.45, y + 19.0, &clip_text(&s.url, iw * 0.5), &font(13.0, HINT));
+                    canvas.draw_text(
+                        &self.fonts,
+                        x + 12.0,
+                        y + 19.0,
+                        &clip_text(&s.title, iw * 0.42),
+                        &font(14.0, INK),
+                    );
+                    canvas.draw_text(
+                        &self.fonts,
+                        x + iw * 0.45,
+                        y + 19.0,
+                        &clip_text(&s.url, iw * 0.5),
+                        &font(13.0, HINT),
+                    );
                 }
             }
         }
@@ -1640,7 +1944,13 @@ impl App {
             canvas.stroke_rect(x, CHROME_TOP, MENU_W, h, BORDER, 1.0);
             for (i, (label, _)) in MENU.iter().enumerate() {
                 let y = CHROME_TOP + 4.0 + i as f32 * MENU_ITEM_H;
-                canvas.draw_text(&self.fonts, x + 16.0, y + MENU_ITEM_H / 2.0 + 4.0, label, &font(14.0, INK));
+                canvas.draw_text(
+                    &self.fonts,
+                    x + 16.0,
+                    y + MENU_ITEM_H / 2.0 + 4.0,
+                    label,
+                    &font(14.0, INK),
+                );
             }
         }
     }
@@ -1697,12 +2007,28 @@ impl App {
 
     /// Draw the scrollbar (track + thumb) on the right edge, if the page overflows.
     fn draw_scrollbar(&self, canvas: &mut Canvas, w: f32, h: f32) {
-        const TRACK: Rgba = Rgba { r: 244, g: 244, b: 246, a: 255 };
-        const THUMB: Rgba = Rgba { r: 178, g: 180, b: 188, a: 255 };
+        const TRACK: Rgba = Rgba {
+            r: 244,
+            g: 244,
+            b: 246,
+            a: 255,
+        };
+        const THUMB: Rgba = Rgba {
+            r: 178,
+            g: 180,
+            b: 188,
+            a: 255,
+        };
         if let Some((track_y, track_h, thumb_y, thumb_h)) = self.scrollbar_geom(h) {
             let x = w - SCROLLBAR_W;
             canvas.fill_rect(x, track_y, SCROLLBAR_W, track_h, TRACK);
-            canvas.fill_rect(x + 2.0, thumb_y + 1.0, SCROLLBAR_W - 4.0, thumb_h - 2.0, THUMB);
+            canvas.fill_rect(
+                x + 2.0,
+                thumb_y + 1.0,
+                SCROLLBAR_W - 4.0,
+                thumb_h - 2.0,
+                THUMB,
+            );
         }
     }
 
@@ -1730,8 +2056,12 @@ impl App {
 
     /// Continue a scrollbar thumb drag: map the cursor to a scroll offset.
     fn scrollbar_drag_to(&mut self, cy: f32, h: f32) {
-        let Some(grab) = self.scrollbar_drag else { return };
-        let Some((track_y, track_h, _, thumb_h)) = self.scrollbar_geom(h) else { return };
+        let Some(grab) = self.scrollbar_drag else {
+            return;
+        };
+        let Some((track_y, track_h, _, thumb_h)) = self.scrollbar_geom(h) else {
+            return;
+        };
         let max = self.viewport.max_scroll();
         let denom = (track_h - thumb_h).max(1.0);
         self.scroll_y = ((cy - grab - track_y) / denom * max).clamp(0.0, max);
@@ -1752,7 +2082,9 @@ impl App {
 
     /// Read text from the system clipboard, if any.
     fn clipboard_text(&self) -> Option<String> {
-        arboard::Clipboard::new().and_then(|mut c| c.get_text()).ok()
+        arboard::Clipboard::new()
+            .and_then(|mut c| c.get_text())
+            .ok()
     }
 
     /// Every laid-out text run in the current page as `(x, top, width, height, text)` in
@@ -1783,10 +2115,18 @@ impl App {
             return (String::new(), Vec::new());
         };
         // Order endpoints top-to-bottom (then left-to-right on the same line).
-        let ((sx, sy), (ex, ey)) = if (ay, ax) <= (by, bx) { ((ax, ay), (bx, by)) } else { ((bx, by), (ax, ay)) };
+        let ((sx, sy), (ex, ey)) = if (ay, ax) <= (by, bx) {
+            ((ax, ay), (bx, by))
+        } else {
+            ((bx, by), (ax, ay))
+        };
 
         let mut runs = self.page_text_runs();
-        runs.sort_by(|a, b| (a.1, a.0).partial_cmp(&(b.1, b.0)).unwrap_or(std::cmp::Ordering::Equal));
+        runs.sort_by(|a, b| {
+            (a.1, a.0)
+                .partial_cmp(&(b.1, b.0))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // Which runs fall in the vertical band (by run vertical midpoint).
         let in_band: Vec<_> = runs
@@ -1824,7 +2164,11 @@ impl App {
                 _ => lines.push((y, vec![text])),
             }
         }
-        let text = lines.iter().map(|(_, w)| w.join(" ")).collect::<Vec<_>>().join("\n");
+        let text = lines
+            .iter()
+            .map(|(_, w)| w.join(" "))
+            .collect::<Vec<_>>()
+            .join("\n");
         (text, rects)
     }
 
@@ -1898,7 +2242,10 @@ impl App {
         let w = self.viewport.width;
         for (target_win, json, origin, source_win) in msgs {
             let Some(&tab) = self.win_to_tab.get(&target_win) else {
-                tracing::debug!(target_win, "postMessage to an unknown/closed window; dropped");
+                tracing::debug!(
+                    target_win,
+                    "postMessage to an unknown/closed window; dropped"
+                );
                 continue;
             };
             if tab == self.tab_id {
@@ -1946,14 +2293,20 @@ impl App {
                 self.rt.spawn(async move {
                     let hdrs: &[(&str, &str)] = &[];
                     let bytes = manuk_net::Bytes::from(body.into_bytes());
-                    let (status, text) = match manuk_net::request(&method, &url, hdrs, bytes).await {
+                    let (status, text) = match manuk_net::request(&method, &url, hdrs, bytes).await
+                    {
                         Ok(resp) => (resp.status, resp.text()),
                         Err(e) => {
                             tracing::warn!(url = %url, error = %e, "page fetch failed");
                             (0u16, String::new())
                         }
                     };
-                    let _ = proxy.send_event(NavEvent::PageFetch { gen, id, status, body: text });
+                    let _ = proxy.send_event(NavEvent::PageFetch {
+                        gen,
+                        id,
+                        status,
+                        body: text,
+                    });
                 });
             }
             // Nothing to drain synchronously any more — the responses arrive as events.
@@ -2024,7 +2377,8 @@ impl App {
                 .as_ref()
                 .map(|p| (p.title.clone(), p.content_height))
                 .unwrap_or_default();
-            self.browser.set_loaded(self.tab_id, self.url.clone(), title, height);
+            self.browser
+                .set_loaded(self.tab_id, self.url.clone(), title, height);
             self.rerender();
         }
     }
@@ -2104,7 +2458,13 @@ impl App {
             return;
         }
         self.bfcache.retain(|(u, _)| u != &url);
-        self.bfcache.push((url, BfEntry { page, scroll: self.scroll_y }));
+        self.bfcache.push((
+            url,
+            BfEntry {
+                page,
+                scroll: self.scroll_y,
+            },
+        ));
         while self.bfcache.len() > BFCACHE_CAP {
             self.bfcache.remove(0);
         }
@@ -2349,7 +2709,9 @@ impl App {
             return;
         };
         // Resolve a backend from the environment; if none, tell the user how to get one.
-        let llama_port = std::env::var("MANUK_LLAMA_PORT").ok().and_then(|s| s.parse().ok());
+        let llama_port = std::env::var("MANUK_LLAMA_PORT")
+            .ok()
+            .and_then(|s| s.parse().ok());
         manuk_agent::env::load_dotenv();
         let groq_present = manuk_agent::env::single_key().is_some();
         let Some(kind) = panel::resolve_panel_backend(llama_port, groq_present) else {
@@ -2383,7 +2745,8 @@ impl App {
         tracing::info!(backend = ?kind, task, "agent: running (assistant: read-only page + tab control)");
         let result = {
             let mut tabs = crate::session::BrowserTabs::new(&mut self.browser, known, settings);
-            self.rt.block_on(panel.run_with_tabs(&backend, task, &mut tabs))
+            self.rt
+                .block_on(panel.run_with_tabs(&backend, task, &mut tabs))
         };
         match result {
             Ok(outcome) => {
@@ -2626,8 +2989,11 @@ impl App {
                 }
                 "l" | "L" => {
                     self.omnibox_open = true;
-                    self.omnibox_input =
-                        if self.url == "about:blank" { String::new() } else { self.url.clone() };
+                    self.omnibox_input = if self.url == "about:blank" {
+                        String::new()
+                    } else {
+                        self.url.clone()
+                    };
                     self.rerender();
                     true
                 }
@@ -2649,7 +3015,11 @@ impl App {
                 }
                 "l" => {
                     self.omnibox_open = true;
-                    self.omnibox_input = if self.url == "about:blank" { String::new() } else { self.url.clone() };
+                    self.omnibox_input = if self.url == "about:blank" {
+                        String::new()
+                    } else {
+                        self.url.clone()
+                    };
                     self.rerender();
                     tracing::info!("omnibox: type a URL or a search, Enter to go, Esc to cancel");
                     true
@@ -2775,10 +3145,19 @@ impl ApplicationHandler<NavEvent> for App {
             }
             NavEvent::Prewarmed { url, result } => self.finish_prewarm(url, result),
             NavEvent::ImagesReady { gen, tab, images } => self.finish_images(gen, tab, images),
-            NavEvent::IframeReady { gen, tab, node, html, url } => {
-                self.finish_iframe(gen, tab, node, html, url)
-            }
-            NavEvent::PageFetch { gen, id, status, body } => {
+            NavEvent::IframeReady {
+                gen,
+                tab,
+                node,
+                html,
+                url,
+            } => self.finish_iframe(gen, tab, node, html, url),
+            NavEvent::PageFetch {
+                gen,
+                id,
+                status,
+                body,
+            } => {
                 // A response for a page the user has navigated away from must not be applied.
                 if gen != self.nav_gen {
                     return;
@@ -3059,7 +3438,8 @@ fn resolve_href(base: &str, href: &str) -> Option<String> {
         return None;
     }
     let lower = h.to_ascii_lowercase();
-    if lower.starts_with("javascript:") || lower.starts_with("mailto:") || lower.starts_with("tel:") {
+    if lower.starts_with("javascript:") || lower.starts_with("mailto:") || lower.starts_with("tel:")
+    {
         return None;
     }
     let resolved = match url::Url::parse(h) {
@@ -3096,11 +3476,23 @@ mod tests {
     fn resolve_href_handles_relative_absolute_and_skips() {
         let base = "https://example.com/dir/page.html";
         // Relative resolves against the base's directory.
-        assert_eq!(resolve_href(base, "next.html").as_deref(), Some("https://example.com/dir/next.html"));
-        assert_eq!(resolve_href(base, "/root.html").as_deref(), Some("https://example.com/root.html"));
-        assert_eq!(resolve_href(base, "../up.html").as_deref(), Some("https://example.com/up.html"));
+        assert_eq!(
+            resolve_href(base, "next.html").as_deref(),
+            Some("https://example.com/dir/next.html")
+        );
+        assert_eq!(
+            resolve_href(base, "/root.html").as_deref(),
+            Some("https://example.com/root.html")
+        );
+        assert_eq!(
+            resolve_href(base, "../up.html").as_deref(),
+            Some("https://example.com/up.html")
+        );
         // Absolute passes through.
-        assert_eq!(resolve_href(base, "https://other.test/x").as_deref(), Some("https://other.test/x"));
+        assert_eq!(
+            resolve_href(base, "https://other.test/x").as_deref(),
+            Some("https://other.test/x")
+        );
         // Non-navigational / empty are skipped.
         assert_eq!(resolve_href(base, "#frag"), None);
         assert_eq!(resolve_href(base, ""), None);
@@ -3112,7 +3504,10 @@ mod tests {
     fn resolve_href_unwraps_ddg_redirect() {
         let base = "https://lite.duckduckgo.com/lite/?q=rust";
         // Protocol-relative DDG redirect resolves to the decoded `uddg` target.
-        let got = resolve_href(base, "//duckduckgo.com/l/?uddg=https%3A%2F%2Frust-lang.org%2F&rut=abc");
+        let got = resolve_href(
+            base,
+            "//duckduckgo.com/l/?uddg=https%3A%2F%2Frust-lang.org%2F&rut=abc",
+        );
         assert_eq!(got.as_deref(), Some("https://rust-lang.org/"));
         // A plain duckduckgo.com link is untouched.
         assert_eq!(
@@ -3270,7 +3665,10 @@ impl Gpu {
     /// single contiguous `write_texture` with the canvas' natural row stride.
     fn upload_damage(&mut self, canvas: &manuk_paint::Canvas, y0: u32, h: u32) {
         let full = self.texture.is_none()
-            || self.texture.as_ref().is_some_and(|t| t.width() != canvas.width() || t.height() != canvas.height());
+            || self
+                .texture
+                .as_ref()
+                .is_some_and(|t| t.width() != canvas.width() || t.height() != canvas.height());
         if full {
             self.upload(canvas);
             return;
@@ -3285,12 +3683,20 @@ impl Gpu {
 
     /// Create the page texture + bind group at `(w, h)` if absent or a different size.
     fn ensure_texture(&mut self, w: u32, h: u32) {
-        if self.texture.as_ref().is_some_and(|t| t.width() == w && t.height() == h) {
+        if self
+            .texture
+            .as_ref()
+            .is_some_and(|t| t.width() == w && t.height() == h)
+        {
             return;
         }
         let texture = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("page texture"),
-            size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width: w,
+                height: h,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -3303,8 +3709,14 @@ impl Gpu {
             label: Some("page bind group"),
             layout: &self.bind_group_layout,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
             ],
         }));
         self.texture = Some(texture);
@@ -3331,7 +3743,11 @@ impl Gpu {
                 bytes_per_row: Some(4 * cw),
                 rows_per_image: Some(h),
             },
-            wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+            wgpu::Extent3d {
+                width: w,
+                height: h,
+                depth_or_array_layers: 1,
+            },
         );
     }
 

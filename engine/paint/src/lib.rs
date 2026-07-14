@@ -53,7 +53,13 @@ impl DisplayList {
                 | DisplayItem::Gradient { rect, .. }
                 | DisplayItem::BackgroundImage { rect, .. }
                 | DisplayItem::RoundRect { rect, .. } => *rect,
-                DisplayItem::TextLine { x, y, width, thickness, .. } => Rect {
+                DisplayItem::TextLine {
+                    x,
+                    y,
+                    width,
+                    thickness,
+                    ..
+                } => Rect {
                     x: *x,
                     y: *y,
                     width: *width,
@@ -66,7 +72,9 @@ impl DisplayList {
                     width: rect.width + blur * 2.0,
                     height: rect.height + blur * 2.0,
                 },
-                DisplayItem::Text { x, baseline, style, .. } => Rect {
+                DisplayItem::Text {
+                    x, baseline, style, ..
+                } => Rect {
                     x: *x,
                     y: baseline - style.line_height,
                     // Text has no stored width; a generous box keeps the damage a superset.
@@ -265,7 +273,11 @@ impl DisplayList {
                 return;
             }
             // A radius can never exceed half the shorter side (CSS clamps overlapping corners).
-            let radius = b.radius.min(b.rect.width / 2.0).min(b.rect.height / 2.0).max(0.0);
+            let radius = b
+                .radius
+                .min(b.rect.width / 2.0)
+                .min(b.rect.height / 2.0)
+                .max(0.0);
             // Partial opacity: scale every colour's alpha. (A true CSS opacity group would composite
             // the subtree off-screen; per-item alpha is a close, cheap approximation and is exact
             // for the overwhelmingly common non-overlapping case.)
@@ -273,12 +285,18 @@ impl DisplayList {
                 if b.opacity >= 0.999 {
                     c
                 } else {
-                    Rgba { a: ((c.a as f32) * b.opacity).round().clamp(0.0, 255.0) as u8, ..c }
+                    Rgba {
+                        a: ((c.a as f32) * b.opacity).round().clamp(0.0, 255.0) as u8,
+                        ..c
+                    }
                 }
             };
             // `box-shadow` paints *beneath* the background.
             if let Some(sh) = b.shadow {
-                let sh = manuk_css::BoxShadow { color: fade(sh.color), ..sh };
+                let sh = manuk_css::BoxShadow {
+                    color: fade(sh.color),
+                    ..sh
+                };
                 if sh.color.a > 0 {
                     items.push(DisplayItem::Shadow {
                         rect: Rect {
@@ -331,7 +349,13 @@ impl DisplayList {
                     manuk_css::BackgroundImage::Linear { angle_deg, stops } => {
                         items.push(DisplayItem::Gradient {
                             rect: b.rect,
-                            stops: stops.iter().map(|s| manuk_css::ColorStop { color: fade(s.color), at: s.at }).collect(),
+                            stops: stops
+                                .iter()
+                                .map(|s| manuk_css::ColorStop {
+                                    color: fade(s.color),
+                                    at: s.at,
+                                })
+                                .collect(),
                             angle_deg: *angle_deg,
                             radial: false,
                             radius,
@@ -340,7 +364,13 @@ impl DisplayList {
                     manuk_css::BackgroundImage::Radial { stops } => {
                         items.push(DisplayItem::Gradient {
                             rect: b.rect,
-                            stops: stops.iter().map(|s| manuk_css::ColorStop { color: fade(s.color), at: s.at }).collect(),
+                            stops: stops
+                                .iter()
+                                .map(|s| manuk_css::ColorStop {
+                                    color: fade(s.color),
+                                    at: s.at,
+                                })
+                                .collect(),
                             angle_deg: 0.0,
                             radial: true,
                             radius,
@@ -372,7 +402,12 @@ impl DisplayList {
                 let mut edge = |x: f32, y: f32, w: f32, h: f32| {
                     if w > 0.0 && h > 0.0 {
                         items.push(DisplayItem::Rect {
-                            rect: Rect { x, y, width: w, height: h },
+                            rect: Rect {
+                                x,
+                                y,
+                                width: w,
+                                height: h,
+                            },
                             color: c,
                         });
                     }
@@ -452,7 +487,15 @@ impl DisplayList {
                 if ow > 0.0 && oc.a > 0 {
                     let r = b.rect;
                     let mut edge = |x: f32, y: f32, w: f32, h: f32| {
-                        items.push(DisplayItem::Rect { rect: Rect { x, y, width: w, height: h }, color: oc });
+                        items.push(DisplayItem::Rect {
+                            rect: Rect {
+                                x,
+                                y,
+                                width: w,
+                                height: h,
+                            },
+                            color: oc,
+                        });
                     };
                     edge(r.x - ow, r.y - ow, r.width + ow * 2.0, ow);
                     edge(r.x - ow, r.y + r.height, r.width + ow * 2.0, ow);
@@ -480,8 +523,8 @@ impl Canvas {
     /// A blank canvas filled with `background` — for a page-less view (new tab) that still
     /// needs browser chrome drawn on it.
     pub fn new(width: u32, height: u32, background: Rgba) -> Self {
-        let mut pixmap = tiny_skia::Pixmap::new(width.max(1), height.max(1))
-            .expect("valid pixmap dimensions");
+        let mut pixmap =
+            tiny_skia::Pixmap::new(width.max(1), height.max(1)).expect("valid pixmap dimensions");
         pixmap.fill(tiny_skia::Color::from_rgba8(
             background.r,
             background.g,
@@ -543,13 +586,27 @@ impl Canvas {
             width: w,
             ..Default::default()
         };
-        self.pixmap
-            .stroke_path(&path, &paint, &stroke, tiny_skia::Transform::identity(), None);
+        self.pixmap.stroke_path(
+            &path,
+            &paint,
+            &stroke,
+            tiny_skia::Transform::identity(),
+            None,
+        );
     }
 
     /// Fill an opaque rect (used for browser chrome bands drawn over the page).
     pub fn fill_rect(&mut self, x: f32, y: f32, width: f32, height: f32, color: Rgba) {
-        fill_rect(&mut self.pixmap, Rect { x, y, width, height }, color);
+        fill_rect(
+            &mut self.pixmap,
+            Rect {
+                x,
+                y,
+                width,
+                height,
+            },
+            color,
+        );
     }
 
     /// Draw a text string with its baseline at `baseline`, left edge at `origin_x`. Shapes
@@ -690,12 +747,21 @@ impl CpuPainter<'_> {
                         }
                         fill_rect(&mut pixmap, r, *color);
                     }
-                    DisplayItem::RoundRect { rect, color, radius } => {
+                    DisplayItem::RoundRect {
+                        rect,
+                        color,
+                        radius,
+                    } => {
                         let mut r = *rect;
                         r.y -= scroll_y;
                         fill_round_rect(&mut pixmap, r, *color, *radius, clip);
                     }
-                    DisplayItem::Shadow { rect, color, radius, blur } => {
+                    DisplayItem::Shadow {
+                        rect,
+                        color,
+                        radius,
+                        blur,
+                    } => {
                         let mut r = *rect;
                         r.y -= scroll_y;
                         fill_shadow(&mut pixmap, r, *color, *radius, *blur, clip);
@@ -716,18 +782,41 @@ impl CpuPainter<'_> {
                         r.y -= scroll_y;
                         blit_masked(&mut pixmap, mask, *color, r, clip);
                     }
-                    DisplayItem::BackgroundImage { rect, image, size, repeat, radius } => {
+                    DisplayItem::BackgroundImage {
+                        rect,
+                        image,
+                        size,
+                        repeat,
+                        radius,
+                    } => {
                         let mut r = *rect;
                         r.y -= scroll_y;
                         blit_background(&mut pixmap, image, r, *size, *repeat, *radius, clip);
                     }
-                    DisplayItem::Gradient { rect, stops, angle_deg, radial, radius } => {
+                    DisplayItem::Gradient {
+                        rect,
+                        stops,
+                        angle_deg,
+                        radial,
+                        radius,
+                    } => {
                         let mut r = *rect;
                         r.y -= scroll_y;
                         fill_gradient(&mut pixmap, r, stops, *angle_deg, *radial, *radius, clip);
                     }
-                    DisplayItem::TextLine { x, y, width, thickness, color } => {
-                        let mut r = Rect { x: *x, y: *y - scroll_y, width: *width, height: *thickness };
+                    DisplayItem::TextLine {
+                        x,
+                        y,
+                        width,
+                        thickness,
+                        color,
+                    } => {
+                        let mut r = Rect {
+                            x: *x,
+                            y: *y - scroll_y,
+                            width: *width,
+                            height: *thickness,
+                        };
                         if let Some(cl) = clip {
                             r = r.intersect(&cl);
                         }
@@ -991,7 +1080,12 @@ fn fill_shadow(
 
 /// Scale a decoded (straight-alpha) RGBA image into `rect` and blit it onto the pixmap
 /// with bilinear filtering.
-fn blit_image(pixmap: &mut tiny_skia::Pixmap, image: &DecodedImage, rect: Rect, clip: Option<Rect>) {
+fn blit_image(
+    pixmap: &mut tiny_skia::Pixmap,
+    image: &DecodedImage,
+    rect: Rect,
+    clip: Option<Rect>,
+) {
     if rect.width <= 0.0 || rect.height <= 0.0 || image.width == 0 || image.height == 0 {
         return;
     }
@@ -1026,7 +1120,8 @@ fn blit_image(pixmap: &mut tiny_skia::Pixmap, image: &DecodedImage, rect: Rect, 
 /// overflow-clipping ancestor's box.
 fn rect_mask(pw: u32, ph: u32, clip: Rect) -> Option<tiny_skia::Mask> {
     let mut mask = tiny_skia::Mask::new(pw, ph)?;
-    let rect = tiny_skia::Rect::from_xywh(clip.x, clip.y, clip.width.max(0.0), clip.height.max(0.0))?;
+    let rect =
+        tiny_skia::Rect::from_xywh(clip.x, clip.y, clip.width.max(0.0), clip.height.max(0.0))?;
     let path = tiny_skia::PathBuilder::from_rect(rect);
     mask.fill_path(
         &path,
@@ -1117,7 +1212,9 @@ mod bg_tests {
         let dom = manuk_html::parse(r#"<div id="hidden">Submit</div><p id="ok">visible</p>"#);
         let styles = MinimalCascade.cascade(
             &dom,
-            &[Stylesheet::parse("#hidden{font-size:0;color:#888888} #ok{font-size:16px}")],
+            &[Stylesheet::parse(
+                "#hidden{font-size:0;color:#888888} #ok{font-size:16px}",
+            )],
         );
         let fonts = FontContext::new();
         let root = manuk_layout::layout_document(&dom, &styles, &fonts, 400.0);
@@ -1141,7 +1238,10 @@ mod bg_tests {
             .chunks_exact(4)
             .filter(|p| p[0] < 250 || p[1] < 250 || p[2] < 250)
             .count();
-        assert!(inked > 40, "the 16px paragraph must still paint; only {inked}px inked");
+        assert!(
+            inked > 40,
+            "the 16px paragraph must still paint; only {inked}px inked"
+        );
     }
 
     /// Regression: **an anonymous box must inherit its ancestors' stacking layer and clip.**
@@ -1231,7 +1331,9 @@ mod bg_tests {
         let dom = manuk_html::parse(r#"<div id="d">x</div>"#);
         let styles = MinimalCascade.cascade(
             &dom,
-            &[Stylesheet::parse("#d{width:300px;height:120px;background-image:url(t.png)}")],
+            &[Stylesheet::parse(
+                "#d{width:300px;height:120px;background-image:url(t.png)}",
+            )],
         );
         let fonts = FontContext::new();
         let root = manuk_layout::layout_document(&dom, &styles, &fonts, 400.0);
@@ -1244,7 +1346,11 @@ mod bg_tests {
         let mut images = std::collections::HashMap::new();
         images.insert(
             node,
-            std::rc::Rc::new(DecodedImage { width: 40, height: 30, rgba: vec![255; 40 * 30 * 4] }),
+            std::rc::Rc::new(DecodedImage {
+                width: 40,
+                height: 30,
+                rgba: vec![255; 40 * 30 * 4],
+            }),
         );
 
         let items = DisplayList::build_with_images(&root, &images).items;
@@ -1252,7 +1358,10 @@ mod bg_tests {
             .iter()
             .filter(|i| matches!(i, DisplayItem::BackgroundImage { .. }))
             .count();
-        let replaced = items.iter().filter(|i| matches!(i, DisplayItem::Image { .. })).count();
+        let replaced = items
+            .iter()
+            .filter(|i| matches!(i, DisplayItem::Image { .. }))
+            .count();
 
         assert_eq!(
             backgrounds, 1,
@@ -1275,25 +1384,46 @@ mod tests {
     #[test]
     fn display_list_change_detection_and_damage() {
         let red = DisplayItem::Rect {
-            rect: Rect { x: 0.0, y: 0.0, width: 10.0, height: 10.0 },
+            rect: Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 10.0,
+                height: 10.0,
+            },
             color: Rgba::new(255, 0, 0, 255),
         };
         let blue = DisplayItem::Rect {
-            rect: Rect { x: 100.0, y: 100.0, width: 20.0, height: 20.0 },
+            rect: Rect {
+                x: 100.0,
+                y: 100.0,
+                width: 20.0,
+                height: 20.0,
+            },
             color: Rgba::new(0, 0, 255, 255),
         };
-        let a = DisplayList { items: vec![red.clone(), blue.clone()] };
-        let b = DisplayList { items: vec![red.clone(), blue.clone()] };
+        let a = DisplayList {
+            items: vec![red.clone(), blue.clone()],
+        };
+        let b = DisplayList {
+            items: vec![red.clone(), blue.clone()],
+        };
         // Identical lists → no change, no damage (idle frame skips re-upload).
         assert!(!a.changed_since(&b));
         assert_eq!(a.damage_since(&b), None);
 
         // Change the second item's color → changed, and the damage covers its rect.
         let blue2 = DisplayItem::Rect {
-            rect: Rect { x: 100.0, y: 100.0, width: 20.0, height: 20.0 },
+            rect: Rect {
+                x: 100.0,
+                y: 100.0,
+                width: 20.0,
+                height: 20.0,
+            },
             color: Rgba::new(0, 200, 0, 255),
         };
-        let c = DisplayList { items: vec![red, blue2] };
+        let c = DisplayList {
+            items: vec![red, blue2],
+        };
         assert!(c.changed_since(&a));
         let dmg = c.damage_since(&a).expect("some damage");
         // Damage must contain the changed rect (100,100 20x20).
@@ -1360,10 +1490,20 @@ mod tests {
     #[test]
     fn rounded_rect_cuts_the_corners() {
         let mut pm = tiny_skia::Pixmap::new(50, 50).expect("pixmap");
-        let red = Rgba { r: 255, g: 0, b: 0, a: 255 };
+        let red = Rgba {
+            r: 255,
+            g: 0,
+            b: 0,
+            a: 255,
+        };
         fill_round_rect(
             &mut pm,
-            Rect { x: 0.0, y: 0.0, width: 50.0, height: 50.0 },
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 50.0,
+                height: 50.0,
+            },
             red,
             20.0,
             None,
@@ -1372,7 +1512,11 @@ mod tests {
         assert_eq!(alpha(25, 25), 255, "the centre is filled");
         assert_eq!(alpha(0, 0), 0, "the corner is cut away by the 20px radius");
         assert_eq!(alpha(49, 0), 0, "…on every corner");
-        assert_eq!(alpha(25, 0), 255, "but the straight top edge is still filled");
+        assert_eq!(
+            alpha(25, 0),
+            255,
+            "but the straight top edge is still filled"
+        );
     }
 
     /// An outer `box-shadow` paints *outside* the box (softened over `blur`), and nothing at all
@@ -1380,11 +1524,21 @@ mod tests {
     #[test]
     fn box_shadow_paints_outside_the_box() {
         let mut pm = tiny_skia::Pixmap::new(60, 60).expect("pixmap");
-        let black = Rgba { r: 0, g: 0, b: 0, a: 200 };
+        let black = Rgba {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 200,
+        };
         // A 20x20 box at (20,20), shadow blurred 8px: pixels just outside it get some alpha.
         fill_shadow(
             &mut pm,
-            Rect { x: 20.0, y: 20.0, width: 20.0, height: 20.0 },
+            Rect {
+                x: 20.0,
+                y: 20.0,
+                width: 20.0,
+                height: 20.0,
+            },
             black,
             0.0,
             8.0,
@@ -1439,7 +1593,9 @@ fn blit_masked(
                 continue;
             }
             let mi = ((v as u32 * mask.width + u as u32) * 4) as usize;
-            let Some(&ma) = mask.rgba.get(mi + 3) else { continue };
+            let Some(&ma) = mask.rgba.get(mi + 3) else {
+                continue;
+            };
             if ma == 0 {
                 continue;
             }
@@ -1448,30 +1604,32 @@ fn blit_masked(
                 continue;
             }
             let di = (py * pw + px) as usize;
-            let Some(dst) = data.get_mut(di) else { continue };
+            let Some(dst) = data.get_mut(di) else {
+                continue;
+            };
             // Source-over, on premultiplied storage.
             let inv = 1.0 - a;
             let blend = |s: u8, d: u8| -> u8 {
-                ((s as f32 * a) + (d as f32 * inv)).round().clamp(0.0, 255.0) as u8
+                ((s as f32 * a) + (d as f32 * inv))
+                    .round()
+                    .clamp(0.0, 255.0) as u8
             };
             let (r, g, b) = (
                 blend(color.r, dst.red()),
                 blend(color.g, dst.green()),
                 blend(color.b, dst.blue()),
             );
-            let na = ((a * 255.0) + (dst.alpha() as f32 * inv)).round().clamp(0.0, 255.0) as u8;
-            if let Some(p) = tiny_skia::PremultipliedColorU8::from_rgba(
-                r.min(na),
-                g.min(na),
-                b.min(na),
-                na,
-            ) {
+            let na = ((a * 255.0) + (dst.alpha() as f32 * inv))
+                .round()
+                .clamp(0.0, 255.0) as u8;
+            if let Some(p) =
+                tiny_skia::PremultipliedColorU8::from_rgba(r.min(na), g.min(na), b.min(na), na)
+            {
                 *dst = p;
             }
         }
     }
 }
-
 
 /// Fill `rect` with a **gradient** — the modern web's most common background.
 ///
@@ -1528,7 +1686,11 @@ fn fill_gradient(
             if t >= a.at && t <= b.at {
                 let span = (b.at - a.at).max(1e-6);
                 let f = (t - a.at) / span;
-                let lerp = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * f).round().clamp(0.0, 255.0) as u8;
+                let lerp = |x: u8, y: u8| {
+                    (x as f32 + (y as f32 - x as f32) * f)
+                        .round()
+                        .clamp(0.0, 255.0) as u8
+                };
                 return Rgba {
                     r: lerp(a.color.r, b.color.r),
                     g: lerp(a.color.g, b.color.g),
@@ -1560,12 +1722,26 @@ fn fill_gradient(
             }
             let al = c.a as f32 / 255.0;
             let di = (py * pw + px) as usize;
-            let Some(dst) = data.get_mut(di) else { continue };
+            let Some(dst) = data.get_mut(di) else {
+                continue;
+            };
             let inv = 1.0 - al;
-            let blend = |s: u8, d: u8| ((s as f32 * al) + (d as f32 * inv)).round().clamp(0.0, 255.0) as u8;
-            let na = ((al * 255.0) + (dst.alpha() as f32 * inv)).round().clamp(0.0, 255.0) as u8;
-            let (rr, gg, bb) = (blend(c.r, dst.red()), blend(c.g, dst.green()), blend(c.b, dst.blue()));
-            if let Some(p) = tiny_skia::PremultipliedColorU8::from_rgba(rr.min(na), gg.min(na), bb.min(na), na) {
+            let blend = |s: u8, d: u8| {
+                ((s as f32 * al) + (d as f32 * inv))
+                    .round()
+                    .clamp(0.0, 255.0) as u8
+            };
+            let na = ((al * 255.0) + (dst.alpha() as f32 * inv))
+                .round()
+                .clamp(0.0, 255.0) as u8;
+            let (rr, gg, bb) = (
+                blend(c.r, dst.red()),
+                blend(c.g, dst.green()),
+                blend(c.b, dst.blue()),
+            );
+            if let Some(p) =
+                tiny_skia::PremultipliedColorU8::from_rgba(rr.min(na), gg.min(na), bb.min(na), na)
+            {
                 *dst = p;
             }
         }
@@ -1593,7 +1769,6 @@ fn inside_round_rect(x: f32, y: f32, r: &Rect, rad: f32) -> bool {
     }
     true
 }
-
 
 /// Paint a `background-image` into `rect`: at its **natural size** by default, **tiled** by default,
 /// clipped to the box, honouring `background-size` and `background-repeat`.
@@ -1669,18 +1844,34 @@ fn blit_background(
                 continue;
             }
             let si = ((v as u32 * img.width + u as u32) * 4) as usize;
-            let Some(px4) = img.rgba.get(si..si + 4) else { continue };
+            let Some(px4) = img.rgba.get(si..si + 4) else {
+                continue;
+            };
             let a = px4[3] as f32 / 255.0;
             if a <= 0.002 {
                 continue;
             }
             let di = (py * pw + px) as usize;
-            let Some(dst) = data.get_mut(di) else { continue };
+            let Some(dst) = data.get_mut(di) else {
+                continue;
+            };
             let inv = 1.0 - a;
-            let blend = |s: u8, d: u8| ((s as f32 * a) + (d as f32 * inv)).round().clamp(0.0, 255.0) as u8;
-            let na = ((a * 255.0) + (dst.alpha() as f32 * inv)).round().clamp(0.0, 255.0) as u8;
-            let (rr, gg, bb) = (blend(px4[0], dst.red()), blend(px4[1], dst.green()), blend(px4[2], dst.blue()));
-            if let Some(p) = tiny_skia::PremultipliedColorU8::from_rgba(rr.min(na), gg.min(na), bb.min(na), na) {
+            let blend = |s: u8, d: u8| {
+                ((s as f32 * a) + (d as f32 * inv))
+                    .round()
+                    .clamp(0.0, 255.0) as u8
+            };
+            let na = ((a * 255.0) + (dst.alpha() as f32 * inv))
+                .round()
+                .clamp(0.0, 255.0) as u8;
+            let (rr, gg, bb) = (
+                blend(px4[0], dst.red()),
+                blend(px4[1], dst.green()),
+                blend(px4[2], dst.blue()),
+            );
+            if let Some(p) =
+                tiny_skia::PremultipliedColorU8::from_rgba(rr.min(na), gg.min(na), bb.min(na), na)
+            {
                 *dst = p;
             }
         }

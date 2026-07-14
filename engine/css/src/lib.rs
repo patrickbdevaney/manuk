@@ -151,7 +151,10 @@ pub enum BackgroundImage {
     Url(String),
     /// `linear-gradient(<angle>, stops…)`. `angle_deg` is CSS's convention: 0° points **up**, and
     /// angles increase clockwise.
-    Linear { angle_deg: f32, stops: Vec<ColorStop> },
+    Linear {
+        angle_deg: f32,
+        stops: Vec<ColorStop>,
+    },
     /// `radial-gradient(stops…)` — centred, covering the box (the `farthest-corner` default).
     Radial { stops: Vec<ColorStop> },
 }
@@ -558,7 +561,12 @@ impl ComputedStyle {
             before: None,
             after: None,
             outline_width: 0.0,
-            outline_color: Rgba { r: 0, g: 0, b: 0, a: 0 },
+            outline_color: Rgba {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: 0,
+            },
             opacity: 1.0,
             has_animation: false,
             box_shadow: None,
@@ -679,7 +687,10 @@ pub fn scale_style(style: &ComputedStyle, k: f32) -> ComputedStyle {
 /// Scale a whole [`StyleMap`] for full-page zoom. Always derive from the *base* map;
 /// scaling an already-scaled map compounds.
 pub fn zoom_styles(styles: &StyleMap, k: f32) -> StyleMap {
-    styles.iter().map(|(n, s)| (*n, scale_style(s, k))).collect()
+    styles
+        .iter()
+        .map(|(n, s)| (*n, scale_style(s, k)))
+        .collect()
 }
 
 /// How much work a style change forces (A2 incremental-layout damage taxonomy,
@@ -942,15 +953,20 @@ fn pseudo_matches(p: &Pseudo, dom: &Dom, node: NodeId) -> bool {
                 n >= 0 && a * n + b == idx
             }
         }
-        Pseudo::Root => dom.parent(node).map(|p| !dom.is_element(p)).unwrap_or(false),
+        Pseudo::Root => dom
+            .parent(node)
+            .map(|p| !dom.is_element(p))
+            .unwrap_or(false),
         Pseudo::Empty => !dom.children(node).any(|c| {
             dom.is_element(c) || matches!(dom.data(c), NodeData::Text(t) if !t.trim().is_empty())
         }),
         Pseudo::Checked => el.attr("checked").is_some() || el.attr("selected").is_some(),
         Pseudo::Disabled => el.attr("disabled").is_some(),
         Pseudo::Enabled => {
-            matches!(el.name.as_str(), "input" | "button" | "select" | "textarea" | "option")
-                && el.attr("disabled").is_none()
+            matches!(
+                el.name.as_str(),
+                "input" | "button" | "select" | "textarea" | "option"
+            ) && el.attr("disabled").is_none()
         }
         Pseudo::Required => el.attr("required").is_some(),
         Pseudo::Link => {
@@ -1096,12 +1112,7 @@ fn slotted_matches(dom: &Dom, node: NodeId, scope: Option<NodeId>, subject: &Com
 }
 
 /// Match `sel` against `node` for a sheet in `scope`.
-fn selector_matches_scoped(
-    sel: &Selector,
-    dom: &Dom,
-    node: NodeId,
-    scope: Option<NodeId>,
-) -> bool {
+fn selector_matches_scoped(sel: &Selector, dom: &Dom, node: NodeId, scope: Option<NodeId>) -> bool {
     if sel.slotted {
         let subject = sel.parts.last().expect("::slotted has one compound");
         return slotted_matches(dom, node, scope, subject);
@@ -1167,7 +1178,9 @@ fn selector_matches(sel: &Selector, dom: &Dom, node: NodeId) -> bool {
         let comb = sel.combinators[i];
         match comb {
             Combinator::Child => {
-                let Some(p) = dom.parent(right) else { return false };
+                let Some(p) = dom.parent(right) else {
+                    return false;
+                };
                 if !compound_matches(cand, dom, p) {
                     return false;
                 }
@@ -1185,7 +1198,9 @@ fn selector_matches(sel: &Selector, dom: &Dom, node: NodeId) -> bool {
                 }
             }
             Combinator::NextSibling => {
-                let Some(s) = prev_element_sibling(dom, right) else { return false };
+                let Some(s) = prev_element_sibling(dom, right) else {
+                    return false;
+                };
                 if !compound_matches(cand, dom, s) {
                     return false;
                 }
@@ -1381,7 +1396,12 @@ fn parse_font_face_block(block: &str) -> Option<FontFace> {
     for d in parse_declarations(block) {
         match d.name.as_str() {
             "font-family" => {
-                family = Some(d.value.trim().trim_matches(['"', '\'']).to_ascii_lowercase())
+                family = Some(
+                    d.value
+                        .trim()
+                        .trim_matches(['"', '\''])
+                        .to_ascii_lowercase(),
+                )
             }
             "src" => {
                 let mut rest = d.value.as_str();
@@ -1699,9 +1719,9 @@ fn parse_compound(token: &str) -> Option<Compound> {
             }
             ':' => {
                 chars.next(); // consume ':'
-                // `::before` — a pseudo-ELEMENT is written with two colons. Bailing on the second
-                // one dropped the whole selector, and with it every icon, quote and divider the web
-                // generates this way. (One colon is legal CSS2 syntax for these too.)
+                              // `::before` — a pseudo-ELEMENT is written with two colons. Bailing on the second
+                              // one dropped the whole selector, and with it every icon, quote and divider the web
+                              // generates this way. (One colon is legal CSS2 syntax for these too.)
                 if chars.peek() == Some(&':') {
                     chars.next();
                 }
@@ -1804,8 +1824,8 @@ fn parse_pseudo(name: &str, arg: Option<&str>) -> Option<Pseudo> {
         "after" => Pseudo::After,
         // Dynamic / state pseudos we can't evaluate in a static render → never match, so a
         // rule gated on them just doesn't apply (rather than dropping the whole rule).
-        "hover" | "focus" | "active" | "visited" | "target" | "focus-within"
-        | "focus-visible" | "read-write" | "placeholder-shown" | "autofill" => Pseudo::NeverStatic,
+        "hover" | "focus" | "active" | "visited" | "target" | "focus-within" | "focus-visible"
+        | "read-write" | "placeholder-shown" | "autofill" => Pseudo::NeverStatic,
         "nth-child" => {
             let (a, b) = parse_nth(arg?)?;
             Pseudo::NthChild(a, b)
@@ -1997,16 +2017,23 @@ impl MinimalCascade {
         for scoped in sheets {
             for rule in &scoped.sheet.rules {
                 for sel in &rule.selectors {
-                    let entry = IndexedRule { scope: scoped.scope, sel, rule, order };
+                    let entry = IndexedRule {
+                        scope: scoped.scope,
+                        sel,
+                        rule,
+                        order,
+                    };
                     // The subject compound is the rightmost part.
                     let key = sel.parts.last();
                     match key {
                         // `::slotted(x)` reaches across the shadow boundary; keep it universal so
                         // it is never index-skipped.
                         _ if sel.slotted => ix.universal.push(entry),
-                        Some(c) if c.id.is_some() => {
-                            ix.by_id.entry(c.id.clone().unwrap()).or_default().push(entry)
-                        }
+                        Some(c) if c.id.is_some() => ix
+                            .by_id
+                            .entry(c.id.clone().unwrap())
+                            .or_default()
+                            .push(entry),
                         Some(c) if !c.classes.is_empty() => ix
                             .by_class
                             .entry(c.classes[0].clone())
@@ -2112,7 +2139,10 @@ impl MinimalCascade {
                     ps.content.as_ref()?;
                     Some(Box::new(ps))
                 }
-                let (pb, pa) = (cascade_pseudo(&s, pseudo_before), cascade_pseudo(&s, pseudo_after));
+                let (pb, pa) = (
+                    cascade_pseudo(&s, pseudo_before),
+                    cascade_pseudo(&s, pseudo_after),
+                );
                 s.before = pb;
                 s.after = pa;
 
@@ -2169,9 +2199,7 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
         // configuration and none in the other.
         "head" | "title" | "meta" | "link" | "script" | "style" | "base" | "noscript"
         | "template" | "source" | "track" | "param" | "area" | "datalist" | "basefont"
-        | "noembed" | "noframes" | "rp" => {
-            (None, 0.0, 400, 1.0)
-        }
+        | "noembed" | "noframes" | "rp" => (None, 0.0, 400, 1.0),
         // Form controls render as replaced-ish inline-block boxes (styled below).
         "input" | "button" | "textarea" | "select" => (InlineBlock, 0.0, 400, 1.0),
         // Default for unknown/other elements is inline (per CSS).
@@ -2202,7 +2230,12 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
             s.height = Dim::Px(48.0);
         }
         if tag == "input" {
-            match el.attr("type").unwrap_or("text").to_ascii_lowercase().as_str() {
+            match el
+                .attr("type")
+                .unwrap_or("text")
+                .to_ascii_lowercase()
+                .as_str()
+            {
                 // Button-like inputs hug their label (like <button>).
                 "submit" | "reset" | "button" | "file" => {
                     s.background_color = Some(Rgba::new(239, 239, 239, 255));
@@ -2271,7 +2304,10 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
     // its presentational width/height attributes (author CSS width/height still overrides,
     // as those are applied after UA defaults). Natural (intrinsic) sizing from the decoded
     // bitmap is layered on in the image pipeline.
-    if matches!(tag, "img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe") {
+    if matches!(
+        tag,
+        "img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe"
+    ) {
         s.display = Display::InlineBlock;
         if let Some(w) = el.attr("width").and_then(parse_dimension_attr) {
             s.width = Dim::Px(w);
@@ -2629,7 +2665,11 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         "mask-image" | "-webkit-mask-image" => {
             let v = v.trim();
             if let Some(rest) = v.strip_prefix("url(") {
-                let inner = rest.trim_end_matches(')').trim().trim_matches('"').trim_matches('\'');
+                let inner = rest
+                    .trim_end_matches(')')
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('\'');
                 if !inner.is_empty() {
                     s.mask_image = Some(inner.to_string());
                 }
@@ -2792,8 +2832,9 @@ fn parse_border_shorthand(v: &str, fs: f32) -> (Option<f32>, Option<Rgba>) {
     for tok in v.split_whitespace() {
         match tok {
             "none" | "hidden" => width = Some(0.0),
-            "solid" | "dashed" | "dotted" | "double" | "groove" | "ridge" | "inset"
-            | "outset" => saw_visible_style = true,
+            "solid" | "dashed" | "dotted" | "double" | "groove" | "ridge" | "inset" | "outset" => {
+                saw_visible_style = true
+            }
             "thin" => width = Some(1.0),
             "medium" => width = Some(3.0),
             "thick" => width = Some(5.0),
@@ -2963,12 +3004,22 @@ pub fn parse_background_image(v: &str) -> Option<BackgroundImage> {
             _ => (&sp[..], None),
         };
         let color = values::parse_color(cpart.trim())?;
-        let at = pos.unwrap_or(if n <= 1 { 0.0 } else { i as f32 / (n - 1) as f32 });
-        stops.push(ColorStop { color, at: at.clamp(0.0, 1.0) });
+        let at = pos.unwrap_or(if n <= 1 {
+            0.0
+        } else {
+            i as f32 / (n - 1) as f32
+        });
+        stops.push(ColorStop {
+            color,
+            at: at.clamp(0.0, 1.0),
+        });
     }
     if stops.len() == 1 {
         // A single stop is a solid fill; give it two ends so the painter's interpolation is uniform.
-        stops.push(ColorStop { at: 1.0, ..stops[0] });
+        stops.push(ColorStop {
+            at: 1.0,
+            ..stops[0]
+        });
     }
     Some(match kind {
         0 => BackgroundImage::Linear { angle_deg, stops },
@@ -3073,7 +3124,10 @@ fn parse_box_shadow(v: &str, fs: f32) -> Option<BoxShadow> {
         }
     }
     let first = &v[..end];
-    if first.split_whitespace().any(|t| t.eq_ignore_ascii_case("inset")) {
+    if first
+        .split_whitespace()
+        .any(|t| t.eq_ignore_ascii_case("inset"))
+    {
         return None; // inset shadows aren't painted yet
     }
 
@@ -3105,26 +3159,52 @@ fn parse_transform(v: &str, fs: f32) -> Vec<TransformFn> {
     let mut rest = v.trim();
     while let Some(open) = rest.find('(') {
         let name = rest[..open].trim().to_ascii_lowercase();
-        let Some(close) = rest[open..].find(')') else { break };
+        let Some(close) = rest[open..].find(')') else {
+            break;
+        };
         let args_str = &rest[open + 1..open + close];
-        let nums: Vec<&str> = args_str.split(',').map(str::trim).filter(|s| !s.is_empty()).collect();
+        let nums: Vec<&str> = args_str
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .collect();
         let angle = |s: &str| parse_angle_rad(s);
         let f = |i: usize| nums.get(i).and_then(|s| s.parse::<f32>().ok());
-        let dim = |i: usize| nums.get(i).map(|s| values::parse_dim(s, fs)).unwrap_or(Dim::Px(0.0));
+        let dim = |i: usize| {
+            nums.get(i)
+                .map(|s| values::parse_dim(s, fs))
+                .unwrap_or(Dim::Px(0.0))
+        };
         match name.as_str() {
-            "translate" => out.push(TransformFn::Translate(dim(0), nums.get(1).map(|s| values::parse_dim(s, fs)).unwrap_or(Dim::Px(0.0)))),
+            "translate" => out.push(TransformFn::Translate(
+                dim(0),
+                nums.get(1)
+                    .map(|s| values::parse_dim(s, fs))
+                    .unwrap_or(Dim::Px(0.0)),
+            )),
             "translatex" => out.push(TransformFn::Translate(dim(0), Dim::Px(0.0))),
             "translatey" => out.push(TransformFn::Translate(Dim::Px(0.0), dim(0))),
-            "scale" => out.push(TransformFn::Scale(f(0).unwrap_or(1.0), f(1).or(f(0)).unwrap_or(1.0))),
+            "scale" => out.push(TransformFn::Scale(
+                f(0).unwrap_or(1.0),
+                f(1).or(f(0)).unwrap_or(1.0),
+            )),
             "scalex" => out.push(TransformFn::Scale(f(0).unwrap_or(1.0), 1.0)),
             "scaley" => out.push(TransformFn::Scale(1.0, f(0).unwrap_or(1.0))),
-            "rotate" => out.push(TransformFn::Rotate(nums.first().and_then(|s| angle(s)).unwrap_or(0.0))),
+            "rotate" => out.push(TransformFn::Rotate(
+                nums.first().and_then(|s| angle(s)).unwrap_or(0.0),
+            )),
             "skew" => out.push(TransformFn::Skew(
                 nums.first().and_then(|s| angle(s)).unwrap_or(0.0),
                 nums.get(1).and_then(|s| angle(s)).unwrap_or(0.0),
             )),
-            "skewx" => out.push(TransformFn::Skew(nums.first().and_then(|s| angle(s)).unwrap_or(0.0), 0.0)),
-            "skewy" => out.push(TransformFn::Skew(0.0, nums.first().and_then(|s| angle(s)).unwrap_or(0.0))),
+            "skewx" => out.push(TransformFn::Skew(
+                nums.first().and_then(|s| angle(s)).unwrap_or(0.0),
+                0.0,
+            )),
+            "skewy" => out.push(TransformFn::Skew(
+                0.0,
+                nums.first().and_then(|s| angle(s)).unwrap_or(0.0),
+            )),
             "matrix" => {
                 if nums.len() == 6 {
                     let mut m = [0.0f32; 6];
@@ -3150,7 +3230,9 @@ fn parse_transform(v: &str, fs: f32) -> Vec<TransformFn> {
 /// Parse an `<angle>` (`deg`/`rad`/`grad`/`turn`, default deg) to radians.
 fn parse_angle_rad(s: &str) -> Option<f32> {
     let s = s.trim();
-    let (num, unit) = s.find(|c: char| c.is_ascii_alphabetic()).map_or((s, ""), |i| s.split_at(i));
+    let (num, unit) = s
+        .find(|c: char| c.is_ascii_alphabetic())
+        .map_or((s, ""), |i| s.split_at(i));
     let n: f32 = num.trim().parse().ok()?;
     Some(match unit.to_ascii_lowercase().as_str() {
         "rad" => n,
@@ -3210,14 +3292,26 @@ fn parse_track(t: &str, fs: f32) -> Option<TrackSize> {
     if low == "max-content" {
         return Some(TrackSize::MaxContent);
     }
-    if let Some(inner) = low.strip_prefix("minmax(").and_then(|s| s.strip_suffix(')')) {
+    if let Some(inner) = low
+        .strip_prefix("minmax(")
+        .and_then(|s| s.strip_suffix(')'))
+    {
         let (a, b) = inner.split_once(',')?;
-        return Some(TrackSize::MinMax(parse_track_unit(a.trim(), fs)?, parse_track_unit(b.trim(), fs)?));
+        return Some(TrackSize::MinMax(
+            parse_track_unit(a.trim(), fs)?,
+            parse_track_unit(b.trim(), fs)?,
+        ));
     }
-    if let Some(n) = t.strip_suffix("fr").and_then(|n| n.trim().parse::<f32>().ok()) {
+    if let Some(n) = t
+        .strip_suffix("fr")
+        .and_then(|n| n.trim().parse::<f32>().ok())
+    {
         return Some(TrackSize::Fr(n));
     }
-    if let Some(p) = t.strip_suffix('%').and_then(|n| n.trim().parse::<f32>().ok()) {
+    if let Some(p) = t
+        .strip_suffix('%')
+        .and_then(|n| n.trim().parse::<f32>().ok())
+    {
         return Some(TrackSize::Percent(p));
     }
     values::parse_length_px(t, fs).map(TrackSize::Px)
@@ -3230,9 +3324,15 @@ fn parse_track_unit(t: &str, fs: f32) -> Option<TrackUnit> {
         "min-content" => Some(TrackUnit::MinContent),
         "max-content" => Some(TrackUnit::MaxContent),
         _ => {
-            if let Some(n) = t.strip_suffix("fr").and_then(|n| n.trim().parse::<f32>().ok()) {
+            if let Some(n) = t
+                .strip_suffix("fr")
+                .and_then(|n| n.trim().parse::<f32>().ok())
+            {
                 Some(TrackUnit::Fr(n))
-            } else if let Some(p) = t.strip_suffix('%').and_then(|n| n.trim().parse::<f32>().ok()) {
+            } else if let Some(p) = t
+                .strip_suffix('%')
+                .and_then(|n| n.trim().parse::<f32>().ok())
+            {
                 Some(TrackUnit::Percent(p))
             } else {
                 values::parse_length_px(t, fs).map(TrackUnit::Px)
@@ -3255,10 +3355,16 @@ fn parse_grid_line(v: &str) -> GridLine {
     if v.eq_ignore_ascii_case("auto") || v.is_empty() {
         return GridLine::Auto;
     }
-    if let Some(n) = v.strip_prefix("span").map(str::trim).and_then(|n| n.parse::<u16>().ok()) {
+    if let Some(n) = v
+        .strip_prefix("span")
+        .map(str::trim)
+        .and_then(|n| n.parse::<u16>().ok())
+    {
         return GridLine::Span(n.max(1));
     }
-    v.parse::<i16>().map(GridLine::Line).unwrap_or(GridLine::Auto)
+    v.parse::<i16>()
+        .map(GridLine::Line)
+        .unwrap_or(GridLine::Auto)
 }
 
 /// Expand `repeat(N, <single-track>)` occurrences into N copies of the track.
@@ -3331,7 +3437,11 @@ fn parse_flex_shorthand(s: &mut ComputedStyle, v: &str) {
         _ => {}
     }
     // An explicit basis wins; otherwise a numeric `flex` sets basis 0 (not auto).
-    s.flex_basis = basis.unwrap_or(if nums.is_empty() { Dim::Auto } else { Dim::Px(0.0) });
+    s.flex_basis = basis.unwrap_or(if nums.is_empty() {
+        Dim::Auto
+    } else {
+        Dim::Px(0.0)
+    });
 }
 
 /// Expand a 1–4 value `border-width` shorthand (same edge order as `margin`).
@@ -3340,13 +3450,28 @@ fn set_border_widths(sides: &mut Sides<f32>, v: &str, fs: f32) {
     match vals.as_slice() {
         [a] => *sides = Sides::all(*a),
         [a, b] => {
-            *sides = Sides { top: *a, bottom: *a, right: *b, left: *b };
+            *sides = Sides {
+                top: *a,
+                bottom: *a,
+                right: *b,
+                left: *b,
+            };
         }
         [a, b, c] => {
-            *sides = Sides { top: *a, right: *b, left: *b, bottom: *c };
+            *sides = Sides {
+                top: *a,
+                right: *b,
+                left: *b,
+                bottom: *c,
+            };
         }
         [a, b, c, d] => {
-            *sides = Sides { top: *a, right: *b, bottom: *c, left: *d };
+            *sides = Sides {
+                top: *a,
+                right: *b,
+                bottom: *c,
+                left: *d,
+            };
         }
         _ => {}
     }
@@ -3598,12 +3723,19 @@ mod shadow_scoping_tests {
         );
         let outer = dom.find_first("p").expect("light-DOM p");
         assert_eq!(dom.element(outer).unwrap().attr("id"), Some("outer"));
-        assert_eq!(map[&outer].color, Rgba::new(255, 0, 0, 255), "the light-DOM p is red");
+        assert_eq!(
+            map[&outer].color,
+            Rgba::new(255, 0, 0, 255),
+            "the light-DOM p is red"
+        );
 
         // The shadow <p> is a different <p>; find it through the shadow root.
         let host = dom.find_first("div").unwrap();
         let shadow = dom.shadow_root(host).unwrap();
-        let inner = dom.descendants(shadow).find(|&n| dom.tag_name(n) == Some("p")).unwrap();
+        let inner = dom
+            .descendants(shadow)
+            .find(|&n| dom.tag_name(n) == Some("p"))
+            .unwrap();
         assert_ne!(inner, outer);
         assert_ne!(
             map[&inner].color,
@@ -3626,8 +3758,15 @@ mod shadow_scoping_tests {
         );
         let host = dom.find_first("div").unwrap();
         let shadow = dom.shadow_root(host).unwrap();
-        let inner = dom.descendants(shadow).find(|&n| dom.tag_name(n) == Some("p")).unwrap();
-        assert_eq!(map[&inner].color, Rgba::new(0, 255, 0, 255), "the shadow p is green");
+        let inner = dom
+            .descendants(shadow)
+            .find(|&n| dom.tag_name(n) == Some("p"))
+            .unwrap();
+        assert_eq!(
+            map[&inner].color,
+            Rgba::new(0, 255, 0, 255),
+            "the shadow p is green"
+        );
 
         // The light-DOM <p> is the one that is NOT inside the shadow root.
         let outer = dom
@@ -3657,7 +3796,11 @@ mod shadow_scoping_tests {
                </div>"#,
         );
         let p = dom.find_first("p").unwrap();
-        assert_eq!(map[&p].color, Rgba::new(0, 0, 255, 255), "::slotted(p) styles the slotted p");
+        assert_eq!(
+            map[&p].color,
+            Rgba::new(0, 0, 255, 255),
+            "::slotted(p) styles the slotted p"
+        );
 
         // ...but not the slotted <span>: the compound must still match.
         let span = dom.find_first("span").unwrap();
@@ -3702,7 +3845,10 @@ mod shadow_scoping_tests {
         );
         let host = dom.find_first("div").unwrap();
         let shadow = dom.shadow_root(host).unwrap();
-        let em = dom.descendants(shadow).find(|&n| dom.tag_name(n) == Some("em")).unwrap();
+        let em = dom
+            .descendants(shadow)
+            .find(|&n| dom.tag_name(n) == Some("em"))
+            .unwrap();
         // `color` inherits from the host across the shadow boundary (inheritance is
         // flat-tree, not scoped -- only *matching* is scoped).
         assert_eq!(map[&host].color, Rgba::new(0x12, 0x34, 0x56, 255));
@@ -3711,11 +3857,14 @@ mod shadow_scoping_tests {
 
     #[test]
     fn border_shorthand_and_box_sizing_parse() {
-        let (dom, map) = cascade_of(
-            r#"<p style="border:5px solid #333;box-sizing:border-box"></p>"#,
-        );
+        let (dom, map) =
+            cascade_of(r#"<p style="border:5px solid #333;box-sizing:border-box"></p>"#);
         let s = &map[&dom.find_first("p").unwrap()];
-        assert_eq!(s.border_width, Sides::all(5.0), "border shorthand sets all widths");
+        assert_eq!(
+            s.border_width,
+            Sides::all(5.0),
+            "border shorthand sets all widths"
+        );
         assert_eq!(s.border_color, Rgba::new(0x33, 0x33, 0x33, 255));
         assert_eq!(s.box_sizing, BoxSizing::BorderBox);
 
@@ -3726,40 +3875,69 @@ mod shadow_scoping_tests {
         let s = &map[&dom.find_first("p").unwrap()];
         assert_eq!(s.border_width.right, 2.0);
         assert_eq!(s.border_width.bottom, 3.0);
-        assert_eq!(s.border_width.left, 3.0, "border-left: dashed -> medium 3px");
+        assert_eq!(
+            s.border_width.left, 3.0,
+            "border-left: dashed -> medium 3px"
+        );
         assert_eq!(s.border_width.top, 5.0, "border-top-width: thick -> 5px");
 
         // `border-style: none` zeroes the width set by an earlier `border`.
         let (dom, map) = cascade_of(r#"<p style="border:10px solid;border-style:none"></p>"#);
-        assert_eq!(map[&dom.find_first("p").unwrap()].border_width, Sides::all(0.0));
+        assert_eq!(
+            map[&dom.find_first("p").unwrap()].border_width,
+            Sides::all(0.0)
+        );
 
         // Default box-sizing is content-box.
         let (dom, map) = cascade_of(r#"<p style="width:10px"></p>"#);
-        assert_eq!(map[&dom.find_first("p").unwrap()].box_sizing, BoxSizing::ContentBox);
+        assert_eq!(
+            map[&dom.find_first("p").unwrap()].box_sizing,
+            BoxSizing::ContentBox
+        );
     }
 
     #[test]
     fn font_family_resolves_generics_named_and_ua() {
         // Generic keyword after an unavailable named font falls through to the generic.
-        assert_eq!(parse_font_family("Arial, sans-serif"), vec!["arial", "sans-serif"]);
-        assert_eq!(parse_font_family("Georgia, serif"), vec!["georgia", "serif"]);
-        assert_eq!(parse_font_family("'Courier New', monospace"), vec!["courier new", "monospace"]);
+        assert_eq!(
+            parse_font_family("Arial, sans-serif"),
+            vec!["arial", "sans-serif"]
+        );
+        assert_eq!(
+            parse_font_family("Georgia, serif"),
+            vec!["georgia", "serif"]
+        );
+        assert_eq!(
+            parse_font_family("'Courier New', monospace"),
+            vec!["courier new", "monospace"]
+        );
         // Named families we know map to their generic even without a following keyword.
         // Named families are preserved (the text layer resolves them).
-        assert_eq!(parse_font_family("Times New Roman"), vec!["times new roman"]);
-        assert_eq!(parse_font_family("Menlo, monospace"), vec!["menlo", "monospace"]);
+        assert_eq!(
+            parse_font_family("Times New Roman"),
+            vec!["times new roman"]
+        );
+        assert_eq!(
+            parse_font_family("Menlo, monospace"),
+            vec!["menlo", "monospace"]
+        );
 
         // Cascade: an author family list applies and is inherited; UA gives <code> monospace.
-        let (dom, map) = cascade_of(
-            r#"<div style="font-family:'MyFont', monospace">a<code>b</code></div>"#,
-        );
+        let (dom, map) =
+            cascade_of(r#"<div style="font-family:'MyFont', monospace">a<code>b</code></div>"#);
         let div = dom.find_first("div").unwrap();
         assert_eq!(map[&div].font_family, vec!["myfont", "monospace"]);
-        assert_eq!(map[&dom.find_first("code").unwrap()].font_family, vec!["monospace"]);
+        assert_eq!(
+            map[&dom.find_first("code").unwrap()].font_family,
+            vec!["monospace"]
+        );
 
         // A bare <pre> is monospace by UA default even without an author rule.
         let (dom, map) = cascade_of("<pre>x</pre>");
-        assert_eq!(map[&dom.find_first("pre").unwrap()].font_family, vec!["monospace"]);
+        assert_eq!(
+            map[&dom.find_first("pre").unwrap()].font_family,
+            vec!["monospace"]
+        );
     }
 
     #[test]
@@ -3791,14 +3969,20 @@ mod shadow_scoping_tests {
         assert!(m("[href]", a1));
         assert!(m("input[type=submit]", sub));
         assert!(m("a[href^='/']", a1), "prefix match");
-        let a2 = dom.descendants(dom.root())
-            .filter(|&n| dom.tag_name(n) == Some("a")).nth(1).unwrap();
+        let a2 = dom
+            .descendants(dom.root())
+            .filter(|&n| dom.tag_name(n) == Some("a"))
+            .nth(1)
+            .unwrap();
         assert!(m("a[href$='.com']", a2), "suffix match");
         assert!(m("[data-role~=ext]", a2), "includes match");
         assert!(!m("input[type=text]", sub), "type mismatch");
 
         // Structural pseudo-classes over the three <p>s.
-        assert!(m("p:first-child", ps[0]) == false, "p[0] has prior siblings (a/input)");
+        assert!(
+            m("p:first-child", ps[0]) == false,
+            "p[0] has prior siblings (a/input)"
+        );
         assert!(m("p:last-child", ps[2]), "gamma is last child");
         assert!(m("p:nth-child(4)", ps[0]), "alpha is the 4th child element");
         // alpha=4th, beta=5th, gamma=6th among element children.
@@ -3830,7 +4014,10 @@ mod pseudo_tests {
         let dom = manuk_html::parse(r#"<p id="p">body</p>"#);
         let sheets = vec![Stylesheet::parse(r#"#p::before{content:"[X] "}"#)];
         let styles = MinimalCascade.cascade(&dom, &sheets);
-        let p = dom.descendants(dom.root()).find(|&n| dom.tag_name(n) == Some("p")).unwrap();
+        let p = dom
+            .descendants(dom.root())
+            .find(|&n| dom.tag_name(n) == Some("p"))
+            .unwrap();
         let s = &styles[&p];
         assert!(s.before.is_some(), "::before must cascade");
         assert_eq!(s.before.as_ref().unwrap().content.as_deref(), Some("[X] "));

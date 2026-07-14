@@ -154,4 +154,3 @@ fn dead_subresources_cannot_hold_the_document_hostage() {
 
     manuk_js::shutdown();
 }
-

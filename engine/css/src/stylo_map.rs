@@ -11,7 +11,9 @@ use stylo::properties::ComputedValues;
 use stylo::values::computed::font::FontStyle;
 use stylo::values::computed::length::{Margin, MaxSize, Size};
 use stylo::values::computed::position::Inset;
-use stylo::values::computed::{Display as StyloDisplay, LengthPercentage, TextAlign as StyloTextAlign};
+use stylo::values::computed::{
+    Display as StyloDisplay, LengthPercentage, TextAlign as StyloTextAlign,
+};
 
 use crate::{ComputedStyle, Dim, Display, Rgba, Sides, TextAlign};
 
@@ -19,7 +21,12 @@ use crate::{ComputedStyle, Dim, Display, Rgba, Sides, TextAlign};
 fn abs_to_rgba(c: &AbsoluteColor) -> Rgba {
     let s = c.to_color_space(ColorSpace::Srgb);
     let to = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-    Rgba::new(to(s.components.0), to(s.components.1), to(s.components.2), to(s.alpha))
+    Rgba::new(
+        to(s.components.0),
+        to(s.components.1),
+        to(s.components.2),
+        to(s.alpha),
+    )
 }
 
 /// A `LengthPercentage` reduced to our `Dim`. Sampling the used value at two bases makes
@@ -164,9 +171,7 @@ fn track_size_to_ours(
 
 /// A Stylo `grid-template-columns`/`-rows` component → our flat `Vec<TrackSize>`, expanding
 /// integer `repeat()`; `none`/subgrid/masonry/auto-repeat collapse to what we can model.
-fn template_to_tracks(
-    c: &stylo::values::computed::GridTemplateComponent,
-) -> Vec<crate::TrackSize> {
+fn template_to_tracks(c: &stylo::values::computed::GridTemplateComponent) -> Vec<crate::TrackSize> {
     use stylo::values::generics::grid::{
         GenericGridTemplateComponent as GC, GenericTrackListValue as TLV, RepeatCount,
     };
@@ -226,7 +231,11 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         use stylo::values::specified::outline::OutlineStyle;
         let o = cv.get_outline();
         let styled = !matches!(o.clone_outline_style(), OutlineStyle::BorderStyle(bs) if bs.none_or_hidden());
-        s.outline_width = if styled { o.clone_outline_width().0.to_f32_px() } else { 0.0 };
+        s.outline_width = if styled {
+            o.clone_outline_width().0.to_f32_px()
+        } else {
+            0.0
+        };
         let oc = o.clone_outline_color().resolve_to_absolute(&current);
         if oc.alpha > 0.0 {
             s.outline_color = abs_to_rgba(&oc);
@@ -306,10 +315,26 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     // computed width is still `medium` (3px). Replicate that zeroing here or every block
     // paints a spurious 3px border.
     s.border_width = Sides {
-        top: if cv.clone_border_top_style().none_or_hidden() { 0.0 } else { cv.clone_border_top_width().0.to_f32_px() },
-        right: if cv.clone_border_right_style().none_or_hidden() { 0.0 } else { cv.clone_border_right_width().0.to_f32_px() },
-        bottom: if cv.clone_border_bottom_style().none_or_hidden() { 0.0 } else { cv.clone_border_bottom_width().0.to_f32_px() },
-        left: if cv.clone_border_left_style().none_or_hidden() { 0.0 } else { cv.clone_border_left_width().0.to_f32_px() },
+        top: if cv.clone_border_top_style().none_or_hidden() {
+            0.0
+        } else {
+            cv.clone_border_top_width().0.to_f32_px()
+        },
+        right: if cv.clone_border_right_style().none_or_hidden() {
+            0.0
+        } else {
+            cv.clone_border_right_width().0.to_f32_px()
+        },
+        bottom: if cv.clone_border_bottom_style().none_or_hidden() {
+            0.0
+        } else {
+            cv.clone_border_bottom_width().0.to_f32_px()
+        },
+        left: if cv.clone_border_left_style().none_or_hidden() {
+            0.0
+        } else {
+            cv.clone_border_left_width().0.to_f32_px()
+        },
     };
     s.border_color = abs_to_rgba(&cv.clone_border_top_color().resolve_to_absolute(&current));
 
@@ -393,8 +418,15 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         SOverflow::Clip => crate::Overflow::Clip,
         SOverflow::Visible => crate::Overflow::Visible,
     };
-    let (ox, oy) = (map_overflow(cv.clone_overflow_x()), map_overflow(cv.clone_overflow_y()));
-    s.overflow = if ox != crate::Overflow::Visible { ox } else { oy };
+    let (ox, oy) = (
+        map_overflow(cv.clone_overflow_x()),
+        map_overflow(cv.clone_overflow_y()),
+    );
+    s.overflow = if ox != crate::Overflow::Visible {
+        ox
+    } else {
+        oy
+    };
     s.z_index = match cv.clone_z_index() {
         ZIndex::Integer(i) => Some(i),
         ZIndex::Auto => None,
@@ -444,13 +476,14 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         };
         // row-gap / column-gap: `normal` → 0, else the length part.
         use stylo::values::generics::length::GenericLengthPercentageOrNormal as GapVal;
-        let gap_px = |g: stylo::values::computed::length::NonNegativeLengthPercentageOrNormal| match g {
-            GapVal::Normal => 0.0,
-            GapVal::LengthPercentage(lp) => match lp_to_dim(&lp.0) {
-                Dim::Px(p) => p,
-                _ => 0.0,
-            },
-        };
+        let gap_px =
+            |g: stylo::values::computed::length::NonNegativeLengthPercentageOrNormal| match g {
+                GapVal::Normal => 0.0,
+                GapVal::LengthPercentage(lp) => match lp_to_dim(&lp.0) {
+                    Dim::Px(p) => p,
+                    _ => 0.0,
+                },
+            };
         s.row_gap = gap_px(cv.clone_row_gap());
         s.column_gap = gap_px(cv.clone_column_gap());
     }
@@ -492,8 +525,8 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         }
         _ => crate::TableLayout::Auto,
     };
-    s.border_collapse =
-        cv.clone_border_collapse() == stylo::properties::longhands::border_collapse::computed_value::T::Collapse;
+    s.border_collapse = cv.clone_border_collapse()
+        == stylo::properties::longhands::border_collapse::computed_value::T::Collapse;
     s.border_spacing = cv.clone_border_spacing().horizontal().to_f32_px();
 
     // transform: map the 2D operations onto our affine list (3D/perspective skipped — our
@@ -518,9 +551,7 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
                 TOp::Rotate(a) | TOp::RotateZ(a) => {
                     ops.push(crate::TransformFn::Rotate(a.radians()))
                 }
-                TOp::Skew(ax, ay) => {
-                    ops.push(crate::TransformFn::Skew(ax.radians(), ay.radians()))
-                }
+                TOp::Skew(ax, ay) => ops.push(crate::TransformFn::Skew(ax.radians(), ay.radians())),
                 TOp::SkewX(ax) => ops.push(crate::TransformFn::Skew(ax.radians(), 0.0)),
                 TOp::SkewY(ay) => ops.push(crate::TransformFn::Skew(0.0, ay.radians())),
                 TOp::Matrix(m) => {
@@ -549,16 +580,15 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     if let stylo::values::computed::position::GridTemplateAreas::Areas(a) =
         cv.clone_grid_template_areas()
     {
-        s.grid_template_areas = a
-            .0
-            .areas
-            .iter()
-            .map(|na| crate::GridAreaRect {
-                name: na.name.to_string(),
-                row: (na.rows.start as u16, na.rows.end as u16),
-                col: (na.columns.start as u16, na.columns.end as u16),
-            })
-            .collect();
+        s.grid_template_areas =
+            a.0.areas
+                .iter()
+                .map(|na| crate::GridAreaRect {
+                    name: na.name.to_string(),
+                    row: (na.rows.start as u16, na.rows.end as u16),
+                    col: (na.columns.start as u16, na.columns.end as u16),
+                })
+                .collect();
     }
     // Item placement by area name: `grid-area: main` sets all four grid-line idents to
     // "main"; the row-start ident is representative. A bare custom-ident (no line number,
@@ -609,8 +639,15 @@ mod tests {
         let cv = ComputedValues::initial_values_with_font_override(Font::initial_values());
         let style = to_computed_style(&cv);
 
-        assert_eq!(style.color, Rgba::new(0, 0, 0, 255), "initial color is black");
-        assert_eq!(style.background_color, None, "initial background is transparent");
+        assert_eq!(
+            style.color,
+            Rgba::new(0, 0, 0, 255),
+            "initial color is black"
+        );
+        assert_eq!(
+            style.background_color, None,
+            "initial background is transparent"
+        );
         assert_eq!(style.font_size, 16.0, "initial medium font-size");
         assert_eq!(style.font_weight, 400, "initial normal weight");
         assert!(!style.italic, "initial font-style is normal");

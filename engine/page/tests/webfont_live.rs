@@ -33,7 +33,9 @@ fn live_woff2_decodes_to_valid_sfnt() {
     db.load_font_data(sfnt);
     let face = db.faces().next().expect("one face");
     assert!(
-        face.families.iter().any(|(n, _)| n.eq_ignore_ascii_case("roboto")),
+        face.families
+            .iter()
+            .any(|(n, _)| n.eq_ignore_ascii_case("roboto")),
         "expected Roboto family, got {:?}",
         face.families
     );

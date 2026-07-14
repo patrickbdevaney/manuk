@@ -110,7 +110,10 @@ pub fn fields(dom: &Dom, form: NodeId) -> Vec<(String, String)> {
                     if first.is_none() {
                         first = Some(val.clone());
                     }
-                    if dom.element(opt).is_some_and(|e| e.attr("selected").is_some()) {
+                    if dom
+                        .element(opt)
+                        .is_some_and(|e| e.attr("selected").is_some())
+                    {
                         chosen = Some(val);
                         break;
                     }
@@ -146,7 +149,9 @@ pub fn submission_url(dom: &Dom, form: NodeId, base: &str) -> Result<String, Sub
     };
 
     let pairs = fields(dom, form);
-    url.query_pairs_mut().clear().extend_pairs(pairs.iter().map(|(k, v)| (k, v)));
+    url.query_pairs_mut()
+        .clear()
+        .extend_pairs(pairs.iter().map(|(k, v)| (k, v)));
     // An empty form yields `?` from `query_pairs_mut`; strip it.
     if url.query() == Some("") {
         url.set_query(None);
@@ -196,7 +201,9 @@ pub fn multipart_submission(
     let el = dom.element(form).ok_or(SubmitError::NoForm)?;
     let method = el.attr("method").unwrap_or("get").to_ascii_lowercase();
     if method != "post" {
-        return Err(SubmitError::BadAction("multipart upload requires method=post".to_string()));
+        return Err(SubmitError::BadAction(
+            "multipart upload requires method=post".to_string(),
+        ));
     }
     let action = el.attr("action").filter(|a| !a.trim().is_empty());
     let base_url = Url::parse(base).map_err(|_| SubmitError::BadAction(base.to_string()))?;
@@ -220,7 +227,11 @@ pub fn multipart_submission(
         ));
     }
     let (content_type, body) = manuk_net::multipart::encode(&parts, boundary);
-    Ok(MultipartPost { url: url.to_string(), content_type, body })
+    Ok(MultipartPost {
+        url: url.to_string(),
+        content_type,
+        body,
+    })
 }
 
 #[cfg(test)]
@@ -305,7 +316,9 @@ mod tests {
     /// (passwords, tokens) into the URL and the referrer.
     #[test]
     fn post_is_refused_rather_than_downgraded_to_get() {
-        let dom = dom_of(r#"<form method="POST" action="/login"><input name="pw" value="s3cr3t"></form>"#);
+        let dom = dom_of(
+            r#"<form method="POST" action="/login"><input name="pw" value="s3cr3t"></form>"#,
+        );
         let form = dom.find_first("form").unwrap();
         assert_eq!(
             submission_url(&dom, form, "https://ex.test/"),
@@ -315,7 +328,8 @@ mod tests {
 
     #[test]
     fn owning_form_walks_up_then_falls_back_to_the_first_form() {
-        let dom = dom_of(r#"<form id="f"><div><button id="b">Go</button></div></form><p id="p">x</p>"#);
+        let dom =
+            dom_of(r#"<form id="f"><div><button id="b">Go</button></div></form><p id="p">x</p>"#);
         let btn = dom.find_first("button").unwrap();
         let form = dom.find_first("form").unwrap();
         assert_eq!(owning_form(&dom, btn), Some(form));
@@ -330,7 +344,10 @@ mod tests {
             r#"<form><input type="file" name="a"><input type="file"><input name="b"><input type="file" name="c"></form>"#,
         );
         let form = dom.find_first("form").unwrap();
-        assert_eq!(file_inputs(&dom, form), vec!["a".to_string(), "c".to_string()]);
+        assert_eq!(
+            file_inputs(&dom, form),
+            vec!["a".to_string(), "c".to_string()]
+        );
     }
 
     #[test]
@@ -339,14 +356,25 @@ mod tests {
             r#"<form method="post" action="/upload"><input name="title" value="hi"><input type="file" name="doc"></form>"#,
         );
         let form = dom.find_first("form").unwrap();
-        let files = vec![("doc".to_string(), "a.txt".to_string(), "text/plain".to_string(), b"DATA".to_vec())];
-        let post = multipart_submission(&dom, form, "https://ex.test/page", &files, "BOUND").expect("post");
+        let files = vec![(
+            "doc".to_string(),
+            "a.txt".to_string(),
+            "text/plain".to_string(),
+            b"DATA".to_vec(),
+        )];
+        let post = multipart_submission(&dom, form, "https://ex.test/page", &files, "BOUND")
+            .expect("post");
         assert_eq!(post.url, "https://ex.test/upload");
         assert_eq!(post.content_type, "multipart/form-data; boundary=BOUND");
         let s = String::from_utf8(post.body).unwrap();
-        assert!(s.contains("name=\"title\"\r\n\r\nhi\r\n"), "text field part: {s}");
         assert!(
-            s.contains("name=\"doc\"; filename=\"a.txt\"\r\nContent-Type: text/plain\r\n\r\nDATA\r\n"),
+            s.contains("name=\"title\"\r\n\r\nhi\r\n"),
+            "text field part: {s}"
+        );
+        assert!(
+            s.contains(
+                "name=\"doc\"; filename=\"a.txt\"\r\nContent-Type: text/plain\r\n\r\nDATA\r\n"
+            ),
             "file part: {s}"
         );
         assert!(s.ends_with("--BOUND--\r\n"), "closing delimiter");

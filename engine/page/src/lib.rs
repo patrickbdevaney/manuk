@@ -41,7 +41,9 @@ fn cascade_styles(dom: &Dom, sheets: &[Stylesheet], viewport_width: f32) -> Styl
         match cascaded {
             Ok(styles) => styles,
             Err(_) => {
-                tracing::warn!("Stylo cascade panicked; falling back to MinimalCascade for this page");
+                tracing::warn!(
+                    "Stylo cascade panicked; falling back to MinimalCascade for this page"
+                );
                 MinimalCascade.cascade(dom, sheets)
             }
         }
@@ -125,7 +127,10 @@ fn scan_preloads(html: &str, base: &str) -> Vec<String> {
     let mut i = 0;
     while let Some(p) = lower[i..].find("<link") {
         let start = i + p;
-        let end = lower[start..].find('>').map(|e| start + e + 1).unwrap_or(lower.len());
+        let end = lower[start..]
+            .find('>')
+            .map(|e| start + e + 1)
+            .unwrap_or(lower.len());
         let tag_low = &lower[start..end];
         i = end;
         let is_target = tag_low.contains("stylesheet") || tag_low.contains("preload");
@@ -174,9 +179,14 @@ async fn fetch_images(
     dom: &Dom,
     base: &str,
 ) -> std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>> {
-    fetch_images_except(dom, base, &std::collections::HashSet::new(), &mut std::collections::HashMap::new())
-        .await
-        .0
+    fetch_images_except(
+        dom,
+        base,
+        &std::collections::HashSet::new(),
+        &mut std::collections::HashMap::new(),
+    )
+    .await
+    .0
 }
 
 /// The same, minus the nodes whose image we have ALREADY fetched and decoded for this navigation.
@@ -200,7 +210,11 @@ pub async fn fetch_image_urls(
             Ok(img) => {
                 let rgba = img.to_rgba8();
                 let (w, h) = rgba.dimensions();
-                Some(manuk_paint::DecodedImage { width: w, height: h, rgba: rgba.into_raw() })
+                Some(manuk_paint::DecodedImage {
+                    width: w,
+                    height: h,
+                    rgba: rgba.into_raw(),
+                })
             }
             Err(_) => decode_svg(&bytes, &url),
         };
@@ -388,7 +402,11 @@ fn decode_bitmap(bytes: &[u8], url: &str) -> Option<manuk_paint::DecodedImage> {
         Ok(img) => {
             let rgba = img.to_rgba8();
             let (w, h) = rgba.dimensions();
-            (w > 0 && h > 0).then(|| manuk_paint::DecodedImage { width: w, height: h, rgba: rgba.into_raw() })
+            (w > 0 && h > 0).then(|| manuk_paint::DecodedImage {
+                width: w,
+                height: h,
+                rgba: rgba.into_raw(),
+            })
         }
         Err(_) => decode_svg(bytes, url).filter(|i| i.width > 0 && i.height > 0),
     }
@@ -403,9 +421,11 @@ fn decode_bitmap(bytes: &[u8], url: &str) -> Option<manuk_paint::DecodedImage> {
 async fn fetch_masks_owned(
     targets: Vec<(String, String)>,
 ) -> HashMap<String, manuk_paint::DecodedImage> {
-    let fetched = futures_util::future::join_all(targets.into_iter().map(|(raw, abs)| async move {
-        (raw, fetch_image_bytes(&abs).await, abs)
-    }))
+    let fetched = futures_util::future::join_all(
+        targets
+            .into_iter()
+            .map(|(raw, abs)| async move { (raw, fetch_image_bytes(&abs).await, abs) }),
+    )
     .await;
     fetched
         .into_iter()
@@ -430,7 +450,11 @@ fn decode_svg(bytes: &[u8], url: &str) -> Option<manuk_paint::DecodedImage> {
         return None;
     }
     let mut pixmap = resvg::tiny_skia::Pixmap::new(w, h)?;
-    resvg::render(&tree, resvg::tiny_skia::Transform::identity(), &mut pixmap.as_mut());
+    resvg::render(
+        &tree,
+        resvg::tiny_skia::Transform::identity(),
+        &mut pixmap.as_mut(),
+    );
     // resvg output is premultiplied; store straight-alpha RGBA for our blitter.
     let mut rgba = Vec::with_capacity((w * h * 4) as usize);
     for px in pixmap.pixels() {
@@ -502,7 +526,10 @@ fn collect_style_sources(dom: &Dom, base: &str) -> Vec<StyleSource> {
     for n in dom.flat_descendants(dom.root()) {
         match dom.tag_name(n) {
             Some("style") => {
-                let media = dom.element(n).and_then(|e| e.attr("media")).map(str::to_string);
+                let media = dom
+                    .element(n)
+                    .and_then(|e| e.attr("media"))
+                    .map(str::to_string);
                 out.push(StyleSource::Inline(dom.text_content(n), media));
             }
             Some("link") => {
@@ -860,10 +887,12 @@ impl Page {
             true
         };
         if phase("external CSS") {
-            self.fetch_and_apply_stylesheets(fonts, viewport_width).await;
+            self.fetch_and_apply_stylesheets(fonts, viewport_width)
+                .await;
         }
         if phase("dynamic scripts") {
-            self.fetch_and_run_dynamic_scripts(fonts, viewport_width, 4).await;
+            self.fetch_and_run_dynamic_scripts(fonts, viewport_width, 4)
+                .await;
         }
         // **The page's own `fetch()`/XHR calls — PERFORMED, not just queued.**
         //
@@ -880,7 +909,8 @@ impl Page {
         // load a modern site's content is not measuring the browser; it is measuring itself. Every
         // data-driven SPA in the corpus was being scored against a skeleton.
         if phase("page fetches") {
-            self.pump_page_fetches(fonts, viewport_width, &started, budget).await;
+            self.pump_page_fetches(fonts, viewport_width, &started, budget)
+                .await;
         }
         if phase("images") {
             self.fetch_and_apply_images(fonts, viewport_width).await;
@@ -913,7 +943,10 @@ impl Page {
         const MAX_ROUNDS: usize = 6;
         for round in 0..MAX_ROUNDS {
             if budget.saturating_sub(started.elapsed()).is_zero() {
-                tracing::warn!(round, "load budget exhausted with page fetches still in flight");
+                tracing::warn!(
+                    round,
+                    "load budget exhausted with page fetches still in flight"
+                );
                 return;
             }
             let mut reqs = self.take_fetches();
@@ -939,41 +972,45 @@ impl Page {
             // how a five-request page becomes a five-deadline page.
             let base = self.final_url.clone();
             let left = budget.saturating_sub(started.elapsed());
-            let all = futures_util::future::join_all(reqs.into_iter().map(|(id, raw, method, body)| {
-                let url = resolve_url(&base, &raw);
-                async move {
-                    let out = if method.eq_ignore_ascii_case("GET") || method.is_empty() {
-                        // GET goes through `fetch`, which carries the HTTP cache, the single-flight
-                        // coalescer and the per-navigation negative cache. A POST must not: it is not
-                        // idempotent, and de-duplicating one would drop a real request.
-                        manuk_net::fetch(&url).await
-                    } else {
-                        manuk_net::request(
-                            &method,
-                            &url,
-                            &[("content-type", "application/json")],
-                            body.clone().into_bytes().into(),
-                        )
-                        .await
-                    };
-                    match out {
-                        Ok(r) => (id, r.status, r.decoded_text()),
-                        // status 0 is the fetch API's "network failure" — the page's `.catch` runs, which
-                        // is a path it was written for. Silence is not.
-                        Err(e) => {
-                            tracing::warn!(%url, "page fetch failed: {e}");
-                            (id, 0u16, String::new())
+            let all =
+                futures_util::future::join_all(reqs.into_iter().map(|(id, raw, method, body)| {
+                    let url = resolve_url(&base, &raw);
+                    async move {
+                        let out = if method.eq_ignore_ascii_case("GET") || method.is_empty() {
+                            // GET goes through `fetch`, which carries the HTTP cache, the single-flight
+                            // coalescer and the per-navigation negative cache. A POST must not: it is not
+                            // idempotent, and de-duplicating one would drop a real request.
+                            manuk_net::fetch(&url).await
+                        } else {
+                            manuk_net::request(
+                                &method,
+                                &url,
+                                &[("content-type", "application/json")],
+                                body.clone().into_bytes().into(),
+                            )
+                            .await
+                        };
+                        match out {
+                            Ok(r) => (id, r.status, r.decoded_text()),
+                            // status 0 is the fetch API's "network failure" — the page's `.catch` runs, which
+                            // is a path it was written for. Silence is not.
+                            Err(e) => {
+                                tracing::warn!(%url, "page fetch failed: {e}");
+                                (id, 0u16, String::new())
+                            }
                         }
                     }
-                }
-            }));
+                }));
 
             // **The ROUND lives inside the budget, not merely between rounds.** Checking the clock only
             // at the top of the loop let a single round run unbounded — a 20s budget produced a 200s+
             // load, which is a Bar 0 regression and not a slow path. Whatever arrived by the deadline is
             // what the page gets, which is the same promise every other phase makes.
             let Ok(results) = tokio::time::timeout(left, all).await else {
-                tracing::warn!(round, "page fetches exceeded the load budget — settling with what arrived");
+                tracing::warn!(
+                    round,
+                    "page fetches exceeded the load budget — settling with what arrived"
+                );
                 return;
             };
 
@@ -997,7 +1034,8 @@ impl Page {
             };
         }
         if within!() {
-            self.fetch_and_apply_stylesheets(fonts, viewport_width).await;
+            self.fetch_and_apply_stylesheets(fonts, viewport_width)
+                .await;
         }
         if within!() {
             self.fetch_and_apply_images(fonts, viewport_width).await;
@@ -1043,7 +1081,9 @@ impl Page {
     /// and layout are redone — the same thing the blocking pass already does, for the same reason.
     #[cfg(feature = "spidermonkey")]
     pub fn run_deferred_scripts(&mut self, fonts: &FontContext, viewport_width: f32) -> usize {
-        let Some(ctx) = self.js.as_ref() else { return 0 };
+        let Some(ctx) = self.js.as_ref() else {
+            return 0;
+        };
         let rects: std::collections::HashMap<manuk_dom::NodeId, [f32; 4]> = self
             .root_box
             .node_rects(&self.dom)
@@ -1093,13 +1133,17 @@ impl Page {
             if self.iframes.contains_key(&n) {
                 continue; // already rendered
             }
-            let Some(el) = self.dom.element(n) else { continue };
+            let Some(el) = self.dom.element(n) else {
+                continue;
+            };
             // `srcdoc` beats `src`, per spec. A `src` of `about:blank` has nothing to fetch.
             let src = el.attr("src").unwrap_or("").trim();
             if src.is_empty() || src.starts_with("about:") || src.starts_with("javascript:") {
                 continue;
             }
-            let Some(r) = rects.get(&n).copied() else { continue };
+            let Some(r) = rects.get(&n).copied() else {
+                continue;
+            };
             let (w, h) = (r.width.round() as u32, r.height.round() as u32);
             if w == 0 || h == 0 {
                 continue;
@@ -1137,8 +1181,13 @@ impl Page {
             return;
         }
         let rects = self.root_box.node_rects(&self.dom);
-        let Some(r) = rects.get(&node).copied() else { return };
-        let (w, h) = (r.width.round().max(1.0) as u32, r.height.round().max(1.0) as u32);
+        let Some(r) = rects.get(&node).copied() else {
+            return;
+        };
+        let (w, h) = (
+            r.width.round().max(1.0) as u32,
+            r.height.round().max(1.0) as u32,
+        );
 
         // A whole page, at the iframe's own viewport width — so its media queries and its layout see the
         // size of the frame, not the size of the window. That is what makes a responsive embed responsive.
@@ -1162,10 +1211,12 @@ impl Page {
     pub fn pending_image_urls(&self) -> Vec<String> {
         let mut out: Vec<String> = Vec::new();
         for n in self.dom.flat_descendants(self.dom.root()) {
-            let Some(el) = self.dom.element(n) else { continue };
+            let Some(el) = self.dom.element(n) else {
+                continue;
+            };
             let src = match self.dom.tag_name(n) {
                 Some("img") => el.attr("src"),
-                Some("video") => el.attr("poster"),   // a poster is a still, and we decode stills
+                Some("video") => el.attr("poster"), // a poster is a still, and we decode stills
                 _ => None,
             };
             let Some(src) = src else { continue };
@@ -1193,10 +1244,14 @@ impl Page {
         for (url, img) in by_url {
             self.image_by_url.insert(url, Some(std::rc::Rc::new(img)));
         }
-        let mut rc: std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>> =
-            std::collections::HashMap::new();
+        let mut rc: std::collections::HashMap<
+            manuk_dom::NodeId,
+            std::rc::Rc<manuk_paint::DecodedImage>,
+        > = std::collections::HashMap::new();
         for n in self.dom.flat_descendants(self.dom.root()) {
-            let Some(el) = self.dom.element(n) else { continue };
+            let Some(el) = self.dom.element(n) else {
+                continue;
+            };
             let src = match self.dom.tag_name(n) {
                 Some("img") => el.attr("src"),
                 Some("video") => el.attr("poster"),
@@ -1222,7 +1277,10 @@ impl Page {
     /// blocking it, with the fetching done off-thread.
     pub fn apply_images(
         &mut self,
-        images: std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
+        images: std::collections::HashMap<
+            manuk_dom::NodeId,
+            std::rc::Rc<manuk_paint::DecodedImage>,
+        >,
         fonts: &FontContext,
         viewport_width: f32,
     ) -> usize {
@@ -1294,13 +1352,12 @@ impl Page {
             if pending.is_empty() {
                 break;
             }
-            let fetched = futures_util::future::join_all(pending.into_iter().map(
-                |(node, url)| async move {
+            let fetched =
+                futures_util::future::join_all(pending.into_iter().map(|(node, url)| async move {
                     let text = manuk_net::fetch(&url).await.ok().map(|r| r.decoded_text());
                     (node, text)
-                },
-            ))
-            .await;
+                }))
+                .await;
 
             let mut any = false;
             for (node, text) in fetched {
@@ -1317,7 +1374,8 @@ impl Page {
                     .into_iter()
                     .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                     .collect();
-                if let Err(e) = manuk_js::eval_in_page(ctx, &mut self.dom, &src, &rects, &self.styles)
+                if let Err(e) =
+                    manuk_js::eval_in_page(ctx, &mut self.dom, &src, &rects, &self.styles)
                 {
                     tracing::warn!("dynamic script: {e}");
                 }
@@ -1329,7 +1387,8 @@ impl Page {
             }
             // Those scripts may have injected <style>/<link> and mutated the tree — restyle before
             // the next round so the next script sees the layout it actually caused.
-            self.fetch_and_apply_stylesheets(fonts, viewport_width).await;
+            self.fetch_and_apply_stylesheets(fonts, viewport_width)
+                .await;
             self.fetch_and_apply_masks().await;
         }
         ran
@@ -1357,23 +1416,31 @@ impl Page {
         fonts: &FontContext,
         viewport_width: f32,
     ) -> bool {
-        let Some(ctx) = self.js.as_ref() else { return true };
+        let Some(ctx) = self.js.as_ref() else {
+            return true;
+        };
         let rects: std::collections::HashMap<manuk_dom::NodeId, [f32; 4]> = self
             .root_box
             .node_rects(&self.dom)
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
-        let proceed =
-            match manuk_js::dispatch_event(ctx, &mut self.dom, form, "submit", &rects, &self.styles) {
-                Ok(default_ok) => default_ok,
-                Err(e) => {
-                    // Surfaced, never swallowed (G_SILENT_FAIL). A submit handler that dies silently is
-                    // a form that mysteriously navigates away, and the user loses what they typed.
-                    tracing::warn!("submit dispatch: {e}");
-                    true
-                }
-            };
+        let proceed = match manuk_js::dispatch_event(
+            ctx,
+            &mut self.dom,
+            form,
+            "submit",
+            &rects,
+            &self.styles,
+        ) {
+            Ok(default_ok) => default_ok,
+            Err(e) => {
+                // Surfaced, never swallowed (G_SILENT_FAIL). A submit handler that dies silently is
+                // a form that mysteriously navigates away, and the user loses what they typed.
+                tracing::warn!("submit dispatch: {e}");
+                true
+            }
+        };
         // The handler may have re-rendered the page (that is the entire point of intercepting submit).
         self.relayout(fonts, viewport_width);
         proceed
@@ -1441,7 +1508,14 @@ impl Page {
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
         if let Err(e) = manuk_js::view_changed(
-            ctx, &mut self.dom, scroll_y, vw, vh, scrolled, &rects, &self.styles,
+            ctx,
+            &mut self.dom,
+            scroll_y,
+            vw,
+            vh,
+            scrolled,
+            &rects,
+            &self.styles,
         ) {
             tracing::warn!("view_changed: {e}");
         }
@@ -1576,8 +1650,10 @@ impl Page {
             self.fetched_urls.insert(raw.clone());
         }
         let owned = fetch_masks_owned(targets).await;
-        let rc: HashMap<String, std::rc::Rc<manuk_paint::DecodedImage>> =
-            owned.into_iter().map(|(u, i)| (u, std::rc::Rc::new(i))).collect();
+        let rc: HashMap<String, std::rc::Rc<manuk_paint::DecodedImage>> = owned
+            .into_iter()
+            .map(|(u, i)| (u, std::rc::Rc::new(i)))
+            .collect();
         self.apply_masks(&rc)
     }
 
@@ -1587,7 +1663,8 @@ impl Page {
     /// `url()` background is never also a replaced image, so they cannot collide. Gradients need no
     /// fetch at all; they are painted from the computed value directly.
     pub async fn fetch_and_apply_background_images(&mut self) -> usize {
-        let have: std::collections::HashSet<manuk_dom::NodeId> = self.images.keys().copied().collect();
+        let have: std::collections::HashSet<manuk_dom::NodeId> =
+            self.images.keys().copied().collect();
         let targets: Vec<(manuk_dom::NodeId, String)> = self
             .styles
             .iter()
@@ -1607,9 +1684,11 @@ impl Page {
         if targets.is_empty() {
             return 0;
         }
-        let fetched = futures_util::future::join_all(targets.into_iter().map(|(n, url)| async move {
-            (n, fetch_image_bytes(&url).await, url)
-        }))
+        let fetched = futures_util::future::join_all(
+            targets
+                .into_iter()
+                .map(|(n, url)| async move { (n, fetch_image_bytes(&url).await, url) }),
+        )
         .await;
         let mut count = 0usize;
         for (node, bytes, url) in fetched {
@@ -1638,26 +1717,38 @@ impl Page {
     }
 
     fn from_prefetched_inner(pre: Prefetched, fonts: &FontContext, viewport_width: f32) -> Page {
-        let Prefetched { dom, final_url, css, images, masks } = pre;
+        let Prefetched {
+            dom,
+            final_url,
+            css,
+            images,
+            masks,
+        } = pre;
         let mut page = Page::from_dom(dom, &final_url, fonts, viewport_width);
         if !css.is_empty() {
             page.apply_stylesheets(&css, fonts, viewport_width);
         }
         if !masks.is_empty() {
             // After the cascade: only now does a node have a computed `mask-image` to bind to.
-            let rc: HashMap<String, std::rc::Rc<manuk_paint::DecodedImage>> =
-                masks.into_iter().map(|(u, i)| (u, std::rc::Rc::new(i))).collect();
+            let rc: HashMap<String, std::rc::Rc<manuk_paint::DecodedImage>> = masks
+                .into_iter()
+                .map(|(u, i)| (u, std::rc::Rc::new(i)))
+                .collect();
             page.apply_masks(&rc);
         }
         if !images.is_empty() {
             // Bind the URL-keyed bitmaps to the nodes that name them. One decoded image, shared by
             // every element pointing at it — the flat tree, so a shadow-root `<img>` is not skipped.
-            let by_url: HashMap<String, std::rc::Rc<manuk_paint::DecodedImage>> =
-                images.into_iter().map(|(u, i)| (u, std::rc::Rc::new(i))).collect();
+            let by_url: HashMap<String, std::rc::Rc<manuk_paint::DecodedImage>> = images
+                .into_iter()
+                .map(|(u, i)| (u, std::rc::Rc::new(i)))
+                .collect();
             let mut rc: HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>> =
                 HashMap::new();
             for n in page.dom.flat_descendants(page.dom.root()) {
-                let Some(el) = page.dom.element(n) else { continue };
+                let Some(el) = page.dom.element(n) else {
+                    continue;
+                };
                 let src = match page.dom.tag_name(n) {
                     Some("img") => el.attr("src"),
                     Some("video") => el.attr("poster"),
@@ -1695,12 +1786,7 @@ impl Page {
 
     /// Build a page from an already-parsed [`Dom`] (shared by [`load`](Self::load) and
     /// [`load_streaming`](Self::load_streaming)).
-    pub fn from_dom(
-        dom: Dom,
-        final_url: &str,
-        fonts: &FontContext,
-        viewport_width: f32,
-    ) -> Page {
+    pub fn from_dom(dom: Dom, final_url: &str, fonts: &FontContext, viewport_width: f32) -> Page {
         // Box the DOM up front so its address is stable for the persistent JS context's raw
         // reflector pointers, then style + lay out once and run the document's inline scripts
         // against that layout snapshot (so `getBoundingClientRect` works), letting them mutate
@@ -1754,7 +1840,9 @@ impl Page {
         // The tree is now laid out and clean; later mutations mark fresh dirtiness.
         dom.clear_all_dirty();
 
-        let has_sticky = styles.values().any(|s| s.position == manuk_css::Position::Sticky);
+        let has_sticky = styles
+            .values()
+            .any(|s| s.position == manuk_css::Position::Sticky);
         Page {
             final_url: final_url.to_string(),
             title,
@@ -1780,7 +1868,12 @@ impl Page {
     /// `true` if the engine should still perform the element's **default action** (follow a
     /// link, submit a form) — i.e. no listener called `preventDefault()`. Without JS (no
     /// context / feature off) this is a no-op that returns `true`.
-    pub fn dispatch_click(&mut self, node: manuk_dom::NodeId, fonts: &FontContext, viewport_width: f32) -> bool {
+    pub fn dispatch_click(
+        &mut self,
+        node: manuk_dom::NodeId,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
         let Some(ctx) = &self.js else { return true };
         let rects: std::collections::HashMap<manuk_dom::NodeId, [f32; 4]> = self
             .root_box
@@ -1788,13 +1881,15 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
-        let proceed = match manuk_js::dispatch_event(ctx, &mut self.dom, node, "click", &rects, &self.styles) {
-            Ok(p) => p,
-            Err(e) => {
-                tracing::warn!("click dispatch: {e}");
-                return true;
-            }
-        };
+        let proceed =
+            match manuk_js::dispatch_event(ctx, &mut self.dom, node, "click", &rects, &self.styles)
+            {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::warn!("click dispatch: {e}");
+                    return true;
+                }
+            };
         // If a handler mutated the DOM, re-style + re-lay-out so it renders (at base zoom;
         // the caller re-applies zoom on its next relayout).
         let root = self.dom.root();
@@ -1908,9 +2003,15 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
-        if let Err(e) =
-            manuk_js::deliver_message(ctx, &mut self.dom, json, origin, source_win, &rects, &self.styles)
-        {
+        if let Err(e) = manuk_js::deliver_message(
+            ctx,
+            &mut self.dom,
+            json,
+            origin,
+            source_win,
+            &rects,
+            &self.styles,
+        ) {
             tracing::warn!("deliver_message: {e}");
             return;
         }
@@ -2287,7 +2388,10 @@ impl Page {
             damage = damage.max(d);
         }
         self.styles = new_styles;
-        self.has_sticky = self.styles.values().any(|s| s.position == manuk_css::Position::Sticky);
+        self.has_sticky = self
+            .styles
+            .values()
+            .any(|s| s.position == manuk_css::Position::Sticky);
         self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
         self.content_height = self.root_box.content_bottom();
         self.dom.clear_all_dirty();
@@ -2339,8 +2443,10 @@ impl Page {
                 }
                 // A stylesheet that fails to arrive is not a cosmetic loss — it is the difference
                 // between a site's desktop layout and its mobile one. Say so.
-                None => tracing::warn!(%url, "STYLESHEET FAILED — the page will render unstyled or \
-                                              in its fallback layout"),
+                None => {
+                    tracing::warn!(%url, "STYLESHEET FAILED — the page will render unstyled or \
+                                              in its fallback layout")
+                }
             }
         }
         // Web fonts: fetch @font-face sources (from inline + external CSS) and register
@@ -2490,7 +2596,9 @@ impl Page {
     fn canvas_background(&self) -> Rgba {
         let root = self.dom.root();
         for sel in ["html", "body"] {
-            let Some(n) = self.dom.find_first(sel) else { continue };
+            let Some(n) = self.dom.find_first(sel) else {
+                continue;
+            };
             let _ = root;
             if let Some(bg) = self.styles.get(&n).and_then(|st| st.background_color) {
                 if bg.a > 0 {
@@ -2504,8 +2612,12 @@ impl Page {
     pub fn paint(&self, fonts: &FontContext, width: u32, height: u32) -> Canvas {
         let z = self.z_index_map();
         let clip = self.clip_map();
-        CpuPainter::with_layers(fonts, &self.images, &z, &clip)
-            .render(&self.root_box, width, height, self.canvas_background())
+        CpuPainter::with_layers(fonts, &self.images, &z, &clip).render(
+            &self.root_box,
+            width,
+            height,
+            self.canvas_background(),
+        )
     }
 
     /// Rasterize the visible viewport with the content scrolled up by `scroll_y`.
@@ -2530,8 +2642,13 @@ impl Page {
         } else {
             &self.root_box
         };
-        CpuPainter::with_layers(fonts, &self.images, &z, &clip)
-            .render_scrolled(boxes, width, height, self.canvas_background(), scroll_y)
+        CpuPainter::with_layers(fonts, &self.images, &z, &clip).render_scrolled(
+            boxes,
+            width,
+            height,
+            self.canvas_background(),
+            scroll_y,
+        )
     }
 
     /// All `<a href>` links, in document order, with hrefs resolved absolute.
@@ -2855,7 +2972,13 @@ pub async fn prefetch_document(url: &str) -> Result<Loaded> {
             };
             let masks = fetch_masks_owned(mask_targets).await;
 
-            Ok(Loaded::Prefetched(Box::new(Prefetched { dom, final_url, css, images, masks })))
+            Ok(Loaded::Prefetched(Box::new(Prefetched {
+                dom,
+                final_url,
+                css,
+                images,
+                masks,
+            })))
         }
         other => Ok(other),
     }
@@ -2864,8 +2987,14 @@ pub async fn prefetch_document(url: &str) -> Result<Loaded> {
 /// The outcome of navigating to a URL: a document to render, or a file to save (the server
 /// marked the response `Content-Disposition: attachment` or served a non-renderable binary).
 pub enum Loaded {
-    Document { html: String, final_url: String },
-    Download { filename: String, bytes: Vec<u8> },
+    Document {
+        html: String,
+        final_url: String,
+    },
+    Download {
+        filename: String,
+        bytes: Vec<u8>,
+    },
     /// DEBT-1: a document whose subresources were already fetched off-thread. The UI thread can
     /// build this with **no network calls at all**.
     Prefetched(Box<Prefetched>),
@@ -3060,7 +3189,10 @@ mod js_interactive_tests {
         let out = manuk_css::query_selector_all(page.dom(), root, "#out")[0];
         assert_eq!(page.dom().text_content(out), "before");
         let proceed = page.dispatch_click(button, &fonts, 800.0);
-        assert!(proceed, "no listener called preventDefault, so the default action proceeds");
+        assert!(
+            proceed,
+            "no listener called preventDefault, so the default action proceeds"
+        );
         assert_eq!(
             page.dom().text_content(out),
             "CLICKED",
@@ -3090,7 +3222,11 @@ mod js_interactive_tests {
             </body></html>"#;
         let _page3 = Page::load(html3, "https://app.test/", &fonts, 800.0);
         let opens3 = manuk_js::take_window_opens();
-        assert_eq!(opens3.len(), 1, "window.open recorded one open for the host");
+        assert_eq!(
+            opens3.len(),
+            1,
+            "window.open recorded one open for the host"
+        );
         assert!(opens3[0].0 > 0, "the open carries an allocated window id");
         assert_eq!(
             opens3[0].1, "https://accounts.example/oauth?client=x",
@@ -3122,7 +3258,11 @@ mod js_interactive_tests {
             </script></body></html>"#;
         let mut page5 = Page::load(html5, "https://app.test/page", &fonts, 800.0);
         let out5 = manuk_css::query_selector_all(page5.dom(), page5.dom().root(), "#out")[0];
-        assert_eq!(page5.dom().text_content(out5), "loading", "pre-resolution placeholder");
+        assert_eq!(
+            page5.dom().text_content(out5),
+            "loading",
+            "pre-resolution placeholder"
+        );
         let reqs = page5.take_fetches();
         assert_eq!(reqs.len(), 1, "the page issued exactly one fetch");
         let (id, url, method, _body) = &reqs[0];
@@ -3182,7 +3322,10 @@ mod js_interactive_tests {
         let ops = page7.take_history_ops();
         assert_eq!(ops.len(), 1, "one history op queued for the host");
         assert_eq!(ops[0].0, 0, "kind 0 = pushState");
-        assert_eq!(ops[0].2, "https://app.test/next", "resolved absolute URL for the omnibox");
+        assert_eq!(
+            ops[0].2, "https://app.test/next",
+            "resolved absolute URL for the omnibox"
+        );
         assert!(ops[0].1.contains("42"), "state serialized: {}", ops[0].1);
 
         // (8) popstate: a host-driven back/forward fires onpopstate with the restored state.
@@ -3209,7 +3352,10 @@ mod js_interactive_tests {
         let (target, json, origin, source) = &msgs[0];
         assert!(*target > 0, "routed to the opened popup's window id");
         assert_eq!(origin, "https://auth.test", "targetOrigin preserved");
-        assert!(json.contains("token") && json.contains('T'), "payload serialized: {json}");
+        assert!(
+            json.contains("token") && json.contains('T'),
+            "payload serialized: {json}"
+        );
         // NB: source is read at post time; set_identity ran after load, so this asserts the
         // send path carries a source slot (0 here — the post happened during load, pre-identity).
         let _ = source;
@@ -3227,7 +3373,13 @@ mod js_interactive_tests {
         let mut page10 = Page::load(html10, "https://app.test/", &fonts, 800.0);
         page10.set_identity(200, 0);
         let m10 = manuk_css::query_selector_all(page10.dom(), page10.dom().root(), "#m")[0];
-        page10.deliver_message("{\"token\":\"XYZ\"}", "https://auth.test", 100, &fonts, 800.0);
+        page10.deliver_message(
+            "{\"token\":\"XYZ\"}",
+            "https://auth.test",
+            100,
+            &fonts,
+            800.0,
+        );
         assert_eq!(
             page10.dom().text_content(m10),
             "from:https://auth.test:XYZ:src=100",
@@ -3263,7 +3415,11 @@ mod js_interactive_tests {
         let root11 = page11.dom().root();
         let btn = manuk_css::query_selector_all(page11.dom(), root11, "#btn")[0];
         let log = manuk_css::query_selector_all(page11.dom(), root11, "#log")[0];
-        assert_eq!(page11.dom().text_content(log), "none", "no records before the mutation");
+        assert_eq!(
+            page11.dom().text_content(log),
+            "none",
+            "no records before the mutation"
+        );
         page11.dispatch_click(btn, &fonts, 800.0);
         assert_eq!(
             page11.dom().text_content(log),
@@ -3401,12 +3557,12 @@ mod js_interactive_tests {
         let out14 = manuk_css::query_selector_all(page14.dom(), root14, "#out")[0];
         let got = page14.dom().text_content(out14);
         for claim in [
-            "ownerDoc:true",     // React   — a raw *mut JSObject cached across a GC is a bug
-            "protoAccessor:true",// Svelte 5 — get_descriptor(Node.prototype,'firstChild').get
-            "commentData:true",  // Lit      — CharacterData.data on its binding markers
-            "shadowType:true",   // Lit      — a shadow root is a DocumentFragment
-            "fragInsert:true",   // lit-html — every template commits through this call
-            "mixins:true",       // everyone — append/prepend/insertAdjacentHTML/outerHTML
+            "ownerDoc:true",      // React   — a raw *mut JSObject cached across a GC is a bug
+            "protoAccessor:true", // Svelte 5 — get_descriptor(Node.prototype,'firstChild').get
+            "commentData:true",   // Lit      — CharacterData.data on its binding markers
+            "shadowType:true",    // Lit      — a shadow root is a DocumentFragment
+            "fragInsert:true",    // lit-html — every template commits through this call
+            "mixins:true",        // everyone — append/prepend/insertAdjacentHTML/outerHTML
         ] {
             assert!(
                 got.contains(claim),
@@ -3443,7 +3599,10 @@ mod js_interactive_tests {
 
         // connectedCallback ran on upgrade.
         assert_eq!(
-            page13.dom().element(widget).and_then(|e| e.attr("data-connected")),
+            page13
+                .dom()
+                .element(widget)
+                .and_then(|e| e.attr("data-connected")),
             Some("1"),
             "connectedCallback fired on upgrade"
         );
@@ -3455,7 +3614,10 @@ mod js_interactive_tests {
         );
         // attachShadow gave the host a real shadow root, and its content is in the shadow tree
         // (NOT a light-DOM child of the host).
-        let sr = page13.dom().shadow_root(widget).expect("shadow root attached from JS");
+        let sr = page13
+            .dom()
+            .shadow_root(widget)
+            .expect("shadow root attached from JS");
         assert!(page13.dom().is_shadow_root(sr));
         assert_eq!(
             page13.dom().text_content(sr),
@@ -3728,7 +3890,11 @@ mod js_interactive_tests {
         // The checkbox hack: a script set `.checked`, so `:checked` must now MATCH and the panel
         // must be revealed. This is the assertion that a whole class of JS-free UI depends on.
         let s22 = manuk_css::query_selector_all(page22.dom(), r22, "#s")[0];
-        let h22 = page22.root_box.node_rects(page22.dom()).get(&s22).map(|r| r.height);
+        let h22 = page22
+            .root_box
+            .node_rects(page22.dom())
+            .get(&s22)
+            .map(|r| r.height);
         assert_eq!(
             h22,
             Some(40.0),
@@ -3762,14 +3928,16 @@ mod tests {
         assert!(page.has_sticky, "sticky is detected");
 
         let hid = manuk_css::query_selector_all(page.dom(), page.dom().root(), "#h")[0];
-        let rects: std::collections::HashMap<_, _> = page.root_box.node_rects(page.dom()).into_iter().collect();
+        let rects: std::collections::HashMap<_, _> =
+            page.root_box.node_rects(page.dom()).into_iter().collect();
         let natural_y = rects[&hid].y;
 
         // Scrolled 500px past the top: the header pins so it stays at the viewport top (top:0),
         // i.e. its document y rises to ~scroll_y.
         let mut boxes = page.root_box.clone();
         apply_sticky(&mut boxes, &page.styles, 500.0);
-        let pinned: std::collections::HashMap<_, _> = boxes.node_rects(page.dom()).into_iter().collect();
+        let pinned: std::collections::HashMap<_, _> =
+            boxes.node_rects(page.dom()).into_iter().collect();
         assert!(
             (pinned[&hid].y - (natural_y + 500.0)).abs() < 1.5,
             "sticky header pinned to the scroll offset (natural {natural_y}, got {})",
@@ -3786,10 +3954,23 @@ mod tests {
             <link rel="stylesheet" href="/a.css">
         </head>"#;
         let urls = scan_preloads(html, "https://e.test/page");
-        assert!(urls.contains(&"https://e.test/a.css".to_string()), "found stylesheet: {urls:?}");
-        assert!(urls.contains(&"https://cdn.test/f.woff2".to_string()), "found preload: {urls:?}");
-        assert!(!urls.iter().any(|u| u.contains("favicon")), "icon is not preloaded");
-        assert_eq!(urls.iter().filter(|u| u.contains("a.css")).count(), 1, "deduped");
+        assert!(
+            urls.contains(&"https://e.test/a.css".to_string()),
+            "found stylesheet: {urls:?}"
+        );
+        assert!(
+            urls.contains(&"https://cdn.test/f.woff2".to_string()),
+            "found preload: {urls:?}"
+        );
+        assert!(
+            !urls.iter().any(|u| u.contains("favicon")),
+            "icon is not preloaded"
+        );
+        assert_eq!(
+            urls.iter().filter(|u| u.contains("a.css")).count(),
+            1,
+            "deduped"
+        );
     }
 
     /// §4a — element geometry must come from the **real** layout pipeline, not a
@@ -3810,10 +3991,15 @@ mod tests {
             .find(&manuk_a11y::Role::Button, "Sign in")
             .expect("button is in the a11y tree");
         let bbox = btn.bbox.expect("button was laid out, so it has geometry");
-        assert!(bbox.width > 0.0 && bbox.height > 0.0, "degenerate bbox: {bbox:?}");
+        assert!(
+            bbox.width > 0.0 && bbox.height > 0.0,
+            "degenerate bbox: {bbox:?}"
+        );
 
         // The heading is laid out above the button (normal block flow).
-        let h1 = tree.find(&manuk_a11y::Role::Heading { level: 1 }, "Heading").unwrap();
+        let h1 = tree
+            .find(&manuk_a11y::Role::Heading { level: 1 }, "Heading")
+            .unwrap();
         assert!(h1.bbox.unwrap().y < bbox.y, "h1 should precede the button");
 
         // Hit-testing the button's own center resolves to the button.
@@ -3821,7 +4007,12 @@ mod tests {
         assert_eq!(tree.hit_test(cx, cy).map(|n| n.node), Some(btn.node));
 
         // The viewport rendering carries a click point for the button.
-        let vp = manuk_a11y::Rect { x: 0.0, y: 0.0, width: 800.0, height: 600.0 };
+        let vp = manuk_a11y::Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 800.0,
+            height: 600.0,
+        };
         assert!(tree
             .to_viewport_lines(vp)
             .iter()
@@ -3856,12 +4047,18 @@ mod tests {
         page.relayout_zoomed(&fonts, 400.0, 2.0);
         assert_eq!(page.zoom(), 2.0);
         let big_h = page.content_height;
-        assert!(big_h > base_h, "zoom-in must grow content: {base_h} -> {big_h}");
+        assert!(
+            big_h > base_h,
+            "zoom-in must grow content: {base_h} -> {big_h}"
+        );
 
         // The *font size* really changed — that is what makes it crisp rather than a
         // scaled bitmap.
         let big_fs = font_size_at(&page);
-        assert!((big_fs - base_fs * 2.0).abs() < 0.01, "font_size must scale with zoom");
+        assert!(
+            (big_fs - base_fs * 2.0).abs() < 0.01,
+            "font_size must scale with zoom"
+        );
 
         // Returning to 100% restores the original layout exactly (no compounding).
         page.relayout_zoomed(&fonts, 400.0, 1.0);
@@ -3899,8 +4096,14 @@ mod tests {
 
         // Both strings are visible: one from the shadow tree, one slotted from the light DOM.
         let text = page.visible_text();
-        assert!(text.contains("ShadowTitle"), "shadow content must render: {text:?}");
-        assert!(text.contains("SlottedBody"), "slotted content must render: {text:?}");
+        assert!(
+            text.contains("ShadowTitle"),
+            "shadow content must render: {text:?}"
+        );
+        assert!(
+            text.contains("SlottedBody"),
+            "slotted content must render: {text:?}"
+        );
 
         // And both produced real geometry.
         let tree = page.a11y_tree();

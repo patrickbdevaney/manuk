@@ -142,7 +142,11 @@ pub fn omnibox_intent(input: &str, settings: &Settings) -> OmniboxIntent {
 
     // 1. An explicit scheme is decisive.
     if let Some((scheme, _)) = t.split_once("://") {
-        if !scheme.is_empty() && scheme.chars().all(|c| c.is_ascii_alphanumeric() || c == '+') {
+        if !scheme.is_empty()
+            && scheme
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '+')
+        {
             return OmniboxIntent::Navigate(t.to_string());
         }
     }
@@ -235,12 +239,7 @@ pub fn suggestions(
     };
 
     for b in bookmarks.items() {
-        let r = rank_of(&b.url, 0).or_else(|| {
-            b.title
-                .to_lowercase()
-                .contains(&q)
-                .then_some(1)
-        });
+        let r = rank_of(&b.url, 0).or_else(|| b.title.to_lowercase().contains(&q).then_some(1));
         if let Some(r) = r {
             scored.push((
                 r,
@@ -530,7 +529,9 @@ mod affordance_gate {
             // A "log" effect is exactly the bug we shipped twice (Downloads, Bookmark).
             let lowered = effect.to_ascii_lowercase();
             assert!(
-                !lowered.contains("log") && !lowered.contains("stderr") && !lowered.contains("trace"),
+                !lowered.contains("log")
+                    && !lowered.contains("stderr")
+                    && !lowered.contains("trace"),
                 "affordance {name} claims its effect is {effect:?} — a log line is NOT a UI (§1.8)"
             );
         }
@@ -541,7 +542,10 @@ mod affordance_gate {
     /// author to state its observable effect.
     #[test]
     fn the_affordance_inventory_covers_the_real_menu() {
-        let menu_declared = AFFORDANCES.iter().filter(|(a, _)| a.starts_with("menu:")).count();
+        let menu_declared = AFFORDANCES
+            .iter()
+            .filter(|(a, _)| a.starts_with("menu:"))
+            .count();
         assert_eq!(
             menu_declared,
             super::super::gui::MENU_LEN,

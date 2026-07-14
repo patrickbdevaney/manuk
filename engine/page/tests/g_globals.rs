@@ -101,17 +101,17 @@ fn every_global_a_real_bundle_references_exists_and_answers_honestly() {
     );
 
     for claim in [
-        "winDispatch:true",   // window is an EventTarget
-        "winRoundTrip:true",  // ...and dispatch actually reaches its listeners
-        "title:true",         // document.title is readable AND writable
+        "winDispatch:true",  // window is an EventTarget
+        "winRoundTrip:true", // ...and dispatch actually reaches its listeners
+        "title:true",        // document.title is readable AND writable
         "referrer:true",
         "charset:true",
         "currentScript:true", // null, not undefined — libraries guard against null, not undefined
         "vendor:true",
-        "wsConstructs:true",  // it constructs
-        "wsNotOpen:true",     // ...and does NOT claim to be connected
-        "webglNull:true",     // getContext('webgl') === null is the spec's "cannot"
-        "canvas2d:true",      // a real 2D context, whose drawing ops are no-ops
+        "wsConstructs:true", // it constructs
+        "wsNotOpen:true",    // ...and does NOT claim to be connected
+        "webglNull:true",    // getContext('webgl') === null is the spec's "cannot"
+        "canvas2d:true",     // a real 2D context, whose drawing ops are no-ops
     ] {
         assert!(
             got.contains(claim),

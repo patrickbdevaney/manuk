@@ -24,7 +24,7 @@
 //! Both are asserted against a **large** DOM, because the bug was invisible on a small one.
 
 use std::alloc::{GlobalAlloc, Layout, System};
-use std::sync::atomic::{AtomicUsize, AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 /// A counting allocator. Only counts while `ARMED` — so the page's own construction (which
 /// legitimately allocates a great deal) does not drown the signal from one event.
@@ -64,7 +64,10 @@ fn measure(f: impl FnOnce()) -> (usize, usize) {
     ARMED.store(true, Ordering::Relaxed);
     f();
     ARMED.store(false, Ordering::Relaxed);
-    (ALLOCS.load(Ordering::Relaxed), BYTES.load(Ordering::Relaxed))
+    (
+        ALLOCS.load(Ordering::Relaxed),
+        BYTES.load(Ordering::Relaxed),
+    )
 }
 
 /// A document with `n` elements — big enough that O(n)-per-event work is unmistakable.
@@ -92,7 +95,8 @@ fn a_scroll_does_not_allocate_per_dom_node() {
     let fonts = manuk_text::FontContext::new();
 
     // --- 1. Nobody is listening. This is the common case, and it must be free. ---
-    let mut quiet = manuk_page::Page::load(&big_page(2_000, false), "https://g.test/", &fonts, 1200.0);
+    let mut quiet =
+        manuk_page::Page::load(&big_page(2_000, false), "https://g.test/", &fonts, 1200.0);
     quiet.view_changed(0.0, 1200.0, 800.0, true); // warm any one-time setup
     let (quiet_allocs, quiet_bytes) = measure(|| {
         for i in 0..10 {
@@ -109,7 +113,8 @@ fn a_scroll_does_not_allocate_per_dom_node() {
 
     // --- 2. Someone IS listening. The cost must not scale with the DOM. ---
     let mut small = manuk_page::Page::load(&big_page(500, true), "https://g.test/", &fonts, 1200.0);
-    let mut large = manuk_page::Page::load(&big_page(4_000, true), "https://g.test/", &fonts, 1200.0);
+    let mut large =
+        manuk_page::Page::load(&big_page(4_000, true), "https://g.test/", &fonts, 1200.0);
     small.view_changed(0.0, 1200.0, 800.0, true);
     large.view_changed(0.0, 1200.0, 800.0, true);
 

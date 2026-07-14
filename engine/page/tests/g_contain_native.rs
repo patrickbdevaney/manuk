@@ -47,7 +47,12 @@ fn a_panicking_native_does_not_take_the_browser_with_it() {
     let out = manuk_css::query_selector_all(page.dom(), root, "#out")[0];
     let got = page.dom().text_content(out);
 
-    for claim in ["returned:true", "threwToJs:true", "domStillWorks:true", "survived:true"] {
+    for claim in [
+        "returned:true",
+        "threwToJs:true",
+        "domStillWorks:true",
+        "survived:true",
+    ] {
         assert!(
             got.contains(claim),
             "G_CONTAIN_NATIVE: expected `{claim}`\n  got: {got}\n\n  \

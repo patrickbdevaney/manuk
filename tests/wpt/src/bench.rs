@@ -47,7 +47,15 @@ fn time_median(runs: usize, mut f: impl FnMut()) -> Duration {
 }
 
 /// Measure the full pipeline for one page.
-pub fn bench_page(name: &str, html: &str, url: &str, vw: f32, vh: u32, fonts: &FontContext, runs: usize) -> StageTimes {
+pub fn bench_page(
+    name: &str,
+    html: &str,
+    url: &str,
+    vw: f32,
+    vh: u32,
+    fonts: &FontContext,
+    runs: usize,
+) -> StageTimes {
     // Parse.
     let parse = time_median(runs, || {
         let _ = manuk_html::parse(html);
@@ -120,7 +128,9 @@ pub fn report(rows: &[StageTimes]) {
         );
     }
 
-    println!("\n--- per-KB cost (µs/KB) — a column that CLIMBS with page size is superlinear ---\n");
+    println!(
+        "\n--- per-KB cost (µs/KB) — a column that CLIMBS with page size is superlinear ---\n"
+    );
     println!(
         "{:<14} {:>7} {:>8} {:>8} {:>8} {:>8} {:>8} {:>9}",
         "page", "KB", "parse", "cascade", "layout", "dlist", "paint", "TOTAL"
@@ -162,7 +172,6 @@ pub fn report(rows: &[StageTimes]) {
     println!();
 }
 
-
 /// **F4 — INTERACTIVE LATENCY.** The cost of one scroll notification and one click dispatch on a
 /// real page.
 ///
@@ -176,7 +185,15 @@ pub fn report(rows: &[StageTimes]) {
 /// Per wheel event. The load bench never saw it.
 ///
 /// Floor: **one frame (16ms)**. Anything slower is felt.
-pub fn bench_interactive(name: &str, html: &str, url: &str, vw: f32, vh: u32, fonts: &FontContext, runs: usize) -> (f64, f64) {
+pub fn bench_interactive(
+    name: &str,
+    html: &str,
+    url: &str,
+    vw: f32,
+    vh: u32,
+    fonts: &FontContext,
+    runs: usize,
+) -> (f64, f64) {
     let ms = |d: Duration| d.as_secs_f64() * 1000.0;
     let mut page = manuk_page::Page::load(html, url, fonts, vw);
     // Scroll: what the shell does once per frame while the wheel is turning.

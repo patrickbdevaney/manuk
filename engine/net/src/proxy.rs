@@ -52,7 +52,11 @@ impl SocksProxy {
     /// The target is passed to the proxy as a *domain name*, never resolved locally —
     /// so DNS happens at the proxy, not on this machine. That is the whole point of
     /// routing through it: a locally-resolved hostname would leak the destination.
-    pub async fn connect(&self, host: &str, port: u16) -> Result<Socks5Stream<tokio::net::TcpStream>> {
+    pub async fn connect(
+        &self,
+        host: &str,
+        port: u16,
+    ) -> Result<Socks5Stream<tokio::net::TcpStream>> {
         let target = (host, port);
         let stream = match &self.auth {
             Some((u, p)) => Socks5Stream::connect_with_password(self.addr.as_str(), target, u, p)
@@ -145,7 +149,10 @@ where
         .body(Full::<Bytes>::default())
         .context("building proxied request")?;
 
-    let resp = sender.send_request(req).await.context("proxied request failed")?;
+    let resp = sender
+        .send_request(req)
+        .await
+        .context("proxied request failed")?;
     let status = resp.status().as_u16();
     let version: HttpVersion = resp.version().into();
     let headers: Vec<(String, String)> = resp
@@ -153,7 +160,12 @@ where
         .iter()
         .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
         .collect();
-    let body = resp.into_body().collect().await.context("reading proxied body")?.to_bytes();
+    let body = resp
+        .into_body()
+        .collect()
+        .await
+        .context("reading proxied body")?
+        .to_bytes();
 
     Ok(Response {
         status,

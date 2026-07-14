@@ -497,8 +497,8 @@ mod tests {
     #[test]
     fn stylo_selector_matcher_runs_over_arena_dom() {
         use selectors::context::{
-            MatchingContext, MatchingForInvalidation, MatchingMode, NeedsSelectorFlags,
-            QuirksMode, SelectorCaches,
+            MatchingContext, MatchingForInvalidation, MatchingMode, NeedsSelectorFlags, QuirksMode,
+            SelectorCaches,
         };
         use selectors::matching::matches_selector;
         use stylo::selector_parser::SelectorParser;
@@ -527,8 +527,7 @@ mod tests {
 
         // Match one selector string against one arena node, expecting `want`.
         let check = |sel: &str, node: NodeId, want: bool| {
-            let list =
-                SelectorParser::parse_author_origin_no_namespace(sel, &url_data).unwrap();
+            let list = SelectorParser::parse_author_origin_no_namespace(sel, &url_data).unwrap();
             let el = StyloElement::new(&dom, node, &store);
             let mut caches = SelectorCaches::default();
             let mut ctx = MatchingContext::new(

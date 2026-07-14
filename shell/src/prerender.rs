@@ -92,7 +92,10 @@ mod tests {
 
     #[test]
     fn nothing_same_origin_predicts_nothing() {
-        let links = vec!["https://b.test/1".to_string(), "https://c.test/2".to_string()];
+        let links = vec![
+            "https://b.test/1".to_string(),
+            "https://c.test/2".to_string(),
+        ];
         assert_eq!(predict_next("https://a.test/home", None, &links), None);
     }
 }

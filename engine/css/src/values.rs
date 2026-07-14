@@ -148,9 +148,10 @@ impl CalcVal {
         let s = if sub { -1.0 } else { 1.0 };
         match (self, o) {
             (CalcVal::Num(a), CalcVal::Num(b)) => Some(CalcVal::Num(a + s * b)),
-            (CalcVal::Dim { px, pct }, CalcVal::Dim { px: p2, pct: c2 }) => {
-                Some(CalcVal::Dim { px: px + s * p2, pct: pct + s * c2 })
-            }
+            (CalcVal::Dim { px, pct }, CalcVal::Dim { px: p2, pct: c2 }) => Some(CalcVal::Dim {
+                px: px + s * p2,
+                pct: pct + s * c2,
+            }),
             _ => None, // number ± dimension is invalid
         }
     }
@@ -158,9 +159,10 @@ impl CalcVal {
         match (self, o) {
             (CalcVal::Num(a), CalcVal::Num(b)) => Some(CalcVal::Num(a * b)),
             (CalcVal::Num(n), CalcVal::Dim { px, pct })
-            | (CalcVal::Dim { px, pct }, CalcVal::Num(n)) => {
-                Some(CalcVal::Dim { px: px * n, pct: pct * n })
-            }
+            | (CalcVal::Dim { px, pct }, CalcVal::Num(n)) => Some(CalcVal::Dim {
+                px: px * n,
+                pct: pct * n,
+            }),
             _ => None, // dimension * dimension is invalid
         }
     }
@@ -171,7 +173,10 @@ impl CalcVal {
         }
         Some(match self {
             CalcVal::Num(a) => CalcVal::Num(a / d),
-            CalcVal::Dim { px, pct } => CalcVal::Dim { px: px / d, pct: pct / d },
+            CalcVal::Dim { px, pct } => CalcVal::Dim {
+                px: px / d,
+                pct: pct / d,
+            },
         })
     }
 }
@@ -235,7 +240,10 @@ fn tokenize_calc(s: &str, fs: f32) -> Option<Vec<CalcTok>> {
             } else if unit == "%" {
                 CalcVal::Dim { px: 0.0, pct: num }
             } else {
-                CalcVal::Dim { px: dimension_to_px(num, unit, fs)?, pct: 0.0 }
+                CalcVal::Dim {
+                    px: dimension_to_px(num, unit, fs)?,
+                    pct: 0.0,
+                }
             };
             out.push(CalcTok::Val(val));
         } else {
@@ -268,7 +276,11 @@ impl CalcParser<'_> {
         while let Some(op @ (CalcTok::Star | CalcTok::Slash)) = self.peek() {
             self.i += 1;
             let rhs = self.factor()?;
-            v = if matches!(op, CalcTok::Star) { v.mul(rhs)? } else { v.div(rhs)? };
+            v = if matches!(op, CalcTok::Star) {
+                v.mul(rhs)?
+            } else {
+                v.div(rhs)?
+            };
         }
         Some(v)
     }
@@ -410,7 +422,11 @@ fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (u8, u8, u8) {
     let (r, g, b) = if s == 0.0 {
         (l, l, l)
     } else {
-        let q = if l < 0.5 { l * (1.0 + s) } else { l + s - l * s };
+        let q = if l < 0.5 {
+            l * (1.0 + s)
+        } else {
+            l + s - l * s
+        };
         let p = 2.0 * l - q;
         (
             hue(p, q, h + 1.0 / 3.0),
@@ -550,11 +566,23 @@ mod tests {
         );
         assert_eq!(parse_color("nonsense"), None);
         // hsl(): red, green, a mid-grey, and hsla with alpha.
-        assert_eq!(parse_color("hsl(0, 100%, 50%)"), Some(Rgba::new(255, 0, 0, 255)));
-        assert_eq!(parse_color("hsl(120 100% 50%)"), Some(Rgba::new(0, 255, 0, 255)));
-        assert_eq!(parse_color("hsl(0, 0%, 50%)"), Some(Rgba::new(128, 128, 128, 255)));
+        assert_eq!(
+            parse_color("hsl(0, 100%, 50%)"),
+            Some(Rgba::new(255, 0, 0, 255))
+        );
+        assert_eq!(
+            parse_color("hsl(120 100% 50%)"),
+            Some(Rgba::new(0, 255, 0, 255))
+        );
+        assert_eq!(
+            parse_color("hsl(0, 0%, 50%)"),
+            Some(Rgba::new(128, 128, 128, 255))
+        );
         assert_eq!(parse_color("hsla(240, 100%, 50%, 0.5)").unwrap().a, 128);
-        assert_eq!(parse_color("hsl(240deg 100% 50%)"), Some(Rgba::new(0, 0, 255, 255)));
+        assert_eq!(
+            parse_color("hsl(240deg 100% 50%)"),
+            Some(Rgba::new(0, 0, 255, 255))
+        );
     }
 
     #[test]
@@ -575,15 +603,33 @@ mod calc_tests {
     #[test]
     fn calc_full_evaluator() {
         // additive
-        assert_eq!(parse_dim("calc(100% - 60px)", 16.0), Dim::Calc { px: -60.0, pct: 100.0 });
+        assert_eq!(
+            parse_dim("calc(100% - 60px)", 16.0),
+            Dim::Calc {
+                px: -60.0,
+                pct: 100.0
+            }
+        );
         // multiplication / division by a number
         assert_eq!(parse_dim("calc(100% / 3)", 16.0), Dim::Percent(100.0 / 3.0));
         assert_eq!(parse_dim("calc(50px * 2)", 16.0), Dim::Px(100.0));
         assert_eq!(parse_dim("calc(2 * 30px)", 16.0), Dim::Px(60.0));
         // parens + precedence
-        assert_eq!(parse_dim("calc((100% - 20px) / 2)", 16.0), Dim::Calc { px: -10.0, pct: 50.0 });
+        assert_eq!(
+            parse_dim("calc((100% - 20px) / 2)", 16.0),
+            Dim::Calc {
+                px: -10.0,
+                pct: 50.0
+            }
+        );
         // nested calc
-        assert_eq!(parse_dim("calc(100% - calc(10px + 10px))", 16.0), Dim::Calc { px: -20.0, pct: 100.0 });
+        assert_eq!(
+            parse_dim("calc(100% - calc(10px + 10px))", 16.0),
+            Dim::Calc {
+                px: -20.0,
+                pct: 100.0
+            }
+        );
         // unary minus
         assert_eq!(parse_dim("calc(-5px + 10px)", 16.0), Dim::Px(5.0));
         // em units inside calc

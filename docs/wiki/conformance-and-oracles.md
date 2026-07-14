@@ -262,3 +262,25 @@ GPU drivers, DRM), which are not algorithm-discovery problems.
 - **G_SILENT_FAIL** — a swallowed script exception hid two missing IDL properties that were killing
   navigation on **every mdbook site**. *A caught error that is not logged or surfaced is a gate violation,
   not defensive coding.*
+
+## THREE anchors of parity scope, and each sees what the others cannot
+
+1. **The differential oracle** (265 real sites vs Chromium) — *what real pages do*; needs Chromium to say
+   what's right; blind to anything that does not move a box.
+2. **WPT** (`docs/wiki/wpt-horizon.md`) — *what the spec says*; carries its own verdict, no oracle needed;
+   sees adversarial cases no real site generates; blind to which spec features the real web actually uses.
+3. **The doc/app/platform-web capability roadmap** (`PARITY-LEDGER.md`) — *which class of the web works
+   end-to-end*.
+
+**No one of them is sufficient.** The oracle found the cascade dropping 41% of real sites' nested rules;
+WPT found `insert_before(X,X)` looping forever and `load` never firing; the roadmap is what says iframes and
+lazy-load come before media. **Feed all measured WPT categories into the priority ledger with the same
+`usage × divergence` formula the oracle's cluster ranking uses — one ledger, not three.**
+
+## The async CI lane is redundant verification you never wait on
+
+`.github/workflows/ci.yml` runs the full wall on every push, in parallel, at zero cost to the local loop —
+a regression it finds is an ordinary gate failure at the next check-in, never an interrupt. Split into a
+**badge-bearing Linux lane** (shipping config, must be green) and a **cross-platform known-gap lane**
+(`continue-on-error`, promoted into the badge when a platform goes green). *A green badge that has stopped
+meaning anything is worse than a red one from a real regression.*
