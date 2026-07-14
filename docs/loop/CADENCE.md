@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **64** | ticks 1–71 |
-| median tick cycle | **19m** | 63 intervals |
-| median, last 10 | **16m** | 10 intervals |
+| ticks landed | **65** | ticks 1–72 |
+| median tick cycle | **19m** | 64 intervals |
+| median, last 10 | **14m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.87** | 72.2h elapsed |
-| median verify wall | **39s** | 3 ticks |
+| **ticks per hour** | **0.88** | 72.5h elapsed |
+| median verify wall | **2m** | 4 ticks |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -25,22 +25,31 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 ### Near — the daily driver (doc / app / platform web)
 
-* **capabilities asserted** (`G_CAPABILITY`): 48 → **50**
-* **live gates**: 27 → **28**
-* **✅ rows in the capability ledger**: 144 → **145**
+* **capabilities asserted** (`G_CAPABILITY`): 48 → **53**
+* **live gates**: 27 → **29**
+* **✅ rows in the capability ledger**: 144 → **146**
 * **Bar 0 — oracle hangs**: 4 of 265 sites
 
-**26 of 64 ticks** (41%) moved a
+**27 of 65 ticks** (42%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
 
 ### Far — WPT (50,000 tests)
 
-* measured **4** times (a carried-forward number is never counted as a measurement)
+* measured **5** times (a carried-forward number is never counted as a measurement)
 * first, tick 64: **1736/6418** = 27.0%
-* latest, tick 71: **1766/6418** = 27.5%
-* **rate over the measured window: +4.3 subtests / tick** (7 ticks)
+* latest, tick 72: **1793/6418** = 27.9%
+* **rate over the measured window: +7.1 subtests / tick** (8 ticks)
+
+**Interval by interval — and this is the finding, not the average:**
+
+| ticks | Δ subtests | per tick | what those ticks were |
+|---|---:|---:|---|
+| 64→69 | **+1** | +0.2 | capability, instrument |
+| 69→70 | **+0** | +0.0 | instrument |
+| 70→71 | **+29** | +29.0 | capability |
+| 71→72 | **+27** | +27.0 | capability |
 
 > **What this rate is NOT.** It is measured on the `dom/` subset — **6,418 subtests** — and
 > the far horizon is ~50,000 across *all* of WPT, **which this project has never run**.
@@ -49,6 +58,15 @@ and finding that out redirected everything after it.
 > the projection is not made. What the rate *does* say is stated below, and it is the
 > important part.
 
+> **What the intervals say, and it is the whole strategy.** Ticks 64→69 shipped a 60×
+> DOM speedup, real prototypes, a canvas rasterizer, element scrolling and
+> `display: contents` — every one a genuine daily-driver capability win — and WPT moved
+> **+1 subtest**. Tick 71 was the first aimed *directly* at WPT (a real `Range`) and moved
+> **+29 in a single tick**.
+>
+> **The two horizons are nearly orthogonal.** The far one will not arrive as a side-effect
+> of the near one; it has to be spent on deliberately. That is now a measurement rather
+> than an opinion, and it is what this ledger was built to find.
 
 **Near-horizon work does not automatically move the far horizon**, and the log is what proves it:
 tick 64 made DOM node creation **60× faster** and fixed prototype patching across the whole web
@@ -56,8 +74,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **26** capability ticks, median cycle **19m**
-* median diff per tick: **+304 / −9** lines across 7 files
+* **27** capability ticks, median cycle **19m**
+* median diff per tick: **+317 / −9** lines across 7 files
 
 ## Every tick
 
@@ -127,5 +145,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **69** | 2026-07-14 04:50 | 12m | capability | 39s | +259/−29 | 27 | 48 | 27.1% | `display: contents` fell through to `inline`, and collapsed the grid |
 | **70** | 2026-07-14 04:56 | 7m | instrument | 37s | +778/−2 | 27 | 48 | 27.1% | the loop had no odometer |
 | **71** | 2026-07-14 05:16 | 20m | capability | 4m | +632/−5 | 28 | 50 | 27.5% | a real `Range`, and the first tick aimed straight at the far horizon |
+| **72** | 2026-07-14 05:32 | 15m | capability | 2m | +545/−12 | 29 | 53 | 27.9% | `NodeIterator` and `TreeWalker`, and the filter bug that is really a security bug |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

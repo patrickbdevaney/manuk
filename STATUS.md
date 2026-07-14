@@ -8,10 +8,10 @@
 > filesystem, git, the crawl output or the verify receipt.
 
 ```
-TICK:              71
+TICK:              72
 LAST_AUDIT_TICK:   71          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
-LAST_WALL_TIME:    256s
+LAST_WALL_TIME:    150s
 ORACLE_CORPUS:     265 sites
 ORACLE_CRAWLED:    265 sites, 640 clusters  → docs/loop/CLUSTERS.md
 ORACLE_HANGS:      4   ← Bar 0, on OUR clock (manuk_ms > 30s). Outranks every visual cluster.
@@ -375,6 +375,7 @@ loud rather than quietly following the pull.
 | **G_DEDUP** | ✅ **live** | the same URL on the **wire** twice for one navigation (nytimes was pulling one sprite down once per element that named it) |
 | **G_HANG** | ✅ **live, and now honest** | Every oracle site runs in its own process under a watchdog. The watchdog is a **backstop against a true infinite loop** — it wraps our render *and Chromium's*, so when it fires it is recorded as `TIMEOUT` and **attributed to nobody**. The Bar 0 hang count comes from `manuk_ms`. A metric that cannot say whose time it measured must not name a culprit. |
 | **G_CONTAIN** | ✅ **live** | Bar 0 — a panic kills the page, not the process (Part 23.2) |
+| **G_TRAVERSAL** | ✅ **live** | `NodeIterator` + `TreeWalker` with the spec's **filter protocol**. `FILTER_REJECT` prunes the subtree; `FILTER_SKIP` does not — a **security** property wearing a traversal property's clothes, since DOMPurify rejects `<script>` and must not be walked into it. `dom/traversal` 11/53 → **34/53**; whole `dom/` **+27 subtests**. |
 | **G_RANGE** | ✅ **live** | A **real `Range`** — not the inert stub that sat in the interface list making `typeof Range === 'function'` true for sixty ticks. Boundary-point comparison, extract/clone/delete **across structure** (the partially-contained ends are *split*, which is the whole difficulty), `insertNode`, `surroundContents`. `dom/ranges` 2/200 → 16/200; whole `dom/` suite **+29 subtests**. |
 | **G_DISPLAY_CONTENTS** | ✅ **live** | A `display: contents` wrapper **generates no box while its children still do** — they become the grandparent's grid/flex items. It was never parsed: `contents` fell through to `inline`, so the wrapper stayed a real box and the grid saw one anonymous item instead of three. The layout collapsed into a single cell with everything present, styled, and in the wrong place. |
 | **G_TRANSFORM** | ✅ **live** | `getComputedStyle(el).transform` resolves to the spec's `matrix(a,b,c,d,e,f)`. The transform was always *applied* (the box moves); it just never reached JS — and `undefined + ' scale(2)'` is the **string** `"undefined scale(2)"`, which is how every animation library on the web silently stops animating. |

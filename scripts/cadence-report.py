@@ -134,6 +134,21 @@ def main() -> None:
             rate = (lp - fp) / max(dticks, 1)
             w(f"* **rate over the measured window: {rate:+.1f} subtests / tick** ({dticks} ticks)")
             w("")
+            # The AVERAGE rate hides the only thing worth knowing. Show each measured interval, because
+            # what the data actually says is that WPT moves when a tick is AIMED at it and barely
+            # otherwise — and an average across both kinds of tick washes that out completely.
+            w("**Interval by interval — and this is the finding, not the average:**\n")
+            w("| ticks | Δ subtests | per tick | what those ticks were |")
+            w("|---|---:|---:|---|")
+            for a, b in zip(fresh, fresh[1:]):
+                ta, tb = int(a["tick"]), int(b["tick"])
+                d = num(b, "wpt_pass") - num(a, "wpt_pass")
+                n = max(tb - ta, 1)
+                shapes = ", ".join(
+                    sorted({r["shape"] for r in rows if ta < int(r["tick"]) <= tb and r.get("shape")})
+                )
+                w(f"| {ta}→{tb} | **{d:+.0f}** | {d/n:+.1f} | {shapes} |")
+            w("")
             w("> **What this rate is NOT.** It is measured on the `dom/` subset — **6,418 subtests** — and")
             w("> the far horizon is ~50,000 across *all* of WPT, **which this project has never run**.")
             w("> Multiplying a subset's rate up to the whole is not an extrapolation, it is a category")
@@ -141,15 +156,15 @@ def main() -> None:
             w("> the projection is not made. What the rate *does* say is stated below, and it is the")
             w("> important part.")
             w("")
-            if rate < 1.0:
-                w(f"> **At {rate:+.1f} subtests/tick, near-horizon work is not moving WPT.** Ticks"
-                  f" {f_['tick']}–{l_['tick']} shipped a 60× DOM speedup, real prototypes, a canvas")
-                w("> rasterizer, element scrolling, `display: contents` — **every one a genuine capability")
-                w("> win for the daily driver — and WPT moved by a single subtest.** That is not a failure;")
-                w("> it is a *measurement of the relationship between the two horizons*, and it says they")
-                w("> are nearly orthogonal. **The far horizon will not arrive as a side-effect of the near")
-                w("> one. It has to be spent on directly**, and the WPT horizon map")
-                w("> (`docs/wiki/wpt-horizon.md`) is where those ticks get aimed.")
+            w("> **What the intervals say, and it is the whole strategy.** Ticks 64→69 shipped a 60×")
+            w("> DOM speedup, real prototypes, a canvas rasterizer, element scrolling and")
+            w("> `display: contents` — every one a genuine daily-driver capability win — and WPT moved")
+            w("> **+1 subtest**. Tick 71 was the first aimed *directly* at WPT (a real `Range`) and moved")
+            w("> **+29 in a single tick**.")
+            w(">")
+            w("> **The two horizons are nearly orthogonal.** The far one will not arrive as a side-effect")
+            w("> of the near one; it has to be spent on deliberately. That is now a measurement rather")
+            w("> than an opinion, and it is what this ledger was built to find.")
         else:
             w("* no change across the measured window")
     else:

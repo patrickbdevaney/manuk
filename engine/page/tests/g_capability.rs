@@ -57,6 +57,12 @@ const CLAIMS: &[(&str, &str)] = &[
     ("Range", "typeof Range === 'function'"),
     ("document.createRange", "typeof document.createRange === 'function'"),
     ("Range extracts", "(function(){var d=document.createElement('div');d.innerHTML='<p>Hello</p>';var t=d.firstChild.firstChild;var r=document.createRange();r.setStart(t,1);r.setEnd(t,4);return r.toString()==='ell'})()"),
+    // Traversal (tick 72). DOMPurify is built on NodeIterator; Lit on createTreeWalker. And the assertion
+    // that matters is that FILTER_REJECT prunes the SUBTREE — a sanitizer that rejects <script> must not
+    // walk into it.
+    ("createNodeIterator", "typeof document.createNodeIterator === 'function'"),
+    ("TreeWalker instance", "document.createTreeWalker(document.body) instanceof TreeWalker"),
+    ("FILTER_REJECT prunes", "(function(){var d=document.createElement('div');d.innerHTML='<i id=x><b id=y></b></i>';var w=document.createTreeWalker(d,NodeFilter.SHOW_ELEMENT,{acceptNode:function(n){return n.id==='x'?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT}});var s=[],n;while((n=w.nextNode()))s.push(n.id);return s.indexOf('y')===-1})()"),
     ("getSelection", "typeof getSelection==='function' || typeof document.getSelection==='function'"),
     // ── Files (ledger: "Blob / File / FileReader — uploads, downloads, image preview")
     ("Blob", "typeof Blob === 'function'"),

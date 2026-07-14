@@ -1480,7 +1480,19 @@ pub fn install(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<()
     // for sixty ticks. This is the same ordering bug that once let a stub `AbortSignal` shadow the real
     // one; the lesson is cheap to re-learn and expensive to miss: **a stub satisfies every check that only
     // asks whether a name exists.**
-    eval(rt, global, crate::range_js::RANGE_JS, "range.js").map(|_| ())
+    eval(rt, global, crate::range_js::RANGE_JS, "range.js")?;
+
+    // Also after the prelude — it REPLACES the plain-object `createTreeWalker` shim installed there. If
+    // it ran first the shim's `typeof document.createTreeWalker !== 'function'` guard would see a real
+    // function, decline to install, and leave the real one in place — which happens to be right, and is
+    // right by accident. Ordering that works by luck is ordering that breaks on the next edit.
+    eval(
+        rt,
+        global,
+        crate::traversal_js::TRAVERSAL_JS,
+        "traversal.js",
+    )
+    .map(|_| ())
 }
 
 /// A **microtask checkpoint**: drain the host `queueMicrotask` queue *and* SpiderMonkey's

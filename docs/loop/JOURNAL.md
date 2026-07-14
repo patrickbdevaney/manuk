@@ -3054,6 +3054,44 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 72 — `NodeIterator` and `TreeWalker`, and the filter bug that is really a security bug
+
+**TICK SHAPE: capability.** The second tick aimed straight at the far horizon, and it confirms the first.
+
+**+27 WPT subtests** (1766 → 1793, 27.5% → 27.9%); `dom/traversal` **11/53 → 34/53**. Bar 0 clean.
+
+> **Two WPT-aimed ticks: +56 subtests. Five near-horizon ticks: +1.** The cadence ledger's finding is now
+> confirmed twice, and it is no longer a hypothesis about how to allocate ticks — it is a measurement.
+
+**What was there:** a `createTreeWalker` returning a **plain object** with `nextNode` and nothing else — no
+`previousNode`, no `firstChild`/`nextSibling`/`parentNode`, no prototype (so `instanceof TreeWalker` was
+false). `NodeIterator` did not exist at all.
+
+**Both horizons again**, which is why it was chosen: 42 WPT subtests, *and* traversal is how the real web
+walks a subtree. **DOMPurify** — the sanitizer half the web runs untrusted HTML through — is built on
+`NodeIterator`. Lit finds a template's dynamic holes with `createTreeWalker`.
+
+**The walk is the easy part. The filter protocol is where it goes wrong, and silently:**
+
+> **`FILTER_REJECT` (2) skips the whole SUBTREE. `FILTER_SKIP` (3) skips only the node** and still descends
+> into its children. Swap them, and a sanitizer that rejects `<script>` walks cheerfully **into** the
+> script and keeps its contents. **That is a security bug shaped like a traversal bug** — nothing throws,
+> the walk still returns nodes, it just returns the wrong ones.
+
+And the two interfaces differ *precisely there*: **`NodeIterator` has no notion of a subtree, so it treats
+`REJECT` as `SKIP`.** Implementing one and aliasing the other is wrong in the way nobody notices until
+something leaks. The gate asserts both behaviours against the same tree, and the falsifier's mutation is
+exactly that slip.
+
+**The gate was wrong once, and the implementation corrected it.** I asserted that `NodeIterator` would not
+return the root. It does — its reference node *starts* at the root with `pointerBeforeReferenceNode = true`,
+so the first `nextNode()` returns it, while `TreeWalker` starts at the root and moves *away*, never
+returning it. A real asymmetry, easy to get backwards, and worth the gate having been red about.
+
+**The ratchet.** Capability: **up** on both horizons. Performance: unchanged (wall 150s). Instrument
+fidelity: **up** — `G_TRAVERSAL` proven falsifiable, and `G_CAPABILITY` now asserts that `FILTER_REJECT`
+prunes.
+
 ## Tick 71 — a real `Range`, and the first tick aimed straight at the far horizon
 
 **TICK SHAPE: capability.** The first tick *chosen by the cadence ledger*, and it validates it.

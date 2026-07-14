@@ -628,6 +628,8 @@ pub mod canvas;
 pub mod dom_bindings;
 #[cfg(feature = "_sm")]
 pub mod range_js;
+#[cfg(feature = "_sm")]
+pub mod traversal_js;
 
 /// N2 (host half) — History API state model; no JS engine dependency, always built.
 pub mod history_host;

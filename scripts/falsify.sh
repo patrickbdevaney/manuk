@@ -638,6 +638,30 @@ fi
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_TRAVERSAL; then
+  # Make FILTER_REJECT behave as FILTER_SKIP in TreeWalker — the classic implementation slip, and a
+  # SECURITY bug wearing a traversal bug's clothes: a sanitizer that rejects <script> then walks straight
+  # into it and keeps the contents. Nothing throws. The walk still returns nodes. It just returns the
+  # wrong ones.
+  mutate engine/js/src/traversal_js.rs '
+s = s.replace(
+    "    var node = self.currentNode.firstChild ? (first ? self.currentNode.firstChild : self.currentNode.lastChild) : null;",
+    "",
+)
+s = s.replace(
+    "      if (v === REJECT || !sib) {",
+    "      if (false) {",
+)
+s = s.replace(
+    "      while (result !== REJECT && node.firstChild) {",
+    "      while (node.firstChild) {",
+    1,
+)
+'
+  expect_red G_TRAVERSAL cargo test -q -p manuk-page --features stylo,spidermonkey --test g_traversal
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_RANGE; then
   # Stop installing the real Range. The INERT STUB from the interface list is still there, so
   # `typeof Range === 'function'` stays true and nothing throws — which is exactly why nobody noticed the
