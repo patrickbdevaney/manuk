@@ -1,0 +1,73 @@
+name: demo
+
+# ── THE IN-BROWSER DEMO → GitHub Pages.
+#
+# Its OWN lane, deliberately separate from the verify wall:
+#   * it never gates a merge and never competes with tick velocity;
+#   * it builds a `wasm32-unknown-unknown` bundle and deploys a static site;
+#   * `workflow_dispatch` means it can be re-cut on demand without touching the loop.
+#
+# Threading is single-threaded ON PURPOSE, which is what keeps this host clean: no SharedArrayBuffer,
+# so no COOP/COEP headers — which a static host cannot set anyway.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'demo/**'
+      - 'engine/**'
+      - 'scripts/demo-*.sh'
+      - '.github/workflows/demo.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_BUILD_JOBS: 2
+  CARGO_NET_RETRY: 10
+  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+
+      - name: wasm-bindgen CLI (pinned to the crate version)
+        run: |
+          VER=$(grep -oE 'wasm-bindgen = "=[0-9.]+"' demo/Cargo.toml | grep -oE '[0-9.]+')
+          cargo install wasm-bindgen-cli --version "$VER" --locked
+
+      # The engine itself, compiled to wasm: Stylo + Taffy + tiny-skia + our DOM/layout/paint.
+      - name: build the engine for wasm
+        run: ./scripts/ci-run.sh "wasm demo build" ./scripts/demo-build.sh
+
+      - name: shrink the wasm (optional; the demo works without it)
+        run: |
+          sudo apt-get update && sudo apt-get install -y binaryen || true
+          if command -v wasm-opt >/dev/null; then
+            wasm-opt -Oz demo/www/manuk_demo_bg.wasm -o demo/www/manuk_demo_bg.wasm --enable-bulk-memory
+            ls -lh demo/www/manuk_demo_bg.wasm | awk '{print "  optimized: "$5}'
+          fi
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: demo/www
+      - id: deploy
+        uses: actions/deploy-pages@v4

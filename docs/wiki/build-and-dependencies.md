@@ -251,3 +251,20 @@ fifth declaration enables it. Pinning `tokio-rustls` to `ring` removed `aws-lc-s
 
 > **Check with `cargo tree -f "{p} :: {f}"`, not by reading Cargo.toml** — the manifest says what you
 > *asked for*; the tree says what you *got*.
+
+## `Instant::now()` panics on wasm — a debug line can take down the engine
+
+`std::time::Instant::now()` is **unsupported on `wasm32-unknown-unknown`** (`std::sys::pal::wasm::
+unsupported::time`). A **debug-only** `tracing::debug!` timing the Stylo rule-index build **panicked the
+entire cascade** in the browser — and surfaced as `RuntimeError: unreachable` from inside the wasm module,
+*a diagnosis pointing nowhere near a debug line.*
+
+> **A measurement must never be able to break the thing it measures.** Gate clock reads behind
+> `#[cfg(not(target_arch = "wasm32"))]`.
+
+## wasm has no filesystem, so `load_system_fonts()` finds nothing
+
+The page laid out **correctly** (2,526px of content) and rendered **blank**. *A font problem never looks
+like a font problem.* Fonts must be **compiled into the binary** (`include_bytes!`) — and use the
+**Liberation** faces specifically, because those are what Chrome's `Arial`/`Times New Roman` requests
+resolve to on Linux, so text measures like the native engine rather than like a lookalike.

@@ -1,6 +1,19 @@
 # Manuk
 
 [![CI](https://github.com/patrickbdevaney/manuk/actions/workflows/ci.yml/badge.svg)](https://github.com/patrickbdevaney/manuk/actions/workflows/ci.yml)
+[![demo](https://github.com/patrickbdevaney/manuk/actions/workflows/demo.yml/badge.svg)](https://github.com/patrickbdevaney/manuk/actions/workflows/demo.yml)
+
+### ▶ **[Run the engine in your own browser →](https://patrickbdevaney.github.io/manuk/)**
+
+Not a screenshot, not a video. That link compiles this engine to WebAssembly and executes it **in your
+browser**: **Stylo**'s cascade, **Taffy**'s flex/grid, **tiny-skia**'s rasterizer, and this engine's own
+DOM/layout/paint, rendering real page snapshots onto a canvas. Scroll it — scrolling **re-renders**, it
+does not pan a bitmap. Hover it — that is the real hit-test against the laid-out boxes. And press
+**compare with Chromium** to put our render next to Chromium's of the same document, so you do not have to
+take any of this on trust.
+
+*What is not real, said in-product too:* **no JavaScript** (SpiderMonkey is C++ and does not target wasm)
+and **no live fetching** (bundled snapshots). Saying so is the only thing that makes the rest believable.
 
 A browser engine built from scratch in Rust — ~48k lines across 16 crates — with one shared engine
 core driving two front-ends: a **headful GUI browser** (`shell`) and a **headless agentic browser**
@@ -39,15 +52,18 @@ Three bars, and they are never conflated:
 ### Measured, on the 265-site frame
 
 ```
-structural coverage   ~99%     of the elements Chromium renders, we render
-hangs                 ~73/265  ← the number that matters, and the current focus
-crashes               0        (contained: a panic kills the page, not the browser)
+Bar 1 node presence   92.2%    of the nodes Chromium renders, we render
+hangs (our clock)     4/211    1.9%  — timed per-engine on the same bytes
+faster than Chromium  195/211  92%   median 16.1s vs 36.5s
+crashes               0        (a panic kills the page, not the browser)
 ```
 
-**~1 site in 4 still hangs.** That is the headline, it is ours (attributed by timing each engine
-separately on the same bytes), and it outranks every rendering bug in the ledger — a browser that hangs
-on one site in four is not a browser. It is CPU and duplicate work, not the network, and it is what the
-current ticks are about.
+⚠ **A previous version of this README reported "~73/265 hangs (1 site in 4)". That number was wrong, and
+how it was wrong is worth knowing:** the crawl's 90-second watchdog wrapped the *whole oracle process* —
+**including Chromium's render** — and Chromium is the slower engine on 84% of this corpus (a cold headless
+news front page takes 30–110s). **We were booking Chromium's clock against ourselves.** Timed separately,
+the real figure is **4 of 211 (1.9%)**. *Every number has a harness, and the harness is part of the
+number.*
 
 ### The app web (SPA frameworks)
 
@@ -56,14 +72,18 @@ rendered anything** — every one mounted an empty `<div id="root">` and threw *
 The silence was the bug.
 
 ```
-✓ Vue    ✓ Preact    ✓ Vanilla        ✗ React   ✗ Svelte   ✗ Solid   ✗ Lit
+✓ React   ✓ Vue   ✓ Svelte   ✓ Solid   ✓ Preact   ✓ Lit   ✓ Vanilla   ✓ React(JS)     8/8
 ```
 
 It turned out to be **missing substrate, not a missing subsystem** — `import.meta` (SpiderMonkey needs a
 metadata hook; every Vite bundle emits `import.meta.url`), `nodeType` (React's `isValidContainer` checks
 it — without it, React error #299), `ownerDocument`, DOM interface constructors (`x instanceof
 HTMLIFrameElement` throws when the constructor is `undefined`), `createElementNS`/`createComment`.
-Additive, bounded work. The rest of the frameworks are the next tick.
+**All eight now render**, on roughly ten additive WebIDL fixes and **no new architecture** — which settles
+the question the whole schedule hung on: hydration failure does *not* cascade into needing a scheduling
+subsystem. Four of the five real blockers were in **our own primitives** (a use-after-GC in
+`ownerDocument`, an unsupported `file://` scheme, a missing `CharacterData.data`, a shadow root typed 8
+instead of 11). *The framework was never once the thing that was broken.*
 
 ---
 
@@ -90,9 +110,13 @@ dispatch and bubbling, `fetch`/XHR, timers, promises/microtasks, custom elements
 
 Stated plainly, because a README that only lists wins is marketing:
 
-- **~1 site in 4 hangs.** The single biggest problem. Ours, CPU-bound, actively being fixed.
-- **React, Svelte, Solid, Lit don't render yet.** Vue/Preact do. Bounded substrate work.
-- **Bar 2 (pixel precision) is deferred**, not achieved. Mean visual similarity to Chromium is ~80%.
+- **WPT `dom/` is at 26.7%.** The spec surface is measured now (`docs/wiki/wpt-horizon.md`), and most of
+  it is not yet implemented. That is the honest distance to "parity".
+- **No JS in the wasm demo.** SpiderMonkey is C++ and does not target wasm — the in-browser demo is
+  render-only, and says so on its own front page.
+- **Bar 2 (pixel precision) is deferred**, not achieved.
+- **SpiderMonkey segfaults in its static destructors at process exit** — an open Bar 0 residual, printed
+  every time rather than hidden.
 - **No multi-process isolation.** A panic is contained per-navigation; a fault *inside* SpiderMonkey's
   C++ frames still cannot be caught in-process. That needs a per-tab process, and is deferred.
 - **No extensions, no DevTools, no WebGL/WebGPU content, no video playback.**

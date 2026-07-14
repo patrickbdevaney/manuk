@@ -2918,3 +2918,45 @@ implicitly all along — it greps for `test result: ok` — so CI now finally ma
 it is recorded as an **OPEN Bar 0 residual**: *a browser that segfaults on exit is a browser that can lose
 a profile flush.* `G_TEARDOWN` already forbids `libc::_exit()` for exactly that reason — *"a workaround
 that hides a crash is a data-loss bug wearing a disguise."* **This is the same wound, one layer down.**
+
+## Tick 57 — the engine runs in the visitor's browser, and a debug line nearly stopped it (2026-07-14)
+
+**TICK SHAPE: infrastructure** — a whole new proof-of-realness surface.
+
+**It works.** `demo/` compiles the engine to `wasm32-unknown-unknown` and runs it **in the visitor's own
+browser**: html5ever parses, **Stylo cascades**, **Taffy lays out**, **tiny-skia rasterizes**, and the
+pixels go to a `<canvas>`. Verified by driving the real page in headless Chromium and *looking at what came
+back*: rust-lang.org's horizontal flex nav, its typography, its language selector — laid out and painted by
+our engine, in wasm. Scrolling **re-renders at the new offset** (so `fixed`/`sticky` behave like a browser,
+not like a panned bitmap), and hover goes through a **real hit-test against the laid-out boxes.**
+
+**Two failures on the way, and both are the same lesson in different clothes.**
+
+**1. `Instant::now()` PANICS on wasm** (`std::sys::pal::wasm::unsupported::time`). One **debug-only timing
+line** in the Stylo cascade — a `tracing::debug!` measuring how long the rule index took to build — took
+down **the entire cascade** in the browser. And it surfaced as `RuntimeError: unreachable` from inside the
+wasm module, *a diagnosis that points nowhere near a `tracing::debug!`.*
+
+> **A measurement must never be able to break the thing it measures.**
+
+**2. The page laid out perfectly and rendered BLANK** — because `FontContext::new()` calls
+`load_system_fonts()`, and **wasm has no filesystem.** The engine had a correct 2,526px layout and nothing
+to draw it with. *A font problem never looks like a font problem* (`docs/wiki/text-layout.md`, learned the
+hard way at least twice before). Fixed by compiling the **Liberation** faces **into the binary** — and
+Liberation specifically, because those are the faces Chrome's `Arial`/`Times New Roman` requests resolve to
+on Linux, so the demo's text measures like the native engine's rather than like a lookalike.
+
+**Honesty, in-product and not just here.** The demo's own front page states what is **not** real: **no
+JavaScript** (SpiderMonkey is C++ and does not target wasm — which is *why* the demo is JS-free, not a
+convenient omission) and **no live fetching** (bundled snapshots). *Saying so is the only thing that makes
+the rest of it believable.* And the **compare-with-Chromium** toggle exists so a visitor never has to take
+the claim on trust — they can look at both renders of the same document.
+
+**The stylesheets are inlined into the snapshots at bake time, and that is faithful rather than a cheat:**
+the native engine *does* fetch them. Rendering the fetch-less version would misrepresent the engine in the
+*other* direction — showing an unstyled page it would never show a user.
+
+**And the README stopped lying.** It still reported *"~73/265 hangs — 1 site in 4"* — **a number this
+project itself debunked** (the watchdog was timing Chromium, which is slower on 84% of the corpus). It now
+reports the real 4/211 (1.9%), the 8/8 frameworks, and the WPT distance. *The public face of a project that
+preaches honest measurement should not be the last place a corrected number arrives.*

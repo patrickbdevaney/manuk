@@ -539,3 +539,11 @@ footnote.
 No web capability changed. The engine now links on **Windows**: a committed `+crt-static` was being forced
 on *every* Windows build (not just the static-release one), which cannot link. Cross-platform reach is a
 prerequisite for a daily driver.
+
+## Tick 57 — the engine, in the visitor's browser
+
+| Pattern | Status |
+|---|---|
+| **The engine compiled to wasm, rendering real pages on a canvas** | ✅ (tick 57) — Stylo + Taffy + tiny-skia executing in the browser; scroll re-renders, hover hit-tests |
+| **Fonts in a no-filesystem target** | ✅ (tick 57) — Liberation faces compiled into the binary (the same ones Chrome's Arial/Times resolve to) |
+| **JS in the demo** | ❌ **permanent** — SpiderMonkey is C++ and does not target wasm. Stated in-product. |

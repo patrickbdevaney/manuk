@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Manuk — a browser engine, running inside your browser</title>
+<style>
+  :root {
+    --ink: #12100e; --paper: #faf8f5; --line: #ded7cd; --dim: #6d6459;
+    --accent: #b4472c; --ok: #2f6b4f;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink: #ece7e0; --paper: #14130f; --line: #33302a; --dim: #968c7f; --accent: #e0714f; --ok: #6fbf95; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 16px/1.6 ui-serif, Georgia, "Times New Roman", serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  header { padding: 2.5rem 1.5rem 1rem; max-width: 68ch; margin: 0 auto; }
+  h1 { font-size: 1.9rem; line-height: 1.15; margin: 0 0 .5rem; letter-spacing: -.01em; }
+  h1 em { font-style: normal; color: var(--accent); }
+  .lede { color: var(--dim); margin: 0 0 1.25rem; }
+  .honest {
+    border-left: 3px solid var(--accent); padding: .75rem 0 .75rem 1rem; margin: 0 0 1.5rem;
+    font-size: .92rem; background: color-mix(in srgb, var(--accent) 5%, transparent);
+  }
+  .honest b { color: var(--accent); }
+  .honest .no { color: var(--dim); }
+  main { max-width: 1200px; margin: 0 auto; padding: 0 1.5rem 4rem; }
+  .bar {
+    display: flex; gap: .5rem; flex-wrap: wrap; align-items: center;
+    padding: .75rem 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    margin-bottom: 1rem; font-family: var(--mono); font-size: .8rem;
+  }
+  button {
+    font: inherit; font-family: var(--mono); font-size: .8rem;
+    background: transparent; color: var(--ink); border: 1px solid var(--line);
+    padding: .35rem .7rem; border-radius: 3px; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .stats { margin-left: auto; color: var(--dim); }
+  .stage { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+  .stage.split { grid-template-columns: 1fr 1fr; }
+  @media (max-width: 800px) { .stage.split { grid-template-columns: 1fr; } }
+  figure { margin: 0; }
+  figcaption {
+    font-family: var(--mono); font-size: .72rem; color: var(--dim);
+    padding: .4rem 0; display: flex; justify-content: space-between;
+  }
+  figcaption .who { color: var(--ink); font-weight: 700; }
+  .frame {
+    border: 1px solid var(--line); border-radius: 4px; overflow: auto;
+    height: 70vh; background: #fff; position: relative;
+  }
+  canvas { display: block; }
+  #hover {
+    position: sticky; bottom: 0; font-family: var(--mono); font-size: .72rem;
+    color: var(--dim); padding: .4rem 0; min-height: 1.6em;
+  }
+  footer { max-width: 68ch; margin: 0 auto; padding: 0 1.5rem 4rem; color: var(--dim); font-size: .85rem; }
+  a { color: var(--accent); }
+  .boot { font-family: var(--mono); font-size: .8rem; color: var(--dim); padding: 2rem 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>A browser engine, <em>running inside your browser</em>.</h1>
+  <p class="lede">
+    Everything below this line is rendered by Manuk — a from-scratch engine in Rust — compiled to
+    WebAssembly and executing on this page, right now. Scroll it. Hover it. It is laying the document
+    out as you do.
+  </p>
+  <p class="honest">
+    <b>Real:</b> Stylo (the actual cascade), Taffy (the actual flex/grid), tiny-skia (the actual
+    rasterizer), and this engine's own DOM, layout and paint. Scrolling <b>re-renders</b> — it does not
+    pan a bitmap.<br>
+    <span class="no"><b>Not real, and worth saying:</b> no JavaScript (SpiderMonkey is C++ and does not
+    target wasm), and no live URL fetching — these are bundled snapshots of real pages. Saying so is the
+    only thing that makes the rest of it believable.</span>
+  </p>
+</header>
+
+<main>
+  <div class="bar">
+    <span id="pages"></span>
+    <button id="cmp" aria-pressed="false">compare with Chromium</button>
+    <span class="stats" id="stats">booting…</span>
+  </div>
+
+  <div class="stage" id="stage">
+    <figure>
+      <figcaption><span class="who">Manuk</span> <span id="dims"></span></figcaption>
+      <div class="frame" id="frame"><canvas id="cv"></canvas></div>
+      <div id="hover">&nbsp;</div>
+    </figure>
+    <figure id="ref" hidden>
+      <figcaption><span class="who">Chromium</span> <span>reference render of the same snapshot</span></figcaption>
+      <div class="frame"><img id="refimg" alt="Chromium's render of the same page" style="width:100%;display:block"></div>
+      <div id="hover2">&nbsp;</div>
+    </figure>
+  </div>
+  <div class="boot" id="boot">loading the engine…</div>
+</main>
+
+<footer>
+  <p>
+    Don't take the claim on trust — press <b>compare with Chromium</b> and look at both. The reference is
+    Chromium's own render of the identical snapshot.
+  </p>
+  <p><a href="https://github.com/patrickbdevaney/manuk">Source, methodology, and the engineering journal →</a></p>
+</footer>
+
+<script type="module">
+import init, { Renderer } from './manuk_demo.js';
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const frame = document.getElementById('frame');
+const stats = document.getElementById('stats');
+const dims = document.getElementById('dims');
+const hover = document.getElementById('hover');
+const boot = document.getElementById('boot');
+
+const WIDTH = 900;
+let r = null, pages = [], current = 0, scrollY = 0;
+
+function paint() {
+  const h = Math.min(frame.clientHeight || 700, 1400);
+  cv.width = WIDTH; cv.height = h;
+  const t0 = performance.now();
+  const bytes = r.render(h, scrollY);
+  const ms = performance.now() - t0;
+  ctx.putImageData(new ImageData(new Uint8ClampedArray(bytes), WIDTH, h), 0, 0);
+  stats.textContent = `raster ${ms.toFixed(1)}ms · ${WIDTH}×${h} · content ${r.content_height().toFixed(0)}px`;
+}
+
+async function load(i) {
+  current = i; scrollY = 0;
+  const p = pages[i];
+  const html = await (await fetch(p.html)).text();
+  const t0 = performance.now();
+  r = new Renderer(html, WIDTH);          // parse → Stylo cascade → Taffy layout
+  const build = performance.now() - t0;
+  dims.textContent = `${p.title} · parse+cascade+layout ${build.toFixed(0)}ms`;
+  document.getElementById('refimg').src = p.ref;
+  paint();
+  document.querySelectorAll('#pages button').forEach((b, k) =>
+    b.setAttribute('aria-pressed', String(k === i)));
+}
+
+// Scrolling RE-RENDERS at the new offset. That is why sticky/fixed behave like a browser.
+frame.addEventListener('wheel', e => {
+  e.preventDefault();
+  const max = Math.max(0, r.content_height() - cv.height);
+  scrollY = Math.min(max, Math.max(0, scrollY + e.deltaY));
+  paint();
+}, { passive: false });
+
+// Hover goes through the REAL hit-test against the laid-out boxes.
+cv.addEventListener('mousemove', e => {
+  const b = cv.getBoundingClientRect();
+  const hit = r.hit_test(e.clientX - b.left, e.clientY - b.top + scrollY);
+  hover.textContent = hit ? `hit-test → ${hit}` : ' ';
+});
+
+document.getElementById('cmp').addEventListener('click', e => {
+  const on = e.target.getAttribute('aria-pressed') !== 'true';
+  e.target.setAttribute('aria-pressed', String(on));
+  document.getElementById('stage').classList.toggle('split', on);
+  document.getElementById('ref').hidden = !on;
+});
+
+(async () => {
+  await init();
+  pages = await (await fetch('./pages.json')).json();
+  document.getElementById('pages').innerHTML = '';
+  pages.forEach((p, i) => {
+    const b = document.createElement('button');
+    b.textContent = p.title;
+    b.onclick = () => load(i);
+    document.getElementById('pages').appendChild(b);
+  });
+  boot.remove();
+  await load(0);
+})();
+</script>
+</body>
+</html>

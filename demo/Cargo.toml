@@ -1,0 +1,26 @@
+[package]
+name = "manuk-demo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The engine, compiled to wasm and running in the visitor's own browser."
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# NOTE the crates that are NOT here: manuk-page and manuk-net. They pull tokio/mio, which cannot target
+# wasm32-unknown-unknown. The demo therefore wires the render pipeline DIRECTLY — which is also exactly
+# why it is JS-free, and why that limitation is honest rather than convenient.
+[dependencies]
+manuk-dom.workspace = true
+manuk-html.workspace = true
+manuk-css = { workspace = true, features = ["stylo"] }
+manuk-layout.workspace = true
+manuk-paint.workspace = true
+manuk-text.workspace = true
+
+wasm-bindgen = "=0.2.100"
+console_error_panic_hook = "0.1"
+getrandom = { version = "0.2", features = ["js"] }

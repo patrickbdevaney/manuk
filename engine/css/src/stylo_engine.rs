@@ -252,8 +252,16 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
 
     // Built ONCE for the document, not once per element. This is what turns the cascade from
     // O(elements × rules) into O(elements × rules-that-could-match).
+    // ⚠ `Instant::now()` PANICS on `wasm32-unknown-unknown` — there is no clock there
+    // (`std::sys::pal::wasm::unsupported::time`). One debug-only timing line took down the ENTIRE
+    // cascade in the browser demo, and the failure surfaced as `RuntimeError: unreachable` from inside
+    // the wasm module — a diagnosis that points nowhere near a `tracing::debug!`.
+    //
+    // A measurement must never be able to break the thing it measures.
+    #[cfg(not(target_arch = "wasm32"))]
     let _ti = std::time::Instant::now();
     let index = RuleIndex::build(&stylo_sheets, &guard, stylist.device());
+    #[cfg(not(target_arch = "wasm32"))]
     tracing::debug!(
         ms = _ti.elapsed().as_millis(),
         rules = index.rules.len(),
