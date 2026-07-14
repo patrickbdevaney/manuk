@@ -8,10 +8,10 @@
 > filesystem, git, the crawl output or the verify receipt.
 
 ```
-TICK:              75
+TICK:              76
 LAST_AUDIT_TICK:   71          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
-LAST_WALL_TIME:    273s
+LAST_WALL_TIME:    254s
 ORACLE_CORPUS:     265 sites
 ORACLE_CRAWLED:    265 sites, 640 clusters  → docs/loop/CLUSTERS.md
 ORACLE_HANGS:      4   ← Bar 0, on OUR clock (manuk_ms > 30s). Outranks every visual cluster.
@@ -375,6 +375,7 @@ loud rather than quietly following the pull.
 | **G_DEDUP** | ✅ **live** | the same URL on the **wire** twice for one navigation (nytimes was pulling one sprite down once per element that named it) |
 | **G_HANG** | ✅ **live, and now honest** | Every oracle site runs in its own process under a watchdog. The watchdog is a **backstop against a true infinite loop** — it wraps our render *and Chromium's*, so when it fires it is recorded as `TIMEOUT` and **attributed to nobody**. The Bar 0 hang count comes from `manuk_ms`. A metric that cannot say whose time it measured must not name a culprit. |
 | **G_CONTAIN** | ✅ **live** | Bar 0 — a panic kills the page, not the process (Part 23.2) |
+| **G_ATTRS** | ✅ **live** | `element.attributes` was **`undefined`** — not incomplete, absent. `.length` was a `TypeError`, so **DOMPurify could not enumerate attributes to strip `on*` handlers.** Live `NamedNodeMap` (a frozen length spins forever), `Attr` as a write-through **handle**, `createAttribute`, `toggleAttribute`. Whole `dom/` **+49 → 33.1%**. |
 | **G_NAMES** | ✅ **live** | `classList` is a real **`DOMTokenList`** (indexed, and it **throws** on whitespace/empty tokens — `add('btn primary')` used to silently write one class matching neither selector). `createElement` validates its name. `createElementNS` keeps the **namespace**, so SVG's `linearGradient` is no longer uppercased into nothing. Whole `dom/` **+149 subtests → 32.3%**. |
 | **G_EVENT_SURFACE** | ✅ **live** | `{once:true}` fired **forever** — the options object was read as a bare boolean, so `once` was dropped. `returnValue`/`cancelBubble` were `undefined`. `document.createEvent` did not exist. Every failure **silent**. Whole `dom/` **+118 subtests** — the largest single-tick move so far, crossing **30%**. |
 | **G_COLLECTIONS** | ✅ **live** | `children` / `getElementsByTagName()` are **live** — they were snapshots. Not merely non-conformant: **a Bar 0 hang.** `while (el.children.length) el.removeChild(el.firstChild)` never terminates against a frozen `length`, and the tab locks up. Whole `dom/` **+17 subtests**. |

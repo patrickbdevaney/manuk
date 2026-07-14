@@ -1502,8 +1502,10 @@ pub fn install(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<()
         global,
         crate::collections_js::COLLECTIONS_JS,
         "collections.js",
-    )
-    .map(|_| ())
+    )?;
+
+    // `Attr` / `NamedNodeMap`. Last, because it wraps the element prototype too.
+    eval(rt, global, crate::attrs_js::ATTRS_JS, "attrs.js").map(|_| ())
 }
 
 /// A **microtask checkpoint**: drain the host `queueMicrotask` queue *and* SpiderMonkey's

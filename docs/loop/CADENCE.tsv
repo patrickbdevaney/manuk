@@ -67,3 +67,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 73	737804f	1784022495	2026-07-14T05:48:15-04:00	959	capability	251	9	379	2	30	55	1810	6418	1	147	4	a dead collection is not a conformance gap. It is a hang.
 74	48f0cbd	1784023305	2026-07-14T06:01:45-04:00	810	capability	154	7	297	21	31	59	1928	6429	1	148	4	`{once: true}` fired forever, and nothing complained
 75	b87de60	1784042657	2026-07-14T11:24:17-04:00	19352	capability	273	8	473	29	32	63	2077	6429	1	149	4	a name is not a string
+76	2402365	1784043501	2026-07-14T11:38:21-04:00	844	capability	254	9	407	4	33	66	2126	6429	1	150	4	`element.attributes` was `undefined`. Not incomplete: absent.

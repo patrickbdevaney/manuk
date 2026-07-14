@@ -3054,6 +3054,39 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 76 — `element.attributes` was `undefined`. Not incomplete: absent.
+
+**TICK SHAPE: capability.** Sixth tick at the far horizon. **+49 WPT subtests** (2077 → 2126, **33.1%**).
+Bar 0 clean.
+
+> **Six WPT-aimed ticks: +389 subtests. Five near-horizon ticks: +1.**
+
+`element.attributes.length` was a **`TypeError`**. Iterating an element's attributes is one of the most
+ordinary things a script does — every DOM serializer, every differ, every "copy these attributes across"
+helper. And:
+
+> **DOMPurify walks `attributes` to strip `on*` handlers. A sanitizer that cannot enumerate attributes
+> cannot sanitize them.**
+
+Gone with it: `getAttributeNode`, `setAttributeNode`, `document.createAttribute`, and `toggleAttribute` —
+the idiomatic way to flip `disabled` / `hidden` / `aria-expanded`.
+
+**Two things it had to get right, and both are easy to miss:**
+
+* **The map is LIVE**, for exactly the reason `HTMLCollection` is (tick 73):
+  `while (el.attributes.length) el.removeAttribute(el.attributes[0].name)` — the "strip everything" idiom
+  — **spins forever** against a frozen `length`. *The same dead-collection hang, one interface over.*
+* **An `Attr` is a HANDLE, not a snapshot.** `attr.value = 'x'` must write **through** to the owner
+  element. Return a plain object and every `attrs[i].value = …` in the wild silently writes to nothing —
+  which is the falsifier's mutation, and it goes red.
+
+Built entirely on `getAttributeNames`/`getAttribute`/`setAttribute`, which already worked — the third
+capability to land on the back of tick 64's real prototypes, because `attributes` has to be an accessor on
+the prototype to be wrappable at all.
+
+**The ratchet.** Capability: **up**, and it closes a second latent Bar 0 of the same shape. Performance:
+unchanged. Instrument fidelity: **up** — proven falsifiable.
+
 ## Tick 75 — a name is not a string
 
 **TICK SHAPE: capability.** Fifth tick at the far horizon. **+149 WPT subtests** (1928 → 2077, **32.3%**).

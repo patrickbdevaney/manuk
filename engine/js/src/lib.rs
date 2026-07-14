@@ -623,6 +623,8 @@ pub mod job_queue;
 // that followed it was now canvas. `dom_bindings` then tried to compile with no JS engine underneath:
 // 283 errors, and only in the no-feature build, which the wall runs and I do not.
 #[cfg(feature = "_sm")]
+pub mod attrs_js;
+#[cfg(feature = "_sm")]
 pub mod canvas;
 #[cfg(feature = "_sm")]
 pub mod collections_js;

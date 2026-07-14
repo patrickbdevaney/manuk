@@ -638,6 +638,18 @@ fi
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_ATTRS; then
+  # Make the Attr a SNAPSHOT instead of a handle: `attr.value = x` writes to a local, not to the element.
+  # Nothing throws. Every `attrs[i].value = ...` in the wild silently writes to nothing.
+  mutate engine/js/src/attrs_js.rs '
+old = "        if (el) { el.setAttribute(name, v); } else { own = v; }"
+assert old in s, "MUTATION DID NOT APPLY - a falsifier that changes nothing certifies nothing (PROCESS #15)"
+s = s.replace(old, "        own = v;", 1)
+'
+  expect_red G_ATTRS cargo test -q -p manuk-page --features stylo,spidermonkey --test g_attrs
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_NAMES; then
   # Stop validating class tokens. `classList.add("btn primary")` then silently writes the SINGLE class
   # "btn primary" — an element that matches NEITHER selector, with no error anywhere. The author meant two

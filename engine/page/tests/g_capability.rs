@@ -64,6 +64,12 @@ const CLAIMS: &[(&str, &str)] = &[
     ("TreeWalker instance", "document.createTreeWalker(document.body) instanceof TreeWalker"),
     // Live collections (tick 73). A DEAD collection is a Bar 0 hang: `while (el.children.length)
     // el.removeChild(el.firstChild)` never terminates if length is frozen.
+    // Attr / NamedNodeMap (tick 76). `element.attributes` was UNDEFINED — a sanitizer that cannot
+    // enumerate attributes cannot sanitize them.
+    ("element.attributes", "(function(){var d=document.createElement('i');d.setAttribute('a','1');return d.attributes.length===1&&d.attributes[0].name==='a'})()"),
+    ("Attr writes through", "(function(){var d=document.createElement('i');d.setAttribute('a','1');d.getAttributeNode('a').value='2';return d.getAttribute('a')==='2'})()"),
+    ("toggleAttribute", "(function(){var d=document.createElement('i');return d.toggleAttribute('x')===true&&d.hasAttribute('x')&&d.toggleAttribute('x')===false&&!d.hasAttribute('x')})()"),
+
     // Names and namespaces (tick 75). Each of these ACCEPTED something that is not a name, and produced
     // an element or a class that could never match anything — silently.
     ("classList is indexed", "(function(){var d=document.createElement('i');d.className='a b';return d.classList[0]==='a'})()"),
