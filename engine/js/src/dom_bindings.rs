@@ -1220,6 +1220,8 @@ unsafe fn define_members(
             Some(el_set_inner_html)
         );
         prop_guarded!(prop, c"tagName", el_get_tag_name, None); // read-only
+        prop_guarded!(prop, c"localName", el_get_local_name, None);
+        prop_guarded!(prop, c"prefix", el_get_prefix, None);
         prop_guarded!(prop, c"id", el_get_id, Some(el_set_id));
         prop_guarded!(
             prop,
@@ -1356,10 +1358,69 @@ unsafe fn doc_create_element_ns(cx: *mut RawJSContext, argc: u32, vp: *mut Value
         *vp = NullValue();
         return true;
     };
-    // arg 0 is the namespace; arg 1 is the qualified name.
-    let tag = arg_string(cx, vp, argc, 1).unwrap_or_else(|| "div".to_string());
-    let tag = tag.rsplit(':').next().unwrap_or("div").to_string();
-    let node = (*dom).create_element(tag);
+    // arg 0 is the namespace; arg 1 is the qualified name (`prefix:local`).
+    //
+    // This used to **throw the namespace away**: it split off the prefix, called `create_element`, and
+    // returned an HTML element. Everything downstream then lied — `namespaceURI` said XHTML, `localName`
+    // was `undefined`, and `tagName` was uppercased, which for SVG's `linearGradient` is simply wrong.
+    // `Document-createElementNS.html` is 596 subtests of exactly this, and it scored **zero**.
+    // **JS `null` is not the string "null".** `arg_string` stringifies, so `createElementNS(null, 'p:q')`
+    // arrived as the namespace `"null"` — which is a perfectly good namespace as far as the check below is
+    // concerned, so the NamespaceError never fired. Read the raw value.
+    let ns = {
+        let args = mozjs::jsapi::CallArgs::from_vp(vp, argc);
+        let raw = if argc > 0 {
+            args.get(0).get()
+        } else {
+            NullValue()
+        };
+        if raw.is_null_or_undefined() {
+            None
+        } else {
+            arg_string(cx, vp, argc, 0).filter(|s| !s.is_empty())
+        }
+    };
+    let qname = arg_string(cx, vp, argc, 1).unwrap_or_default();
+
+    // The spec's validation, in order, and each one is a distinct WPT block:
+    //   * the qualified name must be a valid Name        → InvalidCharacterError
+    //   * at most one colon, neither end                 → InvalidCharacterError
+    //   * a prefix with NO namespace                     → NamespaceError
+    //   * the `xml` prefix outside the XML namespace     → NamespaceError
+    //   * `xmlns` (as prefix or name) outside XMLNS ns   → NamespaceError, and vice versa
+    let ns_str = ns.as_deref().filter(|n| !n.is_empty());
+    let (prefix, local) = match qname.split_once(':') {
+        Some((p, l)) => (Some(p), l),
+        None => (None, qname.as_str()),
+    };
+    let name_ok = !qname.is_empty()
+        && qname.matches(':').count() <= 1
+        && !qname.starts_with(':')
+        && !qname.ends_with(':')
+        && is_valid_xml_name(local)
+        && prefix.map(is_valid_xml_name).unwrap_or(true);
+    if !name_ok {
+        return throw_dom(
+            cx,
+            "InvalidCharacterError",
+            &format!("'{qname}' is not a valid qualified name"),
+        );
+    }
+    const XML_NS: &str = "http://www.w3.org/XML/1998/namespace";
+    const XMLNS_NS: &str = "http://www.w3.org/2000/xmlns/";
+    let bad_ns = (prefix.is_some() && ns_str.is_none())
+        || (prefix == Some("xml") && ns_str != Some(XML_NS))
+        || ((prefix == Some("xmlns") || qname == "xmlns") && ns_str != Some(XMLNS_NS))
+        || (ns_str == Some(XMLNS_NS) && prefix != Some("xmlns") && qname != "xmlns");
+    if bad_ns {
+        return throw_dom(
+            cx,
+            "NamespaceError",
+            &format!("'{qname}' is not valid in namespace {ns_str:?}"),
+        );
+    }
+
+    let node = (*dom).create_element_ns(ns.clone(), qname);
     *vp = ObjectValue(new_reflector(cx, dom, node));
     true
 }
@@ -1390,12 +1451,43 @@ unsafe fn doc_create_fragment(cx: *mut RawJSContext, _argc: u32, vp: *mut Value)
     true
 }
 
+/// Is `name` a valid XML `Name` — the production `createElement` and `createAttribute` validate against?
+///
+/// Not the full XML grammar (which admits a large slice of Unicode); the practical subset: a name is
+/// non-empty, starts with a letter, `_` or `:`, and continues with letters, digits, `-`, `.`, `_` or `:`.
+/// That accepts everything the web actually creates, including custom elements (`my-widget`), and rejects
+/// everything WPT checks: the empty string, whitespace, `<`, `>`, `/`, and a leading digit.
+fn is_valid_xml_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false; // the empty string is not a name
+    };
+    let start_ok = first.is_ascii_alphabetic() || first == '_' || first == ':' || !first.is_ascii();
+    if !start_ok {
+        return false;
+    }
+    chars.all(|c| {
+        c.is_ascii_alphanumeric() || c == '-' || c == '.' || c == '_' || c == ':' || !c.is_ascii()
+    })
+}
+
 unsafe fn doc_create_element(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, _)) = this_node(vp) else {
         *vp = NullValue();
         return true;
     };
     let tag = arg_string(cx, vp, argc, 0).unwrap_or_else(|| "div".to_string());
+    // **A name is not a string.** `createElement('')` and `createElement('<div>')` both used to produce a
+    // perfectly good element with a nonsense tag, which then never matched a selector and never rendered
+    // — with no error anywhere. The spec throws `InvalidCharacterError`, and a page that catches it can
+    // recover; a page handed a phantom element cannot even see the problem.
+    if !is_valid_xml_name(&tag) {
+        return throw_dom(
+            cx,
+            "InvalidCharacterError",
+            &format!("'{tag}' is not a valid element name"),
+        );
+    }
     let node = (*dom).create_element(tag);
     *vp = ObjectValue(new_reflector(cx, dom, node));
     true
@@ -3500,12 +3592,66 @@ unsafe fn doc_get_current_script(_cx: *mut RawJSContext, _argc: u32, vp: *mut Va
 }
 
 /// `element.tagName` getter → the uppercase tag name (read-only, per DOM).
+/// `element.localName` — the tag name in its **original case**, where `tagName` is uppercased for HTML.
+///
+/// It was `undefined`. The distinction is not pedantry: `tagName` is uppercase for HTML elements and
+/// case-preserving for SVG/XML, so code that wants to compare names *without* guessing which tree it is
+/// in uses `localName`. It is also what every DOM-diffing library keys on.
+unsafe fn el_get_local_name(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    match this_node(vp) {
+        Some((dom, node)) => match (*dom).tag_name(node) {
+            Some(t) => {
+                // **HTML does not split prefixes.** `document.createElement('a:b')` has localName
+                // `"a:b"` — the colon is just a character. Only a NAMESPACED element has a prefix, and
+                // only then is the part after the colon the local name. Splitting unconditionally (as the
+                // first version did) silently renamed every HTML element containing a colon, and cost 15
+                // subtests that had been passing.
+                let name = match (*dom).namespace(node) {
+                    Some(_) => t.rsplit(':').next().unwrap_or(t).to_string(),
+                    None => t.to_ascii_lowercase(),
+                };
+                return_string(cx, vp, &name);
+            }
+            None => *vp = NullValue(),
+        },
+        None => *vp = NullValue(),
+    }
+    true
+}
+
+/// `element.prefix` — `null` for everything this engine creates (no namespace prefixes yet), and `null`
+/// is the *correct* answer for an unprefixed element, not a placeholder. It was `undefined`, which is a
+/// different value and fails `=== null`.
+unsafe fn el_get_prefix(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    *vp = NullValue();
+    if let Some((dom, node)) = this_node(vp) {
+        // Only a NAMESPACED element has a prefix. `null` for everything else — and `null` is the correct
+        // answer for an unprefixed element, not a placeholder. It was `undefined`, which is a different
+        // value and fails `=== null`.
+        if (*dom).namespace(node).is_some() {
+            if let Some(t) = (*dom).tag_name(node) {
+                if let Some((p, _)) = t.split_once(':') {
+                    let p = p.to_string();
+                    return_string(cx, vp, &p);
+                }
+            }
+        }
+    }
+    true
+}
+
 unsafe fn el_get_tag_name(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
         Some((dom, node)) => match (*dom).tag_name(node) {
             Some(t) => {
-                let upper = t.to_ascii_uppercase();
-                return_string(cx, vp, &upper);
+                // **Uppercased only in the HTML namespace.** An SVG `linearGradient` keeps its case, and
+                // uppercasing it produces a tag that matches no selector and no library's element table.
+                let name = if (*dom).namespace(node).is_some() {
+                    t.to_string()
+                } else {
+                    t.to_ascii_uppercase()
+                };
+                return_string(cx, vp, &name);
             }
             None => *vp = NullValue(),
         },
@@ -3660,7 +3806,15 @@ unsafe fn el_get_node_value(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -
 unsafe fn el_get_namespace_uri(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
         Some((dom, node)) if (*dom).is_element(node) => {
-            return_string(cx, vp, "http://www.w3.org/1999/xhtml")
+            // It used to answer XHTML for **everything**, including an element explicitly created in the
+            // SVG or MathML namespace. A hardcoded answer is not an answer.
+            match (*dom).namespace(node) {
+                Some(ns) => {
+                    let ns = ns.to_string();
+                    return_string(cx, vp, &ns)
+                }
+                None => return_string(cx, vp, "http://www.w3.org/1999/xhtml"),
+            }
         }
         _ => *vp = NullValue(),
     }
@@ -5205,37 +5359,76 @@ const CSSOM_PRELUDE: &str = r#"
         return p;
     };
 
-    // ---- element.classList --------------------------------------------------------------
+    // ---- element.classList — a real DOMTokenList -----------------------------------------
+    //
+    // What was here worked for `add`/`remove`/`contains` and nothing else. `classList[0]` was
+    // `undefined` (no indexed access at all), `supports` was missing, and — the part that costs the most
+    // — **the token methods NEVER THREW.**
+    //
+    // The spec is emphatic about that, and the web depends on it:
+    //
+    //   * an **empty** token is a `SyntaxError`;
+    //   * a token containing **ASCII whitespace** is an `InvalidCharacterError`.
+    //
+    // `classList.add('btn primary')` is a bug — the author meant two tokens — and a browser that silently
+    // writes the single class `"btn primary"` produces an element that matches **neither** selector, with
+    // no error anywhere. WPT's `Element-classlist.html` tests every method against both, which is why
+    // that one file held 735 failing subtests.
+    g.__DOMTokenList = function () {};
+    g.DOMTokenList = g.__DOMTokenList;
+
     g.__clsCache = {};
     g.__mkClassList = function (id) {
         if (g.__clsCache[id]) return g.__clsCache[id];
         var el = g.__nodes[id];
         if (!el) return null;
+
         var read = function () {
-            return (el.getAttribute('class') || '').split(/\s+/).filter(function (x) { return x; });
+            return (el.getAttribute('class') || '').split(/[ \t\r\n\f]+/).filter(function (x) { return x; });
         };
         var write = function (a) { el.setAttribute('class', a.join(' ')); };
-        var api = {
+
+        // Validate BEFORE mutating anything: the spec requires the whole call to throw without partial
+        // effect, so a `add('ok', '')` must not leave `ok` behind.
+        var check = function (c) {
+            c = String(c);
+            if (c === '') {
+                var e1 = new Error('an empty token is not allowed');
+                e1.name = 'SyntaxError';
+                throw e1;
+            }
+            if (/[ \t\r\n\f]/.test(c)) {
+                var e2 = new Error('a token must not contain ASCII whitespace');
+                e2.name = 'InvalidCharacterError';
+                throw e2;
+            }
+            return c;
+        };
+        var checkAll = function (args) {
+            var out = [];
+            for (var i = 0; i < args.length; i++) out.push(check(args[i]));
+            return out;
+        };
+
+        var methods = {
             add: function () {
-                var a = read();
-                for (var i = 0; i < arguments.length; i++) {
-                    var c = String(arguments[i]);
-                    if (a.indexOf(c) < 0) a.push(c);
+                var toks = checkAll(arguments), a = read();
+                for (var i = 0; i < toks.length; i++) {
+                    if (a.indexOf(toks[i]) < 0) a.push(toks[i]);
                 }
                 write(a);
             },
             remove: function () {
-                var a = read();
-                for (var i = 0; i < arguments.length; i++) {
-                    var j = a.indexOf(String(arguments[i]));
+                var toks = checkAll(arguments), a = read();
+                for (var i = 0; i < toks.length; i++) {
+                    var j = a.indexOf(toks[i]);
                     if (j >= 0) a.splice(j, 1);
                 }
                 write(a);
             },
             toggle: function (c, force) {
-                c = String(c);
-                var a = read();
-                var j = a.indexOf(c);
+                c = check(c);
+                var a = read(), j = a.indexOf(c);
                 var want = (force === undefined) ? (j < 0) : !!force;
                 if (want && j < 0) a.push(c);
                 if (!want && j >= 0) a.splice(j, 1);
@@ -5243,20 +5436,72 @@ const CSSOM_PRELUDE: &str = r#"
                 return want;
             },
             replace: function (o, n) {
-                var a = read();
-                var j = a.indexOf(String(o));
+                o = check(o); n = check(n);
+                var a = read(), j = a.indexOf(o);
                 if (j < 0) return false;
-                a[j] = String(n);
+                if (a.indexOf(n) >= 0 && a.indexOf(n) !== j) a.splice(j, 1);
+                else a[j] = n;
                 write(a);
                 return true;
             },
             contains: function (c) { return read().indexOf(String(c)) >= 0; },
-            item: function (i) { var a = read(); return (i >= 0 && i < a.length) ? a[i] : null; },
+            item: function (i) { var a = read(); i = i | 0; return (i >= 0 && i < a.length) ? a[i] : null; },
             forEach: function (fn, thisArg) { read().forEach(fn, thisArg); },
-            toString: function () { return read().join(' '); }
+            // `supports()` is only meaningful for token lists with a defined vocabulary (`rel`, `sandbox`).
+            // `classList` has none, so the spec says it THROWS TypeError — it does not return false.
+            supports: function () {
+                var e = new Error('classList has no supported tokens');
+                e.name = 'TypeError';
+                throw e;
+            },
+            toString: function () { return read().join(' '); },
+            entries: function () { return read().map(function (v, i) { return [i, v]; })[Symbol.iterator](); },
+            keys: function () { return read().map(function (_, i) { return i; })[Symbol.iterator](); },
+            values: function () { return read()[Symbol.iterator](); },
         };
-        Object.defineProperty(api, 'length', { get: function () { return read().length; } });
-        Object.defineProperty(api, 'value', { get: function () { return read().join(' '); } });
+
+        var target = Object.create(g.__DOMTokenList.prototype);
+        var api = new Proxy(target, {
+            get: function (t, k) {
+                if (k === 'length') return read().length;
+                if (k === 'value') return read().join(' ');
+                if (k === Symbol.iterator) return function () { return read()[Symbol.iterator](); };
+                if (k === Symbol.toStringTag) return 'DOMTokenList';
+                // INDEXED ACCESS — `classList[0]`. It was simply absent, and a great deal of WPT (and of
+                // ordinary code that iterates a token list) does nothing else.
+                if (typeof k === 'string' && /^(0|[1-9]\d*)$/.test(k)) {
+                    var a = read();
+                    return (+k < a.length) ? a[+k] : undefined;
+                }
+                if (methods[k]) return methods[k];
+                return t[k];
+            },
+            set: function (t, k, v) {
+                if (k === 'value') { el.setAttribute('class', String(v)); return true; }
+                t[k] = v;
+                return true;
+            },
+            has: function (t, k) {
+                if (k === 'length' || k === 'value' || methods[k]) return true;
+                if (typeof k === 'string' && /^(0|[1-9]\d*)$/.test(k)) return +k < read().length;
+                return k in t;
+            },
+            ownKeys: function () {
+                var a = read(), keys = [];
+                for (var i = 0; i < a.length; i++) keys.push(String(i));
+                keys.push('length', 'value');
+                return keys;
+            },
+            getOwnPropertyDescriptor: function (t, k) {
+                if (typeof k === 'string' && /^(0|[1-9]\d*)$/.test(k)) {
+                    var a = read();
+                    if (+k < a.length) return { value: a[+k], writable: false, enumerable: true, configurable: true };
+                }
+                if (k === 'length') return { value: read().length, writable: false, enumerable: false, configurable: true };
+                if (k === 'value') return { value: read().join(' '), writable: true, enumerable: false, configurable: true };
+                return Object.getOwnPropertyDescriptor(t, k);
+            },
+        });
         g.__clsCache[id] = api;
         return api;
     };

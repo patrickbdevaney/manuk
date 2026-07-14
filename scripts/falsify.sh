@@ -638,6 +638,19 @@ fi
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_NAMES; then
+  # Stop validating class tokens. `classList.add("btn primary")` then silently writes the SINGLE class
+  # "btn primary" — an element that matches NEITHER selector, with no error anywhere. The author meant two
+  # tokens; the browser agreed with the typo.
+  mutate engine/js/src/dom_bindings.rs '
+old = "            if (/[ \\t\\r\\n\\f]/.test(c)) {"
+assert old in s, "MUTATION DID NOT APPLY - a falsifier that changes nothing certifies nothing (PROCESS #15)"
+s = s.replace(old, "            if (false) {", 1)
+'
+  expect_red G_NAMES cargo test -q -p manuk-page --features stylo,spidermonkey --test g_names
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_EVENT_SURFACE; then
   # Drop `once` again — read the options object as a bare boolean, which is what the native did. Nothing
   # throws; the listener simply keeps firing, forever. `{once:true}` is one of the most common options in

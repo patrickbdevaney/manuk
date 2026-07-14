@@ -64,6 +64,13 @@ const CLAIMS: &[(&str, &str)] = &[
     ("TreeWalker instance", "document.createTreeWalker(document.body) instanceof TreeWalker"),
     // Live collections (tick 73). A DEAD collection is a Bar 0 hang: `while (el.children.length)
     // el.removeChild(el.firstChild)` never terminates if length is frozen.
+    // Names and namespaces (tick 75). Each of these ACCEPTED something that is not a name, and produced
+    // an element or a class that could never match anything — silently.
+    ("classList is indexed", "(function(){var d=document.createElement('i');d.className='a b';return d.classList[0]==='a'})()"),
+    ("classList rejects whitespace", "(function(){var d=document.createElement('i');try{d.classList.add('a b');return false}catch(e){return e.name==='InvalidCharacterError'}})()"),
+    ("createElement validates", "(function(){try{document.createElement('<x>');return false}catch(e){return e.name==='InvalidCharacterError'}})()"),
+    ("createElementNS keeps the namespace", "(function(){var s=document.createElementNS('http://www.w3.org/2000/svg','linearGradient');return s.namespaceURI==='http://www.w3.org/2000/svg'&&s.localName==='linearGradient'&&s.tagName==='linearGradient'})()"),
+
     // The event surface (tick 74). Every one of these failed SILENTLY.
     ("addEventListener once", "(function(){var d=document.createElement('i');var n=0;d.addEventListener('x',function(){n++},{once:true});d.dispatchEvent(new Event('x'));d.dispatchEvent(new Event('x'));return n===1})()"),
     ("event.returnValue", "(function(){var e=new Event('x',{cancelable:true});if(e.returnValue!==true)return false;e.preventDefault();return e.returnValue===false})()"),

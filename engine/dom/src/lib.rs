@@ -68,6 +68,16 @@ pub struct ElementData {
     /// Lowercased local name, e.g. `div`, `p`, `span`.
     pub name: String,
     pub attrs: Vec<Attr>,
+    /// The element's **namespace**, or `None` for the HTML namespace (the overwhelmingly common case, so
+    /// it costs a null and not a string).
+    ///
+    /// This is not decoration. `document.createElementNS(SVG_NS, 'linearGradient')` must keep its **case**
+    /// (`localName` is `linearGradient`, not `lineargradient`) and must report its namespace — and until
+    /// now `createElementNS` threw the namespace away entirely and returned an HTML element. Everything
+    /// downstream then lied: `namespaceURI` said XHTML, `localName` was `undefined`, and `tagName` was
+    /// uppercased when it must not be. WPT's `Document-createElementNS.html` is **596 subtests** of
+    /// exactly this, and it scored zero.
+    pub namespace: Option<String>,
 }
 
 impl ElementData {
@@ -343,7 +353,27 @@ impl Dom {
         self.alloc(NodeData::Element(ElementData {
             name: name.into(),
             attrs: Vec::new(),
+            namespace: None,
         }))
+    }
+
+    /// `document.createElementNS(ns, qualifiedName)`. `ns` of `None` (or the HTML namespace) behaves
+    /// exactly like [`create_element`]; anything else is a foreign element, and its **case is preserved**.
+    pub fn create_element_ns(&mut self, ns: Option<String>, name: impl Into<String>) -> NodeId {
+        let ns = ns.filter(|n| n != "http://www.w3.org/1999/xhtml" && !n.is_empty());
+        self.alloc(NodeData::Element(ElementData {
+            name: name.into(),
+            attrs: Vec::new(),
+            namespace: ns,
+        }))
+    }
+
+    /// The element's namespace, or `None` for HTML.
+    pub fn namespace(&self, node: NodeId) -> Option<&str> {
+        match self.nodes.get(node.index()).map(|n| &n.data) {
+            Some(NodeData::Element(e)) => e.namespace.as_deref(),
+            _ => None,
+        }
     }
 
     pub fn create_text(&mut self, text: impl Into<String>) -> NodeId {

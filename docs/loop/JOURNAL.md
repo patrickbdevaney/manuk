@@ -3054,6 +3054,51 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 75 — a name is not a string
+
+**TICK SHAPE: capability.** Fifth tick at the far horizon. **+149 WPT subtests** (1928 → 2077, **32.3%**).
+Bar 0 clean.
+
+> **Five WPT-aimed ticks: +340 subtests. Five near-horizon ticks: +1.**
+
+Three gaps, all silent, all the same family: **the engine accepted things that are not names, and then
+produced elements and classes that could never match anything.**
+
+* **`classList` was not a `DOMTokenList`.** `classList[0]` was `undefined` — no indexed access at all —
+  and the token methods **never threw**. `classList.add('btn primary')` is a *bug*: the author meant two
+  tokens. A browser that silently writes the single class `"btn primary"` produces an element matching
+  **neither** selector, with no error anywhere. It is a real `DOMTokenList` now: indexed, iterable,
+  `SyntaxError` on an empty token, `InvalidCharacterError` on whitespace, and **no partial effect** — a
+  throwing `add('ok', '')` must not leave `ok` behind.
+* **`createElement('')` and `createElement('<div>')` produced elements.** Perfectly good nodes with
+  nonsense tags, which then matched no selector and rendered nothing. A page that catches
+  `InvalidCharacterError` can recover; a page handed a phantom cannot even see the problem.
+* **`createElementNS` threw the namespace away.** It split off the prefix, called `createElement`, and
+  returned an HTML element — so `namespaceURI` said XHTML for an SVG node, `localName` was `undefined`,
+  and `tagName` was **uppercased**, which for SVG's `linearGradient` is simply wrong. `ElementData` carries
+  a real namespace now, and casing is per-namespace. That one fix took `dom/nodes/case.html` from
+  **7/285 to 68/285**.
+
+**And the correction that cost me, because it made the score go DOWN.** I split names on `:`
+unconditionally — but **HTML does not split prefixes**. `document.createElement('a:b')` has
+`localName === "a:b"`; the colon is just a character. Only a *namespaced* element has a prefix. The
+unconditional split silently renamed every HTML element containing one, and `dom/nodes` fell from 1592 to
+1575 before I caught it. **A refactor that improves the thing you are looking at and regresses the thing
+you are not is indistinguishable from progress, unless you measure both.**
+
+**And `null` is not `"null"`.** `createElementNS(null, 'p:q')` must throw `NamespaceError`, and it did not:
+`arg_string` *stringifies*, so the namespace arrived as the string `"null"` — a perfectly good namespace as
+far as the check was concerned.
+
+**Found and not fixed, stated so nobody re-discovers it:** `Document-createElementNS.html` (596 subtests)
+runs against **iframe documents** (`doc.defaultView.DOMException`), and our iframes render as bitmaps with
+no JS global. Those 596 are behind *real nested browsing contexts*, not behind `createElementNS`. Likewise
+`Element-classlist.html` (1420) builds its nodes with `createElementNS` in four namespaces — the namespace
+fix helps, but the file's remaining bulk needs `MutationObserver` records on attribute changes.
+
+**The ratchet.** Capability: **up**. Performance: unchanged. Instrument fidelity: **up** — `G_NAMES` proven
+falsifiable by letting `classList` accept whitespace again.
+
 ## Tick 74 — `{once: true}` fired forever, and nothing complained
 
 **TICK SHAPE: capability.** Fourth tick aimed at the far horizon, and the largest move yet:
