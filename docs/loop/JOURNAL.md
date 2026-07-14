@@ -3054,6 +3054,51 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 73 — a dead collection is not a conformance gap. It is a hang.
+
+**TICK SHAPE: capability.** Third tick aimed at the far horizon. **+17 WPT subtests** (1793 → 1810,
+28.2%). Bar 0 clean.
+
+> **Three WPT-aimed ticks: +73 subtests. Five near-horizon ticks: +1.**
+
+`element.children` and `getElementsByTagName()` returned **plain arrays** — a snapshot, taken once. Append
+a child and `length` did not move. `dom/collections` scored 3/48.
+
+**And that is a Bar 0 hang**, hiding in the most common DOM idiom there is:
+
+```js
+while (el.children.length) { el.removeChild(el.firstChild); }   // "empty this element"
+```
+
+With a *live* collection this terminates: each removal shortens it. With a **dead** one, `length` is frozen
+at its initial value, the condition is true forever, and **the tab locks up.** *A dead collection does not
+fail loudly — it spins.* The gate asserts exactly this, and the falsifier's mutation freezes `length` and
+watches it go red.
+
+**It landed cheaply for one reason, and the reason is worth recording.** `children` is an accessor on the
+prototype, so a live view could **wrap** the existing getter rather than reimplement it. That is only
+possible because **tick 64 gave the DOM real prototypes** — before it, patching the prototype did nothing
+at all, silently. This is the **second** capability to land almost free on the back of that fix
+(traversal was the first), and it is the argument for repairing foundations rather than symptoms.
+
+**Two self-inflicted, both instructive:**
+
+* The wrap silently did nothing at first, because I wrapped `Element.prototype` — and tick 64's **stated
+  limit** is that every member is an own-property of `Node.prototype`, with `Element.prototype` an empty
+  link that merely *inherits*. `getOwnPropertyDescriptor` returned `undefined` and the patch went nowhere.
+  A stated limit is not a solved one; it comes back.
+* `cargo fmt` had reflowed the `eval(...)` call I was string-matching against, so the install edit **never
+  applied** and the module never ran. **An edit that matches nothing changes nothing, and reports success.**
+
+**Honest cost:** recomputing per access makes `for (i = 0; i < c.length; i++) c[i]` quadratic in the
+collection's size. For the collections real pages hold, nothing. If it ever matters, the fix is a DOM
+mutation counter to invalidate a cache — *not* a return to snapshots. **Correct and occasionally slow beats
+fast and wrong, and fast-and-wrong here means a locked tab.**
+
+**The ratchet.** Capability: **up**, and it closes a latent Bar 0. Performance: unchanged (wall 251s).
+Instrument fidelity: **up** — proven falsifiable, after the first falsifier failed to apply and reported
+the gate as vacuous (PROCESS #15: *a mutation that changes nothing certifies nothing*).
+
 ## Tick 72 — `NodeIterator` and `TreeWalker`, and the filter bug that is really a security bug
 
 **TICK SHAPE: capability.** The second tick aimed straight at the far horizon, and it confirms the first.

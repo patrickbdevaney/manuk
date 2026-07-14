@@ -1491,6 +1491,17 @@ pub fn install(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<()
         global,
         crate::traversal_js::TRAVERSAL_JS,
         "traversal.js",
+    )?;
+
+    // Live collections, LAST — it WRAPS `children` / `getElementsByTagName` and friends, so everything it
+    // wraps must already exist. It works at all only because tick 64 gave the DOM real prototypes: before
+    // that, `children` was an own-property of every element and patching the prototype did nothing,
+    // silently.
+    eval(
+        rt,
+        global,
+        crate::collections_js::COLLECTIONS_JS,
+        "collections.js",
     )
     .map(|_| ())
 }

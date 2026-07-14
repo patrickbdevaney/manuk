@@ -638,6 +638,20 @@ fi
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_COLLECTIONS; then
+  # Freeze `length` — a snapshot, which is what collections were. Nothing throws. The collection still
+  # indexes. And `while (el.children.length) el.removeChild(el.firstChild)` — the universal "empty this
+  # element" idiom — NEVER TERMINATES. A dead collection does not fail loudly; it spins, and the tab locks
+  # up. That is Bar 0, and it is why this gate exists.
+  mutate engine/js/src/collections_js.rs '
+old = "return compute().length;"
+assert old in s, "MUTATION DID NOT APPLY - a falsifier that changes nothing certifies nothing (PROCESS #15)"
+s = s.replace(old, "{ if (t.__f === undefined) { t.__f = compute().length; } return t.__f; }", 1)
+'
+  expect_red G_COLLECTIONS cargo test -q -p manuk-page --features stylo,spidermonkey --test g_collections
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_TRAVERSAL; then
   # Make FILTER_REJECT behave as FILTER_SKIP in TreeWalker — the classic implementation slip, and a
   # SECURITY bug wearing a traversal bug's clothes: a sanitizer that rejects <script> then walks straight

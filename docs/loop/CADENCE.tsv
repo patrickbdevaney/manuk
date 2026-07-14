@@ -64,3 +64,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 70	002cd66	1784019419	2026-07-14T04:56:59-04:00	394	instrument	37	10	778	2	27	48	1737	6418	1	144	4	the loop had no odometer
 71	228211d	1784020609	2026-07-14T05:16:49-04:00	1190	capability	256	9	632	5	28	50	1766	6418	1	145	4	a real `Range`, and the first tick aimed straight at the far horizon
 72	f6533cb	1784021536	2026-07-14T05:32:16-04:00	927	capability	150	11	545	12	29	53	1793	6418	1	146	4	`NodeIterator` and `TreeWalker`, and the filter bug that is really a security bug
+73	737804f	1784022495	2026-07-14T05:48:15-04:00	959	capability	251	9	379	2	30	55	1810	6418	1	147	4	a dead collection is not a conformance gap. It is a hang.

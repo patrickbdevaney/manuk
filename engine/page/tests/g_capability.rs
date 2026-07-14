@@ -62,6 +62,10 @@ const CLAIMS: &[(&str, &str)] = &[
     // walk into it.
     ("createNodeIterator", "typeof document.createNodeIterator === 'function'"),
     ("TreeWalker instance", "document.createTreeWalker(document.body) instanceof TreeWalker"),
+    // Live collections (tick 73). A DEAD collection is a Bar 0 hang: `while (el.children.length)
+    // el.removeChild(el.firstChild)` never terminates if length is frozen.
+    ("children is live", "(function(){var d=document.createElement('div');d.appendChild(document.createElement('i'));var c=d.children;var n=c.length;d.appendChild(document.createElement('i'));return c.length===n+1})()"),
+    ("drain idiom terminates", "(function(){var d=document.createElement('div');for(var i=0;i<5;i++)d.appendChild(document.createElement('i'));var s=0;while(d.children.length&&s<50){d.removeChild(d.firstChild);s++}return d.children.length===0&&s===5})()"),
     ("FILTER_REJECT prunes", "(function(){var d=document.createElement('div');d.innerHTML='<i id=x><b id=y></b></i>';var w=document.createTreeWalker(d,NodeFilter.SHOW_ELEMENT,{acceptNode:function(n){return n.id==='x'?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT}});var s=[],n;while((n=w.nextNode()))s.push(n.id);return s.indexOf('y')===-1})()"),
     ("getSelection", "typeof getSelection==='function' || typeof document.getSelection==='function'"),
     // ── Files (ledger: "Blob / File / FileReader — uploads, downloads, image preview")
