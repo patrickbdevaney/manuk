@@ -2878,3 +2878,43 @@ the flag:
 *(`--exclude manuk-js` was the first attempt and it is subtly wrong: excluding a package changes cargo's
 feature UNIFICATION, so `manuk-page`'s gate tests lose their `stylo,spidermonkey` features and stop
 compiling. Union again — the same trap as tick 54's crypto backend, one layer up.)*
+
+## Tick 56 — the gate PASSED and the process segfaulted on the way out (2026-07-14)
+
+**TICK SHAPE: infrastructure**
+
+**Two CI failures, and NEITHER was a code bug.**
+
+**1. Windows static: a pure infrastructure flake** — *"Could not resolve host: index.crates.io"*. The
+runner's DNS died mid-fetch. Nothing in the engine to fix. Hardened with `CARGO_NET_RETRY=10`, the
+**sparse registry protocol** (fewer, smaller requests than the git index — fewer chances to hit the
+flake), and multiplexing off.
+
+**2. The Linux gate wall, and this one is worth reading:**
+
+```
+test every_global_a_real_bundle_references_exists_and_answers_honestly ... ok
+test result: ok. 1 passed; 0 failed
+mozilla::detail::MutexImpl::~MutexImpl: pthread_mutex_destroy failed: Device or resource busy
+process didn't exit successfully: (signal: 11, SIGSEGV)
+```
+
+> **The gate PASSED. Then SpiderMonkey segfaulted in its STATIC C++ DESTRUCTORS, after `main` returned.**
+
+The runtime is deliberately leaked (`ManuallyDrop`) because tearing it down mid-process is the fragile
+path — but its static destructors still run at exit and find a **mutex the leaked runtime still holds.**
+
+**`cargo` reports the PROCESS's exit status, so a passing gate read as a failing one, and CI called a green
+wall red.** *That is an instrument lying about the engine — the exact failure this project refuses
+everywhere else.*
+
+So gates are judged by **what the gate actually asserts**: `test result: ok … 0 failed`
+(`scripts/ci-gate.sh`). **This is not weaker.** A crash *during* a test **cannot** produce that line — the
+process dies before cargo prints it. The only thing tolerated is a crash strictly *after* every assertion
+has passed and been reported. *(And it turns out `verify.sh` has been applying this exact criterion
+implicitly all along — it greps for `test result: ok` — so CI now finally matches the wall.)*
+
+**AND THE CRASH IS NOT FORGIVEN.** It is printed **every single time** so it cannot become invisible, and
+it is recorded as an **OPEN Bar 0 residual**: *a browser that segfaults on exit is a browser that can lose
+a profile flush.* `G_TEARDOWN` already forbids `libc::_exit()` for exactly that reason — *"a workaround
+that hides a crash is a data-loss bug wearing a disguise."* **This is the same wound, one layer down.**

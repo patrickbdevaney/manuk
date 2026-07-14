@@ -181,3 +181,24 @@ throws on line one.
 | **Pre-insertion validity (no cycles, no Document child)** | **Bar 0** | ✅ (tick 48) — enforced at the JS native AND the arena |
 | **The created document's reflector as a document** (`doc.body`) | — | ❌ **deferred** — gets element members; document members break the real document |
 | **`document.createEvent` / `initEvent`** | jQuery, GA, legacy code | ❌ **deferred** — exposes an infinite loop in event dispatch when listeners mutate mid-dispatch (Bar 0) |
+
+## Open Bar 0 residual — SpiderMonkey segfaults in its STATIC DESTRUCTORS at process exit
+
+```
+test result: ok. 1 passed; 0 failed
+mozilla::detail::MutexImpl::~MutexImpl: pthread_mutex_destroy failed: Device or resource busy
+process didn't exit successfully: (signal: 11, SIGSEGV)
+```
+
+**The test passes; the process then dies on the way out.** The runtime is deliberately leaked
+(`ManuallyDrop`) because tearing it down mid-process is the fragile path — but SpiderMonkey's *static* C++
+destructors still run at exit and find a mutex the leaked runtime still holds.
+
+**Why this is not cosmetic:** *a browser that segfaults on exit is a browser that can lose a profile
+flush.* `G_TEARDOWN` already forbids `libc::_exit()` for exactly that reason (PROCESS: *a workaround that
+hides a crash is a data-loss bug wearing a disguise*). This is the same wound, one layer down.
+
+**Status:** the gate wall judges gates by `test result: ok … 0 failed` rather than the process exit code
+(`scripts/ci-gate.sh`), and **prints the crash every single time so it cannot become invisible.** A crash
+*during* a test cannot produce that pass line, so nothing is hidden. **Fixing the teardown properly is an
+open Bar 0 item, not a closed one.**

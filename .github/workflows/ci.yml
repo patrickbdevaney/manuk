@@ -34,6 +34,12 @@ env:
   CARGO_BUILD_JOBS: 2
   CARGO_PROFILE_DEV_DEBUG: 0
   CARGO_PROFILE_TEST_DEBUG: 0
+  # GitHub runners intermittently lose DNS ("Could not resolve host: index.crates.io") — the Windows
+  # static job died on exactly that, and it is INFRASTRUCTURE, not our code. Retry hard, and prefer the
+  # sparse protocol (fewer, smaller requests than the git index, so fewer chances to hit the flake).
+  CARGO_NET_RETRY: 10
+  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+  CARGO_HTTP_MULTIPLEXING: false
 
 jobs:
   # ── THE BADGE. The shipping config on the primary target, and it must stay green. ──
@@ -100,13 +106,18 @@ jobs:
           done
       # The full gate wall in its shipping configuration (stylo + spidermonkey) — the REAL verification,
       # which the headless test run above cannot exercise (the feature-gated gates need the JS engine).
+      # Gates are judged by `test result: ok … 0 failed`, NOT by the process exit code — because
+      # SpiderMonkey segfaults in its STATIC DESTRUCTORS after `main` returns (the runtime is deliberately
+      # leaked; its dtors then find a mutex still held). The gate PASSES and cargo still reports SIGSEGV.
+      # That does not reproduce on the dev machine's libc and reproduces on the runner's every time.
+      # See scripts/ci-gate.sh — a crash DURING a test cannot produce the pass line, so nothing is hidden.
       - name: the gate wall (stylo + spidermonkey)
         run: |
-          set -e   # fail on the FIRST bad gate, so the annotation names the gate that actually broke
+          set -e
           for g in g_globals g_selector g_lifecycle g_chardata g_contain_native g_dom_impl; do
-            ./scripts/ci-run.sh "gate: $g" cargo test -p manuk-page --features stylo,spidermonkey --test "$g"
+            ./scripts/ci-gate.sh "gate: $g" cargo test -p manuk-page --features stylo,spidermonkey --test "$g"
           done
-          ./scripts/ci-run.sh "gate: stale_handle" cargo test -p manuk-dom stale_handle
+          ./scripts/ci-gate.sh "gate: stale_handle" cargo test -p manuk-dom stale_handle
       # The wasm render pipeline — proof the in-browser demo target stays buildable (docs/loop/DEMO.md).
       - name: wasm render pipeline (the demo target)
         run: |
