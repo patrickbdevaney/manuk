@@ -64,7 +64,12 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y binaryen || exit 0
           command -v wasm-opt >/dev/null || exit 0
-          wasm-opt -Oz demo/www/manuk_demo_bg.wasm -o /tmp/opt.wasm --enable-bulk-memory \
+          # rustc emits sign-ext / bulk-memory / mutable-globals / nontrapping-fptoint by default now, and
+          # wasm-opt REJECTS the module unless each is explicitly allowed ("all used features should be
+          # allowed" — 10k lines of validator noise for a step that is merely a size optimisation).
+          wasm-opt -Oz demo/www/manuk_demo_bg.wasm -o /tmp/opt.wasm \
+            --enable-bulk-memory --enable-sign-ext --enable-mutable-globals \
+            --enable-nontrapping-float-to-int --enable-reference-types --enable-simd \
             && mv /tmp/opt.wasm demo/www/manuk_demo_bg.wasm \
             && ls -lh demo/www/manuk_demo_bg.wasm | awk '{print "  optimized: "$5}'
           exit 0
