@@ -262,6 +262,20 @@ fi
 # reported TIMEOUT. It never errors; it just happens in the wrong order, silently, on every debounce
 # and retry-backoff on the web.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_CONTAIN_NATIVE; then
+  # Call the native directly, with no catch_unwind — as it was. The panic then cannot unwind out of the
+  # `extern "C"` frame and ABORTS THE PROCESS. The gate does not merely fail: the test binary DIES, which
+  # is precisely the Bar 0 failure this boundary exists to prevent.
+  mutate engine/js/src/dom_bindings.rs '
+s = s.replace(
+    "    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {\n        Ok(ok) => ok,",
+    "    match Ok::<bool, ()>(f()) {   // MUTATION: no containment — a panic here aborts the browser\n        Ok(ok) => ok,",
+    1)
+'
+  expect_red G_CONTAIN_NATIVE cargo test -q -p manuk-page --features stylo,spidermonkey --test g_contain_native
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_STALE_NODE; then
   # Index the arena blindly again, as it did before. A handle from another document then walks off the end
   # of a smaller arena — and because the caller is an `extern "C"` JS native (nounwind), the panic ABORTS

@@ -238,3 +238,34 @@ and the sandbox are a "come back to a human" boundary — not a "do it carefully
 The per-process runtime is leaked and tears down messily. The gate passed, then segfaulted, then passed.
 **A flaky gate is worse than a missing one, because it gets ignored — and an ignored gate protects
 nothing.** So JS gates are **one giant test per binary, on purpose.**
+
+## `catch_unwind` AROUND an `extern "C"` fn does NOTHING. The catch must be INSIDE it.
+
+`extern "C"` is **`nounwind`**. A Rust panic inside such a function is *"panic in a function that cannot
+unwind"* → **abort/SIGSEGV** — and it aborts at **that function's own boundary**, *before any outer
+`catch_unwind` is ever reached.
+
+**So wrapping the native from the outside compiles cleanly, looks correct, and contains nothing.** (Done
+here first; the gate still died.)
+
+**The working shape:** the native is a **plain Rust `unsafe fn`**, and a **generated trampoline is the only
+`extern "C"` frame** — with the `catch_unwind` *inside* it:
+
+```rust
+unsafe extern "C" fn trampoline(cx, argc, vp) -> bool {      // the ONLY nounwind frame
+    match catch_unwind(AssertUnwindSafe(|| real_native(cx, argc, vp))) {
+        Ok(ok) => ok,
+        Err(_) => { error!(...); *vp = UndefinedValue(); true }
+    }
+}
+```
+
+**Return `true`, not `false`.** `false` tells SpiderMonkey *"an exception is pending"* — and there isn't
+one. **That trades a segfault for an assertion failure.**
+
+**And it must be LOUD.** *A crash you made survivable and invisible becomes a permanent, unexplained "this
+site just doesn't work."*
+
+> **This also requires `panic = "unwind"` in the profile.** Under `panic = "abort"`, `catch_unwind` cannot
+> exist and per-page containment is **unreachable by construction** — a build-profile decision *before* it
+> is a code decision.

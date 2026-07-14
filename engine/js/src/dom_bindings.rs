@@ -292,7 +292,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle) -> String {
 
 /// `getComputedStyle(element)` → a snapshot style object (camelCase props + a
 /// `getPropertyValue("kebab-case")` accessor). Reads the pre-script computed styles.
-unsafe extern "C" fn window_get_computed_style(
+unsafe fn window_get_computed_style(
     cx: *mut RawJSContext,
     argc: u32,
     vp: *mut Value,
@@ -339,6 +339,105 @@ unsafe fn wrap_cx(cx: *mut RawJSContext) -> JSContext {
 /// Read `(dom, node)` from a reflector's reserved slots, or `None` if the object is
 /// not a DOM reflector / slots are unset (turns a would-be segfault into a graceful
 /// `null`/`undefined`).
+/// **A PANIC INSIDE A JS NATIVE ABORTS THE PROCESS. This is the boundary that stops it.**
+///
+/// Every DOM method below is an `extern "C"` function, and `extern "C"` is **`nounwind`**. A Rust panic
+/// inside one is *"panic in a function that cannot unwind"* → **SIGSEGV, core dumped** — *the whole
+/// browser, every tab the user had open, because one page hit one bad index.*
+///
+/// That is Bar 0's founding promise inverted: **a bad page must kill the PAGE, not the browser.** The
+/// engine already runs `panic = "unwind"` precisely so this boundary can exist; it just did not exist.
+///
+/// So every native is wrapped in `catch_unwind` **at the FFI edge** — the last Rust frame before control
+/// returns to SpiderMonkey's C++ — and a panic becomes:
+///
+///   * **loud** — logged at `error!` with the native's name. *A crash you made survivable and INVISIBLE
+///     becomes a permanent, unexplained "this site just doesn't work"*, which is the silent-failure bug
+///     this project has already paid for three times.
+///   * **`undefined`** — the JS call returns, the page keeps running, and the rest of the tab survives.
+///
+/// It returns `true` (not `false`): `false` tells SpiderMonkey *"an exception is pending"*, and there
+/// isn't one — that would trade a segfault for an assertion failure.
+/// **The panic probe — how the containment boundary is PROVEN rather than asserted.**
+///
+/// A guarantee that "a panic in a native cannot kill the browser" is worthless unless something actually
+/// panics in a native and the browser is still standing afterwards. So this native panics, on purpose,
+/// and `G_CONTAIN_NATIVE` calls it.
+///
+/// It is registered **only when `MANUK_PANIC_PROBE` is set**, so it is not part of any page's surface.
+unsafe fn el_panic_probe(_cx: *mut RawJSContext, _argc: u32, _vp: *mut Value) -> bool {
+    panic!("deliberate panic inside a JS native (MANUK_PANIC_PROBE)");
+}
+
+/// The one place a panic is caught. **It must be INSIDE the `extern "C"` frame** — wrapping an
+/// `extern "C"` function from the outside does nothing at all, because the panic aborts at *that*
+/// function's own `nounwind` boundary before any outer `catch_unwind` is ever reached. **That mistake was
+/// made here first, and the containment silently did not work.** Hence every native below is a plain Rust
+/// `unsafe fn`, and the generated trampoline is the *only* `extern "C"` frame.
+unsafe fn guard_native(
+    f: impl FnOnce() -> bool,
+    name: &'static str,
+    vp: *mut Value,
+) -> bool {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+        Ok(ok) => ok,
+        Err(_) => {
+            // LOUD. A crash you made survivable and INVISIBLE becomes a permanent, unexplained
+            // "this site just doesn't work" — the silent-failure bug this project has already paid for.
+            tracing::error!(
+                native = name,
+                "a DOM native PANICKED — CONTAINED. Without this boundary the panic could not unwind out \
+                 of `extern \"C\"` and would have ABORTED THE WHOLE BROWSER, and every tab in it."
+            );
+            *vp = UndefinedValue();
+            // `true`, not `false`: `false` tells SpiderMonkey an exception is PENDING, and there isn't
+            // one — that would trade a segfault for an assertion failure.
+            true
+        }
+    }
+}
+
+macro_rules! def_guarded {
+    ($def:ident, $name:expr, $f:ident, $n:expr) => {{
+        unsafe extern "C" fn guarded(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+            guard_native(|| $f(cx, argc, vp), stringify!($f), vp)
+        }
+        $def($name, guarded, $n);
+    }};
+}
+
+/// Accessor properties are natives too, and a getter that panics kills the browser exactly like a method
+/// that panics. **A partial containment boundary is a FALSE guarantee.**
+/// The host natives registered directly with `JS_DefineFunction` (console, storage, scroll,
+/// `getComputedStyle`, `window.open`, history, `postMessage`) are just as reachable from a page as any
+/// DOM method, and a panic in one of them aborts the browser exactly the same way.
+macro_rules! host_fn {
+    ($f:ident) => {{
+        unsafe extern "C" fn t(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+            guard_native(|| $f(cx, argc, vp), stringify!($f), vp)
+        }
+        Some(t as unsafe extern "C" fn(*mut RawJSContext, u32, *mut Value) -> bool)
+    }};
+}
+
+macro_rules! prop_guarded {
+    ($prop:ident, $name:expr, $get:ident, None) => {{
+        unsafe extern "C" fn g(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+            guard_native(|| $get(cx, argc, vp), stringify!($get), vp)
+        }
+        $prop($name, g, None);
+    }};
+    ($prop:ident, $name:expr, $get:ident, Some($set:ident)) => {{
+        unsafe extern "C" fn g(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+            guard_native(|| $get(cx, argc, vp), stringify!($get), vp)
+        }
+        unsafe extern "C" fn st(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+            guard_native(|| $set(cx, argc, vp), stringify!($set), vp)
+        }
+        $prop($name, g, Some(st));
+    }};
+}
+
 unsafe fn node_and_dom(obj: *mut JSObject) -> Option<(*mut Dom, NodeId)> {
     let mut ns = UndefinedValue();
     JS_GetReservedSlot(obj, SLOT_NODE, &mut ns);
@@ -629,178 +728,178 @@ unsafe fn define_members(
         // is what collapses Wikipedia's table of contents. Without this property the script threw,
         // the class never changed, the TOC stayed fully expanded (1,949px instead of 364px), and
         // every element on the page below it was ~5,000px out of place.
-        prop(c"documentElement", doc_get_document_element, None);
-        prop(c"body", doc_get_body, None);
-        prop(c"head", doc_get_head, None);
-        prop(c"cookie", doc_get_cookie, Some(doc_set_cookie));
+        prop_guarded!(prop, c"documentElement", doc_get_document_element, None);
+        prop_guarded!(prop, c"body", doc_get_body, None);
+        prop_guarded!(prop, c"head", doc_get_head, None);
+        prop_guarded!(prop, c"cookie", doc_get_cookie, Some(doc_set_cookie));
         // Standard document properties that were UNDEFINED. Each is read (and `title` written) by a
         // large amount of ordinary web code, and `undefined.split(...)` is a TypeError that takes the
         // rest of the bundle with it.
-        prop(c"title", doc_get_title, Some(doc_set_title));
-        prop(c"referrer", doc_get_referrer, None);
-        prop(c"characterSet", doc_get_charset, None);
-        prop(c"charset", doc_get_charset, None);
-        prop(c"inputEncoding", doc_get_charset, None);
-        prop(c"currentScript", doc_get_current_script, None);
-        prop(c"activeElement", doc_get_active_element, None);
-        prop(c"scrollingElement", doc_get_scrolling_element, None);
-        def(c"getElementById", doc_get_by_id, 1);
-        def(c"querySelector", doc_query, 1);
-        def(c"querySelectorAll", doc_query_all, 1);
-        def(c"createElement", doc_create_element, 1);
-        def(c"createElementNS", doc_create_element_ns, 2);
-        def(c"importNode", doc_import_node, 2);
-        def(c"createComment", doc_create_comment, 1);
-        def(c"createDocumentFragment", doc_create_fragment, 0);
-        prop(c"adoptedStyleSheets", el_get_adopted_stylesheets, Some(el_set_adopted_stylesheets));
-        def(c"append", el_append, 1);
-        def(c"prepend", el_prepend, 1);
-        def(c"replaceChildren", el_replace_children, 0);
-        def(c"createTextNode", doc_create_text_node, 1);
-        def(c"getElementsByTagName", el_get_by_tag, 1);
-        def(c"getElementsByClassName", el_get_by_class, 1);
+        prop_guarded!(prop, c"title", doc_get_title, Some(doc_set_title));
+        prop_guarded!(prop, c"referrer", doc_get_referrer, None);
+        prop_guarded!(prop, c"characterSet", doc_get_charset, None);
+        prop_guarded!(prop, c"charset", doc_get_charset, None);
+        prop_guarded!(prop, c"inputEncoding", doc_get_charset, None);
+        prop_guarded!(prop, c"currentScript", doc_get_current_script, None);
+        prop_guarded!(prop, c"activeElement", doc_get_active_element, None);
+        prop_guarded!(prop, c"scrollingElement", doc_get_scrolling_element, None);
+        def_guarded!(def, c"getElementById", doc_get_by_id, 1);
+        def_guarded!(def, c"querySelector", doc_query, 1);
+        def_guarded!(def, c"querySelectorAll", doc_query_all, 1);
+        def_guarded!(def, c"createElement", doc_create_element, 1);
+        def_guarded!(def, c"createElementNS", doc_create_element_ns, 2);
+        def_guarded!(def, c"importNode", doc_import_node, 2);
+        def_guarded!(def, c"createComment", doc_create_comment, 1);
+        def_guarded!(def, c"createDocumentFragment", doc_create_fragment, 0);
+        prop_guarded!(prop, c"adoptedStyleSheets", el_get_adopted_stylesheets, Some(el_set_adopted_stylesheets));
+        def_guarded!(def, c"append", el_append, 1);
+        def_guarded!(def, c"prepend", el_prepend, 1);
+        def_guarded!(def, c"replaceChildren", el_replace_children, 0);
+        def_guarded!(def, c"createTextNode", doc_create_text_node, 1);
+        def_guarded!(def, c"getElementsByTagName", el_get_by_tag, 1);
+        def_guarded!(def, c"getElementsByClassName", el_get_by_class, 1);
         // Document-level (delegated) events.
-        def(c"addEventListener", el_add_event_listener, 2);
-        def(c"removeEventListener", el_remove_event_listener, 2);
-        def(c"dispatchEvent", el_dispatch_event, 1);
+        def_guarded!(def, c"addEventListener", el_add_event_listener, 2);
+        def_guarded!(def, c"removeEventListener", el_remove_event_listener, 2);
+        def_guarded!(def, c"dispatchEvent", el_dispatch_event, 1);
+        // Test-only: proves the containment boundary is real. Not registered otherwise.
+        if std::env::var_os("MANUK_PANIC_PROBE").is_some() {
+            def_guarded!(def, c"__panicProbe", el_panic_probe, 0);
+        }
     } else {
-        def(c"appendChild", el_append_child, 1);
-        def(c"setAttribute", el_set_attribute, 2);
-        def(c"getAttribute", el_get_attribute, 1);
-        def(c"removeAttribute", el_remove_attribute, 1);
-        def(c"hasAttribute", el_has_attribute, 1);
-        def(c"remove", el_remove, 0);
+        def_guarded!(def, c"appendChild", el_append_child, 1);
+        def_guarded!(def, c"setAttribute", el_set_attribute, 2);
+        def_guarded!(def, c"getAttribute", el_get_attribute, 1);
+        def_guarded!(def, c"removeAttribute", el_remove_attribute, 1);
+        def_guarded!(def, c"hasAttribute", el_has_attribute, 1);
+        def_guarded!(def, c"remove", el_remove, 0);
         // The ChildNode / ParentNode mixins — see the block above. Absent until now, all eleven.
-        def(c"append", el_append, 1);
-        def(c"prepend", el_prepend, 1);
-        def(c"before", el_before, 1);
-        def(c"after", el_after, 1);
-        def(c"replaceWith", el_replace_with, 1);
-        def(c"replaceChildren", el_replace_children, 0);
-        def(c"insertAdjacentHTML", el_insert_adjacent_html, 2);
-        def(c"insertAdjacentElement", el_insert_adjacent_element, 2);
-        def(c"insertAdjacentText", el_insert_adjacent_text, 2);
-        def(c"click", el_click, 0);
-        def(c"getAttributeNames", el_get_attribute_names, 0);
-        prop(c"data", el_get_char_data, Some(el_set_char_data));
+        def_guarded!(def, c"append", el_append, 1);
+        def_guarded!(def, c"prepend", el_prepend, 1);
+        def_guarded!(def, c"before", el_before, 1);
+        def_guarded!(def, c"after", el_after, 1);
+        def_guarded!(def, c"replaceWith", el_replace_with, 1);
+        def_guarded!(def, c"replaceChildren", el_replace_children, 0);
+        def_guarded!(def, c"insertAdjacentHTML", el_insert_adjacent_html, 2);
+        def_guarded!(def, c"insertAdjacentElement", el_insert_adjacent_element, 2);
+        def_guarded!(def, c"insertAdjacentText", el_insert_adjacent_text, 2);
+        def_guarded!(def, c"click", el_click, 0);
+        def_guarded!(def, c"getAttributeNames", el_get_attribute_names, 0);
+        prop_guarded!(prop, c"data", el_get_char_data, Some(el_set_char_data));
         // CharacterData — the whole interface, in UTF-16 code units, throwing IndexSizeError.
-        prop(c"length", el_char_length, None);
-        def(c"substringData", el_substring_data, 2);
-        def(c"appendData", el_append_data, 1);
-        def(c"insertData", el_insert_data, 2);
-        def(c"deleteData", el_delete_data, 2);
-        def(c"replaceData", el_replace_data, 3);
-        prop(c"nodeValue", el_get_char_data, Some(el_set_char_data));
+        prop_guarded!(prop, c"length", el_char_length, None);
+        def_guarded!(def, c"substringData", el_substring_data, 2);
+        def_guarded!(def, c"appendData", el_append_data, 1);
+        def_guarded!(def, c"insertData", el_insert_data, 2);
+        def_guarded!(def, c"deleteData", el_delete_data, 2);
+        def_guarded!(def, c"replaceData", el_replace_data, 3);
+        prop_guarded!(prop, c"nodeValue", el_get_char_data, Some(el_set_char_data));
         // Forms — 50% of the corpus, and the difference between a reader and a browser.
-        def(c"submit", el_form_submit, 0);
-        def(c"requestSubmit", el_form_request_submit, 0);
-        def(c"reset", el_form_reset, 0);
-        def(c"hasAttributes", el_has_attributes, 0);
-        def(c"hasChildNodes", el_has_child_nodes, 0);
-        def(c"replaceChild", el_replace_child, 2);
-        def(c"getRootNode", el_get_root_node, 0);
-        def(c"isSameNode", el_is_same_node, 1);
-        def(c"isEqualNode", el_is_equal_node, 1);
-        def(c"normalize", el_normalize, 0);
-        prop(c"childElementCount", el_child_element_count, None);
-        prop(c"lastElementChild", el_last_element_child, None);
-        prop(c"outerHTML", el_get_outer_html, Some(el_set_outer_html));
-        prop(c"innerText", el_get_inner_text, None);
-        def(c"attachShadow", el_attach_shadow, 1);
-        prop(c"adoptedStyleSheets", el_get_adopted_stylesheets, Some(el_set_adopted_stylesheets));
-        def(c"getElementsByTagName", el_get_by_tag, 1);
-        def(c"getElementsByClassName", el_get_by_class, 1);
-        def(c"querySelector", doc_query, 1);
-        def(c"querySelectorAll", doc_query_all, 1);
-        def(c"addEventListener", el_add_event_listener, 2);
-        def(c"removeEventListener", el_remove_event_listener, 2);
-        def(c"dispatchEvent", el_dispatch_event, 1);
-        def(c"getBoundingClientRect", el_get_bounding_rect, 0);
+        def_guarded!(def, c"submit", el_form_submit, 0);
+        def_guarded!(def, c"requestSubmit", el_form_request_submit, 0);
+        def_guarded!(def, c"reset", el_form_reset, 0);
+        def_guarded!(def, c"hasAttributes", el_has_attributes, 0);
+        def_guarded!(def, c"hasChildNodes", el_has_child_nodes, 0);
+        def_guarded!(def, c"replaceChild", el_replace_child, 2);
+        def_guarded!(def, c"getRootNode", el_get_root_node, 0);
+        def_guarded!(def, c"isSameNode", el_is_same_node, 1);
+        def_guarded!(def, c"isEqualNode", el_is_equal_node, 1);
+        def_guarded!(def, c"normalize", el_normalize, 0);
+        prop_guarded!(prop, c"childElementCount", el_child_element_count, None);
+        prop_guarded!(prop, c"lastElementChild", el_last_element_child, None);
+        prop_guarded!(prop, c"outerHTML", el_get_outer_html, Some(el_set_outer_html));
+        prop_guarded!(prop, c"innerText", el_get_inner_text, None);
+        def_guarded!(def, c"attachShadow", el_attach_shadow, 1);
+        prop_guarded!(prop, c"adoptedStyleSheets", el_get_adopted_stylesheets, Some(el_set_adopted_stylesheets));
+        def_guarded!(def, c"getElementsByTagName", el_get_by_tag, 1);
+        def_guarded!(def, c"getElementsByClassName", el_get_by_class, 1);
+        def_guarded!(def, c"querySelector", doc_query, 1);
+        def_guarded!(def, c"querySelectorAll", doc_query_all, 1);
+        def_guarded!(def, c"addEventListener", el_add_event_listener, 2);
+        def_guarded!(def, c"removeEventListener", el_remove_event_listener, 2);
+        def_guarded!(def, c"dispatchEvent", el_dispatch_event, 1);
+        def_guarded!(def, c"getBoundingClientRect", el_get_bounding_rect, 0);
         // DOM tree mutation + cloning.
-        def(c"insertBefore", el_insert_before, 2);
-        def(c"removeChild", el_remove_child, 1);
-        def(c"cloneNode", el_clone_node, 1);
+        def_guarded!(def, c"insertBefore", el_insert_before, 2);
+        def_guarded!(def, c"removeChild", el_remove_child, 1);
+        def_guarded!(def, c"cloneNode", el_clone_node, 1);
         // DOM traversal (read-only accessor properties).
         // The Node interface's own identity properties. `nodeType` is the one React's
         // `isValidContainer` checks, and its absence is React error #299 — the entire app web.
-        prop(c"nodeType", el_get_node_type, None);
-        prop(c"ownerDocument", el_get_owner_document, None);
-        prop(c"nodeName", el_get_node_name, None);
-        prop(c"nodeValue", el_get_node_value, None);
-        prop(c"namespaceURI", el_get_namespace_uri, None);
-        prop(c"parentNode", el_get_parent_node, None);
-        prop(c"shadowRoot", el_get_shadow_root, None);
-        prop(c"parentElement", el_get_parent_element, None);
-        prop(c"firstChild", el_get_first_child, None);
-        prop(c"lastChild", el_get_last_child, None);
-        prop(c"firstElementChild", el_get_first_element_child, None);
-        prop(c"nextSibling", el_get_next_sibling, None);
-        prop(c"previousSibling", el_get_prev_sibling, None);
-        prop(c"nextElementSibling", el_get_next_element_sibling, None);
-        prop(c"previousElementSibling", el_get_prev_element_sibling, None);
-        prop(c"children", el_get_children, None);
-        prop(c"childNodes", el_get_child_nodes, None);
+        prop_guarded!(prop, c"nodeType", el_get_node_type, None);
+        prop_guarded!(prop, c"ownerDocument", el_get_owner_document, None);
+        prop_guarded!(prop, c"nodeName", el_get_node_name, None);
+        prop_guarded!(prop, c"nodeValue", el_get_node_value, None);
+        prop_guarded!(prop, c"namespaceURI", el_get_namespace_uri, None);
+        prop_guarded!(prop, c"parentNode", el_get_parent_node, None);
+        prop_guarded!(prop, c"shadowRoot", el_get_shadow_root, None);
+        prop_guarded!(prop, c"parentElement", el_get_parent_element, None);
+        prop_guarded!(prop, c"firstChild", el_get_first_child, None);
+        prop_guarded!(prop, c"lastChild", el_get_last_child, None);
+        prop_guarded!(prop, c"firstElementChild", el_get_first_element_child, None);
+        prop_guarded!(prop, c"nextSibling", el_get_next_sibling, None);
+        prop_guarded!(prop, c"previousSibling", el_get_prev_sibling, None);
+        prop_guarded!(prop, c"nextElementSibling", el_get_next_element_sibling, None);
+        prop_guarded!(prop, c"previousElementSibling", el_get_prev_element_sibling, None);
+        prop_guarded!(prop, c"children", el_get_children, None);
+        prop_guarded!(prop, c"childNodes", el_get_child_nodes, None);
         // Control IDL reflections.
-        prop(c"value", el_get_value, Some(el_set_value));
-        prop(c"checked", el_get_checked, Some(el_set_checked));
+        prop_guarded!(prop, c"value", el_get_value, Some(el_set_value));
+        prop_guarded!(prop, c"checked", el_get_checked, Some(el_set_checked));
         // Accessor properties (jQuery-core read/write surface).
-        prop(
-            c"textContent",
-            el_get_text_content,
-            Some(el_set_text_content),
-        );
-        prop(c"innerHTML", el_get_inner_html, Some(el_set_inner_html));
-        prop(c"tagName", el_get_tag_name, None); // read-only
-        prop(c"id", el_get_id, Some(el_set_id));
-        prop(c"className", el_get_class_name, Some(el_set_class_name));
+        prop_guarded!(prop, c"textContent", el_get_text_content, Some(el_set_text_content));
+        prop_guarded!(prop, c"innerHTML", el_get_inner_html, Some(el_set_inner_html));
+        prop_guarded!(prop, c"tagName", el_get_tag_name, None); // read-only
+        prop_guarded!(prop, c"id", el_get_id, Some(el_set_id));
+        prop_guarded!(prop, c"className", el_get_class_name, Some(el_set_class_name));
         // Reflected content attributes. `createElement` → assign → `appendChild` is how the modern
         // web builds elements; without reflection the element that reaches the tree is empty.
-        prop(c"href", el_get_href, Some(el_set_href));
-        prop(c"src", el_get_src, Some(el_set_src));
-        prop(c"rel", el_get_rel, Some(el_set_rel));
-        prop(c"type", el_get_type, Some(el_set_type));
-        prop(c"alt", el_get_alt, Some(el_set_alt));
-        prop(c"title", el_get_title, Some(el_set_title));
-        prop(c"name", el_get_name, Some(el_set_name));
-        prop(c"placeholder", el_get_placeholder, Some(el_set_placeholder));
-        prop(c"action", el_get_action, Some(el_set_action));
-        prop(c"method", el_get_method, Some(el_set_method));
-        prop(c"target", el_get_target, Some(el_set_target));
+        prop_guarded!(prop, c"href", el_get_href, Some(el_set_href));
+        prop_guarded!(prop, c"src", el_get_src, Some(el_set_src));
+        prop_guarded!(prop, c"rel", el_get_rel, Some(el_set_rel));
+        prop_guarded!(prop, c"type", el_get_type, Some(el_set_type));
+        prop_guarded!(prop, c"alt", el_get_alt, Some(el_set_alt));
+        prop_guarded!(prop, c"title", el_get_title, Some(el_set_title));
+        prop_guarded!(prop, c"name", el_get_name, Some(el_set_name));
+        prop_guarded!(prop, c"placeholder", el_get_placeholder, Some(el_set_placeholder));
+        prop_guarded!(prop, c"action", el_get_action, Some(el_set_action));
+        prop_guarded!(prop, c"method", el_get_method, Some(el_set_method));
+        prop_guarded!(prop, c"target", el_get_target, Some(el_set_target));
         // ONE `content` property, dispatched: `<template>` gets its fragment, everything
         // else (`<meta content>`) gets the attribute. Registering it twice meant the second
         // registration silently won, which is how `<template>.content` stayed undefined.
-        prop(c"content", el_get_template_content, Some(el_set_content));
-        prop(c"media", el_get_media, Some(el_set_media));
-        prop(c"srcset", el_get_srcset, Some(el_set_srcset));
-        prop(c"htmlFor", el_get_html_for, Some(el_set_html_for));
+        prop_guarded!(prop, c"content", el_get_template_content, Some(el_set_content));
+        prop_guarded!(prop, c"media", el_get_media, Some(el_set_media));
+        prop_guarded!(prop, c"srcset", el_get_srcset, Some(el_set_srcset));
+        prop_guarded!(prop, c"htmlFor", el_get_html_for, Some(el_set_html_for));
         // CSSOM + the DOM ergonomics every framework and hand-written handler depends on.
         // URL decomposition — a link is the web's canonical URL object.
-        prop(c"protocol", el_get_protocol, None);
-        prop(c"hostname", el_get_hostname, None);
-        prop(c"port", el_get_port, None);
-        prop(c"host", el_get_host, None);
-        prop(c"pathname", el_get_pathname, None);
-        prop(c"search", el_get_search, None);
-        prop(c"hash", el_get_hash, None);
-        prop(c"origin", el_get_origin, None);
+        prop_guarded!(prop, c"protocol", el_get_protocol, None);
+        prop_guarded!(prop, c"hostname", el_get_hostname, None);
+        prop_guarded!(prop, c"port", el_get_port, None);
+        prop_guarded!(prop, c"host", el_get_host, None);
+        prop_guarded!(prop, c"pathname", el_get_pathname, None);
+        prop_guarded!(prop, c"search", el_get_search, None);
+        prop_guarded!(prop, c"hash", el_get_hash, None);
+        prop_guarded!(prop, c"origin", el_get_origin, None);
         // Element metrics.
-        prop(c"offsetLeft", el_get_offset_left, None);
-        prop(c"offsetTop", el_get_offset_top, None);
-        prop(c"offsetWidth", el_get_offset_width, None);
-        prop(c"offsetHeight", el_get_offset_height, None);
-        prop(c"clientWidth", el_get_offset_width, None);
-        prop(c"clientHeight", el_get_offset_height, None);
-        prop(c"scrollWidth", el_get_offset_width, None);
-        prop(c"scrollHeight", el_get_offset_height, None);
-        prop(c"style", el_get_style, None);
-        prop(c"classList", el_get_class_list, None);
-        prop(c"dataset", el_get_dataset, None);
-        def(c"matches", el_matches, 1);
-        def(c"closest", el_closest, 1);
-        def(c"contains", el_contains, 1);
-        def(c"scrollIntoView", el_scroll_into_view, 0);
-        def(c"focus", el_focus, 0);
-        def(c"blur", el_blur, 0);
+        prop_guarded!(prop, c"offsetLeft", el_get_offset_left, None);
+        prop_guarded!(prop, c"offsetTop", el_get_offset_top, None);
+        prop_guarded!(prop, c"offsetWidth", el_get_offset_width, None);
+        prop_guarded!(prop, c"offsetHeight", el_get_offset_height, None);
+        prop_guarded!(prop, c"clientWidth", el_get_offset_width, None);
+        prop_guarded!(prop, c"clientHeight", el_get_offset_height, None);
+        prop_guarded!(prop, c"scrollWidth", el_get_offset_width, None);
+        prop_guarded!(prop, c"scrollHeight", el_get_offset_height, None);
+        prop_guarded!(prop, c"style", el_get_style, None);
+        prop_guarded!(prop, c"classList", el_get_class_list, None);
+        prop_guarded!(prop, c"dataset", el_get_dataset, None);
+        def_guarded!(def, c"matches", el_matches, 1);
+        def_guarded!(def, c"closest", el_closest, 1);
+        def_guarded!(def, c"contains", el_contains, 1);
+        def_guarded!(def, c"scrollIntoView", el_scroll_into_view, 0);
+        def_guarded!(def, c"focus", el_focus, 0);
+        def_guarded!(def, c"blur", el_blur, 0);
     }
 }
 
@@ -809,7 +908,7 @@ unsafe fn define_members(
 // ---------------------------------------------------------------------------
 
 /// `document.getElementById(id)` → element reflector | null.
-unsafe extern "C" fn doc_get_by_id(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn doc_get_by_id(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, root)) = this_node(vp) else {
         *vp = NullValue();
         return true;
@@ -826,7 +925,7 @@ unsafe extern "C" fn doc_get_by_id(cx: *mut RawJSContext, argc: u32, vp: *mut Va
 }
 
 /// `document.querySelector(sel)` (also installed on elements) → first match | null.
-unsafe extern "C" fn doc_query(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn doc_query(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, root)) = this_node(vp) else {
         *vp = NullValue();
         return true;
@@ -850,7 +949,7 @@ unsafe extern "C" fn doc_query(cx: *mut RawJSContext, argc: u32, vp: *mut Value)
 /// than crashing the page that asked for them.
 /// `document.importNode(node, deep)` — Lit and friends import a template's content before appending.
 /// Same node arena, so this is a clone.
-unsafe extern "C" fn doc_import_node(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn doc_import_node(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, _)) = this_node(vp) else {
         *vp = NullValue();
         return true;
@@ -866,7 +965,7 @@ unsafe extern "C" fn doc_import_node(cx: *mut RawJSContext, argc: u32, vp: *mut 
     true
 }
 
-unsafe extern "C" fn doc_create_element_ns(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn doc_create_element_ns(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, _)) = this_node(vp) else {
         *vp = NullValue();
         return true;
@@ -882,7 +981,7 @@ unsafe extern "C" fn doc_create_element_ns(cx: *mut RawJSContext, argc: u32, vp:
 /// `document.createComment(text)` — Vue and Svelte use comment nodes as anchors for every conditional
 /// and every list, so this is not optional for them: without it, `v-if` and `{#if}` cannot place their
 /// markers and the framework fails where it can least explain itself.
-unsafe extern "C" fn doc_create_comment(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn doc_create_comment(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, _)) = this_node(vp) else {
         *vp = NullValue();
         return true;
@@ -895,7 +994,7 @@ unsafe extern "C" fn doc_create_comment(cx: *mut RawJSContext, argc: u32, vp: *m
 
 /// `document.createDocumentFragment()` — the standard way every framework batches a subtree before
 /// inserting it once.
-unsafe extern "C" fn doc_create_fragment(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn doc_create_fragment(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     let Some((dom, _)) = this_node(vp) else {
         *vp = NullValue();
         return true;
@@ -905,7 +1004,7 @@ unsafe extern "C" fn doc_create_fragment(cx: *mut RawJSContext, _argc: u32, vp: 
     true
 }
 
-unsafe extern "C" fn doc_create_element(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn doc_create_element(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, _)) = this_node(vp) else {
         *vp = NullValue();
         return true;
@@ -921,7 +1020,7 @@ unsafe extern "C" fn doc_create_element(cx: *mut RawJSContext, argc: u32, vp: *m
 // ---------------------------------------------------------------------------
 
 /// `element.appendChild(child)` → the appended child (per DOM spec).
-unsafe extern "C" fn el_append_child(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_append_child(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, parent)) = this_node(vp) else {
         *vp = UndefinedValue();
         return true;
@@ -938,7 +1037,7 @@ unsafe extern "C" fn el_append_child(cx: *mut RawJSContext, argc: u32, vp: *mut 
 }
 
 /// `element.setAttribute(name, value)`.
-unsafe extern "C" fn el_set_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_set_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, node)) = this_node(vp) else {
         *vp = UndefinedValue();
         return true;
@@ -954,7 +1053,7 @@ unsafe extern "C" fn el_set_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut
 
 /// `element.getBoundingClientRect()` → a DOMRect-shaped object from the pre-script layout
 /// snapshot (`{x, y, width, height, top, right, bottom, left}`), or all-zero if unlaid-out.
-unsafe extern "C" fn el_get_bounding_rect(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_bounding_rect(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     let node = this_node(vp).map(|(_, n)| n);
     let [x, y, w, h] = node
         .and_then(layout_rect)
@@ -972,7 +1071,7 @@ unsafe extern "C" fn el_get_bounding_rect(cx: *mut RawJSContext, _argc: u32, vp:
 }
 
 /// `element.getAttribute(name)` → string | null.
-unsafe extern "C" fn el_get_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, node)) = this_node(vp) else {
         *vp = NullValue();
         return true;
@@ -1051,7 +1150,7 @@ node_getter!(el_get_next_element_sibling, |d, n| unsafe { next_element(d, n) });
 node_getter!(el_get_prev_element_sibling, |d, n| unsafe { prev_element(d, n) });
 
 /// `element.children` — element children as a static Array.
-unsafe extern "C" fn el_get_children(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_children(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         let kids: Vec<NodeId> = (*dom).children(node).filter(|&c| (*dom).is_element(c)).collect();
         node_array(cx, vp, dom, &kids);
@@ -1062,7 +1161,7 @@ unsafe extern "C" fn el_get_children(cx: *mut RawJSContext, _argc: u32, vp: *mut
 }
 
 /// `element.childNodes` — all child nodes as a static Array.
-unsafe extern "C" fn el_get_child_nodes(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_child_nodes(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         let kids: Vec<NodeId> = (*dom).children(node).collect();
         node_array(cx, vp, dom, &kids);
@@ -1073,7 +1172,7 @@ unsafe extern "C" fn el_get_child_nodes(cx: *mut RawJSContext, _argc: u32, vp: *
 }
 
 /// `element.value` getter (form controls) — the `value` attribute, else empty string.
-unsafe extern "C" fn el_get_value(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_value(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     let v = this_node(vp)
         .and_then(|(dom, n)| (*dom).element(n).and_then(|e| e.attr("value")).map(str::to_owned))
         .unwrap_or_default();
@@ -1081,7 +1180,7 @@ unsafe extern "C" fn el_get_value(cx: *mut RawJSContext, _argc: u32, vp: *mut Va
     true
 }
 /// `element.value = s` setter.
-unsafe extern "C" fn el_set_value(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_set_value(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         let v = arg_string(cx, vp, argc, 0).unwrap_or_default();
         (*dom).set_attr(node, "value", v);
@@ -1091,7 +1190,7 @@ unsafe extern "C" fn el_set_value(cx: *mut RawJSContext, argc: u32, vp: *mut Val
 }
 
 /// `element.checked` getter — presence of the `checked` attribute.
-unsafe extern "C" fn el_get_checked(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_checked(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     let checked = this_node(vp)
         .and_then(|(dom, n)| (*dom).element(n).map(|e| e.attr("checked").is_some()))
         .unwrap_or(false);
@@ -1099,7 +1198,7 @@ unsafe extern "C" fn el_get_checked(_cx: *mut RawJSContext, _argc: u32, vp: *mut
     true
 }
 /// `element.checked = b` setter.
-unsafe extern "C" fn el_set_checked(_cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_set_checked(_cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         let on = argc > 0 && (*vp.add(2)).is_boolean() && (*vp.add(2)).to_boolean();
         if on {
@@ -1114,7 +1213,7 @@ unsafe extern "C" fn el_set_checked(_cx: *mut RawJSContext, argc: u32, vp: *mut 
 
 /// `parent.insertBefore(newChild, refChild)` — insert before `refChild` (or append if
 /// `refChild` is null). Returns the inserted node.
-unsafe extern "C" fn el_insert_before(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_insert_before(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, parent)) = this_node(vp) else {
         *vp = UndefinedValue();
         return true;
@@ -1136,7 +1235,7 @@ unsafe extern "C" fn el_insert_before(cx: *mut RawJSContext, argc: u32, vp: *mut
 }
 
 /// `parent.removeChild(child)` — detach `child`; returns it.
-unsafe extern "C" fn el_remove_child(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_remove_child(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, parent)) = this_node(vp) else {
         *vp = UndefinedValue();
         return true;
@@ -1153,7 +1252,7 @@ unsafe extern "C" fn el_remove_child(cx: *mut RawJSContext, argc: u32, vp: *mut 
 }
 
 /// `document.createTextNode(text)` → a detached text-node reflector.
-unsafe extern "C" fn doc_create_text_node(
+unsafe fn doc_create_text_node(
     cx: *mut RawJSContext,
     argc: u32,
     vp: *mut Value,
@@ -1210,7 +1309,7 @@ unsafe fn clone_node(dom: *mut Dom, node: NodeId, deep: bool) -> NodeId {
 }
 
 /// `node.cloneNode(deep)` → a detached clone.
-unsafe extern "C" fn el_clone_node(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_clone_node(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, node)) = this_node(vp) else {
         *vp = NullValue();
         return true;
@@ -1222,7 +1321,7 @@ unsafe extern "C" fn el_clone_node(cx: *mut RawJSContext, argc: u32, vp: *mut Va
 }
 
 /// `element.removeAttribute(name)`.
-unsafe extern "C" fn el_remove_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_remove_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         if let Some(name) = arg_string(cx, vp, argc, 0) {
             let old = (*dom).element(node).and_then(|e| e.attr(&name)).map(|s| s.to_string());
@@ -1235,7 +1334,7 @@ unsafe extern "C" fn el_remove_attribute(cx: *mut RawJSContext, argc: u32, vp: *
 }
 
 /// `element.hasAttribute(name)` → boolean.
-unsafe extern "C" fn el_has_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_has_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let has = match (this_node(vp), arg_string(cx, vp, argc, 0)) {
         (Some((dom, node)), Some(name)) => {
             (*dom).element(node).and_then(|e| e.attr(&name)).is_some()
@@ -1247,7 +1346,7 @@ unsafe extern "C" fn el_has_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut
 }
 
 /// `element.remove()` — detach this node from its parent (DOM Living Standard `ChildNode`).
-unsafe extern "C" fn el_remove(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_remove(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         // Record on the parent (still attached) with this node as the removed child.
         if let Some(parent) = (*dom).parent(node) {
@@ -1264,7 +1363,7 @@ unsafe extern "C" fn el_remove(cx: *mut RawJSContext, _argc: u32, vp: *mut Value
 /// models shadow roots as separate trees surfaced through the **flat tree**, so layout/paint pick
 /// the content up with no further plumbing. Idempotent: a host that already has a shadow root
 /// returns the existing one. `mode` defaults to `open`.
-unsafe extern "C" fn el_attach_shadow(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_attach_shadow(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, host)) = this_node(vp) else {
         *vp = NullValue();
         return true;
@@ -1297,7 +1396,7 @@ unsafe extern "C" fn el_attach_shadow(cx: *mut RawJSContext, argc: u32, vp: *mut
 
 /// `element.shadowRoot` — the attached shadow root, or `null`. (An `closed` root is still
 /// returned here; hiding it is a follow-on and would only obscure the page from itself.)
-unsafe extern "C" fn el_get_shadow_root(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_shadow_root(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp).and_then(|(dom, n)| (*dom).shadow_root(n).map(|sr| (dom, sr))) {
         Some((dom, sr)) => *vp = ObjectValue(new_reflector(cx, dom, sr)),
         None => *vp = NullValue(),
@@ -1308,7 +1407,7 @@ unsafe extern "C" fn el_get_shadow_root(cx: *mut RawJSContext, _argc: u32, vp: *
 /// `getElementsByTagName(tag)` — live-ish collection (returned here as a static Array, like
 /// `querySelectorAll`). `"*"` matches every descendant element. Installed on both document
 /// and elements; delegates to the selector engine using the tag as a type selector.
-unsafe extern "C" fn el_get_by_tag(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_by_tag(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, root)) = this_node(vp) else {
         *vp = NullValue();
         return true;
@@ -1322,7 +1421,7 @@ unsafe extern "C" fn el_get_by_tag(cx: *mut RawJSContext, argc: u32, vp: *mut Va
 /// `getElementsByClassName(name)` — descendants carrying every space-separated class in
 /// `name`. Returned as a static Array. Delegates to the selector engine via a `.class`
 /// compound selector.
-unsafe extern "C" fn el_get_by_class(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_by_class(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, root)) = this_node(vp) else {
         *vp = NullValue();
         return true;
@@ -1371,7 +1470,7 @@ unsafe fn return_string_array(cx: *mut RawJSContext, vp: *mut Value, items: &[St
 /// node in the JS-side listener registry (keyed by the node's arena id). The handler
 /// is stashed on the global, then a helper appends it — keeping it GC-rooted via the
 /// registry. Requires [`install`]'s registry prelude.
-unsafe extern "C" fn el_add_event_listener(
+unsafe fn el_add_event_listener(
     cx: *mut RawJSContext,
     argc: u32,
     vp: *mut Value,
@@ -1418,7 +1517,7 @@ unsafe extern "C" fn el_add_event_listener(
 }
 
 /// `element.removeEventListener(type, handler[, capture])`.
-unsafe extern "C" fn el_remove_event_listener(
+unsafe fn el_remove_event_listener(
     cx: *mut RawJSContext,
     argc: u32,
     vp: *mut Value,
@@ -1461,7 +1560,7 @@ unsafe extern "C" fn el_remove_event_listener(
 /// (Simplified: takes a type string rather than an `Event` object — no `Event`
 /// constructor yet.) Runs synchronously, but can be *called from* a `setTimeout`
 /// task, i.e. driven through the event loop.
-unsafe extern "C" fn el_dispatch_event(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_dispatch_event(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((_, node)) = this_node(vp) else {
         *vp = BooleanValue(false);
         return true;
@@ -1505,7 +1604,7 @@ unsafe extern "C" fn el_dispatch_event(cx: *mut RawJSContext, argc: u32, vp: *mu
 /// **Honest limit, stated rather than discovered:** this fires the *event*. It does not yet run the
 /// full **activation behaviour** (toggling a checkbox, following a link, submitting a form) — that is
 /// the follow-on, and it is real work rather than a "TODO" meaning never.
-unsafe extern "C" fn el_click(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_click(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     if let Some((_, node)) = this_node(vp) {
         let script = format!(
             "__dispatchEvent({}, new Event('click', {{ bubbles: true, cancelable: true }}))",
@@ -1519,7 +1618,7 @@ unsafe extern "C" fn el_click(cx: *mut RawJSContext, _argc: u32, vp: *mut Value)
 
 /// `document.querySelectorAll(sel)` / `element.querySelectorAll(sel)` → a JS `Array`
 /// of element reflectors (a static NodeList, per this tranche).
-unsafe extern "C" fn doc_query_all(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn doc_query_all(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, root)) = this_node(vp) else {
         *vp = NullValue();
         return true;
@@ -1543,7 +1642,7 @@ unsafe extern "C" fn doc_query_all(cx: *mut RawJSContext, argc: u32, vp: *mut Va
 // ---------------------------------------------------------------------------
 
 /// `element.textContent` getter → the element's concatenated text.
-unsafe extern "C" fn el_get_text_content(
+unsafe fn el_get_text_content(
     cx: *mut RawJSContext,
     _argc: u32,
     vp: *mut Value,
@@ -1559,7 +1658,7 @@ unsafe extern "C" fn el_get_text_content(
 }
 
 /// `element.textContent = s` setter → replace all children with a single text node.
-unsafe extern "C" fn el_set_text_content(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_set_text_content(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         let value = arg_string(cx, vp, argc, 0).unwrap_or_default();
         let kids: Vec<NodeId> = (*dom).children(node).collect();
@@ -1576,7 +1675,7 @@ unsafe extern "C" fn el_set_text_content(cx: *mut RawJSContext, argc: u32, vp: *
 }
 
 /// `element.innerHTML` getter → the element's children serialized to HTML.
-unsafe extern "C" fn el_get_inner_html(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_inner_html(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
         Some((dom, node)) => {
             let html = manuk_html::serialize_inner(&*dom, node);
@@ -1588,7 +1687,7 @@ unsafe extern "C" fn el_get_inner_html(cx: *mut RawJSContext, _argc: u32, vp: *m
 }
 
 /// `element.innerHTML = s` setter → parse `s` and replace the element's children.
-unsafe extern "C" fn el_set_inner_html(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_set_inner_html(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         let value = arg_string(cx, vp, argc, 0).unwrap_or_default();
         let old_kids: Vec<NodeId> = (*dom).children(node).collect();
@@ -1646,7 +1745,7 @@ unsafe fn args_as_nodes(
 }
 
 /// `parent.append(...nodes)` — append each, after the last child.
-unsafe extern "C" fn el_append(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_append(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, parent)) = this_node(vp) {
         let kids = args_as_nodes(cx, dom, vp, argc);
         for &k in &kids {
@@ -1659,7 +1758,7 @@ unsafe extern "C" fn el_append(cx: *mut RawJSContext, argc: u32, vp: *mut Value)
 }
 
 /// `parent.prepend(...nodes)` — insert each before the first child, **preserving argument order**.
-unsafe extern "C" fn el_prepend(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_prepend(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, parent)) = this_node(vp) {
         let kids = args_as_nodes(cx, dom, vp, argc);
         match (*dom).children(parent).next() {
@@ -1683,7 +1782,7 @@ unsafe extern "C" fn el_prepend(cx: *mut RawJSContext, argc: u32, vp: *mut Value
 }
 
 /// `node.before(...nodes)` — insert into the PARENT, before this node.
-unsafe extern "C" fn el_before(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_before(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         if let Some(parent) = (*dom).parent(node) {
             let kids = args_as_nodes(cx, dom, vp, argc);
@@ -1698,7 +1797,7 @@ unsafe extern "C" fn el_before(cx: *mut RawJSContext, argc: u32, vp: *mut Value)
 }
 
 /// `node.after(...nodes)` — insert into the PARENT, after this node.
-unsafe extern "C" fn el_after(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_after(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         if let Some(parent) = (*dom).parent(node) {
             let kids = args_as_nodes(cx, dom, vp, argc);
@@ -1720,7 +1819,7 @@ unsafe extern "C" fn el_after(cx: *mut RawJSContext, argc: u32, vp: *mut Value) 
 }
 
 /// `node.replaceWith(...nodes)` — put the nodes where this one was, then detach it.
-unsafe extern "C" fn el_replace_with(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_replace_with(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         if let Some(parent) = (*dom).parent(node) {
             let kids = args_as_nodes(cx, dom, vp, argc);
@@ -1736,7 +1835,7 @@ unsafe extern "C" fn el_replace_with(cx: *mut RawJSContext, argc: u32, vp: *mut 
 }
 
 /// `parent.replaceChildren(...nodes)` — the modern "empty it and fill it" in one call.
-unsafe extern "C" fn el_replace_children(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_replace_children(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, parent)) = this_node(vp) {
         let kids = args_as_nodes(cx, dom, vp, argc);
         let old: Vec<NodeId> = (*dom).children(parent).collect();
@@ -1816,7 +1915,7 @@ unsafe fn insert_adjacent(dom: *mut Dom, node: NodeId, pos: &str, nodes: &[NodeI
 /// Parses `html` into a detached container and moves the resulting children into place. This is how a
 /// very large amount of non-framework JavaScript on the web writes markup — every "load more" button,
 /// every server-rendered partial swapped in by hand, and all of htmx.
-unsafe extern "C" fn el_insert_adjacent_html(
+unsafe fn el_insert_adjacent_html(
     cx: *mut RawJSContext,
     argc: u32,
     vp: *mut Value,
@@ -1851,7 +1950,7 @@ unsafe extern "C" fn el_insert_adjacent_html(
 /// so the throw aborted the loop invoking the completion callbacks and **29 of the first 40 WPT files
 /// reported nothing at all** — every one of them looking like a conformance failure rather than one
 /// missing method.
-unsafe extern "C" fn el_insert_adjacent_text(
+unsafe fn el_insert_adjacent_text(
     cx: *mut RawJSContext,
     argc: u32,
     vp: *mut Value,
@@ -1870,7 +1969,7 @@ unsafe extern "C" fn el_insert_adjacent_text(
     true
 }
 
-unsafe extern "C" fn el_insert_adjacent_element(
+unsafe fn el_insert_adjacent_element(
     cx: *mut RawJSContext,
     argc: u32,
     vp: *mut Value,
@@ -1891,7 +1990,7 @@ unsafe extern "C" fn el_insert_adjacent_element(
 }
 
 /// `el.outerHTML` getter — the element's own serialization, tag included.
-unsafe extern "C" fn el_get_outer_html(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_outer_html(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
         Some((dom, node)) => {
             let html = manuk_html::serialize_outer(&*dom, node);
@@ -1903,7 +2002,7 @@ unsafe extern "C" fn el_get_outer_html(cx: *mut RawJSContext, _argc: u32, vp: *m
 }
 
 /// `el.outerHTML = html` — replace the element *itself* with the parsed markup.
-unsafe extern "C" fn el_set_outer_html(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_set_outer_html(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         let html = arg_string(cx, vp, argc, 0).unwrap_or_default();
         if let Some(parent) = (*dom).parent(node) {
@@ -1930,7 +2029,7 @@ unsafe extern "C" fn el_set_outer_html(cx: *mut RawJSContext, argc: u32, vp: *mu
 /// `innerText` far more often than they depend on its layout-sensitivity, so the approximation is
 /// worth far more than the absence — but it IS an approximation, and it is written down as one rather
 /// than quietly shipped as if it were the spec.
-unsafe extern "C" fn el_get_inner_text(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_inner_text(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
         Some((dom, node)) => {
             let t = (*dom).text_content(node);
@@ -1942,7 +2041,7 @@ unsafe extern "C" fn el_get_inner_text(cx: *mut RawJSContext, _argc: u32, vp: *m
 }
 
 /// `el.getAttributeNames()` → an array of attribute names.
-unsafe extern "C" fn el_get_attribute_names(
+unsafe fn el_get_attribute_names(
     cx: *mut RawJSContext,
     _argc: u32,
     vp: *mut Value,
@@ -2019,7 +2118,7 @@ unsafe fn sheet_text(cx: *mut RawJSContext, sheet: *mut JSObject) -> String {
 ///
 /// Stashes the array (so the getter round-trips, which libraries check) and materializes the combined
 /// text into a single `<style>` child of the root, replacing any it previously wrote.
-unsafe extern "C" fn el_set_adopted_stylesheets(
+unsafe fn el_set_adopted_stylesheets(
     cx: *mut RawJSContext,
     argc: u32,
     vp: *mut Value,
@@ -2084,7 +2183,7 @@ unsafe extern "C" fn el_set_adopted_stylesheets(
 }
 
 /// `root.adoptedStyleSheets` getter — whatever was assigned, or `[]`.
-unsafe extern "C" fn el_get_adopted_stylesheets(
+unsafe fn el_get_adopted_stylesheets(
     cx: *mut RawJSContext,
     _argc: u32,
     vp: *mut Value,
@@ -2118,7 +2217,7 @@ unsafe extern "C" fn el_get_adopted_stylesheets(
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 /// `el.hasAttributes()`.
-unsafe extern "C" fn el_has_attributes(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_has_attributes(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     let has = this_node(vp)
         .and_then(|(dom, n)| (*dom).element(n).map(|e| !e.attrs.is_empty()))
         .unwrap_or(false);
@@ -2127,7 +2226,7 @@ unsafe extern "C" fn el_has_attributes(_cx: *mut RawJSContext, _argc: u32, vp: *
 }
 
 /// `node.hasChildNodes()`.
-unsafe extern "C" fn el_has_child_nodes(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_has_child_nodes(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     let has = this_node(vp)
         .map(|(dom, n)| (*dom).children(n).next().is_some())
         .unwrap_or(false);
@@ -2136,7 +2235,7 @@ unsafe extern "C" fn el_has_child_nodes(_cx: *mut RawJSContext, _argc: u32, vp: 
 }
 
 /// `parent.replaceChild(new, old)` → the OLD node, per DOM.
-unsafe extern "C" fn el_replace_child(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_replace_child(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let mut out = NullValue();
     if let Some((dom, parent)) = this_node(vp) {
         let new_child = arg_object(vp, argc, 0).and_then(|o| node_and_dom(o).map(|(_, n)| n));
@@ -2156,7 +2255,7 @@ unsafe extern "C" fn el_replace_child(cx: *mut RawJSContext, argc: u32, vp: *mut
 ///
 /// How a component asks *"which tree am I in"*. Every design-system component that styles or queries
 /// itself from the inside goes through this.
-unsafe extern "C" fn el_get_root_node(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_root_node(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         let mut cur = node;
         loop {
@@ -2176,7 +2275,7 @@ unsafe extern "C" fn el_get_root_node(cx: *mut RawJSContext, _argc: u32, vp: *mu
 }
 
 /// `a.isSameNode(b)` — identity.
-unsafe extern "C" fn el_is_same_node(_cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_is_same_node(_cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let a = this_node(vp).map(|(_, n)| n);
     let b = arg_object(vp, argc, 0).and_then(|o| node_and_dom(o).map(|(_, n)| n));
     *vp = BooleanValue(a.is_some() && a == b);
@@ -2188,7 +2287,7 @@ unsafe extern "C" fn el_is_same_node(_cx: *mut RawJSContext, argc: u32, vp: *mut
 /// The spec defines this as a recursive walk over type, name, attributes and children. Serializing
 /// both and comparing the strings answers the same question for every case a page can construct, and
 /// does it in two lines instead of forty.
-unsafe extern "C" fn el_is_equal_node(_cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_is_equal_node(_cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let eq = match (
         this_node(vp),
         arg_object(vp, argc, 0).and_then(|o| node_and_dom(o).map(|(_, n)| n)),
@@ -2203,13 +2302,13 @@ unsafe extern "C" fn el_is_equal_node(_cx: *mut RawJSContext, argc: u32, vp: *mu
 }
 
 /// `node.normalize()` — merge adjacent text nodes.
-unsafe extern "C" fn el_normalize(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_normalize(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     *vp = UndefinedValue();
     true
 }
 
 /// `parent.childElementCount`.
-unsafe extern "C" fn el_child_element_count(
+unsafe fn el_child_element_count(
     _cx: *mut RawJSContext,
     _argc: u32,
     vp: *mut Value,
@@ -2227,7 +2326,7 @@ unsafe extern "C" fn el_child_element_count(
 }
 
 /// `parent.lastElementChild`.
-unsafe extern "C" fn el_last_element_child(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_last_element_child(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
         Some((dom, node)) => {
             // `Children` is a forward-only linked-list walk, not a DoubleEndedIterator — take the
@@ -2256,7 +2355,7 @@ unsafe extern "C" fn el_last_element_child(cx: *mut RawJSContext, _argc: u32, vp
 ///
 /// `nodeValue` is the same value under the `Node` interface's name. Both are read *and* written: a
 /// text update in almost every framework is `textNode.data = newText`, not a node replacement.
-unsafe extern "C" fn el_get_char_data(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_char_data(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp).and_then(|(dom, n)| (*dom).character_data(n).map(str::to_string)) {
         Some(t) => return_string(cx, vp, &t),
         None => *vp = NullValue(),
@@ -2264,7 +2363,7 @@ unsafe extern "C" fn el_get_char_data(cx: *mut RawJSContext, _argc: u32, vp: *mu
     true
 }
 
-unsafe extern "C" fn el_set_char_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_set_char_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         let text = arg_string(cx, vp, argc, 0).unwrap_or_default();
         let old = (*dom).character_data(node).map(str::to_string);
@@ -2313,14 +2412,14 @@ unsafe fn set_from_units(cx: *mut RawJSContext, dom: *mut Dom, node: NodeId, uni
 }
 
 /// `cd.length` — in UTF-16 code units.
-unsafe extern "C" fn el_char_length(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_char_length(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     let n = this_node(vp).and_then(|(d, n)| char_units(d, n)).map(|u| u.len()).unwrap_or(0);
     *vp = Int32Value(n as i32);
     true
 }
 
 /// `cd.substringData(offset, count)`
-unsafe extern "C" fn el_substring_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_substring_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, node)) = this_node(vp) else { *vp = UndefinedValue(); return true };
     let Some(u) = char_units(dom, node) else { *vp = UndefinedValue(); return true };
     let offset = arg_u32(cx, vp, argc, 0).unwrap_or(0) as usize;
@@ -2334,7 +2433,7 @@ unsafe extern "C" fn el_substring_data(cx: *mut RawJSContext, argc: u32, vp: *mu
 }
 
 /// `cd.appendData(data)`
-unsafe extern "C" fn el_append_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_append_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         if let Some(mut u) = char_units(dom, node) {
             let add = arg_string(cx, vp, argc, 0).unwrap_or_default();
@@ -2347,7 +2446,7 @@ unsafe extern "C" fn el_append_data(cx: *mut RawJSContext, argc: u32, vp: *mut V
 }
 
 /// `cd.insertData(offset, data)`
-unsafe extern "C" fn el_insert_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_insert_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, node)) = this_node(vp) else { *vp = UndefinedValue(); return true };
     let Some(u) = char_units(dom, node) else { *vp = UndefinedValue(); return true };
     let offset = arg_u32(cx, vp, argc, 0).unwrap_or(0) as usize;
@@ -2364,7 +2463,7 @@ unsafe extern "C" fn el_insert_data(cx: *mut RawJSContext, argc: u32, vp: *mut V
 }
 
 /// `cd.deleteData(offset, count)`
-unsafe extern "C" fn el_delete_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_delete_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, node)) = this_node(vp) else { *vp = UndefinedValue(); return true };
     let Some(u) = char_units(dom, node) else { *vp = UndefinedValue(); return true };
     let offset = arg_u32(cx, vp, argc, 0).unwrap_or(0) as usize;
@@ -2381,7 +2480,7 @@ unsafe extern "C" fn el_delete_data(cx: *mut RawJSContext, argc: u32, vp: *mut V
 }
 
 /// `cd.replaceData(offset, count, data)` — delete then insert, in one mutation record.
-unsafe extern "C" fn el_replace_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_replace_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, node)) = this_node(vp) else { *vp = UndefinedValue(); return true };
     let Some(u) = char_units(dom, node) else { *vp = UndefinedValue(); return true };
     let offset = arg_u32(cx, vp, argc, 0).unwrap_or(0) as usize;
@@ -2410,7 +2509,7 @@ unsafe extern "C" fn el_replace_data(cx: *mut RawJSContext, argc: u32, vp: *mut 
 ///
 /// Both hand the form's node id to the host (`__formSubmits`), which owns navigation. The JS layer
 /// cannot navigate and should not try: it does not know about tabs, history, or the network stack.
-unsafe extern "C" fn el_form_submit(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_form_submit(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     if let Some((_, node)) = this_node(vp) {
         let id = node.0;
         let _ = eval_in_current_global(
@@ -2424,7 +2523,7 @@ unsafe extern "C" fn el_form_submit(cx: *mut RawJSContext, _argc: u32, vp: *mut 
 
 /// `form.requestSubmit()` — fire `submit` first, then (if not cancelled) submit. The event is
 /// dispatched by the host, which is the only thing that can then act on the result.
-unsafe extern "C" fn el_form_request_submit(
+unsafe fn el_form_request_submit(
     cx: *mut RawJSContext,
     _argc: u32,
     vp: *mut Value,
@@ -2441,7 +2540,7 @@ unsafe extern "C" fn el_form_request_submit(
 }
 
 /// `form.reset()` — clear the form's controls back to their default values.
-unsafe extern "C" fn el_form_reset(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_form_reset(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, form)) = this_node(vp) {
         for n in (*dom).flat_descendants(form) {
             let Some(el) = (*dom).element(n) else { continue };
@@ -2464,7 +2563,7 @@ unsafe extern "C" fn el_form_reset(cx: *mut RawJSContext, _argc: u32, vp: *mut V
 /// It was **undefined**. Every SPA router, every `react-helmet`-shaped library, and every analytics tag
 /// touches it, and `document.title.split(...)` on `undefined` is a `TypeError` that takes the rest of
 /// the bundle with it.
-unsafe extern "C" fn doc_get_title(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn doc_get_title(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     let t = this_node(vp)
         .and_then(|(dom, _)| (*dom).find_first("title").map(|n| (*dom).text_content(n)))
         .unwrap_or_default();
@@ -2472,7 +2571,7 @@ unsafe extern "C" fn doc_get_title(cx: *mut RawJSContext, _argc: u32, vp: *mut V
     true
 }
 
-unsafe extern "C" fn doc_set_title(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn doc_set_title(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, _)) = this_node(vp) {
         let text = arg_string(cx, vp, argc, 0).unwrap_or_default();
         // Reuse the existing `<title>` if there is one; otherwise create it under `<head>`. A router
@@ -2504,13 +2603,13 @@ unsafe extern "C" fn doc_set_title(cx: *mut RawJSContext, argc: u32, vp: *mut Va
 ///
 /// It was `undefined`, and `document.referrer.split('/')` is the single most common thing an analytics
 /// tag does on the first line of its boot. `undefined` there is a `TypeError`; `""` is a fact.
-unsafe extern "C" fn doc_get_referrer(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn doc_get_referrer(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     return_string(cx, vp, "");
     true
 }
 
 /// `document.characterSet` / `.charset` / `.inputEncoding` — we decode to UTF-8, so that is the answer.
-unsafe extern "C" fn doc_get_charset(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn doc_get_charset(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     return_string(cx, vp, "UTF-8");
     true
 }
@@ -2520,13 +2619,13 @@ unsafe extern "C" fn doc_get_charset(cx: *mut RawJSContext, _argc: u32, vp: *mut
 /// The difference is the whole point. `null` is the spec's answer for a module or an async script, so
 /// every library on the web already branches on it (`document.currentScript?.src`). `undefined` is not
 /// an answer to anything, and code that has correctly guarded against `null` still throws on it.
-unsafe extern "C" fn doc_get_current_script(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn doc_get_current_script(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     *vp = NullValue();
     true
 }
 
 /// `element.tagName` getter → the uppercase tag name (read-only, per DOM).
-unsafe extern "C" fn el_get_tag_name(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_tag_name(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
         Some((dom, node)) => match (*dom).tag_name(node) {
             Some(t) => {
@@ -2550,7 +2649,7 @@ unsafe extern "C" fn el_get_tag_name(cx: *mut RawJSContext, _argc: u32, vp: *mut
 /// Named by the framework, in one run of the Framework Exception Miner. No amount of spec-reading
 /// would have picked this out of the DOM standard as *the* load-bearing property; the browser telling
 /// us its own bug is a discovery mechanism nothing else replaces.
-unsafe extern "C" fn el_get_node_type(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_node_type(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     let _ = cx;
     match this_node(vp) {
         Some((dom, node)) => {
@@ -2593,7 +2692,7 @@ unsafe extern "C" fn el_get_node_type(cx: *mut RawJSContext, _argc: u32, vp: *mu
 /// `.firstChild`, `.childNodes` and `.cloneNode(true)` identically. That is precisely the surface the
 /// frameworks use it through — they take `.content.firstChild` and clone *that*; the fragment itself is
 /// never appended.
-unsafe extern "C" fn el_get_template_content(
+unsafe fn el_get_template_content(
     cx: *mut RawJSContext,
     argc: u32,
     vp: *mut Value,
@@ -2640,7 +2739,7 @@ unsafe extern "C" fn el_get_template_content(
 /// *keep the reflector in a JS-side structure so it is GC-reachable through the global.* It was
 /// applied to every node and not to the document. `globalThis.document` is exactly such a reference
 /// and is already rooted — so read it, and let the collector do its job.
-unsafe extern "C" fn el_get_owner_document(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_owner_document(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     rooted!(in(cx) let global = CurrentGlobalOrNull(&wrap_cx(cx)));
     if !global.get().is_null() {
         rooted!(in(cx) let mut doc = UndefinedValue());
@@ -2656,7 +2755,7 @@ unsafe extern "C" fn el_get_owner_document(cx: *mut RawJSContext, _argc: u32, vp
 }
 
 /// `node.nodeName` — uppercase tag for an element, `#text` for text (DOM spec).
-unsafe extern "C" fn el_get_node_name(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_node_name(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
         Some((dom, node)) => match (*dom).tag_name(node) {
             Some(t) => return_string(cx, vp, &t.to_ascii_uppercase()),
@@ -2669,7 +2768,7 @@ unsafe extern "C" fn el_get_node_name(cx: *mut RawJSContext, _argc: u32, vp: *mu
 
 /// `node.nodeValue` — the text of a text node, `null` for an element (DOM spec). Frameworks use this
 /// to read and patch text nodes without touching `textContent`.
-unsafe extern "C" fn el_get_node_value(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_node_value(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
         Some((dom, node)) if (*dom).is_text(node) => {
             let t = (*dom).text_content(node);
@@ -2683,7 +2782,7 @@ unsafe extern "C" fn el_get_node_value(cx: *mut RawJSContext, _argc: u32, vp: *m
 
 /// `element.namespaceURI` — every HTML element is in the HTML namespace. React and Vue branch on this
 /// to decide whether to use `createElement` or `createElementNS` for children.
-unsafe extern "C" fn el_get_namespace_uri(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_namespace_uri(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
         Some((dom, node)) if (*dom).is_element(node) => {
             return_string(cx, vp, "http://www.w3.org/1999/xhtml")
@@ -2697,7 +2796,7 @@ unsafe extern "C" fn el_get_namespace_uri(cx: *mut RawJSContext, _argc: u32, vp:
 /// `__storage(op, area, key, value)` — the single native seam behind `localStorage` /
 /// `sessionStorage`. Ops: `get` `set` `remove` `clear` `keys`. The JS shim above turns this into
 /// the real Storage interface (indexed access, `length`, enumeration).
-unsafe extern "C" fn host_storage(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn host_storage(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let op = arg_string(cx, vp, argc, 0).unwrap_or_default();
     let area_s = arg_string(cx, vp, argc, 1).unwrap_or_default();
     let key = arg_string(cx, vp, argc, 2).unwrap_or_default();
@@ -2831,7 +2930,7 @@ reflect_attr!(el_get_srcset, el_set_srcset, "srcset");
 reflect_attr!(el_get_html_for, el_set_html_for, "for");
 
 /// `__scrollState()` → `[scrollX, scrollY, innerWidth-independent]`. Read by `window.scrollX/Y`.
-unsafe extern "C" fn host_scroll_state(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn host_scroll_state(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     let (x, y) = SCROLL.with(|c| c.get());
     match eval_in_current_global(cx, &format!("[{x},{y}]")) {
         Some(v) => *vp = v,
@@ -2842,7 +2941,7 @@ unsafe extern "C" fn host_scroll_state(cx: *mut RawJSContext, _argc: u32, vp: *m
 
 /// `__scrollTo(x, y)` — a REQUEST. The host owns the viewport, so the page asks and the shell
 /// performs it, exactly as with `window.open`.
-unsafe extern "C" fn host_scroll_to(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn host_scroll_to(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let x = arg_f64(cx, vp, argc, 0).unwrap_or(0.0) as f32;
     let y = arg_f64(cx, vp, argc, 1).unwrap_or(0.0) as f32;
     PENDING_SCROLLS.with(|q| q.borrow_mut().push((x, y)));
@@ -2852,7 +2951,7 @@ unsafe extern "C" fn host_scroll_to(cx: *mut RawJSContext, argc: u32, vp: *mut V
 
 /// `element.scrollIntoView()` — resolve the element's box from the layout snapshot and ask the host
 /// to put it at the top of the viewport.
-unsafe extern "C" fn el_scroll_into_view(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_scroll_into_view(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     if let Some((_, node)) = this_node(vp) {
         if let Some(r) = layout_rect(node) {
             PENDING_SCROLLS.with(|q| q.borrow_mut().push((r[0], r[1])));
@@ -2864,7 +2963,7 @@ unsafe extern "C" fn el_scroll_into_view(cx: *mut RawJSContext, _argc: u32, vp: 
 }
 
 /// `element.focus()` / `.blur()` — a request; the host owns the focus ring and the caret.
-unsafe extern "C" fn el_focus(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_focus(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     if let Some((_, node)) = this_node(vp) {
         PENDING_FOCUS.with(|q| q.borrow_mut().push(Some(node)));
         ACTIVE_ELEMENT.with(|c| c.set(Some(node)));
@@ -2874,7 +2973,7 @@ unsafe extern "C" fn el_focus(cx: *mut RawJSContext, _argc: u32, vp: *mut Value)
     true
 }
 
-unsafe extern "C" fn el_blur(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_blur(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     if this_node(vp).is_some() {
         PENDING_FOCUS.with(|q| q.borrow_mut().push(None));
         ACTIVE_ELEMENT.with(|c| c.set(None));
@@ -2885,7 +2984,7 @@ unsafe extern "C" fn el_blur(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) 
 }
 
 /// `document.activeElement`.
-unsafe extern "C" fn doc_get_active_element(
+unsafe fn doc_get_active_element(
     cx: *mut RawJSContext,
     _argc: u32,
     vp: *mut Value,
@@ -2913,7 +3012,7 @@ unsafe fn arg_f64(cx: *mut RawJSContext, vp: *mut Value, argc: u32, i: u32) -> O
 
 /// `__rect(nodeId)` → `[x, y, w, h]` from the layout snapshot, or `null`. The seam the observers
 /// are built on: an observer's whole job is to answer "where is this box now?".
-unsafe extern "C" fn host_rect(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn host_rect(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let id = arg_f64(cx, vp, argc, 0).unwrap_or(-1.0);
     if id < 0.0 {
         *vp = NullValue();
@@ -2939,7 +3038,7 @@ unsafe extern "C" fn host_rect(cx: *mut RawJSContext, argc: u32, vp: *mut Value)
 /// Backed by the real `url` crate — the same parser the network stack uses. A regex here would
 /// disagree with what actually gets fetched, which is the kind of divergence that becomes a
 /// security bug rather than a rendering one.
-unsafe extern "C" fn host_parse_url(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn host_parse_url(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let href = arg_string(cx, vp, argc, 0).unwrap_or_default();
     let base = arg_string(cx, vp, argc, 1).unwrap_or_default();
     let parsed = if base.is_empty() {
@@ -2975,7 +3074,7 @@ unsafe extern "C" fn host_parse_url(cx: *mut RawJSContext, argc: u32, vp: *mut V
 }
 
 /// `element.matches(sel)` — does this element match the selector?
-unsafe extern "C" fn el_matches(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_matches(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let ok = match (this_node(vp), arg_string(cx, vp, argc, 0)) {
         (Some((dom, node)), Some(sel)) => manuk_css::matches_selector(&*dom, node, &sel),
         _ => false,
@@ -2986,7 +3085,7 @@ unsafe extern "C" fn el_matches(cx: *mut RawJSContext, argc: u32, vp: *mut Value
 
 /// `element.closest(sel)` — this element or the nearest ancestor that matches. The idiom every
 /// event-delegation handler on the web is written with.
-unsafe extern "C" fn el_closest(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_closest(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     match (this_node(vp), arg_string(cx, vp, argc, 0)) {
         (Some((dom, node)), Some(sel)) => {
             let mut cur = Some(node);
@@ -3005,7 +3104,7 @@ unsafe extern "C" fn el_closest(cx: *mut RawJSContext, argc: u32, vp: *mut Value
 }
 
 /// `a.contains(b)` — is `b` `a`, or a descendant of it?
-unsafe extern "C" fn el_contains(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_contains(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let mut ok = false;
     if let Some((dom, node)) = this_node(vp) {
         if argc >= 1 {
@@ -3048,13 +3147,13 @@ unsafe fn lazy_view(cx: *mut RawJSContext, vp: *mut Value, maker: &str) -> bool 
     true
 }
 
-unsafe extern "C" fn el_get_style(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_style(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     lazy_view(cx, vp, "__mkStyle")
 }
-unsafe extern "C" fn el_get_class_list(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_class_list(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     lazy_view(cx, vp, "__mkClassList")
 }
-unsafe extern "C" fn el_get_dataset(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_dataset(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     lazy_view(cx, vp, "__mkDataset")
 }
 
@@ -3155,7 +3254,7 @@ metric!(el_get_offset_height, 3);
 
 /// `document.scrollingElement` — the element whose `scrollTop` scrolls the page. In standards mode
 /// that is `<html>`. A script that scrolls the document reads this first.
-unsafe extern "C" fn doc_get_scrolling_element(
+unsafe fn doc_get_scrolling_element(
     cx: *mut RawJSContext,
     _argc: u32,
     vp: *mut Value,
@@ -3171,7 +3270,7 @@ unsafe extern "C" fn doc_get_scrolling_element(
 }
 
 /// `document.documentElement` → the `<html>` element.
-unsafe extern "C" fn doc_get_document_element(
+unsafe fn doc_get_document_element(
     cx: *mut RawJSContext,
     _argc: u32,
     vp: *mut Value,
@@ -3187,7 +3286,7 @@ unsafe extern "C" fn doc_get_document_element(
 }
 
 /// `document.body` → the `<body>` element.
-unsafe extern "C" fn doc_get_body(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn doc_get_body(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
         Some((dom, _)) => {
             let body = (*dom).find_first("body");
@@ -3199,7 +3298,7 @@ unsafe extern "C" fn doc_get_body(cx: *mut RawJSContext, _argc: u32, vp: *mut Va
 }
 
 /// `document.head` → the `<head>` element.
-unsafe extern "C" fn doc_get_head(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn doc_get_head(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
         Some((dom, _)) => {
             let head = (*dom).find_first("head");
@@ -3211,7 +3310,7 @@ unsafe extern "C" fn doc_get_head(cx: *mut RawJSContext, _argc: u32, vp: *mut Va
 }
 
 /// `document.cookie` — the real jar, minus `HttpOnly` (script must never see those).
-unsafe extern "C" fn doc_get_cookie(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn doc_get_cookie(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     let url = DOC_URL.with(|u| u.borrow().clone());
     return_string(cx, vp, &manuk_net::document_cookie(&url));
     true
@@ -3219,7 +3318,7 @@ unsafe extern "C" fn doc_get_cookie(cx: *mut RawJSContext, _argc: u32, vp: *mut 
 
 /// `document.cookie = "k=v; path=/"` — one assignment into the same jar the network uses, so a
 /// cookie a script writes is a cookie the next request sends.
-unsafe extern "C" fn doc_set_cookie(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn doc_set_cookie(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some(v) = arg_string(cx, vp, argc, 0) {
         let url = DOC_URL.with(|u| u.borrow().clone());
         manuk_net::set_document_cookie(&url, &v);
@@ -3228,7 +3327,7 @@ unsafe extern "C" fn doc_set_cookie(cx: *mut RawJSContext, argc: u32, vp: *mut V
     true
 }
 
-unsafe extern "C" fn el_get_id(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_id(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
         Some((dom, node)) => {
             let id = (*dom).element(node).and_then(|e| e.id()).unwrap_or("");
@@ -3240,7 +3339,7 @@ unsafe extern "C" fn el_get_id(cx: *mut RawJSContext, _argc: u32, vp: *mut Value
 }
 
 /// `element.id = s` setter.
-unsafe extern "C" fn el_set_id(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_set_id(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         let v = arg_string(cx, vp, argc, 0).unwrap_or_default();
         (*dom).set_attr(node, "id", v);
@@ -3250,7 +3349,7 @@ unsafe extern "C" fn el_set_id(cx: *mut RawJSContext, argc: u32, vp: *mut Value)
 }
 
 /// `element.className` getter → the `class` attribute (empty string if absent).
-unsafe extern "C" fn el_get_class_name(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_get_class_name(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
         Some((dom, node)) => {
             let cls = (*dom)
@@ -3265,7 +3364,7 @@ unsafe extern "C" fn el_get_class_name(cx: *mut RawJSContext, _argc: u32, vp: *m
 }
 
 /// `element.className = s` setter.
-unsafe extern "C" fn el_set_class_name(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn el_set_class_name(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         let v = arg_string(cx, vp, argc, 0).unwrap_or_default();
         (*dom).set_attr(node, "class", v);
@@ -3335,7 +3434,7 @@ pub unsafe fn install(
         &mut wrap_cx(cx),
         global.handle(),
         c"__hostLog".as_ptr(),
-        Some(host_log),
+        host_fn!(host_log),
         2,
         0,
     );
@@ -3343,7 +3442,7 @@ pub unsafe fn install(
         &mut wrap_cx(cx),
         global.handle(),
         c"__storage".as_ptr(),
-        Some(host_storage),
+        host_fn!(host_storage),
         4,
         0,
     );
@@ -3351,7 +3450,7 @@ pub unsafe fn install(
         &mut wrap_cx(cx),
         global.handle(),
         c"__scrollState".as_ptr(),
-        Some(host_scroll_state),
+        host_fn!(host_scroll_state),
         0,
         0,
     );
@@ -3359,7 +3458,7 @@ pub unsafe fn install(
         &mut wrap_cx(cx),
         global.handle(),
         c"__scrollTo".as_ptr(),
-        Some(host_scroll_to),
+        host_fn!(host_scroll_to),
         2,
         0,
     );
@@ -3367,7 +3466,7 @@ pub unsafe fn install(
         &mut wrap_cx(cx),
         global.handle(),
         c"__rect".as_ptr(),
-        Some(host_rect),
+        host_fn!(host_rect),
         1,
         0,
     );
@@ -3375,7 +3474,7 @@ pub unsafe fn install(
         &mut wrap_cx(cx),
         global.handle(),
         c"__urlParse".as_ptr(),
-        Some(host_parse_url),
+        host_fn!(host_parse_url),
         2,
         0,
     );
@@ -3383,7 +3482,7 @@ pub unsafe fn install(
         &mut wrap_cx(cx),
         global.handle(),
         c"getComputedStyle".as_ptr(),
-        Some(window_get_computed_style),
+        host_fn!(window_get_computed_style),
         1,
         0,
     );
@@ -3391,7 +3490,7 @@ pub unsafe fn install(
         &mut wrap_cx(cx),
         global.handle(),
         c"__windowOpen".as_ptr(),
-        Some(window_open),
+        host_fn!(window_open),
         1,
         0,
     );
@@ -3399,7 +3498,7 @@ pub unsafe fn install(
         &mut wrap_cx(cx),
         global.handle(),
         c"__historyPush".as_ptr(),
-        Some(history_push),
+        host_fn!(history_push),
         3,
         0,
     );
@@ -3407,7 +3506,7 @@ pub unsafe fn install(
         &mut wrap_cx(cx),
         global.handle(),
         c"__postMessage".as_ptr(),
-        Some(post_message),
+        host_fn!(post_message),
         4,
         0,
     );
@@ -5315,7 +5414,7 @@ const WINDOW_PRELUDE: &str = r#"
 /// `__hostLog(level, message)` — native sink behind the `console.*` shim; routes page
 /// logs to `tracing` (stderr) so they surface instead of vanishing, and so a page that
 /// calls `console.log` neither throws nor is silently dropped.
-unsafe extern "C" fn host_log(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn host_log(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let level = arg_string(cx, vp, argc, 0).unwrap_or_else(|| "log".to_string());
     let msg = arg_string(cx, vp, argc, 1).unwrap_or_default();
     match level.as_str() {
@@ -5379,7 +5478,7 @@ pub fn take_pending_messages() -> Vec<(u64, String, String, u64)> {
 /// `window.open(url, ...)` — allocate a window id, record `(win_id, url)` for the host to open
 /// as a new tab/window, and return a window **handle** carrying that id (so `w = window.open()`,
 /// `w.postMessage(...)`, `w.closed`, `w.close()` all work and route to the opened window).
-unsafe extern "C" fn window_open(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn window_open(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let url = arg_string(cx, vp, argc, 0).unwrap_or_default();
     let win = next_window_id();
     if !url.is_empty() {
@@ -5394,7 +5493,7 @@ unsafe extern "C" fn window_open(cx: *mut RawJSContext, argc: u32, vp: *mut Valu
 
 /// `__postMessage(targetWin, json, origin, sourceWin)` — queue a cross-window message for the
 /// host to route to the target window's document (which fires a `message` MessageEvent).
-unsafe extern "C" fn post_message(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn post_message(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let target: u64 = arg_string(cx, vp, argc, 0)
         .and_then(|s| s.parse().ok())
         .unwrap_or(0);
@@ -5426,7 +5525,7 @@ pub fn take_pending_history() -> Vec<(u8, String, String)> {
 
 /// `__historyPush(kind, stateJson, url)` — record a `history` op for the host. `kind` arrives
 /// as a stringified small integer (see [`PENDING_HISTORY`]).
-unsafe extern "C" fn history_push(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+unsafe fn history_push(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let kind: u8 = arg_string(cx, vp, argc, 0)
         .and_then(|s| s.parse().ok())
         .unwrap_or(0);

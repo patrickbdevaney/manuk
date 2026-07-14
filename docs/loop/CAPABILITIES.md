@@ -163,3 +163,11 @@ throws on line one.
 | **A handle from another document is inert, not fatal** | ✅ (tick 46) — was a **SIGSEGV**: a stale `NodeId` indexed past the end of a smaller arena, inside an `extern "C"` native where a panic **cannot unwind** |
 | **WPT `dom/` Bar 0** | ✅ **0 hangs, 0 crashes** (was 1 hang + 1 crash + 4 phantom) |
 | **`catch_unwind` at the JSNative boundary** | ❌ **OPEN Bar 0** — a panic anywhere in a native still aborts the process. The known source is fixed and the arena hardened, but this is the real containment and it is not yet there. |
+
+## Tick 47 — Bar 0 containment at the JS boundary
+
+| Capability | Status |
+|---|---|
+| **A panic in any page-callable JS native kills the CALL, not the browser** | ✅ (tick 47) — 112 natives (57 methods + 45 accessors + 10 host fns). Was: **SIGSEGV, every tab.** |
+| **The panic is LOGGED, not swallowed** | ✅ — `error!` with the native's name |
+| **SpiderMonkey engine callbacks** (module hooks, rejection tracker) | ⚠️ **residual, named** — not page-callable; different signatures |

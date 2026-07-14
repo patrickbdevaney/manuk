@@ -477,3 +477,13 @@ forty ticks.
 reuses one process for many documents has this bug until it proves otherwise, and **it is invisible to
 single-page testing**: the failing file passes alone, and passes in a 120-file batch; it dies only when it
 runs *after other documents*.
+
+## Tick 47 — Bar 0 containment at the JS boundary
+
+| Pattern | Reach | Status |
+|---|---|---|
+| **A page that makes any DOM call hit an internal bug** | **every page, every DOM method** | ✅ (tick 47) — a panic in any of the **112 page-callable natives** used to be a **SIGSEGV that killed every tab**. It is now caught at the FFI edge, **logged loudly**, and the page carries on. |
+| **SpiderMonkey engine callbacks** (module hooks, rejection tracker) | not page-callable | ⚠️ residual, named |
+
+**This is not a class of *site* — it is Bar 0's founding promise finally being true of the JS boundary:
+a bad page kills the PAGE, not the browser.** Every DOM method written from here on is born contained.

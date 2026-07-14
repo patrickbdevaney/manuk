@@ -2488,3 +2488,59 @@ indexing. **The new gate found four more of those the moment it existed.**
 **The open Bar 0 residual, stated rather than discovered later:** *a panic anywhere inside a JSNative still
 aborts the process.* We removed the known source and hardened the arena, but **`catch_unwind` at the native
 boundary is the real containment**, and it is not yet there.
+
+## Tick 47 — a panic in a JS native killed the browser. Containing the CLASS, not the instance. (2026-07-13)
+
+**TICK SHAPE: infrastructure** — it multiplies every future tick: every DOM method written from here on is
+born contained.
+
+**Hypothesis:** tick 46 fixed *one* index that panicked inside a native. **That was prevention of an
+INSTANCE.** The class is still open, and it is Bar 0: **every DOM method is an `extern "C"` function, and
+`extern "C"` is `nounwind` — so ANY Rust panic inside ANY of them is *"panic in a function that cannot
+unwind"* → SIGSEGV.** The whole browser, and every tab the user had open, because one page hit one bad
+index.
+
+**RESULT: contained — and the first attempt silently did not work, which is the whole lesson.**
+
+> **Wrapping an `extern "C"` function in `catch_unwind` FROM THE OUTSIDE does nothing at all.** The panic
+> aborts at *that function's own* `nounwind` boundary, **before any outer `catch_unwind` is ever reached.**
+> I wrapped all 67 natives, the build was clean, and **the gate still died with `panic in a function that
+> cannot unwind`.**
+
+**The catch has to be INSIDE the `extern "C"` frame.** So every native is now a plain Rust `unsafe fn`, and
+the **generated trampoline is the only `extern "C"` frame** — which is where `guard_native` sits. A panic
+becomes:
+
+- **loud** — logged at `error!` with the native's name. *A crash you made survivable and INVISIBLE becomes a
+  permanent, unexplained "this site just doesn't work"* — the silent-failure bug this project has already
+  paid for three times.
+- **`undefined`** — the call returns, the page keeps running, the tab survives.
+- **`true`, not `false`** — `false` tells SpiderMonkey *an exception is pending*, and there isn't one. *That
+  would trade a segfault for an assertion failure.*
+
+**Coverage: every page-callable native.** 57 methods (`def`) + 45 accessors (`prop`, incl. `textContent` —
+which a **multi-line call site had hidden from the first regex**) + 10 host natives registered directly with
+`JS_DefineFunction` (console, storage, scroll, `getComputedStyle`, `window.open`, history, `postMessage`).
+*A partial containment boundary is a FALSE guarantee, so the audit was mechanical: grep for every remaining
+`extern "C"` and account for it.*
+
+**The residual, stated rather than discovered later:** three **SpiderMonkey engine callbacks**
+(`module_metadata_hook`, `module_resolve_hook`, `promise_rejection_tracker`) are still bare. They are **not
+page-callable** and have different signatures. *Named, so nobody has to rediscover them.*
+
+**G_CONTAIN_NATIVE proves it rather than asserting it:** a native panics **on purpose** (registered only
+under `MANUK_PANIC_PROBE`, so it has no production surface), and the gate asserts the page **keeps running
+afterwards** — creates an element, appends it, queries it. **Falsified by removing the `catch_unwind`: the
+test binary does not fail politely, it ABORTS.** *Which is exactly the Bar 0 failure the boundary exists to
+prevent.*
+
+**MEASURED — the ratchet turned, nothing else moved:**
+
+| | before | after |
+|---|---|---|
+| page-callable natives that can kill the browser | **112** | **0** |
+| `dom/` WPT subtests | 1548/6287 | **1548/6287** (unchanged) |
+| `dom/` Bar 0 | 0 | **0** |
+
+*Bar 0's founding promise — **a bad page kills the PAGE, not the browser** — is now true of the JS boundary,
+and not merely of the Rust one.*

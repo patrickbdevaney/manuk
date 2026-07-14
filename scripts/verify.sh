@@ -104,6 +104,18 @@ head_ "G_GLOBALS · a missing constructor is a THROWN EXCEPTION, not a missing f
 GG=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_globals 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GG" ]; then ok "globals: $GG"; else bad "G_GLOBALS failed — a global a real bundle references is missing, or one of them is LYING"; fi
 
+head_ "G_CONTAIN_NATIVE · a panic in a JS native must kill the CALL, not the browser (Bar 0)"
+# Every DOM method is an `extern "C"` function, and `extern "C"` is NOUNWIND. A Rust panic inside one is
+# "panic in a function that cannot unwind" -> SIGSEGV, core dumped: the whole browser, and every tab the
+# user had open, because one page hit one bad index. Tick 46 found this for real via WPT.
+#
+# THE TRAP, and it is the whole lesson: wrapping an `extern "C"` fn in catch_unwind from the OUTSIDE does
+# NOTHING — the panic aborts at that function's own nounwind boundary before any outer catch is reached.
+# The catch must be INSIDE the extern "C" frame. So every native is a plain Rust fn and the generated
+# trampoline is the only extern "C" frame.
+GCN=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_contain_native 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GCN" ]; then ok "native containment: $GCN"; else bad "G_CONTAIN_NATIVE failed — a panic in a JS native is NOT contained, and it takes the whole browser with it"; fi
+
 head_ "G_STALE_NODE · a foreign handle must be INERT, not FATAL (Bar 0)"
 # A JS reflector stores its node as a bare integer, and the arena it indexes is NOT necessarily the arena
 # it came from: one process loads many documents and CURRENT_DOM is swapped on every re-entry. A handle
