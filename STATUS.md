@@ -8,10 +8,10 @@
 > filesystem, git, the crawl output or the verify receipt.
 
 ```
-TICK:              63
+TICK:              64
 LAST_AUDIT_TICK:   61          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
-LAST_WALL_TIME:    33s
+LAST_WALL_TIME:    255s
 ORACLE_CORPUS:     265 sites
 ORACLE_CRAWLED:    265 sites, 640 clusters  → docs/loop/CLUSTERS.md
 ORACLE_HANGS:      4   ← Bar 0, on OUR clock (manuk_ms > 30s). Outranks every visual cluster.
@@ -375,6 +375,7 @@ loud rather than quietly following the pull.
 | **G_DEDUP** | ✅ **live** | the same URL on the **wire** twice for one navigation (nytimes was pulling one sprite down once per element that named it) |
 | **G_HANG** | ✅ **live, and now honest** | Every oracle site runs in its own process under a watchdog. The watchdog is a **backstop against a true infinite loop** — it wraps our render *and Chromium's*, so when it fires it is recorded as `TIMEOUT` and **attributed to nobody**. The Bar 0 hang count comes from `manuk_ms`. A metric that cannot say whose time it measured must not name a culprit. |
 | **G_CONTAIN** | ✅ **live** | Bar 0 — a panic kills the page, not the process (Part 23.2) |
+| **G_PROTOTYPE** | ✅ **live** | DOM methods live on **prototypes**, not on every element. Patching `Element.prototype.setAttribute` now actually takes effect — it used to be a **silent no-op**, which is how every error tracker, ad-blocker and polyfill hooks the DOM. Also: `createElement` ×5,000 went **124ms → 2ms**, and own-properties per element **116 → 1**. |
 | **G_CLEAN_EXIT** | ✅ **live** | Bar 0 — a process that ran JavaScript **exits 0**, without being told to shut down. Closes the exit-segfault residual this project carried for 60 ticks: SpiderMonkey needs `JS_ShutDown()` before the process ends, and the only thing providing it was every caller *remembering* to. Half of them did. |
 | **G_RUNTIME_COUNT** | ✅ **live** | one async runtime for the process, not one per action (Part 25.2). The shell was building **two**. |
 | **G_SPAWN / G_POOL_ISOLATION** | ⏹ **retired, with a reason** | G_SPAWN is subsumed by G_RUNTIME_COUNT; G_POOL_ISOLATION guards a rayon pool that **does not exist**. A gate on absent machinery passes forever and is counted as coverage — which is the definition of vacuous. Saying so beats building theatre to make an audit green. |

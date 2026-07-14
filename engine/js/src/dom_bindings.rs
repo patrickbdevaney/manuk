@@ -50,8 +50,8 @@ use mozjs::jsval::{
 use mozjs::rooted;
 use mozjs::rust::wrappers2::{
     CurrentGlobalOrNull, JS_DefineFunction, JS_DefineProperty, JS_DefineProperty1, JS_GetElement,
-    JS_GetProperty, JS_NewGlobalObject, JS_NewObject, JS_SetElement, JS_SetElement1,
-    JS_SetProperty, NewArrayObject1,
+    JS_GetProperty, JS_NewGlobalObject, JS_NewObject, JS_NewObjectWithGivenProto, JS_SetElement,
+    JS_SetElement1, JS_SetProperty, NewArrayObject1,
 };
 use mozjs::rust::{
     evaluate_script, CompileOptionsWrapper, RealmOptions, Runtime, SIMPLE_GLOBAL_CLASS,
@@ -597,20 +597,198 @@ unsafe fn return_node_or_null(
 
 /// Create a DOM reflector for `(dom, node)` and install its element methods. The
 /// returned pointer is written straight to a GC-rooted `vp[0]` by callers, with no
+/// Which DOM interface a member belongs to.
+///
+/// The spec puts every DOM method on a **prototype**, not on the object — `setAttribute` lives on
+/// `Element.prototype`, `appendChild` on `Node.prototype`, `addEventListener` on
+/// `EventTarget.prototype` — and an element merely *inherits* them. This engine used to define all
+/// **116 of them as own-properties of every single element**, which is wrong in three separate ways at
+/// once:
+///
+/// 1. **`Element.prototype.setAttribute` was `undefined`.** Half the web reaches for it: polyfills,
+///    error trackers, ad-blockers, framework internals, React DevTools, and every library that
+///    feature-detects with `'matches' in Element.prototype`.
+/// 2. **Patching a prototype silently did nothing.** `Element.prototype.setAttribute = wrapper` is *the*
+///    way instrumentation hooks the DOM — and the element's own property shadowed it, so the wrapper
+///    was never called, and nothing threw. **A silent no-op is the worst possible failure**: the library
+///    believes it is installed.
+/// 3. **It was slow, and it was slow per element.** 116 `JS_DefineProperty` calls on every reflector.
+///
+/// So the members are now defined **once per global**, on real prototype objects, in a real chain.
+#[derive(Clone, Copy, PartialEq)]
+enum Tier {
+    /// `EventTarget.prototype` — the root of the DOM chain, exactly as in the spec.
+    EventTarget,
+    /// `Node.prototype`, and everything an element inherits from it.
+    Node,
+    /// `Document.prototype`.
+    Document,
+}
+
+/// Build (once per global) the DOM prototype chain, and hand back its three links.
+///
+/// `EventTarget.prototype` → `Node.prototype` → `Document.prototype`, with every element reflector's
+/// `[[Prototype]]` set to `Node.prototype`.
+///
+/// The prototypes are themselves [`NODE_CLASS`] objects, and that is deliberate: their reserved slots
+/// are left `undefined`, so [`node_and_dom`] sees a non-int32 slot and returns `None`. Calling
+/// `Element.prototype.tagName` with `this` *being the prototype* therefore yields `undefined` instead
+/// of reading reserved slots off an object that has none — which is undefined behaviour, and in release
+/// is a garbage pointer dereference.
+/// Returns `(instance prototype, Document.prototype)` — the instance prototype being
+/// `HTMLElement.prototype`, the deepest link of the chain.
+unsafe fn dom_protos(cx: *mut RawJSContext) -> Option<(*mut JSObject, *mut JSObject)> {
+    let global = CurrentGlobalOrNull(&wrap_cx(cx));
+    if global.is_null() {
+        return None;
+    }
+    rooted!(in(cx) let g = global);
+
+    // Already built? The chain is reachable from the global, so it is GC-safe and survives.
+    rooted!(in(cx) let mut cached = UndefinedValue());
+    if JS_GetProperty(
+        &mut wrap_cx(cx),
+        g.handle(),
+        c"__protoHTMLElement".as_ptr(),
+        cached.handle_mut(),
+    ) && cached.is_object()
+    {
+        rooted!(in(cx) let mut dv = UndefinedValue());
+        if JS_GetProperty(
+            &mut wrap_cx(cx),
+            g.handle(),
+            c"__protoDocument".as_ptr(),
+            dv.handle_mut(),
+        ) && dv.is_object()
+        {
+            return Some((cached.to_object(), dv.to_object()));
+        }
+    }
+
+    // EventTarget.prototype — the root. Its [[Prototype]] is Object.prototype, as the spec says.
+    rooted!(in(cx) let et = JS_NewObject(&mut wrap_cx(cx), &NODE_CLASS));
+    if et.get().is_null() {
+        return None;
+    }
+    define_members(cx, &et, Tier::EventTarget);
+
+    // Node.prototype → EventTarget.prototype. Every member lives here.
+    rooted!(in(cx) let node = JS_NewObjectWithGivenProto(&mut wrap_cx(cx), &NODE_CLASS, et.handle()));
+    if node.get().is_null() {
+        return None;
+    }
+    define_members(cx, &node, Tier::Node);
+
+    // `Element.prototype` and `HTMLElement.prototype` are real links in the chain, and **empty**.
+    //
+    // They are empty because this engine's member list does not yet distinguish "a Node method" from
+    // "an Element method" — `appendChild` and `setAttribute` sit in one list — and inventing that split
+    // by guesswork would be worse than saying so. What matters is that they are *in the chain*:
+    //
+    //   instance → HTMLElement.prototype → Element.prototype → Node.prototype → EventTarget.prototype
+    //
+    // so `Element.prototype.setAttribute` **resolves** (property lookup walks the chain), and — the
+    // point of the whole exercise — `Element.prototype.setAttribute = wrapper` installs an own property
+    // *between the instance and the real method*, so the wrapper is actually called. That is how every
+    // error tracker, ad-blocker, polyfill and devtool in the world hooks the DOM.
+    //
+    // The honest limit: `Element.prototype.hasOwnProperty('setAttribute')` is `false` where the spec
+    // says `true`. Tiering the member list properly is its own tick.
+    rooted!(in(cx) let el = JS_NewObjectWithGivenProto(&mut wrap_cx(cx), &NODE_CLASS, node.handle()));
+    rooted!(in(cx) let html_el = JS_NewObjectWithGivenProto(&mut wrap_cx(cx), &NODE_CLASS, el.handle()));
+    if el.get().is_null() || html_el.get().is_null() {
+        return None;
+    }
+
+    // Document.prototype → Node.prototype. A document IS a node, so it inherits the whole tree API and
+    // `addEventListener` for free — which is exactly why the chain is worth having.
+    rooted!(in(cx) let doc = JS_NewObjectWithGivenProto(&mut wrap_cx(cx), &NODE_CLASS, node.handle()));
+    if doc.get().is_null() {
+        return None;
+    }
+    define_members(cx, &doc, Tier::Document);
+
+    for (name, obj) in [
+        (c"__protoEventTarget", et.handle()),
+        (c"__protoNode", node.handle()),
+        (c"__protoElement", el.handle()),
+        (c"__protoHTMLElement", html_el.handle()),
+        (c"__protoDocument", doc.handle()),
+    ] {
+        rooted!(in(cx) let v = ObjectValue(obj.get()));
+        JS_SetProperty(&mut wrap_cx(cx), g.handle(), name.as_ptr(), v.handle());
+    }
+
+    Some((html_el.get(), doc.get()))
+}
+
+/// The per-global reflector identity map, as a **real object** rather than a string of JavaScript.
+///
+/// `a.firstChild === b` must hold, so there is one wrapper per node, cached. That cache was previously
+/// read and written by `eval`ing a formatted source string — **two full JS compiles per node**. On a
+/// page that touches 5,000 elements that is 10,000 compiles, and it was the dominant cost of
+/// `createElement` (124ms for 5,000 divs). It is a plain object and two property accesses.
+unsafe fn node_cache(cx: *mut RawJSContext) -> Option<*mut JSObject> {
+    let global = CurrentGlobalOrNull(&wrap_cx(cx));
+    if global.is_null() {
+        return None;
+    }
+    rooted!(in(cx) let g = global);
+    rooted!(in(cx) let mut v = UndefinedValue());
+    if JS_GetProperty(
+        &mut wrap_cx(cx),
+        g.handle(),
+        c"__nodes".as_ptr(),
+        v.handle_mut(),
+    ) && v.is_object()
+    {
+        return Some(v.to_object());
+    }
+    rooted!(in(cx) let map = JS_NewObject(&mut wrap_cx(cx), std::ptr::null()));
+    if map.get().is_null() {
+        return None;
+    }
+    rooted!(in(cx) let mv = ObjectValue(map.get()));
+    JS_SetProperty(
+        &mut wrap_cx(cx),
+        g.handle(),
+        c"__nodes".as_ptr(),
+        mv.handle(),
+    );
+    Some(map.get())
+}
+
 /// intervening allocation.
 unsafe fn new_reflector(cx: *mut RawJSContext, dom: *mut Dom, node: NodeId) -> *mut JSObject {
     let id = node.0;
-    // Identity cache: one wrapper per node, so `a.firstChild === b`, `event.target === el`
-    // and the like hold (real sites rely on node identity). The cache is a JS-side
-    // `__nodes` map, so its entries are GC-reachable through the global.
-    if let Some(v) =
-        eval_in_current_global(cx, &format!("(globalThis.__nodes&&__nodes[{id}])||null"))
-    {
-        if v.is_object() {
+    // Identity cache: one wrapper per node, so `a.firstChild === b`, `event.target === el` and the like
+    // hold (real sites rely on node identity). The cache is a JS-side `__nodes` map, so its entries are
+    // GC-reachable through the global — and it is read with a **property get**, not by compiling a
+    // formatted string of JavaScript, which is what this used to do, once per node, twice.
+    // ROOT THE CACHE IMMEDIATELY. A raw `*mut JSObject` held across ANY allocation is a dangling
+    // pointer waiting to happen: `dom_protos` below defines ~116 properties the first time it runs, any
+    // one of which can trigger a **moving** GC. The first version of this held `cache` unrooted across
+    // that call and segfaulted on the very first page — a bug that Rust's type system cannot see,
+    // because to it a `*mut JSObject` is just a number.
+    rooted!(in(cx) let cache = node_cache(cx).unwrap_or(ptr::null_mut()));
+    if !cache.get().is_null() {
+        rooted!(in(cx) let mut v = UndefinedValue());
+        if JS_GetElement(&mut wrap_cx(cx), cache.handle(), id as u32, v.handle_mut())
+            && v.is_object()
+        {
             return v.to_object();
         }
     }
-    let obj_ptr = JS_NewObject(&mut wrap_cx(cx), &NODE_CLASS);
+
+    // Every element reflector inherits from `Node.prototype` and carries **no own members at all**.
+    // See [`Tier`] for why that is a correctness fix and not merely a diet.
+    let obj_ptr = match dom_protos(cx) {
+        Some((node_proto, _)) => {
+            rooted!(in(cx) let proto = node_proto);
+            JS_NewObjectWithGivenProto(&mut wrap_cx(cx), &NODE_CLASS, proto.handle())
+        }
+        None => JS_NewObject(&mut wrap_cx(cx), &NODE_CLASS),
+    };
     rooted!(in(cx) let obj = obj_ptr);
     let node_val = Int32Value(node.0 as i32);
     JS_SetReservedSlot(obj.get(), SLOT_NODE, &node_val);
@@ -632,24 +810,21 @@ unsafe fn new_reflector(cx: *mut RawJSContext, dom: *mut Dom, node: NodeId) -> *
     // (`doc.body` is `undefined`). That is worth shipping anyway, because the alternative is a
     // **TypeError on the call**, which takes the whole sanitizer down with it; and it is worth saying
     // out loud, because a half-working document that pretended otherwise would be the worse bug.
-    define_members(cx, &obj, false);
+    // NO `define_members` here. The members live on `Node.prototype`, defined once per global.
     // Store in the identity cache.
     let global = CurrentGlobalOrNull(&wrap_cx(cx));
     if !global.is_null() {
         rooted!(in(cx) let g = global);
         rooted!(in(cx) let ov = ObjectValue(obj.get()));
+        if !cache.get().is_null() {
+            JS_SetElement(&mut wrap_cx(cx), cache.handle(), id as u32, ov.handle());
+        }
+        rooted!(in(cx) let idv = Int32Value(id as i32));
         JS_SetProperty(
             &mut wrap_cx(cx),
-            g.handle(),
-            c"__pending_node".as_ptr(),
-            ov.handle(),
-        );
-        let _ = eval_in_current_global(
-            cx,
-            &format!(
-                "(globalThis.__nodes||(globalThis.__nodes={{}}))[{id}]=__pending_node;\
-                 __pending_node.__nodeId={id}"
-            ),
+            obj.handle(),
+            c"__nodeId".as_ptr(),
+            idv.handle(),
         );
         // **A `<video>` or `<audio>` gets the HTMLMediaElement surface — an honest NO.**
         //
@@ -730,8 +905,9 @@ unsafe fn record_mutation(
 unsafe fn define_members(
     cx: *mut RawJSContext,
     obj: &mozjs::rust::RootedGuard<'_, *mut JSObject>,
-    is_document: bool,
+    tier: Tier,
 ) {
+    let is_document = tier == Tier::Document;
     let def = |name: &std::ffi::CStr,
                f: unsafe extern "C" fn(*mut RawJSContext, u32, *mut Value) -> bool,
                n: u32| {
@@ -751,6 +927,20 @@ unsafe fn define_members(
                 JSPROP_ENUMERATE as u32,
             );
         };
+    // ── `EventTarget.prototype`. The root of the DOM chain.
+    //
+    // These three used to be defined TWICE — once in the document branch, once in the element branch —
+    // as own-properties of every object. Now they are defined once, at the tier the spec puts them at,
+    // and `document`, every element, every text node and every future `EventTarget` subclass inherit
+    // them through the chain. This is what makes `EventTarget.prototype.addEventListener` exist, and
+    // what makes patching it actually take effect.
+    if tier == Tier::EventTarget {
+        def_guarded!(def, c"addEventListener", el_add_event_listener, 2);
+        def_guarded!(def, c"removeEventListener", el_remove_event_listener, 2);
+        def_guarded!(def, c"dispatchEvent", el_dispatch_event, 1);
+        return;
+    }
+
     if is_document {
         // The document's landmark elements. `document.documentElement` in particular is how the
         // web bootstraps itself: MediaWiki swaps `client-nojs` → `client-js` on it, and that class
@@ -793,9 +983,6 @@ unsafe fn define_members(
         def_guarded!(def, c"getElementsByTagName", el_get_by_tag, 1);
         def_guarded!(def, c"getElementsByClassName", el_get_by_class, 1);
         // Document-level (delegated) events.
-        def_guarded!(def, c"addEventListener", el_add_event_listener, 2);
-        def_guarded!(def, c"removeEventListener", el_remove_event_listener, 2);
-        def_guarded!(def, c"dispatchEvent", el_dispatch_event, 1);
         def_guarded!(def, c"__createHTMLDocument", doc_create_html_document, 1);
         // Test-only: proves the containment boundary is real. Not registered otherwise.
         if std::env::var_os("MANUK_PANIC_PROBE").is_some() {
@@ -860,9 +1047,6 @@ unsafe fn define_members(
         def_guarded!(def, c"getElementsByClassName", el_get_by_class, 1);
         def_guarded!(def, c"querySelector", doc_query, 1);
         def_guarded!(def, c"querySelectorAll", doc_query_all, 1);
-        def_guarded!(def, c"addEventListener", el_add_event_listener, 2);
-        def_guarded!(def, c"removeEventListener", el_remove_event_listener, 2);
-        def_guarded!(def, c"dispatchEvent", el_dispatch_event, 1);
         def_guarded!(def, c"getBoundingClientRect", el_get_bounding_rect, 0);
         // DOM tree mutation + cloning.
         def_guarded!(def, c"insertBefore", el_insert_before, 2);
@@ -3671,13 +3855,20 @@ pub unsafe fn install(
     DOC_URL.with(|u| *u.borrow_mut() = doc_url.to_string());
     set_current_dom(dom);
     let root = (*dom).root();
-    let doc_ptr = JS_NewObject(&mut wrap_cx(cx), &NODE_CLASS);
+    // `document` inherits `Document.prototype` → `Node.prototype` → `EventTarget.prototype`, so it gets
+    // the whole tree API and `addEventListener` through the chain rather than by being handed 116 copies.
+    let doc_ptr = match dom_protos(cx) {
+        Some((_, doc_proto)) => {
+            rooted!(in(cx) let proto = doc_proto);
+            JS_NewObjectWithGivenProto(&mut wrap_cx(cx), &NODE_CLASS, proto.handle())
+        }
+        None => JS_NewObject(&mut wrap_cx(cx), &NODE_CLASS),
+    };
     rooted!(in(cx) let document = doc_ptr);
     let node_val = Int32Value(root.0 as i32);
     JS_SetReservedSlot(document.get(), SLOT_NODE, &node_val);
     let dom_val = PrivateValue(dom as *const std::ffi::c_void);
     JS_SetReservedSlot(document.get(), SLOT_DOM, &dom_val);
-    define_members(cx, &document, true);
 
     rooted!(in(cx) let doc_val = ObjectValue(document.get()));
     JS_DefineProperty(

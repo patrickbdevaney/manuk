@@ -3054,6 +3054,68 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 64 — the DOM methods were on the wrong objects, and it cost 60× and every prototype patch
+
+**TICK SHAPE: capability** — and a performance step-function that fell out of the same fix.
+
+**The ledger sent me at React, and React was fine.** `WEB-PATTERNS.md` said *"React committing its render
+— ❌ still silent. Mounts, schedules, throws nothing, renders nothing."* Probe first, per the rule: I ran
+the real Vite/React bundle through the engine before touching a line. **It renders.** `#root` gets its 6
+children, the app's own text (*"Count is 0"*), 59 elements, **zero errors**. That `❌` was never measured;
+it was inherited. Fifth recurrence of PROCESS #35 — *an absent measurement is not a negative measurement*.
+
+**But the probe found the real gap next door, and it was bigger.**
+
+`typeof Element.prototype.addEventListener` → **`undefined`**. Every DOM method was defined as an
+**own-property of every element** — 116 of them, one `JS_DefineProperty` per node. Which means:
+
+1. **`Element.prototype.setAttribute` was `undefined`.** So was `Node.prototype.appendChild`.
+   `EventTarget` did not exist at all — a bare `ReferenceError`.
+2. **Patching a prototype silently did nothing.** `Element.prototype.setAttribute = wrapper` — *the* way
+   Sentry, ad-blockers, polyfills, framework internals and React DevTools hook the DOM — succeeded, threw
+   nothing, and was **never called**, because the element's own property shadowed it. **The library
+   believes it is installed and it is not.** A loud failure gets fixed; a silent one ships.
+3. **It was slow, per element.** 116 defines *plus two full JS compiles* per node (the identity cache was
+   read and written by `eval`ing a formatted string). **5,000 `createElement`s took 124ms.**
+
+**The fix.** A real chain, built once per global:
+
+```
+element  → HTMLElement.prototype → Element.prototype → Node.prototype → EventTarget.prototype
+document → Document.prototype    → Node.prototype    → EventTarget.prototype
+```
+
+Members defined **once**. Identity cache is a real object read with `JS_GetElement`, not a compile.
+
+| | before | after |
+|---|---|---|
+| `createElement` × 5,000 (release) | **124ms** | **2ms** (~60×) |
+| own properties per element | **116** | **1** |
+| `Element.prototype.setAttribute` | `undefined` | function |
+| patching it | **silently ignored** | actually runs |
+| `EventTarget` | `ReferenceError` | exists, and elements are instances |
+
+**Two traps, both of which bit.**
+
+*The GC one:* I cached the `__nodes` object as a raw `*mut JSObject`, then called `dom_protos()` — which
+defines 116 properties, any one of which can trigger a **moving** GC. Segfault on the first page. Rust
+cannot see this: to it a `*mut JSObject` is a number. **Root immediately, always.**
+
+*The silent one:* removing the old `bridge()` shim left an orphaned `try {` in a 71KB embedded JS blob. A
+syntax error there does not throw — it **fails to install the entire JS environment**, and every page
+then renders as static HTML with no error at all. `js_conformance` caught it, which is the wall doing
+precisely its job.
+
+**Honesty about WPT.** `dom/nodes` reads 26.9% against a recorded 22.4%, and it was tempting to bank that
+here. So I A/B'd it on the same tree, with the change mutated out: **1736/6418 — identical, to the
+subtest.** This work moved WPT **not at all**; the baseline had simply gone stale, and a stale baseline
+will happily hand you a win you did not earn. **A number you cannot attribute is not a result.**
+
+**The ratchet.** Capability: **up** (prototype patching, `EventTarget`, the interface surface). Performance:
+**up, 60×** on DOM node creation — every React/Vue/Angular render pays that cost on every commit.
+Instrument fidelity: **up** — `G_PROTOTYPE`, proven to go red when the members go back on the instance;
+and one false `❌` removed from the capability ledger.
+
 ## Tick 63 — the release cadence was green, and shipping nothing
 
 **TICK SHAPE: instrument** — no engine change. `[no-pattern]`.

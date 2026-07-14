@@ -213,6 +213,20 @@ const PRELUDE: &str = r#"
       // So: attach `Symbol.hasInstance` to whatever is already there, and only *define* the ones that
       // do not exist. The frameworks get their `instanceof` either way, and nothing that already works
       // stops working.
+      // The REAL prototypes, built in Rust (see dom_bindings::dom_protos). The chain is
+      //   instance -> HTMLElement.prototype -> Element.prototype -> Node.prototype -> EventTarget.prototype
+      // and every DOM method is an own-property of Node.prototype — not of the element, as it used to be.
+      var REAL = {
+        EventTarget:      globalThis.__protoEventTarget,
+        Node:             globalThis.__protoNode,
+        Element:          globalThis.__protoElement,
+        HTMLElement:      globalThis.__protoHTMLElement,
+        Document:         globalThis.__protoDocument,
+        Text:             globalThis.__protoNode,
+        Comment:          globalThis.__protoNode,
+        DocumentFragment: globalThis.__protoNode,
+      };
+
       function iface(name, test) {
         var C = globalThis[name];
         if (typeof C !== 'function') {
@@ -220,7 +234,10 @@ const PRELUDE: &str = r#"
           // indistinguishable, from the author's side, from a browser that does not support classes.
           C = function(){ return this; };
           Object.defineProperty(C, 'name', { value: name });
-          C.prototype = {};
+          // Point the constructor at the REAL prototype where one exists, instead of a fresh `{}`.
+          // A fake `{}` is why `Element.prototype.setAttribute` was `undefined` for sixty ticks, and why
+          // patching a DOM prototype silently did nothing — the fake was not in any instance's chain.
+          C.prototype = REAL[name] || {};
           globalThis[name] = C;
         }
         try { Object.defineProperty(C, Symbol.hasInstance, { value: test, configurable: true }); }
@@ -281,6 +298,7 @@ const PRELUDE: &str = r#"
                             'previousElementSibling','tagName','attributes'];
       var CD_ACCESSORS   = ['data','nodeValue','textContent'];
 
+      iface('EventTarget', function(o){ return isNode(o) || o === globalThis; });
       iface('Node', isNode);
       iface('Element', isEl);
       iface('HTMLElement', isEl);
@@ -855,15 +873,13 @@ const PRELUDE: &str = r#"
         return el;
       };
 
-      // Install the bridges once every interface exists (see `bridge` above).
-      try {
-        bridge(globalThis.Node.prototype, NODE_ACCESSORS);
-        bridge(globalThis.Element.prototype, NODE_ACCESSORS.concat(EL_ACCESSORS));
-        bridge(globalThis.HTMLElement.prototype, NODE_ACCESSORS.concat(EL_ACCESSORS));
-        bridge(globalThis.Text.prototype, NODE_ACCESSORS.concat(CD_ACCESSORS));
-        bridge(globalThis.Comment.prototype, NODE_ACCESSORS.concat(CD_ACCESSORS));
-        bridge(globalThis.DocumentFragment.prototype, NODE_ACCESSORS);
-      } catch (e) { /* a frozen builtin prototype: leave it alone */ }
+      // NO BRIDGES ANY MORE — and removing them is not tidying, it is required.
+      //
+      // `bridge()` defined an accessor on the prototype that forwarded to the INSTANCE's own property
+      // descriptor. It existed precisely BECAUSE the members were own-properties of every element. They
+      // are not any more — they live on the real prototype chain. A forwarding accessor left in place
+      // would sit in FRONT of the real one, look for an own property that no longer exists, and return
+      // `undefined` for every DOM read on the page.
       iface('Document', function(o){ return o === document; });
       iface('Window', function(o){ return o === globalThis; });
 

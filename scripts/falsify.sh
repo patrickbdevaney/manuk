@@ -638,6 +638,21 @@ fi
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_PROTOTYPE; then
+  # Put the members back on the INSTANCE — the state this engine shipped in for sixty ticks. The own
+  # property then shadows the prototype, so `Element.prototype.setAttribute = wrapper` still "succeeds",
+  # still throws nothing, and is still never called. That silent no-op is how an error tracker, an
+  # ad-blocker or a polyfill believes it is installed when it is not.
+  mutate engine/js/src/dom_bindings.rs '
+s = s.replace(
+    "    // NO `define_members` here. The members live on `Node.prototype`, defined once per global.",
+    "    define_members(cx, &obj, Tier::Node); // MUTATION: shadow the prototype",
+)
+'
+  expect_red G_PROTOTYPE cargo test -q -p manuk-page --features stylo,spidermonkey --test g_prototype
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_CLEAN_EXIT; then
   # Disarm the automatic teardown. SpiderMonkey then never gets its `JS_ShutDown()`, its C++ static
   # destructors run against a live engine, and the process SIGSEGVs in `__run_exit_handlers` — after

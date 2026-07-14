@@ -103,3 +103,21 @@ it. **WPT found it in the first 25 tests.** The other 89 are not yet triaged —
 export WPT_DIR=$HOME/wpt
 cargo run --release -p manuk-wpt -- wpt dom --show-failures
 ```
+
+---
+
+## Re-measured 2026-07-14 (tick 64), release build, `dom/` subset
+
+    FILES 458   subtests 1736/6418 = 27.0%
+    NO_REPORT 1   HANG/CRASH 0 (Bar 0)   SLOW 0   TH_TIMEOUT 89
+
+`dom/nodes` now reads **26.9% (1413/5256)** against the **22.4% (1147/5125)** recorded above at tick 43.
+That is **+266 subtests**, and it was earned by ticks 44–62 — **not** by tick 64's prototype work.
+
+That distinction is not pedantry, and it is worth saying loudly. Tick 64 moved DOM methods onto real
+prototypes, and it was tempting to bank the `dom/nodes` gain against it. So it was **A/B-tested on the
+same tree**: with the change mutated out, WPT reads **1736/6418 — identical, to the subtest**. The
+prototype work is a correctness and performance win (see `G_PROTOTYPE`) and it moved **WPT not at all**.
+
+> **A number you cannot attribute is not a result.** The baseline above had simply gone stale, and a
+> stale baseline will happily hand you a win you did not earn.

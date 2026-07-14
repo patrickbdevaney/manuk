@@ -340,3 +340,70 @@ the moment it stops running JavaScript (before it flushes the profile), rather t
 moment the runtime picks. It is now an optimization, not a requirement. **`G_CLEAN_EXIT`** holds the line:
 it re-executes the test binary as a child that runs real JavaScript and then simply returns from `main`,
 and demands exit code 0.
+
+## DOM reflectors: the prototype chain, and the two bugs hiding in "it works"
+
+For sixty ticks every DOM method was defined as an **own-property of every element** — all 116 of them,
+one `JS_DefineProperty` per node. Elements answered `div.setAttribute(...)` correctly, so it looked fine.
+It was wrong in three ways at once, and two of them were invisible.
+
+**1. The interfaces were empty.** `Element.prototype.setAttribute` was `undefined`. So was
+`Node.prototype.appendChild`. `EventTarget` did not exist at all — a bare `ReferenceError`. Feature
+detection (`'matches' in Element.prototype`) and borrowed methods (`Element.prototype.setAttribute.call(el, …)`)
+both failed.
+
+**2. Patching a prototype SILENTLY DID NOTHING — this is the one that matters.**
+
+```js
+const real = Element.prototype.setAttribute;
+Element.prototype.setAttribute = function (n, v) { track(n, v); return real.call(this, n, v); };
+```
+
+That is *the* way the web instruments the DOM: Sentry and every error tracker, ad-blockers, polyfills,
+framework internals, React DevTools. The assignment succeeded. Nothing threw. And the element's **own**
+property shadowed the patched prototype, so the wrapper was never called. **The library believes it is
+installed and it is not.** A loud failure gets fixed; a silent one ships.
+
+**3. It was slow, per element.** 116 property definitions *and two full JS compiles* per node — the
+identity cache (`__nodes[id]`) was read and written by `eval`ing a formatted source string. Creating
+5,000 divs took **124ms**. Every React/Vue/Angular render pays that.
+
+### The shape now
+
+```text
+element → HTMLElement.prototype → Element.prototype → Node.prototype → EventTarget.prototype
+document → Document.prototype   → Node.prototype    → EventTarget.prototype
+```
+
+Built once per global (`dom_bindings::dom_protos`), cached on the global so it is GC-reachable. Every
+member is defined **once**. The identity cache is a real object read with `JS_GetElement`, not a compile.
+Reflectors carry **one** own property (`__nodeId`) instead of 116.
+
+**Result:** `createElement` ×5,000 went **124ms → 2ms** (~60×), and `Element.prototype.setAttribute = wrapper`
+now actually runs. `G_PROTOTYPE` holds both, and is proven to go red when the members go back on the
+instance.
+
+### Two traps worth knowing
+
+* **The prototypes are `NODE_CLASS` objects with unset reserved slots**, on purpose. `node_and_dom()`
+  checks `is_int32()` and returns `None`, so calling `Element.prototype.tagName` with `this` *being the
+  prototype* yields `undefined` — instead of reading reserved slots off an object that has none, which is
+  UB and in release is a garbage pointer dereference.
+
+* **A raw `*mut JSObject` held across ANY allocation is a dangling pointer.** The first version cached the
+  `__nodes` object pointer, then called `dom_protos()` — which defines ~116 properties, any one of which
+  can trigger a **moving** GC. It segfaulted on the first page. Rust's type system cannot see this: to it,
+  a `*mut JSObject` is a number. **Root immediately, always.**
+
+### The stated limit
+
+The members are own-properties of `Node.prototype` rather than distributed across the Node / Element /
+HTMLElement tiers, because this engine's member list does not yet distinguish them (`appendChild` and
+`setAttribute` live in one list). So `Element.prototype.hasOwnProperty('setAttribute')` is `false` where
+the spec says `true`. Everything that *resolves* through the chain is correct; the ownership tiering is a
+later tick. Saying so beats pretending.
+
+### And it moved WPT not at all
+
+It was tempting to bank `dom/nodes`' rise against this. A/B on the same tree — the change mutated out —
+gives **1736/6418, identical to the subtest**. *A number you cannot attribute is not a result.*
