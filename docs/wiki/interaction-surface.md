@@ -195,3 +195,25 @@ which is the whole ask.*
 **`alert`/`confirm`/`prompt` must be honest too:** a renderer has **no user to ask**, and a `confirm()`
 returning `true` by default would let a page **believe the user had agreed to something.** *Declining is the
 safe answer, and it is LOGGED rather than silent.*
+
+## The live viewport is ONE primitive, and the step everybody forgets is the FOURTH
+
+Lazy-loading, list virtualization, sticky headers, scroll-linked animation and infinite scroll are **not
+five features.** They are **one primitive seen five times**: *does the engine tell the page that the
+viewport moved?*
+
+**The complete loop, and all four steps are required:**
+
+1. the viewport moves → **`window.scrollY` updates** and **`scroll` fires**;
+2. **`IntersectionObserver` FIRES** — this, not `scroll` handlers, is what *most* modern content-loading is
+   built on;
+3. the callback swaps **`img.src = img.dataset.src`** — the universal lazy-load pattern;
+4. **the engine NOTICES that new URL and FETCHES it.**
+
+> **Step 4 is the one everybody forgets.** An engine that fires the observer and never fetches what the
+> observer asked for has implemented the **appearance** of lazy-loading and none of the substance: the page
+> requests the image and it never arrives. **Firing the observer is not the feature. The image ARRIVING is
+> the feature.**
+
+**Ask before re-entering JS.** The overwhelming majority of pages register no scroll listener and no
+observer; re-entering JS on every wheel event for those is pure cost.

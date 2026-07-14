@@ -8,10 +8,10 @@
 > filesystem, git, the crawl output or the verify receipt.
 
 ```
-TICK:              58
+TICK:              59
 LAST_AUDIT_TICK:   51          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
-LAST_WALL_TIME:    39s
+LAST_WALL_TIME:    127s
 ORACLE_CORPUS:     265 sites
 ORACLE_CRAWLED:    265 sites, 640 clusters  → docs/loop/CLUSTERS.md
 ORACLE_HANGS:      4   ← Bar 0, on OUR clock (manuk_ms > 30s). Outranks every visual cluster.
@@ -180,7 +180,14 @@ process. A 100-tab session should look like a handful of live tabs' worth of mem
 
 ## THE PLATFORM MAP (priority order — each unlocks a CATEGORY, not a site)
 
-1. **Loading & viewport awareness** — **the single biggest breadth-per-tick item on the board**, because
+1. ~~**Loading & viewport awareness**~~ — ✅ **ALREADY BUILT (verified tick 59, gated by `G_VIEWPORT`).**
+   A probe written *before* implementing anything found the **entire chain working end-to-end**: the
+   viewport moves → `scrollY` updates and `scroll` fires → **`IntersectionObserver` FIRES** → the callback
+   sets `img.src` from `data-src` → **and the engine queues that URL for fetching.** *This ledger entry was
+   stale, and it was about to send a tick at a feature that already existed — the FOURTH time (after
+   `localStorage`, `FormData`, `position: sticky`).* **An absent measurement is not a negative
+   measurement.** The original entry read:
+   **the single biggest breadth-per-tick item on the board**, because
    it is *one missing primitive, not six missing features*: the browser paints at scroll 0 and **never
    tells anything the viewport moved**. That one gap is why lazy-loading, virtualization, sticky headers,
    scroll-linked animation and infinite scroll are **all simultaneously unsupported**. Build the live

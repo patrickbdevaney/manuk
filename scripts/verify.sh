@@ -61,6 +61,7 @@ _launch gt cargo test -q -p manuk-shell --test g_teardown
 _launch gl cargo test -q -p manuk-page --features stylo,spidermonkey --test g_load_budget
 _launch gg cargo test -q -p manuk-page --features stylo,spidermonkey --test g_globals
 _launch gau cargo test -q -p manuk-dom pointer_width
+_launch gvp cargo test -q -p manuk-page --features stylo,spidermonkey --test g_viewport
 _launch gdi cargo test -q -p manuk-page --features stylo,spidermonkey --test g_dom_impl
 _launch gcn cargo test -q -p manuk-page --features stylo,spidermonkey --test g_contain_native
 _launch gsn cargo test -q -p manuk-dom stale_handle
@@ -207,6 +208,16 @@ head_ "G_ARENA_U64 · the arena handle is pointer-width-INDEPENDENT (wasm + ARM)
 # silently reintroduce the overflow. It also matters for the ARM/cross-platform target.
 GAU=$(_out gau | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GAU" ]; then ok "arena u64: $GAU"; else bad "G_ARENA_U64 failed — the arena handle is not pointer-width-independent and will not compile on wasm32"; fi
+
+head_ "G_VIEWPORT · the live viewport, and the whole lazy-load loop it unlocks"
+# ONE primitive blocks FIVE features: lazy-load, virtualization, sticky, scroll-linked animation, infinite
+# scroll. The platform map called it "the single biggest breadth-per-tick item on the board" — and it was
+# ALREADY BUILT, with nothing proving it. A capability with no gate is indistinguishable from one that does
+# not exist. The gate asserts the COMPLETE loop: viewport moves -> IntersectionObserver FIRES -> the
+# callback sets img.src from data-src -> AND THE ENGINE QUEUES THAT URL FOR FETCHING. The last step is the
+# one everybody forgets: firing the observer is not the feature; the image ARRIVING is the feature.
+GVP=$(_out gvp | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GVP" ]; then ok "viewport + lazy-load: $GVP"; else bad "G_VIEWPORT failed — the viewport moved and nothing heard it, or the observer fired and the image never arrived"; fi
 
 head_ "G_DOM_IMPL · createHTMLDocument + pre-insertion validity (a cycle is a HANG)"
 # createHTMLDocument() is how DOMPurify builds a safe DETACHED document; its absence is a TypeError that

@@ -553,3 +553,12 @@ prerequisite for a daily driver.
 No web capability changed. The verify wall went 92.6s → 40.3s with every gate intact, and the fidelity gate
 became **deterministic** (one snapshot, both engines) in the process — it had been fetching live sites on
 every tick, which is a rigor bug wearing a performance bug's clothes.
+
+## Tick 59 — the platform web's live viewport
+
+| Pattern | Reach | Status |
+|---|---|---|
+| **Lazy-loaded image feeds** (IntersectionObserver + `data-src`) | **the dominant content-loading pattern on the modern web** | ✅ **verified end-to-end + gated** (tick 59) — was already built; **nothing proved it, so the ledger called it missing** |
+| **Infinite scroll** (scroll/IO → fetch more) | social, news, commerce | ✅ the primitive is live (IO fires, scroll fires) |
+| **Sticky headers, scroll-linked animation, virtualization** | ubiquitous | ✅ same primitive — *one gap seen five times, and it was closed* |
+| **Native `loading="lazy"`** | perf hint | ❌ not honoured (renders correctly; fetches eagerly) |

@@ -320,6 +320,20 @@ s = s.replace(
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_VIEWPORT; then
+  # Stop telling the page the viewport moved. The IntersectionObserver then never fires, the lazy-loader
+  # never sets img.src, and the image below the fold NEVER ARRIVES — which is every feed on the web
+  # rendering its first screen and then nothing, forever.
+  mutate engine/page/src/lib.rs '
+s = s.replace(
+    "        if !manuk_js::wants_view_events(ctx) {",
+    "        if true {   // MUTATION: never notify the page that the viewport moved",
+    1)
+'
+  expect_red G_VIEWPORT cargo test -q -p manuk-page --features stylo,spidermonkey --test g_viewport
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_DOM_IMPL; then
   # Remove the cycle check from the arena backstop. Inserting a node into its own descendant then builds a
   # self-referential tree, and the next children() walk loops forever — Bar 0. The gate asserts the

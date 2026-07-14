@@ -202,3 +202,12 @@ hides a crash is a data-loss bug wearing a disguise*). This is the same wound, o
 (`scripts/ci-gate.sh`), and **prints the crash every single time so it cannot become invisible.** A crash
 *during* a test cannot produce that pass line, so nothing is hidden. **Fixing the teardown properly is an
 open Bar 0 item, not a closed one.**
+
+## Tick 59 — the live viewport (verified, not assumed)
+
+| Capability | Reach | Status |
+|---|---|---|
+| **`window.scrollY` + `scroll` events** | every sticky header, every scroll-linked animation | ✅ **verified + gated** (was already built; nothing proved it) |
+| **`IntersectionObserver` FIRES on scroll** | **most modern content-loading** | ✅ **verified + gated** |
+| **The full lazy-load loop** (IO → `img.src` = `data-src` → **engine fetches it**) | every image feed on the web | ✅ **verified + gated** — *step 4 is the one everybody forgets: firing the observer is not the feature; the image ARRIVING is the feature* |
+| **Native `loading="lazy"`** | a perf hint | ❌ not honoured — images load eagerly, which renders **correctly** but fetches more than it must |

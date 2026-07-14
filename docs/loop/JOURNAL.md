@@ -3008,3 +3008,48 @@ commit, push, and say out loud *"CI is async — read it at the start of the nex
 **And the most expensive thing in this loop is not compute at all — it is GUESSING.** Six ticks went into
 CI while its logs were unreadable, "fixing" causes I had *inferred*. The tick that stopped guessing and
 made CI **say** its error found the answer in **one run**. *Build the probe first.*
+
+## Tick 59 — the biggest item on the board was already built, and nothing proved it (2026-07-14)
+
+**TICK SHAPE: pattern-class** · **CLUSTER: platform-web/viewport** — the class is *lazy-loaded content
+feeds*, which is the dominant content-loading pattern on the modern web.
+
+**Hypothesis:** the platform map names **"loading & viewport awareness"** *the single biggest breadth-per-
+tick item on the board*, because **one** missing primitive blocks **five** features at once — lazy-loading,
+list virtualization, sticky headers, scroll-linked animation, infinite scroll. *They are not five gaps.
+They are one gap, seen five times.* So build the primitive.
+
+**RESULT: it was ALREADY BUILT.** A probe written *before* implementing anything — the methodology's own
+first rule, and the only reason this tick did not waste itself — found **the entire chain working end to
+end**:
+
+```
+scroll → window.scrollY updates → `scroll` fires
+       → IntersectionObserver FIRES
+       → the callback swaps img.src = data-src   (the universal lazy-load pattern)
+       → AND THE ENGINE QUEUES THAT URL FOR FETCHING
+```
+
+**That last step is the one everybody forgets.** Firing the observer is not lazy-loading. An engine that
+fires the observer and never fetches what the observer asked for has implemented the *appearance* of the
+feature and none of it: the page requests the image and it never arrives. **We do fetch it.**
+
+---
+
+**PROCESS #35, and it has now recurred FOUR TIMES.** The ledger sent me to build something that already
+worked — after `localStorage`, `FormData`/`URLSearchParams`, and `position: sticky` did exactly the same.
+**Twice before, the replacement was already written before anyone noticed.**
+
+The rule those three produced — *"an absent measurement is not a negative measurement"* — **was written down
+and never made MECHANICAL.** So it did not hold. Now it is:
+
+> **A capability claimed MISSING must be probed before it is implemented.**
+> **A capability that WORKS must be GATED — because a capability with no gate is indistinguishable from a
+> capability that does not exist**, and that is *precisely* how this ledger entry went stale.
+
+`G_VIEWPORT` now proves the whole loop and is **falsifiable** (stop telling the page the viewport moved →
+the observer never fires → the image below the fold never arrives → red).
+
+**What IS actually still missing here, stated honestly:** native **`loading="lazy"`** is not honoured —
+images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
+*performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
