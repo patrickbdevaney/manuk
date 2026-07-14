@@ -52,18 +52,42 @@ jobs:
         with: { fetch-depth: 2 }
       - id: check
         run: |
-          MSG=$(git log -1 --format=%B)
           TICK=$(grep -oP '^TICK:\s*\K[0-9]+' STATUS.md || echo 0)
-          # A capability tick declares itself. Infrastructure ticks say so, and are skipped.
-          if echo "$MSG" | grep -qiE 'TICK SHAPE:[[:space:]]*(pattern-class|capability)' \
-             && ! echo "$MSG" | grep -q '\[no-pattern\]'; then
-            echo "ship=true" >> "$GITHUB_OUTPUT"
-            echo "tag=v0.${TICK}.0" >> "$GITHUB_OUTPUT"
-            echo "→ capability step-change: shipping v0.${TICK}.0"
-          else
-            echo "ship=false" >> "$GITHUB_OUTPUT"
-            echo "→ not a capability tick (infrastructure/docs). No release, by design."
-          fi
+
+          # READ THE TICK SHAPE FROM THE JOURNAL — the same place the pre-commit hook enforces it.
+          #
+          # This gate used to grep the COMMIT MESSAGE for `TICK SHAPE:`. The hook does not enforce it
+          # there; it enforces it in `docs/loop/JOURNAL.md`. So the two disagreed about where the truth
+          # lived, and the release gate quietly read the one nobody writes to — it found no shape, took
+          # the `else` branch, reported SUCCESS, and shipped nothing. **A release cadence that never
+          # fires and never complains is worse than no cadence at all**, because the green check says it
+          # is working. Tick 62 was a genuine capability win (you can now quit the browser without
+          # losing your session) and it shipped no binary.
+          #
+          # One claim, one place it is written, one place it is read.
+          # `,0` — i.e. to EOF — and NOT `,/^## Tick [0-9]/`. In awk a range tests its END pattern on
+          # the START line as well, so `## Tick 62` matches both and the range collapses to one line,
+          # which never contains the shape. It silently yields nothing, which reads exactly like "this
+          # tick declared no shape". `tick.sh` has always used `,0`; the journal is newest-first, so
+          # to-EOF plus `head -1` is the entry we want.
+          SHAPE=$(awk "/^## Tick ${TICK}[^0-9]/,0" docs/loop/JOURNAL.md \
+                  | grep -oiP 'TICK SHAPE:\s*\K[a-z0-9-]+' | head -1)
+          echo "tick ${TICK} · shape: ${SHAPE:-<none>}"
+
+          # The capability ledger moved (the path filter guarantees that) AND the tick calls itself a
+          # capability tick. Infrastructure, instrument and doc ticks say so, and are skipped — that is
+          # the whole point: a version number should mean something changed for the user.
+          case "$SHAPE" in
+            pattern-class|capability|bar-0)
+              echo "ship=true" >> "$GITHUB_OUTPUT"
+              echo "tag=v0.${TICK}.0" >> "$GITHUB_OUTPUT"
+              echo "→ capability step-change (${SHAPE}): shipping v0.${TICK}.0"
+              ;;
+            *)
+              echo "ship=false" >> "$GITHUB_OUTPUT"
+              echo "→ tick shape '${SHAPE:-none}' is not a capability change. No release, by design."
+              ;;
+          esac
 
   build:
     needs: gate

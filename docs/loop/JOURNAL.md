@@ -3054,6 +3054,41 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 63 — the release cadence was green, and shipping nothing
+
+**TICK SHAPE: instrument** — no engine change. `[no-pattern]`.
+
+The demo CI and the verify wall both went green after tick 62, and the 41-site demo is live. But the
+**release** workflow reported ✅ success and shipped **no binary** — for a tick that closed a Bar 0 defect
+a user can feel (*you can quit the browser without losing your session*).
+
+**Why.** The release gate greps the **commit message** for `TICK SHAPE:`. The pre-commit hook enforces
+that trailer in the **journal**. Two sources of truth for one claim, and the gate read the one nobody is
+required to write to. When a commit message happened to repeat the shape (tick 60) a binary shipped; when
+it did not (tick 62) the gate found nothing, took the `else` branch, printed *"not a capability tick"*,
+and reported success.
+
+> **A cadence that never fires and never complains is worse than no cadence at all** — the green check
+> certifies that it is working.
+
+**And the fix's first draft had the same disease one layer down.** I wrote
+`awk "/^## Tick 62/,/^## Tick [0-9]/"` to pull the shape out of the journal. **Awk tests a range's END
+pattern against the START line too**, so `## Tick 62` matched both, the range collapsed to a single line,
+the shape was never inside it — and it reported "no shape declared" for *every tick in the file*. I caught
+it only because I ran the extraction against the real journal instead of trusting that it worked.
+`tick.sh` has always used `,0` (to EOF); now so does this.
+
+Proven against the real journal, for real ticks: 59 → ship, 60 → ship (and v0.60.0 **is** the latest
+release, which is the corroboration that the diagnosis is right), 61 → skip (an instrument tick, correctly
+not a release), 62 → ship.
+
+**The honest cost:** v0.62.0 was missed and is not being back-dated. Tick 62's fix is on `main` and goes
+out with the next capability tick, which the gate will now actually fire for.
+
+**The ratchet.** Capability: unchanged. Performance: unchanged. Instrument fidelity: **up** — the release
+cadence the directive asked to be *mechanically enforced* is now mechanically enforced, rather than
+mechanically pretending.
+
 ## Tick 62 — the exit segfault, closed: to run first at teardown, register last
 
 **TICK SHAPE: bar-0** — the stability floor. A sixty-tick-old residual, and it was ours all along.

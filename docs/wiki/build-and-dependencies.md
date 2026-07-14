@@ -268,3 +268,24 @@ The page laid out **correctly** (2,526px of content) and rendered **blank**. *A 
 like a font problem.* Fonts must be **compiled into the binary** (`include_bytes!`) — and use the
 **Liberation** faces specifically, because those are what Chrome's `Arial`/`Times New Roman` requests
 resolve to on Linux, so text measures like the native engine rather than like a lookalike.
+
+## The release cadence — and the way it silently did nothing
+
+The trigger is **not a calendar**. A version number should mean *something changed for the user*, so a
+release fires when the **capability ledger** (`docs/loop/WEB-PATTERNS.md`) moves **and** the tick declares
+itself `pattern-class`, `capability`, or `bar-0`. Infrastructure, instrument and doc ticks are skipped —
+that is the point, not a gap. The tag is derived, never typed: `v0.<TICK>.0`, read from `STATUS.md`,
+because the tick *is* the unit of progress here.
+
+**It was broken for several ticks, and reported success the whole time.** The gate grepped the *commit
+message* for `TICK SHAPE:`; the pre-commit hook enforces that trailer in the *journal*. Two sources of
+truth for one claim — so the gate read the one nobody has to write, found nothing, and skipped the build
+while printing a green check. Tick 62 (a genuine Bar 0 capability win) shipped no binary.
+
+> **A check whose source of truth differs from the enforcement mechanism's is a check that silently never
+> fires.** And the green tick is what makes it dangerous: it certifies that the thing is working.
+
+The gate now reads the journal, with the same `awk "/^## Tick N/,0"` construct `tick.sh` uses — `,0` (to
+EOF) and *not* `,/^## Tick [0-9]/`, because **awk tests a range's END pattern against the START line as
+well**, so the obvious version collapses the range to a single line and finds nothing, for every tick.
+The extraction is proven against the real journal before it is trusted.
