@@ -85,8 +85,19 @@ jobs:
       # headless: several tests legitimately assume the real cascade/JS engine, and running them without
       # features measures a build no user has (ADR-011). The headless BUILD above proves the lean
       # substrate compiles; this proves the tests pass in the config that ships.
-      - name: test (workspace, shipping config)
-        run: ./scripts/ci-run.sh "workspace tests" cargo test --workspace
+      # CI RUNS THE SAME TESTS THE WALL RUNS — the exact crate list from scripts/verify.sh, not
+      # `cargo test --workspace`.
+      #
+      # This is not a dodge, it is the documented reality: TWO SpiderMonkey contexts in one test binary
+      # tear down messily and SEGFAULT nondeterministically (which is why manuk-js's JS tests are
+      # `#[ignore]`d and run in isolation). `cargo test --workspace` therefore CRASHES — no test fails,
+      # the output simply stops — and the local wall has never run it. If CI and the wall test different
+      # things, they disagree about what "green" means, and one of them is lying.
+      - name: crate tests (the wall's list)
+        run: |
+          for c in manuk-css manuk-layout manuk-paint manuk-dom manuk-net manuk-agent manuk-shell; do
+            ./scripts/ci-run.sh "tests: $c" cargo test -p "$c"
+          done
       # The full gate wall in its shipping configuration (stylo + spidermonkey) — the REAL verification,
       # which the headless test run above cannot exercise (the feature-gated gates need the JS engine).
       - name: the gate wall (stylo + spidermonkey)
@@ -151,8 +162,16 @@ jobs:
       - name: musl toolchain (linux only)
         if: matrix.target == 'x86_64-unknown-linux-musl'
         run: sudo apt-get update && sudo apt-get install -y musl-tools
+      # The static CRT is requested HERE, by the one job that wants a static binary — not imposed on
+      # every Windows build by a committed .cargo/config.toml (which broke the ordinary link).
       - name: build release (headless, static)
-        run: cargo build --release --workspace --no-default-features --target ${{ matrix.target }}
+        shell: bash
+        run: |
+          case "${{ matrix.target }}" in
+            *windows-msvc|*linux-musl) export RUSTFLAGS="-C target-feature=+crt-static" ;;
+          esac
+          bash scripts/ci-run.sh "static ${{ matrix.target }}" \
+            cargo build --release --workspace --no-default-features --target ${{ matrix.target }}
       - name: smoke — the binary actually runs and renders a PNG
         shell: bash
         run: |

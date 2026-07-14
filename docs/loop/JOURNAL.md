@@ -2844,3 +2844,37 @@ knows the shape of a test failure: `test … FAILED`, the `failures:` block, `pa
 **The pattern across 52–54 is one pattern:** *every time I could not see, I guessed; every time I built the
 instrument, the answer arrived in one run.* Three ticks, three instruments (annotations, then the OOM
 guard, then a test-aware extractor), and each one immediately paid for itself.
+
+## Tick 55 — CI and the wall must test the same thing, or one of them is lying (2026-07-13)
+
+**TICK SHAPE: infrastructure**
+
+**Two remaining CI failures, and both were the same mistake in different clothes: a committed config
+imposing a constraint the ordinary build cannot satisfy.**
+
+**1. Windows `link.exe: exit code 1104` — and it was NOT aws-lc after all** (that fix was real: `ring` now
+downloads instead). `.cargo/config.toml` carried
+`[target.x86_64-pc-windows-msvc] rustflags = ["-C", "target-feature=+crt-static"]`.
+
+> **A `[target.…-windows-msvc]` block applies to EVERY build on Windows — because that IS the host target
+> there.** It was never scoped to the static-release job that wanted it; it forced a **static CRT on the
+> ordinary build**, which cannot link. The flag now belongs to **the one job that actually wants a static
+> binary** (set via `RUSTFLAGS` in that job), not to every Windows contributor.
+
+*This is the identical shape as the sccache wrapper that broke all eight checks: a committed config making
+the repo unbuildable for anyone whose environment does not happen to match the author's.*
+
+**2. Linux: no test FAILED — the output simply STOPPED.** That is a crash, not an assertion. `cargo test
+--workspace` includes **`manuk-js`**, and **two SpiderMonkey contexts in one test binary tear down messily
+and segfault nondeterministically** — which is *exactly why* its JS tests are `#[ignore]`d and run in
+isolation, and **exactly why `verify.sh` has never run that crate.**
+
+**So CI was testing something the wall does not test, and crashing on it.** The fix is the principle, not
+the flag:
+
+> **CI runs the same tests the wall runs — the exact crate list from `verify.sh`.** If CI and the wall test
+> different things, they disagree about what "green" means, **and one of them is lying.**
+
+*(`--exclude manuk-js` was the first attempt and it is subtly wrong: excluding a package changes cargo's
+feature UNIFICATION, so `manuk-page`'s gate tests lose their `stylo,spidermonkey` features and stop
+compiling. Union again — the same trap as tick 54's crypto backend, one layer up.)*

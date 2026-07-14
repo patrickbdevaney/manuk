@@ -12,11 +12,16 @@
 [target.x86_64-unknown-linux-musl]
 rustflags = ["-C", "target-feature=+crt-static"]
 
-[target.x86_64-pc-windows-msvc]
-rustflags = ["-C", "target-feature=+crt-static"]
-
-[target.aarch64-pc-windows-msvc]
-rustflags = ["-C", "target-feature=+crt-static"]
+# ⚠ `+crt-static` for the MSVC targets is NOT set here, deliberately.
+#
+# A `[target.x86_64-pc-windows-msvc]` block applies to EVERY build on Windows — not just the explicit
+# static-release build — because that IS the host target there. Forcing a static CRT on the ordinary
+# build fails the link (`link.exe: exit code 1104`, "cannot open file"), since parts of the graph expect
+# the dynamic CRT. So the flag belongs to the ONE job that actually wants a static binary, and it is set
+# there via `RUSTFLAGS` (see .github/workflows/ci.yml), not imposed on every Windows contributor.
+#
+# Same rule as the sccache wrapper that broke every OS: a committed config must not impose a constraint
+# the ordinary build cannot satisfy.
 
 # Build-artifact cache. Shared dependencies (stylo, mozjs bindings, taffy, hyper …) dominate the
 # compile cycle and are rebuilt identically across every session and every parallel branch; caching

@@ -533,3 +533,9 @@ No web capability changed. But the engine now links on **Windows**: an unpinned 
 the `aws-lc-rs` crypto backend (NASM/CMake) into a graph that had otherwise been pinned to pure-Rust
 `ring`, and it failed the Windows link. Cross-platform reach is a prerequisite for "a daily driver", not a
 footnote.
+
+## Tick 55 — Windows links (infrastructure)
+
+No web capability changed. The engine now links on **Windows**: a committed `+crt-static` was being forced
+on *every* Windows build (not just the static-release one), which cannot link. Cross-platform reach is a
+prerequisite for a daily driver.
