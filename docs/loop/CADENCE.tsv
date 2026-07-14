@@ -62,3 +62,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 68	5e1c260	1784018295	2026-07-14T04:38:15-04:00	493	capability		7	226	8					0			the transform was applied all along; it just never reached JavaScript
 69	04d6855	1784019025	2026-07-14T04:50:25-04:00	730	capability	39	12	259	29	27	48	1737	6418	1	144	4	`display: contents` fell through to `inline`, and collapsed the grid
 70	002cd66	1784019419	2026-07-14T04:56:59-04:00	394	instrument	37	10	778	2	27	48	1737	6418	1	144	4	the loop had no odometer
+71	228211d	1784020609	2026-07-14T05:16:49-04:00	1190	capability	256	9	632	5	28	50	1766	6418	1	145	4	a real `Range`, and the first tick aimed straight at the far horizon

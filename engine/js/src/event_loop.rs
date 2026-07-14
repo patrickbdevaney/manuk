@@ -1472,7 +1472,15 @@ pub fn install(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<()
     // `Runtime::new` — see the N7 research note).
     let raw_cx = unsafe { rt.cx().raw_cx() };
     unsafe { crate::job_queue::install_once(raw_cx) }?;
-    eval(rt, global, PRELUDE, "event_loop_prelude.js").map(|_| ())
+    eval(rt, global, PRELUDE, "event_loop_prelude.js")?;
+
+    // **AFTER the prelude, never before.** The prelude's inert-interface list creates a stub `Range`, so
+    // installing the real one first would have it immediately overwritten by a do-nothing constructor —
+    // and `typeof Range === 'function'` would still be true, which is exactly why nobody noticed the stub
+    // for sixty ticks. This is the same ordering bug that once let a stub `AbortSignal` shadow the real
+    // one; the lesson is cheap to re-learn and expensive to miss: **a stub satisfies every check that only
+    // asks whether a name exists.**
+    eval(rt, global, crate::range_js::RANGE_JS, "range.js").map(|_| ())
 }
 
 /// A **microtask checkpoint**: drain the host `queueMicrotask` queue *and* SpiderMonkey's

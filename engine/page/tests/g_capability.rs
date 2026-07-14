@@ -51,7 +51,12 @@ const CLAIMS: &[(&str, &str)] = &[
     ("innerText", "typeof H.innerText === 'string'"),
     ("innerHTML set", "(function(){var d=document.createElement('div');d.innerHTML='<b>z</b>';return !!d.firstChild&&d.firstChild.tagName==='B'})()"),
     // ── Selection / ranges (ledger: "getSelection / Range — editors, copy handling")
+    // A REAL Range (tick 71) — the stub was in the interface list, so `typeof Range === 'function'` was
+    // already true. A check that only asks whether a NAME EXISTS is satisfied by a stub, which is why the
+    // stub survived sixty ticks. Ask it to do something.
     ("Range", "typeof Range === 'function'"),
+    ("document.createRange", "typeof document.createRange === 'function'"),
+    ("Range extracts", "(function(){var d=document.createElement('div');d.innerHTML='<p>Hello</p>';var t=d.firstChild.firstChild;var r=document.createRange();r.setStart(t,1);r.setEnd(t,4);return r.toString()==='ell'})()"),
     ("getSelection", "typeof getSelection==='function' || typeof document.getSelection==='function'"),
     // ── Files (ledger: "Blob / File / FileReader — uploads, downloads, image preview")
     ("Blob", "typeof Blob === 'function'"),

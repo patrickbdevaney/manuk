@@ -626,6 +626,8 @@ pub mod job_queue;
 pub mod canvas;
 #[cfg(feature = "_sm")]
 pub mod dom_bindings;
+#[cfg(feature = "_sm")]
+pub mod range_js;
 
 /// N2 (host half) — History API state model; no JS engine dependency, always built.
 pub mod history_host;

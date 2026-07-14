@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **63** | ticks 1–70 |
-| median tick cycle | **19m** | 62 intervals |
+| ticks landed | **64** | ticks 1–71 |
+| median tick cycle | **19m** | 63 intervals |
 | median, last 10 | **16m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.86** | 71.9h elapsed |
-| median verify wall | **38s** | 2 ticks |
+| **ticks per hour** | **0.87** | 72.2h elapsed |
+| median verify wall | **39s** | 3 ticks |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -25,22 +25,22 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 ### Near — the daily driver (doc / app / platform web)
 
-* **capabilities asserted** (`G_CAPABILITY`): 48 → **48**
-* **live gates**: 27 → **27**
-* **✅ rows in the capability ledger**: 144 → **144**
+* **capabilities asserted** (`G_CAPABILITY`): 48 → **50**
+* **live gates**: 27 → **28**
+* **✅ rows in the capability ledger**: 144 → **145**
 * **Bar 0 — oracle hangs**: 4 of 265 sites
 
-**25 of 63 ticks** (40%) moved a
+**26 of 64 ticks** (41%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
 
 ### Far — WPT (50,000 tests)
 
-* measured **3** times (a carried-forward number is never counted as a measurement)
+* measured **4** times (a carried-forward number is never counted as a measurement)
 * first, tick 64: **1736/6418** = 27.0%
-* latest, tick 70: **1737/6418** = 27.1%
-* **rate over the measured window: +0.2 subtests / tick** (6 ticks)
+* latest, tick 71: **1766/6418** = 27.5%
+* **rate over the measured window: +4.3 subtests / tick** (7 ticks)
 
 > **What this rate is NOT.** It is measured on the `dom/` subset — **6,418 subtests** — and
 > the far horizon is ~50,000 across *all* of WPT, **which this project has never run**.
@@ -49,13 +49,6 @@ and finding that out redirected everything after it.
 > the projection is not made. What the rate *does* say is stated below, and it is the
 > important part.
 
-> **At +0.2 subtests/tick, near-horizon work is not moving WPT.** Ticks 64–70 shipped a 60× DOM speedup, real prototypes, a canvas
-> rasterizer, element scrolling, `display: contents` — **every one a genuine capability
-> win for the daily driver — and WPT moved by a single subtest.** That is not a failure;
-> it is a *measurement of the relationship between the two horizons*, and it says they
-> are nearly orthogonal. **The far horizon will not arrive as a side-effect of the near
-> one. It has to be spent on directly**, and the WPT horizon map
-> (`docs/wiki/wpt-horizon.md`) is where those ticks get aimed.
 
 **Near-horizon work does not automatically move the far horizon**, and the log is what proves it:
 tick 64 made DOM node creation **60× faster** and fixed prototype patching across the whole web
@@ -63,8 +56,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **25** capability ticks, median cycle **19m**
-* median diff per tick: **+290 / −9** lines across 7 files
+* **26** capability ticks, median cycle **19m**
+* median diff per tick: **+304 / −9** lines across 7 files
 
 ## Every tick
 
@@ -133,5 +126,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **68** | 2026-07-14 04:38 | 8m | capability | — | +226/−8 | 0 | 0 |  | the transform was applied all along; it just never reached JavaScript |
 | **69** | 2026-07-14 04:50 | 12m | capability | 39s | +259/−29 | 27 | 48 | 27.1% | `display: contents` fell through to `inline`, and collapsed the grid |
 | **70** | 2026-07-14 04:56 | 7m | instrument | 37s | +778/−2 | 27 | 48 | 27.1% | the loop had no odometer |
+| **71** | 2026-07-14 05:16 | 20m | capability | 4m | +632/−5 | 28 | 50 | 27.5% | a real `Range`, and the first tick aimed straight at the far horizon |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

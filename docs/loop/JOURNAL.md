@@ -3054,6 +3054,48 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 71 — a real `Range`, and the first tick aimed straight at the far horizon
+
+**TICK SHAPE: capability.** The first tick *chosen by the cadence ledger*, and it validates it.
+
+**Tick 70's measurement said the two horizons are nearly orthogonal**: ticks 64–69 shipped a 60× DOM
+speedup, real prototypes, a canvas rasterizer, element scrolling and `display: contents` — every one a
+genuine daily-driver win — and **WPT moved by one subtest.** So this tick was aimed *directly* at WPT.
+
+**Result: +29 subtests in one tick** (1737 → 1766, 27.1% → 27.5% of `dom/`), Bar 0 clean. Five ticks of
+near-horizon work moved +1. **The ledger was right, and acting on it worked.**
+
+**`Range` was an inert stub**, and the shape of that is worth keeping: it sat in the interface list, so
+`typeof Range === 'function'` was **already true**. `document.createRange()` did not exist. `dom/ranges`
+scored **2 of 200**. *A check that only asks whether a name exists is satisfied by a stub* — which is
+precisely how it survived sixty ticks, and precisely why `G_CAPABILITY` now asks it to *extract a
+substring*, not to exist.
+
+It is the rare target that serves **both horizons**: ~198 WPT subtests, and every rich-text editor,
+selection, copy/paste path and `contenteditable` surface on the web.
+
+**Written in JavaScript, on purpose.** A `Range` is pure tree arithmetic — compare two boundary points,
+find a common ancestor, splice a subtree — and it touches nothing JS cannot already reach. What it *does*
+need is a **correct DOM**, and that is exactly what the last several ticks built: real prototypes, a spec
+`insertBefore`, CharacterData in UTF-16 code units. **It landed cheaply because of them.**
+
+**The difficulty is entirely in one place**, and the gate is built around it: extraction **across
+structure**. A range from the middle of one paragraph to the middle of the next leaves both only
+*partially* contained, so both must be **split** — the outer halves stay, the inner halves leave — while
+fully-contained nodes move wholesale. The naive version (move whole nodes) passes on flat text and
+destroys every document that has structure, which is every real document.
+
+**Installed AFTER the prelude**, never before: the prelude's inert-interface list creates the stub, so the
+real `Range` would otherwise be overwritten by a do-nothing constructor — and `typeof` would still say
+`function`. This is the same ordering bug that once let a stub `AbortSignal` shadow the real one.
+
+**Still a stub, and said out loud:** `Selection`. `dom/ranges/tentative` (149 subtests of proposed-spec
+API) remains at zero and is not being chased.
+
+**The ratchet.** Capability: **up** on both horizons at once. Performance: unchanged. Instrument fidelity:
+**up** — `G_RANGE` is proven falsifiable, and it goes red *while the stub keeps `typeof Range` truthful*,
+which is the exact failure it replaced.
+
 ## Tick 70 — the loop had no odometer
 
 **TICK SHAPE: instrument.** `[no-pattern]`.

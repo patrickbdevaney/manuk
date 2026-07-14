@@ -638,6 +638,21 @@ fi
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_RANGE; then
+  # Stop installing the real Range. The INERT STUB from the interface list is still there, so
+  # `typeof Range === 'function'` stays true and nothing throws — which is exactly why nobody noticed the
+  # stub for sixty ticks. A gate that only asked whether the name existed would still be green.
+  mutate engine/js/src/event_loop.rs '
+s = s.replace(
+    "    eval(rt, global, crate::range_js::RANGE_JS, \"range.js\").map(|_| ())",
+    "    Ok(()) // MUTATION: the inert stub Range survives",
+    1,
+)
+'
+  expect_red G_RANGE cargo test -q -p manuk-page --features stylo,spidermonkey --test g_range
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_DISPLAY_CONTENTS; then
   # Stop dissolving the wrapper in the flex/grid path. The grid then sees ONE anonymous item instead of
   # three, and a/b/c stack in a single cell — every element still present, still styled, and in the wrong
