@@ -562,3 +562,12 @@ every tick, which is a rigor bug wearing a performance bug's clothes.
 | **Infinite scroll** (scroll/IO → fetch more) | social, news, commerce | ✅ the primitive is live (IO fires, scroll fires) |
 | **Sticky headers, scroll-linked animation, virtualization** | ubiquitous | ✅ same primitive — *one gap seen five times, and it was closed* |
 | **Native `loading="lazy"`** | perf hint | ❌ not honoured (renders correctly; fetches eagerly) |
+
+## Tick 60 — DOM code that catches errors
+
+| Pattern | Reach | Status |
+|---|---|---|
+| **`text.appendChild(x)` throws** | **tree integrity** | ✅ (tick 60) — it used to **succeed**, leaving a subtree on a text node that nothing can render |
+| **`insertBefore` with a non-child reference throws `NotFoundError`** | every framework's insert path | ✅ (tick 60) — used to silently **append somewhere else** |
+| **`removeChild` of a non-child throws `NotFoundError`** | **every framework's unmount path** | ✅ (tick 60) — used to silently do nothing, turning a loud bug into a leak |
+| The rest of the DOM's `assert_throws_dom` surface | — | ⚠️ ~500 more in the WPT work list |

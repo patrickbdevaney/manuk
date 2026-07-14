@@ -1336,6 +1336,24 @@ unsafe fn el_insert_before(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> 
     let reference = arg_object(vp, argc, 1).and_then(|o| node_and_dom(o).map(|(_, n)| n));
     match new_child {
         Some((obj, child)) => {
+            if !insertion_is_valid(cx, dom, parent, child) {
+                return false;
+            }
+            // **"If referenceChild is non-null and its parent is not parent, throw NotFoundError."**
+            //
+            // Inserting before a node that is not there is not a no-op — it is a bug in the CALLER, and
+            // the spec makes the DOM say so. Silently appending instead (which is what we did) puts the
+            // node somewhere the page did not ask for, and the page has no way to find out.
+            if let Some(rf) = reference {
+                if (*dom).parent(rf) != Some(parent) {
+                    throw_dom(
+                        cx,
+                        "NotFoundError",
+                        "the reference child is not a child of this node",
+                    );
+                    return false;
+                }
+            }
             match reference {
                 Some(rf) => (*dom).insert_before(parent, child, rf),
                 None => (*dom).append_child(parent, child),
@@ -1734,6 +1752,30 @@ unsafe fn insertion_is_valid(
     parent: NodeId,
     node: NodeId,
 ) -> bool {
+    // **"If parent is not a Document, DocumentFragment, or Element, throw HierarchyRequestError."**
+    //
+    // A **Text node cannot have children.** Neither can a Comment. That sounds obvious right up until you
+    // notice that `text.appendChild(x)` currently *succeeds* — and then the tree has a text node with a
+    // subtree hanging off it, which no traversal in the engine expects and nothing will ever render.
+    // Silently accepting an impossible tree is worse than refusing it: the corruption surfaces somewhere
+    // else, later, as something that looks unrelated.
+    // ⚠ A **ShadowRoot** is a DocumentFragment to the spec (`nodeType` 11) but a DISTINCT `NodeData`
+    // variant in this arena — so a naive "Element | Document | Fragment" check REJECTS
+    // `shadowRoot.appendChild(...)`, which is how EVERY web component builds its content. The gate caught
+    // it immediately (`ownerDoc` in the framework-primitive suite went to "-", i.e. the script threw), and
+    // that is the ratchet doing its job: a spec fix that breaks a working capability is not a fix.
+    if !(*dom).is_element(parent)
+        && !(*dom).is_document(parent)
+        && !(*dom).is_fragment(parent)
+        && !(*dom).is_shadow_root(parent)
+    {
+        throw_dom(
+            cx,
+            "HierarchyRequestError",
+            "this kind of node cannot have children",
+        );
+        return false;
+    }
     if (*dom).is_document(node) {
         throw_dom(
             cx,

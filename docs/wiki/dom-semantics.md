@@ -248,3 +248,17 @@ nodes in the same arena.
 **The failure was invisible until the door unlocked:** five WPT files passed until `createHTMLDocument`
 existed, then killed the process instantly — *the validity check was always missing; nothing could reach the
 bad state before.*
+
+## A DOM that never throws turns a loud caller bug into a silent leak
+
+The spec's pre-insertion validity steps are not pedantry — each one prevents a **specific corruption that
+surfaces somewhere else**:
+
+| Spec rule | What silently accepting it produces |
+|---|---|
+| *parent must be a Document, DocumentFragment or Element* | **`text.appendChild(div)` succeeds** — a subtree hanging off a **text node**, which no traversal expects and nothing will ever render |
+| *referenceChild's parent must be parent* (`NotFoundError`) | `insertBefore` **appends somewhere else instead**, putting the node where the page never asked, **with no way for it to find out** |
+| *child's parent must be parent* (`NotFoundError`) | `removeChild` **does nothing** — and **every framework's unmount path catches this exception**, so a DOM that never raises it converts a loud bug into a **leak** |
+
+> **Silently accepting an impossible tree is worse than refusing it.** The corruption does not surface where
+> it was created. It surfaces later, somewhere else, looking like something unrelated.

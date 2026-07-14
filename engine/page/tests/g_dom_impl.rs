@@ -35,6 +35,33 @@ const HTML: &str = r#"<!doctype html><html><body><div id="out">-</div><script>
     catch (e) { ancThrew = (e instanceof DOMException) ? e.name : ('wrong:' + e); }
     R.push('ancestorThrows:' + ancThrew);
 
+    // ── The spec's OTHER validity throws — the ones real code actually catches.
+    //
+    // A TEXT NODE CANNOT HAVE CHILDREN. That sounds obvious right until you notice that
+    // `text.appendChild(x)` used to SUCCEED — leaving a subtree hanging off a text node that no
+    // traversal expects and nothing will ever render. Silently accepting an impossible tree is worse
+    // than refusing it: the corruption surfaces later, somewhere else, looking unrelated.
+    var t = document.createTextNode('x');
+    var textThrew = 'no';
+    try { t.appendChild(document.createElement('div')); }
+    catch (e) { textThrew = (e instanceof DOMException) ? e.name : ('wrong:' + e); }
+    R.push('textNoKids:' + textThrew);
+
+    // insertBefore with a reference that is NOT a child: a caller bug, and the DOM must say so.
+    // Silently appending instead puts the node somewhere the page never asked for.
+    var stray = document.createElement('span');
+    var refThrew = 'no';
+    try { box.insertBefore(document.createElement('i'), stray); }
+    catch (e) { refThrew = (e instanceof DOMException) ? e.name : ('wrong:' + e); }
+    R.push('badRef:' + refThrew);
+
+    // removeChild on a node that is not your child. Every framework's unmount path catches this;
+    // a DOM that never raises it turns a loud bug into a silent leak.
+    var rmThrew = 'no';
+    try { box.removeChild(stray); }
+    catch (e) { rmThrew = (e instanceof DOMException) ? e.name : ('wrong:' + e); }
+    R.push('badRemove:' + rmThrew);
+
     // The page is intact after all of that.
     R.push('intact:' + (document.getElementById('out') === box));
     box.textContent = R.join(' ');

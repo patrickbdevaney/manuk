@@ -3053,3 +3053,46 @@ the observer never fires → the image below the fold never arrives → red).
 **What IS actually still missing here, stated honestly:** native **`loading="lazy"`** is not honoured —
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
+
+## Tick 60 — a Text node could have children (2026-07-14)
+
+**TICK SHAPE: pattern-class** · **CLUSTER: C00wpt** — the class is *DOM code that catches errors*, which is
+every framework's unmount path and every sanitizer.
+
+**Hypothesis:** WPT's `dom/nodes` shows **588 `assert_throws_dom` failures** — our DOM methods *silently
+no-op* where the spec requires them to **throw**. Real code catches those exceptions; ours never raises
+them.
+
+**RESULT — three spec violations closed, and the first one is the interesting one.**
+
+1. **A Text node could have children.** `text.appendChild(div)` **succeeded**. That sounds like a triviality
+   right until you notice what it leaves behind: **a subtree hanging off a text node that no traversal in
+   the engine expects and nothing will ever render.** *Silently accepting an impossible tree is worse than
+   refusing it* — the corruption does not surface where it was created; it surfaces later, somewhere else,
+   looking like something unrelated. The spec's rule (*"if parent is not a Document, DocumentFragment, or
+   Element, throw HierarchyRequestError"*) exists to stop exactly that.
+
+2. **`insertBefore(node, ref)` where `ref` is not a child** silently **appended instead** — putting the node
+   somewhere the page never asked for, **with no way for the page to find out.** Now `NotFoundError`.
+
+3. **`removeChild(node)` where `node` is not a child** silently did nothing. **Every framework's unmount
+   path catches this exception**; a DOM that never raises it turns a loud bug into a **silent leak**. Now
+   `NotFoundError`.
+
+**MEASURED — the ratchet turned:** `dom/` **1738/6499 (26.7%) → 1749/6499 (26.9%)**, **Bar 0 clean (0)**,
+**NO_REPORT 0**. A modest number, and an honest one: most of the remaining 500-odd `assert_throws_dom`
+failures want throws from methods we have not reached yet. *The point of the work list is that it does not
+run out.*
+
+`G_DOM_IMPL` now gates all five validity throws (cycle, Document-as-child, Text-with-children, bad
+reference, bad remove).
+
+**And the gate caught a regression I introduced, which is the ratchet working.** The spec's parent check is
+*"Document, DocumentFragment, or Element"* — but **a ShadowRoot is a DocumentFragment to the spec
+(`nodeType` 11) and a DISTINCT `NodeData` variant in this arena.** So the naive check **rejected
+`shadowRoot.appendChild(...)` — which is how EVERY web component builds its content.** The JS-conformance
+gate went red instantly (the framework-primitive suite's output collapsed to `"-"`, i.e. the script threw),
+and the tick **did not land** until it was fixed.
+
+> **A spec fix that breaks a working capability is not a fix.** That is what the wall is for, and it is why
+> the ratchet has three faces and not one.
