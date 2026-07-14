@@ -102,6 +102,7 @@ jobs:
       # which the headless test run above cannot exercise (the feature-gated gates need the JS engine).
       - name: the gate wall (stylo + spidermonkey)
         run: |
+          set -e   # fail on the FIRST bad gate, so the annotation names the gate that actually broke
           for g in g_globals g_selector g_lifecycle g_chardata g_contain_native g_dom_impl; do
             ./scripts/ci-run.sh "gate: $g" cargo test -p manuk-page --features stylo,spidermonkey --test "$g"
           done
