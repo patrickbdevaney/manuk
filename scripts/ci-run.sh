@@ -28,7 +28,10 @@ if [ "$STATUS" -ne 0 ]; then
   # is `test ... FAILED`, the `failures:` block, and the panic/assert text. The first version of this
   # script missed all of that, fell through to `tail`, and annotated 25 lines of PASSING tests — which is
   # a instrument reporting the opposite of the truth.
-  ERRS="$(grep -E '^(error|error\[|warning: unused|thread .* panicked|.*signal: 9)|FAILED|^assertion|^ *left:|^ *right:|panicked at|^test result: FAILED' "$TMP" | head -25)"
+  # `LNK[0-9]+` / `cannot open file` matter because MSVC's real diagnosis lives on a NOTE line, not an
+  # `error:` line — `error: linking with link.exe failed: exit code 1104` names no file at all, and the
+  # file it cannot open is the entire diagnosis.
+  ERRS="$(grep -E '^(error|error\[|thread .* panicked|.*signal: 9)|FAILED|^assertion|^ *left:|^ *right:|panicked at|^test result: FAILED|LNK[0-9]+|cannot open file|No such file' "$TMP" | head -25)"
   [ -z "$ERRS" ] && ERRS="$(tail -25 "$TMP")"
   while IFS= read -r line; do
     printf '::error title=%s::%s\n' "$LABEL" "${line//$'\r'/}"

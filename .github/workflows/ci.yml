@@ -102,13 +102,10 @@ jobs:
       # which the headless test run above cannot exercise (the feature-gated gates need the JS engine).
       - name: the gate wall (stylo + spidermonkey)
         run: |
-          cargo test -p manuk-page --features stylo,spidermonkey --test g_globals
-          cargo test -p manuk-page --features stylo,spidermonkey --test g_selector
-          cargo test -p manuk-page --features stylo,spidermonkey --test g_lifecycle
-          cargo test -p manuk-page --features stylo,spidermonkey --test g_chardata
-          cargo test -p manuk-page --features stylo,spidermonkey --test g_contain_native
-          cargo test -p manuk-page --features stylo,spidermonkey --test g_dom_impl
-          cargo test -p manuk-dom stale_handle
+          for g in g_globals g_selector g_lifecycle g_chardata g_contain_native g_dom_impl; do
+            ./scripts/ci-run.sh "gate: $g" cargo test -p manuk-page --features stylo,spidermonkey --test "$g"
+          done
+          ./scripts/ci-run.sh "gate: stale_handle" cargo test -p manuk-dom stale_handle
       # The wasm render pipeline — proof the in-browser demo target stays buildable (docs/loop/DEMO.md).
       - name: wasm render pipeline (the demo target)
         run: |
