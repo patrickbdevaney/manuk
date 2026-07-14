@@ -8,10 +8,10 @@
 > filesystem, git, the crawl output or the verify receipt.
 
 ```
-TICK:              66
+TICK:              67
 LAST_AUDIT_TICK:   61          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
-LAST_WALL_TIME:    237s
+LAST_WALL_TIME:    265s
 ORACLE_CORPUS:     265 sites
 ORACLE_CRAWLED:    265 sites, 640 clusters  → docs/loop/CLUSTERS.md
 ORACLE_HANGS:      4   ← Bar 0, on OUR clock (manuk_ms > 30s). Outranks every visual cluster.
@@ -375,6 +375,7 @@ loud rather than quietly following the pull.
 | **G_DEDUP** | ✅ **live** | the same URL on the **wire** twice for one navigation (nytimes was pulling one sprite down once per element that named it) |
 | **G_HANG** | ✅ **live, and now honest** | Every oracle site runs in its own process under a watchdog. The watchdog is a **backstop against a true infinite loop** — it wraps our render *and Chromium's*, so when it fires it is recorded as `TIMEOUT` and **attributed to nobody**. The Bar 0 hang count comes from `manuk_ms`. A metric that cannot say whose time it measured must not name a culprit. |
 | **G_CONTAIN** | ✅ **live** | Bar 0 — a panic kills the page, not the process (Part 23.2) |
+| **G_SCROLL** | ✅ **live** | `element.scrollTop` is **real** — truthful `scrollHeight`/`clientHeight`, clamped writes, survives re-layout, **moves the actual pixels**, fires `scroll`. It did not merely not work: `scrollHeight` was aliased to the element's own border box, so **`scrollHeight - clientHeight` was always 0** — the exact number every virtualised list divides by. |
 | **G_CANVAS** | ✅ **live** | `<canvas>` 2D **rasterizes** — fills, strokes, paths, transforms, real `getImageData`/`toDataURL`, on tiny-skia. And the pixels **reach the page**: a canvas is composited as an image the page drew into. It was a stub that accepted every call and drew nothing, which is the worst shape a failure takes — the page is told YES and renders blank. |
 | **G_CAPABILITY** | ✅ **live** | **The pattern ledger, as executable assertions.** 42 of its claims now run on every wall; a ✅ that stops being true stops the tick. Built because the ledger — the file that decides what gets built next — was wrong **six times**, always a ❌ nobody measured. Its top *three* priorities were all phantoms. |
 | **G_PROTOTYPE** | ✅ **live** | DOM methods live on **prototypes**, not on every element. Patching `Element.prototype.setAttribute` now actually takes effect — it used to be a **silent no-op**, which is how every error tracker, ad-blocker and polyfill hooks the DOM. Also: `createElement` ×5,000 went **124ms → 2ms**, and own-properties per element **116 → 1**. |

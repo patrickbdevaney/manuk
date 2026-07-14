@@ -3054,6 +3054,46 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 67 — `scrollTop` did not merely not work. It lied, and so did `scrollHeight`.
+
+**TICK SHAPE: capability** — roadmap item #2, from the roadmap tick 65 rebuilt from measurement.
+
+**The gap was not absence.** `element.scrollTop` read `undefined`, and writing it quietly created a plain
+JavaScript own-property that scrolled nothing and threw nothing. A virtualised list would set it, read it
+back, get **its own value**, and conclude it had worked. *The failure was silent on both sides of the API.*
+
+**And the probe found something worse underneath.** `clientWidth`, `clientHeight`, `scrollWidth` and
+`scrollHeight` all **existed** — aliased to `offsetWidth`/`offsetHeight`, the element's own border box.
+They looked present and they were wrong in the one way that matters:
+
+> **`scrollHeight - clientHeight` was always ZERO.** That is precisely the number every virtualised list
+> divides by to decide which slice of the data to render. Not `undefined`, which fails loudly — *zero*,
+> which fails as "there is nothing to scroll."
+
+Only the gate found it: the clamp computed 900 correctly while the getter reported 100, and two numbers
+that disagree about the same fact mean one of them is not reading what it thinks.
+
+**It is real now** (`G_SCROLL`): truthful geometry, writes clamped to `scrollHeight - clientHeight` (a
+script that assigns `1e9` to reach the bottom reads back the real maximum — otherwise *"am I at the
+bottom?"* is false forever), the offsets survive re-layout (layout starts from zero every time, so without
+care the user types in a chat box and the list jumps to the top), the `scroll` event **fires** (an infinite
+feed listens for it to fetch the next page), and — the assertion that cannot be faked — **it moves the
+actual pixels.**
+
+**And it needed no painter changes at all.** A scroll container's clip is *already* its padding box, so
+translating its subtree up by `scrollTop` slides content out of that clip exactly as a real scroll does.
+Anything scrolled out of view is clipped away for free, because it was always going to be. The translate
+is by the **delta**, never the absolute offset — the tree already carries the old one, and translating by
+the absolute value each time scrolls cumulatively, which looks exactly like a runaway-scroll bug.
+
+A latent bug fell out on the way: `LayoutBox::translate` **did not move the list marker**. A `<ul>` inside
+a float — and now inside a scroll container — would have kept its bullets behind while its text moved.
+
+**The ratchet.** Capability: **up** — virtualised lists, chat panes, infinite feeds, scroll-to-top.
+Performance: unchanged. Instrument fidelity: **up** — `G_SCROLL` proven falsifiable (stop moving the tree
+and it goes red *while every JS-visible number stays correct*, which is the bug it replaced), and
+`G_CAPABILITY` now asserts scroll geometry rather than printing it as a gap.
+
 ## Tick 66 — `<canvas>` paints, and the pixels reach the screen
 
 **TICK SHAPE: capability** — the #1 item on the roadmap that tick 65 rebuilt from measurement.

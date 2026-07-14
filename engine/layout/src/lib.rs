@@ -193,6 +193,79 @@ pub struct LayoutBox {
     pub content: BoxContent,
 }
 
+impl LayoutBox {
+    /// The union of every descendant box's extent, relative to this box's origin — i.e. **how tall and
+    /// wide the content actually is**, which is what `scrollHeight`/`scrollWidth` report.
+    ///
+    /// A virtualised list computes `scrollHeight - clientHeight` to decide how many rows exist. Return a
+    /// wrong number and it renders the wrong slice of the data; return `undefined` and it renders `NaN`
+    /// rows, which is to say none.
+    pub fn content_extent(&self) -> (f32, f32) {
+        fn walk(b: &LayoutBox, ox: f32, oy: f32, w: &mut f32, h: &mut f32) {
+            *w = w.max(b.rect.x + b.rect.width - ox);
+            *h = h.max(b.rect.y + b.rect.height - oy);
+            match &b.content {
+                BoxContent::Block(kids) => {
+                    for k in kids {
+                        walk(k, ox, oy, w, h);
+                    }
+                }
+                BoxContent::Inline(frags) => {
+                    for f in frags {
+                        *w = w.max(f.x + f.width - ox);
+                        *h = h.max(f.baseline - oy);
+                    }
+                }
+            }
+        }
+        let (mut w, mut h) = (0.0f32, 0.0f32);
+        match &self.content {
+            BoxContent::Block(kids) => {
+                for k in kids {
+                    walk(k, self.rect.x, self.rect.y, &mut w, &mut h);
+                }
+            }
+            BoxContent::Inline(frags) => {
+                for f in frags {
+                    w = w.max(f.x + f.width - self.rect.x);
+                    h = h.max(f.baseline - self.rect.y);
+                }
+            }
+        }
+        (w.max(0.0), h.max(0.0))
+    }
+
+    /// Find the box for `node`, if it has one.
+    pub fn find(&self, node: NodeId) -> Option<&LayoutBox> {
+        if self.node == Some(node) {
+            return Some(self);
+        }
+        if let BoxContent::Block(kids) = &self.content {
+            for k in kids {
+                if let Some(b) = k.find(node) {
+                    return Some(b);
+                }
+            }
+        }
+        None
+    }
+
+    /// Find the box for `node` mutably.
+    pub fn find_mut(&mut self, node: NodeId) -> Option<&mut LayoutBox> {
+        if self.node == Some(node) {
+            return Some(self);
+        }
+        if let BoxContent::Block(kids) = &mut self.content {
+            for k in kids.iter_mut() {
+                if let Some(b) = k.find_mut(node) {
+                    return Some(b);
+                }
+            }
+        }
+        None
+    }
+}
+
 /// A table cell placed on the row/column grid (CSS2 §17.5 colspan/rowspan).
 struct PlacedCell {
     cell: NodeId,
@@ -372,11 +445,27 @@ impl LayoutBox {
         found
     }
 
-    /// Shift this box and its whole subtree by `(dx, dy)` (absolute coords). Used to
-    /// re-origin a float's content once its final position is known.
-    fn translate(&mut self, dx: f32, dy: f32) {
+    /// Shift this box and its whole subtree by `(dx, dy)` (absolute coords).
+    ///
+    /// Two callers: re-origining a float once its final position is known, and **element-level
+    /// scrolling** — which is why it needs no painter changes at all. A scroll container's clip is
+    /// already its padding box, so shifting its subtree up by `scrollTop` slides content out of that
+    /// clip exactly as a real scroll does; anything scrolled out of view is clipped away for free,
+    /// because it was always going to be.
+    ///
+    /// The `marker` moves too. It did not, before — a `<ul>` inside a float (or now a scroll container)
+    /// whose bullets stayed behind while its text moved is a memorable bug, and it was latent here.
+    pub fn translate(&mut self, dx: f32, dy: f32) {
+        if dx == 0.0 && dy == 0.0 {
+            return;
+        }
         self.rect.x += dx;
         self.rect.y += dy;
+        if let Some(m) = self.marker.as_mut() {
+            m.x += dx;
+            m.line_top += dy;
+            m.baseline += dy;
+        }
         match &mut self.content {
             BoxContent::Block(kids) => {
                 for k in kids {

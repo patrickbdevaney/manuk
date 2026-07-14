@@ -638,6 +638,21 @@ fi
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_SCROLL; then
+  # Stop moving the layout tree. `scrollTop` still reads back what was assigned (the mirror updates),
+  # `scrollHeight` is still right, the `scroll` event still fires — and NOTHING MOVES. That is the exact
+  # shape of the bug this replaced: a scroll that JavaScript can see and the user cannot.
+  mutate engine/page/src/lib.rs '
+s = s.replace(
+    "        if let Some(b) = self.root_box.find_mut(node) {\n            let (dx, dy) = (-(new.0 - old.0), -(new.1 - old.1));",
+    "        if let Some(b) = self.root_box.find_mut(node) {\n            let (dx, dy) = (0.0, 0.0); // MUTATION: the pixels do not move",
+    1,
+)
+'
+  expect_red G_SCROLL cargo test -q -p manuk-page --features stylo,spidermonkey --test g_scroll
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_CANVAS; then
   # Put the no-op back: the rasterizer stops writing pixels. `getContext('2d')` still returns a context,
   # `fillRect` is still a function, nothing throws — and the canvas is blank. That is the state this

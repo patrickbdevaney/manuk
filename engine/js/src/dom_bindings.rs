@@ -107,6 +107,15 @@ thread_local! {
     static SCROLL: std::cell::Cell<(f32, f32)> = const { std::cell::Cell::new((0.0, 0.0)) };
     /// Scroll requests the page made — the host performs them (it owns the viewport).
     static PENDING_SCROLLS: std::cell::RefCell<Vec<(f32, f32)>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// Per-element scroll geometry, published by the host for the duration of one re-entry:
+    /// `[scrollTop, scrollLeft, scrollHeight, scrollWidth, clientHeight, clientWidth]`.
+    static SCROLL_GEOM: std::cell::RefCell<std::collections::HashMap<NodeId, [f32; 6]>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+    /// `element.scrollTop = n` requests the host has not applied yet. The value here is ALREADY CLAMPED
+    /// — a script that sets `scrollTop = 1e9` to reach the bottom must read back the real maximum, not
+    /// a billion, or every "am I at the bottom?" check on the web breaks.
+    static PENDING_ELEM_SCROLLS: std::cell::RefCell<Vec<(NodeId, f32, f32)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
     /// The focused element, and focus requests the page made.
     static ACTIVE_ELEMENT: std::cell::Cell<Option<NodeId>> = const { std::cell::Cell::new(None) };
     static PENDING_FOCUS: std::cell::RefCell<Vec<Option<NodeId>>> = const { std::cell::RefCell::new(Vec::new()) };
@@ -167,6 +176,21 @@ fn set_view_maps(
 ) {
     LAYOUT_RECTS_PTR.with(|c| c.set(layout as *const _));
     STYLES_PTR.with(|c| c.set(styles as *const _));
+}
+
+/// Publish the per-element scroll geometry for one re-entry. Owned by the host; copied, not borrowed,
+/// because a script can *change* it mid-round (by assigning `scrollTop`) and must read its own write.
+pub fn set_scroll_geometry(g: std::collections::HashMap<NodeId, [f32; 6]>) {
+    SCROLL_GEOM.with(|c| *c.borrow_mut() = g);
+}
+
+/// The `element.scrollTop = n` assignments a script made this round, already clamped.
+pub fn take_element_scrolls() -> Vec<(NodeId, f32, f32)> {
+    PENDING_ELEM_SCROLLS.with(|q| std::mem::take(&mut *q.borrow_mut()))
+}
+
+fn scroll_geom(node: NodeId) -> [f32; 6] {
+    SCROLL_GEOM.with(|c| c.borrow().get(&node).copied().unwrap_or([0.0; 6]))
 }
 
 /// Read one node's layout rect from the borrowed snapshot.
@@ -1048,6 +1072,22 @@ unsafe fn define_members(
         def_guarded!(def, c"querySelector", doc_query, 1);
         def_guarded!(def, c"querySelectorAll", doc_query_all, 1);
         def_guarded!(def, c"getBoundingClientRect", el_get_bounding_rect, 0);
+        prop_guarded!(
+            prop,
+            c"scrollTop",
+            el_get_scroll_top,
+            Some(el_set_scroll_top)
+        );
+        prop_guarded!(
+            prop,
+            c"scrollLeft",
+            el_get_scroll_left,
+            Some(el_set_scroll_left)
+        );
+        prop_guarded!(prop, c"scrollHeight", el_get_scroll_height, None);
+        prop_guarded!(prop, c"scrollWidth", el_get_scroll_width, None);
+        prop_guarded!(prop, c"clientHeight", el_get_client_height, None);
+        prop_guarded!(prop, c"clientWidth", el_get_client_width, None);
         // `<canvas>` 2D. Harmless on a non-canvas element: `crate::canvas` simply has no backing store
         // for that node, so every call is a no-op rather than a crash.
         def_guarded!(def, c"__cvInit", cv_init, 2);
@@ -1159,10 +1199,11 @@ unsafe fn define_members(
         prop_guarded!(prop, c"offsetTop", el_get_offset_top, None);
         prop_guarded!(prop, c"offsetWidth", el_get_offset_width, None);
         prop_guarded!(prop, c"offsetHeight", el_get_offset_height, None);
-        prop_guarded!(prop, c"clientWidth", el_get_offset_width, None);
-        prop_guarded!(prop, c"clientHeight", el_get_offset_height, None);
-        prop_guarded!(prop, c"scrollWidth", el_get_offset_width, None);
-        prop_guarded!(prop, c"scrollHeight", el_get_offset_height, None);
+        // `clientWidth/Height` and `scrollWidth/Height` USED to be aliased to `offsetWidth/Height` —
+        // i.e. the element's own border box. That is not merely imprecise, it is the one value that
+        // breaks the thing they exist for: `scrollHeight - clientHeight` came out **always zero**, so
+        // every virtualised list on the web computed a scrollable range of nothing. They are real now,
+        // and they live with the rest of the scroll geometry above.
         prop_guarded!(prop, c"style", el_get_style, None);
         prop_guarded!(prop, c"classList", el_get_class_list, None);
         prop_guarded!(prop, c"dataset", el_get_dataset, None);
@@ -1542,6 +1583,91 @@ fn b64(bytes: &[u8]) -> String {
         });
     }
     out
+}
+
+// ── ELEMENT SCROLLING. `scrollTop` was not missing; it LIED.
+//
+// Reading it gave `undefined`. Writing it created a plain JS own-property that scrolled nothing — so a
+// virtualised list set it, read it back, got its own value, and believed it had worked. **The failure was
+// silent on both sides of the API**, which is the only kind that ships.
+
+/// `element.scrollTop` / `scrollLeft` / `scrollHeight` / `scrollWidth` / `clientHeight` / `clientWidth`.
+macro_rules! scroll_getter {
+    // `$fallback` is what a NON-scroll-container reports. A plain `<div>` still has a `clientHeight`,
+    // and it is its own box — so only a real `overflow: auto|scroll|hidden` container consults the
+    // scroll geometry. Getting this wrong the other way would make `clientHeight` zero for every
+    // ordinary element on the page, which is a far bigger regression than the bug being fixed.
+    ($name:ident, $idx:expr, $fallback:expr) => {
+        unsafe extern "C" fn $name(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+            let v = this_node(vp)
+                .map(
+                    |(_, n)| match SCROLL_GEOM.with(|c| c.borrow().get(&n).copied()) {
+                        Some(g) => g[$idx],
+                        None => {
+                            let r = layout_rect(n).unwrap_or([0.0; 4]);
+                            let _ = &r;
+                            ($fallback)(r)
+                        }
+                    },
+                )
+                .unwrap_or(0.0);
+            *vp = mozjs::jsval::DoubleValue(v as f64);
+            true
+        }
+    };
+}
+scroll_getter!(el_get_scroll_top, 0, |_r: [f32; 4]| 0.0);
+scroll_getter!(el_get_scroll_left, 1, |_r: [f32; 4]| 0.0);
+scroll_getter!(el_get_scroll_height, 2, |r: [f32; 4]| r[3]);
+scroll_getter!(el_get_scroll_width, 3, |r: [f32; 4]| r[2]);
+scroll_getter!(el_get_client_height, 4, |r: [f32; 4]| r[3]);
+scroll_getter!(el_get_client_width, 5, |r: [f32; 4]| r[2]);
+
+/// `element.scrollTop = n`. Clamped **here**, so the script reads back the truth on the very next line.
+unsafe fn el_set_scroll_axis(
+    cx: *mut RawJSContext,
+    argc: u32,
+    vp: *mut Value,
+    vertical: bool,
+) -> bool {
+    let Some((_, node)) = this_node(vp) else {
+        *vp = UndefinedValue();
+        return true;
+    };
+    let g = scroll_geom(node);
+    let want = arg_f64(cx, vp, argc, 0).unwrap_or(0.0) as f32;
+    // max = content extent - visible window. A script that assigns 1e9 to reach the bottom must read
+    // back the real maximum, or "am I at the bottom?" is false forever.
+    let (max, other) = if vertical {
+        ((g[2] - g[4]).max(0.0), g[1])
+    } else {
+        ((g[3] - g[5]).max(0.0), g[0])
+    };
+    let v = if want.is_finite() {
+        want.clamp(0.0, max)
+    } else {
+        0.0
+    };
+    let (left, top) = if vertical { (other, v) } else { (v, other) };
+
+    // Update the mirror the getter reads, so `el.scrollTop = x; el.scrollTop` is x on the same line —
+    // and queue the real scroll for the host, which owns the layout tree.
+    SCROLL_GEOM.with(|c| {
+        if let Some(e) = c.borrow_mut().get_mut(&node) {
+            e[0] = top;
+            e[1] = left;
+        }
+    });
+    PENDING_ELEM_SCROLLS.with(|q| q.borrow_mut().push((node, left, top)));
+    *vp = UndefinedValue();
+    true
+}
+
+unsafe fn el_set_scroll_top(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    el_set_scroll_axis(cx, argc, vp, true)
+}
+unsafe fn el_set_scroll_left(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    el_set_scroll_axis(cx, argc, vp, false)
 }
 
 /// `element.getAttribute(name)` → string | null.

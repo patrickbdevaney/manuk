@@ -640,6 +640,13 @@ pub struct Page {
     zoom: f32,
     /// Decoded raster images keyed by their `<img>` node, painted into each element's box.
     images: std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
+    /// **Per-element scroll offsets** — `overflow: auto|scroll` containers, in CSS px.
+    ///
+    /// Before tick 67, `element.scrollTop` was not a property at all: reading it gave `undefined`, and
+    /// writing it quietly created a plain JS own-property that scrolled nothing. A virtualised list
+    /// would set it, read it back, get its own value, and believe it had worked — **the failure was
+    /// silent on both sides of the API.**
+    scroll_offsets: std::collections::HashMap<manuk_dom::NodeId, (f32, f32)>,
     /// **The external stylesheets, kept.** They used to live only in a local map inside
     /// `fetch_and_apply_stylesheets` and were dropped on the floor afterwards — so every LATER
     /// cascade rebuilt its sheet list from `collect_style_elements`, which sees only inline
@@ -734,6 +741,51 @@ pub fn load_budget() -> std::time::Duration {
             .unwrap_or(12_000);
         std::time::Duration::from_millis(ms)
     })
+}
+
+/// The scroll geometry of every `overflow: auto|scroll|hidden` container:
+/// `[scrollTop, scrollLeft, scrollHeight, scrollWidth, clientHeight, clientWidth]`.
+///
+/// A free function, not a method, because the **inline** scripts run inside `from_dom` — before a `Page`
+/// exists — and a virtualised list that reads `clientHeight` at boot (they all do) must not be handed a
+/// zero. A capability that only works after the deferred pass is a capability that works on half the web.
+fn scroll_geometry_of(
+    root_box: &manuk_layout::LayoutBox,
+    styles: &StyleMap,
+    offsets: &std::collections::HashMap<manuk_dom::NodeId, (f32, f32)>,
+) -> std::collections::HashMap<manuk_dom::NodeId, [f32; 6]> {
+    use manuk_css::Overflow;
+    let mut m = std::collections::HashMap::new();
+    for (node, st) in styles.iter() {
+        if !matches!(
+            st.overflow,
+            Overflow::Auto | Overflow::Scroll | Overflow::Hidden
+        ) {
+            continue;
+        }
+        let Some(b) = root_box.find(*node) else {
+            continue;
+        };
+        let bw = &st.border_width;
+        let client_w = (b.rect.width - bw.left - bw.right).max(0.0);
+        let client_h = (b.rect.height - bw.top - bw.bottom).max(0.0);
+        let (cw, ch) = b.content_extent();
+        let (sx, sy) = offsets.get(node).copied().unwrap_or((0.0, 0.0));
+        // The extent is measured on the ALREADY-SCROLLED tree, so add the offset back: the content did
+        // not get shorter because the user scrolled down it.
+        m.insert(
+            *node,
+            [
+                sy,
+                sx,
+                (ch + sy).max(client_h),
+                (cw + sx).max(client_w),
+                client_h,
+                client_w,
+            ],
+        );
+    }
+    m
 }
 
 impl Page {
@@ -1090,6 +1142,7 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
+        manuk_js::set_scroll_geometry(self.scroll_geometry_map());
         let ran = match manuk_js::run_deferred_scripts(ctx, &mut self.dom, &rects, &self.styles) {
             Ok(n) => n,
             Err(e) => {
@@ -1100,11 +1153,13 @@ impl Page {
             }
         };
         self.drain_canvases();
+        self.drain_element_scrolls();
         if ran > 0 {
             tracing::debug!(scripts = ran, "executed deferred page scripts");
             let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
             self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
             self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            self.reapply_scroll_offsets();
             self.content_height = self.root_box.rect.height;
         }
         ran
@@ -1201,6 +1256,141 @@ impl Page {
         };
         self.images.insert(node, std::rc::Rc::new(img));
         self.iframes.insert(node, url.to_string());
+    }
+
+    // ── ELEMENT SCROLLING (`overflow: auto|scroll`) ────────────────────────────────────────────────
+    //
+    // `scrollTop` was the roadmap's #2 item and it was the worst kind of gap: **not missing, lying.**
+    // Reading gave `undefined`; writing created a plain JS own-property that scrolled nothing, so a
+    // virtualised list set it, read it back, got its own value, and believed it had worked.
+
+    /// The scrollable geometry of `node`, as the DOM reports it:
+    /// `(scrollTop, scrollLeft, scrollHeight, scrollWidth, clientHeight, clientWidth)`.
+    ///
+    /// `clientHeight/Width` are the **padding box** (the visible window), `scrollHeight/Width` the
+    /// content's full extent — and `scrollHeight - clientHeight` is exactly the number every
+    /// virtualised list divides by to decide which slice of the data to render. Give it a wrong number
+    /// and it renders the wrong rows; give it `undefined` and it renders `NaN` of them, which is none.
+    pub fn scroll_geometry(&self, node: manuk_dom::NodeId) -> Option<[f32; 6]> {
+        scroll_geometry_of(&self.root_box, &self.styles, &self.scroll_offsets)
+            .get(&node)
+            .copied()
+    }
+
+    /// Scroll `node` to `(left, top)`, clamped to what there is to scroll. Returns the clamped offset
+    /// actually applied — the DOM must read back the *clamped* value, not the value that was asked for,
+    /// or a list that scrolls to `1e9` to reach the bottom believes it is a billion pixels down.
+    pub fn set_element_scroll(
+        &mut self,
+        node: manuk_dom::NodeId,
+        left: f32,
+        top: f32,
+    ) -> (f32, f32) {
+        // Only a real scroll container scrolls. `overflow: visible` does not, and neither does an
+        // element that has no box.
+        let scrollable = matches!(
+            self.styles.get(&node).map(|s| s.overflow),
+            Some(manuk_css::Overflow::Auto)
+                | Some(manuk_css::Overflow::Scroll)
+                | Some(manuk_css::Overflow::Hidden)
+        );
+        if !scrollable {
+            return (0.0, 0.0);
+        }
+        let Some(g) = self.scroll_geometry(node) else {
+            return (0.0, 0.0);
+        };
+        let max_y = (g[2] - g[4]).max(0.0);
+        let max_x = (g[3] - g[5]).max(0.0);
+        let new = (left.clamp(0.0, max_x), top.clamp(0.0, max_y));
+        let old = self
+            .scroll_offsets
+            .get(&node)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        if (new.0 - old.0).abs() < 0.01 && (new.1 - old.1).abs() < 0.01 {
+            return old;
+        }
+        // Move the subtree by the DELTA, not the absolute offset — the tree already carries the old
+        // one. Translating by the absolute value every time would scroll the content cumulatively, one
+        // full offset per assignment, which looks exactly like a runaway scroll bug.
+        if let Some(b) = self.root_box.find_mut(node) {
+            let (dx, dy) = (-(new.0 - old.0), -(new.1 - old.1));
+            if let manuk_layout::BoxContent::Block(kids) = &mut b.content {
+                for k in kids.iter_mut() {
+                    k.translate(dx, dy);
+                }
+            }
+        }
+        self.scroll_offsets.insert(node, new);
+        new
+    }
+
+    /// Apply the scroll offsets to a freshly laid-out tree.
+    ///
+    /// Layout starts from zero every time, so a re-layout silently un-scrolls every container on the
+    /// page — the user types in a chat box, the list jumps back to the top. This is called after every
+    /// re-layout for that reason.
+    fn reapply_scroll_offsets(&mut self) {
+        let offsets: Vec<(manuk_dom::NodeId, (f32, f32))> =
+            self.scroll_offsets.iter().map(|(k, v)| (*k, *v)).collect();
+        for (node, (sx, sy)) in offsets {
+            if let Some(b) = self.root_box.find_mut(node) {
+                if let manuk_layout::BoxContent::Block(kids) = &mut b.content {
+                    for k in kids.iter_mut() {
+                        k.translate(-sx, -sy);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Every `overflow: auto|scroll|hidden` container's scroll geometry — what the DOM must report.
+    fn scroll_geometry_map(&self) -> std::collections::HashMap<manuk_dom::NodeId, [f32; 6]> {
+        scroll_geometry_of(&self.root_box, &self.styles, &self.scroll_offsets)
+    }
+
+    /// Apply the `element.scrollTop = n` assignments a script just made, and **tell the page it
+    /// scrolled**.
+    ///
+    /// The `scroll` event is not a nicety: an infinite-scroll feed listens for it to fetch the next
+    /// page, and a sticky header listens for it to pin itself. A scroll that moves the pixels and fires
+    /// nothing is half a scroll.
+    fn drain_element_scrolls(&mut self) {
+        let reqs = manuk_js::take_element_scrolls();
+        if reqs.is_empty() {
+            return;
+        }
+        let mut moved = Vec::new();
+        for (node, left, top) in reqs {
+            let before = self
+                .scroll_offsets
+                .get(&node)
+                .copied()
+                .unwrap_or((0.0, 0.0));
+            let after = self.set_element_scroll(node, left, top);
+            if after != before {
+                moved.push(node);
+            }
+        }
+        // Tell the page it scrolled.
+        #[cfg(feature = "spidermonkey")]
+        for node in moved {
+            let Some(ctx) = &self.js else { break };
+            let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+                .root_box
+                .node_rects(&self.dom)
+                .into_iter()
+                .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+                .collect();
+            if let Err(e) =
+                manuk_js::dispatch_event(ctx, &mut self.dom, node, "scroll", &rects, &self.styles)
+            {
+                tracing::warn!("scroll event: {e}");
+            }
+        }
+        #[cfg(not(feature = "spidermonkey"))]
+        let _ = moved;
     }
 
     /// **Move anything a script painted into a `<canvas>` onto the screen.**
@@ -1561,7 +1751,14 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
+        manuk_js::set_scroll_geometry(scroll_geometry_of(
+            &self.root_box,
+            &self.styles,
+            &self.scroll_offsets,
+        ));
         let _ = manuk_js::eval_in_page(ctx, &mut self.dom, src, &rects, &self.styles);
+        self.drain_canvases();
+        self.drain_element_scrolls();
     }
 
     /// **Fire the document lifecycle: `DOMContentLoaded`, then `load`.**
@@ -1833,6 +2030,11 @@ impl Page {
         let js = if dom.find_first("script").is_none() {
             None
         } else {
+            manuk_js::set_scroll_geometry(scroll_geometry_of(
+                &root_box,
+                &styles,
+                &std::collections::HashMap::new(),
+            ));
             match manuk_js::load_document(&mut dom, final_url, &rects, &styles) {
                 Ok((ctx, n)) => {
                     if n > 0 {
@@ -1879,6 +2081,7 @@ impl Page {
             has_sticky,
             zoom: 1.0,
             images: std::collections::HashMap::new(),
+            scroll_offsets: std::collections::HashMap::new(),
             external_css: HashMap::new(),
             fetched_urls: std::collections::HashSet::new(),
             image_attempts: std::collections::HashSet::new(),
@@ -1922,6 +2125,7 @@ impl Page {
             let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
             self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
             self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            self.reapply_scroll_offsets();
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
         }
@@ -1958,6 +2162,7 @@ impl Page {
             let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
             self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
             self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            self.reapply_scroll_offsets();
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
         }
@@ -2045,6 +2250,7 @@ impl Page {
             let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
             self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
             self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            self.reapply_scroll_offsets();
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
         }
@@ -2088,6 +2294,7 @@ impl Page {
             let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
             self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
             self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            self.reapply_scroll_offsets();
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
         }
@@ -2234,6 +2441,7 @@ impl Page {
         // and skips layout entirely — the incremental fast path.
         if damage >= RestyleDamage::Reflow {
             self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            self.reapply_scroll_offsets();
             self.content_height = self.root_box.content_bottom();
         } else if damage == RestyleDamage::Repaint {
             self.apply_paint_only();

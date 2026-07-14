@@ -94,6 +94,15 @@ const CLAIMS: &[(&str, &str)] = &[
     // ── The prototype chain (tick 64)
     ("Element.prototype.setAttribute", "typeof Element.prototype.setAttribute === 'function'"),
     ("EventTarget", "typeof EventTarget === 'function'"),
+    // ── Element scrolling (tick 67). It was not missing, it LIED: reading gave `undefined`, writing
+    // created a plain JS property that scrolled nothing, and `scrollHeight` was aliased to the element's
+    // own box so `scrollHeight - clientHeight` was ALWAYS ZERO — a virtualised list computes its whole
+    // range from that number.
+    ("scrollTop is a number", "typeof document.getElementById('scroller').scrollTop === 'number'"),
+    ("scrollHeight is the content", "document.getElementById('scroller').scrollHeight >= 400"),
+    ("clientHeight is the window", "document.getElementById('scroller').clientHeight === 50"),
+    ("scrollTop clamps", "(function(){var s=document.getElementById('scroller');s.scrollTop=1e9;return s.scrollTop===s.scrollHeight-s.clientHeight})()"),
+
     // ── Canvas: it PAINTS now (tick 66). Fill it red, read the pixel back, and demand red.
     ("canvas getContext", "!!document.createElement('canvas').getContext('2d')"),
     ("canvas actually paints", "(function(){var c=document.createElement('canvas');c.width=c.height=8;var x=c.getContext('2d');x.fillStyle='#f00';x.fillRect(0,0,8,8);var d=x.getImageData(0,0,1,1).data;return d[0]===255&&d[3]===255})()"),
@@ -146,6 +155,7 @@ fn html() -> String {
 <div id="host"><span class="a">x</span><span class="b">y</span></div>
 <div id="pristine"><span>x</span><span>y</span></div>
 <div id="contents" style="display:contents"><i>i</i></div>
+<div id="scroller" style="height:50px;width:80px;overflow:auto"><div style="height:400px">tall</div></div>
 <div id="moved" style="width:20px;height:20px;transform:translateX(100px)">b</div>
 <script>
 var FAIL = [], GAPS = [];

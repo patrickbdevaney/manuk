@@ -258,6 +258,32 @@ pub fn set_view_state(scroll_x: f32, scroll_y: f32, active: Option<manuk_dom::No
 #[cfg(not(feature = "_sm"))]
 pub fn set_view_state(_scroll_x: f32, _scroll_y: f32, _active: Option<manuk_dom::NodeId>) {}
 
+/// Publish per-element scroll geometry for the coming script round:
+/// `[scrollTop, scrollLeft, scrollHeight, scrollWidth, clientHeight, clientWidth]`.
+///
+/// The host owns the layout tree, so the host owns these numbers. They are *copied* rather than
+/// borrowed because a script mutates them mid-round — `el.scrollTop = x` must be readable on the very
+/// next line, and a virtualised list does exactly that.
+#[cfg(feature = "_sm")]
+pub fn set_scroll_geometry(g: std::collections::HashMap<manuk_dom::NodeId, [f32; 6]>) {
+    dom_bindings::set_scroll_geometry(g);
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn set_scroll_geometry(_g: std::collections::HashMap<manuk_dom::NodeId, [f32; 6]>) {}
+
+/// `element.scrollTop = n` assignments a script made, already clamped. The host applies them, because
+/// the host owns the layout tree.
+#[cfg(feature = "_sm")]
+pub fn take_element_scrolls() -> Vec<(manuk_dom::NodeId, f32, f32)> {
+    dom_bindings::take_element_scrolls()
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn take_element_scrolls() -> Vec<(manuk_dom::NodeId, f32, f32)> {
+    Vec::new()
+}
+
 /// Scroll requests the page made (`scrollTo`, `scrollBy`, `scrollIntoView`) — the host performs
 /// them, because the host owns the viewport.
 #[cfg(feature = "_sm")]

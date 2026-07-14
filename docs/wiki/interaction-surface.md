@@ -217,3 +217,57 @@ viewport moved?*
 
 **Ask before re-entering JS.** The overwhelming majority of pages register no scroll listener and no
 observer; re-entering JS on every wheel event for those is pure cost.
+
+## Element scrolling — and the zero that broke every virtualised list
+
+`element.scrollTop` was the roadmap's #2 item, and the gap was not absence. It was a **lie on both sides**:
+
+* reading gave `undefined`;
+* writing quietly created a plain JavaScript own-property. It scrolled nothing. It threw nothing.
+
+So a virtualised list set it, read it back, got its own value, and believed it had worked.
+
+### The worse bug underneath
+
+`clientWidth`, `clientHeight`, `scrollWidth`, `scrollHeight` all **existed** — every one of them aliased to
+`offsetWidth`/`offsetHeight`, i.e. the element's own border box. Which means:
+
+> **`scrollHeight - clientHeight` was always ZERO.**
+
+That is precisely the number every virtualised list divides by to decide which slice of the data to render.
+`undefined` fails loudly. **Zero fails as *"there is nothing to scroll"*** — and the list renders one screen
+of rows and stops, on a page that looks fine.
+
+It surfaced only because two numbers disagreed: the setter's clamp computed 900 correctly (from the real
+geometry) while the getter reported 100 (from the alias). **Two numbers that disagree about the same fact
+mean one of them is not reading what it thinks it is.**
+
+### How it works, and why the painter needed no changes
+
+A scroll container's clip is **already** its padding box (that is what `overflow` has always done here). So
+translating its subtree up by `scrollTop` slides content out of that clip exactly as a real scroll does, and
+anything scrolled out of view is clipped away **for free, because it was always going to be**.
+
+* `LayoutBox::translate(dx, dy)` moves a box and its whole subtree — including the **list marker**, which it
+  did not before (a latent bug: a `<ul>` inside a float would have kept its bullets behind while its text
+  moved).
+* `Page::set_element_scroll` translates by the **delta**, never the absolute offset. The tree already carries
+  the old one; translating by the absolute value on every assignment scrolls cumulatively, which looks
+  exactly like a runaway-scroll bug.
+* `Page::reapply_scroll_offsets()` runs after **every** re-layout. Layout starts from zero each time, so
+  without this the user types in a chat box and the list jumps back to the top.
+
+### The contract with JavaScript
+
+The host owns the layout tree, so the host owns the numbers. `Page` publishes
+`[scrollTop, scrollLeft, scrollHeight, scrollWidth, clientHeight, clientWidth]` per container before **every**
+script round — including the *inline* one, which runs before a `Page` even exists, because a virtualised list
+reads `clientHeight` at boot and a capability that only works after the deferred pass works on half the web.
+
+The setter **clamps in the native**, so `el.scrollTop = 1e9; el.scrollTop` reads back the real maximum on the
+very next line. A script that scrolls to a huge number to reach the bottom is idiomatic; reading back `1e9`
+makes every `atBottom` check false forever.
+
+Non-scroll-containers fall back to their own box for `clientHeight`/`scrollHeight` — a plain `<div>` still has
+a `clientHeight`, and returning zero for every ordinary element would be a far bigger regression than the bug
+being fixed.

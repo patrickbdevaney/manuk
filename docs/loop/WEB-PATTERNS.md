@@ -117,7 +117,7 @@ architecture. Each one below was *named by a framework*, not guessed at.
 | `append` `prepend` `before` `after` `replaceWith` `replaceChildren` | The ChildNode/ParentNode mixins — what any script reaches for to place a node *next to* another | ✅ (tick 25) — all eleven were missing |
 | `outerHTML` (get + set) · `innerText` · `getAttributeNames` | Ubiquitous | ✅ (tick 25) — `innerText` is honestly approximated as `textContent`; the true definition needs layout |
 | `outerHTML`, `innerText` | Common | ✅ both — **measured**, `G_CAPABILITY` |
-| `scrollTop`/`scrollLeft` | Scroll containers, virtualised lists | ❌ **and it lies**: reading gives `undefined`, writing silently creates a plain JS property that scrolls nothing. A virtualised list sets it, reads it back, believes it worked. **Silently wrong beats absent only in the sense that it is worse.** |
+| `scrollTop`/`scrollLeft` + `scrollHeight`/`clientHeight` | Scroll containers, virtualised lists, chat panes, infinite feeds | ✅ **real** (`G_SCROLL`) — truthful geometry, clamped writes, survives re-layout, **moves the actual pixels**, and fires `scroll`. Was worse than missing: `scrollHeight` was aliased to the element's own box, so **`scrollHeight - clientHeight` was always ZERO** — the one number every virtualised list divides by. |
 | `getSelection` / `Range` | Editors, copy handling | ⚠️ `Range` and `getSelection` **exist** (measured); `document.createRange()` does not. The ❌ was too broad. |
 | `Blob` / `File` / `FileReader` | Uploads, downloads, image preview | ✅ all three — **measured**, `G_CAPABILITY`. (`URL.createObjectURL` is still missing.) |
 | **`WebSocket` / `Worker`** | Live feeds, chat, heavy compute | ❌ **deliberately absent** — a page that feature-detects and falls back is better served by honest absence than a stub that lies |
@@ -157,8 +157,7 @@ Every row below has a receipt in `G_CAPABILITY`, which now runs the ledger's cla
 
 1. ~~**`<canvas>` 2D**~~ — **done, tick 66.** It rasterizes on tiny-skia and the pixels reach the screen
    (`G_CANVAS`). `fillText`/`drawImage`/`clip`/gradients remain honest no-ops.
-2. **`scrollTop`/`scrollLeft` — and it lies today.** Reading gives `undefined`; writing quietly creates a
-   plain JS property that scrolls nothing. Virtualised lists, chat panes, scroll-to-top buttons.
+2. ~~**`scrollTop`/`scrollLeft`**~~ — **done, tick 67** (`G_SCROLL`).
 3. **`getComputedStyle().transform`.** The transform *is applied* — the box really moves — so this is a
    read-back gap, not the layout bug the old ledger claimed.
 4. **`display: contents`** — reports `inline`. Layout-transparent wrappers are common in modern CSS.
