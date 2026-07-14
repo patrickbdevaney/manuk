@@ -1504,8 +1504,14 @@ pub fn install(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<()
         "collections.js",
     )?;
 
-    // `Attr` / `NamedNodeMap`. Last, because it wraps the element prototype too.
-    eval(rt, global, crate::attrs_js::ATTRS_JS, "attrs.js").map(|_| ())
+    // `Attr` / `NamedNodeMap`. It wraps the element prototype too.
+    eval(rt, global, crate::attrs_js::ATTRS_JS, "attrs.js")?;
+
+    // `MutationObserver` LAST of all: it wraps the mutating methods, and it must wrap the FINAL versions
+    // of them — including the ones the collections and attrs layers have already replaced. Install it
+    // earlier and it observes a method that is later swapped out from under it, so a page's mutations
+    // stop being reported and nothing says so.
+    eval(rt, global, crate::mutation_js::MUTATION_JS, "mutation.js").map(|_| ())
 }
 
 /// A **microtask checkpoint**: drain the host `queueMicrotask` queue *and* SpiderMonkey's

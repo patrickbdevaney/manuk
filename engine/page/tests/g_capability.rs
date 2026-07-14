@@ -64,6 +64,11 @@ const CLAIMS: &[(&str, &str)] = &[
     ("TreeWalker instance", "document.createTreeWalker(document.body) instanceof TreeWalker"),
     // Live collections (tick 73). A DEAD collection is a Bar 0 hang: `while (el.children.length)
     // el.removeChild(el.firstChild)` never terminates if length is frozen.
+    // MutationObserver (tick 77). It was an INERT STUB that said `function` — a check that only asks
+    // whether a name exists is satisfied by a stub, and a stub is worse than an absence: the library
+    // feature-detects, registers, and silently never reacts.
+    ("MutationObserver records", "(function(){var d=document.createElement('i');var m=new MutationObserver(function(){});m.observe(d,{attributes:true});d.setAttribute('a','1');var r=m.takeRecords();return r.length===1&&r[0].type==='attributes'&&r[0].attributeName==='a'})()"),
+
     // Attr / NamedNodeMap (tick 76). `element.attributes` was UNDEFINED — a sanitizer that cannot
     // enumerate attributes cannot sanitize them.
     ("element.attributes", "(function(){var d=document.createElement('i');d.setAttribute('a','1');return d.attributes.length===1&&d.attributes[0].name==='a'})()"),

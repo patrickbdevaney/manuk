@@ -59,20 +59,27 @@ trap 'restore_all; rm -rf "$BACKUP"' EXIT
 #
 # Two rules now make that impossible:
 #
-#   1. **Refuse to start on a poisoned tree.** Every mutation carries a `MUTATION` marker. If a target
-#      file already contains one, a previous run died and the tree is dirty — stop, and say so.
+#   1. **Refuse to start on a poisoned tree.** Every mutation carries a marker. If a target file already
+#      contains one, a previous run died and the tree is dirty — stop, and say so.
 #   2. **Verify the restore.** After putting the file back, assert the marker is gone. A restore that
 #      silently fails is the same bug one layer down.
+#
+# **The marker must be UNMISTAKABLE, and the first one was not.** It was the bare word `MUTATION`, and the
+# guard therefore refused to run against `engine/js/src/mutation_js.rs` — a file whose legitimate contents
+# include `pub const MUTATION_JS`. The safety mechanism could not tell its own marker from the English
+# word, declared a clean tree poisoned, and blocked the gate. *A guard whose signal is a common substring
+# will eventually fire on a file that simply talks about the thing it guards.*
+MARKER="MANUK_FALSIFY_MUTATION"
 MUTATED=()
 
 poisoned() {  # a leftover marker means a previous run died mid-flight
-  grep -l "MUTATION" "$@" 2>/dev/null | head -1
+  grep -l "$MARKER" "$@" 2>/dev/null | head -1
 }
 
 mutate() {  # mutate <file> <python-replacement-expression>
   local file="$1" pyexpr="$2"
-  if grep -q "MUTATION" "$file" 2>/dev/null; then
-    printf "%sREFUSING: %s already contains a MUTATION marker.%s\n" "$RED$BLD" "$file" "$OFF" >&2
+  if grep -q "$MARKER" "$file" 2>/dev/null; then
+    printf "%sREFUSING: %s already contains a %s marker.%s\n" "$RED$BLD" "$file" "$MARKER" "$OFF" >&2
     printf "%s  A previous falsify run died before restoring it. The tree is POISONED.%s\n" "$RED" "$OFF" >&2
     printf "%s  Restore it (git diff -- %s) before running again.%s\n" "$RED" "$file" "$OFF" >&2
     exit 2
@@ -94,8 +101,8 @@ restore_all() {
     [ -z "$f" ] && continue
     cp "$BACKUP/$(echo "$f" | tr / _)" "$f" 2>/dev/null
     # **Verify the restore.** A restore that silently fails is the original bug, one layer down.
-    if grep -q "MUTATION" "$f" 2>/dev/null; then
-      printf "%sFATAL: failed to restore %s — it still contains a MUTATION marker.%s\n" "$RED$BLD" "$f" "$OFF" >&2
+    if grep -q "$MARKER" "$f" 2>/dev/null; then
+      printf "%sFATAL: failed to restore %s — it still contains a %s marker.%s\n" "$RED$BLD" "$f" "$MARKER" "$OFF" >&2
       printf "%s  Fix it by hand NOW. A poisoned source tree looks exactly like a real regression.%s\n" "$RED" "$OFF" >&2
     fi
   done
@@ -168,7 +175,7 @@ if want G_DEDUP; then
   mutate engine/net/src/lib.rs '
 s = s.replace("""    let gate = {
         let map = INFLIGHT.get_or_init(Default::default);""", """    let gate = {
-        if true { return fetch_with_deadline(url, request_timeout()).await; }   // MUTATION
+        if true { return fetch_with_deadline(url, request_timeout()).await; }   // MANUK_FALSIFY_MUTATION
         let map = INFLIGHT.get_or_init(Default::default);""")
 '
   expect_red G_DEDUP cargo test -q -p manuk-page --features stylo,spidermonkey --test g_dedup
@@ -193,7 +200,7 @@ if want G_LOAD; then
   mutate engine/page/src/lib.rs '
 s = s.replace(
     "pub fn load_budget() -> std::time::Duration {",
-    "pub fn load_budget() -> std::time::Duration {\n    #[allow(unreachable_code)]\n    return std::time::Duration::from_secs(3600);   // MUTATION: no budget at any layer",
+    "pub fn load_budget() -> std::time::Duration {\n    #[allow(unreachable_code)]\n    return std::time::Duration::from_secs(3600);   // MANUK_FALSIFY_MUTATION: no budget at any layer",
     1)
 '
   expect_red G_LOAD cargo test -q -p manuk-page --features stylo,spidermonkey --test g_load_budget
@@ -207,7 +214,7 @@ if want G_FIRST_PAINT; then
   mutate engine/page/src/lib.rs '
 s = s.replace(
     "            let images: HashMap<String, manuk_paint::DecodedImage> = HashMap::new();",
-    "            let images: HashMap<String, manuk_paint::DecodedImage> =   // MUTATION: images back on the paint path\n                fetch_images_owned(&dom, &final_url, &std::collections::HashSet::new(), &std::collections::HashSet::new()).await.0;",
+    "            let images: HashMap<String, manuk_paint::DecodedImage> =   // MANUK_FALSIFY_MUTATION: images back on the paint path\n                fetch_images_owned(&dom, &final_url, &std::collections::HashSet::new(), &std::collections::HashSet::new()).await.0;",
     1)
 '
   expect_red G_FIRST_PAINT cargo test -q -p manuk-page --features stylo,spidermonkey --test g_first_paint
@@ -220,7 +227,7 @@ if want G_DEFER; then
   mutate engine/js/src/dom_bindings.rs '
 s = s.replace(
     "            blocks_paint =\n                !is_module && el.attr(\"defer\").is_none() && el.attr(\"async\").is_none();",
-    "            blocks_paint = true;   // MUTATION: every script blocks paint again",
+    "            blocks_paint = true;   // MANUK_FALSIFY_MUTATION: every script blocks paint again",
     1)
 '
   expect_red G_DEFER cargo test -q -p manuk-page --features stylo,spidermonkey --test g_defer
@@ -234,7 +241,7 @@ if want G_FORM; then
   mutate engine/page/src/lib.rs '
 s = s.replace(
     "        // The handler may have re-rendered the page (that is the entire point of intercepting submit).\n        self.relayout(fonts, viewport_width);\n        proceed",
-    "        self.relayout(fonts, viewport_width);\n        let _ = proceed;\n        true   // MUTATION: navigate anyway, ignoring preventDefault()",
+    "        self.relayout(fonts, viewport_width);\n        let _ = proceed;\n        true   // MANUK_FALSIFY_MUTATION: navigate anyway, ignoring preventDefault()",
     1)
 '
   expect_red G_FORM cargo test -q -p manuk-page --features stylo,spidermonkey --test g_form
@@ -247,7 +254,7 @@ if want G_IFRAME; then
   mutate engine/css/src/stylo_engine.rs '
 s = s.replace(
     "        if tag == \"iframe\" {\n            if s.width == crate::Dim::Auto {\n                s.width = crate::Dim::Px(300.0);\n            }",
-    "        if false {   // MUTATION: no iframe default size\n            if s.width == crate::Dim::Auto {\n                s.width = crate::Dim::Px(300.0);\n            }",
+    "        if false {   // MANUK_FALSIFY_MUTATION: no iframe default size\n            if s.width == crate::Dim::Auto {\n                s.width = crate::Dim::Px(300.0);\n            }",
     1)
 '
   expect_red G_IFRAME cargo test -q -p manuk-page --features stylo,spidermonkey --test g_iframe
@@ -260,7 +267,7 @@ if want G_ANIMATION; then
   mutate engine/css/src/stylo_map.rs '
 s = s.replace(
     "    if s.has_animation && s.opacity == 0.0 {\n        s.opacity = 1.0;\n    }",
-    "    if false {   // MUTATION: render the animation first frame, hiding the content\n        s.opacity = 1.0;\n    }",
+    "    if false {   // MANUK_FALSIFY_MUTATION: render the animation first frame, hiding the content\n        s.opacity = 1.0;\n    }",
     1)
 '
   expect_red G_ANIMATION cargo test -q -p manuk-page --features stylo,spidermonkey --test g_animation
@@ -292,7 +299,7 @@ if want G_NO_PHANTOM_FORK; then
       printf "%sREFUSING: ./stylo is ALREADY dirty — restore it first (git -C stylo checkout .)%s\n" "$RED" "$OFF"
       exit 2
     fi
-    echo "// MUTATION: a phantom edit to a directory nothing builds" >> "$_PF_FILE"
+    echo "// MANUK_FALSIFY_MUTATION: a phantom edit to a directory nothing builds" >> "$_PF_FILE"
     # ⚠ Capture FIRST, then grep. Piping `verify.sh | grep` under `set -o pipefail` returns non-zero
     # because *verify* exits non-zero — which is exactly what we WANT it to do — so the pipeline's status
     # reports failure even when grep matched. The first version of this falsifier did that and declared a
@@ -317,7 +324,7 @@ if want G_ARENA_U64; then
   mutate engine/dom/src/lib.rs '
 s = s.replace(
     "        NodeId((generation as u64) << 32 | (index as u64 & Self::INDEX_MASK))",
-    "        NodeId(index as u64 & Self::INDEX_MASK)   // MUTATION: drop the generation (32-bit shape)",
+    "        NodeId(index as u64 & Self::INDEX_MASK)   // MANUK_FALSIFY_MUTATION: drop the generation (32-bit shape)",
     1)
 '
   expect_red G_ARENA_U64 cargo test -q -p manuk-dom pointer_width
@@ -331,7 +338,7 @@ if want G_VIEWPORT; then
   mutate engine/page/src/lib.rs '
 s = s.replace(
     "        if !manuk_js::wants_view_events(ctx) {",
-    "        if true {   // MUTATION: never notify the page that the viewport moved",
+    "        if true {   // MANUK_FALSIFY_MUTATION: never notify the page that the viewport moved",
     1)
 '
   expect_red G_VIEWPORT cargo test -q -p manuk-page --features stylo,spidermonkey --test g_viewport
@@ -345,7 +352,7 @@ if want G_DOM_IMPL; then
   mutate engine/dom/src/lib.rs '
 s = s.replace(
     "        if self.is_inclusive_ancestor(child, parent) {\n            return;\n        }\n\n        // **Inserting a DocumentFragment moves its CHILDREN, not itself.**",
-    "        // MUTATION: no cycle check\n        // **Inserting a DocumentFragment moves its CHILDREN, not itself.**",
+    "        // MANUK_FALSIFY_MUTATION: no cycle check\n        // **Inserting a DocumentFragment moves its CHILDREN, not itself.**",
     1)
 '
   expect_red G_DOM_IMPL cargo test -q -p manuk-page --features stylo,spidermonkey --test g_dom_impl
@@ -359,7 +366,7 @@ if want G_CONTAIN_NATIVE; then
   mutate engine/js/src/dom_bindings.rs '
 s = s.replace(
     "    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {\n        Ok(ok) => ok,",
-    "    match Ok::<bool, ()>(f()) {   // MUTATION: no containment — a panic here aborts the browser\n        Ok(ok) => ok,",
+    "    match Ok::<bool, ()>(f()) {   // MANUK_FALSIFY_MUTATION: no containment — a panic here aborts the browser\n        Ok(ok) => ok,",
     1)
 '
   expect_red G_CONTAIN_NATIVE cargo test -q -p manuk-page --features stylo,spidermonkey --test g_contain_native
@@ -373,7 +380,7 @@ if want G_STALE_NODE; then
   mutate engine/dom/src/lib.rs '
 s = s.replace(
     "        match self.nodes.get(id.index()) {\n            Some(n) => matches!(n.data, NodeData::Fragment),\n            None => false,\n        }",
-    "        matches!(self.nodes[id.index()].data, NodeData::Fragment)   // MUTATION: index blindly",
+    "        matches!(self.nodes[id.index()].data, NodeData::Fragment)   // MANUK_FALSIFY_MUTATION: index blindly",
     1)
 '
   expect_red G_STALE_NODE cargo test -q -p manuk-dom stale_handle
@@ -387,7 +394,7 @@ if want G_CHARDATA; then
   mutate engine/js/src/dom_bindings.rs '
 s = s.replace(
     "    (*dom).character_data(node).map(|t| t.encode_utf16().collect())",
-    "    (*dom).character_data(node).map(|t| t.chars().map(|c| c as u16).collect())   // MUTATION: chars, not UTF-16",
+    "    (*dom).character_data(node).map(|t| t.chars().map(|c| c as u16).collect())   // MANUK_FALSIFY_MUTATION: chars, not UTF-16",
     1)
 '
   expect_red G_CHARDATA cargo test -q -p manuk-page --features stylo,spidermonkey --test g_chardata
@@ -398,7 +405,7 @@ if want G_LIFECYCLE; then
   mutate engine/js/src/event_loop.rs '
 s = s.replace(
     "__tasks.push({ f: fn, w: __now + ms, s: ++__seq });",
-    "__tasks.push({ f: fn, w: __now, s: ++__seq });   // MUTATION: throw the DELAY away",
+    "__tasks.push({ f: fn, w: __now, s: ++__seq });   // MANUK_FALSIFY_MUTATION: throw the DELAY away",
     1)
 '
   expect_red G_LIFECYCLE cargo test -q -p manuk-page --features stylo,spidermonkey --test g_lifecycle
@@ -413,7 +420,7 @@ if want G_LIFECYCLE_LOAD; then
   mutate engine/page/src/lib.rs '
 s = s.replace(
     "        page.fire_lifecycle(\"load\");",
-    "        // MUTATION: never fire load on the sync path",
+    "        // MANUK_FALSIFY_MUTATION: never fire load on the sync path",
     1)
 '
   expect_red G_LIFECYCLE_LOAD cargo test -q -p manuk-page --features stylo,spidermonkey --test g_lifecycle
@@ -427,7 +434,7 @@ if want G_SELECTOR; then
   mutate engine/css/src/stylo_engine.rs '
 s = s.replace(
     "                        self.add_rules(&nested.0, guard, device, order);",
-    "                        let _ = &nested;   // MUTATION: stop descending into nested rules",
+    "                        let _ = &nested;   // MANUK_FALSIFY_MUTATION: stop descending into nested rules",
     1)
 '
   expect_red G_SELECTOR cargo test -q -p manuk-page --features stylo,spidermonkey --test g_selector
@@ -441,7 +448,7 @@ if want G_HAS; then
   mutate engine/css/src/stylo_engine.rs '
 s = s.replace(
     "    let has_sheets: Vec<&Stylesheet> = sheets.iter().filter(|sh| sh.has_relative_rules()).collect();",
-    "    let has_sheets: Vec<&Stylesheet> = Vec::new();   // MUTATION: no :has() supplement\n    let _ = sheets;",
+    "    let has_sheets: Vec<&Stylesheet> = Vec::new();   // MANUK_FALSIFY_MUTATION: no :has() supplement\n    let _ = sheets;",
     1)
 '
   expect_red G_HAS cargo test -q -p manuk-page --features stylo,spidermonkey --test g_selector
@@ -455,7 +462,7 @@ if want G_SILENT_FAIL; then
   mutate engine/js/src/dom_bindings.rs '
 s = s.replace(
     "        mozjs::jsapi::SetPromiseRejectionTrackerCallback(\n            raw_cx,\n            Some(promise_rejection_tracker),\n            std::ptr::null_mut(),\n        );",
-    "        // MUTATION: nothing listens for unhandled rejections\n        let _ = promise_rejection_tracker as *const ();",
+    "        // MANUK_FALSIFY_MUTATION: nothing listens for unhandled rejections\n        let _ = promise_rejection_tracker as *const ();",
     1)
 '
   expect_red G_SILENT_FAIL cargo test -q -p manuk-page --features stylo,spidermonkey --test g_silent_fail
@@ -469,7 +476,7 @@ if want G_RUNTIME_COUNT; then
   mutate engine/net/src/lib.rs '
 s = s.replace(
     "pub fn runtime() -> &\x27static tokio::runtime::Runtime {",
-    "pub fn runtime() -> &\x27static tokio::runtime::Runtime {\n    // MUTATION: count a fresh runtime on every call\n    RUNTIME_INSTANTIATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);",
+    "pub fn runtime() -> &\x27static tokio::runtime::Runtime {\n    // MANUK_FALSIFY_MUTATION: count a fresh runtime on every call\n    RUNTIME_INSTANTIATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);",
     1)
 '
   expect_red G_RUNTIME_COUNT cargo test -q -p manuk-shell runtime_instantiations
@@ -483,7 +490,7 @@ if want G_ALLOC; then
   mutate engine/page/src/lib.rs '
 s = s.replace(
     "        if !manuk_js::wants_view_events(ctx) {\n            return;\n        }",
-    "        // MUTATION: do the work even when nobody is listening\n        let _ = manuk_js::wants_view_events(ctx);",
+    "        // MANUK_FALSIFY_MUTATION: do the work even when nobody is listening\n        let _ = manuk_js::wants_view_events(ctx);",
     1)
 '
   expect_red G_ALLOC cargo test -q -p manuk-page --features spidermonkey --test g_alloc -- --ignored
@@ -501,7 +508,7 @@ if want G_TEARDOWN; then
   mutate shell/src/gui.rs '
 s = s.replace(
     "use ",
-    "#[allow(dead_code)]\nfn _mutation_exit() { std::process::exit(0); }   // MUTATION: skips the profile flush\nuse ",
+    "#[allow(dead_code)]\nfn _mutation_exit() { std::process::exit(0); }   // MANUK_FALSIFY_MUTATION: skips the profile flush\nuse ",
     1)
 '
   expect_red G_TEARDOWN cargo test -q -p manuk-shell --test g_teardown
@@ -520,7 +527,7 @@ if want G6; then
   mutate engine/a11y/src/lib.rs '
 s = s.replace(
     "    pub fn hit_test(&self, x: f32, y: f32) -> Option<&A11yNode> {",
-    "    pub fn hit_test(&self, x: f32, y: f32) -> Option<&A11yNode> {\n        if true { let _ = (x, y); return None; }   // MUTATION: nothing is clickable\n        #[allow(unreachable_code)]",
+    "    pub fn hit_test(&self, x: f32, y: f32) -> Option<&A11yNode> {\n        if true { let _ = (x, y); return None; }   // MANUK_FALSIFY_MUTATION: nothing is clickable\n        #[allow(unreachable_code)]",
     1)
 '
   expect_red G6 bash -c '
@@ -543,7 +550,7 @@ if want G_INTERACT; then
   mutate shell/src/tab.rs '
 s = s.replace(
     "    pub fn open(&mut self, url: impl Into<String>) -> TabId {",
-    "    pub fn open(&mut self, url: impl Into<String>) -> TabId {\n        std::thread::sleep(std::time::Duration::from_millis(50));   // MUTATION: stall the UI thread",
+    "    pub fn open(&mut self, url: impl Into<String>) -> TabId {\n        std::thread::sleep(std::time::Duration::from_millis(50));   // MANUK_FALSIFY_MUTATION: stall the UI thread",
     1)
 '
   expect_red G_INTERACT cargo test -q -p manuk-shell tab_operations
@@ -558,7 +565,7 @@ if want G3; then
 import re
 s = re.sub(
     r"const AFFORDANCES: &\[\(&str, &str\)\] = &\[\n",
-    "const AFFORDANCES: &[(&str, &str)] = &[\n        (\"mutation-dead-button\", \"\"),   // MUTATION: a control that does nothing\n",
+    "const AFFORDANCES: &[(&str, &str)] = &[\n        (\"mutation-dead-button\", \"\"),   // MANUK_FALSIFY_MUTATION: a control that does nothing\n",
     s, count=1)
 '
   expect_red G3 cargo test -q -p manuk-shell affordance
@@ -577,7 +584,7 @@ if want G1; then
   mutate engine/layout/src/lib.rs '
 s = s.replace(
     "    pub fn node_rects(&self, dom: &Dom) -> std::collections::HashMap<NodeId, Rect> {",
-    "    pub fn node_rects(&self, dom: &Dom) -> std::collections::HashMap<NodeId, Rect> {\n        if true { let _ = dom; return Default::default(); }   // MUTATION: the page renders nothing\n        #[allow(unreachable_code)]",
+    "    pub fn node_rects(&self, dom: &Dom) -> std::collections::HashMap<NodeId, Rect> {\n        if true { let _ = dom; return Default::default(); }   // MANUK_FALSIFY_MUTATION: the page renders nothing\n        #[allow(unreachable_code)]",
     1)
 '
   expect_red G1 cargo run -q -p manuk-wpt --release -- fidelity --urls "https://news.ycombinator.com" --out /tmp/manuk-fid-f --floor 0.75
@@ -591,7 +598,7 @@ if want G_GLOBALS; then
   mutate engine/js/src/event_loop.rs '
 s = s.replace(
     "      if (typeof globalThis.WebSocket === \x27undefined\x27) {",
-    "      if (false) {   // MUTATION: WebSocket does not exist",
+    "      if (false) {   // MANUK_FALSIFY_MUTATION: WebSocket does not exist",
     1)
 '
   expect_red G_GLOBALS cargo test -q -p manuk-page --features stylo,spidermonkey --test g_globals
@@ -602,7 +609,7 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_RUNAWAY; then
   mutate engine/js/src/event_loop.rs '
-s = s.replace("MAX_TASKS_PER_DRAIN: u32 = 20_000", "MAX_TASKS_PER_DRAIN: u32 = u32::MAX;   // MUTATION\nconst _UNUSED_MUT: u32 = 0")
+s = s.replace("MAX_TASKS_PER_DRAIN: u32 = 20_000", "MAX_TASKS_PER_DRAIN: u32 = u32::MAX;   // MANUK_FALSIFY_MUTATION\nconst _UNUSED_MUT: u32 = 0")
 '
   expect_red G_RUNAWAY cargo test -q -p manuk-page --features stylo,spidermonkey --test g_runaway
 fi
@@ -627,7 +634,7 @@ s = s.replace("""    rooted!(in(cx) let global = CurrentGlobalOrNull(&wrap_cx(cx
     }
     *vp = NullValue();
     true
-}""", """    *vp = NullValue();   // MUTATION: ownerDocument returns null
+}""", """    *vp = NullValue();   // MANUK_FALSIFY_MUTATION: ownerDocument returns null
     let _ = cx;
     true
 }""")
@@ -636,6 +643,19 @@ s = s.replace("""    rooted!(in(cx) let global = CurrentGlobalOrNull(&wrap_cx(cx
 fi
 
 echo
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_MUTATION; then
+  # Stop recording. The observer still constructs, `observe()` still returns, `typeof MutationObserver` is
+  # still "function" — and it reports nothing, forever. That is the inert stub it replaced, and it is worse
+  # than an absence: the library feature-detects, finds it, registers, and silently never reacts.
+  mutate engine/js/src/mutation_js.rs '
+old = "      reg.observer._records.push(rec);"
+assert old in s, "MUTATION DID NOT APPLY - a falsifier that changes nothing certifies nothing (PROCESS #15)"
+s = s.replace(old, "      /* MANUK_FALSIFY_MUTATION: observed nothing */", 1)
+'
+  expect_red G_MUTATION cargo test -q -p manuk-page --features stylo,spidermonkey --test g_mutation
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_ATTRS; then
@@ -721,7 +741,7 @@ if want G_RANGE; then
   mutate engine/js/src/event_loop.rs '
 s = s.replace(
     "    eval(rt, global, crate::range_js::RANGE_JS, \"range.js\").map(|_| ())",
-    "    Ok(()) // MUTATION: the inert stub Range survives",
+    "    Ok(()) // MANUK_FALSIFY_MUTATION: the inert stub Range survives",
     1,
 )
 '
@@ -736,7 +756,7 @@ if want G_DISPLAY_CONTENTS; then
   mutate engine/layout/src/taffy_tree.rs '
 s = s.replace(
     "            Some(CssDisplay::Contents) => out.extend(flex_items(dom, styles, c, depth + 1)),",
-    "            Some(CssDisplay::Contents) => out.push(c), // MUTATION: the wrapper stays an item",
+    "            Some(CssDisplay::Contents) => out.push(c), // MANUK_FALSIFY_MUTATION: the wrapper stays an item",
     1,
 )
 '
@@ -766,7 +786,7 @@ if want G_SCROLL; then
   mutate engine/page/src/lib.rs '
 s = s.replace(
     "        if let Some(b) = self.root_box.find_mut(node) {\n            let (dx, dy) = (-(new.0 - old.0), -(new.1 - old.1));",
-    "        if let Some(b) = self.root_box.find_mut(node) {\n            let (dx, dy) = (0.0, 0.0); // MUTATION: the pixels do not move",
+    "        if let Some(b) = self.root_box.find_mut(node) {\n            let (dx, dy) = (0.0, 0.0); // MANUK_FALSIFY_MUTATION: the pixels do not move",
     1,
 )
 '
@@ -797,7 +817,7 @@ if want G_CAPABILITY; then
   mutate engine/js/src/dom_bindings.rs '
 s = s.replace(
     "        def_guarded!(def, c\"append\", el_append, 1);",
-    "        // MUTATION: the ledger still claims append works",
+    "        // MANUK_FALSIFY_MUTATION: the ledger still claims append works",
 )
 '
   expect_red G_CAPABILITY cargo test -q -p manuk-page --features stylo,spidermonkey --test g_capability
@@ -812,7 +832,7 @@ if want G_PROTOTYPE; then
   mutate engine/js/src/dom_bindings.rs '
 s = s.replace(
     "    // NO `define_members` here. The members live on `Node.prototype`, defined once per global.",
-    "    define_members(cx, &obj, Tier::Node); // MUTATION: shadow the prototype",
+    "    define_members(cx, &obj, Tier::Node); // MANUK_FALSIFY_MUTATION: shadow the prototype",
 )
 '
   expect_red G_PROTOTYPE cargo test -q -p manuk-page --features stylo,spidermonkey --test g_prototype
@@ -828,7 +848,7 @@ if want G_CLEAN_EXIT; then
   mutate engine/js/src/lib.rs '
 s = s.replace(
     "        spidermonkey::arm_teardown();",
-    "        // MUTATION: teardown disarmed",
+    "        // MANUK_FALSIFY_MUTATION: teardown disarmed",
 )
 '
   expect_red G_CLEAN_EXIT cargo test -q -p manuk-page --features stylo,spidermonkey --test g_clean_exit

@@ -631,6 +631,8 @@ pub mod collections_js;
 #[cfg(feature = "_sm")]
 pub mod dom_bindings;
 #[cfg(feature = "_sm")]
+pub mod mutation_js;
+#[cfg(feature = "_sm")]
 pub mod range_js;
 #[cfg(feature = "_sm")]
 pub mod traversal_js;

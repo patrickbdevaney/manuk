@@ -3054,6 +3054,47 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 77 — `MutationObserver` observed nothing, and said `function` the whole time
+
+**TICK SHAPE: capability.** Seventh tick at the far horizon. **+44 WPT subtests** (2126 → 2170, **33.8%**).
+Bar 0 clean.
+
+> **Seven WPT-aimed ticks: +433 subtests. Five near-horizon ticks: +1.**
+
+`new MutationObserver(cb)` constructed. `observe()` returned. `takeRecords()` returned `[]`. The callback
+**never fired.** And `typeof MutationObserver === 'function'` was `true` throughout — which is exactly how
+it survived. *A check that only asks whether a name exists is satisfied by a stub.* That is the third
+inert-stub interface found in seven ticks (`Range`, `TreeWalker`, now this), and the pattern is the point:
+
+> **A stub is worse than an absence.** The library feature-detects, finds it, registers, and then silently
+> never reacts. Vue, Alpine and lit use it to notice DOM changes they did not make; every analytics and
+> consent script uses it to see injected content.
+
+It records for real now — attributes and childList, with `oldValue` **only when the registration asked for
+it** (handing it over unasked is a conformance failure that looks like generosity), `attributeFilter`,
+`subtree`, and `disconnect`.
+
+**Delivery is a microtask, and that is not a detail.** A loop that appends 100 nodes must produce **one**
+callback with 100 records, not 100 callbacks. Deliver synchronously and every observer on the page runs
+100× per frame — *a performance collapse, not a conformance bug.* The gate asserts `batched:1,100`.
+
+**The fourth capability to land on the back of tick 64's real prototypes**, and it could not have been done
+without them: it observes by *wrapping the mutating methods on the DOM prototypes*.
+
+**Stated limit, so nobody re-discovers it:** only mutations made by a **script** are observed. Engine-
+internal edits (the parser, the deferred-script pass) do not go through those wrappers. That is mostly the
+right behaviour — an observer registered after parsing should not see the parse — but it is a limit, and
+wiring the natives to emit records directly is the complete answer.
+
+**And the falsifier refused to run** (PROCESS #44). Its poison-guard greps target files for a leftover
+mutation marker — and the marker was the bare word `MUTATION`, so it declared `mutation_js.rs` poisoned on
+account of `pub const MUTATION_JS`. **The safety mechanism could not tell its own sentinel from the English
+word.** It is `MANUK_FALSIFY_MUTATION` now: *a guard whose signal is a common substring will eventually
+fire on a file that merely discusses the subject.*
+
+**The ratchet.** Capability: **up**. Performance: unchanged (wall 129s). Instrument fidelity: **up** — a
+real gate, proven falsifiable, and the falsifier's own guard repaired.
+
 ## Tick 76 — `element.attributes` was `undefined`. Not incomplete: absent.
 
 **TICK SHAPE: capability.** Sixth tick at the far horizon. **+49 WPT subtests** (2077 → 2126, **33.1%**).
