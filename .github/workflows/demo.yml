@@ -81,7 +81,11 @@ jobs:
           test -f demo/www/pages.json || { echo "::error::demo/www/pages.json missing — run scripts/demo-pages.sh and commit"; exit 1; }
           echo "  pages: $(python3 -c "import json;print(len(json.load(open('demo/www/pages.json'))))")"
 
+      # `enablement: true` turns Pages ON via the API if it is not already — otherwise this action fails
+      # with a bare 404 and nothing explains that the repo simply has no Pages site yet.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: demo/www
