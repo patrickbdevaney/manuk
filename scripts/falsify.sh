@@ -638,6 +638,19 @@ fi
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_EVENT_SURFACE; then
+  # Drop `once` again — read the options object as a bare boolean, which is what the native did. Nothing
+  # throws; the listener simply keeps firing, forever. `{once:true}` is one of the most common options in
+  # modern code and its failure is completely invisible.
+  mutate engine/js/src/dom_bindings.rs '
+old = "            once: !!o.once,"
+assert old in s, "MUTATION DID NOT APPLY - a falsifier that changes nothing certifies nothing (PROCESS #15)"
+s = s.replace(old, "            once: false,", 1)
+'
+  expect_red G_EVENT_SURFACE cargo test -q -p manuk-page --features stylo,spidermonkey --test g_event_surface
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_COLLECTIONS; then
   # Freeze `length` — a snapshot, which is what collections were. Nothing throws. The collection still
   # indexes. And `while (el.children.length) el.removeChild(el.firstChild)` — the universal "empty this

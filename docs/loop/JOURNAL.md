@@ -3054,6 +3054,40 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 74 — `{once: true}` fired forever, and nothing complained
+
+**TICK SHAPE: capability.** Fourth tick aimed at the far horizon, and the largest move yet:
+**+118 WPT subtests** (1810 → 1928). **`dom/` crosses 30.0%.** Bar 0 clean.
+
+> **Four WPT-aimed ticks: +191 subtests. Five near-horizon ticks: +1.**
+
+**Propagation was already right** — bubbling, capture, `stopPropagation`, `target`/`currentTarget`, the
+`dispatchEvent` return value. What was missing was everything *around* it, and **every gap failed
+silently**:
+
+* **`{once: true}` fired every time, forever.** The native read `addEventListener`'s third argument as a
+  bare boolean, so an options *object* meant `capture: false` and `once` was **dropped on the floor**. It
+  is one of the most common options in modern code, and its failure is invisible: the handler just keeps
+  running.
+* **`e.returnValue` and `e.cancelBubble` were `undefined`.** They are IE-era aliases the spec kept
+  *because the web never stopped using them* — jQuery's event normalisation, Google Analytics, and a great
+  deal of ordinary handler code. `if (e.returnValue === false)` was **dead code**, and
+  `e.cancelBubble = true` set a junk property that stopped nothing.
+* **`document.createEvent` did not exist**, so `createEvent is not a function` took the whole script with
+  it. It had been **deferred for fear of an infinite dispatch loop** — and that fear was misplaced: the
+  loop was never in `createEvent`, it was a frozen `timeStamp`, and that was fixed ticks ago. **A deferral
+  outlived its reason.**
+* the invocation loop **indexed a live array while mutating it**, so a `once` removal mid-dispatch skipped
+  the next listener. It iterates a snapshot now.
+* a listener could be registered **twice** (the spec says no), and an **object with `handleEvent`** — the
+  `EventListener` interface every class-based component uses — was not accepted at all.
+* `{signal: abortSignal}` now removes the listener on abort, which is how a component tears down all its
+  handlers in one call.
+
+**The ratchet.** Capability: **up** — and a whole class of silent handler bugs closed. Performance:
+unchanged (wall 154s). Instrument fidelity: **up** — proven falsifiable by dropping `once` again and
+watching it go red.
+
 ## Tick 73 — a dead collection is not a conformance gap. It is a hang.
 
 **TICK SHAPE: capability.** Third tick aimed at the far horizon. **+17 WPT subtests** (1793 → 1810,

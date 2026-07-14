@@ -2204,13 +2204,11 @@ unsafe fn el_add_event_listener(cx: *mut RawJSContext, argc: u32, vp: *mut Value
         *vp = UndefinedValue();
         return true;
     }
-    // Third arg: a boolean `true` selects the capture phase (an options object defaults to
-    // bubble here; `{capture:true}` parsing is a follow-on).
-    let capture = argc >= 3 && {
-        let opt = *vp.add(4);
-        opt.is_boolean() && opt.to_boolean()
-    };
-    // Stash the handler (arg 1) on the global, then register it via the helper.
+    // The third argument is passed through RAW, because it is not a boolean — it is `boolean | {capture,
+    // once, passive, signal}`. Collapsing it to `opt.is_boolean() && opt.to_boolean()` (as this did)
+    // meant an options OBJECT was silently read as `capture: false` **and `once` was dropped entirely**:
+    // `addEventListener('click', f, {once: true})` fired every time, forever. That is one of the most
+    // common option in modern code, and its failure is completely silent.
     let global = CurrentGlobalOrNull(&wrap_cx(cx));
     if !global.is_null() {
         rooted!(in(cx) let g = global);
@@ -2221,11 +2219,17 @@ unsafe fn el_add_event_listener(cx: *mut RawJSContext, argc: u32, vp: *mut Value
             c"__pending_fn".as_ptr(),
             fnval.handle(),
         );
+        rooted!(in(cx) let optval = if argc >= 3 { *vp.add(4) } else { UndefinedValue() });
+        JS_SetProperty(
+            &mut wrap_cx(cx),
+            g.handle(),
+            c"__pending_opts".as_ptr(),
+            optval.handle(),
+        );
         let script = format!(
-            "__addEventListener({}, {}, __pending_fn, {})",
+            "__addEventListener({}, {}, __pending_fn, __pending_opts)",
             node.0,
             js_string_literal(&ty),
-            capture
         );
         let _ = eval_in_current_global(cx, &script);
     }
@@ -5282,17 +5286,60 @@ const CSSOM_PRELUDE: &str = r#"
 
 const LISTENER_PRELUDE: &str = r#"
     globalThis.__listeners = {};
-    globalThis.__addEventListener = function(nid, type, fn, capture) {
-        if (typeof fn !== 'function') return;
-        var k = nid + ':' + type + ':' + (capture ? 'c' : 'b');
-        (__listeners[k] || (__listeners[k] = [])).push(fn);
+    // The third argument to addEventListener is `boolean | {capture, once, passive, signal}`. It used to
+    // be read as a bare boolean, so an options OBJECT meant `capture: false` and **`once` was dropped**:
+    // `addEventListener('click', f, {once: true})` fired every time, forever, and nothing complained.
+    globalThis.__normOpts = function(o) {
+        if (o === true) return { capture: true, once: false, passive: false, signal: null };
+        if (!o || typeof o !== 'object') return { capture: false, once: false, passive: false, signal: null };
+        return {
+            capture: !!o.capture,
+            once: !!o.once,
+            passive: !!o.passive,
+            signal: o.signal || null,
+        };
+    };
+    globalThis.__addEventListener = function(nid, type, fn, opts) {
+        // A handler may be an OBJECT with a `handleEvent` method — the EventListener interface, which
+        // real code (and every class-based component) uses.
+        if (typeof fn !== 'function' && !(fn && typeof fn.handleEvent === 'function')) return;
+        var o = __normOpts(opts);
+        var k = nid + ':' + type + ':' + (o.capture ? 'c' : 'b');
+        var arr = (__listeners[k] || (__listeners[k] = []));
+        // The spec: a listener with the same callback AND the same capture flag is not added twice.
+        for (var i = 0; i < arr.length; i++) {
+            if (arr[i].fn === fn) return;
+        }
+        var entry = { fn: fn, once: o.once, passive: o.passive };
+        arr.push(entry);
+        // `signal: AbortSignal` — abort removes the listener. Widely used to tear down a component's
+        // handlers in one call.
+        if (o.signal && typeof o.signal.addEventListener === 'function') {
+            o.signal.addEventListener('abort', function () {
+                globalThis.__removeEventListener(nid, type, fn, o.capture);
+            });
+        }
     };
     globalThis.__removeEventListener = function(nid, type, fn, capture) {
-        var k = nid + ':' + type + ':' + (capture ? 'c' : 'b');
+        var o = __normOpts(capture);
+        var k = nid + ':' + type + ':' + (o.capture ? 'c' : 'b');
         var arr = __listeners[k];
         if (!arr) return;
-        var i = arr.indexOf(fn);
-        if (i >= 0) arr.splice(i, 1);
+        for (var i = 0; i < arr.length; i++) {
+            if (arr[i].fn === fn) { arr.splice(i, 1); return; }
+        }
+    };
+    // Invoke one listener entry, honouring `once` and the EventListener-object form.
+    globalThis.__invokeListener = function(entry, node, ev, key) {
+        if (entry.once) {
+            var arr = __listeners[key];
+            if (arr) {
+                var i = arr.indexOf(entry);
+                if (i >= 0) arr.splice(i, 1);   // remove BEFORE calling — the spec, and it prevents a
+            }                                    // handler that re-dispatches from re-entering itself
+        }
+        var f = (typeof entry.fn === 'function') ? entry.fn : entry.fn.handleEvent;
+        return f.call(entry.fn === f ? node : entry.fn, ev);
     };
     // A real Event with capture/bubble propagation, target/currentTarget, preventDefault
     // and stopPropagation. Returns false iff preventDefault was called (so the engine can
@@ -5323,13 +5370,21 @@ const LISTENER_PRELUDE: &str = r#"
         ev.stopImmediatePropagation = function () { this._stop = true; this._stopImmediate = true; };
         var invoke = function (node, phase) {
             if (!node || ev._stop) return;
-            var arr = __listeners[node.__nodeId + ':' + type + ':' + phase];
+            var key = node.__nodeId + ':' + type + ':' + phase;
+            var arr = __listeners[key];
             if (!arr) return;
             ev.currentTarget = node;
+            // Iterate a COPY: `once` removes entries mid-walk, and a handler may add or remove others.
+            // Mutating the array under a live index skips listeners — silently.
+            var snapshot = arr.slice();
             // `stopPropagation` stops the WALK; only `stopImmediatePropagation` stops the remaining
             // listeners on this same node. Conflating them silences handlers that should still run.
-            for (var i = 0; i < arr.length && !ev._stopImmediate; i++) {
-                try { arr[i].call(node, ev); } catch (e) {}
+            for (var i = 0; i < snapshot.length && !ev._stopImmediate; i++) {
+                var entry = snapshot[i];
+                if (arr.indexOf(entry) === -1) continue;   // removed by an earlier handler this round
+                try { __invokeListener(entry, node, ev, key); } catch (e) {
+                    if (typeof __reportError === 'function') __reportError(e);
+                }
             }
         };
         // Capture: root → target's parent.
@@ -5563,10 +5618,58 @@ const WINDOW_PRELUDE: &str = r#"
                 this.preventDefault = function () { if (this.cancelable) this.defaultPrevented = true; };
                 this.stopPropagation = function () { this._stop = true; };
                 this.stopImmediatePropagation = function () { this._stop = true; this._stopImmediate = true; };
+
+                // ── The LEGACY surface, which is not optional and is not rare.
+                //
+                // `returnValue` and `cancelBubble` are IE-era aliases the spec kept, because the web
+                // never stopped using them. jQuery's event normalisation, Google Analytics, and a great
+                // deal of ordinary handler code read and write them. They were `undefined`, so
+                // `if (e.returnValue === false)` was always false, and `e.cancelBubble = true` set a junk
+                // property that stopped nothing.
+                Object.defineProperty(this, 'returnValue', {
+                    configurable: true,
+                    get: function () { return !this.defaultPrevented; },
+                    set: function (v) { if (v === false) { this.preventDefault(); } },
+                });
+                Object.defineProperty(this, 'cancelBubble', {
+                    configurable: true,
+                    get: function () { return !!this._stop; },
+                    set: function (v) { if (v) { this.stopPropagation(); } },
+                });
+
+                // `initEvent` — the pre-constructor way to build an event, and still what
+                // `document.createEvent()` hands back. Legacy libraries feature-detect on it.
+                this.initEvent = function (t, b, c) {
+                    this.type = String(t);
+                    this.bubbles = !!b;
+                    this.cancelable = !!c;
+                    this.defaultPrevented = false;
+                    this._stop = false;
+                    this._stopImmediate = false;
+                };
+                this.composedPath = function () {
+                    var p = [];
+                    for (var n = this.target; n; n = n.parentNode) { p.push(n); }
+                    return p;
+                };
             };
         };
         defEvent('Event', {});
         defEvent('CustomEvent', { detail: null });
+
+        // `document.createEvent(interface)` — the pre-constructor API. It was deferred once for fear of
+        // an infinite dispatch loop; the loop was never in `createEvent`, it was in a frozen `timeStamp`
+        // (see above), and that is fixed. Legacy code, jQuery's `trigger`, and Google Analytics all use
+        // this path, and `createEvent is not a function` takes the whole script with it.
+        if (typeof g.document !== 'undefined' && typeof g.document.createEvent !== 'function') {
+            g.document.createEvent = function (iface) {
+                var C = g[String(iface)] || g.Event;
+                var e = new C('');
+                // Per spec the event is created UNINITIALIZED — `initEvent` must be called before it is
+                // dispatched, and until then its type is the empty string.
+                return e;
+            };
+        }
         defEvent('MouseEvent', {
             clientX: 0, clientY: 0, screenX: 0, screenY: 0, pageX: 0, pageY: 0,
             button: 0, buttons: 0, altKey: false, ctrlKey: false, metaKey: false, shiftKey: false

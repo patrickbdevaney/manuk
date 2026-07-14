@@ -64,6 +64,11 @@ const CLAIMS: &[(&str, &str)] = &[
     ("TreeWalker instance", "document.createTreeWalker(document.body) instanceof TreeWalker"),
     // Live collections (tick 73). A DEAD collection is a Bar 0 hang: `while (el.children.length)
     // el.removeChild(el.firstChild)` never terminates if length is frozen.
+    // The event surface (tick 74). Every one of these failed SILENTLY.
+    ("addEventListener once", "(function(){var d=document.createElement('i');var n=0;d.addEventListener('x',function(){n++},{once:true});d.dispatchEvent(new Event('x'));d.dispatchEvent(new Event('x'));return n===1})()"),
+    ("event.returnValue", "(function(){var e=new Event('x',{cancelable:true});if(e.returnValue!==true)return false;e.preventDefault();return e.returnValue===false})()"),
+    ("event.cancelBubble", "(function(){var e=new Event('x');e.cancelBubble=true;return e.cancelBubble===true})()"),
+    ("document.createEvent", "(function(){var e=document.createEvent('Event');e.initEvent('z',true,true);return e.type==='z'&&e.bubbles===true})()"),
     ("children is live", "(function(){var d=document.createElement('div');d.appendChild(document.createElement('i'));var c=d.children;var n=c.length;d.appendChild(document.createElement('i'));return c.length===n+1})()"),
     ("drain idiom terminates", "(function(){var d=document.createElement('div');for(var i=0;i<5;i++)d.appendChild(document.createElement('i'));var s=0;while(d.children.length&&s<50){d.removeChild(d.firstChild);s++}return d.children.length===0&&s===5})()"),
     ("FILTER_REJECT prunes", "(function(){var d=document.createElement('div');d.innerHTML='<i id=x><b id=y></b></i>';var w=document.createTreeWalker(d,NodeFilter.SHOW_ELEMENT,{acceptNode:function(n){return n.id==='x'?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT}});var s=[],n;while((n=w.nextNode()))s.push(n.id);return s.indexOf('y')===-1})()"),
