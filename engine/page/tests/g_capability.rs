@@ -64,6 +64,12 @@ const CLAIMS: &[(&str, &str)] = &[
     ("TreeWalker instance", "document.createTreeWalker(document.body) instanceof TreeWalker"),
     // Live collections (tick 73). A DEAD collection is a Bar 0 hang: `while (el.children.length)
     // el.removeChild(el.firstChild)` never terminates if length is frozen.
+    // The *AttributeNS family (tick 79). 160 failing subtests said "setAttributeNS is not a function" —
+    // it is how SVG's xlink:href, MathML, and every XML-ish document set an attribute at all.
+    ("setAttributeNS", "(function(){var d=document.createElement('i');d.setAttributeNS('http://www.w3.org/1999/xlink','xlink:href','#x');return d.getAttribute('xlink:href')==='#x'})()"),
+    ("getAttributeNS", "(function(){var d=document.createElement('i');d.setAttributeNS('http://www.w3.org/1999/xlink','xlink:href','#x');return d.getAttributeNS('http://www.w3.org/1999/xlink','href')==='#x'})()"),
+    ("setAttributeNS rejects a prefix with no namespace", "(function(){var d=document.createElement('i');try{d.setAttributeNS(null,'p:q','v');return false}catch(e){return e.name==='NamespaceError'}})()"),
+
     // DocumentType (tick 78). `createDocumentType` returned a plain object literal — prototype `Object`,
     // so `instanceof DocumentType` was false — and it validated nothing.
     ("DocumentType", "typeof DocumentType === 'function'"),

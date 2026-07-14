@@ -70,3 +70,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 76	2402365	1784043501	2026-07-14T11:38:21-04:00	844	capability	254	9	407	4	33	66	2126	6429	1	150	4	`element.attributes` was `undefined`. Not incomplete: absent.
 77	2251205	1784044632	2026-07-14T11:57:12-04:00	1131	capability	129	10	478	46	34	67	2170	6429	1	151	4	`MutationObserver` observed nothing, and said `function` the whole time
 78	c730907	1784045547	2026-07-14T12:12:27-04:00	915	capability	159	6	107	4	34	71	2175	6429	1	152	4	a bundle of correct fixes can be jointly wrong, and per-file totals cannot say which
+79	a33535c	1784046038	2026-07-14T12:20:38-04:00	491	capability	156	6	107	3	34	74	2345	6484	1	153	4	the cheapest instrument is the one you already have and did not run

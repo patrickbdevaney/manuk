@@ -222,6 +222,57 @@ pub const ATTRS_JS: &str = r#"
     return want;
   };
 
+  // ── The `*AttributeNS` family. 160 failing subtests said `node.setAttributeNS is not a function`, and
+  // that is not an exotic API: it is how SVG's `xlink:href`, MathML, and every XML-ish document set an
+  // attribute at all.
+  //
+  // **Honest limit:** the namespace is validated and then *ignored* for storage — `setAttributeNS(ns,
+  // 'xlink:href', v)` stores the attribute under its qualified name. That is right for every document
+  // this engine renders (attributes are looked up by qualified name), and it is wrong for a document that
+  // distinguishes two attributes with the same qualified name in different namespaces. Which is not a
+  // thing any real page does, and is exactly the kind of limit that must be *said* rather than discovered.
+  owner.setAttributeNS = function (ns, qname, value) {
+    qname = String(qname);
+    if (qname === '') {
+      var e = new Error('an empty attribute name is not allowed');
+      e.name = 'InvalidCharacterError';
+      throw e;
+    }
+    var prefix = qname.indexOf(':') >= 0 ? qname.split(':')[0] : null;
+    var nsStr = (ns === null || ns === undefined || ns === '') ? null : String(ns);
+    var XMLNS = 'http://www.w3.org/2000/xmlns/';
+    var XML = 'http://www.w3.org/XML/1998/namespace';
+    if ((prefix && !nsStr)
+        || (prefix === 'xml' && nsStr !== XML)
+        || ((prefix === 'xmlns' || qname === 'xmlns') && nsStr !== XMLNS)
+        || (nsStr === XMLNS && prefix !== 'xmlns' && qname !== 'xmlns')) {
+      var e2 = new Error("'" + qname + "' is not valid in namespace " + nsStr);
+      e2.name = 'NamespaceError';
+      throw e2;
+    }
+    this.setAttribute(qname, String(value));
+  };
+  owner.getAttributeNS = function (_ns, local) {
+    local = String(local);
+    // Look up by local name first, then by any qualified name that ends in it — which is what a document
+    // written with a prefix actually stores.
+    if (this.hasAttribute(local)) return this.getAttribute(local);
+    var names = this.getAttributeNames ? this.getAttributeNames() : [];
+    for (var i = 0; i < names.length; i++) {
+      if (names[i].split(':').pop() === local) return this.getAttribute(names[i]);
+    }
+    return null;
+  };
+  owner.hasAttributeNS = function (ns, local) { return this.getAttributeNS(ns, local) !== null; };
+  owner.removeAttributeNS = function (ns, local) {
+    local = String(local);
+    if (this.hasAttribute(local)) { this.removeAttribute(local); return; }
+    var names = this.getAttributeNames ? this.getAttributeNames() : [];
+    for (var i = 0; i < names.length; i++) {
+      if (names[i].split(':').pop() === local) { this.removeAttribute(names[i]); return; }
+    }
+  };
+
   document.createAttribute = function (name) {
     name = String(name);
     if (name === '') {

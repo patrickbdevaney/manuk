@@ -3054,6 +3054,52 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 79 — the cheapest instrument is the one you already have and did not run
+
+**TICK SHAPE: capability.** **+170 WPT subtests** (2175 → 2345, **33.8% → 36.2%**) — the second-largest
+single-tick move, from **one contained fix**. Bar 0 clean.
+
+> **Eight WPT-aimed ticks: +608 subtests. Five near-horizon ticks: +1.**
+
+**Tick 78 concluded that the WPT harness could not show which subtests fail, and wrote that into
+`PROCESS.md` as an instrument gap to go and build.** It was already built. `manuk-wpt wpt dom
+--show-failures` prints every failing subtest's **name and its assertion message**, and has for many ticks.
+
+I asserted an absent measurement without running the one command that would have checked — and then
+enshrined the false claim **in the ledger whose entire purpose is to stop exactly that.** PROCESS #45 is
+rewritten. The rule now binds this file too: *an entry claiming something is missing must name the command
+that was run to establish it.*
+
+**And running it took one command to produce a ranked work list:**
+
+| failing subtests | message |
+|---:|---|
+| 441 | `assert_throws_dom` (things that must throw and do not) |
+| 390 | `doc is undefined` — iframe documents |
+| 195 | `wrong class after modification` — classList serialization |
+| **160** | **`node.setAttributeNS is not a function`** |
+| 103 | `document.createProcessingInstruction is not a function` |
+| 57 | `defaultPrevented expected false but got true` |
+
+`setAttributeNS` is not an exotic API — **it is how SVG's `xlink:href`, MathML, and every XML-ish document
+set an attribute at all.** Implementing the four `*AttributeNS` methods, with the spec's `NamespaceError`
+validation, was **+170 subtests.**
+
+> **The most expensive thing in this loop is still guessing — and the cheapest instrument is the one you
+> already have and did not run.**
+
+**Honest limit, stated rather than discovered:** the namespace is *validated* and then **ignored for
+storage** — `setAttributeNS(ns, 'xlink:href', v)` keys the attribute by its qualified name. That is right
+for every document this engine renders, and wrong only for a document holding two same-named attributes in
+different namespaces, which no real page does.
+
+**Deliberately not done:** `createProcessingInstruction` (103 subtests) needs a new DOM node type with
+match-exhaustiveness fallout across four crates. Faking it as a `Comment` would be the exact stub pattern
+these last ten ticks have been killing, so it waits for a tick with room to do it properly.
+
+**The ratchet.** Capability: **up, sharply**. Performance: unchanged. Instrument fidelity: **up** — a false
+entry removed from the process ledger, which is worth more than the entry it replaced.
+
 ## Tick 78 — a bundle of correct fixes can be jointly wrong, and per-file totals cannot say which
 
 **TICK SHAPE: capability.** **+5 WPT subtests** (2170 → 2175, 33.8%). Bar 0 clean. A small tick, and it is
