@@ -2808,3 +2808,39 @@ built an instrument (52) found the answer in one run. *Build the probe first —
 
 *(The libclang and GUI-lib deps added in 49/51 were not wasted: mozjs and winit genuinely need them once
 the build gets far enough to care. They were just never the thing that was failing.)*
+
+## Tick 54 — the Windows linker died on a crypto backend nobody asked for (2026-07-13)
+
+**TICK SHAPE: infrastructure**
+
+**With CI finally able to speak (tick 52) and buildable at all (tick 53), the remaining failures named
+themselves.** macOS went fully green — *including the mozjs default build*, which had been assumed
+unverifiable — and so did the musl and macOS static targets. Two failures left, and both were real.
+
+**1. Windows: `error: linking with link.exe failed: exit code 1104`** — and `aws-lc-sys` compiling in the
+log above it.
+
+`engine/net/Cargo.toml` declared **`tokio-rustls = "0.26"` with DEFAULT FEATURES**, and tokio-rustls's
+defaults enable **`rustls/aws-lc-rs`** — a C/assembly crypto backend that needs **NASM + CMake** and fails
+the Windows link outright.
+
+> **Every other rustls dependency in the workspace was already carefully pinned to the pure-Rust `ring`
+> backend** (`hyper-rustls`, `rustls`, both `default-features = false`). **This one silently was not — and
+> cargo's feature UNION meant that a single unpinned declaration re-enabled aws-lc for the entire graph.**
+> Pinning it removes `aws-lc-sys` from the tree *completely*.
+
+*A feature you disabled in four places is still enabled if you forgot it in the fifth. Union, not
+intersection.*
+
+**2. The Linux badge got all the way past every build and failed at `test` — and my own annotation
+instrument reported the OPPOSITE of the truth.** `ci-run.sh`'s error extractor only knew what a *compile*
+error looks like (`error:` / `error[`), and **a cargo test failure has no `error:` line at all.** So it
+fell through to `tail -25` and annotated **twenty-five lines of PASSING tests.**
+
+An instrument that reports success lines when something failed is worse than one that says nothing. It now
+knows the shape of a test failure: `test … FAILED`, the `failures:` block, `panicked at`, `assertion`,
+`left:`/`right:`, `test result: FAILED`.
+
+**The pattern across 52–54 is one pattern:** *every time I could not see, I guessed; every time I built the
+instrument, the answer arrived in one run.* Three ticks, three instruments (annotations, then the OOM
+guard, then a test-aware extractor), and each one immediately paid for itself.

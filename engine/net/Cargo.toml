@@ -40,7 +40,12 @@ serde_json.workspace = true
 tower-service = "0.3"
 psl = "2"
 tokio-socks = "0.5"
-tokio-rustls = "0.26"
+# ⚠ `default-features = false` is load-bearing. tokio-rustls's DEFAULTS enable `rustls/aws-lc-rs`,
+# which drags in `aws-lc-sys` — a C/asm crypto backend needing NASM+CMake — and on Windows that fails
+# the link outright (`link.exe: exit code 1104`). Every other rustls dependency here is already pinned to
+# the pure-Rust `ring` backend; this one silently was not, and cargo's feature UNION meant one unpinned
+# declaration re-enabled aws-lc for the whole graph. It is the single reason the Windows build died.
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12", "logging"] }
 # Native content-blocking (E5), feature-gated. Brave's audited adblock engine.
 # Keep default features (embedded-domain-resolver, full-regex-handling).
 adblock = { version = "0.13", optional = true }

@@ -24,7 +24,11 @@ if [ "$STATUS" -ne 0 ]; then
   # Prefer the compiler's own error lines; fall back to the tail if there are none (a build-script panic,
   # a linker kill, an OOM). `signal: 9` is the OOM killer and MUST be named as such, because it looks
   # exactly like a compile error and gets read as "the code is broken" (see scripts/mem-guard.sh).
-  ERRS="$(grep -E '^(error|error\[|thread .* panicked|.*signal: 9)' "$TMP" | head -20)"
+  # A cargo TEST failure looks nothing like a compile error: there is no `error:` line at all. The signal
+  # is `test ... FAILED`, the `failures:` block, and the panic/assert text. The first version of this
+  # script missed all of that, fell through to `tail`, and annotated 25 lines of PASSING tests — which is
+  # a instrument reporting the opposite of the truth.
+  ERRS="$(grep -E '^(error|error\[|warning: unused|thread .* panicked|.*signal: 9)|FAILED|^assertion|^ *left:|^ *right:|panicked at|^test result: FAILED' "$TMP" | head -25)"
   [ -z "$ERRS" ] && ERRS="$(tail -25 "$TMP")"
   while IFS= read -r line; do
     printf '::error title=%s::%s\n' "$LABEL" "${line//$'\r'/}"

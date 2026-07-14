@@ -238,3 +238,16 @@ the whole shape of the bug.*
 
 > **The general rule, and this project had already written it down: a committed artifact must be usable by
 > anyone who clones this repo.**
+
+## Cargo features are a UNION — one unpinned declaration re-enables what four others disabled
+
+`hyper-rustls` and `rustls` were both declared `default-features = false, features = ["ring", …]` to keep
+the crypto backend **pure Rust**. But `engine/net` also declared **`tokio-rustls = "0.26"` with default
+features**, and tokio-rustls's defaults enable **`rustls/aws-lc-rs`** — a C/assembly backend requiring
+**NASM + CMake**, which fails the **Windows** link with `link.exe: exit code 1104`.
+
+**Cargo unions features across every dependent.** Disabling a feature in four places does nothing if the
+fifth declaration enables it. Pinning `tokio-rustls` to `ring` removed `aws-lc-sys` from the tree entirely.
+
+> **Check with `cargo tree -f "{p} :: {f}"`, not by reading Cargo.toml** — the manifest says what you
+> *asked for*; the tree says what you *got*.

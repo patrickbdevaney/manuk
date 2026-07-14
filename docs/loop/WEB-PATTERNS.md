@@ -526,3 +526,10 @@ wasm lanes green without guessing.
 No web capability changed. But: a committed `.cargo/config.toml` hard-coded `rustc-wrapper = "sccache"`,
 which made **the repository unbuildable for every contributor and every CI runner without that tool
 installed**. Now opt-in. This is a prerequisite for anyone else ever running this engine.
+
+## Tick 54 — Windows buildability (infrastructure)
+
+No web capability changed. But the engine now links on **Windows**: an unpinned `tokio-rustls` was pulling
+the `aws-lc-rs` crypto backend (NASM/CMake) into a graph that had otherwise been pinned to pure-Rust
+`ring`, and it failed the Windows link. Cross-platform reach is a prerequisite for "a daily driver", not a
+footnote.
