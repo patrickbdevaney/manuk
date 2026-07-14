@@ -12,8 +12,17 @@ does not pan a bitmap. Hover it — that is the real hit-test against the laid-o
 **compare with Chromium** to put our render next to Chromium's of the same document, so you do not have to
 take any of this on trust.
 
-*What is not real, said in-product too:* **no JavaScript** (SpiderMonkey is C++ and does not target wasm)
-and **no live fetching** (bundled snapshots). Saying so is the only thing that makes the rest believable.
+It runs **41 real sites**, grouped the way this project thinks about the web — **doc** (Wikipedia, HN,
+RFC-Editor, BBC, SQLite, kernel.org…), **app** (the server-rendered DOM of React, Next, Svelte, Vue, Astro,
+Remix, Solid, Angular…), and **platform** (Tailwind, Bootstrap, GitHub, Stripe, MUI, Cloudflare, Linear…).
+Each carries a Chromium reference render, so each one can be disbelieved. Point at anything and the panel
+shows you **Stylo's actual computed style and Taffy's actual box** — read out of the live engine, not
+re-derived for display — next to the real cost of each stage: parse, cascade, layout, raster.
+
+*What is not real, said in-product too:* **no JavaScript** and **no live fetching** (bundled snapshots).
+SpiderMonkey *can* target wasm, but only as an **interpreter** — WebAssembly forbids runtime code
+generation, which is what a JIT is — and it ships as a separate WASI module that cannot be linked into this
+binary. Saying so is the only thing that makes the rest believable.
 
 A browser engine built from scratch in Rust — ~48k lines across 16 crates — with one shared engine
 core driving two front-ends: a **headful GUI browser** (`shell`) and a **headless agentic browser**

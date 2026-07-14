@@ -3,113 +3,154 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Manuk — a browser engine, running inside your browser</title>
+<title>Manuk — a browser engine you can see inside</title>
 <style>
   :root {
-    --ink: #12100e; --paper: #faf8f5; --line: #ded7cd; --dim: #6d6459;
-    --accent: #b4472c; --ok: #2f6b4f;
-    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+    --ink:#12100e; --paper:#faf8f5; --line:#ded7cd; --dim:#6d6459;
+    --accent:#b4472c; --ok:#2f6b4f; --box:#2f6bb4;
+    --mono: ui-monospace,"SF Mono","Cascadia Mono",Menlo,monospace;
   }
-  @media (prefers-color-scheme: dark) {
-    :root { --ink: #ece7e0; --paper: #14130f; --line: #33302a; --dim: #968c7f; --accent: #e0714f; --ok: #6fbf95; }
+  @media (prefers-color-scheme: dark){
+    :root{--ink:#ece7e0;--paper:#14130f;--line:#33302a;--dim:#968c7f;--accent:#e0714f;--ok:#6fbf95;--box:#6fa8e0;}
   }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--paper); color: var(--ink);
-    font: 16px/1.6 ui-serif, Georgia, "Times New Roman", serif;
-    -webkit-font-smoothing: antialiased;
-  }
-  header { padding: 2.5rem 1.5rem 1rem; max-width: 68ch; margin: 0 auto; }
-  h1 { font-size: 1.9rem; line-height: 1.15; margin: 0 0 .5rem; letter-spacing: -.01em; }
-  h1 em { font-style: normal; color: var(--accent); }
-  .lede { color: var(--dim); margin: 0 0 1.25rem; }
-  .honest {
-    border-left: 3px solid var(--accent); padding: .75rem 0 .75rem 1rem; margin: 0 0 1.5rem;
-    font-size: .92rem; background: color-mix(in srgb, var(--accent) 5%, transparent);
-  }
-  .honest b { color: var(--accent); }
-  .honest .no { color: var(--dim); }
-  main { max-width: 1200px; margin: 0 auto; padding: 0 1.5rem 4rem; }
-  .bar {
-    display: flex; gap: .5rem; flex-wrap: wrap; align-items: center;
-    padding: .75rem 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
-    margin-bottom: 1rem; font-family: var(--mono); font-size: .8rem;
-  }
-  button {
-    font: inherit; font-family: var(--mono); font-size: .8rem;
-    background: transparent; color: var(--ink); border: 1px solid var(--line);
-    padding: .35rem .7rem; border-radius: 3px; cursor: pointer;
-  }
-  button:hover { border-color: var(--accent); color: var(--accent); }
-  button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
-  .stats { margin-left: auto; color: var(--dim); }
-  .stage { display: grid; gap: 1rem; grid-template-columns: 1fr; }
-  .stage.split { grid-template-columns: 1fr 1fr; }
-  @media (max-width: 800px) { .stage.split { grid-template-columns: 1fr; } }
-  figure { margin: 0; }
-  figcaption {
-    font-family: var(--mono); font-size: .72rem; color: var(--dim);
-    padding: .4rem 0; display: flex; justify-content: space-between;
-  }
-  figcaption .who { color: var(--ink); font-weight: 700; }
-  .frame {
-    border: 1px solid var(--line); border-radius: 4px; overflow: auto;
-    height: 70vh; background: #fff; position: relative;
-  }
-  canvas { display: block; }
-  #hover {
-    position: sticky; bottom: 0; font-family: var(--mono); font-size: .72rem;
-    color: var(--dim); padding: .4rem 0; min-height: 1.6em;
-  }
-  footer { max-width: 68ch; margin: 0 auto; padding: 0 1.5rem 4rem; color: var(--dim); font-size: .85rem; }
-  a { color: var(--accent); }
-  .boot { font-family: var(--mono); font-size: .8rem; color: var(--dim); padding: 2rem 0; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+       font:16px/1.6 ui-serif,Georgia,"Times New Roman",serif;-webkit-font-smoothing:antialiased}
+  header{padding:2.5rem 1.5rem 1rem;max-width:70ch;margin:0 auto}
+  h1{font-size:1.95rem;line-height:1.15;margin:0 0 .5rem;letter-spacing:-.01em}
+  h1 em{font-style:normal;color:var(--accent)}
+  .lede{color:var(--dim);margin:0 0 1.25rem}
+  .honest{border-left:3px solid var(--accent);padding:.75rem 0 .75rem 1rem;margin:0 0 1rem;
+          font-size:.9rem;background:color-mix(in srgb,var(--accent) 5%,transparent)}
+  .honest b{color:var(--accent)} .honest .no{color:var(--dim)}
+  details{font-size:.85rem;color:var(--dim);margin-bottom:1.5rem}
+  details summary{cursor:pointer;color:var(--accent)}
+  details p{margin:.6rem 0}
+  main{max-width:1400px;margin:0 auto;padding:0 1.5rem 4rem}
+  .bar{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;padding:.75rem 0;
+       border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:1rem;
+       font-family:var(--mono);font-size:.75rem}
+  .grp{display:flex;gap:.3rem;align-items:center;padding-right:.6rem;margin-right:.3rem;border-right:1px solid var(--line)}
+  .grp .lbl{color:var(--dim);font-size:.68rem;text-transform:uppercase;letter-spacing:.06em}
+  button{font:inherit;font-family:var(--mono);font-size:.75rem;background:transparent;color:var(--ink);
+         border:1px solid var(--line);padding:.3rem .55rem;border-radius:3px;cursor:pointer}
+  button:hover{border-color:var(--accent);color:var(--accent)}
+  button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .stage{display:grid;gap:1rem;grid-template-columns:1fr 320px}
+  .stage.split{grid-template-columns:1fr 1fr 320px}
+  @media(max-width:1100px){.stage,.stage.split{grid-template-columns:1fr}}
+  figure{margin:0}
+  figcaption{font-family:var(--mono);font-size:.7rem;color:var(--dim);padding:.4rem 0;
+             display:flex;justify-content:space-between;gap:1rem}
+  figcaption .who{color:var(--ink);font-weight:700}
+  .frame{border:1px solid var(--line);border-radius:4px;overflow:hidden;height:74vh;background:#fff;position:relative}
+  canvas{display:block;cursor:crosshair}
+  #ov{position:absolute;inset:0;pointer-events:none}
+  aside{border:1px solid var(--line);border-radius:4px;padding:.9rem;font-family:var(--mono);
+        font-size:.72rem;height:74vh;overflow:auto;line-height:1.5}
+  aside h3{margin:0 0 .5rem;font-family:var(--mono);font-size:.66rem;text-transform:uppercase;
+           letter-spacing:.08em;color:var(--accent)}
+  aside .sec{border-top:1px dashed var(--line);margin-top:.9rem;padding-top:.7rem}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:.15rem .6rem}
+  .kv dt{color:var(--dim)} .kv dd{margin:0;word-break:break-word}
+  .layer{display:flex;justify-content:space-between;padding:.12rem 0}
+  .layer b{font-weight:700} .layer .ms{color:var(--ok)}
+  .swatch{display:inline-block;width:.7em;height:.7em;border:1px solid var(--line);vertical-align:-1px;margin-right:.25em}
+  .hint{color:var(--dim);font-style:italic}
+  footer{max-width:70ch;margin:0 auto;padding:0 1.5rem 4rem;color:var(--dim);font-size:.85rem}
+  a{color:var(--accent)}
+  .boot{font-family:var(--mono);font-size:.8rem;color:var(--dim);padding:2rem 0}
 </style>
 </head>
 <body>
 <header>
-  <h1>A browser engine, <em>running inside your browser</em>.</h1>
+  <h1>A browser engine <em>you can see inside</em>.</h1>
   <p class="lede">
-    Everything below this line is rendered by Manuk — a from-scratch engine in Rust — compiled to
-    WebAssembly and executing on this page, right now. Scroll it. Hover it. It is laying the document
-    out as you do.
+    Manuk — written from scratch in Rust — compiled to WebAssembly and executing on this page. It is
+    parsing, cascading, laying out and rasterizing real websites in your browser right now. Point at
+    anything and it will show you <em>its own</em> computed style and layout box, straight out of Stylo and
+    Taffy. Click a link and it will navigate.
   </p>
   <p class="honest">
-    <b>Real:</b> Stylo (the actual cascade), Taffy (the actual flex/grid), tiny-skia (the actual
-    rasterizer), and this engine's own DOM, layout and paint. Scrolling <b>re-renders</b> — it does not
-    pan a bitmap.<br>
-    <span class="no"><b>Not real, and worth saying:</b> no JavaScript (SpiderMonkey is C++ and does not
-    target wasm), and no live URL fetching — these are bundled snapshots of real pages. Saying so is the
-    only thing that makes the rest of it believable.</span>
+    <b>Real:</b> <b>Stylo</b> (Firefox's cascade), <b>Taffy</b> (flex/grid), <b>tiny-skia</b> (the
+    rasterizer), and this engine's own DOM, inline/float/table layout, paint, hit-testing and stacking.
+    Scrolling <b>re-renders</b>. The inspector reads the <b>actual</b> engine state — nothing is
+    re-derived for display.<br>
+    <span class="no"><b>Not real:</b> no JavaScript, and no live fetching — these are bundled snapshots of
+    real sites, with their stylesheets inlined. Saying so is the only thing that makes the rest
+    believable.</span>
   </p>
+  <details>
+    <summary>Why no JavaScript? (the honest, technical answer)</summary>
+    <p>
+      The engine embeds <b>SpiderMonkey</b> natively — real JS, real JIT. But this demo targets
+      <code>wasm32-unknown-unknown</code>, and SpiderMonkey is C++: <code>mozjs</code>'s FFI links a native
+      library that has no build for that target.
+    </p>
+    <p>
+      SpiderMonkey <em>can</em> run on WebAssembly — but only as an <b>interpreter</b>, because
+      <b>WebAssembly forbids runtime code generation</b>, which is precisely what a JIT is. That is why the
+      Bytecode Alliance built a portable baseline interpreter for it. It also ships as a separate WASI
+      module, not something linkable into this Rust wasm binary.
+    </p>
+    <p>
+      So: shipping JS here is a <em>project</em>, not a feature — and pretending otherwise would undermine
+      everything else on this page. What you are looking at is the <b>rendering engine</b>, in full.
+    </p>
+  </details>
 </header>
 
 <main>
-  <div class="bar">
-    <span id="pages"></span>
-    <button id="cmp" aria-pressed="false">compare with Chromium</button>
-    <span class="stats" id="stats">booting…</span>
-  </div>
+  <div class="bar" id="bar"></div>
 
   <div class="stage" id="stage">
     <figure>
-      <figcaption><span class="who">Manuk</span> <span id="dims"></span></figcaption>
-      <div class="frame" id="frame"><canvas id="cv"></canvas></div>
-      <div id="hover">&nbsp;</div>
+      <figcaption>
+        <span class="who">Manuk <span id="cls"></span></span>
+        <span id="url"></span>
+      </figcaption>
+      <div class="frame" id="frame">
+        <canvas id="cv"></canvas>
+        <canvas id="ov"></canvas>
+      </div>
     </figure>
+
     <figure id="ref" hidden>
-      <figcaption><span class="who">Chromium</span> <span>reference render of the same snapshot</span></figcaption>
-      <div class="frame"><img id="refimg" alt="Chromium's render of the same page" style="width:100%;display:block"></div>
-      <div id="hover2">&nbsp;</div>
+      <figcaption><span class="who">Chromium</span><span>same snapshot, reference render</span></figcaption>
+      <div class="frame" style="overflow:auto"><img id="refimg" alt="Chromium's render" style="width:100%;display:block"></div>
     </figure>
+
+    <aside>
+      <h3>engine provenance</h3>
+      <div id="layers"></div>
+
+      <div class="sec">
+        <h3>under the cursor</h3>
+        <div id="insp"><span class="hint">move over the page…</span></div>
+      </div>
+
+      <div class="sec">
+        <h3>what this engine is</h3>
+        <div class="kv" style="grid-template-columns:auto 1fr">
+          <dt>parser</dt><dd>html5ever (ours)</dd>
+          <dt>cascade</dt><dd>Stylo — Firefox's</dd>
+          <dt>selectors</dt><dd>ours (+ <code>:has()</code>)</dd>
+          <dt>flex/grid</dt><dd>Taffy</dd>
+          <dt>inline/float/table</dt><dd>ours</dd>
+          <dt>raster</dt><dd>tiny-skia (CPU)</dd>
+          <dt>hit-test</dt><dd>ours, on the real boxes</dd>
+          <dt>JS</dt><dd>SpiderMonkey <span class="hint">(native only)</span></dd>
+        </div>
+      </div>
+    </aside>
   </div>
   <div class="boot" id="boot">loading the engine…</div>
 </main>
 
 <footer>
   <p>
-    Don't take the claim on trust — press <b>compare with Chromium</b> and look at both. The reference is
-    Chromium's own render of the identical snapshot.
+    Don't take any of it on trust — press <b>compare</b> and look at Chromium's render of the identical
+    snapshot, side by side.
   </p>
   <p><a href="https://github.com/patrickbdevaney/manuk">Source, methodology, and the engineering journal →</a></p>
 </footer>
@@ -117,74 +158,147 @@
 <script type="module">
 import init, { Renderer } from './manuk_demo.js';
 
-const cv = document.getElementById('cv');
-const ctx = cv.getContext('2d');
-const frame = document.getElementById('frame');
-const stats = document.getElementById('stats');
-const dims = document.getElementById('dims');
-const hover = document.getElementById('hover');
-const boot = document.getElementById('boot');
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const ov=document.getElementById('ov'), octx=ov.getContext('2d');
+const frame=document.getElementById('frame');
+const WIDTH=900;
+let r=null, pages=[], byName={}, cur=0, scrollY=0, hoverBox=null;
 
-const WIDTH = 900;
-let r = null, pages = [], current = 0, scrollY = 0;
+const esc = s => String(s).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
 
-function paint() {
-  const h = Math.min(frame.clientHeight || 700, 1400);
-  cv.width = WIDTH; cv.height = h;
-  const t0 = performance.now();
-  const bytes = r.render(h, scrollY);
-  const ms = performance.now() - t0;
-  ctx.putImageData(new ImageData(new Uint8ClampedArray(bytes), WIDTH, h), 0, 0);
-  stats.textContent = `raster ${ms.toFixed(1)}ms · ${WIDTH}×${h} · content ${r.content_height().toFixed(0)}px`;
+function paint(){
+  const h=Math.min(frame.clientHeight||760,1600);
+  cv.width=WIDTH; cv.height=h; ov.width=WIDTH; ov.height=h;
+  ov.style.width=cv.style.width=WIDTH+'px';
+  const t0=performance.now();
+  const bytes=r.render(h, scrollY);
+  const ms=performance.now()-t0;
+  ctx.putImageData(new ImageData(new Uint8ClampedArray(bytes),WIDTH,h),0,0);
+  drawOverlay();
+  layers(ms);
 }
 
-async function load(i) {
-  current = i; scrollY = 0;
-  const p = pages[i];
-  const html = await (await fetch(p.html)).text();
-  const t0 = performance.now();
-  r = new Renderer(html, WIDTH);          // parse → Stylo cascade → Taffy layout
-  const build = performance.now() - t0;
-  dims.textContent = `${p.title} · parse+cascade+layout ${build.toFixed(0)}ms`;
-  document.getElementById('refimg').src = p.ref;
-  paint();
-  document.querySelectorAll('#pages button').forEach((b, k) =>
-    b.setAttribute('aria-pressed', String(k === i)));
+// The layout box Taffy solved, drawn ON the render. Proof the geometry is real, not decorative.
+function drawOverlay(){
+  octx.clearRect(0,0,ov.width,ov.height);
+  if(!hoverBox) return;
+  const [x,y,w,h]=hoverBox;
+  octx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--box').trim()||'#2f6bb4';
+  octx.lineWidth=1; octx.setLineDash([4,3]);
+  octx.strokeRect(x+.5, y-scrollY+.5, Math.max(w,1), Math.max(h,1));
 }
 
-// Scrolling RE-RENDERS at the new offset. That is why sticky/fixed behave like a browser.
-frame.addEventListener('wheel', e => {
-  e.preventDefault();
-  const max = Math.max(0, r.content_height() - cv.height);
-  scrollY = Math.min(max, Math.max(0, scrollY + e.deltaY));
-  paint();
-}, { passive: false });
+function layers(rasterMs){
+  const s=JSON.parse(r.stats());
+  document.getElementById('layers').innerHTML =
+    `<div class="layer"><b>parse</b> <span>html5ever · ${s.nodes} nodes</span><span class="ms">${s.parseMs.toFixed(0)}ms</span></div>
+     <div class="layer"><b>cascade</b> <span>Stylo · ${s.styled} styled</span><span class="ms">${s.cascadeMs.toFixed(0)}ms</span></div>
+     <div class="layer"><b>layout</b> <span>Taffy + ours</span><span class="ms">${s.layoutMs.toFixed(0)}ms</span></div>
+     <div class="layer"><b>raster</b> <span>tiny-skia · ${WIDTH}px</span><span class="ms">${rasterMs.toFixed(1)}ms</span></div>
+     <div class="layer" style="margin-top:.4rem;color:var(--dim)"><span>shadow roots</span><span>${s.shadowRoots}</span></div>
+     <div class="layer" style="color:var(--dim)"><span>document height</span><span>${s.contentHeight}px</span></div>`;
+}
 
-// Hover goes through the REAL hit-test against the laid-out boxes.
-cv.addEventListener('mousemove', e => {
-  const b = cv.getBoundingClientRect();
-  const hit = r.hit_test(e.clientX - b.left, e.clientY - b.top + scrollY);
-  hover.textContent = hit ? `hit-test → ${hit}` : ' ';
-});
+function inspect(e){
+  const b=cv.getBoundingClientRect();
+  const x=e.clientX-b.left, y=e.clientY-b.top+scrollY;
+  const raw=r.inspect(x,y);
+  if(!raw){ hoverBox=null; drawOverlay(); return; }
+  const i=JSON.parse(raw);
+  hoverBox=i.box; drawOverlay();
+  const sw=c=>c.startsWith('#')?`<span class="swatch" style="background:${c}"></span>${c}`:c;
+  document.getElementById('insp').innerHTML=
+    `<div class="kv">
+       <dt>element</dt><dd>&lt;${esc(i.tag)}&gt;${i.id?'#'+esc(i.id):''}</dd>
+       ${i.class?`<dt>class</dt><dd>${esc(i.class)}</dd>`:''}
+       <dt>path</dt><dd>${esc(i.path)}</dd>
+       ${i.shadow?`<dt>tree</dt><dd style="color:var(--accent)">inside a shadow root</dd>`:''}
+     </div>
+     <div class="sec" style="border-top:1px dashed var(--line);margin-top:.6rem;padding-top:.5rem">
+       <div class="kv">
+         <dt colspan="2" style="color:var(--accent)">Stylo</dt><dd></dd>
+         <dt>display</dt><dd>${esc(i.display)}</dd>
+         <dt>position</dt><dd>${esc(i.position)}</dd>
+         <dt>color</dt><dd>${sw(i.color)}</dd>
+         <dt>background</dt><dd>${sw(i.background)}</dd>
+         <dt>font-size</dt><dd>${i.fontSize.toFixed(1)}px</dd>
+       </div>
+       <div class="kv" style="margin-top:.5rem">
+         <dt colspan="2" style="color:var(--accent)">Taffy box</dt><dd></dd>
+         <dt>x, y</dt><dd>${i.box[0].toFixed(0)}, ${i.box[1].toFixed(0)}</dd>
+         <dt>w × h</dt><dd>${i.box[2].toFixed(0)} × ${i.box[3].toFixed(0)}</dd>
+       </div>
+       ${i.href?`<div style="margin-top:.5rem;color:var(--ok)">→ link: ${esc(i.href)}<br><span class="hint">click to follow</span></div>`:''}
+     </div>`;
+}
 
-document.getElementById('cmp').addEventListener('click', e => {
-  const on = e.target.getAttribute('aria-pressed') !== 'true';
-  e.target.setAttribute('aria-pressed', String(on));
-  document.getElementById('stage').classList.toggle('split', on);
-  document.getElementById('ref').hidden = !on;
-});
-
-(async () => {
-  await init();
-  pages = await (await fetch('./pages.json')).json();
-  document.getElementById('pages').innerHTML = '';
-  pages.forEach((p, i) => {
-    const b = document.createElement('button');
-    b.textContent = p.title;
-    b.onclick = () => load(i);
-    document.getElementById('pages').appendChild(b);
+// A browser that cannot follow a link is a picture of a browser.
+function follow(e){
+  const b=cv.getBoundingClientRect();
+  const href=r.link_at(e.clientX-b.left, e.clientY-b.top+scrollY);
+  if(!href) return;
+  // Internal routing: if the link lands on a page we bundled, NAVIGATE to it — in the engine.
+  const hit=pages.find(p=>{
+    try{ const a=new URL(href, pages[cur].url), b2=new URL(p.url);
+         return a.host===b2.host && (a.pathname===b2.pathname || (a.pathname==='/'&&b2.pathname==='/')); }
+    catch{ return false; }
   });
-  boot.remove();
+  if(hit) load(pages.indexOf(hit));
+  else if(confirm(`Manuk resolved this link to:\n\n${new URL(href, pages[cur].url)}\n\nThat page is not in the bundled corpus. Open it in your real browser?`))
+    window.open(new URL(href, pages[cur].url), '_blank', 'noopener');
+}
+
+async function load(i){
+  cur=i; scrollY=0; hoverBox=null;
+  const p=pages[i];
+  const html=await (await fetch(p.html)).text();
+  r=new Renderer(html, WIDTH);              // parse → Stylo → Taffy, in your browser
+  document.getElementById('cls').textContent=`· ${p.class} web`;
+  document.getElementById('url').textContent=p.url.replace(/^https?:\/\//,'');
+  document.getElementById('refimg').src=p.ref;
+  paint();
+  document.querySelectorAll('#bar button[data-i]').forEach(b=>
+    b.setAttribute('aria-pressed', String(+b.dataset.i===i)));
+}
+
+frame.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const max=Math.max(0, r.content_height()-cv.height);
+  scrollY=Math.min(max,Math.max(0,scrollY+e.deltaY));
+  paint();
+},{passive:false});
+cv.addEventListener('mousemove',inspect);
+cv.addEventListener('click',follow);
+
+(async()=>{
+  await init();
+  pages=await (await fetch('./pages.json')).json();
+  pages.forEach(p=>byName[p.title]=p);
+
+  const bar=document.getElementById('bar');
+  for(const cls of ['doc','app','platform']){
+    const g=document.createElement('span'); g.className='grp';
+    g.innerHTML=`<span class="lbl">${cls}</span>`;
+    pages.forEach((p,i)=>{
+      if(p.class!==cls) return;
+      const b=document.createElement('button');
+      b.textContent=p.title; b.dataset.i=i; b.onclick=()=>load(i);
+      g.appendChild(b);
+    });
+    bar.appendChild(g);
+  }
+  const cmp=document.createElement('button');
+  cmp.textContent='compare with Chromium'; cmp.setAttribute('aria-pressed','false');
+  cmp.onclick=()=>{
+    const on=cmp.getAttribute('aria-pressed')!=='true';
+    cmp.setAttribute('aria-pressed',String(on));
+    document.getElementById('stage').classList.toggle('split',on);
+    document.getElementById('ref').hidden=!on;
+    paint();
+  };
+  bar.appendChild(cmp);
+
+  document.getElementById('boot').remove();
   await load(0);
 })();
 </script>

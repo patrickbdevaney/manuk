@@ -21,6 +21,10 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
+# Snapshot the tree before doing anything. PROCESS #37: `git checkout` is a delete, and I have
+# run it on uncommitted work twice. This makes that recoverable. It is free when nothing has changed.
+./scripts/snap.sh || true
+
 RED=$'\033[31m'; GRN=$'\033[32m'; YEL=$'\033[33m'; BLD=$'\033[1m'; OFF=$'\033[0m'
 die() { printf '%s✗ %s%s\n' "$RED$BLD" "$1" "$OFF" >&2; exit 1; }
 ok()  { printf '  %s✓%s %s\n' "$GRN" "$OFF" "$1"; }

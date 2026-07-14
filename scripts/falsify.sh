@@ -30,6 +30,10 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
+# Snapshot the tree before doing anything. PROCESS #37: `git checkout` is a delete, and I have
+# run it on uncommitted work twice. This makes that recoverable. It is free when nothing has changed.
+./scripts/snap.sh || true
+
 # ── OOM GUARD. `ld terminated with signal 9` is the OOM killer and it looks EXACTLY like a compile
 # error — cargo returns non-zero and every wrapper reads it as "the code is broken". It has already
 # produced a false FALSIFIER BROKEN verdict (PROCESS #31). Derive the job count from AVAILABLE MEMORY,

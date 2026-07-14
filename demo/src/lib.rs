@@ -41,6 +41,23 @@ pub struct Renderer {
     root: LayoutBox,
     fonts: FontContext,
     width: u32,
+    /// Per-stage timings. **`Instant::now()` PANICS on wasm** (there is no clock), so the clock is the
+    /// host's — `Date::now()` through `js_sys`. Coarse (ms), which is exactly the resolution these stages
+    /// live at.
+    t_parse: f64,
+    t_cascade: f64,
+    t_layout: f64,
+}
+
+/// `Instant::now()` **panics** on wasm (there is no clock), and `Date::now()` is coarse to 1ms — which
+/// rounded every pipeline stage to "0ms" and made the provenance panel useless. `performance.now()` is the
+/// host's high-resolution monotonic clock. *A measurement that cannot see the thing it measures is not a
+/// measurement.*
+fn now() -> f64 {
+    web_sys::window()
+        .and_then(|w| w.performance())
+        .map(|p| p.now())
+        .unwrap_or(0.0)
 }
 
 #[wasm_bindgen]
@@ -58,14 +75,20 @@ impl Renderer {
         // resolve to on Linux, and therefore the same metrics the native engine uses. Not a substitute
         // chosen for size; the same faces, so the demo's text measures like the real thing.
         register_bundled_fonts(&fonts);
+
+        let t0 = now();
         let dom = Box::new(manuk_html::parse(html));
         let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&dom);
+        let t1 = now();
 
         manuk_css::values::set_viewport_width(width as f32);
         let (_, vh) = manuk_css::values::viewport_size();
         // Stylo. The real cascade — the whole point of the demo.
         let styles = manuk_css::stylo_engine::cascade_via_stylo(&dom, &sheets, width as f32, vh);
+        let t2 = now();
+
         let root = layout_document(&dom, &styles, &fonts, width as f32);
+        let t3 = now();
 
         Renderer {
             dom,
@@ -73,6 +96,9 @@ impl Renderer {
             root,
             fonts,
             width,
+            t_parse: t1 - t0,
+            t_cascade: t2 - t1,
+            t_layout: t3 - t2,
         }
     }
 
@@ -106,24 +132,122 @@ impl Renderer {
         canvas.rgba_bytes().to_vec()
     }
 
+    /// **The engine's own numbers — the provenance panel.**
+    ///
+    /// These are not a description of the pipeline; they are the pipeline reporting on itself. A visitor
+    /// can watch html5ever, Stylo and Taffy each cost what they cost, on a real document, on their machine.
+    pub fn stats(&self) -> String {
+        let shadow = self.dom.all_shadow_roots().len();
+        let nodes = self.dom.len();
+        let styled = self.styles.len();
+        format!(
+            "{{\"nodes\":{},\"styled\":{},\"shadowRoots\":{},\"contentHeight\":{:.0},\
+             \"parseMs\":{:.1},\"cascadeMs\":{:.1},\"layoutMs\":{:.1}}}",
+            nodes,
+            styled,
+            shadow,
+            self.root.content_bottom(),
+            self.t_parse,
+            self.t_cascade,
+            self.t_layout
+        )
+    }
+
+    /// **INSPECT what is under the cursor — straight out of Stylo and Taffy, not a re-derivation.**
+    ///
+    /// This is the thing a wasm demo can do that a screenshot never can, and that Chromium's own DevTools
+    /// cannot do for *this* engine: show the visitor the **actual computed style Stylo produced** and the
+    /// **actual box Taffy solved**, for the element they are pointing at. The provenance IS the product.
+    pub fn inspect(&self, x: f32, y: f32) -> String {
+        let Some(n) = self.node_at(x, y) else {
+            return String::new();
+        };
+        let rects = self.root.node_rects(&self.dom);
+        let r = rects.get(&n).copied();
+        let tag = self.dom.tag_name(n).unwrap_or("#text").to_string();
+        let el = self.dom.element(n);
+        let id = el.and_then(|e| e.attr("id")).unwrap_or("").to_string();
+        let class = el.and_then(|e| e.attr("class")).unwrap_or("").to_string();
+        let href = el.and_then(|e| e.attr("href")).unwrap_or("").to_string();
+
+        // The DOM path — the same structural key the differential oracle uses to compare us to Chromium.
+        let mut path = Vec::new();
+        let mut cur = Some(n);
+        while let Some(c) = cur {
+            if let Some(t) = self.dom.tag_name(c) {
+                path.push(t.to_string());
+            }
+            cur = self.dom.parent(c);
+        }
+        path.reverse();
+
+        let (disp, pos, color, bg, fs) = match self.styles.get(&n) {
+            Some(s) => (
+                format!("{:?}", s.display).to_lowercase(),
+                format!("{:?}", s.position).to_lowercase(),
+                format!("#{:02x}{:02x}{:02x}", s.color.r, s.color.g, s.color.b),
+                s.background_color
+                    .map(|c| format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b))
+                    .unwrap_or_else(|| "—".into()),
+                s.font_size,
+            ),
+            None => ("—".into(), "—".into(), "—".into(), "—".into(), 0.0),
+        };
+        let (bx, by, bw, bh) = r
+            .map(|r| (r.x, r.y, r.width, r.height))
+            .unwrap_or((0.0, 0.0, 0.0, 0.0));
+        let in_shadow = self.dom.all_shadow_roots().iter().any(|&sr| {
+            let mut c = Some(n);
+            while let Some(k) = c {
+                if k == sr {
+                    return true;
+                }
+                c = self.dom.parent(k);
+            }
+            false
+        });
+
+        format!(
+            "{{\"tag\":\"{}\",\"id\":\"{}\",\"class\":\"{}\",\"href\":\"{}\",\
+             \"path\":\"{}\",\"display\":\"{}\",\"position\":\"{}\",\"color\":\"{}\",\
+             \"background\":\"{}\",\"fontSize\":{:.1},\"shadow\":{},\
+             \"box\":[{:.1},{:.1},{:.1},{:.1}]}}",
+            tag,
+            id,
+            class.chars().take(40).collect::<String>(),
+            href,
+            path.join(" › "),
+            disp,
+            pos,
+            color,
+            bg,
+            fs,
+            in_shadow,
+            bx,
+            by,
+            bw,
+            bh
+        )
+    }
+
+    /// The `href` under the cursor, if any — so the demo can NAVIGATE. A browser that cannot follow a
+    /// link is a picture of a browser.
+    pub fn link_at(&self, x: f32, y: f32) -> String {
+        let mut cur = self.node_at(x, y);
+        while let Some(n) = cur {
+            if let Some(h) = self.dom.element(n).and_then(|e| e.attr("href")) {
+                return h.to_string();
+            }
+            cur = self.dom.parent(n); // the click target is often a <span> INSIDE the <a>
+        }
+        String::new()
+    }
+
     /// Which element is under the cursor — the **real hit-test against the laid-out boxes**, the same one
     /// a click goes through. A demo that faked this would be demonstrating nothing.
     pub fn hit_test(&self, x: f32, y: f32) -> String {
-        // Deepest-wins over the LAID-OUT boxes — the same rects a click resolves against. Ties break
-        // toward the SMALLER box, because a lone `<button>` inside a same-size `<form>` must hit the
-        // button (that tie once resolved toward the ancestor, and the click landed on the form).
-        let rects = self.root.node_rects(&self.dom);
-        let mut best: Option<(NodeId, f32)> = None;
-        for (n, r) in &rects {
-            if x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height {
-                let area = r.width * r.height;
-                if best.map(|(_, a)| area <= a).unwrap_or(true) {
-                    best = Some((*n, area));
-                }
-            }
-        }
-        match best {
-            Some((n, _)) => {
+        match self.node_at(x, y) {
+            Some(n) => {
                 let tag = self.dom.tag_name(n).unwrap_or("?").to_string();
                 let id = self
                     .dom
@@ -135,6 +259,25 @@ impl Renderer {
             }
             None => String::new(),
         }
+    }
+}
+
+impl Renderer {
+    /// Deepest-wins over the LAID-OUT boxes — the same rects a click resolves against. Ties break toward
+    /// the SMALLER box, because a lone `<button>` inside a same-size `<form>` must hit the button (that tie
+    /// once resolved toward the ancestor, and the click landed on the form).
+    fn node_at(&self, x: f32, y: f32) -> Option<NodeId> {
+        let rects = self.root.node_rects(&self.dom);
+        let mut best: Option<(NodeId, f32)> = None;
+        for (n, r) in &rects {
+            if x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height {
+                let area = r.width * r.height;
+                if best.map(|(_, a)| area <= a).unwrap_or(true) {
+                    best = Some((*n, area));
+                }
+            }
+        }
+        best.map(|(n, _)| n)
     }
 }
 

@@ -82,3 +82,4 @@ accumulates by construction**, because the pre-commit hook requires a `WIKI:` tr
 | [`performance.md`](performance.md) | what is actually slow, and why — measured, never assumed |
 | [`build-and-dependencies.md`](build-and-dependencies.md) | what is actually compiled, and what only *looks* like it is |
 | [`wpt-horizon.md`](wpt-horizon.md) | the parity-scope roadmap, counted live from the WPT tree |
+| [`wasm-demo.md`](wasm-demo.md) | the engine in someone else's browser — and why every obvious way to observe it lies |

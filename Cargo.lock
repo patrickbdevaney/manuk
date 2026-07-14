@@ -3032,6 +3032,7 @@ version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
  "getrandom 0.2.17",
+ "js-sys",
  "manuk-css",
  "manuk-dom",
  "manuk-html",
@@ -3039,6 +3040,7 @@ dependencies = [
  "manuk-paint",
  "manuk-text",
  "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]

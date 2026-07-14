@@ -11,17 +11,84 @@ mkdir -p "$OUT"
 
 CHROME=$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)
 
-# A small, deliberately DIVERSE set: a document-web page, a table-driven layout, and a flex/grid one —
-# the three shapes the cascade and layout engine are actually judged on.
+# **A corpus, not a showcase.** These are drawn from the classes the differential oracle actually measures,
+# and they are chosen to span the WEB'S SHAPES rather than to flatter the engine:
+#
+#   doc web       — long-form text, tables, footnotes, the 1990s markup that never went away
+#   app web       — SSR'd framework output: the DOM a React/Next/Svelte site ships before hydration
+#   platform web  — grid/flex-heavy marketing pages, media-rich layouts, design systems
+#
+# Ordered by class so the demo's page list reads as a taxonomy, which is the point: a visitor should be
+# able to see WHICH KIND of web each one is, and judge the engine on breadth rather than on one lucky page.
+PAGE_ORDER=(
+  # ── doc web: long-form text, tables, footnotes, and the 1990s markup that never went away
+  wikipedia hackernews lobsters mdn-css gnu apache python-docs w3c rfc-editor
+  arstechnica bbc guardian craigslist xkcd sqlite pgdocs kernel-org
+  # ── app web: server-rendered framework output (the DOM a site ships BEFORE hydration)
+  rustlang nextjs svelte vuejs react astro remix solid vite nuxt angular
+  # ── platform web: design systems, grid/flex-heavy marketing, media-rich, docs portals
+  tailwind bootstrap github stripe-docs mui chakra bulma vercel netlify cloudflare
+  figma-blog linear openai
+)
 declare -A PAGES=(
   [wikipedia]="https://en.wikipedia.org/wiki/Web_browser_engine"
   [hackernews]="https://news.ycombinator.com/"
+  [lobsters]="https://lobste.rs/"
+  [mdn-css]="https://developer.mozilla.org/en-US/docs/Web/CSS/display"
+  [gnu]="https://www.gnu.org/"
+  [apache]="https://httpd.apache.org/"
+  [python-docs]="https://docs.python.org/3/library/index.html"
+  [w3c]="https://www.w3.org/"
+  [rfc-editor]="https://www.rfc-editor.org/rfc/rfc2616.html"
+  [arstechnica]="https://arstechnica.com/"
+  [bbc]="https://www.bbc.com/news"
+  [guardian]="https://www.theguardian.com/international"
+  [craigslist]="https://craigslist.org/about/sites"
+  [xkcd]="https://xkcd.com/"
+  [sqlite]="https://www.sqlite.org/index.html"
+  [pgdocs]="https://www.postgresql.org/docs/current/sql-select.html"
+  [kernel-org]="https://www.kernel.org/"
   [rustlang]="https://www.rust-lang.org/"
+  [nextjs]="https://nextjs.org/"
+  [svelte]="https://svelte.dev/"
+  [vuejs]="https://vuejs.org/"
+  [react]="https://react.dev/"
+  [astro]="https://astro.build/"
+  [remix]="https://remix.run/"
+  [solid]="https://www.solidjs.com/"
+  [vite]="https://vite.dev/"
+  [nuxt]="https://nuxt.com/"
+  [angular]="https://angular.dev/"
+  [tailwind]="https://tailwindcss.com/"
+  [bootstrap]="https://getbootstrap.com/"
+  [github]="https://github.com/rust-lang/rust"
+  [stripe-docs]="https://docs.stripe.com/payments"
+  [mui]="https://mui.com/material-ui/"
+  [chakra]="https://chakra-ui.com/"
+  [bulma]="https://bulma.io/"
+  [vercel]="https://vercel.com/"
+  [netlify]="https://www.netlify.com/"
+  [cloudflare]="https://www.cloudflare.com/"
+  [figma-blog]="https://www.figma.com/blog/"
+  [linear]="https://linear.app/"
+  [openai]="https://openai.com/"
+)
+declare -A CLASS=(
+  [wikipedia]="doc" [hackernews]="doc" [lobsters]="doc" [mdn-css]="doc" [gnu]="doc"
+  [apache]="doc" [python-docs]="doc" [w3c]="doc" [rfc-editor]="doc" [arstechnica]="doc"
+  [bbc]="doc" [guardian]="doc" [craigslist]="doc" [xkcd]="doc" [sqlite]="doc"
+  [pgdocs]="doc" [kernel-org]="doc"
+  [rustlang]="app" [nextjs]="app" [svelte]="app" [vuejs]="app" [react]="app"
+  [astro]="app" [remix]="app" [solid]="app" [vite]="app" [nuxt]="app" [angular]="app"
+  [tailwind]="platform" [bootstrap]="platform" [github]="platform" [stripe-docs]="platform"
+  [mui]="platform" [chakra]="platform" [bulma]="platform" [vercel]="platform"
+  [netlify]="platform" [cloudflare]="platform" [figma-blog]="platform" [linear]="platform"
+  [openai]="platform"
 )
 
 JSON="["
 first=1
-for name in "${!PAGES[@]}"; do
+for name in "${PAGE_ORDER[@]}"; do
   url="${PAGES[$name]}"
   echo "── $name ← $url"
   curl -sL --max-time 30 -A "Mozilla/5.0 (X11; Linux x86_64) manuk-demo-snapshot" "$url" -o "$OUT/$name.html" || { echo "  fetch failed, skipping"; continue; }
@@ -56,6 +123,12 @@ def inline(m):
     return f'<style>{css}</style>' if css else tag
 
 html = re.sub(r'<link\b[^>]*>', inline, html, flags=re.I)
+
+# STRIP <script>. The demo does not execute JavaScript — shipping the bytes is pure waste, and on a modern
+# site the inline bundles dwarf the markup. This hides nothing: the page's scripts were never going to run
+# here, and the demo says so on its own front page.
+html = re.sub(r'<script\b[^>]*>.*?</script>', '', html, flags=re.I | re.S)
+html = re.sub(r'<script\b[^>]*/?>', '', html, flags=re.I)
 if '<base' not in html.lower():
     html = re.sub(r'(<head[^>]*>)', r'\1<base href="' + base + '">', html, count=1, flags=re.I)
 open(path, 'w', encoding='utf-8').write(html)
@@ -70,7 +143,7 @@ PYEOF
   fi
   [ $first -eq 0 ] && JSON="$JSON,"
   first=0
-  JSON="$JSON{\"title\":\"$name\",\"html\":\"pages/$name.html\",\"ref\":\"pages/$name.png\"}"
+  JSON="$JSON{\"title\":\"$name\",\"class\":\"${CLASS[$name]}\",\"url\":\"$url\",\"html\":\"pages/$name.html\",\"ref\":\"pages/$name.png\"}"
 done
 JSON="$JSON]"
 echo "$JSON" > demo/www/pages.json

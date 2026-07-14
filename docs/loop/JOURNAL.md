@@ -3054,6 +3054,64 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 61 — the corpus goes to 41 sites, and three instruments lie in a row
+
+**TICK SHAPE: instrument** (the engine is unchanged; what changed is what the engine can be *seen* doing,
+and what the loop can *trust* about what it sees). `[no-pattern]` — no `engine/*/src` change.
+
+**Hypothesis.** The demo shipped 13 sites. Thirteen sites is an anecdote. If the claim is *"this engine
+renders the real web"*, the corpus has to be big enough and varied enough that it could **fail** — so the
+corpus was taken to **41**, spanning the three classes the roadmap is organised around: 17 doc-web
+(Wikipedia, HN, RFC-Editor, Craigslist, BBC, the Guardian, SQLite, kernel.org…), 11 app-web (the
+server-rendered output of React, Next, Svelte, Vue, Astro, Remix, Solid, Vite, Nuxt, Angular), and 13
+platform-web (Tailwind, Bootstrap, GitHub, Stripe, MUI, Chakra, Cloudflare, Vercel, Linear…). Every one
+carries a Chromium reference render, so every one can be looked at side by side and disbelieved.
+
+**Two real findings, neither of them about the engine.**
+
+1. **The stage timings read `0ms`.** `js_sys::Date::now()` is coarse to 1ms, so every stage of the
+   pipeline rounded to zero and the provenance panel — the entire point of which is to show the engine
+   working — showed nothing. Switched to `performance.now()` via `web-sys`. Real numbers: **parse 18ms,
+   cascade 54ms, layout 51ms, raster 55ms** on Wikipedia's 2,281 nodes.
+
+2. **Snapshots ship inline `<script>` we never execute.** Stripping it is not hiding anything — the demo
+   has no JS engine and says so on its own front page — and it is most of the bytes. What is left is the
+   *markup and the CSS*, which is exactly what Stylo and Taffy are here to chew on. `github.html` is 4.5M
+   of which **4.2M is inlined CSS**: that is the substance, and it stays.
+
+**And then the instruments lied, three times, in one tick** (PROCESS #36, #37, #38 — this is the real
+content of the tick and it is worth more than the corpus):
+
+* `--virtual-time-budget` **froze the clock I was measuring with**, so the fixed timings still read `0ms`
+  and I was one step from going back into Rust that was already correct.
+* `--dump-dom` fires at `load`, which does not wait for an async wasm boot — so it reported an engine that
+  had never run, *every single time*, regardless of the truth.
+* `--screenshot` waits **sometimes**. It caught the render once and missed it on the next run of identical
+  code. A flaky observer is worse than no observer: it makes a working build look broken at random, and I
+  believed it.
+
+All three are one defect wearing three coats: **the instrument was blind to the thing it was reporting as
+absent.** The answer was to stop *inferring* "did it run?" from whatever side-effect happened to be
+observable, and to **ask the page** over the DevTools protocol once it has actually finished —
+`scripts/demo-verify.py`, now a gate (`G_DEMO_LIVE`) the build cannot pass without.
+
+**The gate written to catch that was itself vacuous** (#38): it asked *"is any pixel non-white?"* to prove
+the canvas was painted. An untouched canvas is transparent **black**, which satisfies that trivially — so
+it reported PAINTED for a blank demo, and a mutation deleting the paint call went straight through it,
+green. It now counts **distinct colours** and demands more than two, and it is trusted for one reason
+only: it was **proven to go RED**, twice.
+
+**And I destroyed 306 lines of uncommitted work with `git checkout`** (#37) — the *second* time, and I
+typed the words *"never do this (PROCESS #32)"* into the same shell command that did it. Recovered only
+because the file's bytes happened to still be in the session transcript. That is luck, not a mechanism, so
+there is now a mechanism: **`scripts/snap.sh`** snapshots the working tree into a dangling commit before
+every wall, falsifier, demo build and tick. Proven by re-running the exact destructive command and
+recovering the file byte-for-byte.
+
+**The ratchet.** Capability: unchanged, by design. Instrument fidelity: **up** — the demo can no longer
+silently ship without having painted, and the loop can no longer silently lose a file. Both of those were
+true-but-unprovable yesterday and are mechanical today.
+
 ## Tick 60 — a Text node could have children (2026-07-14)
 
 **TICK SHAPE: pattern-class** · **CLUSTER: C00wpt** — the class is *DOM code that catches errors*, which is
