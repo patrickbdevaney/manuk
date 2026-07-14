@@ -229,7 +229,7 @@ impl<'a> TNode for StyloNode<'a> {
         unimplemented!("StyloNode::opaque is not used by the None-cascade path")
     }
     fn debug_id(self) -> usize {
-        self.node.0
+        self.node.0 as usize
     }
     fn as_element(&self) -> Option<Self::ConcreteElement> {
         self.as_stylo_element()

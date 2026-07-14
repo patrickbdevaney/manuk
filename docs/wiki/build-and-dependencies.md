@@ -204,3 +204,17 @@ relationship; **`OpenWV` ships without a device identity and is a key-extraction
 one**) — which permanently excludes Netflix, Disney+, Max, Hulu, Prime Video, Apple TV+, Peacock and Spotify
 web, **and excludes essentially nothing else**, because ordinary-web `<video>` is **muted autoplay loops
 with no DRM, no audio and no ABR.**
+
+## The render pipeline compiles to wasm32 — but `usize` in a packed handle does not
+
+**The whole render pipeline minus JS builds for `wasm32-unknown-unknown`:** `dom`, `css`+**Stylo**,
+`layout`(taffy), `paint`(tiny-skia), `html`, `text`. **Stylo — the obvious risk — compiles cleanly.**
+SpiderMonkey (C++) is deliberately absent, which is *why* the in-browser demo is JS-free. Proven repeatably
+by `scripts/wasm-check.sh`.
+
+**The one real portability bug, and it is a general lesson:** `NodeId` packed `generation << 32 | index`
+into a **`usize`**. On `wasm32` (and any 32-bit target) `usize` is **32 bits**, so `<< 32` **overflows and
+the crate does not compile** — *"this arithmetic operation will overflow"*, invisible on a 64-bit dev
+machine, fatal on the target. **Any type that packs bit-fields into a pointer-width integer is a latent
+32-bit bug.** Back it with an explicit `u64` (identical to `usize` on 64-bit, correct on 32-bit), never
+`usize`. This also hardens the ARM/cross-platform target — the same fix serves wasm and ARM at once.

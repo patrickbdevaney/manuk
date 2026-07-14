@@ -104,6 +104,14 @@ head_ "G_GLOBALS · a missing constructor is a THROWN EXCEPTION, not a missing f
 GG=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_globals 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GG" ]; then ok "globals: $GG"; else bad "G_GLOBALS failed — a global a real bundle references is missing, or one of them is LYING"; fi
 
+head_ "G_ARENA_U64 · the arena handle is pointer-width-INDEPENDENT (wasm + ARM)"
+# NodeId packs generation<<32 | index. Backed by usize, it OVERFLOWS on a 32-bit target (wasm32) — the
+# crate does not even compile, which the in-browser demo's wasm build surfaced. u64 is identical to usize
+# on 64-bit and correct on 32-bit. This test pins the packing so a future "simplify back to usize" cannot
+# silently reintroduce the overflow. It also matters for the ARM/cross-platform target.
+GAU=$(cargo test -q -p manuk-dom pointer_width 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GAU" ]; then ok "arena u64: $GAU"; else bad "G_ARENA_U64 failed — the arena handle is not pointer-width-independent and will not compile on wasm32"; fi
+
 head_ "G_DOM_IMPL · createHTMLDocument + pre-insertion validity (a cycle is a HANG)"
 # createHTMLDocument() is how DOMPurify builds a safe DETACHED document; its absence is a TypeError that
 # takes the sanitizer down (WPT failed 488x on documentElement downstream of it). And inserting a node into

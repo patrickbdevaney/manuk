@@ -91,7 +91,7 @@ mod tests {
 
     fn n(id: u64, role: Role, name: &str, bbox: Option<Rect>, children: Vec<A11yNode>) -> A11yNode {
         A11yNode {
-            node: NodeId(id as usize),
+            node: NodeId(id as u64),
             role,
             name: name.to_string(),
             bbox,

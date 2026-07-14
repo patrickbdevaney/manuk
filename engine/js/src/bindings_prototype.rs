@@ -75,7 +75,7 @@ unsafe extern "C" fn text_content_of(cx: *mut JSContext, argc: u32, vp: *mut Val
         *vp = UndefinedValue();
         return true;
     }
-    let node = NodeId(node_slot.to_int32() as usize);
+    let node = NodeId(node_slot.to_int32() as u64);
     let dom = &*dom_ptr;
     let text = dom.text_content(node);
 

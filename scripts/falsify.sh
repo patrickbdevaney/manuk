@@ -262,6 +262,20 @@ fi
 # reported TIMEOUT. It never errors; it just happens in the wrong order, silently, on every debounce
 # and retry-backoff on the web.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_ARENA_U64; then
+  # Drop the generation to the low bits so the packed handle no longer exceeds 32 bits — i.e. exactly the
+  # shape a "simplify back to usize" refactor would produce. The gate asserts the handle uses bits above
+  # 32, so this goes red.
+  mutate engine/dom/src/lib.rs '
+s = s.replace(
+    "        NodeId((generation as u64) << 32 | (index as u64 & Self::INDEX_MASK))",
+    "        NodeId(index as u64 & Self::INDEX_MASK)   // MUTATION: drop the generation (32-bit shape)",
+    1)
+'
+  expect_red G_ARENA_U64 cargo test -q -p manuk-dom pointer_width
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_DOM_IMPL; then
   # Remove the cycle check from the arena backstop. Inserting a node into its own descendant then builds a
   # self-referential tree, and the next children() walk loops forever — Bar 0. The gate asserts the

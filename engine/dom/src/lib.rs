@@ -18,27 +18,33 @@ use std::fmt::Write as _;
 /// cycle. It has no DOM dependency itself.
 pub mod history;
 
-/// A handle to a node in a [`Dom`] arena. The `usize` packs a **generation** (high 32
-/// bits) and a **slot index** (low 32 bits), so a handle to a removed node whose slot was
-/// later reused is detected as stale (its generation no longer matches) instead of
-/// silently aliasing the new occupant. For a never-reused (generation-0) node the packed
-/// value equals the bare index, so old code and serialized handles stay compatible.
+/// A handle to a node in a [`Dom`] arena. It packs a **generation** (high 32 bits) and a **slot
+/// index** (low 32 bits), so a handle to a removed node whose slot was later reused is detected as
+/// stale (its generation no longer matches) instead of silently aliasing the new occupant. For a
+/// never-reused (generation-0) node the packed value equals the bare index, so old code and
+/// serialized handles stay compatible.
+///
+/// **The backing type is `u64`, NOT `usize`, and that is load-bearing for `wasm32`.** On a 32-bit
+/// target `usize` is 32 bits, so `generation << 32` overflows and the crate does not even compile —
+/// which is exactly what the in-browser demo's `wasm32-unknown-unknown` build surfaced. `u64` is
+/// identical to `usize` on 64-bit platforms and correct on 32-bit ones, so the arena is now
+/// pointer-width-independent (this also matters for the ARM/cross-platform target).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct NodeId(pub usize);
+pub struct NodeId(pub u64);
 
 impl NodeId {
-    const INDEX_MASK: usize = 0xFFFF_FFFF;
+    const INDEX_MASK: u64 = 0xFFFF_FFFF;
 
     /// Pack a slot index + generation into a handle.
     #[inline]
     pub(crate) fn pack(index: usize, generation: u32) -> NodeId {
-        NodeId((generation as usize) << 32 | (index & Self::INDEX_MASK))
+        NodeId((generation as u64) << 32 | (index as u64 & Self::INDEX_MASK))
     }
 
     /// The arena slot this handle points at (its low 32 bits).
     #[inline]
     pub fn index(self) -> usize {
-        self.0 & Self::INDEX_MASK
+        (self.0 & Self::INDEX_MASK) as usize
     }
 
     /// The generation this handle was minted at (its high 32 bits).
@@ -541,7 +547,7 @@ impl Dom {
     /// Every shadow root in the arena, in creation order.
     pub fn all_shadow_roots(&self) -> Vec<NodeId> {
         (0..self.nodes.len())
-            .map(NodeId)
+            .map(|i| NodeId(i as u64))
             .filter(|&n| self.is_shadow_root(n))
             .collect()
     }
@@ -1218,5 +1224,33 @@ mod stale_handle_tests {
         // And the real document is untouched by any of it.
         assert!(small.is_alive(root));
         assert_eq!(small.tag_name(root), Some("div"));
+    }
+}
+
+#[cfg(test)]
+mod pointer_width_tests {
+    use super::*;
+
+    /// **G_ARENA_U64 — the arena handle must be pointer-width-INDEPENDENT.**
+    ///
+    /// `NodeId` packs `generation << 32 | index`. If it is backed by `usize`, then on a 32-bit target
+    /// (`wasm32-unknown-unknown` — the in-browser demo's build) `usize` is 32 bits and the shift
+    /// **overflows: the crate does not even compile.** That is exactly what the demo's wasm build
+    /// surfaced. The fix is a `u64` backing, identical to `usize` on 64-bit and correct on 32-bit.
+    ///
+    /// This test would not have caught the *compile* failure (it is 64-bit here), so its real job is to
+    /// pin the packing semantics so a future "simplify NodeId back to usize" cannot silently reintroduce
+    /// the 32-bit overflow. It also matters for the ARM/cross-platform target, not only wasm.
+    #[test]
+    fn nodeid_packs_generation_above_the_32_bit_boundary() {
+        // A generation in the high 32 bits and an index in the low 32 — the exact pattern that overflows
+        // a 32-bit usize.
+        let id = NodeId::pack(0x1234_5678, 0x9abc);
+        assert_eq!(id.index(), 0x1234_5678, "the low 32 bits are the slot index");
+        assert_eq!(id.generation(), 0x9abc, "the high 32 bits are the generation");
+        // The packed value genuinely uses bits above 32 — proving it is not a 32-bit type.
+        assert!(id.0 > u32::MAX as u64, "the packed handle exceeds 32 bits, so usize would overflow it");
+        // Generation-0 compatibility: the packed value equals the bare index (serialized-handle contract).
+        assert_eq!(NodeId::pack(42, 0).0, 42);
     }
 }

@@ -1954,8 +1954,8 @@ impl Page {
             Some(ctx) => {
                 let (d, r) = manuk_js::take_form_submits(ctx);
                 (
-                    d.into_iter().map(manuk_dom::NodeId).collect(),
-                    r.into_iter().map(manuk_dom::NodeId).collect(),
+                    d.into_iter().map(|x| manuk_dom::NodeId(x as u64)).collect(),
+                    r.into_iter().map(|x| manuk_dom::NodeId(x as u64)).collect(),
                 )
             }
             None => (Vec::new(), Vec::new()),

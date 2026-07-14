@@ -446,7 +446,7 @@ unsafe fn node_and_dom(obj: *mut JSObject) -> Option<(*mut Dom, NodeId)> {
     if dom.is_null() {
         return None;
     }
-    let id = NodeId(ns.to_int32() as usize);
+    let id = NodeId(ns.to_int32() as u64);
 
     // ── **THE REFLECTOR'S NODE MUST ACTUALLY EXIST IN *THIS* ARENA.** ─────────────────────────────
     //
@@ -3264,7 +3264,7 @@ unsafe fn host_rect(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
         *vp = NullValue();
         return true;
     }
-    let node = NodeId(id as usize);
+    let node = NodeId(id as u64);
     match layout_rect(node) {
         Some(r) => {
             match eval_in_current_global(cx, &format!("[{},{},{},{}]", r[0], r[1], r[2], r[3])) {

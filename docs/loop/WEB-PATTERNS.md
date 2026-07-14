@@ -501,3 +501,10 @@ a bad page kills the PAGE, not the browser.** Every DOM method written from here
 No web capability changed this tick (CI lane + WPT horizon map + fmt). Recorded here only so the
 capability ledger stays complete: **`docs/wiki/wpt-horizon.md`** is now the spec-shaped anchor of *which*
 classes of the web to target next, feeding the same `usage × divergence` ranking this ledger uses.
+
+## Tick 50 — the engine in a browser (infrastructure)
+
+No web capability changed (a portability fix + wasm feasibility). Recorded so the ledger stays complete:
+the render pipeline (dom · css+stylo · layout · paint · html · text) now compiles to `wasm32-unknown-unknown`,
+which unblocks the **in-browser demo** — a visitor running our *actual* Stylo/Taffy/tiny-skia pipeline live
+(`docs/loop/DEMO.md`). The enabling fix (`NodeId` → `u64`) also hardens the ARM/cross-platform target.

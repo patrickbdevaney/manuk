@@ -2639,3 +2639,43 @@ that most of the real web works, and a graceful decline for the rest.* WPT shows
 **The checkout is sparse** (9 of ~90 top-level dirs), so the loading/interaction/media/a11y categories are
 mapped but not yet measurable — `./scripts/wpt-setup.sh` adds a dir before it can be run. The map records
 which are `[checked out]` vs pending, so the gap is visible rather than assumed.
+
+## Tick 50 — the engine runs in a browser: wasm feasibility proven, and one 32-bit bug (2026-07-13)
+
+**TICK SHAPE: infrastructure** — it unblocks the in-browser demo (a whole new proof-of-realness surface) and
+hardens the cross-platform/ARM target; it multiplies future work rather than being one feature.
+
+**Hypothesis:** the in-browser demo directive's load-bearing unknown is *"does the engine even compile to
+`wasm32-unknown-unknown`?"* Everything downstream (curated snapshots, canvas, side-by-side, GitHub Pages) is
+scaffolding around that one fact — so probe it FIRST, before building anything, exactly as the WPT runner
+probed `testharness.js`.
+
+**RESULT: the entire render pipeline minus JS compiles to wasm.** `dom`, `css`+**Stylo**, `layout`(taffy),
+`paint`(tiny-skia), `html`, `text` — all of it, proven repeatably by `./scripts/wasm-check.sh`. **Stylo was
+the real risk and it cleared.** The demo is feasible.
+
+**The one genuine blocker, found by the probe and fixed:** `NodeId` packed `generation << 32 | index` into a
+**`usize`** — and **`wasm32`'s `usize` is 32 bits**, so the shift **overflowed and `manuk-dom` did not even
+compile** (*"this arithmetic operation will overflow"*). This is the exact class of bug a probe exists to
+find: invisible on the 64-bit dev machine, fatal on the target. The fix is a **`u64`** backing — byte-
+identical to `usize` on 64-bit, correct on 32-bit — so **the arena is now pointer-width-independent**, which
+also hardens the ARM/cross-platform target the process-model directive named.
+
+**The ripple was ~20 sites** (`NodeId(x as usize)` → `as u64`, a couple of `.map(NodeId)` over `usize`
+ranges, one shell `node.0`), all mechanical, and **native is unregressed — the full wall is green and
+stable across three runs.** `G_ARENA_U64` pins the packing semantics so a future *"simplify NodeId back to
+usize"* cannot silently reintroduce the overflow, and it is proven falsifiable.
+
+**The plan is written (`docs/loop/DEMO.md`)** — real (Stylo/Taffy/tiny-skia executing in the visitor's
+browser; live scroll/click/hover and CSS state), not real and *said so in-product* (no JS, no arbitrary
+fetch — curated snapshots from the cluster registry), single-threaded by choice (keeps GitHub Pages clean:
+no COOP/COEP, no `SharedArrayBuffer`), a **side-by-side-vs-Chromium** toggle so realness is *checkable* not
+*assertable*, its **own non-blocking CI lane** on a stable branch, and the maintenance rule that the demo
+path's output must not diverge from the native path's.
+
+**Directly serves the standing concern** — *"the same codebase must work for the wasm demo, native x86-64,
+and mac/windows/linux, without regressing capability."* The `u64` fix advances all of them at once: 32-bit
+safety for wasm, pointer-width independence for ARM, and zero native regression.
+
+**Next (the demo is feasible, not yet built):** the `demo/` wasm crate wiring the already-proven pipeline to
+a canvas, the snapshot-baking build step, the JS-glue shell, and the GitHub Pages lane.

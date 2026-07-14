@@ -1039,7 +1039,7 @@ impl App {
         let tab = self.tab_id;
         for (node, url, _w, _h) in frames {
             let proxy = self.proxy.clone();
-            let id = node.0;
+            let id = node.0 as usize;
             self.rt.spawn(async move {
                 match manuk_net::fetch(&url).await {
                     Ok(resp) => {
@@ -1074,7 +1074,7 @@ impl App {
             return; // a stale embed must not land in a page the user has navigated away from
         }
         if let Some(p) = self.page.as_mut() {
-            p.render_iframe(manuk_dom::NodeId(node), &html, &url, &self.fonts, 0);
+            p.render_iframe(manuk_dom::NodeId(node as u64), &html, &url, &self.fonts, 0);
         }
         self.rerender();
     }
