@@ -13,6 +13,13 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
+# ── OOM GUARD. `ld terminated with signal 9` is the OOM killer and it looks EXACTLY like a compile
+# error — cargo returns non-zero and every wrapper reads it as "the code is broken". It has already
+# produced a false FALSIFIER BROKEN verdict (PROCESS #31). Derive the job count from AVAILABLE MEMORY,
+# not from `nproc`, because `nproc` knows nothing about LLVM's ~2GB-per-codegen-job peak.
+# shellcheck source=/dev/null
+. "$(dirname "$0")/mem-guard.sh"
+
 FAIL=0
 ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; }
 bad()  { printf '  \033[31m✗ %s\033[0m\n' "$1"; FAIL=1; }

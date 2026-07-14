@@ -385,6 +385,11 @@ pub async fn run_one(
     let hits = manuk_css::query_selector_all(dom, dom.root(), "#__wpt_results__");
     if hits.is_empty() {
         // **Do not record "NO_REPORT" and move on.** Ask the page what happened — it still knows.
+        // Gated: the diagnostic readback evals JS, which only exists with the spidermonkey feature.
+        // Without JS the whole WPT suite is meaningless anyway (testharness.js cannot run), but the crate
+        // must still COMPILE headless so `cargo build --workspace --no-default-features` (the CI headless
+        // lane) is green.
+        #[cfg(feature = "spidermonkey")]
         page.eval_for_test(
             "(function(){ try {                var s = document.createElement('script'); s.id='__wpt_diag__'; s.type='application/json';                s.textContent = JSON.stringify({                  harness: (typeof add_completion_callback === 'function'),                  hook: !!document.getElementById('__wpt_hook__'),                  ready: String(document.readyState),                  loadFired: !!globalThis.__loadFired,                  errors: (globalThis.__errors || []).slice(0, 2) });                (document.documentElement||document.body).appendChild(s);              } catch (e) {} })()",
         );

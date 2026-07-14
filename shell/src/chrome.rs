@@ -469,7 +469,10 @@ mod tests {
 /// Every control a user can reach must map to a real action. §1.8 used to be a rule a human had to
 /// remember — Tick 18 had to fix two dead buttons that a *user*, not the loop, discovered. Now it
 /// is a test: a dead affordance is impossible to ship, not merely forbidden.
-#[cfg(test)]
+// The `gui` feature guard is load-bearing: this module reads `gui::MENU_LEN`, which does not exist
+// without the GUI — so `cargo test --no-default-features` (the headless CI lane) would fail to compile.
+// The affordance gate is only meaningful when the GUI it checks is built.
+#[cfg(all(test, feature = "gui"))]
 mod affordance_gate {
     /// The complete set of user-reachable affordances, declared here so the test and the UI cannot
     /// drift apart. Adding a control to the UI without adding it here (or vice versa) fails.

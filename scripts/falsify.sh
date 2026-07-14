@@ -30,6 +30,13 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
+# ── OOM GUARD. `ld terminated with signal 9` is the OOM killer and it looks EXACTLY like a compile
+# error — cargo returns non-zero and every wrapper reads it as "the code is broken". It has already
+# produced a false FALSIFIER BROKEN verdict (PROCESS #31). Derive the job count from AVAILABLE MEMORY,
+# not from `nproc`, because `nproc` knows nothing about LLVM's ~2GB-per-codegen-job peak.
+# shellcheck source=/dev/null
+. "$(dirname "$0")/mem-guard.sh"
+
 RED=$'\033[31m'; GRN=$'\033[32m'; YEL=$'\033[33m'; BLD=$'\033[1m'; OFF=$'\033[0m'
 PASS=0; FAIL=0
 BACKUP="$(mktemp -d)"
@@ -261,6 +268,43 @@ fi
 # and testharness's own 10s harness timeout fired before the tests it was guarding, so 100% of WPT
 # reported TIMEOUT. It never errors; it just happens in the wrong order, silently, on every debounce
 # and retry-backoff on the web.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+# G_NO_PHANTOM_FORK — this gate does not live in a cargo test; it is an inline check in verify.sh over
+# the ./stylo REFERENCE CLONE (gitignored, built by nothing). So its falsifier cannot `mutate` a tracked
+# source file — it must dirty the clone itself, which is the exact condition the gate exists to catch:
+# **an edit to a directory that looks like source and compiles into nothing.**
+#
+# The self-audit caught that this gate had never been proven to go red. It had been checked by hand once,
+# which is not the same thing: *a gate never proven to go red is not known to work.*
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_NO_PHANTOM_FORK; then
+  printf "  %-18s " "G_NO_PHANTOM_FORK"
+  if [ ! -d stylo ]; then
+    printf "%sSKIP — no ./stylo reference clone on this machine%s\n" "$YEL" "$OFF"
+  else
+    _PF_FILE="stylo/style/servo/selector_parser.rs"
+    if [ -n "$(git -C stylo status --short 2>/dev/null)" ]; then
+      printf "%sREFUSING: ./stylo is ALREADY dirty — restore it first (git -C stylo checkout .)%s\n" "$RED" "$OFF"
+      exit 2
+    fi
+    echo "// MUTATION: a phantom edit to a directory nothing builds" >> "$_PF_FILE"
+    # ⚠ Capture FIRST, then grep. Piping `verify.sh | grep` under `set -o pipefail` returns non-zero
+    # because *verify* exits non-zero — which is exactly what we WANT it to do — so the pipeline's status
+    # reports failure even when grep matched. The first version of this falsifier did that and declared a
+    # working gate broken. **The falsifier is an instrument, and instruments get verified.**
+    _PF_OUT=$(./scripts/verify.sh 2>&1 || true)
+    if printf '%s' "$_PF_OUT" | grep -q "G_NO_PHANTOM_FORK: ./stylo has LOCAL MODIFICATIONS"; then
+      printf "%s✓ goes red when broken%s\n" "$GRN" "$OFF"
+    else
+      printf "%s✗ STAYED GREEN — the gate does not notice a dirty reference clone%s\n" "$RED" "$OFF"
+      git -C stylo checkout -- . 2>/dev/null
+      exit 1
+    fi
+    git -C stylo checkout -- . 2>/dev/null
+  fi
+fi
+
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_ARENA_U64; then
   # Drop the generation to the low bits so the packed handle no longer exceeds 32 bits — i.e. exactly the

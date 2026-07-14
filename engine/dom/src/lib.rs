@@ -1246,10 +1246,21 @@ mod pointer_width_tests {
         // A generation in the high 32 bits and an index in the low 32 — the exact pattern that overflows
         // a 32-bit usize.
         let id = NodeId::pack(0x1234_5678, 0x9abc);
-        assert_eq!(id.index(), 0x1234_5678, "the low 32 bits are the slot index");
-        assert_eq!(id.generation(), 0x9abc, "the high 32 bits are the generation");
+        assert_eq!(
+            id.index(),
+            0x1234_5678,
+            "the low 32 bits are the slot index"
+        );
+        assert_eq!(
+            id.generation(),
+            0x9abc,
+            "the high 32 bits are the generation"
+        );
         // The packed value genuinely uses bits above 32 — proving it is not a 32-bit type.
-        assert!(id.0 > u32::MAX as u64, "the packed handle exceeds 32 bits, so usize would overflow it");
+        assert!(
+            id.0 > u32::MAX as u64,
+            "the packed handle exceeds 32 bits, so usize would overflow it"
+        );
         // Generation-0 compatibility: the packed value equals the bare index (serialized-handle contract).
         assert_eq!(NodeId::pack(42, 0).0, 42);
     }

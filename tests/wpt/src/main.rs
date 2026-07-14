@@ -735,8 +735,11 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
             let net = manuk_net::NET_REQUESTS.load(std::sync::atomic::Ordering::Relaxed);
             let netdup = manuk_net::NET_DUPES.load(std::sync::atomic::Ordering::Relaxed);
             let layouts = manuk_layout::LAYOUTS.swap(0, std::sync::atomic::Ordering::Relaxed);
+            #[cfg(feature = "stylo")]
             let cascades =
                 manuk_css::stylo_engine::CASCADES.swap(0, std::sync::atomic::Ordering::Relaxed);
+            #[cfg(not(feature = "stylo"))]
+            let cascades = 0u64;
             if total < best {
                 best = total;
                 println!(

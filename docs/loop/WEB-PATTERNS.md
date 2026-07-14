@@ -508,3 +508,9 @@ No web capability changed (a portability fix + wasm feasibility). Recorded so th
 the render pipeline (dom · css+stylo · layout · paint · html · text) now compiles to `wasm32-unknown-unknown`,
 which unblocks the **in-browser demo** — a visitor running our *actual* Stylo/Taffy/tiny-skia pipeline live
 (`docs/loop/DEMO.md`). The enabling fix (`NodeId` → `u64`) also hardens the ARM/cross-platform target.
+
+## Tick 51 — CI + OOM guard (infrastructure)
+
+No web capability changed. Recorded for ledger completeness: the **headless configuration** (no GUI, no JS
+— the substrate the wasm demo, the agent and mac/windows CI all build on) **had silently stopped
+compiling** and now builds again, which is a prerequisite for the in-browser demo class of work.
