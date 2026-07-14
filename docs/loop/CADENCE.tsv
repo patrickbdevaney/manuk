@@ -74,3 +74,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 80	5ed482c	1784046441	2026-07-14T12:27:21-04:00	403	capability	157	5	87	4	34	74	2389	6484	1	153	4	a passive listener that cancels is not passive
 81	054f44c	1784047249	2026-07-14T12:40:49-04:00	808	instrument	253	4	81	5	34	74	2389	6484	1	153	4	the wall could not tell a killed gate from a failing one
 82	904fe10	1784057962	2026-07-14T15:39:22-04:00	10713	capability	159	12	609	2	35	78	2387	6484	1	154	4	the largest gap in the platform, and we had never looked at it
+83	4f74479	1784063332	2026-07-14T17:08:52-04:00	5370	instrument	69	21	1542	88	35	78	2387	6484	0	154	0	the loop could not see its own frame. Now it checks the map.

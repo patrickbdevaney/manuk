@@ -68,9 +68,30 @@ if [ $((TICK - AUDIT)) -ge 10 ]; then
 fi
 ok "self-audit current (last: tick ${AUDIT})"
 
+# 5b. ── THE SURFACE AUDIT. Every 10 ticks the loop must LEAVE ITS OWN FRAME.
+#
+# Every other instrument measures the browser against a map. Nothing measured the MAP — and the map was
+# drawn from memory, which has been wrong six times. Twice this project made an order-of-magnitude leap and
+# BOTH times a human had to point at it, because every instrument the loop owned could only see what was
+# already on its map. This is the instrument that checks the map.
+./scripts/surface-audit.sh check || die "surface audit overdue — run ./scripts/surface-audit.sh run"
+
 # 6. Formatting — a one-second check that CI would otherwise fail on minutes later.
 cargo fmt --all --check >/dev/null 2>&1 || { cargo fmt --all >/dev/null 2>&1; printf '  %s⚠%s reformatted (cargo fmt)\n' "$YEL" "$OFF"; }
 ok "fmt clean"
+
+# 7. ── THE RATCHET. It refuses the tick; it does not advise it.
+#
+# This is the mechanism the first principle never had. "Never regress capability, performance or stability"
+# has been written in CLAUDE.md since tick 1 — and tick 82 landed +9,940 WPT subtests while quietly losing
+# 2 in an area it was not looking at, and tick 80 shipped while the wall was red. **A rule I can recite
+# while breaking it is a decoration.** So it is a gate now, and it runs BEFORE the wall, because a
+# regression is a one-second check and the wall is a four-minute one.
+if [ -f docs/loop/WPT-AREAS.tsv ]; then
+  ./scripts/ratchet.sh check || die "the RATCHET refuses this tick — something went backwards"
+else
+  printf '  %s⚠%s no WPT sweep on record — run ./scripts/wpt-sweep.sh (a tick that did not measure cannot claim it did not regress)\n' "$YEL" "$OFF"
+fi
 
 printf '\n%s── status + the wall (ONCE, on the final tree)%s\n' "$BLD" "$OFF"
 ./scripts/status-update.sh >/dev/null 2>&1 || true
@@ -91,6 +112,10 @@ printf '  %s✓%s %s\n' "$GRN" "$OFF" "$(git log --oneline -1)"
 #
 # It runs AFTER the push, on purpose: a tick that did not land is not a tick, and must not appear as one.
 ./scripts/tick-log.sh "$TICK" || true
+
+# The marks only ever RISE. `bank` takes max(mark, current), so a regression cannot be laundered into the
+# baseline by re-running it, and a bad day cannot lower the bar for a good one.
+./scripts/ratchet.sh bank || true
 if ! git diff --quiet docs/loop/CADENCE.tsv docs/loop/CADENCE.md 2>/dev/null; then
   git add docs/loop/CADENCE.tsv docs/loop/CADENCE.md
   git commit -q --amend --no-edit --no-verify

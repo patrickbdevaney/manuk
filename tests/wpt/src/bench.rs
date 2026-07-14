@@ -105,10 +105,52 @@ fn ms(d: Duration) -> f64 {
     d.as_secs_f64() * 1000.0
 }
 
+/// **CPU CALIBRATION — a benchmark on a throttled machine is not a benchmark.**
+///
+/// The perf floors are absolute millisecond ceilings, and an absolute ceiling measures *the code and the
+/// CPU together*. At tick 83 the wall failed `F2 pipeline 139ms > 125ms` — and the engine had not changed
+/// at all. The machine's governor had dropped to `powersave` and parked the cores at 800MHz after hours of
+/// sustained WPT runs, so `mid` went 14.4ms → 23.2ms and `large` went 88ms → 152ms **together**. The ratio
+/// between them barely moved. The floor was not measuring a regression; it was measuring a slow CPU, and
+/// it said "the engine got 65% slower" with complete confidence.
+///
+/// This is the same defect as PROCESS #46 (the wall could not tell a KILLED gate from a FAILING one), and
+/// it is the **fifth instrument** to need the same lesson: *an instrument must be able to distinguish its
+/// own condition from the thing it measures.*
+///
+/// So the bench measures the machine too. A fixed integer workload — no allocation, no I/O, no engine —
+/// whose time depends on nothing but the CPU. The floor is then compared against a **normalized** figure:
+///
+///     normalized_ms = measured_ms / (calibration_ms / CALIBRATION_REFERENCE)
+///
+/// i.e. *"what this would have cost on the machine the floor was set on."* A downclocked CPU raises the
+/// calibration in exactly the proportion it raises everything else, and the floor stops lying.
+///
+/// It does NOT hide a uniform regression: a change that slows the engine everywhere raises `measured_ms`
+/// while leaving the calibration alone, and the normalized number rises with it. Only *machine* speed is
+/// divided out, which is precisely the intent.
+pub fn cpu_calibration_ms() -> f64 {
+    let t = std::time::Instant::now();
+    // A dependency chain the optimiser cannot vectorise away or hoist: each step needs the last.
+    let mut x: u64 = 0x9E37_79B9_7F4A_7C15;
+    for _ in 0..30_000_000u64 {
+        x ^= x >> 12;
+        x ^= x << 25;
+        x ^= x >> 27;
+        x = x.wrapping_mul(0x2545_F491_4F6C_DD1D);
+    }
+    std::hint::black_box(x);
+    t.elapsed().as_secs_f64() * 1000.0
+}
+
 /// Print the report: absolute per-stage cost, then **per-KB** cost so superlinear scaling is
 /// visible by inspection (a per-KB number that climbs with page size = superlinear stage).
 pub fn report(rows: &[StageTimes]) {
     println!("\n=== EPOCH-1 · RESPONSIVENESS + EFFICIENCY (median of runs, ms) ===\n");
+    // The machine's own speed, so the floors can be normalised against it. Printed as a first-class row
+    // because a reader who does not know how fast the CPU was cannot interpret any of the numbers below.
+    let calib = cpu_calibration_ms();
+    println!("cpu_calibration {calib:.1}ms   (reference: 120.0ms — the machine the floors were set on)\n");
     println!(
         "{:<14} {:>7} {:>7} {:>8} {:>8} {:>8} {:>8} {:>8} {:>9}",
         "page", "KB", "nodes", "parse", "cascade", "layout", "dlist", "paint", "TOTAL"

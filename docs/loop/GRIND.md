@@ -1,124 +1,140 @@
-# THE GRIND — how to cover the most ground in the fewest ticks, forever, without asking
+# THE GRIND — the loop, made mechanical
 
-This is the standing operating procedure for the perpetual loop. It replaces intuition about *what to work
-on next* with a mechanical rule, because intuition has now been wrong six times in a way the ledger caught
-and twice in a way it did not.
+This is not a plan. It is a **search policy that runs itself**, and it exists because every plan this
+project has written has been wrong within ten ticks.
 
-**It is not a plan. It is a search policy.** Run it every tick, forever, until both horizons are met.
+> **A rule I can recite while breaking it is a decoration.** Forty-seven process defects say the same
+> thing. So nothing here is advice. Every line below is a script that runs, and a gate that refuses.
 
 ---
 
-## The one law
+## Why this file exists: the loop could not see its own frame
 
-> **Fix the MECHANISM with the largest failure count. Never the instance.**
+Twice in one session this project made an order-of-magnitude leap, and **both times a human had to point
+at it.** Not because the analysis was hard — because the loop was ranking items *inside* an aperture it
+never questioned:
 
-Every capability tick answers one question and it is always the same question:
-*which single mechanism, if implemented correctly, retires the most failing subtests?*
+| the leap | what it was actually worth | why the loop missed it |
+|---|---|---|
+| "measure `html/dom`, not just `dom/`" | **+9,940 subtests in one tick** | `html/dom` (59,818 subtests) sat un-measured **in the same checkout** while ten ticks went into `dom/` (6,484) |
+| "histogram the failure *messages*" | the top row was **+170 subtests in an hour** | `--show-failures` had existed for many ticks and had **never been run** |
 
-The answer is never guessed. It is **measured, in one command**, and the loop had it for many ticks before
-it thought to run it (PROCESS #45).
+Both are the same defect, and it has a name now:
+
+> **The loop optimised the room it was standing in, and never opened the other doors.**
+> An area you have not checked out **scores zero and is invisible**. A test you do not run **cannot
+> fail**. *Absence of measurement is not evidence of coverage — it is the absence of evidence.*
+
+So the policy begins one level up from "what should I fix?" It begins at **"what am I not looking at?"**
 
 ---
 
 ## The tick, mechanically
 
-```sh
-# 1. MEASURE EVERY AREA — not just the one you worked on last.
-for d in dom html/dom css/selectors css/css-flexbox css/css-grid cssom domparsing url encoding; do
-  cargo run -q -p manuk-wpt --release --features spidermonkey -- wpt "$d"
-done
+Every tick, in this order. None of it requires a human.
 
-# 2. HISTOGRAM THE FAILURE MESSAGES of the biggest area. This is the work list.
-cargo run -q -p manuk-wpt --release --features spidermonkey -- wpt html/dom --show-failures 2>&1 \
-  | grep -oP '^         \K.*' \
-  | sed -E 's/"[^"]*"/"X"/g; s/\b[0-9]+\b/N/g' \
+```sh
+./scripts/orient.sh          # ← the whole thing. Runs 1–5 below and prints the verdict.
+```
+
+**1. BAR 0 — `scripts/orient.sh` §1.**
+A hang or a crash outranks every score on the page. Tick 82 landed +9,940 subtests and *introduced one
+crash*; the tick could not ship until the crash was gone. **A win beside a crash is not a win.**
+
+**2. THE APERTURE — `scripts/blindspot.sh`. Rank apertures BEFORE mechanisms.**
+Lists every WPT area upstream — including the ones never checked out, which the sparse clone can still
+*see* in its index — against what we actually measure. If the largest **invisible** area is bigger than
+the largest mechanism inside the visible ones, **the tick is to open the aperture**, not to write engine
+code:
+
+```sh
+./scripts/wpt-expand.sh <area>   # make it real
+./scripts/recon.sh               # re-map: "biggest" may now mean something else
+```
+
+*Opening an aperture is not overhead. It is the only move that can change what "biggest" means.*
+
+**3. THE MAP — `scripts/recon.sh`.**
+A cheap unbiased sample of **every** materialised area, ranked by **estimated failing subtests** — not by
+percentage. *A 0%-passing area of 40 tests is a rounding error; a 21%-passing area of 60,000 is the whole
+map.* Percentage answers "how are we doing here?"; failing-count answers "**where is the ground?**", and
+only the second one chooses a tick.
+
+The estimate uses the **median** subtests-per-file, not the mean — the first version put a degenerate area
+at the top of the map because one generated file held a test per Unicode codepoint. *An estimator a single
+file can hijack chooses wrong, confidently.* These are **scouting numbers**: they decide where to point
+the expensive instrument, and they never enter the ratchet or the cadence ledger.
+
+**4. THE WORK LIST — the failure-message histogram of the top area.**
+
+```sh
+cargo run -q -p manuk-wpt --release --features spidermonkey -- wpt <area> --show-failures 2>&1 \
+  | grep -oP '^         \K.*' | sed -E 's/"[^"]*"/"X"/g; s/\b[0-9]+\b/N/g' \
   | sort | uniq -c | sort -rn | head -20
 ```
 
-**Rank by count. Take the top row whose fix is a mechanism rather than a special case. Implement it
-generically. Gate it. Falsify it. Land it. Repeat.**
+**Take the top row that is a MECHANISM, not an instance.** "Attribute reflection" is one tick;
+"fix `input.disabled`" is four hundred. This single command is how tick 79 found `setAttributeNS` (+170)
+and how tick 82 found reflection (+9,940).
 
-Every step of that is already built. None of it needs a human.
+**5. THE RATCHET — `scripts/ratchet.sh check`.** See below. It refuses the tick, it does not advise it.
 
----
-
-## Why the histogram and not the score
-
-A per-directory pass rate tells you *where* you are losing. It cannot tell you *what* is losing, and those
-are different questions with wildly different answers:
-
-* `dom/` was at 36.8% after **ten ticks** of careful, correct work. It is **6,484 subtests**.
-* `html/dom` was at 21.0% and had **never been measured**. It is **59,818 subtests** — nine times larger.
-* And **80% of its failures were a single mechanism** (attribute reflection), worth **~38,000 subtests**.
-
-Ten ticks were spent on 9% of the ground that was already checked out, because nobody ran the loop over
-the other areas. **The score tells you how you are doing. The histogram tells you what to do.**
+Then: **probe first** (the most expensive thing in this loop is still guessing) → implement → gate (`G_*`)
+→ **prove the gate goes red** (`falsify.sh`) → the wall → `scripts/tick.sh`, which banks the ratchet and
+timestamps the tick. **Go to 1.**
 
 ---
 
-## The ranking rule, when counts are close
+## The ratchet — the part that makes it set-and-forget
 
-Prefer, in order:
+`scripts/ratchet.sh` keeps a **high-water mark** for every invariant and **refuses the commit** if any of
+them moves backwards. It only ever raises: `bank` takes `max(mark, current)`, so a regression cannot be
+laundered into the baseline by re-running it.
 
-1. **A mechanism over an instance.** "Reflection" beats "fix `input.disabled`". One is a tick; the other is
-   four hundred ticks.
-2. **Both horizons over one.** `Range`, `TreeWalker`, `MutationObserver`, reflection — every one of these
-   is *also* how real pages work. A WPT win that no page would ever notice is worth less than the same
-   number of subtests behind something a page actually calls. The near horizon (doc/app/platform web) and
-   the far horizon (WPT) are **nearly orthogonal** (measured, tick 70) — but the overlap is where the
-   cheapest tick lives, and it is where the last ten capability ticks came from.
-3. **A real fix over a stub.** *A stub is worse than an absence* — proven four times (`Range`,
-   `TreeWalker`, `MutationObserver`, and the tokenlist half of reflection). A library feature-detects a
-   stub, finds it, registers, and silently never works. **Skip it and say so** rather than fake it.
-4. **Bar 0 over everything.** A hang or a crash outranks any score. Tick 82 introduced a crash worth
-   −1 file while landing +9,940 subtests, and the tick could not have shipped until it was gone.
+| invariant | why it is a gate and not a hope |
+|---|---|
+| **WPT, per area** | Tick 82 landed +9,940 in `html/dom` and **silently lost 2 in `dom/`**. A tick that improves what you are looking at and breaks what you are not is indistinguishable from progress — *unless you measure both.* |
+| **Crashes** | Zero. Not "no worse" — **zero**. Bar 0 outranks any score. |
+| **Duplicate wire requests** | The same URL downloaded twice in one navigation is bandwidth, latency, and on a metered link, money. **A browser that double-downloads is not lean, however fast its layout is.** |
+| **Capabilities asserted** | `G_CAPABILITY`'s claim count. An engine cannot become less capable. |
+| **Gates live** | An engine cannot become **less measured**. |
+| **Verify wall** | May grow 30% before it fails. The wall **taxes every future tick** — letting it drift is compounding interest charged against the loop itself. |
 
 ---
 
-## The exhaustion rule (go broad before narrow)
+## The exhaustion rule — go broad before narrow
 
-**Keep taking the largest mechanism until there is no mechanism left**, and only then start on
-special cases. Concretely:
+* While any mechanism anywhere is worth **≥500 subtests** → that is the tick, whatever area it lives in.
+* After every such tick, **re-run the recon** — a fix in one area moves the others, and "biggest" changes.
+* Only when **no** area holds a ≥500 mechanism does the loop go narrow: file by file, message by message,
+  still ranked by count.
 
-* while the top histogram row is **≥ 500 subtests** and is a *mechanism* → it is the tick, whatever area
-  it is in;
-* when the top row falls below that, **re-measure every area** (a fix in one moves the others) and check
-  whether a previously-second-place area is now the biggest;
-* only when *no* area has a ≥500 mechanism left does the loop go narrow — file by file, message by
-  message, still ranked by count.
-
-A mechanism you have not looked for cannot appear in your ranking. **Widen the checkout before you narrow
-the work**: `scripts/wpt-setup.sh` controls which areas exist at all, and an area that is not checked out
-scores zero and is invisible.
+**A stub is worse than an absence.** Proven five times (`Range`, `TreeWalker`, `MutationObserver`, the
+tokenlist half of reflection, and `createTreeWalker`'s plain-object shim). A library feature-detects a
+stub, finds it, registers, and **silently never works**. If it cannot be done properly this tick,
+**skip it and say so in the ledger** — never fake it.
 
 ---
 
 ## The no-handback rule
 
-The loop does not stop, and it does not ask. Concretely, every tick:
+The loop does not stop and it does not ask. **A question to the user is a tick that did not happen.**
+If a decision is genuinely ambiguous: take the reversible option, write down why, and keep going. The
+journal is the place to be uncertain in — not the prompt.
 
-1. reads `STATUS.md` and the last journal entry (that is the whole hand-off);
-2. runs the histogram above;
-3. picks the top mechanism;
-4. **builds the probe first** — the most expensive thing in this loop is guessing, and it is *still* the
-   most expensive thing (PROCESS #45);
-5. implements, gates (`G_*`), **proves the gate goes red** (`falsify.sh`), runs the wall;
-6. lands with `scripts/tick.sh`, which timestamps the tick into `CADENCE.tsv` automatically;
-7. goes to 1.
-
-There is no step that requires a human. **A question to the user is a tick that did not happen.** If a
-decision is genuinely ambiguous, take the reversible option, write down why, and keep going — the journal
-is the place to be uncertain in, not the prompt.
+The entire hand-off between ticks is: `STATUS.md`, the last journal entry, and `./scripts/orient.sh`.
+That is by design. A tick that cannot be resumed from those three things is a tick that was never
+properly recorded.
 
 ---
 
 ## What "done" means
 
-**Near horizon — the daily driver.** Every ❌ in `docs/loop/WEB-PATTERNS.md` is either ✅ or carries a
-receipt saying why not; `G_CAPABILITY` asserts every ✅; the 265-site oracle has zero Bar 0 residue.
+**Near horizon — the daily driver.** Every ❌ in `WEB-PATTERNS.md` is either ✅ or carries a receipt saying
+why not. `G_CAPABILITY` asserts every ✅. The 265-site oracle has zero Bar 0 residue.
 
-**Far horizon — WPT.** Ladybird crossed **90% of WPT subtests** in 2025 — the bar Apple uses for
-alternative-engine eligibility on iOS, and therefore the only externally meaningful number. That is the
-target. Not "most of dom/". Not a percentage of what happens to be checked out. **90% of all of it.**
+**Far horizon — WPT.** Ladybird crossed **90% of all WPT subtests** in 2025 — the bar Apple uses for
+alternative-engine eligibility on iOS, and therefore the only externally meaningful number. **That** is the
+target. Not "most of `dom/`". Not a percentage of whatever happens to be checked out. **90% of all of it.**
 
 Neither horizon is met. The loop continues.

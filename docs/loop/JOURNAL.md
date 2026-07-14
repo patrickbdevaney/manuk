@@ -3054,6 +3054,105 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 83 — the loop could not see its own frame. Now it checks the map.
+
+**TICK SHAPE: instrument.** `[no-pattern]`. No engine code changed. What changed is that the loop can now
+**find its own next step-change without being told** — which is the only defect that was still costing
+order-of-magnitude leaps.
+
+**The problem, stated exactly.** Twice in one session this project made an order-of-magnitude jump, and
+**both times a human had to point at it**:
+
+* *"measure `html/dom`, not just `dom/`"* → **+9,940 subtests**. `html/dom` (59,818 subtests) had sat
+  un-measured **in the same checkout** while ten ticks went into `dom/` (6,484).
+* *"histogram the failure messages"* → the top row was **+170 subtests in an hour**. `--show-failures` had
+  existed for many ticks and had **never been run**.
+
+Neither was hard analysis. Both were **aperture** failures. And the reason is uncomfortable: every
+instrument the loop owned — `orient`, the ledgers, the ratchet — could only see **what was already on its
+map**, and *nothing ever checked the map*. The map was drawn from memory, and this project's memory has
+been wrong six times.
+
+> **A ranking inside the wrong frame is a confident wrong answer.**
+
+### What was built (PROCESS #49)
+
+* **`blindspot.sh`** — enumerates every WPT area **upstream**, including ones never checked out (the sparse
+  clone still carries the full tree index, so this is free). It found we were measuring **9 areas** while
+  ~20 areas of >800 tests each were **invisible** — including `html/canvas` (4,232 tests), *after we had
+  built a canvas rasterizer*. **THE RULE: rank apertures before mechanisms.** An area you have not checked
+  out **scores zero and cannot be ranked**.
+* **`wpt-expand.sh`** → the aperture went from **9 areas to 22**.
+* **`recon.sh`** — a cheap unbiased sample of *every* materialised area, ranked by **estimated failing
+  subtests** (median-based: the first version put a degenerate area on top because one generated file holds
+  a test per Unicode codepoint — *an estimator a single file can hijack chooses wrong, confidently*).
+* **`wpt-sweep.sh`** — measures every area, every capability tick. **TOTAL: 25,869 / 837,858.**
+* **`surface-audit.sh`** — **the loop leaves its own frame, every 10 ticks.** Search the web, reconcile the
+  constellation against Interop and other engines, and add what the world names that our map does not.
+
+### The constellation — the near horizon, made countable
+
+`CONSTELLATION.md` + `.tsv`: **98 capabilities** across doc / app / platform / media / cross, each with a
+status that may only be `gated` if a named `G_*` gate asserts it. Scored every tick by
+`constellation.sh`. The honest picture: **platform 10% gated, media 0%.**
+
+### The first surface audit found what the map could not
+
+Sources: [Interop 2026](https://github.com/web-platform-tests/interop/blob/main/2026/README.md) ·
+[Ladybird / engine comparison](https://news.ycombinator.com/item?id=45493358).
+
+**20 capabilities were added that were not on the map** — `<dialog>`/popover, View Transitions, Navigation
+API, container queries, scroll snap, CSS anchor positioning, **WebAuthn/passkeys** (the near horizon says
+"platform = login", and passkeys *are* login now), and — most damning — **`test262`**: Ladybird tracks
+97.8% of 53,207 JS-conformance subtests and **we embed SpiderMonkey and have never run it.** We did not
+know that we did not know.
+
+And the calibration this project never had:
+
+| | |
+|---|---|
+| Ladybird, April 2026 | **2,067,263** passing WPT subtests |
+| Manuk, tick 83 | **25,869** |
+
+**~1.25% of Ladybird's count.** That is the first external scale this project has ever put itself against.
+
+The audit's most important finding is a *methodology* input, not a capability:
+
+> *"Matching the behavior real-world sites depend on — including undocumented quirks — is the work that has
+> historically **killed independent engines**. A strict standards implementation that breaks sites fails
+> the only test that matters."*
+
+**WPT conformance is necessary and not sufficient.** The 265-site Chromium differential oracle is not a
+nice-to-have beside WPT — it is the anchor against the class of failure that has ended other engines.
+
+### The ratchet — the first principle, made a gate that refuses
+
+*"Never regress capability, performance or stability"* has been in `CLAUDE.md` since tick 1, and **tick 82
+landed +9,940 subtests while quietly losing 2 in an area it was not looking at.** A rule I can recite while
+breaking it is a decoration. So `ratchet.sh` keeps a high-water mark for WPT-per-area, crashes (**zero**,
+not "no worse"), duplicate wire requests, capabilities, gates, the wall, and per-class gated counts — and
+**`tick.sh` refuses the commit** if any moves backwards. **Proven**: replaying tick 82's exact numbers, it
+refuses — *"a win beside a regression is not a win — it is a trade, and the ratchet does not trade."*
+
+And its invariant is **`MEASURED`**, not `unknown` — the first version punished *discovery*, which is
+exactly backwards. **A bigger, uglier, more honest map is a good tick.**
+
+### Two instruments caught lying, in this tick, by this tick
+
+* **The wall reported "G_RUNTIME_COUNT failed — runtimes are proliferating"** when `cargo` could not create
+  a directory. Tick 81 taught that lesson to the crate suite and **not** to the parallel gates. Fixed —
+  the **fourth** instrument to need it.
+* **The perf floor said the engine had regressed 65%** — with **zero engine changes**. The governor was in
+  `powersave` and a memory-bound workload does not make it ramp. I then nearly shipped a CPU-calibration
+  loop that would have made it *worse*, because a tight ALU loop **does** ramp — *the calibrator must be
+  the same shape as the workload*. The floor is now a **ratio between two engine workloads**, which divides
+  machine speed out exactly while still catching superlinear scaling. **The fifth instrument** to need the
+  same lesson (PROCESS #48).
+
+**The ratchet.** Capability: unchanged (no engine code). Performance: the floor got *honest* (69s wall, a
+new best). Instrument fidelity: **up, more than any tick so far** — the loop can now find its own next
+leap, and it can no longer ship a trade.
+
 ## Tick 82 — the largest gap in the platform, and we had never looked at it
 
 **TICK SHAPE: capability.** **`html/dom` 21.0% → 37.7% — +9,940 subtests in one tick.** Bar 0 clean.

@@ -8,14 +8,14 @@
 > filesystem, git, the crawl output or the verify receipt.
 
 ```
-TICK:              82
+TICK:              83
 LAST_AUDIT_TICK:   81          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
-LAST_WALL_TIME:    159s
+LAST_WALL_TIME:    69s
 ORACLE_CORPUS:     265 sites
-ORACLE_CRAWLED:    265 sites, 640 clusters  → docs/loop/CLUSTERS.md
-ORACLE_HANGS:      4   ← Bar 0, on OUR clock (manuk_ms > 30s). Outranks every visual cluster.
-ORACLE_UNATTRIB:   13   ← oracle process hit its watchdog. Whose time? UNKNOWN — never ours by default.
+ORACLE_CRAWLED:    0 (PARTIAL — of 265; this run did not finish, so the hang count is a FLOOR, not a number) sites, 640 clusters  → docs/loop/CLUSTERS.md
+ORACLE_HANGS:      0?   ← Bar 0, on OUR clock (manuk_ms > 30s). Outranks every visual cluster.
+ORACLE_UNATTRIB:   0   ← oracle process hit its watchdog. Whose time? UNKNOWN — never ours by default.
 PENDING_GATES:     G_SPAWN G_POOL_ISOLATION
 SINGLE_SITE_TICKS: 0                    (this audit window — a rising count is the drift signal)
 UPDATED:           2026-07-14

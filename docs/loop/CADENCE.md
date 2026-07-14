@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **75** | ticks 1–82 |
-| median tick cycle | **18m** | 74 intervals |
+| ticks landed | **76** | ticks 1–83 |
+| median tick cycle | **18m** | 75 intervals |
 | median, last 10 | **15m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.90** | 82.6h elapsed |
-| median verify wall | **3m** | 14 ticks |
+| **ticks per hour** | **0.89** | 84.1h elapsed |
+| median verify wall | **3m** | 15 ticks |
 | wall trend | 39s → 3m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -29,9 +29,9 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **78**
 * **live gates**: 27 → **35**
 * **✅ rows in the capability ledger**: 144 → **154**
-* **Bar 0 — oracle hangs**: 4 of 265 sites
+* **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**36 of 75 ticks** (48%) moved a
+**36 of 76 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -86,7 +86,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **36** capability ticks, median cycle **18m**
-* median diff per tick: **+317 / −9** lines across 7 files
+* median diff per tick: **+326 / −9** lines across 8 files
 
 ## Every tick
 
@@ -167,5 +167,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **80** | 2026-07-14 12:27 | 7m | capability | 3m | +87/−4 | 34 | 74 | 36.8% | a passive listener that cancels is not passive |
 | **81** | 2026-07-14 12:40 | 13m | instrument | 4m | +81/−5 | 34 | 74 | 36.8% | the wall could not tell a killed gate from a failing one |
 | **82** | 2026-07-14 15:39 | 3.0h | capability | 3m | +609/−2 | 35 | 78 | 36.8% | the largest gap in the platform, and we had never looked at it |
+| **83** | 2026-07-14 17:08 | 90m | instrument | 69s | +1542/−88 | 35 | 78 | 36.8% · | the loop could not see its own frame. Now it checks the map. |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

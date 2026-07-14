@@ -54,7 +54,26 @@ _launch() {  # _launch <key> <cmd...>
 _out() {  # _out <key> → the command's combined output, once it has finished
   local key="$1"
   [ -n "${_PARPID[$key]:-}" ] && wait "${_PARPID[$key]}" 2>/dev/null
-  cat "$_PARDIR/$key" 2>/dev/null
+  local out; out=$(cat "$_PARDIR/$key" 2>/dev/null)
+
+  # ── A GATE THAT COULD NOT BUILD IS NOT A GATE THAT FAILED.
+  #
+  # PROCESS #46 taught this to the crate-suite loop and NOT to these parallel gates — so the very next
+  # time the build broke (a dangling ramdisk symlink: `failed to create directory target/debug/incremental`)
+  # the wall announced **"G_RUNTIME_COUNT failed — runtimes are proliferating"** and **"G_INTERACT failed —
+  # a tab operation stalls the UI thread"**. Both were green in isolation one second later. The engine was
+  # fine; cargo could not create a directory.
+  #
+  # **A lesson learned in one instrument is not learned until it is applied to the others** — and this is
+  # the FOURTH instrument that has had to learn it (WPT's SHORT-vs-CRASH, the crate suite, the sweep, now
+  # the parallel gates). So: a build failure is reported AS a build failure, loudly, and never dressed up
+  # as a verdict about the engine.
+  if echo "$out" | grep -qE "^error: (could not compile|failed to|couldn't)"; then
+    printf '%sBUILD FAILED for gate %s — this is NOT a verdict about the engine:%s\n' \
+      "$RED$BLD" "$key" "$OFF" >&2
+    echo "$out" | grep -E "^(error|Caused by):" | head -4 | sed 's/^/    /' >&2
+  fi
+  printf '%s' "$out"
 }
 
 # Launch every independent gate NOW; each block below simply collects its result.
@@ -442,11 +461,43 @@ if [ "${1:-}" != "--fast" ]; then
   echo "$BENCH" | sed -n '/nodes    parse/,/^$/p' | sed 's/^/  /'
   L_CASCADE=$(echo "$BENCH" | awk '/^large /{print $5; exit}')
   L_TOTAL=$(echo "$BENCH" | awk '/^large /{print $9; exit}')
+  M_TOTAL=$(echo "$BENCH" | awk '/^mid /{print $9; exit}')
   fl() { awk -v a="$1" -v b="$2" 'BEGIN{exit !(a+0 <= b+0)}'; }
-  if [ -n "$L_CASCADE" ] && fl "$L_CASCADE" 40; then ok "F1 cascade ${L_CASCADE}ms <= 40ms"
-  else bad "F1 cascade ${L_CASCADE:-?}ms exceeds the 40ms floor"; fi
-  if [ -n "$L_TOTAL" ] && fl "$L_TOTAL" 125; then ok "F2 pipeline ${L_TOTAL}ms <= 125ms"
-  else bad "F2 pipeline ${L_TOTAL:-?}ms exceeds the 125ms floor"; fi
+
+  # ── AN ABSOLUTE MILLISECOND FLOOR MEASURES THE CODE **AND THE CPU**, AND CANNOT TELL THEM APART.
+  #
+  # At tick 83 this wall failed `F2 pipeline 139ms > 125ms` — with **zero engine changes since the tick
+  # that had measured 88ms on the same machine**. The cause: the governor is `powersave`, and a
+  # *memory-bound* workload like layout does not make it ramp. Sampled during the bench, the cores sat at
+  # 1.4–2.3GHz. `mid` went 14.4 → 23.2ms and `large` went 88 → 152ms **together** — the machine got ~1.7x
+  # slower and the floor announced, with complete confidence, that the engine had.
+  #
+  # (A CPU-calibration loop does not fix this: a tight ALU loop *does* make the governor ramp, so it
+  # reports a healthy machine while the memory-bound bench crawls. **The calibrator must be the same shape
+  # as the workload** — and the only thing guaranteed to be is the workload itself.)
+  #
+  # So the binding floor is a **RATIO between two engine workloads of different size**. Machine speed
+  # divides out exactly — both pages slow down together — while the thing F2 actually exists to catch,
+  # **superlinear scaling**, survives untouched: a layout change that is quadratic in node count raises
+  # `large/mid` no matter how fast the CPU is.
+  #
+  # The absolute numbers are still printed and still logged to the cadence ledger, because a *uniform*
+  # slowdown is real and must be visible over time — it just cannot be judged from one run on one machine.
+  # This is the FIFTH instrument in this project to need the same lesson: **an instrument must be able to
+  # distinguish its own condition from the thing it measures** (PROCESS #46).
+  RATIO=$(awk -v l="$L_TOTAL" -v m="$M_TOTAL" 'BEGIN{ printf "%.2f", (m+0>0 ? l/m : 0) }')
+  CRATIO=$(awk -v c="$L_CASCADE" -v m="$M_TOTAL" 'BEGIN{ printf "%.2f", (m+0>0 ? c/m : 0) }')
+
+  if [ -n "$L_CASCADE" ] && fl "$CRATIO" 0.55; then
+    ok "F1 cascade/mid ${CRATIO} <= 0.55   (${L_CASCADE}ms absolute)"
+  else
+    bad "F1 cascade/mid ${CRATIO:-?} exceeds 0.55 — the cascade is scaling superlinearly"
+  fi
+  if [ -n "$L_TOTAL" ] && fl "$RATIO" 7.5; then
+    ok "F2 pipeline large/mid ${RATIO}x <= 7.5x   (${L_TOTAL}ms / ${M_TOTAL}ms absolute — machine-dependent, not binding)"
+  else
+    bad "F2 pipeline large/mid ${RATIO:-?}x exceeds 7.5x — the pipeline is scaling superlinearly in page size"
+  fi
 fi
 
 printf '\n'
