@@ -33,6 +33,7 @@ spidermonkey = ["_sm", "mozjs/jit", "mozjs/libz-sys", "mozjs/intl"]
 spidermonkey-noicu = ["_sm", "mozjs/jit", "mozjs/libz-sys"]
 
 [dependencies]
+tiny-skia.workspace = true
 manuk-dom.workspace = true
 manuk-css.workspace = true
 manuk-net.workspace = true

@@ -1099,6 +1099,7 @@ impl Page {
                 0
             }
         };
+        self.drain_canvases();
         if ran > 0 {
             tracing::debug!(scripts = ran, "executed deferred page scripts");
             let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
@@ -1200,6 +1201,30 @@ impl Page {
         };
         self.images.insert(node, std::rc::Rc::new(img));
         self.iframes.insert(node, url.to_string());
+    }
+
+    /// **Move anything a script painted into a `<canvas>` onto the screen.**
+    ///
+    /// This needs no new machinery in the painter, and that is the whole reason canvas landed in one
+    /// tick. The painter already scales a `DecodedImage` into a replaced element's content box, keyed by
+    /// `NodeId` — that is exactly how `<img>` works, and how an `<iframe>` is composited. **A canvas is
+    /// just an image the page draws into.** So the finished pixmaps drop into the same map, and paint is
+    /// none the wiser.
+    ///
+    /// Only *dirty* canvases cross: a chart that was drawn once must not be re-uploaded on every script
+    /// round, and a megabyte-sized pixmap copied per event handler would be a performance bug wearing a
+    /// feature's clothes.
+    fn drain_canvases(&mut self) {
+        for (id, w, h, rgba) in manuk_js::canvas_bitmaps() {
+            self.images.insert(
+                manuk_dom::NodeId(id),
+                std::rc::Rc::new(manuk_paint::DecodedImage {
+                    width: w,
+                    height: h,
+                    rgba,
+                }),
+            );
+        }
     }
 
     /// **The images this page still wants** — resolved URLs, distinct, none already resolved.

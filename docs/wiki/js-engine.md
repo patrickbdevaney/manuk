@@ -407,3 +407,63 @@ later tick. Saying so beats pretending.
 
 It was tempting to bank `dom/nodes`' rise against this. A/B on the same tree — the change mutated out —
 gives **1736/6418, identical to the subtest**. *A number you cannot attribute is not a result.*
+
+## `<canvas>` 2D — from a stub that drew nothing to a real rasterizer
+
+For sixty ticks `getContext('2d')` returned a context object whose every drawing operation was a `noop`.
+That was a **deliberate and honest trade** for its time, and worth understanding before replacing it: the
+alternative was `getContext` being `undefined`, which made `ctx.fillRect(...)` on the next line a
+`TypeError` that took the whole bundle down. **A blank chart on a working page beats an exception**, and
+it even warned in the console.
+
+But it is the worst *shape* a failure can take while still counting as "working": a page feature-detects
+canvas, is told **yes**, draws its chart, and nothing appears — with no error anywhere. `G_CAPABILITY`
+measured it exactly: fill the canvas red, read the pixel back, get `0,0,0,0`.
+
+### How it reaches the screen — with no new machinery
+
+This is why canvas took one tick rather than five. The painter **already** scales a
+`manuk_paint::DecodedImage` into a replaced element's content box, keyed by `NodeId` — that is how `<img>`
+works, and how an `<iframe>` is composited. **A canvas is simply an image the page draws into.** So:
+
+* each `<canvas>` owns a `tiny_skia::Pixmap` (`engine/js/src/canvas.rs`);
+* the JS context draws into it;
+* `Page::drain_canvases()` moves the finished, *dirty* pixmaps into the same image map an `<img>` lands
+  in, and **the painter never learns that a canvas exists**.
+
+### Where the state lives, and why it is split
+
+The **state machine** — `fillStyle`, `strokeStyle`, `lineWidth`, `globalAlpha`, the transform stack, the
+current path — stays in **JavaScript**, where colour strings, `save()`/`restore()` and method chaining are
+cheap. Only **rasterization** crosses into Rust, with the colour and transform already resolved.
+
+A path crosses as **one flat `[op, args…]` array**, not one call per segment: a chart with 10,000 points
+must not pay 10,000 FFI crossings. Every read of that stream is bounds-checked, because a truncated array
+would index off the end — and **a panic inside a JSNative is `nounwind`, so it aborts the browser rather
+than throwing** (PROCESS #34).
+
+### Done, and honestly not done
+
+**Works:** `fillRect`, `strokeRect`, `clearRect` (to *transparent*, not white), paths — `moveTo`,
+`lineTo`, `quadraticCurveTo`, `bezierCurveTo`, `rect`, `arc` (flattened to line segments, sub-pixel error),
+`fill`, `stroke` — the full transform stack (`save`/`restore`/`translate`/`scale`/`rotate`/`setTransform`),
+CSS colour parsing (`#rgb`, `#rrggbb`, `#rrggbbaa`, `rgb()`, `rgba()`, named), `globalAlpha`, **real**
+`getImageData` (non-premultiplied, as the spec hands JS), and **real** `toDataURL` PNG.
+
+**Honest no-ops, named rather than hidden:** `fillText`/`strokeText` (but `measureText` returns a real
+shape — layout code multiplies by `.width`, and `undefined * n` is `NaN`, which poisons every coordinate
+downstream), `drawImage`, `clip`, `putImageData`. Gradients return a real object and are approximated by
+their last stop — **a bar drawn in the gradient's end colour beats a bar that is not drawn.**
+
+### The bug that hurt most, and it was not the rasterizer
+
+`canvas.width` and `canvas.height` **did not exist as JS properties**. So `el.width` read `undefined`, the
+backing store fell back to the spec default of 300×150 — and the drawing was then *perfectly correct
+inside a 300×150 surface*, which the painter dutifully scaled down into the element's real box. A chart
+drawn at its true size came out as a smudge in the corner.
+
+> **The pixels were right and the surface was wrong** — which is far more confusing than a blank canvas,
+> because `getImageData` agrees with you the entire way down.
+
+They are IDL attributes reflecting the content attributes now, and assigning either one resizes **and
+clears**, which is the spec and is the idiomatic way to erase a canvas.

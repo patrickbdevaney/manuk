@@ -94,8 +94,9 @@ const CLAIMS: &[(&str, &str)] = &[
     // ── The prototype chain (tick 64)
     ("Element.prototype.setAttribute", "typeof Element.prototype.setAttribute === 'function'"),
     ("EventTarget", "typeof EventTarget === 'function'"),
-    // ── Canvas: the OBJECT exists and never throws. It does NOT draw — see the honest list below.
-    ("canvas getContext (no throw)", "!!document.createElement('canvas').getContext('2d')"),
+    // ── Canvas: it PAINTS now (tick 66). Fill it red, read the pixel back, and demand red.
+    ("canvas getContext", "!!document.createElement('canvas').getContext('2d')"),
+    ("canvas actually paints", "(function(){var c=document.createElement('canvas');c.width=c.height=8;var x=c.getContext('2d');x.fillStyle='#f00';x.fillRect(0,0,8,8);var d=x.getImageData(0,0,1,1).data;return d[0]===255&&d[3]===255})()"),
 ];
 
 /// Genuinely missing, measured, and **printed rather than asserted**.
@@ -104,13 +105,30 @@ const CLAIMS: &[(&str, &str)] = &[
 /// one. They are here so that the next person reads a measurement instead of inheriting a rumour, and so
 /// that a `❌` in the ledger has a receipt behind it.
 const KNOWN_GAPS: &[(&str, &str)] = &[
-    ("canvas actually paints", "(function(){var c=document.createElement('canvas');c.width=c.height=8;var x=c.getContext('2d');x.fillStyle='#f00';x.fillRect(0,0,8,8);var d=x.getImageData(0,0,1,1);return d.data[0]+','+d.data[3]})()"),
-    ("getComputedStyle().transform", "String(getComputedStyle(document.getElementById('moved')).transform)"),
-    ("display:contents", "String(getComputedStyle(document.getElementById('contents')).display)"),
-    ("scrollTop (read)", "String(typeof document.getElementById('host').scrollTop)"),
-    ("document.createRange", "String(typeof document.createRange)"),
-    ("document.createEvent", "String(typeof document.createEvent)"),
-    ("URL.createObjectURL", "String(typeof URL === 'undefined' ? 'no URL' : typeof URL.createObjectURL)"),
+    (
+        "getComputedStyle().transform",
+        "String(getComputedStyle(document.getElementById('moved')).transform)",
+    ),
+    (
+        "display:contents",
+        "String(getComputedStyle(document.getElementById('contents')).display)",
+    ),
+    (
+        "scrollTop (read)",
+        "String(typeof document.getElementById('host').scrollTop)",
+    ),
+    (
+        "document.createRange",
+        "String(typeof document.createRange)",
+    ),
+    (
+        "document.createEvent",
+        "String(typeof document.createEvent)",
+    ),
+    (
+        "URL.createObjectURL",
+        "String(typeof URL === 'undefined' ? 'no URL' : typeof URL.createObjectURL)",
+    ),
 ];
 
 fn html() -> String {

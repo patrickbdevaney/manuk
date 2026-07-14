@@ -54,7 +54,7 @@ that has never been tested.
 | `font-size: 0` (inline-block gap killer, image replacement) | Painted **glyph-shaped continents** across the page | ✅ |
 | `<source>`, `<track>`, `<picture>` | Responsive images — got phantom boxes | ✅ |
 | SVG (inline, `<img src=*.svg>`) | Icons everywhere | ✅ renders; namespaces not modelled |
-| `<canvas>` 2D | Charts, games, visualisations | ❌ **a stub that accepts every call and draws nothing.** `getContext('2d')` returns a context, `fillRect` is a function, and reading the pixel back after filling the canvas red gives `0,0,0,0`. Deliberate (a blank chart beats a `TypeError` that takes the page down) and **openly warned about in-product** — but a page that feature-detects canvas gets YES and renders nothing. **The next exploit tick.** |
+| `<canvas>` 2D | Charts, games, visualisations | ✅ **it rasterizes** (`G_CANVAS`). Fills, strokes, paths (incl. `arc`), the transform stack, `clearRect`, real `getImageData`, real `toDataURL` — on tiny-skia, the same rasterizer that paints the page. **And the pixels reach the screen**: a canvas is composited as an image the page drew into, through the very map an `<img>` lands in. Not done: `fillText`, `drawImage`, `clip`, real gradients (each an honest no-op, not a lie). |
 | `<video>` / `<audio>` playback | Media sites | ❌ **no codecs.** Element boxes lay out; nothing plays. Graceful, not crashing. |
 | Web fonts (`@font-face`) | Typography-heavy sites | ✅ |
 | `display: contents` | Layout-transparent wrappers | ❌ confirmed — computed style reports `inline` |
@@ -141,7 +141,7 @@ Ranked by how much of the real web each represents. Status is from the 265-site 
 | **SPA app shells** | Linear, Notion, Figma, HuggingFace | ⚠️ **partial** — Vue/Solid/Preact class works; React class does not yet |
 | **Feed / infinite scroll** | X, Mastodon, Bluesky | ❓ needs `scrollTop`, virtualised lists, WebSocket |
 | **Media** | YouTube, Twitch, Spotify | ❌ layout only, no playback |
-| **Canvas/WebGL** | Games, maps, editors | ❌ |
+| **Canvas/WebGL** | Games, maps, editors | ⚠️ **canvas 2D rasterizes** (`G_CANVAS`); WebGL returns `null` from `getContext`, which is the spec's "this machine cannot" and every library already branches on it |
 
 ---
 
@@ -155,10 +155,8 @@ and the loop was being steered by them.
 
 Every row below has a receipt in `G_CAPABILITY`, which now runs the ledger's claims as assertions.
 
-1. **`<canvas>` 2D — make it actually paint.** It is not absent, it is a **stub that silently draws
-   nothing**: fill the canvas red, read the pixel, get `0,0,0,0`. A page that feature-detects canvas is
-   told YES and then renders a blank chart. tiny-skia already backs the painter and has paths, fills and
-   strokes. Charts and dashboards are everywhere in the doc and platform web.
+1. ~~**`<canvas>` 2D**~~ — **done, tick 66.** It rasterizes on tiny-skia and the pixels reach the screen
+   (`G_CANVAS`). `fillText`/`drawImage`/`clip`/gradients remain honest no-ops.
 2. **`scrollTop`/`scrollLeft` — and it lies today.** Reading gives `undefined`; writing quietly creates a
    plain JS property that scrolls nothing. Virtualised lists, chat panes, scroll-to-top buttons.
 3. **`getComputedStyle().transform`.** The transform *is applied* — the box really moves — so this is a

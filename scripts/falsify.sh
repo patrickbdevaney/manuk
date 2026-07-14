@@ -638,6 +638,22 @@ fi
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_CANVAS; then
+  # Put the no-op back: the rasterizer stops writing pixels. `getContext('2d')` still returns a context,
+  # `fillRect` is still a function, nothing throws — and the canvas is blank. That is the state this
+  # engine shipped in for sixty ticks, and it is the worst shape a failure can take: the page
+  # feature-detects canvas, is told YES, draws its chart, and nothing appears.
+  mutate engine/js/src/canvas.rs '
+s = s.replace(
+    "            let paint = paint_for(col.0, col.1, col.2, col.3);\n            let t = xform(m);\n            if sw > 0.0 {",
+    "            let paint = paint_for(col.0, col.1, col.2, col.3);\n            let t = xform(m);\n            if true { return; } else if sw > 0.0 {",
+    1,
+)
+'
+  expect_red G_CANVAS cargo test -q -p manuk-page --features stylo,spidermonkey --test g_canvas
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_CAPABILITY; then
   # Take away ONE capability the ledger claims. The ledger is the file that decides what this project
   # builds next, and it has been wrong six times — always a ❌ nobody measured. G_CAPABILITY makes its

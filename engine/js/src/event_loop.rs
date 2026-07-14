@@ -350,63 +350,207 @@ const PRELUDE: &str = r#"
       globalThis.__manukCanvas = function(el) {
         if (!el || el.__canvasReady) { return el; }
         Object.defineProperty(el, '__canvasReady', { value: true, enumerable: false });
-        var warned = false;
+
+        // ── `canvas.width` / `canvas.height` — IDL attributes that REFLECT the content attributes,
+        // defaulting to 300x150.
+        //
+        // They were simply absent, so `el.width` read `undefined` and the backing store fell back to
+        // 300x150 for every canvas on the web. The drawing was then correct *inside a 300x150 surface*,
+        // which the painter dutifully scaled down into the element's real box — so a chart drawn at its
+        // true size came out as a smudge in the corner, and everything else was transparent. **The
+        // pixels were right and the surface was wrong**, which is a far more confusing bug than a blank
+        // canvas, because `getImageData` agrees with you the whole way.
+        //
+        // Assigning either one also RESIZES and CLEARS the surface — that is the spec, and it is the
+        // idiomatic way to erase a canvas, so a chart library that re-renders on resize depends on it.
+        ['width', 'height'].forEach(function (dim) {
+          var dflt = dim === 'width' ? 300 : 150;
+          Object.defineProperty(el, dim, {
+            configurable: true,
+            get: function () {
+              var v = parseInt(el.getAttribute(dim), 10);
+              return (isNaN(v) || v < 0) ? dflt : v;
+            },
+            set: function (v) {
+              v = parseInt(v, 10);
+              el.setAttribute(dim, String((isNaN(v) || v < 0) ? dflt : v));
+              el.__cvInit(el.width, el.height);
+            },
+          });
+        });
+
+        // ── COLOUR. Everything the spec calls a "CSS color" that a chart library actually emits.
+        function color(v) {
+          if (v && v.__grad) { return v.__stops.length ? v.__stops[v.__stops.length-1] : [0,0,0,1]; }
+          var s = String(v == null ? '#000' : v).trim().toLowerCase();
+          var NAMED = { black:[0,0,0], white:[255,255,255], red:[255,0,0], green:[0,128,0],
+                        blue:[0,0,255], gray:[128,128,128], grey:[128,128,128], silver:[192,192,192],
+                        yellow:[255,255,0], orange:[255,165,0], purple:[128,0,128], transparent:[0,0,0,0] };
+          if (NAMED[s]) { var n = NAMED[s]; return [n[0], n[1], n[2], n.length > 3 ? n[3] : 1]; }
+          var m;
+          if ((m = /^#([0-9a-f]{3})$/.exec(s))) {
+            return [parseInt(m[1][0]+m[1][0],16), parseInt(m[1][1]+m[1][1],16), parseInt(m[1][2]+m[1][2],16), 1];
+          }
+          if ((m = /^#([0-9a-f]{6})$/.exec(s))) {
+            return [parseInt(s.slice(1,3),16), parseInt(s.slice(3,5),16), parseInt(s.slice(5,7),16), 1];
+          }
+          if ((m = /^#([0-9a-f]{8})$/.exec(s))) {
+            return [parseInt(s.slice(1,3),16), parseInt(s.slice(3,5),16), parseInt(s.slice(5,7),16),
+                    parseInt(s.slice(7,9),16)/255];
+          }
+          if ((m = /^rgba?\(([^)]+)\)$/.exec(s))) {
+            var p = m[1].split(/[,\s\/]+/).filter(function(x){ return x.length; });
+            var c = function(i){ var t = p[i] || '0';
+              return t.indexOf('%') >= 0 ? Math.round(parseFloat(t) * 2.55) : parseInt(t, 10) || 0; };
+            return [c(0), c(1), c(2), p.length > 3 ? parseFloat(p[3]) : 1];
+          }
+          return [0, 0, 0, 1];   // unparseable: black, exactly as a browser does
+        }
+
+        // ── TRANSFORM. A 2x3 matrix stack, multiplied in JS. Rust receives it already resolved.
+        function mul(a, b) {
+          return [a[0]*b[0] + a[2]*b[1],       a[1]*b[0] + a[3]*b[1],
+                  a[0]*b[2] + a[2]*b[3],       a[1]*b[2] + a[3]*b[3],
+                  a[0]*b[4] + a[2]*b[5] + a[4], a[1]*b[4] + a[3]*b[5] + a[5]];
+        }
+
         el.getContext = function(kind) {
           kind = String(kind || '2d').toLowerCase();
           if (kind !== '2d') {
-            return null;   // the spec's "cannot": every library already handles a null WebGL context
-          }
-          if (!warned) {
-            warned = true;
-            console.warn('canvas 2D drawing is not rasterized yet — the canvas will be blank, but the page runs');
+            // The spec's "cannot": every library already branches on a null WebGL context, because that
+            // is what a machine without a GPU returns. We have no GPU tier here yet.
+            return null;
           }
           if (el.__ctx) { return el.__ctx; }
-          var noop = function(){};
+          el.__cvInit(el.width || 300, el.height || 150);
+
           var ctx = {
             canvas: el,
-            // State
-            save: noop, restore: noop, scale: noop, rotate: noop, translate: noop, transform: noop,
-            setTransform: noop, resetTransform: noop,
-            // Paths
-            beginPath: noop, closePath: noop, moveTo: noop, lineTo: noop, bezierCurveTo: noop,
-            quadraticCurveTo: noop, arc: noop, arcTo: noop, ellipse: noop, rect: noop, roundRect: noop,
-            fill: noop, stroke: noop, clip: noop, isPointInPath: function(){ return false; },
-            // Rects
-            clearRect: noop, fillRect: noop, strokeRect: noop,
-            // Text — `measureText` must return a real shape, because layout code multiplies by `.width`
-            // and `undefined * n` is NaN, which propagates into every coordinate downstream.
-            fillText: noop, strokeText: noop,
-            measureText: function(t){
-              var w = String(t == null ? '' : t).length * 7;
-              return { width: w, actualBoundingBoxLeft: 0, actualBoundingBoxRight: w,
-                       actualBoundingBoxAscent: 10, actualBoundingBoxDescent: 3,
-                       fontBoundingBoxAscent: 10, fontBoundingBoxDescent: 3 };
-            },
-            // Images / pixels
-            drawImage: noop,
-            createImageData: function(w, h){
-              w = w|0; h = h|0;
-              return { width: w, height: h, data: new Uint8ClampedArray(Math.max(w*h*4, 0)) };
-            },
-            getImageData: function(x, y, w, h){ return ctx.createImageData(w, h); },
-            putImageData: noop,
-            // Gradients / patterns — objects, because scripts assign them to fillStyle and then use them
-            createLinearGradient: function(){ return { addColorStop: noop }; },
-            createRadialGradient: function(){ return { addColorStop: noop }; },
-            createConicGradient: function(){ return { addColorStop: noop }; },
-            createPattern: function(){ return null; },
-            // Line/shadow/composite state — plain writable properties, which is what they are
-            fillStyle: '#000', strokeStyle: '#000', lineWidth: 1, lineCap: 'butt', lineJoin: 'miter',
-            miterLimit: 10, lineDashOffset: 0, setLineDash: noop, getLineDash: function(){ return []; },
+            fillStyle: '#000', strokeStyle: '#000', lineWidth: 1, globalAlpha: 1,
+            lineCap: 'butt', lineJoin: 'miter', miterLimit: 10, lineDashOffset: 0,
             font: '10px sans-serif', textAlign: 'start', textBaseline: 'alphabetic', direction: 'inherit',
-            globalAlpha: 1, globalCompositeOperation: 'source-over', imageSmoothingEnabled: true,
-            shadowBlur: 0, shadowColor: 'rgba(0,0,0,0)', shadowOffsetX: 0, shadowOffsetY: 0,
-            filter: 'none',
+            globalCompositeOperation: 'source-over', imageSmoothingEnabled: true,
+            shadowBlur: 0, shadowColor: 'rgba(0,0,0,0)', shadowOffsetX: 0, shadowOffsetY: 0, filter: 'none',
           };
+          var M = [1, 0, 0, 1, 0, 0];      // current transform
+          var STACK = [];                  // save()/restore()
+          var P = [];                      // the current path, as the flat command stream Rust reads
+
+          function rgba(style) {
+            var c = color(style);
+            return [c[0], c[1], c[2], (c.length > 3 ? c[3] : 1) * (ctx.globalAlpha == null ? 1 : ctx.globalAlpha)];
+          }
+
+          // ── State
+          ctx.save = function(){ STACK.push({ m: M.slice(), fs: ctx.fillStyle, ss: ctx.strokeStyle,
+                                              lw: ctx.lineWidth, ga: ctx.globalAlpha }); };
+          ctx.restore = function(){ var s = STACK.pop(); if (!s) return;
+                                    M = s.m; ctx.fillStyle = s.fs; ctx.strokeStyle = s.ss;
+                                    ctx.lineWidth = s.lw; ctx.globalAlpha = s.ga; };
+          ctx.translate = function(x, y){ M = mul(M, [1, 0, 0, 1, +x || 0, +y || 0]); };
+          ctx.scale     = function(x, y){ M = mul(M, [+x || 0, 0, 0, +y || 0, 0, 0]); };
+          ctx.rotate    = function(a){ var c = Math.cos(+a || 0), s = Math.sin(+a || 0);
+                                       M = mul(M, [c, s, -s, c, 0, 0]); };
+          ctx.transform = function(a,b,c,d,e,f){ M = mul(M, [+a||0, +b||0, +c||0, +d||0, +e||0, +f||0]); };
+          ctx.setTransform = function(a,b,c,d,e,f){
+            M = (a && typeof a === 'object')
+              ? [a.a||1, a.b||0, a.c||0, a.d||1, a.e||0, a.f||0]
+              : [+a||0, +b||0, +c||0, +d||0, +e||0, +f||0];
+          };
+          ctx.resetTransform = function(){ M = [1, 0, 0, 1, 0, 0]; };
+          ctx.getTransform = function(){ return { a:M[0], b:M[1], c:M[2], d:M[3], e:M[4], f:M[5] }; };
+
+          // ── Rects
+          ctx.fillRect = function(x, y, w, h){
+            var c = rgba(ctx.fillStyle);
+            el.__cvRect(+x||0, +y||0, +w||0, +h||0, c[0], c[1], c[2], c[3], 0, M);
+          };
+          ctx.strokeRect = function(x, y, w, h){
+            var c = rgba(ctx.strokeStyle);
+            el.__cvRect(+x||0, +y||0, +w||0, +h||0, c[0], c[1], c[2], c[3],
+                        Math.max(+ctx.lineWidth || 1, 0.01), M);
+          };
+          ctx.clearRect = function(x, y, w, h){ el.__cvClear(+x||0, +y||0, +w||0, +h||0, M); };
+
+          // ── Paths. Accumulated as [op, args...] and rasterized in ONE native call, because a chart
+          // with 10,000 points must not pay 10,000 FFI crossings.
+          ctx.beginPath = function(){ P = []; };
+          ctx.closePath = function(){ P.push(4); };
+          ctx.moveTo = function(x, y){ P.push(0, +x||0, +y||0); };
+          ctx.lineTo = function(x, y){ P.push(1, +x||0, +y||0); };
+          ctx.quadraticCurveTo = function(cx, cy, x, y){ P.push(2, +cx||0, +cy||0, +x||0, +y||0); };
+          ctx.bezierCurveTo = function(a,b,c,d,e,f){ P.push(3, +a||0,+b||0,+c||0,+d||0,+e||0,+f||0); };
+          ctx.rect = function(x, y, w, h){ P.push(5, +x||0, +y||0, +w||0, +h||0); };
+          ctx.roundRect = function(x, y, w, h){ P.push(5, +x||0, +y||0, +w||0, +h||0); };
+          // `arc` is flattened to cubics here rather than added as a Rust op: it keeps the command
+          // stream to six primitives, and the error at this segment count is well under a pixel.
+          ctx.arc = function(cx, cy, r, a0, a1, ccw){
+            cx = +cx||0; cy = +cy||0; r = +r||0; a0 = +a0||0; a1 = +a1||0;
+            var span = a1 - a0;
+            if (ccw) { if (span > 0) span -= 2*Math.PI; } else { if (span < 0) span += 2*Math.PI; }
+            var n = Math.max(2, Math.ceil(Math.abs(span) / (Math.PI/8)));
+            for (var i = 0; i <= n; i++) {
+              var t = a0 + span * (i/n), x = cx + r*Math.cos(t), y = cy + r*Math.sin(t);
+              P.push(i === 0 ? 0 : 1, x, y);
+            }
+          };
+          ctx.arcTo = function(x1, y1, x2, y2){ ctx.lineTo(x1, y1); ctx.lineTo(x2, y2); };
+          ctx.ellipse = function(cx, cy, rx, ry, rot, a0, a1, ccw){ ctx.arc(cx, cy, Math.max(+rx||0, +ry||0), a0, a1, ccw); };
+          ctx.fill = function(){
+            var c = rgba(ctx.fillStyle);
+            el.__cvPath(P, true, c[0], c[1], c[2], c[3], 0, M);
+          };
+          ctx.stroke = function(){
+            var c = rgba(ctx.strokeStyle);
+            el.__cvPath(P, false, c[0], c[1], c[2], c[3], Math.max(+ctx.lineWidth || 1, 0.01), M);
+          };
+          ctx.clip = function(){};                      // honest no-op: clipping is not wired yet
+          ctx.isPointInPath = function(){ return false; };
+
+          // ── Text. NOT rasterized — and `measureText` must still return a real shape, because layout
+          // code multiplies by `.width` and `undefined * n` is NaN, which then poisons every coordinate
+          // downstream. A missing label beats a chart drawn at NaN.
+          ctx.fillText = function(){};
+          ctx.strokeText = function(){};
+          ctx.measureText = function(t){
+            var w = String(t == null ? '' : t).length * 7;
+            return { width: w, actualBoundingBoxLeft: 0, actualBoundingBoxRight: w,
+                     actualBoundingBoxAscent: 10, actualBoundingBoxDescent: 3,
+                     fontBoundingBoxAscent: 10, fontBoundingBoxDescent: 3 };
+          };
+
+          // ── Pixels. Real ones.
+          ctx.getImageData = function(x, y, w, h){
+            w = Math.max(0, w|0); h = Math.max(0, h|0);
+            var raw = el.__cvGetImageData(x|0, y|0, w, h) || [];
+            return { width: w, height: h, colorSpace: 'srgb', data: new Uint8ClampedArray(raw) };
+          };
+          ctx.createImageData = function(w, h){
+            w = Math.max(0, w|0); h = Math.max(0, h|0);
+            return { width: w, height: h, colorSpace: 'srgb', data: new Uint8ClampedArray(w*h*4) };
+          };
+          ctx.putImageData = function(){};              // honest no-op
+          ctx.drawImage = function(){};                 // honest no-op: no image source plumbing yet
+
+          // ── Gradients: a real object, and the last stop's colour is used as a flat approximation.
+          // A bar drawn in the gradient's end colour beats a bar that is not drawn.
+          function grad() {
+            var g = { __grad: true, __stops: [] };
+            g.addColorStop = function(_o, c){ g.__stops.push(color(c)); };
+            return g;
+          }
+          ctx.createLinearGradient = grad;
+          ctx.createRadialGradient = grad;
+          ctx.createConicGradient = grad;
+          ctx.createPattern = function(){ return null; };
+          ctx.setLineDash = function(){};
+          ctx.getLineDash = function(){ return []; };
+
           Object.defineProperty(el, '__ctx', { value: ctx, enumerable: false });
           return ctx;
         };
-        el.toDataURL = function(){ return 'data:image/png;base64,'; };
+
+        el.toDataURL = function(){ return el.__cvToDataURL(); };
         el.toBlob = function(cb){ if (typeof cb === 'function') { cb(null); } };
         return el;
       };

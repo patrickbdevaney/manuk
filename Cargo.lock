@@ -3070,6 +3070,7 @@ dependencies = [
  "manuk-net",
  "mozjs",
  "serde_json",
+ "tiny-skia 0.12.0",
  "tracing",
  "url",
 ]

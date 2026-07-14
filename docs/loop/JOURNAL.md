@@ -3054,6 +3054,62 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 66 — `<canvas>` paints, and the pixels reach the screen
+
+**TICK SHAPE: capability** — the #1 item on the roadmap that tick 65 rebuilt from measurement.
+
+**The bug was not that canvas was missing. It was that canvas said yes.** `getContext('2d')` returned a
+context, `fillRect` was a function, nothing threw — and every drawing operation was a `noop`. Fill the
+canvas red, read the pixel back: **`0,0,0,0`**.
+
+That stub was a *deliberate and correct trade* when it was written — `getContext` had been `undefined`,
+which made `ctx.fillRect(...)` on the next line a `TypeError` that took the whole bundle down, and **a
+blank chart on a working page beats an exception**. It even warned in the console. But it is the worst
+*shape* a failure can take while still counting as working: the page feature-detects canvas, is told
+**yes**, draws its chart, and nothing appears, with no error anywhere.
+
+**It rasterizes now**, on tiny-skia — the same rasterizer that paints the page. Fills, strokes, paths
+(including `arc`), the full transform stack, `clearRect` to *transparent*, real `getImageData`
+(non-premultiplied, as the spec hands JS), real `toDataURL` PNG.
+
+**And the pixels reach the screen with no new machinery, which is why this was one tick and not five.**
+The painter already scales a `DecodedImage` into a replaced element's box, keyed by `NodeId` — that is how
+`<img>` works and how an `<iframe>` composites. **A canvas is just an image the page draws into.** So each
+canvas owns a `Pixmap`, and `Page::drain_canvases()` drops the finished ones into the very same map an
+`<img>` lands in. The painter never learns that a canvas exists.
+
+The split: the **state machine** (fillStyle, transforms, the current path) stays in JavaScript, where it is
+cheap; only **rasterization** crosses into Rust, with colour and transform already resolved. A path crosses
+as **one flat array** — a chart with 10,000 points must not pay 10,000 FFI crossings — and every read of
+it is bounds-checked, because a panic inside a JSNative is `nounwind` and aborts the browser rather than
+throwing.
+
+**The bug that cost the most was not in the rasterizer.** `canvas.width`/`height` **did not exist as JS
+properties**, so `el.width` read `undefined`, the surface fell back to the 300×150 default, and the drawing
+was then *perfectly correct inside a 300×150 surface* — which the painter dutifully scaled down into the
+element's real 40×40 box. The chart came out as a smudge in the corner.
+
+> **The pixels were right and the surface was wrong**, which is far more confusing than a blank canvas,
+> because `getImageData` agrees with you the whole way down.
+
+**And two self-inflicted ones, both caught by the wall:**
+
+* I put **two `#[test]`s in a JS gate binary** and it segfaulted — PROCESS #17, *which I wrote myself*: two
+  SpiderMonkey contexts co-running tear down messily. One test per JS gate binary, on purpose.
+* `pub mod canvas;` inserted above `pub mod dom_bindings;` **stole its `#[cfg(feature = "_sm")]`** — an
+  attribute belongs to whatever follows it, and what followed it had just changed. The entire JS binding
+  layer went unconditional: **283 errors in the no-feature build**, which is the one the wall runs and I
+  never do by hand. It surfaced as *"manuk-agent tests failed"*, three crates from the cause. (PROCESS #43.)
+
+**Honestly not done**, and named rather than hidden: `fillText`, `drawImage`, `clip`, `putImageData` are
+no-ops; gradients approximate to their last stop. `measureText` returns a *real* shape, because layout code
+multiplies by `.width` and `undefined * n` is `NaN`, which poisons every coordinate downstream.
+
+**The ratchet.** Capability: **up** — charts and visualisations render, and they are everywhere in the doc
+and platform web. Performance: unchanged. Instrument fidelity: **up** — `G_CANVAS` proves it by *reading
+the pixels back* (`typeof ctx.fillRect === 'function'` is what the stub passed for sixty ticks), and
+`G_CAPABILITY` now asserts red pixels rather than merely a context object.
+
 ## Tick 65 — the ledger's top three priorities were all phantoms
 
 **TICK SHAPE: instrument** — but the instrument is the one that aims every other tick. `[no-pattern]`

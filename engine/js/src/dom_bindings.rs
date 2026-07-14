@@ -1048,6 +1048,14 @@ unsafe fn define_members(
         def_guarded!(def, c"querySelector", doc_query, 1);
         def_guarded!(def, c"querySelectorAll", doc_query_all, 1);
         def_guarded!(def, c"getBoundingClientRect", el_get_bounding_rect, 0);
+        // `<canvas>` 2D. Harmless on a non-canvas element: `crate::canvas` simply has no backing store
+        // for that node, so every call is a no-op rather than a crash.
+        def_guarded!(def, c"__cvInit", cv_init, 2);
+        def_guarded!(def, c"__cvRect", cv_rect, 10);
+        def_guarded!(def, c"__cvClear", cv_clear, 5);
+        def_guarded!(def, c"__cvPath", cv_path, 8);
+        def_guarded!(def, c"__cvGetImageData", cv_get_image_data, 4);
+        def_guarded!(def, c"__cvToDataURL", cv_to_data_url, 0);
         // DOM tree mutation + cloning.
         def_guarded!(def, c"insertBefore", el_insert_before, 2);
         def_guarded!(def, c"removeChild", el_remove_child, 1);
@@ -1346,6 +1354,194 @@ unsafe fn el_get_bounding_rect(cx: *mut RawJSContext, _argc: u32, vp: *mut Value
         None => *vp = NullValue(),
     }
     true
+}
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+// `<canvas>` 2D — the natives. See `crate::canvas` for the rasterizer and why it is split this way.
+//
+// The state machine (fillStyle, transforms, the current path) lives in JS; only RASTERIZATION crosses
+// here, with the colour and transform already resolved. A path arrives as ONE flat array — a chart with
+// 10,000 points must not pay 10,000 FFI crossings.
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+/// Read `argc` floats starting at `i` — missing/NaN args become 0, which is what the canvas spec's
+/// `unrestricted double` coercion effectively does for drawing coordinates.
+unsafe fn f(cx: *mut RawJSContext, vp: *mut Value, argc: u32, i: u32) -> f32 {
+    arg_f64(cx, vp, argc, i).unwrap_or(0.0) as f32
+}
+
+/// Pull a JS number array into a `Vec<f32>` (the path command stream, the transform matrix).
+unsafe fn arg_f32_array(cx: *mut RawJSContext, vp: *mut Value, argc: u32, i: u32) -> Vec<f32> {
+    if i >= argc {
+        return Vec::new();
+    }
+    let args = mozjs::jsapi::CallArgs::from_vp(vp, argc);
+    rooted!(in(cx) let v = args.get(i).get());
+    if !v.is_object() {
+        return Vec::new();
+    }
+    rooted!(in(cx) let arr = v.to_object());
+    let mut len: u32 = 0;
+    if !mozjs::rust::wrappers2::GetArrayLength(&mut wrap_cx(cx), arr.handle(), &mut len) {
+        return Vec::new();
+    }
+    let mut out = Vec::with_capacity(len as usize);
+    for k in 0..len {
+        rooted!(in(cx) let mut e = UndefinedValue());
+        if JS_GetElement(&mut wrap_cx(cx), arr.handle(), k, e.handle_mut()) {
+            out.push(if e.is_number() {
+                e.to_number() as f32
+            } else {
+                0.0
+            });
+        } else {
+            out.push(0.0);
+        }
+    }
+    out
+}
+
+/// `__cvInit(w, h)` — create/resize the backing store. Per spec this also CLEARS it.
+unsafe fn cv_init(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((_, node)) = this_node(vp) {
+        let w = f(cx, vp, argc, 0).max(0.0) as u32;
+        let h = f(cx, vp, argc, 1).max(0.0) as u32;
+        crate::canvas::init(node.0, w, h);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `__cvRect(x, y, w, h, r, g, b, a, strokeWidth, matrix)` — `strokeWidth <= 0` means fill.
+unsafe fn cv_rect(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((_, node)) = this_node(vp) {
+        let col = (
+            f(cx, vp, argc, 4) as u8,
+            f(cx, vp, argc, 5) as u8,
+            f(cx, vp, argc, 6) as u8,
+            f(cx, vp, argc, 7),
+        );
+        let m = arg_f32_array(cx, vp, argc, 9);
+        crate::canvas::rect(
+            node.0,
+            f(cx, vp, argc, 0),
+            f(cx, vp, argc, 1),
+            f(cx, vp, argc, 2),
+            f(cx, vp, argc, 3),
+            col,
+            f(cx, vp, argc, 8),
+            &m,
+        );
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `__cvClear(x, y, w, h, matrix)`
+unsafe fn cv_clear(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((_, node)) = this_node(vp) {
+        let m = arg_f32_array(cx, vp, argc, 4);
+        crate::canvas::clear_rect(
+            node.0,
+            f(cx, vp, argc, 0),
+            f(cx, vp, argc, 1),
+            f(cx, vp, argc, 2),
+            f(cx, vp, argc, 3),
+            &m,
+        );
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `__cvPath(cmds, fill, r, g, b, a, lineWidth, matrix)`
+unsafe fn cv_path(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((_, node)) = this_node(vp) {
+        let cmds = arg_f32_array(cx, vp, argc, 0);
+        let args = mozjs::jsapi::CallArgs::from_vp(vp, argc);
+        let fill = argc > 1 && args.get(1).get().is_boolean() && args.get(1).get().to_boolean();
+        let col = (
+            f(cx, vp, argc, 2) as u8,
+            f(cx, vp, argc, 3) as u8,
+            f(cx, vp, argc, 4) as u8,
+            f(cx, vp, argc, 5),
+        );
+        let m = arg_f32_array(cx, vp, argc, 7);
+        crate::canvas::path(node.0, &cmds, fill, col, f(cx, vp, argc, 6), &m);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `__cvGetImageData(x, y, w, h)` → a plain JS array of RGBA bytes. The JS side wraps it in the
+/// `ImageData` shape (`{width, height, data: Uint8ClampedArray}`) that scripts actually index.
+unsafe fn cv_get_image_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((_, node)) = this_node(vp) else {
+        *vp = NullValue();
+        return true;
+    };
+    let x = f(cx, vp, argc, 0) as i32;
+    let y = f(cx, vp, argc, 1) as i32;
+    let w = f(cx, vp, argc, 2).max(0.0) as u32;
+    let h = f(cx, vp, argc, 3).max(0.0) as u32;
+    let bytes = crate::canvas::get_image_data(node.0, x, y, w, h);
+
+    rooted!(in(cx) let arr = NewArrayObject1(&mut wrap_cx(cx), bytes.len()));
+    if arr.get().is_null() {
+        *vp = NullValue();
+        return true;
+    }
+    for (i, b) in bytes.iter().enumerate() {
+        rooted!(in(cx) let v = Int32Value(*b as i32));
+        JS_SetElement(&mut wrap_cx(cx), arr.handle(), i as u32, v.handle());
+    }
+    *vp = ObjectValue(arr.get());
+    true
+}
+
+/// `__cvToDataURL()` → a real `data:image/png;base64,...` of what was actually drawn.
+unsafe fn cv_to_data_url(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let url = this_node(vp)
+        .and_then(|(_, node)| crate::canvas::to_png(node.0))
+        .map(|png| format!("data:image/png;base64,{}", b64(&png)))
+        .unwrap_or_else(|| "data:,".to_string());
+    let cs = match std::ffi::CString::new(url) {
+        Ok(c) => c,
+        Err(_) => return true,
+    };
+    rooted!(in(cx) let mut out = UndefinedValue());
+    let s = mozjs::jsapi::JS_NewStringCopyZ(cx, cs.as_ptr());
+    if s.is_null() {
+        *vp = NullValue();
+        return true;
+    }
+    out.set(mozjs::jsval::StringValue(&*s));
+    *vp = out.get();
+    true
+}
+
+/// Base64, standard alphabet, padded. Written out rather than pulled in: one dependency for twelve lines
+/// of table lookup is a dependency that will one day break a cross-platform build (see PROCESS #30).
+fn b64(bytes: &[u8]) -> String {
+    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for c in bytes.chunks(3) {
+        let b = [c[0], *c.get(1).unwrap_or(&0), *c.get(2).unwrap_or(&0)];
+        let n = ((b[0] as u32) << 16) | ((b[1] as u32) << 8) | b[2] as u32;
+        out.push(T[(n >> 18) as usize & 63] as char);
+        out.push(T[(n >> 12) as usize & 63] as char);
+        out.push(if c.len() > 1 {
+            T[(n >> 6) as usize & 63] as char
+        } else {
+            '='
+        });
+        out.push(if c.len() > 2 {
+            T[n as usize & 63] as char
+        } else {
+            '='
+        });
+    }
+    out
 }
 
 /// `element.getAttribute(name)` → string | null.

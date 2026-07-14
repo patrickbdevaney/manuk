@@ -179,6 +179,22 @@ fn with_runtime<R>(
 ///
 /// Call this once, last, after every `Page` (and therefore every `PageContext`) has been dropped —
 /// dropping a rooted JS object *after* its runtime is gone would crash in turn.
+/// Every `<canvas>` a script has drawn into since the last call: `(node id, width, height, RGBA8)`.
+///
+/// Non-premultiplied RGBA8 — the exact shape `manuk_paint::DecodedImage` wants — so the host can drop
+/// these straight into the image map an `<img>` lands in, and the painter never has to know that a
+/// canvas exists. Empty without the JS feature, which is correct: no scripts, nothing drawn.
+pub fn canvas_bitmaps() -> Vec<(u64, u32, u32, Vec<u8>)> {
+    #[cfg(feature = "_sm")]
+    {
+        canvas::take_dirty()
+    }
+    #[cfg(not(feature = "_sm"))]
+    {
+        Vec::new()
+    }
+}
+
 pub fn shutdown() {
     #[cfg(feature = "_sm")]
     {
@@ -576,6 +592,12 @@ pub mod bindings_prototype;
 #[cfg(feature = "_sm")]
 pub mod job_queue;
 
+// NOTE the cfg on EACH. Inserting `pub mod canvas;` on the line above `pub mod dom_bindings;` silently
+// STOLE its `#[cfg(feature = "_sm")]` — an attribute applies to the item that follows it, and the item
+// that followed it was now canvas. `dom_bindings` then tried to compile with no JS engine underneath:
+// 283 errors, and only in the no-feature build, which the wall runs and I do not.
+#[cfg(feature = "_sm")]
+pub mod canvas;
 #[cfg(feature = "_sm")]
 pub mod dom_bindings;
 
