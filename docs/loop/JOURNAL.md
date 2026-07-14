@@ -2741,3 +2741,35 @@ reproduced by hand, and the gate fired perfectly.
 > verdict.** *The falsifier is an instrument, and instruments get verified.*
 
 Self-audit closed: **methodology and reality agree.**
+
+## Tick 52 — CI could not tell me why it failed, so I made it able to (2026-07-13)
+
+**TICK SHAPE: infrastructure**
+
+**Hypothesis: I have been guessing.** Two ticks were spent "fixing" CI causes I had *inferred* — mozjs's
+libclang, the GUI system libs, a stale cache — because **GitHub's job LOGS require admin rights** (the API
+answers **403 "Must have admin rights"** even though the repo is public). From the outside, a CI failure
+was exactly one line:
+
+> *"Process completed with exit code 101."*
+
+**That is not a diagnosis.** And this project has a name for acting on one: *a verdict is a claim.* I had
+been treating an unreadable exit code as evidence.
+
+**The instrument, not another guess:** **check-run ANNOTATIONS are public** — I can read them from the API
+without any token. GitHub promotes any line starting with `::error::` into one. So `scripts/ci-run.sh`
+wraps every build/test step, streams output normally, and **on failure re-emits the real compiler error as
+annotations.** The loop now reads the actual error off the API instead of theorising about it.
+
+It also names **`signal: 9`** explicitly, because *the OOM killer looks exactly like a compile error* and
+gets read as "the code is broken" — the same lie `mem-guard.sh` exists to stop (PROCESS #31).
+
+**What I ruled out with a real experiment rather than a hunch:** a **fresh `git clone` builds the headless
+config cleanly** (exit 0). So the code is right and the environment is wrong — which is precisely the thing
+the annotations will now say out loud. *The local-only, gitignored bins were also checked and cleared: none
+is declared as a `[[bin]]`, so a fresh checkout never needed them.*
+
+**Security hygiene, audited while in the area:** the local-only tooling is excluded via
+**`.git/info/exclude`**, not the public `.gitignore` (which is itself committed and would advertise the
+files it names). One committed doc mentioned a local-only *filename* while explaining the public/local
+split — scrubbed. **Zero committed references remain.**

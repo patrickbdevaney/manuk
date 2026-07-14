@@ -63,11 +63,16 @@ jobs:
         run: cargo fmt --all --check
       # The HEADLESS build first — the leanest, most-portable config, and the one mac/windows also run.
       # It must be green: it is the demo/agent substrate and has no display/GPU/JS dependency.
+      # Every build/test goes through `ci-run.sh`, which re-emits the real error as a `::error::`
+      # ANNOTATION on failure. GitHub's job LOGS need admin rights (the API answers 403 even on a public
+      # repo), so a failure was otherwise just "Process completed with exit code 101" — not a diagnosis.
+      # Two ticks were spent GUESSING at causes because the compiler error was unreadable. Annotations
+      # are public; now the loop reads the actual error instead of theorising.
       - name: build (headless, no default features)
-        run: cargo build --workspace --no-default-features
+        run: ./scripts/ci-run.sh "headless build" cargo build --workspace --no-default-features
       # The full default build (GUI + stylo + spidermonkey) — the shipping desktop config.
       - name: build (default, shipping desktop)
-        run: cargo build --workspace
+        run: ./scripts/ci-run.sh "default build" cargo build --workspace
       # Clippy runs and reports, but does NOT gate the badge on `-D warnings`. The badge means "the
       # shipping config builds and its correctness gates pass" — that is the real signal. ~65 accumulated
       # style lints are a gradual epoch cleanup (tracked in STATUS.md), not a per-tick blocker, and making
@@ -81,7 +86,7 @@ jobs:
       # features measures a build no user has (ADR-011). The headless BUILD above proves the lean
       # substrate compiles; this proves the tests pass in the config that ships.
       - name: test (workspace, shipping config)
-        run: cargo test --workspace
+        run: ./scripts/ci-run.sh "workspace tests" cargo test --workspace
       # The full gate wall in its shipping configuration (stylo + spidermonkey) — the REAL verification,
       # which the headless test run above cannot exercise (the feature-gated gates need the JS engine).
       - name: the gate wall (stylo + spidermonkey)
@@ -118,9 +123,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: build (headless, no default features)
-        run: cargo build --workspace --no-default-features
+        run: bash scripts/ci-run.sh "headless build (${{ matrix.os }})" cargo build --workspace --no-default-features
       - name: build (default features — pulls mozjs; the cross-OS gap)
-        run: cargo build --workspace
+        run: bash scripts/ci-run.sh "default build (${{ matrix.os }})" cargo build --workspace
 
   # Static release binaries per target. Also tracked known-gap until the cross-OS mozjs build is proven.
   static-binary:

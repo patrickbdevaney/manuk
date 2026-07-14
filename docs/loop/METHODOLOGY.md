@@ -1161,7 +1161,7 @@ verdict**, asserted rather than assumed.
 The operational mechanics live in the local appendix (`docs/loop/METHODOLOGY-LOCAL.md`, gitignored),
 because they depend on a personal environment no clone of this repository has. Read both at the start
 of every session. The split is not redaction of the reasoning — every principle, decision and gate is
-here — it is the same rule that governs `parity-verify` and `.env`: **a committed artifact must be
+here — it is the same rule that governs the local-only tooling and `.env`: **a committed artifact must be
 usable by anyone who clones this repo.**
 
 ### 27.4 If the resource envelope ever changes

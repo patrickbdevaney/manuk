@@ -514,3 +514,9 @@ which unblocks the **in-browser demo** — a visitor running our *actual* Stylo/
 No web capability changed. Recorded for ledger completeness: the **headless configuration** (no GUI, no JS
 — the substrate the wasm demo, the agent and mac/windows CI all build on) **had silently stopped
 compiling** and now builds again, which is a prerequisite for the in-browser demo class of work.
+
+## Tick 52 — CI observability (infrastructure)
+
+No web capability changed. Recorded for completeness: CI failures are now **readable** (public check-run
+annotations carry the real compiler error), which is a prerequisite for getting the cross-platform and
+wasm lanes green without guessing.
