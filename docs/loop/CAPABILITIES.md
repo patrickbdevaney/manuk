@@ -171,3 +171,13 @@ throws on line one.
 | **A panic in any page-callable JS native kills the CALL, not the browser** | ✅ (tick 47) — 112 natives (57 methods + 45 accessors + 10 host fns). Was: **SIGSEGV, every tab.** |
 | **The panic is LOGGED, not swallowed** | ✅ — `error!` with the native's name |
 | **SpiderMonkey engine callbacks** (module hooks, rejection tracker) | ⚠️ **residual, named** — not page-callable; different signatures |
+
+## Tick 48 — the detached document
+
+| Capability | Reach | Status |
+|---|---|---|
+| **`document.implementation.createHTMLDocument()`** | **every sanitizer (DOMPurify et al.)** | ✅ (tick 48) — a REAL second document in the arena |
+| **`document.implementation` / `hasFeature`** | legacy feature-detection | ✅ (tick 48) |
+| **Pre-insertion validity (no cycles, no Document child)** | **Bar 0** | ✅ (tick 48) — enforced at the JS native AND the arena |
+| **The created document's reflector as a document** (`doc.body`) | — | ❌ **deferred** — gets element members; document members break the real document |
+| **`document.createEvent` / `initEvent`** | jQuery, GA, legacy code | ❌ **deferred** — exposes an infinite loop in event dispatch when listeners mutate mid-dispatch (Bar 0) |

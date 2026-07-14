@@ -487,3 +487,11 @@ runs *after other documents*.
 
 **This is not a class of *site* — it is Bar 0's founding promise finally being true of the JS boundary:
 a bad page kills the PAGE, not the browser.** Every DOM method written from here on is born contained.
+
+## Tick 48 — the detached document
+
+| Pattern | Reach | Status |
+|---|---|---|
+| **`createHTMLDocument()`** — the sanitizer's safe detached tree | **DOMPurify and every sanitizer** | ✅ (tick 48) — a real second document in the arena |
+| **A cycle-forming insertion** (`node.appendChild(itsAncestor)`) | Bar 0 / adversarial | ✅ (tick 48) — throws `HierarchyRequestError`; was **unguarded and would hang** |
+| **`createEvent`/`initEvent`** | jQuery, GA, legacy code | ❌ deferred — exposes an infinite dispatch loop (Bar 0) |

@@ -2544,3 +2544,52 @@ prevent.*
 
 *Bar 0's founding promise — **a bad page kills the PAGE, not the browser** — is now true of the JS boundary,
 and not merely of the Rust one.*
+
+## Tick 48 — a second document, and the cycle check that stands between the DOM and an infinite loop (2026-07-13)
+
+**TICK SHAPE: pattern-class** · **CLUSTER: C00wpt** — the class is *the detached document*, which is how
+every sanitizer on the web (DOMPurify and its kin) processes untrusted markup.
+
+**Hypothesis:** `dom/nodes` (5,125 subtests, the largest pool) is 22.4%. Clustering its failure messages
+gives a clean work list, and one cluster dominates: **488 failures on `can't access property
+"documentElement"`, every one downstream of `document.implementation` not existing.**
+
+**RESULT — `document.implementation.createHTMLDocument()` builds a REAL second document.** One arena,
+several roots: a document is not special storage, it is a node whose *type* is `Document`, so everything
+that already walks the tree works on it unchanged. `hasFeature()` returns `true` (the spec now defines it as
+a constant, precisely because feature-detecting through it never worked).
+
+**And it immediately created a Bar 0 hazard, which is the more important half of the tick.** The moment a
+page can obtain a *second Document*, it can try to **insert** it — and we had **no pre-insertion validity
+check at all.** Inserting a node into its own descendant makes the tree a **cycle**, and every subsequent
+`children()` walk **spins forever.** *That is a hang, not a wrong answer — Bar 0.* It was invisible only
+because the door had been locked: with no `createHTMLDocument()`, a page could not get a second Document to
+insert. **Five WPT files went from passing to killing the process the instant that method existed.**
+
+The fix is the spec's `HierarchyRequestError` — a Document cannot be a child, and a node cannot be inserted
+into its own inclusive ancestor — enforced at **two** layers: the JS native (throws), *and* the arena
+itself (`append_child`/`insert_before` refuse to build a cycle), **because the arena is reachable from the
+parser and from Rust callers too.** This is also exactly what the 588 `assert_throws_dom` failures want.
+
+**A Bar 0 regression I caught and refused to ship, which is the ratchet working.** Adding `createEvent`
+alongside the rest looked like a free +213 — but the moment it existed, tests reached real event dispatch
+with **listeners mutated mid-dispatch** (`Event-dispatch-handlers-changed`), and **our dispatch loops
+forever.** A synchronous infinite loop no timeout can interrupt. So **`createEvent` is deferred with the
+reason stated** — `undefined` (a catchable TypeError) is strictly safer than a hang that takes the tab down,
+and the dispatch-loop fix is its own tick. *The score is 26.7% instead of a higher number, and it is an
+honest 26.7% with Bar 0 clean.*
+
+**MEASURED — the ratchet turned, on all three faces:**
+
+| | tick 47 | tick 48 |
+|---|---|---|
+| `dom/` subtests | 1548/6287 = **24.6%** | **1738/6499 = 26.7%** |
+| `dom/` Bar 0 (HANG/CRASH) | 0 | **0** (a regression to 1 was caught and reverted) |
+| NO_REPORT | 0 | **0** |
+
+`G_DOM_IMPL` gates both halves and is proven falsifiable against removing the cycle check.
+
+**Deferred, stated rather than discovered later:** `createEvent`/`initEvent` (needs the mid-dispatch listener
+loop fixed first); `createHTMLDocument`'s reflector currently gets **element** members, not document ones
+(handing it document members breaks the *real* document — 5 files stop reporting — and finding why is its
+own tick), so `doc.body` on the returned object is `undefined` while the arena tree behind it is correct.

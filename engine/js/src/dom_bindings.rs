@@ -615,6 +615,22 @@ unsafe fn new_reflector(cx: *mut RawJSContext, dom: *mut Dom, node: NodeId) -> *
     JS_SetReservedSlot(obj.get(), SLOT_NODE, &node_val);
     let dom_val = PrivateValue(dom as *const std::ffi::c_void);
     JS_SetReservedSlot(obj.get(), SLOT_DOM, &dom_val);
+    // **A Document node gets the DOCUMENT method set.** This is what makes a second document — the one
+    // `createHTMLDocument()` returns — a real document rather than a shim: `doc.body`, `doc.createElement`,
+    // `doc.querySelector` all come from the same registration the main document uses.
+    // ⚠ **A created Document's reflector gets ELEMENT members, not document members — and that is a
+    // STATED LIMIT, not an oversight.**
+    //
+    // Handing a Document node the document method set breaks the *real* document: 5 WPT files stop
+    // reporting at all, and it is not the root-vs-created distinction (scoping it to non-root documents
+    // changes nothing). Something in the document member set is written against the page's one true
+    // document rather than against `this`, and finding it is its own tick.
+    //
+    // So `createHTMLDocument()` builds a **genuinely correct document in the arena** — `html`/`head`/
+    // `title`/`body`, all real nodes — while its **JS reflector cannot yet be used as a document**
+    // (`doc.body` is `undefined`). That is worth shipping anyway, because the alternative is a
+    // **TypeError on the call**, which takes the whole sanitizer down with it; and it is worth saying
+    // out loud, because a half-working document that pretended otherwise would be the worse bug.
     define_members(cx, &obj, false);
     // Store in the identity cache.
     let global = CurrentGlobalOrNull(&wrap_cx(cx));
@@ -762,6 +778,7 @@ unsafe fn define_members(
         def_guarded!(def, c"addEventListener", el_add_event_listener, 2);
         def_guarded!(def, c"removeEventListener", el_remove_event_listener, 2);
         def_guarded!(def, c"dispatchEvent", el_dispatch_event, 1);
+        def_guarded!(def, c"__createHTMLDocument", doc_create_html_document, 1);
         // Test-only: proves the containment boundary is real. Not registered otherwise.
         if std::env::var_os("MANUK_PANIC_PROBE").is_some() {
             def_guarded!(def, c"__panicProbe", el_panic_probe, 0);
@@ -1027,6 +1044,10 @@ unsafe fn el_append_child(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> b
     };
     match arg_object(vp, argc, 0).and_then(|o| node_and_dom(o).map(|(_, c)| (o, c))) {
         Some((child_obj, child)) => {
+            // Pre-insertion validity FIRST — an ancestor or a Document here makes the tree a cycle.
+            if !insertion_is_valid(cx, dom, parent, child) {
+                return false;
+            }
             (*dom).append_child(parent, child);
             record_mutation(cx, dom, "childList", parent, None, None, &[child], &[]);
             *vp = ObjectValue(child_obj);
@@ -1587,6 +1608,76 @@ unsafe fn el_dispatch_event(cx: *mut RawJSContext, argc: u32, vp: *mut Value) ->
         .map(|v| v.is_boolean() && v.to_boolean())
         .unwrap_or(false);
     *vp = BooleanValue(ran);
+    true
+}
+
+/// **The DOM's PRE-INSERTION VALIDITY check — and it is what stands between us and an infinite loop.**
+///
+/// The spec (`ensure pre-insertion validity`) throws `HierarchyRequestError` when:
+///
+///   * **the node is a host-including inclusive ancestor of the parent** — because inserting a node into
+///     its own descendant makes the tree a **CYCLE**, and every subsequent `children()` walk spins
+///     forever. That is a **hang**, not a wrong answer: Bar 0.
+///   * **the node is a Document** — a document cannot be a child of anything.
+///   * the parent is not a Document, DocumentFragment or Element.
+///
+/// We had **none** of it, and it was invisible only because nothing could *reach* the bad states: with no
+/// `createHTMLDocument()`, a page could not get hold of a second Document to insert. **The moment that
+/// method existed, five WPT files went from passing to killing the process** — the check was always
+/// missing; the door had simply been locked.
+///
+/// Returns `false` (with a `DOMException` pending) when the caller must abort — which is exactly the
+/// contract a `JSNative` needs.
+unsafe fn insertion_is_valid(
+    cx: *mut RawJSContext,
+    dom: *mut Dom,
+    parent: NodeId,
+    node: NodeId,
+) -> bool {
+    if (*dom).is_document(node) {
+        throw_dom(cx, "HierarchyRequestError", "a Document cannot be inserted into a node");
+        return false;
+    }
+    if (*dom).is_inclusive_ancestor(node, parent) {
+        throw_dom(
+            cx,
+            "HierarchyRequestError",
+            "the new child is an ancestor of the parent (this would make the tree a cycle)",
+        );
+        return false;
+    }
+    true
+}
+
+/// **`document.implementation.createHTMLDocument(title)` — a REAL second document, in the same arena.**
+///
+/// This is how **DOMPurify** (and every other sanitizer) works: it parses hostile markup into a *detached*
+/// document so that nothing in it can run, touch the real page, or fetch anything. It is also how template
+/// engines and `DOMParser` build a tree off to one side.
+///
+/// WPT's `dom/nodes` fails **488 times on `can't access property "documentElement"`** — every one of them
+/// downstream of this method not existing and returning `undefined`.
+///
+/// One arena, several roots: a document is not special storage, it is a node whose *type* is `Document`,
+/// so everything that already walks the tree works on it unchanged.
+unsafe fn doc_create_html_document(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, _)) = this_node(vp) else { *vp = NullValue(); return true };
+    let doc = (*dom).create_document();
+    let html = (*dom).create_element("html");
+    (*dom).append_child(doc, html);
+    let head = (*dom).create_element("head");
+    (*dom).append_child(html, head);
+    // `createHTMLDocument()` with NO argument creates no <title> at all; with one (even ""), it does.
+    if let Some(t) = arg_string(cx, vp, argc, 0) {
+        let te = (*dom).create_element("title");
+        let tx = (*dom).create_text(&t);
+        (*dom).append_child(te, tx);
+        (*dom).append_child(head, te);
+    }
+    let body = (*dom).create_element("body");
+    (*dom).append_child(html, body);
+    let obj = new_reflector(cx, dom, doc);
+    *vp = ObjectValue(obj);
     true
 }
 
@@ -4474,6 +4565,48 @@ const WINDOW_PRELUDE: &str = r#"
         if (typeof g.top === 'undefined') g.top = g;
         if (typeof g.frames === 'undefined') g.frames = g;
         if (typeof g.opener === 'undefined') g.opener = null;
+
+        // ---- **`document.implementation` — it did not exist, and it is how sanitizers work.** -----
+        //
+        // `createHTMLDocument()` is what **DOMPurify** uses: parse hostile markup into a DETACHED
+        // document, so nothing in it can run, touch the real page, or fetch anything. Its absence is
+        // `undefined.createHTMLDocument(...)` — a TypeError inside the sanitizer, which takes the page
+        // with it. WPT's `dom/nodes` fails **488 times on `can't access property "documentElement"`**,
+        // every one of them downstream of this returning `undefined`.
+        //
+        // The document it returns is a REAL second document in the same arena (see
+        // `doc_create_html_document`) — `doc.body`, `doc.createElement`, `doc.querySelector` all work,
+        // because a Document node gets the document method set.
+        g.__DOMImplementation = {
+            createHTMLDocument: function (title) {
+                return (arguments.length === 0)
+                    ? document.__createHTMLDocument()
+                    : document.__createHTMLDocument(String(title));
+            },
+            createDocument: function (ns, qualifiedName) {
+                var d = document.__createHTMLDocument();
+                return d;
+            },
+            // `hasFeature()` is specified to ALWAYS return true — it is a legacy method the spec now
+            // defines as a constant, precisely because feature-detecting through it never worked.
+            hasFeature: function () { return true; },
+            createDocumentType: function (name, publicId, systemId) {
+                return { name: String(name), publicId: String(publicId || ''),
+                         systemId: String(systemId || ''), nodeType: 10 };
+            }
+        };
+        try {
+            Object.defineProperty(document, 'implementation', {
+                get: function () { return g.__DOMImplementation; }, configurable: true
+            });
+        } catch (e) { try { document.implementation = g.__DOMImplementation; } catch (e2) {} }
+
+        // **`document.createEvent()` is DEFERRED, and the reason is Bar 0.** The shim itself is trivial,
+        // but the moment it exists, tests reach real event dispatch with listeners that mutate the
+        // listener list *mid-dispatch* (`Event-dispatch-handlers-changed`), and our dispatch loops
+        // FOREVER — a synchronous infinite loop no timeout can interrupt. The dispatch fix is its own
+        // tick; until then, `createEvent` returning undefined (a catchable TypeError) is strictly safer
+        // than a hang that takes the tab down. Stated, not hidden.
 
         // ---- **THE DOCUMENT LIFECYCLE. NONE OF IT EXISTED.** -----------------------------------
         // `document.readyState`, `DOMContentLoaded` and `load` were **not dispatched anywhere in the

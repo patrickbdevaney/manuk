@@ -104,6 +104,14 @@ head_ "G_GLOBALS · a missing constructor is a THROWN EXCEPTION, not a missing f
 GG=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_globals 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GG" ]; then ok "globals: $GG"; else bad "G_GLOBALS failed — a global a real bundle references is missing, or one of them is LYING"; fi
 
+head_ "G_DOM_IMPL · createHTMLDocument + pre-insertion validity (a cycle is a HANG)"
+# createHTMLDocument() is how DOMPurify builds a safe DETACHED document; its absence is a TypeError that
+# takes the sanitizer down (WPT failed 488x on documentElement downstream of it). And inserting a node into
+# its own descendant makes the tree a CYCLE — an infinite children() walk, i.e. a hang (Bar 0) — which
+# pre-insertion validity must throw HierarchyRequestError for, not spin on.
+GDI=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_dom_impl 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GDI" ]; then ok "dom impl + insertion validity: $GDI"; else bad "G_DOM_IMPL failed — createHTMLDocument, or the cycle check that stands between the DOM and an infinite loop"; fi
+
 head_ "G_CONTAIN_NATIVE · a panic in a JS native must kill the CALL, not the browser (Bar 0)"
 # Every DOM method is an `extern "C"` function, and `extern "C"` is NOUNWIND. A Rust panic inside one is
 # "panic in a function that cannot unwind" -> SIGSEGV, core dumped: the whole browser, and every tab the

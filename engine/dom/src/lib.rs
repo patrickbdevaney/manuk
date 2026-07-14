@@ -345,6 +345,37 @@ impl Dom {
         self.alloc(NodeData::Fragment)
     }
 
+    /// **A second, detached DOCUMENT in the same arena** — what `createHTMLDocument()` returns.
+    ///
+    /// One arena, several roots. A document is not special storage; it is a node whose *type* is
+    /// `Document`, and everything that already walks the tree works on it unchanged.
+    pub fn create_document(&mut self) -> NodeId {
+        self.alloc(NodeData::Document)
+    }
+
+    /// **Is `maybe_ancestor` an INCLUSIVE ancestor of `node`?** (i.e. itself, or any ancestor.)
+    ///
+    /// This is the check that stands between the DOM and an **infinite loop**. The spec's pre-insertion
+    /// validity step *"if node is a host-including inclusive ancestor of parent, throw
+    /// HierarchyRequestError"* exists because inserting a node into its own descendant makes the tree a
+    /// **cycle** — and every subsequent `children()` walk spins forever.
+    pub fn is_inclusive_ancestor(&self, maybe_ancestor: NodeId, node: NodeId) -> bool {
+        let mut cur = Some(node);
+        while let Some(n) = cur {
+            if n == maybe_ancestor {
+                return true;
+            }
+            cur = self.parent(n);
+        }
+        false
+    }
+
+    /// Is this node a Document? Decides whether its JS reflector gets the *document* method set
+    /// (`createElement`, `getElementById`, `documentElement`, `body`, …) rather than the element one.
+    pub fn is_document(&self, id: NodeId) -> bool {
+        matches!(self.nodes.get(id.index()).map(|n| &n.data), Some(NodeData::Document))
+    }
+
     pub fn is_fragment(&self, id: NodeId) -> bool {
         // Bounds-safe on purpose: this is reachable from JS via `appendChild`/`insertBefore`, and a raw
         // index from a stale reflector used to panic here — inside an `extern "C"` native, where a panic
@@ -657,6 +688,14 @@ impl Dom {
     }
 
     pub fn append_child(&mut self, parent: NodeId, child: NodeId) {
+        // **The arena's own backstop: never build a cycle.** A node inserted into its own descendant makes
+        // `children()` walk forever — a HANG (Bar 0), not a wrong answer. The JS layer throws
+        // `HierarchyRequestError` for this; the arena simply refuses, because it is reachable from the
+        // parser and from Rust callers too.
+        if self.is_inclusive_ancestor(child, parent) {
+            return;
+        }
+
         // **Inserting a DocumentFragment moves its CHILDREN, not itself.** That single rule is the
         // whole reason fragments exist, and it is what every framework relies on to commit a built
         // subtree in one insertion. Insert the fragment itself and you have inserted an inert wrapper
@@ -758,6 +797,14 @@ impl Dom {
             }
             return;
         }
+        // **THE ARENA'S OWN BACKSTOP: never build a cycle.** The JS layer checks pre-insertion validity
+        // and throws `HierarchyRequestError` — but the arena is reachable from the parser, from layout and
+        // from Rust callers too, and a cycle here is not a wrong answer, it is an **infinite `children()`
+        // walk**: a hang, which is Bar 0. So the invariant is enforced where the tree actually lives.
+        if self.is_inclusive_ancestor(new_node, parent) {
+            return;
+        }
+
         // **DOM spec, "pre-insert", step 2:** *"If referenceChild is node, then set referenceChild to
         // node's next sibling."*
         //

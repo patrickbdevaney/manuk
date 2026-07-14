@@ -227,3 +227,24 @@ nothing.*
 > passes; **it only dies when it runs AFTER other documents.** *No single-page test can catch this class —
 > which is why it survived every gate.* **Any engine that reuses one process for many documents has this
 > bug until it proves otherwise.**
+
+## A detached DOCUMENT is how every sanitizer works — and the moment it exists, you need cycle checks
+
+`document.implementation.createHTMLDocument()` builds a **second, detached document**: DOMPurify and every
+other sanitizer parses hostile markup into one so that nothing in it can run, touch the real page, or fetch.
+Its absence is a `TypeError` on the call that takes the sanitizer — and the page — down.
+
+**One arena, several roots.** A document is not special storage; it is a node whose *type* is `Document`, so
+everything that already walks the tree works on it unchanged. `html`/`head`/`title`/`body` are all real
+nodes in the same arena.
+
+> **The moment a page can obtain a second Document, it can try to INSERT it — and inserting a node into its
+> own descendant makes the tree a CYCLE**, i.e. an infinite `children()` walk: a **hang**, Bar 0. So
+> `createHTMLDocument()` cannot land without **pre-insertion validity** (the spec's `HierarchyRequestError`:
+> a Document cannot be a child; a node cannot be inserted into its own inclusive ancestor). **Enforce it at
+> BOTH layers** — the JS native throws, and the arena itself refuses, because the arena is reachable from
+> the parser and from Rust callers too.
+
+**The failure was invisible until the door unlocked:** five WPT files passed until `createHTMLDocument`
+existed, then killed the process instantly — *the validity check was always missing; nothing could reach the
+bad state before.*

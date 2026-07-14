@@ -262,6 +262,20 @@ fi
 # reported TIMEOUT. It never errors; it just happens in the wrong order, silently, on every debounce
 # and retry-backoff on the web.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_DOM_IMPL; then
+  # Remove the cycle check from the arena backstop. Inserting a node into its own descendant then builds a
+  # self-referential tree, and the next children() walk loops forever — Bar 0. The gate asserts the
+  # insertion THROWS instead; without the check it would hang, and the test times out red.
+  mutate engine/dom/src/lib.rs '
+s = s.replace(
+    "        if self.is_inclusive_ancestor(child, parent) {\n            return;\n        }\n\n        // **Inserting a DocumentFragment moves its CHILDREN, not itself.**",
+    "        // MUTATION: no cycle check\n        // **Inserting a DocumentFragment moves its CHILDREN, not itself.**",
+    1)
+'
+  expect_red G_DOM_IMPL cargo test -q -p manuk-page --features stylo,spidermonkey --test g_dom_impl
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_CONTAIN_NATIVE; then
   # Call the native directly, with no catch_unwind — as it was. The panic then cannot unwind out of the
   # `extern "C"` frame and ABORTS THE PROCESS. The gate does not merely fail: the test binary DIES, which
