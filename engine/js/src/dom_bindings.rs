@@ -5555,7 +5555,20 @@ const LISTENER_PRELUDE: &str = r#"
         for (var i = 0; i < arr.length; i++) {
             if (arr[i].fn === fn) return;
         }
-        var entry = { fn: fn, once: o.once, passive: o.passive };
+        // **Passive by default** for the scroll-blocking event types, on the root targets — this is the
+        // rule browsers adopted to stop a rogue `preventDefault()` in a touch handler from janking every
+        // scroll on the page. It is not an optimization: it changes observable behaviour, and WPT's
+        // `passive-by-default.html` is 100 subtests of exactly it.
+        var SCROLL_BLOCKING = { touchstart: 1, touchmove: 1, wheel: 1, mousewheel: 1 };
+        var isRoot = (nid === 0)
+            || (globalThis.document && __nodes[nid] &&
+                (__nodes[nid] === document.body || __nodes[nid] === document.documentElement));
+        var passive = o.passive;
+        if (opts === undefined || opts === null ||
+            (typeof opts === 'object' && opts.passive === undefined)) {
+            if (SCROLL_BLOCKING[type] && isRoot) passive = true;
+        }
+        var entry = { fn: fn, once: o.once, passive: passive };
         arr.push(entry);
         // `signal: AbortSignal` — abort removes the listener. Widely used to tear down a component's
         // handlers in one call.
@@ -5584,6 +5597,20 @@ const LISTENER_PRELUDE: &str = r#"
             }                                    // handler that re-dispatches from re-entering itself
         }
         var f = (typeof entry.fn === 'function') ? entry.fn : entry.fn.handleEvent;
+
+        // **A PASSIVE listener's `preventDefault()` does nothing.** That is the whole contract: the page
+        // promises not to cancel, so the browser is free to scroll without waiting for the handler. We
+        // recorded `passive` and then honoured it nowhere — so a passive touch handler could still cancel
+        // the scroll, which is the exact jank the flag exists to prevent, and 57 WPT subtests said so.
+        if (entry.passive) {
+            var real = ev.preventDefault;
+            ev.preventDefault = function () { /* ignored: this listener is passive */ };
+            try {
+                return f.call(entry.fn === f ? node : entry.fn, ev);
+            } finally {
+                ev.preventDefault = real;
+            }
+        }
         return f.call(entry.fn === f ? node : entry.fn, ev);
     };
     // A real Event with capture/bubble propagation, target/currentTarget, preventDefault

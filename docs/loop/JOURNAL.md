@@ -3054,6 +3054,39 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 80 — a passive listener that cancels is not passive
+
+**TICK SHAPE: capability.** **+44 WPT subtests** (2345 → 2389, **36.8%**). Bar 0 clean.
+
+> **Nine WPT-aimed ticks: +652 subtests. Five near-horizon ticks: +1.**
+
+Straight off tick 79's ranked failure list — *`assert_equals: defaultPrevented expected false but got true`*,
+57 subtests, all in `passive-by-default.html`. Not a gap: **a bug.**
+
+`addEventListener(type, fn, {passive: true})` is a **promise**: *this handler will not cancel the default
+action.* The browser may therefore begin scrolling **without waiting for the handler to run at all**. That
+is the entire reason the flag exists.
+
+We *recorded* `passive` on the listener entry (tick 74 added the options object) and then **honoured it
+nowhere.** A passive touch handler could still call `preventDefault()` and cancel the scroll — which is
+precisely the jank the flag was invented to prevent. The promise was accepted and then broken, silently.
+
+Two halves, and both are observable behaviour, not optimization:
+
+* **A passive listener's `preventDefault()` does nothing** — it is replaced with a no-op for the duration
+  of that handler, and restored after.
+* **`touchstart` / `touchmove` / `wheel` / `mousewheel` are passive BY DEFAULT** on `window`, `document`,
+  `document.body` and the root element, unless the page explicitly passes `{passive: false}`. That is the
+  rule browsers adopted to stop one rogue touch handler from janking every scroll on a page, and it changes
+  what a page does.
+
+The gate asserts both directions — `passive:false` (the cancel was ignored) and `active:true` (a normal
+listener still cancels), because a fix that made *nothing* cancellable would satisfy the first alone.
+
+**The ratchet.** Capability: **up**. Performance: unchanged. Instrument fidelity: unchanged — but the tick
+took under an hour because tick 79's `--show-failures` histogram had already named the bug, its size, and
+its file.
+
 ## Tick 79 — the cheapest instrument is the one you already have and did not run
 
 **TICK SHAPE: capability.** **+170 WPT subtests** (2175 → 2345, **33.8% → 36.2%**) — the second-largest

@@ -77,6 +77,21 @@ const HTML: &str = r##"<!doctype html><html><body>
   b.dispatchEvent(new Event('h'));
   R.push('handleEvent:' + h);
 
+  // ── 7. **A PASSIVE listener's preventDefault() does NOTHING.** That is the whole contract: the page
+  //       promises not to cancel, so the browser may scroll without waiting for the handler. We recorded
+  //       `passive` and honoured it nowhere — so a passive touch handler could still cancel the scroll,
+  //       which is the exact jank the flag exists to prevent.
+  var pe = new Event('p', { cancelable: true });
+  b.addEventListener('p', function (ev) { ev.preventDefault(); }, { passive: true });
+  b.dispatchEvent(pe);
+  R.push('passive:' + pe.defaultPrevented);
+
+  // …and a NON-passive listener still cancels.
+  var ae = new Event('a', { cancelable: true });
+  b.addEventListener('a', function (ev) { ev.preventDefault(); });
+  b.dispatchEvent(ae);
+  R.push('active:' + ae.defaultPrevented);
+
   document.getElementById('out').textContent = R.join(' ');
 </script></body></html>"##;
 
@@ -110,6 +125,14 @@ fn event_options_legacy_aliases_and_create_event_all_work() {
              feared dispatch loop; that loop was a frozen timeStamp, and it is fixed",
         ),
         ("handleEvent:1", "a listener may be an OBJECT with a handleEvent method — the EventListener interface"),
+        (
+            "passive:false",
+            "**a PASSIVE listener's preventDefault() does NOTHING.** The page promises not to cancel, so \
+             the browser may scroll without waiting for it. We recorded `passive` and honoured it \
+             nowhere — a passive touch handler could still cancel the scroll, which is the exact jank \
+             the flag exists to prevent",
+        ),
+        ("active:true", "…while a non-passive listener still cancels, or the flag would mean nothing"),
     ] {
         assert!(
             got.contains(claim),
