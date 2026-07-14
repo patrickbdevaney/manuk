@@ -1696,10 +1696,20 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
     let _ = std::fs::remove_file(&tmp);
 
     let mut results: Vec<(String, usize, usize, String, u128)> = Vec::new();
+    // **Count the FILE's lines separately from `results`.**
+    //
+    // `results` also holds SYNTHETIC rows (HANG/CRASH) that have no corresponding line in the child's
+    // JSONL. Using `results.len()` as the read offset therefore over-skips the moment one is pushed —
+    // every later batch then reads short, is diagnosed as "the child died", and pushes ANOTHER synthetic
+    // row, which over-skips further. **One real event manufactures a cascade of fake ones.**
+    //
+    // This produced "5 CRASHES" in the first baseline. Running any of those files — or a 120-file batch —
+    // in one child exits 0 and completes every one. **The crashes were an accounting artifact of the
+    // instrument, not a fault in the engine.**
+    let mut lines_read = 0usize;
     let mut i = 0usize;
     while i < all.len() {
         let take = batch.min(all.len() - i);
-        let before = results.len();
         let mut child = std::process::Command::new(&exe)
             .arg("wpt").arg(&subset)
             .arg("--wpt").arg(&dir)
@@ -1717,9 +1727,13 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
         let mut lines_seen = read_jsonl(&tmp).len();
         let mut last_progress = std::time::Instant::now();
         let stall = timeout + std::time::Duration::from_secs(15);
+        // **Capture HOW the child ended.** "The child produced fewer rows than asked" is not a diagnosis —
+        // it could be a segfault (Bar 0) or the instrument miscounting (nothing). Only the exit status can
+        // say, and reporting CRASH without checking it is exactly the "one word for several findings" error.
+        let mut exit_code: Option<i32> = None;
         let hung = loop {
             match child.try_wait() {
-                Ok(Some(_)) => break false,
+                Ok(Some(st)) => { exit_code = st.code(); break false }
                 Ok(None) => {}
                 Err(_) => break false,
             }
@@ -1730,8 +1744,9 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
         };
 
         let done = read_jsonl(&tmp);
-        for r in done.iter().skip(before) { results.push(r.clone()); }
-        let completed = results.len() - before;
+        for r in done.iter().skip(lines_read) { results.push(r.clone()); }
+        let completed = done.len() - lines_read;   // FILE lines this batch produced — not results.len()
+        lines_read = done.len();
 
         if hung {
             // The test after the last flushed line is the culprit. Name it, record it, step over it.
@@ -1750,8 +1765,16 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
             // computed over what was left, with nothing to say so. **A runner that quietly skips what
             // it cannot run reports a pass rate for a suite it did not run.**
             let idx = i + completed;
-            eprintln!("  \x1b[31mCRASH\x1b[0m {}", all[idx]);
-            results.push((all[idx].clone(), 0, 0, "CRASH".into(), 0));
+            // `None` = killed by a SIGNAL (segfault/abort) — a real Bar 0 crash.
+            // `Some(0)` = the child exited CLEANLY and simply wrote fewer rows than we asked for, which is
+            //             an INSTRUMENT fault, not an engine fault. Say which.
+            let (label, note) = match exit_code {
+                None => ("CRASH", "killed by a signal — Bar 0"),
+                Some(0) => ("SHORT", "child exited 0 but wrote fewer rows than asked — INSTRUMENT fault"),
+                Some(c) => ("EXIT", if c == 101 { "panic" } else { "nonzero exit" }),
+            };
+            eprintln!("  \x1b[31m{label}\x1b[0m {} ({note})", all[idx]);
+            results.push((all[idx].clone(), 0, 0, label.into(), 0));
             i = idx + 1;
         } else {
             i += take;
@@ -1762,12 +1785,13 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
     // ── Report
     let mut by_dir: std::collections::BTreeMap<String, (usize, usize, usize)> = Default::default();
     let (mut pass, mut total, mut no_report, mut hangs) = (0usize, 0usize, 0usize, 0usize);
-    let (mut slow, mut th_timeout) = (0usize, 0usize);
+    let (mut slow, mut th_timeout, mut short) = (0usize, 0usize, 0usize);
     let mut jsonl = String::new();
     for (rel, p, t, h, ms) in &results {
         pass += p; total += t;
         match h.as_str() {
-            "HANG" | "CRASH" => hangs += 1,             // Bar 0: the child stopped, or died
+            "HANG" | "CRASH" | "EXIT" => hangs += 1,    // Bar 0: the child stopped, or died
+            "SHORT" => short += 1,                      // the INSTRUMENT lost a row — not the engine
             "SLOW" => slow += 1,                        // our budget expired — a PERF finding
             "TIMEOUT" => th_timeout += 1,               // testharness's own verdict: an async test never completed
             "NO_REPORT" | "HARNESS_NOT_LOADED" | "BAD_REPORT" | "FETCH_FAILED" => no_report += 1,
@@ -1792,7 +1816,7 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
     let rate = if total == 0 { 0.0 } else { 100.0 * pass as f64 / total as f64 };
     println!("\n  FILES  {}   subtests {pass}/{total}  =  {rate:.1}%", results.len());
     // Three DIFFERENT findings. Never one word.
-    println!("  NO_REPORT {no_report}   \x1b[1mHANG/CRASH {hangs}\x1b[0m (Bar 0)   SLOW {slow} (our budget)   TH_TIMEOUT {th_timeout} (an async test never completed)");
+    println!("  NO_REPORT {no_report}   \x1b[1mHANG/CRASH {hangs}\x1b[0m (Bar 0)   SHORT {short} (instrument)   SLOW {slow} (our budget)   TH_TIMEOUT {th_timeout} (async test never completed)");
     if no_report * 4 > results.len() && results.len() > 20 {
         println!("\n  ⚠ {no_report}/{} files reported NOTHING. Above ~25% this is not measuring the engine's\n    \
                   conformance — it is measuring whether testharness.js can RUN here at all.", results.len());

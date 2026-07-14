@@ -155,3 +155,11 @@ throws on line one.
 | **`event.timeStamp`** | anything that measures event timing | ✅ (tick 44) — was a constant `0`, which is an **infinite loop** for code that waits for it to change |
 | **Activation behaviour** (checkbox toggle, link follow, form submit on click) | forms, nav | ❌ follow-on |
 | **5 engine CRASHES under WPT** | Bar 0 | ❌ **open** — surfaced in tick 44 (previously hidden by a silent file-drop); next tick |
+
+## Tick 46 — Bar 0
+
+| Capability | Status |
+|---|---|
+| **A handle from another document is inert, not fatal** | ✅ (tick 46) — was a **SIGSEGV**: a stale `NodeId` indexed past the end of a smaller arena, inside an `extern "C"` native where a panic **cannot unwind** |
+| **WPT `dom/` Bar 0** | ✅ **0 hangs, 0 crashes** (was 1 hang + 1 crash + 4 phantom) |
+| **`catch_unwind` at the JSNative boundary** | ❌ **OPEN Bar 0** — a panic anywhere in a native still aborts the process. The known source is fixed and the arena hardened, but this is the real containment and it is not yet there. |

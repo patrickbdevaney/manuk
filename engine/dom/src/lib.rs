@@ -241,8 +241,10 @@ impl Dom {
     /// Without it: `can't access property "indexOf", i.data is undefined`, thrown inside an async
     /// render, which is why it surfaced as an unhandled promise rejection and not as anything legible.
     pub fn character_data(&self, id: NodeId) -> Option<&str> {
-        match self.data(id) {
-            NodeData::Text(t) | NodeData::Comment(t) => Some(t.as_str()),
+        // `.get()`, not `data(id)`: reachable from JS with a handle from another arena, where indexing
+        // panics — and a panic inside an `extern "C"` native ABORTS THE PROCESS.
+        match self.nodes.get(id.index()).map(|n| &n.data) {
+            Some(NodeData::Text(t)) | Some(NodeData::Comment(t)) => Some(t.as_str()),
             _ => None,
         }
     }
@@ -344,7 +346,13 @@ impl Dom {
     }
 
     pub fn is_fragment(&self, id: NodeId) -> bool {
-        matches!(self.nodes[id.index()].data, NodeData::Fragment)
+        // Bounds-safe on purpose: this is reachable from JS via `appendChild`/`insertBefore`, and a raw
+        // index from a stale reflector used to panic here — inside an `extern "C"` native, where a panic
+        // cannot unwind and therefore ABORTS THE PROCESS.
+        match self.nodes.get(id.index()) {
+            Some(n) => matches!(n.data, NodeData::Fragment),
+            None => false,
+        }
     }
 
     /// **`<template>.content`** — a real fragment holding the template's children.
@@ -403,7 +411,7 @@ impl Dom {
     }
 
     pub fn is_shadow_root(&self, id: NodeId) -> bool {
-        matches!(self.nodes[id.index()].data, NodeData::ShadowRoot { .. })
+        matches!(self.nodes.get(id.index()).map(|n| &n.data), Some(NodeData::ShadowRoot { .. }))
     }
 
     pub fn shadow_root_mode(&self, id: NodeId) -> Option<ShadowRootMode> {
@@ -711,19 +719,19 @@ impl Dom {
     }
 
     pub fn first_child(&self, id: NodeId) -> Option<NodeId> {
-        self.nodes[id.index()].first_child
+        self.nodes.get(id.index())?.first_child
     }
 
     pub fn next_sibling(&self, id: NodeId) -> Option<NodeId> {
-        self.nodes[id.index()].next_sibling
+        self.nodes.get(id.index())?.next_sibling
     }
 
     pub fn last_child(&self, id: NodeId) -> Option<NodeId> {
-        self.nodes[id.index()].last_child
+        self.nodes.get(id.index())?.last_child
     }
 
     pub fn prev_sibling(&self, id: NodeId) -> Option<NodeId> {
-        self.nodes[id.index()].prev_sibling
+        self.nodes.get(id.index())?.prev_sibling
     }
 
     /// If `id` is a text node, append `text` to it and report `true`. Used by the parser
@@ -795,7 +803,7 @@ impl Dom {
     }
 
     pub fn parent(&self, id: NodeId) -> Option<NodeId> {
-        self.nodes[id.index()].parent
+        self.nodes.get(id.index())?.parent
     }
 
     /// **The flat tree was BUILT and then never used by the thing that matters.**
@@ -840,7 +848,7 @@ impl Dom {
     }
 
     pub fn is_element(&self, id: NodeId) -> bool {
-        matches!(self.nodes[id.index()].data, NodeData::Element(_))
+        matches!(self.nodes.get(id.index()).map(|n| &n.data), Some(NodeData::Element(_)))
     }
 
     pub fn element(&self, id: NodeId) -> Option<&ElementData> {
@@ -1086,5 +1094,55 @@ mod tests {
         let remaining: Vec<_> = dom.children(dom.root()).collect();
         assert_eq!(remaining, vec![a, c]);
         assert_eq!(dom.next_sibling(a), Some(c));
+    }
+}
+
+#[cfg(test)]
+mod stale_handle_tests {
+    use super::*;
+
+    /// **G_STALE_NODE — a handle that does not name a node in THIS arena must be INERT, never fatal.**
+    ///
+    /// A JS reflector stores its node as a bare integer, and the arena it indexes is **not necessarily
+    /// the arena it came from**: one process loads many documents and the current-DOM pointer is swapped
+    /// on every re-entry into script. So a handle held from an earlier document indexes into a
+    /// *different, smaller* arena.
+    ///
+    /// **And the consequence is not a wrong answer — it is a DEAD BROWSER.** These accessors are reached
+    /// from `extern "C"` JS natives, which are `nounwind`, so a Rust panic inside one is *"panic in a
+    /// function that cannot unwind"* → **SIGSEGV, core dumped.** Every tab the user had open dies because
+    /// one page held a stale node.
+    ///
+    /// WPT found exactly this (`Node-appendChild-three-scripts-from-fragment`) — **and only when the file
+    /// ran AFTER other documents.** It is perfectly clean in isolation, which is why no single-page test
+    /// could ever have caught it, and why it survived every gate on the wall.
+    ///
+    /// The spec-shaped answer is also the safe one: **an operation on a node that is not there does
+    /// nothing.**
+    #[test]
+    fn a_handle_from_another_arena_is_inert_not_fatal() {
+        let mut small = Dom::new();
+        let root = small.create_element("div");
+
+        // A handle from a *bigger* document — exactly what a reflector from a previous page looks like.
+        let foreign = NodeId(9_999);
+
+        assert!(
+            !small.is_alive(foreign),
+            "a handle past the end of this arena must not be alive"
+        );
+        // Each of these is reachable from JS. None may panic. (`is_fragment` is the one that actually
+        // aborted the process: `appendChild` calls it on its argument.)
+        assert!(!small.is_fragment(foreign), "is_fragment must not index blindly");
+        assert!(small.parent(foreign).is_none());
+        assert!(small.first_child(foreign).is_none());
+        assert!(small.next_sibling(foreign).is_none());
+        assert!(small.tag_name(foreign).is_none());
+        assert!(small.character_data(foreign).is_none());
+        assert!(!small.is_element(foreign));
+
+        // And the real document is untouched by any of it.
+        assert!(small.is_alive(root));
+        assert_eq!(small.tag_name(root), Some("div"));
     }
 }

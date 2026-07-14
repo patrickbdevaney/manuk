@@ -465,3 +465,15 @@ forty ticks.
 | **Text indexing in non-Latin scripts** (emoji, CJK, combining marks) | **the majority of the world's users** | ✅ (tick 44) — offsets are **UTF-16 code units**; counting Rust `char`s corrupts every surrogate pair, silently, *only for the people who write in those scripts* |
 | **`DOMException` thrown by DOM methods** | every `try/catch` around a DOM call | ⚠️ **partial** — CharacterData throws `IndexSizeError`; the rest of the DOM still does not throw. That is the WPT work list. |
 | **Full activation behaviour** (click toggles a checkbox / follows a link / submits a form) | forms, nav | ❌ **follow-on** — `click()` fires the event; it does not yet run activation behaviour |
+
+## Tick 46 — the multi-document process (i.e. every browser)
+
+| Pattern | Reach | Status |
+|---|---|---|
+| **A page holding a handle from a previous document** | **every multi-page process — which is every browser** | ✅ (tick 46) — was a **SIGSEGV that killed every tab**. A reflector's bare `NodeId` indexed past the end of a *different, smaller* arena, inside an `extern "C"` native where a Rust panic **cannot unwind**. |
+| **A panic anywhere inside a JSNative** | Bar 0 | ❌ **OPEN** — still aborts the process. `catch_unwind` at the native boundary is the real containment. |
+
+**The class this closes is not a kind of site — it is a property of the browser itself.** Any engine that
+reuses one process for many documents has this bug until it proves otherwise, and **it is invisible to
+single-page testing**: the failing file passes alone, and passes in a 120-file batch; it dies only when it
+runs *after other documents*.

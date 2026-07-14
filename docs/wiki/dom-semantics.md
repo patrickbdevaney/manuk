@@ -206,3 +206,24 @@ property-registration table with no collision check.*
 
 `form.submit()` and `form.requestSubmit()` differ exactly as spec'd: **`requestSubmit()` fires `submit`
 (the page may cancel); `submit()` does not** — a script calling it has already decided.
+
+## A HANDLE FROM ANOTHER DOCUMENT IS A DEAD BROWSER, not a wrong answer
+
+A JS reflector stores its node as a **bare integer**, and **the arena it indexes is not necessarily the
+arena it came from**: one process loads many documents and the current-DOM pointer is swapped on every
+re-entry into script. A handle held from an earlier document therefore indexes into a **different, smaller**
+arena, and `self.nodes[id.index()]` **walks off the end.**
+
+**And the panic does not unwind — it ABORTS.** DOM accessors are reached from `extern "C"` natives, which
+are **`nounwind`**, so a Rust panic inside one is *"panic in a function that cannot unwind"* → **SIGSEGV.
+Every tab the user had open dies because one page held a stale node.**
+
+**The invariant:** validate every incoming handle against **this** arena (bounds **and** generation) at the
+single choke point where JS hands one in. A stale or foreign handle then reads as **"no such node"** and the
+operation no-ops — *which is the spec-shaped answer anyway: an operation on a node that is not there does
+nothing.*
+
+> **It is perfectly clean in isolation.** The failing WPT file passes on its own, and a 120-file batch
+> passes; **it only dies when it runs AFTER other documents.** *No single-page test can catch this class —
+> which is why it survived every gate.* **Any engine that reuses one process for many documents has this
+> bug until it proves otherwise.**

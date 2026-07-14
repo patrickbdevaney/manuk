@@ -262,6 +262,20 @@ fi
 # reported TIMEOUT. It never errors; it just happens in the wrong order, silently, on every debounce
 # and retry-backoff on the web.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_STALE_NODE; then
+  # Index the arena blindly again, as it did before. A handle from another document then walks off the end
+  # of a smaller arena — and because the caller is an `extern "C"` JS native (nounwind), the panic ABORTS
+  # THE PROCESS rather than unwinding. Bar 0.
+  mutate engine/dom/src/lib.rs '
+s = s.replace(
+    "        match self.nodes.get(id.index()) {\n            Some(n) => matches!(n.data, NodeData::Fragment),\n            None => false,\n        }",
+    "        matches!(self.nodes[id.index()].data, NodeData::Fragment)   // MUTATION: index blindly",
+    1)
+'
+  expect_red G_STALE_NODE cargo test -q -p manuk-dom stale_handle
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_CHARDATA; then
   # Count the offsets in Rust `char`s instead of UTF-16 code units — which silently corrupts every
   # emoji, every CJK surrogate and every combining sequence on the web, and ONLY for the users who

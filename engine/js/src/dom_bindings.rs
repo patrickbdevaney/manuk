@@ -351,7 +351,28 @@ unsafe fn node_and_dom(obj: *mut JSObject) -> Option<(*mut Dom, NodeId)> {
     if dom.is_null() {
         return None;
     }
-    Some((dom, NodeId(ns.to_int32() as usize)))
+    let id = NodeId(ns.to_int32() as usize);
+
+    // ── **THE REFLECTOR'S NODE MUST ACTUALLY EXIST IN *THIS* ARENA.** ─────────────────────────────
+    //
+    // The id is just an integer, and the arena it indexes is **not the arena it came from**: a single
+    // process loads many documents, and `CURRENT_DOM` is swapped on every re-entry. So a reflector held
+    // from an earlier document hands a raw index into a *different, smaller* arena — and
+    // `self.nodes[id.index()]` walks straight off the end.
+    //
+    // **And a panic there does not unwind — it ABORTS.** These natives are `extern "C"`, which is
+    // `nounwind`, so a Rust panic inside one is *"panic in a function that cannot unwind"* → SIGSEGV,
+    // core dumped. **The whole browser dies because one page held a stale node.** WPT found exactly
+    // this (`Node-appendChild-three-scripts-from-fragment`), and only when run *after* other documents —
+    // it is clean in isolation, which is why no single-page test could ever have caught it.
+    //
+    // `is_alive` is the arena's own bounds+generation check, so a stale or foreign handle now reads as
+    // **"no such node"** and the native no-ops. *That is the spec-shaped answer anyway: an operation on
+    // a node that is not there does nothing.*
+    if !(*dom).is_alive(id) {
+        return None;
+    }
+    Some((dom, id))
 }
 
 /// The receiver object itself (`this`, at `vp[1]`) — for stashing state on the reflector.

@@ -2427,3 +2427,64 @@ otherwise have been lost with the next compaction:
 **From here it accumulates by construction:** the pre-commit hook requires a **`WIKI:`** trailer on every
 tick, with an explicit escape hatch (`WIKI: none — <why>`) so **skipping is an auditable CHOICE rather than
 a silent gap.**
+
+## Tick 46 — a stale handle killed the whole browser, and four of the five "crashes" were mine (2026-07-13)
+
+**TICK SHAPE: pattern-class** · **CLUSTER: C00wpt** — the class is *"a document holds a handle from a
+different document"*, which is every multi-page process, i.e. **every browser**.
+
+**Hypothesis:** the 5 crashes WPT surfaced are Bar 0 and outrank everything else.
+
+**They were not 5. They were ONE — and the other four were my own instrument.**
+
+The driver computed its read offset as `results.len()` — but `results` **also holds the synthetic HANG/CRASH
+rows, which have no line in the child's JSONL.** So the moment one was pushed, `skip(before)` over-skipped,
+the next batch read short, was diagnosed *"the child died"*, and pushed **another** synthetic row — which
+over-skipped further. ***One real event manufactured a cascade of fake ones.***
+
+And the driver **reported CRASH without ever checking the child's exit status.** *"The child produced fewer
+rows than asked" is not a diagnosis* — it could be a segfault (Bar 0) or the instrument miscounting
+(nothing). Now: **`CRASH`** (killed by a signal) · **`EXIT`** (nonzero/panic) · **`SHORT`** (exited 0 and
+wrote fewer rows — **an INSTRUMENT fault, and it says so**).
+
+**THE ONE REAL CRASH, and it is a good one.**
+
+```
+thread 'main' panicked at engine/dom/src/lib.rs:347
+panic in a function that cannot unwind
+Segmentation fault (core dumped)
+```
+
+**A JS reflector stores its node as a bare integer — and the arena it indexes is NOT necessarily the arena
+it came from.** One process loads many documents, and `CURRENT_DOM` is swapped on every re-entry into
+script. So a handle held from an **earlier document** hands a raw index into a *different, smaller* arena,
+and `self.nodes[id.index()]` **walks straight off the end.**
+
+**And the consequence is not a wrong answer — it is a DEAD BROWSER.** These accessors are reached from
+`extern "C"` natives, which are **`nounwind`**: a Rust panic inside one is *"panic in a function that cannot
+unwind"* → **SIGSEGV, core dumped. Every tab the user had open dies because one page held a stale node.**
+
+> **It is perfectly clean in isolation.** The file passes on its own; a 120-file batch passes; it only dies
+> when it runs **after other documents.** *No single-page test could ever have caught this — which is
+> exactly why it survived every gate on the wall.*
+
+**The fix is one check at the choke point:** `node_and_dom` now validates the handle with the arena's own
+`is_alive` (bounds **and** generation), so a stale or foreign handle reads as **"no such node"** and the
+native no-ops. **That is the spec-shaped answer anyway: an operation on a node that is not there does
+nothing.** Plus defence in depth — the JS-reachable read accessors (`is_fragment`, `parent`, `first_child`,
+`last_child`, `next_sibling`, `character_data`, `is_element`, `is_shadow_root`) now use `.get()` instead of
+indexing. **The new gate found four more of those the moment it existed.**
+
+**MEASURED — the ratchet turned, and nothing else moved:**
+
+| | before | after |
+|---|---|---|
+| `dom/` Bar 0 (HANG/CRASH) | **1 real + 4 phantom** | **0** |
+| `dom/` subtests | 1548/6287 | **1548/6287** (unchanged — no regression) |
+| instrument faults reported as engine faults | 4 | **0, and it now says `SHORT` when it is its own fault** |
+
+`G_STALE_NODE` gates it and is **proven falsifiable** against exactly the mutation that put it back.
+
+**The open Bar 0 residual, stated rather than discovered later:** *a panic anywhere inside a JSNative still
+aborts the process.* We removed the known source and hardened the arena, but **`catch_unwind` at the native
+boundary is the real containment**, and it is not yet there.

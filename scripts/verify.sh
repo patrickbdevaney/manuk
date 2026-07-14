@@ -104,6 +104,19 @@ head_ "G_GLOBALS · a missing constructor is a THROWN EXCEPTION, not a missing f
 GG=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_globals 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GG" ]; then ok "globals: $GG"; else bad "G_GLOBALS failed — a global a real bundle references is missing, or one of them is LYING"; fi
 
+head_ "G_STALE_NODE · a foreign handle must be INERT, not FATAL (Bar 0)"
+# A JS reflector stores its node as a bare integer, and the arena it indexes is NOT necessarily the arena
+# it came from: one process loads many documents and CURRENT_DOM is swapped on every re-entry. A handle
+# held from an earlier document indexes into a different, smaller arena.
+#
+# And the consequence is not a wrong answer — it is a DEAD BROWSER. These accessors are reached from
+# `extern "C"` natives, which are `nounwind`, so a Rust panic inside one is "panic in a function that
+# cannot unwind" → SIGSEGV, core dumped. Every tab the user had open dies because one page held a stale
+# node. WPT found it — and ONLY when the file ran AFTER other documents. It is clean in isolation, which
+# is why no single-page test could ever have caught it.
+GSN=$(cargo test -q -p manuk-dom stale_handle 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GSN" ]; then ok "stale handles: $GSN"; else bad "G_STALE_NODE failed — a handle from another arena panics, and a panic in an extern \"C\" native ABORTS THE PROCESS"; fi
+
 head_ "G_NO_PHANTOM_FORK · an edit that LOOKS load-bearing and is inert"
 # `./stylo` is a gitignored REFERENCE CLONE of servo/stylo. Nothing in this workspace builds it: it is
 # not a member, there is no [patch.crates-io], there is no path dependency, and Cargo.lock pins
