@@ -69,3 +69,4 @@ agent/src/bin/*-local.rs
 scripts/local-*
 **/*.local.*
 METHODOLOGY_RESEARCH.MD
+.verify-cache/

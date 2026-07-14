@@ -20,6 +20,66 @@ cd "$(dirname "$0")/.."
 # shellcheck source=/dev/null
 . "$(dirname "$0")/mem-guard.sh"
 
+# ── THE PARALLEL GATE RUNNER. Same gates, same assertions, same output — concurrently.
+#
+# The wall ran ~21 INDEPENDENT `cargo test` invocations strictly one after another. They are separate
+# processes that share nothing (each JS gate even stands up its own SpiderMonkey runtime, which is most of
+# its ~1.5s), so serialising them bought exactly nothing and cost the tick a minute.
+#
+# **Nothing is weakened: every gate still runs, still asserts the same thing, and still reports in the same
+# order.** Only the *waiting* is removed.
+#
+# ⚠ TWO things must NOT be parallelised, and they are the reason this is a launcher rather than a blanket
+# `xargs -P`:
+#   * **The perf floors.** *A benchmark that shares a machine with a compile is not a benchmark* — this
+#     project's own rule (PROCESS: the crawl that read 12.5% → 49% on the same binary because the job count
+#     changed). They run LAST, alone, after every background job has been reaped.
+#   * **Anything that measures time.** Same reason.
+_PARDIR="$(mktemp -d)"
+declare -A _PARPID
+trap 'rm -rf "$_PARDIR"' EXIT
+
+# Cap concurrency by the same memory-derived budget as the compiler: SpiderMonkey gates are not free.
+_PARMAX="${CARGO_BUILD_JOBS:-4}"
+_launch() {  # _launch <key> <cmd...>
+  while [ "$(jobs -rp | wc -l)" -ge "$_PARMAX" ]; do wait -n 2>/dev/null || break; done
+  local key="$1"; shift
+  ( "$@" >"$_PARDIR/$key" 2>&1 ) &
+  _PARPID[$key]=$!
+}
+_out() {  # _out <key> → the command's combined output, once it has finished
+  local key="$1"
+  [ -n "${_PARPID[$key]:-}" ] && wait "${_PARPID[$key]}" 2>/dev/null
+  cat "$_PARDIR/$key" 2>/dev/null
+}
+
+# Launch every independent gate NOW; each block below simply collects its result.
+_launch js cargo test -q -p manuk-page --features spidermonkey -- --ignored js_conformance
+_launch aff cargo test -q -p manuk-shell affordance
+_launch ga cargo test -q -p manuk-page --features spidermonkey --test g_alloc -- --ignored
+_launch gt cargo test -q -p manuk-shell --test g_teardown
+_launch gl cargo test -q -p manuk-page --features stylo,spidermonkey --test g_load_budget
+_launch gg cargo test -q -p manuk-page --features stylo,spidermonkey --test g_globals
+_launch gau cargo test -q -p manuk-dom pointer_width
+_launch gdi cargo test -q -p manuk-page --features stylo,spidermonkey --test g_dom_impl
+_launch gcn cargo test -q -p manuk-page --features stylo,spidermonkey --test g_contain_native
+_launch gsn cargo test -q -p manuk-dom stale_handle
+_launch gcd cargo test -q -p manuk-page --features stylo,spidermonkey --test g_chardata
+_launch gl cargo test -q -p manuk-page --features stylo,spidermonkey --test g_lifecycle
+_launch gsl cargo test -q -p manuk-page --features stylo,spidermonkey --test g_selector
+_launch gan cargo test -q -p manuk-page --features stylo,spidermonkey --test g_animation
+_launch gif cargo test -q -p manuk-page --features stylo,spidermonkey --test g_iframe
+_launch gfm cargo test -q -p manuk-page --features stylo,spidermonkey --test g_form
+_launch gdf cargo test -q -p manuk-page --features stylo,spidermonkey --test g_defer
+_launch gf cargo test -q -p manuk-page --features stylo,spidermonkey --test g_first_paint
+_launch gs cargo test -q -p manuk-page --features stylo,spidermonkey --test g_silent_fail
+_launch gd cargo test -q -p manuk-page --features stylo,spidermonkey --test g_dedup
+_launch gra cargo test -q -p manuk-page --features stylo,spidermonkey --test g_runaway
+_launch gc cargo test -q -p manuk-page --features stylo,spidermonkey --test g_contain
+_launch gr cargo test -q -p manuk-shell runtime_instantiations
+_launch gi cargo test -q -p manuk-shell tab_operations -- --nocapture
+
+
 FAIL=0
 ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; }
 bad()  { printf '  \033[31m✗ %s\033[0m\n' "$1"; FAIL=1; }
@@ -49,7 +109,36 @@ head_ "G1 · real-site visual fidelity vs Chromium (ADR-010/011 — SHIPPING con
 # `example.com` was here and it has NO `[id]` elements — so it probed NOTHING, scored a perfect 100%,
 # and inflated the mean of the gate whose job is to catch missing content. Mutation-testing found it.
 # Every URL in this list must be one the gate can actually measure.
-G1URLS="${MANUK_FIDELITY_URLS:-https://news.ycombinator.com,https://en.wikipedia.org/wiki/Terrier}"
+# ── THE SNAPSHOT CACHE. It makes this gate FASTER AND MORE CORRECT AT THE SAME TIME.
+#
+# This gate used to fetch two LIVE sites on every single tick — 25.5 of the wall's 92 seconds, and by far
+# its largest single cost. Worse, it broke the project's own first rule of differential measurement:
+#
+#     ONE SNAPSHOT, BOTH ENGINES.
+#
+# A live page changes between runs, so the gate was comparing today's Manuk against today's Chrome against
+# *yesterday's implicit baseline* — and a fidelity number that moves because a news site published an
+# article is a number that cannot be trusted to have moved because of the code. (This project has already
+# been burned by exactly that: a metric stuck at 5,122px across four correct fixes, because the two engines
+# were fed two different documents.)
+#
+# So: fetch ONCE into a cache, feed the identical bytes to both engines forever after, and refresh
+# deliberately on the audit cadence (`rm -rf .verify-cache`) rather than accidentally on every tick.
+# **Determinism is not a side-effect of the speed-up here; it is the point, and the speed-up is the bonus.**
+CACHE=".verify-cache"
+mkdir -p "$CACHE"
+_snapshot() {  # _snapshot <url> <name> → echoes a file:// URL for the cached copy
+  local url="$1" name="$2" f="$CACHE/$name.html"
+  if [ ! -s "$f" ]; then
+    curl -sL --max-time 30 -A "Mozilla/5.0 manuk-verify" "$url" -o "$f" 2>/dev/null || true
+  fi
+  [ -s "$f" ] && printf 'file://%s/%s' "$PWD" "$f" || printf '%s' "$url"   # fall back to live if offline
+}
+if [ -z "${MANUK_FIDELITY_URLS:-}" ]; then
+  G1URLS="$(_snapshot https://news.ycombinator.com hn),$(_snapshot https://en.wikipedia.org/wiki/Terrier wiki)"
+else
+  G1URLS="$MANUK_FIDELITY_URLS"
+fi
 G1FLOOR="${MANUK_FIDELITY_FLOOR:-0.75}"
 G1OUT="${MANUK_FIDELITY_OUT:-/tmp/manuk-fidelity}"
 if cargo run -q -p manuk-wpt --release -- fidelity --urls "$G1URLS" --out "$G1OUT" --floor "$G1FLOOR" >/tmp/manuk-g1.txt 2>&1; then
@@ -60,11 +149,11 @@ else
 fi
 
 head_ "G2 · JS conformance (ADR-010 — the DOM/BOM surface real sites need)"
-JS=$(cargo test -q -p manuk-page --features spidermonkey -- --ignored js_conformance 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+JS=$(_out js | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$JS" ]; then ok "js conformance: $JS"; else bad "JS conformance suite did not pass"; fi
 
 head_ "G3 · affordance completeness (§1.8 — no dead buttons)"
-AFF=$(cargo test -q -p manuk-shell affordance 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+AFF=$(_out aff | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$AFF" ]; then ok "affordances: $AFF"; else bad "affordance gate failed — a control may be dead"; fi
 
 head_ "G6 · clickability (a link the browser cannot find is a link the user cannot click)"
@@ -93,22 +182,22 @@ if [ -s "$G6HTML" ]; then
 fi
 
 head_ "G_ALLOC · allocation rate per input event (METHODOLOGY 5.2 — the load bench is BLIND to this)"
-GA=$(cargo test -q -p manuk-page --features spidermonkey --test g_alloc -- --ignored 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+GA=$(_out ga | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GA" ]; then ok "per-event allocation: $GA"; else bad "G_ALLOC failed — an input event allocates per DOM node"; fi
 
 head_ "G_TEARDOWN · no exit path bypasses Drop (METHODOLOGY 5.3 — a hidden crash is a data-loss bug)"
-GT=$(cargo test -q -p manuk-shell --test g_teardown 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+GT=$(_out gt | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GT" ]; then ok "teardown: $GT"; else bad "G_TEARDOWN failed — an exit path skips the profile flush"; fi
 
 head_ "G_LOAD · the page renders when its subresources never answer (METHODOLOGY 4.1 — the frozen tab)"
-GL=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_load_budget 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+GL=$(_out gl | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GL" ]; then ok "load budget: $GL"; else bad "G_LOAD failed — a dead subresource can hold the document hostage"; fi
 
 head_ "G_GLOBALS · a missing constructor is a THROWN EXCEPTION, not a missing feature"
 # WebSocket's absence took an entire news front page down: aljazeera's 2,591 server-rendered elements
 # became 141, because a live-blog client constructed one at boot and React's error boundary showed a
 # skeleton. Fixing it revealed Blob; fixing Blob revealed FileList. They come in a long tail.
-GG=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_globals 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+GG=$(_out gg | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GG" ]; then ok "globals: $GG"; else bad "G_GLOBALS failed — a global a real bundle references is missing, or one of them is LYING"; fi
 
 head_ "G_ARENA_U64 · the arena handle is pointer-width-INDEPENDENT (wasm + ARM)"
@@ -116,7 +205,7 @@ head_ "G_ARENA_U64 · the arena handle is pointer-width-INDEPENDENT (wasm + ARM)
 # crate does not even compile, which the in-browser demo's wasm build surfaced. u64 is identical to usize
 # on 64-bit and correct on 32-bit. This test pins the packing so a future "simplify back to usize" cannot
 # silently reintroduce the overflow. It also matters for the ARM/cross-platform target.
-GAU=$(cargo test -q -p manuk-dom pointer_width 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+GAU=$(_out gau | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GAU" ]; then ok "arena u64: $GAU"; else bad "G_ARENA_U64 failed — the arena handle is not pointer-width-independent and will not compile on wasm32"; fi
 
 head_ "G_DOM_IMPL · createHTMLDocument + pre-insertion validity (a cycle is a HANG)"
@@ -124,7 +213,7 @@ head_ "G_DOM_IMPL · createHTMLDocument + pre-insertion validity (a cycle is a H
 # takes the sanitizer down (WPT failed 488x on documentElement downstream of it). And inserting a node into
 # its own descendant makes the tree a CYCLE — an infinite children() walk, i.e. a hang (Bar 0) — which
 # pre-insertion validity must throw HierarchyRequestError for, not spin on.
-GDI=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_dom_impl 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+GDI=$(_out gdi | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GDI" ]; then ok "dom impl + insertion validity: $GDI"; else bad "G_DOM_IMPL failed — createHTMLDocument, or the cycle check that stands between the DOM and an infinite loop"; fi
 
 head_ "G_CONTAIN_NATIVE · a panic in a JS native must kill the CALL, not the browser (Bar 0)"
@@ -136,7 +225,7 @@ head_ "G_CONTAIN_NATIVE · a panic in a JS native must kill the CALL, not the br
 # NOTHING — the panic aborts at that function's own nounwind boundary before any outer catch is reached.
 # The catch must be INSIDE the extern "C" frame. So every native is a plain Rust fn and the generated
 # trampoline is the only extern "C" frame.
-GCN=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_contain_native 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+GCN=$(_out gcn | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GCN" ]; then ok "native containment: $GCN"; else bad "G_CONTAIN_NATIVE failed — a panic in a JS native is NOT contained, and it takes the whole browser with it"; fi
 
 head_ "G_STALE_NODE · a foreign handle must be INERT, not FATAL (Bar 0)"
@@ -149,7 +238,7 @@ head_ "G_STALE_NODE · a foreign handle must be INERT, not FATAL (Bar 0)"
 # cannot unwind" → SIGSEGV, core dumped. Every tab the user had open dies because one page held a stale
 # node. WPT found it — and ONLY when the file ran AFTER other documents. It is clean in isolation, which
 # is why no single-page test could ever have caught it.
-GSN=$(cargo test -q -p manuk-dom stale_handle 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+GSN=$(_out gsn | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GSN" ]; then ok "stale handles: $GSN"; else bad "G_STALE_NODE failed — a handle from another arena panics, and a panic in an extern \"C\" native ABORTS THE PROCESS"; fi
 
 head_ "G_NO_PHANTOM_FORK · an edit that LOOKS load-bearing and is inert"
@@ -181,7 +270,7 @@ head_ "G_CHARDATA · element.click() and CharacterData — neither existed"
 # running. CharacterData was `data` and nothing else — WPT scored CharacterData-replaceData 0/34.
 # The offsets are UTF-16 CODE UNITS: "😀".length === 2, so counting Rust chars silently corrupts every
 # emoji and surrogate pair on the web — and only for the scripts that use them.
-GCD=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_chardata 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+GCD=$(_out gcd | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GCD" ]; then ok "chardata+click: $GCD"; else bad "G_CHARDATA failed — element.click(), the CharacterData interface, or its UTF-16 offsets"; fi
 
 head_ "G_LIFECYCLE · the document lifecycle, the clock, and the loop that must not die"
@@ -195,34 +284,34 @@ head_ "G_LIFECYCLE · the document lifecycle, the clock, and the loop that must 
 #   * `setTimeout` threw its DELAY away — every timer was a FIFO push, so a 10s timer ran before a 0ms
 #     one queued after it. Every debounce and retry-backoff on the web, in the wrong order, silently.
 #   * A throwing task KILLED THE EVENT LOOP: one bad callback and every task after it never ran.
-GL=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_lifecycle 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+GL=$(_out gl | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GL" ]; then ok "lifecycle: $GL"; else bad "G_LIFECYCLE failed — the document lifecycle, the timer clock, or the event loop's survival of a throwing task"; fi
 
 head_ "G_SELECTOR · the cascade must not silently DROP rules (CSS nesting)"
 # RuleIndex — a cascade OPTIMISATION — read each StyleRule's selectors and block and never looked at its
 # `rules` field: its NESTED rules. 41% of the corpus uses CSS nesting (a floor — external sheets are not
 # even scanned). Every one of those rules was thrown away before it could match.
-GSL=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_selector 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+GSL=$(_out gsl | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GSL" ]; then ok "selectors: $GSL"; else bad "G_SELECTOR failed — the cascade is dropping rules (nested rules, or a selector that used to work)"; fi
 
 head_ "G_ANIMATION · an animated element renders its END state, not its first frame"
 # 52 of 237 corpus sites (21%) pair `opacity:0` with an animation. Rendering the first frame literally
 # means a fifth of the web has content nobody can see. The second half of the gate is the important one:
 # an element the author deliberately hid must STAY hidden.
-GAN=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_animation 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+GAN=$(_out gan | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GAN" ]; then ok "animation end-state: $GAN"; else bad "G_ANIMATION failed — fade-in content is invisible, or deliberately-hidden content was revealed"; fi
 
 head_ "G_IFRAME · an <iframe> has a box, shows its document, and cannot touch its parent"
 # 23% of the corpus, and usage == damage: `iframe` was in NO replaced-element list, so it laid out at
 # ZERO WIDTH — the box was gone before we ever got as far as failing to fetch its document.
-GIF=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_iframe 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+GIF=$(_out gif | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GIF" ]; then ok "iframes: $GIF"; else bad "G_IFRAME failed — an embed does not render, blocks paint, or can reach its parent"; fi
 
 head_ "G_FORM · the browser must be WRITABLE — submit is cancellable, and forms serialize correctly"
 # Forms are 50% of the corpus. The load-bearing assertion is that `preventDefault()` on `submit` is
 # HONOURED: without it, every AJAX form on the web performs the full page navigation its author
 # explicitly cancelled, and the user loses what they typed while nothing says why.
-GFM=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_form 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+GFM=$(_out gfm | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GFM" ]; then ok "forms: $GFM"; else bad "G_FORM failed — submit is not cancellable, or a form does not serialize correctly"; fi
 
 head_ "G_DEFER · defer/async/module must not block paint — and must still RUN"
@@ -230,44 +319,44 @@ head_ "G_DEFER · defer/async/module must not block paint — and must still RUN
 # `type=module`, which is deferred by DEFAULT in every real browser and is what every Vite bundle ships
 # as. The second half of this gate is the important one: when the split first landed I forgot it on
 # `load_async` and every SPA in the suite silently stopped mounting.
-GDF=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_defer 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+GDF=$(_out gdf | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GDF" ]; then ok "defer/async: $GDF"; else bad "G_DEFER failed — a deferred script is blocking paint, or is never running at all"; fi
 
 head_ "G_FIRST_PAINT · the document reaches the screen without waiting for its images"
 # nytimes.com: the document was parsed, cascaded and laid out in 1.7s — and the user saw it at 14s,
 # because the load path fetched every image first. A browser that does this feels broken while every
 # other gate stays green.
-GF=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_first_paint 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+GF=$(_out gf | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GF" ]; then ok "first paint: $GF"; else bad "G_FIRST_PAINT failed — first paint is waiting for subresources again"; fi
 
 head_ "G_SILENT_FAIL · an error on the load/render/script path must never be swallowed"
 # Named by an expensive failure: "React mounts, throws nothing, renders nothing" sat in the ledger for
 # several ticks as a REACT bug. React was throwing, truthfully, inside an async render — and nothing was
 # listening. A browser that fails silently sends you looking in the wrong codebase.
-GS=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_silent_fail 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+GS=$(_out gs | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GS" ]; then ok "silent failure: $GS"; else bad "G_SILENT_FAIL failed — an error is being swallowed on the load/render/script path"; fi
 
 head_ "G_DEDUP · the same resource must not go to the WIRE twice for one navigation (Part 22.3)"
 # Measured on real sites before this gate existed: nytimes issued 813 fetches, and one sprite was pulled
 # down once per element that named it. The gate asserts on NET_DUPES — the wire, not the call — because
 # a repeat `fetch()` served from cache costs nothing and counting it conflates free with expensive.
-GD=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_dedup 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+GD=$(_out gd | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GD" ]; then ok "dedup: $GD"; else bad "G_DEDUP failed — a resource is being fetched more than once per navigation"; fi
 
 head_ "G_RUNAWAY · Bar 0 — a self-rescheduling timer must not hang the browser"
-GRA=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_runaway 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+GRA=$(_out gra | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GRA" ]; then ok "runaway timer: $GRA"; else bad "G_RUNAWAY failed — a page can freeze the browser with one line of JS"; fi
 
 head_ "G_CONTAIN · Bar 0 — a panic kills the PAGE, not the process (Part 23.2)"
-GC=$(cargo test -q -p manuk-page --features stylo,spidermonkey --test g_contain 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+GC=$(_out gc | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GC" ]; then ok "containment: $GC"; else bad "G_CONTAIN failed — a page can take the whole browser down"; fi
 
 head_ "G_RUNTIME_COUNT · one async runtime for the process, not one per action (Part 25.2)"
-GR=$(cargo test -q -p manuk-shell runtime_instantiations 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+GR=$(_out gr | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GR" ]; then ok "runtime count flat: $GR"; else bad "G_RUNTIME_COUNT failed — runtimes are proliferating"; fi
 
 head_ "G_INTERACT · UI-thread cost of tab open/switch/close (the 'browser feels laggy' report)"
-GI=$(cargo test -q -p manuk-shell tab_operations -- --nocapture 2>&1 | grep -E "^  (open|switch|close)")
+GI=$(_out gi | grep -E "^  (open|switch|close)")
 if [ -n "$GI" ]; then echo "$GI" | sed 's/^/  /'; ok "every tab operation under one frame"
 else bad "G_INTERACT failed — a tab operation stalls the UI thread"; fi
 
@@ -278,6 +367,9 @@ for c in manuk-css manuk-layout manuk-paint manuk-dom manuk-net manuk-agent manu
 done
 
 if [ "${1:-}" != "--fast" ]; then
+  # Every background gate must be finished before we time anything. A benchmark sharing the machine with
+  # a compile is not a benchmark.
+  wait
   head_ "F · perf floors (§1.7 — EPOCH-1, binding: a regression FAILS the tick)"
   # **These floors were silently SKIPPING.** The default corpus named `mid.html`/`large.html`, and
   # neither file existed, so `bench` printed empty tables and `verify.sh` printed a yellow dash and

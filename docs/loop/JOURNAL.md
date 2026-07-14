@@ -2960,3 +2960,51 @@ the native engine *does* fetch them. Rendering the fetch-less version would misr
 project itself debunked** (the watchdog was timing Chromium, which is slower on 84% of the corpus). It now
 reports the real 4/211 (1.9%), the 8/8 frameworks, and the WPT distance. *The public face of a project that
 preaches honest measurement should not be the last place a corrected number arrives.*
+
+## Tick 58 — the cycle's wall time: 92.6s → 40.3s, and the waste was never the CPU (2026-07-14)
+
+**TICK SHAPE: infrastructure**
+
+**Measured first, as the methodology requires.** The wall was **92.6s**. Two changes took it to **40.3s** —
+**‑56%** — with **every gate still running and asserting exactly what it did before**, and *both changes
+made the loop MORE rigorous rather than less*:
+
+**1. The fidelity gate was fetching two LIVE websites on every single tick** — **25.5 of the 92 seconds**,
+its single largest cost. And it was **breaking this project's own first rule of differential measurement**:
+
+> **ONE SNAPSHOT, BOTH ENGINES.**
+
+A live page changes between runs, so the fidelity number could move because a news site published an
+article — *and this project has already been burned by exactly that* (a metric stuck at 5,122px across four
+correct fixes, because the two engines were being fed two different documents). Now cached in
+`.verify-cache/`, refreshed **deliberately** on the audit cadence rather than **accidentally** on every
+tick. **Determinism is the point here; the speed-up is the bonus.**
+
+**2. Twenty-one independent `cargo test` gates ran strictly one after another.** They are separate
+processes that share nothing — each JS gate even stands up its own SpiderMonkey runtime, which is most of
+its ~1.5s — so serialising them bought *nothing* and cost the tick a minute. They now launch concurrently
+and each block collects its result in the same order, with the same message. **The perf floors still run
+LAST and ALONE**, because *a benchmark that shares a machine with a compile is not a benchmark* — this
+project's own hardest-won measurement rule.
+
+---
+
+**But the CPU was never the real waste. The loop's own habits were**, and naming them is the more valuable
+half of this tick:
+
+- **I was running the wall two or three times per tick** — once to check, then editing the journal/ledgers,
+  then again for a receipt that matches the final tree. **80–180 seconds a tick, every tick, thrown away.**
+- **I was `sleep`ing 400–540 seconds waiting for CI** — a lane I *designed to be asynchronous*, whose whole
+  stated contract is *"a regression it finds is an ordinary gate failure read at the next tick's start."*
+  **I re-serialised the thing I had built to be parallel.**
+- **The pre-commit hook's four requirements are one-second greps** (journal entry, `TICK SHAPE:`, `WIKI:`
+  trailer, pattern ledger) — **but the hook only sees them after the 40-second wall has already run.** A
+  missing trailer therefore cost a *full re-verify*. That happened repeatedly today. **The loop was paying
+  its most expensive check first.**
+
+`scripts/tick.sh` fixes all three: pre-flight the cheap checks, run the wall **once** on the final tree,
+commit, push, and say out loud *"CI is async — read it at the start of the next tick, do not wait on it."*
+
+**And the most expensive thing in this loop is not compute at all — it is GUESSING.** Six ticks went into
+CI while its logs were unreadable, "fixing" causes I had *inferred*. The tick that stopped guessing and
+made CI **say** its error found the answer in **one run**. *Build the probe first.*

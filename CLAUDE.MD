@@ -59,6 +59,34 @@ the number was actively *lying* (as it was once, and that is now fixed).
 **The test for any proposed instrument work:** *"does this change which capability I build next?"* If
 no — **it is not the tick.** Go build the capability.
 
+## THE CYCLE'S WALL TIME — where it actually goes, and the four rules that keep it low
+
+**Measured, not assumed** (tick 58). The wall was **92.6s**; it is now **40.3s**, with **every gate still
+running and asserting exactly what it did before.** Two changes did it, and *both made the loop MORE
+rigorous, not less*:
+
+1. **The fidelity gate fetched two LIVE sites on every tick** — 25.5s, its single largest cost — which also
+   broke this project's own first rule of differential measurement: **ONE SNAPSHOT, BOTH ENGINES.** A live
+   page changes between runs, so a fidelity number could move because a news site published an article.
+   Now cached (`.verify-cache/`), refreshed deliberately on the audit cadence. *Determinism is the point;
+   the speed-up is the bonus.*
+2. **~21 independent `cargo test` gates ran strictly one after another.** They are separate processes that
+   share nothing (each JS gate stands up its own SpiderMonkey runtime — most of its ~1.5s). Serialising
+   them bought nothing. **The perf floors still run LAST and ALONE**, because *a benchmark that shares a
+   machine with a compile is not a benchmark.*
+
+**And the larger waste was never the CPU — it was the loop's own habits:**
+
+| Rule | Why |
+|---|---|
+| **Run the wall ONCE per tick, last, on the final tree.** | Running it, then editing docs, then re-running for a valid receipt costs **80–180s a tick, every tick**. Order: code → gate → journal/wiki/ledgers → `scripts/tick.sh`. |
+| **NEVER sleep waiting for CI.** | The CI lane is **asynchronous by design** — a regression it finds is an ordinary gate failure read at the **next tick's start**. Blocking on it re-serialises the thing that was built to be parallel. This cost many minutes an hour. |
+| **Pre-flight the cheap checks before the expensive one.** | The pre-commit hook's four requirements (journal entry, `TICK SHAPE:`, `WIKI:` trailer, pattern ledger) are **one-second greps** — but the hook only sees them *after* a 40-second wall, so a missing trailer costs a full re-verify. `scripts/tick.sh` checks them **first**. |
+| **Build the probe before the fix.** | The most expensive thing in this loop is not compute, it is **guessing**. Six ticks went into CI while its logs were unreadable; the tick that stopped guessing and made CI *say* its error found the answer in **one run**. |
+
+**`scripts/tick.sh <message-file>` is the whole close-out**: pre-flight → status → wall (once) → commit →
+push.
+
 ## RELEASE CADENCE — ship on a CAPABILITY STEP-CHANGE, not on a calendar and not every tick
 
 > **A version number should mean something changed for the user.**

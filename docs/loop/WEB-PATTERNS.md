@@ -547,3 +547,9 @@ prerequisite for a daily driver.
 | **The engine compiled to wasm, rendering real pages on a canvas** | ✅ (tick 57) — Stylo + Taffy + tiny-skia executing in the browser; scroll re-renders, hover hit-tests |
 | **Fonts in a no-filesystem target** | ✅ (tick 57) — Liberation faces compiled into the binary (the same ones Chrome's Arial/Times resolve to) |
 | **JS in the demo** | ❌ **permanent** — SpiderMonkey is C++ and does not target wasm. Stated in-product. |
+
+## Tick 58 — cycle wall time (infrastructure)
+
+No web capability changed. The verify wall went 92.6s → 40.3s with every gate intact, and the fidelity gate
+became **deterministic** (one snapshot, both engines) in the process — it had been fetching live sites on
+every tick, which is a rigor bug wearing a performance bug's clothes.
