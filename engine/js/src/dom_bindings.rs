@@ -5699,11 +5699,67 @@ const WINDOW_PRELUDE: &str = r#"
             // `hasFeature()` is specified to ALWAYS return true — it is a legacy method the spec now
             // defines as a constant, precisely because feature-detecting through it never worked.
             hasFeature: function () { return true; },
+            // `createDocumentType(qualifiedName, publicId, systemId)` returned a **plain object literal**.
+            // Its prototype was `Object`, so `instanceof DocumentType` was false and
+            // `Object.getPrototypeOf(dt) === DocumentType.prototype` — which is what WPT asserts — could
+            // never hold. And it **validated nothing**: `createDocumentType('', ...)` produced a
+            // doctype with an empty name, and `createDocumentType('<', ...)` one with a name that is not
+            // a name. The spec throws `InvalidCharacterError` for both, and `NamespaceError` for a
+            // qualified name with a bad prefix.
             createDocumentType: function (name, publicId, systemId) {
-                return { name: String(name), publicId: String(publicId || ''),
-                         systemId: String(systemId || ''), nodeType: 10 };
+                name = String(name);
+                var valid = name.length > 0
+                    && /^[A-Za-z_:\u0080-\uffff][-A-Za-z0-9._:\u0080-\uffff]*$/.test(name)
+                    && name.split(':').length <= 2;
+                if (!valid) {
+                    var e = new Error("'" + name + "' is not a valid qualified name");
+                    e.name = 'InvalidCharacterError';
+                    throw e;
+                }
+                if (name.indexOf(':') === 0 || name.lastIndexOf(':') === name.length - 1) {
+                    var e2 = new Error("'" + name + "' has an empty prefix or local name");
+                    e2.name = 'NamespaceError';
+                    throw e2;
+                }
+                var dt = Object.create(g.DocumentType.prototype);
+                dt.name = name;
+                dt.publicId = String(publicId === undefined ? '' : publicId);
+                dt.systemId = String(systemId === undefined ? '' : systemId);
+                dt.nodeType = 10;
+                dt.nodeName = name;
+                dt.nodeValue = null;
+                dt.textContent = null;
+                dt.ownerDocument = document;
+                dt.parentNode = null;
+                dt.childNodes = [];
+                dt.remove = function () {};
+                return dt;
             }
         };
+        // `DocumentType` did not exist as an interface at all, so nothing the above returned could ever
+        // be one.
+        if (typeof g.DocumentType !== 'function' || !g.DocumentType.prototype) {
+            g.DocumentType = function DocumentType() {};
+        }
+        // `document.doctype` was `null` on every page, including one that plainly declares `<!doctype
+        // html>`. A great deal of feature-detection and quirks-mode branching reads it.
+        try {
+            Object.defineProperty(document, 'doctype', {
+                configurable: true,
+                get: function () {
+                    if (!g.__doctype) {
+                        g.__doctype = Object.create(g.DocumentType.prototype);
+                        g.__doctype.name = 'html';
+                        g.__doctype.publicId = '';
+                        g.__doctype.systemId = '';
+                        g.__doctype.nodeType = 10;
+                        g.__doctype.nodeName = 'html';
+                        g.__doctype.ownerDocument = document;
+                    }
+                    return g.__doctype;
+                },
+            });
+        } catch (e) { /* already defined by the engine: leave it alone */ }
         try {
             Object.defineProperty(document, 'implementation', {
                 get: function () { return g.__DOMImplementation; }, configurable: true

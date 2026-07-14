@@ -3054,6 +3054,44 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 78 — a bundle of correct fixes can be jointly wrong, and per-file totals cannot say which
+
+**TICK SHAPE: capability.** **+5 WPT subtests** (2170 → 2175, 33.8%). Bar 0 clean. A small tick, and it is
+mostly worth reading for the part that did *not* work.
+
+**The capability.** `document.implementation.createDocumentType()` returned a **plain object literal** —
+prototype `Object`, so `instanceof DocumentType` was false and
+`Object.getPrototypeOf(dt) === DocumentType.prototype` (which is what WPT asserts) could never hold. It
+also **validated nothing**: `createDocumentType('', …)` produced a doctype with an empty name. And
+`DocumentType` did not exist as an interface at all, so nothing it returned could ever *be* one. Fixed,
+with `InvalidCharacterError` / `NamespaceError` validation. `document.doctype` was `null` on every page —
+including one that plainly declares `<!doctype html>` — and a good deal of quirks-mode branching reads it.
+
+**And the negative result, which cost most of the tick** (PROCESS #45).
+
+`Document-createEvent.https.html` (203 failing) asserts `Object.getPrototypeOf(ev) === window[iface].prototype`.
+So I added the full legacy interface set (`UIEvent`, `CompositionEvent`, `StorageEvent`, `HashChangeEvent`,
+…), the alias map (`MouseEvents` → `MouseEvent`, `HTMLEvents` → `Event`), the `initXxxEvent` family, and
+`NotSupportedError` for unknown names. **Every one of those is correct in isolation.**
+
+The file went **76/279 → 40/279.** The suite fell **31 subtests**. A second targeted fix did not move it.
+
+> **A bundle of individually-correct fixes can be jointly wrong — and per-file totals cannot tell you
+> which one.**
+
+I discarded it. The tree at HEAD was the known-good 2170; `snap.sh` checkpointed the experiment first, and
+the revert was *deliberate* rather than panicked — which is precisely the mechanism PROCESS #37 exists to
+provide, used as designed for the first time.
+
+**The instrument gap this exposes is the real finding.** Our WPT harness records subtest **counts**, not
+subtest **names**. So a regression *inside* a file is invisible: I could see that 36 subtests broke and had
+no way to see *which*. Localizing meant guessing. **Capturing failing subtest names is the next instrument
+tick**, and until it exists, a large multi-part change to a single file is a gamble rather than an
+experiment.
+
+**The ratchet.** Capability: **up** (small). Performance: unchanged. Instrument fidelity: **up** — the gap
+that made this tick expensive is now named, and it is the next thing to build.
+
 ## Tick 77 — `MutationObserver` observed nothing, and said `function` the whole time
 
 **TICK SHAPE: capability.** Seventh tick at the far horizon. **+44 WPT subtests** (2126 → 2170, **33.8%**).

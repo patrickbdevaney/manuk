@@ -64,6 +64,13 @@ const CLAIMS: &[(&str, &str)] = &[
     ("TreeWalker instance", "document.createTreeWalker(document.body) instanceof TreeWalker"),
     // Live collections (tick 73). A DEAD collection is a Bar 0 hang: `while (el.children.length)
     // el.removeChild(el.firstChild)` never terminates if length is frozen.
+    // DocumentType (tick 78). `createDocumentType` returned a plain object literal — prototype `Object`,
+    // so `instanceof DocumentType` was false — and it validated nothing.
+    ("DocumentType", "typeof DocumentType === 'function'"),
+    ("createDocumentType is a DocumentType", "document.implementation.createDocumentType('html','','') instanceof DocumentType"),
+    ("createDocumentType validates", "(function(){try{document.implementation.createDocumentType('','','');return false}catch(e){return e.name==='InvalidCharacterError'}})()"),
+    ("document.doctype", "!!document.doctype && document.doctype.name === 'html'"),
+
     // MutationObserver (tick 77). It was an INERT STUB that said `function` — a check that only asks
     // whether a name exists is satisfied by a stub, and a stub is worse than an absence: the library
     // feature-detects, registers, and silently never reacts.
