@@ -520,3 +520,9 @@ compiling** and now builds again, which is a prerequisite for the in-browser dem
 No web capability changed. Recorded for completeness: CI failures are now **readable** (public check-run
 annotations carry the real compiler error), which is a prerequisite for getting the cross-platform and
 wasm lanes green without guessing.
+
+## Tick 53 — the repo is buildable by anyone who clones it (infrastructure)
+
+No web capability changed. But: a committed `.cargo/config.toml` hard-coded `rustc-wrapper = "sccache"`,
+which made **the repository unbuildable for every contributor and every CI runner without that tool
+installed**. Now opt-in. This is a prerequisite for anyone else ever running this engine.

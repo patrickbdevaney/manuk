@@ -43,3 +43,16 @@ fi
 
 printf '\033[2m  mem-guard: %s MB available → CARGO_BUILD_JOBS=%s (of %s cores)\033[0m\n' \
   "$_MEM_MB" "$CARGO_BUILD_JOBS" "$_NPROC" >&2
+
+# ── sccache, opt-in and self-disabling.
+#
+# The wrapper must NEVER be a committed hard dependency: `.cargo/config.toml` is shipped to every clone,
+# and cargo does not degrade when the wrapper is absent — it dies with
+# `could not execute process \`sccache ... rustc -vV\``. That one committed line broke **every CI job on
+# every OS**, and never once locally, because sccache is installed here. *A committed artifact must be
+# usable by anyone who clones this repo.*
+#
+# So: use it when it is there, and be silent when it is not.
+if command -v sccache >/dev/null 2>&1; then
+  export RUSTC_WRAPPER="${RUSTC_WRAPPER:-sccache}"
+fi

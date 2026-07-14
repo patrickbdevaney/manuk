@@ -2773,3 +2773,38 @@ is declared as a `[[bin]]`, so a fresh checkout never needed them.*
 **`.git/info/exclude`**, not the public `.gitignore` (which is itself committed and would advertise the
 files it names). One committed doc mentioned a local-only *filename* while explaining the public/local
 split — scrubbed. **Zero committed references remain.**
+
+## Tick 53 — every CI job on every OS failed for ONE committed line (2026-07-13)
+
+**TICK SHAPE: infrastructure**
+
+**The annotation instrument built in tick 52 paid for itself on its first run.** CI's real error, readable
+at last:
+
+```
+error: could not execute process `sccache .../rustc -vV` (never executed)
+Caused by: No such file or directory (os error 2)
+```
+
+**`.cargo/config.toml` — which is COMMITTED — hard-coded `rustc-wrapper = "sccache"`.**
+
+**Cargo does not degrade when the wrapper is missing. It dies.** So the repository was **unbuildable by
+anyone who did not already have sccache installed** — every CI runner, and every contributor who ever
+cloned it. That single line is the whole reason **all eight checks failed on all three operating systems**,
+from the moment it was added.
+
+> **And it never failed once locally, which is the entire shape of the bug:** sccache *is* installed here.
+> The rule it violates is one this project already wrote down — ***a committed artifact must be usable by
+> anyone who clones this repo.*** The config was shipping a hard dependency on a tool no clone brings.
+
+**The fix keeps the caching and drops the dependency:** the wrapper is now **opt-in via the environment**,
+and `scripts/mem-guard.sh` exports `RUSTC_WRAPPER=sccache` **only if sccache is actually on `PATH`**. Use
+it when it is there; be silent when it is not.
+
+**The lesson is about the two previous ticks, not this one.** I spent them "fixing" causes I had
+*inferred* — mozjs's libclang, the GUI system libs, a stale cache — none of which was happening. **An
+unreadable exit code is not evidence, and I treated it as evidence.** The tick that stopped guessing and
+built an instrument (52) found the answer in one run. *Build the probe first — again.*
+
+*(The libclang and GUI-lib deps added in 49/51 were not wasted: mozjs and winit genuinely need them once
+the build gets far enough to care. They were just never the thing that was failing.)*

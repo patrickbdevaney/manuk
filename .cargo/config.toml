@@ -21,5 +21,20 @@ rustflags = ["-C", "target-feature=+crt-static"]
 # Build-artifact cache. Shared dependencies (stylo, mozjs bindings, taffy, hyper …) dominate the
 # compile cycle and are rebuilt identically across every session and every parallel branch; caching
 # them is the single cheapest speed-up available to the loop.
-[build]
-rustc-wrapper = "sccache"
+# ⚠ `rustc-wrapper = "sccache"` USED TO BE HERE, AND IT MADE THIS REPO UNBUILDABLE BY ANYONE WHO DID NOT
+# ALREADY HAVE sccache INSTALLED.
+#
+# `.cargo/config.toml` is committed, so the wrapper applied to every clone — and cargo does not degrade
+# gracefully when the wrapper is missing. It fails outright:
+#
+#     error: could not execute process `sccache .../rustc -vV` (never executed)
+#     Caused by: No such file or directory (os error 2)
+#
+# That is exactly what broke **every CI job on every OS** — the badge lane, mac, windows, and all three
+# static targets — from the moment the line was added. It never showed up locally because sccache *is*
+# installed here, which is the whole shape of the bug: **a committed artifact must be usable by anyone who
+# clones this repo**, and this one silently required a tool no clone brings with it.
+#
+# The wrapper is now **opt-in via the environment**, which degrades correctly: `scripts/mem-guard.sh`
+# exports `RUSTC_WRAPPER=sccache` **only if sccache is actually on PATH**, and CI installs it explicitly.
+# Same caching, no hard dependency.

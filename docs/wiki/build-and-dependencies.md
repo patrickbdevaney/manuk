@@ -218,3 +218,23 @@ the crate does not compile** — *"this arithmetic operation will overflow"*, in
 machine, fatal on the target. **Any type that packs bit-fields into a pointer-width integer is a latent
 32-bit bug.** Back it with an explicit `u64` (identical to `usize` on 64-bit, correct on 32-bit), never
 `usize`. This also hardens the ARM/cross-platform target — the same fix serves wasm and ARM at once.
+
+## A committed `.cargo/config.toml` must not require a tool the clone does not bring
+
+`rustc-wrapper = "sccache"` in a **committed** `.cargo/config.toml` makes the repository **unbuildable by
+anyone without sccache installed.** Cargo does **not** degrade gracefully — it dies:
+
+```
+error: could not execute process `sccache .../rustc -vV` (never executed)
+Caused by: No such file or directory (os error 2)
+```
+
+**That one line failed every CI job on every OS** (badge lane, macOS, Windows, and all three static
+targets) — and **never once locally**, because sccache was installed on the dev machine. *That asymmetry is
+the whole shape of the bug.*
+
+**Make build accelerators opt-in via the environment**, enabled only when the tool is actually on `PATH`
+(`scripts/mem-guard.sh` does this). Same caching, no hard dependency.
+
+> **The general rule, and this project had already written it down: a committed artifact must be usable by
+> anyone who clones this repo.**
