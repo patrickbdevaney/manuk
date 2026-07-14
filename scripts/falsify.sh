@@ -638,6 +638,21 @@ fi
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_TRANSFORM; then
+  # Stop resolving the transform: `getComputedStyle(el).transform` goes back to "none" for a box that is
+  # demonstrably moved. Every animation library then computes `"none scale(2)"` — not a parse error, not
+  # an exception, just an element that quietly stops moving.
+  mutate engine/js/src/dom_bindings.rs '
+s = s.replace(
+    "    if fns.is_empty() {\n        return \"none\".into();\n    }",
+    "    if true { return \"none\".into(); }",
+    1,
+)
+'
+  expect_red G_TRANSFORM cargo test -q -p manuk-page --features stylo,spidermonkey --test g_transform
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_SCROLL; then
   # Stop moving the layout tree. `scrollTop` still reads back what was assigned (the mirror updates),
   # `scrollHeight` is still right, the `scroll` event still fires — and NOTHING MOVES. That is the exact

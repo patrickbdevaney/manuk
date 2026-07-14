@@ -91,6 +91,9 @@ const CLAIMS: &[(&str, &str)] = &[
     // `transform` is APPLIED — the ledger said it was "a real gap" and it moves the box correctly.
     // Only its *computed style* is missing, which is a smaller and different claim.
     ("transform moves the box", "document.getElementById('moved').getBoundingClientRect().x === 100"),
+    // And it READS BACK now (tick 68), as the spec's resolved matrix — `undefined + ' scale(2)'` is the
+    // string "undefined scale(2)", which is how an animation library silently stops animating.
+    ("computed transform", "getComputedStyle(document.getElementById('moved')).transform === 'matrix(1, 0, 0, 1, 100, 0)'"),
     // ── The prototype chain (tick 64)
     ("Element.prototype.setAttribute", "typeof Element.prototype.setAttribute === 'function'"),
     ("EventTarget", "typeof EventTarget === 'function'"),

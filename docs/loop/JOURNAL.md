@@ -3054,6 +3054,40 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 68 — the transform was applied all along; it just never reached JavaScript
+
+**TICK SHAPE: capability** — roadmap item #3.
+
+The ledger called this *"`transform` not in computed style — a real gap"* and made it sound like a layout
+bug. **It is not.** The transform has always been *applied*: `translateX(100px)` really moves the box, and
+`getBoundingClientRect()` agrees to the pixel. Tick 65's probe established that, and `G_CAPABILITY` asserts
+it.
+
+What was missing is the **read-back**, and that has its own distinct damage. Every animation library reads
+the current transform before composing its own:
+
+```js
+el.style.transform = getComputedStyle(el).transform + ' scale(2)';
+```
+
+`undefined + ' scale(2)'` is the **string** `"undefined scale(2)"`. Not a parse error. Not an exception.
+The element simply stops moving. GSAP, Framer Motion, and every hand-rolled tween on the web do exactly
+this — which is why *"not in computed style"* is not a cosmetic gap even though the layout is right.
+
+`getComputedStyle(el).transform` now returns the spec's **resolved value**: `matrix(a, b, c, d, e, f)`,
+never the author's shorthand, because a library that re-parses it depends on that. Functions compose
+left-to-right as CSS multiplies them, and a **percentage** translate resolves against the element's own
+border box — get that wrong and every centred modal on the web moves to the wrong place.
+
+`ComputedStyle.transform` already existed as a `Vec<TransformFn>`; it was simply never serialized. The tick
+is small on purpose: it is real, it is gated, and it is proven falsifiable.
+
+**Not done, and said out loud:** transitions still snap to their end state (no tween). Low damage — the end
+state *is* the content.
+
+**The ratchet.** Capability: **up**. Performance: unchanged. Instrument fidelity: **up** — `G_TRANSFORM`
+goes red when the resolver is disabled, and `G_CAPABILITY` asserts the matrix rather than printing the gap.
+
 ## Tick 67 — `scrollTop` did not merely not work. It lied, and so did `scrollHeight`.
 
 **TICK SHAPE: capability** — roadmap item #2, from the roadmap tick 65 rebuilt from measurement.

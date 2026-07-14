@@ -235,7 +235,74 @@ fn rgba_css(c: &manuk_css::Rgba) -> String {
 
 /// Serialize a `ComputedStyle` to a JS object-literal source (camelCase CSS properties →
 /// CSS value strings) for `getComputedStyle`.
-fn computed_style_js(cs: &manuk_css::ComputedStyle) -> String {
+/// `getComputedStyle(el).transform` — the spec's **resolved value**, which is a `matrix(a, b, c, d, e, f)`
+/// string (or `"none"`), never the author's `translateX(10px)` shorthand.
+///
+/// The transform itself has always been *applied* — the box really moves, and `getBoundingClientRect()`
+/// agrees. It simply never reached JavaScript, which meant every animation library that reads the current
+/// transform before compositing its own (GSAP, Framer Motion, and every hand-rolled `el.style.transform =
+/// getComputedStyle(el).transform + ' scale(2)'`) read `undefined` and concatenated it into garbage.
+///
+/// Percentage translations resolve against the element's own border box, which is why this needs the rect.
+fn transform_css(fns: &[manuk_css::TransformFn], rect: Option<[f32; 4]>) -> String {
+    use manuk_css::{Dim, TransformFn};
+    if fns.is_empty() {
+        return "none".into();
+    }
+    // Multiply the functions into one 2x3 matrix, left to right, exactly as CSS composes them.
+    let mut m = [1.0f32, 0.0, 0.0, 1.0, 0.0, 0.0]; // a b c d e f
+    let mul = |x: [f32; 6], y: [f32; 6]| -> [f32; 6] {
+        [
+            x[0] * y[0] + x[2] * y[1],
+            x[1] * y[0] + x[3] * y[1],
+            x[0] * y[2] + x[2] * y[3],
+            x[1] * y[2] + x[3] * y[3],
+            x[0] * y[4] + x[2] * y[5] + x[4],
+            x[1] * y[4] + x[3] * y[5] + x[5],
+        ]
+    };
+    let (bw, bh) = match rect {
+        Some(r) => (r[2], r[3]),
+        None => (0.0, 0.0),
+    };
+    let px = |d: Dim, basis: f32| -> f32 {
+        match d {
+            Dim::Px(v) => v,
+            Dim::Percent(p) => p / 100.0 * basis,
+            _ => 0.0,
+        }
+    };
+    for f in fns {
+        let n = match *f {
+            TransformFn::Translate(x, y) => [1.0, 0.0, 0.0, 1.0, px(x, bw), px(y, bh)],
+            TransformFn::Scale(x, y) => [x, 0.0, 0.0, y, 0.0, 0.0],
+            TransformFn::Rotate(a) => [a.cos(), a.sin(), -a.sin(), a.cos(), 0.0, 0.0],
+            TransformFn::Skew(x, y) => [1.0, y.tan(), x.tan(), 1.0, 0.0, 0.0],
+            TransformFn::Matrix(v) => v,
+        };
+        m = mul(m, n);
+    }
+    // Trim the float noise: `matrix(1, 0, 0, 1, 10, 0)`, not `matrix(1.0000001, ...)`.
+    let f = |v: f32| {
+        let r = (v * 1e6).round() / 1e6;
+        if r == r.trunc() {
+            format!("{}", r as i64)
+        } else {
+            format!("{r}")
+        }
+    };
+    format!(
+        "matrix({}, {}, {}, {}, {}, {})",
+        f(m[0]),
+        f(m[1]),
+        f(m[2]),
+        f(m[3]),
+        f(m[4]),
+        f(m[5])
+    )
+}
+
+fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> String {
     use manuk_css::{Display, Overflow, Position, TextAlign};
     let display = match cs.display {
         Display::Block => "block",
@@ -282,7 +349,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle) -> String {
           fontFamily:{}, lineHeight:{}, textAlign:{}, display:{}, position:{}, overflow:{}, \
           width:{}, height:{}, marginTop:{}, marginRight:{}, marginBottom:{}, marginLeft:{}, \
           paddingTop:{}, paddingRight:{}, paddingBottom:{}, paddingLeft:{}, \
-          top:{}, right:{}, bottom:{}, left:{}, zIndex:{}, getPropertyValue:function(p){{\
+          top:{}, right:{}, bottom:{}, left:{}, zIndex:{}, transform:{}, getPropertyValue:function(p){{\
           var m={{'background-color':'backgroundColor','font-size':'fontSize',\
           'font-weight':'fontWeight','font-style':'fontStyle','font-family':'fontFamily',\
           'line-height':'lineHeight','text-align':'textAlign','margin-top':'marginTop',\
@@ -315,6 +382,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle) -> String {
         q(&dim_css(&cs.inset.bottom)),
         q(&dim_css(&cs.inset.left)),
         q(&cs.z_index.map(|z| z.to_string()).unwrap_or_else(|| "auto".into())),
+        q(&transform_css(&cs.transform, rect)),
     )
 }
 
@@ -322,7 +390,11 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle) -> String {
 /// `getPropertyValue("kebab-case")` accessor). Reads the pre-script computed styles.
 unsafe fn window_get_computed_style(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let node = arg_object(vp, argc, 0).and_then(|o| node_and_dom(o).map(|(_, n)| n));
-    let js = node.and_then(|n| with_style(n, computed_style_js));
+    // The rect is needed because a PERCENTAGE translate resolves against the element's own border box.
+    let js = node.and_then(|n| {
+        let rect = layout_rect(n);
+        with_style(n, |cs| computed_style_js(cs, rect))
+    });
     let src = js.unwrap_or_else(|| "({})".to_string());
     match eval_in_current_global(cx, &src) {
         Some(v) => *vp = v,
