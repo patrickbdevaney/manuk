@@ -376,9 +376,50 @@ if [ -n "$GI" ]; then echo "$GI" | sed 's/^/  /'; ok "every tab operation under 
 else bad "G_INTERACT failed — a tab operation stalls the UI thread"; fi
 
 head_ "T · crate tests"
+
+# ── A KILLED GATE IS NOT A FAILING GATE.
+#
+# This loop used to be `grep 'test result: ok'` and `bad` on anything else — so a suite that was
+# **OOM-killed**, or whose build was starved out under memory pressure, produced no `test result` line at
+# all and was reported as a RED GATE. It happened three times in one session (G_FORM, G_IFRAME,
+# manuk-shell), each time only when the wall shared the machine with a heavy release build, and each time
+# the suite passed 3/3 in isolation a minute later.
+#
+# **A wall that is green non-deterministically proves nothing** — and worse, it teaches you to re-run
+# until it is green, which is how a real regression gets shipped. PROCESS #17 already said this about
+# gates; the wall itself had the same defect.
+#
+# The project already knows the fix, because the WPT harness learned it first: **separate the engine's
+# verdict from the instrument's.** WPT calls a lost row `SHORT` and refuses to score it. Here:
+#
+#   * an explicit `test result: FAILED`  → the gate is RED. It is a real failure and it stops the tick.
+#   * no verdict at all (signal, OOM, build starved) → the INSTRUMENT faulted. Retry ONCE, alone. If the
+#     retry produces a verdict, that verdict is the truth. If it still produces none, say **INSTRUMENT**
+#     and fail — because an unmeasurable gate is not a passing one either.
+_crate_suite() {
+  local c="$1" out rc
+  out=$(cargo test -q -p "$c" 2>&1); rc=$?
+  if echo "$out" | grep -q 'test result: FAILED'; then
+    bad "$c tests FAILED"                       # a real red. Never retried, never excused.
+    return
+  fi
+  local R
+  R=$(echo "$out" | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+  if [ -n "$R" ]; then ok "$c: $R"; return; fi
+
+  # No verdict. That is the instrument, not the engine — retry once, alone, with nothing else running.
+  printf '  %s⟳%s %s produced no verdict (exit %s) — retrying alone; a killed gate is not a failing gate\n' \
+    "$YEL" "$OFF" "$c" "$rc"
+  wait
+  out=$(cargo test -q -p "$c" 2>&1)
+  if echo "$out" | grep -q 'test result: FAILED'; then bad "$c tests FAILED (on retry)"; return; fi
+  R=$(echo "$out" | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+  if [ -n "$R" ]; then ok "$c: $R (after an instrument fault — the first run was killed, not red)"; return; fi
+  bad "$c: INSTRUMENT FAULT — no verdict on two runs. Unmeasurable is not passing."
+}
+
 for c in manuk-css manuk-layout manuk-paint manuk-dom manuk-net manuk-agent manuk-shell; do
-  R=$(cargo test -q -p "$c" 2>&1 | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
-  if [ -n "$R" ]; then ok "$c: $R"; else bad "$c tests failed"; fi
+  _crate_suite "$c"
 done
 
 if [ "${1:-}" != "--fast" ]; then

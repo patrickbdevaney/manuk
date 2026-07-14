@@ -3054,6 +3054,40 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 81 — the wall could not tell a killed gate from a failing one
+
+**TICK SHAPE: instrument.** `[no-pattern]`. No engine change; the thing that *judges* every engine change
+was unreliable.
+
+**On tick 80 my standalone wall went red on `manuk-shell`, `tick.sh`'s own wall went green, and the tick
+landed.** `manuk-shell` then passed 3/3 in isolation. It was the third such flake in one session (G_FORM,
+G_IFRAME, now this), and every one of them happened only when the wall shared the machine with a heavy WPT
+release build.
+
+The cause was one line. The crate-suite loop grepped for `test result: ok` and called anything else a
+failure — so a suite that was **OOM-killed**, or whose build was starved out under memory pressure,
+produced no verdict line at all and was reported as a **RED GATE**.
+
+> **A wall that is green non-deterministically proves nothing.** And it is worse than useless: it teaches
+> you to re-run until it goes green, which is precisely how a real regression gets shipped.
+
+**The project already knew the answer, because the WPT harness learned it first.** WPT distinguishes a
+crash from `SHORT` — *a row the instrument lost* — and refuses to score the latter. The wall itself had
+never been given that taxonomy. It has it now:
+
+* an explicit `test result: FAILED` → **red, immediately.** Never retried, never excused.
+* **no verdict at all** (signal, OOM, starved build) → the **instrument** faulted. Retry once, *alone*,
+  with every background job reaped. If the retry yields a verdict, that verdict is the truth.
+* still no verdict → **`INSTRUMENT FAULT`**, and it fails — because *unmeasurable is not passing either.*
+
+Both branches are proven, not assumed: a genuinely failing test goes red with **no retry**, and a killed
+one recovers and says so.
+
+> **A lesson learned in one instrument is not learned until it is applied to the others.**
+
+**The ratchet.** Capability: unchanged. Performance: unchanged (wall 28s). Instrument fidelity: **up** —
+the thing that judges every other thing can now tell "this is broken" from "I could not look."
+
 ## Tick 80 — a passive listener that cancels is not passive
 
 **TICK SHAPE: capability.** **+44 WPT subtests** (2345 → 2389, **36.8%**). Bar 0 clean.
