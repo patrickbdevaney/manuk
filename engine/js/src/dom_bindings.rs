@@ -312,6 +312,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         Display::Grid => "grid",
         Display::InlineFlex => "inline-flex",
         Display::InlineGrid => "inline-grid",
+        Display::Contents => "contents",
         Display::Table => "table",
         Display::TableRow => "table-row",
         Display::TableRowGroup => "table-row-group",

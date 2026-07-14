@@ -328,22 +328,19 @@ impl<'m> TaffyDom<'m> {
         let children: Vec<TId> = if container {
             // The FLAT tree, exactly as the block path does — a shadow host that is also a flex or
             // grid container must lay out its shadow content, not its light children.
-            dom.flat_children(node)
+            // `display: none` is not "lay it out and give it no room" — it means the element and its
+            // subtree **generate no boxes at all**. Adding them to the tree anyway let taffy hand them a
+            // zero slot while our extraction still measured and materialised their content: a `<script>`
+            // inside a flex `<body>` painted its own source code down the page.
+            //
+            // And `display: contents` is the mirror image: the wrapper generates no box, **but its
+            // children do — as items of THIS container.** A grid whose items are wrapped in a
+            // `display: contents` div (which is the entire reason the property exists, and what every
+            // component framework emits) must see the three children, not one wrapper. Otherwise the grid
+            // gets a single item and collapses into one cell, with everything present and in the wrong
+            // place.
+            flex_items(dom, styles, node, 0)
                 .into_iter()
-                // `display: none` is not "lay it out and give it no room" — it means the element
-                // and its subtree **generate no boxes at all**. Adding them to the tree anyway let
-                // taffy hand them a zero slot while our extraction still measured and materialised
-                // their content: a `<script>` inside a flex `<body>` painted its own source code
-                // down the page, and every hidden menu, modal and template inside any flex or grid
-                // container rendered its contents. The block path has always filtered these
-                // (`is_rendered`); the taffy path did not.
-                .filter(|&c| {
-                    dom.is_element(c)
-                        && styles
-                            .get(&c)
-                            .map(|s| s.display != CssDisplay::None)
-                            .unwrap_or(false)
-                })
                 .map(|c| self.add(dom, styles, c))
                 .collect()
         } else {
@@ -422,6 +419,34 @@ impl<'m> TaffyDom<'m> {
             )
         }
     }
+}
+
+/// The flex/grid items of `node`, with every `display: contents` wrapper dissolved.
+///
+/// Recursive, because `contents` inside `contents` is legal and a component tree produces exactly that.
+/// Depth-bounded, because a stack overflow in layout is a Bar 0 crash and this is precisely the property
+/// a hostile page would nest ten thousand deep.
+fn flex_items(
+    dom: &Dom,
+    styles: &StyleMap,
+    node: manuk_dom::NodeId,
+    depth: u32,
+) -> Vec<manuk_dom::NodeId> {
+    if depth > 64 {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for c in dom.flat_children(node) {
+        if !dom.is_element(c) {
+            continue;
+        }
+        match styles.get(&c).map(|s| s.display) {
+            None | Some(CssDisplay::None) => {}
+            Some(CssDisplay::Contents) => out.extend(flex_items(dom, styles, c, depth + 1)),
+            Some(_) => out.push(c),
+        }
+    }
+    out
 }
 
 impl TraversePartialTree for TaffyDom<'_> {

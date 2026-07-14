@@ -57,7 +57,7 @@ that has never been tested.
 | `<canvas>` 2D | Charts, games, visualisations | ✅ **it rasterizes** (`G_CANVAS`). Fills, strokes, paths (incl. `arc`), the transform stack, `clearRect`, real `getImageData`, real `toDataURL` — on tiny-skia, the same rasterizer that paints the page. **And the pixels reach the screen**: a canvas is composited as an image the page drew into, through the very map an `<img>` lands in. Not done: `fillText`, `drawImage`, `clip`, real gradients (each an honest no-op, not a lie). |
 | `<video>` / `<audio>` playback | Media sites | ❌ **no codecs.** Element boxes lay out; nothing plays. Graceful, not crashing. |
 | Web fonts (`@font-face`) | Typography-heavy sites | ✅ |
-| `display: contents` | Layout-transparent wrappers | ❌ confirmed — computed style reports `inline` |
+| `display: contents` | Layout-transparent wrappers — every component framework emits them | ✅ **the wrapper dissolves** (`G_DISPLAY_CONTENTS`). Its children become the *grandparent's* grid/flex items. Unparsed it fell through to `inline`, which is the worst answer available: the wrapper stayed a real box, the grid saw **one** anonymous item instead of three, and the layout collapsed into a single cell — every element present, every element styled, all in the wrong place. |
 | CSS transforms / transitions / animations | Motion, and *layout* when transforms shift boxes | ✅ **applied AND readable** (`G_TRANSFORM`). The box moves, `getBoundingClientRect()` agrees, and `getComputedStyle().transform` returns the spec's resolved `matrix(a,b,c,d,e,f)` — which is what every animation library reads before composing its own. `undefined + ' scale(2)'` is the string `"undefined scale(2)"`: not an error, just an element that quietly stops moving. Transitions still snap to the end state (no tween). |
 
 ---
@@ -159,7 +159,7 @@ Every row below has a receipt in `G_CAPABILITY`, which now runs the ledger's cla
    (`G_CANVAS`). `fillText`/`drawImage`/`clip`/gradients remain honest no-ops.
 2. ~~**`scrollTop`/`scrollLeft`**~~ — **done, tick 67** (`G_SCROLL`).
 3. ~~**`getComputedStyle().transform`**~~ — **done, tick 68** (`G_TRANSFORM`).
-4. **`display: contents`** — reports `inline`. Layout-transparent wrappers are common in modern CSS.
+4. ~~**`display: contents`**~~ — **done, tick 69** (`G_DISPLAY_CONTENTS`).
 5. **`document.createRange` / `createEvent` / `URL.createObjectURL`** — small, named, and each one a
    `TypeError` in code that expects them.
 6. **The hangs** (4/265). Real, Bar 0, and worth doing — but it is not the emergency the old ledger said.

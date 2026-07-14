@@ -1665,6 +1665,7 @@ fn css_display_name(d: manuk_css::Display) -> &'static str {
         D::TableCaption => "table-caption",
         D::TableColumn => "table-column",
         D::TableColumnGroup => "table-column-group",
+        D::Contents => "contents",
         D::None => "none",
     }
 }

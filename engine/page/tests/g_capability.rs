@@ -94,6 +94,9 @@ const CLAIMS: &[(&str, &str)] = &[
     // And it READS BACK now (tick 68), as the spec's resolved matrix — `undefined + ' scale(2)'` is the
     // string "undefined scale(2)", which is how an animation library silently stops animating.
     ("computed transform", "getComputedStyle(document.getElementById('moved')).transform === 'matrix(1, 0, 0, 1, 100, 0)'"),
+    // `display: contents` (tick 69). Unparsed, it silently became `inline` — so the wrapper stayed a real
+    // box and every grid/flex child inside it stopped being the grandparent's item.
+    ("display:contents", "getComputedStyle(document.getElementById('contents')).display === 'contents'"),
     // ── The prototype chain (tick 64)
     ("Element.prototype.setAttribute", "typeof Element.prototype.setAttribute === 'function'"),
     ("EventTarget", "typeof EventTarget === 'function'"),

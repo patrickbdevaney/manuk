@@ -114,6 +114,14 @@ fn map_display(d: StyloDisplay) -> Display {
         Display::TableCell
     } else if d == StyloDisplay::TableCaption {
         Display::TableCaption
+    } else if d == StyloDisplay::Contents {
+        // Stylo parses `display: contents` perfectly well. **We threw it away here** — the catch-all
+        // below turned it into `Inline`, which is the worst available answer: the wrapper stays in the
+        // box tree as a real inline box that DOES participate in layout, so its children stop being the
+        // grandparent's grid/flex items. The grid then sees one anonymous inline child instead of three,
+        // and the layout silently collapses into a single cell with every element still present and
+        // still styled. `display: none` would at least have been visibly wrong.
+        Display::Contents
     } else {
         Display::Inline
     }

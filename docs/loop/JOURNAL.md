@@ -3054,6 +3054,43 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 69 — `display: contents` fell through to `inline`, and collapsed the grid
+
+**TICK SHAPE: capability** — roadmap item #4.
+
+`display: contents` means the element generates **no box at all, while its children still do**. It is not
+`display: none`; nothing is hidden. The wrapper vanishes from the box tree and its children are laid out as
+if they were the parent's own. Modern CSS leans on it hard, and always for the same reason: a `<div>`
+wrapping grid items so a component can own them — **without that `<div>` becoming a grid item itself.**
+Every component framework emits such wrappers.
+
+It was **never parsed**. `"contents"` fell through the `match` to `_ => s.display` and stayed `inline` —
+and, one layer down, Stylo's own `Display::Contents` (which it parses perfectly well) hit a catch-all
+`else { Display::Inline }` in our mapping and was thrown away there too. **Two independent fallthroughs to
+the same wrong answer.**
+
+And `inline` is the *worst available* wrong answer:
+
+* `display: none` would at least have been **visibly** wrong — the content disappears, and you go looking.
+* `inline` keeps the wrapper in the tree as a real box that **does** participate in layout. Its children
+  stop being the grid's items. The grid sees **one** anonymous child instead of three, and the whole layout
+  silently collapses into a single cell — with every element still present, still styled, and in the wrong
+  place.
+
+Fixed in both paths, because a grid has two: the block path (`rendered_children`) and the Taffy path
+(`flex_items`). Both dissolve `contents` wrappers **recursively** — `contents` inside `contents` is legal
+and a component tree produces exactly that — and both are depth-bounded, because a stack overflow in layout
+is a Bar 0 crash and this is precisely the property a hostile page would nest ten thousand deep.
+
+**The wall caught what I could not see:** adding a variant to `Display` broke a non-exhaustive `match` in
+`manuk-wpt`, which surfaced as *"F1 cascade ?ms exceeds the floor"* and *"G6 found 0 links"* — two failures
+that look like layout regressions and were a compile error in a test harness three crates away. **A
+failure's shape is not its cause.**
+
+**The ratchet.** Capability: **up**. Performance: unchanged (wall 39s). Instrument fidelity: **up** —
+`G_DISPLAY_CONTENTS` goes red when the wrapper stops dissolving, *which is a red that shows the layout
+silently collapsing rather than erroring*, and `G_CAPABILITY` asserts it.
+
 ## Tick 68 — the transform was applied all along; it just never reached JavaScript
 
 **TICK SHAPE: capability** — roadmap item #3.

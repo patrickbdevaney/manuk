@@ -638,6 +638,21 @@ fi
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_DISPLAY_CONTENTS; then
+  # Stop dissolving the wrapper in the flex/grid path. The grid then sees ONE anonymous item instead of
+  # three, and a/b/c stack in a single cell — every element still present, still styled, and in the wrong
+  # place. That silent collapse is the bug, and it is what `display: contents` existing-but-unparsed did.
+  mutate engine/layout/src/taffy_tree.rs '
+s = s.replace(
+    "            Some(CssDisplay::Contents) => out.extend(flex_items(dom, styles, c, depth + 1)),",
+    "            Some(CssDisplay::Contents) => out.push(c), // MUTATION: the wrapper stays an item",
+    1,
+)
+'
+  expect_red G_DISPLAY_CONTENTS cargo test -q -p manuk-page --features stylo,spidermonkey --test g_display_contents
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_TRANSFORM; then
   # Stop resolving the transform: `getComputedStyle(el).transform` goes back to "none" for a box that is
   # demonstrably moved. Every animation library then computes `"none scale(2)"` — not a parse error, not

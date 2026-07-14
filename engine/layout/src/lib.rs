@@ -825,6 +825,42 @@ fn inline_contains_block(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
     false
 }
 
+/// The children of `node` **as layout sees them** — with every `display: contents` wrapper dissolved.
+///
+/// `display: contents` means the element generates **no box at all, while its children still do**. It is
+/// not `display: none` — nothing is hidden. The wrapper simply vanishes from the box tree and its
+/// children are laid out as if they were the parent's own.
+///
+/// Modern CSS leans on this hard: a `<div>` wrapping grid items so that a component can own them, without
+/// that `<div>` becoming a grid item itself and collapsing the entire layout into a single cell. React and
+/// friends emit such wrappers constantly.
+///
+/// Flattening is **recursive**, because `contents` inside `contents` is legal and a component tree
+/// produces exactly that.
+fn rendered_children(dom: &Dom, styles: &StyleMap, node: NodeId) -> Vec<NodeId> {
+    fn push(dom: &Dom, styles: &StyleMap, node: NodeId, out: &mut Vec<NodeId>, depth: u32) {
+        // A cycle cannot happen in a tree, but a pathological nesting can still be deep. Bound it: a
+        // stack overflow in layout is a Bar 0 crash, and `display: contents` is exactly the kind of
+        // property a hostile page would nest ten thousand deep.
+        if depth > 64 {
+            return;
+        }
+        for k in dom.flat_children(node) {
+            if !is_rendered(dom, styles, k) {
+                continue;
+            }
+            if styles.get(&k).map(|s| s.display) == Some(Display::Contents) {
+                push(dom, styles, k, out, depth + 1);
+            } else {
+                out.push(k);
+            }
+        }
+    }
+    let mut out = Vec::new();
+    push(dom, styles, node, &mut out, 0);
+    out
+}
+
 fn is_rendered(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
     match dom.data(node) {
         // A node the cascade has never seen is not in the render tree. This is not merely a
@@ -1529,12 +1565,11 @@ impl Ctx<'_> {
 
         // N4: the FLAT tree — a shadow host lays out its shadow content, and a `<slot>`
         // lays out the light-DOM nodes assigned to it.
-        let kids: Vec<NodeId> = self
-            .dom
-            .flat_children(node)
-            .into_iter()
-            .filter(|&k| is_rendered(self.dom, self.styles, k))
-            .collect();
+        // `rendered_children`, not a raw filter: a `display: contents` wrapper must DISSOLVE, handing
+        // its children up to this formatting context. Filtering it out entirely would take its children
+        // with it (that is `display: none`), and keeping it would make it a grid/flex item in its own
+        // right — which collapses the whole layout into one cell.
+        let kids: Vec<NodeId> = rendered_children(self.dom, self.styles, node);
 
         // Flex/grid containers route through taffy. `inline-flex`/`inline-grid` establish the same
         // formatting context — they differ only in how the CONTAINER is sized by its parent (handled
@@ -2631,10 +2666,7 @@ impl Ctx<'_> {
     /// the cascade gives them no style — and the lookup would panic. A missing style is likewise
     /// skipped rather than indexed, so an unstyled node can never crash layout.
     fn collect_positioned(&self, node: NodeId, out: &mut Vec<NodeId>) {
-        for k in self.dom.flat_children(node) {
-            if !is_rendered(self.dom, self.styles, k) {
-                continue;
-            }
+        for k in rendered_children(self.dom, self.styles, node) {
             if self.dom.is_element(k) {
                 if let Some(st) = self.styles.get(&k) {
                     if is_out_of_flow_positioned(st) {

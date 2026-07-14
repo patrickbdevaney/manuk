@@ -73,6 +73,17 @@ pub enum Display {
     TableCaption,
     TableColumn,
     TableColumnGroup,
+    /// `display: contents` — **the element generates no box at all, but its children still do.**
+    ///
+    /// It is not `none`: nothing is hidden. The wrapper simply vanishes from the box tree and its
+    /// children are laid out as if they were the parent's own. Modern CSS leans on it hard — a `<div>`
+    /// wrapping grid items so a component can own them, without that `<div>` becoming a grid item itself
+    /// and collapsing the whole layout into one cell.
+    ///
+    /// Unparsed, it fell through to the `_ => s.display` arm and stayed `inline`, which is the worst
+    /// possible answer: the wrapper became an inline box that DID participate in layout, so every grid
+    /// or flex child inside it was hidden behind a single anonymous inline parent.
+    Contents,
     None,
 }
 
@@ -2376,6 +2387,7 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 "table-caption" => Display::TableCaption,
                 "table-column" => Display::TableColumn,
                 "table-column-group" => Display::TableColumnGroup,
+                "contents" => Display::Contents,
                 "none" => Display::None,
                 _ => s.display,
             }
