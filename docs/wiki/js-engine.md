@@ -528,3 +528,16 @@ is real and un-fixed; the engine simply never triggers it.
 > must touch "every element," ask whether Rust can answer it from the arena instead; the arena walk is
 > O(n) and allocation-free, the JS reflector sweep is neither, and it is one reflection bug away from a
 > stack overflow the engine cannot report.
+
+**This recursion is a CONCRETE BLOCKER for reflection expansion, proven by ARIA.** Adding the ~44 ARIA IDL
+accessors (`el.role`, `el.ariaLabel`, …) to `Element.prototype` — correct, tested, working in isolation —
+made a *different* `html/dom` file tip the same recursion into a SIGSEGV in the full-suite run (0 crashes
+without ARIA, 1 with; the extra accessors deepen the mass-access recursion past the C-stack limit).
+Enumerable-vs-not made no difference: it is the accessor *count on the mass-access path*, not enumeration.
+So ARIA reflection — and any further reflection-surface growth — is gated on making SpiderMonkey's native
+stack quota **effective** first, so the deep recursion throws `InternalError: too much recursion` (which a
+WPT test survives) instead of segfaulting. The quota is set once in `Runtime::new` relative to a
+stack-pointer buried deep in the async call stack; the durable fix is to set `JS_SetNativeStackQuota` from
+the **actual thread-stack bounds** (`pthread_getattr_np` + `pthread_attr_getstack`, minus a safety
+margin), so the limit is real regardless of call depth. **That is the prerequisite tick; ARIA rides on
+it.** Reverted rather than shipped, because a Bar 0 crash is never a trade for a capability.

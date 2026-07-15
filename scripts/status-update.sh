@@ -124,7 +124,7 @@ SURFACE=$(grep -oP '^## Audit #[0-9]+ — tick \K[0-9]+' docs/loop/SURFACE-AUDIT
 [ -z "$SURFACE" ] && SURFACE=0
 # LAST_CONSTITUTION_CHECK — same survival requirement: constitution-check.sh reads it from STATUS.md, and
 # a generated file that drops it resets the anchor to tick 0. Derive it from the check LOG (append-only).
-CONST=$(grep -oP '^## Check #[0-9]+ — tick [0-9]*/?\K[0-9]+' docs/loop/CONSTITUTION-CHECK.md 2>/dev/null | sort -n | tail -1)
+CONST=$(grep -oP '^## Check #[0-9]+ — tick (?:[0-9]+/)?\K[0-9]+' docs/loop/CONSTITUTION-CHECK.md 2>/dev/null | sort -n | tail -1)
 [ -z "$CONST" ] && CONST=0
 # The loop budget — the operator's tick dial, read from disk so it survives context compaction.
 WALL_AUDIT=$(grep -oP '^## Audit #[0-9]+ — tick \K[0-9]+' docs/loop/WALL-AUDIT.md 2>/dev/null | sort -n | tail -1)

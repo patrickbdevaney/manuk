@@ -3054,6 +3054,34 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 95 — ARIA reflection, explored and reverted: the mass-reflector recursion is now a named gate
+
+**TICK SHAPE: instrument.** No engine code landed — and that is the honest result. The histogram put the
+next Pareto mechanism cleanly: html/dom's largest remaining mass is HTML/ARIA **attribute reflection**
+(~15.5k `IDL get … undefined` getters + ~11k setters not reaching attributes), and **ARIA reflection**
+(`el.role`, `el.ariaLabel`, … ~44 IDL attributes) was the ideal slice — bounded, additive, high-usage,
+and squarely in the I3 moat (it is the script side of the a11y tree, and Surface Audit #2 flagged Interop
+2026's cross-browser AX-consistency investigation). Implemented, it worked perfectly in isolation:
+`role`/`ariaLabel`/`ariaColCount` round-trip, null-when-absent, set/remove, both build lanes green.
+
+**And it tipped a Bar 0 crash, so it was reverted.** In the full `html/dom` run, adding the 44 accessors
+made a *different* file overflow the C stack (`0` crashes without ARIA, `1` with) — the **latent
+mass-reflector recursion** documented in `js-engine.md` at tick 94, now proven to be a hard gate on
+reflection-surface growth, not a curiosity. Enumerable-vs-not made no difference; it is the accessor count
+on the mass-access path. **A Bar 0 crash is never a trade for a capability** (the ratchet's first rule),
+so ARIA does not land.
+
+**The value of this tick is the named prerequisite.** Reflection expansion — ARIA, and the ~15k missing
+table entries behind it — is gated on making SpiderMonkey's native stack quota *effective*, so the deep
+recursion throws `too much recursion` (survivable) instead of segfaulting. The fix is written down in
+`js-engine.md`: set `JS_SetNativeStackQuota` from the **actual thread-stack bounds**
+(`pthread_getattr_np`/`pthread_attr_getstack`), not from the async-buried SP `Runtime::new` sees. **That
+is the next capability tick; ARIA and the reflection backlog ride on it.** The loop now knows exactly what
+to build next, and why — which is what a good negative result buys.
+
+**WIKI:** `js-engine.md` — extended "Mass reflector access can overflow the C stack" with the ARIA proof
+and the thread-stack-bounds quota fix (retrievable: `wiki-lookup.sh ARIA stack quota recursion`).
+
 ## Tick 94 — backfill: the crash saga becomes retrievable knowledge, not just journal narrative
 
 **TICK SHAPE: instrument.** No engine code changed. Tick 92 built the mechanism to hold durable knowledge;

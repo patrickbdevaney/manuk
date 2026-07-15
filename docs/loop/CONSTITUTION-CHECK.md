@@ -44,3 +44,39 @@ encoding stays banked and must not regress (I4 is about where loop-throughput go
 capability).
 
 **Next check due: tick 95.**
+
+---
+
+## Check #2 — tick 95
+
+**Horizon:** H0 — Pareto Web Parity. **Gate:** ~83% WPT across categories · oracle-verified across the
+four corpora · daily-drivable shell · every rendered construct queryable through the semantic API.
+
+**Gate or scoreboard?** Honest answer: ticks 88–95 were **mostly meta-infrastructure, and mostly
+operator-directed** — CI fix (88), loop budget (89), RAM builds (90), the wiki system + backfill (92/94),
+the wall-time audit (93), and a blocked ARIA exploration (95). Only **innerText (91, +33)** moved the H0
+scoreboard directly. On its face that is the drift the standing rule warns against (novelty/infrastructure
+over the gate).
+
+**Why it is not drift, this time.** The infrastructure was the operator's explicit ask and it is
+*load-bearing for the horizon*, not novelty: the loop budget makes the autonomous grind actually
+autonomous; the wiki system (enforced accumulation + deterministic retrieval) is the memory the
+constitution's own §whole-point demands — the knowledge the H1 security work and the H2 agent-driving
+surface and the H4 species will need and cannot reconstruct from a diff; the wall-audit keeps the per-tick
+tax from compounding across the remaining ~990 ticks. This was the session that built the *machine* that
+grinds H0, and proved it (orient → mechanism → gate → wiki → land, repeatedly). Building the machine once,
+early, is not a detour from the gate; it is the multiplier on every tick that reaches it.
+
+**The steer, and it is unambiguous.** The machine is built; the next ticks return to **capability**. The
+histogram names the target — html/dom **attribute reflection** is the largest remaining Pareto mass
+(~35k failing subtests), and tick 95 found its hard gate: the **mass-reflector C-stack recursion**. So the
+next capability tick is the **effective-stack-quota fix** (`JS_SetNativeStackQuota` from real thread-stack
+bounds), which unblocks ARIA *and* the ~15k missing reflected getters behind it. That is the biggest H0
+lever on the board, and the loop knows exactly why.
+
+**PART VI still holds.** No correction needed; the direct path (aperture → CSS/reflection breadth → oracle
+crawl → web-API by usage → semantic model in lockstep) is intact, and reflection breadth is step 2, now
+with its blocker named. **No invariant bent** — ARIA was reverted precisely *because* I4/Bar 0 forbids
+trading a crash for a capability.
+
+**Next check due: tick 103.**
