@@ -5767,9 +5767,23 @@ const CSSOM_PRELUDE: &str = r#"
         if (!el) return null;
         if (el.__clsView) return el.__clsView;
 
+        // **The RAW attribute string** — what `value`/`toString` (the stringifier) must return
+        // UNTOUCHED. A no-op token operation (`toggle('x', false)` when `x` is absent) must leave
+        // `"a  b"` exactly `"a  b"`; only an operation that actually mutates re-serializes.
+        var raw = function () { return el.getAttribute('class') || ''; };
+        // **The token SET** — the ordered-set parse of the attribute, which is DEDUPLICATED. `length`,
+        // indexed access, `contains`, iteration and every mutation operate on this, not on the raw
+        // string. `Object.create(null)` so a token named `__proto__`/`hasOwnProperty` can't corrupt the
+        // seen-set. Duplicates were the bug: `remove('a')` on `"a b a"` used to strip only the first.
         var read = function () {
-            return (el.getAttribute('class') || '').split(/[ \t\r\n\f]+/).filter(function (x) { return x; });
+            var seen = Object.create(null), out = [];
+            raw().split(/[ \t\r\n\f]+/).forEach(function (x) {
+                if (x && !seen[x]) { seen[x] = true; out.push(x); }
+            });
+            return out;
         };
+        // The "update steps": serialize the (unique) token set and write it back. Only ever called by an
+        // operation that MODIFIED the set — never on a no-op — so non-mutating calls preserve the raw text.
         var write = function (a) { el.setAttribute('class', a.join(' ')); };
 
         // Validate BEFORE mutating anything: the spec requires the whole call to throw without partial
@@ -5812,12 +5826,17 @@ const CSSOM_PRELUDE: &str = r#"
             },
             toggle: function (c, force) {
                 c = check(c);
+                // Per spec, toggle runs the update steps ONLY when it changes the set — so
+                // `toggle('x', true)` on a set that already has `x` (or `toggle('x', false)` on one
+                // that lacks it) leaves the attribute's raw text, including its whitespace, intact.
+                var hasForce = arguments.length > 1;
                 var a = read(), j = a.indexOf(c);
-                var want = (force === undefined) ? (j < 0) : !!force;
-                if (want && j < 0) a.push(c);
-                if (!want && j >= 0) a.splice(j, 1);
-                write(a);
-                return want;
+                if (j >= 0) {
+                    if (!hasForce || !force) { a.splice(j, 1); write(a); return false; }
+                    return true; // force=true, already present → no update
+                }
+                if (!hasForce || force) { a.push(c); write(a); return true; }
+                return false; // force=false, already absent → no update
             },
             replace: function (o, n) {
                 o = check(o); n = check(n);
@@ -5838,7 +5857,7 @@ const CSSOM_PRELUDE: &str = r#"
                 e.name = 'TypeError';
                 throw e;
             },
-            toString: function () { return read().join(' '); },
+            toString: function () { return raw(); },
             entries: function () { return read().map(function (v, i) { return [i, v]; })[Symbol.iterator](); },
             keys: function () { return read().map(function (_, i) { return i; })[Symbol.iterator](); },
             values: function () { return read()[Symbol.iterator](); },
@@ -5848,7 +5867,7 @@ const CSSOM_PRELUDE: &str = r#"
         var api = new Proxy(target, {
             get: function (t, k) {
                 if (k === 'length') return read().length;
-                if (k === 'value') return read().join(' ');
+                if (k === 'value') return raw();
                 if (k === Symbol.iterator) return function () { return read()[Symbol.iterator](); };
                 if (k === Symbol.toStringTag) return 'DOMTokenList';
                 // INDEXED ACCESS — `classList[0]`. It was simply absent, and a great deal of WPT (and of
@@ -5882,7 +5901,7 @@ const CSSOM_PRELUDE: &str = r#"
                     if (+k < a.length) return { value: a[+k], writable: false, enumerable: true, configurable: true };
                 }
                 if (k === 'length') return { value: read().length, writable: false, enumerable: false, configurable: true };
-                if (k === 'value') return { value: read().join(' '), writable: true, enumerable: false, configurable: true };
+                if (k === 'value') return { value: raw(), writable: true, enumerable: false, configurable: true };
                 return Object.getOwnPropertyDescriptor(t, k);
             },
         });

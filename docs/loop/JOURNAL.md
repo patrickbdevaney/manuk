@@ -3054,6 +3054,42 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 100 — `classList` was deduped-blind and rewrote the attribute on no-ops (+241 dom, ratchet up, crash-free)
+
+**TICK SHAPE: capability (DOM correctness).** Continued the FLIP-RATE pivot into `dom`. `--show-failures`
++ normalise + `uniq -c` on the dom area put `wrong class after modification` at **195** subtests — and
+crucially the failing variants spanned **HTML nodes**, not just the XML/MathML tail, so this was
+Pareto-relevant, not exotic. Traced to one file (`dom/nodes/Element-classlist.html`) and one subsystem
+(`DOMTokenList`, `engine/js/src/dom_bindings.rs::__mkClassList`).
+
+**Root cause — naive string handling of what is spec'd as an ordered SET with per-method update steps:**
+1. **No dedup.** `read()` split `class` on whitespace and *filtered empties but kept duplicates*. So
+   `class="a b a"` → `remove('a')` spliced only the first index → `"b a"`; and any modification of
+   `class="a a b"` re-serialized `"a a b"` instead of the set `"a b"`.
+2. **No-ops rewrote the attribute.** `toggle`/`replace` called `write()` **unconditionally**, so a no-op
+   (`toggle('z', false)` when `z` absent) collapsed `"a  b"` → `"a b"`. Per spec, `add`/`remove` always
+   run the update steps (normalising is expected there), but `toggle`/`replace` run them **only when they
+   change the set**.
+3. **Raw-vs-set conflation.** `value` and the stringifier must return the **raw** attribute string;
+   `length`/indexing/`contains`/iteration use the **deduped** set. Both went through the same `read()`.
+
+**The fix:** `raw()` (attribute string) separated from `read()` (deduped ordered set, built with
+`Object.create(null)` so a token named `__proto__`/`hasOwnProperty` can't corrupt the seen-map); `toggle`
+restructured to the spec's four branches, `write()`-ing only on the two that mutate; `value`/`toString`/
+the `value` descriptor return `raw()`. `add`/`remove` keep always-update (spec-correct).
+
+**MEASURED — the ratchet turned, nothing regressed:** the file's `wrong class` cluster **195 → 15**
+(remnant is the XML/`foo`-node `expected null` tail); **`dom` 2498 → 2739 (+241)** (also lifts
+`DOMTokenList-coverage` tests); **`html/dom` 22561 → 22561 (unchanged)**; css areas all held; **crashes =
+0** across the full sweep. Gate: new `G_CLASSLIST` — dedup, remove-all, no-op-preserves-whitespace,
+raw-vs-set — **proven falsifiable** (neutering dedup turns it red; restored, re-green). GATES 35 → 36.
+
+**Class of the web this unlocks (WEB-PATTERNS):** every framework's class-toggling path — `classList.add/
+remove/toggle/replace` now obey ordered-set + no-op-preservation semantics, so a component that toggles a
+state class on an element whose `class` has duplicates (or meaningful raw text a sibling reads) behaves as
+Chrome does. Two clean bounded DOM-side flips in a row (tick 99 selectors +117, tick 100 classList +241),
+both zero Bar-0 risk, both probe-first. [[parity-methodology]] [[symptom-names-wrong-organ]]
+
 ## Tick 99 — the attribute-selector case flag (`[attr=val i]`) was stripped, not applied (+117 css/selectors, ratchet up, crash-free)
 
 **TICK SHAPE: capability (selector matching).** Acted on tick 98's steer — *stop expecting single-value

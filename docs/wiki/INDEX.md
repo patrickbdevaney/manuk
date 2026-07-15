@@ -136,6 +136,7 @@
   - L278 · A DOM that never throws turns a loud caller bug into a silent leak
   - L292 · <body onload> is window.onload, and it must fire EXACTLY once — dispatch OR explicit, never both
   - L323 · offsetWidth/Height/Top/Left, client*, scroll{Width,Height} are integers — scrollTop/Left are not
+  - L337 · classList is an ordered SET, and a no-op operation must not rewrite the attribute
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -320,4 +321,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-259 sections across 14 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+260 sections across 14 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

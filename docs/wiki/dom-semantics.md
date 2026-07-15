@@ -333,3 +333,27 @@ fractional — those must NOT be rounded. Fix lives in `el_metric` (offset*) and
 (`assert_tolerance`), so it already passed the fractional value — rounding is correct but does not move the
 WPT number there. When a fix is spec-correct yet the score is flat, the metric was already tolerating the
 bug; the real lever is elsewhere (for flex/grid: geometry errors >1px, or computed-style mismatches). [[js-engine]]
+
+## `classList` is an ordered SET, and a no-op operation must not rewrite the attribute
+
+`DOMTokenList` (`classList`, and the pattern behind `relList`/`sandbox`) has two behaviours that naive
+string handling gets wrong, and both broke high-usage code:
+
+1. **It is a SET.** The token list is the *ordered set parse* of the attribute — **deduplicated**. So
+   `class="a b a"` → `remove('a')` must strip **every** `a` (→ `"b"`), and any modifying op on
+   `class="a a b"` serializes the set `"a b"`, never `"a a b"`. Ours split-without-dedup and `remove`
+   spliced only the first index, leaving `"b a"`.
+2. **A no-op must not touch the raw attribute.** Per the spec, `add`/`remove` always run the "update
+   steps" (serialize the set → normalizes whitespace, expected), **but `toggle`/`replace` run them ONLY
+   when they change the set.** `toggle('x', false)` when `x` is absent must leave `class="a  b"` — double
+   space and all — byte-for-byte. Ours re-serialized unconditionally and collapsed the whitespace.
+
+And the RAW-vs-SET split on the getters: **`value` and the stringifier return the raw attribute string**
+(`"a  b"`), while **`length`, indexed access (`classList[0]`), `contains`, and iteration use the deduped
+set** (`length` of `"a a b"` is 2). Conflating them (serializing the set for `value`) is a third bug.
+
+`dom/nodes/Element-classlist.html`'s "wrong class after modification" cluster (~180 subtests × five node
+types) was all of this at once; the fix moved **dom 2498 → 2739 (+241)**, crash-free, html/dom unchanged.
+Implementation: `engine/js/src/dom_bindings.rs` `__mkClassList` — a `raw()` (attribute string) separate
+from `read()` (deduped ordered set via `Object.create(null)` so a `__proto__` token can't corrupt the
+seen-map), and `toggle` returns without `write()` on the no-op branches. [[js-engine]]
