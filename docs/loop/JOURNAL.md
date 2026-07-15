@@ -3054,6 +3054,41 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 91 — innerText became the rendered text (the first Pareto-ranked capability tick)
+
+**TICK SHAPE: capability.** The first tick under the corrected Pareto north star (§VI.3): the loop ranked
+`html/dom` as the largest representative-breadth failing mass, and inside it
+`the-innertext-and-outertext-properties` sat at **2/455** — a clean, high-usage mechanism (every framework
+reads `innerText`).
+
+**The bug was the honest comment.** `el.innerText` returned `textContent` and *said so* in a doc comment
+("computing it properly means asking the layout tree, which the binding layer cannot reach from here").
+The premise was wrong: the binding **already holds the pre-script computed styles** (`with_style` /
+`STYLES_PTR`), which is exactly what innerText needs. So innerText is now a faithful structural
+approximation: **`display:none` subtrees are skipped** (the #1 divergence from textContent — a page hides
+a node and textContent still returns its text), `<br>` becomes a newline, **block/flex/grid/table
+boundaries** insert newlines, whitespace is **collapsed** in normal flow and **preserved** under
+`white-space: pre*`.
+
+**And the other half was simply missing.** `outerText` was `undefined`, and the suite asserts innerText
+and outerText *together* — so every subtest failed no matter how right innerText was. Added: the getter
+(same rendered text) and the setter (replace the element with the text, `\n`→`<br>`).
+
+**Receipts.** The innertext suite **2 → 35 / 455**; `html/dom/elements` 11.7% → 17.3% as the gain flows
+through. `G_CAPABILITY` now asserts innerText skips `display:none` and turns `<br>` into a newline, and
+that `outerText` reads the same. 0 crashes, gates green. The remaining ~420 failures are layout-exact
+(required line-break counts, `::first-letter`, multicol) — real, and honestly out of reach until innerText
+can consult the layout tree, which is a later horizon's integration, not this tick's.
+
+**Folded in — a real `tick.sh` bug the growing journal exposed.** The pre-flight's TICK-SHAPE check was
+`awk "…" | grep -qi 'TICK SHAPE:'` under `set -o pipefail`: `grep -q` exits on the first match and closes
+the pipe, `awk` (still streaming a 1300+-line tick block) takes SIGPIPE and exits 141, and pipefail
+reports *that* — so the check `die`d on a journal that DID contain the shape. It failed intermittently
+(foreground timing sometimes let awk finish) and worsened as the journal grew — three ticks lost a re-run
+to it. Fixed by doing the whole match in one awk process (no pipe).
+
+**WIKI:** `dom-semantics.md` — "innerText is the RENDERED text, and the binding CAN compute it — it holds the styles already" (the transferable lesson: check `STYLES_PTR`/the view maps before assuming a binding cannot reach computed style or geometry).
+
 ## Tick 90 — iterative builds run in RAM by default, so local work rarely touches the platter
 
 **TICK SHAPE: instrument.** No engine code changed. The operator asked that local iterative compiles use

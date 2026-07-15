@@ -127,6 +127,10 @@ const CLAIMS: &[(&str, &str)] = &[
     // stored and never compiled. Gated here; the encoding suite (767k subtests) turns on the
     // window-mapped variant (`<body onload>`).
     ("inline onclick", "(function(){var b=document.getElementById('ib');window.__ibFired=0;b.dispatchEvent(new MouseEvent('click',{bubbles:true}));return window.__ibFired===1})()"),
+    // innerText is the RENDERED text, not textContent: display:none is excluded, <br> is a newline.
+    // The #1 way scripts get burned is reading innerText and seeing hidden text textContent would include.
+    ("innerText renders (skips display:none, br->newline)", "document.getElementById('itx').innerText === 'a\\nb'"),
+    ("outerText getter == innerText", "document.getElementById('itx').outerText === 'a\\nb'"),
     ("closest", "H.closest('#host') === H"),
     ("matches", "H.matches('#host')"),
     // NOTE: against `#pristine`, not `#host`. The claims above APPEND to `#host`, so asserting its
@@ -227,6 +231,7 @@ fn html() -> String {
 <div id="scroller" style="height:50px;width:80px;overflow:auto"><div style="height:400px">tall</div></div>
 <div id="moved" style="width:20px;height:20px;transform:translateX(100px)">b</div>
 <button id="ib" onclick="window.__ibFired=(window.__ibFired||0)+1">clk</button>
+<div id="itx">a<span style="display:none">HIDE</span><br>b</div>
 <script>
 var FAIL = [], GAPS = [];
 var H = document.getElementById('host');

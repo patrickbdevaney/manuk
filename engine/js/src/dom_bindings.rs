@@ -1239,6 +1239,17 @@ unsafe fn define_members(
             Some(el_set_outer_html)
         );
         prop_guarded!(prop, c"innerText", el_get_inner_text, None);
+        // `outerText` reads the SAME rendered text as `innerText` (the spec defines its getter that way);
+        // the two are asserted together across the whole innerText suite, so an undefined `outerText`
+        // failed every one of those subtests regardless of how right `innerText` was. The setter replaces
+        // the element in its parent with the text (newlines becoming `<br>`), which `el_set_outer_text`
+        // does; without it, `el.outerText = x` would silently no-op and read back stale.
+        prop_guarded!(
+            prop,
+            c"outerText",
+            el_get_inner_text,
+            Some(el_set_outer_text)
+        );
         def_guarded!(def, c"attachShadow", el_attach_shadow, 1);
         prop_guarded!(
             prop,
@@ -3101,6 +3112,44 @@ unsafe fn el_get_outer_html(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -
 }
 
 /// `el.outerHTML = html` — replace the element *itself* with the parsed markup.
+/// `el.outerText = value` — **replace the element itself** with the text, newlines becoming `<br>`.
+///
+/// Per spec: the value is split on line breaks; each segment is a `Text` node and the breaks between them
+/// are `<br>` elements; that run replaces the element in its parent. An empty string is a single empty
+/// text node (no `<br>`). We skip the spec's sibling-text merging and the parentless `throw` — a no-op on
+/// a detached node is friendlier than a crash and the tests exercise the attached path.
+unsafe fn el_set_outer_text(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let raw = arg_string(cx, vp, argc, 0).unwrap_or_default();
+        let text = raw.replace("\r\n", "\n").replace('\r', "\n");
+        if let Some(parent) = (*dom).parent(node) {
+            let mut new_nodes: Vec<NodeId> = Vec::new();
+            for (i, line) in text.split('\n').enumerate() {
+                if i > 0 {
+                    new_nodes.push((*dom).create_element("br"));
+                }
+                new_nodes.push((*dom).create_text(line));
+            }
+            for &n in &new_nodes {
+                (*dom).insert_before(parent, n, node);
+            }
+            (*dom).remove_child(parent, node);
+            record_mutation(
+                cx,
+                dom,
+                "childList",
+                parent,
+                None,
+                None,
+                &new_nodes,
+                &[node],
+            );
+        }
+    }
+    *vp = UndefinedValue();
+    true
+}
+
 unsafe fn el_set_outer_html(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         let html = arg_string(cx, vp, argc, 0).unwrap_or_default();
@@ -3120,23 +3169,108 @@ unsafe fn el_set_outer_html(cx: *mut RawJSContext, argc: u32, vp: *mut Value) ->
     true
 }
 
-/// `el.innerText` — the *rendered* text.
+/// `el.innerText` — the **rendered** text, not `textContent`.
 ///
-/// Honestly approximated as `textContent`. The true definition depends on layout (it collapses
-/// whitespace, respects `display:none`, and inserts newlines at block boundaries), and computing it
-/// properly means asking the layout tree, which the binding layer cannot reach from here. Scripts read
-/// `innerText` far more often than they depend on its layout-sensitivity, so the approximation is
-/// worth far more than the absence — but it IS an approximation, and it is written down as one rather
-/// than quietly shipped as if it were the spec.
+/// The full spec is the "rendered text collection steps", which are layout-exact (required line-break
+/// counts, justified whitespace, the works). This is a faithful *structural* approximation that uses the
+/// pre-script computed styles the binding already holds (`with_style`): it **skips `display:none`**
+/// subtrees (the #1 way the two differ — `textContent` includes hidden text, `innerText` does not),
+/// turns `<br>` into a newline, inserts newlines at **block boundaries** (block/flex/grid/table display),
+/// **collapses runs of whitespace** in normal flow, and **preserves** them under `white-space: pre*`.
+/// It is not pixel-exact and does not claim to be — but it is the difference between `textContent`
+/// wearing `innerText`'s name (which fails the moment a page hides a node) and a value a script can trust
+/// for the things scripts actually read `innerText` for.
 unsafe fn el_get_inner_text(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
         Some((dom, node)) => {
-            let t = (*dom).text_content(node);
-            return_string(cx, vp, &t);
+            let mut out = String::new();
+            inner_text_into(dom, node, &mut out, false);
+            // innerText has no leading/trailing line breaks from the boundary blocks it walked into.
+            let trimmed = out.trim_matches('\n');
+            return_string(cx, vp, trimmed);
         }
         None => *vp = NullValue(),
     }
     true
+}
+
+/// A block-level display forces a line break around its content in the rendered text.
+fn inner_text_is_block(d: manuk_css::Display) -> bool {
+    use manuk_css::Display::*;
+    matches!(
+        d,
+        Block | Flex | Grid | Table | TableRowGroup | TableRow | TableCell | TableCaption
+    )
+}
+
+/// Append `text` to `out` with runs of ASCII whitespace collapsed to a single space (normal flow).
+fn inner_text_append_collapsed(out: &mut String, text: &str) {
+    let mut prev_ws = out.ends_with([' ', '\n']);
+    for ch in text.chars() {
+        if ch.is_ascii_whitespace() {
+            if !prev_ws {
+                out.push(' ');
+                prev_ws = true;
+            }
+        } else {
+            out.push(ch);
+            prev_ws = false;
+        }
+    }
+}
+
+/// Recursively collect the rendered text of `node`'s children into `out`. `in_pre` carries
+/// `white-space: pre*` inheritance so preformatted runs keep their whitespace.
+unsafe fn inner_text_into(dom: *mut Dom, node: NodeId, out: &mut String, in_pre: bool) {
+    let children: Vec<NodeId> = (*dom).children(node).collect();
+    for child in children {
+        match (*dom).data(child) {
+            manuk_dom::NodeData::Text(t) => {
+                if in_pre {
+                    out.push_str(t);
+                } else {
+                    inner_text_append_collapsed(out, t);
+                }
+            }
+            manuk_dom::NodeData::Element(_) => {
+                // `display:none` is invisible to innerText (this is the headline difference from
+                // textContent). Absent style ⇒ treat as inline-visible.
+                let disp = with_style(child, |cs| cs.display).unwrap_or(manuk_css::Display::Inline);
+                if matches!(disp, manuk_css::Display::None) {
+                    continue;
+                }
+                let tag = (*dom).tag_name(child).unwrap_or("");
+                // Elements whose content is never rendered as text (the UA sheet hides most via
+                // display:none, but be defensive — a page can override that).
+                if matches!(
+                    tag,
+                    "script" | "style" | "head" | "title" | "template" | "noscript"
+                ) {
+                    continue;
+                }
+                if tag.eq_ignore_ascii_case("br") {
+                    out.push('\n');
+                    continue;
+                }
+                let child_pre = in_pre
+                    || matches!(
+                        with_style(child, |cs| cs.white_space),
+                        Some(manuk_css::WhiteSpace::Pre)
+                            | Some(manuk_css::WhiteSpace::PreWrap)
+                            | Some(manuk_css::WhiteSpace::PreLine)
+                    );
+                let block = inner_text_is_block(disp);
+                if block && !out.ends_with('\n') && !out.is_empty() {
+                    out.push('\n');
+                }
+                inner_text_into(dom, child, out, child_pre);
+                if block && !out.ends_with('\n') {
+                    out.push('\n');
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 /// `el.getAttributeNames()` → an array of attribute names.

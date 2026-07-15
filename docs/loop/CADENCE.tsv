@@ -82,3 +82,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 88	e011cd7	1784095827	2026-07-15T02:10:27-04:00	1221	instrument	58	5	76	30	35	79	2387	6484	0	159	0	CI was red because the wall built a different thing than CI did
 89	a072bfe	1784098808	2026-07-15T03:00:08-04:00	2981	instrument	54	8	167	40	35	79	2387	6484	0	159	0	the loop budget: "run K more ticks" is now a fact on disk, not a context-window string
 90	6540821	1784099267	2026-07-15T03:07:47-04:00	459	instrument	55	6	201	36	35	79	2387	6484	0	159	0	iterative builds run in RAM by default, so local work rarely touches the platter
+91	b11264b	1784103164	2026-07-15T04:12:44-04:00	3897	capability	53	8	261	40	35	81	2387	6484	0	161	0	innerText became the rendered text (the first Pareto-ranked capability tick)

@@ -149,6 +149,32 @@ content, and honour shadow DOM and slot assignment **for free**. The bug that ex
 laid out correctly with real geometry but was missing from both `visible_text` **and the a11y tree**,
 because both were walking the node tree.
 
+## `innerText` is the RENDERED text, and the binding CAN compute it — it holds the styles already
+
+The JS `el.innerText` getter returned `textContent` for a long time, with a comment claiming the true
+value "means asking the layout tree, which the binding layer cannot reach from here." **The premise was
+false.** The binding layer holds the **pre-script computed styles** the whole time — `STYLES_PTR` is a
+thread-local `*const HashMap<NodeId, ComputedStyle>` set by `set_view_maps`, read via `with_style(node,
+|cs| …)` — which is exactly what `innerText` needs and what `getComputedStyle` already uses. So innerText
+is a faithful **structural** approximation with zero new plumbing:
+
+* **`display:none` subtrees are skipped** — this is the #1 divergence from `textContent`, which happily
+  returns text a page has hidden. `with_style(child).display == None` ⇒ don't descend.
+* `<br>` ⇒ `\n`; **block/flex/grid/table** display inserts a newline before and after its content.
+* whitespace is **collapsed** in normal flow, **preserved** under `white-space: pre*` (carried down the
+  recursion as an `in_pre` flag).
+
+`outerText` reads the *same* rendered text (its getter is defined that way), and was `undefined` — which
+failed **every** innerText subtest, because the suite asserts innerText and outerText together. Its setter
+replaces the element with the text, `\n` becoming `<br>`.
+
+> **The transferable lesson for every future binding:** before writing "the binding can't reach X," check
+> `STYLES_PTR` / the view maps. Computed style and layout geometry are already marshalled across the FFI
+> for `getComputedStyle`/`getBoundingClientRect`; a getter that needs display, position, or a box can use
+> them too. **What is layout-exact stays out of reach** (innerText's required-line-break-count rendering,
+> `::first-letter`, multicol) — the pre-script *computed style* is available; the *fragment tree* is not,
+> from the binding.
+
 ## Generational `NodeId` buys use-after-free safety while staying a bare integer for JS
 
 The arena packs `generation<<32 | index`. A freed slot bumps its generation, so a stale handle to a reused

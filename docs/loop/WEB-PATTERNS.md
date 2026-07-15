@@ -324,6 +324,17 @@ and a capability that throws outranks capabilities used by ten times as many sit
 **Forms are 50% of the corpus, and they are the difference between a reader and a browser.** You cannot
 search, log in, or buy anything without them.
 
+## Tick 91 — innerText is the RENDERED text, not textContent
+
+`textContent` wearing `innerText`'s name works until a page hides a node — then a script reads the hidden
+text and does the wrong thing. Every framework reads `innerText`; it must mean what the spec says.
+
+| Pattern | Unlocks | Status |
+|---|---|---|
+| `element.innerText` (rendered text) | reading visible text — `display:none` excluded, `<br>`→newline, block boundaries→newline, whitespace collapsed (respecting `white-space: pre*`) | ✅ (tick 91) — a structural approximation over the pre-script computed styles the binding already holds. NOT layout-exact (line-break counts, `::first-letter`, multicol still fail); the innerText suite went 2 → 35 / 455 |
+| `element.outerText` (get + set) | the sibling property, asserted alongside innerText everywhere; the setter replaces the element with text (`\n`→`<br>`) | ✅ (tick 91) — was `undefined`, which failed every innerText subtest regardless of innerText's correctness |
+| layout-exact innerText | pixel-faithful required-line-break-count rendering | ❌ needs the layout tree; the structural form is what scripts actually read innerText for |
+
 ## Tick 84 — the nested browsing context becomes readable (+~721k WPT)
 
 Tick 35 gave the iframe a box and a bitmap. This makes the document *inside* it a real, scriptable

@@ -44,7 +44,17 @@ grep -q "^## Tick ${TICK}[^0-9]" docs/loop/JOURNAL.md \
 ok "journal entry for tick ${TICK}"
 
 # 2. Tick shape, in the journal (the hook reads the journal, not the commit message).
-awk "/^## Tick ${TICK}[^0-9]/,0" docs/loop/JOURNAL.md | grep -qi 'TICK SHAPE:' \
+#
+# ⚠ **Pure awk, NOT `awk … | grep -q`.** Under `set -o pipefail`, `grep -q` exits on the first match and
+# closes the pipe; `awk`, still streaming the rest of the (now 1300+-line) tick block, takes SIGPIPE and
+# exits 141, and pipefail reports that as the pipeline's status — so the check `die`d on a journal that
+# *did* contain the shape. It failed intermittently (foreground timing sometimes let awk finish first) and
+# got steadily worse as the journal grew. Doing the whole match inside one awk process removes the pipe.
+awk -v t="$TICK" '
+  $0 ~ "^## Tick " t "[^0-9]" {f=1}
+  f && /TICK SHAPE:/ {found=1}
+  END {exit found?0:1}
+' docs/loop/JOURNAL.md \
   || die "tick ${TICK}'s journal entry has no 'TICK SHAPE:' — a tick that cannot name its shape is drifting"
 ok "tick shape declared"
 
