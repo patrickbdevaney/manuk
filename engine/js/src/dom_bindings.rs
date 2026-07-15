@@ -1283,6 +1283,7 @@ unsafe fn define_members(
         def_guarded!(def, c"querySelectorAll", doc_query_all, 1);
         def_guarded!(def, c"elementFromPoint", doc_element_from_point, 2);
         def_guarded!(def, c"getBoundingClientRect", el_get_bounding_rect, 0);
+        def_guarded!(def, c"getClientRects", el_get_client_rects, 0);
         prop_guarded!(
             prop,
             c"scrollTop",
@@ -1748,6 +1749,29 @@ unsafe fn el_get_bounding_rect(cx: *mut RawJSContext, _argc: u32, vp: *mut Value
         r = x + w,
         b = y + h
     );
+    match eval_in_current_global(cx, &js) {
+        Some(v) => *vp = v,
+        None => *vp = NullValue(),
+    }
+    true
+}
+
+/// `element.getClientRects()` → a DOMRectList of the element's border boxes. A laid-out element yields
+/// one rect (its bounding box); a `display:none` / unlaid-out element yields an empty list — never a
+/// zero rect, which is the distinction from `getBoundingClientRect()`. Honest bound: an inline box that
+/// wraps across lines has several client rects; we return the single bounding box (the block/replaced
+/// case, which is the overwhelming majority), matching the layout snapshot we actually hold.
+unsafe fn el_get_client_rects(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let node = this_node(vp).map(|(_, n)| n);
+    let js = match node.and_then(layout_rect) {
+        Some([x, y, w, h]) => format!(
+            "(function(){{var r={{x:{x},y:{y},width:{w},height:{h},left:{x},top:{y},right:{r},bottom:{b}}};\
+             var l=[r];l.item=function(i){{i=i|0;return (i>=0&&i<this.length)?this[i]:null;}};return l;}})()",
+            r = x + w,
+            b = y + h
+        ),
+        None => "(function(){var l=[];l.item=function(){return null;};return l;})()".to_string(),
+    };
     match eval_in_current_global(cx, &js) {
         Some(v) => *vp = v,
         None => *vp = NullValue(),

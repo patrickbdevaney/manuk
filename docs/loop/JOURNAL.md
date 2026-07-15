@@ -3054,6 +3054,35 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 107 — element.getClientRects() (correct missing API, ratchet-neutral) + the frontier is confirmed diffuse
+
+**TICK SHAPE: capability (CSSOM-View geometry).** Implemented `element.getClientRects()` — a genuinely
+missing DOM API (used broadly for measuring geometry): returns a DOMRectList of the element's border
+boxes, reusing the `layout_rect` snapshot. A laid-out element yields one rect (its bounding box); a
+`display:none`/unlaid-out element yields an **empty** list — never a zero rect, the distinction from
+`getBoundingClientRect()`. Includes `.item(i)` + indexed access. Probe 4/4; gate `G_CLIENT_RECTS` proven
+falsifiable. Honest bound (in code): an inline box wrapping across lines has several client rects; we
+return the single bounding box (the block/replaced majority, which is what the layout snapshot holds).
+
+**Honest result: ratchet-NEUTRAL** (full sweep TOTAL 389,478 unchanged, crashes=0). The lone
+`getClientRects is not a function` failure sits in a multi-assertion css-position test that fails on other
+geometry too, so the one API doesn't flip its subtests. Landed tick-97/102-style: correct, additive,
+zero-regression capability that real sites call constantly, even though the current failing set doesn't
+score it.
+
+**The strategic confirmation, and it steers the next context.** Ticks 99–107 probed **eight** areas
+(selectors, dom, domparsing, css-ui, css-transforms, css-values, css-color, css-position). The clean
+single-mechanism *FLIP* wins are now **harvested**: the early ticks (selectors +117, classList +241, ccf
++33, elementFromPoint +29) were matching/semantics/missing-API bugs that flipped directly; the later
+probes find only **diffuse** mass (layout-geometry precision in css-position/flexbox → Taffy internals;
+computed-value precision in css-values/css-color) or **deep subsystems** (Typed OM `computedStyleMap`, Web
+Animations, system colors, the CSSOM `.sheet` Stylo bridge). Even clean missing-API additions
+(getClientRects, tick-102's computed props) are now ratchet-neutral because the failing tests need more
+than one fix. **The next capability progress is therefore either (a) a deep subsystem (multi-tick, fresh
+context) or (b) the Bar-0 unblocks (html/semantics native-recursion via debug build; the reflection mass
+via the worker-thread-gated quota; flexbox UAF via ASAN) — none a single bounded flip.** The probe-first
+discipline holds: don't expose the easy API and hope. [[parity-methodology]] [[symptom-names-wrong-organ]]
+
 ## Tick 106 — the stack-quota fix, IMPLEMENTED and REVERTED: the html/semantics crasher is NATIVE recursion
 
 **TICK SHAPE: capability (attempted) → negative result + correction.** `[no-pattern]`. Acted on the

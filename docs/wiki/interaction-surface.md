@@ -287,3 +287,14 @@ unscrolled page). Even so it moved css-transforms 20 → 45 (+25) — the tests 
 untransformed box. Transform-aware hit-testing (apply the matrix to the box → point-in-quad) is the
 follow-on for the remaining transformed cases. It reuses the SAME geometry the a11y `hit_test` uses, so
 the agent surface and page JS agree on what is at a point. [[dom-semantics]]
+
+## `element.getClientRects()` reuses the layout snapshot, like getBoundingClientRect
+
+A missing CSSOM-View API. Returns a DOMRectList of the element's border boxes from the same `LAYOUT_RECTS`
+snapshot `getBoundingClientRect` reads: a laid-out element → one rect (its bounding box); a `display:none`
+/ unlaid-out element → an **empty** list (NOT a zero rect — that is the distinction from
+`getBoundingClientRect`, which returns all-zeros). Provides `.item(i)` + indexed access. **Honest bound:**
+an inline box that wraps across lines has several client rects; we return the single bounding box (the
+block/replaced majority the snapshot holds). Ratchet-neutral at introduction (the lone WPT reference sits
+in a multi-assertion test that fails elsewhere too) — landed as correct capability real sites call
+constantly, tick-97-style. [[dom-semantics]]
