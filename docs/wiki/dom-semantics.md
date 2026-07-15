@@ -412,3 +412,12 @@ error; and `compareDocumentPosition` threw outright. Defined all 12 node-type + 
 prelude (ancestor-chain containment + common-ancestor child order). **+146 subtests (html/dom +128)** — the
 constants are referenced by a large swath of the suite. A cross-cutting primitive missing in plain sight,
 found by probing *what the failing tests reference most*, not by area. [[interaction-surface]]
+
+## DOMException legacy codes + Event phase constants — the same undefined-comparison trap as Node constants
+
+`DOMException` defined its codes by NAME (`NotFoundError`) but not the legacy numeric constants
+(`DOMException.NOT_FOUND_ERR` = 8) that `e.code === DOMException.NOT_FOUND_ERR` compares against — so the
+check silently ran false. Same for `Event.AT_TARGET`/`CAPTURING_PHASE`/`BUBBLING_PHASE`. Added the 25
+DOMException legacy codes + 4 Event phase constants (ctor + prototype). **Prelude-ordering gotcha:** `Event`
+is created by `defEvent` in the dom_bindings prelude, NOT event_loop's — attach constants where the object
+is actually defined, or they silently no-op. +7 (narrower than the Node constants' +146). [[interaction-surface]]

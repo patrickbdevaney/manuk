@@ -6560,6 +6560,16 @@ const WINDOW_PRELUDE: &str = r#"
         };
         defEvent('Event', {});
         defEvent('CustomEvent', { detail: null });
+        // The Event phase constants (`Event.AT_TARGET` …). `e.eventPhase === Event.AT_TARGET` is the
+        // canonical dispatch-phase check; absent, it silently compares to `undefined`. On the constructor
+        // and the prototype (instances inherit them).
+        (function () {
+            var E = globalThis.Event, EC = { NONE: 0, CAPTURING_PHASE: 1, AT_TARGET: 2, BUBBLING_PHASE: 3 };
+            for (var k in EC) {
+                try { Object.defineProperty(E, k, { value: EC[k], enumerable: true }); } catch (e) {}
+                try { Object.defineProperty(E.prototype, k, { value: EC[k], enumerable: true }); } catch (e) {}
+            }
+        })();
 
         // `document.createEvent(interface)` — the pre-constructor API. It was deferred once for fear of
         // an infinite dispatch loop; the loop was never in `createEvent`, it was in a frozen `timeStamp`

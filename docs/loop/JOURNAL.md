@@ -3054,6 +3054,22 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 110 — the OTHER interface constants: DOMException legacy codes + Event phase (+7)
+
+**TICK SHAPE: capability (DOM API surface).** Following tick 109's Node-constants win, swept the same
+class of hole: **DOMException legacy code constants** (`DOMException.NOT_FOUND_ERR` = 8, `INDEX_SIZE_ERR`
+= 1, … — the setup already defined codes by *name* (`NotFoundError`) but not the legacy `*_ERR` numeric
+constants code checks against) and the **Event phase constants** (`Event.AT_TARGET` = 2, `CAPTURING_PHASE`,
+`BUBBLING_PHASE`). Added the 25 DOMException legacy codes (on the ctor + prototype) and the 4 Event phase
+constants (Event is defined via `defEvent` in the dom_bindings prelude, so they attach there, not in
+event_loop's — a prelude-ordering gotcha caught before it shipped). Probe 6/6; gate
+`G_INTERFACE_CONSTANTS`, proven falsifiable.
+
+**MEASURED:** dom **2757 → 2764 (+7)**, TOTAL **389,630 → 389,637**, crashes=0, no regression. Smaller
+than the Node constants (+146) — DOMException-code tests are a narrower slice — but a real flip and real
+capability (`e.code === DOMException.NOT_FOUND_ERR` now works instead of silently comparing to undefined).
+GATES 41 → 42. The interface-constants vein (tick 109–110) is now largely mined. [[parity-methodology]]
+
 ## Tick 109 — the Node CONSTANTS + compareDocumentPosition (+146, biggest flip since tick 100)
 
 **TICK SHAPE: capability (DOM API surface).** The tick-107→108 method paid off big: hunting **high-usage**
