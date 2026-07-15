@@ -3054,6 +3054,37 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 104 — open the aperture: css-values/position/display/color join the sweep (§VI.4 step 1)
+
+**TICK SHAPE: instrument (aperture).** `[no-pattern]` — no `engine/*/src` change; this expands what the
+loop can SEE. Acting directly on **surface-audit #3** (tick 103): the WPT sparse checkout held only 9
+css subtrees, so `css-values`/`css-position`/`css-display`/`css-color` and `html/semantics` scored an
+**invisible zero** — the §VI.3 blindness. Fetched them (`git sparse-checkout add`) and turned unknown
+breadth into a **ranked, ratchet-protected work-list**:
+
+| newly-measured area | pass/total | failing (new mass) |
+|---|---|---|
+| **css/css-values** | 280/1461 (19.2%) | **1181** — biggest new lever (units, `calc()`, `var()`) |
+| css/css-position | 63/260 (24.2%) | 197 |
+| css/css-color | 27/106 (25.5%) | 79 |
+| css/css-display | 10/24 (41.7%) | 14 |
+
+All four are **crash-free** (isolation-retry holds any accumulation crash as ACCUM), so they join the swept
+`AREAS` and their marks bank — the MEASURED invariant rewards discovery, and a regression in them now
+fails the ratchet like any other.
+
+**A NEW Bar-0 found by opening the aperture — and correctly NOT swept.** `html/semantics` is the biggest
+single mass on the board (**~8,879 failing**, forms + elements — high Pareto), but it has **2 real
+per-page crashes** (files that SIGSEGV even in isolation, not the recoverable ACCUM class). Adding it to
+the sweep would fail the ratchet on crashes, so it is **checked out but held out of `AREAS`** until those
+2 crashers are root-caused — a tracked Bar-0, exactly the honest handling the isolation-retry design
+enables (per-page crashes stay sacred). This is the aperture doing its job: it found a large mass AND a
+real crash the loop could not previously see.
+
+**MEASURED — the ranked worklist for the next capability ticks.** `css-values` (1181 failing, used by
+every stylesheet via units/`calc()`/`var()`) is now the top usage-weighted CSS lever the loop can see;
+the next capability tick probes its histogram. [[parity-methodology]]
+
 ## Tick 103 — document.elementFromPoint (+29) + the tick-103 surface-audit & constitution-check cadences
 
 **TICK SHAPE: capability (CSSOM-View / DOM hit-testing) + two cadence ceremonies.** Both audits came due

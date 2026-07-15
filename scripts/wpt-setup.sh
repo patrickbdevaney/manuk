@@ -5,7 +5,7 @@
 # instead of several GB.
 set -euo pipefail
 DIR="${WPT_DIR:-$HOME/wpt}"
-SUBSETS="resources common dom html/dom css/selectors css/css-flexbox css/css-grid cssom domparsing url encoding"
+SUBSETS="resources common dom html/dom css/selectors css/css-flexbox css/css-grid cssom domparsing url encoding css/css-values css/css-position css/css-display css/css-color html/semantics"
 
 if [ ! -d "$DIR/.git" ]; then
   echo "cloning WPT → $DIR"

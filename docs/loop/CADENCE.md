@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **96** | ticks 1–103 |
-| median tick cycle | **19m** | 95 intervals |
+| ticks landed | **97** | ticks 1–104 |
+| median tick cycle | **19m** | 96 intervals |
 | median, last 10 | **40m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.91** | 104.6h elapsed |
-| median verify wall | **61s** | 35 ticks |
+| **ticks per hour** | **0.92** | 104.7h elapsed |
+| median verify wall | **60s** | 36 ticks |
 | wall trend | 39s → 51s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **184**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**45 of 96 ticks** (47%) moved a
+**45 of 97 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -86,7 +86,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **45** capability ticks, median cycle **19m**
-* median diff per tick: **+267 / −17** lines across 8 files
+* median diff per tick: **+262 / −18** lines across 8 files
 
 ## Every tick
 
@@ -188,5 +188,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **101** | 2026-07-15 12:26 | 85m | instrument | 51s | +313/−36 | 36 | 81 | 36.8% · | isolation-retry unmasks a cross-file UAF as an artifact, unblocking `Range.createContextua |
 | **102** | 2026-07-15 12:56 | 30m | capability | 52s | +165/−32 | 37 | 81 | 36.8% · | getComputedStyle exposes visibility / white-space / opacity (correct, ratchet-neutral, ver |
 | **103** | 2026-07-15 13:37 | 41m | capability | 51s | +301/−36 | 38 | 81 | 36.8% · | document.elementFromPoint (+29) + the tick-103 surface-audit & constitution-check cadences |
+| **104** | 2026-07-15 13:47 | 11m | instrument | 51s | +96/−30 | 38 | 81 | 36.8% · | open the aperture: css-values/position/display/color join the sweep (§VI.4 step 1) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

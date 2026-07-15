@@ -34,7 +34,13 @@ TMP=$(mktemp)
 AREAS=(dom html/dom
        css/selectors css/css-flexbox css/css-grid css/css-sizing css/css-fonts
        css/css-text css/css-overflow css/css-transforms css/css-ui css/css-backgrounds
+       css/css-values css/css-position css/css-display css/css-color
        cssom domparsing url encoding)
+# **APERTURE, tick 103/104 (surface-audit #3):** css-values/position/display/color were invisible zeros —
+# checked out and swept now, turning unknown breadth into a ranked, ratchet-protected work-list. NOT yet
+# swept: **html/semantics** (checked out, 8,879 failing — the biggest single mass on the board) because it
+# has **2 real per-page crashes** (crash even in isolation, not the recoverable ACCUM class) that are a
+# NEW Bar-0 to fix before it can join the sweep without failing the ratchet. See docs/loop/SURFACE-AUDIT.md.
 if [ "${1:-}" = "--quick" ]; then
   AREAS=(dom css/selectors css/css-flexbox css/css-grid cssom domparsing url)
 fi
