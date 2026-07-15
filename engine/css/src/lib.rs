@@ -768,6 +768,9 @@ struct AttrSel {
     name: String,
     op: AttrOp,
     value: String,
+    /// The ASCII case-insensitivity flag: `[name=val i]` matches the value case-insensitively;
+    /// `[name=val s]` (and the default for author attributes) is case-sensitive. Selectors §6.3.
+    ci: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1046,14 +1049,28 @@ fn attr_matches(a: &AttrSel, dom: &Dom, node: NodeId) -> bool {
     let Some(actual) = el.attr(&a.name) else {
         return false;
     };
+    // The `i` flag (`[attr=val i]`) makes value matching ASCII case-insensitive. We normalise both
+    // sides once — borrowing on the common (case-sensitive) path so the hot path allocates nothing.
+    let (actual, value) = if a.ci {
+        (
+            std::borrow::Cow::Owned(actual.to_ascii_lowercase()),
+            std::borrow::Cow::Owned(a.value.to_ascii_lowercase()),
+        )
+    } else {
+        (
+            std::borrow::Cow::Borrowed(actual),
+            std::borrow::Cow::Borrowed(a.value.as_str()),
+        )
+    };
+    let (actual, value) = (actual.as_ref(), value.as_ref());
     match a.op {
         AttrOp::Exists => true,
-        AttrOp::Equals => actual == a.value,
-        AttrOp::Includes => actual.split_whitespace().any(|w| w == a.value),
-        AttrOp::Prefix => !a.value.is_empty() && actual.starts_with(&a.value),
-        AttrOp::Suffix => !a.value.is_empty() && actual.ends_with(&a.value),
-        AttrOp::Substring => !a.value.is_empty() && actual.contains(&a.value),
-        AttrOp::DashMatch => actual == a.value || actual.starts_with(&format!("{}-", a.value)),
+        AttrOp::Equals => actual == value,
+        AttrOp::Includes => actual.split_whitespace().any(|w| w == value),
+        AttrOp::Prefix => !value.is_empty() && actual.starts_with(value),
+        AttrOp::Suffix => !value.is_empty() && actual.ends_with(value),
+        AttrOp::Substring => !value.is_empty() && actual.contains(value),
+        AttrOp::DashMatch => actual == value || actual.starts_with(&format!("{value}-")),
     }
 }
 
@@ -1773,7 +1790,8 @@ fn parse_compound(token: &str) -> Option<Compound> {
 /// Parse the inside of an attribute selector `[...]` (the text between the brackets).
 fn parse_attr(inner: &str) -> Option<AttrSel> {
     let inner = inner.trim();
-    // Two-char operators first, then `=`.
+    // Two-char operators first, then `=`. (The `|=` token is matched before the bare `|` namespace
+    // separator can be mistaken for it — `*|foo` contains no `|=`.)
     for (tok, op) in [
         ("~=", AttrOp::Includes),
         ("^=", AttrOp::Prefix),
@@ -1782,39 +1800,72 @@ fn parse_attr(inner: &str) -> Option<AttrSel> {
         ("|=", AttrOp::DashMatch),
     ] {
         if let Some((name, value)) = inner.split_once(tok) {
+            let (value, ci) = parse_attr_value(value);
             return Some(AttrSel {
-                name: name.trim().to_ascii_lowercase(),
+                name: strip_attr_ns(name.trim()).to_ascii_lowercase(),
                 op,
-                value: clean_attr_value(value),
+                value,
+                ci,
             });
         }
     }
     if let Some((name, value)) = inner.split_once('=') {
+        let (value, ci) = parse_attr_value(value);
         return Some(AttrSel {
-            name: name.trim().to_ascii_lowercase(),
+            name: strip_attr_ns(name.trim()).to_ascii_lowercase(),
             op: AttrOp::Equals,
-            value: clean_attr_value(value),
+            value,
+            ci,
         });
     }
     if inner.is_empty() {
         return None;
     }
     Some(AttrSel {
-        name: inner.to_ascii_lowercase(),
+        name: strip_attr_ns(inner).to_ascii_lowercase(),
         op: AttrOp::Exists,
         value: String::new(),
+        ci: false,
     })
 }
 
-/// Strip quotes and a trailing case-sensitivity flag (` i`/` s`) from an attr value.
-fn clean_attr_value(v: &str) -> String {
-    let v = v.trim();
-    let v = v
-        .strip_suffix(" i")
-        .or_else(|| v.strip_suffix(" s"))
-        .unwrap_or(v)
-        .trim();
-    v.trim_matches(['"', '\'']).to_string()
+/// Drop a namespace prefix from an attribute name. `*|attr` (any namespace), `|attr` (no namespace)
+/// and `ns|attr` all resolve to the local name `attr` — correct for our HTML-only, no-namespace
+/// attribute model, where every attribute lives in the null namespace.
+fn strip_attr_ns(name: &str) -> &str {
+    match name.rfind('|') {
+        Some(i) => &name[i + 1..],
+        None => name,
+    }
+}
+
+/// Split an attribute-selector RHS into its (unquoted) value and the ASCII case-insensitivity flag.
+///
+/// The grammar is `value [ <ws> (i|s) ]`, where the flag may also abut a quoted value (`'bar'i`).
+/// `i`/`I` → case-insensitive; `s`/`S` → case-sensitive; absent → case-sensitive (author-attr default).
+fn parse_attr_value(raw: &str) -> (String, bool) {
+    let raw = raw.trim();
+    let bytes = raw.as_bytes();
+    let (val_part, flag_part) = if matches!(bytes.first(), Some(b'"') | Some(b'\'')) {
+        let quote = bytes[0] as char;
+        match raw[1..].find(quote) {
+            // `close` is the byte index of the closing quote within `raw`.
+            Some(rel) => {
+                let close = 1 + rel;
+                (&raw[..=close], raw[close + 1..].trim())
+            }
+            None => (raw, ""),
+        }
+    } else {
+        // Unquoted: the value runs to the first whitespace; anything after it is the flag.
+        match raw.find(char::is_whitespace) {
+            Some(i) => (&raw[..i], raw[i..].trim()),
+            None => (raw, ""),
+        }
+    };
+    let ci = flag_part.eq_ignore_ascii_case("i");
+    let value = val_part.trim().trim_matches(['"', '\'']).to_string();
+    (value, ci)
 }
 
 fn parse_pseudo(name: &str, arg: Option<&str>) -> Option<Pseudo> {

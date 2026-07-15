@@ -159,3 +159,63 @@ fn nested_rules_are_not_dropped_and_the_selectors_that_worked_still_work() {
         );
     }
 }
+
+/// **The attribute-selector case-sensitivity flag (`[attr=val i]` / `[attr=val s]`) and the namespace
+/// prefix (`[*|attr]`, `[|attr]`).** Selectors §6.3.
+///
+/// This was the single largest matching gap in `css/selectors`: the value's `i`/`s` flag was *stripped
+/// and discarded*, so `[foo='bar' i]` matched `foo="BAR"` case-**sensitively** and returned nothing —
+/// and a namespaced attribute name (`*|foo`) was carried into the match verbatim, matching no attribute.
+/// ~117 subtests hung off exactly these two mechanisms. Probe: `foo="BAR"` on a real element.
+#[test]
+fn attribute_selector_case_flag_and_namespace() {
+    const H: &str = r#"<!doctype html><html><body>
+        <div id="t" foo="BAR" baz="quux"></div>
+      </body></html>"#;
+    let fonts = FontContext::new();
+    let page = manuk_page::Page::load(H, "https://sel.test/", &fonts, 800.0);
+    let root = page.dom().root();
+    let matches = |sel: &str| !manuk_css::query_selector_all(page.dom(), root, sel).is_empty();
+
+    // ── The `i` flag makes value matching ASCII case-insensitive — the mechanism that was missing.
+    for sel in [
+        "[foo='bar' i]",  // quoted, spaced
+        "[foo='bar'i]",   // quoted, abutting
+        "[foo=bar i]",    // unquoted
+        "[foo='bar' I]",  // the flag itself is case-insensitive
+        "[foo~='bar' i]", // …and it applies to every operator, not just `=`
+        "[foo^='ba' i]",
+        "[foo$='ar' i]",
+        "[foo*='a' i]",
+    ] {
+        assert!(
+            matches(sel),
+            "G_SELECTOR: `{sel}` did not match foo=\"BAR\" — the `i` (ASCII case-insensitive) flag is \
+             being dropped instead of applied. This is the largest matching gap in css/selectors."
+        );
+    }
+
+    // ── Default and `s` are case-SENSITIVE — the flag must not leak case-insensitivity into plain
+    //    matching, or half of every attribute test starts passing for the wrong reason.
+    assert!(
+        !matches("[foo='bar']"),
+        "G_SELECTOR: `[foo='bar']` matched foo=\"BAR\" — attribute values are case-sensitive by default."
+    );
+    assert!(
+        !matches("[foo='bar' s]"),
+        "G_SELECTOR: `[foo='bar' s]` matched foo=\"BAR\" — the `s` flag forces case-SENSITIVE matching."
+    );
+    assert!(
+        matches("[foo='BAR']") && matches("[baz='quux' s]"),
+        "G_SELECTOR: an exact-case value stopped matching — the flag parser ate part of the value."
+    );
+
+    // ── The namespace prefix resolves to the local attribute name (HTML: everything is null-namespace).
+    for sel in ["[*|foo='BAR']", "[|foo='BAR']", "[*|foo]", "[|foo]"] {
+        assert!(
+            matches(sel),
+            "G_SELECTOR: `{sel}` did not match the `foo` attribute — the `*|`/`|` namespace prefix is \
+             being carried into the attribute name instead of stripped."
+        );
+    }
+}

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **91** | ticks 1–98 |
-| median tick cycle | **19m** | 90 intervals |
+| ticks landed | **92** | ticks 1–99 |
+| median tick cycle | **19m** | 91 intervals |
 | median, last 10 | **34m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.89** | 100.7h elapsed |
-| median verify wall | **68s** | 30 ticks |
+| **ticks per hour** | **0.90** | 101.6h elapsed |
+| median verify wall | **66s** | 31 ticks |
 | wall trend | 39s → 55s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **35**
-* **✅ rows in the capability ledger**: 144 → **169**
+* **✅ rows in the capability ledger**: 144 → **173**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**41 of 91 ticks** (45%) moved a
+**42 of 92 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -85,8 +85,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **41** capability ticks, median cycle **19m**
-* median diff per tick: **+272 / −13** lines across 8 files
+* **42** capability ticks, median cycle **19m**
+* median diff per tick: **+267 / −14** lines across 8 files
 
 ## Every tick
 
@@ -183,5 +183,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **96** | 2026-07-15 07:58 | 3.0h | capability | 55s | +180/−48 | 35 | 81 | 36.8% · | the `<body onload>` double-fire: one handler, dispatched twice, corrupting every checkLayo |
 | **97** | 2026-07-15 09:07 | 69m | capability | 55s | +148/−39 | 35 | 81 | 36.8% · | offset metrics now return spec integers (CSSOM correctness; ratchet-neutral, verified) |
 | **98** | 2026-07-15 09:46 | 40m | capability | 55s | +119/−44 | 35 | 81 | 36.8% · | fixed the margin-box extent bug (correct, verified); and the strategic finding that CSS la |
+| **99** | 2026-07-15 10:40 | 54m | capability | 60s | +262/−72 | 35 | 81 | 36.8% · | the attribute-selector case flag (`[attr=val i]`) was stripped, not applied (+117 css/sele |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

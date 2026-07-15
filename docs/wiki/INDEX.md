@@ -91,24 +91,25 @@
 
   - L3 · Stylo's *servo* build hardcodes parse_has() -> false
   - L26 · An optimisation that makes a data structure smaller must be asked WHAT IT DROPPED
-  - L41 · <body>'s background propagates to the CANVAS
-  - L47 · visibility and opacity interact with animation
-  - L55 · Stylo's grid_enabled() reads layout.grid.enabled, which is OFF by default under servo
-  - L61 · Skipping @supports renders the FALLBACK branch of every progressively-enhanced site
-  - L75 · @media is a rule CONTAINER — a cascade that only matches top-level CssRule::Style applies zero responsive rules at ANY width
-  - L84 · match_non_ts_pseudo_class returning false for everything freezes the entire no-JS-menu web SHUT
-  - L96 · Stylo's COMPUTED values are not its RESOLVED values — border-width and outline-width are traps
-  - L110 · Presentational hints are still load-bearing, and Stylo will NOT synthesize them
-  - L121 · Icons on the modern web are an empty element with a background-color shaped by a mask-image
-  - L125 · inline-flex is a distinct display value, not block-level flex
-  - L131 · A background-image is a DECORATION; an <img> is a REPLACED ELEMENT whose bitmap IS the box
-  - L140 · An unmodelled pseudo-element silently mis-styles its SUBJECT
-  - L147 · The display divergence number is ~25% representational NOISE
-  - L158 · MinimalCascade's deficits are architectural, and a hybrid front-end matcher was REJECTED
-  - L175 · var() and @media evaluation effectively exist ONLY inside full Stylo
-  - L183 · grid-template-areas was entirely unparsed — and BOTH underlying engines already supported it
-  - L189 · Stylo's DOM trait wall is 126+ methods and compiles only as ONE indivisible unit
-  - L201 · Full-page zoom scales ABSOLUTE lengths only
+  - L41 · The attribute-selector case flag was STRIPPED, not APPLIED — and the namespace prefix leaked into the name
+  - L67 · <body>'s background propagates to the CANVAS
+  - L73 · visibility and opacity interact with animation
+  - L81 · Stylo's grid_enabled() reads layout.grid.enabled, which is OFF by default under servo
+  - L87 · Skipping @supports renders the FALLBACK branch of every progressively-enhanced site
+  - L101 · @media is a rule CONTAINER — a cascade that only matches top-level CssRule::Style applies zero responsive rules at ANY width
+  - L110 · match_non_ts_pseudo_class returning false for everything freezes the entire no-JS-menu web SHUT
+  - L122 · Stylo's COMPUTED values are not its RESOLVED values — border-width and outline-width are traps
+  - L136 · Presentational hints are still load-bearing, and Stylo will NOT synthesize them
+  - L147 · Icons on the modern web are an empty element with a background-color shaped by a mask-image
+  - L151 · inline-flex is a distinct display value, not block-level flex
+  - L157 · A background-image is a DECORATION; an <img> is a REPLACED ELEMENT whose bitmap IS the box
+  - L166 · An unmodelled pseudo-element silently mis-styles its SUBJECT
+  - L173 · The display divergence number is ~25% representational NOISE
+  - L184 · MinimalCascade's deficits are architectural, and a hybrid front-end matcher was REJECTED
+  - L201 · var() and @media evaluation effectively exist ONLY inside full Stylo
+  - L209 · grid-template-areas was entirely unparsed — and BOTH underlying engines already supported it
+  - L215 · Stylo's DOM trait wall is 126+ methods and compiles only as ONE indivisible unit
+  - L227 · Full-page zoom scales ABSOLUTE lengths only
 
 ## DOM SEMANTICS — spec behaviour, mutation, and tree edge cases
 `docs/wiki/dom-semantics.md`
@@ -319,4 +320,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-258 sections across 14 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+259 sections across 14 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

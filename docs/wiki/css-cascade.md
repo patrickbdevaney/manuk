@@ -38,6 +38,32 @@ page).
 > **A gate comparing boxes could not see it**, because the boxes it produced were internally consistent
 > — they were just consistently wrong.
 
+## The attribute-selector case flag was STRIPPED, not APPLIED — and the namespace prefix leaked into the name
+
+Our own selector engine (`engine/css`, the one behind `querySelectorAll` and the `:has()` supplement)
+parsed `[attr=val i]` by *deleting* the trailing ` i`/` s` and matching the value case-**sensitively**.
+So `[foo='bar' i]` never matched `foo="BAR"` — `querySelector` returned `null` — and the same for every
+operator (`~= ^= $= *=`). Separately, a namespaced name (`[*|foo]`, `[|foo]`) was carried into the match
+verbatim, so it matched no attribute at all. **These two mechanisms were the single largest matching gap
+in `css/selectors`: ~117 subtests (667 → 784), from one bounded fix, crash-free, no area regressed.**
+
+The fix (Selectors §6.3): a `ci: bool` on the parsed attribute selector; `parse_attr_value` splits the
+value from an optional `i`/`s` flag *respecting quotes* (`'bar'i`, `'bar' i`, `bar i` all parse); the
+flag is itself ASCII case-insensitive (`I` == `i`); `strip_attr_ns` drops everything up to and including
+`|` (HTML attributes are all null-namespace, so `*|foo`, `|foo`, `ns|foo` → local name `foo`). Matching
+normalises both sides with a `Cow` — **borrowed on the common case-sensitive path, so the hot selector
+loop allocates nothing** unless the `i` flag is actually present. Default and `s` stay case-sensitive.
+
+> **A flag that is stripped rather than applied is worse than one that errors:** it silently downgrades
+> a correct selector to a wrong-but-plausible one. The value looked right (`bar`); only the *case rule*
+> was missing, and nothing said so — `querySelector` just returned `null`.
+
+**Method note:** the fail-message histogram (`--show-failures` → normalise `"…"`/digits → `sort | uniq
+-c`) put this cluster at the top by count, and a 14-case probe page (`foo="BAR"`) isolated the exact
+mechanism *before* any engine edit — the `.sheet is undefined` cluster was 4× larger but a deep CSSOM
+saga; this was bounded and Bar-0-safe, so it went first. Rank by **flip-per-risk**, not raw count.
+[[parity-methodology]]
+
 ## `<body>`'s background propagates to the CANVAS
 
 If it does not, **every dark-themed site is a dark box floating in a white void.** Found via an

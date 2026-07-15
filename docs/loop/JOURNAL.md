@@ -3054,6 +3054,49 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 99 — the attribute-selector case flag (`[attr=val i]`) was stripped, not applied (+117 css/selectors, ratchet up, crash-free)
+
+**TICK SHAPE: capability (selector matching).** Acted on tick 98's steer — *stop expecting single-value
+layout fixes to flip flex/grid; pivot to higher-FLIP areas where a fix turns subtests green directly, and
+rank by FLIP RATE not raw failing count.* `css/selectors` (matching is more binary) was the named pivot.
+
+**The probe named the mechanism before any edit** (per methodology). `--show-failures` on css/selectors,
+normalised (`"…"`→`"X"`, digits→`N`) and `uniq -c`'d, gave a clean histogram. Top by count was
+`style.sheet is undefined` (**944** subtests) — but that is a deep CSSOM `<style>.sheet`/`cssRules`/
+`selectorText` saga needing canonical Stylo-backed serialization, Bar-0-risky. The next cluster,
+`querySelector(validSelector) → null` (**227**), was a bounded *matching* gap with no new object model. A
+14-case probe page (`<div foo="BAR" baz="quux">`) isolated it to exactly two mechanisms. **Rank by
+flip-per-RISK, not raw count: the bounded, crash-safe fix goes first.**
+
+**The two bugs, both in our own selector engine (`engine/css`, behind `querySelector` + the `:has()`
+supplement):**
+1. **The `i`/`s` case flag was *stripped and discarded*.** `clean_attr_value` deleted a trailing ` i`/
+   ` s` and always matched case-**sensitively** — so `[foo='bar' i]` never matched `foo="BAR"` (nor did
+   `~= ^= $= *=` with the flag). *A flag stripped rather than applied is worse than one that errors: the
+   value looked right (`bar`), only the case rule was silently missing, and `querySelector` just returned
+   `null`.*
+2. **The namespace prefix leaked into the attribute name.** `[*|foo]` / `[|foo]` kept `*|foo` as the name
+   and matched no attribute.
+
+**The fix (Selectors §6.3):** a `ci: bool` on `AttrSel`; `parse_attr_value` splits value from an optional
+`i`/`s` flag *respecting quotes* (`'bar'i`, `'bar' i`, `bar i`), the flag itself ASCII-case-insensitive
+(`I`==`i`); `strip_attr_ns` drops through `|` (HTML attrs are null-namespace → `*|foo`,`|foo`,`ns|foo` →
+`foo`); matching normalises both sides with a `Cow` — **borrowed on the case-sensitive hot path, zero
+allocation** unless the `i` flag is present. Default and `s` stay case-sensitive (proven by a
+must-not-match assertion, so the flag can't leak case-insensitivity into plain matching).
+
+**MEASURED — the ratchet turned, nothing regressed:** css/selectors **667 → 784 (+117)**; `dom` 2495 →
+2498 (+3, some dom tests use attr selectors); **`html/dom` 22561 → 22561 (unchanged — no regression)**;
+flexbox/grid/sizing/fonts/text all exactly held; **crashes = 0** across the full sweep. Gate: `G_SELECTOR`
+gains `attribute_selector_case_flag_and_namespace` — **proven falsifiable** (neutering `ci` turns it red;
+restored, re-green).
+
+**The compounding lesson banked:** the biggest cluster by count (`.sheet`, 944) is NOT the next tick — it
+is a CSSOM subsystem. The right first tick was the 227-cluster that was *one bounded mechanism at zero
+Bar-0 risk*. FLIP RATE is flip-per-risk, and the `.sheet` CSSOM bridge is now the teed-up successor
+(needs `<style>.sheet` → live `CSSStyleSheet` with `cssRules`/`selectorText` canonically serialized via
+Stylo). [[parity-methodology]] [[symptom-names-wrong-organ]]
+
 ## Tick 98 — fixed the margin-box extent bug (correct, verified); and the strategic finding that CSS layout is a multi-assertion slog
 
 **TICK SHAPE: capability (layout correctness) + strategic steer.** Implemented and verified the fix for the
