@@ -3054,6 +3054,29 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 98 — FINDING (localized, for the chain): flex item main-size drops one child margin
+
+**TICK SHAPE: finding (fix pending fresh context — deep layout-engine work).** The probe localized a real,
+concrete geometry bug that likely explains a class of flex checkLayout failures. Minimal repro: a row
+flexbox with one flex item = a `<div>` wrapping a `<p>` that is `100px` wide with `margin:10px`. The item
+should size to the p's margin box = **120×120**. We compute **110×120**:
+- **cross-axis (height) = 120 ✓** — both vertical margins counted (10+100+10).
+- **main-axis (width) = 110 ✗** — only ONE horizontal margin counted (100+10); the far margin is dropped.
+- p itself = 100×100 ✓, p.offsetLeft/Top = 10/10 ✓ (margins position correctly; only the CONTAINER's
+  content-based main-size is short by one margin).
+
+**The lever:** the flex item's content-based main-size (max-content) undercounts a child's margins on the
+main axis by exactly one margin. Cross-axis is correct, so it is specifically the main-axis max-content
+contribution in the layout crate (engine/layout, Taffy 0.12 integration) — find where a child's outer
+(margin-box) size feeds the parent's main-axis content size and is missing the trailing margin. Likely a
+shared cause: many flex sizing tests fail on exactly this kind of >1px content-size error (which is why the
+tick-97 offset-rounding, a <1px effect, did not move flexbox).
+
+**Why not landed here:** modifying the Taffy/layout content-size path is Bar-0-risky deep work that must not
+be started at the tail of a maxed context. Next iteration (fresh via the oracle chain + auto-compaction):
+reproduce with the probe, fix the main-axis margin accounting, gate it, re-sweep flexbox (batch 40) + grid
+(batch 10), and confirm the ratchet rises. [[parity-methodology]] [[symptom-names-wrong-organ]]
+
 ## Tick 97 — offset metrics now return spec integers (CSSOM correctness; ratchet-neutral, verified)
 
 **TICK SHAPE: capability (CSSOM correctness).** The probe found a real spec bug: `offsetWidth/Height/Top/
