@@ -9,10 +9,12 @@ use manuk_text::FontContext;
 
 const HTML: &str = r##"<!doctype html><html><body>
 <div id="out">-</div>
-<div id="d" dir="ltr" hidden tabindex="5" accesskey="k"></div>
+<div id="d" dir="ltr" hidden tabindex="5" accesskey="k" lang="en-US"></div>
 <span id="s"></span>
 <script>
   var R = [], d = document.getElementById('d'), s = document.getElementById('s');
+  R.push('lang:' + d.lang);                                 // en-US (getter)
+  s.lang = 'fr'; R.push('setLang:' + s.getAttribute('lang'));  // fr — the SETTER reflects (tick 112 fix)
   R.push('dir:' + d.dir);                                   // ltr
   R.push('hidden:' + d.hidden);                             // true (boolean reflection)
   R.push('tab:' + d.tabIndex);                              // 5 (long)
@@ -33,6 +35,12 @@ fn global_htmlelement_attributes_reflect_on_every_element() {
     let got = page.dom().text_content(out);
 
     for (claim, why) in [
+        ("lang:en-US", "the global `lang` attribute getter reflects"),
+        (
+            "setLang:fr",
+            "…and its SETTER reflects to the content attribute (tick 112: lang had a getter-only fallback \
+             and setting it was silently dropped)",
+        ),
         ("dir:ltr", "the global `dir` attribute reflects on a plain div, not undefined"),
         ("hidden:true", "`hidden` reflects as a boolean"),
         ("tab:5", "`tabIndex` reflects as a long"),

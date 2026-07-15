@@ -3054,6 +3054,27 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 112 — lang reflection: a getter-only fallback whose SETTER was silently dropped (+4,560)
+
+**TICK SHAPE: capability (attribute reflection).** Re-probed html/dom after tick 111: the top remaining
+cluster was `getAttribute() … got "test-valueOf"` (≈7k) — reflection *value* mismatches. Isolated it to a
+concrete bug: **`el.lang` had a getter (a generic attribute fallback returned the value) but NO setter** —
+`d.lang = 'x'` was silently dropped (`getAttribute('lang')` stayed the old value). lang isn't a named
+native accessor and isn't in the per-tag table, so reflect_js never installed a proper accessor for it.
+Fix: add `lang` (string) to the `"*"` global row, so reflect_js installs a real getter+setter. Probe 5/5
+(setter reflects, object coercion via String()/toString, and native `title` still works, not clobbered).
+
+**A Bar-0 caught and reverted mid-tick — the ratchet working.** The first attempt added `lang` **plus
+`title`, `enterKeyHint`, `inputMode`** — and the sweep showed **css-grid crashes=35.** Reverted
+immediately (Bar 0 is never traded), then bisected: **`lang` alone is crash-free**; the culprit was
+**`title`** (a native accessor already exists, and defining a second reflected `title` over it caused the
+crash). Dropped title/enterKeyHint/inputMode; kept lang.
+
+**MEASURED — clean:** **html/dom 40,935 → 45,495 (+4,560)**, **TOTAL 407,882 → 412,442**, crashes=0, every
+other area held (css-grid back to crashes=0). Gate `G_GLOBAL_REFLECT` extended (lang getter + setter).
+The tick-111 lesson held again: find the shared cause behind the biggest cluster — and the ratchet caught
+the over-reach. [[parity-methodology]]
+
 ## Tick 111 — the GLOBAL reflected attributes (+18,245 — the session's largest flip) + the 111 cadences
 
 **TICK SHAPE: capability (attribute reflection) + self-audit + constitution-check cadences.** Both audits

@@ -103,3 +103,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 109	97f2102	1784144545	2026-07-15T15:42:25-04:00	1099	capability	54	10	207	38	41	81	2387	6484	0	191	0	the Node CONSTANTS + compareDocumentPosition (+146, biggest flip since tick 100)
 110	0027a56	1784145592	2026-07-15T15:59:52-04:00	1047	capability	59	11	158	36	42	81	2387	6484	0	193	0	the OTHER interface constants: DOMException legacy codes + Event phase (+7)
 111	0204dd8	1784147459	2026-07-15T16:30:59-04:00	1867	capability	60	12	215	40	43	81	2387	6484	0	195	0	the GLOBAL reflected attributes (+18,245 — the session's largest flip) + the 111 cadences
+112	c85fdce	1784150176	2026-07-15T17:16:16-04:00	2717	capability	54	11	118	41	43	81	2387	6484	0	197	0	lang reflection: a getter-only fallback whose SETTER was silently dropped (+4,560)

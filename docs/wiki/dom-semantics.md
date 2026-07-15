@@ -434,3 +434,14 @@ table, so `div.dir` etc. returned `undefined`. Fix: a `"*"` row in the table + `
 tick-95 mass-reflector Bar-0 did NOT trip at 10 global accessors — the remaining reflection mass (ARIA +
 whole-tree access) stays crash-gated on the stack-quota fix, but a large crash-free chunk was reachable
 without it. [[js-engine]]
+
+## A getter-only attribute fallback silently drops the setter — and double-defining a native one CRASHES
+
+html/dom's `got "test-valueOf"` cluster was reflection *value* correctness: `el.lang` returned the
+attribute (a generic getter fallback) but `el.lang = x` was silently dropped — no setter, because lang is
+neither a named native accessor nor in the per-tag reflection table, so reflect_js never installed one.
+Fix: add `lang` to the `"*"` global row → reflect_js installs a real getter+setter (+4560 html/dom).
+**Two cautions banked:** (1) a getter without a setter is a silent write-drop, worse than absence; (2)
+adding a reflected `title` alongside the EXISTING native `title` accessor caused a hard crash (css-grid
+crashes=35) — reverted. Never define a reflected accessor over a working native one; and the mass-reflector
+Bar-0 has SOME headroom (lang, the 11th global accessor, is fine) but it is finite. [[js-engine]]

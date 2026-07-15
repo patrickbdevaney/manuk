@@ -50,7 +50,9 @@ while true; do
 
   say "launching headless grind agent (at tick $TICK, target $TARGET, $((TARGET-TICK)) left)"
   # The headless agent self-continues via the Stop hook and lands ticks; when it exits we relaunch.
+  START=$(date +%s)
   "$CLAUDE" --dangerously-skip-permissions --permission-mode bypassPermissions -p "$PROMPT" >>"$LOG" 2>&1 || true
+  DUR=$(( $(date +%s) - START ))
 
   AFTER=$(grep -oP '^TICK:\s*\K[0-9]+' "$STATUS" 2>/dev/null || echo 0)
   if [ "$AFTER" -gt "$TICK" ]; then
@@ -58,9 +60,18 @@ while true; do
     NOPROG=0
   else
     NOPROG=$((NOPROG + 1))
-    say "agent exited — NO tick landed (attempt $NOPROG). Relaunching after backoff."
-    # Safety: if many consecutive launches make no progress, something is wrong (stuck, erroring, gated).
-    # Back off increasingly rather than burn tokens in a tight failing loop; never fully stop (budget bounds).
+    say "agent exited after ${DUR}s — NO tick landed (attempt $NOPROG)."
+    # ── USAGE-EXHAUSTION PAUSE. A fast exit (< 180s) with no tick almost always means the weekly Claude
+    # pool is spent (API rejects immediately) — NOT a code problem. Spinning would burn nothing useful and
+    # spam relaunches. If a reset time is recorded and still in the future, SLEEP UNTIL THE RESET (+60s),
+    # then resume with the fresh pool. See reference/usage/USAGE.md.
+    RESET=$(cat .git/manuk-usage-reset 2>/dev/null || echo 0); NOW=$(date +%s)
+    if [ "$DUR" -lt 180 ] && [ "$RESET" -gt "$NOW" ]; then
+      WAIT=$(( RESET - NOW + 60 ))
+      say "⏸ fast-fail (${DUR}s) + pool likely exhausted — sleeping ${WAIT}s until weekly reset $(date -d @"$RESET" '+%F %T'), then resuming"
+      sleep "$WAIT"; NOPROG=0; continue
+    fi
+    # Otherwise it is a genuine no-progress condition (stuck/gated) — back off, never fully stop.
     if [ "$NOPROG" -ge 5 ]; then
       say "⚠ $NOPROG consecutive no-progress launches — backing off 300s (check the log; is a gate blocking?)"
       sleep 300

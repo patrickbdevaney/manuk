@@ -144,6 +144,7 @@
   - L405 · The Node interface CONSTANTS were absent — and n.nodeType === Node.ELEMENT_NODE silently ran false
   - L416 · DOMException legacy codes + Event phase constants — the same undefined-comparison trap as Node constants
   - L425 · The reflection GAP was the GLOBAL attributes — one "*" row beat 400 per-attribute edits (+18k)
+  - L438 · A getter-only attribute fallback silently drops the setter — and double-defining a native one CRASHES
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -340,4 +341,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-275 sections across 15 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+276 sections across 15 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
