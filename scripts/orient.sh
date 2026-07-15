@@ -32,7 +32,16 @@ AREAS=docs/loop/WPT-AREAS.tsv
 head_() { printf '\n%s── %s%s\n' "$BLD" "$1" "$OFF"; }
 
 # ═════════════════════════════════════════════════════════════════════════════════════════════
-# **THE APERTURE COMES FIRST**, before any ranking, because a ranking inside the wrong frame is a
+# **THE LOOP BUDGET, FIRST OF ALL.** Before deciding WHAT to do, decide WHETHER to. The operator set a
+# tick budget on disk (`docs/loop/AUTOLOOP`); orient reads it every tick so "run K more ticks" never has
+# to live in a context window. If the budget is spent, this exits non-zero and the loop stops and reports
+# — the one handback that is by design.
+if ! ./scripts/autoloop.sh check; then
+  exit 1
+fi
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+# **THE APERTURE COMES NEXT**, before any ranking, because a ranking inside the wrong frame is a
 # confident wrong answer. Both of this project's order-of-magnitude leaps were aperture problems, and both
 # times a human had to point at them. That is the failure this section exists to end.
 ./scripts/blindspot.sh | tail -n +1

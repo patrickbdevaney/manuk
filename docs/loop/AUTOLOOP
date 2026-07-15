@@ -1,0 +1,8 @@
+# ── THE LOOP BUDGET ────────────────────────────────────────────────────────────────────────
+# The autonomous tick/eval loop runs until TICK reaches LOOP_UNTIL_TICK, then STOPS and reports
+# back (the ONE legitimate handback: "budget reached, set a new K"). This is how the operator sets
+# "run K more ticks" WITHOUT it living in a context window — the loop reads it mechanically each tick.
+#
+# To extend: edit the number below, or run  ./scripts/autoloop.sh set <K>   (target = current tick + K).
+# To run effectively forever: set a very large number.
+LOOP_UNTIL_TICK=1088

@@ -126,10 +126,13 @@ SURFACE=$(grep -oP '^## Audit #[0-9]+ — tick \K[0-9]+' docs/loop/SURFACE-AUDIT
 # a generated file that drops it resets the anchor to tick 0. Derive it from the check LOG (append-only).
 CONST=$(grep -oP '^## Check #[0-9]+ — tick [0-9]*/?\K[0-9]+' docs/loop/CONSTITUTION-CHECK.md 2>/dev/null | sort -n | tail -1)
 [ -z "$CONST" ] && CONST=0
+# The loop budget — the operator's tick dial, read from disk so it survives context compaction.
+LOOP_TGT=$(grep -oP '^LOOP_UNTIL_TICK=\K[0-9]+' docs/loop/AUTOLOOP 2>/dev/null || echo 0)
+LOOP_REM=$(( LOOP_TGT - TICK )); [ "$LOOP_REM" -lt 0 ] && LOOP_REM=0
 
-python3 - "$TICK" "$LAST_AUDIT" "$WALL" "$SITES" "$CLUSTERS" "$CRAWLED" "$HUNG" "$pending" "$SINGLE" "$UNATTRIB" "$SURFACE" "$CONST" <<'PY'
+python3 - "$TICK" "$LAST_AUDIT" "$WALL" "$SITES" "$CLUSTERS" "$CRAWLED" "$HUNG" "$pending" "$SINGLE" "$UNATTRIB" "$SURFACE" "$CONST" "$LOOP_REM" "$LOOP_TGT" <<'PY'
 import sys, re, datetime
-tick, last_audit, wall, sites, clusters, crawled, hung, pending, single, unattrib, surface, const = sys.argv[1:13]
+tick, last_audit, wall, sites, clusters, crawled, hung, pending, single, unattrib, surface, const, loop_rem, loop_tgt = sys.argv[1:15]
 src = open('STATUS.md').read()
 
 # The generated block. Everything here is a fact read from disk.
@@ -147,6 +150,7 @@ TICK:              {tick}
 LAST_AUDIT_TICK:   {last_audit}          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
 LAST_SURFACE_AUDIT: {surface}         (surface audit due every 10 ticks — from docs/loop/SURFACE-AUDIT.md)
 LAST_CONSTITUTION_CHECK: {const}     (constitution re-read due every 8 ticks — from docs/loop/CONSTITUTION-CHECK.md; anchors the loop to CONSTITUTION.MD)
+LOOP_BUDGET:       {loop_rem} ticks remaining (target tick {loop_tgt}) — from docs/loop/AUTOLOOP; the loop STOPS and reports at 0
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
 LAST_WALL_TIME:    {wall}s
 ORACLE_CORPUS:     {sites} sites

@@ -3054,6 +3054,36 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 89 — the loop budget: "run K more ticks" is now a fact on disk, not a context-window string
+
+**TICK SHAPE: instrument.** No engine code changed. The standing directive is "loop autonomously with no
+handback," but "no handback" needs a floor the operator controls without re-typing it into a conversation
+that gets summarised and compacted. So the tick budget is now a **fact on disk** (`docs/loop/AUTOLOOP`:
+`LOOP_UNTIL_TICK=1088`), read mechanically at the top of every tick.
+
+**How it works.** `orient.sh` — the first action of every tick — now runs `autoloop.sh check` before it
+does anything else: while `TICK < LOOP_UNTIL_TICK` it prints the remaining count and continues; when the
+target is reached it exits non-zero and the loop **STOPS and reports** — the one handback that is *by
+design*, because the operator asked for exactly this many ticks. The operator sets it once
+(`./scripts/autoloop.sh set <K>` → target = current + K, or just edit the file) and updates it whenever;
+the loop obeys without being retold. `STATUS.md` shows `LOOP_BUDGET: N ticks remaining` every session.
+
+Set now to **1,000 ticks** (tick 88 → target 1088). This closes the gap the operator named: the number
+lives on disk, survives compaction, and is theirs to change — not a string I have to keep alive in
+context across hundreds of hours of looping.
+
+**Also folded in: tick 88's wall-headless check is reverted.** Tick 88 made the wall build the headless
+(`--no-default-features`) config so a headless-only regression could not pass a green wall. Correct in
+principle, but a third feature configuration thrashed cargo's cache and taxed **every** wall ~350–500s
+(measured: 54s → 417–572s), and the wall runs every tick. CI's `verify-linux` builds the headless config
+authoritatively and is green (#280), and the loop reads CI at the start of each tick — so the division of
+labour is: the wall proves the shipping config in 54s, CI proves headless out-of-band. The actual CI fix
+(gating `diag` behind `spidermonkey`, tick 88) stays; only the expensive wall duplication is removed.
+Verified: wall back to **54s**, green. (Iterative-compile output already lives in `/dev/shm` — incremental
+fragments and, while it existed, the headless check — so local builds rarely touch disk.)
+
+**WIKI:** none — loop-governance mechanism; the dial is `docs/loop/AUTOLOOP`, the logic is `autoloop.sh`.
+
 ## Tick 88 — CI was red because the wall built a different thing than CI did
 
 **TICK SHAPE: instrument.** CI's gating `verify-linux` job had been **failing since tick 84** (four
