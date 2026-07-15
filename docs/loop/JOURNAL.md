@@ -3054,6 +3054,33 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 90 — iterative builds run in RAM by default, so local work rarely touches the platter
+
+**TICK SHAPE: instrument.** No engine code changed. The operator asked that local iterative compiles use
+tmpfs/RAM "such that we almost never need to write a binary to disk, and flush excess as needed." Most of
+the machinery already existed — `ramdisk.sh` symlinks `target/{debug,release}/incremental` into
+`/dev/shm`, and the incremental fragments are the *dominant* write source of an ordinary edit→build→test
+loop — but it ran **reactively**: only inside the wall's `disk >= 88%` reclaim branch. So every build
+*between* walls wrote incrementals to the platter until the disk was nearly full, and only then moved to
+RAM. Backwards.
+
+**The fix.** The RAM reseat is now **unconditional** in the wall (before the build, idempotent, cheap: a
+`mkdir` + a symlink check), so the RAM symlinks are in place for this build and for every iterative build
+after it. Reclaim stays conditional (it deletes the warm debug cache; only the RAM *setup* is
+unconditional). The operator can activate the same setup any time with `./scripts/ramdisk.sh`.
+
+Verified live: `target/debug/incremental` and `target/release/incremental` both resolve into
+`/dev/shm/manuk-build` (3.8 GB in RAM, within the 4 GB cap; 21 GB RAM still free). Disk-hygiene continues
+to flush `target/debug`, old banked builds and stale oracle snapshots when the disk crosses 88%. Net: the
+edit→compile churn lives in RAM, the platter sees only the occasional `.rlib`/binary of a crate that
+actually changed, and the disk stays lean without a human minding it.
+
+This also retires the disk-pressure/wall-speed cascade that dogged the last few ticks: the wall-headless
+experiment (tick 88) filled the disk, tripped the reclaim, which deleted the debug cache and made the wall
+rebuild from cold. With iterative output in RAM and reclaim conditional, that loop is broken.
+
+**WIKI:** none — build hygiene; the mechanism is `scripts/ramdisk.sh`, wired unconditionally in the wall.
+
 ## Tick 89 — the loop budget: "run K more ticks" is now a fact on disk, not a context-window string
 
 **TICK SHAPE: instrument.** No engine code changed. The standing directive is "loop autonomously with no

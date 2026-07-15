@@ -109,17 +109,23 @@ ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; }
 bad()  { printf '  \033[31m✗ %s\033[0m\n' "$1"; FAIL=1; }
 head_() { printf '\n\033[1m%s\033[0m\n' "$1"; }
 
-# Disk hygiene is a gate, not a chore. A full disk is a build failure that looks like a code
-# failure, and this tree grows tens of gigabytes a week.
+# **RAM-based iterative builds, ALWAYS ON (not just when the disk is already full).** The incremental
+# compile fragments — the bulk of what a rebuild rewrites, over and over, during ordinary edit→build→test
+# — belong in `/dev/shm`, so local iteration almost never touches the platter. This used to run only
+# inside the `disk >= 88%` reclaim branch, i.e. *reactively*, which meant every build between walls wrote
+# incrementals to disk until the disk was nearly full. Reseating here, unconditionally and idempotently,
+# means the RAM symlinks are in place before this build AND for every iterative build after it. Cheap
+# (a `mkdir` + symlink check) and it must run BEFORE the compile (a dangling tmpfs symlink fails ENOENT).
+# The operator can activate the same setup any time with `./scripts/ramdisk.sh`.
+./scripts/ramdisk.sh >/dev/null 2>&1 || true
+
+# Disk hygiene is a gate, not a chore. A full disk is a build failure that looks like a code failure, and
+# this tree grows tens of gigabytes a week. RECLAIM is still conditional (it deletes the debug cache, which
+# a warm wall wants to keep) — only the RAM setup above is unconditional.
 PCT=$(df /home 2>/dev/null | awk 'NR==2 {gsub(/%/,""); print $5}')
 if [ -n "${PCT:-}" ] && [ "$PCT" -ge 88 ]; then
   head_ "D · disk (${PCT}% full — reclaiming before the build fails on ENOSPC)"
   bash scripts/disk-hygiene.sh | sed 's/^/  /'
-
-# Ephemeral build output in RAM (METHODOLOGY 10.1). Idempotent, and it must run BEFORE the build:
-# tmpfs does not survive a reboot, so the symlink into it has to be re-pointed or the compile fails
-# on a dangling path. Disk-wear elimination, NOT a speed win — see scripts/ramdisk.sh.
-./scripts/ramdisk.sh >/dev/null 2>&1 || true
 fi
 
 head_ "B · build (workspace)"

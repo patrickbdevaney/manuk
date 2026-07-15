@@ -8,13 +8,13 @@
 > filesystem, git, the crawl output or the verify receipt.
 
 ```
-TICK:              89
+TICK:              90
 LAST_AUDIT_TICK:   81          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
 LAST_SURFACE_AUDIT: 83         (surface audit due every 10 ticks — from docs/loop/SURFACE-AUDIT.md)
 LAST_CONSTITUTION_CHECK: 87     (constitution re-read due every 8 ticks — from docs/loop/CONSTITUTION-CHECK.md; anchors the loop to CONSTITUTION.MD)
-LOOP_BUDGET:       999 ticks remaining (target tick 1088) — from docs/loop/AUTOLOOP; the loop STOPS and reports at 0
+LOOP_BUDGET:       998 ticks remaining (target tick 1088) — from docs/loop/AUTOLOOP; the loop STOPS and reports at 0
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
-LAST_WALL_TIME:    54s
+LAST_WALL_TIME:    55s
 ORACLE_CORPUS:     265 sites
 ORACLE_CRAWLED:    0 (PARTIAL — of 265; this run did not finish, so the hang count is a FLOOR, not a number) sites, 640 clusters  → docs/loop/CLUSTERS.md
 ORACLE_HANGS:      0?   ← Bar 0, on OUR clock (manuk_ms > 30s). Outranks every visual cluster.
