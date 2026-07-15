@@ -87,3 +87,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 93	0286efc	1784103948	2026-07-15T04:25:48-04:00	476	instrument	61	9	227	33	35	81	2387	6484	0	161	0	a sparse wall-time audit: keep the per-tick tax lean without cutting a gate
 94	824a562	1784104185	2026-07-15T04:29:45-04:00	237	instrument	66	6	148	30	35	81	2387	6484	0	161	0	backfill: the crash saga becomes retrievable knowledge, not just journal narrative
 95	5f52a6b	1784105941	2026-07-15T04:59:01-04:00	1756	instrument	54	6	108	31	35	81	2387	6484	0	161	0	ARIA reflection, explored and reverted: the mass-reflector recursion is now a named gate
+96	a33d735	1784116709	2026-07-15T07:58:29-04:00	10768	capability	55	10	180	48	35	81	2387	6484	0	165	0	the `<body onload>` double-fire: one handler, dispatched twice, corrupting every checkLayout test

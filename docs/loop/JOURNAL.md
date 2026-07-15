@@ -3054,13 +3054,69 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
-## Tick 96 — HYPOTHESIS (teed up for a fresh context): the recursion is depth, not re-entrancy
+## Tick 96 — the `<body onload>` double-fire: one handler, dispatched twice, corrupting every checkLayout test
 
-**TICK SHAPE: hypothesis (not yet landed).** This entry sharpens the tick-96 target on disk so whichever
-session takes it — this one after a reload, or one the resurrection daemon launches — starts from confirmed
-facts rather than the saga-prone assumption the wiki warned about.
+**TICK SHAPE: capability (JS lifecycle correctness).** The probe redirected the tick. I set out for the
+stack-quota saga (teed up below, now re-deferred) but ran the discipline first — *measure the boxes before
+theorizing* — and picked the biggest daily-driver layout area, **css-flexbox** (378/6837 ≈ 5.5%), to ask
+WHY it was stuck. The answer was not layout at all.
 
-**What was confirmed this pass (read-only, Bar-0-safe):**
+**The probe chain (each step named the next):**
+1. Flexbox's reachable universe is **368 testharness files** (871 are deferred reftests); **220 of them use
+   `checkLayout`** from `check-layout-th.js`, which reads layout geometry *through the DOM* (offset*/
+   getBoundingClientRect) and compares to `data-expected-*`. Geometry APIs are all present.
+2. `diag` on a checkLayout file: `harness:true, loadFired:true`, but the `<body onload>` bootstrap looked
+   dead. A minimal probe (`_probe_flex.html`) instrumented each link and reported **`onloadCalls:2`** — the
+   body-onload handler fired **twice**.
+3. Traced it to `__fireLoad` (dom_bindings.rs): it calls `g.dispatchEvent(ev)` — which goes through
+   `__fireWindowEvent`, and that **already invokes `g['on'+type]`** (the `onload` property) at line 6805 —
+   and THEN calls `g.onload(ev)` **again** explicitly. Two invocations of the same handler.
+
+**Why it hid for 96 ticks:** the encoding suite (720k subtests) bootstraps from `<body onload>` too, but its
+handlers are *idempotent* and don't call `done()`, so a double-fire is harmless — it just decodes twice.
+`checkLayout` is the opposite: the second fire creates duplicate `test()`s and a second `done()` **after the
+harness already completed**, turning a file that would report clean pass/fails into a harness error. The bug
+was invisible to the crown jewel and fatal to every geometry-assertion suite.
+
+**The fix (one surgical removal):** delete the redundant explicit `g.onload(ev)` in `__fireLoad`; dispatch
+alone now fires the handler exactly once. Verified: probe `onloadCalls` 2 → **1**; encoding sanity
+(30 files) still **55,057 passes, 0 crashes** — the crown jewel is untouched because dispatch still invokes
+onload. Gated by the canonical sweep + the RATCHET (this entry's numbers are filled from that sweep, not an
+ad-hoc run; if flexbox/encoding/any area regressed, the tick is reverted, not shipped).
+
+**Class of the web this unlocks (WEB-PATTERNS):** any page or test that bootstraps from `<body onload>` and
+whose handler is *non-idempotent* — calls `done()`, submits a form, increments a counter, starts a single
+run. That is a large fraction of WPT's layout/geometry suites and of legacy real-world pages.
+
+**THE BIG FINDING — the metric was inflated ~2×, and this tick makes it honest.** The double-fire did not
+merely break checkLayout files; wherever a `<body onload>` handler *created subtests* (encoding decodes and
+asserts; every `check-layout` suite), it created them **twice**, and the harness counted both. Measured
+apples-to-apples on the same release binary: **encoding 110,111 → 55,057 passes = exactly 2.00×**; flexbox
+378/6837 → 220/3594. So the project's headline had been **inflated ~2× for as long as the double-fire
+existed**. The honest whole-suite number is **388,674 / 1,210,437 = 32.11%**, not the 749,793 / 47.5% the
+board showed. Per the operator's explicit call (fix + honest re-baseline), the RATCHET's `WPT:*` marks were
+reset to the honest single-fire values — a documented one-time CORRECTION, not a laundered regression (the
+inflated marks were never real capability; they were double-counting). `bank` only ever raises, so this
+reset was done deliberately and is recorded here and in `RATCHET.tsv.pre-tick96-rebaseline` (kept in scratch).
+The honest board is what every future tick now ratchets up from.
+
+**One Bar 0 surfaced and was closed in the same tick.** The honest sweep flagged `crashes=1` in css-grid —
+reproducible, but only at `--batch 40`, and only across the full 643-file run: `css-grid/layout-algorithm/
+grid-fit-content-percentage.html` runs clean in isolation. It is **batch memory accumulation** (40 heavy
+grid-layout pages retained in one process), the same class the harness already right-sizes for encoding
+(`batch_for` → 4). The pass count is batch-invariant (150 at batch 40 and batch 10), so the fix is to
+right-size the batch: `batch_for` now gives `css/css-grid` a batch of 10 → **crashes=0, same 150 passes**.
+Not hidden, not gamed — measured within the machine's memory budget, exactly as encoding is.
+
+**Method note for the horizon:** this whole tick came from *building the probe before theorizing*. Flexbox
+was "stuck at 5.5%"; the instinct is to blame flex layout. The probe (`diag` + a minimal instrumented page)
+walked load→onload→checkLayout→done and found the break was a **lifecycle double-fire upstream of the
+feature**, and then that the same bug was inflating the crown-jewel metric 2×. The score was lying, and only
+the probe could tell. [[parity-methodology]] [[symptom-names-wrong-organ]]
+
+---
+**DEFERRED (re-teed for a later tick) — the stack-quota / mass-reflector-recursion fix.** Still the gate for
+ARIA reflection + the ~35k reflection backlog. Confirmed facts, kept here so the next taker starts sharp:
 - There is currently **no explicit `JS_SetNativeStackQuota` call** anywhere in `engine/js` — mozjs's
   `Runtime::new` (spidermonkey.rs:200) installs its own default, captured relative to the SP *at that
   point*, which in the tokio/async embedding is buried deep → the guard address sits past the real stack

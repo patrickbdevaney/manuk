@@ -83,6 +83,8 @@
   - L352 · Backfilled from git, and what was deliberately left blank
   - L366 · What it found on its first run, and it is strategic
   - L388 · The one number it refuses to give
+  - L394 · A doubled event handler inflates the WPT count ~2× — the score can lie in your favor
+  - L409 · The batch-size crash class — heavy layout areas OOM a shared process
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -131,6 +133,7 @@
   - L236 · A HANDLE FROM ANOTHER DOCUMENT IS A DEAD BROWSER, not a wrong answer
   - L257 · A detached DOCUMENT is how every sanitizer works — and the moment it exists, you need cycle checks
   - L278 · A DOM that never throws turns a loud caller bug into a silent leak
+  - L292 · <body onload> is window.onload, and it must fire EXACTLY once — dispatch OR explicit, never both
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -313,4 +316,4 @@
   - L112 · How this feeds the priority ledger
 
 ---
-252 sections across 14 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+255 sections across 14 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

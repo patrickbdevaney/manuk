@@ -390,3 +390,27 @@ changes how ticks get allocated. It could not have been made without this ledger
 A finish line. The rate is measured on the `dom/` subset (6,418 subtests); the far horizon is ~50,000
 across all of WPT, **which this project has never run**. Multiplying a subset's rate up to the whole is not
 an extrapolation, it is a category error dressed as arithmetic — so the projection is not made.
+
+## A doubled event handler inflates the WPT count ~2× — the score can lie in your favor
+
+When a `<body onload>` (or any) handler that **creates subtests** fires twice, the harness counts the
+subtests twice. This is not a crash and not a visible failure — it silently **inflates** the pass count.
+Tick 96 found `__fireLoad` invoking `window.onload` via both `dispatchEvent` and an explicit call; measured
+same-binary, encoding went **110,111 → 55,057 = exactly 2.00×** once fixed, and the whole-suite headline
+dropped from 749,793 / 47.5% to the honest **388,674 / 32.11%**.
+
+**The lesson:** a rising WPT number is not self-evidently real. A double-dispatched lifecycle event, a
+retried async test, a harness that re-runs a file — each can inflate. Trust the number only when the
+**mechanism** that produces it is understood. When re-basing a metric downward to correct an inflation, do
+it as a **documented one-time correction** with the prior marks saved — the ratchet's `bank` only ever
+raises, precisely so a real regression can't be laundered; an honesty correction must be explicit, not
+sneaked through.
+
+## The batch-size crash class — heavy layout areas OOM a shared process
+
+The sweep runs N files per process (`batch_for`) to amortize runtime startup. **Heavy layout areas**
+(css-grid: full runtime + DOM + grid tree per file) retain enough memory that a 40-file process is killed —
+a `crashes=1` that is a **batch-SIZE artifact, not an engine bug**: the file runs clean in isolation and the
+pass count is **batch-invariant** (css-grid 150 at batch 40 and batch 10). Diagnosis: does it reproduce at
+`--batch 1`? If no, it is accumulation. Fix: right-size `batch_for` for that area (encoding=4, css-grid=10),
+exactly as encoding already is — never hide it by dropping the area or ignoring the crash. [[wpt-horizon]]

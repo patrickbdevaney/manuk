@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **88** | ticks 1–95 |
-| median tick cycle | **18m** | 87 intervals |
+| ticks landed | **89** | ticks 1–96 |
+| median tick cycle | **18m** | 88 intervals |
 | median, last 10 | **15m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.91** | 95.9h elapsed |
-| median verify wall | **2m** | 27 ticks |
-| wall trend | 39s → 61s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.89** | 98.9h elapsed |
+| median verify wall | **2m** | 28 ticks |
+| wall trend | 39s → 55s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **35**
-* **✅ rows in the capability ledger**: 144 → **161**
+* **✅ rows in the capability ledger**: 144 → **165**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**38 of 88 ticks** (43%) moved a
+**39 of 89 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -85,8 +85,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **38** capability ticks, median cycle **18m**
-* median diff per tick: **+288 / −12** lines across 8 files
+* **39** capability ticks, median cycle **18m**
+* median diff per tick: **+285 / −13** lines across 8 files
 
 ## Every tick
 
@@ -180,5 +180,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **93** | 2026-07-15 04:25 | 8m | instrument | 61s | +227/−33 | 35 | 81 | 36.8% · | a sparse wall-time audit: keep the per-tick tax lean without cutting a gate |
 | **94** | 2026-07-15 04:29 | 4m | instrument | 66s | +148/−30 | 35 | 81 | 36.8% · | backfill: the crash saga becomes retrievable knowledge, not just journal narrative |
 | **95** | 2026-07-15 04:59 | 29m | instrument | 54s | +108/−31 | 35 | 81 | 36.8% · | ARIA reflection, explored and reverted: the mass-reflector recursion is now a named gate |
+| **96** | 2026-07-15 07:58 | 3.0h | capability | 55s | +180/−48 | 35 | 81 | 36.8% · | the `<body onload>` double-fire: one handler, dispatched twice, corrupting every checkLayo |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

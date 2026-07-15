@@ -288,3 +288,34 @@ surfaces somewhere else**:
 
 > **Silently accepting an impossible tree is worse than refusing it.** The corruption does not surface where
 > it was created. It surfaces later, somewhere else, looking like something unrelated.
+
+## `<body onload>` is `window.onload`, and it must fire EXACTLY once — dispatch OR explicit, never both
+
+`<body onload="…">` migrates to the Window: the inline-handler wiring sets `g.onload = fn`. Firing `load`
+then went through TWO paths in `__fireLoad` (dom_bindings.rs) that **both** reached that handler:
+
+1. `g.dispatchEvent(ev)` → `__fireWindowEvent(type, ev)`, which runs the `addEventListener('load')` list
+   **and then reads `g['on' + type]` and calls it** (dom_bindings.rs ~6805). So dispatch alone already
+   invokes `window.onload`.
+2. an explicit `if (typeof g.onload === 'function') g.onload(ev)` immediately after.
+
+Result: **every `<body onload>` handler fired twice.** The tell in the `diag` instrument is `onloadCalls:2`.
+
+**Why it survived ~96 ticks — the failure mode is asymmetric by handler idempotency:**
+
+| Handler style | Double-fire effect | Example |
+|---|---|---|
+| Idempotent, no `done()` | harmless — does the same work twice | encoding suite (decode + assert), 720k subtests — **why the crown jewel never flagged it** |
+| Non-idempotent / calls `done()` | **fatal** — second run creates duplicate `test()`s and a second `done()` *after the harness completed* → the whole file reports a harness error instead of its real pass/fails | every `check-layout-th.js` suite (css-flexbox et al.), form submits, single-run bootstraps |
+
+**Fix:** dispatch is the single source of truth — remove the explicit `g.onload(ev)` from `__fireLoad`.
+Dispatch still invokes the property handler, so `<body onload>` (and `window.onload = …`, and
+`addEventListener('load', …)`) each fire once. **Verification that this is safe, not just smaller:** the
+probe's `onloadCalls` drops 2 → 1 AND the encoding sanity holds (55k passes / 0 crashes) — proving dispatch
+alone still bootstraps the handler.
+
+**The reusable lesson:** an event handler reachable from *both* a dispatch path and an explicit call is a
+latent double-fire. When a metric (flexbox 5.5%) won't move, the cause is often not the feature under test
+(flex layout) but a **lifecycle bug upstream of it** that makes the test never report honestly. Build the
+probe (`diag` + a minimal instrumented page); measure which link in load→onload→checkLayout→done breaks;
+do not theorize from the score. [[js-engine]]

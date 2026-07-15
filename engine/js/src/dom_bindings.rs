@@ -6226,11 +6226,15 @@ const WINDOW_PRELUDE: &str = r#"
             g.__setReadyState('complete');
             var ev;
             try { ev = new Event('load'); } catch (e) { ev = { type: 'load' }; }
+            // `g.dispatchEvent` → `__fireWindowEvent` ALREADY invokes both the `addEventListener('load')`
+            // listeners AND the `g.onload` property handler (it reads `g['on'+type]`). So a SEPARATE
+            // explicit `g.onload(ev)` here fires `<body onload>` a SECOND time — harmless for an
+            // idempotent encoding handler, but fatal for a `checkLayout`/`done()` test: the second run
+            // creates duplicate subtests AFTER `done()` and the whole file reports as a harness error.
+            // That double-fire was the dominant failure across every area whose tests bootstrap from
+            // `<body onload>` (css-flexbox's checkLayout suite among them). Dispatch once, and only once.
             try { g.dispatchEvent(ev); } catch (e) { g.__reportError && g.__reportError(e); }
             try { document.dispatchEvent(ev); } catch (e) {}
-            if (typeof g.onload === 'function') {
-                try { g.onload(ev); } catch (e) { g.__reportError && g.__reportError(e); }
-            }
             // The document is done — NOW the virtual clock may run ahead. The delayed timers the page
             // armed during load become eligible, in due order, BEHIND the `load` they were always
             // meant to follow. (See `__timeBudget` in event_loop.rs: a clock that outruns the

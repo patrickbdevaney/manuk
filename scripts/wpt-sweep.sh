@@ -51,6 +51,11 @@ TOT_P=0; TOT_T=0; TOT_C=0; TOT_D=0
 batch_for() {
   case "$1" in
     encoding|encoding/*) echo 4 ;;
+    # Heavy layout areas retain a lot of per-file memory (full runtime + DOM + grid/flex layout tree), and
+    # a 40-file process accumulates enough to be killed — a batch-SIZE artifact, not an engine crash: the
+    # SAME pass count (css-grid 150) measures crash-free at a smaller batch. Right-size it, exactly as
+    # encoding already is. (Confirmed on css-grid at tick 96; add siblings here if they surface the same.)
+    css/css-grid|css/css-grid/*) echo 10 ;;
     *) echo 40 ;;
   esac
 }
