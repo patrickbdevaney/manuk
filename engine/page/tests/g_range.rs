@@ -94,6 +94,18 @@ const HTML: &str = r##"<!doctype html><html><body>
   sr.surroundContents(em);
   R.push('surround:' + s.innerHTML);
 
+  // ── 9. createContextualFragment — how sanitizers and jQuery.parseHTML turn a string into nodes.
+  var cr = document.createRange();
+  cr.selectNodeContents(document.body);
+  var f = cr.createContextualFragment('<p class="ccf">hi</p><span>x</span>');
+  R.push('ccfKids:' + f.childNodes.length);                      // 2 top-level nodes
+  R.push('ccfType:' + (f.nodeType));                             // 11 = DocumentFragment
+  R.push('ccfText:' + f.textContent);                            // "hix"
+  R.push('ccfTag:' + f.firstChild.nodeName.toLowerCase());       // "p"
+  var threw = false;
+  try { cr.createContextualFragment(); } catch (e) { threw = (e.name === 'TypeError'); }
+  R.push('ccfThrow:' + threw);                                   // required arg → TypeError
+
   document.getElementById('out').textContent = R.join(' ');
 </script></body></html>"##;
 
@@ -143,6 +155,19 @@ fn range_compares_extracts_across_structure_and_puts_things_back() {
         (
             "surround:<em>wrap</em> me",
             "surroundContents — this is how every \"bold the selection\" button in the world works",
+        ),
+        (
+            "ccfKids:2",
+            "createContextualFragment parses HTML into a DocumentFragment — sanitizers and \
+             jQuery.parseHTML route through it; it was entirely absent",
+        ),
+        ("ccfType:11", "…and the result is a DocumentFragment (nodeType 11), not a stray element"),
+        ("ccfText:hix", "…carrying the parsed subtree's text"),
+        ("ccfTag:p", "…with the elements actually parsed, not stringified"),
+        (
+            "ccfThrow:true",
+            "calling it with no argument is a TypeError (a required WebIDL arg), not a parse of \
+             the string \"undefined\"",
         ),
     ] {
         assert!(

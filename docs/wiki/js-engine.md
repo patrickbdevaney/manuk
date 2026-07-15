@@ -541,3 +541,24 @@ stack-pointer buried deep in the async call stack; the durable fix is to set `JS
 the **actual thread-stack bounds** (`pthread_getattr_np` + `pthread_attr_getstack`, minus a safety
 margin), so the limit is real regardless of call depth. **That is the prerequisite tick; ARIA rides on
 it.** Reverted rather than shipped, because a Bar 0 crash is never a trade for a capability.
+
+## A reused SpiderMonkey runtime across many pages SIGSEGVs — a cross-file reflector/rooting UAF (open Bar-0)
+
+The WPT batch harness runs many files in ONE process, reusing the process-global runtime (thread-local
+`ENGINE`/`RUNTIME`, `ManuallyDrop`, tick-62) while making a fresh `Page`/PageContext per file. After
+~20–40 accumulated pages, a later page (repro: `css/css-flexbox/stretched-child-shrink-on-relayout.html`,
+which exercises the incremental **relayout** path) **SIGSEGVs (exit 139)**. It is clean in isolation
+(fresh runtime) — so this is **cross-file heap corruption: a dangling reflector / unrooted `*mut JSObject`
+that survives one page's teardown and is touched during the next page's GC or layout.** This is the
+H0.4 "largest unsafe surface" (GC rooting across FFI), the same class as the tick-84 saga.
+
+**Properties that decide how to fix it:** it is a **Heisenbug** — heap-layout/allocator-timing sensitive,
+reliably reproducing only under memory pressure, and **it disappears under `gdb`** (perturbed heap), so
+gdb yields no usable backtrace. **Use ASAN** (`-Zsanitizer=address` + an ASAN mozjs, or `valgrind`) which
+catches the free-at-source regardless of layout — not gdb. Reproduce: `manuk-wpt wpt css/css-flexbox
+--child --out /tmp/x --limit 40` (exit 139) vs `--limit 20` (exit 0); bisect predecessors to a minimal
+pair, then find the reflector whose lifetime outlives its arena node across the per-page teardown.
+
+**Until fixed, the sweep tolerates it HONESTLY via isolation-retry** (the culprit is re-run alone and
+counted as `ACCUM`, not a per-page `CRASH` — see [[conformance-and-oracles]]); the UAF itself stays an
+open Bar-0. Do NOT start this fix at the tail of a maxed context. [[interactive-js-architecture]]

@@ -357,3 +357,22 @@ types) was all of this at once; the fix moved **dom 2498 → 2739 (+241)**, cras
 Implementation: `engine/js/src/dom_bindings.rs` `__mkClassList` — a `raw()` (attribute string) separate
 from `read()` (deduped ordered set via `Object.create(null)` so a `__proto__` token can't corrupt the
 seen-map), and `toggle` returns without `write()` on the no-op branches. [[js-engine]]
+
+## `Range.createContextualFragment` is the fragment parser you already have, wearing a Range
+
+`range.createContextualFragment(html)` runs the HTML fragment-parsing algorithm **in the context of the
+range's start node** and returns a `DocumentFragment`. It is how sanitizers, `jQuery.parseHTML`, and every
+"turn this string into nodes then insert them" idiom work — so its absence silently breaks that whole
+class, and the failures land as *unhandled promise rejections* two callbacks downstream, not as a clean
+"method missing".
+
+The implementation is deliberately NOT a new parser: it reuses `innerHTML` (which is `set_inner_html`, the
+same fragment parser `insertAdjacentHTML` calls) into a scratch element of the **context tag** (the start
+element, with the root `<html>` element falling back to `<body>` per the algorithm's special case), then
+moves the children into a `createDocumentFragment()`. One parser, two entry points.
+
+Two spec details that are easy to miss: the `fragment` argument is **required WebIDL** — calling with zero
+arguments is a `TypeError`, *not* a parse of the string `"undefined"` (distinguish via `arguments.length`,
+not `html === undefined`); and the result's `nodeType` must be **11** (a fragment), not a stray wrapper
+element. `domparsing/createContextualFragment.html` 2 → 34/35 (the last is `<script>` execution on
+insertion, a separate capability); the area moved **149 → 182 (+33)**, crash-free. [[js-engine]]

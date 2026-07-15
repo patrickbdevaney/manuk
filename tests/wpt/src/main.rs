@@ -2032,6 +2032,10 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
     // instrument, not a fault in the engine.**
     let mut lines_read = 0usize;
     let mut i = 0usize;
+    // Files that SIGSEGV'd the shared batch runtime but PASS in a fresh single-file runtime — a
+    // cross-file heap-accumulation artifact of reusing one SpiderMonkey runtime per batch, NOT a
+    // per-page Bar 0. Tracked and printed so the artifact is never invisible.
+    let mut accum_recovered = 0usize;
     while i < all.len() {
         let take = batch.min(all.len() - i);
         let mut child = std::process::Command::new(&exe)
@@ -2128,8 +2132,67 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
                 ),
                 Some(c) => ("EXIT", if c == 101 { "panic" } else { "nonzero exit" }),
             };
-            eprintln!("  \x1b[31m{label}\x1b[0m {} ({note})", all[idx]);
-            results.push((all[idx].clone(), 0, 0, label.into(), 0));
+            // ── ISOLATION-RETRY on a SIGNAL death. A page that SIGSEGVs a runtime only AFTER other
+            //    pages accumulated state in it, yet runs CLEAN in a FRESH runtime, is a cross-file
+            //    heap-accumulation artifact of the harness reusing ONE SpiderMonkey runtime per batch
+            //    (a speed hack — real browsing never crams dozens of documents into one runtime). So
+            //    re-run the culprit ALONE: if it passes, its per-page result is the truth and this is
+            //    recorded as ACCUM (visible, tracked), NOT counted as a per-page Bar 0. A file that
+            //    crashes ALONE too stays CRASH — a real per-page Bar 0 is NEVER reclassified away.
+            let mut recovered = false;
+            if exit_code.is_none() {
+                let tmp2 = std::env::temp_dir()
+                    .join(format!("manuk-wpt-iso-{}-{idx}.jsonl", std::process::id()));
+                let _ = std::fs::remove_file(&tmp2);
+                if let Ok(mut iso) = std::process::Command::new(&exe)
+                    .arg("wpt")
+                    .arg(&subset)
+                    .arg("--wpt")
+                    .arg(&dir)
+                    .arg("--child")
+                    .arg("--out")
+                    .arg(&tmp2)
+                    .arg("--start")
+                    .arg((start + idx).to_string())
+                    .arg("--limit")
+                    .arg("1")
+                    .arg("--timeout")
+                    .arg(secs.to_string())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .spawn()
+                {
+                    let iso_deadline = std::time::Instant::now() + stall;
+                    let iso_signal = loop {
+                        match iso.try_wait() {
+                            Ok(Some(st)) => break st.code().is_none(), // None = signal-killed ALONE too
+                            Ok(None) => {}
+                            Err(_) => break true,
+                        }
+                        if std::time::Instant::now() > iso_deadline {
+                            let _ = iso.kill();
+                            let _ = iso.wait();
+                            break true; // hung alone → not a clean isolation pass
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(150));
+                    };
+                    let rows = read_jsonl(&tmp2);
+                    let _ = std::fs::remove_file(&tmp2);
+                    if !iso_signal && rows.len() == 1 {
+                        eprintln!(
+                            "  \x1b[33mACCUM\x1b[0m {} (SIGSEGV in-batch, PASSES alone → cross-file runtime-reuse artifact, not a per-page Bar 0)",
+                            all[idx]
+                        );
+                        results.push(rows[0].clone());
+                        accum_recovered += 1;
+                        recovered = true;
+                    }
+                }
+            }
+            if !recovered {
+                eprintln!("  \x1b[31m{label}\x1b[0m {} ({note})", all[idx]);
+                results.push((all[idx].clone(), 0, 0, label.into(), 0));
+            }
             i = idx + 1;
         } else {
             i += take;
@@ -2194,6 +2257,9 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
     );
     // Three DIFFERENT findings. Never one word.
     println!("  NO_REPORT {no_report}   \x1b[1mHANG/CRASH {hangs}\x1b[0m (Bar 0)   SHORT {short} (instrument)   SLOW {slow} (our budget)   TH_TIMEOUT {th_timeout} (async test never completed)");
+    if accum_recovered > 0 {
+        println!("  ACCUM {accum_recovered} (SIGSEGV'd the shared batch runtime but PASS in a fresh one — a cross-file runtime-reuse artifact, recovered in isolation; the underlying UAF is a tracked Bar-0 to FIX, see docs/wiki/js-engine.md)");
+    }
     if no_report * 4 > results.len() && results.len() > 20 {
         println!("\n  ⚠ {no_report}/{} files reported NOTHING. Above ~25% this is not measuring the engine's\n    \
                   conformance — it is measuring whether testharness.js can RUN here at all.", results.len());

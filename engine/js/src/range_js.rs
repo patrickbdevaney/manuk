@@ -222,6 +222,34 @@ pub const RANGE_JS: &str = r#"
     return cmp(p, i, this._ec, this._eo) < 0 && cmp(p, i + 1, this._sc, this._so) > 0;
   };
 
+  // `createContextualFragment(html)` — the fragment-parsing algorithm run in the CONTEXT of the range's
+  // start node, returning a DocumentFragment. Sanitizers, `jQuery.parseHTML`, and every "turn this HTML
+  // string into nodes and insert them" idiom route through it. Reuses `innerHTML` (the fragment parser)
+  // + `createDocumentFragment` + `appendChild` — the same pieces `insertAdjacentHTML` uses natively, so
+  // there is no second parser to keep in sync.
+  Range.prototype.createContextualFragment = function (html) {
+    // `fragment` is a required WebIDL argument — calling with none is a TypeError, not a parse of
+    // the string "undefined".
+    if (arguments.length < 1) {
+      throw new TypeError("Range.createContextualFragment requires 1 argument, but only 0 were passed");
+    }
+    html = String(html);
+    var node = this._sc, el = null;
+    if (node) {
+      if (node.nodeType === 1) el = node;
+      else if (node.parentNode && node.parentNode.nodeType === 1) el = node.parentNode;
+    }
+    var doc = (el && el.ownerDocument) || (node && node.ownerDocument) || document;
+    // The context element is the start element, except the root <html> element falls back to <body>
+    // (the algorithm's explicit special case). No element context → <body>.
+    var name = (el && el.nodeName && el.nodeName.toLowerCase() !== 'html') ? el.nodeName : 'body';
+    var scratch = doc.createElement(name);
+    scratch.innerHTML = html;
+    var frag = doc.createDocumentFragment();
+    while (scratch.firstChild) frag.appendChild(scratch.firstChild);
+    return frag;
+  };
+
   // Is `node` FULLY contained — both its boundaries strictly inside the range?
   function contained(range, node) {
     var p = parentOf(node);

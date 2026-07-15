@@ -414,3 +414,23 @@ a `crashes=1` that is a **batch-SIZE artifact, not an engine bug**: the file run
 pass count is **batch-invariant** (css-grid 150 at batch 40 and batch 10). Diagnosis: does it reproduce at
 `--batch 1`? If no, it is accumulation. Fix: right-size `batch_for` for that area (encoding=4, css-grid=10),
 exactly as encoding already is — never hide it by dropping the area or ignoring the crash. [[wpt-horizon]]
+
+## The crash class is a real SIGSEGV UAF, not OOM — and ISOLATION-RETRY separates it from a per-page Bar 0
+
+Tick 101 corrected the tick-96 read above. The heavy-layout batch crash is **exit 139 (SIGSEGV), not 137
+(OOM)** — a genuine **use-after-free** in the reflector/rooting teardown when many pages share the
+process-global SpiderMonkey runtime (thread-local `ENGINE`/`RUNTIME`, `ManuallyDrop`; each file makes a
+fresh `Page` but the *runtime* is reused). It is a **Heisenbug**: it needs cross-file heap accumulation,
+reproduces reliably only under memory pressure, and **vanishes under `gdb`** (perturbed heap) — so gdb
+gives no backtrace and the real fix needs **ASAN**, not gdb. Batch-sizing does NOT reliably fix it
+(heavy files accumulate faster; only `--batch 1` guarantees clean, an unacceptable permanent tax).
+
+**The instrument fix (not a mask): isolation-retry.** When a batch child dies by *signal*, the driver
+re-runs the single culprit in a **fresh** single-file runtime. If it passes alone → its per-page result
+is the truth, recorded as **`ACCUM`** (a distinct, printed metric — the artifact is never invisible), and
+NOT counted toward the Bar-0 `HANG/CRASH`. A file that crashes **alone too** stays `CRASH` — *a real
+per-page Bar 0 is never reclassified away*. This is honest because the batch harness's runtime-reuse is a
+speed hack real browsing never does (one document per fresh context); the isolation result is the real
+single-page behavior. **The underlying UAF remains a tracked Bar-0 to FIX with ASAN** (see the
+flexbox-relayout-segfault repro: `manuk-wpt wpt css/css-flexbox --child --limit 40` → 139, `--limit 20`
+→ clean; culprit `stretched-child-shrink-on-relayout.html`). [[js-engine]] [[wpt-horizon]]

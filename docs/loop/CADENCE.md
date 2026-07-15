@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **93** | ticks 1–100 |
-| median tick cycle | **19m** | 92 intervals |
+| ticks landed | **94** | ticks 1–101 |
+| median tick cycle | **19m** | 93 intervals |
 | median, last 10 | **34m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.90** | 102.0h elapsed |
-| median verify wall | **68s** | 32 ticks |
+| **ticks per hour** | **0.90** | 103.4h elapsed |
+| median verify wall | **66s** | 33 ticks |
 | wall trend | 39s → 60s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **36**
-* **✅ rows in the capability ledger**: 144 → **177**
+* **✅ rows in the capability ledger**: 144 → **180**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**43 of 93 ticks** (46%) moved a
+**43 of 94 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -86,7 +86,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **43** capability ticks, median cycle **19m**
-* median diff per tick: **+262 / −14** lines across 8 files
+* median diff per tick: **+267 / −15** lines across 8 files
 
 ## Every tick
 
@@ -185,5 +185,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **98** | 2026-07-15 09:46 | 40m | capability | 55s | +119/−44 | 35 | 81 | 36.8% · | fixed the margin-box extent bug (correct, verified); and the strategic finding that CSS la |
 | **99** | 2026-07-15 10:40 | 54m | capability | 60s | +262/−72 | 35 | 81 | 36.8% · | the attribute-selector case flag (`[attr=val i]`) was stripped, not applied (+117 css/sele |
 | **100** | 2026-07-15 11:02 | 22m | capability | 5m | +231/−41 | 36 | 81 | 36.8% · | `classList` was deduped-blind and rewrote the attribute on no-ops (+241 dom, ratchet up, c |
+| **101** | 2026-07-15 12:26 | 85m | instrument | 51s | +313/−36 | 36 | 81 | 36.8% · | isolation-retry unmasks a cross-file UAF as an artifact, unblocking `Range.createContextua |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

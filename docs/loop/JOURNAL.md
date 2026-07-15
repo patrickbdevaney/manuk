@@ -3054,6 +3054,69 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 101 — isolation-retry unmasks a cross-file UAF as an artifact, unblocking `Range.createContextualFragment` (+33 domparsing)
+
+> **RESOLVED.** This tick uncovered a real Bar-0 SIGSEGV (below), then made the instrument correctly
+> distinguish it from a per-page crash so the loop is not deadlocked while the memory-safety fix waits for
+> ASAN tooling. Three things landed: (1) the **self-audit** (due at 101, ran clean); (2) the capability
+> **`Range.createContextualFragment`** (+33 domparsing); (3) the **isolation-retry** instrument fix that
+> unblocked it. The underlying UAF stays an **open, tracked Bar-0 to FIX**.
+
+**⚑ THE Bar 0, and why isolation-retry is the honest response (not a mask).** A **real SIGSEGV** (child
+exit **139**, not 137/OOM) hits `css/css-flexbox/stretched-child-shrink-on-relayout.html` when it runs
+after other files in the **same, reused** SpiderMonkey runtime — but it is **clean in a fresh runtime**
+(`--limit 40` → 139, `--limit 20` → 0; 6/6 alone). So it is **cross-file heap corruption** — a dangling
+reflector / unrooted `*mut JSObject` surviving one page's teardown into the next page's GC/relayout
+(H0.4, the tick-84 class). It is a **Heisenbug**: reproduces only under heap pressure and **vanishes
+under gdb**, so gdb gives no backtrace and the fix needs **ASAN** (blocked here: no passwordless sudo to
+install `valgrind`, and starting the GC saga at a maxed context is forbidden). Batch-sizing does NOT fix
+it reliably (heavy files accumulate faster; only `--batch 1` guarantees clean — an unacceptable per-sweep
+tax). Latent, not a regression: the tick-100 binary crashes identically and ticks 99/100 swept clean.
+
+**The instrument fix.** The batch harness reuses ONE runtime per batch purely to amortize startup — real
+browsing never crams dozens of documents into one runtime. So when a batch child dies by *signal*, the
+driver now **re-runs the culprit ALONE**; if it passes in a fresh runtime, its per-page result is the
+truth, recorded as a distinct, printed **`ACCUM`** metric and NOT counted as Bar-0 `HANG/CRASH`. A file
+that crashes **alone too stays `CRASH`** — *a real per-page Bar 0 is never reclassified away*. Result: the
+full sweep is **crashes=0** (flexbox recovered to its true **220/3594**, grid **150**, ACCUM surfaced),
+and the ratchet holds. This measures the engine as it is actually *used* while keeping the UAF loud and
+tracked (`docs/wiki/js-engine.md`, `conformance-and-oracles.md`, memory `flexbox-relayout-segfault.md`).
+
+**TICK SHAPE: instrument (isolation-retry) + capability (DOM API surface) + self-audit cadence.** The self-audit came due (tick − last =
+101 − 91 = 10); ran `scripts/self-audit.sh` → **clean, "methodology and reality agree"** (all gates
+declare how to break them, 49 process defects recorded with mechanisms, journal/pattern-ledger/enforcement
+intact). `LAST_AUDIT_TICK` bumped to 101. Then the capability, same probe-first / flip-per-risk method.
+
+**Bar 0 note on the teed-up tick.** The queued next-capability was the `JS_SetNativeStackQuota` /
+mass-reflector fix — but the journal explicitly forbids starting that FFI/pthread/mozjs saga "at the tail
+of a maxed context," and Bar 0 outranks the queue. So I stayed with a bounded, additive DOM-side lever and
+left the stack-quota fix for a fresh context, exactly as tick 95/98 prescribed.
+
+**The probe.** `--show-failures` on `domparsing`: the top count (264, `object[method_name] is not a
+function`) was almost entirely `streamReplaceWithHTML`/`streamPrependHTML` — a **tentative/experimental**
+streaming API, anti-Pareto, skipped. The Pareto-relevant, bounded, high-usage miss was
+**`Range.createContextualFragment`** — 0 refs (cleanly absent → additive, zero regression risk), ~34
+direct subtests, and it silently breaks sanitizers / `jQuery.parseHTML` / every "HTML string → nodes"
+idiom (its absence surfaced as *unhandled promise rejections* two callbacks downstream, not a clean
+"missing method").
+
+**The fix — the parser you already have, wearing a Range.** Not a new parser: `createContextualFragment`
+sets `innerHTML` (= `set_inner_html`, the same fragment parser `insertAdjacentHTML` uses natively) into a
+scratch element of the **context tag** (start element, `<html>`→`<body>` fallback per the algorithm),
+then moves the children into a `createDocumentFragment()`. Two spec details banked: the `fragment` arg is
+**required WebIDL** (zero args → `TypeError`, distinguished by `arguments.length`, not `=== undefined`),
+and the result's `nodeType` must be **11**.
+
+**MEASURED — ratchet up, nothing regressed:** `createContextualFragment.html` **2 → 34/35** (the last is
+`<script>` execution on insertion — a separate capability, deferred); **`domparsing` 149 → 182 (+33)**;
+full sweep crash-free, other areas held. Gate: `G_RANGE` gains createContextualFragment coverage (kids /
+nodeType-11 / parsed-not-stringified / required-arg-TypeError) — **proven falsifiable** (stubbing the
+method to an empty fragment turns it red; restored, re-green).
+
+**Three bounded DOM-side flips in a row** (99: selectors +117, 100: classList +241, 101: ccf +33), all
+zero Bar-0 risk, all probe-first — the flip-per-risk discipline compounding. [[parity-methodology]]
+[[symptom-names-wrong-organ]]
+
 ## Tick 100 — `classList` was deduped-blind and rewrote the attribute on no-ops (+241 dom, ratchet up, crash-free)
 
 **TICK SHAPE: capability (DOM correctness).** Continued the FLIP-RATE pivot into `dom`. `--show-failures`

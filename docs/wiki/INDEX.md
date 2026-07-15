@@ -85,6 +85,7 @@
   - L388 · The one number it refuses to give
   - L394 · A doubled event handler inflates the WPT count ~2× — the score can lie in your favor
   - L409 · The batch-size crash class — heavy layout areas OOM a shared process
+  - L418 · The crash class is a real SIGSEGV UAF, not OOM — and ISOLATION-RETRY separates it from a per-page Bar 0
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -137,6 +138,7 @@
   - L292 · <body onload> is window.onload, and it must fire EXACTLY once — dispatch OR explicit, never both
   - L323 · offsetWidth/Height/Top/Left, client*, scroll{Width,Height} are integers — scrollTop/Left are not
   - L337 · classList is an ordered SET, and a no-op operation must not rewrite the attribute
+  - L361 · Range.createContextualFragment is the fragment parser you already have, wearing a Range
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -221,6 +223,7 @@
   - L471 · A node id is unique only WITHIN its arena — so a reflector must resolve against its OWN document
   - L498 · A per-arena identity cache must not CLOBBER the shared __nodes — it breaks event dispatch silently
   - L511 · Mass reflector access + the reflection layer can overflow the C stack, and SpiderMonkey won't catch it
+  - L545 · A reused SpiderMonkey runtime across many pages SIGSEGVs — a cross-file reflector/rooting UAF (open Bar-0)
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -321,4 +324,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-260 sections across 14 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+263 sections across 14 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
