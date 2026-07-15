@@ -110,3 +110,34 @@ happened at Audit #1 and the reconciliation confirms they stuck. The next real m
 from measuring the unmeasured WPT areas (the aperture), not from the Interop list, which we now cover.
 
 **Next audit due: tick 103.**
+
+---
+
+## Audit #3 — tick 103 (2026-07-15)
+
+**Method:** the Interop-2026 web reconciliation was done at Audit #1 (tick 83) and re-confirmed current at
+Audit #2 (tick 93, ten ticks ago) — no vendor-named focus area is missing from `CONSTELLATION.tsv`. This
+cycle audits the other half the protocol names: **the measured aperture vs. the checked-out surface**,
+from the tree.
+
+**Finding — the aperture is bounded by a NARROW checkout, not just by what the sweep ranks.** The sweep
+measures ~16 areas, but the WPT checkout holds only **9 `css-*` subtrees** (flexbox, grid, sizing, fonts,
+text, overflow, transforms, ui, backgrounds) + dom / html/dom / domparsing / url / encoding. The
+high-usage subtrees **`css-values`, `css-position`, `css-display`, `css-color`, `css-cascade`,
+`css-writing-modes`, and `html/semantics` / `html/canvas` are not checked out at all** — so they score an
+invisible zero, the exact blindness §VI.3 warns about. This is the standing tee-up from Audit #2 ("the
+next real map-expansion comes from measuring the unmeasured areas"), now made concrete: it is a
+**`wpt-setup.sh` checkout expansion**, not an Interop-list gap.
+
+**What we had been wrong about (mild):** the recent run of web-API-surface ticks (99–103) has been mining
+the *measured* areas, and the clean single-mechanism wins there are visibly thinning (tick 102 neutral;
+`appearance` declined as tail/supplement). That thinning is not "the frontier is done" — it is "the
+frontier we can SEE is thinning." The unopened css/html subtrees are almost certainly where the next
+large, usage-weighted mass sits, unranked.
+
+**Steer (added to §VI.4 step 1):** a near-term tick should expand the WPT checkout to add
+`css-values`/`css-position`/`css-display`/`css-color` + `html/semantics`, re-sweep, and let the histogram
+rank the newly-visible mass — before assuming the measured areas are the whole board. No capability added
+or corrected here (a checkout expansion is its own tick); the map (`CONSTELLATION.tsv`) remains current.
+
+**Next audit due: tick 113.**

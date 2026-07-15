@@ -271,3 +271,19 @@ makes every `atBottom` check false forever.
 Non-scroll-containers fall back to their own box for `clientHeight`/`scrollHeight` — a plain `<div>` still has
 a `clientHeight`, and returning zero for every ordinary element would be a far bigger regression than the bug
 being fixed.
+
+## `document.elementFromPoint(x, y)` bridges the layout-rect snapshot, not a second hit-tester
+
+A genuinely missing DOM API (`css-transforms` alone: 84 `is not a function` failures; also drag-and-drop,
+tooltips, custom controls). Implemented over the binding's existing `LAYOUT_RECTS_PTR` snapshot: among
+laid-out **element** boxes containing the client point, return the **deepest** — smallest border-box area,
+later document order on a tie (children paint over their parents). A miss, or a non-finite/absent
+coordinate, returns `null` (CSSOM-View). Registered on both document setups; wrapped via
+`return_node_or_null` (the same reflector path as `querySelector`).
+
+**Honest bounds, in the code and stated up front:** the rects are **pre-transform**, so a `transform`ed
+hit area isn't yet accounted for, and scroll offset is assumed zero (client ≈ layout coords for an
+unscrolled page). Even so it moved css-transforms 20 → 45 (+25) — the tests whose coords fall in the
+untransformed box. Transform-aware hit-testing (apply the matrix to the box → point-in-quad) is the
+follow-on for the remaining transformed cases. It reuses the SAME geometry the a11y `hit_test` uses, so
+the agent surface and page JS agree on what is at a point. [[dom-semantics]]

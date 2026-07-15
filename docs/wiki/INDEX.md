@@ -183,6 +183,7 @@
   - L230 · The worse bug underneath
   - L245 · How it works, and why the painter needed no changes
   - L260 · The contract with JavaScript
+  - L275 · document.elementFromPoint(x, y) bridges the layout-rect snapshot, not a second hit-tester
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -325,4 +326,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-264 sections across 14 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+265 sections across 14 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

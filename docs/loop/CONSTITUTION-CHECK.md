@@ -80,3 +80,46 @@ with its blocker named. **No invariant bent** — ARIA was reverted precisely *b
 trading a crash for a capability.
 
 **Next check due: tick 103.**
+
+---
+
+## Check #3 — tick 103
+
+**Horizon:** H0 — Pareto Web Parity. **Gate:** ~83% WPT across categories · oracle-verified across the four
+corpora · daily-drivable shell · every rendered construct queryable through the semantic API.
+
+**Gate or scoreboard?** Ticks 96–103 were **capability on the direct H0 path**, and the scoreboard moved
+where the gate lives — not on the tail. The honest baseline correction (tick 96, onload double-fire →
+32.1%) was banked, then a run of **web-API-surface-by-usage-weight** ticks (§VI.4 step 4): selector case
+flag `[attr=val i]` (+117 css/selectors), `classList` ordered-set (+241 dom), `Range.createContextualFragment`
+(+33 domparsing), and `document.elementFromPoint` (+29 css-transforms/flexbox/overflow). **+420 real
+subtests across four categories**, none of it encoding-tail. The method was the operator's **flip-per-risk**
+directive: probe the failure histogram, take the *single bounded mechanism* at zero Bar-0 risk. Two
+honestly-neutral ticks (97 offset-int, 102 computed-style exposure) landed as correctness-with-flat-score
+(tick-97 rule), explicitly labelled.
+
+**Is `orient`'s usage-weighted ranking still the north star?** Yes. No big-but-tail number crept back;
+encoding stayed banked and untouched. The `appearance` cluster (css-ui, 300) was *declined* precisely
+because it is closer to the pedantic tail and needs a Stylo supplement (§I2) — the ranking held.
+
+**Any invariant bent?** No. **I3 is served, not bent** — `elementFromPoint` bridges the a11y hit-test
+(the agent surface's own hit-testing) to the JS surface; `classList`/selectors/computed-style are DOM-query
+surface. **I2 was re-confirmed the hard way**: Stylo's servo build lacks `appearance` (gecko-only), so it
+needs a *supplement*, never a patch — exactly the `:has()` ladder. **Bar 0 held absolutely**: tick 101
+uncovered a real memory-safety **SIGSEGV** (a cross-file reflector/rooting UAF in flex relayout under
+runtime reuse) and did NOT trade it for a capability — it built **isolation-retry** so the sweep
+distinguishes a per-page crash from a runtime-reuse artifact (`ACCUM`), keeping real crashes sacred, and
+the underlying UAF is now a **tracked, open Bar-0** (memory `flexbox-relayout-segfault.md`).
+
+**PART VI correction.** §VI.4 step 4 (web-API surface by usage weight) is **actively in progress**, not
+future. Two blockers are now named on the direct path: (1) the **stack-quota crash** still gates the
+~35k html/dom reflection mass (step 2); (2) a **new open Bar-0** — the flexbox reflector-teardown UAF —
+which needs ASAN/`valgrind` tooling (operator sudo) to fix and, per Bar-0 primacy, precedes further
+capability once that tooling exists. I5 (the oracle) still has not completed one clean full crawl.
+
+**The steer.** Continue web-API surface by usage weight while the clean bounded mechanisms last (next
+candidates: the CSSOM `<style>.sheet` bridge ~944, or the `appearance` supplement); take the stack-quota
+fix and the flexbox UAF **in fresh, well-resourced contexts** (both are the tick-84 GC-saga class —
+forbidden at a maxed context). No drift; the direct path (§VI.4) is intact.
+
+**Next check due: tick 111.**

@@ -3054,6 +3054,37 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 103 — document.elementFromPoint (+29) + the tick-103 surface-audit & constitution-check cadences
+
+**TICK SHAPE: capability (CSSOM-View / DOM hit-testing) + two cadence ceremonies.** Both audits came due
+at 103: the **constitution-check** (Check #3 — H0 gate re-stated, ticks 96–103 judged **gate not
+scoreboard** (+420 real subtests on §VI.4 step-4 web-API surface, no tail, no invariant bent; the flexbox
+UAF is a tracked open Bar-0); next due 111) and the **surface-audit** (#3 — finding: the WPT *checkout*
+aperture is narrow — 9 css subtrees; `css-values`/`css-position`/`css-display`/`css-color`/`html/semantics`
+aren't checked out, an invisible zero — so the next map-expansion is a `wpt-setup.sh` checkout expansion;
+next due 113).
+
+**The capability.** Probed `css/css-transforms` (20/278, suspiciously low): `document.elementFromPoint`
+was **entirely missing** (`is not a function`, 84 failures) — a genuinely absent, high-usage DOM API
+(drag-and-drop, tooltips, custom controls, every hit-test suite). Implemented natively: bridge to the
+layout-rect snapshot (`LAYOUT_RECTS_PTR`), and among laid-out **element** boxes containing the client
+point return the **deepest** (smallest area, later document order on a tie — children paint over parents);
+non-finite/absent coord or a miss → `null` (CSSOM-View). Registered on both document setups.
+
+**Honest bounds, stated not hidden:** the rects are pre-transform, so a `transform`ed hit area is not yet
+accounted for, and scroll offset is assumed zero — yet it still flipped **css-transforms 20 → 45 (+25)**
+(the many tests whose hit coords fall in the untransformed box), plus flexbox +3, overflow +1. Gate
+`G_ELEMENT_FROM_POINT` — deepest-hit / parent-fallback / miss→null / NaN→null — proven falsifiable
+(forcing the result to null turns it red; a first fixture bug — the results `#out` div overlapping the
+test point and correctly winning as the deeper box — proved the hit-test *works* and was fixed).
+
+**MEASURED — ratchet up, nothing regressed:** TOTAL **389,069 → 389,098 (+29)**; css-transforms +25,
+flexbox +3, overflow +1; crashes=0 (isolation-retry holding, ACCUM surfaced); GATES 37 → 38.
+
+**I3 note:** this *strengthens* the semantic model rather than bending it — `elementFromPoint` exposes the
+same hit-testing the agent surface uses (the a11y tree's `hit_test`) to page JS. [[parity-methodology]]
+[[interactive-js-architecture]]
+
 ## Tick 102 — getComputedStyle exposes visibility / white-space / opacity (correct, ratchet-neutral, verified)
 
 **TICK SHAPE: capability (CSSOM correctness).** Probed `css/css-ui` (20/487, suspiciously low): the big

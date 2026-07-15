@@ -1187,6 +1187,7 @@ unsafe fn define_members(
         def_guarded!(def, c"getElementById", doc_get_by_id, 1);
         def_guarded!(def, c"querySelector", doc_query, 1);
         def_guarded!(def, c"querySelectorAll", doc_query_all, 1);
+        def_guarded!(def, c"elementFromPoint", doc_element_from_point, 2);
         def_guarded!(def, c"createElement", doc_create_element, 1);
         def_guarded!(def, c"createElementNS", doc_create_element_ns, 2);
         def_guarded!(def, c"importNode", doc_import_node, 2);
@@ -1280,6 +1281,7 @@ unsafe fn define_members(
         def_guarded!(def, c"getElementsByClassName", el_get_by_class, 1);
         def_guarded!(def, c"querySelector", doc_query, 1);
         def_guarded!(def, c"querySelectorAll", doc_query_all, 1);
+        def_guarded!(def, c"elementFromPoint", doc_element_from_point, 2);
         def_guarded!(def, c"getBoundingClientRect", el_get_bounding_rect, 0);
         prop_guarded!(
             prop,
@@ -1462,6 +1464,58 @@ unsafe fn doc_query(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
         return true;
     };
     let found = manuk_css::query_selector(&*dom, root, &sel);
+    return_node_or_null(cx, vp, dom, found);
+    true
+}
+
+/// `document.elementFromPoint(x, y)` → the topmost ELEMENT whose border box contains the client point,
+/// or `null`. Bridges to the layout-rect snapshot: among laid-out element boxes containing the point, the
+/// deepest wins (smallest area, later document order on a tie) — children paint over their parents.
+/// Honest bounds: the rects are pre-transform, so a `transform`ed hit area is not yet accounted for, and
+/// scroll offset is assumed zero (client ≈ layout coords for an unscrolled page); a non-finite/absent
+/// coordinate returns `null`, per CSSOM-View.
+unsafe fn doc_element_from_point(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, _root)) = this_node(vp) else {
+        *vp = NullValue();
+        return true;
+    };
+    let x = if argc > 0 {
+        (*vp.add(2)).to_number() as f32
+    } else {
+        f32::NAN
+    };
+    let y = if argc > 1 {
+        (*vp.add(3)).to_number() as f32
+    } else {
+        f32::NAN
+    };
+    let found = if x.is_finite() && y.is_finite() {
+        LAYOUT_RECTS_PTR.with(|c| {
+            let p = c.get();
+            if p.is_null() {
+                return None;
+            }
+            let rects = &*p;
+            let mut best: Option<(NodeId, f32)> = None; // (node, border-box area)
+            for (&node, r) in rects.iter() {
+                let (rx, ry, rw, rh) = (r[0], r[1], r[2], r[3]);
+                if x >= rx && x < rx + rw && y >= ry && y < ry + rh && (*dom).is_element(node) {
+                    let area = rw * rh;
+                    let better = match best {
+                        None => true,
+                        // Smaller box = deeper element; equal area = later in document paints on top.
+                        Some((bn, ba)) => area < ba || (area == ba && node.0 > bn.0),
+                    };
+                    if better {
+                        best = Some((node, area));
+                    }
+                }
+            }
+            best.map(|(n, _)| n)
+        })
+    } else {
+        None
+    };
     return_node_or_null(cx, vp, dom, found);
     true
 }
