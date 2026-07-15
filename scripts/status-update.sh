@@ -122,10 +122,14 @@ SINGLE=$(awk -v lo="$LAST_AUDIT" '
 # audit was recorded under. That cannot drift, because the log is append-only.
 SURFACE=$(grep -oP '^## Audit #[0-9]+ — tick \K[0-9]+' docs/loop/SURFACE-AUDIT.md 2>/dev/null | sort -n | tail -1)
 [ -z "$SURFACE" ] && SURFACE=0
+# LAST_CONSTITUTION_CHECK — same survival requirement: constitution-check.sh reads it from STATUS.md, and
+# a generated file that drops it resets the anchor to tick 0. Derive it from the check LOG (append-only).
+CONST=$(grep -oP '^## Check #[0-9]+ — tick [0-9]*/?\K[0-9]+' docs/loop/CONSTITUTION-CHECK.md 2>/dev/null | sort -n | tail -1)
+[ -z "$CONST" ] && CONST=0
 
-python3 - "$TICK" "$LAST_AUDIT" "$WALL" "$SITES" "$CLUSTERS" "$CRAWLED" "$HUNG" "$pending" "$SINGLE" "$UNATTRIB" "$SURFACE" <<'PY'
+python3 - "$TICK" "$LAST_AUDIT" "$WALL" "$SITES" "$CLUSTERS" "$CRAWLED" "$HUNG" "$pending" "$SINGLE" "$UNATTRIB" "$SURFACE" "$CONST" <<'PY'
 import sys, re, datetime
-tick, last_audit, wall, sites, clusters, crawled, hung, pending, single, unattrib, surface = sys.argv[1:12]
+tick, last_audit, wall, sites, clusters, crawled, hung, pending, single, unattrib, surface, const = sys.argv[1:13]
 src = open('STATUS.md').read()
 
 # The generated block. Everything here is a fact read from disk.
@@ -142,6 +146,7 @@ head = f"""# manuk — STATUS
 TICK:              {tick}
 LAST_AUDIT_TICK:   {last_audit}          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
 LAST_SURFACE_AUDIT: {surface}         (surface audit due every 10 ticks — from docs/loop/SURFACE-AUDIT.md)
+LAST_CONSTITUTION_CHECK: {const}     (constitution re-read due every 8 ticks — from docs/loop/CONSTITUTION-CHECK.md; anchors the loop to CONSTITUTION.MD)
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
 LAST_WALL_TIME:    {wall}s
 ORACLE_CORPUS:     {sites} sites

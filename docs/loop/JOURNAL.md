@@ -3054,6 +3054,40 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 87 — open the CSS aperture, and anchor the loop to the constitution on a cadence
+
+**TICK SHAPE: instrument.** `[no-pattern]`. No engine code changed. Two moves, one purpose: make the loop
+**coherently pursue the constitution's H0 gate** rather than the nearest number. Both are §VI.4 of the
+constitution — one executes step 1 of the direct path, one builds the mechanism that keeps the loop *on*
+the path.
+
+**1 — The CSS aperture was barely open, so the ranking was inside the wrong frame.** The sweep measured
+exactly three css subtrees (`selectors`, `flexbox`, `grid`) while **eight more were already checked out
+and never measured** — a ranking that cannot see most of CSS is a confident wrong answer. Measured and
+banked (all Bar 0 clean, sweep held ≥16 GB via the tick-85 batch bound): `css-text` **64.9%**,
+`css-fonts` **32.4%**, `css-overflow` **25.4%**, `css-sizing` **12.7%**, `css-transforms` **7.2%**,
+`css-ui` **4.1%**, `css-backgrounds` **3.5%**. Honest Pareto breadth (encoding tail excluded) is now
+**28,803 / 90,557 = 31.8%**, and the ranked work-list is real: `html/dom` (37,290 failing), then the
+layout levers **`css-flexbox` (6,459)** and **`css-grid` (4,414)** — every modern site needs those, and
+they are the H0.1 lever. That is where the next capability tick goes.
+
+**2 — Nothing was reading the constitution on a schedule, and that is exactly how tick 84 drifted.** The
+loop had `orient` (checks the tree), `surface-audit` (checks the map against the world) — and nothing that
+looked *up*, at the governing document that defines the frontier. So it banked +721k encoding subtests,
+a real win on the wrong hill, and no instrument could tell. New: **`scripts/constitution-check.sh`** — a
+cadenced protocol (every **8 ticks**, enforced by `tick.sh`, persisted through `status-update.sh` like the
+surface audit) that forces the loop to re-read `CONSTITUTION.MD`, name the horizon it is in and that
+horizon's binary exit gate, answer honestly *"did the last ~8 ticks move the gate, or only the
+scoreboard?"*, correct **PART VI** where the tree has drifted, and steer the next tick to whatever is
+closest to the gate. Check #1 (`docs/loop/CONSTITUTION-CHECK.md`) is recorded: horizon H0, gate stated,
+the encoding-tail drift named, the direct path re-derived.
+
+Now the loop has three instruments pointing in three directions that matter: `orient` down (the tree),
+`surface-audit` out (the world), `constitution-check` up (the horizon). A tick that satisfies all three
+is a tick that is actually building the thing the constitution describes.
+
+**WIKI:** none — loop-governance mechanism; the durable content is CONSTITUTION-CHECK.md + PART VI.
+
 ## Tick 86 — the constitution meets the tree; the north star was pointing at the tail
 
 **TICK SHAPE: instrument.** `[no-pattern]`. No engine code changed. A governing **CONSTITUTION.MD**

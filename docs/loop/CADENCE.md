@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **79** | ticks 1–86 |
-| median tick cycle | **18m** | 78 intervals |
-| median, last 10 | **17m** | 10 intervals |
+| ticks landed | **80** | ticks 1–87 |
+| median tick cycle | **18m** | 79 intervals |
+| median, last 10 | **14m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.84** | 92.6h elapsed |
-| median verify wall | **3m** | 18 ticks |
-| wall trend | 39s → 58s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.85** | 92.8h elapsed |
+| median verify wall | **3m** | 19 ticks |
+| wall trend | 39s → 55s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **159**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**37 of 79 ticks** (47%) moved a
+**37 of 80 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -86,7 +86,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **37** capability ticks, median cycle **18m**
-* median diff per tick: **+325 / −9** lines across 7 files
+* median diff per tick: **+321 / −10** lines across 8 files
 
 ## Every tick
 
@@ -171,5 +171,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **84** | 2026-07-14 23:30 | 6.4h | capability | 58s | +1006/−90 | 35 | 79 | 36.8% · | the child document was always built, then thrown away (+~721k WPT) |
 | **85** | 2026-07-14 23:42 | 12m | instrument | 9m | +72/−29 | 35 | 79 | 36.8% · | the instrument could not measure its own biggest win |
 | **86** | 2026-07-15 01:40 | 2.0h | instrument | 54s | +325/−29 | 35 | 79 | 36.8% · | the constitution meets the tree; the north star was pointing at the tail |
+| **87** | 2026-07-15 01:50 | 10m | instrument | 55s | +234/−25 | 35 | 79 | 36.8% · | open the CSS aperture, and anchor the loop to the constitution on a cadence |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

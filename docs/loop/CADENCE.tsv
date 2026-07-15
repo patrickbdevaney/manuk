@@ -78,3 +78,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 84	d8be883	1784086247	2026-07-14T23:30:47-04:00	22915	capability	58	16	1006	90	35	79	2387	6484	0	159	0	the child document was always built, then thrown away (+~721k WPT)
 85	f1f59c9	1784086946	2026-07-14T23:42:26-04:00	699	instrument	534	5	72	29	35	79	2387	6484	0	159	0	the instrument could not measure its own biggest win
 86	9d6910b	1784094008	2026-07-15T01:40:08-04:00	7062	instrument	54	7	325	29	35	79	2387	6484	0	159	0	the constitution meets the tree; the north star was pointing at the tail
+87	aa0d038	1784094606	2026-07-15T01:50:06-04:00	598	instrument	55	9	234	25	35	79	2387	6484	0	159	0	open the CSS aperture, and anchor the loop to the constitution on a cadence

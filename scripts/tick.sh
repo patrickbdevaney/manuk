@@ -76,6 +76,11 @@ ok "self-audit current (last: tick ${AUDIT})"
 # already on its map. This is the instrument that checks the map.
 ./scripts/surface-audit.sh check || die "surface audit overdue — run ./scripts/surface-audit.sh run"
 
+# The constitution check. surface-audit checks the MAP against the world; this checks the loop's DIRECTION
+# against the long horizon (CONSTITUTION.MD). It exists because tick 84 climbed the encoding tail — a real
+# +721k that was the wrong hill — and no instrument read the document that defines the frontier.
+./scripts/constitution-check.sh check || die "constitution check overdue — run ./scripts/constitution-check.sh run"
+
 # 6. Formatting — a one-second check that CI would otherwise fail on minutes later.
 cargo fmt --all --check >/dev/null 2>&1 || { cargo fmt --all >/dev/null 2>&1; printf '  %s⚠%s reformatted (cargo fmt)\n' "$YEL" "$OFF"; }
 ok "fmt clean"

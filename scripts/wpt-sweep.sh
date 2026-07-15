@@ -27,7 +27,14 @@ TMP=$(mktemp)
 
 # Every area that is CHECKED OUT. An area that is not checked out scores zero and is invisible — which is
 # its own kind of blindness, so `wpt-setup.sh` decides what exists and this measures all of it.
-AREAS=(dom html/dom css/selectors css/css-flexbox css/css-grid cssom domparsing url encoding)
+# The measured surface. **CSS breadth opened (tick 87)** — flexbox/grid/selectors were the only css
+# subtrees ranked, so the loop was ranking inside a frame that excluded most of CSS. The subtrees below
+# were already checked out and simply never measured; adding them turns unknown breadth into a ranked,
+# ratchet-protected work-list (CONSTITUTION §VI.4 step 1). Order roughly by Pareto usage.
+AREAS=(dom html/dom
+       css/selectors css/css-flexbox css/css-grid css/css-sizing css/css-fonts
+       css/css-text css/css-overflow css/css-transforms css/css-ui css/css-backgrounds
+       cssom domparsing url encoding)
 if [ "${1:-}" = "--quick" ]; then
   AREAS=(dom css/selectors css/css-flexbox css/css-grid cssom domparsing url)
 fi

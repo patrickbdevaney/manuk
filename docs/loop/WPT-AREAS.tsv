@@ -4,8 +4,15 @@ html/dom	22528	59818	37.7	0	0
 css/selectors	1021	3812	26.8	0	0
 css/css-flexbox	378	6837	5.5	0	0
 css/css-grid	216	4630	4.7	0	0
+css/css-sizing	320	2524	12.7	0	0
+css/css-fonts	924	2854	32.4	0	0
+css/css-text	584	900	64.9	0	0
+css/css-overflow	144	567	25.4	0	0
+css/css-transforms	20	278	7.2	0	0
+css/css-ui	20	487	4.1	0	0
+css/css-backgrounds	3	86	3.5	0	0
 cssom	0	0	0.0	0	0
 domparsing	149	1273	11.7	0	0
 url	1	7	14.3	0	0
 encoding	720990	1487865	48.5	0	0
-TOTAL	747778	1570726	47.61	0	0
+TOTAL	749793	1578422	47.50	0	0
