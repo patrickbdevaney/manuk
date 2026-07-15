@@ -3054,6 +3054,27 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 97 — HYPOTHESIS (teed for fresh context): CSS layout correctness is now the top honest lever
+
+**TICK SHAPE: hypothesis (not yet landed).** With the board made honest in tick 96 (32.1%), the biggest
+reachable daily-driver mass is **CSS flex/grid layout correctness** — and it is now directly convertible:
+`check-layout-th.js` reports honestly (post the onload fix), so every geometry bug fixed turns straight into
+passes. Honest starting points: css-flexbox **220/3594 (6.1%)**, css-grid **150/2841 (5.3%)**, css-sizing
+**191/1586 (12%)**.
+
+**The method (proven in tick 96): probe the geometry gap, don't theorize.** For a failing `checkLayout`
+test, read its `data-expected-*` values and compare to what we compute (`offsetWidth/Height`,
+`getBoundingClientRect`). The delta names the layout bug. Pick from the **reachable head, not the tail**:
+- HEAD (do first): basic flex distribution — `flex: 1 1 auto` growth/shrink, `flex-basis`, `margin:auto`
+  centering, `flex-direction:column` main-size, gaps. These are single-cause and high-frequency.
+- TAIL (defer): orthogonal writing modes (`writing-mode:vertical-rl` in flex, e.g. flex-basis-009),
+  subgrid, intrinsic-size edge cases. Low frequency, deep.
+
+**Watch:** the engine uses Taffy 0.12 for flex/grid. A systematic offset error across MANY tests usually
+means one shared computation is off (a box-sizing/border/padding accounting, a main-vs-cross axis mixup, a
+%-resolution against the wrong basis) — fix the shared cause, re-sweep flexbox at `--batch 40` (grid at 10),
+and the ratchet judges. Bar 0 stays sacred; a layout change that crashes any area is reverted. [[parity-methodology]]
+
 ## Tick 96 — the `<body onload>` double-fire: one handler, dispatched twice, corrupting every checkLayout test
 
 **TICK SHAPE: capability (JS lifecycle correctness).** The probe redirected the tick. I set out for the
