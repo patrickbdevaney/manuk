@@ -134,6 +134,7 @@
   - L257 · A detached DOCUMENT is how every sanitizer works — and the moment it exists, you need cycle checks
   - L278 · A DOM that never throws turns a loud caller bug into a silent leak
   - L292 · <body onload> is window.onload, and it must fire EXACTLY once — dispatch OR explicit, never both
+  - L323 · offsetWidth/Height/Top/Left, client*, scroll{Width,Height} are integers — scrollTop/Left are not
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -316,4 +317,4 @@
   - L112 · How this feeds the priority ledger
 
 ---
-255 sections across 14 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+256 sections across 14 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

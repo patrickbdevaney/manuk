@@ -3054,7 +3054,23 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
-## Tick 97 — HYPOTHESIS (teed for fresh context): CSS layout correctness is now the top honest lever
+## Tick 97 — offset metrics now return spec integers (CSSOM correctness; ratchet-neutral, verified)
+
+**TICK SHAPE: capability (CSSOM correctness).** The probe found a real spec bug: `offsetWidth/Height/Top/
+Left`, `clientWidth/Height`, `scrollWidth/Height` are `long` (integers) per CSSOM-View, but `el_metric`/
+`scroll_getter` returned the raw float (a flex item at `400/3` reported `133.33334`). Fixed: round the
+integer metrics; `scrollTop/Left` stay `double`; `getBoundingClientRect` stays fractional. Verified via
+probe: `offsetWidth` 133.33334 → **133**, 266.667 → **267** — matching every real browser.
+
+**Honest result: ratchet-NEUTRAL, and that is the finding.** A full validating sweep holds every area exactly
+(TOTAL 388,674, crashes=0). The fix does not move the number because `check-layout-th.js` uses
+`assert_tolerance` (`Math.abs(actual-expected) < 1` passes) — the 0.33px was already tolerated. Landed anyway
+because it is strictly more correct (spec + browser parity) with zero regression; correctness is a capability
+even when the score is flat. **The real flexbox lever is therefore NOT rounding** — it is genuine geometry
+errors >1px, or `getComputedStyle` display/padding mismatches. **Tick 98's probe:** run a real failing flex
+checkLayout test and read WHICH assertion is off and by how much. [[parity-methodology]]
+
+## Tick 97 (superseded hypothesis) — CSS layout correctness is now the top honest lever
 
 **TICK SHAPE: hypothesis (not yet landed).** With the board made honest in tick 96 (32.1%), the biggest
 reachable daily-driver mass is **CSS flex/grid layout correctness** — and it is now directly convertible:

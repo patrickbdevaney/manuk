@@ -319,3 +319,17 @@ latent double-fire. When a metric (flexbox 5.5%) won't move, the cause is often 
 (flex layout) but a **lifecycle bug upstream of it** that makes the test never report honestly. Build the
 probe (`diag` + a minimal instrumented page); measure which link in load→onload→checkLayout→done breaks;
 do not theorize from the score. [[js-engine]]
+
+## `offsetWidth/Height/Top/Left`, `client*`, `scroll{Width,Height}` are integers — `scrollTop/Left` are not
+
+CSSOM-View types these metrics as `long`: they return the used pixel value **rounded to the nearest
+integer**. Returning the raw float (a flex item at `400/3 = 133.3333`) is wrong two ways: it mismatches every
+real browser, and it fails any test doing an *exact* `assert_equals(el.offsetWidth, 133)`. Only
+`scrollTop/scrollLeft` are `double` (fractional), and only `getBoundingClientRect()` (a `DOMRect`) stays
+fractional — those must NOT be rounded. Fix lives in `el_metric` (offset*) and the `scroll_getter!` macro
+(a `$round` flag: true for client*/scroll{W,H}, false for scrollTop/Left).
+
+**Caveat that made this ratchet-neutral:** `check-layout-th.js` compares with a **±1px tolerance**
+(`assert_tolerance`), so it already passed the fractional value — rounding is correct but does not move the
+WPT number there. When a fix is spec-correct yet the score is flat, the metric was already tolerating the
+bug; the real lever is elsewhere (for flex/grid: geometry errors >1px, or computed-style mismatches). [[js-engine]]

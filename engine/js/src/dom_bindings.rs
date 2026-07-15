@@ -1965,7 +1965,10 @@ macro_rules! scroll_getter {
     // and it is its own box — so only a real `overflow: auto|scroll|hidden` container consults the
     // scroll geometry. Getting this wrong the other way would make `clientHeight` zero for every
     // ordinary element on the page, which is a far bigger regression than the bug being fixed.
-    ($name:ident, $idx:expr, $fallback:expr) => {
+    // `$round` — `clientWidth/Height` and `scrollWidth/Height` are `long` (integers), like `offset*`, so
+    // `check-layout-th.js`'s `data-expected-client-*` assertions compare against integers and a fractional
+    // return fails them. `scrollTop/scrollLeft` are `double` per CSSOM and must stay fractional.
+    ($name:ident, $idx:expr, $fallback:expr, $round:expr) => {
         unsafe extern "C" fn $name(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
             let v = this_node(vp)
                 .map(
@@ -1979,17 +1982,18 @@ macro_rules! scroll_getter {
                     },
                 )
                 .unwrap_or(0.0);
-            *vp = mozjs::jsval::DoubleValue(v as f64);
+            let out = if $round { (v as f64).round() } else { v as f64 };
+            *vp = mozjs::jsval::DoubleValue(out);
             true
         }
     };
 }
-scroll_getter!(el_get_scroll_top, 0, |_r: [f32; 4]| 0.0);
-scroll_getter!(el_get_scroll_left, 1, |_r: [f32; 4]| 0.0);
-scroll_getter!(el_get_scroll_height, 2, |r: [f32; 4]| r[3]);
-scroll_getter!(el_get_scroll_width, 3, |r: [f32; 4]| r[2]);
-scroll_getter!(el_get_client_height, 4, |r: [f32; 4]| r[3]);
-scroll_getter!(el_get_client_width, 5, |r: [f32; 4]| r[2]);
+scroll_getter!(el_get_scroll_top, 0, |_r: [f32; 4]| 0.0, false);
+scroll_getter!(el_get_scroll_left, 1, |_r: [f32; 4]| 0.0, false);
+scroll_getter!(el_get_scroll_height, 2, |r: [f32; 4]| r[3], true);
+scroll_getter!(el_get_scroll_width, 3, |r: [f32; 4]| r[2], true);
+scroll_getter!(el_get_client_height, 4, |r: [f32; 4]| r[3], true);
+scroll_getter!(el_get_client_width, 5, |r: [f32; 4]| r[2], true);
 
 /// `element.scrollTop = n`. Clamped **here**, so the script reads back the truth on the very next line.
 unsafe fn el_set_scroll_axis(
@@ -4628,7 +4632,12 @@ unsafe fn el_metric(cx: *mut RawJSContext, vp: *mut Value, which: u8) -> bool {
         None => 0.0,
     };
     let _ = cx;
-    *vp = mozjs::jsval::DoubleValue(v as f64);
+    // **`offsetWidth/Height/Top/Left` are `long` — integers.** CSSOM-View rounds the used pixel value to
+    // the nearest integer; only `getBoundingClientRect()` (a separate DOMRect) stays fractional. Returning
+    // the raw float (e.g. a flex item at `400/3 = 133.3333`) makes `check-layout-th.js`'s
+    // `assert_equals(el.offsetWidth, 133)` fail on EVERY fractional layout — which is most of flex/grid.
+    // Rounding here converts the whole class from fail to pass, and matches what every real browser returns.
+    *vp = mozjs::jsval::DoubleValue((v as f64).round());
     true
 }
 
