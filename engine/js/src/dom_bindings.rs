@@ -1217,6 +1217,7 @@ unsafe fn define_members(
         def_guarded!(def, c"getAttribute", el_get_attribute, 1);
         def_guarded!(def, c"removeAttribute", el_remove_attribute, 1);
         def_guarded!(def, c"hasAttribute", el_has_attribute, 1);
+        def_guarded!(def, c"toggleAttribute", el_toggle_attribute, 1);
         def_guarded!(def, c"remove", el_remove, 0);
         // The ChildNode / ParentNode mixins — see the block above. Absent until now, all eleven.
         def_guarded!(def, c"append", el_append, 1);
@@ -1424,7 +1425,12 @@ unsafe fn define_members(
         prop_guarded!(prop, c"style", el_get_style, None);
         prop_guarded!(prop, c"classList", el_get_class_list, None);
         prop_guarded!(prop, c"dataset", el_get_dataset, None);
+        // `isConnected` — is this node in the document tree? Every modern framework reads it before
+        // touching an element it may have detached. `webkitMatchesSelector` — the legacy alias for
+        // `matches`, still emitted by a lot of shipped code.
+        prop_guarded!(prop, c"isConnected", el_get_is_connected, None);
         def_guarded!(def, c"matches", el_matches, 1);
+        def_guarded!(def, c"webkitMatchesSelector", el_matches, 1);
         def_guarded!(def, c"closest", el_closest, 1);
         def_guarded!(def, c"contains", el_contains, 1);
         def_guarded!(def, c"scrollIntoView", el_scroll_into_view, 0);
@@ -2457,6 +2463,67 @@ unsafe fn el_has_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> 
         _ => false,
     };
     *vp = BooleanValue(has);
+    true
+}
+
+/// `node.isConnected` → is this node in the document tree? True iff walking up parents reaches the
+/// document root; a `createElement`'d-but-unappended node (or a detached subtree) is not connected.
+unsafe fn el_get_is_connected(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let connected = if let Some((dom, node)) = this_node(vp) {
+        let mut cur = node;
+        while let Some(p) = (*dom).parent(cur) {
+            cur = p;
+        }
+        cur == (*dom).root()
+    } else {
+        false
+    };
+    *vp = BooleanValue(connected);
+    true
+}
+
+/// `element.toggleAttribute(name[, force])` → add the attribute (value `""`) if absent, remove it if
+/// present; `force` pins the direction (true = ensure present, false = ensure absent). Returns whether
+/// the attribute is present afterwards. DOM Living Standard §Element.
+unsafe fn el_toggle_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let mut present = false;
+    if let Some((dom, node)) = this_node(vp) {
+        if let Some(name) = arg_string(cx, vp, argc, 0) {
+            let has = (*dom).element(node).and_then(|e| e.attr(&name)).is_some();
+            // `force` is optional; read it only if a second argument was actually passed.
+            let force = if argc > 1 {
+                Some((*vp.add(3)).is_boolean() && (*vp.add(3)).to_boolean())
+            } else {
+                None
+            };
+            let want = force.unwrap_or(!has); // no force → flip
+            if want && !has {
+                record_mutation(cx, dom, "attributes", node, Some(&name), None, &[], &[]);
+                (*dom).set_attr(node, &name, "");
+                present = true;
+            } else if !want && has {
+                let old = (*dom)
+                    .element(node)
+                    .and_then(|e| e.attr(&name))
+                    .map(|s| s.to_string());
+                record_mutation(
+                    cx,
+                    dom,
+                    "attributes",
+                    node,
+                    Some(&name),
+                    old.as_deref(),
+                    &[],
+                    &[],
+                );
+                (*dom).remove_attr(node, &name);
+                present = false;
+            } else {
+                present = has; // no change
+            }
+        }
+    }
+    *vp = BooleanValue(present);
     true
 }
 

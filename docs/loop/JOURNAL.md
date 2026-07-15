@@ -3054,6 +3054,26 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 108 — the DOM ergonomics every framework needs: isConnected, toggleAttribute, webkitMatchesSelector (+6 dom)
+
+**TICK SHAPE: capability (DOM API surface).** After tick 107 confirmed neutral *niche* APIs don't flip,
+targeted **high-usage** missing methods instead — the ones modern code calls constantly, so WPT actually
+tests them:
+- **`node.isConnected`** — is the node in the document tree (walk to root == document root). Every
+  framework reads it before touching a possibly-detached element. Was absent (0 refs).
+- **`element.toggleAttribute(name[, force])`** — the ergonomic add-or-remove; `force` pins the direction;
+  returns presence after. Was absent.
+- **`element.webkitMatchesSelector`** — the legacy alias for `matches`, still shipped in a lot of code.
+  Aliased to `el_matches`.
+
+Probe 8/8 (connected/detached/appended · toggle add/remove · force true/false idempotent · wms). Gate
+`G_NODE_ERGONOMICS`, proven falsifiable.
+
+**MEASURED — ratchet up:** dom **2739 → 2745 (+6)**, TOTAL **389,478 → 389,484**, crashes=0, no regression.
+Modest but a REAL flip (vs tick 107's neutral getClientRects) — confirming the tick-107 steer: target the
+methods the *failing* tests actually call (high-usage), not whatever API is easy to add. These are also
+genuine capability real sites depend on hourly. GATES 39 → 40. [[parity-methodology]]
+
 ## Tick 107 — element.getClientRects() (correct missing API, ratchet-neutral) + the frontier is confirmed diffuse
 
 **TICK SHAPE: capability (CSSOM-View geometry).** Implemented `element.getClientRects()` — a genuinely

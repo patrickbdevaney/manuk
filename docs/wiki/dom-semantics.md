@@ -391,3 +391,13 @@ undefined-computed clusters in `css/css-ui` are `appearance` and `caret-color`, 
 correct with zero regression, and real scripts read `visibility`/`opacity`/`white-space` constantly. The
 lever for a *scored* win here is the properties tests actually assert on — appearance/caret-color — not
 the ones that happened to be easy to expose. [[js-engine]]
+
+## isConnected / toggleAttribute / webkitMatchesSelector — the ergonomics frameworks call hourly
+
+Three high-usage DOM methods that were simply absent (0 refs each). `node.isConnected` = walk parents to
+the top; connected iff that top is the document root (a `createElement`'d-but-unappended node is not).
+`toggleAttribute(name, force)` = add-if-absent / remove-if-present, `force` pins the direction, returns
+presence (records an `attributes` mutation like set/removeAttribute). `webkitMatchesSelector` = the legacy
+alias for `matches`. **Method lesson (tick 107→108):** a *neutral* niche API (getClientRects) vs a
+*flipping* high-usage one (isConnected/toggleAttribute, +6 dom) — target what the FAILING tests call, not
+what is easy to add. [[interaction-surface]]
