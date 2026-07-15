@@ -59,10 +59,21 @@ head_ "3. THE RATCHET — would anything go backwards?"
 # The work list. The area with the most FAILING subtests is where the ground is — not the area with the
 # lowest percentage, which is a different question with a different answer (a 0%-passing area of 40 tests
 # is a rounding error; a 21%-passing area of 60,000 is the whole map).
-head_ "4. THE WORK LIST — the biggest MECHANISM, not the biggest file"
-BIGGEST=$(awk -F'\t' 'NR>1 && $1!="TOTAL" { fail=$3-$2; if (fail>max) { max=fail; a=$1 } } END{print a}' "$AREAS")
+#
+# **PARETO LENS (CONSTITUTION §I4 + §VI.3).** "Most failing subtests" is a Pareto TRAP when one area is a
+# deep exotic tail. `encoding` has ~767k *failing* subtests — every one a per-codepoint legacy-CJK case the
+# constitution says to DEGRADE, not chase — and left unchecked it would rank #1 forever and drag the loop
+# off the parity frontier. So the tail areas are **excluded from the ranking** (not from the ratchet; they
+# stay banked and must not regress). The score the loop optimises is *usage-weighted breadth*: an area used
+# by every site outranks one used by the pre-2010 web, at equal failing mass. Flexbox at 5% beats encoding
+# at 48%.
+PARETO_TAIL='^(encoding)'   # areas that are Pareto-COMPLETE for H0 — deep tail, excluded from ranking
+head_ "4. THE WORK LIST — the biggest MECHANISM by USAGE-WEIGHTED breadth (not raw subtest count)"
+BIGGEST=$(awk -F'\t' -v tail="$PARETO_TAIL" 'NR>1 && $1!="TOTAL" && $1 !~ tail { fail=$3-$2; if (fail>max) { max=fail; a=$1 } } END{print a}' "$AREAS")
 FAILING=$(awk -F'\t' -v a="$BIGGEST" '$1==a {print $3-$2}' "$AREAS")
-printf '  largest area by FAILING subtests: %s%s%s (%s failing)\n' "$BLD" "$BIGGEST" "$OFF" "$FAILING"
+BREADTH=$(awk -F'\t' -v tail="$PARETO_TAIL" 'NR>1 && $1!="TOTAL" && $1 !~ tail {p+=$2; t+=$3} END{printf "%d/%d = %.1f%%", p, t, (t>0?100*p/t:0)}' "$AREAS")
+printf '  %sPareto breadth (encoding-tail excluded): %s%s  ← the H0 gauge, not the 47%% headline\n' "$YEL" "$BREADTH" "$OFF"
+printf '  largest NON-TAIL area by failing subtests: %s%s%s (%s failing)\n' "$BLD" "$BIGGEST" "$OFF" "$FAILING"
 printf '  histogramming its failure messages — this is the ranked work list:\n\n'
 
 timeout 3000 cargo run -q -p manuk-wpt --release --features spidermonkey -- wpt "$BIGGEST" --show-failures 2>&1 \
@@ -72,11 +83,14 @@ timeout 3000 cargo run -q -p manuk-wpt --release --features spidermonkey -- wpt 
 
 cat <<'RULE'
 
-  THE RULE (docs/loop/GRIND.md):
+  THE RULE (docs/loop/GRIND.md + CONSTITUTION §VI):
     Take the top row that is a MECHANISM, not an instance. "Reflection" is a tick;
     "fix input.disabled" is four hundred ticks. Prefer a mechanism that also serves the
     NEAR horizon (a real page calls it) — that is where the cheapest tick lives.
-    Keep going broad while any mechanism is worth >= 500 subtests, ANYWHERE.
+    Rank by USAGE-WEIGHTED breadth, not raw subtest count: a mechanism every site needs
+    (flexbox, grid, position) outranks a deep exotic tail with more failing subtests.
+    OPEN THE APERTURE FIRST: ~8 sub-areas of hundreds are measured. css/* and html/*
+    beyond html/dom are unmeasured — a ranking inside the wrong frame is confidently wrong.
     A stub is worse than an absence: if it cannot be done properly, skip it and SAY SO.
 RULE
 

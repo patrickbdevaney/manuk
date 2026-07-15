@@ -18,7 +18,7 @@ doc	lazy loading (loading=lazy + IO)	feeds load the whole timeline	gated	G_VIEWP
 doc	find-in-page / selection	reading is not passive	partial	G_RANGE	Range works; Selection is a stub
 doc	print / media queries	every 'print this page'	unknown	-	NEVER MEASURED — probe it
 doc	multicol	academic + news layout	unknown	-	NEVER MEASURED — probe it
-doc	accessibility tree	screen readers; also our own hit-testing	missing	-	no AX tree at all
+doc	accessibility / semantic tree	screen readers, agent observation, our own hit-testing	partial	-	manuk-a11y (1.3k LOC): role+accessible-name+geometry+hit-test, feeds the agent. NO AccessKit platform bridge yet. Constitution I3 — the moat, already load-bearing
 app	real DOM prototypes (patchable)	Sentry/ad-blockers/devtools hook nothing	gated	G_PROTOTYPE	tick 64: 60x faster too
 app	attribute reflection (a.href, input.disabled)	every branch on a DOM property is wrong	gated	G_REFLECT	tick 82: +9,940 WPT
 app	inline event handlers (onclick, onload, onsubmit)	the oldest way to attach behaviour to markup; every legacy form	gated	G_CAPABILITY	tick 84: compiled + wired at parse; body/frameset on* map to window

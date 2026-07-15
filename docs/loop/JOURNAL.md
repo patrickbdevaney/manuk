@@ -3054,6 +3054,36 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 86 — the constitution meets the tree; the north star was pointing at the tail
+
+**TICK SHAPE: instrument.** `[no-pattern]`. No engine code changed. A governing **CONSTITUTION.MD**
+arrived (the long-horizon vision: one core, two front-ends, N species; H0 Pareto parity → H1 hardening →
+H2 agentic surface → H3 appanages → H4 speciation). This tick maps it onto the repo *as it actually is*,
+corrects what it assumed, and — most importantly — fixes the loop's north star, which tick 84 had quietly
+knocked off the Pareto frontier.
+
+**The correction that matters.** Tick 84 moved `encoding` 128 → 720,990 and the suite TOTAL to 747,778
+(47.6%). But **96% of every passing subtest is now encoding**, and its remaining ~767k failures are the
+exotic per-codepoint legacy-CJK tail — exactly what the constitution's **I4 (Pareto discipline)** says to
+DEGRADE, not chase. Left alone, `orient` ranks by raw failing subtests, so encoding would have sat at #1
+forever and pulled hundreds of hours of loop-throughput into the tail. The honest, H0-relevant number is
+**breadth excluding encoding = 26,788 / 82,861 = 32.3%.** That is now the gauge; 47.6% was a mirage.
+
+**Mechanism, not just prose.** `orient.sh` gained a **Pareto lens**: tail areas (`encoding`) are excluded
+from the ranking (never from the ratchet — they stay banked and must not regress), and the loop optimises
+*usage-weighted breadth*. It now points at `html/dom` (37,290 failing) — representative — instead of the
+tail. `GRIND.md`'s rule and the constitution's new **PART VI** both encode: open the aperture first (~8
+sub-areas of hundreds are measured), rank by usage weight, degrade the tail.
+
+**Assumptions corrected against the tree (PART VI in full):** the a11y/semantic tree (I3, the moat) is
+**already built and feeding the agent** (1.3k LOC) — the map said "no AX tree at all," which was wrong;
+Stylo is **already the shell default**; the GPU/Vello paint path is **aspirational comments only** (raster
+is tiny-skia CPU everywhere); the differential oracle (I5, the vision's discovery engine) has **never
+finished a crawl.** The direct H0 path is written down: open css/* + html/* aperture → CSS layout breadth
+(flexbox 5.5%, grid 4.7%) → land one clean oracle crawl → web-API by usage → semantic model in lockstep.
+
+**WIKI:** none — a governance + loop-mechanism tick; the durable content is CONSTITUTION.MD PART VI.
+
 ## Tick 85 — the instrument could not measure its own biggest win
 
 **TICK SHAPE: instrument.** `[no-pattern]`. No engine code changed. Tick 84 moved `encoding` from 128 to

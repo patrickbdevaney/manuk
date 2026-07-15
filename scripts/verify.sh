@@ -152,7 +152,13 @@ head_ "G1 · real-site visual fidelity vs Chromium (ADR-010/011 — SHIPPING con
 CACHE=".verify-cache"
 mkdir -p "$CACHE"
 _snapshot() {  # _snapshot <url> <name> → echoes a file:// URL for the cached copy
-  local url="$1" name="$2" f="$CACHE/$name.html"
+  # **Separate `local` statements — this is not style, it is the bug.** `local url="$1" name="$2"
+  # f="$CACHE/$name.html"` expands every RHS *before* any assignment, so `$name` is unbound when `f` is
+  # built, and under `set -u` the whole subshell dies. That silently broke the snapshot cache: the fetch
+  # never cached, so EVERY wall re-fetched two live sites (~534s vs ~58s), and the WALL ratchet ceiling
+  # failed a tick whose engine never changed. The instrument was measuring its own broken caching.
+  local url="$1" name="$2"
+  local f="$CACHE/$name.html"
   if [ ! -s "$f" ]; then
     curl -sL --max-time 30 -A "Mozilla/5.0 manuk-verify" "$url" -o "$f" 2>/dev/null || true
   fi
