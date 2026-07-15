@@ -96,3 +96,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 102	9b8934d	1784134582	2026-07-15T12:56:22-04:00	1783	capability	52	9	165	32	37	81	2387	6484	0	182	0	getComputedStyle exposes visibility / white-space / opacity (correct, ratchet-neutral, verified)
 103	a2a160e	1784137020	2026-07-15T13:37:00-04:00	2438	capability	51	12	301	36	38	81	2387	6484	0	184	0	document.elementFromPoint (+29) + the tick-103 surface-audit & constitution-check cadences
 104	7add95b	1784137651	2026-07-15T13:47:31-04:00	631	instrument	51	7	96	30	38	81	2387	6484	0	184	0	open the aperture: css-values/position/display/color join the sweep (§VI.4 step 1)
+105	2b18de3	1784138301	2026-07-15T13:58:21-04:00	650	instrument	51	6	99	29	38	81	2387	6484	0	184	0	Bar-0 triage: the html/semantics crasher is a DETERMINISTIC stack overflow (the stack-quota class)

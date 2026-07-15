@@ -3054,6 +3054,32 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 105 — Bar-0 triage: the html/semantics crasher is a DETERMINISTIC stack overflow (the stack-quota class)
+
+**TICK SHAPE: instrument (Bar-0 triage).** `[no-pattern]` — no `engine/*/src` change; this is the diagnosis
+that turns tick-104's newly-found Bar-0 into a fresh-context work order. Per Bar-0 primacy, investigated
+the html/semantics crasher that keeps that area out of the sweep. Result: it is **tractable, and a better
+first target than the flexbox UAF.**
+
+**Findings.** `html/semantics/scripting-1/the-script-element/script-text-modifications-csp.html` SIGSEGVs
+(exit 139, core dumped) **in isolation — deterministic**, not the flexbox Heisenbug (which vanishes under
+gdb). The gdb backtrace is a tight repeating 3-address cycle over NaN-boxed JS values → **deep JS recursion
+overflowing the C stack**: a SIGSEGV where SpiderMonkey should throw *"too much recursion"*. That is the
+**stack-quota mis-anchoring** already in `js-engine.md` — mozjs 0.18's `Runtime::new` sets the quota from
+`nativeStackBase` captured deep in the tokio `block_on`, so the guard sits past the real stack bottom. The
+trigger (`step_timeout` self-scheduling) is benign in a real browser (setTimeout defers, and ours does too
+— macrotask FIFO), so the recursion is re-entry via the `<script>.textContent` setter + CSP re-eval, or
+the harness drain — **needs a symboled/debug build to pinpoint**, and because it is deterministic gdb will
+catch it there.
+
+**Why this matters for the horizon.** This is the **teed-up effective-stack-quota fix with a clean
+deterministic repro** — the prerequisite tick 95 said to get first. Fixing it (the pthread-thread-bounds
+quota so deep recursion throws, or the specific script-text/CSP recursion) + gating "throws not
+segfaults" unblocks **html/semantics (~8,879 failing — the single biggest mass on the board)** into the
+sweep, and is the same fix that unblocks the ~35k reflection backlog. It is a fresh-context job (symboled
+build + the tick-84 GC-saga class — NOT to be started at a maxed context), now fully scoped. Recorded in
+`js-engine.md` and memory `flexbox-relayout-segfault.md`. [[interactive-js-architecture]] [[parity-methodology]]
+
 ## Tick 104 — open the aperture: css-values/position/display/color join the sweep (§VI.4 step 1)
 
 **TICK SHAPE: instrument (aperture).** `[no-pattern]` — no `engine/*/src` change; this expands what the

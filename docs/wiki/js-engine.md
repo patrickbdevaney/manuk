@@ -562,3 +562,25 @@ pair, then find the reflector whose lifetime outlives its arena node across the 
 **Until fixed, the sweep tolerates it HONESTLY via isolation-retry** (the culprit is re-run alone and
 counted as `ACCUM`, not a per-page `CRASH` — see [[conformance-and-oracles]]); the UAF itself stays an
 open Bar-0. Do NOT start this fix at the tail of a maxed context. [[interactive-js-architecture]]
+
+## A second, DETERMINISTic C-stack overflow (html/semantics) — the stack-quota class, now with a clean repro
+
+Opening the aperture (tick 104) surfaced `html/semantics/scripting-1/the-script-element/`
+**`script-text-modifications-csp.html`**, which **SIGSEGVs (exit 139, core dumped) in ISOLATION** — a
+*deterministic* single-file crash, unlike the flexbox Heisenbug ([[interactive-js-architecture]]). The
+gdb backtrace is a tight repeating 3-address cycle over NaN-boxed JS values (0xfff8/0xfff9/0xfffe tags)
+= **deep JS recursion overflowing the C stack** — a SIGSEGV where SpiderMonkey should throw *"too much
+recursion"*. This is the same **stack-quota mis-anchoring** documented above: mozjs 0.18's `Runtime::new`
+calls `JS_SetNativeStackQuota(cx, STACK_QUOTA, …)` with the limit computed from `nativeStackBase` captured
+at `JS_NewContext` — buried deep in the tokio `block_on`, so the guard sits past the real stack bottom.
+
+The trigger looks benign — `t.step_timeout(changeScriptText, 500)` self-scheduling, which a real browser
+DEFERS (no recursion). Our `setTimeout` correctly defers (macrotask FIFO, `event_loop.rs`), so the
+recursion is elsewhere — most likely re-entry through the `<script>.textContent` setter + CSP re-eval, or
+the harness event-loop drain. **Needs a symboled/debug build to pinpoint** (the stripped release
+backtrace is addresses only; because it is DETERMINISTIC, gdb WILL catch it on a debug build — the
+Heisenbug would not). Because it is deterministic, this is the **better first target than the flexbox
+UAF** for the fresh-context stack-quota tick: fix it (effective quota from real thread-stack bounds via
+`pthread_getattr_np`, OR the specific script-text/CSP recursion) → gate that this file throws instead of
+crashing → then html/semantics (~8,879 failing, the biggest mass) can join the sweep. It is currently
+**held out of `AREAS`** precisely because of this crasher (and one more in the same tree). [[conformance-and-oracles]]
