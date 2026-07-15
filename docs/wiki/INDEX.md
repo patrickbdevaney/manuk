@@ -139,6 +139,7 @@
   - L323 · offsetWidth/Height/Top/Left, client*, scroll{Width,Height} are integers — scrollTop/Left are not
   - L337 · classList is an ordered SET, and a no-op operation must not rewrite the attribute
   - L361 · Range.createContextualFragment is the fragment parser you already have, wearing a Range
+  - L380 · getComputedStyle must expose the properties the cascade ALREADY computed — undefined is a bug, not a value
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -324,4 +325,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-263 sections across 14 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+264 sections across 14 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -376,3 +376,18 @@ arguments is a `TypeError`, *not* a parse of the string `"undefined"` (distingui
 not `html === undefined`); and the result's `nodeType` must be **11** (a fragment), not a stray wrapper
 element. `domparsing/createContextualFragment.html` 2 → 34/35 (the last is `<script>` execution on
 insertion, a separate capability); the area moved **149 → 182 (+33)**, crash-free. [[js-engine]]
+
+## getComputedStyle must expose the properties the cascade ALREADY computed — undefined is a bug, not a value
+
+`computed_style_js` built a fixed ~30-property snapshot and silently dropped several `ComputedStyle`
+fields the cascade already resolves — `visibility`, `white-space`, `opacity`. `getComputedStyle(el).visibility`
+returned **`undefined`**, and `getPropertyValue('white-space')` likewise. These are not new capabilities;
+the values existed, they were just not surfaced to JS. Exposing them (camelCase key + the kebab entry in
+the `getPropertyValue` map + the initial value for unset elements) is mechanical and additive.
+
+**Honest note (tick 102): ratchet-NEUTRAL.** No *failing* WPT subtest read these three as undefined (the
+undefined-computed clusters in `css/css-ui` are `appearance` and `caret-color`, which need new
+`ComputedStyle` fields + Stylo extraction — deferred). Landed anyway, tick-97-style: it is strictly more
+correct with zero regression, and real scripts read `visibility`/`opacity`/`white-space` constantly. The
+lever for a *scored* win here is the properties tests actually assert on — appearance/caret-color — not
+the ones that happened to be easy to expose. [[js-engine]]

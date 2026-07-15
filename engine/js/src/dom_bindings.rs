@@ -361,7 +361,7 @@ fn transform_css(fns: &[manuk_css::TransformFn], rect: Option<[f32; 4]>) -> Stri
 }
 
 fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> String {
-    use manuk_css::{Display, Overflow, Position, TextAlign};
+    use manuk_css::{Display, Overflow, Position, TextAlign, Visibility, WhiteSpace};
     let display = match cs.display {
         Display::Block => "block",
         Display::Inline => "inline",
@@ -402,16 +402,32 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         Overflow::Auto => "auto",
         Overflow::Clip => "clip",
     };
+    let visibility = match cs.visibility {
+        Visibility::Visible => "visible",
+        Visibility::Hidden => "hidden",
+        Visibility::Collapse => "collapse",
+    };
+    let white_space = match cs.white_space {
+        WhiteSpace::Normal => "normal",
+        WhiteSpace::NoWrap => "nowrap",
+        WhiteSpace::Pre => "pre",
+        WhiteSpace::PreWrap => "pre-wrap",
+        WhiteSpace::PreLine => "pre-line",
+    };
+    // CSS serializes `opacity` as a bare number (`1`, `0.5`), never a percentage.
+    let opacity = cs.opacity.to_string();
     let q = js_string_literal;
     format!(
         "({{color:{}, backgroundColor:{}, fontSize:{}, fontWeight:{}, fontStyle:{}, \
           fontFamily:{}, lineHeight:{}, textAlign:{}, display:{}, position:{}, overflow:{}, \
+          visibility:{}, whiteSpace:{}, opacity:{}, \
           width:{}, height:{}, marginTop:{}, marginRight:{}, marginBottom:{}, marginLeft:{}, \
           paddingTop:{}, paddingRight:{}, paddingBottom:{}, paddingLeft:{}, \
           top:{}, right:{}, bottom:{}, left:{}, zIndex:{}, transform:{}, getPropertyValue:function(p){{\
           var m={{'background-color':'backgroundColor','font-size':'fontSize',\
           'font-weight':'fontWeight','font-style':'fontStyle','font-family':'fontFamily',\
-          'line-height':'lineHeight','text-align':'textAlign','margin-top':'marginTop',\
+          'line-height':'lineHeight','text-align':'textAlign','white-space':'whiteSpace',\
+          'margin-top':'marginTop',\
           'margin-right':'marginRight','margin-bottom':'marginBottom','margin-left':'marginLeft',\
           'padding-top':'paddingTop','padding-right':'paddingRight','padding-bottom':'paddingBottom',\
           'padding-left':'paddingLeft','z-index':'zIndex'}};return this[m[p]||p];}}}})",
@@ -426,6 +442,9 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         q(display),
         q(position),
         q(overflow),
+        q(visibility),
+        q(white_space),
+        q(&opacity),
         q(&dim_css(&cs.width)),
         q(&dim_css(&cs.height)),
         q(&dim_css(&cs.margin.top)),

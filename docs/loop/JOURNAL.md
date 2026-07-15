@@ -3054,6 +3054,29 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 102 — getComputedStyle exposes visibility / white-space / opacity (correct, ratchet-neutral, verified)
+
+**TICK SHAPE: capability (CSSOM correctness).** Probed `css/css-ui` (20/487, suspiciously low): the big
+cluster is `appearance`/`-webkit-appearance` computed values (300 subtests) — but that needs a new
+`ComputedStyle` field + Stylo extraction + browser-divergent compat-keyword normalization + inline-style
+validation (multi-layer, closer to the pedantic tail), so it was NOT the clean bounded pick. The clean
+finding underneath it: **`computed_style_js` built a fixed ~30-property snapshot and dropped several
+`ComputedStyle` fields the cascade ALREADY computes** — `visibility`, `white-space`, `opacity`. Reading
+`getComputedStyle(el).visibility` returned `undefined`, not `"hidden"`.
+
+**Implemented:** exposed the three (camelCase key + `white-space` kebab entry in the `getPropertyValue`
+map + serialization: visibility keyword, white-space keyword, opacity as a bare number). Probe: a page
+setting each → 4/4 (`hidden`, `pre-wrap`, kebab accessor, `0.5`). Gate `G_COMPUTED_STYLE` (incl. initial
+values `visible`/`1`, not undefined) — proven falsifiable (blanking `visibility` turns it red).
+
+**MEASURED — honest result: ratchet-NEUTRAL.** Full sweep TOTAL **389,069 unchanged**, every area at its
+banked mark, crashes=0. No *failing* WPT subtest reads these three as undefined — the scored css-ui lever
+is `appearance`/`caret-color` (new fields, deferred). Landed anyway, **tick-97-style**: strictly more
+correct, zero regression, and real scripts read `visibility`/`opacity`/`white-space` constantly — the
+score being flat means the current failing set tests other properties, not that the exposure is wrong.
+The lesson re-confirmed: probe which property the *failing* tests assert, don't expose the easy one and
+hope. [[parity-methodology]] [[symptom-names-wrong-organ]]
+
 ## Tick 101 — isolation-retry unmasks a cross-file UAF as an artifact, unblocking `Range.createContextualFragment` (+33 domparsing)
 
 > **RESOLVED.** This tick uncovered a real Bar-0 SIGSEGV (below), then made the instrument correctly

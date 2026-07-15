@@ -93,3 +93,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 99	979f2dc	1784126417	2026-07-15T10:40:17-04:00	3211	capability	60	9	262	72	35	81	2387	6484	0	173	0	the attribute-selector case flag (`[attr=val i]`) was stripped, not applied (+117 css/selectors, ratchet up, crash-free)
 100	e41deb2	1784127726	2026-07-15T11:02:06-04:00	1309	capability	314	9	231	41	36	81	2387	6484	0	177	0	`classList` was deduped-blind and rewrote the attribute on no-ops (+241 dom, ratchet up, crash-free)
 101	caa4914	1784132799	2026-07-15T12:26:39-04:00	5073	instrument	51	13	313	36	36	81	2387	6484	0	180	0	isolation-retry unmasks a cross-file UAF as an artifact, unblocking `Range.createContextualFragment` (+33 domparsing)
+102	9b8934d	1784134582	2026-07-15T12:56:22-04:00	1783	capability	52	9	165	32	37	81	2387	6484	0	182	0	getComputedStyle exposes visibility / white-space / opacity (correct, ratchet-neutral, verified)
