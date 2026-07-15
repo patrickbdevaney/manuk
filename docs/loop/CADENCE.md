@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **103** | ticks 1–110 |
-| median tick cycle | **19m** | 102 intervals |
+| ticks landed | **104** | ticks 1–111 |
+| median tick cycle | **19m** | 103 intervals |
 | median, last 10 | **27m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.95** | 106.9h elapsed |
-| median verify wall | **58s** | 42 ticks |
+| **ticks per hour** | **0.96** | 107.5h elapsed |
+| median verify wall | **59s** | 43 ticks |
 | wall trend | 39s → 59s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **42**
-* **✅ rows in the capability ledger**: 144 → **193**
+* **live gates**: 27 → **43**
+* **✅ rows in the capability ledger**: 144 → **195**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**50 of 103 ticks** (49%) moved a
+**51 of 104 ticks** (49%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -85,8 +85,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **50** capability ticks, median cycle **19m**
-* median diff per tick: **+259 / −23** lines across 8 files
+* **51** capability ticks, median cycle **19m**
+* median diff per tick: **+256 / −23** lines across 8 files
 
 ## Every tick
 
@@ -195,5 +195,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **108** | 2026-07-15 15:24 | 31m | capability | 60s | +222/−36 | 40 | 81 | 36.8% · | the DOM ergonomics every framework needs: isConnected, toggleAttribute, webkitMatchesSelec |
 | **109** | 2026-07-15 15:42 | 18m | capability | 54s | +207/−38 | 41 | 81 | 36.8% · | the Node CONSTANTS + compareDocumentPosition (+146, biggest flip since tick 100) |
 | **110** | 2026-07-15 15:59 | 17m | capability | 59s | +158/−36 | 42 | 81 | 36.8% · | the OTHER interface constants: DOMException legacy codes + Event phase (+7) |
+| **111** | 2026-07-15 16:30 | 31m | capability | 60s | +215/−40 | 43 | 81 | 36.8% · | the GLOBAL reflected attributes (+18,245 — the session's largest flip) + the 111 cadences |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

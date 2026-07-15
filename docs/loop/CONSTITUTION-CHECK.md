@@ -123,3 +123,41 @@ fix and the flexbox UAF **in fresh, well-resourced contexts** (both are the tick
 forbidden at a maxed context). No drift; the direct path (§VI.4) is intact.
 
 **Next check due: tick 111.**
+
+---
+
+## Check #4 — tick 111
+
+**Horizon:** H0 — Pareto Web Parity. **Gate:** ~83% WPT across categories · oracle-verified across the four
+corpora · daily-drivable shell · every rendered construct queryable through the semantic API.
+
+**Gate or scoreboard?** **Gate, decisively.** Ticks 108–111 executed §VI.4 step-4 (web-API surface by
+usage weight) and it culminated in the session's largest single move: **the global HTMLElement
+attribute reflection** (`dir`/`hidden`/`tabIndex`/`accessKey`/… reflected on *every* element via a `"*"`
+row in the existing reflection table) — **html/dom 22,690 → 40,935 (+18,245), TOTAL 389,637 → 407,882**,
+crashes=0, no area regressed. That is real, usage-weighted breadth (the reflection surface every framework
+reads), not tail. The method that found it: probe by **what the failing tests reference most** — the
+`IDL get … undefined` mass — then find the *shared cause* (the per-tag table had no global row) rather
+than one attribute at a time.
+
+**The Bar-0 fear that gated this since tick 95 did NOT materialise.** tick 95 reverted ARIA because adding
+accessors tipped the mass-reflector C-stack crash. Adding these 10 global accessors did **not** crash
+(crashes=0 across the full sweep) — the crash threshold is higher than 10, and this session's
+isolation-retry (tick 101) would have recovered an accumulation-only crash as ACCUM anyway. **The
+remaining reflection mass (ARIA + the rest) is still gated on the effective-stack-quota fix** — re-scoped
+this session (tick 106/110) to gate on the *reflection* JS-recursion, a fresh-context job — but a large,
+crash-free chunk was reachable *without* it.
+
+**Any invariant bent?** No. **I3 served** (the reflected surface is the DOM-query surface the agent reads);
+**I2 intact** (the reflection *mechanism* is generic against the spec's algorithms — only the table grew,
+and the table is the spec's IDL, not test knowledge); **Bar 0 held** (crashes=0, and the still-latent
+mass-reflector crash was measured, not traded). **The self-audit passed** ("methodology and reality
+agree").
+
+**PART VI correction.** §VI.4 step 4 is now the loop's most productive vein and largely mined for
+*crash-free* reflection: the global attributes landed; per-element table coverage is comprehensive. What
+remains on the reflection frontier is the crash-gated mass (ARIA + idlharness-style whole-tree access),
+which needs the stack-quota fix (now correctly scoped). The other levers (CSSOM `.sheet`, layout-geometry
+precision) are unchanged.
+
+**Next check due: tick 119.**

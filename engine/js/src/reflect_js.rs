@@ -81,7 +81,9 @@ pub const REFLECT_JS: &str = r#"
   function descFor(el, idl) {
     var byTag = BY_NAME[idl];
     if (!byTag || !el || !el.tagName) return null;
-    return byTag[el.tagName.toLowerCase()] || null;
+    // A `"*"` entry is a GLOBAL HTMLElement attribute (dir, hidden, tabIndex, …) — reflected on every
+    // element, so it falls back to the star row when no tag-specific one exists.
+    return byTag[el.tagName.toLowerCase()] || byTag['*'] || null;
   }
   function attrOf(d) { return d.a || d.n.toLowerCase(); }
 

@@ -143,6 +143,7 @@
   - L395 · isConnected / toggleAttribute / webkitMatchesSelector — the ergonomics frameworks call hourly
   - L405 · The Node interface CONSTANTS were absent — and n.nodeType === Node.ELEMENT_NODE silently ran false
   - L416 · DOMException legacy codes + Event phase constants — the same undefined-comparison trap as Node constants
+  - L425 · The reflection GAP was the GLOBAL attributes — one "*" row beat 400 per-attribute edits (+18k)
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -279,6 +280,14 @@
   - L69 · The topics
   - L87 · Retrieval and enforcement (tick 92) — the wiki is now mechanically load-bearing
 
+## Reference Index — a second oracle over shipping-engine source (Chromium / Firefox / Servo / WebKit)
+`docs/wiki/reference-index.md`
+
+  - L10 · TWO HARD RULES (non-negotiable — a violation is a defect, reject it)
+  - L17 · USE IT FOR (only these levers)
+  - L27 · DON'T use it for
+  - L31 · HOW
+
 ## TEXT AND LAYOUT — fonts, shaping, measurement
 `docs/wiki/text-layout.md`
 
@@ -331,4 +340,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-270 sections across 14 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+275 sections across 15 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

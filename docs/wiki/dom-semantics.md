@@ -421,3 +421,16 @@ check silently ran false. Same for `Event.AT_TARGET`/`CAPTURING_PHASE`/`BUBBLING
 DOMException legacy codes + 4 Event phase constants (ctor + prototype). **Prelude-ordering gotcha:** `Event`
 is created by `defEvent` in the dom_bindings prelude, NOT event_loop's — attach constants where the object
 is actually defined, or they silently no-op. +7 (narrower than the Node constants' +146). [[interaction-surface]]
+
+## The reflection GAP was the GLOBAL attributes — one "*" row beat 400 per-attribute edits (+18k)
+
+html/dom's `IDL get … undefined` mass looked like a per-attribute grind, but the reflection *mechanism*
+and per-element table (`reflect_table.rs`, ~400 attrs) were already comprehensive. The hole was the
+**global HTMLElement attributes** — `dir`, `hidden`, `tabIndex`, `accessKey`, `autocapitalize`, `autofocus`,
+`nonce`, `draggable`, `spellcheck`, `translate` — reflected by EVERY element but absent from the per-tag
+table, so `div.dir` etc. returned `undefined`. Fix: a `"*"` row in the table + `descFor` falling back to it
+(`byTag[tag] || byTag['*']`). **+18,245 html/dom subtests, crashes=0, nothing else moved.** Two lessons:
+(1) probe the biggest failing cluster for its SHARED cause before editing one entry at a time; (2) the
+tick-95 mass-reflector Bar-0 did NOT trip at 10 global accessors — the remaining reflection mass (ARIA +
+whole-tree access) stays crash-gated on the stack-quota fix, but a large crash-free chunk was reachable
+without it. [[js-engine]]

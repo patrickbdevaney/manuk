@@ -3054,6 +3054,36 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 111 — the GLOBAL reflected attributes (+18,245 — the session's largest flip) + the 111 cadences
+
+**TICK SHAPE: capability (attribute reflection) + self-audit + constitution-check cadences.** Both audits
+came due at 111: self-audit **clean** ("methodology and reality agree"); constitution-check **#4** (H0
+gate, ticks 108–111 judged **gate not scoreboard**, +18k on §VI.4 step-4, no invariant bent, the
+mass-reflector Bar-0 measured-not-traded; next due 119). Then the capability, and it was enormous.
+
+**The hole, found by probing what the failing tests reference MOST.** html/dom's mass is `IDL get …
+undefined` (~15k). The reflection *mechanism* + per-element table were already comprehensive
+(`input.disabled`, `a.href` reflect correctly) — but the **GLOBAL HTMLElement attributes** (`dir`,
+`hidden`, `tabIndex`, `accessKey`, `autocapitalize`, `autofocus`, `nonce`, `draggable`, `spellcheck`,
+`translate`), reflected by *every* element, had no home in the per-tag table, so `div.dir` / `span.hidden`
+/ `p.tabIndex` were `undefined`. **A `"*"` (global) row in the table + a one-line fallback in
+`reflect_js`'s `descFor` (`byTag[tag] || byTag['*']`)** applies them to every element, reusing the generic
+mechanism unchanged.
+
+**MEASURED — the biggest flip of the session by an order of magnitude:** **html/dom 22,690 → 40,935
+(+18,245)**, **TOTAL 389,637 → 407,882**, crashes=0, **every other area held exactly**. Probe 8/8; gate
+`G_GLOBAL_REFLECT` (incl. the setter round-trip and that a tag-specific attr like `div.disabled` stays
+inert — the fallback must not clobber). Proven falsifiable.
+
+**And the Bar-0 fear that gated this since tick 95 did NOT materialise.** tick 95 reverted ARIA because
+adding accessors tipped the mass-reflector C-stack crash. These 10 global accessors did **not** crash
+(crashes=0 across the whole sweep) — the threshold is higher than 10, and isolation-retry (tick 101) would
+have caught an accumulation-only crash anyway. **The remaining reflection mass (ARIA + whole-tree
+idlharness access) is still crash-gated** on the stack-quota fix (re-scoped tick 106/110), but a huge
+crash-free chunk was reachable without it. The lesson, banked hard: **find the SHARED cause behind the
+biggest failing cluster** — one `"*"` row beat 400 per-attribute edits. [[parity-methodology]]
+[[symptom-names-wrong-organ]]
+
 ## Tick 110 — the OTHER interface constants: DOMException legacy codes + Event phase (+7)
 
 **TICK SHAPE: capability (DOM API surface).** Following tick 109's Node-constants win, swept the same
