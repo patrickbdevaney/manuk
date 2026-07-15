@@ -3054,6 +3054,61 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 113 — HTML attribute qualified names weren't ASCII-lowercased: a hole as big as the win it hid behind (+10,249)
+
+**TICK SHAPE: capability (attribute reflection).** `[pattern: reflection value-correctness]`. The tick-112
+probe left the top html/dom cluster as reflection *value* mismatches — `getAttribute()` returning the wrong
+string. The shared cause was one line neither the per-tag table nor the accessor list could reveal:
+**`setAttribute` did not ASCII-lowercase the qualified name.** DOM Living Standard §Element requires
+`setAttribute`/`getAttribute`/`removeAttribute`/`hasAttribute`/`toggleAttribute` to lowercase the qualified
+name when the element is in the HTML namespace of an HTML document. We stored it **verbatim** — so
+`el.setAttribute('accessKey', v)` created an attribute literally named `accessKey`, and then two independent
+readers both missed it: `getAttribute('accesskey')` (exact-case) → `null`, and the reflected IDL getter
+`el.accessKey` (which reads the *lowercase* content name) → `""`. Every `setAttribute()` subtest for every
+mixed-case IDL attribute (`accessKey`, `tabIndex`, `noValidate`, `contentEditable`, …) failed on that one
+line — across the WHOLE reflection suite.
+
+**Mechanism.** A shared `attr_qname(dom, node, name)` in `dom_bindings.rs` lowercases the name **iff the
+element's `namespace` slot is `None`** (HTML — XHTML normalises to `None`, so it counts too); SVG/MathML
+carry `Some(ns)` and keep their case, so `viewBox`/`preserveAspectRatio` survive. Applied at both store and
+lookup in all five attribute natives. The `*AttributeNS` family is CASE-PRESERVING per spec, so it needed
+its own path: four `__*AttrExact` natives (`el_{set,get,remove,has}_attribute_exact`) that skip the fold,
+and `attrs_js.rs` routes `setAttributeNS`/`getAttributeNS`/…/the `NamedNodeMap`/`Attr` write-through
+through them so `setAttributeNS(ns,'Abc',v)` still stores `Abc`.
+
+**MEASURED — clean, and I did not trust the doc: I re-ran the sweep.** **html/dom 45,495 → 55,744
+(+10,249, 76.1% → 93.2%)**; **dom 2,764 → 2,775 (+11)**; css/selectors (784) and domparsing (188) held
+exactly; **HANG/CRASH 0 (Bar 0) in every area**; **TOTAL → 422,702 (+10,260)**. The one `ACCUM` in
+html/dom is the tracked cross-file flexbox-relayout UAF (SIGSEGV in-batch, PASSES alone) — recovered in
+isolation, not a new per-page crash, not traded. `G_ATTR_CASE` gates all seven claims and is **proven
+falsifiable** (red on clean source, green with the fix); the attr-adjacent gate wall (`g_attrs`,
+`g_classlist`, `g_reflect`, `g_global_reflect`, `g_dom_impl`, `g_names`) stayed green.
+
+**The method note that matters (banked to the wiki).** Every isolated probe of this bug PASSED — the
+`reflection-*.html` files reported `testsCreated:0` under `diag`, so the loop had written the whole cluster
+off as "0 tests, nothing to fix." That counter was a **diagnostic artifact**, not reality: reproducing the
+files' own scripts at their real relative path ran all 8,272 subtests and exposed the `accessKey → ""`
+pattern the isolated repro hid. **When an isolated repro passes but the aggregate fails, rebuild the
+aggregate's real environment before trusting a diagnostic's summary counter.** This is the
+`reflection-value-correctness` memory, closed.
+
+**An instrument bug the landing itself exposed — and it is PROCESS #46 for the fifth time.** The first
+`verify.sh` run false-RED'd three *unrelated* gates (`G_DEFER`, `G_FIRST_PAINT`, `G_SILENT_FAIL`) — all of
+which pass in isolation. Cause: under the cold, massively-parallel gate build, one gate's output carried a
+transient `error: failed to …` line, which triggered `_out()`'s BUILD-FAILED branch — a branch that
+references `$RED/$BLD/$OFF`, variables **never defined in `verify.sh`**. Under `set -u` that branch *died*,
+aborted the `$(_out …)` substitution, and handed the gate an EMPTY result, which the caller reads as the
+gate FAILING. **The path whose entire job is to report a build hiccup honestly was itself the thing that
+lied** — exactly the class the branch's own comment says it exists to prevent, one metre above the bug.
+Fixed to literal escapes (matching `ok()/bad()`); no engine change. This is why the wall is landed on a
+warm re-run, not the cold first pass.
+
+**The ratchet.** Capability: **up** (+10,260, the reflection surface every framework's `setAttribute` path
+writes through). Performance: unchanged (wall ~51s, under the 65s ceiling). Instrument fidelity: **up** —
+`G_ATTR_CASE` is a new falsifiable tooth, the wall no longer false-REDs on a transient build hiccup, and
+`CONSTELLATION.tsv`/`SURFACE-AUDIT.md` now record that a row marked `gated` can still hide a lever as large
+as its headline win. [[parity-methodology]] [[reflection-value-correctness]]
+
 ## Tick 112 — lang reflection: a getter-only fallback whose SETTER was silently dropped (+4,560)
 
 **TICK SHAPE: capability (attribute reflection).** Re-probed html/dom after tick 111: the top remaining

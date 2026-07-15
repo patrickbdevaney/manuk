@@ -141,3 +141,39 @@ rank the newly-visible mass — before assuming the measured areas are the whole
 or corrected here (a checkout expansion is its own tick); the map (`CONSTELLATION.tsv`) remains current.
 
 **Next audit due: tick 113.**
+
+---
+
+## Audit #4 — tick 113 (2026-07-15)
+
+**Date:** 2026-07-15. **Sources searched (web):**
+[web.dev/blog/interop-2026](https://web.dev/blog/interop-2026) ·
+[web-platform-tests/interop 2026 README](https://github.com/web-platform-tests/interop/blob/main/2026/README.md) ·
+[Igalia: Interop 2026 focus areas](https://www.igalia.com/news/interop-2026.html).
+
+**Interop 2026 focus areas (20 areas / 33 proposals + 4 investigations):** Anchor Positioning, Container
+Style Queries (`@container … style()`), Dialog & Popover enhancements (`<dialog closedby>`, `:open`,
+`popover=hint`), View Transitions incl. **cross-document**, WebRTC; investigations: accessibility testing,
+JPEG XL testability, mobile testing infra, WebVTT.
+
+**Reconcile vs `CONSTELLATION.tsv`:** every vendor-named 2026 focus area is ALREADY on the map (anchor
+positioning, dialog, popover, container/style queries, view transitions, WebRTC-adjacent WebTransport,
+JPEG XL — all added in Audit t83). **No new capability rows needed; the map is current on the named
+frontier.** Per protocol ("an audit that finds nothing is suspicious"), the finding this cycle is not a
+missing row — it is a **status-correctness** defect in the map itself.
+
+**What we had been wrong about (this one bit):** the `status` field is binary and it HID a lever as large
+as a headline win. `app · attribute reflection` was marked **`gated` (G_REFLECT, tick 82: +9,940)** —
+reading as *done*. This session (tick 113) found an equal-sized hole **behind** that gate:
+`setAttribute`/`getAttribute` did not ASCII-lowercase HTML qualified names (DOM §Element), so EVERY
+mixed-case IDL attribute (`accessKey`, `tabIndex`, `noValidate`, …) failed its whole `setAttribute()`
+subtest family — **+10,249** (html/dom 45,495 → 55,744) once fixed. A capability marked gated had a second
+lever bigger than the first, invisible because the reflection-suite files reported `testsCreated:0` under
+`diag` (a diagnostic ARTIFACT — the tests ran fine at their real path).
+
+**Steer (banked):** `gated`/`works` means "a slice is PROVEN," never "the capability is exhausted." When an
+area's histogram still shows a large failing mass under a capability the map calls done, **suspect the
+status, not the frontier** — reproduce the aggregate's real environment before trusting a diagnostic's
+summary counter. The `CONSTELLATION.tsv` reflection row is corrected to record the tick-113 residual.
+
+**Next audit due: tick 123.**

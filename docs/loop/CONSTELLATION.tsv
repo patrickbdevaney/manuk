@@ -20,7 +20,7 @@ doc	print / media queries	every 'print this page'	unknown	-	NEVER MEASURED — p
 doc	multicol	academic + news layout	unknown	-	NEVER MEASURED — probe it
 doc	accessibility / semantic tree	screen readers, agent observation, our own hit-testing	partial	-	manuk-a11y (1.3k LOC): role+accessible-name+geometry+hit-test, feeds the agent. NO AccessKit platform bridge yet. Constitution I3 — the moat, already load-bearing
 app	real DOM prototypes (patchable)	Sentry/ad-blockers/devtools hook nothing	gated	G_PROTOTYPE	tick 64: 60x faster too
-app	attribute reflection (a.href, input.disabled)	every branch on a DOM property is wrong	gated	G_REFLECT	tick 82: +9,940 WPT
+app	attribute reflection (a.href, input.disabled)	every branch on a DOM property is wrong	gated	G_REFLECT	tick 82: +9,940; tick 113: +10,249 MORE (setAttribute HTML qualified-name lowercasing was missing — "gated" hid a hole as large as the first win)
 app	inline event handlers (onclick, onload, onsubmit)	the oldest way to attach behaviour to markup; every legacy form	gated	G_CAPABILITY	tick 84: compiled + wired at parse; body/frameset on* map to window
 app	element.dataset (data-* map)	data-testid, Stimulus, Bootstrap, Hotwire	gated	G_CAPABILITY	tick 84: live Proxy over data-*, works across the iframe boundary
 app	live HTMLCollection / NodeList	`while(el.children.length)` is an INFINITE LOOP	gated	G_COLLECTIONS	tick 73

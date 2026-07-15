@@ -69,8 +69,13 @@ _out() {  # _out <key> → the command's combined output, once it has finished
   # the parallel gates). So: a build failure is reported AS a build failure, loudly, and never dressed up
   # as a verdict about the engine.
   if echo "$out" | grep -qE "^error: (could not compile|failed to|couldn't)"; then
-    printf '%sBUILD FAILED for gate %s — this is NOT a verdict about the engine:%s\n' \
-      "$RED$BLD" "$key" "$OFF" >&2
+    # Literal escapes, NOT $RED/$BLD/$OFF — those were never defined in this script, so under `set -u`
+    # this very branch (the one that exists to report a build failure HONESTLY) died on an unbound
+    # variable, aborted the `$(_out …)` substitution, and handed the gate an EMPTY result — which the
+    # caller then read as the gate FAILING. A transient parallel-build hiccup thus false-RED'd a green
+    # tick (tick 113). The honest-reporting path must not itself be the thing that lies. [no-pattern]
+    printf '  \033[31m\033[1mBUILD FAILED for gate %s — this is NOT a verdict about the engine:\033[0m\n' \
+      "$key" >&2
     echo "$out" | grep -E "^(error|Caused by):" | head -4 | sed 's/^/    /' >&2
   fi
   printf '%s' "$out"

@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **105** | ticks 1–112 |
-| median tick cycle | **19m** | 104 intervals |
+| ticks landed | **106** | ticks 1–113 |
+| median tick cycle | **19m** | 105 intervals |
 | median, last 10 | **27m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.96** | 108.2h elapsed |
-| median verify wall | **58s** | 44 ticks |
-| wall trend | 39s → 59s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.95** | 110.7h elapsed |
+| median verify wall | **59s** | 45 ticks |
+| wall trend | 39s → 60s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **43**
-* **✅ rows in the capability ledger**: 144 → **197**
+* **live gates**: 27 → **44**
+* **✅ rows in the capability ledger**: 144 → **200**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**52 of 105 ticks** (50%) moved a
+**53 of 106 ticks** (50%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -85,8 +85,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **52** capability ticks, median cycle **19m**
-* median diff per tick: **+254 / −23** lines across 8 files
+* **53** capability ticks, median cycle **19m**
+* median diff per tick: **+256 / −23** lines across 8 files
 
 ## Every tick
 
@@ -197,5 +197,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **110** | 2026-07-15 15:59 | 17m | capability | 59s | +158/−36 | 42 | 81 | 36.8% · | the OTHER interface constants: DOMException legacy codes + Event phase (+7) |
 | **111** | 2026-07-15 16:30 | 31m | capability | 60s | +215/−40 | 43 | 81 | 36.8% · | the GLOBAL reflected attributes (+18,245 — the session's largest flip) + the 111 cadences |
 | **112** | 2026-07-15 17:16 | 45m | capability | 54s | +118/−41 | 43 | 81 | 36.8% · | lang reflection: a getter-only fallback whose SETTER was silently dropped (+4,560) |
+| **113** | 2026-07-15 19:46 | 2.5h | capability | 9m | +391/−61 | 44 | 81 | 36.8% · | HTML attribute qualified names weren't ASCII-lowercased: a hole as big as the win it hid b |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

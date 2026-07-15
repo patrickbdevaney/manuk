@@ -445,3 +445,25 @@ Fix: add `lang` to the `"*"` global row → reflect_js installs a real getter+se
 adding a reflected `title` alongside the EXISTING native `title` accessor caused a hard crash (css-grid
 crashes=35) — reverted. Never define a reflected accessor over a working native one; and the mass-reflector
 Bar-0 has SOME headroom (lang, the 11th global accessor, is fine) but it is finite. [[js-engine]]
+
+## HTML attribute qualified names are ASCII-lowercased — the root of the reflection value-mismatch mass
+
+The single biggest reflection cluster was NOT missing accessors — it was `setAttribute()`. DOM Living
+Standard §Element makes `setAttribute` / `getAttribute` / `removeAttribute` / `hasAttribute` /
+`toggleAttribute` **ASCII-lowercase the qualified name** when the element is HTML-namespaced in an HTML
+document. We stored/looked-up the name **verbatim**. So `el.setAttribute('accessKey', v)` stored an
+attribute literally named `accessKey`; then `getAttribute('accesskey')` (exact-case) missed it → `null`,
+and the reflected getter `el.accessKey` (which reads the lowercase *content* name) missed it → `""`. Every
+`setAttribute()` subtest for every mixed-case IDL attribute (`accessKey`, `tabIndex`, `noValidate`, …)
+across the whole WPT reflection suite failed on this one line. Fix: a shared `attr_qname(dom, node, name)`
+helper in `dom_bindings.rs` that lowercases the name iff the element's namespace slot is `None` (HTML) —
+SVG/MathML (`Some`) keep their case so `viewBox`/`preserveAspectRatio` survive — applied at both store and
+lookup in all five attribute natives. **+10,249 html/dom subtests (45,495→55,744), crashes=0, no other
+area regressed.** Gate `G_ATTR_CASE`.
+
+**Method note (banked):** the `reflection-*.html` files reported `testsCreated:0` under `diag` — this was
+a **diag artifact**, not reality. Reproducing the file's own scripts in a same-directory copy (so its
+relative `<script src>` resolve) ran all 8,272 of its subtests and exposed the `accessKey → ""` pattern in
+the FULL run that every isolated probe had hidden. When an isolated repro passes but the aggregate fails,
+**rebuild the aggregate's real environment** (its actual scripts, its real path) rather than trusting a
+diagnostic's summary counter. [[conformance-and-oracles]] [[js-engine]]

@@ -1218,6 +1218,11 @@ unsafe fn define_members(
         def_guarded!(def, c"removeAttribute", el_remove_attribute, 1);
         def_guarded!(def, c"hasAttribute", el_has_attribute, 1);
         def_guarded!(def, c"toggleAttribute", el_toggle_attribute, 1);
+        // Case-preserving primitives for the `*AttributeNS` family (which the spec does NOT lowercase).
+        def_guarded!(def, c"__setAttrExact", el_set_attribute_exact, 2);
+        def_guarded!(def, c"__getAttrExact", el_get_attribute_exact, 1);
+        def_guarded!(def, c"__removeAttrExact", el_remove_attribute_exact, 1);
+        def_guarded!(def, c"__hasAttrExact", el_has_attribute_exact, 1);
         def_guarded!(def, c"remove", el_remove, 0);
         // The ChildNode / ParentNode mixins — see the block above. Absent until now, all eleven.
         def_guarded!(def, c"append", el_append, 1);
@@ -1719,12 +1724,47 @@ unsafe fn el_append_child(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> b
 }
 
 /// `element.setAttribute(name, value)`.
+/// DOM Living Standard §Element `setAttribute`/`getAttribute`/`removeAttribute`/`hasAttribute`/
+/// `toggleAttribute`: "If this is in the HTML namespace and its node document is an HTML document,
+/// then set qualifiedName to qualifiedName in ASCII lowercase." Our documents are always HTML, so the
+/// only test is the element's namespace — HTML iff its `namespace` slot is `None`. SVG/MathML elements
+/// (namespace `Some`) keep their case, so `viewBox` / `preserveAspectRatio` survive. This is why
+/// `el.setAttribute('accessKey', v)` must store under `accesskey`: otherwise the reflected getter (which
+/// reads the lowercase content-attribute name) and `getAttribute('accessKey')` both miss it and return
+/// empty — the root of thousands of reflection-suite value mismatches.
+unsafe fn attr_qname(dom: *mut Dom, node: NodeId, name: &str) -> String {
+    let is_html = (*dom).element(node).map_or(true, |e| e.namespace.is_none());
+    if is_html && name.bytes().any(|b| b.is_ascii_uppercase()) {
+        name.to_ascii_lowercase()
+    } else {
+        name.to_string()
+    }
+}
+
 unsafe fn el_set_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    set_attribute_impl(cx, argc, vp, true)
+}
+/// Case-**preserving** `setAttribute` for the `*AttributeNS` family, which the DOM spec does NOT
+/// lowercase — `setAttributeNS(ns, 'Abc', v)` stores `Abc`. Bound as `__setAttrExact`.
+unsafe fn el_set_attribute_exact(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    set_attribute_impl(cx, argc, vp, false)
+}
+unsafe fn set_attribute_impl(
+    cx: *mut RawJSContext,
+    argc: u32,
+    vp: *mut Value,
+    lower: bool,
+) -> bool {
     let Some((dom, node)) = this_node(vp) else {
         *vp = UndefinedValue();
         return true;
     };
     if let (Some(name), Some(value)) = (arg_string(cx, vp, argc, 0), arg_string(cx, vp, argc, 1)) {
+        let name = if lower {
+            attr_qname(dom, node, &name)
+        } else {
+            name
+        };
         let old = (*dom)
             .element(node)
             .and_then(|e| e.attr(&name))
@@ -2147,6 +2187,18 @@ unsafe fn el_set_scroll_left(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -
 
 /// `element.getAttribute(name)` → string | null.
 unsafe fn el_get_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    get_attribute_impl(cx, argc, vp, true)
+}
+/// Case-preserving `getAttribute` for `getAttributeNS`. Bound as `__getAttrExact`.
+unsafe fn el_get_attribute_exact(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    get_attribute_impl(cx, argc, vp, false)
+}
+unsafe fn get_attribute_impl(
+    cx: *mut RawJSContext,
+    argc: u32,
+    vp: *mut Value,
+    lower: bool,
+) -> bool {
     let Some((dom, node)) = this_node(vp) else {
         *vp = NullValue();
         return true;
@@ -2154,6 +2206,11 @@ unsafe fn el_get_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> 
     let Some(name) = arg_string(cx, vp, argc, 0) else {
         *vp = NullValue();
         return true;
+    };
+    let name = if lower {
+        attr_qname(dom, node, &name)
+    } else {
+        name
     };
     match (*dom)
         .element(node)
@@ -2431,8 +2488,25 @@ unsafe fn el_clone_node(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> boo
 
 /// `element.removeAttribute(name)`.
 unsafe fn el_remove_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    remove_attribute_impl(cx, argc, vp, true)
+}
+/// Case-preserving `removeAttribute` for `removeAttributeNS`. Bound as `__removeAttrExact`.
+unsafe fn el_remove_attribute_exact(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    remove_attribute_impl(cx, argc, vp, false)
+}
+unsafe fn remove_attribute_impl(
+    cx: *mut RawJSContext,
+    argc: u32,
+    vp: *mut Value,
+    lower: bool,
+) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         if let Some(name) = arg_string(cx, vp, argc, 0) {
+            let name = if lower {
+                attr_qname(dom, node, &name)
+            } else {
+                name
+            };
             let old = (*dom)
                 .element(node)
                 .and_then(|e| e.attr(&name))
@@ -2456,8 +2530,25 @@ unsafe fn el_remove_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) 
 
 /// `element.hasAttribute(name)` → boolean.
 unsafe fn el_has_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    has_attribute_impl(cx, argc, vp, true)
+}
+/// Case-preserving `hasAttribute` for `hasAttributeNS`. Bound as `__hasAttrExact`.
+unsafe fn el_has_attribute_exact(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    has_attribute_impl(cx, argc, vp, false)
+}
+unsafe fn has_attribute_impl(
+    cx: *mut RawJSContext,
+    argc: u32,
+    vp: *mut Value,
+    lower: bool,
+) -> bool {
     let has = match (this_node(vp), arg_string(cx, vp, argc, 0)) {
         (Some((dom, node)), Some(name)) => {
+            let name = if lower {
+                attr_qname(dom, node, &name)
+            } else {
+                name
+            };
             (*dom).element(node).and_then(|e| e.attr(&name)).is_some()
         }
         _ => false,
@@ -2489,6 +2580,7 @@ unsafe fn el_toggle_attribute(cx: *mut RawJSContext, argc: u32, vp: *mut Value) 
     let mut present = false;
     if let Some((dom, node)) = this_node(vp) {
         if let Some(name) = arg_string(cx, vp, argc, 0) {
+            let name = attr_qname(dom, node, &name);
             let has = (*dom).element(node).and_then(|e| e.attr(&name)).is_some();
             // `force` is optional; read it only if a second argument was actually passed.
             let force = if argc > 1 {

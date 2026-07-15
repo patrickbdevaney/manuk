@@ -75,12 +75,12 @@ pub const ATTRS_JS: &str = r#"
     Object.defineProperty(a, 'value', {
       enumerable: true,
       get: function () {
-        if (el) { var v = el.getAttribute(name); return v === null ? '' : v; }
+        if (el) { var v = el.__getAttrExact(name); return v === null ? '' : v; }
         return own === undefined ? '' : own;
       },
       set: function (v) {
         v = String(v);
-        if (el) { el.setAttribute(name, v); } else { own = v; }
+        if (el) { el.__setAttrExact(name, v); } else { own = v; }
       },
     });
     // `nodeValue` and `textContent` are aliases of `value` on an Attr, and legacy code uses both.
@@ -94,7 +94,7 @@ pub const ATTRS_JS: &str = r#"
       get: function () { return a.value; },
       set: function (v) { a.value = v; },
     });
-    a.__attach = function (owner) { el = owner; if (own !== undefined) owner.setAttribute(name, own); };
+    a.__attach = function (owner) { el = owner; if (own !== undefined) owner.__setAttrExact(name, own); };
     return a;
   }
 
@@ -112,20 +112,20 @@ pub const ATTRS_JS: &str = r#"
         return el.hasAttribute(name) ? makeAttr(el, name) : null;
       },
       setNamedItem: function (attr) {
-        var prev = el.hasAttribute(attr.name) ? makeAttr(el, attr.name) : null;
-        el.setAttribute(attr.name, attr.value);
+        var prev = el.__hasAttrExact(attr.name) ? makeAttr(el, attr.name) : null;
+        el.__setAttrExact(attr.name, attr.value);
         if (attr.__attach) attr.__attach(el);
         return prev;
       },
       removeNamedItem: function (name) {
         name = String(name);
-        if (!el.hasAttribute(name)) {
+        if (!el.__hasAttrExact(name)) {
           var e = new Error("no attribute named '" + name + "'");
           e.name = 'NotFoundError';
           throw e;
         }
-        var old = makeAttr(null, name, el.getAttribute(name));
-        el.removeAttribute(name);
+        var old = makeAttr(null, name, el.__getAttrExact(name));
+        el.__removeAttrExact(name);
         return old;
       },
     };
@@ -189,20 +189,22 @@ pub const ATTRS_JS: &str = r#"
   };
   owner.getAttributeNodeNS = function (_ns, name) { return this.getAttributeNode(name); };
   owner.setAttributeNode = function (attr) {
-    var prev = this.hasAttribute(attr.name) ? makeAttr(null, attr.name, this.getAttribute(attr.name)) : null;
-    this.setAttribute(attr.name, attr.value);
+    // Case-preserving: setAttributeNode stores by the Attr's exact name (no lowercasing) — createAttribute
+    // already lowercased HTML names at creation, so only createAttributeNS-preserved case reaches here.
+    var prev = this.__hasAttrExact(attr.name) ? makeAttr(null, attr.name, this.__getAttrExact(attr.name)) : null;
+    this.__setAttrExact(attr.name, attr.value);
     if (attr.__attach) attr.__attach(this);
     return prev;
   };
   owner.setAttributeNodeNS = owner.setAttributeNode;
   owner.removeAttributeNode = function (attr) {
-    if (!this.hasAttribute(attr.name)) {
+    if (!this.__hasAttrExact(attr.name)) {
       var e = new Error('the attribute is not on this element');
       e.name = 'NotFoundError';
       throw e;
     }
-    var old = makeAttr(null, attr.name, this.getAttribute(attr.name));
-    this.removeAttribute(attr.name);
+    var old = makeAttr(null, attr.name, this.__getAttrExact(attr.name));
+    this.__removeAttrExact(attr.name);
     return old;
   };
 
@@ -250,26 +252,29 @@ pub const ATTRS_JS: &str = r#"
       e2.name = 'NamespaceError';
       throw e2;
     }
-    this.setAttribute(qname, String(value));
+    // The `*AttributeNS` family is CASE-PRESERVING — the DOM spec lowercases only the non-NS
+    // setAttribute/getAttribute. Route through the `__*AttrExact` natives so `setAttributeNS(ns,'Abc',v)`
+    // stores `Abc`, not `abc`. (The public setAttribute lowercases for HTML elements; NS must not.)
+    this.__setAttrExact(qname, String(value));
   };
   owner.getAttributeNS = function (_ns, local) {
     local = String(local);
     // Look up by local name first, then by any qualified name that ends in it — which is what a document
-    // written with a prefix actually stores.
-    if (this.hasAttribute(local)) return this.getAttribute(local);
+    // written with a prefix actually stores. Case-preserving (exact) lookup, per spec.
+    if (this.__hasAttrExact(local)) return this.__getAttrExact(local);
     var names = this.getAttributeNames ? this.getAttributeNames() : [];
     for (var i = 0; i < names.length; i++) {
-      if (names[i].split(':').pop() === local) return this.getAttribute(names[i]);
+      if (names[i].split(':').pop() === local) return this.__getAttrExact(names[i]);
     }
     return null;
   };
   owner.hasAttributeNS = function (ns, local) { return this.getAttributeNS(ns, local) !== null; };
   owner.removeAttributeNS = function (ns, local) {
     local = String(local);
-    if (this.hasAttribute(local)) { this.removeAttribute(local); return; }
+    if (this.__hasAttrExact(local)) { this.__removeAttrExact(local); return; }
     var names = this.getAttributeNames ? this.getAttributeNames() : [];
     for (var i = 0; i < names.length; i++) {
-      if (names[i].split(':').pop() === local) { this.removeAttribute(names[i]); return; }
+      if (names[i].split(':').pop() === local) { this.__removeAttrExact(names[i]); return; }
     }
   };
 
