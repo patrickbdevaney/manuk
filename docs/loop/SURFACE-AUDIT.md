@@ -82,3 +82,31 @@ The single most uncomfortable line: **we did not have `WebAuthn` on the map at a
 definition says "platform web = accounts and login", and passkeys are *how login works now*.
 
 ### Next audit due: tick 93
+
+---
+
+## Audit #2 — tick 93
+
+**Sources:** [Interop 2026 focus areas](https://github.com/web-platform-tests/interop/blob/main/2026/README.md) ·
+[web.dev/blog/interop-2026](https://web.dev/blog/interop-2026) ·
+[Mozilla Hacks: Launching Interop 2026](https://hacks.mozilla.org/2026/02/launching-interop-2026/).
+
+**Method:** reconciled the 20 Interop-2026 focus areas + 4 investigations against `CONSTELLATION.tsv`.
+
+**Finding: the map is current.** Every focus area the four vendors agreed on is already on the map from
+Audit #1 (tick 83) — anchor positioning, container/style queries, dialog/popover, View Transitions,
+Navigation API, scroll-driven animations, WebRTC (now 91.6% cross-vendor). Nothing the world named this
+cycle is missing from the constellation. Audit #1 did its job; ten ticks later the frame still holds.
+
+**The one signal worth recording** — Interop 2026's **accessibility-testing investigation** ("generate
+consistent accessibility trees across browsers"). This is not a gap in our map; it is external validation
+of **Invariant I3**. The industry is now treating a *consistent, correct AX tree* as a first-class
+cross-browser problem — which is precisely the substrate `manuk-a11y` already builds and feeds to the
+agent. A from-scratch engine whose semantic tree is correct and stable is, by this signal, aligned with
+where the platform is heading, not chasing it. The a11y/agent moat (I3) is reinforced, not threatened.
+
+**No capabilities added, none corrected.** A clean audit here is honest, not suspicious: the additions
+happened at Audit #1 and the reconciliation confirms they stuck. The next real map-expansion will come
+from measuring the unmeasured WPT areas (the aperture), not from the Interop list, which we now cover.
+
+**Next audit due: tick 103.**

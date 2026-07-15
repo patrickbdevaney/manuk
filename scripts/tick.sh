@@ -105,6 +105,10 @@ ok "self-audit current (last: tick ${AUDIT})"
 # +721k that was the wrong hill — and no instrument read the document that defines the frontier.
 ./scripts/constitution-check.sh check || die "constitution check overdue — run ./scripts/constitution-check.sh run"
 
+# The wall-time audit. Every 20 ticks, hunt standing bloat in the wall WITHOUT cutting a gate — the
+# proactive half of the WALL ratchet (which only catches regression). See scripts/wall-audit.sh.
+./scripts/wall-audit.sh check || die "wall-time audit overdue — run ./scripts/wall-audit.sh run"
+
 # 6. Formatting — a one-second check that CI would otherwise fail on minutes later.
 cargo fmt --all --check >/dev/null 2>&1 || { cargo fmt --all >/dev/null 2>&1; printf '  %s⚠%s reformatted (cargo fmt)\n' "$YEL" "$OFF"; }
 ok "fmt clean"

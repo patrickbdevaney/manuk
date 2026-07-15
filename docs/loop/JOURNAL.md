@@ -3054,6 +3054,31 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 93 — a sparse wall-time audit: keep the per-tick tax lean without cutting a gate
+
+**TICK SHAPE: instrument.** No engine code changed. The wall runs every tick, so a needless second is
+taxed forever — and the ratchet's WALL invariant only catches *regression* (the wall got slower), never
+*standing bloat* (it was never as lean as it could be). New: **`scripts/wall-audit.sh`**, a cadence (every
+20 ticks, enforced by `tick.sh`, persisted through `status-update.sh`) that reads a per-section timing
+breakdown the wall now records (`head_` writes `.git/manuk-wall-sections`) and hunts removable cost —
+under one absolute rule: **report, never delete.** No gate dropped, no floor widened, no check laundered
+to CI to fake a fast local wall. Only optimisations that buy the *same assertion* for fewer seconds.
+
+**Audit #1 (this tick):** the 61s wall breaks down as `T` crate tests **28%**, `P` parity **25%**, `G6`
+10%, `G1` 7%, everything else ~0 (the ~20 parallel gates hide inside the concurrency; the build is 1s with
+output in RAM). Finding: **the wall is already lean** (61s ≪ the 300s target) and the costs are honest.
+The one admissible lever is **`cargo-nextest` for `T`** — it shares the test binary and parallelises
+execution harder than `cargo test`, for identical assertions (the self-audit already names it). Filed as
+the next wall-lever; not done here (a toolchain change is its own scoped work). `P` is browser-launch-bound
+and has no rigor-preserving cut. **Verdict: no cut — lean.**
+
+That is the point of a *proactive* audit: it can conclude "already lean" and mean it, because it looked.
+The loop now has four cadences pointing at four different failure modes — self-audit (did we build what
+the methodology prescribed), surface-audit (is the map the whole map), constitution-check (is the hill the
+mountain), wall-audit (is the wall paying for what it asserts).
+
+**WIKI:** none — loop-governance mechanism; the log is docs/loop/WALL-AUDIT.md.
+
 ## Tick 92 — the wiki becomes mechanically load-bearing: enforced, indexed, retrievable
 
 **TICK SHAPE: instrument.** No engine code changed. The wiki-writing rule existed but was *methodological,

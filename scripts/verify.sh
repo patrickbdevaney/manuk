@@ -107,7 +107,21 @@ _launch gi cargo test -q -p manuk-shell tab_operations -- --nocapture
 FAIL=0
 ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; }
 bad()  { printf '  \033[31m✗ %s\033[0m\n' "$1"; FAIL=1; }
-head_() { printf '\n\033[1m%s\033[0m\n' "$1"; }
+# head_ also records a per-section timing breakdown to `.git/manuk-wall-sections`, so the wall-time audit
+# (scripts/wall-audit.sh, on a sparse cadence) can see WHERE the wall spends its seconds and hunt bloat
+# without cutting any gate's rigor. Costs nothing on the hot path (one echo of an integer).
+_WALL_SECTIONS=".git/manuk-wall-sections"
+: > "$_WALL_SECTIONS" 2>/dev/null || true
+_WALL_LAST=$SECONDS
+_WALL_PREV_NAME=""
+head_() {
+  if [ -n "$_WALL_PREV_NAME" ]; then
+    printf '%s\t%s\n' "$((SECONDS - _WALL_LAST))" "$_WALL_PREV_NAME" >> "$_WALL_SECTIONS" 2>/dev/null || true
+  fi
+  _WALL_LAST=$SECONDS
+  _WALL_PREV_NAME="${1%% ·*}"
+  printf '\n\033[1m%s\033[0m\n' "$1"
+}
 
 # **RAM-based iterative builds, ALWAYS ON (not just when the disk is already full).** The incremental
 # compile fragments — the bulk of what a rebuild rewrites, over and over, during ordinary edit→build→test
@@ -536,6 +550,11 @@ RECEIPT=".git/manuk-verify-receipt"
 TMPIDX="$(mktemp)"
 GIT_INDEX_FILE="$TMPIDX" git read-tree HEAD 2>/dev/null
 GIT_INDEX_FILE="$TMPIDX" git add -A 2>/dev/null
+# Record the final section's duration so the wall-time audit sees the whole breakdown.
+if [ -n "${_WALL_PREV_NAME:-}" ]; then
+  printf '%s\t%s\n' "$((SECONDS - _WALL_LAST))" "$_WALL_PREV_NAME" >> "$_WALL_SECTIONS" 2>/dev/null || true
+fi
+
 VERIFIED_TREE="$(GIT_INDEX_FILE="$TMPIDX" git write-tree 2>/dev/null)"
 rm -f "$TMPIDX"
 {
