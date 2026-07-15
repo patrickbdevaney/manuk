@@ -45,6 +45,18 @@ TICK=$(grep -oP '^TICK:\s*\K[0-9]+' "$STATUS" 2>/dev/null || echo 0)
 TARGET=$(grep -oP '^LOOP_UNTIL_TICK=\K[0-9]+' "$STORE" 2>/dev/null || echo 0)
 if [ "$(( TARGET - TICK ))" -le 0 ]; then say "budget spent (tick $TICK ≥ target $TARGET) — loop complete, nothing to resurrect"; exit 0; fi
 
+# ── Liveness #0: the ACTIVE DRIVING SESSION's PID is alive. A session driven by ScheduleWakeup (the /loop
+# self-continue) SLEEPS between wakeups — during that sleep it stops touching the heartbeat, so heartbeat
+# age alone would look "dead" and the daemon would wrongly launch a COMPETITOR. The process, however, is
+# still alive. So a session that is driving the loop writes its own PID here; while it lives, stand down.
+SESSION_PIDFILE=.git/manuk-loop-session.pid
+if [ -f "$SESSION_PIDFILE" ]; then
+  spid=$(cat "$SESSION_PIDFILE" 2>/dev/null || echo "")
+  if [ -n "$spid" ] && kill -0 "$spid" 2>/dev/null; then
+    say "alive: driving session PID $spid still running (may be asleep between ScheduleWakeup ticks) — stand down"; exit 0
+  fi
+fi
+
 # ── Liveness #1: a headless session we launched is still running ───────────────────────────────────
 if [ -f "$PIDFILE" ]; then
   pid=$(cat "$PIDFILE" 2>/dev/null || echo "")
