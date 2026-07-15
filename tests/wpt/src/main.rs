@@ -70,7 +70,18 @@ fn run() {
             eprintln!("usage: manuk-wpt diag <path/relative/to/wpt>");
             std::process::exit(2);
         };
+        // `diag` reads what a page's SCRIPTS experienced — it is meaningless without the JS engine, and
+        // its `eval_for_test` seam only exists under the `spidermonkey` feature. Gating the whole path
+        // keeps the **headless** `cargo build --workspace --no-default-features` (CI's gating lane)
+        // compiling — the lane my tick-84 addition of this subcommand silently broke.
+        #[cfg(feature = "spidermonkey")]
         diag(rel.clone(), &fonts);
+        #[cfg(not(feature = "spidermonkey"))]
+        {
+            let _ = rel;
+            eprintln!("diag needs the `spidermonkey` feature (it reads what a page's scripts did)");
+            std::process::exit(2);
+        }
         return;
     }
 
@@ -2228,6 +2239,7 @@ fn read_jsonl(p: &std::path::Path) -> Vec<(String, usize, usize, String, u128)> 
 /// and every test already created was left un-`done()`. `TH_TIMEOUT` is what that *looks* like from
 /// outside, and it is why the status alone is useless. An instrument must be able to distinguish its own
 /// condition from the thing it measures — and "the page threw" is the condition, not the measurement.
+#[cfg(feature = "spidermonkey")]
 fn diag(rel: String, fonts: &manuk_text::FontContext) {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()

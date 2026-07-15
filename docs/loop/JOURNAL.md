@@ -3054,6 +3054,33 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 88 — CI was red because the wall built a different thing than CI did
+
+**TICK SHAPE: instrument.** CI's gating `verify-linux` job had been **failing since tick 84** (four
+commits: 84, 85, 86, 87 — CI was green through tick 83), and the local wall was green the whole time. The
+cause and the lesson are the same: **the wall and CI did not build the same thing, so they disagreed about
+what "green" means, and one of them was lying.**
+
+**The regression.** Tick 84's `diag` subcommand (the WPT single-file diagnostic) calls `page.eval_for_test`
+— a seam that only exists under the `spidermonkey` feature. CI's first build step is
+`cargo build --workspace --no-default-features` (the lean/headless lane), where that method does not exist,
+so the workspace did not compile. `diag` is now gated behind `#[cfg(feature = "spidermonkey")]` with an
+honest headless fallback; the headless workspace build is green again.
+
+**The instrument fix that matters.** The wall built only `cargo build --workspace` (the shipping config);
+CI builds *both* that and `--no-default-features`. A regression that touched only the feature-gated seam
+therefore sailed past a green wall and reddened CI — for four commits, invisibly, because "read CI at the
+start of the next tick" is a human step and the loop had been heads-down landing capability. The wall now
+builds **both configs CI gates on**, so this entire class cannot pass the wall again. If the wall and CI
+build different things, one of them is lying — now they build the same things.
+
+Verified: headless workspace build compiles; CI's exact gate list (`g_globals g_selector g_lifecycle
+g_chardata g_contain_native g_dom_impl` + `stale_handle`) all `ok`; fmt clean; wasm pipeline builds. CI
+history confirms green through #270 (tick 83), red #272–#276 (ticks 84–86), fixed here.
+
+**WIKI:** none — build/CI hygiene; the durable rule (the wall builds exactly what CI builds) is in
+verify.sh's B section.
+
 ## Tick 87 — open the CSS aperture, and anchor the loop to the constitution on a cadence
 
 **TICK SHAPE: instrument.** `[no-pattern]`. No engine code changed. Two moves, one purpose: make the loop

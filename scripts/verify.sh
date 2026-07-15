@@ -122,8 +122,15 @@ if [ -n "${PCT:-}" ] && [ "$PCT" -ge 88 ]; then
 ./scripts/ramdisk.sh >/dev/null 2>&1 || true
 fi
 
-head_ "B · build (workspace)"
-if cargo build -q --workspace 2>&1 | grep -qE '^error'; then bad "workspace does not compile"; else ok "workspace compiles"; fi
+head_ "B · build (workspace — BOTH configs CI gates on)"
+if cargo build -q --workspace 2>&1 | grep -qE '^error'; then bad "workspace does not compile (shipping/default config)"; else ok "workspace compiles (shipping)"; fi
+# **The headless lane, which CI gates on and the wall did not.** `cargo build --workspace
+# --no-default-features` is CI's `verify-linux` first build step; the wall only ever built the shipping
+# config, so a regression that touched only the feature-gated seam (tick 84's `diag` calling the
+# spidermonkey-only `eval_for_test`) sailed past a green wall and reddened CI for four commits. If the
+# wall and CI build different things they disagree about what "green" means, and one of them is lying —
+# so the wall builds what CI builds.
+if cargo build -q --workspace --no-default-features 2>&1 | grep -qE '^error'; then bad "workspace does not compile HEADLESS (--no-default-features) — this is what CI gates on"; else ok "workspace compiles (headless / no-default-features)"; fi
 
 head_ "P · parity (§1.1 — 72/72 vs headless Chrome)"
 PAR=$(cargo run -q -p manuk-wpt --release -- parity 2>&1 | tail -1)
