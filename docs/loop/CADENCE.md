@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **77** | ticks 1–84 |
-| median tick cycle | **18m** | 76 intervals |
-| median, last 10 | **17m** | 10 intervals |
+| ticks landed | **78** | ticks 1–85 |
+| median tick cycle | **18m** | 77 intervals |
+| median, last 10 | **15m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.84** | 90.5h elapsed |
-| median verify wall | **3m** | 16 ticks |
+| **ticks per hour** | **0.85** | 90.7h elapsed |
+| median verify wall | **3m** | 17 ticks |
 | wall trend | 39s → 69s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **159**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**37 of 77 ticks** (48%) moved a
+**37 of 78 ticks** (47%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -86,7 +86,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **37** capability ticks, median cycle **18m**
-* median diff per tick: **+335 / −9** lines across 8 files
+* median diff per tick: **+326 / −9** lines across 8 files
 
 ## Every tick
 
@@ -169,5 +169,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **82** | 2026-07-14 15:39 | 3.0h | capability | 3m | +609/−2 | 35 | 78 | 36.8% | the largest gap in the platform, and we had never looked at it |
 | **83** | 2026-07-14 17:08 | 90m | instrument | 69s | +1542/−88 | 35 | 78 | 36.8% · | the loop could not see its own frame. Now it checks the map. |
 | **84** | 2026-07-14 23:30 | 6.4h | capability | 58s | +1006/−90 | 35 | 79 | 36.8% · | the child document was always built, then thrown away (+~721k WPT) |
+| **85** | 2026-07-14 23:42 | 12m | instrument | 9m | +72/−29 | 35 | 79 | 36.8% · | the instrument could not measure its own biggest win |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

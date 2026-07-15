@@ -76,3 +76,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 82	904fe10	1784057962	2026-07-14T15:39:22-04:00	10713	capability	159	12	609	2	35	78	2387	6484	1	154	4	the largest gap in the platform, and we had never looked at it
 83	4f74479	1784063332	2026-07-14T17:08:52-04:00	5370	instrument	69	21	1542	88	35	78	2387	6484	0	154	0	the loop could not see its own frame. Now it checks the map.
 84	d8be883	1784086247	2026-07-14T23:30:47-04:00	22915	capability	58	16	1006	90	35	79	2387	6484	0	159	0	the child document was always built, then thrown away (+~721k WPT)
+85	f1f59c9	1784086946	2026-07-14T23:42:26-04:00	699	instrument	534	5	72	29	35	79	2387	6484	0	159	0	the instrument could not measure its own biggest win

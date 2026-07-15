@@ -3054,6 +3054,36 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 85 — the instrument could not measure its own biggest win
+
+**TICK SHAPE: instrument.** `[no-pattern]`. No engine code changed. Tick 84 moved `encoding` from 128 to
+~721,000 passing subtests — and the sweep that is supposed to *bank* that win **could not run without
+taking the terminal down with it.**
+
+**Why.** A single `encoding` file creates 190,000+ live testharness subtests (Big5 decode across every
+variant), each a JS object with its own reflector. The sweep runs forty files per child process, and forty
+files of that size outrun the GC: the child is OOM-killed mid-batch. An OOM is not a wrong number — it is
+*no* number, and worse, a runner that dies mid-sweep leaves the ratchet banking the OLD marks, so **the
+largest win in the project's history was invisible to the mechanism built to protect it.**
+
+**The fix is a memory bound, stated as one.** `wpt-sweep.sh` now picks the batch size per area: `encoding`
+(and anything under it) runs **4 files per child**, everything else keeps the fast default of 40. A child
+that exits after a handful of files hands its whole heap back to the OS, so peak memory is capped at a few
+files' worth regardless of how many subtests each holds. Verified: the full sweep now completes with
+**≥20 GB free throughout** (min avail 19,981 MB), where before it exhausted 31 GB and was killed.
+
+**Banked, and now protected.** The sweep measured the real numbers and the ratchet took them:
+`encoding` **128 → 720,990**, `dom` 2387 → **2495**, `css/selectors` 527 → **1,021**, `css/css-flexbox`
+68 → **378**, `css/css-grid` 84 → **216** — and the whole-suite **TOTAL 25,869 → 747,778** (47.6% of the
+1,570,726 measured subtests), crashes 0, duplicate wire requests 0. A ratchet tooth is only real once the
+instrument can reach it; this tick is the instrument reaching it.
+
+**The lesson, general:** an instrument that cannot survive measuring the thing it exists to measure is not
+a conservative instrument, it is a blind one. *An OOM is a measurement fault, not a null result* — the
+fifth instrument this project has had to teach that its own condition is not the thing under test.
+
+**WIKI:** none — a sweep-harness memory bound, no web-class capability changes.
+
 ## Tick 84 — the child document was always built, then thrown away (+~721k WPT)
 
 **TICK SHAPE: capability.** `[no-pattern]`. The single largest gated lever this project has ever found:

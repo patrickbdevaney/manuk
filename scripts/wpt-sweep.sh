@@ -35,8 +35,21 @@ fi
 printf 'area\tpass\ttotal\tpct\tcrashes\tdupes\n' > "$TMP"
 TOT_P=0; TOT_T=0; TOT_C=0; TOT_D=0
 
+# **Per-area batch size — a memory bound, not a speed knob.** A single `encoding` file can create
+# 190,000+ testharness subtests (Big5 decode across every variant), each a live JS object with its own
+# reflector; forty such files in one child process outruns the GC and the child is OOM-killed mid-batch —
+# which is not a wrong number, it is *no* number, and it took the terminal down before this was bounded.
+# Fewer files per child caps the peak: a child that exits after a handful of files hands its whole heap
+# back to the OS. Areas whose files are ordinary keep the fast default.
+batch_for() {
+  case "$1" in
+    encoding|encoding/*) echo 4 ;;
+    *) echo 40 ;;
+  esac
+}
+
 for a in "${AREAS[@]}"; do
-  RAW=$(timeout 3000 cargo run -q -p manuk-wpt --release --features spidermonkey -- wpt "$a" 2>&1)
+  RAW=$(timeout 3000 cargo run -q -p manuk-wpt --release --features spidermonkey -- wpt "$a" --batch "$(batch_for "$a")" 2>&1)
   LINE=$(echo "$RAW" | grep -oE 'subtests [0-9]+/[0-9]+' | tail -1)
   P=$(echo "$LINE" | grep -oE '[0-9]+/' | tr -d '/')
   T=$(echo "$LINE" | grep -oE '/[0-9]+' | tr -d '/')
