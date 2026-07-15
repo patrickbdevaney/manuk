@@ -291,6 +291,7 @@
   - L178 · The char-based glyph model cannot express ligatures or complex scripts
   - L185 · Skrifa is the library Chromium itself ships
   - L194 · tiny-skia has no Gaussian blur
+  - L200 · Shrink-to-fit content extent must include the child's RIGHT margin (margin box, not border box)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -315,6 +316,7 @@
   - L101 · Accessibility & i18n — cross-ref Part 12 (a11y-tree-as-oracle)
   - L105 · Platform / real-time — explicitly deferred; track but do NOT compete with doc-web core for priority
   - L112 · How this feeds the priority ledger
+  - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-256 sections across 14 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+258 sections across 14 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

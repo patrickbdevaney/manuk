@@ -196,3 +196,13 @@ deliberately does not rasterize.*
 Box-shadow's soft edge must be built from **stacked concentric rounded rects with a quadratic alpha
 falloff**, and rounded rects from a Bézier path with **k = 0.5523**; damage boxes grow by `blur`. Inset
 shadows, multiple shadows and spread should map to **`None` rather than to a wrong shadow.**
+
+## Shrink-to-fit content extent must include the child's RIGHT margin (margin box, not border box)
+
+`content_right_extent` measures a block's max-content/shrink-to-fit width by walking children and taking the
+rightmost edge. It counted `rect.x + rect.width` (border-box right) — but `rect.x` already includes the
+child's LEFT margin, so omitting the RIGHT margin makes the box-model asymmetric and the extent short by one
+margin. A flex item wrapping `<p width:100 margin:10>` measured 110 instead of 120 (its content's margin
+box). Fix: add `px_margin_right(node)` (percentage/auto → 0 for an intrinsic measure; negatives don't extend
+the border-box edge, so clamp ≥ 0) at each `content_right_extent` box visit. Affects every shrink-to-fit
+path — flex/grid items, inline-block, floats, table cells.

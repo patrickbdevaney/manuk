@@ -120,3 +120,14 @@ ubiquitous one (`dom/` mutation, `css/selectors/`).
 **The honest note the whole map turns on:** we do not need Chromium's *number*. We need **enough of the
 spec that most of the real web works, and a graceful, honest decline for the rest.** WPT is how we see the
 *shape* of "enough" — not a score to chase to 100%.
+
+## Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
+
+`check-layout-th.js` files assert MANY geometry values and fail the whole file if any one is wrong. Manuk's
+flex/grid geometry is off in several independent ways per file, so a single CORRECT fix (tick 97 offset
+rounding, tick 98 margin-box extent) flips ZERO files — the area's pass count does not move even though the
+fix is right. Lesson: an area's failing-subtest COUNT overstates its reachability when its tests are
+multi-assertion. Rank by **flip rate** — how many subtests one fix actually turns green — not raw failing
+mass. Corollary for flex/grid: either batch several geometry fixes per tick so a file crosses the line, or
+prefer higher-flip areas (DOM/CSSOM property reflection, `css/selectors`, the html/dom attribute-reflection
+mass) where one fix turns subtests green directly. [[conformance-and-oracles]]

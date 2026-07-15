@@ -1114,7 +1114,17 @@ fn establishes_bfc(s: &ComputedStyle) -> bool {
 ///
 /// `origin` is the left edge the subtree was laid out from, so extents are measured **relative** to
 /// the thing being sized rather than in absolute page coordinates.
-fn content_right_extent(content: &BoxContent, fonts: &FontContext, origin: f32) -> f32 {
+fn content_right_extent(
+    content: &BoxContent,
+    fonts: &FontContext,
+    origin: f32,
+    // The right margin (px, non-negative) of a box's node. Needed because a `LayoutBox` carries only its
+    // BORDER box, while `rect.x` already includes the box's LEFT margin — so without adding the right
+    // margin the measured extent is asymmetric and short by one margin. A flex item wrapping `<p margin:10>`
+    // reported 110 instead of 120 (its content's margin box). Percentage/auto margins resolve to 0 for an
+    // intrinsic measure; negative margins do not pull the border-box edge in, so this is clamped ≥ 0.
+    margin_right: &dyn Fn(Option<NodeId>) -> f32,
+) -> f32 {
     // `shrink_to_fit` lays the subtree out at a very large available width (1e6) to read its
     // *max-content* width. Two artifacts of that absurd width must be discarded, or the measurement
     // is nonsense:
@@ -1172,14 +1182,21 @@ fn content_right_extent(content: &BoxContent, fonts: &FontContext, origin: f32) 
     }
 
     let mut max_r = 0.0f32;
-    fn visit(b: &LayoutBox, fonts: &FontContext, max_r: &mut f32, rel: &dyn Fn(f32) -> f32) {
+    fn visit(
+        b: &LayoutBox,
+        fonts: &FontContext,
+        max_r: &mut f32,
+        rel: &dyn Fn(f32) -> f32,
+        mr: &dyn Fn(Option<NodeId>) -> f32,
+    ) {
         if b.rect.width < FILL_SENTINEL {
-            *max_r = max_r.max(rel(b.rect.x) + b.rect.width);
+            // `rect.x` includes the LEFT margin; add the RIGHT margin for a full margin-box extent.
+            *max_r = max_r.max(rel(b.rect.x) + b.rect.width + mr(b.node));
         }
         match &b.content {
             BoxContent::Block(kids) => {
                 for k in kids {
-                    visit(k, fonts, max_r, rel);
+                    visit(k, fonts, max_r, rel, mr);
                 }
             }
             BoxContent::Inline(frags) => {
@@ -1190,7 +1207,7 @@ fn content_right_extent(content: &BoxContent, fonts: &FontContext, origin: f32) 
     match content {
         BoxContent::Block(kids) => {
             for k in kids {
-                visit(k, fonts, &mut max_r, &rel);
+                visit(k, fonts, &mut max_r, &rel, margin_right);
             }
         }
         BoxContent::Inline(frags) => {
@@ -1962,7 +1979,7 @@ impl Ctx<'_> {
         }
         let mut fc = FloatContext::new(0.0, 1.0);
         let (content, _h) = self.layout_children(node, 0.0, 0.0, 1.0, None, &mut fc);
-        let w = content_right_extent(&content, self.fonts, 0.0);
+        let w = content_right_extent(&content, self.fonts, 0.0, &|n| self.px_margin_right(n));
         self.min_content_cache.borrow_mut().insert(node, w);
         w
     }
@@ -1999,6 +2016,14 @@ impl Ctx<'_> {
         pref
     }
 
+    /// The right margin (px, ≥0) of a box's node, for the margin-box extent in `content_right_extent`.
+    /// Percentage/auto margins resolve to 0 for an intrinsic measure; negatives don't extend the box.
+    fn px_margin_right(&self, n: Option<NodeId>) -> f32 {
+        n.map_or(0.0, |node| {
+            self.style_of(node).margin.right.resolve(0.0, 0.0).max(0.0)
+        })
+    }
+
     fn max_content_width_uncached(&self, node: NodeId) -> f32 {
         if matches!(
             self.style_of(node).display,
@@ -2028,7 +2053,7 @@ impl Ctx<'_> {
         // Lay the subtree out unconstrained and measure how far its content actually reaches.
         let mut fc = FloatContext::new(0.0, 1.0e6);
         let (content, _h) = self.layout_children(node, 0.0, 0.0, 1.0e6, None, &mut fc);
-        let pref = content_right_extent(&content, self.fonts, 0.0);
+        let pref = content_right_extent(&content, self.fonts, 0.0, &|n| self.px_margin_right(n));
         // See `MANUK_TRACE_INTRINSIC` in `measure_intrinsic`: max-content is the OTHER place an
         // intrinsic width is decided (inline-block / inline-flex / float / abs), and a box that
         // fills when it should hug is nearly always this number.
@@ -2394,10 +2419,10 @@ impl Ctx<'_> {
         }
         let mut fc_max = FloatContext::new(0.0, 1.0e6);
         let (cmax, _) = self.layout_children(cell, 0.0, 0.0, 1.0e6, None, &mut fc_max);
-        let max = content_right_extent(&cmax, self.fonts, 0.0);
+        let max = content_right_extent(&cmax, self.fonts, 0.0, &|n| self.px_margin_right(n));
         let mut fc_min = FloatContext::new(0.0, 0.0);
         let (cmin, _) = self.layout_children(cell, 0.0, 0.0, 0.0, None, &mut fc_min);
-        let min = content_right_extent(&cmin, self.fonts, 0.0);
+        let min = content_right_extent(&cmin, self.fonts, 0.0, &|n| self.px_margin_right(n));
         (min + frame, max + frame)
     }
 

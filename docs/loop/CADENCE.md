@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **90** | ticks 1–97 |
-| median tick cycle | **18m** | 89 intervals |
-| median, last 10 | **25m** | 10 intervals |
+| ticks landed | **91** | ticks 1–98 |
+| median tick cycle | **19m** | 90 intervals |
+| median, last 10 | **34m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.89** | 100.1h elapsed |
-| median verify wall | **69s** | 29 ticks |
+| **ticks per hour** | **0.89** | 100.7h elapsed |
+| median verify wall | **68s** | 30 ticks |
 | wall trend | 39s → 55s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **35**
-* **✅ rows in the capability ledger**: 144 → **168**
+* **✅ rows in the capability ledger**: 144 → **169**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**40 of 90 ticks** (44%) moved a
+**41 of 91 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -85,8 +85,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **40** capability ticks, median cycle **18m**
-* median diff per tick: **+278 / −13** lines across 8 files
+* **41** capability ticks, median cycle **19m**
+* median diff per tick: **+272 / −13** lines across 8 files
 
 ## Every tick
 
@@ -182,5 +182,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **95** | 2026-07-15 04:59 | 29m | instrument | 54s | +108/−31 | 35 | 81 | 36.8% · | ARIA reflection, explored and reverted: the mass-reflector recursion is now a named gate |
 | **96** | 2026-07-15 07:58 | 3.0h | capability | 55s | +180/−48 | 35 | 81 | 36.8% · | the `<body onload>` double-fire: one handler, dispatched twice, corrupting every checkLayo |
 | **97** | 2026-07-15 09:07 | 69m | capability | 55s | +148/−39 | 35 | 81 | 36.8% · | offset metrics now return spec integers (CSSOM correctness; ratchet-neutral, verified) |
+| **98** | 2026-07-15 09:46 | 40m | capability | 55s | +119/−44 | 35 | 81 | 36.8% · | fixed the margin-box extent bug (correct, verified); and the strategic finding that CSS la |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -3054,12 +3054,33 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
-## Tick 98 — FINDING (localized, for the chain): flex item main-size drops one child margin
+## Tick 98 — fixed the margin-box extent bug (correct, verified); and the strategic finding that CSS layout is a multi-assertion slog
 
-**TICK SHAPE: finding (fix pending fresh context — deep layout-engine work).** The probe localized a real,
-concrete geometry bug that likely explains a class of flex checkLayout failures. Minimal repro: a row
-flexbox with one flex item = a `<div>` wrapping a `<p>` that is `100px` wide with `margin:10px`. The item
-should size to the p's margin box = **120×120**. We compute **110×120**:
+**TICK SHAPE: capability (layout correctness) + strategic steer.** Implemented and verified the fix for the
+localized bug: `content_right_extent` (the shrink-to-fit / max-content measure) counted a child's border-box
+right edge (`rect.x + width`) but NOT its right margin — while `rect.x` already includes the LEFT margin, so
+the margin box was asymmetric and short by one margin. Added a `px_margin_right` lookup (percentage/auto → 0,
+negatives don't extend), threaded through all four `content_right_extent` callers. **Probe confirms the fix:
+the flex item is now 120×120 (was 110×120).**
+
+**BUT — three areas measured EXACTLY unchanged (flexbox 220, css-sizing 191, dom 2495), no regression, no
+crash.** This is the strategic finding of the tick, and it must steer the horizon: **CSS layout areas are a
+MULTI-ASSERTION slog.** A `check-layout-th.js` file asserts many geometry values and FAILS THE WHOLE FILE if
+any one is wrong. Our flex/grid geometry is off in several independent ways per file, so fixing ONE correct
+value (tick 97 rounding, tick 98 margin) does not flip a single file — the number does not move even though
+each fix is correct. Landed anyway because it is correct and foundational (when the sibling bugs are fixed,
+correct margins will help those files pass), but honestly ratchet-neutral.
+
+**The steer for tick 99+:** stop expecting single-value layout fixes to move flex/grid. Either (a) batch
+several geometry fixes in one tick so a file actually flips, or (b) pivot to higher-FLIP areas where a fix
+turns subtests green directly — DOM API / CSSOM property reflection, `css/selectors` (matching is more
+binary), and the html/dom attribute-reflection mass (the ~35k lever, still gated on the stack-quota crash).
+The compounding lesson: rank mechanisms not just by failing-subtest COUNT but by FLIP RATE — how many
+subtests one fix actually turns green. [[parity-methodology]] [[symptom-names-wrong-organ]]
+
+<!-- original localized finding, kept for the record -->
+Minimal repro: a row flexbox with one flex item = a `<div>` wrapping a `<p>` that is `100px` wide with
+`margin:10px`. The item should size to the p's margin box = **120×120**. We computed **110×120**:
 - **cross-axis (height) = 120 ✓** — both vertical margins counted (10+100+10).
 - **main-axis (width) = 110 ✗** — only ONE horizontal margin counted (100+10); the far margin is dropped.
 - p itself = 100×100 ✓, p.offsetLeft/Top = 10/10 ✓ (margins position correctly; only the CONTAINER's

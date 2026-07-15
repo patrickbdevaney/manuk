@@ -89,3 +89,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 95	5f52a6b	1784105941	2026-07-15T04:59:01-04:00	1756	instrument	54	6	108	31	35	81	2387	6484	0	161	0	ARIA reflection, explored and reverted: the mass-reflector recursion is now a named gate
 96	a33d735	1784116709	2026-07-15T07:58:29-04:00	10768	capability	55	10	180	48	35	81	2387	6484	0	165	0	the `<body onload>` double-fire: one handler, dispatched twice, corrupting every checkLayout test
 97	58fa4b9	1784120828	2026-07-15T09:07:08-04:00	4119	capability	55	8	148	39	35	81	2387	6484	0	168	0	offset metrics now return spec integers (CSSOM correctness; ratchet-neutral, verified)
+98	cfb929a	1784123206	2026-07-15T09:46:46-04:00	2378	capability	55	8	119	44	35	81	2387	6484	0	169	0	fixed the margin-box extent bug (correct, verified); and the strategic finding that CSS layout is a multi-assertion slog
