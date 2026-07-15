@@ -467,3 +467,64 @@ drawn at its true size came out as a smudge in the corner.
 
 They are IDL attributes reflecting the content attributes now, and assigning either one resizes **and
 clears**, which is the spec and is the idiomatic way to erase a canvas.
+
+## A node id is unique only WITHIN its arena — so a reflector must resolve against its OWN document
+
+This is the lesson that made `iframe.contentDocument` possible, and it is a trap every second-document
+feature will hit. A DOM reflector stores its node as a bare `i32` in a reserved slot, and for one document
+that is fine: the id indexes the one arena. **The moment a second arena exists — an `<iframe>`'s child
+document — node #7 exists twice**, and a reflector that resolves its id against the *one* thread-local
+`CURRENT_DOM` reads the parent's node #7 for a child reflector: a different element, in a different
+document, with total confidence. Nothing throws; the wrong node is simply returned.
+
+The fix has three parts, and all three are load-bearing:
+
+1. **The reflector carries its arena** in a second reserved slot (`SLOT_DOM`), written at creation, and
+   `node_and_dom` resolves against *that*, not `CURRENT_DOM`.
+2. **A registry of live arenas** (`LIVE_DOMS`, a thread-local `HashSet<usize>` of arena addresses)
+   makes that safe: a reflector held by a script after its `Page` dropped points at freed memory, and
+   `is_alive()` cannot save you — it validates a node id *within* an arena, and the arena itself is what
+   went away. So a `Page`'s `Drop` **unregisters its arenas before they free**, and an unregistered
+   pointer resolves to `None` (a JS `null`), which is a correct answer where a dereference is a crash.
+3. **`SLOT_DOM` holds a `PrivateValue`, and a `PrivateValue` IS a double.** Reading it back, a guard
+   written `if v.is_double() { reject }` throws away every legitimate arena pointer — silently, because it
+   *looks* like the feature simply not working. The only value to reject is `undefined` (the prototype
+   objects' empty slots); everything else is validated by the registry.
+
+> The transferable rule: **any per-document state keyed by node id is wrong the instant a second document
+> exists.** Reflect against the arena the node came from, and gate that arena's liveness through a
+> registry, not through the node-generation check.
+
+## A per-arena identity cache must not CLOBBER the shared `__nodes` — it breaks event dispatch silently
+
+`a.firstChild === b` requires one wrapper per node, so reflectors are memoised in a JS-side map. With two
+documents that map must be **per-arena** (parent node #7 and child node #7 are different objects), keyed by
+the arena address: `__nodes_<addr>`. The trap: the **main** document's cache is the global `__nodes` that
+`install` seeds the `document` reflector into — and the first cut created a fresh `__nodes_<addr>` for the
+main document *too*, and pointed `__nodes` at it. That fresh map does not contain the seeded `document`, so
+`__nodes[0]` became `undefined`, so `document.dispatchEvent(ev)` — which does `target = __nodes[nid]` —
+found nothing and **stopped reaching document-level listeners** (`DOMContentLoaded`, delegated clicks).
+The symptom appeared only after a script touched `document.body` (the access that first built the bad
+cache), and `G_LIFECYCLE` caught it as `seen: dcl-win, load` — missing `dcl-doc`. **The main document's
+cache IS `__nodes`, looked up and reused, never replaced; only child documents get their own map.**
+
+## Mass reflector access + the reflection layer can overflow the C stack, and SpiderMonkey won't catch it
+
+`document.querySelectorAll('*')` and reading a property on every element — an ordinary thing for a
+framework or a polyfill to do — forces a reflector for the whole tree, and with the HTML-attribute
+reflection layer installed that mass access tripped an **infinite JS recursion** (a reflected accessor
+re-entering `getAttribute`/`setAttribute` through the mutation-observer wrappers) that overflowed the C
+stack into a **SIGSEGV** — Bar 0. The nasty part: SpiderMonkey's `JS_SetNativeStackQuota` is supposed to
+turn that into a catchable *"too much recursion"*, but the quota is an **absolute address computed at
+`Runtime::new`**, which in an async/tokio embedding runs buried deep in the call stack — so the limit sits
+past the real stack bottom and never fires. Re-anchoring the quota per call did not reliably help
+(headroom varies by call depth). **The durable fix was structural: do not iterate the whole tree in JS.**
+A native (`__inlineHandlerNodes`) finds the handful of elements that actually need wiring by a single
+arena walk in Rust, so JS never touches every reflector. The latent recursion (reflection + mass access)
+is real and un-fixed; the engine simply never triggers it.
+
+> Two rules fall out. **(a)** A getter that needs computed style or geometry already has it — check
+> `STYLES_PTR` / the view maps before marshalling anything new across the FFI. **(b)** When a JS operation
+> must touch "every element," ask whether Rust can answer it from the arena instead; the arena walk is
+> O(n) and allocation-free, the JS reflector sweep is neither, and it is one reflection bug away from a
+> stack overflow the engine cannot report.

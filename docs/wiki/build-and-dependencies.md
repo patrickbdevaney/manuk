@@ -289,3 +289,27 @@ The gate now reads the journal, with the same `awk "/^## Tick N/,0"` construct `
 EOF) and *not* `,/^## Tick [0-9]/`, because **awk tests a range's END pattern against the START line as
 well**, so the obvious version collapses the range to a single line and finds nothing, for every tick.
 The extraction is proven against the real journal before it is trusted.
+
+## A second cargo feature-config in one build step thrashes the whole cache
+
+The local wall built only `cargo build --workspace` (the shipping config); CI also builds
+`--workspace --no-default-features` (the lean/headless lane). A regression that touched only a
+feature-gated seam — a `diag` subcommand calling the `spidermonkey`-only `eval_for_test` — therefore
+compiled fine for the wall and broke CI for four commits, invisibly. The obvious fix (make the wall build
+BOTH) was correct in principle and a **~350–500s tax on every wall**: the two configs compile the *same*
+crates with *different* features, so sharing `target/` makes each build invalidate the other's artifacts —
+two cold full-workspace builds per wall (54s → 572s). A separate `CARGO_TARGET_DIR` avoids the thrash, and
+`cargo check` (no codegen) is far smaller than `cargo build`; putting that check dir in `/dev/shm` keeps it
+off the disk-reclaim path entirely.
+
+But the deeper lesson is the trade: **duplicating CI's full matrix on the local wall is not free, and the
+wall runs every tick.** The resolution that stuck: the wall proves the shipping config in ~54s; **CI
+proves the headless config out-of-band** (it is green and read at the start of each tick); the actual fix
+(gate the feature-only symbol behind its `#[cfg]`) lives in the code, not in a second wall build. If the
+wall and CI must agree about "green," make them build the same *things* — but pay for it in the cheapest
+place, which is usually a `cargo check` in RAM, not a second `cargo build` on disk.
+
+> And keep iterative build output in RAM as a rule, not a reaction: `target/{debug,release}/incremental`
+> symlinked into `/dev/shm` is the bulk of edit→build churn, and doing it unconditionally (not only when
+> the disk is already 88% full) is what keeps the disk from filling, tripping the reclaim, deleting the
+> warm cache, and forcing the next wall to rebuild cold — the exact cascade that produced the 800s walls.

@@ -85,3 +85,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 91	b11264b	1784103164	2026-07-15T04:12:44-04:00	3897	capability	53	8	261	40	35	81	2387	6484	0	161	0	innerText became the rendered text (the first Pareto-ranked capability tick)
 92	7aff51e	1784103472	2026-07-15T04:17:52-04:00	308	instrument	481	9	534	30	35	81	2387	6484	0	161	0	the wiki becomes mechanically load-bearing: enforced, indexed, retrievable
 93	0286efc	1784103948	2026-07-15T04:25:48-04:00	476	instrument	61	9	227	33	35	81	2387	6484	0	161	0	a sparse wall-time audit: keep the per-tick tax lean without cutting a gate
+94	824a562	1784104185	2026-07-15T04:29:45-04:00	237	instrument	66	6	148	30	35	81	2387	6484	0	161	0	backfill: the crash saga becomes retrievable knowledge, not just journal narrative

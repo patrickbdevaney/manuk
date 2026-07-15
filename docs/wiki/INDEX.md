@@ -49,6 +49,7 @@
   - L255 · Instant::now() panics on wasm — a debug line can take down the engine
   - L265 · wasm has no filesystem, so load_system_fonts() finds nothing
   - L272 · The release cadence — and the way it silently did nothing
+  - L293 · A second cargo feature-config in one build step thrashes the whole cache
 
 ## CONFORMANCE AND ORACLES — how we MEASURE, and what each instrument cannot see
 `docs/wiki/conformance-and-oracles.md`
@@ -211,6 +212,9 @@
   - L434 · Where the state lives, and why it is split
   - L445 · Done, and honestly not done
   - L458 · The bug that hurt most, and it was not the rasterizer
+  - L471 · A node id is unique only WITHIN its arena — so a reflector must resolve against its OWN document
+  - L498 · A per-arena identity cache must not CLOBBER the shared __nodes — it breaks event dispatch silently
+  - L511 · Mass reflector access + the reflection layer can overflow the C stack, and SpiderMonkey won't catch it
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -309,4 +313,4 @@
   - L112 · How this feeds the priority ledger
 
 ---
-248 sections across 14 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+252 sections across 14 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

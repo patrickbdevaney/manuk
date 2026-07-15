@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **86** | ticks 1–93 |
-| median tick cycle | **18m** | 85 intervals |
-| median, last 10 | **16m** | 10 intervals |
+| ticks landed | **87** | ticks 1–94 |
+| median tick cycle | **18m** | 86 intervals |
+| median, last 10 | **11m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.89** | 95.4h elapsed |
-| median verify wall | **2m** | 25 ticks |
-| wall trend | 39s → 61s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.90** | 95.4h elapsed |
+| median verify wall | **2m** | 26 ticks |
+| wall trend | 39s → 66s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **161**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**38 of 86 ticks** (44%) moved a
+**38 of 87 ticks** (44%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -86,7 +86,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **38** capability ticks, median cycle **18m**
-* median diff per tick: **+294 / −12** lines across 8 files
+* median diff per tick: **+290 / −12** lines across 8 files
 
 ## Every tick
 
@@ -178,5 +178,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **91** | 2026-07-15 04:12 | 65m | capability | 53s | +261/−40 | 35 | 81 | 36.8% · | innerText became the rendered text (the first Pareto-ranked capability tick) |
 | **92** | 2026-07-15 04:17 | 5m | instrument | 8m | +534/−30 | 35 | 81 | 36.8% · | the wiki becomes mechanically load-bearing: enforced, indexed, retrievable |
 | **93** | 2026-07-15 04:25 | 8m | instrument | 61s | +227/−33 | 35 | 81 | 36.8% · | a sparse wall-time audit: keep the per-tick tax lean without cutting a gate |
+| **94** | 2026-07-15 04:29 | 4m | instrument | 66s | +148/−30 | 35 | 81 | 36.8% · | backfill: the crash saga becomes retrievable knowledge, not just journal narrative |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

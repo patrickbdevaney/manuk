@@ -3054,6 +3054,35 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 94 — backfill: the crash saga becomes retrievable knowledge, not just journal narrative
+
+**TICK SHAPE: instrument.** No engine code changed. Tick 92 built the mechanism to hold durable knowledge;
+this substantiates it with the highest-value knowledge the loop had generated but left only in journal
+narrative — the tick-84 SpiderMonkey-FFI crash saga and the tick-88/90 build lessons. This is exactly the
+knowledge the downstream horizons (agent-driving, security, the V8/embedded/enterprise species) will need
+and cannot reconstruct from a diff. Added to `js-engine.md`:
+
+* **"A node id is unique only WITHIN its arena — so a reflector must resolve against its OWN document"** —
+  `SLOT_DOM` + the live-arena registry + *a `PrivateValue` IS a double*. The lesson every second-document
+  feature will hit.
+* **"A per-arena identity cache must not CLOBBER the shared `__nodes`"** — how a fresh main-doc cache
+  silently killed `document.dispatchEvent`.
+* **"Mass reflector access + the reflection layer can overflow the C stack, and SpiderMonkey won't catch
+  it"** — the ineffective native stack quota in async embeddings, and why "answer it from the arena in
+  Rust" is the structural fix.
+
+And to `build-and-dependencies.md`: **"A second cargo feature-config in one build step thrashes the whole
+cache"** — the 54s→572s wall tax, the separate-target-dir/`cargo check`/RAM fix, and the rule that CI
+proves the headless matrix out-of-band.
+
+All four are retrievable now: `wiki-lookup.sh SLOT_DOM arena reflector` returns the first, top-ranked,
+3/3 terms. The wiki is **252 sections** across 14 topic files. Backfill of the deeper history (ticks
+1–81) continues opportunistically as those surfaces are next touched — the enforcement guarantees new
+engine ticks add theirs, so the gap only shrinks.
+
+**WIKI:** `js-engine.md` + `build-and-dependencies.md` — the reflector-arena, identity-cache-clobber,
+mass-reflector-recursion, and feature-config-thrash mechanisms.
+
 ## Tick 93 — a sparse wall-time audit: keep the per-tick tax lean without cutting a gate
 
 **TICK SHAPE: instrument.** No engine code changed. The wall runs every tick, so a needless second is
