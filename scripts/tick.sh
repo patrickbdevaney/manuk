@@ -44,7 +44,6 @@ grep -q "^## Tick ${TICK}[^0-9]" docs/loop/JOURNAL.md \
 ok "journal entry for tick ${TICK}"
 
 # 2. Tick shape, in the journal (the hook reads the journal, not the commit message).
-{ echo "DBG TICK=[${TICK}] cwd=$(pwd) journal-exists=$([ -f docs/loop/JOURNAL.md ] && echo yes||echo no)"; echo "DBG range=$(awk "/^## Tick ${TICK}[^0-9]/,0" docs/loop/JOURNAL.md 2>&1 | wc -l) shapegrep=$(awk "/^## Tick ${TICK}[^0-9]/,0" docs/loop/JOURNAL.md 2>/dev/null | grep -ci 'TICK SHAPE:')"; } >&2
 awk "/^## Tick ${TICK}[^0-9]/,0" docs/loop/JOURNAL.md | grep -qi 'TICK SHAPE:' \
   || die "tick ${TICK}'s journal entry has no 'TICK SHAPE:' — a tick that cannot name its shape is drifting"
 ok "tick shape declared"
