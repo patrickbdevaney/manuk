@@ -122,6 +122,11 @@ const CLAIMS: &[(&str, &str)] = &[
     // ── The everyday element surface
     ("classList", "(function(){H.classList.add('z');return H.classList.contains('z')})()"),
     ("dataset", "(function(){H.dataset.k='v';return H.getAttribute('data-k')==='v'})()"),
+    // Inline event-handler content attributes: `<button onclick=...>` must compile and fire. This is
+    // one of the two oldest ways to attach behaviour to markup, and it was dead — the attribute was
+    // stored and never compiled. Gated here; the encoding suite (767k subtests) turns on the
+    // window-mapped variant (`<body onload>`).
+    ("inline onclick", "(function(){var b=document.getElementById('ib');window.__ibFired=0;b.dispatchEvent(new MouseEvent('click',{bubbles:true}));return window.__ibFired===1})()"),
     ("closest", "H.closest('#host') === H"),
     ("matches", "H.matches('#host')"),
     // NOTE: against `#pristine`, not `#host`. The claims above APPEND to `#host`, so asserting its
@@ -221,6 +226,7 @@ fn html() -> String {
 <div id="contents" style="display:contents"><i>i</i></div>
 <div id="scroller" style="height:50px;width:80px;overflow:auto"><div style="height:400px">tall</div></div>
 <div id="moved" style="width:20px;height:20px;transform:translateX(100px)">b</div>
+<button id="ib" onclick="window.__ibFired=(window.__ibFired||0)+1">clk</button>
 <script>
 var FAIL = [], GAPS = [];
 var H = document.getElementById('host');

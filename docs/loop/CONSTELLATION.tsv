@@ -9,7 +9,7 @@ doc	font fallback across scripts (CJK/emoji)	Japanese/Chinese pages render as TO
 doc	bidi (Arabic/Hebrew)	RTL web is unreadable	unknown	-	NEVER MEASURED — probe it
 doc	CJK line breaking	CJK text overflows its box	unknown	-	NEVER MEASURED — probe it
 doc	web fonts (@font-face, WOFF2)	every branded site falls back	works	-	fontdb; webfont_live test
-doc	legacy encodings (Shift_JIS/Big5/GBK/EUC-KR)	the pre-2010 CJK web is MOJIBAKE	missing	-	WPT encoding 128/767003 = 0.0%
+doc	legacy encodings (Shift_JIS/Big5/GBK/EUC-KR)	the pre-2010 CJK web is MOJIBAKE	gated	G_IFRAME	tick 84: encoding 128 -> ~721k subtests. The decoder was always correct (encoding_rs); the tests read expectations from an IFRAME, which now works
 doc	images: PNG/JPEG/GIF/WebP	every page	works	-	G_FIRST_PAINT
 doc	images: AVIF	modern sites serve it first	unknown	-	NEVER MEASURED — probe it
 doc	srcset / <picture>	2x displays get 1x images	works	-	capability-probe.html
@@ -21,6 +21,8 @@ doc	multicol	academic + news layout	unknown	-	NEVER MEASURED — probe it
 doc	accessibility tree	screen readers; also our own hit-testing	missing	-	no AX tree at all
 app	real DOM prototypes (patchable)	Sentry/ad-blockers/devtools hook nothing	gated	G_PROTOTYPE	tick 64: 60x faster too
 app	attribute reflection (a.href, input.disabled)	every branch on a DOM property is wrong	gated	G_REFLECT	tick 82: +9,940 WPT
+app	inline event handlers (onclick, onload, onsubmit)	the oldest way to attach behaviour to markup; every legacy form	gated	G_CAPABILITY	tick 84: compiled + wired at parse; body/frameset on* map to window
+app	element.dataset (data-* map)	data-testid, Stimulus, Bootstrap, Hotwire	gated	G_CAPABILITY	tick 84: live Proxy over data-*, works across the iframe boundary
 app	live HTMLCollection / NodeList	`while(el.children.length)` is an INFINITE LOOP	gated	G_COLLECTIONS	tick 73
 app	MutationObserver	Vue/Alpine/lit never react	gated	G_MUTATION	tick 77
 app	IntersectionObserver	lazy load + infinite scroll dead	gated	G_VIEWPORT	-
@@ -45,7 +47,7 @@ platform	cookies (SameSite/Secure/HttpOnly)	no session, no login	partial	-	cooki
 platform	CORS + credentialed requests	every API call from an SPA	unknown	-	NEVER MEASURED — probe it
 platform	OAuth redirect flow	YOU CANNOT LOG IN TO THE MODERN WEB	unknown	-	NEVER MEASURED — the single biggest platform unknown
 platform	window.open + postMessage (popup auth)	OAuth popups; the other login path	partial	-	window.open recorded; postMessage routing exists
-platform	REAL iframes (nested browsing context)	embeds, payments, OAuth frames, ads, players	missing	G_IFRAME	renders a BITMAP; no doc.defaultView. 596 WPT subtests fail on this alone
+platform	REAL iframes (nested browsing context)	embeds, payments, OAuth frames, ads, players	gated	G_IFRAME	tick 84: contentDocument/contentWindow readable, per-arena reflectors, node identity across the boundary. Pixels are still a snapshot (no re-render on mutation)
 platform	postMessage across frames	every embed talks this way	partial	-	-
 platform	infinite scroll (IO + scrollTop + virtualisation)	every feed	gated	G_SCROLL + G_VIEWPORT	ticks 67, 59
 platform	WebSocket	live feeds, chat, presence	missing	-	deliberately absent — page must feature-detect

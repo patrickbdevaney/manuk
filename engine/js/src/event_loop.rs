@@ -1526,7 +1526,29 @@ pub fn install(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<()
     // of them — including the ones the collections and attrs layers have already replaced. Install it
     // earlier and it observes a method that is later swapped out from under it, so a page's mutations
     // stop being reported and nothing says so.
-    eval(rt, global, crate::mutation_js::MUTATION_JS, "mutation.js").map(|_| ())
+    eval(rt, global, crate::mutation_js::MUTATION_JS, "mutation.js")?;
+    // AFTER reflection: `contentDocument` must not collide with a reflected accessor, and reflect.js
+    // skips any IDL name already `in proto`.
+    eval(rt, global, crate::iframe_js::IFRAME_JS, "iframe.js")?;
+    eval(
+        rt,
+        global,
+        crate::inline_handlers_js::INLINE_HANDLERS_JS,
+        "inline_handlers.js",
+    )?;
+    // **Wire the statically-parsed inline handlers NOW, before any inline `<script>` runs.**
+    //
+    // `<button onclick=...>` must be live the instant the element exists, not only at DOMContentLoaded:
+    // a script lower in the same document routinely dispatches to a button parsed above it. The DOM is
+    // fully parsed by the time bindings install, so a single pass here catches every static handler;
+    // the DCL and load passes then pick up anything a script adds later. Idempotent (per-node mark).
+    eval(
+        rt,
+        global,
+        "globalThis.__wireInlineHandlers && __wireInlineHandlers()",
+        "wire_inline.js",
+    )
+    .map(|_| ())
 }
 
 /// A **microtask checkpoint**: drain the host `queueMicrotask` queue *and* SpiderMonkey's

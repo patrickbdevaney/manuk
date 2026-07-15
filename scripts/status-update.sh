@@ -116,9 +116,16 @@ SINGLE=$(awk -v lo="$LAST_AUDIT" '
   t > lo && /TICK SHAPE:[[:space:]]*single-site/ { n++ }
   END { print n+0 }' docs/loop/JOURNAL.md 2>/dev/null || echo 0)
 
-python3 - "$TICK" "$LAST_AUDIT" "$WALL" "$SITES" "$CLUSTERS" "$CRAWLED" "$HUNG" "$pending" "$SINGLE" "$UNATTRIB" <<'PY'
+# The surface-audit cadence field must SURVIVE this regeneration — surface-audit.sh reads it from
+# STATUS.md, and a generated file that drops it resets the cadence to tick 0 every commit (which blocked
+# tick 84 until this was fixed). It is not hand-state: derive it from the audit LOG, the max tick any
+# audit was recorded under. That cannot drift, because the log is append-only.
+SURFACE=$(grep -oP '^## Audit #[0-9]+ — tick \K[0-9]+' docs/loop/SURFACE-AUDIT.md 2>/dev/null | sort -n | tail -1)
+[ -z "$SURFACE" ] && SURFACE=0
+
+python3 - "$TICK" "$LAST_AUDIT" "$WALL" "$SITES" "$CLUSTERS" "$CRAWLED" "$HUNG" "$pending" "$SINGLE" "$UNATTRIB" "$SURFACE" <<'PY'
 import sys, re, datetime
-tick, last_audit, wall, sites, clusters, crawled, hung, pending, single, unattrib = sys.argv[1:11]
+tick, last_audit, wall, sites, clusters, crawled, hung, pending, single, unattrib, surface = sys.argv[1:12]
 src = open('STATUS.md').read()
 
 # The generated block. Everything here is a fact read from disk.
@@ -134,6 +141,7 @@ head = f"""# manuk — STATUS
 ```
 TICK:              {tick}
 LAST_AUDIT_TICK:   {last_audit}          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
+LAST_SURFACE_AUDIT: {surface}         (surface audit due every 10 ticks — from docs/loop/SURFACE-AUDIT.md)
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
 LAST_WALL_TIME:    {wall}s
 ORACLE_CORPUS:     {sites} sites

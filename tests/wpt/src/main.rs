@@ -59,6 +59,21 @@ fn run() {
         return;
     }
 
+    // `manuk-wpt diag <file>` — **run ONE test file and say what actually happened inside it.**
+    //
+    // "TH_TIMEOUT — the async test never completed" is a *status*, not a finding. It told me nothing
+    // three separate times while I guessed at causes. A test that creates 8,000 subtests and completes
+    // none of them threw an exception somewhere in the middle, and the browser knows exactly where —
+    // it just had nobody to tell. This is the instrument that asks.
+    if args.first().map(String::as_str) == Some("diag") {
+        let Some(rel) = args.get(1) else {
+            eprintln!("usage: manuk-wpt diag <path/relative/to/wpt>");
+            std::process::exit(2);
+        };
+        diag(rel.clone(), &fonts);
+        return;
+    }
+
     // `manuk-wpt parity` — layout-parity vs headless Chrome over a corpus.
     if args.first().map(String::as_str) == Some("parity") {
         run_parity_cmd(&args[1..], &fonts);
@@ -2205,4 +2220,68 @@ fn read_jsonl(p: &std::path::Path) -> Vec<(String, usize, usize, String, u128)> 
         ));
     }
     out
+}
+
+/// Run one WPT file and report **what the page itself experienced** — uncaught errors first.
+///
+/// A file that creates 8,000 subtests and finishes none of them did not "time out": it threw, halfway,
+/// and every test already created was left un-`done()`. `TH_TIMEOUT` is what that *looks* like from
+/// outside, and it is why the status alone is useless. An instrument must be able to distinguish its own
+/// condition from the thing it measures — and "the page threw" is the condition, not the measurement.
+fn diag(rel: String, fonts: &manuk_text::FontContext) {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(async move {
+        let root = std::path::PathBuf::from(
+            std::env::var("WPT_DIR").unwrap_or_else(|_| format!("{}/wpt", std::env::var("HOME").unwrap())),
+        );
+        let (addr, _h) = manuk_wpt::harness::serve(root).await.expect("serve");
+        let url = format!("http://{addr}/{rel}");
+        println!("── {url}");
+
+        let Some((html, final_url)) = manuk_page::fetch_html(&url).await.ok() else {
+            println!("FETCH FAILED");
+            return;
+        };
+        let mut page = manuk_page::Page::load_async(&html, &final_url, fonts, 800.0).await;
+        println!("  after load_async : pending iframes = {}", page.pending_iframes().len());
+        page.finish_loading(fonts, 800.0).await;
+        println!("  after finish_load: pending iframes = {}", page.pending_iframes().len());
+
+        // Ask the page what it experienced. Uncaught errors first — "the async test never completed"
+        // is a status, not a finding, and only the exception says why.
+        page.eval_for_test(
+            r#"(function(){
+              function rep(o){ try {
+                var s = document.createElement('script'); s.id='__diag__'; s.type='application/json';
+                s.textContent = JSON.stringify(o); document.documentElement.appendChild(s);
+              } catch(e){} }
+              var f = document.querySelector('iframe');
+              var d = null, spans = -1, err = null;
+              try {
+                if (f) { d = f.contentWindow ? f.contentWindow.document : f.contentDocument; }
+                if (d) { spans = d.querySelectorAll('*').length; }
+              } catch (e) { err = String(e); }
+              rep({
+                errors: (globalThis.__errors || []).map(String).slice(0, 6),
+                loadFired: !!globalThis.__loadFired,
+                hasIframe: !!f,
+                frameDoc: d ? 'OK' : String(d),
+                frameNodes: spans,
+                frameErr: err,
+                testsCreated: (globalThis.tests && globalThis.tests.length) || 0,
+                onloadCalls: globalThis.__onCalls || 0,
+                harness: (typeof add_completion_callback === 'function')
+              });
+            })()"#,
+        );
+        let dom = page.dom();
+        let hits = manuk_css::query_selector_all(dom, dom.root(), "#__diag__");
+        match hits.first() {
+            Some(&n) => println!("\n{}\n", dom.text_content(n)),
+            None => println!("\nNO DIAG — the eval itself did not run (no JS context?)\n"),
+        }
+    });
 }

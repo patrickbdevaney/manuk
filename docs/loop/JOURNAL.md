@@ -3054,6 +3054,69 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 84 — the child document was always built, then thrown away (+~721k WPT)
+
+**TICK SHAPE: capability.** `[no-pattern]`. The single largest gated lever this project has ever found:
+one mechanism moved WPT `encoding` from **128 → ~721,000** passing subtests (91% of the measured universe,
+previously at 0.0%) and turned the **#1 platform-web capability** — the nested browsing context — from a
+bitmap into a real, readable document.
+
+**The mechanism: real `iframe.contentDocument` / `contentWindow`.** The child `Page` was *always* fully
+built — its own arena, styles, scripts, laid out at the frame's own width — and then painted to a bitmap
+and **dropped on the floor**. The pixels survived; the document did not. So a script that reached into a
+frame got `undefined`, and WPT's entire `encoding` suite scored zero: every decoder test loads a document
+in a frame and reads its text back (`iframeRef(f).querySelectorAll("span")`). The decoder was never the
+gap — `encoding_rs` was correct all along (it sniffs Big5, decodes `§`, zero U+FFFD). **The frame was.**
+
+**The architectural blocker, and the fix.** A node id is unique only *within* an arena, and every
+reflector resolved its id against the one `CURRENT_DOM`. Two documents means node #7 exists twice, so a
+child reflector was reading the *parent's* node #7 — a different element, in a different document, with
+total confidence. That is why `contentDocument` could not be written. Three changes fixed it: reflectors
+honour their own `SLOT_DOM`; a registry of live arenas makes that safe (a dropped `Page`'s arena is a
+use-after-free, not a document — `is_alive()` cannot save you if you ask the *wrong* arena); and the
+identity cache is **per-arena**, or `===` starts lying across documents. `Page` now keeps its child pages
+and unregisters their arenas in `Drop`, before they die.
+
+**Two more capabilities fell out of following the number down.** The frame loaded but created zero
+subtests — the page's `<body onload="showNodes(...)">` never fired, because **inline event-handler content
+attributes were never compiled**. `onload`, `onclick`, `onsubmit` — the oldest way to attach behaviour to
+markup — were all dead. And `nodes[i].dataset.cp` threw, because `element.dataset` looked its element up
+in the *main* document's identity map (id-keyed, single-document), so an iframe element got `null`. Both
+now work; `dataset`/`.style`/`.classList` were rewired to take the **element**, not a global id.
+
+**A `display:none` iframe still loads.** WPT hides its frame (`<style>iframe{display:none}</style>` — the
+frame is a *data source*, not a picture) and we refused to fetch a boxless frame. Loading is a DOM
+decision; the box is only a painting decision. That one confusion cost 767k subtests.
+
+**The saga, honestly told.** The first cut crashed `dom/` (Bar 0: 0 → 2 SIGSEGV) and it took a long hunt
+to corner: my inline-handler wiring did `document.querySelectorAll('*')` and read a property on every
+element, and that mass reflector access, with the reflection layer installed, tripped an infinite JS
+recursion that overflowed the C stack — a crash SpiderMonkey's stack quota failed to catch because its
+limit is anchored deep in the async call stack. Two false fixes (a mutation-wrapper depth guard, a
+re-anchored stack quota) were **non-deterministic luck** and rejected as such. The real fix is structural:
+a `__inlineHandlerNodes` native finds the handful of `on*`-bearing elements by a single arena walk in
+Rust, so JS never iterates the whole tree. The latent recursion (mass property access + reflection) is
+pre-existing from tick 82 and stays for a dedicated tick; this tick simply does not trigger it.
+
+**One more self-inflicted wound, because the per-document cache is a trap of its own.** The first
+per-arena cache created a fresh `__nodes_<addr>` map for the MAIN document too, and *overwrote* the global
+`__nodes` with it — discarding the `document` reflector that `install` seeds there. The symptom was as
+silent as it was specific: `document.dispatchEvent` stopped reaching document-level listeners
+(`DOMContentLoaded`, delegated clicks) **the instant any script touched `document.body`**, because
+`__nodes[0]` was gone. G_LIFECYCLE caught it (`seen:dcl-win,load`, missing `dcl-doc`). The fix: the main
+document's cache *is* `__nodes` (looked up and reused, never replaced); only a child document gets its own
+`__nodes_<addr>`. The lesson generalises the tick's headline one — a per-arena anything must not clobber
+the one map the whole prelude already depends on.
+
+**Receipts.** `dom/` 2387 → **2488** (0 crashes). `html/dom` **37.7%** held. `encoding` big5 0.1% →
+**44.0%**; the area 128 → ~721k. `G_IFRAME` now gates `contentDocument`/`contentWindow` + cross-document
+node identity; `G_CAPABILITY` gates inline `onclick` and `dataset`. Both build lanes green. Constellation:
+platform iframes **missing → gated**, doc legacy-encodings **missing → gated**, +2 app rows.
+
+**WIKI:** none — the interactive-JS architecture note already covers PageContext; this extends it, but the
+one durable lesson (*a node id is unique only within its arena — resolve reflectors against their own
+document*) belongs in the journal, not a new topic file.
+
 ## Tick 83 — the loop could not see its own frame. Now it checks the map.
 
 **TICK SHAPE: instrument.** `[no-pattern]`. No engine code changed. What changed is that the loop can now

@@ -324,6 +324,25 @@ and a capability that throws outranks capabilities used by ten times as many sit
 **Forms are 50% of the corpus, and they are the difference between a reader and a browser.** You cannot
 search, log in, or buy anything without them.
 
+## Tick 84 — the nested browsing context becomes readable (+~721k WPT)
+
+Tick 35 gave the iframe a box and a bitmap. This makes the document *inside* it a real, scriptable
+document — the difference between a picture of an embed and an embed.
+
+| Pattern | Unlocks | Status |
+|---|---|---|
+| `iframe.contentDocument` / `contentWindow` | **the platform web** — embeds, OAuth frames, payment fields, ads, comment widgets, video players all read into their own frame | ✅ (tick 84) — reflectors resolve against their **own arena** (`SLOT_DOM` + a live-arena registry); a per-arena identity cache, so `===` cannot lie across documents; child `Page`s kept alive, arenas unregistered in `Drop`. `G_IFRAME` gates it, incl. cross-document node identity |
+| legacy CJK encodings (Shift_JIS / Big5 / GBK / EUC-KR) | **the pre-2010 CJK web** — MOJIBAKE without it | ✅ (tick 84) — `encoding` **128 → ~721k subtests**. The decoder (`encoding_rs`) was correct all along; the tests read their expectations *from an iframe*, which is why it scored zero |
+| inline event handlers (`onclick`, `onload`, `onsubmit`) | **every server-rendered form, every legacy page** — the oldest way to attach behaviour to markup | ✅ (tick 84) — compiled + wired at parse time; `<body>`/`<frameset>` `on*` map to the **Window**. `G_CAPABILITY` |
+| `element.dataset` (`data-*`) | `data-testid`, Stimulus, Bootstrap, Hotwire — the standard HTML↔JS channel | ✅ (tick 84) — live `Proxy` over `data-*`, works across the iframe boundary. `G_CAPABILITY` |
+| a `display:none` iframe still loads | analytics beacons, OAuth relays, `postMessage` shims | ✅ (tick 84) — loading is a DOM decision; the box is only a painting decision |
+| iframe **live re-render on mutation** | an embed the parent mutates and expects to see repaint | ❌ the pixels are still a snapshot; the DOM is live and readable, the bitmap is not. Next. |
+
+**The one durable lesson:** a node id is unique only *within* an arena. Resolve a reflector against
+the one global `CURRENT_DOM` and a child document's node #7 returns the **parent's** node #7 — a
+different element, in a different document, with total confidence. That is the whole reason
+`contentDocument` could not exist, and it is a trap any second-document feature will hit.
+
 ## Tick 35 — `<iframe>`, and the white void
 
 | Pattern | % of the web | Status |

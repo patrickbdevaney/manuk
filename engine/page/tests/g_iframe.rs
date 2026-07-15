@@ -132,4 +132,78 @@ fn iframes_have_a_box_show_their_document_and_do_not_block_paint() {
          between a page and a third party, and a payment iframe that the host page can rewrite is not \
          a payment iframe."
     );
+
+    // ── (5) **`contentDocument` / `contentWindow` — the nested browsing context is READABLE.**
+    //
+    //        This is the tick's whole point and the single largest gated capability the project has
+    //        found: a script in the parent reaches into a frame's document and reads it back. It is
+    //        WPT's entire `encoding` suite (767,003 subtests) — `iframeRef(f).querySelectorAll(...)` —
+    //        and it is the platform web itself: embeds, OAuth frames, payment fields, comment widgets.
+    //
+    //        The child document was always built and then thrown away; this pins that it survives, that
+    //        a reflector resolves against ITS OWN arena (not the parent's — the bug that made this
+    //        impossible), and that node identity across the document boundary holds.
+    let mut fr = manuk_page::Page::load(
+        r#"<!doctype html><html><body>
+             <iframe src="https://embed.test/child" id="f"></iframe>
+             <span id="p">parent-span</span>
+             <script>window.__x = 1;</script>
+           </body></html>"#,
+        "https://parent.test/",
+        &fonts,
+        900.0,
+    );
+    let froot = fr.dom().root();
+    let fnode = manuk_css::query_selector_all(fr.dom(), froot, "#f")[0];
+    fr.render_iframe(
+        fnode,
+        r#"<!doctype html><html><head><title>frame-title</title></head>
+             <body><span data-cp="A7">child-a</span> <span data-cp="A8">child-b</span></body></html>"#,
+        "https://embed.test/child",
+        &fonts,
+        0,
+    );
+    fr.eval_for_test(
+        r#"var r = [];
+           function iframeRef(f){ return f.contentWindow ? f.contentWindow.document : f.contentDocument; }
+           var f = document.getElementById('f');
+           r.push('cd=' + (typeof f.contentDocument));
+           r.push('divcd=' + (typeof document.getElementById('p').contentDocument));
+           var d = iframeRef(f);
+           var ns = d.querySelectorAll('span');
+           r.push('childSpans=' + ns.length);
+           r.push('cp0=' + (ns[0] && ns[0].getAttribute('data-cp')));
+           r.push('text0=' + (ns[0] && ns[0].textContent));
+           r.push('title=' + d.title);
+           r.push('parentSpans=' + document.querySelectorAll('span').length);
+           r.push('identity=' + (f.contentDocument.querySelector('span') === d.querySelector('span')));
+           var s = document.createElement('script'); s.id = '__cd__'; s.type = 'application/json';
+           s.textContent = r.join('|'); document.documentElement.appendChild(s);"#,
+    );
+    let dom = fr.dom();
+    let out = manuk_css::query_selector_all(dom, dom.root(), "#__cd__");
+    let report = out
+        .first()
+        .map(|&n| dom.text_content(n))
+        .unwrap_or_default();
+    // A frame's document must exist, a non-frame's must not, the child's OWN nodes must come back (2
+    // spans, not the parent's 1), the child's data must decode, and `===` must hold across the boundary.
+    for needle in [
+        "cd=object",
+        "divcd=undefined",
+        "childSpans=2",
+        "cp0=A7",
+        "text0=child-a",
+        "title=frame-title",
+        "parentSpans=1",
+        "identity=true",
+    ] {
+        assert!(
+            report.contains(needle),
+            "G_IFRAME/contentDocument: expected `{needle}` — a script must read a frame's own document \
+             through `contentWindow.document`/`contentDocument`, and get the CHILD's nodes, not the \
+             parent's. This gates WPT's entire `encoding` suite (767k subtests) and the platform web \
+             (embeds, OAuth, payments). Full report: {report}"
+        );
+    }
 }

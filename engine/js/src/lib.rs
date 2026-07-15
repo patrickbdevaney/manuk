@@ -272,6 +272,44 @@ pub fn set_scroll_geometry(g: std::collections::HashMap<manuk_dom::NodeId, [f32;
 #[cfg(not(feature = "_sm"))]
 pub fn set_scroll_geometry(_g: std::collections::HashMap<manuk_dom::NodeId, [f32; 6]>) {}
 
+/// Publish the live child documents — the arena behind each `<iframe>`'s `contentDocument`.
+///
+/// The map is `iframe element → (arena address, that document's root node)`. The arenas belong to child
+/// `Page`s the parent owns and keeps boxed; the addresses are only meaningful while those `Page`s live,
+/// which is what [`unregister_dom`] enforces on the way out.
+#[cfg(feature = "_sm")]
+pub fn set_iframe_docs(
+    m: std::collections::HashMap<manuk_dom::NodeId, (usize, manuk_dom::NodeId)>,
+) {
+    dom_bindings::set_iframe_docs(m);
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn set_iframe_docs(
+    _m: std::collections::HashMap<manuk_dom::NodeId, (usize, manuk_dom::NodeId)>,
+) {
+}
+
+/// An arena is legal to resolve reflectors against.
+#[cfg(feature = "_sm")]
+pub fn register_dom(dom: *mut manuk_dom::Dom) {
+    dom_bindings::register_dom(dom);
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn register_dom(_dom: *mut manuk_dom::Dom) {}
+
+/// An arena is going away. **This must run before the `Page` drops**, or a reflector a script still
+/// holds becomes a use-after-free rather than a `null`. `is_alive()` cannot save you here: it validates a
+/// node id *within* an arena, and the arena itself is the thing that stopped existing.
+#[cfg(feature = "_sm")]
+pub fn unregister_dom(dom: *mut manuk_dom::Dom) {
+    dom_bindings::unregister_dom(dom);
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn unregister_dom(_dom: *mut manuk_dom::Dom) {}
+
 /// `element.scrollTop = n` assignments a script made, already clamped. The host applies them, because
 /// the host owns the layout tree.
 #[cfg(feature = "_sm")]
@@ -630,6 +668,10 @@ pub mod canvas;
 pub mod collections_js;
 #[cfg(feature = "_sm")]
 pub mod dom_bindings;
+#[cfg(feature = "_sm")]
+pub mod iframe_js;
+#[cfg(feature = "_sm")]
+pub mod inline_handlers_js;
 #[cfg(feature = "_sm")]
 pub mod mutation_js;
 #[cfg(feature = "_sm")]

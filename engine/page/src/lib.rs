@@ -665,6 +665,18 @@ pub struct Page {
     /// `<iframe>`s already rendered, by node → the URL they show. Prevents re-fetching an embed on
     /// every round, which is the same storm `image_by_url` exists to stop.
     iframes: std::collections::HashMap<manuk_dom::NodeId, String>,
+    /// **The documents inside the frames — kept, not thrown away.**
+    ///
+    /// They were always built (a real arena, real styles, real scripts, laid out at the frame's own
+    /// width), painted to a bitmap, and dropped. The pixels survived and the document did not, so
+    /// `iframe.contentDocument` was `undefined` — and the platform web *is* other people's documents
+    /// inside yours: embeds, OAuth frames, payment fields, players, comment widgets.
+    ///
+    /// The JS side holds each arena's **address** (in a reflector's `SLOT_DOM`), and a `HashMap` moves
+    /// its values around as it grows — but `Page::dom` is already a `Box<Dom>`, so what moves is the
+    /// pointer, never the arena it points at. No second box is needed, and adding one would just be a
+    /// second indirection on every child access.
+    child_pages: std::collections::HashMap<manuk_dom::NodeId, Page>,
     /// Decoded images keyed by **resolved URL**. `None` means "we asked and did not get it" — a
     /// remembered failure, which is what stops a blocked tracker being re-fetched on every round.
     /// Nine elements naming one sprite share one entry, one fetch and one decode.
@@ -802,8 +814,9 @@ impl Page {
         page.run_deferred_scripts(fonts, viewport_width);
         // Parsing is done and the deferred scripts have executed — that IS DOMContentLoaded.
         page.fire_lifecycle("DOMContentLoaded");
-        // On the SYNC path there is no subresource phase to wait for, so loading is over. The call is
-        // idempotent, so the async path firing `load` again later is harmless.
+        // On the SYNC path there is no async runtime to fetch subframes with; a caller that needs a
+        // frame's document (a gate) drives `render_iframe` directly. The async path
+        // (`load_async`/`finish_loading`) is where real frames load.
         page.fire_lifecycle("load");
         page
     }
@@ -847,8 +860,14 @@ impl Page {
         page.run_deferred_scripts(fonts, viewport_width);
         // Parsing is done and the deferred scripts have executed — that IS DOMContentLoaded.
         page.fire_lifecycle("DOMContentLoaded");
-        // On the SYNC path there is no subresource phase to wait for, so loading is over. The call is
-        // idempotent, so the async path firing `load` again later is harmless.
+        // **Subframes load BEFORE `load` fires** — `load` waits for subframes (HTML spec), and a page's
+        // `<body onload>` is precisely where it reaches into them. Firing `load` first made the entire
+        // `encoding` suite (767k subtests) read a not-yet-loaded frame and throw. Idempotent with the
+        // pass in `finish_loading`: `pending_iframes` skips any frame already rendered.
+        #[cfg(feature = "spidermonkey")]
+        page.fetch_and_load_iframes(fonts, viewport_width).await;
+        // The subresource phases have not run yet, but the document and its frames are ready, which is
+        // what `load` waits for. The call is idempotent, so `finish_loading` firing it again is harmless.
         page.fire_lifecycle("load");
 
         // **The enhancement phases run under the load budget, exactly as they do in `finish_loading`.**
@@ -945,6 +964,18 @@ impl Page {
         if phase("dynamic scripts") {
             self.fetch_and_run_dynamic_scripts(fonts, viewport_width, 4)
                 .await;
+        }
+        // **Subframes — BEFORE `load` fires, because `load` waits for them and because that is where
+        // pages reach into their frames.** `<body onload="showNodes(...)">` reading
+        // `iframe.contentWindow.document` is not an exotic pattern; it is WPT's entire `encoding` suite
+        // and it is every embed script in the wild.
+        //
+        // This ran only in the GUI before, so the test runner, the oracle and every headless render
+        // loaded pages whose frames were simply never fetched — the same class of defect as the
+        // never-drained fetch queue two paragraphs down. A harness that cannot load a subframe is not
+        // measuring the browser; it is measuring itself.
+        if phase("subframes") {
+            self.fetch_and_load_iframes(fonts, viewport_width).await;
         }
         // **The page's own `fetch()`/XHR calls — PERFORMED, not just queued.**
         //
@@ -1197,16 +1228,39 @@ impl Page {
             if src.is_empty() || src.starts_with("about:") || src.starts_with("javascript:") {
                 continue;
             }
-            let Some(r) = rects.get(&n).copied() else {
-                continue;
+            // **A `display:none` iframe still loads.** This used to `continue` when the element had no
+            // layout box, which conflates two different questions: *should this document load?* (a DOM
+            // question) and *is there anywhere to draw it?* (a layout question). A hidden frame answers
+            // no to the second and **yes to the first** — that is what a hidden frame is FOR: analytics
+            // beacons, OAuth relays, payment bridges, `postMessage` shims, prefetch.
+            //
+            // It cost 767,003 subtests. WPT's entire `encoding` suite hides its frame —
+            // `<style> iframe { display:none } </style>` — because the frame is a *data source*, not a
+            // picture; the test then reads its `contentDocument`. We refused to fetch it, so there was
+            // nothing to read, and the failure looked like a character-encoding bug for eighty-three
+            // ticks. The box is a painting decision. It was never a loading decision.
+            let (w, h) = match rects.get(&n) {
+                Some(r) if r.width >= 1.0 && r.height >= 1.0 => {
+                    (r.width.round() as u32, r.height.round() as u32)
+                }
+                // No box: load it at the spec's default frame size, which is only used as the child's
+                // viewport width. Nothing will be painted — see `render_iframe`.
+                _ => (300, 150),
             };
-            let (w, h) = (r.width.round() as u32, r.height.round() as u32);
-            if w == 0 || h == 0 {
-                continue;
-            }
             out.push((n, resolve_url(&self.final_url, src), w, h));
         }
         out
+    }
+
+    /// Every arena this `Page` owns — its own, and its frames'.
+    fn owned_arenas(&mut self) -> Vec<*mut manuk_dom::Dom> {
+        let mut v = vec![&mut *self.dom as *mut manuk_dom::Dom];
+        v.extend(
+            self.child_pages
+                .values_mut()
+                .map(|c| &mut *c.dom as *mut manuk_dom::Dom),
+        );
+        v
     }
 
     /// Render a fetched iframe document into the iframe's box.
@@ -1236,26 +1290,79 @@ impl Page {
             tracing::warn!(depth, "iframe nesting limit reached — not rendering deeper");
             return;
         }
+        // **No box is not a reason not to load** — see `pending_iframes`. It is a reason not to *paint*.
         let rects = self.root_box.node_rects(&self.dom);
-        let Some(r) = rects.get(&node).copied() else {
-            return;
+        let (w, h) = match rects.get(&node) {
+            Some(r) if r.width >= 1.0 && r.height >= 1.0 => (
+                r.width.round().max(1.0) as u32,
+                r.height.round().max(1.0) as u32,
+            ),
+            _ => (300, 150),
         };
-        let (w, h) = (
-            r.width.round().max(1.0) as u32,
-            r.height.round().max(1.0) as u32,
-        );
+        let visible = rects
+            .get(&node)
+            .is_some_and(|r| r.width >= 1.0 && r.height >= 1.0);
 
         // A whole page, at the iframe's own viewport width — so its media queries and its layout see the
         // size of the frame, not the size of the window. That is what makes a responsive embed responsive.
-        let child = Page::load(html, url, fonts, w as f32);
-        let canvas = child.paint(fonts, w, h);
-        let img = manuk_paint::DecodedImage {
-            width: canvas.width(),
-            height: canvas.height(),
-            rgba: canvas.rgba_bytes().to_vec(),
-        };
-        self.images.insert(node, std::rc::Rc::new(img));
+        let mut child = Page::load(html, url, fonts, w as f32);
+        if visible {
+            let canvas = child.paint(fonts, w, h);
+            let img = manuk_paint::DecodedImage {
+                width: canvas.width(),
+                height: canvas.height(),
+                rgba: canvas.rgba_bytes().to_vec(),
+            };
+            self.images.insert(node, std::rc::Rc::new(img));
+        }
         self.iframes.insert(node, url.to_string());
+
+        // **Keep the document.** Everything above this line already existed; the child was built in full
+        // and then thrown away, which is why `contentDocument` was `undefined` for eighty-three ticks.
+        // Registering the arena is what makes a reflector into it *safe* — see `manuk_js::register_dom`.
+        manuk_js::register_dom(&mut *child.dom as *mut manuk_dom::Dom);
+        self.child_pages.insert(node, child);
+        self.publish_iframe_docs();
+    }
+
+    /// Tell the JS world which arena sits behind each `<iframe>`. Cheap, and it must run before any
+    /// script that might reach into a frame — which, once frames are loaded, is any script at all.
+    fn publish_iframe_docs(&mut self) {
+        let m: std::collections::HashMap<_, _> = self
+            .child_pages
+            .iter_mut()
+            .map(|(&n, c)| {
+                let root = c.dom.root();
+                (n, (&mut *c.dom as *mut manuk_dom::Dom as usize, root))
+            })
+            .collect();
+        manuk_js::set_iframe_docs(m);
+    }
+
+    /// Fetch every `<iframe src>` and load it as a real document.
+    ///
+    /// **Before `load` fires**, because that is the spec (`load` waits for subframes) and because it is
+    /// the whole point: `<body onload="...">` is where a page reaches into its frames. WPT's entire
+    /// `encoding` suite — 767,003 subtests, 91% of the measured universe — is exactly that shape.
+    async fn fetch_and_load_iframes(&mut self, fonts: &FontContext, _viewport_width: f32) {
+        let pending = self.pending_iframes();
+        if pending.is_empty() {
+            return;
+        }
+        // One round of fetches, concurrently. A frame inside a frame is handled by the child's own
+        // load — `MAX_IFRAME_DEPTH` is the fork-bomb guard.
+        let fetches = pending.into_iter().map(|(node, url, _w, _h)| async move {
+            let (html, final_url) = fetch_html(&url).await.ok()?;
+            Some((node, html, final_url))
+        });
+        let got: Vec<_> = futures_util::future::join_all(fetches)
+            .await
+            .into_iter()
+            .flatten()
+            .collect();
+        for (node, html, final_url) in got {
+            self.render_iframe(node, &html, &final_url, fonts, 0);
+        }
     }
 
     // ── ELEMENT SCROLLING (`overflow: auto|scroll`) ────────────────────────────────────────────────
@@ -1771,6 +1878,8 @@ impl Page {
     /// finished parsing"* and *"the subresources finished"* are facts about the loader, not about JS.
     #[cfg(feature = "spidermonkey")]
     pub fn fire_lifecycle(&mut self, which: &str) {
+        // The thread-local is shared by every `Page` on this thread, so re-publish rather than trust it.
+        self.publish_iframe_docs();
         let src = match which {
             "DOMContentLoaded" => "globalThis.__fireDOMContentLoaded && __fireDOMContentLoaded()",
             _ => "globalThis.__fireLoad && __fireLoad()",
@@ -1932,8 +2041,9 @@ impl Page {
         page.run_deferred_scripts(fonts, viewport_width);
         // Parsing is done and the deferred scripts have executed — that IS DOMContentLoaded.
         page.fire_lifecycle("DOMContentLoaded");
-        // On the SYNC path there is no subresource phase to wait for, so loading is over. The call is
-        // idempotent, so the async path firing `load` again later is harmless.
+        // On the SYNC path there is no async runtime to fetch subframes with; a caller that needs a
+        // frame's document (a gate) drives `render_iframe` directly. The async path
+        // (`load_async`/`finish_loading`) is where real frames load.
         page.fire_lifecycle("load");
         page
     }
@@ -2087,6 +2197,7 @@ impl Page {
             image_attempts: std::collections::HashSet::new(),
             image_by_url: std::collections::HashMap::new(),
             iframes: std::collections::HashMap::new(),
+            child_pages: std::collections::HashMap::new(),
             last_cascade: None,
         }
     }
@@ -4634,5 +4745,20 @@ mod tests {
             page.relayout_incremental(&fonts, 800.0),
             RestyleDamage::None
         );
+    }
+}
+
+/// **An arena must stop being resolvable before it stops existing.**
+///
+/// A reflector carries the *address* of the document it belongs to. When a `Page` drops, that address
+/// becomes a dangling pointer that a script may still hold — and `Dom::is_alive()` cannot save you,
+/// because it validates a node id *within* an arena and the arena itself is what went away. So the
+/// registry is emptied first, and `node_and_dom` then sees an unregistered pointer and answers `None`,
+/// which is a `null`, which is a correct answer.
+impl Drop for Page {
+    fn drop(&mut self) {
+        for d in self.owned_arenas() {
+            manuk_js::unregister_dom(d);
+        }
     }
 }

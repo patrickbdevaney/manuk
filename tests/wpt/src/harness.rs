@@ -231,7 +231,19 @@ fn resolve(root: &Path, url_path: &str) -> (u16, &'static str, Vec<u8>) {
 
 fn content_type(p: &Path) -> &'static str {
     match p.extension().and_then(|e| e.to_str()).unwrap_or("") {
-        "html" | "htm" | "xht" | "xhtml" => "text/html; charset=utf-8",
+        // **NO `charset=` HERE, AND THAT IS THE WHOLE POINT.**
+        //
+        // This said `text/html; charset=utf-8`, and it was destroying the measurement it existed to take.
+        // In the WHATWG sniff order an HTTP `Content-Type` charset (step 2) **beats the document's own
+        // `<meta charset>` prescan** (step 3) — so every page in `encoding/legacy-mb-*` (Shift_JIS, Big5,
+        // GBK, EUC-KR: raw legacy bytes with `<meta charset=big5>` in the head) was force-decoded as UTF-8,
+        // turned into a wall of U+FFFD, and then scored. **767,003 subtests — 91% of everything we measure
+        // — were failing on a header this harness invented.** The engine's decoder was complete and
+        // correct the entire time (`manuk_net::charset`: BOM → Content-Type → meta prescan → chardetng).
+        //
+        // Real `wptserve` sends no charset for `.html` precisely so the document can declare its own. So do
+        // we now. *An instrument that overrides the thing it is measuring is not measuring it.*
+        "html" | "htm" | "xht" | "xhtml" => "text/html",
         "js" | "mjs" => "text/javascript; charset=utf-8",
         "css" => "text/css; charset=utf-8",
         "json" => "application/json",

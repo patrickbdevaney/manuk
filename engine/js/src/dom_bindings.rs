@@ -166,6 +166,47 @@ fn pending_exception(cx: *mut RawJSContext) -> String {
 /// Point every DOM binding at `dom` for the duration of this re-entry into JS.
 pub(crate) fn set_current_dom(dom: *mut Dom) {
     CURRENT_DOM.with(|c| c.set(dom));
+    register_dom(dom);
+}
+
+thread_local! {
+    /// **Every arena a reflector may legally point at.**
+    ///
+    /// Until now a reflector's node id was resolved against `CURRENT_DOM` — the *one* document the engine
+    /// happened to be re-entering — and its own `SLOT_DOM` was written and never read. That is correct for
+    /// exactly one document and catastrophically wrong for two: an `<iframe>`'s node #7 would be looked up
+    /// in the PARENT's arena, returning the parent's node #7. A different element, in a different document,
+    /// with complete confidence.
+    ///
+    /// So it is one document per engine, and that is why `iframe.contentDocument` did not exist — not
+    /// because nobody wrote it, but because there was nowhere for it to point.
+    ///
+    /// The registry makes `SLOT_DOM` authoritative and safe: a reflector resolves against the arena it was
+    /// MADE from, and only if that arena is still alive. A pointer to a dropped `Page` is not a document,
+    /// it is a use-after-free — and `is_alive()` cannot save you if you are asking the wrong arena.
+    static LIVE_DOMS: std::cell::RefCell<std::collections::HashSet<usize>> =
+        std::cell::RefCell::new(std::collections::HashSet::new());
+}
+
+/// Register an arena as legal to resolve against. Idempotent.
+pub fn register_dom(dom: *mut Dom) {
+    if !dom.is_null() {
+        LIVE_DOMS.with(|s| {
+            s.borrow_mut().insert(dom as usize);
+        });
+    }
+}
+
+/// A `Page` is going away. Its arena must stop being resolvable **before** it is dropped, or a stale
+/// reflector held by a script becomes a use-after-free rather than a `null`.
+pub fn unregister_dom(dom: *mut Dom) {
+    LIVE_DOMS.with(|s| {
+        s.borrow_mut().remove(&(dom as usize));
+    });
+}
+
+fn dom_is_live(dom: *mut Dom) -> bool {
+    !dom.is_null() && LIVE_DOMS.with(|s| s.borrow().contains(&(dom as usize)))
 }
 
 /// Publish the caller's layout + style maps **by reference** for the duration of one re-entry.
@@ -182,6 +223,23 @@ fn set_view_maps(
 /// because a script can *change* it mid-round (by assigning `scrollTop`) and must read its own write.
 pub fn set_scroll_geometry(g: std::collections::HashMap<NodeId, [f32; 6]>) {
     SCROLL_GEOM.with(|c| *c.borrow_mut() = g);
+}
+
+thread_local! {
+    /// For each `<iframe>` **element** in the parent document: the arena of the document it contains.
+    ///
+    /// This is the whole of `contentDocument`. The child `Page` was always built — a real DOM, real
+    /// styles, real scripts — and then painted to a bitmap and **dropped on the floor**. Every script that
+    /// reached into a frame got `undefined`, which is why 767,003 `encoding` subtests scored zero: they
+    /// load a document in a frame and read its text back out.
+    static IFRAME_DOCS: std::cell::RefCell<std::collections::HashMap<NodeId, (usize, NodeId)>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// Publish the live child documents. `Page` calls this before it runs scripts; the arenas must outlive
+/// the run, which is why the child `Page`s are boxed and owned by the parent (see `manuk_page::Page`).
+pub fn set_iframe_docs(m: std::collections::HashMap<NodeId, (usize, NodeId)>) {
+    IFRAME_DOCS.with(|c| *c.borrow_mut() = m);
 }
 
 /// The `element.scrollTop = n` assignments a script made this round, already clamped.
@@ -537,9 +595,38 @@ unsafe fn node_and_dom(obj: *mut JSObject) -> Option<(*mut Dom, NodeId)> {
     if !ns.is_int32() {
         return None;
     }
-    // The node id is stable and comes from the reflector. The arena pointer is NOT stable — see
-    // `CURRENT_DOM` — so it comes from the thread-local, which the current re-entry just set.
-    let dom = CURRENT_DOM.with(|c| c.get());
+    // **Resolve against the reflector's OWN arena**, when that arena is still alive.
+    //
+    // This used to take the arena from `CURRENT_DOM` unconditionally — the one document the engine was
+    // re-entering — which is right for one document and disastrous for two. An `<iframe>`'s node #7 was
+    // looked up in the PARENT's arena and returned the parent's node #7: a different element, in a
+    // different document, with total confidence. It is the reason `contentDocument` could not exist.
+    //
+    // `SLOT_DOM` is authoritative now, and the registry is what makes that safe: a pointer to a dropped
+    // `Page` is not a document, it is a use-after-free, and `is_alive()` cannot save you if you are asking
+    // the wrong arena. Fall back to `CURRENT_DOM` only when the slot is empty (older reflectors, and the
+    // window/global objects that carry no arena at all).
+    // ⚠ **A `PrivateValue` IS a double.** SpiderMonkey stores a private pointer in the double payload,
+    // so `is_double()` answers `true` for every legitimate arena pointer — a guard written as
+    // `if ds.is_double() { null }` throws away exactly the value it was meant to read, silently, and
+    // falls back to `CURRENT_DOM`. That is a bug that *looks* like the feature simply not working: the
+    // first probe of this code read the PARENT's spans out of a child document and reported `1` where
+    // the answer was `2`, with no error anywhere.
+    //
+    // The prototypes' slots are genuinely `undefined` (see [`Tier`]), which is the only case to reject
+    // here. Everything else is checked by the registry, which is the real safety property.
+    let mut ds = UndefinedValue();
+    JS_GetReservedSlot(obj, SLOT_DOM, &mut ds);
+    let own: *mut Dom = if ds.is_undefined() || ds.is_null() || ds.is_object() {
+        std::ptr::null_mut()
+    } else {
+        ds.to_private() as *mut Dom
+    };
+    let dom = if dom_is_live(own) {
+        own
+    } else {
+        CURRENT_DOM.with(|c| c.get())
+    };
     if dom.is_null() {
         return None;
     }
@@ -826,18 +913,42 @@ unsafe fn dom_protos(cx: *mut RawJSContext) -> Option<(*mut JSObject, *mut JSObj
 /// page that touches 5,000 elements that is 10,000 compiles, and it was the dominant cost of
 /// `createElement` (124ms for 5,000 divs). It is a plain object and two property accesses.
 unsafe fn node_cache(cx: *mut RawJSContext) -> Option<*mut JSObject> {
+    node_cache_for(cx, CURRENT_DOM.with(|c| c.get()))
+}
+
+/// The identity cache **for one document**.
+///
+/// It used to be a single `__nodes` map keyed by node id — and a node id is only unique *within* an arena.
+/// The moment a second document exists (an `<iframe>`), the parent's node #7 and the child's node #7 are
+/// the same key, and whichever was cached first is handed back for both: **the wrong element, from the
+/// wrong document, and `===` swears it is the right one.**
+///
+/// One cache per arena, named by the arena's address.
+unsafe fn node_cache_for(cx: *mut RawJSContext, dom: *mut Dom) -> Option<*mut JSObject> {
     let global = CurrentGlobalOrNull(&wrap_cx(cx));
     if global.is_null() {
         return None;
     }
     rooted!(in(cx) let g = global);
+
+    // **The MAIN document's cache IS `__nodes`** — the very map `install` seeds the `document` reflector
+    // into, and that a great deal of prelude JS reads by that name. It must be looked up and REUSED, never
+    // replaced with a fresh map: the old code created a `__nodes_<addr>` map for the main document AND
+    // overwrote `__nodes` with it, discarding the seeded `document` (and every node cached before). The
+    // symptom was silent and vicious — `document.dispatchEvent` stopped reaching document-level listeners
+    // (DOMContentLoaded, delegated clicks) the instant any script touched `document.body`, because
+    // `__nodes[0]` was gone. Only a CHILD document (an `<iframe>`) gets its own `__nodes_<addr>` map, since
+    // a node id is unique only within its arena.
+    let child_key;
+    let name: &std::ffi::CStr = if dom == CURRENT_DOM.with(|c| c.get()) {
+        c"__nodes"
+    } else {
+        child_key = std::ffi::CString::new(format!("__nodes_{}", dom as usize)).ok()?;
+        child_key.as_c_str()
+    };
+
     rooted!(in(cx) let mut v = UndefinedValue());
-    if JS_GetProperty(
-        &mut wrap_cx(cx),
-        g.handle(),
-        c"__nodes".as_ptr(),
-        v.handle_mut(),
-    ) && v.is_object()
+    if JS_GetProperty(&mut wrap_cx(cx), g.handle(), name.as_ptr(), v.handle_mut()) && v.is_object()
     {
         return Some(v.to_object());
     }
@@ -846,12 +957,7 @@ unsafe fn node_cache(cx: *mut RawJSContext) -> Option<*mut JSObject> {
         return None;
     }
     rooted!(in(cx) let mv = ObjectValue(map.get()));
-    JS_SetProperty(
-        &mut wrap_cx(cx),
-        g.handle(),
-        c"__nodes".as_ptr(),
-        mv.handle(),
-    );
+    JS_SetProperty(&mut wrap_cx(cx), g.handle(), name.as_ptr(), mv.handle());
     Some(map.get())
 }
 
@@ -867,7 +973,7 @@ unsafe fn new_reflector(cx: *mut RawJSContext, dom: *mut Dom, node: NodeId) -> *
     // one of which can trigger a **moving** GC. The first version of this held `cache` unrooted across
     // that call and segfaulted on the very first page — a bug that Rust's type system cannot see,
     // because to it a `*mut JSObject` is just a number.
-    rooted!(in(cx) let cache = node_cache(cx).unwrap_or(ptr::null_mut()));
+    rooted!(in(cx) let cache = node_cache_for(cx, dom).unwrap_or(ptr::null_mut()));
     if !cache.get().is_null() {
         rooted!(in(cx) let mut v = UndefinedValue());
         if JS_GetElement(&mut wrap_cx(cx), cache.handle(), id as u32, v.handle_mut())
@@ -1169,6 +1275,9 @@ unsafe fn define_members(
         def_guarded!(def, c"__cvPath", cv_path, 8);
         def_guarded!(def, c"__cvGetImageData", cv_get_image_data, 4);
         def_guarded!(def, c"__cvToDataURL", cv_to_data_url, 0);
+        // The nested browsing context. `null` on anything that is not a frame — see `iframe_js`, which
+        // puts the `contentDocument`/`contentWindow` IDL surface on top of this one native.
+        def_guarded!(def, c"__iframeDoc", el_content_document, 0);
         // DOM tree mutation + cloning.
         def_guarded!(def, c"insertBefore", el_insert_before, 2);
         def_guarded!(def, c"removeChild", el_remove_child, 1);
@@ -1723,6 +1832,89 @@ unsafe fn cv_to_data_url(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> b
     }
     out.set(mozjs::jsval::StringValue(&*s));
     *vp = out.get();
+    true
+}
+
+/// `__iframeDoc()` → the `Document` reflector for the document **inside** this `<iframe>`, or `null`.
+///
+/// The document object is built exactly the way the top-level `document` is — `Document.prototype` →
+/// `Node.prototype` → `EventTarget.prototype` — so `frameDoc.querySelectorAll(...)`, `.body`, `.title`
+/// are the same methods the main document uses, with no shim and no second implementation.
+///
+/// What makes it *work* rather than merely exist is that its reserved `SLOT_DOM` names the **child's**
+/// arena, and [`node_and_dom`] now honours that slot. Before this tick every reflector resolved against
+/// the one `CURRENT_DOM`, so a child node #7 silently returned the *parent's* node #7 — a different
+/// element, in a different document, with total confidence. That is why this could not be written.
+unsafe fn el_content_document(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    *vp = NullValue();
+    let Some((_, node)) = this_node(vp) else {
+        return true;
+    };
+    let Some((dom_addr, root)) = IFRAME_DOCS.with(|c| c.borrow().get(&node).copied()) else {
+        return true;
+    };
+    let child = dom_addr as *mut Dom;
+    // The registry is the safety property, not the pointer: an arena whose `Page` has been dropped is not
+    // a document, it is a use-after-free, and `is_alive()` cannot save you if you ask the wrong arena.
+    if !dom_is_live(child) {
+        return true;
+    }
+    let doc_ptr = match dom_protos(cx) {
+        Some((_, doc_proto)) => {
+            rooted!(in(cx) let proto = doc_proto);
+            JS_NewObjectWithGivenProto(&mut wrap_cx(cx), &NODE_CLASS, proto.handle())
+        }
+        None => JS_NewObject(&mut wrap_cx(cx), &NODE_CLASS),
+    };
+    if doc_ptr.is_null() {
+        return true;
+    }
+    rooted!(in(cx) let doc = doc_ptr);
+    let nv = Int32Value(root.0 as i32);
+    JS_SetReservedSlot(doc.get(), SLOT_NODE, &nv);
+    let dv = PrivateValue(child as *const std::ffi::c_void);
+    JS_SetReservedSlot(doc.get(), SLOT_DOM, &dv);
+    *vp = ObjectValue(doc.get());
+    true
+}
+
+/// `__inlineHandlerNodes()` → a JS array holding a reflector for **every element that carries at least
+/// one `on*` content attribute**, and nothing else.
+///
+/// This exists to keep inline-handler wiring OFF the `document.querySelectorAll('*')` path. Iterating
+/// every element from JS and reading a property on each forces a reflector for the whole tree and — with
+/// the reflection layer installed — trips a pathological re-entrancy that overflows the stack (a Bar 0
+/// crash). Almost no element has an inline handler, so the entire question is answered by a single arena
+/// walk in Rust that touches JS only for the handful of real matches.
+unsafe fn inline_handler_nodes(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let dom = CURRENT_DOM.with(|c| c.get());
+    let arr_ptr = NewArrayObject1(&mut wrap_cx(cx), 0);
+    rooted!(in(cx) let arr = arr_ptr);
+    if dom.is_null() {
+        *vp = ObjectValue(arr.get());
+        return true;
+    }
+    let root = (*dom).root();
+    let mut idx: u32 = 0;
+    for node in (*dom).flat_descendants(root) {
+        let Some(el) = (*dom).element(node) else {
+            continue;
+        };
+        let has_on = el.attrs.iter().any(|a| {
+            a.name.len() >= 3 && a.name.as_bytes()[0] == b'o' && a.name.as_bytes()[1] == b'n'
+        });
+        if !has_on {
+            continue;
+        }
+        let refl = new_reflector(cx, dom, node);
+        if refl.is_null() {
+            continue;
+        }
+        rooted!(in(cx) let v = ObjectValue(refl));
+        JS_SetElement(&mut wrap_cx(cx), arr.handle(), idx, v.handle());
+        idx += 1;
+    }
+    *vp = ObjectValue(arr.get());
     true
 }
 
@@ -4162,13 +4354,54 @@ unsafe fn el_contains(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool 
 /// and `classList.add` is not far behind; before this, touching either threw a `TypeError` that
 /// aborted the rest of the page's script.
 unsafe fn lazy_view(cx: *mut RawJSContext, vp: *mut Value, maker: &str) -> bool {
-    match this_node(vp) {
-        Some((_, node)) => match eval_in_current_global(cx, &format!("{maker}({})", node.0)) {
-            Some(v) => *vp = v,
-            None => *vp = NullValue(),
-        },
-        None => *vp = NullValue(),
+    // **Pass the element, not its id.**
+    //
+    // This used to `eval` the string `"__mkDataset(7)"` and have the JS side look node 7 up in the
+    // global `__nodes` map. Two things were wrong with that, and the second one is fatal:
+    //
+    //   1. It **compiled a fresh script on every access.** `el.style.width = x` is the most common DOM
+    //      write on the web, and it was paying a JS compile each time.
+    //   2. A node id is only unique **within one arena**. `__nodes` is the MAIN document's cache, so an
+    //      element inside an `<iframe>` was looked up by its child-document id in the parent's map,
+    //      found nothing, and `dataset` came back **`null`** — a value that `typeof`s as `object`, which
+    //      is how it survived: `el.dataset.cp` threw a TypeError halfway through a loop, and every
+    //      subtest already created was left un-`done()`. It reported as a *timeout*.
+    //
+    // Handing the maker the element itself has neither problem, and needs no global cache at all.
+    let this = *vp.add(1);
+    if !this.is_object() {
+        *vp = NullValue();
+        return true;
     }
+    rooted!(in(cx) let this_obj = this.to_object());
+    rooted!(in(cx) let mut rval = UndefinedValue());
+    let name = match std::ffi::CString::new(maker) {
+        Ok(n) => n,
+        Err(_) => {
+            *vp = NullValue();
+            return true;
+        }
+    };
+    let global = CurrentGlobalOrNull(&wrap_cx(cx));
+    if global.is_null() {
+        *vp = NullValue();
+        return true;
+    }
+    rooted!(in(cx) let g = global);
+    rooted!(in(cx) let arg = ObjectValue(this_obj.get()));
+    // The rooted value's address is the argument vector: one element, live for the duration of the call.
+    let args = mozjs::jsapi::HandleValueArray {
+        length_: 1,
+        elements_: &*arg as *const Value,
+    };
+    let ok = mozjs::rust::wrappers2::JS_CallFunctionName(
+        &mut wrap_cx(cx),
+        g.handle(),
+        name.as_ptr(),
+        &args,
+        rval.handle_mut(),
+    );
+    *vp = if ok { rval.get() } else { NullValue() };
     true
 }
 
@@ -4454,6 +4687,14 @@ pub unsafe fn install(
 
     // Tier-0 BOM globals (window/self/console/navigator). Register the native console
     // sink, then install the JS shim with the honest UA + platform substituted in.
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__inlineHandlerNodes".as_ptr(),
+        host_fn!(inline_handler_nodes),
+        0,
+        0,
+    );
     JS_DefineFunction(
         &mut wrap_cx(cx),
         global.handle(),
@@ -5305,11 +5546,13 @@ const CSSOM_PRELUDE: &str = r#"
     var camel = function (p) { return String(p).replace(/-([a-z])/g, function (_, c) { return c.toUpperCase(); }); };
 
     // ---- element.style ------------------------------------------------------------------
-    g.__styleCache = {};
-    g.__mkStyle = function (id) {
-        if (g.__styleCache[id]) return g.__styleCache[id];
-        var el = g.__nodes[id];
+    // Memoised on the ELEMENT (a hidden expando), NOT in a global id-keyed map. The reflector cache
+    // already hands back one object per node, so an expando on it is a correct per-document cache — and
+    // an id-keyed map was silently the MAIN document's, so `iframeEl.style` looked up a child id in the
+    // parent's map and got `null`. See `lazy_view`.
+    g.__mkStyle = function (el) {
         if (!el) return null;
+        if (el.__styleView) return el.__styleView;
         var parse = function () {
             var o = {};
             var txt = el.getAttribute('style') || '';
@@ -5355,7 +5598,7 @@ const CSSOM_PRELUDE: &str = r#"
             deleteProperty: function (t, prop) { var o = parse(); delete o[dash(prop)]; write(o); return true; },
             ownKeys: function () { return Object.keys(parse()).map(camel); }
         });
-        g.__styleCache[id] = p;
+        el.__styleView = p;
         return p;
     };
 
@@ -5377,11 +5620,9 @@ const CSSOM_PRELUDE: &str = r#"
     g.__DOMTokenList = function () {};
     g.DOMTokenList = g.__DOMTokenList;
 
-    g.__clsCache = {};
-    g.__mkClassList = function (id) {
-        if (g.__clsCache[id]) return g.__clsCache[id];
-        var el = g.__nodes[id];
+    g.__mkClassList = function (el) {
         if (!el) return null;
+        if (el.__clsView) return el.__clsView;
 
         var read = function () {
             return (el.getAttribute('class') || '').split(/[ \t\r\n\f]+/).filter(function (x) { return x; });
@@ -5502,16 +5743,14 @@ const CSSOM_PRELUDE: &str = r#"
                 return Object.getOwnPropertyDescriptor(t, k);
             },
         });
-        g.__clsCache[id] = api;
+        el.__clsView = api;
         return api;
     };
 
     // ---- element.dataset ---------------------------------------------------------------
-    g.__dsCache = {};
-    g.__mkDataset = function (id) {
-        if (g.__dsCache[id]) return g.__dsCache[id];
-        var el = g.__nodes[id];
+    g.__mkDataset = function (el) {
         if (!el) return null;
+        if (el.__dsView) return el.__dsView;
         var attr = function (p) { return 'data-' + dash(p); };
         var p = new Proxy({}, {
             get: function (t, prop) {
@@ -5523,7 +5762,7 @@ const CSSOM_PRELUDE: &str = r#"
             has: function (t, prop) { return el.hasAttribute(attr(prop)); },
             deleteProperty: function (t, prop) { el.removeAttribute(attr(prop)); return true; }
         });
-        g.__dsCache[id] = p;
+        el.__dsView = p;
         return p;
     };
 })();
@@ -5831,6 +6070,9 @@ const WINDOW_PRELUDE: &str = r#"
         g.__fireDOMContentLoaded = function () {
             if (g.__dclFired) { return; }          // idempotent: several load paths may reach it
             g.__dclFired = true;
+            // Wire inline `on*` handlers now: the parse is complete, so `<button onclick>` works before
+            // any user interaction. Idempotent, and run again at load for elements added late.
+            if (g.__wireInlineHandlers) { try { g.__wireInlineHandlers(); } catch (e) {} }
             g.__setReadyState('interactive');
             var ev;
             try { ev = new Event('DOMContentLoaded', { bubbles: true }); }
@@ -5843,6 +6085,10 @@ const WINDOW_PRELUDE: &str = r#"
         g.__fireLoad = function () {
             if (g.__loadFired) { return; }         // `load` fires exactly once, ever
             g.__loadFired = true;
+            // `<body onload>` IS `window.onload`, and it must be set BEFORE we dispatch load below —
+            // this is the line the entire encoding suite (767k subtests) turns on. Also catches any
+            // element that never saw DOMContentLoaded (added during the load phases).
+            if (g.__wireInlineHandlers) { try { g.__wireInlineHandlers(); } catch (e) {} }
             g.__setReadyState('complete');
             var ev;
             try { ev = new Event('load'); } catch (e) { ev = { type: 'load' }; }
