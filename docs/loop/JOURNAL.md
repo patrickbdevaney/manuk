@@ -3054,6 +3054,39 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 96 — HYPOTHESIS (teed up for a fresh context): the recursion is depth, not re-entrancy
+
+**TICK SHAPE: hypothesis (not yet landed).** This entry sharpens the tick-96 target on disk so whichever
+session takes it — this one after a reload, or one the resurrection daemon launches — starts from confirmed
+facts rather than the saga-prone assumption the wiki warned about.
+
+**What was confirmed this pass (read-only, Bar-0-safe):**
+- There is currently **no explicit `JS_SetNativeStackQuota` call** anywhere in `engine/js` — mozjs's
+  `Runtime::new` (spidermonkey.rs:200) installs its own default, captured relative to the SP *at that
+  point*, which in the tokio/async embedding is buried deep → the guard address sits past the real stack
+  bottom → deep recursion SIGSEGVs instead of throwing "too much recursion". (Matches the wiki.)
+- **`getAttribute` is NOT wrapped** by the mutation layer — only `setAttribute`/`removeAttribute` and the
+  child-mutators are (mutation_js.rs:180-215). So the crash is **not** a trivial reflected-accessor →
+  getAttribute → wrapper re-entrancy that could be severed by de-wrapping. It is genuine **mass-reflector
+  depth**: forcing a reflector for every node in a large tree and running ~44 extra accessors per reflector
+  drives the C stack past the (mis-anchored) limit. The wiki's verdict stands: "real and un-fixed."
+
+**The two candidate fixes, and why this needs a fresh context (NOT a loaded one):**
+1. **Effective stack quota** — after `Runtime::new`, call `JS_SetNativeStackQuota(cx, size)` where the base
+   is the *real* thread-stack bound (`pthread_getattr_np` → `pthread_attr_getstack`), not the async SP.
+   Risk: mozjs records `nativeStackBase` at context creation; the version here may not re-read it, so the
+   size alone may not move the trigger to the right address. The wiki already records "re-anchoring per
+   call did not reliably help." This is FFI + pthread + version-specific mozjs internals — a saga.
+2. **Structural** — keep JS off the whole-tree walk (the `__inlineHandlerNodes` pattern), so mass reflector
+   access never happens for the reflection path either. Safer, but changes how reflection is driven.
+
+**The steer:** do NOT attempt either at the tail of a maxed context — that is precisely how the tick-84
+saga started. Take it fresh: reproduce the crash deterministically first (a minimal `querySelectorAll('*')`
++ per-node accessor-read harness under the html/dom lane), THEN try fix #1 behind a G_STACK_QUOTA gate that
+asserts "too much recursion" is *thrown* (not a segfault), and only re-enable ARIA once that gate is green.
+If fix #1 proves unreliable as the wiki predicts, fall to fix #2. Bar 0 outranks the capability: revert
+rather than ship a maybe-crash.
+
 ## Tick 95 — ARIA reflection, explored and reverted: the mass-reflector recursion is now a named gate
 
 **TICK SHAPE: instrument.** No engine code landed — and that is the honest result. The histogram put the
