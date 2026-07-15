@@ -3054,6 +3054,36 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 92 — the wiki becomes mechanically load-bearing: enforced, indexed, retrievable
+
+**TICK SHAPE: instrument.** No engine code changed. The wiki-writing rule existed but was *methodological,
+not mechanical* — "WIKI: none" was free, so the loop took it on every engine tick from 85 on, and the wiki
+stopped accumulating **precisely where the JS/DOM/CSS/FFI learning was densest.** That knowledge is what
+the downstream horizons (agent-driving, security, the V8/embedded/enterprise species) will need and cannot
+reconstruct from a diff. Three mechanisms fix it, and none of them is a vector DB — deterministic
+keyword/symbol retrieval, no embeddings, no semantic neighbours, per the operator's own call.
+
+**1 — Retrieval.** `scripts/wiki-lookup.sh <terms>` returns the `##` sections containing your terms,
+ranked by how many match (`reflector SLOT_DOM` → the sections naming both, top first; nothing
+adjacent-but-wrong). `scripts/wiki-index.sh` regenerates `docs/wiki/INDEX.md`, the complete map of all
+**247** sections across 14 topic files — never hand-edited, checked current by `tick.sh`.
+
+**2 — Enforcement.** A tick that changes `engine/*/src/` **must** revise a `docs/wiki/*.md` topic, or
+declare an explicit, auditable `WIKI: none [forced] — <reason>`. Enforced in both the pre-commit hook
+(authoritative) and `tick.sh`'s one-second pre-flight. "None" stays legitimate for docs/scripts/mechanism
+ticks; it is no longer legitimate for an engine change that quietly learned something.
+
+**3 — Organisation.** Topic files, revised in place (never one file per tick — that is the write-heavy
+read-light failure the journal already is). The index gives the map; lookup gives precise retrieval; the
+enforcement guarantees the content keeps arriving. A capability is only truly banked when a future
+session — with no memory of this one — can `wiki-lookup` *why* it works and not undo it by accident.
+
+Backfill of the accumulated-but-uncaptured knowledge (the tick-84 crash saga → `js-engine.md`, and a sweep
+of ticks 82–91) is the next tick, now that the mechanism to hold it exists.
+
+**WIKI:** `README.md` — "Retrieval and enforcement: the wiki is now mechanically load-bearing" (lookup +
+index + the engine-tick accumulation rule).
+
 ## Tick 91 — innerText became the rendered text (the first Pareto-ranked capability tick)
 
 **TICK SHAPE: capability.** The first tick under the corrected Pareto north star (§VI.3): the loop ranked

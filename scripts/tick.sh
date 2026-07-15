@@ -58,10 +58,24 @@ awk -v t="$TICK" '
   || die "tick ${TICK}'s journal entry has no 'TICK SHAPE:' — a tick that cannot name its shape is drifting"
 ok "tick shape declared"
 
-# 3. The WIKI trailer. "none" is a legitimate answer; a SILENT gap is not.
+# 3. The WIKI trailer. "none" is a legitimate answer for a docs/scripts/mechanism tick; a SILENT gap is not.
 grep -qiE '^WIKI:' "$MSG" \
   || die "commit message has no 'WIKI:' trailer — name the topic file, or 'WIKI: none — <why>'"
+# **Engine ticks MUST accumulate.** If the tick changed engine SOURCE, "none" is not enough — it must
+# revise a docs/wiki/*.md topic (the knowledge the downstream horizons need and cannot get from a diff),
+# unless it declares an explicit, auditable `WIKI: none [forced] — <reason>`. Checked here so it fails in
+# one second, not after the wall. The authoritative copy of this rule is in scripts/hooks/pre-commit.
+ENGINE_CHG=$(git diff --cached --name-only 2>/dev/null | grep -cE '^engine/[a-z0-9]+/src/' || true)
+[ "$ENGINE_CHG" -eq 0 ] && ENGINE_CHG=$(git diff --name-only 2>/dev/null | grep -cE '^engine/[a-z0-9]+/src/' || true)
+WIKI_CHG=$(git status --short docs/wiki/ 2>/dev/null | grep -cE '\.md$' || true)
+if [ "${ENGINE_CHG:-0}" -gt 0 ] && [ "${WIKI_CHG:-0}" -eq 0 ] && ! grep -qiE '^WIKI:[[:space:]]*none[[:space:]]*\[forced\]' "$MSG"; then
+  die "engine source changed but no docs/wiki/*.md was revised — capture the mechanism (scripts/wiki-index.sh maps it), or 'WIKI: none [forced] — <why>'"
+fi
 ok "wiki trailer present"
+
+# 3b. The wiki index must be current, so the map never lies about what is retrievable.
+./scripts/wiki-index.sh --check >/dev/null 2>&1 || { ./scripts/wiki-index.sh >/dev/null 2>&1; printf '  %s⚠%s regenerated docs/wiki/INDEX.md\n' "$YEL" "$OFF"; }
+ok "wiki index current"
 
 # 4. The pattern ledger: engine capability changed ⇒ say which CLASS OF THE WEB it unlocks.
 if git diff --cached --name-only 2>/dev/null | grep -qE '^engine/(js|css|layout|paint|dom|html|text)/src/' \

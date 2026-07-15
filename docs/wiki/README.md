@@ -83,3 +83,18 @@ accumulates by construction**, because the pre-commit hook requires a `WIKI:` tr
 | [`build-and-dependencies.md`](build-and-dependencies.md) | what is actually compiled, and what only *looks* like it is |
 | [`wpt-horizon.md`](wpt-horizon.md) | the parity-scope roadmap, counted live from the WPT tree |
 | [`wasm-demo.md`](wasm-demo.md) | the engine in someone else's browser — and why every obvious way to observe it lies |
+
+## Retrieval and enforcement (tick 92) — the wiki is now mechanically load-bearing
+
+Accumulating knowledge is worthless if it cannot be found, and it stops accumulating the moment skipping
+is free. Both are now mechanical:
+
+* **Retrieve** — `scripts/wiki-lookup.sh <terms>` returns the `##` sections that contain your terms,
+  ranked by how many match. Deterministic keyword/symbol grep — **no embeddings, no semantic neighbours**,
+  the exact section that names the mechanism. `scripts/wiki-index.sh` regenerates `INDEX.md`, the complete
+  map of every section (never hand-edited; the wall checks it is current).
+* **Accumulate** — a tick that changes `engine/*/src/` **must** revise a `docs/wiki/*.md` topic (the
+  pre-commit hook and `tick.sh` enforce it); the only escape is an explicit `WIKI: none [forced] — <why>`.
+  This is the fix for the shallow rule that let engine ticks capture nothing precisely where the JS/DOM/
+  CSS/FFI learning was densest — the knowledge the downstream horizons (agent-driving, security, the
+  V8/embedded/enterprise species) will need and cannot reconstruct from a diff.

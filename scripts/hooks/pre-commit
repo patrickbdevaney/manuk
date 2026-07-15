@@ -282,6 +282,33 @@ if [ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ]; then
     red "✗ WIKI: the trailer names '$WIKI_F', which does not exist."
     exit 1
   fi
+
+  # ── ENGINE TICKS MUST ACCUMULATE. "None" is fine for a docs/scripts/mechanism tick; it is NOT fine when
+  # the tick changed engine SOURCE. Every touch of `engine/*/src/` teaches something about the JS/DOM/CSS/
+  # layout/FFI surface — SpiderMonkey rooting, a Stylo quirk, a spec edge, a Taffy limit — and that is
+  # exactly the knowledge the downstream horizons (agent-driving, security, the V8/embedded/enterprise
+  # species) will need and cannot reconstruct from a diff. The old rule let "WIKI: none" ride on engine
+  # ticks, so the wiki stopped accumulating precisely where the learning was densest. So: if this commit
+  # changes engine source, it MUST also modify a `docs/wiki/*.md` file (revise the relevant topic — do NOT
+  # create a per-tick file). The only escape is an explicit, auditable `WIKI: none [forced] — <reason>`,
+  # for the rare engine change that is pure mechanical plumbing with no generalisable lesson.
+  ENGINE_CHANGED=$(git diff --cached --name-only 2>/dev/null | grep -cE '^engine/[a-z0-9]+/src/' || true)
+  WIKI_CHANGED=$(git diff --cached --name-only 2>/dev/null | grep -cE '^docs/wiki/[A-Za-z0-9._-]+\.md$' || true)
+  if [ "${ENGINE_CHANGED:-0}" -gt 0 ] && [ "${WIKI_CHANGED:-0}" -eq 0 ]; then
+    if ! grep -qiE '^WIKI:[[:space:]]*none[[:space:]]*\[forced\]' "$MSG_FILE"; then
+      red "✗ WIKI: this tick changed engine source but touched no docs/wiki/*.md."
+      red ""
+      red "  Engine ticks accumulate knowledge — SpiderMonkey/Stylo/Taffy/DOM/CSS reality — that the"
+      red "  downstream horizons (agent-driving, security, species) will need and cannot get from a diff."
+      red "  REVISE the relevant topic file (do not create a per-tick file):"
+      red "    docs/wiki/js-engine.md · css-cascade.md · text-layout.md · dom-semantics.md · …"
+      red "    (map: scripts/wiki-index.sh  ·  retrieve: scripts/wiki-lookup.sh <terms>)"
+      red ""
+      red "  Genuinely nothing durable? Then say so explicitly, and it will be audited:"
+      red "    WIKI: none [forced] — <why this engine change taught no generalisable mechanism>"
+      exit 1
+    fi
+  fi
 fi
 
 grn "✓ gates green on exactly this tree ($(grep -oP '^at:\s*\K.*' "$RECEIPT"))"

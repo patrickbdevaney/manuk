@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **84** | ticks 1–91 |
-| median tick cycle | **18m** | 83 intervals |
-| median, last 10 | **57m** | 10 intervals |
+| ticks landed | **85** | ticks 1–92 |
+| median tick cycle | **18m** | 84 intervals |
+| median, last 10 | **35m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.87** | 95.2h elapsed |
-| median verify wall | **2m** | 23 ticks |
-| wall trend | 39s → 54s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.88** | 95.2h elapsed |
+| median verify wall | **3m** | 24 ticks |
+| wall trend | 39s → 55s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **161**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**38 of 84 ticks** (45%) moved a
+**38 of 85 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -86,7 +86,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **38** capability ticks, median cycle **18m**
-* median diff per tick: **+294 / −12** lines across 8 files
+* median diff per tick: **+297 / −12** lines across 8 files
 
 ## Every tick
 
@@ -176,5 +176,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **89** | 2026-07-15 03:00 | 50m | instrument | 54s | +167/−40 | 35 | 79 | 36.8% · | the loop budget: "run K more ticks" is now a fact on disk, not a context-window string |
 | **90** | 2026-07-15 03:07 | 8m | instrument | 55s | +201/−36 | 35 | 79 | 36.8% · | iterative builds run in RAM by default, so local work rarely touches the platter |
 | **91** | 2026-07-15 04:12 | 65m | capability | 53s | +261/−40 | 35 | 81 | 36.8% · | innerText became the rendered text (the first Pareto-ranked capability tick) |
+| **92** | 2026-07-15 04:17 | 5m | instrument | 8m | +534/−30 | 35 | 81 | 36.8% · | the wiki becomes mechanically load-bearing: enforced, indexed, retrievable |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
