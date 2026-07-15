@@ -244,3 +244,60 @@ forward only if the oracle shows layout *correctness* (not speed) blocking real 
 **Standing loop rule (adds to III's prioritisation):** when ranking the next tick, the score is
 *usage-weight × failing-breadth*, not failing-subtest-count. The encoding lesson is the precedent: a huge
 number that does not move the Pareto frontier is not progress toward H0.
+
+## PART VII — THE v1 SHIPPABLE RELEASE (the north star and the finish line; supersedes the roadmap as the near-term priority)
+
+The complete, shippable **v1** — the thing that proves the core thesis and constitutes "we built what we set
+out to build" — is **exactly and only these four components, treated as one self-contained system.** This
+governs tick selection now; it does not replace the horizons but re-scopes the near term: v1 pulls H0-parity
+(scoped) + H2-agentic (scoped) forward, scopes H1-security **down** to "good enough," and **defers H3/H4
+entirely.**
+
+**1. Daily-driver rendering parity** — breadth-first, usage-weighted, **GUI and headless**. The bar is
+*"reliably renders and runs the representative real internet,"* **not a WPT percentage.** Drive WPT
+capability enablement breadth-first against the **oracle's representative corpus** — maximize the count of
+**real sites moved per fix** — and additionally target **depth on the highest-concentration destinations**
+(x.com, Instagram, Facebook, HuggingFace, and the handful of sites where people actually spend time). **A WPT
+number is a horizon and a diagnostic, never a gate; 83% and beyond is explicitly OUT OF SCOPE for v1** —
+pursuing it optimizes the wrong variable. (This sharpens VI.3 / the standing loop rule: rank by real-sites-
+moved, verified against the oracle corpus, not by subtest count.)
+
+**2. The agentic automation surface** — native, complete, optimal. **This is the differentiator, not a
+feature — it earns the most polish.** The agent must fully drive and traverse the web through the native
+surface: see pages **multimodally**; read the **DOM / a11y / semantic tree as first-class, synchronously-
+queryable state**; interact with forms, buttons, links, and JS-driven UI; navigate and manage tabs.
+**"Complete" = an agent can reliably drive the same top-N real sites a human daily-drives**, measured against
+the **same representative corpus** as rendering parity, not separately. This is what incumbents structurally
+cannot retrofit. (The a11y crate is the seam; build the driving surface out against the top sites.)
+
+**3. Reasonable security hardening** — *"good enough," explicitly NOT maximal.* Bar 0 stability (no
+crashes/hangs/silent failures), **process-per-tab containment**, and sound handling of the memory-unsafe FFI
+surface. It does **NOT** require per-origin isolation, a SpiderMonkey heap-sandbox equivalent, an extension
+security model, or best-in-class-anything. **Do not let "security" expand into a research program before v1
+ships.**
+
+**4. Reasonable performance** — lean, fast, no pathological hangs or runaway resource use on the
+representative corpus. **A "feels good to use" target, not a benchmark-winning one.**
+
+### VII.1 — THE SCOPE-PROTECTION RULE (hard discipline, enforced, not aspiration)
+
+Everything else on the roadmap — the consumer prompt-to-action layer, crypto-wallet / x402 support, the
+V8-backed speciation, kiosk / embedded / enterprise variants, per-origin isolation, deep conformance — is
+**explicitly deferred and OUT of v1 scope.** It is a menu drawn from *if and when the core finds traction*,
+not a plan committed to now.
+
+**Critically: do not build the v1 core toward those later species.** Keep modular seams that make later
+addition possible (good architecture insurance) — but **never pay upfront cost, add abstraction, or make a v1
+design decision "so it's ready for" a deferred item.** If a choice is *only* justified by a post-v1 goal, it
+is out of scope.
+
+**THE TEST for any proposed work (apply every tick):** *does this move one of the four components above
+toward shippable, or does it serve something deferred?* If the latter, **it does not happen now.**
+
+### VII.2 — Why this scoping is the priority, not a limitation
+
+The four components together are a complete, coherent, genuinely novel artifact — a **Rust-native, memory-
+safe, agent-native browser that daily-drives the real web** — that did not exist before and **stands on its
+own even if nothing further on the roadmap is ever built.** Shipping this provably accomplishes the original
+thesis; leaving it unfinished while chasing the long tail (83%+ WPT) or the later species does not. **Ship
+the core; let the rest earn its way in.**
