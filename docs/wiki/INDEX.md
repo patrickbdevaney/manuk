@@ -226,7 +226,7 @@
   - L498 · A per-arena identity cache must not CLOBBER the shared __nodes — it breaks event dispatch silently
   - L511 · Mass reflector access + the reflection layer can overflow the C stack, and SpiderMonkey won't catch it
   - L545 · A reused SpiderMonkey runtime across many pages SIGSEGVs — a cross-file reflector/rooting UAF (open Bar-0)
-  - L566 · A second, DETERMINISTic C-stack overflow (html/semantics) — the stack-quota class, now with a clean repro
+  - L566 · A second, DETERMINISTIC C-stack overflow (html/semantics) — NATIVE recursion, not the stack-quota class
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`

@@ -3054,6 +3054,34 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 106 — the stack-quota fix, IMPLEMENTED and REVERTED: the html/semantics crasher is NATIVE recursion
+
+**TICK SHAPE: capability (attempted) → negative result + correction.** `[no-pattern]`. Acted on the
+hook's teed-up lever with the deterministic repro tick 105 secured. **Built the effective-stack-quota
+fix** — added `libc`, read the current thread's real stack bottom via `pthread_getattr_np` +
+`pthread_attr_getstack`, and set `JS_SetNativeStackQuota` so the JS limit lands a generous ~352 KB above
+the real bottom. Crucially found the page-eval runtime is the thread-local `RUNTIME` created in `lib.rs`
+`with_runtime` (NOT `SpiderMonkeyRuntime::new`, which page JS never uses) and set the quota there. Verified
+it compiles and computes a correct real-bottom quota (debug: avail=8 MB, JS limit ~360 KB above bottom).
+
+**The negative result — and it corrects tick 105.** `script-text-modifications-csp.html` **STILL SIGSEGVs
+on the MAIN thread**, where even mozjs's default 1 MB quota already leaves 7 MB of headroom. A JS stack
+quota only guards the C stack at JS-call checkpoints; a crash that overshoots them is **NATIVE recursion
+— our own Rust** (the `<script>.textContent` setter re-preparing the script / re-evaluating CSP,
+re-entering itself between checkpoints), which no JS quota can catch. So tick 105's "stack-quota class"
+label was wrong for this file. **Reverted** the quota fix (it does not hit its gate; per the ratchet, an
+unverified stack-quota change is not landed on hope).
+
+**Two redirected work orders (recorded in `js-engine.md` + memory):**
+1. **This crasher needs a native-recursion fix** — a "script already started" guard (HTML's *already
+   started* flag) to break the re-entrant loop; find it with a **debug build** (deterministic → gdb
+   catches it).
+2. **The quota fix itself is real and correct**, but its value is **small-worker-thread JS recursion**
+   (the reflection mass), which is **un-gateable on the main thread** (the default already works there).
+   It needs a worker-thread repro to prove + a full-sweep regression pass before it can land — do NOT
+   re-attempt it gated on this file. A disciplined revert of a well-built fix, not a failure: it corrected
+   a wrong hypothesis and saved the next context the same dead-end. [[parity-methodology]]
+
 ## Tick 105 — Bar-0 triage: the html/semantics crasher is a DETERMINISTIC stack overflow (the stack-quota class)
 
 **TICK SHAPE: instrument (Bar-0 triage).** `[no-pattern]` — no `engine/*/src` change; this is the diagnosis

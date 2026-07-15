@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **98** | ticks 1–105 |
-| median tick cycle | **19m** | 97 intervals |
-| median, last 10 | **40m** | 10 intervals |
+| ticks landed | **99** | ticks 1–106 |
+| median tick cycle | **19m** | 98 intervals |
+| median, last 10 | **35m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.92** | 104.9h elapsed |
-| median verify wall | **60s** | 37 ticks |
+| **ticks per hour** | **0.93** | 105.4h elapsed |
+| median verify wall | **59s** | 38 ticks |
 | wall trend | 39s → 51s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **184**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**45 of 98 ticks** (46%) moved a
+**46 of 99 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -85,8 +85,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **45** capability ticks, median cycle **19m**
-* median diff per tick: **+262 / −20** lines across 8 files
+* **46** capability ticks, median cycle **19m**
+* median diff per tick: **+261 / −21** lines across 8 files
 
 ## Every tick
 
@@ -190,5 +190,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **103** | 2026-07-15 13:37 | 41m | capability | 51s | +301/−36 | 38 | 81 | 36.8% · | document.elementFromPoint (+29) + the tick-103 surface-audit & constitution-check cadences |
 | **104** | 2026-07-15 13:47 | 11m | instrument | 51s | +96/−30 | 38 | 81 | 36.8% · | open the aperture: css-values/position/display/color join the sweep (§VI.4 step 1) |
 | **105** | 2026-07-15 13:58 | 11m | instrument | 51s | +99/−29 | 38 | 81 | 36.8% · | Bar-0 triage: the html/semantics crasher is a DETERMINISTIC stack overflow (the stack-quot |
+| **106** | 2026-07-15 14:29 | 31m | capability | 50s | +95/−35 | 38 | 81 | 36.8% · | the stack-quota fix, IMPLEMENTED and REVERTED: the html/semantics crasher is NATIVE recurs |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

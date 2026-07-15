@@ -563,7 +563,18 @@ pair, then find the reflector whose lifetime outlives its arena node across the 
 counted as `ACCUM`, not a per-page `CRASH` — see [[conformance-and-oracles]]); the UAF itself stays an
 open Bar-0. Do NOT start this fix at the tail of a maxed context. [[interactive-js-architecture]]
 
-## A second, DETERMINISTic C-stack overflow (html/semantics) — the stack-quota class, now with a clean repro
+## A second, DETERMINISTIC C-stack overflow (html/semantics) — NATIVE recursion, not the stack-quota class
+
+> **CORRECTION (tick 106): this is NATIVE recursion, not a JS-stack-quota crash — proven by building the
+> quota fix.** Tick 105 hypothesised the stack-quota class; tick 106 implemented the effective quota
+> (`libc`/`pthread_getattr_np` → real thread bottom, set at `lib.rs` `with_runtime` where the page-eval
+> `RUNTIME` is created) and the file **still SIGSEGVs on the main thread with a 7 MB-headroom quota**. A JS
+> stack quota only guards the C stack at JS call checkpoints; this crash overshoots them, so the recursion
+> is in **our own Rust** — the `<script>.textContent` setter re-preparing the script / re-evaluating CSP,
+> re-entering itself between checkpoints. **Fix = a "script is already started/prepared" guard to break the
+> re-entrant loop** (HTML spec's "already started" flag), found with a debug build — NOT the quota. The
+> quota fix was reverted (it doesn't hit this gate; its real value is small-worker-thread JS recursion,
+> which is un-gateable on the main thread and needs a worker-thread repro + full-sweep pass to land).
 
 Opening the aperture (tick 104) surfaced `html/semantics/scripting-1/the-script-element/`
 **`script-text-modifications-csp.html`**, which **SIGSEGVs (exit 139, core dumped) in ISOLATION** — a
