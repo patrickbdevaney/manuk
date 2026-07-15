@@ -25,8 +25,11 @@ KILL=.git/manuk-loop-DISABLED
 STATUS=STATUS.md
 STORE=docs/loop/AUTOLOOP
 
-IDLE_AFTER=18     # seconds since the last `working` touch that count as "idle, tick due"
-POLL=6            # how often to check (local file stat — cheap)
+IDLE_AFTER=90     # seconds since the last `working` touch that count as "idle, tick due". Must exceed the
+                  # agent's normal gap BETWEEN tool calls within a tick (thinking + dispatch), or the oracle
+                  # fires mid-tick and floods. 90s is comfortably above inter-call gaps yet fires promptly on
+                  # a true turn-end. The agent touches `.git/manuk-working` at the top of every tick command.
+POLL=10           # how often to check (local file stat — cheap)
 
 emitted=0         # 1 = already nudged for the current idle period (don't re-emit until work resumes)
 n=0
