@@ -401,3 +401,14 @@ presence (records an `attributes` mutation like set/removeAttribute). `webkitMat
 alias for `matches`. **Method lesson (tick 107→108):** a *neutral* niche API (getClientRects) vs a
 *flipping* high-usage one (isConnected/toggleAttribute, +6 dom) — target what the FAILING tests call, not
 what is easy to add. [[interaction-surface]]
+
+## The Node interface CONSTANTS were absent — and `n.nodeType === Node.ELEMENT_NODE` silently ran false
+
+`Node.ELEMENT_NODE` (1), `TEXT_NODE` (3), `COMMENT_NODE` (8), `DOCUMENT_FRAGMENT_NODE` (11), … and the
+`DOCUMENT_POSITION_*` bitmask were never defined. The failure was invisible: `n.nodeType === Node.ELEMENT_NODE`
+compares a number to `undefined` → **false, silently**, so type-dispatch code took the wrong branch with no
+error; and `compareDocumentPosition` threw outright. Defined all 12 node-type + 6 position constants on BOTH
+`Node` and `Node.prototype` (instances inherit them), and implemented `compareDocumentPosition` in the
+prelude (ancestor-chain containment + common-ancestor child order). **+146 subtests (html/dom +128)** — the
+constants are referenced by a large swath of the suite. A cross-cutting primitive missing in plain sight,
+found by probing *what the failing tests reference most*, not by area. [[interaction-surface]]

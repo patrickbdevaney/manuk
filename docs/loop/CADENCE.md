@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **101** | ticks 1–108 |
-| median tick cycle | **19m** | 100 intervals |
-| median, last 10 | **30m** | 10 intervals |
+| ticks landed | **102** | ticks 1–109 |
+| median tick cycle | **19m** | 101 intervals |
+| median, last 10 | **27m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.94** | 106.3h elapsed |
-| median verify wall | **59s** | 40 ticks |
-| wall trend | 39s → 51s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.95** | 106.7h elapsed |
+| median verify wall | **58s** | 41 ticks |
+| wall trend | 39s → 54s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **40**
-* **✅ rows in the capability ledger**: 144 → **189**
+* **live gates**: 27 → **41**
+* **✅ rows in the capability ledger**: 144 → **191**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**48 of 101 ticks** (48%) moved a
+**49 of 102 ticks** (48%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -85,8 +85,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **48** capability ticks, median cycle **19m**
-* median diff per tick: **+261 / −22** lines across 8 files
+* **49** capability ticks, median cycle **19m**
+* median diff per tick: **+260 / −22** lines across 8 files
 
 ## Every tick
 
@@ -193,5 +193,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **106** | 2026-07-15 14:29 | 31m | capability | 50s | +95/−35 | 38 | 81 | 36.8% · | the stack-quota fix, IMPLEMENTED and REVERTED: the html/semantics crasher is NATIVE recurs |
 | **107** | 2026-07-15 14:52 | 24m | capability | 51s | +176/−34 | 39 | 81 | 36.8% · | element.getClientRects() (correct missing API, ratchet-neutral) + the frontier is confirme |
 | **108** | 2026-07-15 15:24 | 31m | capability | 60s | +222/−36 | 40 | 81 | 36.8% · | the DOM ergonomics every framework needs: isConnected, toggleAttribute, webkitMatchesSelec |
+| **109** | 2026-07-15 15:42 | 18m | capability | 54s | +207/−38 | 41 | 81 | 36.8% · | the Node CONSTANTS + compareDocumentPosition (+146, biggest flip since tick 100) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

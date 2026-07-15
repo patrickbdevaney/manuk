@@ -308,6 +308,50 @@ const PRELUDE: &str = r#"
       iface('Comment', function(o){ return !!o && o.nodeType === 8; });
       iface('DocumentFragment', function(o){ return !!o && o.nodeType === 11; });
 
+      // ── The Node interface CONSTANTS + compareDocumentPosition. Ordinary code writes
+      //    `n.nodeType === Node.ELEMENT_NODE` and libraries order the DOM with
+      //    `a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING`. Absent, the first is
+      //    `=== undefined` (silently false) and the second throws.
+      (function(){
+        var NC = {
+          ELEMENT_NODE:1, ATTRIBUTE_NODE:2, TEXT_NODE:3, CDATA_SECTION_NODE:4,
+          ENTITY_REFERENCE_NODE:5, ENTITY_NODE:6, PROCESSING_INSTRUCTION_NODE:7, COMMENT_NODE:8,
+          DOCUMENT_NODE:9, DOCUMENT_TYPE_NODE:10, DOCUMENT_FRAGMENT_NODE:11, NOTATION_NODE:12,
+          DOCUMENT_POSITION_DISCONNECTED:1, DOCUMENT_POSITION_PRECEDING:2, DOCUMENT_POSITION_FOLLOWING:4,
+          DOCUMENT_POSITION_CONTAINS:8, DOCUMENT_POSITION_CONTAINED_BY:16,
+          DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC:32
+        };
+        var N = globalThis.Node;
+        for (var k in NC) {
+          try { Object.defineProperty(N, k, { value: NC[k], enumerable: true }); } catch (e) {}
+          try { Object.defineProperty(N.prototype, k, { value: NC[k], enumerable: true }); } catch (e) {}
+        }
+        if (typeof N.prototype.compareDocumentPosition !== 'function') {
+          N.prototype.compareDocumentPosition = function(other){
+            if (other === this) return 0;
+            var chain = function(n){ var c=[]; while(n){ c.push(n); n=n.parentNode; } return c; };
+            var ca = chain(this), cb = chain(other);
+            if (ca[ca.length-1] !== cb[cb.length-1]) {           // different roots → disconnected
+              return NC.DOCUMENT_POSITION_DISCONNECTED | NC.DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC |
+                     NC.DOCUMENT_POSITION_PRECEDING;
+            }
+            if (cb.indexOf(this) >= 0)                            // this is an ancestor of other
+              return NC.DOCUMENT_POSITION_CONTAINED_BY | NC.DOCUMENT_POSITION_FOLLOWING;
+            if (ca.indexOf(other) >= 0)                          // other is an ancestor of this
+              return NC.DOCUMENT_POSITION_CONTAINS | NC.DOCUMENT_POSITION_PRECEDING;
+            ca.reverse(); cb.reverse();                          // now [root ... node]
+            var i=0; while(i<ca.length && i<cb.length && ca[i]===cb[i]) i++;
+            var parent = ca[i-1], childA = ca[i], childB = cb[i];
+            var kids = parent.childNodes;
+            for (var k=0;k<kids.length;k++){
+              if (kids[k]===childA) return NC.DOCUMENT_POSITION_FOLLOWING;  // this earlier → other follows
+              if (kids[k]===childB) return NC.DOCUMENT_POSITION_PRECEDING;  // other earlier
+            }
+            return NC.DOCUMENT_POSITION_DISCONNECTED;
+          };
+        }
+      })();
+
       // ── HTMLMediaElement — **an honest NO, not a TypeError.**
       //
       // We cannot decode video or audio. That is a real limit and it is not going away this tick. What

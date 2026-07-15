@@ -141,6 +141,7 @@
   - L361 · Range.createContextualFragment is the fragment parser you already have, wearing a Range
   - L380 · getComputedStyle must expose the properties the cascade ALREADY computed — undefined is a bug, not a value
   - L395 · isConnected / toggleAttribute / webkitMatchesSelector — the ergonomics frameworks call hourly
+  - L405 · The Node interface CONSTANTS were absent — and n.nodeType === Node.ELEMENT_NODE silently ran false
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -329,4 +330,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-268 sections across 14 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+269 sections across 14 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

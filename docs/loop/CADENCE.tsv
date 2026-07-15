@@ -100,3 +100,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 106	09e7ac4	1784140146	2026-07-15T14:29:06-04:00	1845	capability	50	6	95	35	38	81	2387	6484	0	184	0	the stack-quota fix, IMPLEMENTED and REVERTED: the html/semantics crasher is NATIVE recursion
 107	3f86b05	1784141571	2026-07-15T14:52:51-04:00	1425	capability	51	9	176	34	39	81	2387	6484	0	186	0	element.getClientRects() (correct missing API, ratchet-neutral) + the frontier is confirmed diffuse
 108	eefad02	1784143446	2026-07-15T15:24:06-04:00	1875	capability	60	10	222	36	40	81	2387	6484	0	189	0	the DOM ergonomics every framework needs: isConnected, toggleAttribute, webkitMatchesSelector (+6 dom)
+109	97f2102	1784144545	2026-07-15T15:42:25-04:00	1099	capability	54	10	207	38	41	81	2387	6484	0	191	0	the Node CONSTANTS + compareDocumentPosition (+146, biggest flip since tick 100)

@@ -3054,6 +3054,28 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 109 — the Node CONSTANTS + compareDocumentPosition (+146, biggest flip since tick 100)
+
+**TICK SHAPE: capability (DOM API surface).** The tick-107→108 method paid off big: hunting **high-usage**
+missing surface, the **Node interface constants** turned out to be a major hole. `Node.ELEMENT_NODE`,
+`TEXT_NODE`, `COMMENT_NODE`, … and `DOCUMENT_POSITION_*` were **absent** — so the ubiquitous idiom
+`n.nodeType === Node.ELEMENT_NODE` silently evaluated `=== undefined` (false), and
+`a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING` threw. Added all 12 node-type constants
++ 6 position constants on both `Node` and `Node.prototype` (so instances inherit them), and implemented
+**`Node.prototype.compareDocumentPosition`** in the prelude (ancestor-chain diff → CONTAINS/CONTAINED_BY,
+common-ancestor child-order → PRECEDING/FOLLOWING, different-root → DISCONNECTED). Probe 8/8; gate
+`G_COMPARE_POSITION`, proven falsifiable.
+
+**MEASURED — the ratchet turned hard:** **dom 2745 → 2757 (+12)**, **html/dom 22562 → 22690 (+128)** —
+the constants unlock a large swath of html/dom tests that compare `nodeType` against the named constants —
+**domparsing 182 → 188 (+6)**, **TOTAL 389,484 → 389,630 (+146)**, crashes=0, no regression. GATES 40 → 41.
+
+**The lesson, sharpened again:** the "frontier is exhausted" read after tick 107 was *half* right — the
+niche APIs were done, but a **high-usage, cross-cutting primitive** (the Node constants, read by thousands
+of tests) was still missing and hiding in plain sight. Probe by *what the failing tests reference most*,
+not by area. The vein of high-usage missing surface is thinner but not dry. [[parity-methodology]]
+[[symptom-names-wrong-organ]]
+
 ## Tick 108 — the DOM ergonomics every framework needs: isConnected, toggleAttribute, webkitMatchesSelector (+6 dom)
 
 **TICK SHAPE: capability (DOM API surface).** After tick 107 confirmed neutral *niche* APIs don't flip,
