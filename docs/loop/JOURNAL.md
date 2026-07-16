@@ -3054,6 +3054,40 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 134 — a document created by `DOMImplementation` is a REAL Document (+dom)
+
+**TICK SHAPE: pattern-class (one reflector-proto + one scoping fix, a whole `is not a function` cluster).** WIKI: dom-semantics.
+
+**Hypothesis (flip-rate).** `dom/nodes` histogram: the largest single `is not a function` cluster is on
+documents returned by `document.implementation.createHTMLDocument()`/`createDocument()` —
+`doc.createElement` (18), `.createComment` (15), `.createDocumentFragment` (10), `.createTextNode` (6),
+`.createProcessingInstruction` (23), `.createElementNS`, `getElementById`. The created-document reflector
+was built by `new_reflector`, which gives EVERY node `HTMLElement.prototype` (the element member set), so a
+created Document had ELEMENT methods, not the factory surface. The iframe path (`el_content_document`)
+ALREADY builds its Document reflector with `Document.prototype` and works — so the mechanism is proven; the
+created-document factory just never used it.
+
+**The stated-limit blocker, resolved.** The old comment ("handing a Document node the document method set
+breaks the real document — something is written against the page's one true document, not `this`") is the
+arena-wide `find_first`: `document.body`/`head`/`documentElement` search from `self.root` (the MAIN
+document), so a SECOND document in the same arena aliased the main page's body — and a test appending to
+`doc.body` corrupted the real document (and the WPT harness, hence "5 files stopped reporting"). Fix:
+subtree-scope those three getters to the `this` document node via a new `find_first_in(root, name)`. The
+main document is unaffected (its `this` node IS `self.root`).
+
+**Mechanism.** (1) `Dom::find_first_in(root, name)` — subtree-scoped tag search. (2) `documentElement`/`body`/
+`head` scope to `this_node`'s node. (3) `doc_create_html_document` builds its reflector with
+`Document.prototype` (mirroring the iframe path) and adds the spec doctype child so `doc.childNodes.length
+== 2`. (4) `compatMode`/`contentType` constants for HTML documents.
+
+**MEASURED — the ratchet turned.** dom **3612 → 3632 (+20)** (total 6524 → 6528 as early-aborts now run
+their bodies), Bar 0 **0** (deterministic ×2), NO_REPORT unchanged (1), no regressions. Gate
+`g_created_document_is_real` **proven RED on revert** (reflector back to `new_reflector` → every factory
+assertion fails). Also fixed during the tick: `doc.title` get/set were arena-wide too (a created doc read
+the main page's title) — now subtree-scoped. **Open follow-on:** `new DOMParser().parseFromString(...)` and
+XML `createDocument` documents still lack `Document.prototype` (same mechanism, different mint site);
+`createAttribute`/`createCDATASection`/`adoptNode` are absent on ALL documents — each a separate bounded flip.
+
 ## Tick 133 — the `CharacterData` abstract base interface (+9 dom)
 
 **TICK SHAPE: pattern-class (one missing base interface, aborted a whole assertion class).** WIKI: dom-semantics.

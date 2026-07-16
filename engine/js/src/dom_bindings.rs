@@ -1046,23 +1046,19 @@ unsafe fn new_reflector(cx: *mut RawJSContext, dom: *mut Dom, node: NodeId) -> *
     JS_SetReservedSlot(obj.get(), SLOT_NODE, &node_val);
     let dom_val = PrivateValue(dom as *const std::ffi::c_void);
     JS_SetReservedSlot(obj.get(), SLOT_DOM, &dom_val);
-    // **A Document node gets the DOCUMENT method set.** This is what makes a second document — the one
-    // `createHTMLDocument()` returns — a real document rather than a shim: `doc.body`, `doc.createElement`,
-    // `doc.querySelector` all come from the same registration the main document uses.
-    // ⚠ **A created Document's reflector gets ELEMENT members, not document members — and that is a
-    // STATED LIMIT, not an oversight.**
+    // **This generic path gives every reflector `HTMLElement.prototype` (the element member set).** That
+    // is right for elements and text nodes. A DOCUMENT node needs `Document.prototype` instead — but the
+    // two callers that mint a second document (`el_content_document` for `<iframe>`, and
+    // `doc_create_html_document` for `DOMImplementation.createHTMLDocument`) build their reflector
+    // DIRECTLY with `Document.prototype` and seed the identity cache, so a document is never reached
+    // through this path as a fresh object: `ownerDocument`/the cache hand back the real Document reflector.
     //
-    // Handing a Document node the document method set breaks the *real* document: 5 WPT files stop
-    // reporting at all, and it is not the root-vs-created distinction (scoping it to non-root documents
-    // changes nothing). Something in the document member set is written against the page's one true
-    // document rather than against `this`, and finding it is its own tick.
-    //
-    // So `createHTMLDocument()` builds a **genuinely correct document in the arena** — `html`/`head`/
-    // `title`/`body`, all real nodes — while its **JS reflector cannot yet be used as a document**
-    // (`doc.body` is `undefined`). That is worth shipping anyway, because the alternative is a
-    // **TypeError on the call**, which takes the whole sanitizer down with it; and it is worth saying
-    // out loud, because a half-working document that pretended otherwise would be the worse bug.
-    // NO `define_members` here. The members live on `Node.prototype`, defined once per global.
+    // ⚠ The earlier fear — "handing a Document node the document method set breaks the real document,
+    // 5 WPT files stop reporting" — was the arena-wide `find_first`: `documentElement`/`body`/`head`
+    // searched from `self.root` (the MAIN document), so a same-arena second document aliased the page's
+    // `<body>` and a write through `doc.body` corrupted the real tree (and the harness). Tick 134 scoped
+    // those getters to the `this` node (`find_first_in`), which is what made created documents safe.
+    // NO `define_members` here. The members live on the prototype chain, defined once per global.
     // Store in the identity cache.
     let global = CurrentGlobalOrNull(&wrap_cx(cx));
     if !global.is_null() {
@@ -1211,6 +1207,8 @@ unsafe fn define_members(
         prop_guarded!(prop, c"characterSet", doc_get_charset, None);
         prop_guarded!(prop, c"charset", doc_get_charset, None);
         prop_guarded!(prop, c"inputEncoding", doc_get_charset, None);
+        prop_guarded!(prop, c"compatMode", doc_get_compat_mode, None);
+        prop_guarded!(prop, c"contentType", doc_get_content_type, None);
         prop_guarded!(prop, c"currentScript", doc_get_current_script, None);
         prop_guarded!(prop, c"activeElement", doc_get_active_element, None);
         prop_guarded!(prop, c"scrollingElement", doc_get_scrolling_element, None);
@@ -3396,6 +3394,10 @@ unsafe fn doc_create_html_document(cx: *mut RawJSContext, argc: u32, vp: *mut Va
         return true;
     };
     let doc = (*dom).create_document();
+    // Per spec, `createHTMLDocument` appends a `<!DOCTYPE html>` FIRST, so `doc.childNodes` is
+    // `[doctype, html]` (length 2) — `DOMImplementation-createHTMLDocument` asserts exactly this.
+    let doctype = (*dom).create_doctype("html");
+    (*dom).append_child(doc, doctype);
     let html = (*dom).create_element("html");
     (*dom).append_child(doc, html);
     let head = (*dom).create_element("head");
@@ -3409,8 +3411,38 @@ unsafe fn doc_create_html_document(cx: *mut RawJSContext, argc: u32, vp: *mut Va
     }
     let body = (*dom).create_element("body");
     (*dom).append_child(html, body);
-    let obj = new_reflector(cx, dom, doc);
-    *vp = ObjectValue(obj);
+    // **The reflector carries `Document.prototype`, NOT the element member set.** `new_reflector` gives
+    // every node `HTMLElement.prototype`, so a created Document had element methods (`setAttribute`) but
+    // none of the factory surface (`createElement`, `getElementById`, …). This mirrors the iframe path
+    // (`el_content_document`), which has always built its Document reflector this way and works — the
+    // difference is only that `createHTMLDocument`'s document lives in the SAME arena as the main one,
+    // which is why the subtree-scoped `documentElement`/`body`/`head` getters above are required for it
+    // to be safe.
+    let doc_obj = match dom_protos(cx) {
+        Some((_, doc_proto)) => {
+            rooted!(in(cx) let proto = doc_proto);
+            JS_NewObjectWithGivenProto(&mut wrap_cx(cx), &NODE_CLASS, proto.handle())
+        }
+        None => JS_NewObject(&mut wrap_cx(cx), &NODE_CLASS),
+    };
+    if doc_obj.is_null() {
+        *vp = NullValue();
+        return true;
+    }
+    rooted!(in(cx) let dobj = doc_obj);
+    let nv = Int32Value(doc.0 as i32);
+    JS_SetReservedSlot(dobj.get(), SLOT_NODE, &nv);
+    let dv = PrivateValue(dom as *const std::ffi::c_void);
+    JS_SetReservedSlot(dobj.get(), SLOT_DOM, &dv);
+    // Seed the identity cache with THIS reflector, so `el.ownerDocument === doc` and `ownerDocument`
+    // resolves back to the real Document (with the factory surface) instead of `new_reflector` minting a
+    // second, element-proto object for the same node id.
+    rooted!(in(cx) let cache = node_cache_for(cx, dom).unwrap_or(ptr::null_mut()));
+    if !cache.get().is_null() {
+        rooted!(in(cx) let ov = ObjectValue(dobj.get()));
+        JS_SetElement(&mut wrap_cx(cx), cache.handle(), doc.0 as u32, ov.handle());
+    }
+    *vp = ObjectValue(dobj.get());
     true
 }
 
@@ -4650,8 +4682,14 @@ unsafe fn el_form_reset(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bo
 /// touches it, and `document.title.split(...)` on `undefined` is a `TypeError` that takes the rest of
 /// the bundle with it.
 unsafe fn doc_get_title(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    // Subtree-scoped to the `this` document (see `doc_get_body`): a created document reads ITS OWN
+    // `<title>`, not the main page's.
     let t = this_node(vp)
-        .and_then(|(dom, _)| (*dom).find_first("title").map(|n| (*dom).text_content(n)))
+        .and_then(|(dom, root)| {
+            (*dom)
+                .find_first_in(root, "title")
+                .map(|n| (*dom).text_content(n))
+        })
         .unwrap_or_default();
     return_string(
         cx,
@@ -4662,15 +4700,16 @@ unsafe fn doc_get_title(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bo
 }
 
 unsafe fn doc_set_title(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
-    if let Some((dom, _)) = this_node(vp) {
+    if let Some((dom, root)) = this_node(vp) {
         let text = arg_string(cx, vp, argc, 0).unwrap_or_default();
         // Reuse the existing `<title>` if there is one; otherwise create it under `<head>`. A router
         // that sets the title on a page which never had one must still end up with a title.
-        let existing = (*dom).find_first("title");
+        // Subtree-scoped to `this` document, so a created document sets ITS OWN title.
+        let existing = (*dom).find_first_in(root, "title");
         let node = match existing {
             Some(n) => n,
             None => {
-                let head = (*dom).find_first("head");
+                let head = (*dom).find_first_in(root, "head");
                 let t = (*dom).create_element("title");
                 if let Some(h) = head {
                     (*dom).append_child(h, t);
@@ -4701,6 +4740,20 @@ unsafe fn doc_get_referrer(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) ->
 /// `document.characterSet` / `.charset` / `.inputEncoding` — we decode to UTF-8, so that is the answer.
 unsafe fn doc_get_charset(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     return_string(cx, vp, "UTF-8");
+    true
+}
+
+/// `document.compatMode` — always `"CSS1Compat"` (standards mode). Our documents are never quirks-mode:
+/// `createHTMLDocument` mints a `<!DOCTYPE html>` document, and the parser standards-modes real pages.
+/// `DOMImplementation-createHTMLDocument` asserts it; it was `undefined`.
+unsafe fn doc_get_compat_mode(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    return_string(cx, vp, "CSS1Compat");
+    true
+}
+
+/// `document.contentType` — `"text/html"` for the HTML documents this engine produces.
+unsafe fn doc_get_content_type(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    return_string(cx, vp, "text/html");
     true
 }
 
@@ -5466,10 +5519,15 @@ unsafe fn doc_get_scrolling_element(cx: *mut RawJSContext, _argc: u32, vp: *mut 
 }
 
 /// `document.documentElement` → the `<html>` element.
+// ⚠ `documentElement`/`body`/`head` search the subtree of the `this` DOCUMENT NODE, never `self.root`.
+// A second document in the same arena (a `createHTMLDocument()` result) has its own `<html>`/`<body>`;
+// searching from the arena root would alias the MAIN page's — and a write through `doc.body` would then
+// corrupt the real document. `find_first_in(root, ..)` scopes to `this`; for the main document `this` IS
+// the arena root, so nothing changes there.
 unsafe fn doc_get_document_element(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
-        Some((dom, _)) => {
-            let html = (*dom).find_first("html");
+        Some((dom, root)) => {
+            let html = (*dom).find_first_in(root, "html");
             return_node_or_null(cx, vp, dom, html);
         }
         None => *vp = NullValue(),
@@ -5480,8 +5538,8 @@ unsafe fn doc_get_document_element(cx: *mut RawJSContext, _argc: u32, vp: *mut V
 /// `document.body` → the `<body>` element.
 unsafe fn doc_get_body(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
-        Some((dom, _)) => {
-            let body = (*dom).find_first("body");
+        Some((dom, root)) => {
+            let body = (*dom).find_first_in(root, "body");
             return_node_or_null(cx, vp, dom, body);
         }
         None => *vp = NullValue(),
@@ -5492,8 +5550,8 @@ unsafe fn doc_get_body(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> boo
 /// `document.head` → the `<head>` element.
 unsafe fn doc_get_head(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
-        Some((dom, _)) => {
-            let head = (*dom).find_first("head");
+        Some((dom, root)) => {
+            let head = (*dom).find_first_in(root, "head");
             return_node_or_null(cx, vp, dom, head);
         }
         None => *vp = NullValue(),

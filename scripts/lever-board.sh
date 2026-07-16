@@ -13,6 +13,15 @@ A=docs/loop/WPT-AREAS.tsv
 B=$'\033[1m'; C=$'\033[36m'; G=$'\033[32m'; Y=$'\033[33m'; O=$'\033[0m'
 TARGET=83   # daily-driver MVP DIAGNOSTIC: reachable (non-tail) pass-rate goal. Real bar = real-site drivability.
 
+# ── WORKFLOW WARNING (observer, tick 134). This has HUNG the loop 3× and needed a manual kill each time:
+R=$'\033[31m'
+printf "%s⚠ NEVER poll with a pgrep-of-your-own-pattern wait loop%s — e.g. \`while pgrep -f \"cargo test X\"; do sleep; done\`\n" "$R$B" "$O"
+printf "  or \`until ! pgrep -f \"scripts/tick.sh\"; do ...; done\`. The pattern string is in the WAIT LOOP'S OWN cmdline, so\n"
+printf "  pgrep always matches itself, never returns empty, and the loop spins FOREVER even after the real job finished.\n"
+printf "  Instead: run cargo/tick.sh/tests in the FOREGROUND and let them block. If the harness backgrounds a long command,\n"
+printf "  wait on its OUTPUT-FILE CONTENT (e.g. \`grep -q 'VERIFY:' out\`), never on pgrep of a string your wait command contains.\n\n"
+
+
 awk -F'\t' -v B="$B" -v C="$C" -v G="$G" -v Y="$Y" -v O="$O" -v TGT="$TARGET" '
   NR>1 && $1!="TOTAL" && $1!="encoding" {
     p+=$2; t+=$3

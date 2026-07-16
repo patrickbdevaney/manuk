@@ -842,6 +842,46 @@ now matched literally instead of mis-parsed as a selector.
 regressions (a one-off `Node-lookupNamespaceURI` 69-vs-71 sample was an async TH_TIMEOUT flake, stable at
 71/75 across re-runs). Gate `g_class_ascii_whitespace`. [[dom-semantics]]
 
+## A document from `DOMImplementation` is a REAL Document (tick 134)
+
+`document.implementation.createHTMLDocument()`/`createDocument()` returned a reflector built by
+`new_reflector`, which gives EVERY node `HTMLElement.prototype` (the element member set). So the created
+Document had `setAttribute` but **none of the factory surface** — `doc.createElement`/`createTextNode`/
+`createComment`/`createProcessingInstruction`/`getElementById` were all `TypeError: ... is not a function`,
+and every `dom/nodes` test that created a second document to test something else aborted on the first call.
+
+**Why the earlier attempt was (correctly) feared, and what actually blocked it.** A prior comment recorded
+that handing a Document node the document method set "breaks the real document — 5 WPT files stop
+reporting… something is written against the page's one true document, not `this`." The culprit was the
+**arena-wide `find_first`**: `documentElement`/`body`/`head`/`title` searched from `self.root` — the MAIN
+document — so a SECOND document in the same arena resolved the PAGE's `<body>`, and a write through
+`doc.body` mutated the real tree (and the WPT harness lives in that tree → "stopped reporting").
+
+**The mechanism, in four parts:**
+1. **`Dom::find_first_in(root, name)`** — a subtree-scoped tag search. `documentElement`/`body`/`head`/
+   `title` (get + set) now scope to the `this` document node. The main document is unaffected because its
+   `this` node IS `self.root`.
+2. **`doc_create_html_document` builds its reflector with `Document.prototype`** (mirroring the iframe path
+   `el_content_document`, which has always done this and worked) and **seeds the identity cache**, so
+   `el.ownerDocument === doc` and `ownerDocument` hands back the real Document rather than a second
+   element-proto object for the same node id. It also appends a `<!DOCTYPE html>` first, so
+   `doc.childNodes` is `[doctype, html]` (length 2, as the spec requires).
+3. **`instanceof Document` matches nodeType 9**, not `o === document`. The singleton-only predicate made
+   `createHTMLDocument() instanceof Document` false — the FIRST assertion in the test.
+4. **`HTMLHtmlElement`/`HTMLHeadElement`/`HTMLBodyElement`/`HTMLTitleElement` ifaces** (the structural
+   elements the test asserts on) + **`compatMode` ("CSS1Compat") / `contentType` ("text/html")** constants.
+
+**The reusable rule:** *a reflector's prototype is chosen at the ONE place it is minted; a Document node
+reached through the generic `new_reflector` path is wrong, so the two callers that mint documents (iframe,
+createHTMLDocument) set `Document.prototype` directly and seed the cache.* And: *any document getter that
+searches the arena root silently binds to the main document — scope every one of them to `this`.*
+
+**MEASURED:** dom 3612 → 3632 (**+20**), total 6524 → 6528 (early-aborts now run their bodies), Bar 0 **0**
+(deterministic ×3), no regressions. Gate `g_created_document_is_real`. **Open follow-on:** documents from
+`new DOMParser().parseFromString(...)` and `createDocument` (XML) still don't carry `Document.prototype`
+(same mechanism, different mint site), and `createAttribute`/`createCDATASection`/`adoptNode` are absent on
+ALL documents — each a separate bounded flip. [[js-engine]]
+
 ## The `CharacterData` abstract base interface (tick 133)
 
 `CharacterData` is the WebIDL base of `Text` (nodeType 3), `Comment` (8), `ProcessingInstruction` (7) and

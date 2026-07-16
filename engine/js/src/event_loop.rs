@@ -1096,7 +1096,11 @@ const PRELUDE: &str = r#"
       // are not any more — they live on the real prototype chain. A forwarding accessor left in place
       // would sit in FRONT of the real one, look for an own property that no longer exists, and return
       // `undefined` for every DOM read on the page.
-      iface('Document', function(o){ return o === document; });
+      // `instanceof Document` must recognise EVERY document — the main one, an `<iframe>`'s, and one from
+      // `DOMImplementation.createHTMLDocument()`/`createDocument()` — not just the singleton `document`.
+      // A Document node has nodeType 9; the old `o === document` predicate made `createHTMLDocument()
+      // instanceof Document` false, which is the FIRST assertion in `DOMImplementation-createHTMLDocument`.
+      iface('Document', function(o){ return !!o && o.nodeType === 9; });
       iface('Window', function(o){ return o === globalThis; });
 
       iface('HTMLIFrameElement',   tagIs('IFRAME'));
@@ -1115,6 +1119,12 @@ const PRELUDE: &str = r#"
       iface('HTMLTemplateElement', tagIs('TEMPLATE'));
       iface('HTMLDivElement',      tagIs('DIV'));
       iface('HTMLSpanElement',     tagIs('SPAN'));
+      // The structural elements a created document is made of — `DOMImplementation-createHTMLDocument`
+      // asserts `documentElement instanceof HTMLHtmlElement`, `head instanceof HTMLHeadElement`, etc.
+      iface('HTMLHtmlElement',     tagIs('HTML'));
+      iface('HTMLHeadElement',     tagIs('HEAD'));
+      iface('HTMLBodyElement',     tagIs('BODY'));
+      iface('HTMLTitleElement',    tagIs('TITLE'));
 
       // `performance.now()` — schedulers, profilers and animation libraries all feature-detect it and
       // most fall back to `Date.now()`. The ones that don't simply break.

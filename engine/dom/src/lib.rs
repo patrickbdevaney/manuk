@@ -1161,7 +1161,17 @@ impl Dom {
     /// The first element with the given lowercased tag name, searched depth-first
     /// from the document root. Handy for `<html>`/`<body>`/`<title>` lookups.
     pub fn find_first(&self, name: &str) -> Option<NodeId> {
-        self.descendants(self.root)
+        self.find_first_in(self.root, name)
+    }
+
+    /// Like [`find_first`], but scoped to the subtree of `root` (pre-order, `root` excluded).
+    ///
+    /// **This is what makes a SECOND document in one arena resolve its own structure.** `find_first`
+    /// searches from `self.root` — the main document — so `createHTMLDocument().body` used to alias the
+    /// PAGE's `<body>`, and a test that appended to it corrupted the real document (and the WPT harness).
+    /// A document's `documentElement`/`body`/`head` must search *its own* subtree, which is exactly this.
+    pub fn find_first_in(&self, root: NodeId, name: &str) -> Option<NodeId> {
+        self.descendants(root)
             .find(|&id| self.tag_name(id) == Some(name))
     }
 
