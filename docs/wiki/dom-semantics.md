@@ -931,3 +931,37 @@ their full bodies — exposure, not regression. Gate `g_dom_impl` (extended, +11
 `createDocument` (XML) still ignores its namespace/qualifiedName/doctype args and returns an HTML document —
 the XMLDocument surface (lowercase tags, `application/xhtml+xml`, namespaced root) is a separate bounded
 tick. [[js-engine]]
+
+## CharacterData offsets are `unsigned long` = ToUint32, not clamp-to-0 (tick 136)
+
+`substringData`/`appendData`/`insertData`/`deleteData`/`replaceData` take **WebIDL `unsigned long`** offset
+and count arguments, and the coercion is **ECMAScript `ToUint32` (§7.1.7): modular, NOT clamped.** The whole
+CharacterData bounds behaviour hangs off this one distinction:
+
+- `-1` does not become `0` — it becomes **`4294967295`**. So `deleteData(-1, 10)` has an offset past the
+  end and is an **`IndexSizeError`**, and `substringData(-1, 0)` throws too.
+- A large negative *wraps back in bounds*: `insertData(-0x100000000 + 2, "X")` → offset `2` → `"teXst"`,
+  and `substringData(0x100000000 + 1, 1)` → offset `1` → `"e"`. WPT tests exactly these wrap values.
+- A giant count *clamps to the remaining length* (`substringData(0, -1)` → count `4294967295` → `"test"`),
+  because the spec's step is `if offset + count > length, set count to length − offset` — the count is
+  ToUint32'd *first*, then clamped by the algorithm, never by the coercion.
+
+The bug was `arg_u32`: it did `to_int32().max(0)` / `d < 0.0 → 0`, silently turning every out-of-range or
+negative call into an in-bounds no-op — the failure that hides because the method *appears* to work. The fix
+is one helper: `int32 as u32` (two's-complement bit pattern) and `d.trunc().rem_euclid(2^32)` for doubles.
+`arg_u32`'s only callers are these five methods plus `splitText`, all `unsigned long`, so the correction is
+contained to `dom/nodes`.
+
+Two smaller sibling bugs in the same cluster: (1) **required arguments are a `TypeError` before any DOM
+step** — `node.appendData()` / `node.substringData()` must throw (WebIDL "not enough arguments"), not append
+`""` / return from offset 0; the fix is an `argc < N` guard. (2) **`data` is `[LegacyNullToEmptyString]
+DOMString`** — `node.data = null` sets `""`, not the literal `"null"` a bare ToString produces (but
+`data = undefined` *does* stringify to `"undefined"`, and `data = 0` to `"0"` — only *null* is special).
+
+**MEASURED:** dom/nodes 3212 → 3245 (**+33**), zero new failures (before/after FAIL sets diffed), Bar 0
+**0** (deterministic). Gate `g_chardata` (extended). **Open follow-on:** the 8 remaining CharacterData
+failures are all *"splitting surrogate pairs"* — reading/writing a lone surrogate through `substringData`
+etc. That is **structurally gated on the text-storage layer**: the DOM stores `data` as a UTF-8 Rust
+`String`, which cannot represent a lone surrogate, and `from_utf16_lossy` replaces it with U+FFFD. Fixing it
+needs WTF-8 / UTF-16 text storage plus a `JS_NewUCStringCopyN` return path — a subsystem, not a bounded
+tick. [[js-engine]]

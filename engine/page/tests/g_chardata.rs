@@ -59,6 +59,36 @@ const HTML: &str = r#"<!doctype html><html><body>
     catch (err) { threw = (err instanceof DOMException) ? err.name : ('wrong:' + err); }
     R.push('throws:' + threw);
 
+    // ── The offsets/counts are WebIDL `unsigned long` = ToUint32 (modular, NOT clamped to 0). `-1`
+    // becomes 4294967295, so an out-of-range negative is an IndexSizeError, and a large negative that
+    // wraps back in bounds acts on the wrapped offset. The old code clamped negatives to 0, turning every
+    // one of these into a silent in-bounds no-op.
+    var u = document.createTextNode('test');
+    var negThrew = 'no';
+    try { u.deleteData(-1, 10); }               // -1 -> 4294967295 > length -> throws
+    catch (err) { negThrew = (err instanceof DOMException) ? err.name : ('wrong:' + err); }
+    R.push('negOffThrows:' + negThrew);
+    u.insertData(-0x100000000 + 2, 'X');        // wraps to offset 2 -> "teXst" (NOT "Xtest")
+    R.push('wrapIns:' + u.data);
+    var v = document.createTextNode('test');
+    R.push('bigOff:' + v.substringData(0x100000000 + 1, 1));   // wraps to offset 1 -> "e"
+    R.push('negCount:' + v.substringData(0, -1));              // count 4294967295 -> clamps -> "test"
+
+    // ── Required arguments are a TypeError BEFORE any DOM step — not a silent default.
+    var argThrew = 'no';
+    try { v.substringData(); } catch (err) { argThrew = err.constructor.name; }
+    R.push('subNoArgs:' + argThrew);           // TypeError
+    var appThrew = 'no';
+    try { v.appendData(); } catch (err) { appThrew = err.constructor.name; }
+    R.push('appNoArgs:' + appThrew);           // TypeError
+
+    // ── `data` is [LegacyNullToEmptyString]: `node.data = null` is "", not the literal "null".
+    var w = document.createTextNode('test');
+    w.data = null;
+    R.push('dataNull:[' + w.data + ']');       // []
+    w.data = undefined;                        // ...but undefined stringifies normally
+    R.push('dataUndef:' + w.data);             // undefined
+
     document.getElementById('out').textContent = R.join(' ');
   </script></body></html>"#;
 
@@ -87,6 +117,17 @@ fn click_activates_and_character_data_is_a_real_interface_counted_in_utf16() {
         "emojiSub:true",
         // and it throws the RIGHT exception
         "throws:IndexSizeError",
+        // ToUint32 (unsigned long), not clamp-to-0
+        "negOffThrows:IndexSizeError",
+        "wrapIns:teXst",
+        "bigOff:e",
+        "negCount:test",
+        // required arguments are a TypeError
+        "subNoArgs:TypeError",
+        "appNoArgs:TypeError",
+        // [LegacyNullToEmptyString]
+        "dataNull:[]",
+        "dataUndef:undefined",
     ] {
         assert!(
             got.contains(claim),

@@ -735,22 +735,30 @@ unsafe fn arg_string_nullable(
     arg_string(cx, vp, argc, i)
 }
 
-/// Numeric argument `i`, coerced the way the DOM does: `undefined` → 0, negatives and NaN → 0
-/// (the IDL type is `unsigned long`, so the coercion is modular and clamped, not an error).
+/// Numeric argument `i`, coerced as WebIDL **`unsigned long`** — i.e. ECMAScript `ToUint32` (§7.1.7):
+/// `ToNumber`, map NaN/±0/±∞ to +0, truncate toward zero, then take the result **modulo 2³²**. The
+/// coercion is **modular, NOT clamped**: `-1` becomes `4294967295`, not `0`. That distinction is the whole
+/// CharacterData bounds story — `deleteData(-1, 10)` has offset `4294967295 > length`, so it is an
+/// `IndexSizeError`; `insertData(-4294967294, "x")` wraps to offset `2` and inserts in bounds. The old code
+/// clamped negatives to 0, which silently turned every out-of-range call into an in-bounds no-op. Returns
+/// `None` only when the argument is **absent** (so a required-argument check can distinguish it).
 unsafe fn arg_u32(_cx: *mut RawJSContext, vp: *mut Value, argc: u32, i: u32) -> Option<u32> {
     if i >= argc {
         return None;
     }
     let v = *vp.add(2 + i as usize);
     if v.is_int32() {
-        return Some(v.to_int32().max(0) as u32);
+        // An in-range integer's ToUint32 is just its two's-complement bit pattern: `-1` → 4294967295.
+        return Some(v.to_int32() as u32);
     }
     if v.is_double() {
         let d = v.to_double();
-        if d.is_nan() || d < 0.0 {
+        if !d.is_finite() || d == 0.0 {
             return Some(0);
         }
-        return Some(d as u32);
+        // ToUint32: truncate toward zero, then reduce modulo 2³². `rem_euclid` keeps the result in
+        // [0, 2³²), so negatives wrap high and the final `as u32` is exact.
+        return Some(d.trunc().rem_euclid(4294967296.0) as u32);
     }
     None
 }
@@ -4338,7 +4346,14 @@ unsafe fn el_get_char_data(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) ->
 
 unsafe fn el_set_char_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
-        let text = arg_string(cx, vp, argc, 0).unwrap_or_default();
+        // `data` is `[LegacyNullToEmptyString] DOMString`, and CharacterData's `nodeValue` setter maps
+        // null to "" as well: `node.data = null` sets the text to the empty string, NOT the literal
+        // "null" a bare ToString coercion would produce.
+        let text = if argc > 0 && (*vp.add(2)).is_null() {
+            String::new()
+        } else {
+            arg_string(cx, vp, argc, 0).unwrap_or_default()
+        };
         let old = (*dom).character_data(node).map(str::to_string);
         if (*dom).set_character_data(node, text) {
             record_mutation(
@@ -4507,6 +4522,14 @@ unsafe fn el_get_whole_text(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -
 }
 
 unsafe fn el_substring_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    // `substringData(offset, count)` — both arguments are REQUIRED WebIDL params, so a call with fewer
+    // than two arguments is a `TypeError` *before* any DOM step (WebIDL "not enough arguments").
+    if argc < 2 {
+        return throw_type_error(
+            cx,
+            "Failed to execute 'substringData': 2 arguments required",
+        );
+    }
     let Some((dom, node)) = this_node(vp) else {
         *vp = UndefinedValue();
         return true;
@@ -4527,6 +4550,10 @@ unsafe fn el_substring_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) ->
 
 /// `cd.appendData(data)`
 unsafe fn el_append_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    // `data` is a REQUIRED argument: `node.appendData()` is a `TypeError`, not an append of `""`.
+    if argc < 1 {
+        return throw_type_error(cx, "Failed to execute 'appendData': 1 argument required");
+    }
     if let Some((dom, node)) = this_node(vp) {
         if let Some(mut u) = char_units(dom, node) {
             let add = arg_string(cx, vp, argc, 0).unwrap_or_default();

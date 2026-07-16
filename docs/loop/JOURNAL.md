@@ -3054,6 +3054,39 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 136 — CharacterData offsets are `unsigned long` (ToUint32), not clamp-to-0 (+33 dom)
+
+**TICK SHAPE: pattern-class (one WebIDL coercion helper + two sibling validity rules, a whole CharacterData bounds cluster).** WIKI: dom-semantics.
+
+**Hypothesis (flip-rate, histogramming `dom/nodes --show-failures`).** After tick 135 the cleanest bounded
+`dom/nodes` cluster was the **CharacterData ordinal methods** — 38 failing subtests across
+`substringData`/`appendData`/`insertData`/`deleteData`/`replaceData`, every one about **negative or
+out-of-range offset/count handling**, plus `data = null`. One shared cause: `arg_u32` coerced WebIDL
+`unsigned long` as **clamp-to-0** (`to_int32().max(0)`, `d < 0.0 → 0`) instead of **ToUint32** (modular).
+So `-1` became `0`, and every out-of-range call became a silent in-bounds no-op — the failure that hides
+because the method *appears* to work.
+
+**Mechanism.** (1) `arg_u32` now does ECMAScript ToUint32 (§7.1.7): `int32 as u32` (two's-complement bit
+pattern, `-1` → 4294967295) and `d.trunc().rem_euclid(2^32)` for doubles. Its only callers are the five
+CharacterData methods + `splitText`, all `unsigned long`, so the correction is contained to `dom/nodes`. Now
+`deleteData(-1,10)` is an `IndexSizeError`, `insertData(-0x100000000+2,"X")` wraps to offset 2 (`"teXst"`),
+and `substringData(0x100000000+1,1)` reads offset 1. (2) Required arguments throw `TypeError` *before* any
+DOM step (`appendData()`/`substringData()` — an `argc < N` guard). (3) `data` is
+`[LegacyNullToEmptyString]`: `node.data = null` → `""`, not the literal `"null"` (but `= undefined` →
+`"undefined"`, `= 0` → `"0"` — only null is special).
+
+**MEASURED — the ratchet turned.** dom/nodes **3212 → 3245 (+33)**; before/after FAIL sets diffed → **zero
+new failures**, CharacterData method failures 38 → 8. Bar 0 **0** (deterministic). The remaining 8 are all
+*"splitting surrogate pairs"* — reading/writing a **lone surrogate**, which is structurally gated on the
+text-storage layer (DOM stores `data` as UTF-8 Rust `String`; `from_utf16_lossy` → U+FFFD). That needs
+WTF-8/UTF-16 storage + a `JS_NewUCStringCopyN` return path — a subsystem, not a bounded tick, named not
+hidden. Gate `g_chardata` extended with 9 claims, falsifiable by construction (the old code returned "no"
+for `negOffThrows`, `"Xtest"` for `wrapIns`, did not throw on missing args, and `"[null]"` for `dataNull`).
+
+**The ratchet.** Capability: **up** — every rich-text/`contenteditable` surface that edits by ordinal offset
+now gets spec-correct bounds and wrap behaviour. Performance: unchanged. Instrument fidelity: **up** —
+`g_chardata` now pins the ToUint32 corner that silently no-op'd before.
+
 ## Tick 135 — `createDocumentType` validates a DOCTYPE name, and every document has its OWN `.implementation` (+190 dom)
 
 **TICK SHAPE: pattern-class (one validation rule + one per-document binding, a whole file + its downstream cluster).** WIKI: dom-semantics.
