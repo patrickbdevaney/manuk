@@ -161,3 +161,37 @@ which needs the stack-quota fix (now correctly scoped). The other levers (CSSOM 
 precision) are unchanged.
 
 **Next check due: tick 119.**
+
+## Check #5 — tick 119
+
+**Horizon:** H0 — Pareto Web Parity. **Gate:** ~83% WPT across categories · oracle-verified across the four
+corpora · daily-drivable shell · every rendered construct queryable through the semantic API.
+
+**Gate or scoreboard?** **Gate.** Ticks 112–119 stayed on the direct H0 path — DOM/HTML-DOM capability the
+app web actually calls, picked by histogramming `--show-failures` for the single largest *one-mechanism*
+cluster each time: numeric reflection coercion (117, +437), `dispatchEvent` validity (118, +15), and this
+tick `Node.prototype.moveBefore` (119, +18) — the atomic move plus its stricter pre-move validity, a whole
+missing DOM method framework reconcilers call. None of it is the encoding tail; every move landed where the
+gate lives. The method was chosen over higher-*raw*-count `dom` clusters (XML document loading ~488, the
+diffuse `assert_throws` mass) precisely because those are subsystems, not bounded ticks — the FLIP-RATE
+discipline, not failing-count.
+
+**Is `orient`'s usage-weighted ranking still the north star?** Yes. `moveBefore` is modest in raw flip
+(+18) but high in *mechanism cleanliness and forward usage weight* (frameworks are adopting it), and it is
+one coherent spec algorithm at zero Bar-0 risk — the right shape for the loop even though bigger raw
+numbers (e.g. document named-properties, ~56) sat nearby but needed reflector class-ops surgery (a resolve
+hook on the shared `NODE_CLASS`) that carries real Bar-0 risk. The ranking held: cleaner bounded mechanism
+over bigger-but-riskier mass.
+
+**Any invariant bent?** No. **Bar 0 held** (HANG/CRASH 0; the gate is its own process per the runtime-reuse
+UAF discipline). **I2 intact** — the move is spec-generic (WebIDL + DOM "ensure pre-move validity"), no
+engine forked. **I3 served** — a new DOM-mutation method is part of the surface the agent drives. A latent
+memory-safety-adjacent hazard was *surfaced and closed*, not traded: `node_and_dom`'s blind `SLOT_NODE`
+read mistook a plain `{a:1}` for node #1, now gated by an explicit `NODE_CLASS` check.
+
+**PART VI correction.** None. §VI.4 step 4 (web-API surface by usage weight) remains the productive vein;
+the crash-gated reflection mass (ARIA + whole-tree idlharness access) still awaits the effective-stack-quota
+fix in a fresh context, and I5 (one clean full oracle crawl) is still outstanding — both unchanged since
+check #4.
+
+**Next check due: tick 127.**

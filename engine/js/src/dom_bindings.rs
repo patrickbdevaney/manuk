@@ -674,6 +674,15 @@ unsafe fn node_and_dom(obj: *mut JSObject) -> Option<(*mut Dom, NodeId)> {
     Some((dom, id))
 }
 
+/// Is `obj` a genuine DOM node reflector — a [`NODE_CLASS`] object — rather than an arbitrary JS object
+/// whose fixed slots merely *alias* the reserved-slot indices? [`node_and_dom`] reads `SLOT_NODE`
+/// blindly, and a plain `{a: 1}` stores its `1` in fixed slot 0, which `SLOT_NODE` aliases — so
+/// `node_and_dom` mistakes it for node #1. A WebIDL conversion that must throw `TypeError` on a non-`Node`
+/// (e.g. `moveBefore`'s arguments) needs this stricter class test, not just a live-slot read.
+unsafe fn is_node_reflector(obj: *mut JSObject) -> bool {
+    !obj.is_null() && mozjs::rust::get_object_class(obj) == (&NODE_CLASS as *const JSClass)
+}
+
 /// The receiver object itself (`this`, at `vp[1]`) — for stashing state on the reflector.
 unsafe fn this_object(vp: *mut Value) -> Option<*mut JSObject> {
     let this = *vp.add(1);
@@ -1355,6 +1364,7 @@ unsafe fn define_members(
         def_guarded!(def, c"__iframeDoc", el_content_document, 0);
         // DOM tree mutation + cloning.
         def_guarded!(def, c"insertBefore", el_insert_before, 2);
+        def_guarded!(def, c"moveBefore", el_move_before, 2);
         def_guarded!(def, c"removeChild", el_remove_child, 1);
         def_guarded!(def, c"cloneNode", el_clone_node, 1);
         // DOM traversal (read-only accessor properties).
@@ -2457,6 +2467,143 @@ unsafe fn el_remove_child(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> b
     true
 }
 
+/// `parent.moveBefore(node, child)` — the **atomic move** (WHATWG DOM). Unlike `insertBefore`, it
+/// requires BOTH `parent` and `node` to already be *connected* and to share a root, and it relocates
+/// `node` **without** the remove-then-insert side effects that would otherwise reset the moved subtree's
+/// state (an iframe would reload, a running animation would restart, focus/selection would be lost).
+///
+/// Manuk does not tear that state down on a plain remove+insert, so the *observable relocation* is the
+/// same as `insertBefore`; what this method adds to the platform is (1) its **existence** — legacy code
+/// and modern framework reconcilers feature-detect and call it — and (2) the spec's **stricter pre-move
+/// validity**, the throws real code branches on. The presence-on-non-ParentNode distinction
+/// (`"moveBefore" in text === false`) is not yet reachable: this engine defines every Node method on one
+/// flat `Node.prototype` (see `dom_protos` — the Element/Document/Fragment member tiering is its own tick),
+/// so `moveBefore` is inherited by Text/Comment/DocumentType too. Calling it on such a `this` still throws
+/// (their kind is not a valid parent), so only the four `in`-presence subtests are out of reach.
+unsafe fn el_move_before(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, parent)) = this_node(vp) else {
+        *vp = UndefinedValue();
+        return true;
+    };
+    // WebIDL: `undefined moveBefore(Node node, Node? child)` — BOTH arguments are required (neither is
+    // `optional`). A missing second argument is "not enough arguments" → TypeError, before any DOM step.
+    if argc < 2 {
+        return throw_type_error(cx, "Failed to execute 'moveBefore': 2 arguments required");
+    }
+    // `node` (arg 0): must be a Node. `null`, `undefined` or a plain object → TypeError. The
+    // `is_node_reflector` class check is what rejects a plain object whose slot 0 aliases `SLOT_NODE`.
+    let Some((node_dom, node)) = arg_object(vp, argc, 0)
+        .filter(|&o| is_node_reflector(o))
+        .and_then(|o| node_and_dom(o))
+    else {
+        return throw_type_error(
+            cx,
+            "Failed to execute 'moveBefore': parameter 1 is not of type 'Node'",
+        );
+    };
+    // `child` (arg 1): a Node, or `null`/`undefined` (nullable → "no reference, append"). A non-null
+    // value that is not a Node → TypeError.
+    let child_raw = *vp.add(3);
+    let child: Option<NodeId> = if child_raw.is_null_or_undefined() {
+        None
+    } else if child_raw.is_object() && is_node_reflector(child_raw.to_object()) {
+        match node_and_dom(child_raw.to_object()) {
+            Some((_, c)) => Some(c),
+            None => {
+                return throw_type_error(
+                    cx,
+                    "Failed to execute 'moveBefore': parameter 2 is not of type 'Node'",
+                )
+            }
+        }
+    } else {
+        return throw_type_error(
+            cx,
+            "Failed to execute 'moveBefore': parameter 2 is not of type 'Node'",
+        );
+    };
+
+    // ── Ensure pre-move validity (WHATWG DOM "ensure pre-move validity") ──────────────────────────
+    // Step: `parent` must be a Document, DocumentFragment, or Element (a ShadowRoot is a fragment here).
+    if !(*dom).is_element(parent)
+        && !(*dom).is_document(parent)
+        && !(*dom).is_fragment(parent)
+        && !(*dom).is_shadow_root(parent)
+    {
+        return throw_dom(
+            cx,
+            "HierarchyRequestError",
+            "moveBefore: this node cannot be a move destination",
+        );
+    }
+    // Step: BOTH `parent` and `node` must be connected — the constraint that distinguishes an atomic
+    // move from `insertBefore` (which happily inserts a freshly-created, disconnected node).
+    if !is_connected(dom, parent) || !is_connected(node_dom, node) {
+        return throw_dom(
+            cx,
+            "HierarchyRequestError",
+            "moveBefore requires both the destination and the moved node to be connected",
+        );
+    }
+    // Step: `parent`'s shadow-including root must equal `node`'s. A node from another document lives in a
+    // distinct arena (`node_dom != dom`), so a pointer compare is the cross-document root check.
+    if node_dom != dom {
+        return throw_dom(
+            cx,
+            "HierarchyRequestError",
+            "moveBefore cannot move a node across documents",
+        );
+    }
+    // Step: `node` must not be a (host-including) inclusive ancestor of `parent` — that would cycle.
+    if (*dom).is_inclusive_ancestor(node, parent) {
+        return throw_dom(
+            cx,
+            "HierarchyRequestError",
+            "moveBefore: the moved node is an ancestor of the destination",
+        );
+    }
+    // Step: `node` must be an Element or a CharacterData node (Text/Comment). Doctype, Document,
+    // DocumentFragment and ShadowRoot are all rejected here.
+    if !(*dom).is_element(node) && (*dom).character_data(node).is_none() {
+        return throw_dom(
+            cx,
+            "HierarchyRequestError",
+            "moveBefore: only Element and CharacterData nodes can be moved",
+        );
+    }
+    // Step: if `child` is non-null, it must be a child of `parent` (else NotFoundError).
+    if let Some(rf) = child {
+        if (*dom).parent(rf) != Some(parent) {
+            return throw_dom(
+                cx,
+                "NotFoundError",
+                "moveBefore: the reference child is not a child of the destination",
+            );
+        }
+    }
+
+    // ── Perform the move. `insert_before`/`append_child` detach `node` from its old parent first, so
+    // this both removes and re-inserts in one step. "If referenceChild is node, set it to node's next
+    // sibling" — otherwise the reference vanishes the moment `node` detaches.
+    let old_parent = (*dom).parent(node);
+    let reference = match child {
+        Some(rf) if rf == node => (*dom).next_sibling(node),
+        other => other,
+    };
+    match reference {
+        Some(rf) if rf != node => (*dom).insert_before(parent, node, rf),
+        _ => (*dom).append_child(parent, node),
+    }
+    // A move is a removal from the old parent AND an insertion into the new one — one childList record
+    // each, so a MutationObserver on either parent sees it (they coincide for a same-parent reorder).
+    if let Some(op) = old_parent {
+        record_mutation(cx, dom, "childList", op, None, None, &[], &[node]);
+    }
+    record_mutation(cx, dom, "childList", parent, None, None, &[node], &[]);
+    *vp = UndefinedValue();
+    true
+}
+
 /// `document.createTextNode(text)` → a detached text-node reflector.
 unsafe fn doc_create_text_node(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, _)) = this_node(vp) else {
@@ -2596,15 +2743,9 @@ unsafe fn has_attribute_impl(
 /// `node.isConnected` → is this node in the document tree? True iff walking up parents reaches the
 /// document root; a `createElement`'d-but-unappended node (or a detached subtree) is not connected.
 unsafe fn el_get_is_connected(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
-    let connected = if let Some((dom, node)) = this_node(vp) {
-        let mut cur = node;
-        while let Some(p) = (*dom).parent(cur) {
-            cur = p;
-        }
-        cur == (*dom).root()
-    } else {
-        false
-    };
+    let connected = this_node(vp)
+        .map(|(dom, node)| is_connected(dom, node))
+        .unwrap_or(false);
     *vp = BooleanValue(connected);
     true
 }
@@ -4035,6 +4176,27 @@ unsafe fn throw_dom(cx: *mut RawJSContext, name: &str, msg: &str) -> bool {
     let script = format!("(function(){{ throw new DOMException({msg:?}, {name:?}); }})()");
     let _ = eval_in_current_global(cx, &script);
     false
+}
+
+/// Throw a `TypeError` and leave the exception pending — the WebIDL-level failure a native raises when
+/// an argument fails to convert (e.g. a non-`Node` where the operation's signature requires one). Modelled
+/// on [`throw_dom`]: a native returning `false` with an exception pending is how a thrown error propagates
+/// across the SpiderMonkey FFI seam ([[symptom-names-wrong-organ]] — a native that `unwrap_or(false)`s a
+/// throw swallows it into a benign value the caller cannot distinguish from success).
+unsafe fn throw_type_error(cx: *mut RawJSContext, msg: &str) -> bool {
+    let script = format!("(function(){{ throw new TypeError({msg:?}); }})()");
+    let _ = eval_in_current_global(cx, &script);
+    false
+}
+
+/// Is `node` connected — does walking its parent chain reach the arena's Document root? A
+/// `createElement`'d-but-unappended node, or any node in a detached subtree or a bare fragment, is not.
+unsafe fn is_connected(dom: *mut Dom, node: NodeId) -> bool {
+    let mut cur = node;
+    while let Some(p) = (*dom).parent(cur) {
+        cur = p;
+    }
+    cur == (*dom).root()
 }
 
 /// The node's data as UTF-16 code units — the unit the DOM spec counts in.

@@ -3054,6 +3054,61 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 119 — `Node.prototype.moveBefore`: the atomic move + its pre-move validity (+18)
+
+**TICK SHAPE: capability (a whole missing DOM method).** `[pattern: atomic-move]`. Probed `dom`
+(45.0%, top-headroom high-flip) with `--show-failures`; the single largest *one-missing-mechanism* cluster
+is `dom/nodes/moveBefore` — **3/106 (45 files)**, and its failures are dominated by
+`X.moveBefore is not a function`: the method simply did not exist. `moveBefore` is a rising daily-driver
+API — framework reconcilers (React/Preact/lit) call it to relocate a subtree **without** the state reset a
+remove+insert causes (iframe reload, animation restart, focus/selection loss).
+
+**Hypothesis / mechanism.** Add `moveBefore(node, child)` beside `insertBefore` on the flat
+`Node.prototype`, so Element + Document (inherited) + DocumentFragment all get it. The relocation itself is
+`insert_before`/`append_child` (both already `detach` the node from its old parent first), so no new arena
+code — Manuk never tore down the moved subtree's state on a plain remove+insert, so the *observable* move
+already matches. What the platform gains: (1) the method's **existence**, and (2) the spec's **stricter
+pre-move validity** — the throws real code branches on: WebIDL TypeError on non-`Node` args / a missing 2nd
+arg (`throw_type_error`, new); `HierarchyRequestError` when either `parent` or `node` is **disconnected**
+(the constraint that separates an atomic move from `insertBefore`), when they are in **different documents**
+(distinct arenas → pointer compare), when `node` is an inclusive ancestor of `parent`, or when `parent`/
+`node` is the wrong kind; `NotFoundError` when `child` is not a child of `parent`. Reused `is_connected`
+(factored out of `el_get_is_connected`).
+
+**Known out of reach (named, not hidden):** the four `"moveBefore" in <non-ParentNode>` presence subtests —
+this engine defines every Node method on ONE flat `Node.prototype`, so Text/Comment/Doctype inherit
+`moveBefore` too (calling it still throws — wrong parent kind). The Element/Document/Fragment member tiering
+is its own tick (`dom_protos` already names it). Also skipped: the animation/focus/iframe *state-preserve*
+tests (Manuk has no such state to lose) and the crash-regression reftests.
+
+**MEASURED.** `dom/nodes/moveBefore` **3/106 → 21/106 (+18)**; whole `dom` **2914 → 2932 (+18)** —
+every other subarea (nodes, events, ranges, traversal, collections, lists) held *exactly*, so no
+regression from `moveBefore` now being inherited by non-ParentNode nodes. **HANG/CRASH 0 (Bar 0).**
+
+**GATE:** `g_move_before` (own binary — SpiderMonkey runtime-reuse UAF forbids two `Page::load`s per
+process, per [[flexbox-relayout-segfault]]): non-Node arg→TypeError (incl. the `{a:1}` plain-object case),
+missing 2nd arg→TypeError, disconnected parent/target→HierarchyRequestError, ancestor→cycle throw, bad
+reference child→NotFoundError, and a real `[a,b]→[b,a]` reorder returning `undefined`. Proven falsifiable
+(RED before the native existed — the `Hierarchy*`/`NotFound` cases read back `TypeError` "moveBefore is not
+a function" and the bare reorder threw, leaving `#out` at its `-` sentinel).
+
+**The one real bug the gate caught:** `node_and_dom` reads `SLOT_NODE` blindly, and a plain `{a:1}` stores
+its `1` in fixed slot 0 — which `SLOT_NODE` aliases — so it was mistaken for node #1 and reached a
+*validity* throw instead of the WebIDL `TypeError`. Fixed with `is_node_reflector` (a `NODE_CLASS` class
+check via `mozjs::rust::get_object_class`), now the correct gate on any argument that must be a real Node.
+
+**The ratchet.** Capability: **up** (a whole new DOM method + its spec pre-move validity). Performance:
+unchanged. Instrument fidelity: **up** — a 9-case falsifiable tooth, and a latent slot-aliasing hazard
+(`{a:1}` → node #1) is now named and guarded. [[parity-methodology]] [[htmldom-top-levers]]
+[[symptom-names-wrong-organ]]
+
+WIKI: docs/wiki/dom-semantics.md — `moveBefore`: the atomic move, its pre-move validity, and the
+`node_and_dom` slot-aliasing hazard (`is_node_reflector`).
+
+**CONSTITUTION CHECK #5 (due tick 119) — see docs/loop/CONSTITUTION-CHECK.md.** Gate, not scoreboard:
+this tick is §VI.4 direct-H0 capability (a real DOM method the app web calls), Bar 0 held, no invariant
+bent. The path is intact; next check tick 127.
+
 ## Tick 118 — `dispatchEvent` swallowed its own `InvalidStateError`: uninitialized + in-flight events (+15)
 
 **TICK SHAPE: pattern-class.** The class is *DOM event dispatch validity* — every legacy library that

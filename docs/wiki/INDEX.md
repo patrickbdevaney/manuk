@@ -149,6 +149,7 @@
   - L471 · The HTMLDocument named collections — document.forms/images/links/scripts/embeds/anchors + getElementsByName
   - L489 · lookupNamespaceURI / isDefaultNamespace — the "locate a namespace" algorithm
   - L513 · nodeName is per node type, and case-sensitive outside the HTML namespace
+  - L525 · moveBefore — the atomic move, and why it is stricter than insertBefore
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -239,6 +240,17 @@
   - L568 · Mass reflector access + the reflection layer can overflow the C stack, and SpiderMonkey won't catch it
   - L602 · A reused SpiderMonkey runtime across many pages SIGSEGVs — a cross-file reflector/rooting UAF (open Bar-0)
   - L623 · A second, DETERMINISTIC C-stack overflow (html/semantics) — NATIVE recursion, not the stack-quota class
+
+## Lever Map — daily-driver-weighted capability targeting
+`docs/wiki/lever-map.md`
+
+  - L9 · The core correction to the oracle
+  - L16 · Ranked levers  (score = weight × WPT-mass(k) ÷ effort)
+  - L36 · Per-site dependency map (the 7-site daily-driver corpus)
+  - L47 · Oracle scoring (implemented in lever-board.sh)
+  - L53 · Pre-build FORECAST signals (compute from the existing WPT run; no build required)
+  - L64 · Corpus recommendation (for oracle-crawl.sh)
+  - L71 · Concrete next-3 ticks
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -347,4 +359,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-282 sections across 15 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+290 sections across 16 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

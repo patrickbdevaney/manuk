@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **111** | ticks 1–118 |
-| median tick cycle | **19m** | 110 intervals |
-| median, last 10 | **35m** | 10 intervals |
+| ticks landed | **112** | ticks 1–119 |
+| median tick cycle | **19m** | 111 intervals |
+| median, last 10 | **42m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.94** | 117.6h elapsed |
-| median verify wall | **58s** | 50 ticks |
-| wall trend | 39s → 57s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.92** | 120.1h elapsed |
+| median verify wall | **58s** | 51 ticks |
+| wall trend | 39s → 52s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -27,21 +27,21 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **49**
-* **✅ rows in the capability ledger**: 144 → **208**
+* **live gates**: 27 → **50**
+* **✅ rows in the capability ledger**: 144 → **211**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**58 of 111 ticks** (52%) moved a
+**59 of 112 ticks** (53%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
 
 ### Far — WPT (50,000 tests)
 
-* measured **15** times (a carried-forward number is never counted as a measurement)
+* measured **16** times (a carried-forward number is never counted as a measurement)
 * first, tick 64: **1736/6418** = 27.0%
-* latest, tick 82: **2387/6484** = 36.8%
-* **rate over the measured window: +36.2 subtests / tick** (18 ticks)
+* latest, tick 119: **21/106** = 19.8%
+* **rate over the measured window: -31.2 subtests / tick** (55 ticks)
 
 **Interval by interval — and this is the finding, not the average:**
 
@@ -61,6 +61,7 @@ and finding that out redirected everything after it.
 | 79→80 | **+44** | +44.0 | capability |
 | 80→81 | **+0** | +0.0 | instrument |
 | 81→82 | **-2** | -2.0 | capability |
+| 82→119 | **-2366** | -63.9 | capability, instrument, pattern-class |
 
 > **What this rate is NOT.** It is measured on the `dom/` subset — **6,418 subtests** — and
 > the far horizon is ~50,000 across *all* of WPT, **which this project has never run**.
@@ -85,8 +86,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **58** capability ticks, median cycle **19m**
-* median diff per tick: **+251 / −23** lines across 8 files
+* **59** capability ticks, median cycle **19m**
+* median diff per tick: **+252 / −23** lines across 8 files
 
 ## Every tick
 
@@ -203,5 +204,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **116** | 2026-07-15 23:46 | 29m | capability | 57s | +171/−40 | 47 | 81 | 36.8% · | `nodeName` uppercased everything and called every non-element `#text` (+62) |
 | **117** | 2026-07-16 00:24 | 38m | pattern-class | 52s | +232/−54 | 48 | 81 | 36.8% · | numeric reflection: `-0`, overflow-wraps-not-falls-back, and the missing `-1`/`1` defaults |
 | **118** | 2026-07-16 02:38 | 2.2h | pattern-class | 4m | +178/−17 | 49 | 81 | 36.8% · | `dispatchEvent` swallowed its own `InvalidStateError`: uninitialized + in-flight events (+ |
+| **119** | 2026-07-16 05:09 | 2.5h | capability | 51s | +411/−14 | 50 | 81 | 19.8% | `Node.prototype.moveBefore`: the atomic move + its pre-move validity (+18) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -521,3 +521,35 @@ namespace-aware casing `el_get_tag_name` already had, plus the right constant pe
 / `#document` / `#document-fragment` / the doctype's name. The getter is a thin seam over it. Gate
 `g_node_name`. **The lesson: a rule duplicated across two getters drifts — `tagName` had the namespace
 check, `nodeName` (which is *defined as* tagName for elements) silently did not.** [[js-engine]]
+
+## `moveBefore` — the atomic move, and why it is stricter than `insertBefore`
+
+`parent.moveBefore(node, child)` (WHATWG DOM) relocates a **connected** node **without** the
+remove-then-insert side effects that reset the moved subtree's state — an iframe would reload, a running
+CSS animation/transition would restart, focus and selection would be lost. Framework reconcilers
+(React/Preact/lit) reach for it to move a subtree while preserving that state. Manuk has none of that state
+to lose, so the *observable relocation* is identical to `insertBefore` (both `insert_before`/`append_child`
+already `detach` the node from its old parent first — no new arena code). What the platform gains is the
+method's **existence** and its **stricter pre-move validity**, the throws real code branches on:
+
+1. **WebIDL arg coercion** — `moveBefore(Node node, Node? child)`, both required. A non-`Node` first arg, a
+   missing second arg, or a non-`Node`/non-null second arg is a **`TypeError`** before any DOM step.
+2. **both `parent` and `node` must be connected** — the rule that separates an atomic move from
+   `insertBefore` (which happily inserts a freshly-created, disconnected node). Disconnected either side →
+   `HierarchyRequestError`.
+3. **same shadow-including root** — a node from another document lives in a distinct arena, so a `Dom`
+   pointer compare is the cross-document check → `HierarchyRequestError`.
+4. **no cycle** (`node` not an inclusive ancestor of `parent`), **valid kinds** (`node` is Element or
+   CharacterData; `parent` is Document/DocumentFragment/Element) → `HierarchyRequestError`.
+5. **reference child belongs to `parent`** → else `NotFoundError`.
+
+It is defined on the flat `Node.prototype` beside `insertBefore`, so Element + Document (inherited) +
+DocumentFragment all get it; Text/Comment/DocumentType inherit it too (calling it still throws — wrong
+parent kind), so the four `"moveBefore" in <non-ParentNode>` presence subtests are the only ones out of
+reach until the Element/Document/Fragment member tiering lands (its own tick, named in `dom_protos`).
+
+**The latent hazard it surfaced:** `node_and_dom` reads `SLOT_NODE` **blindly**, and a plain `{a: 1}`
+stores its `1` in fixed slot 0 — which `SLOT_NODE` aliases — so it was mistaken for node #1 and reached a
+*validity* throw instead of the WebIDL `TypeError`. Any argument that must be a genuine Node now goes
+through `is_node_reflector` (a `NODE_CLASS` class check via `mozjs::rust::get_object_class`), not a bare
+slot read. Gate `g_move_before`. [[js-engine]] [[conformance-and-oracles]]
