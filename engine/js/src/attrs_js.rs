@@ -149,12 +149,16 @@ pub const ATTRS_JS: &str = r#"
       has: function (t, k) {
         if (k === 'length' || methods[k]) return true;
         if (typeof k === 'string' && /^(0|[1-9]\d*)$/.test(k)) return +k < names().length;
+        if (typeof k === 'string' && el.hasAttribute && el.hasAttribute(k)) return true;
         return k in t;
       },
+      // Supported property names = indices ++ the attribute qualified names, in order. `length` lives on
+      // the prototype (an accessor), so it is NOT an own key — matching Object.getOwnPropertyNames in
+      // real browsers (dom/collections/namednodemap-supported-property-names).
       ownKeys: function () {
         var n = names(), keys = [];
         for (var i = 0; i < n.length; i++) keys.push(String(i));
-        keys.push('length');
+        for (var j = 0; j < n.length; j++) { if (keys.indexOf(n[j]) === -1) keys.push(n[j]); }
         return keys;
       },
       getOwnPropertyDescriptor: function (t, k) {
@@ -164,8 +168,9 @@ pub const ATTRS_JS: &str = r#"
             return { value: makeAttr(el, n[+k]), writable: false, enumerable: true, configurable: true };
           }
         }
-        if (k === 'length') {
-          return { value: names().length, writable: false, enumerable: false, configurable: true };
+        // A named attribute property — NamedNodeMap is [LegacyUnenumerableNamedProperties] (enumerable:false).
+        if (typeof k === 'string' && el.hasAttribute && el.hasAttribute(k)) {
+          return { value: makeAttr(el, k), writable: false, enumerable: false, configurable: true };
         }
         return Object.getOwnPropertyDescriptor(t, k);
       },

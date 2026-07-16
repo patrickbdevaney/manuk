@@ -781,3 +781,24 @@ allocation-neutral until the UAF is fixed.
 regressions. Gate `g_collection_named_props` (proven red on the committed proxy). Named-property parity for
 `NamedNodeMap` (`.attributes`) and `DOMStringMap` (`.dataset`) is the same shape on **different** objects —
 still 0/5 and 0/3, a separate follow-on tick. [[js-engine]]
+
+## `DOMStringMap` (`dataset`) and `NamedNodeMap` (`attributes`) enumerate their names (tick 130)
+
+The same legacy-platform-object gap as [[dom-semantics]]'s tick-129 `HTMLCollection`, on two more proxy-backed
+objects — and the completion of the `dom/collections/` cluster.
+
+- **`el.dataset`** is a `Proxy` over `{}` with `get`/`set`/`has`/`deleteProperty` but **no
+  `ownKeys`/`getOwnPropertyDescriptor`** — so `Object.getOwnPropertyNames(el.dataset)` saw the empty target
+  (`[]`). Fixed: `ownKeys` = each `data-*` attribute, prefix stripped and **dash→camel-cased** via the same
+  `camel()` the accessor already uses (`data-date-of-birth` → `dateOfBirth`; `data-` → `""`; `data-id-` →
+  `"id-"` because the trailing hyphen has no following lowercase letter). Named props are ordinary
+  enumerable/writable data properties (DOMStringMap has **no** `[LegacyUnenumerableNamedProperties]`).
+- **`el.attributes`** (`NamedNodeMap`) `ownKeys` pushed indices ++ `'length'` and no names; the spec wants
+  indices ++ the **attribute qualified names**, and `length` is a prototype accessor (not an own key).
+  NamedNodeMap **does** have `[LegacyUnenumerableNamedProperties]`, so a named descriptor is
+  `enumerable:false, writable:false` over the `Attr`.
+
+**MEASURED:** dom 3557 → 3566 (**+9**), `domstringmap-supported-property-names` 0/5 → 5/5,
+`namednodemap-supported-property-names` 0/3 → 3/3, Bar 0 **0** (deterministic ×3), no regressions. Gate
+`g_dataset_attrs_enum`. Both are far colder proxies than `NodeList`, so — unlike tick 129 — routing them
+through the richer traps did not perturb the tracked cross-file UAF. [[js-engine]]

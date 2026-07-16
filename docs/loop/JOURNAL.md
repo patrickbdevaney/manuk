@@ -3054,6 +3054,26 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 130 — `dataset`/`attributes` enumerate their supported names (+9 dom)
+
+**TICK SHAPE: pattern-class (the same legacy-platform-object gap on two more proxy objects — closes the
+`dom/collections/` cluster).** WIKI: dom-semantics.
+
+**Hypothesis.** After tick 129 the only `dom/collections` files still at 0 were `domstringmap-supported-
+property-names` (0/5) and `namednodemap-supported-property-names` (0/3) — `Object.getOwnPropertyNames(el.
+dataset)` returned `[]` and `...(el.attributes)` returned `['0','1','length']`. Both proxies lacked (or
+mis-implemented) `ownKeys`/`getOwnPropertyDescriptor`.
+
+**Mechanism.** `dataset`: `ownKeys` now camel-cases each `data-*` attribute (reusing the accessor's `camel()`
+— `data-date-of-birth`→`dateOfBirth`, `data-`→`""`, `data-id-`→`"id-"`), descriptors enumerable+writable.
+`attributes`: `ownKeys` = indices ++ attribute qualified names (no `'length'` — a prototype accessor);
+named descriptors `[LegacyUnenumerableNamedProperties]` (enumerable:false, read-only `Attr`).
+
+**MEASURED — the ratchet turned.** dom **3557 → 3566 (+9)**, both files 5/5 and 3/3, Bar 0 **0**
+(deterministic ×3), no regressions. Gate `g_dataset_attrs_enum` (proven red on revert). Both `dataset` and
+`attributes` are far colder proxies than tick-129's `NodeList`, so routing them through the richer traps did
+NOT surface the tracked cross-file UAF — no gating needed.
+
 ## Tick 129 — `HTMLCollection` is a WebIDL legacy platform object (+21 dom)
 
 **TICK SHAPE: pattern-class (one object-model mechanism, a whole `dom/collections/` file cluster).**

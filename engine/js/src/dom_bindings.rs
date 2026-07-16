@@ -6689,6 +6689,16 @@ const CSSOM_PRELUDE: &str = r#"
         if (!el) return null;
         if (el.__dsView) return el.__dsView;
         var attr = function (p) { return 'data-' + dash(p); };
+        // The DOMStringMap supported property names: each `data-*` content attribute, prefix stripped
+        // and dash-to-camel-cased (HTML §DOMStringMap). Without ownKeys/getOwnPropertyDescriptor,
+        // `Object.getOwnPropertyNames(el.dataset)` / `Object.keys` / `for..in` saw the empty target.
+        var names = function () {
+            var out = [], an = el.getAttributeNames ? el.getAttributeNames() : [];
+            for (var i = 0; i < an.length; i++) {
+                if (an[i].indexOf('data-') === 0) out.push(camel(an[i].slice(5)));
+            }
+            return out;
+        };
         var p = new Proxy({}, {
             get: function (t, prop) {
                 if (typeof prop !== 'string') return undefined;
@@ -6697,7 +6707,14 @@ const CSSOM_PRELUDE: &str = r#"
             },
             set: function (t, prop, v) { el.setAttribute(attr(prop), String(v)); return true; },
             has: function (t, prop) { return el.hasAttribute(attr(prop)); },
-            deleteProperty: function (t, prop) { el.removeAttribute(attr(prop)); return true; }
+            deleteProperty: function (t, prop) { el.removeAttribute(attr(prop)); return true; },
+            ownKeys: function () { return names(); },
+            getOwnPropertyDescriptor: function (t, prop) {
+                if (typeof prop === 'string' && el.hasAttribute(attr(prop))) {
+                    return { value: el.getAttribute(attr(prop)), writable: true, enumerable: true, configurable: true };
+                }
+                return Object.getOwnPropertyDescriptor(t, prop);
+            }
         });
         el.__dsView = p;
         return p;
