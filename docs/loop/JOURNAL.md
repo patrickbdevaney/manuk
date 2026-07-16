@@ -3054,6 +3054,26 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 131 — `HTMLCollection` iterable surface + numeric `namedItem` (+7 dom)
+
+**TICK SHAPE: pattern-class (two shared-proxy correctness gaps on `HTMLCollection`).** WIKI: dom-semantics.
+
+**Hypothesis.** After ticks 129–130 the residual `dom/collections` misses were `HTMLCollection-iterator`
+(2/6) and `-supported-property-indices` (2/7). The iterator file asserts `"values"/"entries"/"forEach" in
+coll === false` (HTMLCollection is not `iterable<>`; those are NodeList-generated) yet our shared `methods`
+exposed all four; and `Symbol.iterator in coll` read false though `for..of` worked. The indices file's
+`namedItem(-2)` compared a *number* against string ids.
+
+**Mechanism.** `methods` is now built per-type — HTMLCollection: `item`+`namedItem`; NodeList: `item`+the
+four iterable methods (`forEach`/`entries`/`keys`/`values`). The HTMLCollection `has` trap reports
+`Symbol.iterator` (trap-consistency with the get trap). `namedProp` coerces `String(key)` so `namedItem(-2)`
+finds `id="-2"`. NodeList's hot path is untouched → no UAF perturbation.
+
+**MEASURED — the ratchet turned.** dom **3566 → 3573 (+7)**, `HTMLCollection-iterator` 2/6 → 6/6,
+`-supported-property-indices` 2/7 → 5/7, Bar 0 **0** (deterministic ×3), no regressions. Gate
+`g_collection_iterator_indices` (proven red on revert). `dom/collections` now 45/48 — only `own-props` 7/8
+and `-supported-property-indices` 5/7 (2^31-boundary index edge cases) remain, different mechanisms.
+
 ## Tick 130 — `dataset`/`attributes` enumerate their supported names (+9 dom)
 
 **TICK SHAPE: pattern-class (the same legacy-platform-object gap on two more proxy objects — closes the

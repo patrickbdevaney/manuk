@@ -802,3 +802,21 @@ objects — and the completion of the `dom/collections/` cluster.
 `namednodemap-supported-property-names` 0/3 → 3/3, Bar 0 **0** (deterministic ×3), no regressions. Gate
 `g_dataset_attrs_enum`. Both are far colder proxies than `NodeList`, so — unlike tick 129 — routing them
 through the richer traps did not perturb the tracked cross-file UAF. [[js-engine]]
+
+## `HTMLCollection` iterable surface + numeric `namedItem` (tick 131)
+
+Two smaller `HTMLCollection` correctness gaps left after ticks 129–130, both from the shared collection proxy:
+
+- **HTMLCollection is not a WebIDL `iterable<>`.** It has a default `@@iterator` (the get trap yields one,
+  so `for..of` works) and `item`/`namedItem`, but must NOT carry `values`/`entries`/`keys`/`forEach` — those
+  are the *generated* members of `NodeList` (which IS `iterable<Node>`). The shared `methods` object exposed
+  all four on both, so `"values" in coll` was wrongly true. Now `methods` is built per-type: HTMLCollection
+  gets `item`+`namedItem`; NodeList gets `item`+the four iterable methods. And the `has` trap now reports
+  `Symbol.iterator` (the get trap already served it, but `Symbol.iterator in coll` read false — a
+  trap-consistency gap). NodeList's hot path is untouched, so no UAF perturbation.
+- **`namedItem` coerces to string.** `namedItem(-2)` passed the *number* `-2` into an `id === key` compare
+  against the string `"-2"` → never matched. `collection[-2]` already worked (property keys are strings);
+  the method did not. `namedProp` now does `String(key)` (after the null guard, before the empty check).
+
+**MEASURED:** dom 3566 → 3573 (**+7**), `HTMLCollection-iterator` 2/6 → 6/6, `-supported-property-indices`
+2/7 → 5/7, Bar 0 **0** (deterministic ×3), no regressions. Gate `g_collection_iterator_indices`. [[js-engine]]

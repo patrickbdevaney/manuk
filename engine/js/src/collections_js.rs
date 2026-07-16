@@ -83,9 +83,12 @@ pub const COLLECTIONS_JS: &str = r#"
       }
       return names;
     }
-    // The named property for `key`, or null. Empty string is never a supported name.
+    // The named property for `key`, or null. `key` is coerced to a string first (so `namedItem(-2)`
+    // finds `id="-2"`), and the empty string is never a supported name.
     function namedProp(key) {
-      if (!hasNamed || key === '' || key == null) return null;
+      if (!hasNamed || key == null) return null;
+      key = String(key);
+      if (key === '') return null;
       var a = compute();
       for (var i = 0; i < a.length; i++) {
         var el = a[i];
@@ -102,15 +105,22 @@ pub const COLLECTIONS_JS: &str = r#"
         i = i | 0;
         return (i >= 0 && i < a.length) ? a[i] : null;
       },
-      namedItem: function (name) { return namedProp(name); },
-      forEach: function (fn, thisArg) {
+    };
+    if (hasNamed) {
+      // HTMLCollection is NOT declared `iterable<>` — it has `item`/`namedItem` and a default
+      // `@@iterator` (from the get trap), but NOT `values`/`entries`/`keys`/`forEach`
+      // (dom/collections/HTMLCollection-iterator asserts `"values" in coll === false`).
+      methods.namedItem = function (name) { return namedProp(name); };
+    } else {
+      // NodeList IS `iterable<Node>` — it carries the four generated iterable methods.
+      methods.forEach = function (fn, thisArg) {
         var a = compute();
         for (var i = 0; i < a.length; i++) { fn.call(thisArg, a[i], i, this); }
-      },
-      entries: function () { return compute().map(function (v, i) { return [i, v]; })[Symbol.iterator](); },
-      keys:    function () { return compute().map(function (_, i) { return i; })[Symbol.iterator](); },
-      values:  function () { return compute()[Symbol.iterator](); },
-    };
+      };
+      methods.entries = function () { return compute().map(function (v, i) { return [i, v]; })[Symbol.iterator](); };
+      methods.keys = function () { return compute().map(function (_, i) { return i; })[Symbol.iterator](); };
+      methods.values = function () { return compute()[Symbol.iterator](); };
+    }
 
     // The legacy-platform-object surface (named properties, expando-shadowing, unenumerable names) is
     // HTMLCollection-only. NodeList (`childNodes`) is the engine's HOTTEST proxy — kept byte-for-byte on
@@ -180,7 +190,7 @@ pub const COLLECTIONS_JS: &str = r#"
         return t[k];
       },
       has: function (t, k) {
-        if (k === 'length' || methods[k]) return true;
+        if (k === 'length' || k === Symbol.iterator || methods[k]) return true;
         if (isIndex(k)) return +k < compute().length;
         if (typeof k === 'string' && hasOwn(t, k)) return true;
         if (typeof k === 'string' && namedProp(k)) return true;
