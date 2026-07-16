@@ -3054,6 +3054,43 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 137 — selector identifiers decode CSS escapes (+40 dom)
+
+**TICK SHAPE: pattern-class (one tokenizer helper + escape-aware pre-tokenizer, a whole CSS-escape selector cluster).** WIKI: css-cascade.
+
+**Hypothesis (flip-rate, histogramming `dom/nodes --show-failures`).** After tick 136 a clean bounded
+cluster was `ParentNode-querySelector-escapes` — ~50 subtests where a `CSS.escape`-style selector
+(`#has\.dot`, `#\30 start`, `#a\:b`) matched **nothing**. Shared cause: the hand-rolled selector parser's
+`take_ident` (which backs both the cascade and JS `querySelector`) treated `\` as a **terminator**, and the
+pre-tokenizer split compounds on the *raw* whitespace inside a hex escape (`#\30 x` → `#\30` descendant
+`x`).
+
+**Mechanism.** css-syntax §4.3.7 "consume an escaped code point" in two places: (1) `take_ident` decodes
+escapes (`consume_escaped_code_point`: 1–6 hex + one optional trailing whitespace → code point; else the
+literal next char; NUL/out-of-range → U+FFFD) and accepts raw non-ASCII (U+0080+) as ident chars; (2) the
+pre-tokenizer keeps an escape sequence verbatim (including a hex escape's trailing whitespace) so it never
+splits a compound. Only callers are id/class/pseudo idents — the tag/attribute paths are untouched.
+
+**The Bar-0-adjacent honesty call: a surrogate-half escape is DROPPED, not U+FFFD'd.** The first pass mapped
+surrogates to U+FFFD per spec and it turned **+44 into +44 with 2 regressions** — `querySelector-escapes`
+*"should never match"* cases where the id is a **lone surrogate**. Our DOM stores attribute values as UTF-8,
+so a lone-surrogate id is *already* lossily collapsed to U+FFFD on the way in; a U+FFFD selector then
+false-matches it. **THE RATCHET IS ABSOLUTE — no regression is traded for a capability.** So surrogate-range
+escapes are dropped instead of U+FFFD'd, which keeps such selectors from matching (preserving the non-match
+the spec wants for a *distinct* lone surrogate). Faithful handling is gated on WTF-8/UTF-16 attribute storage
+— the same subsystem as tick 136's CharacterData surrogate follow-on, named not hidden.
+
+**MEASURED — the ratchet turned.** dom/nodes **3245 → 3285 (+40)**; before/after FAIL sets diffed → **zero
+new failures** (the surrogate-drop is exactly what makes it zero, not +44/−2). css/selectors held at its
+banked **784** (the cascade path's behaviour is unchanged — escapes in stylesheet selectors now also
+decode, but no css/selectors test regressed). Bar 0 **0**. Gate `selector_ident_escapes_decode_per_css_syntax`
+(9 match cases + a NUL-≠-U+FFFD never-match), falsifiable by construction (the old `take_ident` returned the
+pre-`\` prefix, so every case matched `None`).
+
+**The ratchet.** Capability: **up** — `CSS.escape` output and every id/class with CSS-syntax characters now
+resolves, in both `querySelector` and the cascade. Performance: unchanged. Instrument fidelity: **up** — the
+gate pins the §4.3.7 decoding and the deliberate surrogate-drop.
+
 ## Tick 136 — CharacterData offsets are `unsigned long` (ToUint32), not clamp-to-0 (+33 dom)
 
 **TICK SHAPE: pattern-class (one WebIDL coercion helper + two sibling validity rules, a whole CharacterData bounds cluster).** WIKI: dom-semantics.

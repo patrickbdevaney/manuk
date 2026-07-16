@@ -112,6 +112,7 @@
   - L209 · grid-template-areas was entirely unparsed — and BOTH underlying engines already supported it
   - L215 · Stylo's DOM trait wall is 126+ methods and compiles only as ONE indivisible unit
   - L227 · Full-page zoom scales ABSOLUTE lengths only
+  - L235 · Selector identifiers decode CSS escapes — take_ident used to stop at the backslash (tick 137)
 
 ## DOM SEMANTICS — spec behaviour, mutation, and tree edge cases
 `docs/wiki/dom-semantics.md`
@@ -375,4 +376,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-306 sections across 16 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+307 sections across 16 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

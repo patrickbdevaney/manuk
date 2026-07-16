@@ -231,3 +231,30 @@ compounds**. Because `font_size` scales, glyphs **rasterize at the larger size**
 which is what distinguishes full-page zoom from pinch-zoom (a compositor surface transform with no layout).
 **Zoomed styles must always be derived from the BASE cascade**, never from the previously-zoomed one, or
 repeated zooming compounds.
+
+## Selector identifiers decode CSS escapes — `take_ident` used to stop at the backslash (tick 137)
+
+The hand-rolled selector parser (`parse_selector` → `take_ident`, which backs both the cascade and JS
+`querySelector`/`matches`) treated `\` as a **terminator**: `#has\.dot` parsed the id as `has` and
+matched nothing, and every `CSS.escape`-produced selector on the web silently missed. The fix is
+css-syntax **§4.3.7 "consume an escaped code point"** in two places:
+
+- **`take_ident`** now decodes escapes (`consume_escaped_code_point`) and accepts raw non-ASCII (U+0080+)
+  as ident chars. `\.`/`\!` → the literal punctuation; `\30 x` → `0x` (1–6 hex digits, one optional
+  trailing whitespace); NUL and out-of-range → **U+FFFD**.
+- **The pre-tokenizer** (which splits a selector into compounds on whitespace/combinators) is now
+  escape-aware: on `\` it keeps the escape sequence — including a hex escape's trailing whitespace —
+  **verbatim**, so `#\30 x` is one compound, not `#\30` descendant `x`. Without this the split happened
+  *before* `take_ident` ever saw the escape.
+
+**A surrogate-half escape (`\d83d`) is DROPPED, not mapped to U+FFFD — a named limitation.** The spec
+says U+FFFD, but this engine stores attribute values as **UTF-8**: a lone-surrogate id set from JS is
+already lossily collapsed to U+FFFD on the way into the DOM. Emitting U+FFFD from the selector too would
+make `#\d83d x` **false-match** an id that only holds U+FFFD because its surrogate was lost — turning a
+`ParentNode-querySelector-escapes` *"should never match"* green→red. Dropping the code point preserves
+the non-match, so the tick regresses nothing; faithful surrogate handling is gated on WTF-8/UTF-16
+attribute storage — **the same subsystem** as CharacterData surrogate splitting ([[dom-semantics]]).
+
+**MEASURED:** dom/nodes 3245 → 3285 (**+40**), before/after FAIL sets diffed → **zero regressions**;
+css/selectors held at its banked 784 (the cascade path is unaffected in behaviour). Bar 0 **0**. Test
+`selector_ident_escapes_decode_per_css_syntax`.

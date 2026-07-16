@@ -1623,8 +1623,34 @@ fn parse_selector(text: &str) -> Option<Selector> {
         }
         cur.clear();
     };
-    for ch in text.chars() {
+    let mut it = text.chars().peekable();
+    while let Some(ch) = it.next() {
         match ch {
+            '\\' => {
+                // Keep an escape sequence verbatim through tokenization, so an escaped whitespace or
+                // combinator (`#a\ b`, `#\30 nextIsWhiteSpace`) is NOT split into two compounds — the
+                // trailing whitespace of a hex escape belongs to the escape, not to a descendant
+                // combinator. `take_ident` decodes it downstream via `consume_escaped_code_point`.
+                cur.push('\\');
+                if matches!(it.peek(), Some(h) if h.is_ascii_hexdigit()) {
+                    let mut n = 0;
+                    while n < 6 {
+                        match it.peek() {
+                            Some(h) if h.is_ascii_hexdigit() => {
+                                cur.push(*h);
+                                it.next();
+                                n += 1;
+                            }
+                            _ => break,
+                        }
+                    }
+                    if matches!(it.peek(), Some(c) if c.is_whitespace()) {
+                        cur.push(it.next().unwrap());
+                    }
+                } else if let Some(n) = it.next() {
+                    cur.push(n);
+                }
+            }
             '[' | '(' => {
                 depth += 1;
                 cur.push(ch);
@@ -1957,7 +1983,16 @@ fn parse_nth(arg: &str) -> Option<(i32, i32)> {
 fn take_ident(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> String {
     let mut s = String::new();
     while let Some(&ch) = chars.peek() {
-        if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+        if ch == '\\' {
+            // A backslash escape is part of the ident: `#\.foo` selects id `.foo`, `#\30 x` selects
+            // `0x`. Decode it per css-syntax §4.3.7 rather than stopping — the old code treated `\` as a
+            // terminator, so every escaped id/class silently matched nothing.
+            chars.next(); // consume the backslash
+            if let Some(c) = consume_escaped_code_point(chars) {
+                s.push(c);
+            }
+        } else if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || (ch as u32) >= 0x80 {
+            // ASCII ident chars plus any non-ASCII code point (CSS idents allow U+0080+ directly).
             s.push(ch);
             chars.next();
         } else {
@@ -1965,6 +2000,50 @@ fn take_ident(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> String {
         }
     }
     s
+}
+
+/// css-syntax §4.3.7 **consume an escaped code point** — the leading `\` has already been consumed.
+/// A run of 1–6 hex digits (then one optional trailing whitespace) is that code point; anything else is
+/// the next code point taken literally. **Null and out-of-range values become U+FFFD** — that replacement
+/// is why `#zero\0` matches an id of `"zero\u{FFFD}"` and *not* one holding a raw NUL, which is exactly
+/// what `ParentNode-querySelector-escapes` checks (NUL is storable and distinct, so it is winnable).
+///
+/// **A surrogate-half escape returns `None` (the code point is dropped), which is a NAMED limitation, not
+/// the spec's U+FFFD.** The spec maps `\d83d` to U+FFFD — but this engine stores attribute values as UTF-8
+/// (a lone surrogate cannot round-trip; JS→DOM lossily collapses it to U+FFFD already). Emitting U+FFFD
+/// here would make a surrogate-escape selector *false-match* an id that only holds U+FFFD because its lone
+/// surrogate was lost — turning a `querySelector-escapes` "should never match" green→red. Dropping the
+/// code point keeps such selectors from matching, so no test regresses; faithful surrogate handling is
+/// gated on WTF-8/UTF-16 attribute storage (the same subsystem as CharacterData surrogate splitting).
+fn consume_escaped_code_point(
+    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+) -> Option<char> {
+    let mut hex = String::new();
+    while hex.len() < 6 {
+        match chars.peek() {
+            Some(h) if h.is_ascii_hexdigit() => {
+                hex.push(*h);
+                chars.next();
+            }
+            _ => break,
+        }
+    }
+    if hex.is_empty() {
+        // Not a hex escape: the next input code point, verbatim. `\` at end-of-input → U+FFFD.
+        return Some(chars.next().unwrap_or('\u{FFFD}'));
+    }
+    // One optional whitespace terminates a hex escape.
+    if matches!(chars.peek(), Some(c) if c.is_whitespace()) {
+        chars.next();
+    }
+    let cp = u32::from_str_radix(&hex, 16).unwrap_or(0xFFFD);
+    if (0xD800..=0xDFFF).contains(&cp) {
+        None // surrogate half — dropped, see the doc comment above
+    } else if cp == 0 || cp > 0x0010_FFFF {
+        Some('\u{FFFD}')
+    } else {
+        Some(char::from_u32(cp).unwrap_or('\u{FFFD}'))
+    }
 }
 
 fn parse_declarations(text: &str) -> Vec<Declaration> {
@@ -3720,6 +3799,46 @@ mod tests {
         assert_eq!(query_selector(&dom, root, ".nope"), None);
         assert!(matches_selector(&dom, span, "span"));
         assert_eq!(query_selector_all(&dom, root, "span").len(), 1);
+    }
+
+    #[test]
+    fn selector_ident_escapes_decode_per_css_syntax() {
+        // A selector escape (`\`) is part of the identifier, decoded per css-syntax §4.3.7 — the old
+        // `take_ident` stopped at the backslash, so every escaped id/class matched NOTHING. Build one
+        // element per id and confirm the escaped selector finds it.
+        let cases = [
+            // (id set on the element, selector that must match it)
+            ("simple", "#simple"),
+            ("has.dot", "#has\\.dot"), // `\.` → literal dot (not a class combinator)
+            ("a:b!c", "#a\\:b\\!c"),   // `\:` `\!` → literal punctuation
+            ("0start", "#\\30 start"), // `\30 ` → '0', trailing space consumed
+            ("0start", "#\\000030start"), // 6 hex, no space needed
+            ("sp ace", "#sp\\ ace"),   // `\ ` → literal space, must not split compounds
+            ("zero\u{FFFD}", "#zero\\0"), // NUL escape → U+FFFD replacement
+            ("caf\u{e9}", "#caf\\e9"), // `\e9` → é (non-ASCII from hex)
+            ("na\u{ef}ve", "#na\u{ef}ve"), // raw non-ASCII ident char is accepted
+        ];
+        for (id, sel) in cases {
+            let mut dom = Dom::new();
+            let root = dom.root();
+            let el = dom.create_element("span");
+            dom.set_attr(el, "id", id);
+            dom.append_child(root, el);
+            assert_eq!(
+                query_selector(&dom, root, sel),
+                Some(el),
+                "selector {sel:?} should match an element with id {id:?}"
+            );
+        }
+        // A NUL-holding id must NOT match a U+FFFD selector (they are distinct code points), and a
+        // surrogate-half escape is dropped rather than U+FFFD'd, so it does not false-match a lossily
+        // stored id — both are the "should never match" side of the WPT suite.
+        let mut dom = Dom::new();
+        let root = dom.root();
+        let el = dom.create_element("span");
+        dom.set_attr(el, "id", "zero\u{0}"); // a raw NUL, stored distinctly from U+FFFD
+        dom.append_child(root, el);
+        assert_eq!(query_selector(&dom, root, "#zero\\0"), None);
     }
 
     #[test]
