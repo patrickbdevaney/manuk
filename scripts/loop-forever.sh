@@ -64,7 +64,9 @@ NOPROG=0
 while true; do
   if [ -f "$KILL" ]; then say "DISABLED (kill file present) — pausing 60s"; sleep 60; continue; fi
 
-  TICK=$(grep -oP '^TICK:\s*\K[0-9]+' "$STATUS" 2>/dev/null || echo 0)
+  # STATUS.md's TICK field goes stale (the agent numbers ticks from git, not this field), so read the tick
+  # number from git — otherwise the progress check below false-fails and the supervisor backs off forever.
+  TICK=$(git log --oneline -40 2>/dev/null | grep -oiE 'tick [0-9]+' | head -1 | grep -oE '[0-9]+' || echo 0)
   TARGET=$(grep -oP '^LOOP_UNTIL_TICK=\K[0-9]+' "$STORE" 2>/dev/null || echo 0)
   if [ "$TICK" -ge "$TARGET" ] 2>/dev/null; then
     say "budget spent (tick $TICK ≥ target $TARGET) — loop complete. Supervisor exiting."
@@ -76,13 +78,16 @@ while true; do
 
   say "launching headless grind agent (at tick $TICK, target $TARGET, $((TARGET-TICK)) left)"
   # The headless agent self-continues via the Stop hook and lands ticks; when it exits we relaunch.
+  # PROGRESS = a NEW git commit landed. git HEAD is the source of truth; STATUS.md's TICK field is stale, so
+  # comparing it before/after always read "no progress" and forced a 600s backoff even while ticks landed.
+  BEFORE=$(git rev-parse HEAD 2>/dev/null || echo none)
   START=$(date +%s)
   launch_agent   # memory-capped cgroup (falls back to uncontained if systemd --user is down)
   DUR=$(( $(date +%s) - START ))
 
-  AFTER=$(grep -oP '^TICK:\s*\K[0-9]+' "$STATUS" 2>/dev/null || echo 0)
-  if [ "$AFTER" -gt "$TICK" ]; then
-    say "agent exited — progress made (tick $TICK → $AFTER). Relaunching."
+  AFTER=$(git rev-parse HEAD 2>/dev/null || echo none)
+  if [ "$AFTER" != "$BEFORE" ]; then
+    say "agent exited — progress made (git ${BEFORE:0:8} -> ${AFTER:0:8}, now at tick $(git log --oneline -40 2>/dev/null|grep -oiE 'tick [0-9]+'|head -1)). Relaunching."
     NOPROG=0
   else
     NOPROG=$((NOPROG + 1))
