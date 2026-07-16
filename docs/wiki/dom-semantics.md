@@ -898,3 +898,36 @@ rewiring needed for these tests).
 no regressions. Gate `g_characterdata_iface`. **Open follow-on:** `Document-createComment` stays 0/6 in the
 *batch* despite an isolated probe showing Comment nodes fully correct (instanceof/nodeName/nodeType/data all
 pass) — a Comment-specific shared-runtime-reuse artifact, pre-existing and unrelated to this fix. [[js-engine]]
+
+## `createDocumentType` name validation + per-document `.implementation` (tick 135)
+
+Two DOMImplementation bugs, one shared corner of the object model, both surfaced by histogramming
+`dom/nodes --show-failures` for the biggest same-signature cluster after tick 134.
+
+**A DOCTYPE name is NOT a QName.** `createDocumentType(name, publicId, systemId)`'s argument is a *doctype
+name*, and the current DOM spec's `#valid-doctype-name` rule is deliberately tiny: **a string is a valid
+doctype name iff it contains no ASCII whitespace, no U+0000 NULL, and no U+003E `>`.** The empty string is
+valid; `1foo`, `@foo`, `prefix::local`, `:foo`, `foo:` are all valid. The old code applied the *QName*
+production (letter-start, single colon, non-empty prefix/local) and threw `InvalidCharacterError`/
+`NamespaceError` for all of those — the exact opposite of the spec. The lesson: **the DOM has several
+name-validity productions (QName, Name, doctype-name, custom-element-name) and they are NOT
+interchangeable — match the one the algorithm actually cites.** (Verified against Ladybird's
+`is_valid_doctype_name`: `!name.contains_any_of({\t,\n,\f,\r,space,\0,>})`.)
+
+**`.implementation` is per-document, not a singleton.** A single `g.__DOMImplementation` closed over the
+top-level `document` meant (a) created documents had **no `.implementation`** at all and (b) any doctype it
+minted was owned by the *main* document, not the caller's. WPT's `createDocumentType` calls
+`createdDoc.implementation.createDocumentType(...)` and asserts `doctype.ownerDocument === createdDoc`, so
+the implementation must bind to *its* document. Fix: a `__makeImpl(ownerDoc)` factory + an `implementation`
+**getter on `Document.prototype`** (shared by main/created/iframe docs since tick 134) that mints and caches
+a per-document impl in a non-enumerable expando. The general pattern: *a DOM object exposed by every
+document must be defined on the shared prototype and bound to `this`, never a global closed over the one
+true document* — the same lesson tick 134 learned for `body`/`title`/`documentElement`.
+
+**MEASURED:** dom 3632 → 3822 (**+190**), entirely in `dom/nodes` (2990 → 3180) with every other subdirectory
+byte-identical; `createDocumentType … should work` and `implementation is undefined` both 0 remaining. Bar 0
+**0** (deterministic ×2). Rate dipped 55.6% → 54.9% (denominator +432) as previously-aborting files now run
+their full bodies — exposure, not regression. Gate `g_dom_impl` (extended, +11 claims). **Open follow-on:**
+`createDocument` (XML) still ignores its namespace/qualifiedName/doctype args and returns an HTML document —
+the XMLDocument surface (lowercase tags, `application/xhtml+xml`, namespaced root) is a separate bounded
+tick. [[js-engine]]

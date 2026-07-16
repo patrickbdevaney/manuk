@@ -62,6 +62,31 @@ const HTML: &str = r#"<!doctype html><html><body><div id="out">-</div><script>
     catch (e) { rmThrew = (e instanceof DOMException) ? e.name : ('wrong:' + e); }
     R.push('badRemove:' + rmThrew);
 
+    // ── createDocumentType: a DOCTYPE name, not a QName. The old check applied the QName production and
+    // wrongly threw for `1foo`/`@foo`/`prefix::local`/``. Per spec the ONLY rule is: no ASCII whitespace,
+    // no U+0000 NULL, no `>` (dom.spec.whatwg.org #valid-doctype-name). The empty string is valid.
+    R.push('dtDigit:' + impl.createDocumentType('1foo', '', '').name);       // 1foo (was: threw)
+    R.push('dtDoubleColon:' + impl.createDocumentType('prefix::local', '', '').name); // prefix::local
+    R.push('dtEmpty:[' + impl.createDocumentType('', '', '').name + ']');    // [] (empty is valid)
+    var dt = impl.createDocumentType('html', 'pub', 'sys');
+    R.push('dtPub:' + dt.publicId + ',' + dt.systemId);                      // pub,sys
+    R.push('dtIsDT:' + (dt instanceof DocumentType) + ',' + dt.nodeType);    // true,10
+    var gtThrew = 'no';
+    try { impl.createDocumentType('a>b', '', ''); }
+    catch (e) { gtThrew = (e instanceof DOMException) ? e.name : ('wrong:' + e); }
+    R.push('dtGt:' + gtThrew);                                              // InvalidCharacterError
+    var spThrew = 'no';
+    try { impl.createDocumentType('a b', '', ''); }
+    catch (e) { spThrew = (e instanceof DOMException) ? e.name : ('wrong:' + e); }
+    R.push('dtSpace:' + spThrew);                                           // InvalidCharacterError
+
+    // ── `.implementation` is PER-DOCUMENT. A document minted by createHTMLDocument exposes its OWN
+    // implementation, bound to ITSELF — WPT asserts the created doctype's ownerDocument is that doc.
+    R.push('doc2Impl:' + (typeof doc.implementation));                     // object (was: undefined)
+    var dt2 = doc.implementation.createDocumentType('foo', '', '');
+    R.push('dt2Owner:' + (dt2.ownerDocument === doc));                     // true
+    R.push('dt2NotMain:' + (dt2.ownerDocument === document));             // false
+
     // The page is intact after all of that.
     R.push('intact:' + (document.getElementById('out') === box));
     box.textContent = R.join(' ');
@@ -81,6 +106,16 @@ fn create_html_document_exists_and_insertion_validity_prevents_cycles() {
         "docExists:true",
         "cycleThrows:HierarchyRequestError", // NOT a hang
         "ancestorThrows:HierarchyRequestError",
+        "dtDigit:1foo",                  // doctype name starting with a digit is valid
+        "dtDoubleColon:prefix::local",   // `prefix::local` is a valid doctype name (not a QName)
+        "dtEmpty:[]",                    // the empty string is a valid doctype name
+        "dtPub:pub,sys",                 // publicId/systemId carried through
+        "dtIsDT:true,10",                // a real DocumentType, nodeType 10
+        "dtGt:InvalidCharacterError",    // `>` makes a doctype name invalid
+        "dtSpace:InvalidCharacterError", // ASCII whitespace makes a doctype name invalid
+        "doc2Impl:object",               // a created document has its OWN .implementation
+        "dt2Owner:true",                 // a created doc's doctype is owned by THAT doc
+        "dt2NotMain:false",              // ...not by the main document
         "intact:true",
     ] {
         assert!(

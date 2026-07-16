@@ -6994,14 +6994,22 @@ const WINDOW_PRELUDE: &str = r#"
         // The document it returns is a REAL second document in the same arena (see
         // `doc_create_html_document`) — `doc.body`, `doc.createElement`, `doc.querySelector` all work,
         // because a Document node gets the document method set.
-        g.__DOMImplementation = {
+        // **`implementation` is a PER-DOCUMENT object, not a global singleton.** WPT's
+        // `DOMImplementation-createDocumentType` calls `doc.implementation.createDocumentType(...)` on a
+        // document minted by `createHTMLDocument()` and asserts `doctype.ownerDocument === doc` — so the
+        // implementation each document exposes must be bound to *that* document, not the main one. A single
+        // `g.__DOMImplementation` closed over the top-level `document` answered every created document with
+        // the wrong owner, and created documents had no `.implementation` at all. `__makeImpl(ownerDoc)`
+        // mints an implementation bound to its owner; the prototype getter (below) hands each document its own.
+        g.__makeImpl = function (ownerDoc) {
+          return {
             createHTMLDocument: function (title) {
                 return (arguments.length === 0)
-                    ? document.__createHTMLDocument()
-                    : document.__createHTMLDocument(String(title));
+                    ? ownerDoc.__createHTMLDocument()
+                    : ownerDoc.__createHTMLDocument(String(title));
             },
             createDocument: function (ns, qualifiedName) {
-                var d = document.__createHTMLDocument();
+                var d = ownerDoc.__createHTMLDocument();
                 return d;
             },
             // `hasFeature()` is specified to ALWAYS return true — it is a legacy method the spec now
@@ -7016,14 +7024,8 @@ const WINDOW_PRELUDE: &str = r#"
             // qualified name with a bad prefix.
             createDocumentType: function (name, publicId, systemId) {
                 name = String(name);
-                var valid = name.length > 0
-                    && /^[A-Za-z_:\u0080-\uffff][-A-Za-z0-9._:\u0080-\uffff]*$/.test(name)
-                    && name.split(':').length <= 2;
-                if (!valid) {
-                    throw new DOMException("'" + name + "' is not a valid qualified name", 'InvalidCharacterError');
-                }
-                if (name.indexOf(':') === 0 || name.lastIndexOf(':') === name.length - 1) {
-                    throw new DOMException("'" + name + "' has an empty prefix or local name", 'NamespaceError');
+                if (/[\t\n\f\r \x00>]/.test(name)) {
+                    throw new DOMException("'" + name + "' is not a valid doctype name", 'InvalidCharacterError');
                 }
                 var dt = Object.create(g.DocumentType.prototype);
                 dt.name = name;
@@ -7033,13 +7035,16 @@ const WINDOW_PRELUDE: &str = r#"
                 dt.nodeName = name;
                 dt.nodeValue = null;
                 dt.textContent = null;
-                dt.ownerDocument = document;
+                dt.ownerDocument = ownerDoc;
                 dt.parentNode = null;
                 dt.childNodes = [];
                 dt.remove = function () {};
                 return dt;
             }
+          };
         };
+        // Back-compat alias for the sanitizer prelude / any code that grabbed the singleton, bound to main.
+        g.__DOMImplementation = g.__makeImpl(document);
         // `DocumentType` did not exist as an interface at all, so nothing the above returned could ever
         // be one.
         if (typeof g.DocumentType !== 'function' || !g.DocumentType.prototype) {
@@ -7077,11 +7082,31 @@ const WINDOW_PRELUDE: &str = r#"
                 },
             });
         } catch (e) { /* already defined by the engine: leave it alone */ }
+        // `implementation` is defined on `Document.prototype` (shared by the main / created /
+        // iframe documents) so EVERY document — not just `document` — answers with an implementation bound
+        // to *itself*. `createHTMLDocument()` returns a real second document; the createDocumentType test
+        // calls `thatDoc.implementation.createDocumentType(...)` and asserts the doctype's ownerDocument is
+        // `thatDoc`. Each document caches its own impl in a non-enumerable expando so identity is stable.
         try {
-            Object.defineProperty(document, 'implementation', {
-                get: function () { return g.__DOMImplementation; }, configurable: true
+            var __docProto = Object.getPrototypeOf(document);
+            Object.defineProperty(__docProto, 'implementation', {
+                configurable: true,
+                get: function () {
+                    if (!this.__impl) {
+                        var im = g.__makeImpl(this);
+                        try { Object.defineProperty(this, '__impl', { value: im, configurable: true }); }
+                        catch (e2) { this.__impl = im; }
+                    }
+                    return this.__impl;
+                }
             });
-        } catch (e) { try { document.implementation = g.__DOMImplementation; } catch (e2) {} }
+        } catch (e) {
+            try {
+                Object.defineProperty(document, 'implementation', {
+                    get: function () { return g.__DOMImplementation; }, configurable: true
+                });
+            } catch (e3) { try { document.implementation = g.__DOMImplementation; } catch (e4) {} }
+        }
 
         // **`document.createEvent()` is DEFERRED, and the reason is Bar 0.** The shim itself is trivial,
         // but the moment it exists, tests reach real event dispatch with listeners that mutate the

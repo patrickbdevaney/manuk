@@ -3054,6 +3054,49 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 135 — `createDocumentType` validates a DOCTYPE name, and every document has its OWN `.implementation` (+190 dom)
+
+**TICK SHAPE: pattern-class (one validation rule + one per-document binding, a whole file + its downstream cluster).** WIKI: dom-semantics.
+
+**Hypothesis (flip-rate, from histogramming `dom/nodes --show-failures`).** After tick 134 the largest single
+one-mechanism `dom/nodes` cluster was **DOMImplementation**: `createDocumentType(...) should work` failing
+wholesale, plus **32+ `aDocument.implementation is undefined`** aborts. Two shared causes: (1) the argument
+was validated as a **QName** — wrongly throwing for `1foo`, `@foo`, `prefix::local`, `:foo`, `foo:`, … ; (2)
+`.implementation` was a **global singleton** closed over the top-level `document`, so a document minted by
+`createHTMLDocument()` had **no `.implementation` at all** — every `createdDoc.implementation.createDocumentType(...)`
+threw and aborted its whole file.
+
+**Mechanism.** (1) `createDocumentType` now applies the spec's **valid-doctype-name** rule and nothing else:
+throw `InvalidCharacterError` iff the name contains ASCII whitespace, U+0000 NULL, or U+003E `>`
+(dom.spec.whatwg.org `#valid-doctype-name`; verified against Ladybird's `is_valid_doctype_name`). The empty
+string is valid; the prefix/local-name checks are gone. (2) `.implementation` moved from an own-property
+singleton to a **`Document.prototype` getter** that mints an implementation bound to `this` via a new
+`__makeImpl(ownerDoc)` factory, cached per-document in a non-enumerable expando. Every document — main /
+created / iframe (all share `Document.prototype` since tick 134) — now answers with its own implementation,
+so `doctype.ownerDocument === thatDoc` holds. `g.__DOMImplementation` stays as a main-bound alias for the
+sanitizer prelude.
+
+**MEASURED — the ratchet turned.** dom **3632 → 3822 (+190)**; the delta is **entirely in `dom/nodes`
+(2990 → 3180)** — every other dom subdirectory byte-identical (zero regression, diffed). `createDocumentType
+… should work` and `implementation is undefined` both **0 remaining**. Bar 0 **0** (deterministic ×2), NO_REPORT
+unchanged (1). The pass *rate* dipped 55.6% → 54.9% because previously-aborting files now run their full
+subtest sets (denominator +432) — that is exposure/fidelity, not regression: no subtest that passed before
+fails now. Gate `g_dom_impl` extended with 11 new claims (loose validation accepts `1foo`/`prefix::local`/``,
+rejects `a>b`/`a b`; a created doc's doctype is owned by that doc) — falsifiable by construction (the old code
+threw on `1foo` and `doc.implementation` was `undefined`).
+
+**Honest follow-on.** `createDocument(namespace, qualifiedName, doctype)` still returns an HTML document
+ignoring its args — the XMLDocument surface (lowercase tagName in XML, `application/xhtml+xml` contentType, a
+root element in the given namespace) is a separate bounded tick, as is `createAttribute`/`createCDATASection`/
+`adoptNode` (absent on all documents, per tick 134's note).
+
+**HARNESS NOTE (observer-owned, not browser).** `STATUS.md:TICK` is frozen at **128** — stale across ticks
+129–134 (status-update.sh reads TICK from STATUS and writes it back unchanged; nothing is incrementing it).
+The self-audit/surface/constitution cadences are computed from that field and so under-count (real tick 135,
+last self-audit 121 → genuinely overdue, but the gate sees 128−121=7). Flagged for the observer; not mine to
+fix (V1-SCOPE: harness is observer-owned). This browser tick is complete, verify-clean, and lands on its own
+merits.
+
 ## Tick 134 — a document created by `DOMImplementation` is a REAL Document (+dom)
 
 **TICK SHAPE: pattern-class (one reflector-proto + one scoping fix, a whole `is not a function` cluster).** WIKI: dom-semantics.
