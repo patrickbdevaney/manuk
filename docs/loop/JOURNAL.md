@@ -3054,6 +3054,46 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 144 — `position:absolute; inset:0` gives a `height:100%` child a definite base (the overlay/modal fill pattern stops collapsing to 0)
+
+**TICK SHAPE: layout-mechanism (CSS-LAYOUT phase-mandate row 1 territory — intrinsic/definite sizing; +2 measured WPT, but the value is the daily-driver render fix). WIKI: box-layout.**
+
+**Phase mandate.** `scripts/lever-board.sh` row 1 is intrinsic/definite sizing (`css-sizing 12→35%`). Probed
+`manuk-wpt wpt css/css-sizing --show-failures`: the cleanest, highest-daily-driver-value cluster with
+*actionable* messages is `abspos-intrinsic-height-inset-percentage-child` — a `position:absolute; inset:0`
+box whose `height:100%` child reads back **0** instead of the containing-block height. That is the
+overlay / modal / backdrop *fill* pattern, on virtually every real site. (`contain-intrinsic-size` and
+`stretch` are the bigger raw buckets but are subsystems — size containment, the `stretch` keyword — and
+847 of the stretch failures are message-less reftests. FLIP-RATE discipline: bounded mechanism over big
+raw count.)
+
+**Hypothesis.** An abspos box with both block insets set has a **definite** used height via the constraint
+equation (CB-height − top − bottom − frame), even at `height:auto`. Manuk computes that height correctly
+for the box — but **after** its children (`layout_children(..., None, ...)`), so a `height:100%` child sees
+an indefinite base and collapses. Compute the definite height *first* (explicit non-auto height, or
+auto+both-insets) and thread it down as the percentage base.
+
+**RESULT — landed.** `layout_abs` now derives `definite_ch` before laying out children and passes it as
+`pch`; the post-children height computation is unchanged (a non-`auto` `Dim` ignores its `auto_px`
+fallback, so box heights do not move — only percentage-height *children* of definite abspos boxes gain a
+real base). **Measured:** `css/css-sizing` 227→**229** (the file's `height:auto` and `height:stretch`
+cases flip; the `fit/min/max-content` cases stay failing — those need real intrinsic-keyword `Dim`
+variants, still `Dim::Auto` today, a separate tick). Spot-checked the abspos-bearing suites for
+regression: css-position +5 (bonus), css-grid +2, css-flexbox 949 (= tick 143), css-overflow flat,
+manuk-layout 47→48 green. **No regression.** *(Note: `WPT-AREAS.tsv` is stale from 07:52 — pre-tick-138 —
+so the ratchet's WPT check is vacuous this tick; the change is layout-geometry-only and cannot touch the
+non-layout suites, and I verified the affected suites by hand.)*
+
+**Gate (falsifiable).** `abspos_inset_zero_gives_percentage_height_child_a_definite_base`
+(`manuk-layout`): a `position:absolute; top/right/bottom/left:0; height:auto` box in a 200px CB, with a
+`height:100%` child — child rect must be 200. **Proven RED** by withholding the base (`pch = None`): child
+= 0. GREEN with it: child = 200. (The unit test uses the inset *longhands* because the test cascade
+`MinimalCascade` parses them but not the `inset` shorthand; the full stylo pipeline — the WPT run and real
+pages — parses `inset:0`.)
+
+**The ratchet.** Capability: **up** — the fill pattern's inner layer now measures correctly. Performance:
+unchanged. Instrument fidelity: **up** — a new falsifiable layout gate. Bar 0 clean.
+
 ## Tick 143 — `getComputedStyle` exposes the box-model longhands (`box-sizing` + the min/max constraints a framework measures with)
 
 **TICK SHAPE: capability wiring (the tick-142 pattern, extended to the box model; +4 measured WPT, but the value is the honest capability — most box-model gCS tests live in `css/cssom`, which is not in the local corpus).** WIKI: interaction-surface.

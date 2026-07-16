@@ -2768,19 +2768,29 @@ impl Ctx<'_> {
             other => other.resolve(cw, (cw - frame).max(0.0)).max(0.0),
         };
 
+        let frame_v = mt + mb + pt + pb + bt + bb;
+        // A **definite** content height is known BEFORE the children are laid out in two cases:
+        // an explicit (non-`auto`) height, and `height:auto` resolved by the constraint equation
+        // (both `top` and `bottom` set, CSS2 §10.6.4). In both, a `height:100%` (or any `%`) child
+        // must resolve against it (CSS2 §10.5) — so we thread it down as the percentage base. This
+        // is the `position:absolute; inset:0` fill pattern (overlays/modals/backdrops), whose child
+        // otherwise sees an indefinite base and **collapses to 0**. When the box is content-sized
+        // instead, the base stays `None` (a `%` height there is `auto`, which is correct).
+        let definite_ch: Option<f32> = match s.height {
+            Dim::Auto => match (top, bottom) {
+                (Some(t), Some(b)) => Some((cb.height - t - b - frame_v).max(0.0)),
+                _ => None,
+            },
+            // A non-`auto` Dim ignores its `auto_px` fallback, so this equals the old
+            // `other.resolve(cb.height, ch)` — the height never depended on `ch` here.
+            other => Some(other.resolve(cb.height, 0.0).max(0.0)),
+        };
         // Lay out content at a provisional origin, then re-origin once placed.
         let mut inner = FloatContext::new(0.0, content_w);
-        let (content, ch) = self.layout_children(node, 0.0, 0.0, content_w, None, &mut inner);
-        let frame_v = mt + mb + pt + pb + bt + bb;
-        // Height: definite wins; else if both top+bottom are set the box stretches to fill
-        // between them; else it is content height (CSS2 §10.6.4).
-        let content_height = match s.height {
-            Dim::Auto => match (top, bottom) {
-                (Some(t), Some(b)) => (cb.height - t - b - frame_v).max(0.0),
-                _ => ch.max(inner.lowest_bottom().max(0.0)),
-            },
-            other => other.resolve(cb.height, ch),
-        };
+        let (content, ch) =
+            self.layout_children(node, 0.0, 0.0, content_w, definite_ch, &mut inner);
+        // Height: the definite value if we have one; else content height (CSS2 §10.6.4).
+        let content_height = definite_ch.unwrap_or_else(|| ch.max(inner.lowest_bottom().max(0.0)));
 
         let border_box_w = bl + pl + content_w + pr + br;
         let border_box_h = bt + pt + content_height + pb + bb;
@@ -4336,6 +4346,39 @@ mod tests {
         let ar = rects.get(&a).unwrap();
         // Taller than one line => the runs really were unioned across lines.
         assert!(ar.height > 20.0, "expected a multi-line union, got {ar:?}");
+    }
+
+    /// `position:absolute; inset:0` (all four insets set) resolves the box to a **definite** height
+    /// via the constraint equation — containing-block height minus the insets — so a `height:100%`
+    /// child resolves against it. This is the overlay/modal/backdrop *fill* pattern. Before, the box's
+    /// used height was only known *after* its children were laid out, so the child saw an indefinite
+    /// base and **collapsed to 0** — the overlay's contents vanished.
+    #[test]
+    fn abspos_inset_zero_gives_percentage_height_child_a_definite_base() {
+        // Explicit `top/right/bottom/left:0` longhands, not the `inset:0` shorthand — the test
+        // cascade (`MinimalCascade`) parses the longhands but not the shorthand; the constraint
+        // equation under test reads the four insets either way.
+        let (dom, root) = layout_html(
+            "<body><div style='position:relative;width:200px;height:200px'>\
+               <section style='position:absolute;top:0;right:0;bottom:0;left:0;height:auto'>\
+                 <article style='height:100%'></article>\
+               </section></div></body>",
+            "",
+            800.0,
+        );
+        let rects = root.node_rects(&dom);
+        let fill = dom.find_first("section").unwrap();
+        let inner = dom.find_first("article").unwrap();
+        assert_eq!(
+            rects.get(&fill).expect("abspos box has geometry").height,
+            200.0,
+            "abspos inset:0 height:auto fills its 200px containing block (constraint equation)"
+        );
+        assert_eq!(
+            rects.get(&inner).expect("child has geometry").height,
+            200.0,
+            "height:100% child resolves against the definite abspos parent — it was 0 before"
+        );
     }
 
     #[test]

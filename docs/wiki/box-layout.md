@@ -47,3 +47,29 @@ fix does not touch them. The `css/css-sizing` and `css/css-flexbox` calc tests t
 mostly **reftests** (Bar-2, skipped) or additionally depend on **intrinsic sizing** (min/max-content
 propagation, still open). A layout-calc fix is therefore a *daily-driver render* win with a near-zero WPT
 flip — gate it with a falsifiable layout assertion, not a subtest count.
+
+## Absolute box with both insets set is a DEFINITE size — lay its children out with it (tick 144)
+
+An `absolute`/`fixed` box with both block insets set (`top` and `bottom`, i.e. the `inset:0` fill pattern)
+has a **definite** used height via the constraint equation — *containing-block height − top − bottom −
+frame* (CSS2 §10.6.4) — even when `height:auto`. Manuk's abspos layout computed that height correctly for
+the box itself, but did so **after** laying out the children (`layout_children(..., None, ...)`), so a
+`height:100%` child was resolved against an *indefinite* base and **collapsed to 0**. On the real web that
+is the overlay / modal / backdrop: `position:absolute; inset:0` to fill a positioned ancestor, with a
+`height:100%` inner layer that then measures 0 and vanishes.
+
+**Fix (`layout_abs`, `engine/layout/src/lib.rs`).** Compute the definite content height *before* the
+children in the two cases where it is knowable without them — an explicit non-`auto` height, and
+`height:auto` with both insets set (the constraint equation) — and thread it down as the percentage base
+(`pch`). The content-sized case (auto height, not both insets) keeps `pch = None`, which is correct: a `%`
+height there is `auto`. The post-children height computation is unchanged (a non-`auto` `Dim` ignores its
+`auto_px` fallback, so this equals the old `other.resolve(cb.height, ch)`), so box heights do not move —
+only percentage-height *children* of definite abspos boxes gain a real base.
+
+**WPT / gate.** `css/css-sizing` +2 (`abspos-intrinsic-height-inset-percentage-child`'s `height:auto` and
+`height:stretch` cases; the `fit/min/max-content` cases stay failing — those need real intrinsic-keyword
+`Dim` variants, still `Dim::Auto` today). Gated by the falsifiable layout unit test
+`abspos_inset_zero_gives_percentage_height_child_a_definite_base` — RED (child = 0) when the base is
+withheld, GREEN (child = 200) with it. **Note:** the test cascade `MinimalCascade` parses the
+`top/right/bottom/left` longhands but *not* the `inset` shorthand, so the unit test uses the longhands; the
+full stylo pipeline (what the WPT run and real pages use) parses `inset:0` too.
