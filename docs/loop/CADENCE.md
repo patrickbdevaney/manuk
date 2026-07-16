@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **108** | ticks 1–115 |
-| median tick cycle | **19m** | 107 intervals |
+| ticks landed | **109** | ticks 1–116 |
+| median tick cycle | **19m** | 108 intervals |
 | median, last 10 | **31m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.94** | 114.2h elapsed |
-| median verify wall | **58s** | 47 ticks |
+| **ticks per hour** | **0.94** | 114.7h elapsed |
+| median verify wall | **58s** | 48 ticks |
 | wall trend | 39s → 52s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **46**
-* **✅ rows in the capability ledger**: 144 → **206**
+* **live gates**: 27 → **47**
+* **✅ rows in the capability ledger**: 144 → **208**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**55 of 108 ticks** (51%) moved a
+**56 of 109 ticks** (51%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -85,8 +85,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **55** capability ticks, median cycle **19m**
-* median diff per tick: **+256 / −23** lines across 8 files
+* **56** capability ticks, median cycle **19m**
+* median diff per tick: **+254 / −23** lines across 8 files
 
 ## Every tick
 
@@ -200,5 +200,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **113** | 2026-07-15 19:46 | 2.5h | capability | 9m | +391/−61 | 44 | 81 | 36.8% · | HTML attribute qualified names weren't ASCII-lowercased: a hole as big as the win it hid b |
 | **114** | 2026-07-15 22:44 | 3.0h | capability | 48s | +209/−7 | 45 | 81 | 36.8% · | the HTMLDocument named collections were `undefined`, and `document.forms.length` was a Typ |
 | **115** | 2026-07-15 23:17 | 32m | capability | 52s | +366/−36 | 46 | 81 | 36.8% · | `lookupNamespaceURI`/`isDefaultNamespace` were `undefined`: the locate-a-namespace algorit |
+| **116** | 2026-07-15 23:46 | 29m | capability | 57s | +171/−40 | 47 | 81 | 36.8% · | `nodeName` uppercased everything and called every non-element `#text` (+62) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

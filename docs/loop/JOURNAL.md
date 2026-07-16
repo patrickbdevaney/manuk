@@ -3054,6 +3054,34 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 116 — `nodeName` uppercased everything and called every non-element `#text` (+62)
+
+**TICK SHAPE: capability (DOM correctness).** `[pattern: node-name-casing]`. Re-probed `dom` after tick 115
+with `--show-failures` (the namespace-method clusters were gone — the tick-115 flip confirmed). The top
+single-cause cluster was `assert_equals: element.nodeName expected "foo" but got "FOO"` (55), all in
+`Document-createElementNS.html`: `createElementNS('http://example.com/', 'foo')` is a **non-HTML** element
+whose `nodeName` must stay `"foo"`, and we returned `"FOO"`.
+
+**Mechanism — a one-getter bug.** `el_get_node_name` did `t.to_ascii_uppercase()` **unconditionally** and
+returned `"#text"` for *every* non-element. But DOM §Node makes nodeName **per node type**, and an
+element's nodeName is its `tagName` — ASCII-uppercased **only in the HTML namespace** (the exact rule
+`el_get_tag_name` already had, and that `nodeName` failed to mirror). The full rule now lives in the DOM
+crate (`Dom::node_name`): HTML element → uppercase, non-HTML element → case-preserved, plus the right
+constant per kind (`#text` / `#comment` / `#document` / `#document-fragment` / the doctype's name). The
+getter is now a thin seam. Chosen over the bigger `createProcessingInstruction` cluster (~115), which needs
+a new arena node type (Bar-0 surface), and over `getElementsByTagNameNS` (~49), which is blocked by the
+engine conflating the null and XHTML namespaces (both stored `None`) — a namespace-representation rework,
+not a bounded tick.
+
+**MEASURED.** New gate `g_node_name` (9 cases: HTML-uppercase, non-HTML case-preserved incl. SVG
+`linearGradient` and a prefixed name, and `#text`/`#comment`/`#document-fragment`/`#document`) is **proven
+falsifiable** — RED without the fix, GREEN with it. **dom 2,837 → 2,899 (+62)**, TOTAL 422,803 → 422,865, Bar 0
+clean, no area regressed.
+
+**The ratchet.** Capability: **up** (a per-type correctness rule made real). Performance: unchanged.
+Instrument fidelity: **up** — a 9-case falsifiable tooth, and the DOM crate now owns the nodeName rule
+instead of it being duplicated-and-wrong in a getter. [[parity-methodology]] [[symptom-names-wrong-organ]]
+
 ## Tick 115 — `lookupNamespaceURI`/`isDefaultNamespace` were `undefined`: the locate-a-namespace algorithm (+~75)
 
 **TICK SHAPE: capability (DOM namespace algorithm).** `[pattern: namespace-lookup]`. Probed the `dom` area

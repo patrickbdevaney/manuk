@@ -509,3 +509,15 @@ each of which is a separate way to get it wrong:
 `g_namespace_lookup` ports all 27 branch cases from WPT `Node-lookupNamespaceURI.html`. `lookupPrefix` is
 NOT implemented: its WPT file is `.xhtml`, gated behind XML document loading, so it would flip nothing.
 [[js-engine]] [[conformance-and-oracles]]
+
+## `nodeName` is per node type, and case-sensitive outside the HTML namespace
+
+`el_get_node_name` uppercased the tag name **unconditionally** and returned `"#text"` for every
+non-element. Both are wrong: DOM §Node makes `nodeName` **per node type**, and an element's nodeName is its
+`tagName` — ASCII-uppercased **only in the HTML namespace**. So `createElementNS('http://example.com/',
+'foo').nodeName` is `"foo"`, not `"FOO"` (the whole `Document-createElementNS.html` nodeName cluster), and
+SVG's `linearGradient` keeps its case. The rule now lives in `Dom::node_name` (the DOM crate), mirroring the
+namespace-aware casing `el_get_tag_name` already had, plus the right constant per kind: `#text` / `#comment`
+/ `#document` / `#document-fragment` / the doctype's name. The getter is a thin seam over it. Gate
+`g_node_name`. **The lesson: a rule duplicated across two getters drifts — `tagName` had the namespace
+check, `nodeName` (which is *defined as* tagName for elements) silently did not.** [[js-engine]]

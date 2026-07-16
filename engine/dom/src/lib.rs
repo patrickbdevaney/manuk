@@ -1049,6 +1049,27 @@ impl Dom {
         self.children(doc).find(|&c| self.is_element(c))
     }
 
+    /// `node.nodeName` (DOM §Node). Per the spec, this is **per node type**, and — the bug this fixes —
+    /// an element's nodeName is its `tagName`, which is ASCII-uppercased **only in the HTML namespace**.
+    /// A non-HTML element (`createElementNS('http://example.com/', 'foo')`) keeps its case (`"foo"`, not
+    /// `"FOO"`); the old getter uppercased unconditionally and returned `"#text"` for every non-element.
+    pub fn node_name(&self, id: NodeId) -> String {
+        match self.nodes.get(id.index()).map(|n| &n.data) {
+            Some(NodeData::Element(el)) => match &el.namespace {
+                Some(_) => el.name.clone(),
+                None => el.name.to_ascii_uppercase(),
+            },
+            Some(NodeData::Text(_)) => "#text".to_string(),
+            Some(NodeData::Comment(_)) => "#comment".to_string(),
+            Some(NodeData::Document) => "#document".to_string(),
+            Some(NodeData::Fragment) | Some(NodeData::ShadowRoot { .. }) => {
+                "#document-fragment".to_string()
+            }
+            Some(NodeData::Doctype { name }) => name.clone(),
+            None => "#text".to_string(),
+        }
+    }
+
     /// The first element with the given lowercased tag name, searched depth-first
     /// from the document root. Handy for `<html>`/`<body>`/`<title>` lookups.
     pub fn find_first(&self, name: &str) -> Option<NodeId> {

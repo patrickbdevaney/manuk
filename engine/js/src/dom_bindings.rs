@@ -4485,10 +4485,12 @@ unsafe fn el_get_owner_document(cx: *mut RawJSContext, _argc: u32, vp: *mut Valu
 /// `node.nodeName` — uppercase tag for an element, `#text` for text (DOM spec).
 unsafe fn el_get_node_name(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     match this_node(vp) {
-        Some((dom, node)) => match (*dom).tag_name(node) {
-            Some(t) => return_string(cx, vp, &t.to_ascii_uppercase()),
-            None => return_string(cx, vp, "#text"),
-        },
+        // `nodeName` is per node type and case-sensitive outside the HTML namespace — the DOM crate owns
+        // the full rule (`Dom::node_name`); this is just the reflector seam.
+        Some((dom, node)) => {
+            let name = (*dom).node_name(node);
+            return_string(cx, vp, &name);
+        }
         None => *vp = NullValue(),
     }
     true
