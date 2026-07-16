@@ -739,3 +739,45 @@ the script throws at the first `lookupPrefix` and `textContent` never updates).
 **The lesson, again:** a "missing method" histogram row splits into two very different fixes — a real
 algorithm on real reflectors (the +11 element/text/document part) and a constant-answer stub on an exotic
 JS shim (the +9 doctype part). Both are spec-required Node surface; neither is the other. [[js-engine]]
+
+## `HTMLCollection` is a WebIDL legacy platform object, not a plain indexed proxy (tick 129)
+
+`document.getElementsByTagName(...)` returns a **live `HTMLCollection`**, backed by a `Proxy` (see
+[[js-engine]]) whose traps recompute the node list on every access. It handled indices and a bare
+`namedItem`, but the object-model surface — the part `dom/collections/` checks hardest — was wrong, and it
+was **one mechanism failing a whole file cluster** (the flip-rate signal): `HTMLCollection-supported-
+property-names` 0/6, `-empty-name` 0/7, `-own-props` 4/8, `-supported-property-indices` 0/7, `-delete` 2/4.
+
+**What a legacy platform object owes (WebIDL §3.9 + HTML §HTMLCollection):**
+- **Supported property names** = every element's `id`, plus every **HTML-namespace** element's `name`, in
+  tree order, deduped, no empty strings. (A non-HTML `name` contributes nothing — that is why
+  `getElementsByTagName('foo')` over `<foo name=x>` in a random namespace has no named property.)
+- `Object.getOwnPropertyNames` = `[...indices, ...supported names, ...expandos]` and **never `length`** —
+  `length` is a prototype accessor, not an own property. Our old `ownKeys` pushed `'length'` and no names.
+- Named properties are **`[LegacyUnenumerableNamedProperties]`**: present, `writable:false`,
+  `enumerable:false`, `configurable:true`. An expando may **not** shadow a live index/named property
+  (`coll["some-id"] = 5` is a silent no-op in sloppy mode, `TypeError` in strict; same for
+  `defineProperty`/`delete`). But an expando set on a name **before** it becomes supported is a real own
+  property that shadows the named property appearing later (named-property *visibility*).
+
+**The receiver subtlety that bit back (the `as-prototype` regression).** Making named descriptors
+`writable:false` broke `Object.create(coll).named = "foo"`: an inherited assignment consults the collection's
+descriptor and a non-writable data property rejects it. But WebIDL's legacy `[[Set]]` passes
+`ownDesc = undefined` when the **receiver is not the collection**, so the assignment falls through to an
+ordinary own property on the receiver. The `set` trap must branch on `receiver !== proxy`. And `length` is a
+branded IDL attribute — reading it on a mere inheritor is a `TypeError`, not the count.
+
+**The heap-churn trap that made this a two-attempt tick (Bar 0).** The first cut routed **`NodeList`
+(`childNodes` — the engine's hottest proxy)** through the richer traps too. It measured +19 dom, **but the
+extra allocation shifted the shared-batch-runtime heap enough to surface the tracked cross-file UAF on three
+unrelated `ranges`/`traversal` files (batch Bar 0 0 → 3), each of which passes in isolation.** The fix was to
+gate every new behaviour on `HTMLCollection` and keep `NodeList`'s traps **byte-for-byte** on their original
+bodies — zero added churn on the hot path. Batch Bar 0 returned to **0**. The lesson: on an engine with a
+known heap-layout-sensitive UAF ([[js-engine]]), *a correct change that perturbs a hot allocation path can
+trip Bar 0 far from where it was made* — measure the full batch, not just the subdir, and keep hot paths
+allocation-neutral until the UAF is fixed.
+
+**MEASURED:** dom 3536 → 3557 (**+21**), collections 9/48 → 30/48, Bar 0 **0** (deterministic ×3), no
+regressions. Gate `g_collection_named_props` (proven red on the committed proxy). Named-property parity for
+`NamedNodeMap` (`.attributes`) and `DOMStringMap` (`.dataset`) is the same shape on **different** objects —
+still 0/5 and 0/3, a separate follow-on tick. [[js-engine]]

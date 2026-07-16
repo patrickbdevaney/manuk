@@ -158,6 +158,7 @@
   - L646 · getElementsByTagNameNS — match on (namespace, localName), and None means XHTML
   - L673 · DOM validation errors must be REAL DOMExceptions, not decorated Errors (tick 127, +420 dom)
   - L713 · Node.lookupPrefix and the DocumentType namespace-lookup surface (tick 128, +20 dom)
+  - L743 · HTMLCollection is a WebIDL legacy platform object, not a plain indexed proxy (tick 129)
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -367,4 +368,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-298 sections across 16 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+299 sections across 16 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

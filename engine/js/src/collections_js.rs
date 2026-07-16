@@ -56,8 +56,45 @@ pub const COLLECTIONS_JS: &str = r#"
   // A live view over `compute()`, which re-reads the tree EVERY time. That is the whole point: a
   // collection whose length is a stored number is a snapshot, and a snapshot turns
   // `while (el.children.length) el.removeChild(el.firstChild)` into an infinite loop.
+  var HTML_NS = 'http://www.w3.org/1999/xhtml';
+  function isIndex(k) { return typeof k === 'string' && /^(0|[1-9]\d*)$/.test(k); }
+  function hasOwn(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
+
   function live(compute, proto) {
     var target = Object.create(proto.prototype);
+    // Only HTMLCollection is a legacy platform object with NAMED properties (id / HTML `name`).
+    // NodeList (childNodes) is indexed-only — exposing names on it would invent properties the spec
+    // does not have and break `Object.getOwnPropertyNames(node.childNodes)`.
+    var hasNamed = (proto === HTMLCollection);
+
+    // The HTMLCollection "supported property names": the `id` of every element, plus the `name` of
+    // every HTML-namespace element, in tree order, no empty strings, deduped (HTML §HTMLCollection).
+    function supportedNames(a) {
+      var names = [], seen = Object.create(null);
+      for (var i = 0; i < a.length; i++) {
+        var el = a[i];
+        if (!el.getAttribute) continue;
+        var id = el.getAttribute('id');
+        if (id && !seen[id]) { seen[id] = 1; names.push(id); }
+        if (el.namespaceURI === HTML_NS) {
+          var nm = el.getAttribute('name');
+          if (nm && !seen[nm]) { seen[nm] = 1; names.push(nm); }
+        }
+      }
+      return names;
+    }
+    // The named property for `key`, or null. Empty string is never a supported name.
+    function namedProp(key) {
+      if (!hasNamed || key === '' || key == null) return null;
+      var a = compute();
+      for (var i = 0; i < a.length; i++) {
+        var el = a[i];
+        if (!el.getAttribute) continue;
+        if (el.getAttribute('id') === key) return el;
+        if (el.namespaceURI === HTML_NS && el.getAttribute('name') === key) return el;
+      }
+      return null;
+    }
 
     var methods = {
       item: function (i) {
@@ -65,14 +102,7 @@ pub const COLLECTIONS_JS: &str = r#"
         i = i | 0;
         return (i >= 0 && i < a.length) ? a[i] : null;
       },
-      namedItem: function (name) {
-        var a = compute();
-        for (var i = 0; i < a.length; i++) {
-          if (a[i].id === name) return a[i];
-          if (a[i].getAttribute && a[i].getAttribute('name') === name) return a[i];
-        }
-        return null;
-      },
+      namedItem: function (name) { return namedProp(name); },
       forEach: function (fn, thisArg) {
         var a = compute();
         for (var i = 0; i < a.length; i++) { fn.call(thisArg, a[i], i, this); }
@@ -82,46 +112,148 @@ pub const COLLECTIONS_JS: &str = r#"
       values:  function () { return compute()[Symbol.iterator](); },
     };
 
-    return new Proxy(target, {
+    // The legacy-platform-object surface (named properties, expando-shadowing, unenumerable names) is
+    // HTMLCollection-only. NodeList (`childNodes`) is the engine's HOTTEST proxy — kept byte-for-byte on
+    // its original trap bodies so this tick adds ZERO heap churn to that path. (An earlier version routed
+    // NodeList through the richer traps; the extra allocation shifted the shared-batch-runtime heap enough
+    // to surface the tracked cross-file UAF on unrelated ranges/traversal files — see docs/wiki/js-engine.md.)
+    if (!hasNamed) {
+      return new Proxy(target, {
+        get: function (t, k, recv) {
+          if (k === 'length') return compute().length;
+          if (k === Symbol.iterator) return function () { return compute()[Symbol.iterator](); };
+          if (isIndex(k)) {
+            var a = compute();
+            return (+k < a.length) ? a[+k] : undefined;
+          }
+          if (methods[k]) return methods[k];
+          return t[k];
+        },
+        has: function (t, k) {
+          if (k === 'length' || methods[k]) return true;
+          if (isIndex(k)) return +k < compute().length;
+          return k in t;
+        },
+        ownKeys: function () {
+          var a = compute(), keys = [];
+          for (var i = 0; i < a.length; i++) keys.push(String(i));
+          keys.push('length');
+          return keys;
+        },
+        getOwnPropertyDescriptor: function (t, k) {
+          if (k === 'length') {
+            return { value: compute().length, writable: false, enumerable: false, configurable: true };
+          }
+          if (isIndex(k)) {
+            var a = compute();
+            if (+k < a.length) {
+              return { value: a[+k], writable: false, enumerable: true, configurable: true };
+            }
+          }
+          return Object.getOwnPropertyDescriptor(t, k);
+        },
+      });
+    }
+
+    var proxy = new Proxy(target, {
       get: function (t, k, recv) {
-        if (k === 'length') return compute().length;
+        // `length` is an IDL attribute with a brand check: reading it on an object that merely
+        // INHERITS from the collection (`Object.create(coll).length`) is a TypeError, not the count.
+        if (k === 'length') {
+          if (recv !== proxy) throw new TypeError("'length' called on an object that is not an HTMLCollection");
+          return compute().length;
+        }
         if (k === Symbol.iterator) return function () { return compute()[Symbol.iterator](); };
-        if (typeof k === 'string' && /^(0|[1-9]\d*)$/.test(k)) {
+        if (isIndex(k)) {
           var a = compute();
           return (+k < a.length) ? a[+k] : undefined;
         }
         if (methods[k]) return methods[k];
+        // An own expando shadows a named property (WebIDL named-property visibility), so it wins here.
+        if (typeof k === 'string' && hasOwn(t, k)) return t[k];
         // A NAMED property: `form.username` and `collection.someId` both work on a real collection.
+        // The named getter is exotic — it resolves for any receiver (so an inheriting object sees it).
         if (typeof k === 'string' && k !== 'constructor') {
-          var named = methods.namedItem(k);
+          var named = namedProp(k);
           if (named) return named;
         }
         return t[k];
       },
       has: function (t, k) {
         if (k === 'length' || methods[k]) return true;
-        if (typeof k === 'string' && /^(0|[1-9]\d*)$/.test(k)) return +k < compute().length;
+        if (isIndex(k)) return +k < compute().length;
+        if (typeof k === 'string' && hasOwn(t, k)) return true;
+        if (typeof k === 'string' && namedProp(k)) return true;
         return k in t;
       },
-      ownKeys: function () {
+      set: function (t, k, v, receiver) {
+        // Assigning through an object that only INHERITS from the collection must land as an ordinary
+        // own property on that receiver — WebIDL's [[Set]] passes `ownDesc = undefined` in this case,
+        // so the read-only index/named descriptors never block it (dom/collections as-prototype).
+        if (receiver !== proxy) {
+          var ex = Object.getOwnPropertyDescriptor(receiver, k);
+          if (ex) {
+            if ('value' in ex) { if (!ex.writable) return false; Object.defineProperty(receiver, k, { value: v }); return true; }
+            if (ex.set) { ex.set.call(receiver, v); return true; }
+            return false;
+          }
+          Object.defineProperty(receiver, k, { value: v, writable: true, enumerable: true, configurable: true });
+          return true;
+        }
+        // Read-only index / named property: an expando may not shadow it. Reject → silent in sloppy
+        // mode, TypeError in strict.
+        if (isIndex(k) && +k < compute().length) return false;
+        if (typeof k === 'string' && !hasOwn(t, k) && namedProp(k)) return false;
+        t[k] = v;
+        return true;
+      },
+      defineProperty: function (t, k, desc) {
+        if (isIndex(k) && +k < compute().length) return false;
+        if (typeof k === 'string' && !hasOwn(t, k) && namedProp(k)) return false;
+        return Reflect.defineProperty(t, k, desc);
+      },
+      deleteProperty: function (t, k) {
+        if (isIndex(k) && +k < compute().length) return false;
+        if (typeof k === 'string' && !hasOwn(t, k) && namedProp(k)) return false;
+        return Reflect.deleteProperty(t, k);
+      },
+      ownKeys: function (t) {
         var a = compute(), keys = [];
         for (var i = 0; i < a.length; i++) keys.push(String(i));
-        keys.push('length');
+        var names = supportedNames(a);
+        for (var j = 0; j < names.length; j++) {
+          if (keys.indexOf(names[j]) === -1) keys.push(names[j]);
+        }
+        // Expando own string keys, then own symbols — `length` lives on the prototype, so it is
+        // deliberately NOT an own key (matching Object.getOwnPropertyNames in real browsers).
+        var own = Reflect.ownKeys(t);
+        for (var m = 0; m < own.length; m++) {
+          if (typeof own[m] === 'string' && keys.indexOf(own[m]) === -1) keys.push(own[m]);
+        }
+        for (var s = 0; s < own.length; s++) {
+          if (typeof own[s] === 'symbol') keys.push(own[s]);
+        }
         return keys;
       },
       getOwnPropertyDescriptor: function (t, k) {
-        if (k === 'length') {
-          return { value: compute().length, writable: false, enumerable: false, configurable: true };
-        }
-        if (typeof k === 'string' && /^(0|[1-9]\d*)$/.test(k)) {
+        if (isIndex(k)) {
           var a = compute();
           if (+k < a.length) {
             return { value: a[+k], writable: false, enumerable: true, configurable: true };
           }
         }
-        return Object.getOwnPropertyDescriptor(t, k);
+        if (typeof k === 'string' && hasOwn(t, k)) {
+          return Reflect.getOwnPropertyDescriptor(t, k);
+        }
+        // Named properties are [LegacyUnenumerableNamedProperties]: present but NOT enumerable.
+        if (typeof k === 'string') {
+          var named = namedProp(k);
+          if (named) return { value: named, writable: false, enumerable: false, configurable: true };
+        }
+        return Reflect.getOwnPropertyDescriptor(t, k);
       },
     });
+    return proxy;
   }
 
   function asArray(v) {

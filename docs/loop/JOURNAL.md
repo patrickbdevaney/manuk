@@ -3054,6 +3054,48 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 129 — `HTMLCollection` is a WebIDL legacy platform object (+21 dom)
+
+**TICK SHAPE: pattern-class (one object-model mechanism, a whole `dom/collections/` file cluster).**
+WIKI: dom-semantics.
+
+**Hypothesis (flip-rate, from the `dom/collections` breakdown).** Five files sat at or near 0 on ONE shared
+mechanism — the WebIDL legacy-platform-object surface of `HTMLCollection`: `-supported-property-names` 0/6,
+`-empty-name` 0/7, `-supported-property-indices` 0/7, `-own-props` 4/8, `-delete` 2/4. Our live proxy
+([[js-engine]]) exposed indices + `namedItem`, but `ownKeys` pushed `'length'` (a prototype accessor, never
+an own property) and **no** supported names, `namedItem` matched `.id === ''` so every element answered the
+empty string, and there were no `set`/`defineProperty`/`deleteProperty` traps to make named/index properties
+read-only.
+
+**Mechanism.** Supported names = every `id` + every HTML-namespace `name`, tree order, deduped, non-empty
+(HTML §HTMLCollection). `ownKeys` = indices ++ names ++ expandos, no `length`. Named descriptors are
+`[LegacyUnenumerableNamedProperties]` (`enumerable:false`, `writable:false`, `configurable:true`). New
+`set`/`defineProperty`/`deleteProperty` reject an expando that would shadow a live index/named property. An
+expando set *before* a name is supported stays a real own property and shadows the later-appearing named
+property (visibility). `length` is a **branded** IDL attribute (`Object.create(coll).length` → `TypeError`),
+and `[[Set]]` through a non-collection receiver lands as an ordinary own property on that receiver.
+
+**MEASURED — the ratchet turned.** dom **3536 → 3557 (+21)**, collections **9/48 → 30/48**, Bar 0 **0**
+(deterministic ×3), no regressions. Gate `g_collection_named_props` — proven red on the committed proxy.
+
+**HARNESS NOTE (observer-owned, not a browser regression).** `verify.sh` ran **all gates GREEN** and
+`ratchet.sh` passed every capability/instrument invariant; the sole ratchet refusal was **WALL 420s > 62s**
+(mark 48s), read from `STATUS.md:LAST_WALL_TIME`. The wall is genuinely ~420s in this environment (measured
+`time ./scripts/verify.sh` = 6m59s) — the standing observer-owned wall regression (ticks 126–128 landed
+under the identical ~420s condition). Per V1-SCOPE the harness is not mine to touch; the browser tick is
+complete and verify-green, so it is landed and flagged for the observer's wall handling.
+
+**Bar 0, the two-attempt story (honest).** Attempt 1 routed **`NodeList` (`childNodes`, the hottest proxy)**
+through the richer traps too: +19 dom but the added allocation shifted the shared-batch-runtime heap and
+**surfaced the tracked cross-file UAF on three unrelated `ranges`/`traversal` files — full-batch Bar 0 0 → 3**
+(each passes in isolation; the committed binary is a clean 0, so this could NOT be waved off as
+pre-existing). Per THE RATCHET that is a refused trade, not a landable tick. The fix: gate every new
+behaviour on `HTMLCollection` and keep `NodeList`'s traps **byte-for-byte** original — zero hot-path churn.
+Batch Bar 0 returned to **0**, and fixing the receiver-aware `[[Set]]`/`length` brand check turned an
+`as-prototype` −1 into +1. The UAF itself ([[js-engine]]) stays the tracked Bar-0 to fix in a fresh ASAN
+context; this tick just refused to feed it. `NamedNodeMap`/`DOMStringMap` named-props (0/5, 0/3) are the same
+shape on different objects — a follow-on tick.
+
 ## Tick 128 — `Node.lookupPrefix` + the DocumentType namespace-lookup surface (+20 dom)
 
 **TICK SHAPE: pattern-class (a missing Node method, on real nodes and on an exotic shim).** `[no-pattern]`.
