@@ -384,3 +384,15 @@ getcomputedstyle 2/78→59/78), `css/css-grid` 150→257 (+107) — grid's getco
 align-items:center` container with a `flex-grow:2;flex-shrink:0;flex-basis:100px;align-self:flex-end` child
 must read back `column|wrap|space-between|center|2|0|100px|flex-end|column` (the last via `getPropertyValue`).
 Proven RED by stashing the serialization — the whole join was `undefined|…`. [[dom-semantics]]
+
+## `getComputedStyle` exposes the box-model longhands too (tick 143)
+
+Extending tick 142's pattern: `boxSizing`, `minWidth`/`maxWidth`/`minHeight`/`maxHeight` also read back
+`undefined` before. `box-sizing` is the single most-read layout flag in framework measurement code (*is this
+a border-box, so does my width math include padding?*). All four are stored+computed on `ComputedStyle`;
+this is pure serialization wiring. **The subtle rule:** `max-*` uses `Dim::Auto` for *unconstrained*, whose
+resolved value is **`none`**, not `auto` (only `min-*` → `auto`) — a `max_dim` helper maps `Auto → "none"`.
+Non-regressing (nothing read these before). Measured +4 (`css-flexbox`); the bulk of box-model gCS tests are
+the `css/cssom` battery, absent from the local corpus, so the capability is pinned by `js_conformance`
+scenario 24 (`box-sizing:border-box;min-width:50px;max-width:300px;min-height:10px` →
+`border-box|50px|300px|10px|none|border-box`), proven RED by stashing the fix. [[dom-semantics]]

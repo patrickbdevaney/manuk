@@ -363,8 +363,8 @@ fn transform_css(fns: &[manuk_css::TransformFn], rect: Option<[f32; 4]>) -> Stri
 
 fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> String {
     use manuk_css::{
-        AlignItems, Display, FlexDirection, FlexWrap, JustifyContent, Overflow, Position,
-        TextAlign, Visibility, WhiteSpace,
+        AlignItems, BoxSizing, Display, FlexDirection, FlexWrap, JustifyContent, Overflow,
+        Position, TextAlign, Visibility, WhiteSpace,
     };
     let display = match cs.display {
         Display::Block => "block",
@@ -456,6 +456,17 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
     // `flex-grow`/`flex-shrink` serialize as a bare number (`0`, `1`, `2.5`), never a unit.
     let flex_grow = cs.flex_grow.to_string();
     let flex_shrink = cs.flex_shrink.to_string();
+    // Box-model longhands frameworks read to decide how to measure: `box-sizing` (is this a
+    // border-box element?), and the min/max constraints. `min-*` resolves `auto` → "auto"; `max-*`
+    // uses `Dim::Auto` to mean "unconstrained", whose CSS resolved value is **`none`**, not `auto`.
+    let box_sizing = match cs.box_sizing {
+        BoxSizing::ContentBox => "content-box",
+        BoxSizing::BorderBox => "border-box",
+    };
+    let max_dim = |d: &manuk_css::Dim| match d {
+        manuk_css::Dim::Auto => "none".to_string(),
+        other => dim_css(other),
+    };
     let q = js_string_literal;
     format!(
         "({{color:{}, backgroundColor:{}, fontSize:{}, fontWeight:{}, fontStyle:{}, \
@@ -466,6 +477,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
           top:{}, right:{}, bottom:{}, left:{}, zIndex:{}, transform:{}, \
           justifyContent:{}, alignItems:{}, alignSelf:{}, flexDirection:{}, flexWrap:{}, \
           flexGrow:{}, flexShrink:{}, flexBasis:{}, rowGap:{}, columnGap:{}, \
+          boxSizing:{}, minWidth:{}, maxWidth:{}, minHeight:{}, maxHeight:{}, \
           getPropertyValue:function(p){{\
           var m={{'background-color':'backgroundColor','font-size':'fontSize',\
           'font-weight':'fontWeight','font-style':'fontStyle','font-family':'fontFamily',\
@@ -477,7 +489,9 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
           'justify-content':'justifyContent','align-items':'alignItems','align-self':'alignSelf',\
           'flex-direction':'flexDirection','flex-wrap':'flexWrap','flex-grow':'flexGrow',\
           'flex-shrink':'flexShrink','flex-basis':'flexBasis','row-gap':'rowGap',\
-          'column-gap':'columnGap'}};return this[m[p]||p];}}}})",
+          'column-gap':'columnGap','box-sizing':'boxSizing','min-width':'minWidth',\
+          'max-width':'maxWidth','min-height':'minHeight','max-height':'maxHeight'}};\
+          return this[m[p]||p];}}}})",
         q(&rgba_css(&cs.color)),
         q(&cs.background_color.map(|c| rgba_css(&c)).unwrap_or_else(|| "rgba(0, 0, 0, 0)".into())),
         q(&format!("{}px", cs.font_size)),
@@ -518,6 +532,11 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         q(&dim_css(&cs.flex_basis)),
         q(&format!("{}px", cs.row_gap)),
         q(&format!("{}px", cs.column_gap)),
+        q(box_sizing),
+        q(&dim_css(&cs.min_width)),
+        q(&max_dim(&cs.max_width)),
+        q(&dim_css(&cs.min_height)),
+        q(&max_dim(&cs.max_height)),
     )
 }
 

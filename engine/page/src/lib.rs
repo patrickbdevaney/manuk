@@ -4357,6 +4357,33 @@ mod js_interactive_tests {
         );
         drop(page23);
 
+        // (24) **`getComputedStyle` exposes the box-model longhands a framework measures with.**
+        // `boxSizing` (is this a border-box element? — the single most-read layout flag), and the
+        // `minWidth`/`maxWidth`/`minHeight`/`maxHeight` constraints. These read `undefined` before.
+        // The subtle one: `max-*` uses `Dim::Auto` to mean *unconstrained*, whose CSS resolved value
+        // is **`none`**, not `auto` (only `min-*` resolves to `auto`) — a wrong default here would
+        // silently mislead any code that branches on `maxWidth === 'none'`.
+        let html24 = r#"<!doctype html><html><body>
+            <div id="b" style="box-sizing:border-box;min-width:50px;max-width:300px;min-height:10px">box</div>
+            <p id="o">?</p>
+            <script>
+              var s = getComputedStyle(document.getElementById('b'));
+              document.getElementById('o').textContent = [
+                s.boxSizing, s.minWidth, s.maxWidth, s.minHeight, s.maxHeight,
+                s.getPropertyValue('box-sizing')
+              ].join('|');
+            </script></body></html>"#;
+        let page24 = Page::load(html24, "https://ex.test/", &fonts, 800.0);
+        let r24 = page24.dom().root();
+        let o24 = manuk_css::query_selector_all(page24.dom(), r24, "#o")[0];
+        assert_eq!(
+            page24.dom().text_content(o24),
+            "border-box|50px|300px|10px|none|border-box",
+            "getComputedStyle must expose box-sizing + the min/max constraints (undefined before); \
+             an unset `max-height` resolves to `none`, not `auto`; getPropertyValue reaches box-sizing too"
+        );
+        drop(page24);
+
         // Tear SpiderMonkey down before this process exits, exactly as the shell and the harness do.
         // Every page above is out of scope by now, so no rooted object outlives its runtime. Leaving
         // the engine up means its C++ static destructors run at exit against a live context and

@@ -3054,6 +3054,38 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 143 — `getComputedStyle` exposes the box-model longhands (`box-sizing` + the min/max constraints a framework measures with)
+
+**TICK SHAPE: capability wiring (the tick-142 pattern, extended to the box model; +4 measured WPT, but the value is the honest capability — most box-model gCS tests live in `css/cssom`, which is not in the local corpus).** WIKI: interaction-surface.
+
+**The gap.** After tick 142 the computed-style object surfaced the flex longhands, but `box-sizing`,
+`min-width`/`max-width`/`min-height`/`max-height` still read back `undefined`. `box-sizing` is the single
+most-read layout flag in framework measurement code (*is this element a border-box, so does my width math
+include padding?*), and the min/max constraints gate any "will this fit" branch. All four were already
+stored and honestly computed on `ComputedStyle` — surfaced to nothing.
+
+**Mechanism (`dom_bindings.rs`, `computed_style_js`).** Serialize `box-sizing` (`content-box`/`border-box`),
+and the four constraints via `dim_css`. **The subtle one:** `max-*` uses `Dim::Auto` to mean *unconstrained*,
+whose CSS resolved value is **`none`**, not `auto` — only `min-*` resolves to `auto`. A `max_dim` helper maps
+`Auto → "none"` so code that branches on `maxWidth === 'none'` reads the truth. Ten camelCase keys + kebab
+entries in `getPropertyValue`'s map.
+
+**Strictly non-regressing** (same argument as 142: nothing read these keys before). **Measured:**
+`css/css-flexbox` 945→**949** (+4 — flex getcomputedstyle files also assert `box-sizing`/`min-width`);
+`css/css-values` passing held at 280 (its denominator wobble is async-timeout variance, not a lost pass).
+The bulk of box-model gCS coverage is the `css/cssom` `getComputedStyle` battery, which is **not present in
+the local WPT corpus** — so the capability is real and framework-critical but mostly unmeasurable here, which
+is exactly why it is pinned by a **falsifiable conformance gate**, not a subtest count.
+
+**Gate (falsifiable, `js_conformance` scenario 24).** A `box-sizing:border-box;min-width:50px;max-width:300px;
+min-height:10px` box must read back `border-box|50px|300px|10px|none|border-box` (the unset `max-height`
+resolving to `none`, the last field via `getPropertyValue`). **Proven RED** — stashed the serialization,
+rebuilt, the join was `undefined|…`, panic. GREEN after.
+
+**The ratchet.** Capability: **up** — a box's sizing model + min/max constraints are now readable by the JS
+that measures real layouts. Performance: unchanged. Instrument fidelity: **up** — a 24th falsifiable scenario.
+Bar 0 clean.
+
 ## Tick 142 — `getComputedStyle` resolves the flexbox longhands (frameworks stop reading `undefined` off a flex box)
 
 **TICK SHAPE: same-signature cluster (one serialization fix, ~+164 subtests across two suites — the tick-113 shape).** WIKI: interaction-surface.
