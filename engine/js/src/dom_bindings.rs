@@ -1222,6 +1222,12 @@ unsafe fn define_members(
         def_guarded!(def, c"createElementNS", doc_create_element_ns, 2);
         def_guarded!(def, c"importNode", doc_import_node, 2);
         def_guarded!(def, c"createComment", doc_create_comment, 1);
+        def_guarded!(
+            def,
+            c"createProcessingInstruction",
+            doc_create_processing_instruction,
+            2
+        );
         def_guarded!(def, c"createDocumentFragment", doc_create_fragment, 0);
         prop_guarded!(
             prop,
@@ -1440,7 +1446,7 @@ unsafe fn define_members(
         );
         prop_guarded!(prop, c"action", el_get_action, Some(el_set_action));
         prop_guarded!(prop, c"method", el_get_method, Some(el_set_method));
-        prop_guarded!(prop, c"target", el_get_target, Some(el_set_target));
+        prop_guarded!(prop, c"target", el_get_target_dispatch, Some(el_set_target));
         // ONE `content` property, dispatched: `<template>` gets its fragment, everything
         // else (`<meta content>`) gets the attribute. Registering it twice meant the second
         // registration silently won, which is how `<template>.content` stayed undefined.
@@ -1688,6 +1694,62 @@ unsafe fn doc_create_comment(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -
     let node = (*dom).create_comment(text);
     *vp = ObjectValue(new_reflector(cx, dom, node));
     true
+}
+
+/// `document.createProcessingInstruction(target, data)` — a `ProcessingInstruction` node (`nodeType`
+/// 7, `nodeName` = `target`, `data` = the instruction body). ~88 `dom/nodes` WPT subtests failed *only*
+/// because this factory did not exist: a test would `createProcessingInstruction(...)` and every later
+/// line — `.target`, `.data`, `cloneNode`, `nodeValue` — threw on `undefined`.
+///
+/// Validity (WHATWG DOM "create a processing instruction"): `target` must be a valid XML `Name`, and
+/// `data` must not contain the PI-close sequence `"?>"`; either violation is an `InvalidCharacterError`.
+/// The `Name` check reuses [`is_valid_xml_name`], which is permissive about the non-ASCII
+/// NameStartChar/NameChar split — so three exotic non-ASCII target subtests (`·A`, `×A`, `A×`) do not
+/// throw where the spec's full character tables would. Named, not hidden; the common valid/invalid
+/// cases and the ~88 method-exists flips are what this buys.
+unsafe fn doc_create_processing_instruction(
+    cx: *mut RawJSContext,
+    argc: u32,
+    vp: *mut Value,
+) -> bool {
+    let Some((dom, _)) = this_node(vp) else {
+        *vp = NullValue();
+        return true;
+    };
+    let target = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    let data = arg_string(cx, vp, argc, 1).unwrap_or_default();
+    if !is_valid_xml_name(&target) {
+        return throw_dom(
+            cx,
+            "InvalidCharacterError",
+            &format!("'{target}' is not a valid processing-instruction target"),
+        );
+    }
+    if data.contains("?>") {
+        return throw_dom(
+            cx,
+            "InvalidCharacterError",
+            "processing-instruction data must not contain '?>'",
+        );
+    }
+    let node = (*dom).create_processing_instruction(target, data);
+    *vp = ObjectValue(new_reflector(cx, dom, node));
+    true
+}
+
+/// `target` getter, dispatched: a `ProcessingInstruction` answers its **PI target** (its `nodeName`);
+/// every other node falls back to the `target` **attribute** reflection (`<a target>`, `<form target>`,
+/// `<base target>`). One property on the flat `Node.prototype` serves both, the same way `content` and
+/// `data` already dispatch by node kind.
+unsafe fn el_get_target_dispatch(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        if (*dom).is_processing_instruction(node) {
+            let t = (*dom).node_name(node);
+            return_string(cx, vp, &t);
+            return true;
+        }
+    }
+    el_get_target(cx, argc, vp)
 }
 
 /// `document.createDocumentFragment()` — the standard way every framework batches a subtree before
@@ -4567,6 +4629,10 @@ unsafe fn el_get_node_type(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) ->
                 1
             } else if (*dom).is_text(node) {
                 3
+            } else if (*dom).is_processing_instruction(node) {
+                // PROCESSING_INSTRUCTION_NODE = 7. Without this it fell through to 8 (comment), so
+                // `pi.nodeType === 7` failed and any framework branching on node type mis-dispatched it.
+                7
             } else if (*dom).is_fragment(node) || (*dom).is_shadow_root(node) {
                 // **A shadow root IS a DocumentFragment (11).** It was answering 8 — "comment" — which
                 // is not a near-miss: `getRootNode().nodeType === 11` is how a component asks whether
@@ -4675,12 +4741,12 @@ unsafe fn el_get_node_name(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) ->
 /// `node.nodeValue` — the text of a text node, `null` for an element (DOM spec). Frameworks use this
 /// to read and patch text nodes without touching `textContent`.
 unsafe fn el_get_node_value(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
-    match this_node(vp) {
-        Some((dom, node)) if (*dom).is_text(node) => {
-            let t = (*dom).text_content(node);
-            return_string(cx, vp, &t);
-        }
-        Some(_) => *vp = NullValue(),
+    // `nodeValue` is the node's **character data** for every CharacterData node (Text, Comment,
+    // ProcessingInstruction) and `null` for everything else. `character_data` is the authoritative
+    // source and already covers all three — the old text-only branch reported `null` for a comment's
+    // and a PI's nodeValue, both of which the spec says are the data.
+    match this_node(vp).and_then(|(dom, node)| (*dom).character_data(node).map(str::to_owned)) {
+        Some(s) => return_string(cx, vp, &s),
         None => *vp = NullValue(),
     }
     true

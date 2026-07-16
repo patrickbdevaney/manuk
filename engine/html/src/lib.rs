@@ -157,6 +157,15 @@ fn serialize_node(dom: &Dom, node: NodeId, out: &mut String) {
             out.push_str(name);
             out.push('>');
         }
+        // HTML fragment serialization of a PI: `<?` target ` ` data `>` (a single `>`, per spec — NOT
+        // the `?>` of XML; the escaping rules also differ, hence this is not the XML `debug_node` form).
+        NodeData::ProcessingInstruction { target, data } => {
+            out.push_str("<?");
+            out.push_str(target);
+            out.push(' ');
+            out.push_str(data);
+            out.push('>');
+        }
         NodeData::Document => {}
     }
 }

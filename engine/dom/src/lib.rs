@@ -114,6 +114,14 @@ pub enum NodeData {
     Element(ElementData),
     Text(String),
     Comment(String),
+    /// A **ProcessingInstruction** (`<?target data?>`) — nodeType 7. It is a `CharacterData` node
+    /// (its `data` is the instruction body), distinguished from `Comment` by carrying a `target`
+    /// (`nodeName`). `document.createProcessingInstruction(target, data)` mints one; ~88 WPT `dom/nodes`
+    /// subtests fail only because the factory did not exist and every later operation on the node threw.
+    ProcessingInstruction {
+        target: String,
+        data: String,
+    },
     /// N3 — a shadow root. It is **not** a child of its host: it is the root of a separate
     /// tree, reachable via [`Dom::shadow_root`]. Its `parent` link points at the host so
     /// upward walks work, but the host's `children()` never yields it.
@@ -265,15 +273,23 @@ impl Dom {
         // panics — and a panic inside an `extern "C"` native ABORTS THE PROCESS.
         match self.nodes.get(id.index()).map(|n| &n.data) {
             Some(NodeData::Text(t)) | Some(NodeData::Comment(t)) => Some(t.as_str()),
+            // A PI is CharacterData: `.data`/`nodeValue`/`textContent` read its instruction body.
+            Some(NodeData::ProcessingInstruction { data, .. }) => Some(data.as_str()),
             _ => None,
         }
     }
 
-    /// Set the character data of a `Text` or `Comment` node. Returns whether it applied.
+    /// Set the character data of a `Text`, `Comment` or `ProcessingInstruction` node. Returns whether
+    /// it applied.
     pub fn set_character_data(&mut self, id: NodeId, value: impl Into<String>) -> bool {
         match &mut self.nodes[id.index()].data {
             NodeData::Text(t) | NodeData::Comment(t) => {
                 *t = value.into();
+                self.mark_dirty(id);
+                true
+            }
+            NodeData::ProcessingInstruction { data, .. } => {
+                *data = value.into();
                 self.mark_dirty(id);
                 true
             }
@@ -454,6 +470,19 @@ impl Dom {
 
     pub fn create_comment(&mut self, text: impl Into<String>) -> NodeId {
         self.alloc(NodeData::Comment(text.into()))
+    }
+
+    /// `document.createProcessingInstruction(target, data)` — a detached PI node. Target/data validity
+    /// is enforced at the binding (it throws `InvalidCharacterError`); the arena only stores.
+    pub fn create_processing_instruction(
+        &mut self,
+        target: impl Into<String>,
+        data: impl Into<String>,
+    ) -> NodeId {
+        self.alloc(NodeData::ProcessingInstruction {
+            target: target.into(),
+            data: data.into(),
+        })
     }
 
     pub fn create_doctype(&mut self, name: impl Into<String>) -> NodeId {
@@ -952,6 +981,15 @@ impl Dom {
         )
     }
 
+    /// Is this a ProcessingInstruction node? (`nodeType === 7`.) `.get()`, not indexing: reachable
+    /// from JS with a handle whose id may be out of range for this arena.
+    pub fn is_processing_instruction(&self, id: NodeId) -> bool {
+        matches!(
+            self.nodes.get(id.index()).map(|n| &n.data),
+            Some(NodeData::ProcessingInstruction { .. })
+        )
+    }
+
     pub fn element(&self, id: NodeId) -> Option<&ElementData> {
         // Gate on the generation so a stale handle (to a removed/reused slot) reads as "no
         // element" rather than aliasing the slot's current or freed-but-uncleared contents.
@@ -1061,6 +1099,8 @@ impl Dom {
             },
             Some(NodeData::Text(_)) => "#text".to_string(),
             Some(NodeData::Comment(_)) => "#comment".to_string(),
+            // A PI's nodeName is its target (`<?xml-stylesheet ...?>` → `"xml-stylesheet"`).
+            Some(NodeData::ProcessingInstruction { target, .. }) => target.clone(),
             Some(NodeData::Document) => "#document".to_string(),
             Some(NodeData::Fragment) | Some(NodeData::ShadowRoot { .. }) => {
                 "#document-fragment".to_string()
@@ -1133,6 +1173,9 @@ impl Dom {
             }
             NodeData::Comment(c) => {
                 let _ = write!(out, "<!-- {} -->", c.trim());
+            }
+            NodeData::ProcessingInstruction { target, data } => {
+                let _ = write!(out, "<?{target} {}?>", data.trim());
             }
         }
         out.push('\n');

@@ -150,6 +150,7 @@
   - L489 · lookupNamespaceURI / isDefaultNamespace — the "locate a namespace" algorithm
   - L513 · nodeName is per node type, and case-sensitive outside the HTML namespace
   - L525 · moveBefore — the atomic move, and why it is stricter than insertBefore
+  - L557 · ProcessingInstruction — a whole missing node type, found by histogramming failure *messages*
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -359,4 +360,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-290 sections across 16 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+291 sections across 16 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

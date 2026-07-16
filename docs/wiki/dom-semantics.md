@@ -553,3 +553,36 @@ stores its `1` in fixed slot 0 — which `SLOT_NODE` aliases — so it was mista
 *validity* throw instead of the WebIDL `TypeError`. Any argument that must be a genuine Node now goes
 through `is_node_reflector` (a `NODE_CLASS` class check via `mozjs::rust::get_object_class`), not a bare
 slot read. Gate `g_move_before`. [[js-engine]] [[conformance-and-oracles]]
+
+## `ProcessingInstruction` — a whole missing node type, found by histogramming failure *messages*
+
+The single largest one-mechanism cluster in `dom/nodes` was not a wrong value — it was
+`document.createProcessingInstruction is not a function`, ~88 subtests that threw before their first
+assertion (plus ~40 that then died on `pi is undefined`). **The lever was invisible to a failing-*count*
+histogram and obvious to a failing-*message* one** — the method simply did not exist, so every test that
+minted a PI to test something else collapsed. This is the recurring shape (`[[parity-methodology]]`): the
+biggest flip is often one missing primitive, not a hard bug.
+
+**The node.** A `ProcessingInstruction` (`<?target data?>`, `nodeType` 7) is a `CharacterData` node — a
+`data` body plus a `target` (its `nodeName`). It became a `NodeData::ProcessingInstruction { target, data }`
+arena variant; adding the variant made the Rust compiler enumerate every match arm that had to learn it
+(`character_data`, `set_character_data`, `node_name`, the debug + HTML serializers, plus a new
+`is_processing_instruction`) — **exhaustive-match discipline is the safety net that makes adding a node
+type a bounded, compiler-guided change rather than a hunt.**
+
+**The factory + validity.** `document.createProcessingInstruction(target, data)` mints one after the
+WHATWG "create a processing instruction" checks: `target` must be a valid XML `Name` (colons allowed —
+`xml:fail` is legal), `data` must not contain the PI-close `?>`; either violation is an
+`InvalidCharacterError`. `.data`/`nodeValue`/`textContent` fall out of `character_data` for free; `.target`
+dispatches on the flat `Node.prototype` — a PI answers its target, every other node the `target`
+**attribute** reflection — the same by-kind dispatch `content` and `data` already use.
+
+**Two named limits.** (1) `pi instanceof ProcessingInstruction` is *false*: every node reflector shares one
+flat `Node.prototype` (`NODE_CLASS`), so per-interface `instanceof` awaits the member-tiering tick. (2) The
+three exotic non-ASCII invalid targets (`·A`/`×A`/`A×`) do not throw — `is_valid_xml_name` treats all
+non-ASCII as valid NameChars (ASCII-precise tables only), a ~3-subtest miss not worth a Unicode table.
+
+**The latent bug it closed.** `nodeValue` read `null` for a PI *and a Comment*: its getter knew only Text.
+The spec says `nodeValue` is the character data of *every* `CharacterData` node, so it now routes through
+`character_data` (Text/Comment/PI) — Comment `nodeValue` is fixed as a free correctness gain. Gate
+`g_processing_instruction`. [[js-engine]] [[conformance-and-oracles]] [[parity-methodology]]

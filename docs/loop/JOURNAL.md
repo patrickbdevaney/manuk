@@ -3054,6 +3054,55 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 120 — `document.createProcessingInstruction`: a whole missing node type (+43)
+
+**TICK SHAPE: capability (a whole missing DOM node type + its factory).** `[pattern: processing-instruction]`.
+Histogrammed `dom` (45.2%) failure *messages*, not counts: the single largest one-mechanism cluster was
+**`document.createProcessingInstruction is not a function`** — 88 direct `dom/nodes` subtests plus ~40
+cascading (`pi is undefined`, the DOMParser PI path). One missing factory, failing not on a wrong value
+but by throwing before the test's first assertion, so every later line (`.target`, `.data`, `cloneNode`,
+`nodeValue`) died on `undefined`. Chosen by FLIP RATE over the bigger-but-diffuse `dom/nodes` mass and
+over the recurring named/indexed-property lever (which is Bar-0-risky resolve-hook surgery, per
+CONSTITUTION-CHECK #5).
+
+**Hypothesis / mechanism.** `ProcessingInstruction` (`<?target data?>`, `nodeType` 7) is a `CharacterData`
+node — a `data` body plus a `target` (its `nodeName`). Add a `NodeData::ProcessingInstruction { target,
+data }` arena variant (the compiler then names every match arm to close: `character_data`,
+`set_character_data`, `node_name`, both serializers, an `is_processing_instruction` helper) and the
+factory `document.createProcessingInstruction(target, data)`. Validity (WHATWG "create a PI"): target is a
+valid XML `Name`, data has no `?>`, else `InvalidCharacterError`. `.data`/`nodeValue`/`textContent` fall
+out of `character_data` for free; `.target` dispatches on the flat `Node.prototype` (PI → its target, else
+the `target` **attribute** reflection, the same dispatch `content`/`data` already use).
+
+**MEASURED.** whole `dom` **2932 → 2975 (+43)**: `dom/nodes` +37, `dom/events` +5 (its own
+`createProcessingInstruction` subtests), `dom/traversal` +1 — **no subarea lost a passing subtest**
+(the comment-`nodeValue` fix below is a strict improvement). **HANG/CRASH 0 (Bar 0).**
+
+**The latent bug it exposed and closed.** `nodeValue` read `null` for a PI **and a Comment** — its getter
+(`el_get_node_value`) only knew Text nodes. The spec says `nodeValue` is the character data for *every*
+`CharacterData` node; routed it through `character_data` (authoritative for Text/Comment/PI), which fixes
+Comment `nodeValue` as a free correctness gain, no regression (the wall stayed green).
+
+**Known out of reach (named, not hidden):** `pi instanceof ProcessingInstruction` — every node reflector
+shares ONE flat `Node.prototype` (`NODE_CLASS`), so per-interface `instanceof` awaits the member-tiering
+tick (`dom_protos`, named in tick 119 too). And the XML/XHTML PI files (`ProcessingInstruction-literal-*.xhtml`)
+stay red on the separate "XML document didn't load" gap. The three exotic non-ASCII invalid-target
+subtests (`·A`/`×A`/`A×`) do not throw: `is_valid_xml_name` treats all non-ASCII as valid NameChars (its
+NameStartChar/NameChar tables are ASCII-precise only) — a ~3-subtest miss not worth a Unicode table.
+
+**GATE:** `g_processing_instruction` (own binary — SpiderMonkey runtime-reuse UAF forbids two `Page::load`s
+per process, per [[flexbox-relayout-segfault]]): target/data/nodeName/nodeType-7/isNode/ownerDocument, a
+settable `data`, `nodeValue === data`, `InvalidCharacterError` on `?>`-data and on a non-Name target, a
+colon being a *valid* Name, and an appended PI serializing to `<?foo bar>`. Proven falsifiable (RED — `#out`
+at its `-` sentinel — before the factory existed; GREEN with it).
+
+**The ratchet.** Capability: **up** (a whole DOM node type + factory + its validity). Performance:
+unchanged. Instrument fidelity: **up** — a 13-case falsifiable tooth, and a latent Comment/PI `nodeValue`
+bug named and closed. [[parity-methodology]] [[htmldom-top-levers]] [[dom-semantics]]
+
+WIKI: docs/wiki/dom-semantics.md — `ProcessingInstruction`: the node type, its CharacterData semantics,
+the pre-mint validity, and the flat-prototype `instanceof` limit.
+
 ## Tick 119 — `Node.prototype.moveBefore`: the atomic move + its pre-move validity (+18)
 
 **TICK SHAPE: capability (a whole missing DOM method).** `[pattern: atomic-move]`. Probed `dom`
