@@ -15,7 +15,7 @@
 | median tick cycle | **20m** | 120 intervals |
 | median, last 10 | **30m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.91** | 132.0h elapsed |
+| **ticks per hour** | **0.91** | 132.4h elapsed |
 | median verify wall | **55s** | 60 ticks |
 | wall trend | 39s → 51s — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -28,7 +28,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **65**
-* **✅ rows in the capability ledger**: 144 → **246**
+* **✅ rows in the capability ledger**: 144 → **247**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
 **66 of 121 ticks** (55%) moved a
@@ -217,6 +217,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **125** | 2026-07-16 07:21 | 30m | pattern-class | 62s | +278/−34 | 56 | 81 | 46.8% · | `getElementsByTagNameNS`: the namespace-aware query (+44 dom) |
 | **126** | 2026-07-16 07:55 | 35m | Bar-0 | 51s | +71/−4 | 56 | 81 | 46.8% · | Bar-0 diagnosis: the css-values/calc-size interpolate-size SIGSEGV (tracked, not a regress |
 | **127** | 2026-07-16 08:33 | 38m | pattern-class | 48s | +222/−59 | 57 | 81 | 46.8% · | DOM validation throws are REAL `DOMException`s, not decorated `Error`s (+420 dom) |
-| **128** | 2026-07-16 17:02 | 8.5h | pattern-class | 52s | +165/−37 | 65 | 81 | 46.8% · | `Node.lookupPrefix` + the DocumentType namespace-lookup surface (+20 dom) |
+| **128** | 2026-07-16 17:24 | 8.8h | pattern-class | 51s | +118/−37 | 65 | 81 | 46.8% · | `Node.lookupPrefix` + the DocumentType namespace-lookup surface (+20 dom) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

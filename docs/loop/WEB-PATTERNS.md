@@ -608,6 +608,7 @@ every tick, which is a rigor bug wearing a performance bug's clothes.
 | **Lazy-loaded image feeds** (IntersectionObserver + `data-src`) | **the dominant content-loading pattern on the modern web** | ✅ **verified end-to-end + gated** (tick 59) — was already built; **nothing proved it, so the ledger called it missing** |
 | **Infinite scroll** (scroll/IO → fetch more) | social, news, commerce | ✅ the primitive is live (IO fires, scroll fires); tick 140 fixed `rootMargin` — it was single-token, so the `'0px 0px 300px 0px'` **prefetch-early** idiom was silently dropped and the feed loaded late. Now a 4-side shorthand (px/%), bottom margin applied asymmetrically |
 | **Sticky headers, scroll-linked animation, virtualization** | ubiquitous | ✅ same primitive — *one gap seen five times, and it was closed* |
+| **Horizontal carousels / galleries** (IO-driven lazy slides) | product galleries, media rails | ✅ tick 141 made IO intersection **2-D** — off-screen-to-the-side slides no longer report intersecting (were eager-loading every slide); left/right `rootMargin` now live |
 | **Native `loading="lazy"`** | perf hint | ❌ not honoured (renders correctly; fetches eagerly) |
 
 ## Tick 60 — DOM code that catches errors

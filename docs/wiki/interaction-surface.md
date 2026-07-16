@@ -339,9 +339,17 @@ option is accepted, and it just quietly does nothing — the library feature-det
 **Fix (`dom_bindings.rs`, `g.IntersectionObserver`):** parse `rootMargin` into `{top,right,bottom,left}`,
 each `{v, pct}`, with the standard shorthand fallbacks (`right←top`, `bottom←top`, `left←right`). In
 `__runObservers`, resolve top/bottom per-side (a `%` is a fraction of the viewport **height**) and grow the
-intersection band asymmetrically: `min(b, bottom+marginBottom) − max(t, top−marginTop)`. **Bound (honest):**
-the intersection model is still vertical-only, so `right`/`left` margins are parsed but not yet applied —
-horizontal 2-D intersection (carousels) is a follow-on; the vertical feed case is ~all real usage.
+intersection band asymmetrically: `min(b, bottom+marginBottom) − max(t, top−marginTop)`.
+
+**Tick 141 made the intersection 2-D** (the follow-on tick 140 named). The old test was vertical-overlap
+only, so an element vertically in view but scrolled off to the **side** of a horizontal carousel reported
+`isIntersecting=true` and every off-screen slide eager-loaded. Now `visX = min(right, vw+mRight) −
+max(left, 0−mLeft)` runs alongside the vertical band (`%` on left/right is a fraction of viewport **width**),
+`isIntersecting = visX>0 && visY>0`, and `intersectionRatio = visX·visY / (w·h)`. This is also the only
+consumer of the `left`/`right` margins tick 140 parsed. The page is assumed **not** horizontally scrolled
+(root x-band `[0, vw]`), which is ~all real layouts. Gate scenario 21c: an element at x=800 in a 400px
+viewport must NOT intersect (`hplain:false`); a `'0px 500px 0px 0px'` right margin that reaches it must
+(`hright:true`). Proven RED on the vertical-only code (`hplain:true`).
 
 **Gate** (`js_conformance` scenario 21b): a sentinel 20px **below** a 600px viewport (top=620). A plain
 `rootMargin:'0px'` observer must report it **not** intersecting; a `'0px 0px 200px 0px'` observer must

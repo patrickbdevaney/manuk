@@ -7785,15 +7785,25 @@ const WINDOW_PRELUDE: &str = r#"
                 // top margin does the same at the top (sticky-header latch).
                 var _mt = o._rm.top.pct ? o._rm.top.v / 100 * vh : o._rm.top.v;
                 var _mb = o._rm.bottom.pct ? o._rm.bottom.v / 100 * vh : o._rm.bottom.v;
+                // Left/right margins resolve against the viewport WIDTH; the root's horizontal band is
+                // [0-mLeft, vw+mRight] in document x (the page is assumed not horizontally scrolled,
+                // which is ~all real layouts). Intersection is 2-D: an element vertically in view but
+                // scrolled off to the side of a horizontal carousel is NOT intersecting — the
+                // vertical-only test used to report it visible and eager-load every off-screen slide.
+                var _ml = o._rm.left.pct ? o._rm.left.v / 100 * vw : o._rm.left.v;
+                var _mr = o._rm.right.pct ? o._rm.right.v / 100 * vw : o._rm.right.v;
                 var entries = [];
                 for (var j = 0; j < o._targets.length; j++) {
                     var el = o._targets[j];
                     var r = rectOf(el);
                     if (!r) continue;
                     var t = r[1], b = r[1] + r[3];
-                    var visible = Math.max(0, Math.min(b, bottom + _mb) - Math.max(t, top - _mt));
-                    var ratio = r[3] > 0 ? visible / r[3] : 0;
-                    var isInt = visible > 0;
+                    var visY = Math.max(0, Math.min(b, bottom + _mb) - Math.max(t, top - _mt));
+                    var lft = r[0], rgt = r[0] + r[2];
+                    var visX = Math.max(0, Math.min(rgt, vw + _mr) - Math.max(lft, 0 - _ml));
+                    var area = r[2] * r[3];
+                    var ratio = area > 0 ? (visX * visY) / area : 0;
+                    var isInt = visX > 0 && visY > 0;
                     var was = o._prev.get(el);
                     if (was === undefined || was.isIntersecting !== isInt || Math.abs(was.ratio - ratio) > 0.01) {
                         o._prev.set(el, { isIntersecting: isInt, ratio: ratio });

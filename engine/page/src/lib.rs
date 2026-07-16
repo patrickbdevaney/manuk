@@ -4239,6 +4239,42 @@ mod js_interactive_tests {
         );
         drop(page21b);
 
+        // (21c) **Intersection is 2-D.** A slide in a horizontal carousel is vertically in view but
+        // scrolled off to the SIDE; the old vertical-only test reported it intersecting and every
+        // off-screen slide eager-loaded. An element at x=800 in a 400px-wide viewport must NOT
+        // intersect; a `right` rootMargin that reaches it must (this is also the only thing that
+        // exercises the parsed-but-unused left/right margins).
+        let html21c = r#"<!doctype html><html><body>
+            <div id="h" style="position:absolute;left:800px;top:5px;width:50px;height:20px">slide</div>
+            <p id="o">?</p>
+            <script>
+              var hlog = [];
+              new IntersectionObserver(function (es) {
+                es.forEach(function (e) { hlog.push('hplain:' + e.isIntersecting); });
+              }, { rootMargin: '0px' }).observe(document.getElementById('h'));
+              new IntersectionObserver(function (es) {
+                es.forEach(function (e) { hlog.push('hright:' + e.isIntersecting); });
+              }, { rootMargin: '0px 500px 0px 0px' }).observe(document.getElementById('h'));
+              window.__hlog = hlog;
+            </script></body></html>"#;
+        let mut page21c = Page::load(html21c, "https://example.test/", &fonts, 400.0);
+        page21c.view_changed(0.0, 600.0, 400.0, false);
+        let r21c = page21c.dom().root();
+        let o21c = manuk_css::query_selector_all(page21c.dom(), r21c, "#o")[0];
+        page21c.eval_for_test("document.getElementById('o').textContent = window.__hlog.join('|')");
+        let got21c = page21c.dom().text_content(o21c);
+        assert!(
+            got21c.contains("hplain:false"),
+            "an element at x=800 in a 400px viewport is off-screen to the RIGHT and must NOT intersect \
+             — the vertical-only test wrongly reported it visible (got {got21c:?})"
+        );
+        assert!(
+            got21c.contains("hright:true"),
+            "a '0px 500px 0px 0px' right-margin observer reaches x=800 and MUST report the slide \
+             intersecting — this exercises the horizontal rootMargin (got {got21c:?})"
+        );
+        drop(page21c);
+
         // (22) **State pseudo-classes, and the URL decomposition IDL.** Two gaps that each killed a
         // whole class of page.
         //

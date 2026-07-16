@@ -3054,6 +3054,32 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 141 — IntersectionObserver intersection is 2-D (a horizontal carousel stops eager-loading every off-screen slide)
+
+**TICK SHAPE: pattern-class (completes tick 140's named follow-on — the observer machinery every carousel/gallery is built on; the parsed-but-unused left/right rootMargins become live).** WIKI: interaction-surface.
+
+**The gap tick 140 named, closed.** After tick 140 the IO intersection test was still **vertical-overlap
+only** (`visible = min(b, bottom) − max(t, top)`), so an element vertically in view but scrolled off to the
+**side** of a horizontal carousel reported `isIntersecting=true`. Every off-screen slide's lazy image
+eager-loaded — the exact over-fetch IO exists to prevent, just on the other axis. And the `left`/`right`
+rootMargins tick 140 parsed had **no consumer**.
+
+**Mechanism (`engine/js/src/dom_bindings.rs`, `__runObservers`).** Compute the horizontal band alongside the
+vertical one: `visX = min(right, vw+mRight) − max(left, 0−mLeft)` (a `%` on left/right is a fraction of
+viewport **width**). `isIntersecting = visX>0 && visY>0`; `intersectionRatio = visX·visY / (w·h)` — a true
+2-D area ratio, not a 1-D one. The page is assumed not horizontally scrolled (root x-band `[0, vw]`, since
+`__runObservers(scrollY, vh, vw)` carries no scrollX), which is ~all real layouts.
+
+**Gate (falsifiable, `js_conformance` scenario 21c).** An element at x=800 in a 400px viewport is off-screen
+right: a plain observer must report `hplain:false`; a `'0px 500px 0px 0px'` right-margin observer that
+reaches x=800 must report `hright:true`. Proven RED on the vertical-only code (stashed the fix → the element
+reported `hplain:true`, panic), GREEN after. The existing vertical gates (21, 21b) still pass — their
+sentinels are full-width, so `visX>0` always holds; zero regression to the feed path.
+
+**The ratchet.** Capability: **up** — horizontal carousels/galleries built on IO now load only visible
+slides (matches Chrome), and the left/right rootMargins are live. Performance: unchanged (a few scalars per
+pass). Instrument fidelity: **up** — a third falsifiable IO scenario. Bar 0 clean.
+
 ## Tick 140 — `IntersectionObserver.rootMargin` is a 4-side shorthand, and its bottom margin is what makes an infinite feed prefetch
 
 **TICK SHAPE: pattern-class (one parse+resolve fix on the observer machinery every infinite feed is built on; unlocks the asymmetric-`rootMargin` prefetch idiom).** WIKI: interaction-surface.
