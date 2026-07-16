@@ -3054,6 +3054,57 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 121 — the typed Event subclass hierarchy: `instanceof` chain + inherited members (+41)
+
+**TICK SHAPE: capability (a missing interface hierarchy).** `[pattern: typed-event-constructors]`.
+`dom/events` was the biggest non-diffuse `dom` lever (207/380); its concentrated cluster (from the
+message histogram) was **typed Event constructors** — `Event-subclasses-constructors` asserts, per
+interface, both the member set (own + inherited) and the `instanceof` chain up to `Event`, and it failed
+because the engine's events were flat, parent-less objects: `new MouseEvent() instanceof UIEvent` was
+false, `mouseEvent.view`/`detail` were `undefined`, and `UIEvent`/`WheelEvent`/`CompositionEvent` did not
+exist at all.
+
+**Hypothesis / mechanism.** The `defEvent(name, extraDefaults)` prelude factory already minted flat event
+constructors; extend it to `defEvent(name, extraDefaults, parent)`: (1) **merge** the parent's default
+dictionary into the child's, so the flat constructor sets inherited members as own properties (there is no
+accessor inheritance here); (2) `Object.setPrototypeOf(g[name].prototype, g[parent].prototype)` so
+`instanceof` walks the real chain. Then define the hierarchy parents-first — `Event → UIEvent →
+{MouseEvent → {WheelEvent, PointerEvent}, KeyboardEvent, CompositionEvent, InputEvent, FocusEvent}` and
+`Event → CustomEvent` — adding the three missing interfaces (`UIEvent`{view,detail}, `WheelEvent`{deltaX/Y/Z,
+deltaMode}, `CompositionEvent`{data}) and the missing members (`MouseEvent.relatedTarget`,
+`KeyboardEvent.location`/`isComposing`/`charCode`). Plus WebIDL `UIEventInit.view` is `Window?`: a supplied
+non-null non-object is a `TypeError` (`new UIEvent('x', {view: 7})`).
+
+**MEASURED.** whole `dom` **2975 → 3016 (+41)**: `dom/events` +37, `dom/events/non-cancelable-when-passive`
++2, `dom/nodes` +2 — **no subarea lost a passing subtest** (adding a prototype chain + more own-properties
+to events cannot regress their existing dispatch behaviour, and the wall confirms it). **HANG/CRASH 0
+(Bar 0).** Pure-JS prelude, so zero native/arena risk.
+
+**Known out of reach (named, not hidden):** the `view` type-check accepts any object as a Window (it only
+rejects primitives like `7`) — the one tested invalid case; a full `instanceof Window` check is not worth
+the extra branch. And the interfaces the aliases table names but that nothing constructs here
+(`DragEvent`/`HashChangeEvent`/`StorageEvent`/…) still fall back to `Event` in `createEvent`.
+
+**GATE:** `g_event_constructors` (own binary, per the SpiderMonkey runtime-reuse UAF discipline): the
+`WheelEvent→MouseEvent→UIEvent→Event` chain, inherited `view`/`detail`/`relatedTarget`, the new
+`WheelEvent`/`CompositionEvent`/`UIEvent` members, and the `view`-is-not-a-Window `TypeError`. Proven
+falsifiable (RED — `wMouse:false`, `wDeltaX:undefined` — with any interface removed; GREEN with the chain).
+
+**The ratchet.** Capability: **up** (a whole typed-event interface hierarchy). Performance: unchanged.
+Instrument fidelity: **up** — a 15-case falsifiable tooth. [[parity-methodology]] [[interaction-surface]]
+[[dom-semantics]]
+
+**SELF-AUDIT (cadence, tick 121).** Ran `self-audit.sh`; 5 items, all pre-existing and HARNESS-owned
+(observer scope, not this agent's — [[harness-is-observer-owned]]): (1) wall 453s>300s is the COLD-cache
+false signal — warm re-verify is ~51s (the receipt held a cold number from my own probe builds); (2–4)
+G_TEARDOWN/G_INTERACT/G_RUNTIME_COUNT read as "not built" because the observer CONSOLIDATED them into the
+single `manuk-shell` suite run (verify.sh tick-118 note) — they DO run and pass; self-audit.sh's
+separate-`--test` check is stale; (5) G_DOC_COLLECTIONS lacks a falsifier (gate maintenance). None are
+browser-capability gaps; noted for the observer and continuing with capability per the loop mandate.
+
+WIKI: docs/wiki/dom-semantics.md — the typed Event hierarchy: flat-object members + a real prototype chain
+for `instanceof`, and the `defEvent(parent)` merge.
+
 ## Tick 120 — `document.createProcessingInstruction`: a whole missing node type (+43)
 
 **TICK SHAPE: capability (a whole missing DOM node type + its factory).** `[pattern: processing-instruction]`.

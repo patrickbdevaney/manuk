@@ -586,3 +586,27 @@ non-ASCII as valid NameChars (ASCII-precise tables only), a ~3-subtest miss not 
 The spec says `nodeValue` is the character data of *every* `CharacterData` node, so it now routes through
 `character_data` (Text/Comment/PI) — Comment `nodeValue` is fixed as a free correctness gain. Gate
 `g_processing_instruction`. [[js-engine]] [[conformance-and-oracles]] [[parity-methodology]]
+
+## The typed Event hierarchy — flat members over a real `instanceof` chain
+
+Events here are **flat JS objects** minted by a prelude factory `defEvent(name, defaults, parent)` — there
+is no C++ interface per event type. `Event-subclasses-constructors` demands two things of every typed
+event: the **member set** (`new MouseEvent().view` must exist, inherited from UIEvent) *and* the
+**`instanceof` chain** (`new MouseEvent() instanceof UIEvent instanceof Event`). Those pull in opposite
+directions for a flat model:
+
+- **Members** — because there is no accessor inheritance, the flat constructor must set *every* ancestor's
+  member as an OWN property. So `defEvent` **merges** the parent's default dictionary into the child's
+  before the constructor's assignment loop: `MouseEvent`'s effective defaults are its own plus UIEvent's
+  `view`/`detail` plus Event's.
+- **`instanceof`** — that is the ONE thing a real prototype chain is still needed for, so after building
+  `g[name]`, `Object.setPrototypeOf(g[name].prototype, g[parent].prototype)`. Instances carry their methods
+  as own properties (set in the constructor), so the chain is *only* consulted by `instanceof`, never for
+  property lookup — which is why the flat/own-property duplication is harmless.
+
+Define **parents first** (`Event → UIEvent → MouseEvent → WheelEvent`, etc.) so each `setPrototypeOf` sees
+a defined parent prototype. WebIDL `UIEventInit.view` is `Window?`: a supplied non-null non-object is a
+constructor `TypeError` (the check accepts any object as a Window — enough for the tested `{view: 7}`
+rejection; a strict `instanceof Window` is not worth the branch). This is a **pure-JS-prelude** capability
+— zero arena/native risk, so it cannot regress dispatch. Gate `g_event_constructors`. [[interaction-surface]]
+[[js-engine]]

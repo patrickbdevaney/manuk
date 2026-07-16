@@ -6967,8 +6967,24 @@ const WINDOW_PRELUDE: &str = r#"
         // libraries signal through CustomEvent, and `dispatchEvent(new Event('input'))` is how
         // frameworks tell a control it changed. Without these, `new CustomEvent(...)` is a
         // ReferenceError that takes the rest of the script with it.
-        var defEvent = function (name, extraDefaults) {
-            if (typeof g[name] !== 'undefined') return;
+        // The event-interface registry, keyed by name → its MERGED default dictionary (own members plus
+        // every ancestor's). The flat constructor sets those as OWN properties — there is no accessor
+        // inheritance here — so a `MouseEvent` instance must itself carry UIEvent's `view`/`detail`. The
+        // real prototype CHAIN (set below) is only what `instanceof` walks: `new MouseEvent()` must be
+        // `instanceof UIEvent` and `instanceof Event`, which `Event-subclasses-constructors` asserts.
+        var eventDefaults = {};
+        var defEvent = function (name, extraDefaults, parent) {
+            if (typeof g[name] !== 'undefined') {
+                if (!eventDefaults[name]) eventDefaults[name] = extraDefaults || {};
+                return;
+            }
+            var merged = {};
+            if (parent && eventDefaults[parent]) {
+                for (var pk in eventDefaults[parent]) merged[pk] = eventDefaults[parent][pk];
+            }
+            for (var mk in extraDefaults) merged[mk] = extraDefaults[mk];
+            eventDefaults[name] = merged;
+            var hasView = ('view' in merged);
             g[name] = function (type, init) {
                 init = init || {};
                 this.type = String(type);
@@ -6985,8 +7001,14 @@ const WINDOW_PRELUDE: &str = r#"
                 // `Event-timestamp-safe-resolution` does, in a `do { … } while (delta == 0)` — spins
                 // **forever**. That was the only true Bar 0 hang in the whole `dom/` suite.
                 this.timeStamp = (globalThis.performance && performance.now) ? performance.now() : 0;
-                for (var k in extraDefaults) {
-                    this[k] = (init[k] !== undefined) ? init[k] : extraDefaults[k];
+                // WebIDL: `UIEventInit.view` is `Window?`. A supplied non-null, non-Window value is a
+                // TypeError before any member is assigned (`new UIEvent('x', {view: 7})`). We accept a
+                // Window (an object) or null; a primitive like `7` is rejected.
+                if (hasView && init.view != null && typeof init.view !== 'object') {
+                    throw new TypeError("Failed to construct '" + name + "': member view is not a Window");
+                }
+                for (var k in merged) {
+                    this[k] = (init[k] !== undefined) ? init[k] : merged[k];
                 }
                 this.preventDefault = function () { if (this.cancelable) this.defaultPrevented = true; };
                 this.stopPropagation = function () { this._stop = true; };
@@ -7027,9 +7049,17 @@ const WINDOW_PRELUDE: &str = r#"
                     return p;
                 };
             };
+            // The interface hierarchy `instanceof` walks: WheelEvent → MouseEvent → UIEvent → Event.
+            if (parent && g[parent] && g[parent].prototype) {
+                try { Object.setPrototypeOf(g[name].prototype, g[parent].prototype); } catch (e) {}
+            }
         };
+        // Defined parents-first so each `setPrototypeOf` sees its parent's prototype. The hierarchy
+        // mirrors the DOM/UIEvents specs; `Event-subclasses-constructors` checks both the inherited
+        // property set and the `instanceof` chain at every level.
         defEvent('Event', {});
-        defEvent('CustomEvent', { detail: null });
+        defEvent('UIEvent', { view: null, detail: 0 }, 'Event');
+        defEvent('CustomEvent', { detail: null }, 'Event');
         // The Event phase constants (`Event.AT_TARGET` …). `e.eventPhase === Event.AT_TARGET` is the
         // canonical dispatch-phase check; absent, it silently compares to `undefined`. On the constructor
         // and the prototype (instances inherit them).
@@ -7058,15 +7088,18 @@ const WINDOW_PRELUDE: &str = r#"
         }
         defEvent('MouseEvent', {
             clientX: 0, clientY: 0, screenX: 0, screenY: 0, pageX: 0, pageY: 0,
-            button: 0, buttons: 0, altKey: false, ctrlKey: false, metaKey: false, shiftKey: false
-        });
-        defEvent('PointerEvent', { clientX: 0, clientY: 0, pointerId: 1, pointerType: 'mouse', button: 0 });
-        defEvent('KeyboardEvent', {
-            key: '', code: '', keyCode: 0, which: 0, repeat: false,
+            button: 0, buttons: 0, relatedTarget: null,
             altKey: false, ctrlKey: false, metaKey: false, shiftKey: false
-        });
-        defEvent('InputEvent', { data: null, inputType: '' });
-        defEvent('FocusEvent', { relatedTarget: null });
+        }, 'UIEvent');
+        defEvent('WheelEvent', { deltaX: 0, deltaY: 0, deltaZ: 0, deltaMode: 0 }, 'MouseEvent');
+        defEvent('PointerEvent', { clientX: 0, clientY: 0, pointerId: 1, pointerType: 'mouse', button: 0 }, 'MouseEvent');
+        defEvent('KeyboardEvent', {
+            key: '', code: '', keyCode: 0, which: 0, charCode: 0, location: 0, repeat: false, isComposing: false,
+            altKey: false, ctrlKey: false, metaKey: false, shiftKey: false
+        }, 'UIEvent');
+        defEvent('CompositionEvent', { data: '' }, 'UIEvent');
+        defEvent('InputEvent', { data: null, inputType: '' }, 'UIEvent');
+        defEvent('FocusEvent', { relatedTarget: null }, 'UIEvent');
 
         // ---- Scrolling ----------------------------------------------------------------------
         // Reading the scroll offset is how virtualized feeds, sticky headers, infinite scroll and
