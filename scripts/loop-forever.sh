@@ -47,13 +47,13 @@ export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${XDG_RUN
 # back to a direct (uncontained) launch so the loop never fully stalls — better uncontained than stopped.
 launch_agent() {
   if systemd-run --user --scope --quiet \
-        --setenv=CARGO_BUILD_JOBS=6 --setenv=WPT_DIR="$HOME/wpt" \
+        --setenv=CARGO_BUILD_JOBS=12 --setenv=WPT_DIR="$HOME/wpt" \
         -p MemoryMax=22G -p MemorySwapMax=6G -p MemoryHigh=19G -p OOMPolicy=kill \
         "$CLAUDE" --dangerously-skip-permissions --permission-mode bypassPermissions -p "$PROMPT" >>"$LOG" 2>&1
   then return 0; fi
   # Fallback: systemd-run failed — launch directly with just the CARGO cap (still reduces build memory).
   say "⚠ systemd-run unavailable — launching agent UNCONTAINED (CARGO_BUILD_JOBS cap only)"
-  CARGO_BUILD_JOBS=6 WPT_DIR="$HOME/wpt" \
+  CARGO_BUILD_JOBS=12 WPT_DIR="$HOME/wpt" \
     "$CLAUDE" --dangerously-skip-permissions --permission-mode bypassPermissions -p "$PROMPT" >>"$LOG" 2>&1 || true
 }
 
