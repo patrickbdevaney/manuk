@@ -84,12 +84,35 @@ _out() {  # _out <key> → the command's combined output, once it has finished
 # Colors used by the error/retry branches below (were unbound under set -u — the harness bug the
 # agent flagged: a RED wall crashed while trying to print its own error). Defined once here.
 BLD=$'\033[1m'; YEL=$'\033[33m'; OFF=$'\033[0m'
+
+# ── PRE-WARM (observer, tick 118). Build each distinct test unit ONCE, serially, BEFORE the parallel gate
+# launch below. Without this, the ~26 gates each invoke `cargo test` on a cold cache and contend on cargo's
+# build-directory LOCK — they cannot build in parallel, they queue on the lock, and the isolated shell gates
+# (G_RUNTIME_COUNT/G_INTERACT) intermittently false-RED under that race. The agent then re-runs the whole
+# wall 3-4x to prove it was a race and not a regression — ~40 min/tick of pure waste, and a flaky gate that
+# teaches the loop to distrust a RED. Building the four units up front means every gate below only *runs* its
+# already-linked binary, so the runs genuinely parallelise and the build-race false-RED cannot occur. Warm
+# runs are a no-op. No gate semantics change — same binaries, same tests, built once instead of raced. A real
+# build failure is NOT masked: `|| true` only skips the warm-up; the gate (or the workspace build) still REDs.
+for _pw in \
+  "manuk-page --features spidermonkey" \
+  "manuk-page --features stylo,spidermonkey" \
+  "manuk-shell" \
+  "manuk-dom"; do
+  cargo test --no-run -q -p $_pw >/dev/null 2>&1 || true
+done
+
 # Launch every independent gate NOW; each block below simply collects its result.
 _launch js cargo test -q -p manuk-page --features spidermonkey -- --ignored js_conformance
-_launch aff cargo test -q -p manuk-shell affordance
 _launch ga cargo test -q -p manuk-page --features spidermonkey --test g_alloc -- --ignored
-_launch gt cargo test -q -p manuk-shell --test g_teardown
-_launch gl cargo test -q -p manuk-page --features stylo,spidermonkey --test g_load_budget
+# ── SHELL GATES AS ONE INVOCATION (observer, tick 118). The manuk-shell gates — affordance, teardown,
+# runtime-count, tab-interact — used to run as FOUR concurrent `cargo test -p manuk-shell` processes. Under
+# contention those four shells fought over the process/runtime accounting and G_RUNTIME_COUNT false-RED'd
+# ("runtimes are proliferating") — a flaky gate that thrashed the loop for ~40 min/tick. Run alone each test
+# passes; run as the FULL suite in ONE process they pass reliably (the agent confirmed 49 ok). So: one job,
+# all shell tests, checked for ZERO failures below (nothing masked), and faster than four separate builds.
+_launch shell cargo test -q -p manuk-shell -- --nocapture
+_launch glb cargo test -q -p manuk-page --features stylo,spidermonkey --test g_load_budget
 _launch gg cargo test -q -p manuk-page --features stylo,spidermonkey --test g_globals
 _launch gau cargo test -q -p manuk-dom pointer_width
 _launch gvp cargo test -q -p manuk-page --features stylo,spidermonkey --test g_viewport
@@ -109,8 +132,7 @@ _launch gs cargo test -q -p manuk-page --features stylo,spidermonkey --test g_si
 _launch gd cargo test -q -p manuk-page --features stylo,spidermonkey --test g_dedup
 _launch gra cargo test -q -p manuk-page --features stylo,spidermonkey --test g_runaway
 _launch gc cargo test -q -p manuk-page --features stylo,spidermonkey --test g_contain
-_launch gr cargo test -q -p manuk-shell runtime_instantiations
-_launch gi cargo test -q -p manuk-shell tab_operations -- --nocapture
+# (G_RUNTIME_COUNT + G_INTERACT are part of the single `_launch shell` above — observer tick 118)
 
 
 FAIL=0
@@ -219,8 +241,12 @@ JS=$(_out js | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$JS" ]; then ok "js conformance: $JS"; else bad "JS conformance suite did not pass"; fi
 
 head_ "G3 · affordance completeness (§1.8 — no dead buttons)"
-AFF=$(_out aff | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
-if [ -n "$AFF" ]; then ok "affordances: $AFF"; else bad "affordance gate failed — a control may be dead"; fi
+# The whole manuk-shell suite is one job now: capture it ONCE and count failures, so a regression in ANY
+# shell test surfaces (nothing masked by a `grep ok | head -1`). G_TEARDOWN/G_RUNTIME_COUNT/G_INTERACT below
+# read this same captured output.
+SHELL_OUT=$(_out shell); SHELL_FAILED=$(printf '%s' "$SHELL_OUT" | grep -c 'test result: FAILED')
+AFF=$(printf '%s' "$SHELL_OUT" | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ "$SHELL_FAILED" -eq 0 ] && [ -n "$AFF" ]; then ok "affordances (full shell suite green): $AFF"; else bad "affordance gate failed — a control may be dead, or another manuk-shell test regressed"; fi
 
 head_ "G6 · clickability (a link the browser cannot find is a link the user cannot click)"
 G6URL="${MANUK_CLICK_URL:-https://en.wikipedia.org/wiki/Terrier}"
@@ -252,11 +278,10 @@ GA=$(_out ga | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GA" ]; then ok "per-event allocation: $GA"; else bad "G_ALLOC failed — an input event allocates per DOM node"; fi
 
 head_ "G_TEARDOWN · no exit path bypasses Drop (METHODOLOGY 5.3 — a hidden crash is a data-loss bug)"
-GT=$(_out gt | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
-if [ -n "$GT" ]; then ok "teardown: $GT"; else bad "G_TEARDOWN failed — an exit path skips the profile flush"; fi
+if [ "${SHELL_FAILED:-1}" -eq 0 ]; then ok "teardown: manuk-shell suite green"; else bad "G_TEARDOWN failed — an exit path skips the profile flush (or another shell test regressed)"; fi
 
 head_ "G_LOAD · the page renders when its subresources never answer (METHODOLOGY 4.1 — the frozen tab)"
-GL=$(_out gl | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+GL=$(_out glb | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GL" ]; then ok "load budget: $GL"; else bad "G_LOAD failed — a dead subresource can hold the document hostage"; fi
 
 head_ "G_GLOBALS · a missing constructor is a THROWN EXCEPTION, not a missing feature"
@@ -432,12 +457,11 @@ GC=$(_out gc | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GC" ]; then ok "containment: $GC"; else bad "G_CONTAIN failed — a page can take the whole browser down"; fi
 
 head_ "G_RUNTIME_COUNT · one async runtime for the process, not one per action (Part 25.2)"
-GR=$(_out gr | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
-if [ -n "$GR" ]; then ok "runtime count flat: $GR"; else bad "G_RUNTIME_COUNT failed — runtimes are proliferating"; fi
+if [ "${SHELL_FAILED:-1}" -eq 0 ]; then ok "runtime count flat (shell suite green)"; else bad "G_RUNTIME_COUNT failed — runtimes are proliferating"; fi
 
 head_ "G_INTERACT · UI-thread cost of tab open/switch/close (the 'browser feels laggy' report)"
-GI=$(_out gi | grep -E "^  (open|switch|close)")
-if [ -n "$GI" ]; then echo "$GI" | sed 's/^/  /'; ok "every tab operation under one frame"
+GI=$(printf '%s' "${SHELL_OUT:-}" | grep -E "^  (open|switch|close)")
+if [ "${SHELL_FAILED:-1}" -eq 0 ] && [ -n "$GI" ]; then echo "$GI" | sed 's/^/  /'; ok "every tab operation under one frame"
 else bad "G_INTERACT failed — a tab operation stalls the UI thread"; fi
 
 head_ "T · crate tests"
