@@ -3054,6 +3054,42 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 118 — `dispatchEvent` swallowed its own `InvalidStateError`: uninitialized + in-flight events (+15)
+
+**TICK SHAPE: pattern-class.** The class is *DOM event dispatch validity* — every legacy library that
+builds events the pre-constructor way (`createEvent`/`initEvent`: jQuery's `trigger`, Google Analytics)
+depends on the ordering the spec enforces. `dom` is the top-headroom high-flip area (44.7%); histogramming
+its `--show-failures` put `assert_throws_dom "…did not throw"` at the top, and the single largest *one-file,
+one-mechanism* cluster was `EventTarget-dispatchEvent` (20 subtests): *"If the event's initialized flag is
+not set, an InvalidStateError must be thrown."*
+
+**Mechanism — the rule was one line; the bug was the plumbing.** DOM §dispatchEvent: throw
+`InvalidStateError` if the event's **dispatch flag** is set (re-entrant dispatch of the same object) or its
+**initialized flag** is not set (a `createEvent()` event never `initEvent`-ed). Added: `createEvent` marks
+its event `__initialized = false`; `initEvent` clears it; `__dispatchEvent` throws `InvalidStateError` when
+`__initialized === false` or the dispatch flag is set, and sets/clears `__dispatchFlag` around the walk. A
+constructed event (`new Event()`) leaves `__initialized` `undefined` — not `=== false` — so it dispatches
+normally; only createEvent-without-init throws. **The real defect was invisible:** `el.dispatchEvent` is a
+native that `unwrap_or(false)`'d the internal dispatch, **swallowing the thrown exception into a benign
+`false`** — so `assert_throws_dom` saw no throw. The native now propagates the pending exception
+(`eval` → `None` + `JS_IsExceptionPending` → return `false` with the exception left pending).
+
+Chosen over the bigger `dom` levers because they are subsystems, not bounded ticks: XML/XHTML document
+loading (~488 subtests — we parse XML iframe resources as HTML, so `documentElement.textContent` gains a
+trailing `\n`; needs a real XML parser) and the `assert_throws` mass (dozens of unrelated methods, one
+throw each). This one is a single mechanism at one dispatch seam.
+
+**MEASURED.** New gate `g_event_dispatch_state` (own binary — runtime-reuse UAF): uninitialized→throw,
+post-init→dispatches, re-entrant→throw, dispatchable-again — **proven falsifiable** (the old native
+swallowed the throw to `false`). **dom 2,899 → 2,914 (+15)**, all gain in `dom/events` (187→202), every
+other `dom` subarea held, `html/dom` flat, HANG/CRASH 0 (Bar 0).
+
+**The ratchet.** Capability: **up** (a spec validity rule + honest exception propagation across the native
+seam). Performance: unchanged. Instrument fidelity: **up** — it fixed a *swallowed-error* class the project
+keeps finding ([[symptom-names-wrong-organ]]): the native reported `false` for a throw. [[parity-methodology]]
+
+WIKI: docs/wiki/js-engine.md — event dispatch validity flags + native exception propagation
+
 ## Tick 117 — numeric reflection: `-0`, overflow-wraps-not-falls-back, and the missing `-1`/`1` defaults (+437)
 
 **TICK SHAPE: pattern-class.** The class is *integer-reflecting IDL attributes* (`maxLength`, `tabIndex`,

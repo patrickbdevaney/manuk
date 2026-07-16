@@ -42,7 +42,8 @@ use mozjs::glue::JS_GetReservedSlot;
 use mozjs::jsapi::Heap;
 use mozjs::jsapi::OnNewGlobalHookOption;
 use mozjs::jsapi::{
-    JSClass, JSContext as RawJSContext, JSObject, JS_SetReservedSlot, Value, JSPROP_ENUMERATE,
+    JSClass, JSContext as RawJSContext, JSObject, JS_IsExceptionPending, JS_SetReservedSlot, Value,
+    JSPROP_ENUMERATE,
 };
 use mozjs::jsval::{
     BooleanValue, Int32Value, NullValue, ObjectValue, PrivateValue, UndefinedValue,
@@ -2981,11 +2982,24 @@ unsafe fn el_dispatch_event(cx: *mut RawJSContext, argc: u32, vp: *mut Value) ->
         v.handle(),
     );
     let script = format!("__dispatchEvent({}, __pendingEvent)", node.0);
-    let ran = eval_in_current_global(cx, &script)
-        .map(|v| v.is_boolean() && v.to_boolean())
-        .unwrap_or(false);
-    *vp = BooleanValue(ran);
-    true
+    match eval_in_current_global(cx, &script) {
+        Some(v) => {
+            *vp = BooleanValue(v.is_boolean() && v.to_boolean());
+            true
+        }
+        None => {
+            // `__dispatchEvent` threw — the spec's `InvalidStateError` for an event dispatched before
+            // `initEvent` or re-dispatched while already in flight. The old code `unwrap_or(false)`
+            // SWALLOWED it into a benign `false`, so `assert_throws_dom` saw no throw. Propagate the
+            // pending exception instead (return false, exception left pending) so it reaches the caller.
+            if JS_IsExceptionPending(cx) {
+                false
+            } else {
+                *vp = BooleanValue(false);
+                true
+            }
+        }
+    }
 }
 
 /// **The DOM's PRE-INSERTION VALIDITY check — and it is what stands between us and an infinite loop.**
@@ -6405,8 +6419,19 @@ const LISTENER_PRELUDE: &str = r#"
         // Event the PAGE constructed and passed to `dispatchEvent`. In the second case the object
         // is the event: its `detail`, its key, its coordinates all have to survive.
         var supplied = (typeOrEvent && typeof typeOrEvent === 'object') ? typeOrEvent : null;
+        // **An event may be dispatched only once at a time, and only after it is initialized.** Per DOM
+        // §dispatchEvent: throw InvalidStateError if the event's dispatch flag is set (re-entrant
+        // dispatch of the same event) or its initialized flag is not set (a `createEvent()` event that
+        // was never `initEvent()`-ed). `__initialized === false` is set ONLY by `createEvent`; a
+        // constructed event leaves it `undefined`, which is not `=== false`, so it dispatches normally.
+        if (supplied && (supplied.__initialized === false || supplied.__dispatchFlag)) {
+            throw new DOMException(
+                "Failed to execute 'dispatchEvent': the event is already being dispatched, or was not initialized",
+                "InvalidStateError");
+        }
         var type = supplied ? supplied.type : typeOrEvent;
         var ev = supplied || {};
+        if (supplied) ev.__dispatchFlag = true;   // set for the duration of the dispatch; cleared below
         ev.type = type;
         ev.target = target;
         ev.currentTarget = null;
@@ -6448,6 +6473,7 @@ const LISTENER_PRELUDE: &str = r#"
         // Bubble: target's parent → root.
         ev.eventPhase = 3;
         if (ev.bubbles) for (var i = 1; i < path.length; i++) invoke(path[i], 'b');
+        if (supplied) ev.__dispatchFlag = false;   // clear: the event may be dispatched again later
         return !ev.defaultPrevented;
     };
 "#;
@@ -6765,6 +6791,7 @@ const WINDOW_PRELUDE: &str = r#"
                     this.defaultPrevented = false;
                     this._stop = false;
                     this._stopImmediate = false;
+                    this.__initialized = true;   // now dispatchable (clears createEvent's uninit flag)
                 };
                 this.composedPath = function () {
                     var p = [];
@@ -6795,7 +6822,9 @@ const WINDOW_PRELUDE: &str = r#"
                 var C = g[String(iface)] || g.Event;
                 var e = new C('');
                 // Per spec the event is created UNINITIALIZED — `initEvent` must be called before it is
-                // dispatched, and until then its type is the empty string.
+                // dispatched, and until then its type is the empty string. The flag makes dispatching it
+                // early throw InvalidStateError (see `__dispatchEvent`); `initEvent` clears it.
+                e.__initialized = false;
                 return e;
             };
         }

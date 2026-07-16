@@ -233,11 +233,12 @@
   - L445 · Done, and honestly not done
   - L458 · The bug that hurt most, and it was not the rasterizer
   - L471 · Reflecting a NUMBER attribute: four rules the naive getter gets wrong (tick 117)
-  - L505 · A node id is unique only WITHIN its arena — so a reflector must resolve against its OWN document
-  - L532 · A per-arena identity cache must not CLOBBER the shared __nodes — it breaks event dispatch silently
-  - L545 · Mass reflector access + the reflection layer can overflow the C stack, and SpiderMonkey won't catch it
-  - L579 · A reused SpiderMonkey runtime across many pages SIGSEGVs — a cross-file reflector/rooting UAF (open Bar-0)
-  - L600 · A second, DETERMINISTIC C-stack overflow (html/semantics) — NATIVE recursion, not the stack-quota class
+  - L505 · dispatchEvent validity, and the native seam that swallowed the throw (tick 118)
+  - L528 · A node id is unique only WITHIN its arena — so a reflector must resolve against its OWN document
+  - L555 · A per-arena identity cache must not CLOBBER the shared __nodes — it breaks event dispatch silently
+  - L568 · Mass reflector access + the reflection layer can overflow the C stack, and SpiderMonkey won't catch it
+  - L602 · A reused SpiderMonkey runtime across many pages SIGSEGVs — a cross-file reflector/rooting UAF (open Bar-0)
+  - L623 · A second, DETERMINISTIC C-stack overflow (html/semantics) — NATIVE recursion, not the stack-quota class
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -346,4 +347,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-281 sections across 15 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+282 sections across 15 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

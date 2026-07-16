@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **110** | ticks 1–117 |
-| median tick cycle | **19m** | 109 intervals |
-| median, last 10 | **32m** | 10 intervals |
+| ticks landed | **111** | ticks 1–118 |
+| median tick cycle | **19m** | 110 intervals |
+| median, last 10 | **35m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.94** | 115.4h elapsed |
-| median verify wall | **58s** | 49 ticks |
-| wall trend | 39s → 52s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.94** | 117.6h elapsed |
+| median verify wall | **58s** | 50 ticks |
+| wall trend | 39s → 57s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **48**
+* **live gates**: 27 → **49**
 * **✅ rows in the capability ledger**: 144 → **208**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**57 of 110 ticks** (52%) moved a
+**58 of 111 ticks** (52%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -85,8 +85,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **57** capability ticks, median cycle **19m**
-* median diff per tick: **+252 / −23** lines across 8 files
+* **58** capability ticks, median cycle **19m**
+* median diff per tick: **+251 / −23** lines across 8 files
 
 ## Every tick
 
@@ -202,5 +202,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **115** | 2026-07-15 23:17 | 32m | capability | 52s | +366/−36 | 46 | 81 | 36.8% · | `lookupNamespaceURI`/`isDefaultNamespace` were `undefined`: the locate-a-namespace algorit |
 | **116** | 2026-07-15 23:46 | 29m | capability | 57s | +171/−40 | 47 | 81 | 36.8% · | `nodeName` uppercased everything and called every non-element `#text` (+62) |
 | **117** | 2026-07-16 00:24 | 38m | pattern-class | 52s | +232/−54 | 48 | 81 | 36.8% · | numeric reflection: `-0`, overflow-wraps-not-falls-back, and the missing `-1`/`1` defaults |
+| **118** | 2026-07-16 02:38 | 2.2h | pattern-class | 4m | +178/−17 | 49 | 81 | 36.8% · | `dispatchEvent` swallowed its own `InvalidStateError`: uninitialized + in-flight events (+ |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

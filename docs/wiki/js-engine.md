@@ -502,6 +502,29 @@ are natively shadowed and untouched by this; `tabIndex`/`maxLength`/`colSpan`/`w
 were the ~380-subtest lever. Gated by `G_REFLECT_NUMERIC`, kept in its own test binary because two
 SpiderMonkey `Page::load`s in one process reuse the runtime and can trip the reflector-teardown UAF.
 
+## dispatchEvent validity, and the native seam that swallowed the throw (tick 118)
+
+DOM §`dispatchEvent` requires `InvalidStateError` in two states: the event's **dispatch flag** is set
+(you are re-dispatching the same event object from inside one of its own listeners) or its **initialized
+flag** is not set (a `document.createEvent("Event")` event that was never `initEvent`-ed). The rule is one
+line; the trap is where the throw has to *survive*.
+
+`el.dispatchEvent` is a **native** (`el_dispatch_event`) that hands the event to a JS helper
+(`__dispatchEvent`) via `eval_in_current_global`. That helper returning an error was `unwrap_or(false)`'d —
+so an `InvalidStateError` thrown inside it became a benign `false`, and `assert_throws_dom` saw **no throw**.
+The generalisable lesson (the swallowed-error class this project keeps rediscovering): **a native that
+coerces a JS exception into a return value erases it.** The fix is to let `eval` return `None`, check
+`JS_IsExceptionPending`, and return `false` from the native *with the exception still pending* so
+SpiderMonkey propagates it to the JS caller.
+
+The flags live on the event object as `__initialized` / `__dispatchFlag`:
+- `createEvent` sets `__initialized = false`; `initEvent` clears it back to `true`.
+- A **constructed** event (`new Event()`) leaves `__initialized` `undefined` — deliberately not `=== false`
+  — so it dispatches normally without any per-constructor bookkeeping. Only createEvent-without-init is
+  uninitialized.
+- `__dispatchEvent` sets `__dispatchFlag = true` for the duration of the walk and clears it at the end, so
+  a listener that re-dispatches the same object throws, but the object is dispatchable again afterward.
+
 ## A node id is unique only WITHIN its arena — so a reflector must resolve against its OWN document
 
 This is the lesson that made `iframe.contentDocument` possible, and it is a trap every second-document

@@ -109,3 +109,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 115	76c0866	1784171831	2026-07-15T23:17:11-04:00	1945	capability	52	10	366	36	46	81	2387	6484	0	206	0	`lookupNamespaceURI`/`isDefaultNamespace` were `undefined`: the locate-a-namespace algorithm (+~75)
 116	dcf6f5d	1784173584	2026-07-15T23:46:24-04:00	1753	capability	57	11	171	40	47	81	2387	6484	0	208	0	`nodeName` uppercased everything and called every non-element `#text` (+62)
 117	7330860	1784175887	2026-07-16T00:24:47-04:00	2303	pattern-class	52	8	232	54	48	81	2387	6484	0	208	0	numeric reflection: `-0`, overflow-wraps-not-falls-back, and the missing `-1`/`1` defaults (+437)
+118	47a3183	1784183900	2026-07-16T02:38:20-04:00	8013	pattern-class	242	7	178	17	49	81	2387	6484	0	208	0	`dispatchEvent` swallowed its own `InvalidStateError`: uninitialized + in-flight events (+15)
