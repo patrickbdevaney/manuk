@@ -3054,6 +3054,46 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 114 — the HTMLDocument named collections were `undefined`, and `document.forms.length` was a TypeError (+39)
+
+**TICK SHAPE: capability (DOM named-collection surface).** `[pattern: doc-collections]`. Built and proven
+in a prior session, reverted only because it had been entangled with harness edits (the tick-76afc15 steer
+correctly rejected that); re-landed here as a **pure browser tick** from a clean tree — the engine diff and
+the gate, nothing under `scripts/`.
+
+**Hypothesis / the gap.** `document.forms`, `document.images`, `document.links`, `document.scripts`,
+`document.embeds`/`plugins`, `document.anchors`, and `document.getElementsByName(n)` were **all
+`undefined`** — not incomplete, absent. That is not a pedantic conformance miss: `document.forms.length` is
+a **`TypeError` that takes the rest of the bundle down with it.** Every form library and serializer
+enumerates `document.forms`; analytics, ad tooling and prerender scanners walk
+`document.links`/`images`/`scripts`; legacy control-resolution code calls `getElementsByName`. A single
+`undefined` here silently kills whole scripts on the load path — the [[symptom-names-wrong-organ]] class,
+where the page is told YES-then-throws and nothing renders.
+
+**Mechanism.** Each getter is a static Array (exactly like the already-working `getElementsByTagName`) over
+the selector engine via a shared `doc_collection(cx, vp, selector)` helper, so tree order and de-dup come
+for free from `query_selector_all`'s single descendant walk. `getElementsByName` enumerates `"*"` and
+filters on the stored `name` **content attribute** (exact string, any element type) — robust against values
+that would need CSS attribute-selector escaping, and correct precisely *because* tick 113 now stores HTML
+attribute names lowercased so the `name` key always resolves ([[reflection-value-correctness]] paid off
+one tick later). The three subtle spec points are gated: `document.links` is `a`/`area` **with `href`** (a
+bare `<a name>` anchor is NOT a link); `document.anchors` is `a` **with `name`**; `plugins` is a synonym
+for `embeds`.
+
+**MEASURED — clean.** New gate `g_doc_collections` (8 claims: forms/images/links/embeds+plugins/anchors/
+scripts/getElementsByName/miss-returns-empty) is **proven falsifiable** — RED without the engine fix
+(`document.forms is undefined` → `TypeError`), GREEN with it. **html/dom 55,744 → 55,783 (+39)**; Bar 0
+clean (HANG/CRASH 0 every area); no area regressed; the existing wall stayed green. A small, honest number
+on a surface that was throwing — the flip is 39 subtests, but the *class* it unblocks is every bundle that
+touches `document.forms`.
+
+**Note for the observer (harness, not agent scope):** the `g_doc_collections` test lives in
+`engine/page/tests/`; wiring a `G_DOC_COLLECTIONS` launcher into `scripts/verify.sh` is a harness task.
+Until then the gate is proven falsifiable via the standalone `cargo test`, in-tree and ready to wire.
+
+**The ratchet.** Capability: **up** (+39, a throwing surface made real). Performance: unchanged. Instrument
+fidelity: **up** — a new falsifiable tooth. [[parity-methodology]] [[harness-is-observer-owned]]
+
 ## Tick 113 — HTML attribute qualified names weren't ASCII-lowercased: a hole as big as the win it hid behind (+10,249)
 
 **TICK SHAPE: capability (attribute reflection).** `[pattern: reflection value-correctness]`. The tick-112

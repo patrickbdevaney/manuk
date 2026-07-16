@@ -1205,6 +1205,19 @@ unsafe fn define_members(
         def_guarded!(def, c"createTextNode", doc_create_text_node, 1);
         def_guarded!(def, c"getElementsByTagName", el_get_by_tag, 1);
         def_guarded!(def, c"getElementsByClassName", el_get_by_class, 1);
+        def_guarded!(def, c"getElementsByName", doc_get_by_name, 1);
+        // The HTMLDocument "named-collection" getters — each a live-ish HTMLCollection of a fixed kind
+        // of element, in tree order. `document.forms` is how every form library and serializer enumerates
+        // forms; `images`/`links`/`scripts` are read by analytics, ad tooling, and prerender scanners;
+        // returning `undefined` makes `document.forms.length` a TypeError that takes the bundle down.
+        // (Returned here as static Arrays, exactly like getElementsByTagName above.)
+        prop_guarded!(prop, c"forms", doc_get_forms, None);
+        prop_guarded!(prop, c"images", doc_get_images, None);
+        prop_guarded!(prop, c"links", doc_get_links, None);
+        prop_guarded!(prop, c"scripts", doc_get_scripts, None);
+        prop_guarded!(prop, c"embeds", doc_get_embeds, None);
+        prop_guarded!(prop, c"plugins", doc_get_embeds, None); // `plugins` is a synonym for `embeds`.
+        prop_guarded!(prop, c"anchors", doc_get_anchors, None);
         // Document-level (delegated) events.
         def_guarded!(def, c"__createHTMLDocument", doc_create_html_document, 1);
         // Test-only: proves the containment boundary is real. Not registered otherwise.
@@ -2714,6 +2727,64 @@ unsafe fn el_get_by_class(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> b
         manuk_css::query_selector_all(&*dom, root, &sel)
     };
     node_array(cx, vp, dom, &matches);
+    true
+}
+
+/// `document.getElementsByName(name)` — every element whose **`name` content attribute** equals `name`,
+/// in tree order (HTML spec: matches ANY element type, exact-string, case-sensitive on the value). We
+/// enumerate all descendant elements (`"*"`) and filter on the stored `name` — robust against values that
+/// would otherwise need CSS attribute-selector escaping (quotes, brackets), and correct now that tick 113
+/// stores HTML attribute names lowercased so the `name` key always resolves.
+unsafe fn doc_get_by_name(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, root)) = this_node(vp) else {
+        *vp = NullValue();
+        return true;
+    };
+    let name = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    let matches: Vec<NodeId> = manuk_css::query_selector_all(&*dom, root, "*")
+        .into_iter()
+        .filter(|&n| (*dom).element(n).and_then(|e| e.attr("name")) == Some(name.as_str()))
+        .collect();
+    node_array(cx, vp, dom, &matches);
+    true
+}
+
+/// Shared body for the document named-collection getters (`forms`/`images`/`links`/…): a static Array of
+/// every descendant element matching `selector`, in tree order (`query_selector_all` walks descendants
+/// once, so selector *lists* like `"a[href], area[href]"` stay de-duplicated and document-ordered).
+unsafe fn doc_collection(cx: *mut RawJSContext, vp: *mut Value, selector: &str) {
+    match this_node(vp) {
+        Some((dom, root)) => {
+            let matches = manuk_css::query_selector_all(&*dom, root, selector);
+            node_array(cx, vp, dom, &matches);
+        }
+        None => *vp = NullValue(),
+    }
+}
+unsafe fn doc_get_forms(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    doc_collection(cx, vp, "form");
+    true
+}
+unsafe fn doc_get_images(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    doc_collection(cx, vp, "img");
+    true
+}
+unsafe fn doc_get_links(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    // `document.links` is `a` AND `area` elements that carry an `href` — not every anchor.
+    doc_collection(cx, vp, "a[href], area[href]");
+    true
+}
+unsafe fn doc_get_scripts(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    doc_collection(cx, vp, "script");
+    true
+}
+unsafe fn doc_get_embeds(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    doc_collection(cx, vp, "embed");
+    true
+}
+unsafe fn doc_get_anchors(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    // `document.anchors` is `a` elements with a `name` attribute.
+    doc_collection(cx, vp, "a[name]");
     true
 }
 

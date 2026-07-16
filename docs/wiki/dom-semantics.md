@@ -467,3 +467,21 @@ relative `<script src>` resolve) ran all 8,272 of its subtests and exposed the `
 the FULL run that every isolated probe had hidden. When an isolated repro passes but the aggregate fails,
 **rebuild the aggregate's real environment** (its actual scripts, its real path) rather than trusting a
 diagnostic's summary counter. [[conformance-and-oracles]] [[js-engine]]
+
+## The HTMLDocument named collections — `document.forms`/`images`/`links`/`scripts`/`embeds`/`anchors` + `getElementsByName`
+
+These seven getters plus `getElementsByName` were **all `undefined`** — not incomplete, absent. That is not
+a pedantic miss: `document.forms.length` is a **`TypeError`** that kills the rest of the bundle on the load
+path. Every form library and serializer enumerates `document.forms`; analytics/ad/prerender tooling walks
+`document.links`/`images`/`scripts`; legacy control-resolution calls `getElementsByName`. One `undefined`
+here is the [[conformance-and-oracles]] YES-then-throw class — the page renders nothing and says nothing.
+
+Each is a **static Array** (identical shape to the already-working `getElementsByTagName`) over a shared
+`doc_collection(cx, vp, selector)` helper: `query_selector_all` walks descendants once, so tree order and
+de-dup are free. `getElementsByName` enumerates `"*"` and filters on the stored `name` **content
+attribute** (exact string, any element type) rather than a `[name="…"]` selector — robust against values
+that would need attribute-selector escaping, and it resolves at all only because tick 113 now lowercases
+HTML attribute names (`name` is always keyed lowercase). Three spec subtleties, each gated:
+`document.links` is `a`/`area` **with `href`** (a bare `<a name>` anchor is not a link); `document.anchors`
+is `a` **with `name`**; `plugins` is a synonym for `embeds`. **+39 html/dom (55,744 → 55,783), crashes=0.**
+Gate `g_doc_collections`, proven falsifiable (RED = `document.forms is undefined`). [[js-engine]]
