@@ -31,6 +31,32 @@ flock -n 9 || { echo "$(date '+%F %T')  another loop-forever already holds the l
 say() { printf '%s  %s\n' "$(date '+%F %T')" "$1" >>"$LOG"; }
 CLAUDE=$(command -v claude 2>/dev/null || echo "$HOME/.local/bin/claude")
 
+# ── OOM DILIGENCE #1: protect THIS supervisor from the OOM killer. It is a tiny bash loop; it must survive
+# so it can relaunch a fresh agent after an OOM. -900 makes the kernel pick almost anything else first.
+echo -900 > /proc/self/oom_score_adj 2>/dev/null || true
+
+# systemd-run --user needs a session bus; when launched from cron/nohup those env vars are absent, so set
+# them explicitly (this is why the cgroup cap silently fell back to uncontained before).
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${XDG_RUNTIME_DIR}/bus}"
+
+# ── OOM DILIGENCE #2: run the agent + ALL its child builds/sweeps/parity inside a MEMORY-CAPPED cgroup, so
+# a memory spike OOM-kills only the agent's tree — never this supervisor, never the OS, never the operator's
+# other windows. The machine has ~31G; cap the agent at 22G RAM + 6G swap, leaving ~9G for everything else.
+# MemoryHigh throttles allocation before the hard MemoryMax kill. If systemd --user is unavailable, fall
+# back to a direct (uncontained) launch so the loop never fully stalls — better uncontained than stopped.
+launch_agent() {
+  if systemd-run --user --scope --quiet \
+        --setenv=CARGO_BUILD_JOBS=6 --setenv=WPT_DIR="$HOME/wpt" \
+        -p MemoryMax=22G -p MemorySwapMax=6G -p MemoryHigh=19G -p OOMPolicy=kill \
+        "$CLAUDE" --dangerously-skip-permissions --permission-mode bypassPermissions -p "$PROMPT" >>"$LOG" 2>&1
+  then return 0; fi
+  # Fallback: systemd-run failed — launch directly with just the CARGO cap (still reduces build memory).
+  say "⚠ systemd-run unavailable — launching agent UNCONTAINED (CARGO_BUILD_JOBS cap only)"
+  CARGO_BUILD_JOBS=6 WPT_DIR="$HOME/wpt" \
+    "$CLAUDE" --dangerously-skip-permissions --permission-mode bypassPermissions -p "$PROMPT" >>"$LOG" 2>&1 || true
+}
+
 PROMPT='Continue the autonomous Manuk tick loop NOW — you are a headless grind agent, there is no user to hand back to. Read STATUS.md, docs/loop/JOURNAL.md, docs/loop/CONSTITUTION-CHECK.md and CONSTITUTION.MD first (ground truth on disk). Then run as many ticks as you can this invocation: pick the top Pareto capability by FLIP RATE (how many subtests one fix turns green — see the wpt-horizon wiki; NOT raw failing count), implement it, gate it with a falsifiable check, capture the mechanism in docs/wiki, and land it via ./scripts/tick.sh. Touch .git/manuk-working at the top of every command so the watchdogs see you working. Honor THE RATCHET absolutely: a Bar 0 crash or any regression is never traded for a capability — revert instead. Do not stop; keep landing ticks until this process is killed or the budget is spent.'
 
 say "=== loop-forever supervisor START (pid $$) ==="
@@ -51,7 +77,7 @@ while true; do
   say "launching headless grind agent (at tick $TICK, target $TARGET, $((TARGET-TICK)) left)"
   # The headless agent self-continues via the Stop hook and lands ticks; when it exits we relaunch.
   START=$(date +%s)
-  "$CLAUDE" --dangerously-skip-permissions --permission-mode bypassPermissions -p "$PROMPT" >>"$LOG" 2>&1 || true
+  launch_agent   # memory-capped cgroup (falls back to uncontained if systemd --user is down)
   DUR=$(( $(date +%s) - START ))
 
   AFTER=$(grep -oP '^TICK:\s*\K[0-9]+' "$STATUS" 2>/dev/null || echo 0)
@@ -72,9 +98,9 @@ while true; do
       sleep "$WAIT"; NOPROG=0; continue
     fi
     # Otherwise it is a genuine no-progress condition (stuck/gated) — back off, never fully stop.
-    if [ "$NOPROG" -ge 5 ]; then
-      say "⚠ $NOPROG consecutive no-progress launches — backing off 300s (check the log; is a gate blocking?)"
-      sleep 300
+    if [ "$NOPROG" -ge 3 ]; then
+      say "⚠ $NOPROG consecutive no-progress launches — backing off 600s (check the log; is a gate blocking?)"
+      sleep 600
     fi
   fi
   sleep 8
