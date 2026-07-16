@@ -3054,6 +3054,42 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 123 — `Text.splitText()` + `wholeText`, and the tick-123 SURFACE AUDIT (+8)
+
+**TICK SHAPE: capability (Text-node methods) + scheduled surface audit.** `[pattern: split-text]`. The
+tick-122 probe had already found the two gaps: `Text.prototype.splitText(offset)` was `TypeError` (not a
+function) and `Text.prototype.wholeText` was `undefined`.
+
+**Mechanism.** Two natives in `dom_bindings.rs`, reusing the existing UTF-16 `char_units` helper:
+`splitText(offset)` validates `offset ≤ length` (`IndexSizeError` else), creates a new Text node with
+`[offset, len)`, inserts it as the original's next sibling (`insert_before`/`append_child` + a childList
+mutation record), and truncates the original to `[0, offset)`; `wholeText` walks back to the first Text of
+the contiguous run via `prev_sibling` then concatenates forward. Both guard on the node being Text (the
+flat prototype means Comment/PI inherit the members, but they no-op there).
+
+**MEASURED.** whole `dom` **3045 → 3053 (+8)**, `dom/nodes` +7, one fewer TH_TIMEOUT. **HANG/CRASH 0
+(Bar 0).** Modest but clean — splitText is real editor/text-processing capability. **Named limit:** the
+spec's live-`Range` boundary adjustment across the split is not modelled (noted in the native's doc).
+
+**GATE:** `g_split_text` (own binary, runtime-reuse UAF discipline): the split (`"hello world"`→`"hello"` +
+`" world"`), next-sibling wiring, parent child count, `wholeText` re-concatenation, `IndexSizeError` on
+overflow, and a detached-node split. Proven falsifiable (RED — `#out` at `-` — without the `splitText`
+registration; GREEN with it).
+
+**SURFACE AUDIT (cadence, tick 123 — Audit #5, see docs/loop/SURFACE-AUDIT.md).** Left the frame: searched
+Interop 2026 (README/web.dev/wpt.fyi/Mozilla Hacks) and Ladybird's June-2026 progress. Every Interop 2026
+focus area was already mapped; the real finding was a **coverage bias in `CONSTELLATION.tsv` toward the
+novel over the load-bearing** — it listed container queries / anchor positioning / view transitions but had
+**silently omitted equally-shipped, older-Baseline CSS primitives**. ADDED 6 rows (status `unknown`): CSS
+nesting (native `&`), subgrid, `@scope`, `text-wrap: balance/pretty`, WebCodecs, Sanitizer API. Steer
+banked: reconcile against the **Baseline-stable** set, not only the current-year Interop headlines.
+
+**The ratchet.** Capability: **up** (two Text methods). Instrument fidelity: **up** — a falsifiable gate,
+and the map grew by 6 honestly-`unknown` rows the loop can now rank. [[parity-methodology]] [[dom-semantics]]
+
+WIKI: docs/wiki/dom-semantics.md — `splitText`/`wholeText`: the split + contiguous-run concatenation, and
+the deferred live-Range adjustment.
+
 ## Tick 122 — `new Text()`/`new Comment()`/`new DocumentFragment()` minted dead objects (+29)
 
 **TICK SHAPE: capability (constructable DOM interfaces).** `[pattern: node-constructors]`. A fast targeted

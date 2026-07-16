@@ -1293,6 +1293,11 @@ unsafe fn define_members(
         def_guarded!(def, c"insertData", el_insert_data, 2);
         def_guarded!(def, c"deleteData", el_delete_data, 2);
         def_guarded!(def, c"replaceData", el_replace_data, 3);
+        // Text-specific: `splitText` (on Text) and the read-only `wholeText`. On the flat prototype they
+        // are inherited by Comment/PI too, but both guard on the node being Text (splitText via
+        // `char_units`, wholeText via `is_text`).
+        def_guarded!(def, c"splitText", el_split_text, 1);
+        prop_guarded!(prop, c"wholeText", el_get_whole_text, None);
         prop_guarded!(prop, c"nodeValue", el_get_char_data, Some(el_set_char_data));
         // Forms — 50% of the corpus, and the difference between a reader and a browser.
         def_guarded!(def, c"submit", el_form_submit, 0);
@@ -4296,6 +4301,76 @@ unsafe fn el_char_length(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> 
 }
 
 /// `cd.substringData(offset, count)`
+/// `text.splitText(offset)` — split this Text node at `offset` (UTF-16 units): the node keeps
+/// `[0, offset)`, a NEW Text node takes `[offset, len)` and is inserted as this node's next sibling.
+/// Returns the new node. `offset > length` is an `IndexSizeError`. (The spec's final step — adjusting
+/// live `Range` boundary points that fall in the split region — is not yet modelled; named, not hidden.)
+unsafe fn el_split_text(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, node)) = this_node(vp) else {
+        *vp = NullValue();
+        return true;
+    };
+    let Some(u) = char_units(dom, node) else {
+        *vp = NullValue();
+        return true;
+    };
+    let offset = arg_u32(cx, vp, argc, 0).unwrap_or(0) as usize;
+    if offset > u.len() {
+        return throw_dom(
+            cx,
+            "IndexSizeError",
+            "splitText offset is greater than length",
+        );
+    }
+    let new_node = (*dom).create_text(String::from_utf16_lossy(&u[offset..]));
+    if let Some(parent) = (*dom).parent(node) {
+        match (*dom).next_sibling(node) {
+            Some(sib) => (*dom).insert_before(parent, new_node, sib),
+            None => (*dom).append_child(parent, new_node),
+        }
+        record_mutation(cx, dom, "childList", parent, None, None, &[new_node], &[]);
+    }
+    (*dom).set_character_data(node, String::from_utf16_lossy(&u[..offset]));
+    *vp = ObjectValue(new_reflector(cx, dom, new_node));
+    true
+}
+
+/// `text.wholeText` — the concatenated `data` of this Text node and every Text node **contiguous** with
+/// it (no non-Text sibling in between), scanning both directions from it. A text run that `splitText`
+/// broke into three reads back here as one string.
+unsafe fn el_get_whole_text(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, node)) = this_node(vp) else {
+        *vp = UndefinedValue();
+        return true;
+    };
+    if !(*dom).is_text(node) {
+        *vp = UndefinedValue();
+        return true;
+    }
+    // Walk back to the first Text node in this contiguous run, then concatenate forward.
+    let mut start = node;
+    while let Some(prev) = (*dom).prev_sibling(start) {
+        if (*dom).is_text(prev) {
+            start = prev;
+        } else {
+            break;
+        }
+    }
+    let mut out = String::new();
+    let mut cur = Some(start);
+    while let Some(n) = cur {
+        if !(*dom).is_text(n) {
+            break;
+        }
+        if let Some(d) = (*dom).character_data(n) {
+            out.push_str(d);
+        }
+        cur = (*dom).next_sibling(n);
+    }
+    return_string(cx, vp, &out);
+    true
+}
+
 unsafe fn el_substring_data(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let Some((dom, node)) = this_node(vp) else {
         *vp = UndefinedValue();

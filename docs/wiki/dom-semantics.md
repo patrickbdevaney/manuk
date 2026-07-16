@@ -630,3 +630,15 @@ nodeType `hasInstance` predicate so the flat-prototype node still tests `instanc
 lesson: a generic "make it constructible and inert" default is correct only for the un-constructable half
 of the interface list; the constructable half needs the real factory wired in.** Gate
 `g_node_constructors`. [[js-engine]] [[conformance-and-oracles]]
+
+## `Text.splitText()` and `wholeText` — the split and its inverse
+
+`splitText(offset)` cuts a Text node in two at `offset` (UTF-16 units): the node keeps `[0, offset)`, a new
+Text node takes `[offset, len)` and is inserted as the original's **next sibling**; the new node is
+returned. `offset > length` is an `IndexSizeError`. `wholeText` is its inverse view — the concatenated
+`data` of the maximal run of **contiguous** Text siblings containing this node (walk `prev_sibling` to the
+run's start, then concatenate forward until a non-Text sibling). Both reuse the `char_units` UTF-16 helper
+that the other CharacterData methods already share; both guard on the node actually being Text (the flat
+`Node.prototype` means Comment/PI inherit the members but they must no-op there). **Deferred, named:** the
+spec's final `splitText` step adjusts any live `Range` boundary points that fall inside the split region —
+not yet modelled (Selection/Range liveness is its own surface). Gate `g_split_text`. [[js-engine]]

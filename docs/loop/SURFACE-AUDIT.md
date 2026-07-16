@@ -177,3 +177,48 @@ status, not the frontier** — reproduce the aggregate's real environment before
 summary counter. The `CONSTELLATION.tsv` reflection row is corrected to record the tick-113 residual.
 
 **Next audit due: tick 123.**
+
+---
+
+## Audit #5 — tick 123 (2026-07-16)
+
+**Date:** 2026-07-16. **Sources searched (web):**
+[Interop 2026 README](https://github.com/web-platform-tests/interop/blob/main/2026/README.md) ·
+[web.dev/blog/interop-2026](https://web.dev/blog/interop-2026) ·
+[wpt.fyi Interop 2026 dashboard](https://wpt.fyi/interop-2026?stable=) ·
+[Mozilla Hacks: Launching Interop 2026](https://hacks.mozilla.org/2026/02/launching-interop-2026/) ·
+[This Month in Ladybird — June 2026](https://ladybird.org/newsletter/2026-06-30/).
+
+**Interop 2026 (20 focus areas / 33 proposals + 4 investigations):** anchor positioning, container style
+queries, cross-document view transitions, dialog/popover enhancements, WebRTC (91.6% carried from 2025);
+investigations: accessibility-tree consistency, JPEG XL testability, mobile WPT infra, WebVTT. **Every
+vendor-named 2026 focus area is already on `CONSTELLATION.tsv`** (added Audit #2 t83, reconfirmed #4 t113).
+Independent-engine signal (Ladybird, ~2.08M WPT subtests passing, first alpha targeted 2026): their named
+hardest problem is **web-compatibility / engine-quirk divergence**, not spec coverage — which matches this
+project's own browser-sniffing lesson.
+
+**What we had been wrong about (the finding — an audit that finds nothing is suspicious):** the map claimed
+to cover the CSS frontier (container queries, anchor positioning, view transitions, scroll-driven
+animations were all present) but **silently omitted several equally-shipped, equally-Baseline CSS
+primitives** that predate the ones it *did* list — a coverage bias toward the *novel* over the *load-bearing*.
+Six capabilities the world names and the map did not, now ADDED with status `unknown` (per protocol — a
+bigger, uglier map is a good tick; the ratchet rewards MEASURED, never punishes discovery):
+
+| Added | Class | Why it was a real gap |
+|---|---|---|
+| **CSS nesting (native `&`)** | doc | Baseline 2023; *every* modern authored stylesheet nests now — as fundamental as the container queries the map already had. Stylo likely parses it; unmeasured. |
+| **subgrid** | doc | Baseline 2023; nested grids aligning to parent tracks — a common real-layout primitive. |
+| **`@scope` / scoped styles** | doc | component-scoped CSS; newer but shipping. |
+| **`text-wrap: balance`/`pretty`** | doc | a visible typographic gap on headings/paragraphs. |
+| **WebCodecs** (VideoDecoder/AudioDecoder/VideoFrame) | app | distinct from MSE — the low-level codec API for in-browser editors/players; media rows had demux/decode but not this JS surface. |
+| **Sanitizer API** (`Element.setHTML`/`setHTMLUnsafe`) | platform | the platform replacement for DOMPurify — an XSS-safety primitive the security rows missed. |
+
+**Steer (banked):** the map's growth has tracked *what's new and talked-about* (Interop headlines) more
+than *what's shipped and load-bearing*. When reconciling, sweep the **Baseline-stable** set (features safe
+to use for years), not only the current-year Interop list — the quiet, years-old primitives are exactly the
+ones a novelty-biased map forgets it never added. Nesting/subgrid being absent while anchor-positioning was
+present is that bias made concrete.
+
+**LAST_SURFACE_AUDIT set to 123.**
+
+**Next audit due: tick 133.**
