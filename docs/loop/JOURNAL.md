@@ -3054,6 +3054,40 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 125 — `getElementsByTagNameNS`: the namespace-aware query (+44 dom)
+
+**TICK SHAPE: pattern-class (web-API surface by usage weight, §VI.4 step 4).** WIKI: dom-semantics.
+
+**Hypothesis.** Histogramming `wpt dom --show-failures` by *message* (not count) surfaced
+`getElementsByTagNameNS is not a function` as the largest single **clean, reachable** cluster — 52 subtests
+across `Document-Element-getElementsByTagNameNS.js` (the diffuse `assert_throws`/`assert_equals` masses and
+the `createValueRange` cluster are, respectively, subsystems and a *tentative* spec, and the XML-document
+`createElement is not a function` mass is the nested-XML-context subsystem, all correctly skipped). The
+method was `undefined` on both `Element` and `Document`.
+
+**Result — MEASURED dom 3052 → 3096 (46.8% → 47.5%), +44, Bar 0 clean (HANG/CRASH 0).** A native
+`el_get_by_tag_ns` on both prototypes: walk descendants (`query_selector_all(root, "*")`, self excluded like
+`getElementsByTagName`), match on (namespace, localName) with `"*"` a wildcard in either slot. The local
+name is derived **exactly as `element.localName`** — post-prefix part for a namespaced element
+(`createElementNS("test","test:body")` → `"body"`), ASCII-lowercased tag for HTML — so `("test","BODY")`
+and `("test","body")` are correctly distinct, case-sensitive. Wrapped in `collections_js` so the result is a
+**live `HTMLCollection`** (the "live collection" subtest: append/remove moves `.length`).
+
+**The one edge deliberately not served, stated honestly.** An HTML element stores `namespace: None`, which
+this treats as the XHTML namespace for matching — the case the whole web exercises. A *genuinely*
+empty-string-namespace element (`createElementNS("", "x")`, essentially never seen in the wild) also stores
+`None` and is thus indistinguishable from XHTML here, so `getElementsByTagNameNS("", "*")` finding it is the
+one query left RED (2 subtests: "Empty string as a name"). Serving it needs the full null-vs-XHTML storage
+rework (`namespaceURI`, `tagName` casing, the HTML-parser path — 596 `createElementNS` subtests at risk),
+which is a subsystem, not this bounded tick. Every real-namespace query (XHTML, SVG, MathML, custom URI) is
+exact.
+
+**GATE:** `g_get_by_tag_ns` — XHTML-namespace match on HTML elements, `"*"` wildcards, foreign-namespace
+case sensitivity, prefix stripping, the null-namespace-does-not-match-XHTML rule, and the live-collection
+length tracking. Falsifiable: the method was `undefined`, so the first call threw `TypeError`, the gate's
+`try` bailed to `THREW:…`, and no `label:OK` was written — every assert RED; the native turns them GREEN.
+The +44 WPT flip is itself the falsification proof (44 tests were RED, now GREEN).
+
 ## Tick 124 — MEASURED: native CSS nesting works (surface-audit follow-through; unknown → gated)
 
 **TICK SHAPE: instrument fidelity (measure an unknown, bank it).** `[no-pattern]`. Directly acting on

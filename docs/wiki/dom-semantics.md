@@ -642,3 +642,30 @@ that the other CharacterData methods already share; both guard on the node actua
 `Node.prototype` means Comment/PI inherit the members but they must no-op there). **Deferred, named:** the
 spec's final `splitText` step adjusts any live `Range` boundary points that fall inside the split region —
 not yet modelled (Selection/Range liveness is its own surface). Gate `g_split_text`. [[js-engine]]
+
+## `getElementsByTagNameNS` — match on (namespace, localName), and `None` means XHTML
+
+The namespace-aware sibling of `getElementsByTagName`. It matches descendant elements by a **pair** —
+`(namespace, localName)` — where `"*"` is a wildcard in *either* slot, and the local name is derived
+**exactly as `element.localName` derives it**, because the two must agree: the part after the prefix for a
+namespaced element (`createElementNS("test","test:body")` → local `"body"`), and the ASCII-lowercased tag
+for an HTML element. So `("test","BODY")` and `("test","body")` are different queries — foreign content is
+case-sensitive, HTML is folded. Implemented as `el_get_by_tag_ns` on both the Element and Document
+prototypes: enumerate descendants with `query_selector_all(root, "*")` (self excluded, same as
+`getElementsByTagName`), filter on the pair, and hand the static array to `collections_js`, which wraps it
+into a **live `HTMLCollection`** — so `while (c.length) …` over the result terminates.
+
+**The load-bearing subtlety is the namespace representation, and it is a deliberate, stated trade.** An
+HTML element stores `namespace: None`, which is treated as the XHTML namespace for matching — this is why
+`getElementsByTagNameNS("http://www.w3.org/1999/xhtml", "div")` finds the page's divs and a `null`/`""`
+namespace query does **not** (those elements are not in the null namespace). But a *genuinely*
+empty-string-namespace element — `createElementNS("", "x")`, which essentially no real page creates — also
+stores `None`, so it is **indistinguishable from XHTML** here. That single WPT edge
+(`getElementsByTagNameNS("", "*")` finding such an element) is the one query left unserved; every
+real-namespace query — XHTML, SVG, MathML, a custom URI — is exact. Serving the empty-string edge needs the
+full null-vs-XHTML *storage* split, which would ripple into `namespaceURI` (must answer `null` not `""`),
+`tagName` casing (a null-namespace element is not uppercased), and the HTML-parser path (596
+`createElementNS` subtests already green depend on `None`==XHTML) — a subsystem, not a bounded query tick.
+**The general lesson: a query can be spec-correct for every case the storage can represent, and honest
+about the one case it cannot — the fix for that case is a storage change, not a query change.** Gate
+`g_get_by_tag_ns` (dom 3052 → 3096, +44). [[js-engine]] [[conformance-and-oracles]]

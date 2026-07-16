@@ -116,3 +116,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 122	229dd14	1784197094	2026-07-16T06:18:14-04:00	1072	capability	49	8	210	34	53	81	3045	6524	1	217	0	`new Text()`/`new Comment()`/`new DocumentFragment()` minted dead objects (+29)
 123	7cf6d88	1784198690	2026-07-16T06:44:50-04:00	1596	capability	50	10	301	35	54	81	3053	6524	1	219	0	`Text.splitText()` + `wholeText`, and the tick-123 SURFACE AUDIT (+8)
 124	438aba1	1784199037	2026-07-16T06:50:37-04:00	347	instrument	60	5	133	34	55	81	3053	6524	0	219	0	MEASURED: native CSS nesting works (surface-audit follow-through; unknown → gated)
+125	e91fdd1	1784200863	2026-07-16T07:21:03-04:00	1826	pattern-class	62	9	278	34	56	81	3053	6524	0	220	0	`getElementsByTagNameNS`: the namespace-aware query (+44 dom)

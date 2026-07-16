@@ -154,6 +154,7 @@
   - L590 · The typed Event hierarchy — flat members over a real instanceof chain
   - L614 · Constructable node interfaces — when iface()'s inert constructor is the wrong default
   - L634 · Text.splitText() and wholeText — the split and its inverse
+  - L646 · getElementsByTagNameNS — match on (namespace, localName), and None means XHTML
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -363,4 +364,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-294 sections across 16 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+295 sections across 16 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

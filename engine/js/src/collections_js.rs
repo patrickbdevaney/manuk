@@ -185,8 +185,10 @@ pub const COLLECTIONS_JS: &str = r#"
   wrapAccessor(NP, 'childNodes', NodeList);
 
   wrapMethod(EP, 'getElementsByTagName', HTMLCollection);
+  wrapMethod(EP, 'getElementsByTagNameNS', HTMLCollection);
   wrapMethod(EP, 'getElementsByClassName', HTMLCollection);
   wrapMethod(document, 'getElementsByTagName', HTMLCollection);
+  wrapMethod(document, 'getElementsByTagNameNS', HTMLCollection);
   wrapMethod(document, 'getElementsByClassName', HTMLCollection);
 
   // `querySelectorAll` returns a STATIC NodeList — and that is the spec, not an oversight. Code relies on

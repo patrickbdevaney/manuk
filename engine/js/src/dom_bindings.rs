@@ -1240,6 +1240,7 @@ unsafe fn define_members(
         def_guarded!(def, c"replaceChildren", el_replace_children, 0);
         def_guarded!(def, c"createTextNode", doc_create_text_node, 1);
         def_guarded!(def, c"getElementsByTagName", el_get_by_tag, 1);
+        def_guarded!(def, c"getElementsByTagNameNS", el_get_by_tag_ns, 2);
         def_guarded!(def, c"getElementsByClassName", el_get_by_class, 1);
         def_guarded!(def, c"getElementsByName", doc_get_by_name, 1);
         // The HTMLDocument "named-collection" getters — each a live-ish HTMLCollection of a fixed kind
@@ -1340,6 +1341,7 @@ unsafe fn define_members(
             Some(el_set_adopted_stylesheets)
         );
         def_guarded!(def, c"getElementsByTagName", el_get_by_tag, 1);
+        def_guarded!(def, c"getElementsByTagNameNS", el_get_by_tag_ns, 2);
         def_guarded!(def, c"getElementsByClassName", el_get_by_class, 1);
         def_guarded!(def, c"querySelector", doc_query, 1);
         def_guarded!(def, c"querySelectorAll", doc_query_all, 1);
@@ -2937,6 +2939,72 @@ unsafe fn el_get_by_tag(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> boo
     };
     let tag = arg_string(cx, vp, argc, 0).unwrap_or_default();
     let matches = manuk_css::query_selector_all(&*dom, root, &tag);
+    node_array(cx, vp, dom, &matches);
+    true
+}
+
+/// `getElementsByTagNameNS(namespace, localName)` — the namespace-aware sibling of
+/// `getElementsByTagName`. Matches descendant elements by (namespace, local name): `"*"` is a wildcard in
+/// either position, and a `null`/`""` namespace means "no namespace". Returned as a static Array; the JS
+/// live-collection wrapper (`collections_js`) turns it into a live `HTMLCollection`, so a mutation under a
+/// `while (c.length)` loop terminates instead of spinning.
+///
+/// **The local name is computed exactly as `element.localName` computes it** — the part after the prefix
+/// for a namespaced element (`createElementNS("test", "test:body")` → `"body"`), and the ASCII-lowercased
+/// tag for an HTML element — so `getElementsByTagNameNS("test", "body")` matches the prefixed element and
+/// `getElementsByTagNameNS("test", "BODY")` does not. Case-sensitive, as the spec requires for foreign
+/// content.
+///
+/// **One honest limit, stated:** an HTML element stores `namespace: None`, which this treats as the XHTML
+/// namespace for matching (the case the whole web exercises). A *genuinely* null-namespace element —
+/// `createElementNS("", "x")`, essentially never seen in the wild — is also stored `None`, so it is
+/// indistinguishable from XHTML here. That single WPT edge (`getElementsByTagNameNS("", "*")` finding an
+/// empty-namespace element) is the one query this does not serve; every real-namespace query — XHTML, SVG,
+/// MathML, a custom URI — is exact.
+unsafe fn el_get_by_tag_ns(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, root)) = this_node(vp) else {
+        *vp = NullValue();
+        return true;
+    };
+    // arg 0 is the namespace. JS `null` (and an absent arg) means "no namespace", NOT the string "null";
+    // read the raw value the way `createElementNS` does. `"*"` is the any-namespace wildcard.
+    let ns_raw = {
+        let args = mozjs::jsapi::CallArgs::from_vp(vp, argc);
+        let raw = if argc > 0 {
+            args.get(0).get()
+        } else {
+            NullValue()
+        };
+        if raw.is_null_or_undefined() {
+            None
+        } else {
+            arg_string(cx, vp, argc, 0)
+        }
+    };
+    let want_ns = ns_raw.as_deref().unwrap_or(""); // null / absent → "" (no namespace)
+    let ns_any = want_ns == "*";
+    let want_local = arg_string(cx, vp, argc, 1).unwrap_or_default();
+    let local_any = want_local == "*";
+
+    const XHTML: &str = "http://www.w3.org/1999/xhtml";
+    let matches: Vec<NodeId> = manuk_css::query_selector_all(&*dom, root, "*")
+        .into_iter()
+        .filter(|&n| {
+            let Some(t) = (*dom).tag_name(n) else {
+                return false;
+            };
+            // Effective (namespace, localName) exactly as `element.localName` derives them: a stored `None`
+            // namespace is the XHTML namespace and the tag is ASCII-lowercased; a foreign namespace keeps
+            // its case and the local name is the part after the prefix.
+            let (el_ns, el_local): (&str, String) = match (*dom).namespace(n) {
+                Some(ns) => (ns, t.rsplit(':').next().unwrap_or(t).to_string()),
+                None => (XHTML, t.to_ascii_lowercase()),
+            };
+            let ns_ok = ns_any || el_ns == want_ns;
+            let local_ok = local_any || el_local == want_local;
+            ns_ok && local_ok
+        })
+        .collect();
     node_array(cx, vp, dom, &matches);
     true
 }
