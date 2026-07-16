@@ -106,3 +106,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 112	c85fdce	1784150176	2026-07-15T17:16:16-04:00	2717	capability	54	11	118	41	43	81	2387	6484	0	197	0	lang reflection: a getter-only fallback whose SETTER was silently dropped (+4,560)
 113	c5389cf	1784159170	2026-07-15T19:46:10-04:00	8994	capability	555	14	391	61	44	81	2387	6484	0	200	0	HTML attribute qualified names weren't ASCII-lowercased: a hole as big as the win it hid behind (+10,249)
 114	5356161	1784169886	2026-07-15T22:44:46-04:00	10716	capability	48	8	209	7	45	81	2387	6484	0	203	0	the HTMLDocument named collections were `undefined`, and `document.forms.length` was a TypeError (+39)
+115	76c0866	1784171831	2026-07-15T23:17:11-04:00	1945	capability	52	10	366	36	46	81	2387	6484	0	206	0	`lookupNamespaceURI`/`isDefaultNamespace` were `undefined`: the locate-a-namespace algorithm (+~75)

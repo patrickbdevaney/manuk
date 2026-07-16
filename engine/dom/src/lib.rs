@@ -968,6 +968,87 @@ impl Dom {
         self.element(id).map(|e| e.name.as_str())
     }
 
+    /// The XML, XMLNS and XHTML namespace URIs — the fixed points of the DOM's namespace algorithms.
+    /// `XML_NS` and `XMLNS_NS` are always bound (they cannot be re-declared or overridden); `XHTML_NS`
+    /// is the effective namespace of an HTML-namespaced element, which this arena stores as `None`.
+    pub const XML_NS: &'static str = "http://www.w3.org/XML/1998/namespace";
+    pub const XMLNS_NS: &'static str = "http://www.w3.org/2000/xmlns/";
+    pub const XHTML_NS: &'static str = "http://www.w3.org/1999/xhtml";
+
+    /// The DOM "locate a namespace" algorithm (DOM Living Standard §Node). Given a `prefix` (or `None`
+    /// for the default namespace), walk from `node` toward the root and return the namespace URI it
+    /// resolves to, or `None`.
+    ///
+    /// This backs both `node.lookupNamespaceURI(prefix)` (which normalises `""` → `None` first) and
+    /// `node.isDefaultNamespace(ns)` (which calls it with `None` and compares). The subtleties that make
+    /// it more than a field read:
+    ///   * The `xml` and `xmlns` prefixes are **always** bound on an element and cannot be overridden by
+    ///     an `xmlns:*` declaration — so `el.lookupNamespaceURI('xmlns')` is `XMLNS_NS` even after
+    ///     `setAttributeNS(XMLNS_NS, 'xmlns', ...)`.
+    ///   * An HTML element stores `namespace: None` but **is** in the XHTML namespace with a null prefix,
+    ///     so `document.lookupNamespaceURI(null)` is XHTML, not whatever `xmlns` the `<html>` carries —
+    ///     the element's own namespace wins over its attributes.
+    ///   * "Parent element" means the parent *iff it is an element* — a comment whose parent is the
+    ///     document resolves to `None`, it does not climb to the document element.
+    pub fn locate_namespace(&self, node: NodeId, prefix: Option<&str>) -> Option<String> {
+        match &self.nodes.get(node.index())?.data {
+            NodeData::Element(el) => {
+                match prefix {
+                    Some("xml") => return Some(Self::XML_NS.to_string()),
+                    Some("xmlns") => return Some(Self::XMLNS_NS.to_string()),
+                    _ => {}
+                }
+                // 1. The element's own namespace, if its prefix matches. HTML (`None`) → XHTML, null prefix.
+                let (el_ns, el_prefix) = match &el.namespace {
+                    Some(ns) => (ns.as_str(), el.name.split_once(':').map(|(p, _)| p)),
+                    None => (Self::XHTML_NS, None),
+                };
+                if el_prefix == prefix {
+                    return Some(el_ns.to_string());
+                }
+                // 2. An `xmlns:<prefix>` (or bare `xmlns` for the default) declaration. Stored as an
+                //    ordinary attribute by qualified name; an empty value un-declares (→ `None`).
+                let attr_name = match prefix {
+                    Some(p) => format!("xmlns:{p}"),
+                    None => "xmlns".to_string(),
+                };
+                if let Some(v) = el.attr(&attr_name) {
+                    return (!v.is_empty()).then(|| v.to_string());
+                }
+                // 3. Recurse to the parent ELEMENT.
+                self.parent_element(node)
+                    .and_then(|pe| self.locate_namespace(pe, prefix))
+            }
+            NodeData::Document => self
+                .document_element(node)
+                .and_then(|de| self.locate_namespace(de, prefix)),
+            // A DocumentType, DocumentFragment or ShadowRoot has no namespace and no element to climb to.
+            NodeData::Doctype { .. } | NodeData::Fragment | NodeData::ShadowRoot { .. } => None,
+            // Text / Comment / etc.: resolve on the parent element, if any.
+            _ => self
+                .parent_element(node)
+                .and_then(|pe| self.locate_namespace(pe, prefix)),
+        }
+    }
+
+    /// `node.isDefaultNamespace(namespace)` — is `namespace` (with `""` normalised to `None`) the
+    /// default namespace in scope at `node`? (DOM §Node.)
+    pub fn is_default_namespace(&self, node: NodeId, namespace: Option<&str>) -> bool {
+        let ns = namespace.filter(|s| !s.is_empty());
+        self.locate_namespace(node, None).as_deref() == ns
+    }
+
+    /// The parent node **iff it is an element** (i.e. `node.parentElement`), else `None`.
+    fn parent_element(&self, node: NodeId) -> Option<NodeId> {
+        let p = self.parent(node)?;
+        self.is_element(p).then_some(p)
+    }
+
+    /// A document's document element — its first element child — or `None` (e.g. `new Document()`).
+    fn document_element(&self, doc: NodeId) -> Option<NodeId> {
+        self.children(doc).find(|&c| self.is_element(c))
+    }
+
     /// The first element with the given lowercased tag name, searched depth-first
     /// from the document root. Handy for `<html>`/`<body>`/`<title>` lookups.
     pub fn find_first(&self, name: &str) -> Option<NodeId> {

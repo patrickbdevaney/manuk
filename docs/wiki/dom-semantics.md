@@ -485,3 +485,27 @@ HTML attribute names (`name` is always keyed lowercase). Three spec subtleties, 
 `document.links` is `a`/`area` **with `href`** (a bare `<a name>` anchor is not a link); `document.anchors`
 is `a` **with `name`**; `plugins` is a synonym for `embeds`. **+39 html/dom (55,744 → 55,783), crashes=0.**
 Gate `g_doc_collections`, proven falsifiable (RED = `document.forms is undefined`). [[js-engine]]
+
+## `lookupNamespaceURI` / `isDefaultNamespace` — the "locate a namespace" algorithm
+
+Both were `undefined` on every node (`node.lookupNamespaceURI is not a function`, a `TypeError`). They
+implement DOM §Node's "locate a namespace", which is more than a field read. The algorithm lives in the DOM
+crate (`Dom::locate_namespace(node, prefix)`, direct `NodeData` match); the JS side is two thin natives on
+**`Node.prototype`** so Document/Fragment/Comment/Element inherit through the chain. The four subtleties,
+each of which is a separate way to get it wrong:
+
+1. **`xml`/`xmlns` are always bound on an element and are NOT overridable.** `lookupNamespaceURI('xmlns')`
+   is `XMLNS_NS` even after `setAttributeNS(XMLNS_NS,'xmlns',v)`. Checked *first*, and only in the Element
+   branch — a bare DocumentFragment/DocumentType returns `null` even for `'xml'`.
+2. **HTML elements store `namespace: None` but ARE in the XHTML namespace with a null prefix.** So an
+   element's own namespace (xhtml) wins over an `xmlns` attribute it carries: `document.lookupNamespaceURI
+   (null)` is xhtml, not the `<html>`'s `xmlns`. Mirror `namespaceURI`'s `None → xhtml` convention.
+3. **"Parent element" is the parent iff it is an element** (`node.parentElement`), so a comment whose
+   parent is the *document* resolves to `null` — it does not climb to the document element.
+4. **The prefix arg is nullable** (`DOMString?`). `lookupNamespaceURI(null)` means "no prefix", so it must
+   NOT be ToString-coerced to `"null"` — `arg_string_nullable` maps JS `null`/`undefined` → `None`.
+
+`isDefaultNamespace(ns)` is `locate_namespace(node, None) == ns` (with `""` normalised to null). Gate
+`g_namespace_lookup` ports all 27 branch cases from WPT `Node-lookupNamespaceURI.html`. `lookupPrefix` is
+NOT implemented: its WPT file is `.xhtml`, gated behind XML document loading, so it would flip nothing.
+[[js-engine]] [[conformance-and-oracles]]

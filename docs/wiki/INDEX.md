@@ -147,6 +147,7 @@
   - L438 · A getter-only attribute fallback silently drops the setter — and double-defining a native one CRASHES
   - L449 · HTML attribute qualified names are ASCII-lowercased — the root of the reflection value-mismatch mass
   - L471 · The HTMLDocument named collections — document.forms/images/links/scripts/embeds/anchors + getElementsByName
+  - L489 · lookupNamespaceURI / isDefaultNamespace — the "locate a namespace" algorithm
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -343,4 +344,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-278 sections across 15 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+279 sections across 15 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

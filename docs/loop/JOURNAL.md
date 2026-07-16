@@ -3054,6 +3054,44 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 115 — `lookupNamespaceURI`/`isDefaultNamespace` were `undefined`: the locate-a-namespace algorithm (+~75)
+
+**TICK SHAPE: capability (DOM namespace algorithm).** `[pattern: namespace-lookup]`. Probed the `dom` area
+(42.8%, 3,706 failing) with `--show-failures` and clustered by message shape — the top *single-cause*
+bounded cluster was `node.lookupNamespaceURI is not a function` (39) + `node.isDefaultNamespace is not a
+function` (36) = **~75 subtests**, one coherent spec algorithm, read-only (zero Bar-0 risk). Chosen over
+the bigger-but-diffuse `assert_equals expected X but got X` (464) and `assert_throws_dom did not throw`
+(441) masses, which have many independent root causes, and over `createProcessingInstruction` (~115) which
+needs a new arena node type (Bar-0 surface — the tick-60 ShadowRoot-variant class).
+
+**Hypothesis / the gap.** Both methods were **`undefined`** on every node, so any script that reached for
+them took a `TypeError`. They implement the DOM "locate a namespace" algorithm — more than a field read.
+
+**Mechanism.** The algorithm lives in the DOM crate (`Dom::locate_namespace(node, prefix)`), where the
+`NodeData` match is direct; the two JS natives (`el_lookup_namespace_uri`, `el_is_default_namespace`) are
+thin reflector seams on **`Node.prototype`** (so Document/Fragment/Comment/Element all inherit through the
+chain). Four spec subtleties, each pinned by the gate:
+1. **`xml`/`xmlns` are always bound on an element and cannot be overridden** — `lookupNamespaceURI('xmlns')`
+   stays `XMLNS_NS` even after `setAttributeNS(XMLNS_NS,'xmlns',…)`. Checked *first*, and only in the
+   Element branch (a bare fragment returns `null` even for `'xml'`).
+2. **An HTML element stores `namespace: None` but IS in the XHTML namespace with a null prefix** — mirrors
+   `namespaceURI`'s `None → xhtml`. So `document.lookupNamespaceURI(null)` is XHTML, **not** whatever
+   `xmlns` the `<html>` carries: the element's own namespace wins over its attributes.
+3. **"Parent element" means the parent iff it is an element** — a comment whose parent is the document
+   resolves to `null`; it does not climb to the document element.
+4. **Nullable arg** — `lookupNamespaceURI(null)` must mean "no prefix", not the string `"null"`. A new
+   `arg_string_nullable` maps JS `null`/`undefined` → `None` instead of ToString-coercing them.
+
+**MEASURED.** New gate `g_namespace_lookup` (27 checks ported straight from WPT
+`Node-lookupNamespaceURI.html`, covering every branch above) is **proven falsifiable** — RED without the
+engine fix (`frag.lookupNamespaceURI is not a function`), GREEN with it. **dom 2,775 → 2,837 (+62)**,
+TOTAL 422,741 → 422,803; Bar 0 clean (HANG/CRASH 0 every area); html/dom, css/selectors and domparsing
+held exactly; no area regressed. *(`lookupPrefix` was deliberately left out: its WPT file is `.xhtml`,
+gated behind XML document loading we don't do, so it would add risk for no flip.)*
+
+**The ratchet.** Capability: **up** (a whole DOM algorithm made real, read-only). Performance: unchanged.
+Instrument fidelity: **up** — a 27-branch falsifiable tooth. [[parity-methodology]]
+
 ## Tick 114 — the HTMLDocument named collections were `undefined`, and `document.forms.length` was a TypeError (+39)
 
 **TICK SHAPE: capability (DOM named-collection surface).** `[pattern: doc-collections]`. Built and proven

@@ -705,6 +705,26 @@ unsafe fn arg_string(cx: *mut RawJSContext, vp: *mut Value, argc: u32, i: u32) -
     }
 }
 
+/// Like [`arg_string`] but for a **nullable** IDL string (`DOMString?`): JS `null`/`undefined` map to
+/// `None` rather than being ToString-coerced into the literal `"null"`/`"undefined"`. `lookupNamespaceURI`
+/// and `isDefaultNamespace` take `DOMString?`, and `foo.lookupNamespaceURI(null)` MUST mean "no prefix",
+/// not the string `"null"`.
+unsafe fn arg_string_nullable(
+    cx: *mut RawJSContext,
+    vp: *mut Value,
+    argc: u32,
+    i: u32,
+) -> Option<String> {
+    if i >= argc {
+        return None;
+    }
+    let v = *vp.add(2 + i as usize);
+    if v.is_null() || v.is_undefined() {
+        return None;
+    }
+    arg_string(cx, vp, argc, i)
+}
+
 /// Numeric argument `i`, coerced the way the DOM does: `undefined` → 0, negatives and NaN → 0
 /// (the IDL type is `unsigned long`, so the coercion is modular and clamped, not an error).
 unsafe fn arg_u32(_cx: *mut RawJSContext, vp: *mut Value, argc: u32, i: u32) -> Option<u32> {
@@ -1268,6 +1288,8 @@ unsafe fn define_members(
         def_guarded!(def, c"getRootNode", el_get_root_node, 0);
         def_guarded!(def, c"isSameNode", el_is_same_node, 1);
         def_guarded!(def, c"isEqualNode", el_is_equal_node, 1);
+        def_guarded!(def, c"lookupNamespaceURI", el_lookup_namespace_uri, 1);
+        def_guarded!(def, c"isDefaultNamespace", el_is_default_namespace, 1);
         def_guarded!(def, c"normalize", el_normalize, 0);
         prop_guarded!(prop, c"childElementCount", el_child_element_count, None);
         prop_guarded!(prop, c"lastElementChild", el_last_element_child, None);
@@ -2785,6 +2807,34 @@ unsafe fn doc_get_embeds(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> b
 unsafe fn doc_get_anchors(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     // `document.anchors` is `a` elements with a `name` attribute.
     doc_collection(cx, vp, "a[name]");
+    true
+}
+
+/// `node.lookupNamespaceURI(prefix)` — DOM §Node "locate a namespace". `prefix` is nullable
+/// (`""` → `null`), and the return is the namespace URI string, or `null`. The algorithm lives in the
+/// DOM crate ([`Dom::locate_namespace`]); this is the reflector seam.
+unsafe fn el_lookup_namespace_uri(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, node)) = this_node(vp) else {
+        *vp = NullValue();
+        return true;
+    };
+    let prefix = arg_string_nullable(cx, vp, argc, 0).filter(|s| !s.is_empty());
+    match (*dom).locate_namespace(node, prefix.as_deref()) {
+        Some(ns) => return_string(cx, vp, &ns),
+        None => *vp = NullValue(),
+    }
+    true
+}
+
+/// `node.isDefaultNamespace(namespace)` — is `namespace` the default namespace in scope at `node`?
+/// (DOM §Node.) `namespace` is nullable (`""` → `null`); returns a boolean.
+unsafe fn el_is_default_namespace(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, node)) = this_node(vp) else {
+        *vp = BooleanValue(false);
+        return true;
+    };
+    let ns = arg_string_nullable(cx, vp, argc, 0);
+    *vp = BooleanValue((*dom).is_default_namespace(node, ns.as_deref()));
     true
 }
 
