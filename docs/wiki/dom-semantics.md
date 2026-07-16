@@ -610,3 +610,23 @@ constructor `TypeError` (the check accepts any object as a Window — enough for
 rejection; a strict `instanceof Window` is not worth the branch). This is a **pure-JS-prelude** capability
 — zero arena/native risk, so it cannot regress dispatch. Gate `g_event_constructors`. [[interaction-surface]]
 [[js-engine]]
+
+## Constructable node interfaces — when `iface()`'s inert constructor is the wrong default
+
+The prelude's generic `iface(name, test)` gives every DOM interface global a constructor that is
+**constructible and inert** — `function(){ return this; }` returning an empty object, with a
+`Symbol.hasInstance` predicate so `instanceof` works. That is deliberately right for the interfaces the web
+platform makes **un-constructable** (`new Element()`/`new Node()` throw "Illegal constructor" — an inert
+stub is a gentler, framework-friendlier version of that). But three node interfaces ARE constructable and
+the inert default silently breaks them: `new Text('x')`, `new Comment('x')`, `new DocumentFragment()` must
+each mint a **real detached node owned by the current document**. Left inert, `new Text('x').data` was
+`undefined` and `.nodeType` `undefined` — a dead object that every library building nodes via the
+constructors (rather than `document.createTextNode`) silently received.
+
+The fix delegates to the factories that already exist: after `iface()` runs, replace those three globals
+with constructors that `return globalThis.document.createTextNode(...)` / `createComment(...)` /
+`createDocumentFragment()` (evaluated at call time, when `document` is fully wired), re-applying the
+nodeType `hasInstance` predicate so the flat-prototype node still tests `instanceof Text`. **The general
+lesson: a generic "make it constructible and inert" default is correct only for the un-constructable half
+of the interface list; the constructable half needs the real factory wired in.** Gate
+`g_node_constructors`. [[js-engine]] [[conformance-and-oracles]]

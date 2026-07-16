@@ -308,6 +308,36 @@ const PRELUDE: &str = r#"
       iface('Comment', function(o){ return !!o && o.nodeType === 8; });
       iface('DocumentFragment', function(o){ return !!o && o.nodeType === 11; });
 
+      // ── Text, Comment and DocumentFragment are CONSTRUCTABLE (`new Text('x')`, `new Comment('x')`,
+      //    `new DocumentFragment()`), not merely `instanceof` targets. `iface()` above gives every
+      //    interface an *inert* constructor that returns an empty `{}` — right for the un-constructable
+      //    ones (Element, Node) but wrong for these three, where the spec mints a real detached node
+      //    owned by the current document. `new Text('x')` was returning `{data: undefined, nodeType:
+      //    undefined}`, so every test (and every library) that builds a node with `new Text()` got a
+      //    dead object. Delegating to the existing `document.create*` factories (evaluated at call time,
+      //    when `document` is fully wired) makes them real; `hasInstance` from `iface` still answers
+      //    `instanceof` via the nodeType predicate, so the flat-prototype node still tests true.
+      (function () {
+        var mkCtor = function (name, build, test) {
+          var C = function (arg) { return build(arg); };
+          try { Object.defineProperty(C, 'name', { value: name }); } catch (e) {}
+          C.prototype = (typeof REAL !== 'undefined' && REAL[name]) ||
+                        (globalThis[name] && globalThis[name].prototype) || {};
+          try { Object.defineProperty(C, Symbol.hasInstance, { value: test, configurable: true }); }
+          catch (e) {}
+          globalThis[name] = C;
+        };
+        mkCtor('Text',
+          function (d) { return globalThis.document.createTextNode(d === undefined ? '' : String(d)); },
+          function (o) { return !!o && o.nodeType === 3; });
+        mkCtor('Comment',
+          function (d) { return globalThis.document.createComment(d === undefined ? '' : String(d)); },
+          function (o) { return !!o && o.nodeType === 8; });
+        mkCtor('DocumentFragment',
+          function () { return globalThis.document.createDocumentFragment(); },
+          function (o) { return !!o && o.nodeType === 11; });
+      })();
+
       // ── The Node interface CONSTANTS + compareDocumentPosition. Ordinary code writes
       //    `n.nodeType === Node.ELEMENT_NODE` and libraries order the DOM with
       //    `a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING`. Absent, the first is

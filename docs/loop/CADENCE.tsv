@@ -113,3 +113,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 119	02ded29	1784192942	2026-07-16T05:09:02-04:00	9042	capability	51	8	411	14	50	81	21	106	1	211	0	`Node.prototype.moveBefore`: the atomic move + its pre-move validity (+18)
 120	eae534a	1784194660	2026-07-16T05:37:40-04:00	1718	capability	55	10	361	42	51	81	2975	6524	1	214	0	`document.createProcessingInstruction`: a whole missing node type (+43)
 121	d0cfbde	1784196022	2026-07-16T06:00:22-04:00	1362	capability	50	8	278	47	52	81	3016	6524	1	216	0	the typed Event subclass hierarchy: `instanceof` chain + inherited members (+41)
+122	229dd14	1784197094	2026-07-16T06:18:14-04:00	1072	capability	49	8	210	34	53	81	3045	6524	1	217	0	`new Text()`/`new Comment()`/`new DocumentFragment()` minted dead objects (+29)

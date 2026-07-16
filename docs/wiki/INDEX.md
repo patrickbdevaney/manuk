@@ -152,6 +152,7 @@
   - L525 · moveBefore — the atomic move, and why it is stricter than insertBefore
   - L557 · ProcessingInstruction — a whole missing node type, found by histogramming failure *messages*
   - L590 · The typed Event hierarchy — flat members over a real instanceof chain
+  - L614 · Constructable node interfaces — when iface()'s inert constructor is the wrong default
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -361,4 +362,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-292 sections across 16 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+293 sections across 16 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

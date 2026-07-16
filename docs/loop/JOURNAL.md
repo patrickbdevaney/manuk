@@ -3054,6 +3054,36 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 122 — `new Text()`/`new Comment()`/`new DocumentFragment()` minted dead objects (+29)
+
+**TICK SHAPE: capability (constructable DOM interfaces).** `[pattern: node-constructors]`. A fast targeted
+probe (the "build the probe first" discipline, [[parity-methodology]]) found `new Text('hi')` returning
+`{data: undefined, nodeType: undefined}` — a dead object. The three constructable node interfaces
+(`Text`, `Comment`, `DocumentFragment`) were being served by the generic `iface()` helper, which gives
+every DOM interface an **inert** constructor (`function(){ return this; }`) — correct for the
+un-constructable ones (Element, Node) but wrong for these three, where the spec mints a real detached node
+owned by the current document.
+
+**Hypothesis / mechanism.** After the `iface()` setup in `event_loop.rs`, replace the inert
+Text/Comment/DocumentFragment constructors with real ones that delegate to the existing
+`document.createTextNode`/`createComment`/`createDocumentFragment` factories (evaluated at call time, when
+`document` is fully wired), re-applying the `Symbol.hasInstance` nodeType predicate so `instanceof` still
+answers correctly on the flat-prototype node. Pure JS prelude — no arena/native change, zero Bar-0 risk.
+
+**MEASURED.** whole `dom` **3016 → 3045 (+29)**: `dom/nodes` +27, `dom/nodes/moveBefore` +1, `dom/events`
++1 — **no subarea lost a passing subtest**. **HANG/CRASH 0 (Bar 0).**
+
+**GATE:** `g_node_constructors` (own binary, per the runtime-reuse UAF discipline): `new Text(data)` →
+nodeType 3 with `.data`, `instanceof Text`/`Node`, owned by `document`, default `""`; `new Comment` →
+nodeType 8; `new DocumentFragment()` → nodeType 11 holding appended children. Proven falsifiable (RED —
+`tData:null`, `tInstText:false` — with the Text constructor disabled; GREEN with it).
+
+**The ratchet.** Capability: **up** (three constructable DOM interfaces). Performance: unchanged.
+Instrument fidelity: **up** — a 12-case falsifiable tooth. [[parity-methodology]] [[dom-semantics]]
+
+WIKI: docs/wiki/dom-semantics.md — constructable node interfaces: why `iface()`'s inert constructor is
+right for Element/Node and wrong for Text/Comment/DocumentFragment.
+
 ## Tick 121 — the typed Event subclass hierarchy: `instanceof` chain + inherited members (+41)
 
 **TICK SHAPE: capability (a missing interface hierarchy).** `[pattern: typed-event-constructors]`.

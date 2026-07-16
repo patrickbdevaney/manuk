@@ -760,6 +760,12 @@ every tick, which is a rigor bug wearing a performance bug's clothes.
 | **`element.nodeName`** case-preserved outside the HTML namespace | every DOM-diffing lib and serializer keys on nodeName; SVG/XML content | ✅ (tick 116) — was uppercased unconditionally; now mirrors `tagName` (HTML→upper, else preserved) via `Dom::node_name` |
 | **`nodeName` of comment/document/fragment/doctype** | correctness | ✅ (tick 116) — every non-element returned `"#text"`; now `#comment`/`#document`/`#document-fragment`/doctype-name |
 
+## Tick 122 — constructable node interfaces: `new Text`/`new Comment`/`new DocumentFragment` (+29)
+
+| Pattern | Reach | Status |
+|---|---|---|
+| **`new Text(d)` / `new Comment(d)` / `new DocumentFragment()`** mint real detached nodes | every library/test that builds nodes with the constructors instead of `document.create*` (common in test harnesses and vDOM code) | ✅ (tick 122) — were the generic `iface()` **inert** constructor returning `{data: undefined, nodeType: undefined}`; now real constructors delegating to `document.create*` with the `instanceof` predicate preserved. **whole dom 3016 → 3045 (+29)**, gate `g_node_constructors`, pure-JS-prelude (zero Bar-0 risk) |
+
 ## Tick 121 — the typed Event subclass hierarchy (instanceof + inherited members) (+41)
 
 | Pattern | Reach | Status |
