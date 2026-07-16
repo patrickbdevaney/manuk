@@ -17,55 +17,62 @@ use manuk_css::{
     JustifyContent as CssJustify, Position as CssPosition, TrackSize as CssTrackSize, TrackUnit,
 };
 use taffy::prelude::*;
-use taffy::style::{BoxSizing as TaffyBoxSizing, Position as TaffyPosition};
+use taffy::style::{
+    BoxSizing as TaffyBoxSizing, Dimension, LengthPercentage, LengthPercentageAuto,
+    Position as TaffyPosition,
+};
 
-/// `Dim` → taffy `Dimension` (`auto` / length / percentage; a mixed `calc` collapses to its
-/// dominant part — taffy's own calc plumbing is not wired, a documented v1 simplification).
-fn dimension(d: Dim) -> Dimension {
-    match d {
-        Dim::Auto => auto(),
-        Dim::Px(p) => length(p),
-        Dim::Percent(p) => percent(p / 100.0),
-        Dim::Calc { px, pct } => {
-            if px != 0.0 {
-                length(px)
-            } else {
-                percent(pct / 100.0)
+/// Register a mixed `calc(px + pct%)` into the tree's calc table and encode its index as the
+/// opaque `*const ()` handle taffy round-trips back to [`TaffyDom::resolve_calc_value`].
+///
+/// taffy requires the handle to be non-null and 8-byte aligned (low 3 bits = 0), so the index
+/// is stored as `(idx + 1) << 3`. It is an *index*, not a real address — the `Vec` may realloc
+/// freely without invalidating it. The `+1` keeps index 0 off the forbidden null value.
+fn reg_calc(calc: &mut Vec<(f32, f32)>, px: f32, pct: f32) -> *const () {
+    let idx = calc.len();
+    calc.push((px, pct));
+    (((idx + 1) << 3) as usize) as *const ()
+}
+
+/// Split a `calc(px + pct%)` into taffy's length / percent fast paths, or a genuine calc handle
+/// when BOTH terms are present. A single-term calc (`calc(50%)`, `calc(20px)`) needs no handle.
+/// Only the mixed case (`calc(100% - 250px)`) requires taffy's calc plumbing, which resolves the
+/// two terms against the definite basis at layout time — the same `px + pct% · basis` the block
+/// path already does via [`Dim::resolve`].
+macro_rules! dim_impl {
+    ($ty:ty, $auto:expr) => {
+        |d: Dim, calc: &mut Vec<(f32, f32)>| -> $ty {
+            match d {
+                Dim::Auto => $auto,
+                Dim::Px(p) => length(p),
+                Dim::Percent(p) => percent(p / 100.0),
+                Dim::Calc { px, pct } => {
+                    if px != 0.0 && pct != 0.0 {
+                        <$ty>::calc(reg_calc(calc, px, pct))
+                    } else if px != 0.0 {
+                        length(px)
+                    } else {
+                        percent(pct / 100.0)
+                    }
+                }
             }
         }
-    }
+    };
+}
+
+/// `Dim` → taffy `Dimension` (`auto` / length / percentage / calc), sizes + flex-basis.
+fn dimension(d: Dim, calc: &mut Vec<(f32, f32)>) -> Dimension {
+    dim_impl!(Dimension, auto())(d, calc)
 }
 
 /// `Dim` → taffy `LengthPercentageAuto` (margins / insets).
-fn lp_auto(d: Dim) -> LengthPercentageAuto {
-    match d {
-        Dim::Auto => auto(),
-        Dim::Px(p) => length(p),
-        Dim::Percent(p) => percent(p / 100.0),
-        Dim::Calc { px, pct } => {
-            if px != 0.0 {
-                length(px)
-            } else {
-                percent(pct / 100.0)
-            }
-        }
-    }
+fn lp_auto(d: Dim, calc: &mut Vec<(f32, f32)>) -> LengthPercentageAuto {
+    dim_impl!(LengthPercentageAuto, auto())(d, calc)
 }
 
 /// `Dim` → taffy `LengthPercentage` (padding; `auto` is invalid → 0).
-fn lp(d: Dim) -> LengthPercentage {
-    match d {
-        Dim::Auto => length(0.0),
-        Dim::Px(p) => length(p),
-        Dim::Percent(p) => percent(p / 100.0),
-        Dim::Calc { px, pct } => {
-            if px != 0.0 {
-                length(px)
-            } else {
-                percent(pct / 100.0)
-            }
-        }
-    }
+fn lp(d: Dim, calc: &mut Vec<(f32, f32)>) -> LengthPercentage {
+    dim_impl!(LengthPercentage, length(0.0))(d, calc)
 }
 
 fn map_display(d: CssDisplay) -> Display {
@@ -175,7 +182,7 @@ fn grid_line(pair: (CssGridLine, CssGridLine)) -> Line<GridPlacement> {
 /// Map a Manuk [`ComputedStyle`] onto a taffy [`Style`], covering the box model + flex + grid
 /// properties taffy needs to lay out a flex/grid container and its items. Inline/float/table
 /// specifics stay with Manuk (this node is a leaf to taffy in those cases).
-pub fn to_taffy_style(cs: &ComputedStyle) -> Style {
+pub fn to_taffy_style(cs: &ComputedStyle, calc: &mut Vec<(f32, f32)>) -> Style {
     Style {
         display: map_display(cs.display),
         box_sizing: if cs.box_sizing == BoxSizing::BorderBox {
@@ -185,34 +192,34 @@ pub fn to_taffy_style(cs: &ComputedStyle) -> Style {
         },
         position: map_position(cs.position),
         inset: Rect {
-            left: lp_auto(cs.inset.left),
-            right: lp_auto(cs.inset.right),
-            top: lp_auto(cs.inset.top),
-            bottom: lp_auto(cs.inset.bottom),
+            left: lp_auto(cs.inset.left, calc),
+            right: lp_auto(cs.inset.right, calc),
+            top: lp_auto(cs.inset.top, calc),
+            bottom: lp_auto(cs.inset.bottom, calc),
         },
         size: Size {
-            width: dimension(cs.width),
-            height: dimension(cs.height),
+            width: dimension(cs.width, calc),
+            height: dimension(cs.height, calc),
         },
         min_size: Size {
-            width: dimension(cs.min_width),
-            height: dimension(cs.min_height),
+            width: dimension(cs.min_width, calc),
+            height: dimension(cs.min_height, calc),
         },
         max_size: Size {
-            width: dimension(cs.max_width),
-            height: dimension(cs.max_height),
+            width: dimension(cs.max_width, calc),
+            height: dimension(cs.max_height, calc),
         },
         margin: Rect {
-            left: lp_auto(cs.margin.left),
-            right: lp_auto(cs.margin.right),
-            top: lp_auto(cs.margin.top),
-            bottom: lp_auto(cs.margin.bottom),
+            left: lp_auto(cs.margin.left, calc),
+            right: lp_auto(cs.margin.right, calc),
+            top: lp_auto(cs.margin.top, calc),
+            bottom: lp_auto(cs.margin.bottom, calc),
         },
         padding: Rect {
-            left: lp(cs.padding.left),
-            right: lp(cs.padding.right),
-            top: lp(cs.padding.top),
-            bottom: lp(cs.padding.bottom),
+            left: lp(cs.padding.left, calc),
+            right: lp(cs.padding.right, calc),
+            top: lp(cs.padding.top, calc),
+            bottom: lp(cs.padding.bottom, calc),
         },
         border: Rect {
             left: length(cs.border_width.left),
@@ -231,7 +238,7 @@ pub fn to_taffy_style(cs: &ComputedStyle) -> Style {
         flex_wrap: map_wrap(cs.flex_wrap),
         flex_grow: cs.flex_grow,
         flex_shrink: cs.flex_shrink,
-        flex_basis: dimension(cs.flex_basis),
+        flex_basis: dimension(cs.flex_basis, calc),
         grid_template_columns: cs
             .grid_template_columns
             .iter()
@@ -290,6 +297,9 @@ struct TNode {
 pub struct TaffyDom<'m> {
     nodes: Vec<TNode>,
     measure: Box<MeasureFn<'m>>,
+    /// Mixed `calc(px + pct%)` terms, indexed by the handle encoded into each calc `Dimension`.
+    /// taffy hands the handle back to [`Self::resolve_calc_value`] with the definite basis.
+    calc: Vec<(f32, f32)>,
 }
 
 impl<'m> TaffyDom<'m> {
@@ -304,6 +314,7 @@ impl<'m> TaffyDom<'m> {
         let mut tree = TaffyDom {
             nodes: Vec::new(),
             measure,
+            calc: Vec::new(),
         };
         let root = tree.add(dom, styles, container);
         // The container's own margin/padding/border/inset are applied by Manuk's block
@@ -320,7 +331,7 @@ impl<'m> TaffyDom<'m> {
 
     fn add(&mut self, dom: &Dom, styles: &StyleMap, node: DomNodeId) -> TId {
         let cs = &styles[&node];
-        let style = to_taffy_style(cs);
+        let style = to_taffy_style(cs, &mut self.calc);
         let container = matches!(
             cs.display,
             CssDisplay::Flex | CssDisplay::Grid | CssDisplay::InlineFlex | CssDisplay::InlineGrid
@@ -475,6 +486,16 @@ impl LayoutPartialTree for TaffyDom<'_> {
     fn get_core_container_style(&self, node_id: TId) -> &Style {
         &self.nodes[usize::from(node_id)].style
     }
+    /// Resolve a `calc(px + pct%)` handle against the definite `basis` taffy supplies — the same
+    /// linear form [`Dim::resolve`] computes on the block path, so flex/grid items agree with
+    /// block ones on e.g. `width: calc(100% - 250px)`. The handle is `(idx + 1) << 3`.
+    fn resolve_calc_value(&self, val: *const (), basis: f32) -> f32 {
+        let idx = ((val as usize) >> 3).wrapping_sub(1);
+        match self.calc.get(idx) {
+            Some(&(px, pct)) => px + basis * pct / 100.0,
+            None => 0.0,
+        }
+    }
     fn set_unrounded_layout(&mut self, node_id: TId, layout: &Layout) {
         self.nodes[usize::from(node_id)].layout = *layout;
     }
@@ -620,7 +641,7 @@ mod tests {
         cs.width = Dim::Px(600.0);
         cs.flex_direction = CssDir::Column;
         cs.column_gap = 8.0;
-        let t = to_taffy_style(&cs);
+        let t = to_taffy_style(&cs, &mut Vec::new());
         assert_eq!(t.display, Display::Flex);
         assert_eq!(t.flex_direction, FlexDirection::Column);
         assert_eq!(t.size.width, length(600.0));
@@ -631,9 +652,50 @@ mod tests {
     fn maps_item_grow_and_auto_size() {
         let mut cs = ComputedStyle::initial();
         cs.flex_grow = 1.0;
-        let t = to_taffy_style(&cs);
+        let t = to_taffy_style(&cs, &mut Vec::new());
         assert_eq!(t.flex_grow, 1.0);
         assert_eq!(t.size.width, auto());
+    }
+
+    /// The daily-driver `calc()` bar: a flex-item sidebar `width: calc(100% - 250px)` in a
+    /// 1000px flex row must resolve to 750px, NOT the old collapse-to-one-term (-250px → 0).
+    /// Falsifiable: reverting the calc plumbing drops the sidebar to 0 and this fails.
+    #[test]
+    fn flex_item_calc_width_mixes_px_and_percent() {
+        use manuk_dom::Dom;
+        use std::collections::HashMap;
+
+        let mut dom = Dom::new();
+        let container = dom.create_element("div");
+        dom.append_child(dom.root(), container);
+        let sidebar = dom.create_element("div");
+        dom.append_child(container, sidebar);
+
+        let mut styles: HashMap<_, _> = HashMap::new();
+        let mut cc = ComputedStyle::initial();
+        cc.display = CssDisplay::Flex;
+        cc.width = Dim::Px(1000.0);
+        styles.insert(container, cc);
+        let mut cs = ComputedStyle::initial();
+        cs.display = CssDisplay::Block;
+        // calc(100% - 250px): px = -250, pct = 100 (percentages stored 0–100 in Dim).
+        cs.width = Dim::Calc {
+            px: -250.0,
+            pct: 100.0,
+        };
+        cs.flex_shrink = 0.0; // don't let flex shrink the item below its basis
+        styles.insert(sidebar, cs);
+
+        let placed = solve_subtree(&dom, &styles, container, 1000.0, None, |_n, _k, _a| Size {
+            width: 0.0,
+            height: 0.0,
+        });
+        assert_eq!(placed.len(), 1);
+        assert!(
+            (placed[0].slot.width - 750.0).abs() < 1.0,
+            "calc(100% - 250px) of 1000px should be 750px, got {}",
+            placed[0].slot.width
+        );
     }
 
     #[test]

@@ -3799,6 +3799,35 @@ mod tests {
         (dom, root)
     }
 
+    /// The daily-driver `calc()` bar, end-to-end through HTML → cascade → flex layout: a
+    /// `width: calc(100% - 250px)` sidebar in a 1000px flex row must resolve to **750px**, not
+    /// collapse to one term (the pre-wiring taffy path dropped `100%` and used `-250px` → 0).
+    /// This is the sidebar-split every dashboard, docs site and app shell is built on.
+    #[test]
+    fn flex_sidebar_calc_width_resolves_in_full_pipeline() {
+        let html = r#"<div id="row"><div id="side"></div><div id="main"></div></div>"#;
+        let css = "#row{display:flex;width:1000px;height:50px} \
+                   #side{width:calc(100% - 250px);flex-shrink:0} \
+                   #main{flex:1}";
+        let (dom, root) = layout_html(html, css, 1000.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let side_w = rects[&by_id("side")].width;
+        let main_w = rects[&by_id("main")].width;
+        assert!(
+            (side_w - 750.0).abs() < 1.0,
+            "calc(100% - 250px) sidebar should be 750px, got {side_w}"
+        );
+        assert!(
+            (main_w - 250.0).abs() < 1.0,
+            "flex:1 main should take the remaining 250px, got {main_w}"
+        );
+    }
+
     /// Regression: **a shadow tree must be laid out.**
     ///
     /// `flat_children` — the flat tree — existed, was correct, was tested, and was used by the HTML

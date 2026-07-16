@@ -46,7 +46,7 @@ that has never been tested.
 | **`position:absolute` with no insets** (static position) | **React portal roots, JS-positioned dropdowns, every `.sr-only` node** | ✅ — these were being *deleted from the page* |
 | `@media` (incl. `em`/`rem` breakpoints) | Every responsive site | ✅ |
 | `@supports` | Progressive enhancement — without it we rendered the *fallback* of every such site | ✅ |
-| `@layer`, `var()`, `calc()` | Modern design systems | ✅ |
+| `@layer`, `var()`, `calc()` | Modern design systems | ✅ (incl. **mixed `calc(100% − 250px)` in flex/grid layout** — tick 139; the taffy path used to collapse a mixed calc to one term, so `calc`-sized flex/grid sidebars fell to 0) |
 | **`font-family`** | **Literally every page** — was never mapped from the cascade at all | ✅ |
 | `line-height: normal` from real font metrics | Every line box on every page | ✅ |
 | **Intrinsic aspect ratio** (`img { max-width:100% }`) | **Every responsive image on the web** | ✅ |
@@ -834,6 +834,12 @@ every tick, which is a rigor bug wearing a performance bug's clothes.
 |---|---|---|
 | **`new MouseEvent`/`WheelEvent`/`KeyboardEvent`/`UIEvent`/`CompositionEvent`** carry their inherited members and satisfy the `instanceof` chain | every library that constructs synthetic events (test frameworks, drag/gesture libs, `dispatchEvent` polyfills) and every handler that reads `e.view`/`e.detail`/`e.relatedTarget`/`e.deltaX`/`e.location` or branches on `e instanceof UIEvent` | ✅ (tick 121) — events were flat parent-less objects: `new MouseEvent() instanceof UIEvent` was false and `.view`/`.detail` `undefined`; `UIEvent`/`WheelEvent`/`CompositionEvent` did not exist. Now `defEvent(name, defaults, parent)` merges inherited defaults + chains prototypes; hierarchy `Event → UIEvent → MouseEvent → WheelEvent`. **whole dom 2975 → 3016 (+41)**, gate `g_event_constructors` |
 | **`new UIEvent('x', {view: 7})` throws TypeError** | WebIDL `Window?` coercion correctness | ✅ (tick 121) — a supplied non-null non-object `view` is rejected |
+
+## Tick 139 — mixed `calc()` resolves in the flex/grid layout path (sidebar-splits stop collapsing to 0)
+
+| Pattern | Reach | Status |
+|---|---|---|
+| **`width: calc(100% − 250px)` on a flex/grid item/container** | **every dashboard, docs site and app shell** — the fixed-gutter sidebar split (`calc(100% − <fixed>)` main beside a fixed rail, or `calc(<fixed> + 100%)`) is one of the most common layout idioms on the modern web | ✅ (tick 139) — the block path already resolved calc via `Dim::resolve`, but the taffy flex/grid mapping **collapsed a mixed calc to a single term** (`Dim::Calc{px,pct}` → `length(px)` OR `percent(pct)`), so `calc(100% − 250px)` became `−250px` → clamped to **0** and the sidebar vanished. Now the two terms are packed into taffy's `calc()` handle and resolved as `px + pct% · basis` against the definite basis at layout time — the same linear form the block path uses, so flex/grid items agree with block ones. Falsifiable unit + full-pipeline layout tests (750px sidebar in a 1000px row); WPT-neutral (the css-sizing/flexbox calc tests are reftests or also need intrinsic sizing), a daily-driver render fix rather than a flip-count move |
 
 ## Tick 138 — `offsetLeft`/`offsetTop` are offsetParent-relative, and `offsetParent` exists (CSS layout: +665 flexbox, +107 grid)
 

@@ -26,6 +26,12 @@
   - L243 · Retained-heap accounting is NOT RSS, and saying so is the whole point of the metric
   - L256 · Two design decisions recorded as DECIDED-BUT-UNDONE
 
+## BOX LAYOUT — taffy mapping realities and quirks (flex / grid / sizing)
+`docs/wiki/box-layout.md`
+
+  - L8 · A mixed calc() must NOT collapse to one term — taffy has calc plumbing; wire it (tick 139)
+  - L42 · Why the WPT calc suites barely move on a layout-calc fix
+
 ## BUILD AND DEPENDENCIES — what is actually compiled, and what only looks like it is
 `docs/wiki/build-and-dependencies.md`
 
@@ -259,17 +265,16 @@
   - L602 · A reused SpiderMonkey runtime across many pages SIGSEGVs — a cross-file reflector/rooting UAF (open Bar-0)
   - L623 · A second, DETERMINISTIC C-stack overflow (html/semantics) — NATIVE recursion, not the stack-quota class
 
-## Lever Map — daily-driver-weighted capability targeting
+## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
 
-  - L9 · ⚑ CURRENT PHASE DIRECTIVE (tick 138+) — enforced in lever-board.sh
-  - L19 · The core correction to the oracle
-  - L26 · Ranked levers  (score = weight × WPT-mass(k) ÷ effort)
-  - L46 · Per-site dependency map (the 7-site daily-driver corpus)
-  - L57 · Oracle scoring (implemented in lever-board.sh)
-  - L63 · Pre-build FORECAST signals (compute from the existing WPT run; no build required)
-  - L74 · Corpus recommendation (for oracle-crawl.sh)
-  - L81 · Concrete next-3 ticks
+  - L8 · The enforceable sequence (RENDER+INTERACT, build top-down)
+  - L19 · PARALLEL TRACK (layout-independent — pull forward on any crash / crash-gated tick)
+  - L23 · THEN media (BIND GStreamer, never write a codec; lead royalty-free WebM/VP9/Opus)
+  - L30 · Forms (server-rendered actor tier)
+  - L33 · Agentic fallbacks (the a11y tree decouples driving from rendering — v1 ships while CSS imperfect)
+  - L45 · Deferred
+  - L48 · Terminal gate — reasonable security sweep
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -378,4 +383,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-309 sections across 16 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+310 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
