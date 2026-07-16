@@ -669,3 +669,43 @@ full null-vs-XHTML *storage* split, which would ripple into `namespaceURI` (must
 **The general lesson: a query can be spec-correct for every case the storage can represent, and honest
 about the one case it cannot — the fix for that case is a storage change, not a query change.** Gate
 `g_get_by_tag_ns` (dom 3052 → 3096, +44). [[js-engine]] [[conformance-and-oracles]]
+
+## DOM validation errors must be REAL `DOMException`s, not decorated `Error`s (tick 127, +420 dom)
+
+A whole class of DOM validation throws — `classList.add('a b')` and `.add('')`, `createAttribute('')`,
+`setAttributeNS(ns,'',v)`, `removeNamedItem`/`removeAttributeNode` on an absent attribute, `Range.setStart`
+past a node's length, `compareBoundaryPoints` with a bad `how` — was implemented in JS as **`var e = new
+Error(msg); e.name = 'InvalidCharacterError'; throw e;`**. That decorates the *name* but nothing else, and
+it is wrong on two properties that matter far more than the name:
+
+- **`e.code` is `undefined`.** The legacy numeric `DOMException` codes (`INVALID_CHARACTER_ERR` = 5,
+  `SYNTAX_ERR` = 12, `INDEX_SIZE_ERR` = 1, …) never got set. Real code does
+  `catch (e) { if (e.code === DOMException.SYNTAX_ERR) … }`; a decorated `Error` silently takes the wrong
+  branch.
+- **`e.constructor === Error`, not `DOMException`**, and `e instanceof DOMException` is `false`.
+
+**Why it was a ~420-subtest lever, all behind one mechanism.** WPT's `assert_throws_dom` — used by a very
+large fraction of `dom/` — does NOT just check the name. Reading `resources/testharness.js`: it builds
+`required_props.code = name_code_map[name]` and asserts `'code' in e && e.code == required_props.code`
+**for every throw**, then finally asserts `e.constructor === constructor` (the test realm's
+`DOMException`). A decorated `Error` fails the `code` check first, so the test reports the *right name* and
+still fails — e.g. classList whitespace validation alone was **360** such failures, empty-token **45**,
+qualified-name **58**, namespace **5**. The histogram signature was unmistakable:
+`threw object "InvalidCharacterError: …" that is not a DOMException InvalidCharacterError: property "code"
+is equal to undefined, expected 5`. The word "threw" is the tell — the site *did* throw, the object was
+just the wrong type.
+
+**The fix is uniform: `throw new DOMException(message, name)`.** The engine already installs a spec-shaped
+`DOMException` polyfill on the global (`event_loop.rs`) whose constructor sets `.name`, maps `.code` from
+`DOM_CODES[name]`, and whose `.prototype` chains to `Error.prototype` (so `instanceof Error` still holds).
+Because it is `globalThis.DOMException`, the instance's `.constructor` **is** the object the WPT test
+compares against — same realm, so `e.constructor === DOMException` passes. The Rust-side `throw_dom` helper
+(`dom_bindings.rs`) already did exactly this (`throw new DOMException(...)`); the gap was purely the
+JS-authored throw sites in `attrs_js` / `dom_bindings` (classList) / `range_js` / (and, for `TypeError`,
+`mutation_js`, converted to `new TypeError`). **dom 3096 → 3516 (47.5% → 53.9%), Bar 0 clean.**
+
+**The general lesson:** a thrown error's *identity* (`constructor`, `instanceof`) and its *legacy code* are
+load-bearing API surface, not decoration — the spec's own conformance harness checks them before it checks
+the name, and real `catch` blocks branch on them. Setting only `.name` is the shape of a fix that passes an
+eyeball test and every `assert_throws_dom`. Gate `g_dom_exception` (proven red: without the fix,
+`code=undefined|isDE=false|ctorDE=false`). [[js-engine]] [[conformance-and-oracles]]

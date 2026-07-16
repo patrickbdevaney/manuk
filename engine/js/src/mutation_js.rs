@@ -120,9 +120,7 @@ pub const MUTATION_JS: &str = r#"
 
   function MutationObserver(cb) {
     if (typeof cb !== 'function') {
-      var e = new Error('MutationObserver requires a callback');
-      e.name = 'TypeError';
-      throw e;
+      throw new TypeError('MutationObserver requires a callback');
     }
     this._cb = cb;
     this._records = [];
@@ -141,9 +139,7 @@ pub const MUTATION_JS: &str = r#"
     if (o.attributeOldValue || o.attributeFilter) o.attributes = true;
     if (o.characterDataOldValue) o.characterData = true;
     if (!o.childList && !o.attributes && !o.characterData) {
-      var e = new Error('observe() requires childList, attributes or characterData');
-      e.name = 'TypeError';
-      throw e;
+      throw new TypeError('observe() requires childList, attributes or characterData');
     }
     // Re-observing the same target REPLACES the previous registration, per spec.
     for (var i = registry.length - 1; i >= 0; i--) {

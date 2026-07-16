@@ -120,9 +120,7 @@ pub const ATTRS_JS: &str = r#"
       removeNamedItem: function (name) {
         name = String(name);
         if (!el.__hasAttrExact(name)) {
-          var e = new Error("no attribute named '" + name + "'");
-          e.name = 'NotFoundError';
-          throw e;
+          throw new DOMException("no attribute named '" + name + "'", 'NotFoundError');
         }
         var old = makeAttr(null, name, el.__getAttrExact(name));
         el.__removeAttrExact(name);
@@ -199,9 +197,7 @@ pub const ATTRS_JS: &str = r#"
   owner.setAttributeNodeNS = owner.setAttributeNode;
   owner.removeAttributeNode = function (attr) {
     if (!this.__hasAttrExact(attr.name)) {
-      var e = new Error('the attribute is not on this element');
-      e.name = 'NotFoundError';
-      throw e;
+      throw new DOMException('the attribute is not on this element', 'NotFoundError');
     }
     var old = makeAttr(null, attr.name, this.__getAttrExact(attr.name));
     this.__removeAttrExact(attr.name);
@@ -213,9 +209,7 @@ pub const ATTRS_JS: &str = r#"
   owner.toggleAttribute = function (name, force) {
     name = String(name);
     if (name === '') {
-      var e1 = new Error('an empty attribute name is not allowed');
-      e1.name = 'InvalidCharacterError';
-      throw e1;
+      throw new DOMException('an empty attribute name is not allowed', 'InvalidCharacterError');
     }
     var has = this.hasAttribute(name);
     var want = (force === undefined) ? !has : !!force;
@@ -236,9 +230,7 @@ pub const ATTRS_JS: &str = r#"
   owner.setAttributeNS = function (ns, qname, value) {
     qname = String(qname);
     if (qname === '') {
-      var e = new Error('an empty attribute name is not allowed');
-      e.name = 'InvalidCharacterError';
-      throw e;
+      throw new DOMException('an empty attribute name is not allowed', 'InvalidCharacterError');
     }
     var prefix = qname.indexOf(':') >= 0 ? qname.split(':')[0] : null;
     var nsStr = (ns === null || ns === undefined || ns === '') ? null : String(ns);
@@ -248,9 +240,7 @@ pub const ATTRS_JS: &str = r#"
         || (prefix === 'xml' && nsStr !== XML)
         || ((prefix === 'xmlns' || qname === 'xmlns') && nsStr !== XMLNS)
         || (nsStr === XMLNS && prefix !== 'xmlns' && qname !== 'xmlns')) {
-      var e2 = new Error("'" + qname + "' is not valid in namespace " + nsStr);
-      e2.name = 'NamespaceError';
-      throw e2;
+      throw new DOMException("'" + qname + "' is not valid in namespace " + nsStr, 'NamespaceError');
     }
     // The `*AttributeNS` family is CASE-PRESERVING — the DOM spec lowercases only the non-NS
     // setAttribute/getAttribute. Route through the `__*AttrExact` natives so `setAttributeNS(ns,'Abc',v)`
@@ -281,9 +271,7 @@ pub const ATTRS_JS: &str = r#"
   document.createAttribute = function (name) {
     name = String(name);
     if (name === '') {
-      var e = new Error('an empty attribute name is not allowed');
-      e.name = 'InvalidCharacterError';
-      throw e;
+      throw new DOMException('an empty attribute name is not allowed', 'InvalidCharacterError');
     }
     // Created DETACHED, with an empty value, exactly as the spec says — it holds its own value until
     // something attaches it to an element.

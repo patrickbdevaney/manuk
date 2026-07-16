@@ -145,9 +145,7 @@ pub const RANGE_JS: &str = r#"
     return offset < 0 || offset > nodeLength(node);
   }
   function throwIndex() {
-    var e = new Error('offset is out of range');
-    e.name = 'IndexSizeError';
-    throw e;
+    throw new DOMException('offset is out of range', 'IndexSizeError');
   }
 
   // Setting one boundary past the other COLLAPSES the range onto the new point. That is the spec, and it
@@ -198,9 +196,7 @@ pub const RANGE_JS: &str = r#"
       case 2: return cmp(this._ec, this._eo, other._ec, other._eo);  // END_TO_END
       case 3: return cmp(this._sc, this._so, other._ec, other._eo);  // END_TO_START
     }
-    var e = new Error('invalid comparison type');
-    e.name = 'NotSupportedError';
-    throw e;
+    throw new DOMException('invalid comparison type', 'NotSupportedError');
   };
 
   Range.prototype.isPointInRange = function (node, offset) {

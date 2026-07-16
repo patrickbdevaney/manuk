@@ -6555,14 +6555,10 @@ const CSSOM_PRELUDE: &str = r#"
         var check = function (c) {
             c = String(c);
             if (c === '') {
-                var e1 = new Error('an empty token is not allowed');
-                e1.name = 'SyntaxError';
-                throw e1;
+                throw new DOMException('an empty token is not allowed', 'SyntaxError');
             }
             if (/[ \t\r\n\f]/.test(c)) {
-                var e2 = new Error('a token must not contain ASCII whitespace');
-                e2.name = 'InvalidCharacterError';
-                throw e2;
+                throw new DOMException('a token must not contain ASCII whitespace', 'InvalidCharacterError');
             }
             return c;
         };
@@ -6617,9 +6613,7 @@ const CSSOM_PRELUDE: &str = r#"
             // `supports()` is only meaningful for token lists with a defined vocabulary (`rel`, `sandbox`).
             // `classList` has none, so the spec says it THROWS TypeError — it does not return false.
             supports: function () {
-                var e = new Error('classList has no supported tokens');
-                e.name = 'TypeError';
-                throw e;
+                throw new TypeError('classList has no supported tokens');
             },
             toString: function () { return raw(); },
             entries: function () { return read().map(function (v, i) { return [i, v]; })[Symbol.iterator](); },
@@ -6916,14 +6910,10 @@ const WINDOW_PRELUDE: &str = r#"
                     && /^[A-Za-z_:\u0080-\uffff][-A-Za-z0-9._:\u0080-\uffff]*$/.test(name)
                     && name.split(':').length <= 2;
                 if (!valid) {
-                    var e = new Error("'" + name + "' is not a valid qualified name");
-                    e.name = 'InvalidCharacterError';
-                    throw e;
+                    throw new DOMException("'" + name + "' is not a valid qualified name", 'InvalidCharacterError');
                 }
                 if (name.indexOf(':') === 0 || name.lastIndexOf(':') === name.length - 1) {
-                    var e2 = new Error("'" + name + "' has an empty prefix or local name");
-                    e2.name = 'NamespaceError';
-                    throw e2;
+                    throw new DOMException("'" + name + "' has an empty prefix or local name", 'NamespaceError');
                 }
                 var dt = Object.create(g.DocumentType.prototype);
                 dt.name = name;

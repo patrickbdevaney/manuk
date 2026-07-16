@@ -3054,6 +3054,43 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 127 — DOM validation throws are REAL `DOMException`s, not decorated `Error`s (+420 dom)
+
+**TICK SHAPE: pattern-class (one mechanism, whole class of throws).** `[no-pattern]`.
+WIKI: dom-semantics.
+
+**Hypothesis (from the `dom` failure histogram, top cluster by a mile).** The single largest failure
+signature in `dom/` was `threw object "InvalidCharacterError: …" that is not a DOMException
+InvalidCharacterError: property "code" is equal to undefined, expected 5` — **355 InvalidCharacterError +
+45 SyntaxError + 58 qualified-name + 5 namespace ≈ 460** subtests, all the same shape. The word *threw* is
+the tell: the site DID throw, the object was just the wrong TYPE. Several JS-authored validation throws
+(`classList.add`, `createAttribute('')`, `setAttributeNS`, `removeNamedItem`, `Range.setStart` OOB,
+`compareBoundaryPoints`) did `var e = new Error(msg); e.name = 'InvalidCharacterError'; throw e;` — which
+decorates the name but leaves `e.code === undefined` and `e.constructor === Error`.
+
+**Mechanism.** WPT's `assert_throws_dom` (read from `resources/testharness.js`) asserts BOTH
+`'code' in e && e.code == name_code_map[name]` (for every throw) AND, last, `e.constructor === constructor`
+(the realm's `DOMException`). A decorated `Error` fails the `.code` check first — so the test reports the
+*right name* and still fails. The engine already installs a spec-shaped `DOMException` polyfill on the
+global (sets `.name`, maps `.code`, chains to `Error.prototype`) and the Rust-side `throw_dom` helper
+already used it; the gap was purely the JS-authored sites. Fix is uniform: `throw new DOMException(message,
+name)` (and `new TypeError(...)` where WebIDL wants a `TypeError` — `MutationObserver`, `classList.supports`).
+
+**MEASURED — the ratchet turned.** `dom` **3096/6524 (47.5%) → 3516/6524 (53.9%), +420**, HANG/CRASH 0,
+dupes 0. dom/ranges also +4 from the `range_js` conversion.
+
+**Bar 0 checked, not assumed.** dom/ranges standalone shows HANG/CRASH 1 — I stashed my diff, rebuilt the
+committed binary, and reproduced the SAME crash: it is **pre-existing** (a ranges/tentative runtime-reuse
+artifact that the isolated full-`dom` sweep recovers as ACCUM → CRASH 0), NOT a regression from this tick.
+A pure-JS throw-type change cannot produce a process SIGSEGV. Tracked, not traded.
+
+**Gate `g_dom_exception`** asserts `instanceof DOMException`, the numeric `.code`, and
+`.constructor === DOMException` for the five representative throws — **proven red** (revert one site →
+`code=undefined|isDE=false|ctorDE=false`).
+
+**Constitution check #6 (due tick 127)** appended to `docs/loop/CONSTITUTION-CHECK.md`: gate, on the direct
+H0 path (web-API surface by usage weight — the failure-signature FLIP-RATE method), no invariant bent.
+
 ## Tick 126 — Bar-0 diagnosis: the css-values/calc-size interpolate-size SIGSEGV (tracked, not a regression)
 
 **TICK SHAPE: Bar-0 containment (diagnose a crash, hand a reproducer to a fresh context — no trade).**

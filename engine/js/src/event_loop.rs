@@ -997,9 +997,7 @@ const PRELUDE: &str = r#"
         // are written for it. Ours is never open, so this is the honest answer — but it is a *caught*
         // error in every client, not a boot-time ReferenceError, and that is the entire difference.
         WS.prototype.send = function () {
-          var e = new Error('websocket is not connected');
-          e.name = 'InvalidStateError';
-          throw e;
+          throw new DOMException('websocket is not connected', 'InvalidStateError');
         };
         WS.prototype.close = function (code, reason) {
           if (this.readyState === 3) { return; }
@@ -1076,17 +1074,13 @@ const PRELUDE: &str = r#"
         el.canPlayType = function() { return ''; };
 
         el.play = function() {
-          var e = new Error('media playback is not supported by this browser');
-          e.name = 'NotSupportedError';
-          return Promise.reject(e);
+          return Promise.reject(new DOMException('media playback is not supported by this browser', 'NotSupportedError'));
         };
         el.pause = function() {};
         el.load  = function() {};
         el.addTextTrack = function() { return { cues: [], activeCues: [], mode: 'disabled' }; };
         el.requestPictureInPicture = function() {
-          var e = new Error('picture-in-picture is not supported');
-          e.name = 'NotSupportedError';
-          return Promise.reject(e);
+          return Promise.reject(new DOMException('picture-in-picture is not supported', 'NotSupportedError'));
         };
         return el;
       };

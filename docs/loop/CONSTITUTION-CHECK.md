@@ -195,3 +195,39 @@ fix in a fresh context, and I5 (one clean full oracle crawl) is still outstandin
 check #4.
 
 **Next check due: tick 127.**
+
+---
+
+## Check #6 — tick 127
+
+**Horizon:** H0 — Pareto Web Parity. **Gate:** ~83% WPT across categories · oracle-verified across the four
+corpora · daily-drivable shell · every rendered construct queryable through the semantic API.
+
+**Gate or scoreboard?** **Gate.** Ticks 120–127 stayed on the direct H0 path (§VI.4 step 4 — web-API
+surface by usage weight), each picked by histogramming `--show-failures` for the single largest
+one-mechanism cluster: `createProcessingInstruction` (120), typed Event hierarchy (121), Text/Comment/
+DocumentFragment constructors (122), `splitText`/`wholeText` (123), CSS-nesting measurement (124),
+`getElementsByTagNameNS` (125), a Bar-0 diagnosis with no trade (126), and this tick the **DOMException
+identity fix** — the largest single move of the run at **+420 dom** (47.5% → 53.9%). That is real,
+usage-weighted breadth (every `catch` block that branches on `e.code`/`instanceof DOMException`, plus the
+`assert_throws_dom` harness itself), not the encoding tail. The method held throughout: the FLIP-RATE
+discipline — cluster by error signature, take the one shared cause — is exactly how tick 127 turned one
+mechanism into ~420 flips instead of chasing names one at a time.
+
+**Is `orient`'s usage-weighted ranking still the north star?** Yes. The DOMException cluster was picked
+over the higher-*raw*-count but LAYOUT-slog areas (css-flexbox 3371, css-grid 2691 — deprioritised per the
+loop's own "one fix flips ~nothing" rule) and over diffuse `assert_throws`-family masses that are
+subsystems, not bounded ticks. Cleaner bounded mechanism, bigger flip, zero Bar-0 risk.
+
+**Any invariant bent?** No. **Bar 0 held, and was checked rather than assumed** — dom/ranges' standalone
+CRASH 1 was reproduced on the *committed* binary (stash → rebuild → same crash), proving it pre-existing
+(a ranges/tentative runtime-reuse artifact the isolated sweep recovers), not a trade. **I2 intact** — the
+`DOMException`/`.code` mapping is the spec's own WebIDL constant table, no engine forked; the polyfill
+already existed, only the JS throw sites changed. **I3 served** — thrown-error identity is part of the DOM
+surface the agent and every framework read.
+
+**PART VI correction.** None. §VI.4 step 4 remains the productive vein; the crash-gated reflection mass
+(ARIA + whole-tree idlharness access) still awaits the effective-stack-quota fix in a fresh context, and
+I5 (one clean full oracle crawl) is still outstanding — both unchanged since check #5.
+
+**Next check due: tick 135.**
