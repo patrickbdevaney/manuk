@@ -31,10 +31,20 @@ echo "▶ /home is ${pct}% full ($before free)"
 echo "  · incremental fragments (RAM-resident; flushed, not written to disk at all)"
 ./scripts/ramdisk.sh --flush >/dev/null 2>&1 || rm -rf target/debug/incremental target/release/incremental 2>/dev/null
 
-# The debug tree is the hog and the least valuable: nothing ships from it and nothing gates on it.
-if [ "${1:-}" = "--aggressive" ] || [ "$pct" -ge 85 ]; then
-  echo "  · target/debug (rebuilt on demand; we gate and ship on release)"
+# GRANULAR DEBUG-TREE POLICY (observer, tick 119). The debug tree is NOT disposable: verify.sh's gates run
+# `cargo test` in DEBUG, so `rm -rf target/debug` forces a full cold rebuild on the very NEXT verify. The
+# disk oscillates at 84-91%, so the old `pct >= 85` rule fired almost every tick — turning a ~10min warm
+# tick into a ~35min cold-rebuild + OOM-roulette, the exact thrash that stalled the loop. The 28G is mostly
+# mozjs-linked test binaries (the warm cache) plus dep rlibs written once / read forever; regenerating it
+# buys nothing. So PRESERVE the warm cache and reclaim the CHURN instead: incremental now lives in RAM
+# (ramdisk, flushed above), and banked builds + oracle snapshots are pruned below. Nuke the whole debug
+# tree only as an explicit LAST RESORT — `--aggressive`, or a critical >=95% where ENOSPC is imminent and
+# one cold rebuild beats a failed build.
+if [ "${1:-}" = "--aggressive" ] || [ "$pct" -ge 95 ]; then
+  echo "  · target/debug — CRITICAL ${pct}%: full purge to avert ENOSPC (a cold rebuild follows)"
   rm -rf target/debug 2>/dev/null
+else
+  echo "  · target/debug preserved (warm cache kept; only regenerable churn reclaimed — incremental is in RAM)"
 fi
 
 echo "  · banked builds beyond the newest $KEEP_BUILDS (git tags keep the source of every one)"
