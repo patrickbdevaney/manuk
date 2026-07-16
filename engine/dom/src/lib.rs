@@ -1076,6 +1076,54 @@ impl Dom {
         self.locate_namespace(node, None).as_deref() == ns
     }
 
+    /// `node.lookupPrefix(namespace)` — DOM §Node "locate a namespace prefix". Given a namespace URI,
+    /// find the prefix that maps to it in scope at `node`. `namespace` is nullable and an empty string is
+    /// treated as `null` (which always returns `None`, per spec). The return is a prefix string or `None`.
+    ///
+    /// This is the inverse of [`Self::locate_namespace`], and the two share the same walk: check the
+    /// element's own `(namespace, prefix)`, then its `xmlns:<prefix>` declarations, then recurse to the
+    /// parent element. A DocumentType/DocumentFragment has none, a Document defers to its documentElement,
+    /// and a Text/Comment/PI defers to its parent element.
+    pub fn lookup_prefix(&self, node: NodeId, namespace: Option<&str>) -> Option<String> {
+        let ns = namespace.filter(|s| !s.is_empty())?;
+        self.locate_prefix(node, ns)
+    }
+
+    fn locate_prefix(&self, node: NodeId, namespace: &str) -> Option<String> {
+        match &self.nodes.get(node.index())?.data {
+            NodeData::Element(el) => {
+                // 1. The element's own namespace, if it has a (non-null) prefix that maps to it.
+                let (el_ns, el_prefix) = match &el.namespace {
+                    Some(ns) => (ns.as_str(), el.name.split_once(':').map(|(p, _)| p)),
+                    None => (Self::XHTML_NS, None),
+                };
+                if el_ns == namespace {
+                    if let Some(p) = el_prefix {
+                        return Some(p.to_string());
+                    }
+                }
+                // 2. An `xmlns:<prefix>` declaration whose value is this namespace → its local name.
+                for a in &el.attrs {
+                    if a.value == namespace {
+                        if let Some(("xmlns", prefix)) = a.name.split_once(':') {
+                            return Some(prefix.to_string());
+                        }
+                    }
+                }
+                // 3. Recurse to the parent ELEMENT.
+                self.parent_element(node)
+                    .and_then(|pe| self.locate_prefix(pe, namespace))
+            }
+            NodeData::Document => self
+                .document_element(node)
+                .and_then(|de| self.locate_prefix(de, namespace)),
+            NodeData::Doctype { .. } | NodeData::Fragment | NodeData::ShadowRoot { .. } => None,
+            _ => self
+                .parent_element(node)
+                .and_then(|pe| self.locate_prefix(pe, namespace)),
+        }
+    }
+
     /// The parent node **iff it is an element** (i.e. `node.parentElement`), else `None`.
     fn parent_element(&self, node: NodeId) -> Option<NodeId> {
         let p = self.parent(node)?;

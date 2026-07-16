@@ -1311,6 +1311,7 @@ unsafe fn define_members(
         def_guarded!(def, c"isSameNode", el_is_same_node, 1);
         def_guarded!(def, c"isEqualNode", el_is_equal_node, 1);
         def_guarded!(def, c"lookupNamespaceURI", el_lookup_namespace_uri, 1);
+        def_guarded!(def, c"lookupPrefix", el_lookup_prefix, 1);
         def_guarded!(def, c"isDefaultNamespace", el_is_default_namespace, 1);
         def_guarded!(def, c"normalize", el_normalize, 0);
         prop_guarded!(prop, c"childElementCount", el_child_element_count, None);
@@ -3098,6 +3099,22 @@ unsafe fn el_lookup_namespace_uri(cx: *mut RawJSContext, argc: u32, vp: *mut Val
     let prefix = arg_string_nullable(cx, vp, argc, 0).filter(|s| !s.is_empty());
     match (*dom).locate_namespace(node, prefix.as_deref()) {
         Some(ns) => return_string(cx, vp, &ns),
+        None => *vp = NullValue(),
+    }
+    true
+}
+
+/// `node.lookupPrefix(namespace)` — DOM §Node "locate a namespace prefix": the inverse of
+/// `lookupNamespaceURI`. `namespace` is nullable (`""` → `null`, which returns `null`); the return is the
+/// prefix string, or `null`. The algorithm lives in the DOM crate ([`Dom::lookup_prefix`]).
+unsafe fn el_lookup_prefix(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, node)) = this_node(vp) else {
+        *vp = NullValue();
+        return true;
+    };
+    let namespace = arg_string_nullable(cx, vp, argc, 0);
+    match (*dom).lookup_prefix(node, namespace.as_deref()) {
+        Some(prefix) => return_string(cx, vp, &prefix),
         None => *vp = NullValue(),
     }
     true
@@ -6934,6 +6951,19 @@ const WINDOW_PRELUDE: &str = r#"
         // be one.
         if (typeof g.DocumentType !== 'function' || !g.DocumentType.prototype) {
             g.DocumentType = function DocumentType() {};
+        }
+        // A DocumentType is a JS shim, not a real reflector, so it lacks the Node namespace-lookup methods
+        // — and `dom/nodes` calls them on a doctype directly (`Node-lookupNamespaceURI`). For a DocumentType
+        // the answers are constant per spec: "locate a namespace" routes a non-Element/Document node to its
+        // parent ELEMENT, and a doctype's parent is at most a Document — so there is never one to climb to.
+        // lookupNamespaceURI/lookupPrefix are therefore always null; isDefaultNamespace is true only for the
+        // null/empty namespace.
+        if (typeof g.DocumentType.prototype.lookupNamespaceURI !== 'function') {
+            g.DocumentType.prototype.lookupNamespaceURI = function () { return null; };
+            g.DocumentType.prototype.lookupPrefix = function () { return null; };
+            g.DocumentType.prototype.isDefaultNamespace = function (ns) {
+                return ns === null || ns === undefined || ns === '';
+            };
         }
         // `document.doctype` was `null` on every page, including one that plainly declares `<!doctype
         // html>`. A great deal of feature-detection and quirks-mode branching reads it.

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **120** | ticks 1–127 |
-| median tick cycle | **20m** | 119 intervals |
+| ticks landed | **121** | ticks 1–128 |
+| median tick cycle | **20m** | 120 intervals |
 | median, last 10 | **30m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.96** | 123.5h elapsed |
-| median verify wall | **55s** | 59 ticks |
+| **ticks per hour** | **0.97** | 124.0h elapsed |
+| median verify wall | **56s** | 60 ticks |
 | wall trend | 39s → 51s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **57**
-* **✅ rows in the capability ledger**: 144 → **222**
+* **live gates**: 27 → **58**
+* **✅ rows in the capability ledger**: 144 → **224**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**65 of 120 ticks** (54%) moved a
+**66 of 121 ticks** (55%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **65** capability ticks, median cycle **20m**
-* median diff per tick: **+252 / −24** lines across 8 files
+* **66** capability ticks, median cycle **20m**
+* median diff per tick: **+254 / −25** lines across 8 files
 
 ## Every tick
 
@@ -217,5 +217,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **125** | 2026-07-16 07:21 | 30m | pattern-class | 62s | +278/−34 | 56 | 81 | 46.8% · | `getElementsByTagNameNS`: the namespace-aware query (+44 dom) |
 | **126** | 2026-07-16 07:55 | 35m | Bar-0 | 51s | +71/−4 | 56 | 81 | 46.8% · | Bar-0 diagnosis: the css-values/calc-size interpolate-size SIGSEGV (tracked, not a regress |
 | **127** | 2026-07-16 08:33 | 38m | pattern-class | 48s | +222/−59 | 57 | 81 | 46.8% · | DOM validation throws are REAL `DOMException`s, not decorated `Error`s (+420 dom) |
+| **128** | 2026-07-16 09:05 | 31m | pattern-class | 7m | +254/−34 | 58 | 81 | 46.8% · | `Node.lookupPrefix` + the DocumentType namespace-lookup surface (+20 dom) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

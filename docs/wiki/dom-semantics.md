@@ -709,3 +709,33 @@ load-bearing API surface, not decoration — the spec's own conformance harness 
 the name, and real `catch` blocks branch on them. Setting only `.name` is the shape of a fix that passes an
 eyeball test and every `assert_throws_dom`. Gate `g_dom_exception` (proven red: without the fix,
 `code=undefined|isDE=false|ctorDE=false`). [[js-engine]] [[conformance-and-oracles]]
+
+## `Node.lookupPrefix` and the DocumentType namespace-lookup surface (tick 128, +20 dom)
+
+`node.lookupPrefix(namespace)` (DOM §Node "locate a namespace prefix") is the inverse of
+`lookupNamespaceURI` — given a namespace URI, find the prefix that maps to it in scope at `node`. It was
+registered as a native on **no** node type (its siblings `lookupNamespaceURI`/`isDefaultNamespace` were),
+so every `foo.lookupPrefix(ns)` was a `TypeError` — a whole `dom/nodes` file (`Node-lookupPrefix`) plus
+namespace-aware SVG/MathML/XML code and every XML serializer that must choose a prefix.
+
+**The algorithm shares `locate_namespace`'s walk, inverted.** `Dom::lookup_prefix(node, ns)` (with `""`
+normalised to `None`, which returns `None`) on an Element: (1) if the element's own namespace equals the
+target and it has a non-null prefix (from `name.split_once(':')`), return that prefix; (2) scan the
+element's attributes for an `xmlns:<p>` declaration whose *value* equals the target and return `<p>`;
+(3) recurse to the parent element. A Document defers to its `documentElement`; a
+DocumentType/DocumentFragment/ShadowRoot has none; Text/Comment/PI defer to the parent element. The
+reflector seam is `el_lookup_prefix`, registered on the shared prototype beside `lookupNamespaceURI`.
+
+**The second half is a shim gap, and its answers are constant.** A `DocumentType` is a JS shim
+(`Object.create(DocumentType.prototype)`), not a reflector, so it had none of the three namespace-lookup
+methods — and `dom/nodes` calls them directly on a doctype. Per spec the answers are constant, because
+"locate a namespace" routes a non-Element/Document node to its parent **element** and a doctype's parent is
+at most a Document: `lookupNamespaceURI`/`lookupPrefix` are always `null`, `isDefaultNamespace` is true only
+for the null/empty namespace. Three constant methods on `DocumentType.prototype` close it.
+
+**MEASURED:** dom 3516 → 3536 (+20), Bar 0 clean. Gate `g_lookup_prefix` (proven red: without the native,
+the script throws at the first `lookupPrefix` and `textContent` never updates).
+
+**The lesson, again:** a "missing method" histogram row splits into two very different fixes — a real
+algorithm on real reflectors (the +11 element/text/document part) and a constant-answer stub on an exotic
+JS shim (the +9 doctype part). Both are spec-required Node surface; neither is the other. [[js-engine]]

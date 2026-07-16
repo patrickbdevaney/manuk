@@ -157,6 +157,7 @@
   - L634 · Text.splitText() and wholeText — the split and its inverse
   - L646 · getElementsByTagNameNS — match on (namespace, localName), and None means XHTML
   - L673 · DOM validation errors must be REAL DOMExceptions, not decorated Errors (tick 127, +420 dom)
+  - L713 · Node.lookupPrefix and the DocumentType namespace-lookup surface (tick 128, +20 dom)
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -366,4 +367,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-297 sections across 16 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+298 sections across 16 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

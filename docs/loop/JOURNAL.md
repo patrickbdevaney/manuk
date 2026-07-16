@@ -3054,6 +3054,37 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 128 — `Node.lookupPrefix` + the DocumentType namespace-lookup surface (+20 dom)
+
+**TICK SHAPE: pattern-class (a missing Node method, on real nodes and on an exotic shim).** `[no-pattern]`.
+WIKI: dom-semantics.
+
+**Hypothesis (from the post-tick-127 `dom` histogram).** With the DOMException cluster closed, `node.lookupPrefix
+is not a function` (11) and `node.lookupNamespaceURI is not a function` on **DocumentType** (part of 9) were
+the top clean bounded rows. `lookupPrefix` — DOM §Node "locate a namespace prefix", the inverse of
+`lookupNamespaceURI` — was registered as a native on *no* node type, so every call was a TypeError. And a
+DocumentType is a JS shim lacking the whole namespace-lookup surface.
+
+**Mechanism.** `Dom::lookup_prefix(node, ns)` shares `locate_namespace`'s walk, inverted: element's own
+`(namespace, prefix)` → an `xmlns:<p>` declaration whose value matches → recurse to parent element; Document
+→ documentElement; doctype/fragment → none; text/comment/PI → parent element. Native `el_lookup_prefix`
+registered beside `lookupNamespaceURI`. For the DocumentType shim, the spec answers are constant (a doctype
+has no parent ELEMENT to climb to): both lookups null, isDefaultNamespace true only for null/empty — three
+constant methods on `DocumentType.prototype`.
+
+**MEASURED — the ratchet turned.** `dom` **3516 → 3536 (+20)** (+11 native on real nodes, +9 doctype shim),
+HANG/CRASH 0, dupes 0.
+
+**Gate `g_lookup_prefix`** — element own-namespace prefix, `xmlns:` declaration walk, null/empty cases, and
+the doctype constants. **Proven red** (drop the native registration → script throws at the first
+`lookupPrefix` → `textContent` stays "-").
+
+**Scope note (honest):** the larger remaining `dom` mass — XML documents from `createDocument`/`DOMParser`,
+`XMLSerializer`, exotic-node reflectors — is a genuine SUBSYSTEM (real XML documents with correct
+documentElement/namespace/serialization), not a bounded tick; declined this session in favour of the clean
++20, and flagged for a dedicated effort. A one-line probe confirmed `implementation`-on-the-prototype alone
+flips nothing (those tests fail on downstream XML-specific assertions), so the shim path is not a shortcut.
+
 ## Tick 127 — DOM validation throws are REAL `DOMException`s, not decorated `Error`s (+420 dom)
 
 **TICK SHAPE: pattern-class (one mechanism, whole class of throws).** `[no-pattern]`.
