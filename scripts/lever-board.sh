@@ -38,7 +38,7 @@ awk -F'\t' -v B="$B" -v C="$C" -v G="$G" -v Y="$Y" -v O="$O" -v TGT="$TARGET" '
       printf "  %s%-22s %8d %6.1f%%  %s%s\n", col, a, af[a], ap[a], cls, O
     }
   }' "$A"
-printf "\n%s══ DAILY-DRIVER PRIORITY LEVERS — research-informed; these OUTRANK the raw WPT-mass board above ══%s\n" "$B" "$O"
+printf "\n%s══ DAILY-DRIVER PRIORITY LEVERS — research-informed; weigh ALONGSIDE the raw board (undervalued by raw count) ══%s\n" "$B" "$O"
 printf "  (full map + per-site deps + forecast method: %sdocs/wiki/lever-map.md%s)\n" "$C" "$O"
 printf "  The board above ranks by WPT MASS and has a KNOWN BLIND SPOT: it hides cheap, boot-critical APIs whose\n"
 printf "  absence BLANK-SCREENS whole SPAs. Weigh by daily-driver UNLOCK, not raw subtest count:\n"
@@ -52,7 +52,9 @@ printf "     • Flex/Grid intrinsic sizing (min/max-content; Taffy #204) — M-
 printf "     • Web fonts (@font-face / WOFF2)                           — M, 8.8k WPT, layout-metric fidelity\n"
 printf "     • Shadow DOM + Custom Elements                             — L, 20k WPT, YouTube / web-components\n"
 printf "  %sDEFER%s: MSE/media (bind GStreamer, don't build codecs), compositor scrolling, CSS containment.\n" "$Y" "$O"
-printf "  %sDown-weight the near-done giants%s: dom (~99.8%%) + html/dom (~97.8%%) tail is LOW value — stop grinding it.\n" "$Y" "$O"
+printf "  %sWeight by MANUK'S OWN pass-rate (the TALLY above), never Chrome's%s: an area near 100%% HERE is a done tail,\n" "$Y" "$O"
+printf "     but an area still far from 100%% here (e.g. dom) has real high-flip gaps — keep grinding those. The research's\n"
+printf "     'giant is done' notes are CHROME's numbers; MANUK's measured failing subtests are ground truth and win.\n"
 printf "  %sNEXT-3 (highest EV)%s: IntersectionObserver  ->  CSS intrinsic sizing  ->  Fetch streaming.\n" "$G" "$O"
 printf "  %sFORECAST before building%s: cluster the failing subtests by ERROR-SIGNATURE — the biggest same-signature\n" "$B" "$O"
 printf "     cluster means one fix flips them all (how tick-113 landed +10,249). See docs/wiki/lever-map.md #forecast.\n"
