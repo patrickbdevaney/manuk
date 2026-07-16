@@ -6,6 +6,16 @@ sweep (tick 119). Usage %/WPT counts are MEASURED [M] (Web Almanac 2024/25, Proj
 a Chrome 152 wpt.fyi run 2026-07-16); rankings/efforts are JUDGMENT [J]. **WPT remains ground truth; this is a
 second oracle, never the authority.**
 
+## ⚑ CURRENT PHASE DIRECTIVE (tick 138+) — enforced in lever-board.sh
+**Build daily-driver CAPABILITY, not WPT-flip count.** html/dom is reasonably done (~93%); real sites still render
+mislaid-out (CSS layout weak: flexbox 6%, grid 5%, sizing 12%) and video is dead (MSE absent). So this phase
+targets, in order: **(1) CSS LAYOUT** — flex/grid intrinsic sizing (min/max-content; Taffy #204) first, then
+sizing/position/values/overflow; **(2) MSE/MEDIA** — build the `MediaSource`/`SourceBuffer` JS surface and bind
+GStreamer/FFmpeg (don't hand-write codecs). These are low WPT-flip, high daily-driver value — that's the point.
+**The v1 path:** good-enough render+media foundation → the **agentic driving surface** (the differentiator; add
+**agent fallbacks** for actions where DOM/CSS WPT coverage is still thin) → a **reasonable security sweep**. Only
+after CSS layout + MSE are "good enough" do we return to general WPT-flip work.
+
 ## The core correction to the oracle
 Ranking WPT areas by **raw failing-subtest count chases MASS, not daily-driver UNLOCK.** The two biggest WPT
 areas (`html/dom` ~68k, `dom` ~66k) are already Manuk's strongest surfaces (~97.8% / ~99.8% pass) — grinding
