@@ -81,6 +81,9 @@ _out() {  # _out <key> → the command's combined output, once it has finished
   printf '%s' "$out"
 }
 
+# Colors used by the error/retry branches below (were unbound under set -u — the harness bug the
+# agent flagged: a RED wall crashed while trying to print its own error). Defined once here.
+BLD=$'\033[1m'; YEL=$'\033[33m'; OFF=$'\033[0m'
 # Launch every independent gate NOW; each block below simply collects its result.
 _launch js cargo test -q -p manuk-page --features spidermonkey -- --ignored js_conformance
 _launch aff cargo test -q -p manuk-shell affordance
@@ -94,6 +97,7 @@ _launch gdi cargo test -q -p manuk-page --features stylo,spidermonkey --test g_d
 _launch gcn cargo test -q -p manuk-page --features stylo,spidermonkey --test g_contain_native
 _launch gsn cargo test -q -p manuk-dom stale_handle
 _launch gcd cargo test -q -p manuk-page --features stylo,spidermonkey --test g_chardata
+_launch gdoc cargo test -q -p manuk-page --features stylo,spidermonkey --test g_doc_collections
 _launch gl cargo test -q -p manuk-page --features stylo,spidermonkey --test g_lifecycle
 _launch gsl cargo test -q -p manuk-page --features stylo,spidermonkey --test g_selector
 _launch gan cargo test -q -p manuk-page --features stylo,spidermonkey --test g_animation
@@ -344,6 +348,10 @@ head_ "G_CHARDATA · element.click() and CharacterData — neither existed"
 # emoji and surrogate pair on the web — and only for the scripts that use them.
 GCD=$(_out gcd | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ -n "$GCD" ]; then ok "chardata+click: $GCD"; else bad "G_CHARDATA failed — element.click(), the CharacterData interface, or its UTF-16 offsets"; fi
+
+head_ "G_DOC_COLLECTIONS - document.images/forms/links named collections + getElementsByName"
+GDOC=$(_out gdoc | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
+if [ -n "$GDOC" ]; then ok "doc collections: $GDOC"; else bad "G_DOC_COLLECTIONS failed - document named collections or getElementsByName"; fi
 
 head_ "G_LIFECYCLE · the document lifecycle, the clock, and the loop that must not die"
 # Found by wiring up upstream WPT (tick 43). NONE of these move a box, which is why the 265-site
