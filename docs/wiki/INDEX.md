@@ -162,6 +162,7 @@
   - L785 · DOMStringMap (dataset) and NamedNodeMap (attributes) enumerate their names (tick 130)
   - L806 · HTMLCollection iterable surface + numeric namedItem (tick 131)
   - L824 · getElementsByClassName splits on ASCII whitespace, not Unicode (tick 132)
+  - L845 · The CharacterData abstract base interface (tick 133)
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -371,4 +372,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-302 sections across 16 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+303 sections across 16 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

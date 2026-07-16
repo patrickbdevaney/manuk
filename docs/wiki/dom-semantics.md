@@ -841,3 +841,20 @@ now matched literally instead of mis-parsed as a selector.
 **MEASURED:** dom 3573 → 3603 (**+30**), the whitespace file 0/26 → 26/26, Bar 0 **0** (deterministic ×3), no
 regressions (a one-off `Node-lookupNamespaceURI` 69-vs-71 sample was an async TH_TIMEOUT flake, stable at
 71/75 across re-runs). Gate `g_class_ascii_whitespace`. [[dom-semantics]]
+
+## The `CharacterData` abstract base interface (tick 133)
+
+`CharacterData` is the WebIDL base of `Text` (nodeType 3), `Comment` (8), `ProcessingInstruction` (7) and
+`CDATASection` (4). The engine installed `Text`/`Comment`/`ProcessingInstruction` (ticks 120–122) but never
+`CharacterData` — so `node instanceof CharacterData` threw a `ReferenceError`. `dom/nodes/Document-create*`
+(and CharacterData-mutation tests) assert `c instanceof CharacterData` as their FIRST check, so its absence
+aborted the whole subtest before the (already-correct) `data`/`nodeType`/`nodeName`/`childNodes` assertions.
+
+Fix: one `iface('CharacterData', o => nodeType ∈ {3,8,7,4})` line, using the existing `iface()` machinery —
+`instanceof` resolves through `Symbol.hasInstance`, so a nodeType predicate is sufficient (no prototype-chain
+rewiring needed for these tests).
+
+**MEASURED:** dom 3603 → 3612 (**+9**), `Document-createTextNode` 0/6 → 6/6, Bar 0 **0** (deterministic ×3),
+no regressions. Gate `g_characterdata_iface`. **Open follow-on:** `Document-createComment` stays 0/6 in the
+*batch* despite an isolated probe showing Comment nodes fully correct (instanceof/nodeName/nodeType/data all
+pass) — a Comment-specific shared-runtime-reuse artifact, pre-existing and unrelated to this fix. [[js-engine]]

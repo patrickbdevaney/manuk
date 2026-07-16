@@ -3054,6 +3054,27 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 133 — the `CharacterData` abstract base interface (+9 dom)
+
+**TICK SHAPE: pattern-class (one missing base interface, aborted a whole assertion class).** WIKI: dom-semantics.
+
+**Hypothesis.** `dom/nodes/Document-createTextNode` (and createComment) were 0/6 — a probe showed EVERY
+property assertion (`data`/`nodeType`/`nodeName`/`childNodes`/`length`) already correct; the files failed
+because their FIRST assertion, `c instanceof CharacterData`, threw a `ReferenceError` (the global did not
+exist) and aborted all six subtests.
+
+**Mechanism.** `CharacterData` is the WebIDL base of Text/Comment/PI/CDATASection but was never installed.
+One `iface('CharacterData', o => nodeType ∈ {3,8,7,4})` line — `instanceof` resolves via `Symbol.hasInstance`,
+so a nodeType predicate suffices; no prototype rewiring needed for these tests.
+
+**MEASURED — the ratchet turned.** dom **3603 → 3612 (+9)**, `Document-createTextNode` 0/6 → 6/6, Bar 0 **0**
+(deterministic ×3), no regressions. Gate `g_characterdata_iface` (proven red on revert).
+
+**Honest follow-on.** `Document-createComment` stays 0/6 in the batch even though an isolated probe shows
+Comment nodes fully correct — a Comment-specific shared-runtime-reuse artifact (pre-existing, was 0/6 before
+this tick too), NOT caused or fixable by the CharacterData addition. Flagged for a batch-isolation
+investigation, not chased here.
+
 ## Tick 132 — `getElementsByClassName` splits on ASCII whitespace, not Unicode (+30 dom)
 
 **TICK SHAPE: pattern-class (one tokenizer bug, a whole file + neighbours).** WIKI: dom-semantics.

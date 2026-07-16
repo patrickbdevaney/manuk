@@ -306,6 +306,10 @@ const PRELUDE: &str = r#"
       iface('Text', function(o){ return !!o && o.nodeType === 3; });
 
       iface('Comment', function(o){ return !!o && o.nodeType === 8; });
+      // CharacterData is the abstract base of Text (3), Comment (8), ProcessingInstruction (7) and
+      // CDATASection (4) — `dom/nodes/Document-create{TextNode,Comment}` assert `c instanceof
+      // CharacterData` FIRST, so its absence (a ReferenceError) aborted every one of those subtests.
+      iface('CharacterData', function(o){ return !!o && (o.nodeType === 3 || o.nodeType === 8 || o.nodeType === 7 || o.nodeType === 4); });
       iface('DocumentFragment', function(o){ return !!o && o.nodeType === 11; });
 
       // ── Text, Comment and DocumentFragment are CONSTRUCTABLE (`new Text('x')`, `new Comment('x')`,
