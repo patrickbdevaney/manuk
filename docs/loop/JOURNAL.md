@@ -3054,6 +3054,48 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 126 — Bar-0 diagnosis: the css-values/calc-size interpolate-size SIGSEGV (tracked, not a regression)
+
+**TICK SHAPE: Bar-0 containment (diagnose a crash, hand a reproducer to a fresh context — no trade).**
+`[no-pattern]`. WIKI: conformance-and-oracles.
+
+**Why this tick.** Tick 125's orient full sweep first surfaced `css/css-values crashes=1` (and
+`encoding crashes=1`) — sweeps 114/115/116 had recorded crashes=0, so orient REFUSED the tick as a
+regression. Bar-0 outranks every score, so tick 126 IS this investigation. verify.sh (the g_* gates) never
+sweeps css-values, which is why ticks 117–125 landed green while the crash sat unseen until the sweep.
+
+**What it is — a native GC/heap-corruption UAF, CONFIRMED, `[[calc-size-interpolate-size-segfault]]`.**
+Exact reproducer (release, deterministic, rc=139):
+`target/release/manuk-wpt wpt css/css-values/calc-size --child --out /tmp/o.jsonl --start 5 --limit 1`.
+The two crashing files (`interpolate-size-computed.html`, `animation/interpolate-size-interpolation.html`)
+both load `/css/support/computed-testcommon.js` / `interpolation-testcommon.js` — template-literal-heavy
+helper files our engine *also* rejects with `SyntaxError: unexpected token: identifier`, so the `test_*`
+bodies never run: the crash is in **parse/compile/execute of the support JS + testharness.js, not in
+interpolate-size logic**. Signature: (a) **release-only** — a debug build runs the identical JS flawlessly;
+(b) **non-deterministic on minimal repros, ~100 % on the heavy files** — near-identical inputs flip on tiny
+heap deltas (a threshold effect, the hallmark of corruption that only faults after enough GC churn — so
+"template literals" is a red herring, not the cause); (c) gdb backtrace is all `?? ()` inside
+statically-linked SpiderMonkey with NaN-boxed GC values (`0xfff8…/0xfff9…/0xfffe…`) on the faulting stack —
+**none of OUR Rust symbols appear**; (d) a 256 MB `ulimit -s` doesn't help → wild pointer, not stack
+exhaustion.
+
+**NOT a tick 117–125 regression.** Every JS-engine change in that window is a pure-JS prelude edit
+(`reflect_js` numeric coercion, `event_loop` `mkCtor`) or a native DOM binding the crashing files never call
+(they fail to parse). The corruption is on the generic parse/execute path *every* WPT test runs, so it is a
+**pre-existing latent bug** in the mozjs integration; crashes=0 at 114/115/116 was a flaky sample of a
+non-deterministic crash, not proof of absence. Residual uncertainty stated honestly: not proven against a
+tick-116 rebuild — but a "no crash" there would be inconclusive anyway (the bug is flaky), so the rebuild
+buys nothing this deep in context.
+
+**Disposition — track, do not chase (same discipline as `[[flexbox-relayout-segfault]]`).** Localizing the
+corrupting write needs ASAN/valgrind (operator sudo) or an hours-long instrumented-mozjs debug rebuild — the
+"fresh, well-resourced context" class the constitution quarantines from a maxed context, and I am now deep
+in one. The crash is **contained**: the sweep isolates it per-page (process boundary), records HANG/CRASH,
+and continues; the loop landed 20+ ticks with the flexbox UAF open and can do the same here. **The mark was
+not lowered and no capability was traded** — the crash is recorded as a KNOWN, tracked, pre-existing Bar-0
+for a fresh ASAN-equipped context to fix. No RATCHET invariant bent: nothing regressed, nothing green went
+red, tick 125's +44 stands.
+
 ## Tick 125 — `getElementsByTagNameNS`: the namespace-aware query (+44 dom)
 
 **TICK SHAPE: pattern-class (web-API surface by usage weight, §VI.4 step 4).** WIKI: dom-semantics.

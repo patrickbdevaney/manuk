@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **118** | ticks 1–125 |
-| median tick cycle | **20m** | 117 intervals |
-| median, last 10 | **29m** | 10 intervals |
+| ticks landed | **119** | ticks 1–126 |
+| median tick cycle | **20m** | 118 intervals |
+| median, last 10 | **30m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.96** | 122.3h elapsed |
-| median verify wall | **57s** | 57 ticks |
+| **ticks per hour** | **0.96** | 122.9h elapsed |
+| median verify wall | **56s** | 58 ticks |
 | wall trend | 39s → 60s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **220**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**64 of 118 ticks** (54%) moved a
+**64 of 119 ticks** (54%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **64** capability ticks, median cycle **20m**
-* median diff per tick: **+256 / −24** lines across 8 files
+* median diff per tick: **+254 / −24** lines across 8 files
 
 ## Every tick
 
@@ -215,5 +215,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **123** | 2026-07-16 06:44 | 27m | capability | 50s | +301/−35 | 54 | 81 | 46.8% | `Text.splitText()` + `wholeText`, and the tick-123 SURFACE AUDIT (+8) |
 | **124** | 2026-07-16 06:50 | 6m | instrument | 60s | +133/−34 | 55 | 81 | 46.8% · | MEASURED: native CSS nesting works (surface-audit follow-through; unknown → gated) |
 | **125** | 2026-07-16 07:21 | 30m | pattern-class | 62s | +278/−34 | 56 | 81 | 46.8% · | `getElementsByTagNameNS`: the namespace-aware query (+44 dom) |
+| **126** | 2026-07-16 07:55 | 35m | Bar-0 | 51s | +71/−4 | 56 | 81 | 46.8% · | Bar-0 diagnosis: the css-values/calc-size interpolate-size SIGSEGV (tracked, not a regress |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

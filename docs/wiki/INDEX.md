@@ -86,6 +86,7 @@
   - L394 · A doubled event handler inflates the WPT count ~2× — the score can lie in your favor
   - L409 · The batch-size crash class — heavy layout areas OOM a shared process
   - L418 · The crash class is a real SIGSEGV UAF, not OOM — and ISOLATION-RETRY separates it from a per-page Bar 0
+  - L438 · A SECOND, distinct SIGSEGV: css-values/calc-size interpolate-size — a REAL per-page crash (survives isolation)
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -364,4 +365,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-295 sections across 16 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+296 sections across 16 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

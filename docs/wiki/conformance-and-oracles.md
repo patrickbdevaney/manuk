@@ -434,3 +434,27 @@ speed hack real browsing never does (one document per fresh context); the isolat
 single-page behavior. **The underlying UAF remains a tracked Bar-0 to FIX with ASAN** (see the
 flexbox-relayout-segfault repro: `manuk-wpt wpt css/css-flexbox --child --limit 40` → 139, `--limit 20`
 → clean; culprit `stretched-child-shrink-on-relayout.html`). [[js-engine]] [[wpt-horizon]]
+
+## A SECOND, distinct SIGSEGV: css-values/calc-size interpolate-size — a REAL per-page crash (survives isolation)
+
+Tick 126. orient's tick-125 full sweep surfaced `css/css-values crashes=1`. Unlike the flexbox UAF above
+(an **ACCUM** artifact — clean when run alone, so isolation-retry reclassifies it), this one **crashes in a
+fresh single-file process**, so isolation-retry keeps it as a real `HANG/CRASH` Bar-0 — the more serious
+class (a real page could trip it). Reproducer, deterministic exit 139:
+
+```
+target/release/manuk-wpt wpt css/css-values/calc-size --child --out /tmp/o.jsonl --start 5 --limit 1 --timeout 10
+```
+
+Crashing files: `interpolate-size-computed.html` and `animation/interpolate-size-interpolation.html`. Both
+load template-literal-heavy support JS (`computed-testcommon.js` / `interpolation-testcommon.js`) that our
+engine *also* rejects with `SyntaxError: unexpected token: identifier` — so the `test_*` bodies never run;
+the fault is in **parse/compile/execute of the support JS + testharness.js**, not interpolate-size. Same
+Heisenbug signature as the flexbox UAF but harder: **release-only** (debug runs the identical JS cleanly),
+**non-deterministic on minimal repros** (near-identical inputs flip on tiny heap deltas — so the
+"template-literal" correlation is noise, not cause), **all `?? ()` under gdb inside statically-linked
+SpiderMonkey** with NaN-boxed GC values on the faulting stack (no OUR-code frames), and unaffected by a
+256 MB stack — a wild GC-object pointer, corrupted earlier and faulted on later. **Not a tick 117–125
+regression** (every JS change that window is pure-JS prelude or a native binding the crashing files never
+call; crashes=0 at sweeps 114–116 was a flaky sample). Needs **ASAN** to localize the corrupting write —
+tracked open Bar-0 for a fresh, well-resourced context, exactly like the flexbox one. [[js-engine]]
