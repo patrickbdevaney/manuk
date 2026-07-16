@@ -31,6 +31,16 @@ echo "▶ /home is ${pct}% full ($before free)"
 echo "  · incremental fragments (RAM-resident; flushed, not written to disk at all)"
 ./scripts/ramdisk.sh --flush >/dev/null 2>&1 || rm -rf target/debug/incremental target/release/incremental 2>/dev/null
 
+# ── GRANULAR ORPHAN PRUNE (observer, tick 141) — the SYSTEMATIC, SAFE, FREQUENT reclaim that keeps target/
+# bounded so the 95% full-purge (cold rebuild) below never fires. target/*/deps accumulates old-hash dep
+# versions + stale test binaries that cargo never garbage-collects (73G observed). A file NOT read by ANY
+# build in >1 day (access time; /home is relatime) is an ORPHAN — it is not in the current build's working
+# set, so deleting it costs NO cold rebuild. In-use artifacts (every gate test bin, every dep the build
+# links) are READ on every verify, so their atime stays fresh and they are KEPT. This is the opposite of the
+# old `rm -rf target/debug`: it removes only what is provably unused, and it runs every time hygiene fires.
+echo "  · target/*/deps orphans — files unread by any build in >1 day (not in the current build's set)"
+find target/debug/deps target/release/deps -type f -atime +1 -delete 2>/dev/null
+
 # GRANULAR DEBUG-TREE POLICY (observer, tick 119). The debug tree is NOT disposable: verify.sh's gates run
 # `cargo test` in DEBUG, so `rm -rf target/debug` forces a full cold rebuild on the very NEXT verify. The
 # disk oscillates at 84-91%, so the old `pct >= 85` rule fired almost every tick — turning a ~10min warm

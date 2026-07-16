@@ -3054,6 +3054,44 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 142 — `getComputedStyle` resolves the flexbox longhands (frameworks stop reading `undefined` off a flex box)
+
+**TICK SHAPE: same-signature cluster (one serialization fix, ~+164 subtests across two suites — the tick-113 shape).** WIKI: interaction-surface.
+
+**The gap, one uniform signature.** `css/css-flexbox/getcomputedstyle` sat at **2/78 files** and every
+single failure read identically: `getComputedStyle(el).<flexProp>` → `expected (string) "center" but got
+(undefined) undefined`. The computed-style object `computed_style_js` builds (`engine/js/src/dom_bindings.rs`)
+had **no flex keys at all** — `alignItems`, `alignSelf`, `justifyContent`, `flexDirection`, `flexWrap`,
+`flexGrow`, `flexShrink`, `flexBasis`, `rowGap`/`columnGap` were absent, so a framework that measured a flex
+container (`getComputedStyle(el).alignItems`, a CSS-in-JS lib re-reading resolved values, an animation lib
+interpolating `flex-grow`) got `undefined` concatenated into its logic. **`ComputedStyle` already carried
+every one of these fields** — they were computed and stored, just never surfaced to JS. Pure wiring.
+
+**Mechanism.** Serialize each stored field to its CSS resolved value (the exact keyword Chrome returns:
+`flex-start`/`space-between`/`nowrap`/…; `flex-grow`/`flex-shrink` as bare numbers; `flex-basis` via
+`dim_css`; `align-self: None → "auto"`), add the ten camelCase keys to the object literal, and register the
+kebab→camel names in `getPropertyValue`'s map so `gcs.getPropertyValue('flex-direction')` reaches the same
+value. `align-content` and `order` are **not** stored on `ComputedStyle`, so they stay unserialized (a
+handful of subtests) — no guessing a default that would be wrong.
+
+**Strictly non-regressing.** Nothing read these keys before (they were `undefined`), so every currently-green
+test is untouched; the change can only flip failing reads. Confirmed: full crate suite + `js_conformance`
+green, Bar 0 clean.
+
+**Gate (falsifiable, `js_conformance` scenario 23).** A `display:flex;flex-direction:column;flex-wrap:wrap;
+justify-content:space-between;align-items:center` container with a `flex-grow:2;flex-shrink:0;flex-basis:100px;
+align-self:flex-end` child must read back `column|wrap|space-between|center|2|0|100px|flex-end|column`
+(the last via `getPropertyValue`). **Proven RED** — stashed the serialization fix, rebuilt, the whole join
+was `undefined|…`, panic. GREEN after.
+
+**Measured flip.** `css/css-flexbox` 888→**945** (+57; getcomputedstyle 2/78→**59/78**). `css/css-grid`
+150→**257** (+107) — the grid getcomputedstyle files read the *same* `justify-content`/`align-items` resolved
+values, so one fix flipped both suites. **~+164 subtests, zero regression.**
+
+**The ratchet.** Capability: **up** — a flex/grid container's resolved style is now readable by the JS that
+lays real apps out. Performance: unchanged (ten more scalars per `getComputedStyle`). Instrument fidelity:
+**up** — a 23rd falsifiable conformance scenario. Bar 0 clean.
+
 ## Tick 141 — IntersectionObserver intersection is 2-D (a horizontal carousel stops eager-loading every off-screen slide)
 
 **TICK SHAPE: pattern-class (completes tick 140's named follow-on — the observer machinery every carousel/gallery is built on; the parsed-but-unused left/right rootMargins become live).** WIKI: interaction-surface.

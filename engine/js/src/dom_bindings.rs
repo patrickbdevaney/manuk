@@ -362,7 +362,10 @@ fn transform_css(fns: &[manuk_css::TransformFn], rect: Option<[f32; 4]>) -> Stri
 }
 
 fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> String {
-    use manuk_css::{Display, Overflow, Position, TextAlign, Visibility, WhiteSpace};
+    use manuk_css::{
+        AlignItems, Display, FlexDirection, FlexWrap, JustifyContent, Overflow, Position,
+        TextAlign, Visibility, WhiteSpace,
+    };
     let display = match cs.display {
         Display::Block => "block",
         Display::Inline => "inline",
@@ -417,6 +420,42 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
     };
     // CSS serializes `opacity` as a bare number (`1`, `0.5`), never a percentage.
     let opacity = cs.opacity.to_string();
+    // Flexbox resolved values. These are what a framework reads back via
+    // `getComputedStyle(el).alignItems` / `.flexGrow` / … — before this they were all `undefined`,
+    // so any layout code that measured a flex container got garbage. Serialize the CSS keyword,
+    // exactly as Chrome's resolved value.
+    let justify_content = match cs.justify_content {
+        JustifyContent::FlexStart => "flex-start",
+        JustifyContent::FlexEnd => "flex-end",
+        JustifyContent::Center => "center",
+        JustifyContent::SpaceBetween => "space-between",
+        JustifyContent::SpaceAround => "space-around",
+        JustifyContent::SpaceEvenly => "space-evenly",
+    };
+    let ai_css = |a: AlignItems| match a {
+        AlignItems::Stretch => "stretch",
+        AlignItems::FlexStart => "flex-start",
+        AlignItems::FlexEnd => "flex-end",
+        AlignItems::Center => "center",
+        AlignItems::Baseline => "baseline",
+    };
+    let align_items = ai_css(cs.align_items);
+    // `align-self: auto` (the initial) defers to the container — its resolved value is `auto`.
+    let align_self = cs.align_self.map(ai_css).unwrap_or("auto");
+    let flex_direction = match cs.flex_direction {
+        FlexDirection::Row => "row",
+        FlexDirection::RowReverse => "row-reverse",
+        FlexDirection::Column => "column",
+        FlexDirection::ColumnReverse => "column-reverse",
+    };
+    let flex_wrap = match cs.flex_wrap {
+        FlexWrap::NoWrap => "nowrap",
+        FlexWrap::Wrap => "wrap",
+        FlexWrap::WrapReverse => "wrap-reverse",
+    };
+    // `flex-grow`/`flex-shrink` serialize as a bare number (`0`, `1`, `2.5`), never a unit.
+    let flex_grow = cs.flex_grow.to_string();
+    let flex_shrink = cs.flex_shrink.to_string();
     let q = js_string_literal;
     format!(
         "({{color:{}, backgroundColor:{}, fontSize:{}, fontWeight:{}, fontStyle:{}, \
@@ -424,14 +463,21 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
           visibility:{}, whiteSpace:{}, opacity:{}, \
           width:{}, height:{}, marginTop:{}, marginRight:{}, marginBottom:{}, marginLeft:{}, \
           paddingTop:{}, paddingRight:{}, paddingBottom:{}, paddingLeft:{}, \
-          top:{}, right:{}, bottom:{}, left:{}, zIndex:{}, transform:{}, getPropertyValue:function(p){{\
+          top:{}, right:{}, bottom:{}, left:{}, zIndex:{}, transform:{}, \
+          justifyContent:{}, alignItems:{}, alignSelf:{}, flexDirection:{}, flexWrap:{}, \
+          flexGrow:{}, flexShrink:{}, flexBasis:{}, rowGap:{}, columnGap:{}, \
+          getPropertyValue:function(p){{\
           var m={{'background-color':'backgroundColor','font-size':'fontSize',\
           'font-weight':'fontWeight','font-style':'fontStyle','font-family':'fontFamily',\
           'line-height':'lineHeight','text-align':'textAlign','white-space':'whiteSpace',\
           'margin-top':'marginTop',\
           'margin-right':'marginRight','margin-bottom':'marginBottom','margin-left':'marginLeft',\
           'padding-top':'paddingTop','padding-right':'paddingRight','padding-bottom':'paddingBottom',\
-          'padding-left':'paddingLeft','z-index':'zIndex'}};return this[m[p]||p];}}}})",
+          'padding-left':'paddingLeft','z-index':'zIndex',\
+          'justify-content':'justifyContent','align-items':'alignItems','align-self':'alignSelf',\
+          'flex-direction':'flexDirection','flex-wrap':'flexWrap','flex-grow':'flexGrow',\
+          'flex-shrink':'flexShrink','flex-basis':'flexBasis','row-gap':'rowGap',\
+          'column-gap':'columnGap'}};return this[m[p]||p];}}}})",
         q(&rgba_css(&cs.color)),
         q(&cs.background_color.map(|c| rgba_css(&c)).unwrap_or_else(|| "rgba(0, 0, 0, 0)".into())),
         q(&format!("{}px", cs.font_size)),
@@ -462,6 +508,16 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         q(&dim_css(&cs.inset.left)),
         q(&cs.z_index.map(|z| z.to_string()).unwrap_or_else(|| "auto".into())),
         q(&transform_css(&cs.transform, rect)),
+        q(justify_content),
+        q(align_items),
+        q(align_self),
+        q(flex_direction),
+        q(flex_wrap),
+        q(&flex_grow),
+        q(&flex_shrink),
+        q(&dim_css(&cs.flex_basis)),
+        q(&format!("{}px", cs.row_gap)),
+        q(&format!("{}px", cs.column_gap)),
     )
 }
 

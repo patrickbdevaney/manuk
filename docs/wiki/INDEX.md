@@ -220,6 +220,7 @@
   - L291 · element.getClientRects() reuses the layout snapshot, like getBoundingClientRect
   - L302 · offsetLeft/offsetTop are offsetParent-relative, and offsetParent exists (tick 138)
   - L328 · IntersectionObserver.rootMargin is a 4-side shorthand, and the BOTTOM side is the whole feature (tick 140)
+  - L360 · getComputedStyle resolves the flexbox longhands, not just the box model (tick 142)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -384,4 +385,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-311 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+312 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

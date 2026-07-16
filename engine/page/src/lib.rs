@@ -4324,6 +4324,39 @@ mod js_interactive_tests {
         );
         drop(page22);
 
+        // (23) **`getComputedStyle` exposes the flexbox resolved values.** Every flex longhand —
+        // `flexDirection`, `flexWrap`, `justifyContent`, `alignItems`, `flexGrow`, `flexShrink`,
+        // `flexBasis`, `alignSelf`, `rowGap`/`columnGap` — used to read back `undefined`, so any
+        // framework that measured a flex container (`getComputedStyle(el).alignItems`, a CSS-in-JS
+        // lib re-reading resolved values, an animation lib interpolating `flex-grow`) got garbage
+        // concatenated into its logic. The resolved value is the CSS keyword, exactly as Chrome
+        // serializes it; `getPropertyValue('flex-direction')` must reach the same value by kebab name.
+        let html23 = r#"<!doctype html><html><body>
+            <div id="f" style="display:flex;flex-direction:column;flex-wrap:wrap;justify-content:space-between;align-items:center">
+              <div id="c" style="flex-grow:2;flex-shrink:0;flex-basis:100px;align-self:flex-end">item</div>
+            </div>
+            <p id="o">?</p>
+            <script>
+              var f = getComputedStyle(document.getElementById('f'));
+              var c = getComputedStyle(document.getElementById('c'));
+              document.getElementById('o').textContent = [
+                f.flexDirection, f.flexWrap, f.justifyContent, f.alignItems,
+                c.flexGrow, c.flexShrink, c.flexBasis, c.alignSelf,
+                f.getPropertyValue('flex-direction')
+              ].join('|');
+            </script></body></html>"#;
+        let page23 = Page::load(html23, "https://ex.test/", &fonts, 800.0);
+        let r23 = page23.dom().root();
+        let o23 = manuk_css::query_selector_all(page23.dom(), r23, "#o")[0];
+        assert_eq!(
+            page23.dom().text_content(o23),
+            "column|wrap|space-between|center|2|0|100px|flex-end|column",
+            "getComputedStyle must resolve every flexbox longhand (these read back `undefined` \
+             before — the exact over-read that breaks framework layout measurement); \
+             getPropertyValue('flex-direction') must reach it by kebab name too"
+        );
+        drop(page23);
+
         // Tear SpiderMonkey down before this process exits, exactly as the shell and the harness do.
         // Every page above is out of scope by now, so no rooted object outlives its runtime. Leaving
         // the engine up means its C++ static destructors run at exit against a live context and

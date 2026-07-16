@@ -356,3 +356,31 @@ viewport must NOT intersect (`hplain:false`); a `'0px 500px 0px 0px'` right marg
 report it **intersecting with no scroll at all**. Proven RED on the old parse (`prefetch:false`), GREEN
 after. No local WPT `intersection-observer/` suite exists, so this capability is pinned by the falsifiable
 conformance gate, not a subtest count. [[dom-semantics]]
+
+## `getComputedStyle` resolves the flexbox longhands, not just the box model (tick 142)
+
+**The gap.** `computed_style_js` (`dom_bindings.rs`) surfaced the box model (width/margins/padding/inset),
+colors, fonts, `display`/`position`/`transform` — but **no flex longhand**. So
+`getComputedStyle(el).alignItems`, `.justifyContent`, `.flexDirection`, `.flexWrap`, `.flexGrow`,
+`.flexShrink`, `.flexBasis`, `.alignSelf`, `.rowGap`/`.columnGap` all read back `undefined`. A framework
+that measures a flex container, a CSS-in-JS lib re-reading resolved values, or an animation lib
+interpolating `flex-grow` got `undefined` concatenated into its logic. `ComputedStyle` **already stored
+every one of these fields** — they were computed at cascade time and simply never surfaced to JS. Pure
+wiring, not new layout.
+
+**Fix.** Serialize each stored field to its CSS resolved value — the exact keyword Chrome returns
+(`flex-start`/`space-between`/`nowrap`/`column-reverse`/…), `flex-grow`/`flex-shrink` as bare numbers,
+`flex-basis` via `dim_css`, `align-self: None → "auto"` — add the ten camelCase keys to the object literal,
+and register the kebab→camel names in `getPropertyValue`'s map (so `getPropertyValue('flex-direction')`
+reaches the same value). `align-content` and `order` are **not** on `ComputedStyle`, so they stay
+unserialized rather than guessing a wrong default.
+
+**Strictly non-regressing:** nothing read these keys before (they were `undefined`), so the change can only
+flip failing reads, never break a green one. **Measured:** `css/css-flexbox` 888→945 (+57;
+getcomputedstyle 2/78→59/78), `css/css-grid` 150→257 (+107) — grid's getcomputedstyle files read the *same*
+`justify-content`/`align-items` resolved values, so one serialization fix flipped both suites (~+164).
+
+**Gate** (`js_conformance` scenario 23): a `flex-direction:column;flex-wrap:wrap;justify-content:space-between;
+align-items:center` container with a `flex-grow:2;flex-shrink:0;flex-basis:100px;align-self:flex-end` child
+must read back `column|wrap|space-between|center|2|0|100px|flex-end|column` (the last via `getPropertyValue`).
+Proven RED by stashing the serialization — the whole join was `undefined|…`. [[dom-semantics]]
