@@ -219,6 +219,7 @@
   - L275 · document.elementFromPoint(x, y) bridges the layout-rect snapshot, not a second hit-tester
   - L291 · element.getClientRects() reuses the layout snapshot, like getBoundingClientRect
   - L302 · offsetLeft/offsetTop are offsetParent-relative, and offsetParent exists (tick 138)
+  - L328 · IntersectionObserver.rootMargin is a 4-side shorthand, and the BOTTOM side is the whole feature (tick 140)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -383,4 +384,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-310 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+311 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

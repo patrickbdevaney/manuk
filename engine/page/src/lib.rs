@@ -4198,6 +4198,47 @@ mod js_interactive_tests {
         );
         drop(page21);
 
+        // (21b) **`rootMargin` is a 4-side CSS shorthand, and its BOTTOM margin is what makes an
+        // infinite feed prefetch.** The idiom `rootMargin: '0px 0px 300px 0px'` extends only the
+        // bottom edge so the sentinel fires *before* it scrolls into view. Honouring only the first
+        // token (the old bug) dropped that margin and the feed loaded late or never. Here a sentinel
+        // sits 20px BELOW the 600px viewport (top=620, not visible with a 0 margin); a second
+        // observer with a 200px bottom margin must report it intersecting with NO scroll at all,
+        // while a plain observer must not.
+        let html21b = r#"<!doctype html><html><body>
+            <div style="height:620px">spacer</div>
+            <div id="s" style="height:20px">sentinel</div>
+            <p id="o">?</p>
+            <script>
+              var mlog = [];
+              new IntersectionObserver(function (es) {
+                es.forEach(function (e) { mlog.push('plain:' + e.isIntersecting); });
+              }, { rootMargin: '0px' }).observe(document.getElementById('s'));
+              new IntersectionObserver(function (es) {
+                es.forEach(function (e) { mlog.push('prefetch:' + e.isIntersecting); });
+              }, { rootMargin: '0px 0px 200px 0px' }).observe(document.getElementById('s'));
+              window.__mlog = mlog;
+            </script></body></html>"#;
+        let mut page21b = Page::load(html21b, "https://example.test/", &fonts, 600.0);
+        // No scroll: viewport is [0,600] in doc coords; the sentinel top is 620.
+        page21b.view_changed(0.0, 600.0, 600.0, false);
+        let r21b = page21b.dom().root();
+        let o21b = manuk_css::query_selector_all(page21b.dom(), r21b, "#o")[0];
+        page21b.eval_for_test("document.getElementById('o').textContent = window.__mlog.join('|')");
+        let got21b = page21b.dom().text_content(o21b);
+        assert!(
+            got21b.contains("plain:false"),
+            "a 0-margin observer must NOT report the 20px-below-viewport sentinel intersecting \
+             (got {got21b:?})"
+        );
+        assert!(
+            got21b.contains("prefetch:true"),
+            "a '0px 0px 200px 0px' bottom-margin observer MUST report the sentinel intersecting with \
+             no scroll — this is the infinite-feed prefetch that only the first rootMargin token \
+             dropped (got {got21b:?})"
+        );
+        drop(page21b);
+
         // (22) **State pseudo-classes, and the URL decomposition IDL.** Two gaps that each killed a
         // whole class of page.
         //

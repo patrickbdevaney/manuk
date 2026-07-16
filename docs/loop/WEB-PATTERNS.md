@@ -606,7 +606,7 @@ every tick, which is a rigor bug wearing a performance bug's clothes.
 | Pattern | Reach | Status |
 |---|---|---|
 | **Lazy-loaded image feeds** (IntersectionObserver + `data-src`) | **the dominant content-loading pattern on the modern web** | ✅ **verified end-to-end + gated** (tick 59) — was already built; **nothing proved it, so the ledger called it missing** |
-| **Infinite scroll** (scroll/IO → fetch more) | social, news, commerce | ✅ the primitive is live (IO fires, scroll fires) |
+| **Infinite scroll** (scroll/IO → fetch more) | social, news, commerce | ✅ the primitive is live (IO fires, scroll fires); tick 140 fixed `rootMargin` — it was single-token, so the `'0px 0px 300px 0px'` **prefetch-early** idiom was silently dropped and the feed loaded late. Now a 4-side shorthand (px/%), bottom margin applied asymmetrically |
 | **Sticky headers, scroll-linked animation, virtualization** | ubiquitous | ✅ same primitive — *one gap seen five times, and it was closed* |
 | **Native `loading="lazy"`** | perf hint | ❌ not honoured (renders correctly; fetches eagerly) |
 

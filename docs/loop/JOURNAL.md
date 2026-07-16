@@ -3054,6 +3054,45 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 140 — `IntersectionObserver.rootMargin` is a 4-side shorthand, and its bottom margin is what makes an infinite feed prefetch
+
+**TICK SHAPE: pattern-class (one parse+resolve fix on the observer machinery every infinite feed is built on; unlocks the asymmetric-`rootMargin` prefetch idiom).** WIKI: interaction-surface.
+
+**Phase mandate — where this sits.** `lever-board.sh` ranks css-layout/media, but I probed the first mandate
+targets and found their **daily-driver bars already met** (verified this session, not assumed): calc sidebar
+(tick 139) ✓; border-box `p-4` child = **136px** ✓; 3× `flex-1` cards with a long token distribute without
+overflow, min-content floor respected ✓; SPA link-intercept — the shell already returns without navigating
+when `dispatch_click` reports `preventDefault` (`shell/src/gui.rs:515`) ✓; IntersectionObserver already fires
+on scroll (conformance scenario 21) ✓. So targets 1/2/3/5's *common cases* are done; the remaining
+css-sizing/flexbox mass is **reftests** (pixel-perfect, Bar-2) and writing-mode/abspos edge cases — not a
+bounded capability tick. The real open gap on the mandate's own target 3 was its explicit sub-bar,
+**"multi-val rootMargin"**, and it was genuinely broken.
+
+**Hypothesis → confirmed.** `g.IntersectionObserver` parsed `rootMargin` as `String(opts.rootMargin).split(/\s+/)[0]`
+— **one token, applied symmetrically**. `rootMargin` is a CSS margin shorthand (1–4 values), and the
+near-universal feed idiom `'0px 0px 300px 0px'` extends only the **bottom** edge so the sentinel fires
+*before* it scrolls into view. Under the old parse that resolved to `0`: the bottom margin was silently
+dropped and the feed loaded **late or never**. Stub-shaped — the option is accepted and quietly does nothing,
+so the library feature-detects fine and never fires.
+
+**Mechanism (`engine/js/src/dom_bindings.rs`).** Parse `rootMargin` into `{top,right,bottom,left}`, each
+`{v, pct}`, with the standard shorthand fallbacks (`right←top`, `bottom←top`, `left←right`). In
+`__runObservers`, resolve top/bottom per-side (`%` → fraction of viewport height) and grow the intersection
+band asymmetrically: `min(b, bottom+mBottom) − max(t, top−mTop)`. **Bound (honest):** the intersection model
+stays vertical-only, so `right`/`left` are parsed but not yet applied — horizontal 2-D intersection
+(carousels) is a follow-on; the vertical feed case is ~all real usage.
+
+**Gate (falsifiable, `js_conformance` scenario 21b).** A sentinel 20px **below** a 600px viewport (top=620):
+a plain `rootMargin:'0px'` observer must report **not** intersecting (`plain:false`); a `'0px 0px 200px 0px'`
+observer must report **intersecting with no scroll** (`prefetch:true`). Proven RED on the old parse (stashed
+the fix, kept the gate → `prefetch:false`, panic at lib.rs), GREEN after. No local WPT `intersection-observer/`
+suite exists (FILES 0), so this is pinned by the conformance gate, not a subtest count — exactly what the
+mandate authorises for a capability that makes real feeds work.
+
+**The ratchet.** Capability: **up** — the asymmetric-`rootMargin` prefetch that every infinite feed on the
+modern web relies on now works instead of silently no-op'ing. Performance: unchanged (same per-pass loop, two
+extra scalars). Instrument fidelity: **up** — a new falsifiable conformance scenario pins it. Bar 0 clean.
+
 ## Tick 139 — mixed `calc()` resolves in the flex/grid layout path (sidebar-splits stop collapsing to 0)
 
 **TICK SHAPE: pattern-class (one taffy-mapping fix that wires calc through the whole flex/grid layout path; unlocks the `calc(100% − <fixed>)` sidebar-split idiom).** `[no-pattern]` is NOT claimed — this is a capability change, and `docs/loop/WEB-PATTERNS.md` gets the row. WIKI: docs/wiki/box-layout.md.

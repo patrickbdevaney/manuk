@@ -324,3 +324,27 @@ the offsetParent's **padding-edge origin**. Rounded to a `long` last (CSSOM roun
 one number. **MEASURED:** css-flexbox 6.2%→24.7% (+665), css-grid 5.3%→9.0% (+107), css-sizing 12.0%→13.6%,
 css-position +5; Bar 0 clean; html/dom/dom unregressed. All four suites share `check-layout-th.js`, so one
 coordinate-space fix flipped them together. [[dom-semantics]] [[css-cascade]]
+
+## `IntersectionObserver.rootMargin` is a 4-side shorthand, and the BOTTOM side is the whole feature (tick 140)
+
+`rootMargin` grows the observer's root rectangle so a sentinel fires *before* it is actually on screen —
+the mechanism every infinite feed uses to load its next page early. It is a **CSS margin shorthand**
+(`all` | `V H` | `T H B` | `T R B L`), px or `%`, and the sides are **asymmetric**: the near-universal
+idiom `rootMargin: '0px 0px 300px 0px'` extends only the **bottom** edge. The old parse took a single token
+(`.split(/\s+/)[0]`) and applied it symmetrically — so that idiom resolved to `0`, the bottom margin was
+silently dropped, and the feed loaded **late or never** (the sentinel had to be fully visible before
+`observe`'s callback saw `isIntersecting`). This is a **stub-shaped** failure: the API is present, the
+option is accepted, and it just quietly does nothing — the library feature-detects fine and never fires.
+
+**Fix (`dom_bindings.rs`, `g.IntersectionObserver`):** parse `rootMargin` into `{top,right,bottom,left}`,
+each `{v, pct}`, with the standard shorthand fallbacks (`right←top`, `bottom←top`, `left←right`). In
+`__runObservers`, resolve top/bottom per-side (a `%` is a fraction of the viewport **height**) and grow the
+intersection band asymmetrically: `min(b, bottom+marginBottom) − max(t, top−marginTop)`. **Bound (honest):**
+the intersection model is still vertical-only, so `right`/`left` margins are parsed but not yet applied —
+horizontal 2-D intersection (carousels) is a follow-on; the vertical feed case is ~all real usage.
+
+**Gate** (`js_conformance` scenario 21b): a sentinel 20px **below** a 600px viewport (top=620). A plain
+`rootMargin:'0px'` observer must report it **not** intersecting; a `'0px 0px 200px 0px'` observer must
+report it **intersecting with no scroll at all**. Proven RED on the old parse (`prefetch:false`), GREEN
+after. No local WPT `intersection-observer/` suite exists, so this capability is pinned by the falsifiable
+conformance gate, not a subtest count. [[dom-semantics]]

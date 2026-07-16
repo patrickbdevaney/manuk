@@ -7730,9 +7730,26 @@ const WINDOW_PRELUDE: &str = r#"
             this._targets = [];
             this._prev = new Map();
             // `rootMargin` grows the viewport rectangle, which is exactly how a feed asks to be
-            // told *before* the sentinel is actually visible. Only a px value is honoured.
-            var m = String(opts.rootMargin || '0px').trim().split(/\s+/)[0];
-            this._margin = parseFloat(m) || 0;
+            // told *before* the sentinel is actually visible. It is a CSS margin shorthand
+            // (1-4 values: all | V H | T H B | T R B L), px or %, and the sides are NOT symmetric:
+            // the near-universal infinite-scroll idiom `rootMargin: '0px 0px 300px 0px'` extends only
+            // the BOTTOM edge, so the next page loads 300px before the sentinel scrolls into view.
+            // Honouring just the first token (the old behaviour) silently dropped that bottom margin
+            // and the feed loaded late — or never. `%` resolves against the root's size at run time
+            // (top/bottom against the viewport height, left/right against its width).
+            var _rmParts = String(opts.rootMargin || '0px').trim().split(/\s+/);
+            var _rmSide = function (s) {
+                s = s || '0px';
+                return { v: parseFloat(s) || 0, pct: /%\s*$/.test(s) };
+            };
+            var _rmTop = _rmParts[0];
+            var _rmRight = _rmParts.length > 1 ? _rmParts[1] : _rmParts[0];
+            var _rmBottom = _rmParts.length > 2 ? _rmParts[2] : _rmParts[0];
+            var _rmLeft = _rmParts.length > 3 ? _rmParts[3] : _rmRight;
+            this._rm = {
+                top: _rmSide(_rmTop), right: _rmSide(_rmRight),
+                bottom: _rmSide(_rmBottom), left: _rmSide(_rmLeft)
+            };
             var th = opts.threshold;
             this._thresholds = (th === undefined) ? [0] : (Array.isArray(th) ? th.slice() : [th]);
             this.observe = function (el) { if (el && this._targets.indexOf(el) < 0) this._targets.push(el); };
@@ -7762,13 +7779,19 @@ const WINDOW_PRELUDE: &str = r#"
             var top = scrollY, bottom = scrollY + vh;
             for (var i = 0; i < g.__ioList.length; i++) {
                 var o = g.__ioList[i];
+                // Resolve the top/bottom root margins for this pass — `%` is a fraction of the
+                // viewport height. These grow the intersection rectangle asymmetrically, so a
+                // bottom margin fires the sentinel BEFORE it is on screen (feed prefetch) while a
+                // top margin does the same at the top (sticky-header latch).
+                var _mt = o._rm.top.pct ? o._rm.top.v / 100 * vh : o._rm.top.v;
+                var _mb = o._rm.bottom.pct ? o._rm.bottom.v / 100 * vh : o._rm.bottom.v;
                 var entries = [];
                 for (var j = 0; j < o._targets.length; j++) {
                     var el = o._targets[j];
                     var r = rectOf(el);
                     if (!r) continue;
                     var t = r[1], b = r[1] + r[3];
-                    var visible = Math.max(0, Math.min(b, bottom + o._margin) - Math.max(t, top - o._margin));
+                    var visible = Math.max(0, Math.min(b, bottom + _mb) - Math.max(t, top - _mt));
                     var ratio = r[3] > 0 ? visible / r[3] : 0;
                     var isInt = visible > 0;
                     var was = o._prev.get(el);
