@@ -835,6 +835,14 @@ every tick, which is a rigor bug wearing a performance bug's clothes.
 | **`new MouseEvent`/`WheelEvent`/`KeyboardEvent`/`UIEvent`/`CompositionEvent`** carry their inherited members and satisfy the `instanceof` chain | every library that constructs synthetic events (test frameworks, drag/gesture libs, `dispatchEvent` polyfills) and every handler that reads `e.view`/`e.detail`/`e.relatedTarget`/`e.deltaX`/`e.location` or branches on `e instanceof UIEvent` | ✅ (tick 121) — events were flat parent-less objects: `new MouseEvent() instanceof UIEvent` was false and `.view`/`.detail` `undefined`; `UIEvent`/`WheelEvent`/`CompositionEvent` did not exist. Now `defEvent(name, defaults, parent)` merges inherited defaults + chains prototypes; hierarchy `Event → UIEvent → MouseEvent → WheelEvent`. **whole dom 2975 → 3016 (+41)**, gate `g_event_constructors` |
 | **`new UIEvent('x', {view: 7})` throws TypeError** | WebIDL `Window?` coercion correctness | ✅ (tick 121) — a supplied non-null non-object `view` is rejected |
 
+## Tick 138 — `offsetLeft`/`offsetTop` are offsetParent-relative, and `offsetParent` exists (CSS layout: +665 flexbox, +107 grid)
+
+| Pattern | Reach | Status |
+|---|---|---|
+| **`el.offsetLeft`/`offsetTop` measured from the offsetParent's padding edge**, not the viewport | **the whole CSS layout web** — every `check-layout-th.js` WPT suite (flexbox/grid/sizing/position) asserts these against container-relative offsets; and every popup/tooltip/dropdown/drag library positions at `el.offsetLeft` and landed in the wrong place when it was absolute | ✅ (tick 138) — the values returned the absolute page X/Y (`LAYOUT_RECTS[node]`), correct only when the offsetParent is at the origin. Now `self.borderEdge − (offsetParent.borderBoxEdge + offsetParent.borderWidth)`. **css-flexbox 6.2%→24.7% (+665), css-grid 5.3%→9.0% (+107), css-sizing 12.0%→13.6%, css-position +5**; Bar 0 clean; one coordinate-space fix flips all four shared-harness suites |
+| **`el.offsetParent`** returns the nearest positioned ancestor / body / table cell, else `null` | every layout-measuring library (positioning engines, virtualisation, `getComputedStyle`-free measurement) that walks `offsetParent` to sum offsets to the page | ✅ (tick 138) — the property did not exist (`undefined`); now CSSOM-View `offsetParent`: `null` for root/body/`fixed`/boxless, else nearest positioned ancestor, body, or (element-static only) `td`/`th`/`table`. Gate `g_offset_parent` |
+| `offsetParent` reflector identity (`el.offsetParent === container`) and transform-aware offset geometry | frameworks that compare the returned node by identity; transformed containers | ✅ identity via the shared `return_node_or_null` reflector path; ⚠️ offsets are pre-transform (same honest bound as `getBoundingClientRect`/`elementFromPoint`) — a follow-on |
+
 ## Tick 137 — selector identifiers decode CSS escapes (+40)
 
 | Pattern | Reach | Status |

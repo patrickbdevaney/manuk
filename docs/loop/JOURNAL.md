@@ -3054,6 +3054,47 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 138 — `offsetLeft`/`offsetTop` are offsetParent-relative, and `offsetParent` exists (CSS layout: +665 flexbox)
+
+**TICK SHAPE: pattern-class (one coordinate-space fix + the missing `offsetParent`, flips four shared-harness CSS-layout suites at once).** WIKI: interaction-surface.
+
+**Phase mandate obeyed.** `lever-board.sh` PHASE MANDATE = build DAILY-DRIVER CSS-LAYOUT capability, not
+html/dom flip. The top layout levers by mass were css-flexbox (6.2%) and css-grid (5.3%). Histogramming
+`css/css-flexbox --show-failures` and clustering by signature: the single biggest cluster was **`offsetLeft`
+(~1337) + `offsetTop` (~414)** — flex/grid item *positions*, not sizes. So the lever was the coordinate
+space those two properties report in, shared across every `check-layout-th.js` suite.
+
+**Hypothesis.** `offsetLeft`/`offsetTop` returned `LAYOUT_RECTS[node]` directly — the element's **absolute
+page X/Y**. But CSSOM-View defines them relative to the **offsetParent's padding edge**. Absolute is correct
+only when the offsetParent is at the page origin; a flex/grid item inside any `position:relative` container
+reported its viewport coordinate, and `check-layout-th.js` asserts `offsetLeft` against a **container-relative**
+`data-offset-x`. And `offsetParent` did not exist at all (`undefined`).
+
+**Mechanism (`dom_bindings.rs`).** (1) `offset_parent(dom, node)` — CSSOM-View: `null` for root/body/`fixed`/
+boxless (step 1); else the nearest ancestor that is positioned, is the body, or — element-static only —
+`td`/`th`/`table` (step 2). (2) `el_offset_pos(vp, axis)` — body/boxless → 0; no offsetParent → the absolute
+border edge (relative to the ICB, the spec's fallback); else `self.borderEdge − (op.borderBoxEdge +
+op.borderWidth)`, i.e. subtract the offsetParent's **padding-edge origin**. Rounded to a `long` last.
+(3) `el.offsetParent` property added, wired through the shared `return_node_or_null` reflector path.
+
+**MEASURED — the ratchet turned, on the phase's own axis.** css-flexbox **223/3594 (6.2%) → 888/3594
+(24.7%), +665**; css-grid **5.3% → 9.0%, +107**; css-sizing **12.0% → 13.6%, +26**; css-position **24.2% →
+26.2%, +5**. Bar 0 **0** across all. No regression: html/dom **94.0%** and dom **56.0%** held (offsetLeft is
+barely read outside the layout suites, and where the offsetParent is the origin absolute == relative). One
+coordinate-space fix flipped four suites because they all drive `check-layout-th.js`.
+
+**Gate `g_offset_parent`** (features `stylo,spidermonkey`): an abspos item at `left:10 top:20` inside a
+`position:relative` container offset `left:30 top:40` with a `5px` border. Falsifiable by construction —
+proven RED on the committed binary (`op:false ol:45 ot:83 body:false`, the absolute coords with no
+offsetParent), GREEN after (`op:true ol:10 ot:20 body:true`). The `ol:10` (not `45`) proves BOTH
+offsetParent-relativity AND the border subtraction in one number.
+
+**The ratchet.** Capability: **up** — the largest CSS-layout move of the run and the property every
+measuring library reads. Performance: unchanged (same snapshot, a short ancestor walk). Instrument fidelity:
+**up** — the gate pins the coordinate space and the null cases. **Honest bound:** offsets are pre-transform
+(the same bound `getBoundingClientRect`/`elementFromPoint` already state) — a transformed offsetParent is a
+follow-on.
+
 ## Tick 137 — selector identifiers decode CSS escapes (+40 dom)
 
 **TICK SHAPE: pattern-class (one tokenizer helper + escape-aware pre-tokenizer, a whole CSS-escape selector cluster).** WIKI: css-cascade.

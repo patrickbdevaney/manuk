@@ -212,6 +212,7 @@
   - L260 · The contract with JavaScript
   - L275 · document.elementFromPoint(x, y) bridges the layout-rect snapshot, not a second hit-tester
   - L291 · element.getClientRects() reuses the layout snapshot, like getBoundingClientRect
+  - L302 · offsetLeft/offsetTop are offsetParent-relative, and offsetParent exists (tick 138)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -261,13 +262,14 @@
 ## Lever Map — daily-driver-weighted capability targeting
 `docs/wiki/lever-map.md`
 
-  - L9 · The core correction to the oracle
-  - L16 · Ranked levers  (score = weight × WPT-mass(k) ÷ effort)
-  - L36 · Per-site dependency map (the 7-site daily-driver corpus)
-  - L47 · Oracle scoring (implemented in lever-board.sh)
-  - L53 · Pre-build FORECAST signals (compute from the existing WPT run; no build required)
-  - L64 · Corpus recommendation (for oracle-crawl.sh)
-  - L71 · Concrete next-3 ticks
+  - L9 · ⚑ CURRENT PHASE DIRECTIVE (tick 138+) — enforced in lever-board.sh
+  - L19 · The core correction to the oracle
+  - L26 · Ranked levers  (score = weight × WPT-mass(k) ÷ effort)
+  - L46 · Per-site dependency map (the 7-site daily-driver corpus)
+  - L57 · Oracle scoring (implemented in lever-board.sh)
+  - L63 · Pre-build FORECAST signals (compute from the existing WPT run; no build required)
+  - L74 · Corpus recommendation (for oracle-crawl.sh)
+  - L81 · Concrete next-3 ticks
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -376,4 +378,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-307 sections across 16 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+309 sections across 16 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

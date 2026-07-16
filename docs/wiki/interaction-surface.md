@@ -298,3 +298,29 @@ an inline box that wraps across lines has several client rects; we return the si
 block/replaced majority the snapshot holds). Ratchet-neutral at introduction (the lone WPT reference sits
 in a multi-assertion test that fails elsewhere too) — landed as correct capability real sites call
 constantly, tick-97-style. [[dom-semantics]]
+
+## `offsetLeft`/`offsetTop` are offsetParent-relative, and `offsetParent` exists (tick 138)
+
+**The single largest CSS-layout lever, and it was not a layout bug at all — it was a coordinate space.**
+`offsetLeft`/`offsetTop` returned the element's **absolute page X/Y** (`LAYOUT_RECTS[node]` directly). But
+CSSOM-View defines them relative to the **offsetParent's padding edge** — "where is this box inside its
+positioned container". Absolute coords are only correct when the offsetParent sits at the page origin,
+which is the exception, not the rule. So a flex/grid item inside any `position:relative` container reported
+its viewport coordinate, and `check-layout-th.js` — which asserts `el.offsetLeft` against a
+**container-relative** `data-offset-x` — failed across the whole layout suite. It also meant every popup /
+tooltip / drag library that positions at `el.offsetLeft` landed in the wrong place.
+
+**`offsetParent` (`offset_parent()` in `dom_bindings.rs`)** follows CSSOM-View exactly: `null` for the root
+element, the body, a `position:fixed` box, or a boxless element (step 1); otherwise the nearest ancestor
+that is **positioned**, is the **body**, or — only when the element itself is `static` — a `td`/`th`/`table`
+(step 2). Tag detection leans on the arena storing HTML tag names lowercased.
+
+**The offset value (`el_offset_pos()`):** the body/boxless → `0`; **no** offsetParent → the border-edge
+coordinate relative to the ICB, i.e. the old absolute value (correct for that case); **with** an
+offsetParent → `self.borderEdge − (offsetParent.borderBoxEdge + offsetParent.borderWidth)`, i.e. subtract
+the offsetParent's **padding-edge origin**. Rounded to a `long` last (CSSOM rounds; `check-layout` tolerates
+±1px). The gate `g_offset_parent` pins both facts with an abspos item in a bordered relative container
+(`offsetLeft==10`, not the absolute `45`) — proving offsetParent-relativity AND the border subtraction in
+one number. **MEASURED:** css-flexbox 6.2%→24.7% (+665), css-grid 5.3%→9.0% (+107), css-sizing 12.0%→13.6%,
+css-position +5; Bar 0 clean; html/dom/dom unregressed. All four suites share `check-layout-th.js`, so one
+coordinate-space fix flipped them together. [[dom-semantics]] [[css-cascade]]

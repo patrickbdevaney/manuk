@@ -1486,6 +1486,7 @@ unsafe fn define_members(
         // Element metrics.
         prop_guarded!(prop, c"offsetLeft", el_get_offset_left, None);
         prop_guarded!(prop, c"offsetTop", el_get_offset_top, None);
+        prop_guarded!(prop, c"offsetParent", el_get_offset_parent, None);
         prop_guarded!(prop, c"offsetWidth", el_get_offset_width, None);
         prop_guarded!(prop, c"offsetHeight", el_get_offset_height, None);
         // `clientWidth/Height` and `scrollWidth/Height` USED to be aliased to `offsetWidth/Height` —
@@ -5494,10 +5495,122 @@ url_part!(el_get_search, "search");
 url_part!(el_get_hash, "hash");
 url_part!(el_get_origin, "origin");
 
-/// The element **metrics** every script reads: `offsetWidth`/`offsetHeight`/`offsetTop`/`offsetLeft`,
+/// CSSOM-View **`offsetParent`**: the ancestor `offsetTop`/`offsetLeft` are measured against. This
+/// is the fact those two properties are *relative to*, and without it they are meaningless — every
+/// tooltip/dropdown/drag library reads `offsetParent` (or the offsets, which imply it) to place a
+/// popup at an element's corner. Returns `None` (→ `null`) for the root element, the body, a
+/// `fixed` box, or a boxless element (spec step 1); otherwise the nearest ancestor that is
+/// positioned, is the body, or — when the element itself is `static` — a `td`/`th`/`table`.
+fn offset_parent(dom: *mut Dom, node: NodeId) -> Option<NodeId> {
+    // Step 1 — the null cases. A boxless element has no geometry to be relative to.
+    layout_rect(node)?;
+    let tag = unsafe { (*dom).tag_name(node) };
+    if matches!(tag, Some("html") | Some("body")) {
+        return None;
+    }
+    if with_style(node, |cs| cs.position) == Some(manuk_css::Position::Fixed) {
+        return None;
+    }
+    // The `td`/`th`/`table` rule only applies when the *element itself* is statically positioned.
+    let elem_static =
+        with_style(node, |cs| cs.position).map_or(true, |p| p == manuk_css::Position::Static);
+    // Step 2 — first qualifying ancestor.
+    let mut cur = unsafe { (*dom).parent(node) };
+    while let Some(a) = cur {
+        if unsafe { (*dom).is_element(a) } {
+            let atag = unsafe { (*dom).tag_name(a) };
+            if atag == Some("body") {
+                return Some(a);
+            }
+            if with_style(a, |cs| cs.position).map_or(false, |p| p != manuk_css::Position::Static) {
+                return Some(a);
+            }
+            if elem_static && matches!(atag, Some("td") | Some("th") | Some("table")) {
+                return Some(a);
+            }
+        }
+        cur = unsafe { (*dom).parent(a) };
+    }
+    None
+}
+
+/// `offsetLeft` / `offsetTop` — CSSOM-View. **These are relative to the `offsetParent`'s padding
+/// edge, not the viewport.** Returning the absolute page coordinate (as this once did) is wrong for
+/// every element whose `offsetParent` is not at the page origin: a flex/grid item inside a
+/// `position:relative` container reported its viewport X, so `check-layout-th.js` — which compares
+/// `el.offsetLeft` against a container-relative `data-offset-x` — failed across the whole layout
+/// suite, and every library that positions a popup at `el.offsetLeft` placed it in the wrong spot.
+///
+/// `axis`: 0 = left (x), 1 = top (y). The value is a `long` — rounded to the nearest integer.
+unsafe fn el_offset_pos(vp: *mut Value, axis: usize) -> f64 {
+    let (dom, node) = match this_node(vp) {
+        Some(v) => v,
+        None => return 0.0,
+    };
+    // The body element (and any boxless element) reports 0 per spec.
+    if matches!((*dom).tag_name(node), Some("body")) {
+        return 0.0;
+    }
+    let self_edge = match layout_rect(node) {
+        Some(r) => r[axis],
+        None => return 0.0,
+    };
+    match offset_parent(dom, node) {
+        // No offsetParent → the border edge relative to the initial containing block, i.e. absolute.
+        None => (self_edge as f64).round(),
+        // Otherwise, subtract the offsetParent's padding-edge origin (its border-box edge plus its
+        // border width on that side).
+        Some(op) => {
+            let op_edge = layout_rect(op).map(|r| r[axis]).unwrap_or(0.0);
+            let border = with_style(op, |cs| {
+                if axis == 0 {
+                    cs.border_width.left
+                } else {
+                    cs.border_width.top
+                }
+            })
+            .unwrap_or(0.0);
+            ((self_edge - op_edge - border) as f64).round()
+        }
+    }
+}
+
+unsafe extern "C" fn el_get_offset_left(
+    _cx: *mut RawJSContext,
+    _argc: u32,
+    vp: *mut Value,
+) -> bool {
+    let v = el_offset_pos(vp, 0);
+    *vp = mozjs::jsval::DoubleValue(v);
+    true
+}
+
+unsafe extern "C" fn el_get_offset_top(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let v = el_offset_pos(vp, 1);
+    *vp = mozjs::jsval::DoubleValue(v);
+    true
+}
+
+/// `element.offsetParent` — the reflector for [`offset_parent`], or `null`.
+unsafe extern "C" fn el_get_offset_parent(
+    cx: *mut RawJSContext,
+    _argc: u32,
+    vp: *mut Value,
+) -> bool {
+    match this_node(vp) {
+        Some((dom, node)) => {
+            let op = offset_parent(dom, node);
+            return_node_or_null(cx, vp, dom, op);
+        }
+        None => *vp = NullValue(),
+    }
+    true
+}
+
+/// The element **metrics** every script reads: `offsetWidth`/`offsetHeight`,
 /// `clientWidth`/`clientHeight`, `scrollWidth`/`scrollHeight`. All come from the same layout
 /// snapshot `getBoundingClientRect` reads; a page that cannot measure its own boxes cannot lay
-/// itself out.
+/// itself out. (`offsetTop`/`offsetLeft` are offsetParent-relative — see [`el_offset_pos`].)
 unsafe fn el_metric(cx: *mut RawJSContext, vp: *mut Value, which: u8) -> bool {
     let v = match this_node(vp) {
         Some((_, node)) => layout_rect(node)
@@ -5527,8 +5640,6 @@ macro_rules! metric {
         }
     };
 }
-metric!(el_get_offset_left, 0);
-metric!(el_get_offset_top, 1);
 metric!(el_get_offset_width, 2);
 metric!(el_get_offset_height, 3);
 
