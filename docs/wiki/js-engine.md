@@ -468,6 +468,40 @@ drawn at its true size came out as a smudge in the corner.
 They are IDL attributes reflecting the content attributes now, and assigning either one resizes **and
 clears**, which is the spec and is the idiomatic way to erase a canvas.
 
+## Reflecting a NUMBER attribute: four rules the naive getter gets wrong (tick 117)
+
+An integer-reflecting IDL attribute (`maxLength`, `tabIndex`, `colSpan`, `width`, …) is a view over a
+content attribute with the HTML spec's coercion in between. Getting one is *not* `parseInt` — it is the
+HTML "rules for parsing integers" **plus** a per-type range/default rule **plus** the WebIDL numeric type,
+and each of those layers hides a subtle failure. The ground truth is WPT's own `html/dom/reflection.js`
+`domExpected` functions — read those, do not re-derive the spec prose.
+
+1. **`-0` is `+0`.** The HTML integer rules accumulate a magnitude and return a bare `0` when it is zero,
+   *sign discarded*. JS `parseInt("-0", 10)` returns `-0`, and `assert_equals` is `Object.is`-based, so a
+   leaked `-0` fails **every** `setAttribute() to "-0"` case — one per numeric attribute per element, the
+   single biggest cluster (143 subtests). Normalise at the parse seam: `n === 0 ? 0 : n`.
+
+2. **Overflow FALLS BACK — it does not wrap.** `tabindex="2147483648"` is outside the signed-32 range, so
+   a plain `long` reflects the **default** (`0`), not `-2147483648`. The tempting "fix" is `n | 0` (ToInt32),
+   and it is exactly wrong: no browser wraps here, because the reflection algorithm's range check fires
+   *before* any IDL conversion. So a plain `long` must range-check `[-2^31, 2^31−1]` and fall back outside
+   it — not only the unsigned family.
+
+3. **The default is per-type, not always `0`.** `limited long` (`maxLength`/`minLength`, "non-negative")
+   defaults to **`-1`**; `limited unsigned long` (`size`, "> 0") defaults to **`1`**. An invalid *or*
+   out-of-range value returns that type default, table-overridable via a `d` field.
+
+4. **`clamped unsigned long` CLAMPS; it does not fall back.** `colspan` of a billion is `1000` (the max),
+   `colspan="0"` is `1` (the min) — out-of-range saturates to the bound. Only a parse failure / negative
+   returns the default. The bug to avoid: applying the plain-unsigned `> 2^31 → default` cutoff *before*
+   the clamp, which turns a huge colspan into the default instead of the max.
+
+**Reach.** Only attributes whose IDL name is *not* already on the prototype chain route through the generic
+reflector (`if (idl in proto) return;` — a native binding always wins). So `li.value`/`ol.start`/`pre.width`
+are natively shadowed and untouched by this; `tabIndex`/`maxLength`/`colSpan`/`width` are reflected and
+were the ~380-subtest lever. Gated by `G_REFLECT_NUMERIC`, kept in its own test binary because two
+SpiderMonkey `Page::load`s in one process reuse the runtime and can trip the reflector-teardown UAF.
+
 ## A node id is unique only WITHIN its arena — so a reflector must resolve against its OWN document
 
 This is the lesson that made `iframe.contentDocument` possible, and it is a trap every second-document

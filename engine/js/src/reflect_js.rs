@@ -94,7 +94,11 @@ pub const REFLECT_JS: &str = r#"
     var m = /^[ \t\n\f\r]*([-+]?[0-9]+)/.exec(String(s));
     if (!m) return null;
     var n = parseInt(m[1], 10);
-    return isNaN(n) ? null : n;
+    if (isNaN(n)) return null;
+    // The HTML "rules for parsing integers" accumulate a magnitude and return a bare 0 when it is
+    // zero, sign or not — so "-0" is +0, never JS's `-0`. `assert_equals` is Object.is-based and
+    // treats -0 !== 0, so a leaked negative zero fails every `setAttribute() to "-0"` reflection test.
+    return n === 0 ? 0 : n;
   }
   function parseFloatHTML(s) {
     if (s === null || s === undefined) return null;
@@ -129,24 +133,38 @@ pub const REFLECT_JS: &str = r#"
     if (t === 'long' || t === 'unsigned long' || t === 'limited long'
         || t === 'limited unsigned long' || t === 'limited unsigned long with fallback'
         || t === 'clamped unsigned long') {
-      var dflt = (d.d !== undefined && d.d !== null) ? d.d : 0;
       var n = parseIntHTML(raw);
-      if (n === null) return dflt;
-      if (t === 'unsigned long' || t === 'limited unsigned long'
-          || t === 'limited unsigned long with fallback' || t === 'clamped unsigned long') {
-        // A NEGATIVE value in an unsigned field is INVALID — it falls back to the default. It is not
-        // clamped to zero, which is the intuitive-and-wrong thing to do.
-        if (n < 0) return dflt;
-        if (n > 2147483647) return dflt;
-      }
-      if (t === 'limited unsigned long' || t === 'limited unsigned long with fallback') {
-        if (n <= 0) return dflt;    // `colspan="0"` is invalid, and colSpan reads back as 1
-      }
+      // Spec-mandated MISSING/INVALID default per type, overridable by the table's `d`:
+      //   long → 0 · limited long ("non-negative", e.g. maxLength/minLength) → -1 ·
+      //   limited unsigned long ("> 0", e.g. size) → 1 · everything else → 0.
+      var dflt;
+      if (d.d !== undefined && d.d !== null) dflt = d.d;
+      else if (t === 'limited long') dflt = -1;
+      else if (t === 'limited unsigned long') dflt = 1;
+      else dflt = 0;
+
       if (t === 'clamped unsigned long') {
+        // Parse non-negative, then CLAMP into [min,max] — out-of-range does NOT fall back, it clamps
+        // (a colspan of a billion is 1000, not the default). Only a parse failure / negative is default.
+        if (n === null || n < 0) return dflt;
         var mn = (d.mn !== undefined) ? d.mn : 0, mx = (d.mx !== undefined) ? d.mx : 2147483647;
         if (n < mn) return mn;
         if (n > mx) return mx;
+        return n;
       }
+
+      // long / limited long / (limited) unsigned long: parse, then anything outside the valid window
+      // — including a value that OVERFLOWS the signed 32-bit range — falls back to the default. It is
+      // NOT wrapped mod 2^32: `<li value="2147483648">` reads back as the default, per the HTML rules
+      // for parsing integers + range check, and is what every browser does.
+      if (n === null) return dflt;
+      var lowBound;
+      if (t === 'long') lowBound = -2147483648;                                   // signed
+      else if (t === 'limited unsigned long'
+               || t === 'limited unsigned long with fallback') lowBound = 1;      // strictly positive
+      else lowBound = 0;                                                          // limited long / unsigned long
+      if (n < lowBound) return dflt;
+      if (n > 2147483647) return dflt;
       return n;
     }
 

@@ -3054,6 +3054,48 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 117 — numeric reflection: `-0`, overflow-wraps-not-falls-back, and the missing `-1`/`1` defaults (+437)
+
+**TICK SHAPE: pattern-class.** The class is *integer-reflecting IDL attributes* (`maxLength`, `tabIndex`,
+`colSpan`, `width`, `rowSpan`, `size`, `cols`, …) — every element's numeric properties, read by form
+validation, table layout and virtualisation. `html/dom` is the top FLIP-RATE surface (93.3%, 4,035 failing).
+
+**Method — build the probe, distrust the note.** My own memory said the lever was ToInt32 wraparound
+(`n | 0`), ~391 subtests. Re-ran `manuk-wpt wpt html/dom --show-failures` and histogrammed the real
+`expected X but got Y` messages, and the note was **wrong about the mechanism**: the two biggest clusters
+are `expected -1 but got 0` (234, all `input.minLength`/`maxLength`) and `expected 0 but got -0` (143,
+every numeric attribute on every element). Then I read WPT's own `reflection.js` `domExpected` functions —
+the arithmetic ground truth — instead of theorising the spec.
+
+**Mechanism — four rules in `engine/js/src/reflect_js.rs`, all in the getter:**
+1. **`-0` is `+0`.** The HTML "rules for parsing integers" accumulate a magnitude and return a bare `0`
+   for zero, sign or not — but JS `parseInt("-0")` is `-0`, and `assert_equals` is `Object.is`-based, so a
+   leaked `-0` fails every `setAttribute() to "-0"` case. One line in `parseIntHTML`: `n === 0 ? 0 : n`.
+2. **overflow FALLS BACK, it does not wrap.** `tabindex="2147483648"` is out of the signed-32 range → the
+   default `0`, NOT `-2147483648`. The note's `n | 0` "fix" would have produced exactly the wrong answer.
+   Plain `long` now range-checks `[-2^31, 2^31-1]` (it only checked the unsigned family before).
+3. **`limited long` (maxLength/minLength) defaults to `-1`, not `0`**, and rejects negatives + overflow to
+   that `-1` (per-type default, table-overridable).
+4. **`limited unsigned long` defaults to `1`**, and **`clamped unsigned long` CLAMPS** (`colspan` of a
+   billion is `1000`, the max) instead of falling back — the old code fell back for `> 2^31` *before*
+   clamping, so a huge colspan read as the default, not the max.
+
+Confirmed the ~380-subtest lever routes through reflection by testing on `tabIndex`/`maxLength`/`colSpan`
+(reflected) — `li.value`/`ol.start`/`pre.width` are natively shadowed on the prototype (`if (idl in proto)
+return;`) and are out of this mechanism's reach (a separate native-binding tick).
+
+**MEASURED.** New gate `g_reflect_numeric` (8 cases: overflow→default, `-0`→`+0` incl. `Object.is` negative-
+zero check, limited-long `-1` default + overflow, clamped→max) — **proven falsifiable** (the old code gives
+`limInvalid:0`, `clamp:1`, `tiNeg:true`). Its own binary, because two SpiderMonkey `Page::load`s per process
+reuse the runtime and trip the tracked reflector-teardown UAF ([[flexbox-relayout-segfault]]). **html/dom
+55,783 → 56,220 (+437)**, HANG/CRASH 0 (Bar 0), no area regressed.
+
+**The ratchet.** Capability: **up** (four spec-correct coercion rules). Performance: unchanged. Instrument
+fidelity: **up** — an 8-case falsifiable tooth. [[parity-methodology]] (the note was wrong; the probe was
+right) [[htmldom-top-levers]]
+
+WIKI: docs/wiki/js-engine.md — HTML integer-parsing + WebIDL numeric reflection coercion rules
+
 ## Tick 116 — `nodeName` uppercased everything and called every non-element `#text` (+62)
 
 **TICK SHAPE: capability (DOM correctness).** `[pattern: node-name-casing]`. Re-probed `dom` after tick 115
