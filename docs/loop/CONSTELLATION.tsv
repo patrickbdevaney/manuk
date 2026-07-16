@@ -99,7 +99,7 @@ cross	real-world QUIRKS (not just the spec)	'the work that has historically KILL
 cross	quirks-mode rendering	the pre-standards web; a huge fraction of the long tail	unknown	-	SURFACE AUDIT t83: never measured
 cross	test262 (JS conformance)	Ladybird tracks 97.8% of 53,207 subtests. We have NEVER RUN IT	unknown	-	SURFACE AUDIT t83: we embed SpiderMonkey, so this should be cheap and high
 cross	developer tools	not a rendering capability, but a browser without them is not a daily driver for the people who build the web	missing	-	SURFACE AUDIT t83: Ladybird names this a gap too
-doc	CSS nesting (native &)	modern stylesheets nest rules; a flat-only parser drops the nested block	unknown	-	NEVER MEASURED — Stylo likely parses it; probe (surface-audit t123)
+doc	CSS nesting (native &)	modern stylesheets nest rules; a flat-only parser drops the nested block	gated	G_CSS_NESTING	tick 124: MEASURED — Stylo backs native nesting (& descendant + bare &); reaches getComputedStyle
 doc	subgrid	nested grids that must align to the parent grid track lines	unknown	-	NEVER MEASURED — probe (surface-audit t123)
 doc	@scope / scoped styles	component-scoped CSS without leakage	unknown	-	NEVER MEASURED — probe (surface-audit t123)
 doc	text-wrap: balance / pretty	headings and paragraphs wrap raggedly; a visible typographic gap	unknown	-	NEVER MEASURED — probe (surface-audit t123)

@@ -3054,6 +3054,36 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 124 — MEASURED: native CSS nesting works (surface-audit follow-through; unknown → gated)
+
+**TICK SHAPE: instrument fidelity (measure an unknown, bank it).** `[no-pattern]`. Directly acting on
+Audit #5's finding: the surface audit added **CSS nesting** to `CONSTELLATION.tsv` as `unknown` because the
+map had never measured it. The ratchet rewards MEASURED over `unknown`, and the fastest MEASURED win is a
+capability that turns out to **already work** — so this tick is the probe-first follow-through the audit
+protocol calls for (step 3: a newly-discovered row may be the next tick).
+
+**Result.** A probe found native CSS nesting **fully working** (Stylo backs it): `.a { & .c {} }` (nested
+descendant) and `.d { & {} }` (bare `&`) both resolve through the cascade to `getComputedStyle`. No engine
+change needed — the capability was present and unmeasured, exactly the surface-audit thesis (the map's
+growth had tracked the novel over the load-bearing; nesting is Baseline-2023 and was missing).
+
+**Also probed, and left honestly `unknown`:** `@scope` does NOT apply its scoped rule (`.card .title` stayed
+at the default colour — Stylo parses but does not scope-match here); `subgrid` and `text-wrap` computed
+values are not exposed via `getComputedStyle`, so unmeasurable this way — all three stay `unknown` rather
+than being claimed. An honest partial is the point.
+
+**GATE:** `g_css_nesting` — asserts the nested `& .c` and bare `& {}` rules reach computed style, with a
+non-nested `.a .b` control so a pass means nesting joined the cascade rather than the probe misreporting.
+Falsifiable (an engine dropping nested rules at parse leaves `.c`/`.d` at defaults → wrong colour/weight,
+RED). `CONSTELLATION.tsv` row flipped `unknown` → `gated (G_CSS_NESTING)`.
+
+**The ratchet.** Capability: unchanged (already present). Instrument fidelity: **up** — one map row moved
+from guess to proof (MEASURED 68 → 69 of 106), and two neighbours (`@scope`, subgrid) are now known-NOT
+rather than unknown. Zero Bar-0 risk (no engine change). [[parity-methodology]] [[css-cascade]]
+
+WIKI: none — a measurement tick banking an existing Stylo capability behind a gate; no new mechanism to
+document (the cascade path is already covered by [[css-cascade]]).
+
 ## Tick 123 — `Text.splitText()` + `wholeText`, and the tick-123 SURFACE AUDIT (+8)
 
 **TICK SHAPE: capability (Text-node methods) + scheduled surface audit.** `[pattern: split-text]`. The

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **116** | ticks 1–123 |
-| median tick cycle | **20m** | 115 intervals |
-| median, last 10 | **31m** | 10 intervals |
+| ticks landed | **117** | ticks 1–124 |
+| median tick cycle | **20m** | 116 intervals |
+| median, last 10 | **29m** | 10 intervals |
 | fastest / slowest | 3m / 31.4h | |
-| **ticks per hour** | **0.94** | 121.7h elapsed |
-| median verify wall | **55s** | 55 ticks |
+| **ticks per hour** | **0.95** | 121.8h elapsed |
+| median verify wall | **56s** | 56 ticks |
 | wall trend | 39s → 50s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **54**
+* **live gates**: 27 → **55**
 * **✅ rows in the capability ledger**: 144 → **219**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**63 of 116 ticks** (54%) moved a
+**63 of 117 ticks** (54%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **63** capability ticks, median cycle **20m**
-* median diff per tick: **+256 / −24** lines across 8 files
+* median diff per tick: **+254 / −24** lines across 8 files
 
 ## Every tick
 
@@ -213,5 +213,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **121** | 2026-07-16 06:00 | 23m | capability | 50s | +278/−47 | 52 | 81 | 46.2% | the typed Event subclass hierarchy: `instanceof` chain + inherited members (+41) |
 | **122** | 2026-07-16 06:18 | 18m | capability | 49s | +210/−34 | 53 | 81 | 46.7% | `new Text()`/`new Comment()`/`new DocumentFragment()` minted dead objects (+29) |
 | **123** | 2026-07-16 06:44 | 27m | capability | 50s | +301/−35 | 54 | 81 | 46.8% | `Text.splitText()` + `wholeText`, and the tick-123 SURFACE AUDIT (+8) |
+| **124** | 2026-07-16 06:50 | 6m | instrument | 60s | +133/−34 | 55 | 81 | 46.8% · | MEASURED: native CSS nesting works (surface-audit follow-through; unknown → gated) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
