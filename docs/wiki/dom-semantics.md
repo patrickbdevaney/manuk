@@ -820,3 +820,24 @@ Two smaller `HTMLCollection` correctness gaps left after ticks 129–130, both f
 
 **MEASURED:** dom 3566 → 3573 (**+7**), `HTMLCollection-iterator` 2/6 → 6/6, `-supported-property-indices`
 2/7 → 5/7, Bar 0 **0** (deterministic ×3), no regressions. Gate `g_collection_iterator_indices`. [[js-engine]]
+
+## `getElementsByClassName` splits on ASCII whitespace, not Unicode (tick 132)
+
+`el.getElementsByClassName(arg)` parses `arg` (and each element's `class` attribute) as a DOM **ordered
+set**, split on **ASCII whitespace only** — TAB (U+0009), LF (U+000A), FF (U+000C), CR (U+000D), SPACE
+(U+0020) — and nothing else. A class of a single non-ASCII "space" character (U+00A0 no-break space, U+2003
+em space, and critically U+000B LINE TABULATION, which is *not* ASCII whitespace) is a real, matchable token.
+
+Our binding used Rust `str::split_whitespace()`, which splits on the **Unicode White_Space** property
+(U+00A0, U+1680, U+2000–200A, U+2028/2029, U+202F, U+205F, U+3000, U+0085, U+000B, U+000C). Every such class
+name split into empty tokens → no match → the entire `dom/nodes/getElementsByClassName-whitespace-class-names`
+file (26 subtests) failed, plus getElementsByClassName-driven setup in neighbouring files.
+
+Two fixes in one: (1) split on the five ASCII whitespace chars via an explicit `matches!` closure; (2) stop
+building a `.{class}` **CSS selector string** and instead enumerate `*` and filter on the element's class
+set (the pattern `getElementsByName` already uses) — a class name containing `.`/`#`/`:`/`[`/quotes/spaces is
+now matched literally instead of mis-parsed as a selector.
+
+**MEASURED:** dom 3573 → 3603 (**+30**), the whitespace file 0/26 → 26/26, Bar 0 **0** (deterministic ×3), no
+regressions (a one-off `Node-lookupNamespaceURI` 69-vs-71 sample was an async TH_TIMEOUT flake, stable at
+71/75 across re-runs). Gate `g_class_ascii_whitespace`. [[dom-semantics]]

@@ -3019,12 +3019,30 @@ unsafe fn el_get_by_class(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> b
         return true;
     };
     let raw = arg_string(cx, vp, argc, 0).unwrap_or_default();
-    // "a b" → ".a.b" (all classes must be present), matching the DOM semantics.
-    let sel: String = raw.split_whitespace().map(|c| format!(".{c}")).collect();
-    let matches = if sel.is_empty() {
+    // The class argument is parsed as an ordered set on **ASCII whitespace only** (TAB/LF/FF/CR/SPACE —
+    // NOT U+000B, U+00A0, U+2000–200A, U+3000, …), so a class of a single non-ASCII "space" character is a
+    // real token that must match. Rust's `split_whitespace()` uses the Unicode White_Space property and
+    // wrongly split those, dropping the whole DOM `getElementsByClassName-whitespace-class-names` file.
+    // Filtering elements directly (as `getElementsByName` does) also avoids CSS-selector escaping of class
+    // names that contain `.`/`#`/`:`/`[`/quotes/spaces — building a `.{c}` selector string was fragile.
+    let ascii_ws = |c: char| matches!(c, ' ' | '\t' | '\n' | '\u{0C}' | '\r');
+    let tokens: Vec<&str> = raw.split(ascii_ws).filter(|s| !s.is_empty()).collect();
+    let matches: Vec<NodeId> = if tokens.is_empty() {
         Vec::new()
     } else {
-        manuk_css::query_selector_all(&*dom, root, &sel)
+        manuk_css::query_selector_all(&*dom, root, "*")
+            .into_iter()
+            .filter(|&n| {
+                (*dom)
+                    .element(n)
+                    .and_then(|e| e.attr("class"))
+                    .is_some_and(|cls| {
+                        let have: Vec<&str> =
+                            cls.split(ascii_ws).filter(|s| !s.is_empty()).collect();
+                        tokens.iter().all(|t| have.contains(t))
+                    })
+            })
+            .collect()
     };
     node_array(cx, vp, dom, &matches);
     true

@@ -3054,6 +3054,24 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 132 — `getElementsByClassName` splits on ASCII whitespace, not Unicode (+30 dom)
+
+**TICK SHAPE: pattern-class (one tokenizer bug, a whole file + neighbours).** WIKI: dom-semantics.
+
+**Hypothesis (flip-rate).** `dom/nodes/getElementsByClassName-whitespace-class-names` was **0/26** — every
+subtest a `<span class="<one space-like codepoint>">` that `getElementsByClassName` must still find. The DOM
+splits the class argument on **ASCII whitespace only** (TAB/LF/FF/CR/SPACE); our binding used Rust
+`split_whitespace()` (Unicode White_Space), which split U+00A0/U+2000–200A/U+000B/U+3000/… into empty tokens.
+
+**Mechanism.** `el_get_by_class` now splits on the five ASCII whitespace chars (explicit `matches!`), and —
+instead of building a fragile `.{class}` CSS-selector string — enumerates `*` and filters on each element's
+class set (the `getElementsByName` pattern), so class names with `.`/`#`/`:`/`[`/quotes are matched literally.
+
+**MEASURED — the ratchet turned.** dom **3573 → 3603 (+30)** (the 26-subtest file 0/26 → 26/26 plus
+getElementsByClassName-driven setup in neighbours), Bar 0 **0** (deterministic ×3), no regressions (a
+`Node-lookupNamespaceURI` 69-vs-71 blip was an async TH_TIMEOUT flake — stable 71/75 on re-run). Gate
+`g_class_ascii_whitespace` (proven red on revert).
+
 ## Tick 131 — `HTMLCollection` iterable surface + numeric `namedItem` (+7 dom)
 
 **TICK SHAPE: pattern-class (two shared-proxy correctness gaps on `HTMLCollection`).** WIKI: dom-semantics.
