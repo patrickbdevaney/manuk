@@ -21,18 +21,27 @@ printf "  pgrep always matches itself, never returns empty, and the loop spins F
 printf "  Instead: run cargo/tick.sh/tests in the FOREGROUND and let them block. If the harness backgrounds a long command,\n"
 printf "  wait on its OUTPUT-FILE CONTENT (e.g. \`grep -q 'VERIFY:' out\`), never on pgrep of a string your wait command contains.\n\n"
 
-# ── PHASE MANDATE (observer, tick 138) — DAILY-DRIVER CAPABILITY, not raw WPT flip. ENFORCED this phase.
-printf "%s🎯 PHASE MANDATE — build DAILY-DRIVER CAPABILITY, not WPT-flip count%s\n" "$R$B" "$O"
-printf "  html/dom is reasonably done (~93%%). The daily-driver bottleneck is now RENDERING and MEDIA. Pick your tick\n"
-printf "  from these two areas IN PRIORITY ORDER until each is 'good enough' to render/play real sites:\n"
-printf "    %s(1) CSS LAYOUT%s — flexbox (~6%%), grid (~5%%), sizing (~12%%), position/values/overflow/transforms. Real sites\n" "$G$B" "$O"
-printf "        render MISLAID-OUT without it. Flex/Grid INTRINSIC SIZING (min/max-content; Taffy #204) is the core lever.\n"
-printf "    %s(2) MSE / MEDIA pipeline%s — currently ABSENT; video sites are dead. Build the MediaSource/SourceBuffer JS\n" "$G$B" "$O"
-printf "        surface and BIND a media framework (GStreamer/FFmpeg) — do NOT hand-write codecs (lever-map.md §M).\n"
-printf "  These are LOW WPT-flip but HIGH daily-driver capability — that is the POINT. A html/dom-flip tick does NOT\n"
-printf "  advance the mandate; prefer a CSS-layout or media tick even at a lower +N. Goal: a good-enough render+media\n"
-printf "  foundation for the agentic driving surface (with agent fallbacks where WPT coverage is thin), then a security\n"
-printf "  sweep. Only after CSS layout + MSE are 'good enough' do we return to general WPT flip. See docs/wiki/lever-map.md.\n\n"
+# ── PHASE MANDATE (observer, tick 138+) — DAILY-DRIVER CAPABILITY via a FIXED SEQUENCE. ENFORCED. Full roadmap +
+# good-enough bars + agentic fallbacks: docs/wiki/lever-map.md. Agent picks the LOWEST-NUMBERED unmet target.
+printf "%s🎯 PHASE MANDATE — pick the LOWEST-NUMBERED unmet target below. Falsifiable bar, NOT WPT%%.%s\n" "$R$B" "$O"
+printf "  html/dom (~93%%) is a done tail — a html/dom-flip tick does NOT advance the mandate. Correction: Taffy #204\n"
+printf "  ('Support CSS Grid') SHIPPED; the intrinsic-sizing blocker is MANUK'S OWN leaf measure — fixable in a tick.\n"
+printf "  %sRENDER+INTERACT SEQUENCE (build top-down; each bar = 'done for daily-driver'):%s\n" "$G$B" "$O"
+printf "   %s1 Intrinsic sizing + wire calc()%s  bar: calc(100%%-250px) sidebar-split ~1px; border-box p-4 child=136px; css-sizing 12->35%%\n" "$G" "$O"
+printf "   %s2 SPA link-intercept (a-click preventDefault cancels shell nav)%s  bar: React Link click => pushState, NO reload; push fires no popstate\n" "$G" "$O"
+printf "   %s3 IntersectionObserver driven-on-scroll (verify E2E)%s  bar: headless scroll => 2nd screenful appends+fetches; multi-val rootMargin\n" "$G" "$O"
+printf "   %s4 Block/inline edges (margin-collapse, %%-height, inline-space bug)%s  bar: 100vh hero exact; a<b>b</b> gains no space\n" "$G" "$O"
+printf "   %s5 Flex common-case%s  bar: 3x flex-1 cards w/ long token don't overflow (~1px); justify-between edges exact; css-flexbox 6->25%%\n" "$G" "$O"
+printf "   %s6 Grid common-case (WIRE grid-template-areas: no taffy consumer!)%s  bar: repeat(3,1fr) gap exact; areas holy-grail; css-grid 5->20%%\n" "$G" "$O"
+printf "   %s7 Overflow scroll-container%s  bar: overflow-y:scroll reserves gutter; overflow:hidden = BFC contains floats\n" "$G" "$O"
+printf "   %s8 Positioned + real z-index stacking + sticky in getBoundingClientRect%s  bar: z-50 modal over z-10 header; sticky rect==pinned top\n" "$G" "$O"
+printf "   %s9 Runtime CSSOM .sheet bridge%s  bar: insertRule/adopted-sheets actually cascade (styled-components/Lit restyle)\n" "$G" "$O"
+printf "  %sPARALLEL TRACK (layout-independent — pull forward on any crash / crash-gated tick):%s\n" "$C$B" "$O"
+printf "   %sP-A Stability%s: catch_unwind at JS-native boundary + contain calc-size SIGSEGV (a crash = lose ALL tabs)\n" "$C" "$O"
+printf "   %sP-B Agentic floor%s: occlusion-aware hit_test; enabled/stable Conditions; BiDi quiescence; WIRE script.evaluate (protocol.rs:481)\n" "$C" "$O"
+printf "  %sTHEN media (BIND GStreamer, never write a codec; lead WebM/VP9/Opus):%s M0 video box+reflector -> M1 src= play ->\n" "$Y$B" "$O"
+printf "   M2 MediaSource/SourceBuffer (honest 'buffered' TimeRanges) -> M3 hls.js/dash.js unmodified -> M4 ABR+YouTube(clear only; Widevine=gap).\n"
+printf "  %sTHEN%s a reasonable security sweep (codec licensing, capability scoping, POST-never-downgraded-to-GET).\n\n" "$Y$B" "$O"
 
 awk -F'\t' -v B="$B" -v C="$C" -v G="$G" -v Y="$Y" -v O="$O" -v TGT="$TARGET" '
   NR>1 && $1!="TOTAL" && $1!="encoding" {
