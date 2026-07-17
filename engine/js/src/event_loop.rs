@@ -125,16 +125,42 @@ const PRELUDE: &str = r#"
     globalThis.__xhrObj = {};    // id -> XMLHttpRequest     (xhr)
     globalThis.__pendingFetches = [];
 
-    globalThis.__makeResponse = function(status, text) {
+    // A `Headers`-like over the server's actual response headers — `pairs` is an array of
+    // `[name, value]`. Names match case-insensitively (HTTP header names are case-insensitive), and
+    // `get` comma-joins repeated fields, both per the Fetch standard. Empty/omitted `pairs` yields a
+    // Headers whose `get` returns null (the pre-header behaviour), so the mock-fetcher event loop —
+    // which delivers with no headers — keeps working unchanged.
+    globalThis.__makeHeaders = function(pairs) {
+        var norm = [];
+        if (pairs) { for (var i = 0; i < pairs.length; i++) {
+            if (pairs[i] && pairs[i].length >= 2) norm.push([String(pairs[i][0]), String(pairs[i][1])]);
+        } }
+        return {
+            get: function(name){
+                name = String(name).toLowerCase(); var vals = [];
+                for (var i = 0; i < norm.length; i++) { if (norm[i][0].toLowerCase() === name) vals.push(norm[i][1]); }
+                return vals.length ? vals.join(", ") : null;
+            },
+            has: function(name){
+                name = String(name).toLowerCase();
+                for (var i = 0; i < norm.length; i++) { if (norm[i][0].toLowerCase() === name) return true; }
+                return false;
+            },
+            forEach: function(cb, thisArg){
+                for (var i = 0; i < norm.length; i++) { cb.call(thisArg, norm[i][1], norm[i][0], this); }
+            }
+        };
+    };
+
+    globalThis.__makeResponse = function(status, text, headers) {
         return {
             ok: (status >= 200 && status < 300), status: status, statusText: "",
             url: "", redirected: false, type: "basic", bodyUsed: false, body: null,
-            headers: { get: function(){ return null; }, has: function(){ return false; },
-                       forEach: function(){} },
+            headers: globalThis.__makeHeaders(headers),
             text: function(){ return Promise.resolve(text); },
             json: function(){ try { return Promise.resolve(JSON.parse(text)); }
                               catch (e) { return Promise.reject(e); } },
-            clone: function(){ return globalThis.__makeResponse(status, text); }
+            clone: function(){ return globalThis.__makeResponse(status, text, headers); }
         };
     };
 
@@ -164,30 +190,42 @@ const PRELUDE: &str = r#"
         __pendingFetches.push(id + "\x01f\x01" + method + "\x01" + url + "\x01" + hdrs + "\x01" + body);
         return new Promise(function(resolve, reject){ __fetchCb[id] = { resolve: resolve, reject: reject }; });
     };
-    globalThis.__deliverFetch = function(id, status, text) {
+    globalThis.__deliverFetch = function(id, status, text, headers) {
         var cb = __fetchCb[id]; if (!cb) return; delete __fetchCb[id];
         if (status === 0) { cb.reject(new TypeError("Failed to fetch")); return; }
-        cb.resolve(globalThis.__makeResponse(status, text));
+        cb.resolve(globalThis.__makeResponse(status, text, headers));
     };
 
     globalThis.XMLHttpRequest = function() {
         this.readyState = 0; this.status = 0; this.statusText = "";
         this.responseText = ""; this.response = ""; this.responseType = "";
         this.onload = null; this.onerror = null; this.onreadystatechange = null;
-        this._m = "GET"; this._u = ""; this._id = null; this._h = [];
+        this._m = "GET"; this._u = ""; this._id = null; this._h = []; this._respHeaders = [];
     };
     XMLHttpRequest.prototype.open = function(m, u) { this._m = m || "GET"; this._u = u || ""; this._h = []; this.readyState = 1; };
     XMLHttpRequest.prototype.setRequestHeader = function(k, v) { if (k != null) this._h.push([k, v == null ? "" : v]); };
-    XMLHttpRequest.prototype.getAllResponseHeaders = function() { return ""; };
-    XMLHttpRequest.prototype.getResponseHeader = function() { return null; };
+    XMLHttpRequest.prototype.getAllResponseHeaders = function() {
+        var h = this._respHeaders; if (!h || !h.length) return "";
+        // Spec: one `name: value` field per line, CRLF-terminated, header names lower-cased.
+        var out = "";
+        for (var i = 0; i < h.length; i++) { out += String(h[i][0]).toLowerCase() + ": " + String(h[i][1]) + "\r\n"; }
+        return out;
+    };
+    XMLHttpRequest.prototype.getResponseHeader = function(name) {
+        var h = this._respHeaders; if (!h) return null;
+        name = String(name).toLowerCase(); var vals = [];
+        for (var i = 0; i < h.length; i++) { if (String(h[i][0]).toLowerCase() === name) vals.push(h[i][1]); }
+        return vals.length ? vals.join(", ") : null;
+    };
     XMLHttpRequest.prototype.abort = function() {};
     XMLHttpRequest.prototype.send = function(body) {
         var id = ++__fetchId; __xhrObj[id] = this; this._id = id;
         var hdrs = __encHeaders(this._h);
         __pendingFetches.push(id + "\x01x\x01" + this._m + "\x01" + this._u + "\x01" + hdrs + "\x01" + (body != null ? String(body) : ""));
     };
-    globalThis.__deliverXhr = function(id, status, text) {
+    globalThis.__deliverXhr = function(id, status, text, headers) {
         var x = __xhrObj[id]; if (!x) return; delete __xhrObj[id];
+        x._respHeaders = headers || [];
         x.status = status; x.statusText = ""; x.responseText = text;
         x.response = (x.responseType === "json")
             ? (function(){ try { return JSON.parse(text); } catch (e) { return null; } })()
@@ -200,9 +238,9 @@ const PRELUDE: &str = r#"
 
     // Kind-agnostic delivery: the host settles a request by id without tracking whether it was
     // a fetch or an XHR.
-    globalThis.__deliver = function(id, status, text) {
-        if (__fetchCb[id]) { globalThis.__deliverFetch(id, status, text); return; }
-        if (__xhrObj[id]) { globalThis.__deliverXhr(id, status, text); return; }
+    globalThis.__deliver = function(id, status, text, headers) {
+        if (__fetchCb[id]) { globalThis.__deliverFetch(id, status, text, headers); return; }
+        if (__xhrObj[id]) { globalThis.__deliverXhr(id, status, text, headers); return; }
     };
 
     // ---------------------------------------------------------------------------------------------
@@ -1940,9 +1978,35 @@ pub fn deliver(
     id: u32,
     status: u16,
     body: &str,
+    headers: &[(String, String)],
 ) -> Result<(), String> {
-    let script = format!("__deliver({}, {}, {})", id, status, js_string_literal(body));
+    let script = format!(
+        "__deliver({}, {}, {}, {})",
+        id,
+        status,
+        js_string_literal(body),
+        js_headers_literal(headers)
+    );
     eval(rt, global, &script, "event_loop_deliver.js").map(|_| ())
+}
+
+/// Serialize response headers as a JS array-of-pairs literal — `[["content-type","..."], …]` — for
+/// embedding in a `__deliver` call so the page's `Response.headers`/`XHR.getResponseHeader` read the
+/// server's real fields. Each name and value is escaped as a JS string literal.
+fn js_headers_literal(headers: &[(String, String)]) -> String {
+    let mut s = String::from("[");
+    for (i, (k, v)) in headers.iter().enumerate() {
+        if i > 0 {
+            s.push(',');
+        }
+        s.push('[');
+        s.push_str(&js_string_literal(k));
+        s.push(',');
+        s.push_str(&js_string_literal(v));
+        s.push(']');
+    }
+    s.push(']');
+    s
 }
 
 /// Run the event loop to quiescence, performing pending `fetch`/XHR I/O via `fetch`

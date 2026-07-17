@@ -413,11 +413,12 @@ pub fn resolve_fetch(
     id: u32,
     status: u16,
     body: &str,
+    headers: &[(String, String)],
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
     styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
 ) -> Result<(), JsError> {
     with_runtime(|rt| {
-        ctx.resolve_fetch(rt, dom, id, status, body, layout, styles)
+        ctx.resolve_fetch(rt, dom, id, status, body, headers, layout, styles)
             .map_err(|message| JsError { message })
     })
 }
@@ -429,6 +430,7 @@ pub fn resolve_fetch(
     _id: u32,
     _status: u16,
     _body: &str,
+    _headers: &[(String, String)],
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
     _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
 ) -> Result<(), JsError> {

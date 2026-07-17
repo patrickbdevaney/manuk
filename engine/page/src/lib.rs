@@ -1102,12 +1102,12 @@ impl Page {
                             .await
                         };
                         match out {
-                            Ok(r) => (id, r.status, r.decoded_text()),
+                            Ok(r) => (id, r.status, r.decoded_text(), r.headers),
                             // status 0 is the fetch API's "network failure" — the page's `.catch` runs, which
                             // is a path it was written for. Silence is not.
                             Err(e) => {
                                 tracing::warn!(%url, "page fetch failed: {e}");
-                                (id, 0u16, String::new())
+                                (id, 0u16, String::new(), Vec::new())
                             }
                         }
                     }
@@ -1126,8 +1126,8 @@ impl Page {
                 return;
             };
 
-            for (id, status, body) in results {
-                self.resolve_fetch(id, status, &body, fonts, viewport_width);
+            for (id, status, body, headers) in results {
+                self.resolve_fetch(id, status, &body, &headers, fonts, viewport_width);
             }
         }
         tracing::debug!(
@@ -2273,14 +2273,17 @@ impl Page {
     }
 
     /// Settle a page `fetch`/`XHR` request (issued during script run or a click handler) with an
-    /// HTTP `status` + response `body` (`status == 0` = network failure). Runs the page's
-    /// `.then`/`onload` reactions; if they mutated the DOM, re-style + re-lay-out so the update
-    /// renders. No-op when the page has no JS context.
+    /// HTTP `status`, response `body`, and the server's response `headers` (`status == 0` = network
+    /// failure). Runs the page's `.then`/`onload` reactions; if they mutated the DOM, re-style +
+    /// re-lay-out so the update renders. The `headers` reach the page as `Response.headers.get(…)`
+    /// and `XMLHttpRequest.getResponseHeader(…)` — an empty slice keeps both returning `null`, as
+    /// they did before headers were plumbed. No-op when the page has no JS context.
     pub fn resolve_fetch(
         &mut self,
         id: u32,
         status: u16,
         body: &str,
+        headers: &[(String, String)],
         fonts: &FontContext,
         viewport_width: f32,
     ) {
@@ -2291,9 +2294,16 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
-        if let Err(e) =
-            manuk_js::resolve_fetch(ctx, &mut self.dom, id, status, body, &rects, &self.styles)
-        {
+        if let Err(e) = manuk_js::resolve_fetch(
+            ctx,
+            &mut self.dom,
+            id,
+            status,
+            body,
+            headers,
+            &rects,
+            &self.styles,
+        ) {
             tracing::warn!("fetch resolve: {e}");
             return;
         }
@@ -3667,12 +3677,21 @@ mod js_interactive_tests {
         );
 
         // (5) fetch(): a load-time request is queued for the host, and resolving it runs the
-        // page's `.then` chain, mutating the DOM with the response body (the SPA data path).
+        // page's `.then` chain, mutating the DOM with the response body (the SPA data path). The
+        // response's HEADERS are readable — `r.headers.get('content-type')` returns the server's
+        // real field (case-insensitively), not `null` as it did before headers were plumbed; a
+        // header the server did not send is `null`. Every SPA that branches on `Content-Type`,
+        // reads pagination from `Link`, or checks a rate-limit header depends on this.
         let html5 = r#"<!doctype html><html><body>
             <div id="out">loading</div>
             <script>
               fetch('/api/data')
-                .then(function (r) { return r.text(); })
+                .then(function (r) {
+                  document.getElementById('out').setAttribute('data-ct', String(r.headers.get('Content-Type')));
+                  document.getElementById('out').setAttribute('data-miss', String(r.headers.get('x-absent')));
+                  document.getElementById('out').setAttribute('data-has', String(r.headers.has('etag')));
+                  return r.text();
+                })
                 .then(function (t) { document.getElementById('out').textContent = t; });
             </script></body></html>"#;
         let mut page5 = Page::load(html5, "https://app.test/page", &fonts, 800.0);
@@ -3687,31 +3706,68 @@ mod js_interactive_tests {
         let (id, url, method, _headers, _body) = &reqs[0];
         assert_eq!(url, "/api/data", "the requested URL reached the host queue");
         assert_eq!(method, "GET");
-        page5.resolve_fetch(*id, 200, "HELLO-FROM-HOST", &fonts, 800.0);
+        let resp_headers = vec![
+            ("Content-Type".to_string(), "application/json".to_string()),
+            ("ETag".to_string(), "\"abc\"".to_string()),
+        ];
+        page5.resolve_fetch(*id, 200, "HELLO-FROM-HOST", &resp_headers, &fonts, 800.0);
         assert_eq!(
             page5.dom().text_content(out5),
             "HELLO-FROM-HOST",
             "resolving the fetch ran the .then chain and mutated the DOM with the body"
         );
+        assert_eq!(
+            page5.dom().element(out5).and_then(|e| e.attr("data-ct")),
+            Some("application/json"),
+            "Response.headers.get('Content-Type') returns the server's header, matched case-insensitively"
+        );
+        assert_eq!(
+            page5.dom().element(out5).and_then(|e| e.attr("data-miss")),
+            Some("null"),
+            "a header the server did not send reads back as null"
+        );
+        assert_eq!(
+            page5.dom().element(out5).and_then(|e| e.attr("data-has")),
+            Some("true"),
+            "Response.headers.has() sees a header present under a different case"
+        );
 
-        // (6) XMLHttpRequest: onload fires with the resolved status + body.
+        // (6) XMLHttpRequest: onload fires with the resolved status + body, and
+        // `getResponseHeader(…)` / `getAllResponseHeaders()` return the server's fields (case-
+        // insensitively) instead of the old hard-coded null/"".
         let html6 = r#"<!doctype html><html><body>
             <div id="x">idle</div>
             <script>
               var r = new XMLHttpRequest();
               r.open('GET', '/xhr');
-              r.onload = function () { document.getElementById('x').textContent = 'S' + r.status + ':' + r.responseText; };
+              r.onload = function () {
+                var el = document.getElementById('x');
+                el.setAttribute('data-ct', String(r.getResponseHeader('content-type')));
+                el.setAttribute('data-all', r.getAllResponseHeaders());
+                el.textContent = 'S' + r.status + ':' + r.responseText;
+              };
               r.send();
             </script></body></html>"#;
         let mut page6 = Page::load(html6, "https://app.test/", &fonts, 800.0);
         let x6 = manuk_css::query_selector_all(page6.dom(), page6.dom().root(), "#x")[0];
         let reqs6 = page6.take_fetches();
         assert_eq!(reqs6.len(), 1, "XHR issued one request");
-        page6.resolve_fetch(reqs6[0].0, 201, "BODY", &fonts, 800.0);
+        let xhr_headers = vec![("Content-Type".to_string(), "text/plain".to_string())];
+        page6.resolve_fetch(reqs6[0].0, 201, "BODY", &xhr_headers, &fonts, 800.0);
         assert_eq!(
             page6.dom().text_content(x6),
             "S201:BODY",
             "XHR onload saw the resolved status + body"
+        );
+        assert_eq!(
+            page6.dom().element(x6).and_then(|e| e.attr("data-ct")),
+            Some("text/plain"),
+            "XHR getResponseHeader() returns the server's header, matched case-insensitively"
+        );
+        assert_eq!(
+            page6.dom().element(x6).and_then(|e| e.attr("data-all")),
+            Some("content-type: text/plain\r\n"),
+            "getAllResponseHeaders() serializes each field as a lower-cased CRLF-terminated line"
         );
 
         // (7) history.pushState: a click handler routes client-side — location updates and the

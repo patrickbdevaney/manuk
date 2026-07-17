@@ -7160,3 +7160,51 @@ pump_fetches). HANG/CRASH 0. Residue: default-`fetch()` credentials modelled as 
 round-trip for non-simple requests) are follow-ons; and `send_once` still attaches the flat jar's
 cookies to a cross-origin script fetch (a separate default-credentials over-send, orthogonal to this
 read barrier). Mechanism: `net::cors` + `pump_fetches`.
+
+## Tick 171 — fetch/XHR response headers reach the page (JS platform — T2 lever) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (T2 JS-platform — the fetch RESPONSE-header read surface, the
+read-side twin of tick 148's request-header fix). WIKI: docs/wiki/networking.md "Response headers are
+readable — `headers.get()` is not hard-coded to null". Diversified OFF the transport/forms/security
+tail (ticks 159–170): fetch response surface, fully manuk-owned (NOT stylo).**
+
+A page reads a `fetch()`/XHR response's headers as much as its body —
+`response.headers.get('content-type')` to branch on payload shape, `Link` for pagination,
+`X-RateLimit-*`, `ETag`. But the JS `Response` was built with `headers: { get: () => null, has: () =>
+false, forEach: () => {} }` and XHR's `getResponseHeader`/`getAllResponseHeaders` were hard-coded
+`null`/`""` — the server's real headers never reached the page. Every SPA that inspects a response
+header saw nothing.
+
+**Fix.** Thread the real header list (`manuk_net::request` already returns `resp.headers:
+Vec<(String,String)>`) from both fetch pumps — the shell's `pump_fetches` (which already read
+`resp.headers` for the tick-170 CORS check) and the page's own `finish_loading` — through
+`Page::resolve_fetch(id, status, body, headers, …)` → `manuk_js::resolve_fetch` →
+`event_loop::deliver`, which serializes the pairs to a JS array literal and calls `__deliver(id,
+status, body, headers)`. `__makeResponse` builds a real `Headers` over the list; XHR stores it as
+`_respHeaders`. Semantics are the Fetch standard's: `get`/`has` match the field name
+**case-insensitively** and `get` comma-joins repeats; `getAllResponseHeaders()` emits lower-cased
+`name: value\r\n` lines; an absent header is `null` (not `""`). An **empty** header slice yields a
+`Headers` whose `get` returns null, so the mock-fetcher `run_with_fetcher` loop and every prior caller
+keep working — the plumbing is purely additive. Signature change rippled through 4 crates
+(js/event_loop + js/lib + page + shell) mechanically; `NavEvent::PageFetch` gained a `headers` field.
+
+**Gate.** `js_conformance_suite` scenarios (5) fetch + (6) XHR extended: (5) asserts
+`r.headers.get('Content-Type')` == `application/json` (server sent `Content-Type`, matched by a
+`content-type` query is the case-insensitive path), a header the server did not send is `null`, and
+`r.headers.has('etag')` is `true` (present under a different case); (6) asserts
+`r.getResponseHeader('content-type')` == `text/plain` and `getAllResponseHeaders()` ==
+`"content-type: text/plain\r\n"`. RED against the pre-tick hard-coded `null`/`""`. Verified: the suite
+passes with spidermonkey (isolated); manuk-js fetch event-loop tests pass isolated; manuk-shell 53
+green; default + spidermonkey builds clean. HANG/CRASH 0 (the 9-co-run manuk-js exit SIGSEGV is the
+pre-existing documented leaked-runtime teardown, not this change — the tests run isolated in verify).
+Residue: the cross-origin per-header `Access-Control-Expose-Headers` safelist is not enforced — same
+origin exposes the full list (correct), and the CORS read barrier already blocks unreadable
+cross-origin bodies wholesale, so this is a fidelity gap not a leak; `response.body`/ReadableStream is
+still `null` (a separate streaming lever). Mechanism: `resolve_fetch` header plumbing + `__makeHeaders`.
+
+**T6.1 note (harness-blocked, not done).** The lever board's flagged "highest-leverage agentic" lever
+— routing the agent's `activate`/`click_at` through `Page::dispatch_click` so a click fires real DOM
+events (div-onclick/SPA buttons) — cannot be cleanly gated in the wall: the JS-firing behaviour needs
+`--features spidermonkey`, but `verify.sh` runs the `manuk-agent` suite under default features (no
+JS), and the only spidermonkey JS gate it runs is page-crate-level. Deferred to a session that can add
+a page-level or dedicated agent JS gate; noted here per the harness-is-observer-owned rule.

@@ -129,6 +129,7 @@ enum NavEvent {
         id: u32,
         status: u16,
         body: String,
+        headers: Vec<(String, String)>,
     },
     /// An `<iframe>`'s document arrived — AFTER first paint, for the same reason images do. A heavy
     /// third-party embed must not hold the parent's article hostage.
@@ -2484,45 +2485,53 @@ impl App {
                         }
                     }
                     let bytes = manuk_net::Bytes::from(body.into_bytes());
-                    let (status, text) = match manuk_net::request(&method, &url, &hdrs, bytes).await
-                    {
-                        Ok(resp) => {
-                            // CORS read barrier: a cross-origin response the server did not opt in
-                            // to share (no matching `Access-Control-Allow-Origin`) is not readable.
-                            // Surface it as Chromium does — a network failure (`status 0`) that
-                            // rejects the page's `fetch()` Promise with a `TypeError` — rather than
-                            // leaking the body. Default `fetch()` credentials mode is `same-origin`,
-                            // so a cross-origin request is treated as uncredentialed.
-                            let readable = !cross_origin
-                                || match (&page_origin, &req_url) {
-                                    (Some(po), Some(ru)) => manuk_net::cors::fetch_response_readable(
-                                        po,
-                                        ru,
-                                        &resp.headers,
-                                        false,
-                                    ),
-                                    _ => true,
-                                };
-                            if readable {
-                                (resp.status, resp.text())
-                            } else {
-                                tracing::info!(
-                                    url = %url,
-                                    "page fetch blocked by CORS (no matching Access-Control-Allow-Origin)"
-                                );
-                                (0u16, String::new())
+                    let (status, text, headers) =
+                        match manuk_net::request(&method, &url, &hdrs, bytes).await {
+                            Ok(resp) => {
+                                // CORS read barrier: a cross-origin response the server did not opt in
+                                // to share (no matching `Access-Control-Allow-Origin`) is not readable.
+                                // Surface it as Chromium does — a network failure (`status 0`) that
+                                // rejects the page's `fetch()` Promise with a `TypeError` — rather than
+                                // leaking the body. Default `fetch()` credentials mode is `same-origin`,
+                                // so a cross-origin request is treated as uncredentialed.
+                                let readable = !cross_origin
+                                    || match (&page_origin, &req_url) {
+                                        (Some(po), Some(ru)) => {
+                                            manuk_net::cors::fetch_response_readable(
+                                                po,
+                                                ru,
+                                                &resp.headers,
+                                                false,
+                                            )
+                                        }
+                                        _ => true,
+                                    };
+                                if readable {
+                                    // The page reads these as `Response.headers.get(…)` /
+                                    // `XHR.getResponseHeader(…)`. (Cross-origin exposure is bounded by
+                                    // the CORS read barrier above, which already blocks unreadable
+                                    // bodies wholesale; the per-header Expose-Headers safelist is a
+                                    // documented follow-on.)
+                                    (resp.status, resp.text(), resp.headers)
+                                } else {
+                                    tracing::info!(
+                                        url = %url,
+                                        "page fetch blocked by CORS (no matching Access-Control-Allow-Origin)"
+                                    );
+                                    (0u16, String::new(), Vec::new())
+                                }
                             }
-                        }
-                        Err(e) => {
-                            tracing::warn!(url = %url, error = %e, "page fetch failed");
-                            (0u16, String::new())
-                        }
-                    };
+                            Err(e) => {
+                                tracing::warn!(url = %url, error = %e, "page fetch failed");
+                                (0u16, String::new(), Vec::new())
+                            }
+                        };
                     let _ = proxy.send_event(NavEvent::PageFetch {
                         gen,
                         id,
                         status,
                         body: text,
+                        headers,
                     });
                 });
             }
@@ -3392,6 +3401,7 @@ impl ApplicationHandler<NavEvent> for App {
                 id,
                 status,
                 body,
+                headers,
             } => {
                 // A response for a page the user has navigated away from must not be applied.
                 if gen != self.nav_gen {
@@ -3399,7 +3409,7 @@ impl ApplicationHandler<NavEvent> for App {
                 }
                 let w = self.viewport.width;
                 if let Some(page) = self.page.as_mut() {
-                    page.resolve_fetch(id, status, &body, &self.fonts, w);
+                    page.resolve_fetch(id, status, &body, &headers, &self.fonts, w);
                 }
                 // The reaction may have issued a follow-on fetch, mutated the DOM, routed, or
                 // posted a message — pump those, then repaint.

@@ -316,3 +316,37 @@ is `same-origin`, so a cross-origin request is modelled as **uncredentialed** (`
 false`); a per-call credentials mode and the CORS **preflight** (the `OPTIONS` round-trip a non-simple
 request must pass *before* it is sent) are documented follow-ons — this is the response read barrier,
 the part whose absence leaked every body.
+
+## Response headers are readable — `headers.get()` is not hard-coded to null
+
+A page reads a `fetch()`/XHR response's status and body, and it reads the response's **headers**:
+`response.headers.get('content-type')` to branch on the payload shape, `Link` for pagination,
+`X-RateLimit-Remaining` before the next call, `ETag` for a conditional re-fetch. For a long time the
+JS `Response` was built as `{ …, headers: { get: () => null, has: () => false, forEach: () => {} } }`
+and XHR's `getResponseHeader`/`getAllResponseHeaders` were `=> null` / `=> ""` — the server's headers
+never reached the page. This is the read-side twin of the tick-148 gap where the page's *request*
+headers were dropped: there the request reached the server stripped, here the response reached the
+page stripped.
+
+**The fix threads the real header list from the wire to the page.** `manuk_net::request` already
+returns `resp.headers: Vec<(String, String)>`; both fetch pumps (the shell's `pump_fetches` and the
+page's own `finish_loading`) now carry it into `Page::resolve_fetch(id, status, body, headers, …)` →
+`manuk_js::resolve_fetch` → `event_loop::deliver`, which serializes the pairs as a JS array literal
+and calls `__deliver(id, status, body, headers)`. `__makeResponse` builds a real `Headers` over that
+list and XHR stores it as `_respHeaders`.
+
+**The `Headers` semantics are the Fetch standard's, not a lookup table.** `get(name)` matches the
+name **case-insensitively** (HTTP field names are case-insensitive — a page asking for
+`'Content-Type'` finds a server's `content-type`) and comma-joins repeated fields; `has(name)` is the
+same match; `getAllResponseHeaders()` emits one `name: value\r\n` line per field with the name
+lower-cased. A header the server did not send is `null`, not `""` — the distinction a page's
+`if (r.headers.get('x-foo'))` depends on. An **empty** header slice yields a `Headers` whose `get`
+returns null, so the mock-fetcher event loop (which delivers with no headers) and every pre-existing
+caller keep working unchanged — the plumbing is additive.
+
+**Bound: cross-origin exposure is left to the CORS read barrier.** The barrier already blocks an
+unreadable cross-origin *body* wholesale (settling `status 0`), so a page cannot read headers off a
+response it cannot read at all. The finer per-header `Access-Control-Expose-Headers` safelist — which
+in Chromium hides non-safelisted headers even on a readable cross-origin response — is a documented
+follow-on; same-origin (the common case for header inspection) exposes the full list, which is
+correct.
