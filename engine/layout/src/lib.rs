@@ -1505,9 +1505,14 @@ impl Ctx<'_> {
 
         // `position: relative` offsets the box (and its subtree) visually without
         // affecting the flow. `left`/`top` win over `right`/`bottom`; percentages
-        // resolve against the containing block (width for x; height unknown here, so
-        // percentage y resolves against 0 — documented).
+        // resolve against the containing block — width for x, **height for y**. The
+        // containing-block height is `pch` (the definite content height threaded down
+        // for percentage sizing, tick 144); when it is indefinite (`None`) a `%` inset
+        // resolves to 0, which matches the spec's "computes to auto" for `top`/`bottom`
+        // percentages against an auto-height containing block (CSS Position §3 / Sizing §5).
+        // Before, y resolved against a hardcoded 0, so `top: 50%` never moved the box.
         if s.position == Position::Relative {
+            let cb_h = pch.unwrap_or(0.0);
             let dx = if !s.inset.left.is_auto() {
                 s.inset.left.resolve(cw, 0.0)
             } else if !s.inset.right.is_auto() {
@@ -1516,9 +1521,9 @@ impl Ctx<'_> {
                 0.0
             };
             let dy = if !s.inset.top.is_auto() {
-                s.inset.top.resolve(0.0, 0.0)
+                s.inset.top.resolve(cb_h, 0.0)
             } else if !s.inset.bottom.is_auto() {
-                -s.inset.bottom.resolve(0.0, 0.0)
+                -s.inset.bottom.resolve(cb_h, 0.0)
             } else {
                 0.0
             };
@@ -4410,6 +4415,41 @@ mod tests {
             200.0,
             "height:100% child resolves against the definite abspos parent — it was 0 before"
         );
+    }
+
+    /// A `position:relative` box with a **percentage `top`** resolves it against the containing
+    /// block's HEIGHT — not against a hardcoded 0. Here the containing block is an abspos box with a
+    /// definite `height` (threaded down as `pch`), so `top:50%` shifts the box by half that height.
+    /// Before, percentage `top`/`bottom` on a relative box always computed to 0 and the box never
+    /// moved vertically (`css/css-position` position-relative-016). Regression guard: `top:0` on the
+    /// same box does not shift, so the 50% case is the *delta*, isolating it from the box's origin.
+    #[test]
+    fn relative_percentage_top_resolves_against_containing_block_height() {
+        // A block-level `<section>` relative child inside an abspos `height:100%` (→200px)
+        // containing block.
+        let y_of = |top: &str| {
+            let html = format!(
+                "<body><div style='position:relative;height:200px;width:100px'>\
+                   <div style='position:absolute;top:0;left:0;height:100%'>\
+                     <section style='position:relative;top:{top};height:20px;width:20px'></section>\
+                   </div>\
+                 </div></body>"
+            );
+            let (dom, root) = layout_html(&html, "", 400.0);
+            let m = dom.find_first("section").unwrap();
+            root.node_rects(&dom)
+                .get(&m)
+                .expect("relative box has geometry")
+                .y
+        };
+        // 50% of the 200px containing block = a 100px downward shift vs top:0.
+        assert_eq!(
+            y_of("50%") - y_of("0"),
+            100.0,
+            "top:50% shifts the relative box by half the abspos containing block's height (200)"
+        );
+        // A negative percentage (bottom-ward semantics via `top`) shifts up by the same magnitude.
+        assert_eq!(y_of("25%") - y_of("0"), 50.0, "top:25% of 200 = 50px");
     }
 
     /// `position:absolute; height:100px; aspect-ratio:1/1` with an **auto width** transfers the

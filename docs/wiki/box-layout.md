@@ -133,3 +133,25 @@ both-insets path changes.
 RED by neutralising the guard arm. **Note:** the unit cascade parses the inset *longhands* but not the
 `inset` shorthand (a tick-144 note), so the layout test drives `top/right/bottom/left:0`; the WPT run uses
 stylo, which parses `inset:0`.
+
+## A `position:relative` percentage `top`/`bottom` resolves against the containing-block HEIGHT (tick 147)
+
+`layout_block`'s `position:relative` offset resolved the horizontal delta against `cw` (the containing
+block width — correct) but the **vertical** delta against a hardcoded `0.0`. The comment rationalised it
+(*"height unknown here"*), but the height is **not** unknown: `pch: Option<f32>` — the definite content
+height already threaded down for percentage *sizing* (`height:50%`, `min/max-height`; tick 144) — is
+exactly the containing-block height a `%` inset resolves against. So `top:50%` on a relative box computed
+`50% of 0 = 0` and the box **never moved vertically**; every percentage-nudge / vertical-centering relative
+idiom silently sat at its flow position.
+
+**Fix.** `let cb_h = pch.unwrap_or(0.0);` and resolve the vertical delta (`top`/`bottom`, and their calc/
+percent forms) against it. `pch == None` (indefinite CB) still yields 0 — which is the spec's "computes to
+auto" for `top`/`bottom` percentages against an auto-height containing block, so nothing regresses. The
+containing block only threads a definite `pch` when it has one — an abspos box with a definite `height`
+(the position-relative-016 cases), or any block with an explicit/resolved height.
+
+**WPT / gate.** `css/css-position` 69→75 (+6, the definite-CB subtests of `position-relative-016.html`;
+the inline / auto-height-ancestor cases t6–t9 still fail — they don't thread `pch`, a separate mechanism).
+Bonus `css/css-flexbox` 949→953 (+4, relative flex items). css-sizing/grid/transforms flat. Gated by
+`relative_percentage_top_resolves_against_containing_block_height` (layout), which measures the shift as a
+*delta* vs `top:0` (isolating it from the box origin) and is proven RED by reverting `cb_h` to `0.0`.

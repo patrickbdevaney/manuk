@@ -3054,6 +3054,43 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 147 — a `position:relative` percentage `top`/`bottom` resolves against the containing block HEIGHT (it always computed to 0 — the box never moved vertically)
+
+**TICK SHAPE: layout-mechanism (CSS-LAYOUT phase-mandate row 1 territory — definite-height percentage resolution). WIKI: box-layout.**
+
+**Phase mandate.** Still on the CSS-LAYOUT rows. Histogrammed `css/css-position --show-failures`: past the
+sticky subsystem and the selector-named reftest mass, the cleanest bounded cluster is
+`position-relative-016.html` — a `position:relative` box with `top:50%` whose containing block is an
+abspos box with a definite height. Picked over sticky (a scroll-linked subsystem, out of scope for a
+bounded tick) per FLIP-RATE; abspos-adjacent, where the last two ticks were already warm.
+
+**Root cause — a one-liner the code already confessed.** `layout_block`'s `position:relative` offset
+resolved the horizontal delta against `cw` (containing-block width, correct) but the **vertical** delta
+against a hardcoded `0.0` — the comment even said *"height unknown here, so percentage y resolves against
+0 — documented."* But the height was **not** unknown: `pch` (the definite content height threaded down for
+percentage *sizing* since tick 144) is exactly the containing-block height a `%` inset resolves against.
+So `top:50%` on a relative box computed `50% of 0 = 0` and the box **never moved vertically** — every
+percentage-offset relative box (a common vertical-centering / nudge idiom) sat at its flow position.
+
+**Fix (one line + guard).** `let cb_h = pch.unwrap_or(0.0);` and resolve the vertical delta against it.
+When `pch` is `None` (indefinite containing block) the `%` still resolves to 0 — which is the spec's
+"computes to auto" for `top`/`bottom` percentages against an auto-height containing block, so no case
+regresses. Horizontal is untouched.
+
+**Measured.** `css/css-position` 69→**75 (+6)** (the definite-CB subtests of position-relative-016; the
+inline/auto-height-ancestor edge cases t6–t9 still fail — they don't thread `pch` — a separate mechanism).
+Bonus: `css/css-flexbox` 949→**953 (+4)** (relative flex items with a `%` top). css-sizing 243, css-grid
+259, css-transforms 45 — **flat**. Bar 0 clean (HANG/CRASH 0) across all.
+
+**Gate (falsifiable).** `relative_percentage_top_resolves_against_containing_block_height` (`manuk-layout`)
+drives a `position:relative; top:50%` `<section>` inside an abspos `height:100%` (→200) containing block
+and asserts the shift is exactly `100` (and `top:25%` → `50`), measured as the *delta* vs `top:0` to
+isolate it from the box origin. **Proven RED** by reverting `cb_h` to `0.0` (shift collapses to 0).
+
+**The ratchet.** Capability: **up** — percentage vertical offsets on relative boxes work at all now.
+Performance: unchanged. Instrument fidelity: **up** — one falsifiable gate. Bar 0 clean; two suites up,
+none down.
+
 ## Tick 146 — an intrinsic-keyword `height` (`min`/`max`/`fit-content`) is indefinite: an `inset:0` abspos box now hugs content instead of stretching to the containing block
 
 **TICK SHAPE: layout-mechanism (CSS-LAYOUT phase-mandate row 1 — intrinsic/definite sizing). WIKI: box-layout.**
