@@ -842,6 +842,7 @@ impl App {
             return;
         };
         let width = self.viewport.width;
+        let zoom = self.zoom;
         if let Some(page) = self.page.as_mut() {
             let mut val = page
                 .dom()
@@ -854,8 +855,16 @@ impl App {
             } else {
                 val.push_str(ch);
             }
-            page.dom_mut().set_attr(node, "value", val);
-            page.relayout_zoomed(&self.fonts, width, self.zoom);
+            // Set the value AND fire an `input` event, so a controlled component (React `onChange`,
+            // Vue `v-model`, Svelte `bind:value`) updates its state — otherwise it reverts the
+            // keystroke on its next render and the field is unusable. (Was a bare `set_attr` that
+            // fired nothing.)
+            page.dispatch_input(node, &val, &self.fonts, width);
+            // dispatch_input lays out at base zoom; restore the user's zoom (and render any DOM the
+            // input handler mutated).
+            if zoom != 1.0 {
+                page.relayout_zoomed(&self.fonts, width, zoom);
+            }
         }
         self.rerender();
     }

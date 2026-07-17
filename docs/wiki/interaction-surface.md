@@ -396,3 +396,31 @@ Non-regressing (nothing read these before). Measured +4 (`css-flexbox`); the bul
 the `css/cssom` battery, absent from the local corpus, so the capability is pinned by `js_conformance`
 scenario 24 (`box-sizing:border-box;min-width:50px;max-width:300px;min-height:10px` →
 `border-box|50px|300px|10px|none|border-box`), proven RED by stashing the fix. [[dom-semantics]]
+
+## Typing must fire an `input` event, or every controlled component reverts the keystroke (tick 175)
+
+A framework text field is a **controlled component**: `<input value={state} onChange={e =>
+setState(e.target.value)}>`. The value the user sees is JS state, and the field learns a key was
+pressed **only from the `input` event** — React's `onChange` (which is really the `input` event), Vue's
+`v-model`, Svelte's `bind:value` all update their state there, then re-render and write the state back
+into the field. So if a keystroke does not fire `input`, the sequence is: user types → the DOM `value`
+changes → but state does not → the component re-renders from its *stale* state → and **overwrites the
+field with the old value**. The keystroke is visibly reverted. Every controlled input in every SPA is
+unusable.
+
+The shell's `edit_focused_input` did exactly the wrong thing: it mutated the `value` attribute
+directly (`dom_mut().set_attr(node, "value", …)`) and fired **nothing**. (There was a
+`Page::dispatch_type` that fired `input`+`change`, but it had **zero callers** — a mechanism wired to
+nothing, the recurring failure this project keeps catching. See [[architecture]] "the mechanism EXISTED
+and was wired to nothing".)
+
+**The fix is a focused `Page::dispatch_input(node, value)`** — set the value, then fire **`input`**
+(and only `input`) — which the shell now calls per keystroke. It is deliberately not
+`dispatch_type`'s `input`+`change`: `change` is a **commit** event (blur / Enter), and firing it on
+every keystroke is wrong — a handler that validates or submits on `change` would run on every
+character. The click path already worked this way (`dispatch_click` fires the real `click`); this is
+the same contract for the keyboard. Gated by `js_conformance` scenario 27: an `input` listener mirrors
+`event.target.value`, two keystrokes update it to `hi` then `hip`, and the `change` counter stays `0`.
+Residue: `change`-on-blur (when the field loses focus) and `keydown`/`keyup`/`beforeinput` are still
+unfired — separate keyboard-event mechanisms; `input` is the one the controlled-component contract
+turns on.

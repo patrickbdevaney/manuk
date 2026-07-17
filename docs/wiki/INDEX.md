@@ -235,6 +235,7 @@
   - L328 · IntersectionObserver.rootMargin is a 4-side shorthand, and the BOTTOM side is the whole feature (tick 140)
   - L360 · getComputedStyle resolves the flexbox longhands, not just the box model (tick 142)
   - L388 · getComputedStyle exposes the box-model longhands too (tick 143)
+  - L400 · Typing must fire an input event, or every controlled component reverts the keystroke (tick 175)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -413,4 +414,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-340 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+341 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

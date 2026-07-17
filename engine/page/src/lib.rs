@@ -1838,6 +1838,43 @@ impl Page {
         self.relayout(fonts, viewport_width);
     }
 
+    /// Set the focused control's `value` to `value` and fire an **`input`** event on it — what a
+    /// single keystroke does. This is the event a **controlled component** listens on: React's
+    /// `onChange`, Vue's `v-model`, Svelte's `bind:value` all update their state from the `input`
+    /// event and, on the next render, write the state back into the field. Without it the shell was
+    /// mutating the `value` attribute directly and firing NOTHING, so a controlled input never saw
+    /// the change, its state stayed stale, and the framework **reverted the user's keystroke** on the
+    /// next render — every React/Vue/Svelte text field was unusable. (Fires `input` only, not
+    /// `change`: `change` is a commit event — it belongs on blur/Enter, not on every keystroke.)
+    pub fn dispatch_input(
+        &mut self,
+        node: manuk_dom::NodeId,
+        value: &str,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) {
+        self.dom.set_attr(node, "value", value.to_string());
+        #[cfg(feature = "spidermonkey")]
+        {
+            let Some(ctx) = &self.js else {
+                self.relayout(fonts, viewport_width);
+                return;
+            };
+            let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+                .root_box
+                .node_rects(&self.dom)
+                .into_iter()
+                .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+                .collect();
+            if let Err(e) =
+                manuk_js::dispatch_event(ctx, &mut self.dom, node, "input", &rects, &self.styles)
+            {
+                tracing::warn!("input dispatch: {e}");
+            }
+        }
+        self.relayout(fonts, viewport_width);
+    }
+
     /// Tell the page its **view changed** — it scrolled, or it was laid out again — so the
     /// observers run and `scroll` fires. Returns any scroll the callbacks then requested.
     ///
@@ -4624,6 +4661,54 @@ mod js_interactive_tests {
             "the multipart body has its closing boundary"
         );
         drop(page26);
+
+        // (27) **Typing fires an `input` event — the controlled-component contract.** A framework
+        // input (`<input value={state} onChange=…>`) keeps its value in JS state and re-renders from
+        // it; it learns the user typed ONLY from the `input` event. `Page::dispatch_input` (what the
+        // shell calls per keystroke) must set the value AND fire `input`, so the handler sees the new
+        // `event.target.value`. Firing nothing (the old bare `set_attr`) left every React/Vue/Svelte
+        // field reverting the keystroke on its next render.
+        let html27 = r#"<!doctype html><html><body>
+            <input id="f" value="">
+            <p id="mirror">?</p>
+            <p id="changes">0</p>
+            <script>
+              var f = document.getElementById('f');
+              f.addEventListener('input', function (e) {
+                // Read back through event.target.value — exactly what a controlled component does.
+                document.getElementById('mirror').textContent = e.target.value;
+              });
+              var changes = 0;
+              f.addEventListener('change', function () {
+                document.getElementById('changes').textContent = String(++changes);
+              });
+            </script></body></html>"#;
+        let mut page27 = Page::load(html27, "https://ex.test/", &fonts, 800.0);
+        let r27 = page27.dom().root();
+        let field = manuk_css::query_selector_all(page27.dom(), r27, "#f")[0];
+        let mirror = manuk_css::query_selector_all(page27.dom(), r27, "#mirror")[0];
+        let changes = manuk_css::query_selector_all(page27.dom(), r27, "#changes")[0];
+        page27.dispatch_input(field, "hi", &fonts, 800.0);
+        assert_eq!(
+            page27.dom().text_content(mirror),
+            "hi",
+            "the input handler fired and read the new value off event.target.value"
+        );
+        assert_eq!(
+            page27.dom().element(field).and_then(|e| e.attr("value")),
+            Some("hi"),
+            "the field's value was updated before the event fired"
+        );
+        // A second keystroke fires input again with the fuller value.
+        page27.dispatch_input(field, "hip", &fonts, 800.0);
+        assert_eq!(page27.dom().text_content(mirror), "hip");
+        // `change` is a COMMIT event — it must NOT fire on a keystroke (only input does).
+        assert_eq!(
+            page27.dom().text_content(changes),
+            "0",
+            "dispatch_input fires `input`, never `change` (change is for blur/commit)"
+        );
+        drop(page27);
 
         // Tear SpiderMonkey down before this process exits, exactly as the shell and the harness do.
         // Every page above is out of scope by now, so no rooted object outlives its runtime. Leaving

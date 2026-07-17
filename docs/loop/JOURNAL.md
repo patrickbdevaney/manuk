@@ -7314,3 +7314,34 @@ isolated); manuk-js `fetch_and_xhr_through_the_loop` + `…_carry_request_header
 (non-FormData path unchanged); HANG/CRASH 0. Residue: File content is a JS string (no byte-accurate
 binary body path — same lossy-UTF-8 limit as the Blob layer); native `<form enctype=multipart>` submit
 is a separate mechanism. Mechanism: `FormData.__multipart` + fetch/XHR body encoding.
+
+## Tick 175 — typing fires an `input` event so controlled components work (interaction surface — P-B/T6) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (interaction surface — the keyboard-input event contract, the
+keyboard twin of dispatch_click). WIKI: docs/wiki/interaction-surface.md "Typing must fire an `input`
+event, or every controlled component reverts the keystroke". Diversified into the interaction surface
+after the fetch/forms run (ticks 170-174).**
+
+A framework text field is a controlled component (`<input value={state} onChange=…>`): it learns a key
+was pressed ONLY from the `input` event, updates its state, re-renders, and writes state back into the
+field. The shell's `edit_focused_input` mutated the `value` attribute directly (`set_attr`) and fired
+NOTHING — so a controlled input's state stayed stale and the framework **reverted the keystroke** on
+its next render. Every React/Vue/Svelte text field (search, login, checkout, comments…) was unusable.
+A `Page::dispatch_type` firing `input`+`change` existed but had ZERO callers — a mechanism wired to
+nothing ([[architecture]] L145).
+
+**Fix.** New `Page::dispatch_input(node, value, fonts, vw)` — set the value, fire `input` ONLY (not
+`change`: `change` is a commit/blur event; firing it per keystroke would run change-validators on every
+character), relayout. The shell's `edit_focused_input` now calls it per keystroke (then re-applies the
+user's zoom, since dispatch_input lays out at base zoom, mirroring dispatch_click's contract). This is
+the keyboard twin of the already-correct `dispatch_click` click path.
+
+**Gate.** `js_conformance_suite` scenario (27): an `input` listener mirrors `event.target.value`; two
+`dispatch_input` calls update a controlled mirror `hi`→`hip`, the field's `value` reflects before the
+event, and a `change` listener's counter stays `0` (proving input-only, not change-per-keystroke). RED
+against baseline (no `dispatch_input`; bare `set_attr` fired nothing → mirror stays `?`). Verified:
+suite passes (spidermonkey, isolated); manuk-shell compiles + suite green; HANG/CRASH 0. Residue:
+`change`-on-blur and `keydown`/`keyup`/`beforeinput` still unfired (separate keyboard-event mechanisms;
+`input` is the controlled-component one). The shell-side wiring mirrors the ungated dispatch_click
+consumption; the engine capability itself is gated. Mechanism: `Page::dispatch_input` + shell
+`edit_focused_input`.
