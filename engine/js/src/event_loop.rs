@@ -1335,19 +1335,62 @@ const PRELUDE: &str = r#"
         globalThis.reportError = function(e){ try { __hostLog('warn', 'reportError: ' + e); } catch(x){} };
       }
 
-      // `crypto.randomUUID` is now everywhere (React keys, request ids, cache busting).
+      // `crypto.getRandomValues` / `crypto.randomUUID` are everywhere (React keys, request ids,
+      // session tokens, cache busting). They must be CRYPTOGRAPHICALLY secure — the old shim filled
+      // both from `Math.random()`, a non-cryptographic PRNG, so every token a page minted was
+      // predictable. Entropy comes from the host OS CSPRNG via `__cryptoRandomHex`; the fill is
+      // per-BYTE (so a Uint32Array gets full 32-bit values, not the old 0..255) and `randomUUID`
+      // sets the RFC 4122 version (4) and variant (10xx) bits so it emits a *valid* v4 UUID.
       if (typeof globalThis.crypto === 'undefined') {
+        var __mkCryptoErr = function(name, msg) {
+          try { return new DOMException(msg, name); }
+          catch (e) { var er = new Error(msg); er.name = name; return er; }
+        };
+        // The integer ArrayBufferView types WebCrypto accepts; a Float*/DataView/plain array throws.
+        var __INT_VIEWS = {
+          Int8Array: 1, Uint8Array: 1, Uint8ClampedArray: 1,
+          Int16Array: 1, Uint16Array: 1, Int32Array: 1, Uint32Array: 1,
+          BigInt64Array: 1, BigUint64Array: 1
+        };
         globalThis.crypto = {
           getRandomValues: function(a) {
-            for (var i = 0; i < a.length; i++) { a[i] = (Math.random() * 256) | 0; }
+            var ctor = (a && a.constructor && a.constructor.name) || '';
+            if (!a || typeof a.byteLength !== 'number' || typeof a.buffer === 'undefined' || !__INT_VIEWS[ctor]) {
+              throw __mkCryptoErr('TypeMismatchError',
+                "Failed to execute 'getRandomValues' on 'Crypto': the provided ArrayBufferView is not an integer-typed array");
+            }
+            if (a.byteLength > 65536) {
+              throw __mkCryptoErr('QuotaExceededError',
+                "Failed to execute 'getRandomValues' on 'Crypto': the ArrayBufferView's byte length (" +
+                a.byteLength + ") exceeds the number of bytes of entropy available via this API (65536)");
+            }
+            if (a.byteLength === 0) { return a; }
+            var hex = __cryptoRandomHex(a.byteLength);
+            if (hex.length !== a.byteLength * 2) {
+              throw __mkCryptoErr('OperationError',
+                "Failed to execute 'getRandomValues' on 'Crypto': the platform CSPRNG is unavailable");
+            }
+            // Write through a byte view so EVERY element byte is random, whatever the element width.
+            var bytes = new Uint8Array(a.buffer, a.byteOffset, a.byteLength);
+            for (var i = 0; i < bytes.length; i++) {
+              bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+            }
             return a;
           },
           randomUUID: function() {
+            var hex = __cryptoRandomHex(16);
+            if (hex.length !== 32) {
+              throw __mkCryptoErr('OperationError',
+                "Failed to execute 'randomUUID' on 'Crypto': the platform CSPRNG is unavailable");
+            }
+            var b = new Array(16);
+            for (var i = 0; i < 16; i++) { b[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16); }
+            b[6] = (b[6] & 0x0f) | 0x40;   // RFC 4122 §4.4 — version nibble = 4
+            b[8] = (b[8] & 0x3f) | 0x80;   // RFC 4122 §4.4 — variant bits = 10xx
             var h = '0123456789abcdef', s = '';
-            for (var i = 0; i < 36; i++) {
-              s += (i === 8 || i === 13 || i === 18 || i === 23) ? '-'
-                 : (i === 14) ? '4'
-                 : h[(Math.random() * 16) | 0];
+            for (var i = 0; i < 16; i++) {
+              s += h[(b[i] >> 4) & 0xf] + h[b[i] & 0xf];
+              if (i === 3 || i === 5 || i === 7 || i === 9) { s += '-'; }
             }
             return s;
           }

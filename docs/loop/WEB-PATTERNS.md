@@ -106,7 +106,8 @@ architecture. Each one below was *named by a framework*, not guessed at.
 | `visibilityState` / `hidden` | Video players and animation loops refuse to start if the tab looks backgrounded | ✅ |
 | `isConnected` | React/Vue check it before every commit; `undefined` is falsy → they silently skip work | ✅ |
 | `AbortController` | **Every modern `fetch` passes a signal** — a library constructing one unconditionally throws before the request | ✅ |
-| `btoa`/`atob`, `TextEncoder`, `crypto.randomUUID` | Data URLs, JWTs, request ids, React keys | ✅ |
+| `btoa`/`atob`, `TextEncoder` | Data URLs, JWTs, request ids | ✅ |
+| `crypto.getRandomValues` / `crypto.randomUUID` — **cryptographically secure** | Session tokens, CSRF nonces, OAuth `state`, password-reset ids, React keys — **anything that must be unguessable** | ✅ **real OS CSPRNG (tick 160, `G_CRYPTO`).** The ✅ here was a *lie* until tick 160: both were filled from `Math.random()`, a non-cryptographic PRNG, so every token a page minted was predictable — and `getRandomValues` gave a `Uint32Array` only `0..255`, and `randomUUID` omitted the RFC 4122 variant nibble. Now: entropy from `getrandom` (`/dev/urandom`), byte-view fill (full element width), version+variant stamped. `crypto.subtle` stays honestly **undefined** (secure-context-only). |
 | Event bubbling / capture / `stopPropagation` | All delegation-based UIs | ✅ |
 | `fetch` / XHR | Every dynamic page | ✅ |
 | `fetch`/XHR **request headers** (`Authorization`, `Content-Type`, `X-*`) | **Every authenticated API read / token exchange / form-POST** — without them the request is anonymous and 401s, looking like a network fault | ✅ (tick 148) — headers travel to the wire; `Content-Type` defaulted only when unset. Response headers still a stub. |

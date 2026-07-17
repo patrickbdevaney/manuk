@@ -6824,3 +6824,41 @@ slower (F1 cascade 0.26 ≤ 0.55, F2 pipeline 6.40× ≤ 7.5×, both green). `st
 tick 159 lands normally. Lesson (already a memory: [[wall-ceiling-blocks-preflight]]): a warm wall
 measurement is only meaningful with the release build warm AND the box quiet — time the wall, don't trust
 a single loaded sample. Residue: `SameSite` enforcement on the live-request path (above) is unchanged.
+
+## Tick 160 — crypto.getRandomValues / randomUUID are a real OS CSPRNG, correctly filled and shaped (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (DIVERSIFY steer — bounded T2 JS-platform lever: CSPRNG off
+Math.random). WIKI: js-engine.**
+Per the observer's DIVERSIFY steer off the CSS-layout-math tail, this takes the T2 line's flagged lever:
+`crypto` was a boot shim that implemented **both** `getRandomValues` and `randomUUID` from
+`Math.random()`. Two independent bugs, both silent:
+- **Security.** `Math.random()` is a non-cryptographic PRNG, so every session token / CSRF nonce /
+  OAuth `state` / password-reset id / UUID a page minted through this API was *predictable* — the exact
+  threat the API exists to remove. A browser that answers with a guessable stream is worse than one that
+  throws, because the page believes it holds entropy it does not.
+- **Correctness.** `a[i] = (Math.random()*256)|0` gave a `Uint32Array` values in `0..255` (24 of every
+  32 bits always zero), and `randomUUID` never set the RFC 4122 variant nibble, so it emitted strings
+  that are not valid v4 UUIDs.
+
+**Fix.** New host native `__cryptoRandomHex(n)` (engine/js/src/dom_bindings.rs) fills `n` bytes from the
+OS CSPRNG via the `getrandom` crate (`getrandom(2)` / `/dev/urandom` on Linux, `BCryptGenRandom` on
+Windows), hex-encodes, and returns them; `n` clamped to WebCrypto's 65536-byte quota, a getrandom error
+returns `""`. The boot shim (event_loop.rs) is rewritten to draw from it: `getRandomValues` validates the
+view is an **integer** typed array (else `TypeMismatchError`), rejects `> 65536` bytes
+(`QuotaExceededError`), then fills through a **byte view** (`new Uint8Array(a.buffer, a.byteOffset,
+a.byteLength)`) so every element byte is random regardless of element width — a `Uint32Array` now gets
+full 32-bit values. `randomUUID` draws 16 CSPRNG bytes and stamps `b[6]=(…&0x0f)|0x40` (version 4) and
+`b[8]=(…&0x3f)|0x80` (variant 10xx) before hex-formatting, so it is a valid RFC 4122 v4 UUID. `getrandom`
+is an **optional** dep gated to the `_sm` feature (only the SpiderMonkey native reaches it; the JS-less
+build does not pull it).
+
+**Gate.** New `engine/page/tests/g_crypto.rs` (`crypto_random_is_a_real_csprng_and_correctly_shaped`)
+loads a page and asserts seven observable consequences: returns its argument; a `Uint32Array(64)` has an
+element `> 255` (mathematically impossible under the old `0..255` filler → deterministic RED); `randomUUID`
+matches `/^[0-9a-f]{8}-…-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-…$/` (RED without the variant fix); two UUIDs
+differ; two 32-byte draws differ; over-quota throws; a `Float64Array` throws. RED against the
+`Math.random()` shim by construction. Confined to engine/js (native + shim) + one new gate — WPT-neutral
+(no WebCryptoAPI area in the sweep), so the ratchet's capability face is the unit gate, not a WPT flip.
+HANG/CRASH 0. Residue: `crypto.subtle` (SubtleCrypto — digest/sign/encrypt) stays **undefined**, which is
+the honest "cannot" (real browsers expose it only in secure contexts) — a larger, separate tick if a page
+class needs `subtle.digest`. Mechanism in [[js-engine]].

@@ -21,7 +21,7 @@ default = []
 # §8). With intl on + jit on, mozjs_sys links its PREBUILT archive (fast, no C++ build).
 # `_sm` is the INTERNAL code marker both variants enable (all `#[cfg]`'d SpiderMonkey
 # code gates on it, so the two variants share one code path and differ ONLY in `intl`).
-_sm = ["dep:mozjs"]
+_sm = ["dep:mozjs", "dep:getrandom"]
 spidermonkey = ["_sm", "mozjs/jit", "mozjs/libz-sys", "mozjs/intl"]
 # `spidermonkey-noicu` — C2 ICU trim. SAME embedding surface, minus the `intl` cargo
 # feature, so ICU (icu_capi) is dropped. Disabling intl forces mozjs_sys to BUILD FROM
@@ -47,3 +47,9 @@ tracing.workspace = true
 # so the ICU-carrying `intl` default can be opted OUT of by `spidermonkey-noicu`;
 # `spidermonkey` re-enables the full default set explicitly.
 mozjs = { version = "0.18", optional = true, default-features = false }
+
+# OS CSPRNG (`getrandom(2)` / `/dev/urandom` on Linux) behind `crypto.getRandomValues` and
+# `crypto.randomUUID`. Optional + gated to `_sm`: it is only reachable from the SpiderMonkey
+# native, so the JS-less build does not pull it. Without a host entropy call JS has no CSPRNG
+# and the old shim leaked predictable `Math.random()` bytes into every token/nonce/UUID.
+getrandom = { version = "0.3", optional = true }

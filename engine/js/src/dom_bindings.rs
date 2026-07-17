@@ -5927,6 +5927,14 @@ pub unsafe fn install(
     JS_DefineFunction(
         &mut wrap_cx(cx),
         global.handle(),
+        c"__cryptoRandomHex".as_ptr(),
+        host_fn!(host_crypto_random_hex),
+        1,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
         c"__scrollState".as_ptr(),
         host_fn!(host_scroll_state),
         0,
@@ -8414,6 +8422,33 @@ unsafe fn host_log(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
         _ => tracing::info!(target: "page.console", "{msg}"),
     }
     *vp = UndefinedValue();
+    true
+}
+
+/// `__cryptoRandomHex(n)` — fill `n` bytes from the OS CSPRNG (`getrandom(2)` / `/dev/urandom` on
+/// Linux, `BCryptGenRandom` on Windows) and return them lowercase-hex-encoded. This is the entropy
+/// source behind `crypto.getRandomValues` and `crypto.randomUUID`: JS cannot reach a real CSPRNG
+/// without a host call, and the previous shim filled both from `Math.random()` — a NON-cryptographic
+/// PRNG whose stream is trivially predictable — so every session token, CSRF nonce and UUID a page
+/// minted was guessable. `n` is clamped to WebCrypto's 65536-byte per-call quota (the shim rejects
+/// larger requests before it ever gets here, but the clamp is defence in depth). A `getrandom`
+/// failure — astronomically rare on a real OS, but possible in a locked-down sandbox — returns the
+/// empty string, which the shim turns into an `OperationError` rather than silently handing back
+/// weak or zero bytes.
+unsafe fn host_crypto_random_hex(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let n = arg_u32(cx, vp, argc, 0).unwrap_or(0).min(65536) as usize;
+    let mut buf = vec![0u8; n];
+    match getrandom::fill(&mut buf) {
+        Ok(()) => {
+            use std::fmt::Write as _;
+            let mut hex = String::with_capacity(n * 2);
+            for b in &buf {
+                let _ = write!(hex, "{b:02x}");
+            }
+            return_string(cx, vp, &hex);
+        }
+        Err(_) => return_string(cx, vp, ""),
+    }
     true
 }
 

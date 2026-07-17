@@ -280,6 +280,7 @@
   - L568 · Mass reflector access + the reflection layer can overflow the C stack, and SpiderMonkey won't catch it
   - L602 · A reused SpiderMonkey runtime across many pages SIGSEGVs — a cross-file reflector/rooting UAF (open Bar-0)
   - L623 · A second, DETERMINISTIC C-stack overflow (html/semantics) — NATIVE recursion, not the stack-quota class
+  - L656 · Web Crypto entropy: crypto.getRandomValues / randomUUID (tick 160)
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -404,4 +405,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-331 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+332 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

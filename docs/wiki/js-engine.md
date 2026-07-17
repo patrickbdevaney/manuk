@@ -652,3 +652,35 @@ UAF** for the fresh-context stack-quota tick: fix it (effective quota from real 
 `pthread_getattr_np`, OR the specific script-text/CSP recursion) → gate that this file throws instead of
 crashing → then html/semantics (~8,879 failing, the biggest mass) can join the sweep. It is currently
 **held out of `AREAS`** precisely because of this crasher (and one more in the same tree). [[conformance-and-oracles]]
+
+## Web Crypto entropy: `crypto.getRandomValues` / `randomUUID` (tick 160)
+
+SpiderMonkey (via mozjs 0.18) does **not** expose a `crypto` global, so the boot prelude
+(`event_loop.rs`) installs one. JS on its own has **no path to a CSPRNG** — `Math.random()` is the only
+entropy primitive in the language, and it is explicitly *non*-cryptographic — so a correct `crypto`
+requires a **host call**. The native `__cryptoRandomHex(n)` (`dom_bindings.rs`) fills `n` bytes from the
+OS CSPRNG (`getrandom` crate → `getrandom(2)`/`/dev/urandom` on Linux, `BCryptGenRandom` on Windows) and
+returns lowercase hex; `n` is clamped to WebCrypto's 65536-byte per-call quota. `getrandom` is an
+**optional dep gated to `_sm`** — it is only reachable from the SpiderMonkey native, so the JS-less build
+never pulls it.
+
+Two non-obvious shaping rules the shim must enforce, because getting either wrong is a *silent* bug:
+
+- **Fill through a BYTE view, not per element.** `getRandomValues` takes any integer typed array. Writing
+  `a[i] = random & 0xff` fills a `Uint32Array` element with only its low byte — 24 bits always zero. The
+  fix writes through `new Uint8Array(a.buffer, a.byteOffset, a.byteLength)` so every *byte* of every
+  element is random, whatever the element width (`Uint8`…`BigUint64`). The type guard rejects
+  Float*/DataView/plain arrays (`TypeMismatchError`) and `>65536` bytes (`QuotaExceededError`).
+- **Stamp the RFC 4122 bits for `randomUUID`.** Draw 16 CSPRNG bytes, then `b[6]=(b[6]&0x0f)|0x40`
+  (version = 4) and `b[8]=(b[8]&0x3f)|0x80` (variant = 10xx) before hex-formatting `8-4-4-4-12`. Skipping
+  the variant nibble emits strings that *look* like UUIDs but fail strict v4 validators (index-19 nibble
+  not in `[89ab]`).
+
+The general lesson, which recurs across this shim layer ([[js-engine]] boot globals): **a security
+primitive that "works" (returns a value, no throw) can still be catastrophically wrong.** `Math.random()`
+tokens pass every functional test and every guessable one. The gate (`g_crypto.rs`) therefore asserts the
+*statistical* consequences a correct CSPRNG must have (full-width fill, independent draws differ) and not
+merely that the call returns — the same "construct AND answer honestly" bar the missing-globals gate
+holds, extended to "answer *securely*". `crypto.subtle` (SubtleCrypto) stays **undefined** — the honest
+"cannot" (browsers expose it only in secure contexts), a separate larger tick if a page class needs
+`subtle.digest`.
