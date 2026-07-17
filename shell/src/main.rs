@@ -18,6 +18,7 @@ mod panel;
 mod prerender;
 mod session;
 mod tab;
+mod visited;
 
 #[cfg(feature = "gui")]
 mod gui;

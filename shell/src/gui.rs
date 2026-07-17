@@ -250,6 +250,9 @@ struct App {
     /// R1 — a navigation's main-document fetch is in flight off-thread (chrome stays live).
     loading: bool,
     bookmarks: Bookmarks,
+    /// Persistent, frecency-ranked visited-site history — the source of omnibox autocomplete. Unlike
+    /// `history` (this session's back/forward stack), it survives restart and ranks by visit count.
+    visited: crate::visited::VisitedHistory,
     settings: Settings,
     zoom: f32,
     /// Find-in-page. `find_open` drives whether typed characters go to the find bar.
@@ -390,6 +393,20 @@ impl App {
             })
             .unwrap_or_default();
 
+        // §5 — restore the persistent visited-site history that ranks omnibox autocomplete. It used
+        // to be session-only (the back/forward stack), so a fresh launch offered no completions and
+        // frequency never counted.
+        let visited = store
+            .as_ref()
+            .and_then(|s| match s.load_history() {
+                Ok(v) => v,
+                Err(e) => {
+                    tracing::warn!("history restore skipped: {e:#}");
+                    None
+                }
+            })
+            .unwrap_or_default();
+
         // The CLI target is the active, eagerly-loaded tab: reuse a restored tab with the
         // same URL if present, else open a fresh focused one.
         let existing = browser.tabs().iter().find(|t| t.url == url).map(|t| t.id);
@@ -431,6 +448,7 @@ impl App {
             nav_gen: 0,
             loading: false,
             bookmarks,
+            visited,
             settings,
             zoom: 1.0,
             find_open: false,
@@ -923,6 +941,18 @@ impl App {
         }
     }
 
+    /// Record a completed navigation in the persistent visited-site history (for frecency-ranked
+    /// omnibox autocomplete) and write it back to disk. Best-effort persistence: a write failure is
+    /// logged, never fatal. `record` itself ignores `about:blank`/empty.
+    fn record_visit(&mut self, url: &str, title: &str) {
+        self.visited.record(url, title);
+        if let Some(store) = &self.store {
+            if let Err(e) = store.save_history(&self.visited) {
+                tracing::warn!("history save failed: {e:#}");
+            }
+        }
+    }
+
     /// Write settings to disk now — called when the user changes one (today: per-origin zoom).
     /// Best-effort: a write failure is logged, never fatal.
     fn persist_settings(&self) {
@@ -1090,6 +1120,8 @@ impl App {
             page.title.clone(),
             page.content_height,
         );
+        // Record the visit for frecency-ranked omnibox autocomplete (persistent across restart).
+        self.record_visit(&page.final_url, &page.title);
         self.page = Some(page);
         self.scroll_y = 0.0;
         self.loading = false;
@@ -1162,6 +1194,7 @@ impl App {
             page.title.clone(),
             page.content_height,
         );
+        self.record_visit(&page.final_url, &page.title);
         self.page = Some(page);
         self.scroll_y = 0.0;
         self.loading = false;
@@ -1850,26 +1883,37 @@ impl App {
     /// box empty (e.g. opened via the History menu item), the most recent history, newest
     /// first — so the dropdown doubles as an accessible history list.
     fn current_suggestions(&self) -> Vec<chrome::Suggestion> {
+        // Frecency-ranked completions from the PERSISTENT visited history (survives restart, ranks by
+        // visit frequency), carrying each site's real title. An empty input yields the top sites; a
+        // typed prefix yields the ranked matches. Bookmarks are layered ahead of history (a bookmark
+        // is a deliberate choice), matching the address bar's long-standing bookmark-first order.
+        let history_suggestions = self
+            .visited
+            .suggest(&self.omnibox_input, 8)
+            .into_iter()
+            .map(|e| chrome::Suggestion {
+                url: e.url.clone(),
+                title: if e.title.is_empty() {
+                    e.url.clone()
+                } else {
+                    e.title.clone()
+                },
+                source: chrome::SuggestionSource::History,
+            });
         if self.omnibox_input.trim().is_empty() {
-            self.history
-                .entries()
-                .iter()
-                .rev()
-                .take(8)
-                .map(|u| chrome::Suggestion {
-                    url: u.clone(),
-                    title: u.clone(),
-                    source: chrome::SuggestionSource::History,
-                })
-                .collect()
-        } else {
-            chrome::suggestions(
-                &self.omnibox_input,
-                self.history.entries(),
-                &self.bookmarks,
-                8,
-            )
+            return history_suggestions.take(8).collect();
         }
+        // Bookmark matches first (via the existing ranker, with no session history), then the
+        // persistent-history matches; dedup by URL and cap at 8.
+        let bookmark_suggestions =
+            chrome::suggestions(&self.omnibox_input, &[], &self.bookmarks, 8);
+        let mut seen = std::collections::HashSet::new();
+        bookmark_suggestions
+            .into_iter()
+            .chain(history_suggestions)
+            .filter(|s| seen.insert(s.url.clone()))
+            .take(8)
+            .collect()
     }
 
     /// Draw the open overlays (omnibox suggestions dropdown, hamburger menu) above the page.

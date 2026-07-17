@@ -7243,3 +7243,40 @@ isolated (no-signal path unchanged); HANG/CRASH 0. Residue: `XMLHttpRequest.abor
 (rarer; frameworks use fetch), and `AbortSignal.timeout()` marks aborted but doesn't yet reject an
 in-flight fetch bound to it (needs the timer to route through the same drop path). Mechanism:
 `fetch` signal wiring + `abort()` DOMException reason.
+
+## Tick 173 — persistent frecency-ranked visited history for omnibox autocomplete (shell/UX — T5 lever) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (T5 shell persistence — the visited-site history that ranks the
+address bar). WIKI: none — shell-only tick (no engine/ change); the mechanism is UX plumbing, not an
+engine capability. Diversified OFF the JS/fetch tail (ticks 170–172) into the shell.**
+
+The omnibox drew its suggestions from `SessionHistory` — this session's back/forward stack, a flat
+list of URLs, newest-first, that evaporates on quit. So a fresh launch offered NO completions, and
+typing `git` could never surface `github.com` by the fact you visit it every day (frequency never
+counted; only presence in the current stack did). Every real browser ranks the address bar by
+**frecency** (frequency + recency) over a **persistent** history — the site you use most is the first
+completion.
+
+**Fix (shell-only).** New `shell/src/visited.rs`: `VisitedHistory` = one `VisitEntry { url, title,
+visit_count, last_visit }` per URL, where `last_visit` is a **monotonic sequence** (not wall-clock —
+keeps ranking deterministic/testable while capturing recency). `record(url, title)` increments the
+count + refreshes recency/title on a repeat, inserts on a new URL, ignores `about:blank`/empty.
+`score = visit_count + recency∈[0,1]` so frequency dominates and recency orders ties / boosts a
+just-visited site. `suggest(input, limit)` returns prefix-on-display-host matches (scheme + `www.`
+stripped, as the user reads a URL) ahead of URL/title substring matches, frecency-ranked within each
+tier; empty input → top sites. Persisted via `SessionStore::save_history`/`load_history`
+(`history.json`), mirroring bookmarks/downloads. `App` gains a `visited` field loaded at startup;
+`finish_load` + `finish_load_prefetched` call `record_visit` (persisting each visit);
+`current_suggestions` now sources the persistent history (with real titles), layering bookmark
+matches ahead of it and deduping.
+
+**Gate.** `visited::tests` (4): frequency dominates then recency orders; a repeat visit increments in
+place + keeps the latest title; `about:blank`/empty are not recorded; `suggest` puts a host-prefix
+match ahead of a path/title substring match and honours frecency. Plus
+`session::tests::visited_history_survives_a_save_load_cycle`: the frecency order and prefix
+autocomplete still resolve after a store round-trip (the "survives restart" claim). RED against the
+pre-tick shell (no persistent history — omnibox fed by the session stack, `load_history` didn't
+exist). Verified: shell suite 57→58 green, `visited` 4 green, HANG/CRASH 0. Residue: no dedicated
+history-management UI (clear-history / delete-entry) yet; the frecency curve is simple
+(count + normalized recency), not Chrome's decaying-bucket model; typed-URL vs link-follow visits are
+weighted equally. Mechanism: `visited::VisitedHistory` + `SessionStore` history + `record_visit`.

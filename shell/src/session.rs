@@ -166,6 +166,25 @@ impl SessionStore {
         read_json(&self.settings_path())
     }
 
+    // -- visited-site history --------------------------------------------------
+
+    fn history_path(&self) -> PathBuf {
+        self.dir.join("history.json")
+    }
+
+    /// Persist the frecency-ranked visited-site history that feeds omnibox autocomplete. Overwrites
+    /// the previous file; like bookmarks, it is a durable collection, not the auto-restored session.
+    pub fn save_history(&self, history: &crate::visited::VisitedHistory) -> Result<()> {
+        self.ensure_dir()?;
+        write_json(&self.history_path(), history)
+    }
+
+    /// Load the saved visited-site history, or `None` if none was ever saved (the caller uses the
+    /// default empty history).
+    pub fn load_history(&self) -> Result<Option<crate::visited::VisitedHistory>> {
+        read_json(&self.history_path())
+    }
+
     fn ensure_dir(&self) -> Result<()> {
         std::fs::create_dir_all(&self.dir)
             .with_context(|| format!("creating state dir {}", self.dir.display()))
@@ -530,6 +549,44 @@ mod tests {
                 .iter()
                 .any(|b| b.url.contains("q=rust+lang")),
             "a bookmarked query string must survive verbatim"
+        );
+    }
+
+    /// **The visited-history persistence gate.** Omnibox autocomplete used to draw from the session
+    /// back/forward stack, so it was empty on a fresh launch and never counted frequency. The
+    /// persistent history must round-trip through the store — visit counts and recency preserved —
+    /// so the site you visit most is still your top completion after a restart. RED against the
+    /// pre-tick store, which had no history save/load at all.
+    #[test]
+    fn visited_history_survives_a_save_load_cycle() {
+        let dir = tmpdir("history-roundtrip");
+        let store = SessionStore::with_dir(&dir);
+
+        // Nothing saved yet → None (distinguishable from an empty-but-saved history).
+        assert!(store.load_history().unwrap().is_none());
+
+        let mut hist = crate::visited::VisitedHistory::default();
+        hist.record("https://github.com/", "GitHub");
+        hist.record("https://github.com/", "GitHub"); // twice — the frequent one
+        hist.record("https://example.test/once", "Once");
+        store.save_history(&hist).unwrap();
+
+        let restored = store.load_history().unwrap().expect("saved history");
+        // Frequency survives the round-trip: github (2 visits) still ranks ahead of the once-visited.
+        let ranked: Vec<&str> = restored.ranked().iter().map(|e| e.url.as_str()).collect();
+        assert_eq!(
+            ranked.first().copied(),
+            Some("https://github.com/"),
+            "the most-visited site is still the top completion after restart"
+        );
+        // And a typed prefix still resolves against it post-restore.
+        assert_eq!(
+            restored
+                .suggest("github", 5)
+                .first()
+                .map(|e| e.url.as_str()),
+            Some("https://github.com/"),
+            "prefix autocomplete works against the restored history"
         );
     }
 
