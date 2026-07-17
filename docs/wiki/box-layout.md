@@ -155,3 +155,34 @@ the inline / auto-height-ancestor cases t6–t9 still fail — they don't thread
 Bonus `css/css-flexbox` 949→953 (+4, relative flex items). css-sizing/grid/transforms flat. Gated by
 `relative_percentage_top_resolves_against_containing_block_height` (layout), which measures the shift as a
 *delta* vs `top:0` (isolating it from the box origin) and is proven RED by reverting `cb_h` to `0.0`.
+
+## Percentage heights resolve against the initial containing block, and `max-height:%` on an indefinite parent is `none` (tick 150)
+
+Two percentage-height bugs, one theme — a `%` height reference that was silently **0**.
+
+**1. The full-height app-shell chain never filled the window.** `layout_document` seeds the root box
+(`body`, or `html` if no body) with `pch: None`. But the initial containing block has the **viewport's**
+dimensions (CSS2 §10.1), and its height is the reference a root-level `height: 100%` resolves against — the
+`html,body{height:100%}` → `#app{height:100%}` chain every SPA uses to make a scroll pane fill the window.
+With `None`, that root percentage was indefinite, so the whole chain fell back to *content* height: the
+pane collapsed to its content and a `100vh` sibling (resolved at **parse** time against the same viewport)
+filled the window while the `height:100%` box next to it did not — a visible inconsistency between two
+spellings of the same intent. **Fix:** seed the root with `Some(manuk_css::values::viewport_size().1)` —
+the *same* viewport `vh` resolves against, so the two can never disagree. Only elements with an explicit
+percentage/definite height up the chain change; an `auto`-height body still yields `None` to its children,
+so content-sized pages are untouched.
+
+**2. `max-height:%` against an auto-height parent clamped the box to 0.** `max_h` resolved the percentage
+against `pch.unwrap_or(0.0)`, so an indefinite containing block gave `max-height: 100%` → `0` and the box
+vanished. Per CSS2 §10.7 a percentage `max-height` against an indefinite CB height is treated as **`none`**
+(no cap). **Fix:** `Dim::Percent(_) if pch.is_none() => f32::INFINITY` (and the `Calc{pct != 0}` form).
+This is the ubiquitous `img { max-width:100%; max-height:100% }` responsive reset — previously every such
+image collapsed to nothing inside an auto-height parent. (`min-height:%` against an indefinite CB is `0`,
+which `unwrap_or(0.0)` already produced — no change needed there.)
+
+**WPT / gate.** `css/CSS2/normal-flow` 17→18 (the `height:30000px; max-height:100%` case). The app-shell
+chain is mostly reftest-covered (Bar 2, deferred), so it is gated by unit tests instead:
+`root_percentage_height_fills_the_viewport` (asserts `#app` height == the viewport height through the root)
+and `percentage_max_height_indefinite_parent_is_none` (asserts a `height:500px; max-height:100%` box stays
+500 inside an auto-height parent). Both proven RED by reverting the respective change. flex/position/
+overflow/sizing flat, HANG/CRASH 0.

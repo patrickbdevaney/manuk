@@ -6513,3 +6513,34 @@ and the tick **did not land** until it was fixed.
 
 > **A spec fix that breaks a working capability is not a fix.** That is what the wall is for, and it is why
 > the ratchet has three faces and not one.
+
+## Tick 150 — percentage heights resolve against the initial containing block; `max-height:%` on an indefinite parent is `none` (2026-07-17)
+
+**TICK SHAPE: layout-mechanism (CSS-LAYOUT phase-mandate row 4 — %-height edges). WIKI: box-layout.**
+Lever-board phase mandate:
+lowest-numbered unmet RENDER+INTERACT target. Rows 1/2/3/5 already met (t139/140); row 4 (block/inline
+edges — margin-collapse, %-height, inline-space) was open. Took the **%-height** half — the cleanest,
+highest-daily-driver bounded mechanism on that row.
+
+**Hypothesis.** Two percentage-height reference bugs, both silently resolving `%` against **0**:
+(1) `layout_document` seeds the root box with `pch: None`, so a root-level `height:100%` — the
+`html,body{height:100%}` → `#app{height:100%}` full-height app-shell chain every SPA uses — is indefinite
+and collapses to content height, while a `100vh` sibling (parse-time) fills the window. (2) `max_h`
+resolves a percentage against `pch.unwrap_or(0.0)`, so `max-height:100%` inside an auto-height parent →
+`0` and the box vanishes (the `img{max-width:100%;max-height:100%}` reset dies).
+
+**Fix.** (1) Seed the root's `pch` with `Some(manuk_css::values::viewport_size().1)` — the ICB has the
+viewport's dimensions (CSS2 §10.1), read from the *same* viewport `vh` resolves against so the two spellings
+agree. (2) `Dim::Percent(_) if pch.is_none() => f32::INFINITY` (+ the `Calc{pct!=0}` form) — a percentage
+`max-height` against an indefinite CB is `none` (CSS2 §10.7). `min-height:%` indefinite → 0 already correct.
+
+**Verified.** `css/CSS2/normal-flow` 17→18 (the `height:30000px; max-height:100%` case flips). App-shell
+chain is reftest-covered (Bar 2), so gated by two unit tests: `root_percentage_height_fills_the_viewport`
+and `percentage_max_height_indefinite_parent_is_none`, both proven RED by reverting. Regression sweep:
+css-flexbox 26.5%, css-position 28.8%, css-overflow 27.8%, css-sizing 14.5% — all flat, **HANG/CRASH 0**.
+
+**Ratchet.** Capability up (full-height app shells + responsive-image resets now render); performance
+unchanged; instrument fidelity up (two new falsifiable layout gates). No invariant bent — surgical,
+spec-cited, root-only percentage change; auto-height pages untouched. Mechanism in
+[[box-layout]]. Next lever on row 4: the inline-whitespace edge (`a<b>b</b>` spacing) or margin-collapse
+parent↔child (explicitly unmodeled in `layout_block`).

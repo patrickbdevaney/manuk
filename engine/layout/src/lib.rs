@@ -627,9 +627,26 @@ pub fn layout_document(
         Some(el) => {
             // The initial containing block is itself a BFC root; `layout_block` gives
             // the root element its own context, so this outer one is just a seed.
+            //
+            // The ICB has the viewport's dimensions (CSS2 §10.1), and its **height** is the
+            // reference a root-level `height: 100%` resolves against — the full-height app-shell
+            // pattern (`html,body{height:100%}` then `#app{height:100%}`) that every SPA relies on
+            // to make a scrollable pane fill the window. Passing `None` here made that root percent
+            // indefinite, so the whole chain fell back to content height and the shell never filled
+            // the viewport. Read the height from the same viewport the parser resolves `vh` against
+            // so a `height:100%` root and a `100vh` sibling can never disagree.
+            let icb_height = manuk_css::values::viewport_size().1;
             let mut floats = FloatContext::new(0.0, viewport_width);
             let mut root = ctx
-                .layout_block(el, viewport_width, None, 0.0, 0.0, 0.0, &mut floats)
+                .layout_block(
+                    el,
+                    viewport_width,
+                    Some(icb_height),
+                    0.0,
+                    0.0,
+                    0.0,
+                    &mut floats,
+                )
                 .boxx;
             // Absolute/fixed boxes were skipped in flow; place them in a final pass
             // against their containing blocks (CSS2 §9.6).
@@ -1464,6 +1481,14 @@ impl Ctx<'_> {
         let min_h = (s.min_height.resolve(pch.unwrap_or(0.0), 0.0) - bs_extra_h).max(0.0);
         let max_h = match s.max_height {
             Dim::Auto => f32::INFINITY,
+            // A percentage `max-height` against an **indefinite** containing-block height is
+            // treated as `none` (CSS2 §10.7) — the cap simply does not apply. Resolving it
+            // against 0 instead (the old `unwrap_or(0.0)`) clamped the box to **zero height**:
+            // `height:30000px; max-height:100%` inside an auto-height parent rendered as an
+            // invisible 0px box, and `img { max-width:100%; max-height:100% }` — the single most
+            // common responsive-image reset on the web — collapsed every such image to nothing.
+            Dim::Percent(_) if pch.is_none() => f32::INFINITY,
+            Dim::Calc { pct, .. } if pct != 0.0 && pch.is_none() => f32::INFINITY,
             other => (other.resolve(pch.unwrap_or(0.0), f32::INFINITY) - bs_extra_h).max(0.0),
         };
         if max_h.is_finite() {
@@ -3871,6 +3896,51 @@ mod tests {
         assert!(
             (main_w - 250.0).abs() < 1.0,
             "flex:1 main should take the remaining 250px, got {main_w}"
+        );
+    }
+
+    /// The full-height app-shell chain: `body{height:100%}` then `#app{height:100%}` must FILL the
+    /// viewport, not collapse to content height. The initial containing block supplies the reference
+    /// the root percentage resolves against; passing `None` there (the old behaviour) made every
+    /// SPA's scroll pane 0-tall — the `100vh` sibling filled the window while the `height:100%` one
+    /// next to it vanished, which is the exact inconsistency this wiring removes.
+    #[test]
+    fn root_percentage_height_fills_the_viewport() {
+        let html = r#"<div id="app"><p>hi</p></div>"#;
+        let css = "body{height:100%;margin:0} #app{height:100%}";
+        let vp_h = manuk_css::values::viewport_size().1;
+        let (dom, root) = layout_html(html, css, 400.0);
+        let rects = root.node_rects(&dom);
+        let app = dom
+            .descendants(dom.root())
+            .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("app"))
+            .expect("id=app");
+        let app_h = rects[&app].height;
+        assert!(
+            (app_h - vp_h).abs() < 1.0,
+            "#app{{height:100%}} through a height:100% body should fill the {vp_h}px viewport, got {app_h}"
+        );
+    }
+
+    /// A percentage `max-height` against an **indefinite** (auto-height) containing block is `none`
+    /// (CSS2 §10.7): the cap does not apply, so a `height:500px` box stays 500. The old code
+    /// resolved the `%` against 0 and clamped the box to zero — the `img{max-width:100%;
+    /// max-height:100%}` responsive reset collapsed every image inside an auto-height parent.
+    #[test]
+    fn percentage_max_height_indefinite_parent_is_none() {
+        let html = r#"<div id="wrap"><div id="box"></div></div>"#;
+        // #wrap is auto-height (indefinite); #box asks for 500px capped by max-height:100%.
+        let css = "#box{height:500px;max-height:100%}";
+        let (dom, root) = layout_html(html, css, 400.0);
+        let rects = root.node_rects(&dom);
+        let boxx = dom
+            .descendants(dom.root())
+            .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("box"))
+            .expect("id=box");
+        let box_h = rects[&boxx].height;
+        assert!(
+            (box_h - 500.0).abs() < 1.0,
+            "max-height:100% against an indefinite parent is `none`; box should stay 500px, got {box_h}"
         );
     }
 
