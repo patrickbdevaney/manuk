@@ -451,3 +451,32 @@ unchanged. Symmetric with the inline reservation, so a box with both `overflow-x
 `height:100%` child 185 while offsetHeight stays 200; an auto-height control's 40px child stays 40; RED
 before at child 200). Regression sweep across css-position/css-sizing/css-flexbox/css-grid/css-values/
 css-display: **all flat, HANG/CRASH 0**; full manuk-layout suite 72/72.
+
+## object-fit — a replaced image fits its box without distorting (tick 181)
+
+`object-fit: cover` is the card-grid thumbnail idiom — `img { width:100%; height:100%;
+object-fit:cover }` — so a photo fills its tile without distorting, cropping the overflow. It was
+**completely unimplemented** (0 hits in the engine): the replaced-image blit stretched the decoded
+bitmap to fill the box, so every non-square photo in a square tile came out squashed to the tile's
+ratio. This is one of the most common rendering bugs a real page would show.
+
+Three-crate mechanism, each layer minimal:
+- **css** — `ObjectFit` enum (`Fill` default / `Contain` / `Cover` / `None` / `ScaleDown`), parsed
+  from the `object-fit` property into `Style::object_fit`, and recovered from MinimalCascade on the
+  shipping **Stylo** path (same recovery block as background-size — Stylo's servo build models it as a
+  generic type we would otherwise have to consume).
+- **layout** — `object_fit` carried on `LayoutBox` (populated at every construction site alongside
+  `background_size`). No layout-math change: the used box is unchanged; only how the bitmap fills it.
+- **paint** — `object_fit_geometry(fit, box, img_w, img_h) -> (dest_rect, content_clip)` at
+  display-list build. `fill` returns the box (stretch, unchanged). The aspect-preserving modes scale
+  the bitmap (contain = min fit-scale, cover = max, none = 1.0, scale-down = min(contain,1)) and center
+  it (`object-position: 50% 50%`, the default). `cover`/`none` can exceed the box, so
+  `DisplayItem::Image` gained a `content_clip`; the paint walk intersects it with any ancestor overflow
+  clip before blitting, so the overflow is cropped to the tile.
+
+**Gate.** `object_fit_preserves_aspect_ratio` (engine/paint): a 200×100 (2:1) photo in a 100×100 tile —
+`fill` → dest 100×100 no clip; `cover` → dest 200×100 + a 100×100 crop box; `contain` → dest 100×50,
+letterboxed, no clip. RED against the stretch baseline, which reports 100×100 for cover. css+layout+
+paint suites green; HANG/CRASH 0. Residue: explicit `object-position` (only the 50% 50% default is
+applied); `object-fit` on `<video>`/`<canvas>` follows the same path once those decode; `none` uses
+raw bitmap pixels (approximate at devicePixelRatio ≠ 1). [[box-layout]]

@@ -135,10 +135,15 @@ pub enum DisplayItem {
         text: String,
         style: TextStyle,
     },
-    /// A decoded image scaled into `rect` (a replaced `<img>`'s content box).
+    /// A decoded image drawn into `rect`. For the default `object-fit: fill`, `rect` is the box and
+    /// the bitmap stretches to it. For `cover`/`contain`/`none`/`scale-down`, `rect` is the
+    /// **aspect-ratio-preserved destination** the full bitmap is scaled into (which for `cover`/`none`
+    /// may exceed the box), and `content_clip` is the box the overflow is cropped to.
     Image {
         rect: Rect,
         image: std::rc::Rc<DecodedImage>,
+        /// `object-fit` crop box (the used content box). `None` = fill/contain, which never overflow.
+        content_clip: Option<Rect>,
     },
     /// A `background-image: url(...)` layer. **Not** an `<img>`: a background is painted at its
     /// natural size and TILED by default — it is not stretched to fill its box. Treating it like a
@@ -432,9 +437,12 @@ impl DisplayList {
             let bg_is_url = matches!(b.background_image, Some(manuk_css::BackgroundImage::Url(_)));
             if let Some(node) = b.node.filter(|_| mask.is_none() && !bg_is_url) {
                 if let Some(img) = images.get(&node) {
+                    let (rect, content_clip) =
+                        object_fit_geometry(b.object_fit, b.rect, img.width, img.height);
                     items.push(DisplayItem::Image {
-                        rect: b.rect,
+                        rect,
                         image: img.clone(),
+                        content_clip,
                     });
                 }
             }
@@ -772,10 +780,24 @@ impl CpuPainter<'_> {
                         text,
                         style,
                     } => self.draw_text(&mut pixmap, *x, *baseline - scroll_y, text, style, clip),
-                    DisplayItem::Image { rect, image } => {
+                    DisplayItem::Image {
+                        rect,
+                        image,
+                        content_clip,
+                    } => {
                         let mut r = *rect;
                         r.y -= scroll_y;
-                        blit_image(&mut pixmap, image, r, clip);
+                        // `object-fit: cover`/`none` may paint the bitmap larger than its box; crop
+                        // the overflow to the content box, intersected with any ancestor overflow clip.
+                        let eff_clip = match content_clip {
+                            Some(cc) => {
+                                let mut cc = *cc;
+                                cc.y -= scroll_y;
+                                Some(clip.map_or(cc, |a| a.intersect(&cc)))
+                            }
+                            None => clip,
+                        };
+                        blit_image(&mut pixmap, image, r, eff_clip);
                     }
                     DisplayItem::MaskedRect { rect, color, mask } => {
                         let mut r = *rect;
@@ -1080,6 +1102,46 @@ fn fill_shadow(
 
 /// Scale a decoded (straight-alpha) RGBA image into `rect` and blit it onto the pixmap
 /// with bilinear filtering.
+/// Compute where a decoded `img_w`×`img_h` bitmap is drawn inside `box_rect` under `object-fit`,
+/// plus the crop box for any overflow. Returns `(destination_rect, content_clip)`: for `fill` the
+/// image stretches to the box and nothing is cropped; the aspect-ratio-preserving modes center the
+/// scaled image (`object-position: 50% 50%`, the default) and `cover`/`none` return the box as a
+/// crop rect because the image can exceed it. Explicit `object-position` is not yet parsed.
+fn object_fit_geometry(
+    fit: manuk_css::ObjectFit,
+    box_rect: Rect,
+    img_w: u32,
+    img_h: u32,
+) -> (Rect, Option<Rect>) {
+    use manuk_css::ObjectFit;
+    let (bw, bh) = (box_rect.width, box_rect.height);
+    let (iw, ih) = (img_w as f32, img_h as f32);
+    if iw <= 0.0 || ih <= 0.0 || bw <= 0.0 || bh <= 0.0 {
+        return (box_rect, None);
+    }
+    let scale = match fit {
+        ObjectFit::Fill => return (box_rect, None), // stretch to the box, ignore aspect ratio
+        ObjectFit::Contain => (bw / iw).min(bh / ih),
+        ObjectFit::Cover => (bw / iw).max(bh / ih),
+        ObjectFit::None => 1.0,
+        ObjectFit::ScaleDown => (bw / iw).min(bh / ih).min(1.0),
+    };
+    let (dw, dh) = (iw * scale, ih * scale);
+    let dest = Rect {
+        x: box_rect.x + (bw - dw) / 2.0, // center: object-position 50% 50%
+        y: box_rect.y + (bh - dh) / 2.0,
+        width: dw,
+        height: dh,
+    };
+    // cover / none can overflow the box → crop to it; contain / scale-down never do.
+    let clip = if dw > bw + 0.5 || dh > bh + 0.5 {
+        Some(box_rect)
+    } else {
+        None
+    };
+    (dest, clip)
+}
+
 fn blit_image(
     pixmap: &mut tiny_skia::Pixmap,
     image: &DecodedImage,
@@ -1372,6 +1434,87 @@ mod bg_tests {
             replaced, 0,
             "and the REPLACED-element blit must NOT also fire: it stretches the bitmap to fill the \
              box, painting a scaled copy straight over the tiled background"
+        );
+    }
+
+    /// `object-fit` — a 2:1 photo in a 1:1 tile must NOT distort. This is the near-universal thumbnail
+    /// idiom (`img { width:100%; height:100%; object-fit:cover }` in a card grid). Baseline: the
+    /// replaced blit stretched the bitmap to the box, so a 200×100 photo in a 100×100 tile came out
+    /// squashed to 1:1. Now `cover` scales the bitmap preserving aspect ratio to COVER the box (dest
+    /// 200×100, cropped to the 100×100 box); `contain` scales it to FIT inside (dest 100×50,
+    /// letterboxed, no crop).
+    #[test]
+    fn object_fit_preserves_aspect_ratio() {
+        // A helper: the single DisplayItem::Image produced for `<img id=p>` under `fit`.
+        fn image_item(fit: &str) -> (Rect, Option<Rect>) {
+            let dom = manuk_html::parse(r#"<img id="p">"#);
+            let css = format!("#p{{width:100px;height:100px;object-fit:{fit}}}");
+            let styles = MinimalCascade.cascade(&dom, &[Stylesheet::parse(&css)]);
+            let fonts = FontContext::new();
+            let root = manuk_layout::layout_document(&dom, &styles, &fonts, 400.0);
+            let node = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("p"))
+                .expect("the img");
+            let mut images = std::collections::HashMap::new();
+            images.insert(
+                node,
+                std::rc::Rc::new(DecodedImage {
+                    width: 200, // a 2:1 photo
+                    height: 100,
+                    rgba: vec![255; 200 * 100 * 4],
+                }),
+            );
+            let items = DisplayList::build_with_images(&root, &images).items;
+            items
+                .iter()
+                .find_map(|i| match i {
+                    DisplayItem::Image {
+                        rect, content_clip, ..
+                    } => Some((*rect, *content_clip)),
+                    _ => None,
+                })
+                .expect("a replaced-image display item")
+        }
+
+        // fill (default): the bitmap stretches to the box — the historical behaviour, unchanged.
+        let (fill, fill_clip) = image_item("fill");
+        assert!(
+            (fill.width - 100.0).abs() < 0.5 && (fill.height - 100.0).abs() < 0.5,
+            "object-fit:fill stretches to the box (100×100), got {}×{}",
+            fill.width,
+            fill.height
+        );
+        assert!(fill_clip.is_none(), "fill never overflows, so no crop");
+
+        // cover: aspect ratio preserved, scaled to cover the box → 200×100, cropped to the tile.
+        let (cover, cover_clip) = image_item("cover");
+        assert!(
+            (cover.width - 200.0).abs() < 0.5 && (cover.height - 100.0).abs() < 0.5,
+            "object-fit:cover keeps 2:1 and covers the box (dest 200×100), got {}×{} — a stretched \
+             baseline would report 100×100",
+            cover.width,
+            cover.height
+        );
+        let cc = cover_clip.expect("cover crops the overflow to the box");
+        assert!(
+            (cc.width - 100.0).abs() < 0.5 && (cc.height - 100.0).abs() < 0.5,
+            "the crop box is the 100×100 tile, got {}×{}",
+            cc.width,
+            cc.height
+        );
+
+        // contain: aspect ratio preserved, scaled to fit inside → 100×50, letterboxed, no crop.
+        let (contain, contain_clip) = image_item("contain");
+        assert!(
+            (contain.width - 100.0).abs() < 0.5 && (contain.height - 50.0).abs() < 0.5,
+            "object-fit:contain keeps 2:1 and fits inside the box (dest 100×50), got {}×{}",
+            contain.width,
+            contain.height
+        );
+        assert!(
+            contain_clip.is_none(),
+            "contain fits inside the box, so nothing is cropped"
         );
     }
 }

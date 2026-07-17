@@ -195,6 +195,25 @@ pub enum BackgroundSize {
     Px(f32, f32),
 }
 
+/// `object-fit` — how a **replaced element**'s content (an `<img>`/`<video>`) is fitted into its
+/// used box when the two have different aspect ratios. The default `fill` stretches (the historical
+/// behaviour); `cover` is what nearly every thumbnail/card grid uses so a photo fills its tile
+/// without distorting, cropping the overflow.
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub enum ObjectFit {
+    /// Stretch to fill the box, ignoring aspect ratio (the initial value).
+    #[default]
+    Fill,
+    /// Scale (preserving aspect ratio) to entirely fit inside the box — letterboxed.
+    Contain,
+    /// Scale (preserving aspect ratio) to cover the box — the overflow is clipped.
+    Cover,
+    /// Natural size, centered, clipped to the box.
+    None,
+    /// The smaller of `none` and `contain` — never scales UP past natural size.
+    ScaleDown,
+}
+
 /// `background-repeat`.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub enum BackgroundRepeat {
@@ -418,6 +437,8 @@ pub struct ComputedStyle {
     /// gradient heroes, washed cards and CSS-only icons rendered as blank rectangles.
     pub background_image: Option<BackgroundImage>,
     pub background_size: BackgroundSize,
+    /// `object-fit` — how a replaced element's content is fitted into its box (default `fill`).
+    pub object_fit: ObjectFit,
     /// **Intrinsic aspect ratio (width / height) of a REPLACED element** — an `<img>`, `<video>`,
     /// `<canvas>`. Set from the decoded image once it arrives; `None` for everything else.
     ///
@@ -599,6 +620,7 @@ impl ComputedStyle {
             mask_image: None,
             background_image: None,
             background_size: BackgroundSize::Auto,
+            object_fit: ObjectFit::Fill,
             aspect_ratio: None,
             background_repeat: BackgroundRepeat::Repeat,
             text_decoration: TextDecoration::default(),
@@ -2960,6 +2982,20 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                     2 => BackgroundSize::Px(parts[0], parts[1]),
                     _ => BackgroundSize::Auto,
                 }
+            };
+        }
+        "object-fit" => {
+            let t = v.trim();
+            s.object_fit = if t.eq_ignore_ascii_case("contain") {
+                ObjectFit::Contain
+            } else if t.eq_ignore_ascii_case("cover") {
+                ObjectFit::Cover
+            } else if t.eq_ignore_ascii_case("none") {
+                ObjectFit::None
+            } else if t.eq_ignore_ascii_case("scale-down") {
+                ObjectFit::ScaleDown
+            } else {
+                ObjectFit::Fill
             };
         }
         "background-repeat" => {

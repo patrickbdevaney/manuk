@@ -870,7 +870,7 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
                     manuk_paint::DisplayItem::Gradient { rect, stops, .. } => {
                         (*rect, format!("Gradient {} stops", stops.len()))
                     }
-                    manuk_paint::DisplayItem::Image { rect, image } => {
+                    manuk_paint::DisplayItem::Image { rect, image, .. } => {
                         (*rect, format!("Image {}x{}", image.width, image.height))
                     }
                     manuk_paint::DisplayItem::BackgroundImage {
@@ -951,9 +951,23 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
         if want == "IMAGES" {
             for it in &dl.items {
                 match it {
-                    manuk_paint::DisplayItem::Image { rect, image } => println!(
-                        "IMAGE      {}x{} -> [{:.0} {:.0} {:.0}x{:.0}]  (STRETCHED to the box)",
-                        image.width, image.height, rect.x, rect.y, rect.width, rect.height
+                    manuk_paint::DisplayItem::Image {
+                        rect,
+                        image,
+                        content_clip,
+                    } => println!(
+                        "IMAGE      {}x{} -> [{:.0} {:.0} {:.0}x{:.0}]  ({})",
+                        image.width,
+                        image.height,
+                        rect.x,
+                        rect.y,
+                        rect.width,
+                        rect.height,
+                        if content_clip.is_some() {
+                            "object-fit: cropped to box"
+                        } else {
+                            "fitted/stretched to the box"
+                        }
                     ),
                     manuk_paint::DisplayItem::BackgroundImage {
                         rect,

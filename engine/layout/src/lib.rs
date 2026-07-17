@@ -184,6 +184,10 @@ pub struct LayoutBox {
     /// `background-image` — a URL (decoded by the page layer) or a gradient (painted directly).
     pub background_image: Option<manuk_css::BackgroundImage>,
     pub background_size: manuk_css::BackgroundSize,
+    /// `object-fit` — how a replaced element's decoded image is fitted into this box (default `fill`,
+    /// i.e. stretch). `cover`/`contain` preserve the image's aspect ratio; the paint layer computes
+    /// the fitted destination rect and clips the overflow to this box.
+    pub object_fit: manuk_css::ObjectFit,
     pub background_repeat: manuk_css::BackgroundRepeat,
     /// `outline` — painted OUTSIDE the border box and never affecting layout, which is exactly what
     /// makes it usable as a focus ring.
@@ -669,6 +673,7 @@ pub fn layout_document(
             mask_image: None,
             background_image: None,
             background_size: manuk_css::BackgroundSize::Auto,
+            object_fit: manuk_css::ObjectFit::Fill,
             background_repeat: manuk_css::BackgroundRepeat::Repeat,
             outline: None,
             marker: None,
@@ -1767,6 +1772,7 @@ impl Ctx<'_> {
             mask_image: s.mask_image.clone(),
             background_image: s.background_image.clone(),
             background_size: s.background_size,
+            object_fit: s.object_fit,
             background_repeat: s.background_repeat,
             outline: (s.outline_width > 0.0 && s.outline_color.a > 0)
                 .then_some((s.outline_width, s.outline_color)),
@@ -1916,6 +1922,7 @@ impl Ctx<'_> {
                     mask_image: None,
                     background_image: None,
                     background_size: manuk_css::BackgroundSize::Auto,
+                    object_fit: manuk_css::ObjectFit::Fill,
                     background_repeat: manuk_css::BackgroundRepeat::Repeat,
                     outline: None,
                     marker: None,
@@ -2114,6 +2121,7 @@ impl Ctx<'_> {
             mask_image: s.mask_image.clone(),
             background_image: s.background_image.clone(),
             background_size: s.background_size,
+            object_fit: s.object_fit,
             background_repeat: s.background_repeat,
             outline: (s.outline_width > 0.0 && s.outline_color.a > 0)
                 .then_some((s.outline_width, s.outline_color)),
@@ -2589,6 +2597,7 @@ impl Ctx<'_> {
                 mask_image: rs.and_then(|s| s.mask_image.clone()),
                 background_image: rs.and_then(|s| s.background_image.clone()),
                 background_size: rs.map(|s| s.background_size).unwrap_or_default(),
+                object_fit: rs.map(|s| s.object_fit).unwrap_or_default(),
                 background_repeat: rs.map(|s| s.background_repeat).unwrap_or_default(),
                 outline: rs.and_then(|s| {
                     (s.outline_width > 0.0 && s.outline_color.a > 0)
@@ -2625,6 +2634,7 @@ impl Ctx<'_> {
             mask_image: s.mask_image.clone(),
             background_image: s.background_image.clone(),
             background_size: s.background_size,
+            object_fit: s.object_fit,
             background_repeat: s.background_repeat,
             outline: (s.outline_width > 0.0 && s.outline_color.a > 0)
                 .then_some((s.outline_width, s.outline_color)),
@@ -2867,6 +2877,7 @@ impl Ctx<'_> {
                 mask_image: s.mask_image.clone(),
                 background_image: s.background_image.clone(),
                 background_size: s.background_size,
+                object_fit: s.object_fit,
                 background_repeat: s.background_repeat,
                 outline: (s.outline_width > 0.0 && s.outline_color.a > 0)
                     .then_some((s.outline_width, s.outline_color)),
@@ -2966,6 +2977,7 @@ impl Ctx<'_> {
                         mask_image: None,
                         background_image: None,
                         background_size: manuk_css::BackgroundSize::Auto,
+                        object_fit: manuk_css::ObjectFit::Fill,
                         background_repeat: manuk_css::BackgroundRepeat::Repeat,
                         outline: None,
                         marker: None,
@@ -3224,6 +3236,7 @@ impl Ctx<'_> {
             mask_image: s.mask_image.clone(),
             background_image: s.background_image.clone(),
             background_size: s.background_size,
+            object_fit: s.object_fit,
             background_repeat: s.background_repeat,
             outline: (s.outline_width > 0.0 && s.outline_color.a > 0)
                 .then_some((s.outline_width, s.outline_color)),
@@ -3300,6 +3313,7 @@ impl Ctx<'_> {
             mask_image: None,
             background_image: None,
             background_size: manuk_css::BackgroundSize::Auto,
+            object_fit: manuk_css::ObjectFit::Fill,
             background_repeat: manuk_css::BackgroundRepeat::Repeat,
             outline: None,
             marker: None,
@@ -3426,6 +3440,7 @@ impl Ctx<'_> {
                 mask_image: s.mask_image.clone(),
                 background_image: s.background_image.clone(),
                 background_size: s.background_size,
+                object_fit: s.object_fit,
                 background_repeat: s.background_repeat,
                 outline: (s.outline_width > 0.0 && s.outline_color.a > 0)
                     .then_some((s.outline_width, s.outline_color)),

@@ -7473,3 +7473,25 @@ input (per-keystroke) → keyup (release).
 `event.key`/`event.keyCode`; `dispatch_key(node,"keyup","x",…)` fires it and the handler records
 `x:88`. RED against a shell that never dispatches on release. Verify: page suite + manuk-shell green;
 HANG/CRASH 0.
+
+## Tick 181 — object-fit: cover — thumbnails stop distorting (CSS render / replaced elements) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (CSS layout/render — replaced-element fitting). WIKI:
+docs/wiki/box-layout.md "object-fit — a replaced image fits its box without distorting".**
+
+**Hypothesis.** `object-fit: cover` is on nearly every thumbnail on the web — the card-grid idiom
+`img { width:100%; height:100%; object-fit:cover }` — so a photo fills its tile without distorting,
+cropping the overflow. It was **completely unimplemented** (0 hits in the tree): the replaced-image
+blit stretched the decoded bitmap to fill the box, so every non-square photo in a square tile came out
+squashed. Fix: parse `object-fit` (css), carry it on `LayoutBox` (layout), and compute the
+aspect-ratio-preserved destination rect + crop box at display-list build (paint) —
+`object_fit_geometry(fit, box, iw, ih)`. `cover`/`none` can exceed the box, so `DisplayItem::Image`
+gains a `content_clip` the paint walk intersects with any ancestor overflow clip; `fill` (default,
+stretch) and `contain`/`scale-down` (fit inside) are unchanged in behaviour/clip. Recovered from
+MinimalCascade on the shipping Stylo path too (same block as background-size). object-position is the
+default 50% 50% (centered); explicit object-position not yet parsed.
+
+**Gate.** engine/paint `object_fit_preserves_aspect_ratio`: a 200×100 (2:1) photo in a 100×100 tile —
+`fill`→dest 100×100 (stretched, no clip); `cover`→dest 200×100 + 100×100 crop box; `contain`→dest
+100×50, no clip. RED against the stretch baseline (which reports 100×100 for cover). Verify: css+layout+
+paint suites green; HANG/CRASH 0.
