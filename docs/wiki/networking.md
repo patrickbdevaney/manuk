@@ -350,3 +350,31 @@ response it cannot read at all. The finer per-header `Access-Control-Expose-Head
 in Chromium hides non-safelisted headers even on a readable cross-origin response — is a documented
 follow-on; same-origin (the common case for header inspection) exposes the full list, which is
 correct.
+
+## `fetch(url, {signal})` honours AbortController — cancellation is not a no-op
+
+`AbortController`/`AbortSignal` existed as globals (so `new AbortController()` didn't throw), but
+`fetch` never read `opts.signal` — so `controller.abort()` did **nothing** to the request. This is the
+single most common way modern code cancels a fetch: every React `useEffect(() => { const c = new
+AbortController(); fetch(url, {signal: c.signal})…; return () => c.abort(); }, […])` depends on it, and
+React 18 StrictMode's deliberate double-mount *relies* on the first request being cancelled — without
+it the component sets state after unmount (the "can't update state on an unmounted component" race) and
+StrictMode's effect-cleanup contract is silently broken.
+
+**`fetch` now honours the signal, in three cases:**
+- **Already aborted** when `fetch` is called → returns a **synchronously rejected** Promise and queues
+  **no** network request at all (the host never sees it).
+- **Aborted in flight** → the Promise rejects with the signal's `reason`, and the pending callback is
+  **dropped from `__fetchCb`** so a later host delivery (`__deliverFetch(id, …)`) finds no callback and
+  is a no-op — the response body can never resolve an already-cancelled fetch.
+- **Never aborted** → unchanged; the request queues and resolves normally (an empty/absent signal adds
+  nothing).
+
+**The reject reason is a `DOMException` named `AbortError`,** per the Fetch/DOM standard — code
+everywhere branches on `err.name === 'AbortError'` to tell a *cancel* apart from a real network
+failure (a cancel is expected and swallowed; a failure is surfaced). The default abort reason in both
+`AbortController.prototype.abort()` and the static `AbortSignal.abort()` was `new Error('AbortError')`
+(whose `.name` is `'Error'`, not `'AbortError'`) — now a `DOMException(…, 'AbortError')`. Residue:
+`XMLHttpRequest.prototype.abort()` is still a no-op (the XHR cancel path is a separate, rarer lever —
+`fetch` is what the frameworks use), and `AbortSignal.timeout()` marks the signal aborted but does not
+yet reject an in-flight fetch bound to it (needs the timer to route through the same drop path).

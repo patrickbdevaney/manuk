@@ -7208,3 +7208,38 @@ events (div-onclick/SPA buttons) — cannot be cleanly gated in the wall: the JS
 `--features spidermonkey`, but `verify.sh` runs the `manuk-agent` suite under default features (no
 JS), and the only spidermonkey JS gate it runs is page-crate-level. Deferred to a session that can add
 a page-level or dedicated agent JS gate; noted here per the harness-is-observer-owned rule.
+
+## Tick 172 — fetch() honours AbortController.signal (JS platform — request cancellation) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (T2 JS-platform — fetch request cancellation, the AbortSignal the
+frameworks all pass). WIKI: docs/wiki/networking.md "`fetch(url, {signal})` honours AbortController —
+cancellation is not a no-op". Continues the fetch-surface arc (t148 request headers, t170 CORS, t171
+response headers) but on the CANCELLATION axis, fully manuk-owned JS glue (NOT stylo).**
+
+`AbortController`/`AbortSignal` existed as globals, but `globalThis.fetch` never read `opts.signal` —
+so `controller.abort()` did nothing. Every React `useEffect` cleanup (`return () => c.abort()`) and
+React-18 StrictMode's double-mount rely on the abort actually cancelling the request; without it a
+component sets state after unmount (the classic race) and StrictMode's cleanup contract is silently
+broken.
+
+**Fix (engine/js/event_loop.rs, the JS prelude).** `fetch(url, opts)` now honours `opts.signal`: an
+**already-aborted** signal returns a synchronously-rejected Promise and queues **no** request
+(`__pendingFetches` untouched, the host never sees it); an **in-flight** abort rejects the Promise with
+`signal.reason` and **deletes `__fetchCb[id]`** so a late `__deliverFetch(id, …)` finds no callback and
+is a no-op (the body cannot resolve a cancelled fetch); a never-aborted fetch is unchanged (absent
+signal adds nothing). The reject reason is now a `DOMException` named `AbortError` — both
+`AbortController.prototype.abort()` and static `AbortSignal.abort()` defaulted to `new
+Error('AbortError')` whose `.name` is `'Error'`, so `err.name === 'AbortError'` (which every request lib
+checks to tell a cancel from a failure) was false; now a real `DOMException(…, 'AbortError')`.
+
+**Gate.** `js_conformance_suite` scenario (25): (a) `AbortSignal.abort().reason.name === 'AbortError'`;
+(b) a fetch on a pre-aborted signal queues NO request (`take_fetches().len() == 1`, only the non-aborted
+`/inflight` url present) and its `.catch` sees `AbortError`; (c) a fetch aborted in flight, then
+delivered LATE with body `LATEBODY`, ends `AbortError` not `RESOLVED:LATEBODY` — proving the dropped
+callback makes the late delivery a no-op. RED against baseline on all three (pre-abort would queue `/pre`
+→ len 2; in-flight would resolve the body; reason name would be `Error`). Verified: suite passes
+(spidermonkey, isolated); manuk-js `fetch_and_xhr_through_the_loop` + `…_carry_request_headers` pass
+isolated (no-signal path unchanged); HANG/CRASH 0. Residue: `XMLHttpRequest.abort()` is still a no-op
+(rarer; frameworks use fetch), and `AbortSignal.timeout()` marks aborted but doesn't yet reject an
+in-flight fetch bound to it (needs the timer to route through the same drop path). Mechanism:
+`fetch` signal wiring + `abort()` DOMException reason.

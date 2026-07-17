@@ -4515,6 +4515,64 @@ mod js_interactive_tests {
         );
         drop(page24);
 
+        // (25) **`fetch(url, {signal})` honours AbortController** — the request-cancellation every
+        // React `useEffect` cleanup (and StrictMode's double-mount) relies on. Three behaviours, all
+        // observed after a single event-loop drain: (a) the default abort reason is a DOMException
+        // named 'AbortError'; (b) a fetch on an *already-aborted* signal rejects and queues **no**
+        // network request; (c) a fetch aborted **in flight** rejects, and its callback is dropped so a
+        // late host delivery cannot resolve it (the response body must never reach the page).
+        let html25 = r#"<!doctype html><html><body>
+            <div id="out" data-pre="pending" data-reason="?" data-inflight="pending">loading</div>
+            <script>
+              var el = document.getElementById('out');
+              el.setAttribute('data-reason', AbortSignal.abort().reason.name);
+              var c1 = new AbortController(); c1.abort();
+              fetch('/pre', {signal: c1.signal}).then(
+                function(){ el.setAttribute('data-pre', 'RESOLVED'); },
+                function(e){ el.setAttribute('data-pre', e && e.name); });
+              var c2 = new AbortController();
+              fetch('/inflight', {signal: c2.signal}).then(
+                function(t){ el.setAttribute('data-inflight', 'RESOLVED:' + t); },
+                function(e){ el.setAttribute('data-inflight', e && e.name); });
+              c2.abort();
+            </script></body></html>"#;
+        let mut page25 = Page::load(html25, "https://ex.test/", &fonts, 800.0);
+        let out25 = manuk_css::query_selector_all(page25.dom(), page25.dom().root(), "#out")[0];
+        // (b) The pre-aborted fetch queued NO request; only the in-flight one reached the host.
+        let reqs25 = page25.take_fetches();
+        assert_eq!(
+            reqs25.len(),
+            1,
+            "a pre-aborted fetch must not queue a network request"
+        );
+        assert_eq!(
+            &reqs25[0].1, "/inflight",
+            "only the non-pre-aborted request is queued"
+        );
+        // Deliver the in-flight request LATE — after it was aborted. Its callback was dropped on
+        // abort, so this must be a no-op (the body must not reach the page). This also drains the loop,
+        // running the two `.catch` handlers.
+        page25.resolve_fetch(reqs25[0].0, 200, "LATEBODY", &[], &fonts, 800.0);
+        assert_eq!(
+            page25
+                .dom()
+                .element(out25)
+                .and_then(|e| e.attr("data-reason")),
+            Some("AbortError"),
+            "the default abort reason is a DOMException named 'AbortError'"
+        );
+        assert_eq!(
+            page25.dom().element(out25).and_then(|e| e.attr("data-pre")),
+            Some("AbortError"),
+            "a fetch on an already-aborted signal rejects with AbortError"
+        );
+        assert_eq!(
+            page25.dom().element(out25).and_then(|e| e.attr("data-inflight")),
+            Some("AbortError"),
+            "an in-flight abort rejects, and the late delivery is dropped (body 'LATEBODY' never resolves it)"
+        );
+        drop(page25);
+
         // Tear SpiderMonkey down before this process exits, exactly as the shell and the harness do.
         // Every page above is out of scope by now, so no rooted object outlives its runtime. Leaving
         // the engine up means its C++ static destructors run at exit against a live context and

@@ -323,6 +323,7 @@
   - L275 · Cross-site POST navigation withholds Lax/Strict (the form-POST CSRF defence)
   - L290 · CORS is a READ barrier, and a missing check leaks every cross-origin body
   - L320 · Response headers are readable — headers.get() is not hard-coded to null
+  - L354 · fetch(url, {signal}) honours AbortController — cancellation is not a no-op
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -411,4 +412,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-338 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+339 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

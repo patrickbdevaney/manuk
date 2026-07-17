@@ -181,14 +181,35 @@ const PRELUDE: &str = r#"
         }
         return out.join("\x02");
     };
-    // fetch(url[, {method, headers, body}]) -> Promise<Response-like>.
+    // fetch(url[, {method, headers, body, signal}]) -> Promise<Response-like>.
+    // **`signal` is honoured** — every modern `fetch` passes an `AbortController.signal`, and React's
+    // `useEffect` cleanup (and StrictMode's double-mount) *depends* on the abort actually cancelling
+    // the request. An already-aborted signal rejects synchronously without ever queuing the request; an
+    // abort that fires while the request is in flight rejects the Promise with the signal's reason (a
+    // DOMException named 'AbortError') and drops the pending callback so a late host delivery is a
+    // no-op (it cannot resolve an already-rejected fetch).
     globalThis.fetch = function(url, opts) {
+        var signal = opts && opts.signal;
+        if (signal && signal.aborted) {
+            return Promise.reject(signal.reason !== undefined ? signal.reason
+                : new DOMException('signal is aborted without reason', 'AbortError'));
+        }
         var id = ++__fetchId;
         var method = (opts && opts.method) || "GET";
         var body = (opts && opts.body != null) ? String(opts.body) : "";
         var hdrs = (opts && opts.headers) ? __encHeaders(opts.headers) : "";
         __pendingFetches.push(id + "\x01f\x01" + method + "\x01" + url + "\x01" + hdrs + "\x01" + body);
-        return new Promise(function(resolve, reject){ __fetchCb[id] = { resolve: resolve, reject: reject }; });
+        return new Promise(function(resolve, reject){
+            __fetchCb[id] = { resolve: resolve, reject: reject };
+            if (signal) {
+                signal.addEventListener('abort', function(){
+                    if (!__fetchCb[id]) { return; }   // already settled — do not double-reject
+                    delete __fetchCb[id];             // a later __deliverFetch(id, …) now finds no callback
+                    reject(signal.reason !== undefined ? signal.reason
+                        : new DOMException('signal is aborted without reason', 'AbortError'));
+                });
+            }
+        });
     };
     globalThis.__deliverFetch = function(id, status, text, headers) {
         var cb = __fetchCb[id]; if (!cb) return; delete __fetchCb[id];
@@ -1267,7 +1288,10 @@ const PRELUDE: &str = r#"
           if (this.aborted) { throw this.reason; }
         };
         globalThis.AbortSignal.abort = function(reason) {
-          var s = new AbortSignal(); s.aborted = true; s.reason = reason; return s;
+          var s = new AbortSignal(); s.aborted = true;
+          s.reason = reason !== undefined ? reason
+            : new DOMException('signal is aborted without reason', 'AbortError');
+          return s;
         };
         globalThis.AbortSignal.timeout = function(ms) {
           var s = new AbortSignal();
@@ -1281,7 +1305,11 @@ const PRELUDE: &str = r#"
           var s = this.signal;
           if (s.aborted) { return; }
           s.aborted = true;
-          s.reason = reason !== undefined ? reason : new Error('AbortError');
+          // The default abort reason is a DOMException named 'AbortError' (Fetch/DOM standard) — a
+          // `fetch()` rejected by an abort must have `err.name === 'AbortError'`, which React's effect
+          // cleanup and every request library check for to distinguish a cancel from a real failure.
+          s.reason = reason !== undefined ? reason
+            : new DOMException('signal is aborted without reason', 'AbortError');
           var e = { type: 'abort', target: s };
           if (typeof s.onabort === 'function') { try { s.onabort(e); } catch (x) {} }
           s.__ls.slice().forEach(function(f){ try { f(e); } catch (x) {} });
