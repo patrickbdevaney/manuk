@@ -355,6 +355,18 @@ pub fn take_window_opens() -> Vec<(u64, String)> {
     Vec::new()
 }
 
+/// `navigator.clipboard.writeText(...)` calls the page made since the last drain (oldest first). The
+/// host writes each to the OS clipboard; the last wins. Empty without the JS feature.
+#[cfg(feature = "_sm")]
+pub fn take_clipboard_writes() -> Vec<String> {
+    dom_bindings::take_pending_clipboard_writes()
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn take_clipboard_writes() -> Vec<String> {
+    Vec::new()
+}
+
 /// Allocate the next process-unique window id (for ordinary, non-`window.open` tabs), shared
 /// with the id space `window.open` draws from. `0` without the JS feature (unused there).
 #[cfg(feature = "_sm")]

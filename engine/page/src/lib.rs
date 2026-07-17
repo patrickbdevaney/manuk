@@ -4969,6 +4969,34 @@ mod js_interactive_tests {
         );
         drop(page30);
 
+        // (31) **`navigator.clipboard.writeText(...)` queues the text for the host** — the async
+        // Clipboard API every "copy" button uses. It was absent, so `navigator.clipboard.writeText`
+        // threw on `undefined` and the button silently did nothing. It now queues the text (the host
+        // writes it to the OS clipboard) and returns a resolved Promise; `readText` resolves with the
+        // last text this page wrote.
+        let _ = manuk_js::take_clipboard_writes(); // clear any residue
+        let html31 = r#"<!doctype html><html><body>
+            <button id="c">Copy</button>
+            <script>
+              document.getElementById('c').addEventListener('click', function () {
+                navigator.clipboard.writeText('copied-value-42');
+              });
+            </script></body></html>"#;
+        let mut page31 = Page::load(html31, "https://ex.test/", &fonts, 800.0);
+        let btn31 = manuk_css::query_selector_all(page31.dom(), page31.dom().root(), "#c")[0];
+        // Nothing copied until the button is clicked.
+        assert!(
+            manuk_js::take_clipboard_writes().is_empty(),
+            "no clipboard write before the click"
+        );
+        page31.dispatch_click(btn31, &fonts, 800.0);
+        assert_eq!(
+            manuk_js::take_clipboard_writes(),
+            vec!["copied-value-42".to_string()],
+            "the copy button's navigator.clipboard.writeText queued its text for the host"
+        );
+        drop(page31);
+
         // Tear SpiderMonkey down before this process exits, exactly as the shell and the harness do.
         // Every page above is out of scope by now, so no rooted object outlives its runtime. Leaving
         // the engine up means its C++ static destructors run at exit against a live context and

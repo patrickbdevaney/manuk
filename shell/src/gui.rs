@@ -577,6 +577,8 @@ impl App {
         self.apply_view_requests();
         // A handler may have called window.open — open those as new tabs.
         self.handle_window_opens();
+        // A handler may have copied to the clipboard (a "copy" button) — flush it to the OS.
+        self.pump_clipboard();
         // A handler may have issued fetch/XHR — perform them and settle the page's Promises.
         self.pump_fetches();
         // A handler may have routed client-side (history.pushState) — reflect it in the chrome.
@@ -2451,6 +2453,18 @@ impl App {
 
     /// Open any URLs the page requested via `window.open(...)` as new tabs (resolved against
     /// the current page), focusing the last one — the multi-window/OAuth-popup pattern.
+    /// Drain `navigator.clipboard.writeText(...)` calls a handler made and write them to the real OS
+    /// clipboard — how a page's "copy" button actually copies. Last write wins (one clipboard value).
+    fn pump_clipboard(&mut self) {
+        for text in manuk_js::take_clipboard_writes() {
+            self.set_clipboard(&text);
+            tracing::info!(
+                len = text.len(),
+                "navigator.clipboard.writeText -> OS clipboard"
+            );
+        }
+    }
+
     fn handle_window_opens(&mut self) {
         let opener_tab = self.tab_id;
         let opener_win = self.win_id_for(opener_tab);

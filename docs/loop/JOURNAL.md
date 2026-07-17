@@ -7424,3 +7424,32 @@ against baseline (no `dispatch_key`). Verified: suite passes (spidermonkey, isol
 green; HANG/CRASH 0. Residue: `keyup` not yet fired (the pre-empt-the-default half is the value);
 `event.code` equals `key` for named keys, approximates for characters; unsurfaced keys (function keys,
 IME) dispatch nothing. Mechanism: `Page::dispatch_key` + shell key-handler pre-dispatch.
+
+## Tick 179 — navigator.clipboard.writeText: the "copy" button actually copies (JS platform / shell) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (JS platform + shell — the async Clipboard API bridged to the OS
+clipboard). WIKI: docs/wiki/interaction-surface.md "`navigator.clipboard.writeText` — the "copy"
+button actually copies".**
+
+Copy-to-clipboard is one of the most common buttons on the web (code-block copy, copy link/API
+key/coupon) and they all call `navigator.clipboard.writeText(text)`. `navigator.clipboard` was ABSENT,
+so the call threw on `undefined` inside the click handler and the button silently did nothing — a dead
+affordance (§1.8).
+
+**Fix.** The shell already owns a real OS clipboard (`arboard`); this bridges the page to it with the
+`window.open`/`postMessage` host-queue pattern. A native `__clipboardWrite(text)` (dom_bindings) pushes
+onto a thread-local `PENDING_CLIPBOARD`; `navigator.clipboard.writeText` (JS, defined on the existing
+`navigator` only when the `__clipboardWrite` bridge exists) calls it and returns the spec's resolved
+`Promise<void>`; `manuk_js::take_clipboard_writes()` drains it; the shell's `pump_clipboard` (beside
+`handle_window_opens`, called after a click dispatch) writes the last value to the OS clipboard.
+`readText` resolves with the last text this page wrote (within-page round-trip) but does NOT read the
+OS clipboard (a permission-gated capability — pretending would be a lie).
+
+**Gate.** `js_conformance_suite` scenario (31): a copy button whose click calls
+`writeText('copied-value-42')`; nothing queued before the click, and after `dispatch_click`,
+`take_clipboard_writes()` returns exactly `["copied-value-42"]`. RED against baseline (`navigator.
+clipboard` undefined → writeText throws → nothing queued). Verified: suite passes (spidermonkey,
+isolated); manuk-shell 58+2 green; HANG/CRASH 0. Residue: OS-clipboard `readText`, `navigator.
+permissions`, legacy `document.execCommand('copy')`, and clipboard writes off the click path (timer /
+fetch reaction) are not yet pumped. Mechanism: `__clipboardWrite` native + `navigator.clipboard` +
+shell `pump_clipboard`.

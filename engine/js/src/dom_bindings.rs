@@ -5991,6 +5991,14 @@ pub unsafe fn install(
     JS_DefineFunction(
         &mut wrap_cx(cx),
         global.handle(),
+        c"__clipboardWrite".as_ptr(),
+        host_fn!(clipboard_write),
+        1,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
         c"__historyPush".as_ptr(),
         host_fn!(history_push),
         3,
@@ -8057,6 +8065,25 @@ const WINDOW_PRELUDE: &str = r#"
             // `cookieEnabled` is now TRUE, because it IS: we have a real per-origin cookie jar. Saying
             // `false` invites a page to take its no-cookie path, which is a different site.
         };
+        // `navigator.clipboard.writeText` — the async Clipboard API every "copy" button uses (copy a
+        // code block, a share link, an API key). It was ABSENT, so `navigator.clipboard.writeText(...)`
+        // threw on `undefined` and the button did nothing. `writeText` queues the text for the host to
+        // put on the real OS clipboard and resolves (as the spec's Promise<void>); `readText` resolves
+        // with the last text this page wrote (the OS-clipboard READ is a host-permission follow-on, so
+        // it does not pretend to see what another app copied). Only define it when missing, and only
+        // when the host provided the `__clipboardWrite` bridge.
+        if (!g.navigator.clipboard && typeof g.__clipboardWrite === 'function') {
+            g.__clipboardText = '';
+            g.navigator.clipboard = {
+                writeText: function (t) {
+                    t = String(t == null ? '' : t);
+                    g.__clipboardText = t;
+                    try { g.__clipboardWrite(t); } catch (e) {}
+                    return Promise.resolve();
+                },
+                readText: function () { return Promise.resolve(g.__clipboardText || ''); }
+            };
+        }
         // window.open → the host opens a real tab/window (OAuth-popup pattern). Returns a
         // stub window handle so `var w = window.open(...)` and `w.close()` work.
         if (typeof g.open !== 'function') {
@@ -8653,6 +8680,11 @@ thread_local! {
     /// `postMessage` sends since the last drain: `(target_win, json, origin, source_win)`.
     static PENDING_MESSAGES: std::cell::RefCell<Vec<(u64, String, String, u64)>> =
         const { std::cell::RefCell::new(Vec::new()) };
+    /// `navigator.clipboard.writeText(...)` calls since the last drain, oldest first. The host
+    /// writes each to the real OS clipboard — a page cannot touch the clipboard directly, so it goes
+    /// through the host exactly like `window.open`.
+    static PENDING_CLIPBOARD: std::cell::RefCell<Vec<String>> =
+        const { std::cell::RefCell::new(Vec::new()) };
 }
 
 /// Allocate the next process-unique window id (host side, for ordinary tabs).
@@ -8667,6 +8699,12 @@ pub fn next_window_id() -> u64 {
 /// `window.open` requests since the last drain, each `(win_id, url)` (host side).
 pub fn take_pending_window_opens() -> Vec<(u64, String)> {
     PENDING_OPENS.with(|q| std::mem::take(&mut *q.borrow_mut()))
+}
+
+/// `navigator.clipboard.writeText(...)` calls since the last drain (oldest first). The host writes
+/// each to the OS clipboard; the last one wins, as a real clipboard holds a single value.
+pub fn take_pending_clipboard_writes() -> Vec<String> {
+    PENDING_CLIPBOARD.with(|q| std::mem::take(&mut *q.borrow_mut()))
 }
 
 /// `postMessage` sends since the last drain, each `(target_win, json, origin, source_win)`.
@@ -8687,6 +8725,15 @@ unsafe fn window_open(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool 
         Some(v) => *vp = v,
         None => *vp = NullValue(),
     }
+    true
+}
+
+/// `__clipboardWrite(text)` — queue a `navigator.clipboard.writeText` for the host to write to the
+/// real OS clipboard (a page cannot reach the clipboard directly).
+unsafe fn clipboard_write(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let text = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    PENDING_CLIPBOARD.with(|q| q.borrow_mut().push(text));
+    *vp = UndefinedValue();
     true
 }
 

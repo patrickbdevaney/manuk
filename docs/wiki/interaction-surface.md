@@ -470,3 +470,26 @@ Gated by `js_conformance` scenario 30: a handler reads `event.key`/`event.keyCod
 fired (the shell fires `keydown` only — the pre-empt-the-default half is what the value is); `event.code`
 (physical key) equals `key` for named keys but approximates for characters; keys the shell does not
 surface (function keys, IME composition) dispatch nothing. [[dom-semantics]]
+
+## `navigator.clipboard.writeText` — the "copy" button actually copies (tick 179)
+
+Copy-to-clipboard is one of the most common single-purpose buttons on the web: the code-block copy
+icon, "copy share link", "copy API key", "copy to clipboard" on a coupon. They all call
+`navigator.clipboard.writeText(text)`. `navigator.clipboard` was **absent**, so that call threw on
+`undefined` inside the click handler and the button silently did nothing — a dead affordance, the
+exact §1.8 failure the project treats as "broken to the user."
+
+The shell already owns a real OS clipboard (`arboard`, wired to Ctrl+C/V). The fix bridges the page to
+it with the host-queue pattern used by `window.open`/`postMessage`: a native `__clipboardWrite(text)`
+pushes onto a process-thread-local queue; `navigator.clipboard.writeText` calls it and returns the
+spec's resolved `Promise<void>`; the shell drains the queue after a click dispatch (`pump_clipboard`,
+beside `handle_window_opens`) and writes the last value to the OS clipboard. `readText` resolves with
+the last text this page wrote — a genuine within-page round-trip — but does **not** read the OS
+clipboard (reading what another app copied is a permission-gated capability, a follow-on; pretending
+to would be a lie, not a feature).
+
+Gated by `js_conformance` scenario 31: a copy button whose click calls `writeText('copied-value-42')`;
+after `dispatch_click`, `take_clipboard_writes()` returns exactly that text (and nothing before the
+click). Residue: OS-clipboard `readText`, the `permissions` query, and the legacy
+`document.execCommand('copy')` path are not wired; a write triggered off the click path (a timer, a
+fetch reaction) is not yet pumped. [[js-engine]]

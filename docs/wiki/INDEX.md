@@ -238,6 +238,7 @@
   - L400 · Typing must fire an input event, or every controlled component reverts the keystroke (tick 175)
   - L428 · Blur fires change then blur — field-level validation runs on commit (tick 176)
   - L450 · keydown fires with the real key, and preventDefault() suppresses the default (tick 178)
+  - L474 · navigator.clipboard.writeText — the "copy" button actually copies (tick 179)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -417,4 +418,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-344 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+345 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
