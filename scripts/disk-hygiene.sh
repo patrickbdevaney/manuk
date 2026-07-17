@@ -41,6 +41,22 @@ echo "  · incremental fragments (RAM-resident; flushed, not written to disk at 
 echo "  · target/*/deps orphans — files unread by any build in >1 day (not in the current build's set)"
 find target/debug/deps target/release/deps -type f -atime +1 -delete 2>/dev/null
 
+# ── ORPHAN TEST-BINARY PRUNE (observer, tick 147) — the atime prune above MISSES the biggest bloat: every
+# engine change rebuilds the ~65 gate test binaries under a NEW fingerprint hash, orphaning the old-hash copy,
+# and each mozjs-static bin is 350-560MB. ~150 accumulate = ~54G that `atime +1` never catches (all touched
+# THIS session). Cargo never GCs them. Keep only the NEWEST-mtime executable per name-stem in deps/ (that IS
+# the current gate bin the next verify links); delete older-hash duplicates. Provably-superseded orphans only,
+# so it costs NO cold rebuild. Reclaimed ~40G/pass at tick 147 (debug 72G->36G, /home 91%->77%). Runs every
+# fire, BEFORE the >=95% debug-purge below — so it frees the space first and the cold-purge stays a last resort.
+echo "  · target/*/deps orphan test-binaries (old-hash duplicates; keep newest per name — the recurring bloat)"
+for _d in target/debug/deps target/release/deps; do
+  [ -d "$_d" ] || continue
+  for _stem in $(find "$_d" -maxdepth 1 -type f -executable ! -name '*.*' -printf '%f\n' 2>/dev/null | sed -E 's/-[0-9a-f]{8,}$//' | sort -u); do
+    find "$_d" -maxdepth 1 -type f -executable -name "${_stem}-*" ! -name '*.*' -printf '%T@ %p\n' 2>/dev/null \
+      | sort -rn | tail -n +2 | cut -d' ' -f2- | xargs -r rm -f
+  done
+done
+
 # GRANULAR DEBUG-TREE POLICY (observer, tick 119). The debug tree is NOT disposable: verify.sh's gates run
 # `cargo test` in DEBUG, so `rm -rf target/debug` forces a full cold rebuild on the very NEXT verify. The
 # disk oscillates at 84-91%, so the old `pct >= 85` rule fired almost every tick — turning a ~10min warm

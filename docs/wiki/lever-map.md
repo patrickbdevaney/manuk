@@ -30,6 +30,39 @@ measure (fixable in a tick), not a Taffy gap.
 ## Forms (server-rendered actor tier)
 12. **Form POST navigation + constraint validation (+Selection, contenteditable)** [forms, M] — bar: <form method=POST> real navigation (net POSTs via send_raw), POST **refused loudly never downgraded to GET**; required/type=email/:invalid/checkValidity/reportValidity block submit; Selection stub->real. SPA half done (submit+preventDefault+FormData). Ranked below read/scroll tasks. Depends: 2.
 
+## Full-tier extension (after RENDER 1–9 + MEDIA M0–M4 — the sufficient daily-driver set)
+Master: reference/cap-research/ROADMAP.md. Lowest-numbered unmet wins; falsifiable bar, NOT WPT %.
+Three of these (U-1/U-2/U-3) are PULL-FORWARD: S-sized, dependency-free, take them on any blocked-lever tick.
+⚑ RE-BASELINE (stale-item correction, tick 147): step 6 grid-template-areas HAS a taffy consumer now, step 8
+z-index stacking is PARTLY shipped, and M0 poster paints — PROBE (`--show-failures`) before rebuilding these
+three; the synthesis found them further along than the step text above says.
+
+- **U-1 fetch req body+headers** [net/js, S] — bar: POST w/ JSON body + Authorization reaches the socket; response.headers.get('content-type') != null. Closure Fn(&str,&str) at event_loop.rs:1760 drops body+headers (silent-fail class). Depends: none.
+- **U-2 streaming download-to-disk** [net, S] — bar: multi-GB HF *.safetensors streams to disk (no OOM), no 30s timeout, cross-host 302 followed. Route attachments through fetch_streaming, not fetch_document (page/lib.rs:3363). Depends: none. (best ROI/tick — the named download requirement.)
+- **U-3 SameSite/prefix enforcement** [net, S] — bar: SameSite=Lax cookie NOT on cross-site subresource, IS on top-level OAuth redirect; __Host-/__Secure- enforced at set-time. Wire the dead storage.rs (0 callers) into send_once (lib.rs:952). Depends: none.
+- **T0.4 CORS enforcement** [net, M] — bar: cross-origin fetch w/o Access-Control-Allow-Origin rejects (opaque/error); preflight for non-simple; credentials mode honored. 0 hits repo-wide. Depends: none.
+- **T1.b/c object-fit + aspect-ratio** [layout, S] — bar: object-fit:cover crops poster/img; aspect-ratio:16/9 card sizes. Depends: 1. (aspect-ratio mapping LANDED t145; object-fit still open.)
+- **T1.d–f web-text fidelity** [css/text, M–L] — bar: unicode-range gates Google-Font subsets; @font-face weight/style/size-adjust honored; text-transform:uppercase changes width; overflow-wrap:anywhere forces break. unicode-range = 0 hits. Depends: 1,4.
+- **T2.1 boot-global sweep** [js, S] — bar: Vue3 createApp boots (Proxy traps correct); no ReferenceError at module eval on corpus. Verify-only (most already wired). Depends: none.
+- **T2.2 crypto.subtle + CSPRNG** [js, M] — bar: crypto.subtle.digest works; getRandomValues cryptographically secure (off Math.random, event_loop.rs:1319). Depends: none.
+- **T2.4 ReadableStream + response.body** [js, M] — bar: for-await over resp.body streams; LLM token-stream UI works. body hardcoded null today. Depends: none.
+- **T2.5 :host/::part selectors** [css, M] — bar: web-component :host{display:block} applies; ::part() themes. 0 hits — highest-leverage shadow-DOM fix (YouTube/Polymer/Lit visual). Depends: css shadow scoping (done).
+- **T2.6 custom-element lifecycle** [dom/js, L] — bar: el instanceof MyElement true; disconnectedCallback fires; slotchange dispatches; HTMLSlotElement.assignedNodes(). Needs per-tag reflector prototypes (architectural). Depends: T2.5.
+- **T4.1 POST navigation** [forms, S–M] — bar: <form method=POST> navigates; refused-LOUD never GET-downgrade. Net already POSTs (gui.rs:2282); wire agent/forms.rs + shell/gui.rs. Depends: 2.
+- **T4.2 multipart→nav + FormData files** [forms/net, M] — bar: résumé PDF uploads via <input type=file>; fetch(body:formData) sends bytes (urlencodes files today = silent drop, dom_bindings.rs:7765). Encoder+builder exist, unwired. Depends: T4.1.
+- **T4.3 constraint validation** [dom/css, M] — bar: required/type=email/pattern block submit; :invalid matches (hard-coded valid, stylo_dom.rs:362). Depends: none.
+- **T5.1 shell persistence** [shell, S–M] — bar: bookmarks.json + settings.json + (url,title,visit_count,last_visit) history table survive restart (all evaporate today). History table is the omnibox prerequisite. Depends: none.
+- **T6.1 agent actuation** [agent/page, M] — bar: agent click on <div onclick> SPA button runs the JS handler; typing fires input/keydown. Route AgentBrowser.activate (agent/lib.rs:664) through Page::dispatch_click (already works in GUI). HIGHEST-LEVERAGE agentic fix. Depends: none.
+- **T6.2 BiDi loopback+auth** [bidi, S] — bar: non-loopback bind refused; handshake token-checked (server.rs:37 raw TcpListener). Depends: none.
+- **T4.4 password save/fill UX** [shell/store, L] — bar: save-prompt on login; exact-origin fill picker; keyring-unlock flow. Crypto DONE (store/lib.rs, > Chromium-Linux); iceberg is UX. The named "stay logged in via passwords" requirement. Depends: T4.1, T5.1.
+
+## Bot-wall posture (separate track — NOT engine capability; user scoped OUT)
+API-first (Greenhouse boards-api / Lever postings API = public no-auth JSON, zero fingerprint work);
+spoof a Chrome UA by default (get past naive UA sniffers only — NOT fingerprint-matching); real-Chrome/CDP
+fallback for IG/X/YouTube; accept the gate + Widevine permanent gap. Do NOT fingerprint-match Manuk's own
+stack: internal inconsistency (TLS=rustls, h2=hyper, canvas=tiny-skia, UA=Chrome) is worse than an honest
+"unknown client", and it's a perishable treadmill against monthly Chrome drift + immune behavioral/reputation layers.
+
 ## Agentic fallbacks (the a11y tree decouples driving from rendering — v1 ships while CSS imperfect)
 - FB1 layout imperfect -> target by role+name not pixel (default path, no work).
 - FB2 box-less element -> DOM click/.focus()+value by node id via JS engine (needs script.evaluate, P-B) — most important gap.

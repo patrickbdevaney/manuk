@@ -251,7 +251,7 @@ if [ "$SHELL_FAILED" -eq 0 ] && [ -n "$AFF" ]; then ok "affordances (full shell 
 head_ "G6 · clickability (a link the browser cannot find is a link the user cannot click)"
 G6URL="${MANUK_CLICK_URL:-https://en.wikipedia.org/wiki/Terrier}"
 G6HTML="/tmp/manuk-g6.html"
-if curl -sL "$G6URL" -o "$G6HTML" 2>/dev/null && [ -s "$G6HTML" ]; then
+if curl -sL --max-time 30 "$G6URL" -o "$G6HTML" 2>/dev/null && [ -s "$G6HTML" ]; then
   CLK=$(cargo run -q -p manuk-wpt --release -- hittest --html "$G6HTML" --url "$G6URL" 2>/dev/null | grep -E "CLICKABILITY|MISSED|links on page")
   MISS=$(echo "$CLK" | grep -oE 'MISSED \(unclickable\): [0-9]+' | grep -oE '[0-9]+$' || echo 0)
   PCT=$(echo "$CLK" | grep -oE 'CLICKABILITY: [0-9.]+' | grep -oE '[0-9.]+' || echo 0)
