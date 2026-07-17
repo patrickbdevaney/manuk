@@ -5935,6 +5935,14 @@ pub unsafe fn install(
     JS_DefineFunction(
         &mut wrap_cx(cx),
         global.handle(),
+        c"__subtleDigestHex".as_ptr(),
+        host_fn!(host_subtle_digest_hex),
+        2,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
         c"__scrollState".as_ptr(),
         host_fn!(host_scroll_state),
         0,
@@ -8450,6 +8458,83 @@ unsafe fn host_crypto_random_hex(cx: *mut RawJSContext, argc: u32, vp: *mut Valu
         Err(_) => return_string(cx, vp, ""),
     }
     true
+}
+
+/// `__subtleDigestHex(algo, inputHex)` — compute a SubtleCrypto digest and return it hex-encoded.
+/// `algo` is the normalised algorithm name (`SHA-1`/`SHA-256`/`SHA-384`/`SHA-512`); `inputHex` is the
+/// message bytes hex-encoded (the shim hands bytes across as hex to keep the FFI a single string-in /
+/// string-out, the same shape as `__cryptoRandomHex`). An unknown algorithm or malformed hex returns
+/// the empty string, which the shim turns into a rejected Promise (`NotSupportedError`). The hashes are
+/// pure-Rust RustCrypto (`sha2`/`sha1`) — no OpenSSL, no C.
+unsafe fn host_subtle_digest_hex(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let algo = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    let input_hex = arg_string(cx, vp, argc, 1).unwrap_or_default();
+    let Some(bytes) = decode_hex(&input_hex) else {
+        return_string(cx, vp, "");
+        return true;
+    };
+    let out = match algo.as_str() {
+        "SHA-1" => {
+            use sha1::Digest as _;
+            let mut h = sha1::Sha1::new();
+            h.update(&bytes);
+            hex_encode(&h.finalize())
+        }
+        "SHA-256" => {
+            use sha2::Digest as _;
+            let mut h = sha2::Sha256::new();
+            h.update(&bytes);
+            hex_encode(&h.finalize())
+        }
+        "SHA-384" => {
+            use sha2::Digest as _;
+            let mut h = sha2::Sha384::new();
+            h.update(&bytes);
+            hex_encode(&h.finalize())
+        }
+        "SHA-512" => {
+            use sha2::Digest as _;
+            let mut h = sha2::Sha512::new();
+            h.update(&bytes);
+            hex_encode(&h.finalize())
+        }
+        _ => String::new(),
+    };
+    return_string(cx, vp, &out);
+    true
+}
+
+/// Lowercase-hex-encode a byte slice.
+fn hex_encode(bytes: &[u8]) -> String {
+    use std::fmt::Write as _;
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        let _ = write!(s, "{b:02x}");
+    }
+    s
+}
+
+/// Decode an even-length ASCII-hex string to bytes; `None` on odd length or a non-hex digit.
+fn decode_hex(s: &str) -> Option<Vec<u8>> {
+    let b = s.as_bytes();
+    if b.len() % 2 != 0 {
+        return None;
+    }
+    let mut out = Vec::with_capacity(b.len() / 2);
+    let nib = |c: u8| -> Option<u8> {
+        match c {
+            b'0'..=b'9' => Some(c - b'0'),
+            b'a'..=b'f' => Some(c - b'a' + 10),
+            b'A'..=b'F' => Some(c - b'A' + 10),
+            _ => None,
+        }
+    };
+    let mut i = 0;
+    while i < b.len() {
+        out.push((nib(b[i])? << 4) | nib(b[i + 1])?);
+        i += 2;
+    }
+    Some(out)
 }
 
 /// The honest `navigator.userAgent` — same form as the network `User-Agent` (Axis F:

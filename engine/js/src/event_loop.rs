@@ -1393,6 +1393,37 @@ const PRELUDE: &str = r#"
               if (i === 3 || i === 5 || i === 7 || i === 9) { s += '-'; }
             }
             return s;
+          },
+          // SubtleCrypto — the digest slice. `crypto.subtle.digest(algo, data)` is what Subresource
+          // Integrity checks, content-addressed caches and many auth libraries call; without it,
+          // `crypto.subtle` was `undefined` and `crypto.subtle.digest(...)` threw. Hashing runs in the
+          // host (`__subtleDigestHex`, pure-Rust RustCrypto) and the result is wrapped in a resolved
+          // Promise, matching the async signature real code awaits. Only digest is provided — sign /
+          // encrypt / deriveKey stay absent (honestly, so a page's `if (crypto.subtle.encrypt)` guard
+          // takes its fallback rather than getting a broken stub).
+          subtle: {
+            digest: function(algorithm, data) {
+              var name = String((typeof algorithm === 'string') ? algorithm : (algorithm && algorithm.name) || '').toUpperCase();
+              var NORM = {
+                'SHA-1': 'SHA-1', 'SHA1': 'SHA-1', 'SHA-256': 'SHA-256', 'SHA256': 'SHA-256',
+                'SHA-384': 'SHA-384', 'SHA384': 'SHA-384', 'SHA-512': 'SHA-512', 'SHA512': 'SHA-512'
+              };
+              var algo = NORM[name];
+              if (!algo) { return Promise.reject(__mkCryptoErr('NotSupportedError', "Unrecognized algorithm name: " + name)); }
+              var bytes;
+              try {
+                if (data instanceof ArrayBuffer) { bytes = new Uint8Array(data); }
+                else if (data && data.buffer instanceof ArrayBuffer) { bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength); }
+                else { return Promise.reject(new TypeError("Failed to execute 'digest' on 'SubtleCrypto': data is not a BufferSource")); }
+              } catch (e) { return Promise.reject(e); }
+              var ih = '';
+              for (var i = 0; i < bytes.length; i++) { ih += ('0' + bytes[i].toString(16)).slice(-2); }
+              var oh = __subtleDigestHex(algo, ih);
+              if (oh.length === 0) { return Promise.reject(__mkCryptoErr('OperationError', "digest failed")); }
+              var out = new ArrayBuffer(oh.length / 2), ov = new Uint8Array(out);
+              for (var j = 0; j < ov.length; j++) { ov[j] = parseInt(oh.slice(j * 2, j * 2 + 2), 16); }
+              return Promise.resolve(out);
+            }
           }
         };
       }

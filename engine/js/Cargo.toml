@@ -21,7 +21,7 @@ default = []
 # §8). With intl on + jit on, mozjs_sys links its PREBUILT archive (fast, no C++ build).
 # `_sm` is the INTERNAL code marker both variants enable (all `#[cfg]`'d SpiderMonkey
 # code gates on it, so the two variants share one code path and differ ONLY in `intl`).
-_sm = ["dep:mozjs", "dep:getrandom"]
+_sm = ["dep:mozjs", "dep:getrandom", "dep:sha2", "dep:sha1"]
 spidermonkey = ["_sm", "mozjs/jit", "mozjs/libz-sys", "mozjs/intl"]
 # `spidermonkey-noicu` — C2 ICU trim. SAME embedding surface, minus the `intl` cargo
 # feature, so ICU (icu_capi) is dropped. Disabling intl forces mozjs_sys to BUILD FROM
@@ -53,3 +53,9 @@ mozjs = { version = "0.18", optional = true, default-features = false }
 # native, so the JS-less build does not pull it. Without a host entropy call JS has no CSPRNG
 # and the old shim leaked predictable `Math.random()` bytes into every token/nonce/UUID.
 getrandom = { version = "0.3", optional = true }
+
+# SubtleCrypto digests (`crypto.subtle.digest`, SHA-1/256/384/512). Pure-Rust RustCrypto hashes,
+# optional + gated to `_sm` (only the SpiderMonkey native reaches them). SHA-1 is included because
+# SubtleCrypto still exposes it (for verifying legacy signatures), even though it is not collision-safe.
+sha2 = { version = "0.10", optional = true }
+sha1 = { version = "0.10", optional = true }

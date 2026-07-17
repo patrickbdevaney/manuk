@@ -282,6 +282,7 @@
   - L623 · A second, DETERMINISTIC C-stack overflow (html/semantics) — NATIVE recursion, not the stack-quota class
   - L656 · Web Crypto entropy: crypto.getRandomValues / randomUUID (tick 160)
   - L688 · HTML Constraint Validation, on the shared prototype (tick 161)
+  - L713 · crypto.subtle.digest — async surface over a sync host hash (tick 162)
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -406,4 +407,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-333 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+334 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -3071,6 +3071,8 @@ dependencies = [
  "manuk-net",
  "mozjs",
  "serde_json",
+ "sha1",
+ "sha2",
  "tiny-skia 0.12.0",
  "tracing",
  "url",

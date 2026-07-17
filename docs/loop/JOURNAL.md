@@ -6896,3 +6896,33 @@ gate — WPT-neutral (the css/dom sweep areas don't cover the constraint-validat
 Residue: the `:valid`/`:invalid` **CSS pseudo-classes** are NOT wired (they need Stylo pseudo-class
 matching keyed on live validity) — a separate cascade tick; `stepMismatch`/`badInput` stay false
 (`badInput` needs the input's raw-text buffer). Mechanism in [[js-engine]].
+
+## Tick 162 — crypto.subtle.digest: real SHA-1/256/384/512 (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (DIVERSIFY steer — bounded T2 JS-platform lever: SubtleCrypto
+digest, the tick-160 residue). WIKI: js-engine.**
+`crypto.subtle` was `undefined` (tick 160 left it so, honestly). But `crypto.subtle.digest(algo, data)`
+is what Subresource-Integrity verification, content-addressed caches and many auth/signing libraries
+call unconditionally — so the *absent* `subtle` is a `TypeError` on `crypto.subtle.digest(...)` that
+takes whatever was running with it (the `G_GLOBALS` missing-member failure, in the crypto namespace).
+
+**Fix.** New host native `__subtleDigestHex(algo, inputHex)` (dom_bindings.rs) computes a digest with the
+pure-Rust RustCrypto hashes (`sha2` for SHA-256/384/512, `sha1` for SHA-1 — SHA-1 stays exposed because
+SubtleCrypto still offers it for verifying legacy signatures), string-in/string-out over hex to keep the
+FFI a single function (same shape as `__cryptoRandomHex`); an unknown algorithm or bad hex returns "".
+The shim extends `crypto` with `subtle.digest`: it normalises the algorithm (string or `{name}`, the
+`SHA256`/`SHA-256` aliases), converts the BufferSource to hex, calls the native, and wraps the result in
+a **resolved Promise** matching the async signature real code awaits; an unknown algorithm returns a
+rejected Promise (`NotSupportedError`), a non-BufferSource a rejected `TypeError`. Only `digest` is
+provided — `sign`/`encrypt`/`deriveKey` stay absent so a page's `if (crypto.subtle.encrypt)` guard takes
+its fallback rather than hitting a broken stub. `sha2`/`sha1` are optional deps gated to `_sm`.
+
+**Gate.** New `engine/page/tests/g_subtle_digest.rs` (`subtle_digest_computes_known_sha_vectors`) —
+against **known test vectors** (deterministic): `digest` returns a thenable; SHA-256/SHA-1/SHA-512 of
+`"abc"` and SHA-256 of the empty message match their published hashes; the `{name:'SHA-256'}` object form
+works; and an unknown algorithm (`MD5`) **rejects with `NotSupportedError`** rather than mis-hashing. All
+work funnels through one `Promise.all().then`, which resolves during `Page::load` (the microtask queue
+drains there — the same path `MutationObserver` uses). RED against the absent API. Confined to engine/js
+(native + shim) + one gate — WPT-neutral. HANG/CRASH 0. Residue: the rest of SubtleCrypto
+(sign/verify/encrypt/decrypt/generateKey/importKey/deriveBits) stays honestly absent — a much larger
+key-management surface, separate work if a page class needs it. Mechanism in [[js-engine]].

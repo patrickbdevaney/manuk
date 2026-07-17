@@ -709,3 +709,28 @@ What is deliberately NOT here: the `:valid`/`:invalid` **CSS pseudo-classes**. T
 match a pseudo keyed on the element's live validity (a restyle on every value change), which is a cascade
 tick, not a JS-shim tick. Leaving them unwired is honest — a page's *script* validation works; only the
 *CSS-driven* red-border styling is absent, and that degrades to "no styling" rather than to a throw.
+
+## crypto.subtle.digest — async surface over a sync host hash (tick 162)
+
+`crypto.subtle.digest` shows the general recipe for exposing an **async Web API backed by a synchronous
+host computation**. The digest itself is instant (a few KB through SHA-256), but WebCrypto's signature is
+`Promise<ArrayBuffer>`, and real code always `await`s it. So the native `__subtleDigestHex` computes
+synchronously (RustCrypto `sha2`/`sha1`, hex string-in/string-out — the same single-function FFI shape as
+`__cryptoRandomHex`), and the JS shim wraps the result in `Promise.resolve(buffer)`. Errors become
+`Promise.reject` (an unknown algorithm → `NotSupportedError`, a non-BufferSource → `TypeError`), never a
+synchronous throw — matching what `.then(ok, err)` / `.catch` expect.
+
+Two things worth reusing:
+
+- **The microtask queue drains during `Page::load`.** A gate that reads its result from a `.then` (even a
+  chained `Promise.all([...]).then`) works, because load pumps the job queue to empty before returning —
+  the same delivery path `MutationObserver` (queueMicrotask) relies on. This means async APIs *can* be
+  gated by a synchronous page load + `textContent` read, as long as every result funnels into one final
+  `.then`.
+- **Provide only what you can do correctly, and leave the rest genuinely absent.** `subtle` exposes
+  `digest` and nothing else; `sign`/`encrypt`/`deriveKey` stay `undefined` so a page's
+  `if (crypto.subtle.encrypt)` feature-check takes its fallback path instead of calling a stub that lies.
+  This is the same "construct AND answer honestly" discipline the missing-globals gate holds — a broken
+  stub is worse than an honest absence, because the caller cannot route around a method that pretends to
+  exist. (SHA-1 is deliberately kept, not dropped: SubtleCrypto still exposes it for verifying legacy
+  signatures, even though it is not collision-resistant — "available" is a spec fact, not an endorsement.)
