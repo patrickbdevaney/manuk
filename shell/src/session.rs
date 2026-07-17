@@ -128,6 +128,26 @@ impl SessionStore {
         read_json(&self.bookmarks_path())
     }
 
+    // -- downloads -------------------------------------------------------------
+
+    fn downloads_path(&self) -> PathBuf {
+        self.dir.join("downloads.json")
+    }
+
+    /// Persist the completed-downloads list (filename, on-disk path, size) so the menu's
+    /// Downloads section survives a restart, as every browser's does. Overwrites the previous
+    /// file. Not redacted: a download is a file the user saved, and its path is exactly what the
+    /// "open / show in folder" action needs.
+    pub fn save_downloads(&self, downloads: &[crate::gui::DownloadRecord]) -> Result<()> {
+        self.ensure_dir()?;
+        write_json(&self.downloads_path(), &downloads)
+    }
+
+    /// Load the persisted downloads (oldest first), or `None` if none were ever saved.
+    pub fn load_downloads(&self) -> Result<Option<Vec<crate::gui::DownloadRecord>>> {
+        read_json(&self.downloads_path())
+    }
+
     fn ensure_dir(&self) -> Result<()> {
         std::fs::create_dir_all(&self.dir)
             .with_context(|| format!("creating state dir {}", self.dir.display()))
@@ -493,6 +513,42 @@ mod tests {
                 .any(|b| b.url.contains("q=rust+lang")),
             "a bookmarked query string must survive verbatim"
         );
+    }
+
+    /// **The download-list persistence gate.** The Downloads menu used to show only the current
+    /// session's saves — the list evaporated on quit. Saved records must round-trip through the
+    /// store (filename, path, size preserved). RED against the pre-T5 store, which had no download
+    /// save/load at all.
+    #[test]
+    fn downloads_survive_a_save_load_cycle() {
+        let dir = tmpdir("downloads-roundtrip");
+        let store = SessionStore::with_dir(&dir);
+
+        assert!(store.load_downloads().unwrap().is_none());
+
+        let recs = vec![
+            crate::gui::DownloadRecord {
+                filename: "report.pdf".to_string(),
+                path: PathBuf::from("/home/u/Downloads/report.pdf"),
+                bytes: 1234,
+            },
+            crate::gui::DownloadRecord {
+                filename: "data.csv".to_string(),
+                path: PathBuf::from("/home/u/Downloads/data.csv"),
+                bytes: 42,
+            },
+        ];
+        store.save_downloads(&recs).unwrap();
+
+        let restored = store.load_downloads().unwrap().expect("saved downloads");
+        assert_eq!(restored.len(), 2);
+        assert_eq!(restored[0].filename, "report.pdf");
+        assert_eq!(
+            restored[0].path,
+            PathBuf::from("/home/u/Downloads/report.pdf")
+        );
+        assert_eq!(restored[0].bytes, 1234);
+        assert_eq!(restored[1].filename, "data.csv");
     }
 
     // -- session restore is hibernated ---------------------------------------

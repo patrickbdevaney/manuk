@@ -7071,3 +7071,28 @@ both appear (`tag=rust`, `tag=wasm`) and an empty multiple-select adds nothing. 
 single-value collapse. Confined to agent/src/forms.rs. Runs in the `manuk-agent` suite (pure DOM read,
 no JS). HANG/CRASH 0. Improves every form path — agent GET submit + shell GET/POST navigation all call
 `fields`. Mechanism: `agent/src/forms.rs`, alongside the single-select and checkbox/radio handling.
+
+## Tick 168 — the downloads list persists across restart (shell/UX — T5 lever) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (T5 shell persistence — the persisted download list, sibling of
+tick 166's bookmarks). WIKI: none — shell-only tick (no engine/ change); mirrors the bookmark
+persistence added in 166.**
+The hamburger menu's Downloads section read `self.downloads: Vec<DownloadRecord>`, re-created **empty
+on every launch** (`downloads: Vec::new()`). So a file saved yesterday was invisible today — the
+download *history* every browser keeps evaporated on quit, even though the files themselves persisted
+on disk.
+
+**Fix (mirrors tick 166's bookmark persistence exactly).** `DownloadRecord` derives
+`Serialize`/`Deserialize` + `Clone` and is `pub(crate)`; `SessionStore` gains
+`save_downloads`/`load_downloads` writing `downloads.json` in the same state dir. `App` loads the list
+at startup (best-effort; a read failure logs and starts empty); `persist_downloads()` writes after
+**each** completed download (survives a crash) and again in `save_session` as a backstop. Not redacted
+— a download is a file the user saved, and its path is exactly what a future "open / show in folder"
+action needs.
+
+**Gate.** New `session::tests::downloads_survive_a_save_load_cycle` — nothing-saved reads `None`, then
+two records round-trip (filename, path, size preserved). RED against the pre-T5 store, which had no
+download save/load at all. Confined to shell (gui + session). HANG/CRASH 0. Residue: the list grows
+unbounded (a "clear downloads" action + a cap are follow-ons); download *progress* for an in-flight
+transfer is still not surfaced (a separate slice). Mechanism: `SessionStore` in shell/src/session.rs,
+alongside bookmark/session/collection persistence.

@@ -161,10 +161,11 @@ enum FormSubmission {
 }
 
 /// A completed download, shown in the hamburger menu's Downloads section.
-struct DownloadRecord {
-    filename: String,
-    path: std::path::PathBuf,
-    bytes: usize,
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub(crate) struct DownloadRecord {
+    pub(crate) filename: String,
+    pub(crate) path: std::path::PathBuf,
+    pub(crate) bytes: usize,
 }
 
 pub fn run(url: String, width: u32, measure_frames: Option<usize>) -> Result<()> {
@@ -362,6 +363,19 @@ impl App {
             })
             .unwrap_or_else(Bookmarks::new);
 
+        // §5 — restore the completed-downloads list (it used to evaporate on quit: the menu's
+        // Downloads section showed only the current session's saves).
+        let downloads = store
+            .as_ref()
+            .and_then(|s| match s.load_downloads() {
+                Ok(d) => d,
+                Err(e) => {
+                    tracing::warn!("download-list restore skipped: {e:#}");
+                    None
+                }
+            })
+            .unwrap_or_default();
+
         // The CLI target is the active, eagerly-loaded tab: reuse a restored tab with the
         // same URL if present, else open a fresh focused one.
         let existing = browser.tabs().iter().find(|t| t.url == url).map(|t| t.id);
@@ -393,7 +407,7 @@ impl App {
             frames_done: 0,
             modifiers: ModifiersState::empty(),
             history: History::new(),
-            downloads: Vec::new(),
+            downloads,
             prewarming: None,
             win_to_tab: std::collections::HashMap::new(),
             tab_win: std::collections::HashMap::new(),
@@ -885,6 +899,16 @@ impl App {
         }
     }
 
+    /// Write the completed-downloads list to disk now — called after each save so the Downloads
+    /// menu survives a crash, not just a clean quit. Best-effort: a write failure is logged.
+    fn persist_downloads(&self) {
+        if let Some(store) = &self.store {
+            if let Err(e) = store.save_downloads(&self.downloads) {
+                tracing::warn!("download-list save failed: {e:#}");
+            }
+        }
+    }
+
     /// A click within the chrome band: back / forward / reload, zoom, bookmark, menu, or the field.
     fn handle_chrome_click(&mut self, x: f32) {
         let w = self.viewport.width;
@@ -1067,6 +1091,7 @@ impl App {
             path,
             bytes: bytes as usize,
         });
+        self.persist_downloads();
         // Undo the navigation the download rode in on: go back to the prior page.
         if let Some(prev) = self.history.back().map(str::to_string) {
             self.goto_no_history(&prev);
@@ -2625,6 +2650,8 @@ impl App {
         manuk_net::webstorage::save();
         // Bookmarks too — a backstop for the per-toggle save (e.g. a bookmark added, then quit).
         self.persist_bookmarks();
+        // ...and the downloads list, a backstop for the per-download save.
+        self.persist_downloads();
     }
 
     /// Flush a pending scroll notification — called once per frame, from the paint path. A page that
