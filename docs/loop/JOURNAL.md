@@ -6780,3 +6780,47 @@ css-position/css-sizing/css-flexbox/css-grid/css-values/css-display **all flat (
 HANG/CRASH 0. Full manuk-layout suite 72/72. Residue: the `overflow-x:auto`-and-actually-overflows case
 (needs a second layout pass to know a scrollbar appeared) stays unreserved, same as the inline `auto`
 case; RTL/vertical-writing-mode gutter placement unchanged. Mechanism in [[box-layout]].
+
+## Tick 159 — __Host-/__Secure- cookie name prefixes are enforced at the jar chokepoint (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (DIVERSIFY steer, tick 159 — bounded other-tier lever: U-3 cookie
+integrity). WIKI: networking.**
+Per the observer's DIVERSIFY steer (8b4ec6d) off the CSS-layout-math tail, this takes a bounded,
+daily-driver-critical lever from the U-3 line: cookie **name-prefix enforcement**. `parse_set_cookie`
+already enforced the sibling RFC 6265bis rules (SameSite=None⇒Secure, "leave secure cookies alone",
+public-suffix/supercookie domain rejection) but never checked the `__Secure-` / `__Host-` name prefixes
+— so a network attacker on a sibling subdomain (or over plaintext http) could plant a `__Host-sid`
+session cookie the app trusts *because* of its name. Both the network `Set-Cookie` path
+(`send_once`/`send_raw_with_cookies`) and script writes (`set_document_cookie`) funnel through this one
+function, so a single guard closes the whole surface.
+
+**Fix.** In `parse_set_cookie`, after the domain is resolved (so `host_only` is known) and the path is
+resolved once into `path`, apply RFC 6265bis §5.5: drop a `__Secure-`-prefixed cookie lacking `Secure`;
+drop a `__Host-`-prefixed cookie unless it is `Secure` **and** host-only (no `Domain` attribute) **and**
+its resolved path is exactly `/`. The prefix comparison is case-insensitive per spec via a byte-wise
+`has_ci_prefix` helper that cannot panic on a multi-byte cookie name (no `str` slicing at a non-boundary).
+
+**Gate.** Unit test `host_and_secure_name_prefixes_are_enforced` (manuk-net): `__Secure-` without Secure
+dropped / with Secure kept; `__Host-` dropped when it has a Domain, lacks Secure, has a non-root Path, or
+resolves to a non-`/` default-path (set from `/app/page`); the one well-formed
+`__Host-sid=1; Secure; Path=/` kept; `__hOsT-` proves the match is case-insensitive; a plain-named cookie
+is untouched. RED before the guard (every `assert!(!store(...))` line stored the forged cookie instead).
+Full `manuk-net cookies::` suite 15/15. Change is confined to the net crate — WPT-neutral (no cookies
+suite in the sweep; css/dom/url/domparsing counts unchanged), so the ratchet's capability face is the
+unit gate, not a WPT flip. Residue: `SameSite` enforcement on the *live request* path still routes through
+the flat `cookie_jar()` (which ignores request context) rather than `StorageLayer::cookie_header` — that
+wiring needs a `RequestContext` threaded through the net send path and is a separate, larger tick.
+Mechanism in [[networking]].
+
+**LANDING — the wall "regression" was cold release-build + load, NOT a browser perf regression.** The
+prior invocation's 431s warm measurement was taken while the machine's 15-min load average was 3.07 AND
+the release artifacts were stale (release `manuk` binary was from 08:38; the wall's parity phase runs
+`cargo run --release -p manuk-wpt -- parity`, so a cold release link dominated the clock). Re-measured on
+a quiet box (load 0.39) after a `cargo build --release --workspace --features stylo,spidermonkey` warm-up:
+`./scripts/verify.sh` returned `VERIFY: all gates green` in **59s** — under the 62s ceiling. So the ratchet
+was correctly catching a *measurement* that conflated build+load with runtime; nothing in the browser got
+slower (F1 cascade 0.26 ≤ 0.55, F2 pipeline 6.40× ≤ 7.5×, both green). `status-update.sh` wrote
+`LAST_WALL_TIME: 59s`; `ratchet.sh check` → `WALL 59s ✓ (ceiling 62s)`, THE RATCHET HOLDS (exit 0), so
+tick 159 lands normally. Lesson (already a memory: [[wall-ceiling-blocks-preflight]]): a warm wall
+measurement is only meaningful with the release build warm AND the box quiet — time the wall, don't trust
+a single loaded sample. Residue: `SameSite` enforcement on the live-request path (above) is unchanged.

@@ -174,6 +174,23 @@ pub fn parse_set_cookie(url: &Url, header: &str) -> Option<Cookie> {
         None => (host.clone(), true),
     };
 
+    let path = path_attr.unwrap_or_else(|| default_path(url));
+
+    // §5.5 cookie name prefixes (RFC 6265bis): `__Secure-` and `__Host-` are opt-in
+    // integrity markers. A server that names its session cookie `__Host-sid` is telling
+    // the client "only accept this if it could not have been planted by a network attacker
+    // on a sibling subdomain or over plaintext http" — so a client that stores one whose
+    // preconditions do not hold has silently defeated the very defence the name requests.
+    // The prefix match is case-insensitive per spec. Enforced here, the one chokepoint both
+    // the network `Set-Cookie` path and `document.cookie` writes funnel through.
+    if has_ci_prefix(name, "__Secure-") && !secure {
+        return None;
+    }
+    if has_ci_prefix(name, "__Host-") && !(secure && host_only && path == "/") {
+        // Requires Secure, no Domain attribute (host-only), and Path exactly `/`.
+        return None;
+    }
+
     // §5.2.2: Max-Age wins over Expires. Max-Age <= 0 expires immediately.
     let expires = match max_age {
         Some(secs) if secs <= 0 => Some(UNIX_EPOCH),
@@ -186,13 +203,20 @@ pub fn parse_set_cookie(url: &Url, header: &str) -> Option<Cookie> {
         value,
         domain,
         host_only,
-        path: path_attr.unwrap_or_else(|| default_path(url)),
+        path,
         secure,
         http_only,
         same_site,
         expires,
         creation: 0,
     })
+}
+
+/// Case-insensitive ASCII prefix test that never panics on a multi-byte cookie name — RFC
+/// 6265bis §5.5 matches the `__Secure-`/`__Host-` prefixes case-insensitively.
+fn has_ci_prefix(name: &str, prefix: &str) -> bool {
+    let (nb, pb) = (name.as_bytes(), prefix.as_bytes());
+    nb.len() >= pb.len() && nb[..pb.len()].eq_ignore_ascii_case(pb)
 }
 
 /// Parse an IMF-fixdate (`Sun, 06 Nov 1994 08:49:37 GMT`), the only `Expires` form
@@ -596,5 +620,57 @@ mod tests {
             jar.cookie_header(&u("https://example.com/")),
             Some("a=9; b=2".to_string())
         );
+    }
+
+    #[test]
+    fn host_and_secure_name_prefixes_are_enforced() {
+        // RFC 6265bis §5.5. A `__Secure-` cookie must carry `Secure`.
+        let mut jar = CookieJar::new();
+        assert!(
+            !jar.store(&u("https://example.com/"), "__Secure-sid=1; Path=/"),
+            "__Secure- without Secure must be dropped"
+        );
+        assert!(jar.store(&u("https://example.com/"), "__Secure-sid=1; Secure; Path=/"));
+
+        // A `__Host-` cookie must be Secure, host-only (no Domain), and Path=/.
+        let mut jar = CookieJar::new();
+        // Set from a deep URL with no explicit Path: the default-path is `/app`, not `/`,
+        // so the resolved path fails the __Host- precondition and the cookie is dropped.
+        assert!(
+            !jar.store(&u("https://example.com/app/page"), "__Host-sid=1; Secure"),
+            "__Host- with a non-root resolved path must be dropped"
+        );
+        assert!(
+            !jar.store(
+                &u("https://example.com/"),
+                "__Host-sid=1; Secure; Path=/; Domain=example.com"
+            ),
+            "__Host- with a Domain attribute must be dropped"
+        );
+        assert!(
+            !jar.store(&u("https://example.com/"), "__Host-sid=1; Path=/"),
+            "__Host- without Secure must be dropped"
+        );
+        assert!(
+            !jar.store(
+                &u("https://example.com/"),
+                "__Host-sid=1; Secure; Path=/app"
+            ),
+            "__Host- with a non-root Path must be dropped"
+        );
+        // The one well-formed shape is accepted.
+        assert!(jar.store(&u("https://example.com/"), "__Host-sid=1; Secure; Path=/"));
+        assert_eq!(jar.len(), 1);
+
+        // The prefix match is case-insensitive: `__hOsT-` is still a __Host- cookie.
+        let mut jar = CookieJar::new();
+        assert!(
+            !jar.store(&u("https://example.com/"), "__hOsT-x=1; Path=/"),
+            "prefix match is case-insensitive"
+        );
+        assert!(jar.is_empty());
+
+        // A plain-named cookie is unaffected by the prefix rules.
+        assert!(jar.store(&u("https://example.com/"), "ordinary=1; Path=/app"));
     }
 }

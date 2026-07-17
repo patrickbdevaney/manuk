@@ -157,6 +157,24 @@ boundaries** (`/application` does **not** match `Path=/app`).
 must be stored before the next hop and the `Cookie` header recomputed per new host, **or a login that
 redirects loses its session.**
 
+## `__Host-`/`__Secure-` name prefixes are a promise the client must KEEP, or it is worse than useless
+
+A server that names its session cookie `__Host-sid` is opting into an integrity contract: *"reject this
+unless it could not have been planted by a sibling-subdomain or plaintext-HTTP attacker."* A client that
+stores a prefixed cookie whose preconditions do not hold has silently defeated the exact defence the name
+requests — so the enforcement is not optional polish, it is the whole point of the feature (RFC 6265bis
+§5.5). Enforce at `parse_set_cookie`, the ONE chokepoint both the network `Set-Cookie` path and
+`document.cookie` writes funnel through:
+
+- **`__Secure-`** → require the `Secure` attribute.
+- **`__Host-`** → require `Secure` **and** host-only (**no `Domain` attribute**) **and** resolved
+  `Path` exactly `/`. The Domain ban is what makes it un-forgeable from a sibling subdomain; the `Path=/`
+  makes it un-shadowable by a narrower-path cookie.
+
+Two traps: the prefix match is **case-insensitive** (`__hOsT-` still binds), and the `Path=/` test is
+against the **resolved** path — a prefixed cookie with no explicit `Path` set from a deep URL inherits a
+non-root default-path (`/app`) and must be dropped, not silently accepted.
+
 ## Two proxy details that are the difference between privacy and a leak
 
 1. **Hand the target host to SOCKS5 as a DOMAIN NAME, never resolved locally** — so DNS happens at the

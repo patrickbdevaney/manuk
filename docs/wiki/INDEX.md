@@ -310,11 +310,12 @@
   - L125 · Preconnect only pays off if it warms the SAME rustls session cache the navigation uses
   - L135 · Stream hyper bodies with BodyExt::frame(), never collect()
   - L141 · SameSite is ASYMMETRIC — and getting it backwards ships the exact CSRF it prevents
-  - L160 · Two proxy details that are the difference between privacy and a leak
-  - L167 · Charset sniffing is a definitive reuse
-  - L174 · A download STREAMS to disk; only a document is buffered
-  - L199 · HTTP/2's win is gated on SUBRESOURCES, not on the document fetch
-  - L204 · The bot-wall fingerprint surface is known — and matching it IS the evasion
+  - L160 · __Host-/__Secure- name prefixes are a promise the client must KEEP, or it is worse than useless
+  - L178 · Two proxy details that are the difference between privacy and a leak
+  - L185 · Charset sniffing is a definitive reuse
+  - L192 · A download STREAMS to disk; only a document is buffered
+  - L217 · HTTP/2's win is gated on SUBRESOURCES, not on the document fetch
+  - L222 · The bot-wall fingerprint surface is known — and matching it IS the evasion
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -403,4 +404,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-330 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+331 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
