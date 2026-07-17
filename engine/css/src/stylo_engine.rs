@@ -424,6 +424,9 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
             // `object-fit` recovered from MinimalCascade like the rest of this block, so the shipping
             // Stylo path renders it too: a card grid's `object-fit:cover` thumbnails must not distort.
             cs.object_fit = m.object_fit;
+            // `text-transform` recovered from MinimalCascade (inherited there) so the shipping path
+            // renders uppercase nav/buttons — Stylo's servo build models it as a bitflags type.
+            cs.text_transform = m.text_transform;
             cs.background_repeat = m.background_repeat;
             cs.text_decoration = m.text_decoration;
             cs.list_style_type = m.list_style_type;

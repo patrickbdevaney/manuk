@@ -905,6 +905,37 @@ fn is_rendered(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
     }
 }
 
+/// Apply `text-transform` to a text run for RENDERING only (the DOM text is untouched, so JS still
+/// reads the author's string). `None` borrows the input unchanged; the casing modes allocate. Unicode
+/// casing is honoured (`ß`→`SS`, locale-independent). `Capitalize` upper-cases the first cased letter
+/// of each whitespace-delimited word and leaves the rest as authored (the common-case approximation of
+/// the spec's "first typographic letter unit").
+fn apply_text_transform(s: &str, transform: manuk_css::TextTransform) -> std::borrow::Cow<'_, str> {
+    use manuk_css::TextTransform;
+    match transform {
+        TextTransform::None => std::borrow::Cow::Borrowed(s),
+        TextTransform::Uppercase => std::borrow::Cow::Owned(s.to_uppercase()),
+        TextTransform::Lowercase => std::borrow::Cow::Owned(s.to_lowercase()),
+        TextTransform::Capitalize => {
+            let mut out = String::with_capacity(s.len());
+            let mut at_word_start = true;
+            for ch in s.chars() {
+                if ch.is_whitespace() {
+                    at_word_start = true;
+                    out.push(ch);
+                } else if at_word_start && ch.is_alphabetic() {
+                    out.extend(ch.to_uppercase());
+                    at_word_start = false;
+                } else {
+                    out.push(ch);
+                    at_word_start = false;
+                }
+            }
+            std::borrow::Cow::Owned(out)
+        }
+    }
+}
+
 fn text_style(cs: &ComputedStyle, fonts: &FontContext) -> TextStyle {
     let key = FontKey {
         family: fonts.resolve_family(&cs.font_family),
@@ -3539,9 +3570,13 @@ impl Ctx<'_> {
         cw: f32,
     ) {
         match self.dom.data(node) {
-            NodeData::Text(t) => {
+            NodeData::Text(raw) => {
                 let cs = self.style_of(node);
                 let style = text_style(cs, self.fonts);
+                // `text-transform` (inherited) changes the RENDERED casing without touching the DOM
+                // text — "SUBMIT" for a `text-transform:uppercase` button whose textContent is "Submit".
+                let transformed = apply_text_transform(raw, cs.text_transform);
+                let t: &str = transformed.as_ref();
                 // `white-space` is inherited, so the text node carries it. `nowrap` and `pre`
                 // both suppress wrapping between words.
                 let no_wrap = matches!(cs.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre);
@@ -5803,6 +5838,64 @@ mod tests {
             "::after content must render (got {text:?})"
         );
     }
+    /// `text-transform` changes the RENDERED casing (nav bars, buttons, headings) while leaving the
+    /// DOM text alone. Baseline: unimplemented, so an `uppercase` button rendered its lowercase source.
+    /// A child's own `text-transform` overrides the inherited value (a `none` island stays as authored).
+    #[test]
+    fn text_transform_recases_rendered_text_only() {
+        // Unit: the transform itself, including the capitalize word-boundary and Unicode casing.
+        use manuk_css::TextTransform;
+        assert_eq!(
+            apply_text_transform("Submit", TextTransform::Uppercase).as_ref(),
+            "SUBMIT"
+        );
+        assert_eq!(
+            apply_text_transform("HELLO", TextTransform::Lowercase).as_ref(),
+            "hello"
+        );
+        assert_eq!(
+            apply_text_transform("hello world", TextTransform::Capitalize).as_ref(),
+            "Hello World"
+        );
+        assert_eq!(
+            apply_text_transform("straße", TextTransform::Uppercase).as_ref(),
+            "STRASSE",
+            "Unicode casing (ß→SS) is honoured"
+        );
+
+        // E2E: the property parses, inherits, is overridable, and reaches the rendered fragments —
+        // while the DOM textContent is unchanged.
+        let html = r#"<nav id="n">home <span id="s" style="text-transform:none">Keep</span></nav>"#;
+        let css = "#n{text-transform:uppercase}";
+        let (dom, root) = layout_html(html, css, 400.0);
+        let mut rendered = String::new();
+        root.walk(&mut |b| {
+            if let BoxContent::Inline(frags) = &b.content {
+                for f in &*frags {
+                    rendered.push_str(&f.text);
+                    rendered.push(' ');
+                }
+            }
+        });
+        assert!(
+            rendered.contains("HOME"),
+            "inherited text-transform:uppercase must upper-case the nav text (got {rendered:?})"
+        );
+        assert!(
+            rendered.contains("Keep") && !rendered.contains("KEEP"),
+            "a child's text-transform:none overrides the inherited uppercase (got {rendered:?})"
+        );
+        // The DOM text is untouched — JS still reads the author's string.
+        let n = dom
+            .descendants(dom.root())
+            .find(|&x| dom.element(x).and_then(|e| e.attr("id")) == Some("n"))
+            .unwrap();
+        assert!(
+            dom.text_content(n).contains("home"),
+            "text-transform must NOT mutate the DOM text (JS reads the author's casing)"
+        );
+    }
+
     /// Regression: `display:none` means **no boxes at all** — including inside a flex/grid container.
     /// The taffy path filtered children by `is_element` but not by display, so a hidden child got a
     /// zero slot while our extraction still measured and materialised its content. A `<script>` in a

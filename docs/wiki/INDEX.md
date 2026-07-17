@@ -393,6 +393,7 @@
   - L185 · Skrifa is the library Chromium itself ships
   - L194 · tiny-skia has no Gaussian blur
   - L200 · Shrink-to-fit content extent must include the child's RIGHT margin (margin box, not border box)
+  - L210 · text-transform — rendered casing without touching the DOM text (tick 182)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -420,4 +421,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-347 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+348 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

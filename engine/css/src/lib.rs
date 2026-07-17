@@ -265,6 +265,19 @@ pub enum WhiteSpace {
     PreLine,
 }
 
+/// `text-transform` — the **rendered** casing of text, applied at layout without changing the DOM
+/// text (so JS still reads the author's string). `uppercase` is ubiquitous on nav bars, buttons and
+/// section headings; without it "SUBMIT" renders as "submit". Inherited.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum TextTransform {
+    #[default]
+    None,
+    Uppercase,
+    Lowercase,
+    /// The first typographic letter of each word is upper-cased; the rest are left as authored.
+    Capitalize,
+}
+
 /// `box-sizing`: whether `width`/`height` size the content box (CSS default) or the
 /// border box (padding + border counted inside the given dimension).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -478,6 +491,8 @@ pub struct ComputedStyle {
     pub line_height: f32,
     pub text_align: TextAlign,
     pub white_space: WhiteSpace,
+    /// `text-transform` — rendered casing (inherited); applied in layout, DOM text unchanged.
+    pub text_transform: TextTransform,
     pub margin: Sides<Dim>,
     pub padding: Sides<Dim>,
     pub border_width: Sides<f32>,
@@ -610,6 +625,7 @@ impl ComputedStyle {
             line_height: 16.0 * 1.2,
             text_align: TextAlign::Left,
             white_space: WhiteSpace::Normal,
+            text_transform: TextTransform::None,
             margin: Sides::all(Dim::Px(0.0)),
             padding: Sides::all(Dim::Px(0.0)),
             border_width: Sides::all(0.0),
@@ -700,6 +716,7 @@ impl ComputedStyle {
         s.line_height_normal = parent.line_height_normal;
         s.text_align = parent.text_align;
         s.white_space = parent.white_space;
+        s.text_transform = parent.text_transform;
         // `list-style-*` is inherited (that is how `ul{list-style:none}` silences its `li`s).
         s.list_style_type = parent.list_style_type;
         s.list_style_inside = parent.list_style_inside;
@@ -807,6 +824,7 @@ pub fn diff_style(old: &ComputedStyle, new: &ComputedStyle) -> RestyleDamage {
         || old.line_height != new.line_height
         || old.text_align != new.text_align
         || old.white_space != new.white_space
+        || old.text_transform != new.text_transform
         || old.float != new.float
         || old.clear != new.clear
         || old.position != new.position
@@ -2648,6 +2666,14 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 "pre-wrap" => WhiteSpace::PreWrap,
                 "pre-line" => WhiteSpace::PreLine,
                 _ => WhiteSpace::Normal,
+            }
+        }
+        "text-transform" => {
+            s.text_transform = match v.trim().to_ascii_lowercase().as_str() {
+                "uppercase" => TextTransform::Uppercase,
+                "lowercase" => TextTransform::Lowercase,
+                "capitalize" => TextTransform::Capitalize,
+                _ => TextTransform::None,
             }
         }
         "width" => {

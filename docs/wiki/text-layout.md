@@ -206,3 +206,32 @@ margin. A flex item wrapping `<p width:100 margin:10>` measured 110 instead of 1
 box). Fix: add `px_margin_right(node)` (percentage/auto → 0 for an intrinsic measure; negatives don't extend
 the border-box edge, so clamp ≥ 0) at each `content_right_extent` box visit. Affects every shrink-to-fit
 path — flex/grid items, inline-block, floats, table cells.
+
+## text-transform — rendered casing without touching the DOM text (tick 182)
+
+`text-transform: uppercase` is everywhere — nav bars, buttons, section headings, table headers; and
+`capitalize` on titles. It was **unimplemented** (0 hits in the engine), so text rendered in its source
+casing: a `text-transform:uppercase` button whose textContent is "Submit" rendered "Submit", not
+"SUBMIT". A visible divergence on a large fraction of styled pages.
+
+Mechanism (css + layout):
+- **css** — `TextTransform` enum (`None`/`Uppercase`/`Lowercase`/`Capitalize`), an **inherited**
+  `Style::text_transform` (copied from the parent in the MinimalCascade inheritance step, beside
+  `white_space`), parsed from the `text-transform` property, added to the style-change-detection set,
+  and recovered from MinimalCascade on the shipping **Stylo** path (Stylo's servo build exposes it as
+  a bitflags type we would otherwise map by hand).
+- **layout** — `apply_text_transform(raw, cs.text_transform) -> Cow<str>` at the point a text node
+  becomes inline words (`collect_inline_node`, the `NodeData::Text` arm). The RENDERED run is re-cased
+  (and therefore measured at its new width — no separate metrics bug) while the **DOM text is
+  untouched**: `dom.text_content` still returns the author's string, so JS reads what the author wrote.
+  `None` borrows the input (zero-alloc); the casing modes allocate. Unicode casing is honoured
+  (`ß`→`SS`, locale-independent `to_uppercase`/`to_lowercase`); `Capitalize` upper-cases the first
+  cased letter of each whitespace-delimited word — the common-case approximation of the spec's "first
+  typographic letter unit".
+
+**Gate.** `text_transform_recases_rendered_text_only` (engine/layout): unit (Submit→SUBMIT,
+HELLO→hello, "hello world"→"Hello World", straße→STRASSE) + E2E (inherited uppercase nav renders HOME;
+a child `text-transform:none` island stays "Keep"; `dom.text_content` still contains "home"). RED vs
+the no-transform baseline. css+layout suites green (layout 72→73), HANG/CRASH 0. Residue:
+`full-width`/`full-size-kana` keywords; the spec's exact grapheme-cluster word boundary for capitalize
+(digits/punctuation-prefixed words); `letter-spacing`/`word-spacing` are separate unbuilt properties.

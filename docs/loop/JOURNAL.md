@@ -7495,3 +7495,24 @@ default 50% 50% (centered); explicit object-position not yet parsed.
 `fill`→dest 100×100 (stretched, no clip); `cover`→dest 200×100 + 100×100 crop box; `contain`→dest
 100×50, no clip. RED against the stretch baseline (which reports 100×100 for cover). Verify: css+layout+
 paint suites green; HANG/CRASH 0.
+
+## Tick 182 — text-transform: uppercase — nav/buttons render in the case the design shows (CSS render / text) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (CSS render — inherited text casing). WIKI:
+docs/wiki/text-layout.md "text-transform — rendered casing without touching the DOM text".**
+
+**Hypothesis.** `text-transform: uppercase` is on countless nav bars, buttons, section headings and
+table headers; `capitalize` on titles. It was **unimplemented** (0 hits): text rendered in its source
+casing, so a `text-transform:uppercase` button whose textContent is "Submit" rendered "Submit", not
+"SUBMIT" — a visible, everywhere divergence from the design. Fix: parse `text-transform` (css) into an
+inherited `TextTransform` (None/Uppercase/Lowercase/Capitalize), recovered from MinimalCascade on the
+shipping Stylo path; apply it in layout at the point a text node becomes inline words
+(`apply_text_transform(raw, cs.text_transform)` in `collect_inline_node`) so the RENDERED run is
+re-cased (and measured at its new width) while the **DOM text is untouched** — JS still reads the
+author's string. Unicode casing honoured (ß→SS); `capitalize` upper-cases the first cased letter of
+each whitespace word (common-case approximation of the spec's typographic-letter-unit).
+
+**Gate.** engine/layout `text_transform_recases_rendered_text_only`: unit (Submit→SUBMIT, HELLO→hello,
+"hello world"→"Hello World", straße→STRASSE) + E2E (a nav with inherited uppercase renders HOME; a
+child `text-transform:none` stays "Keep"; `dom.text_content` still contains "home"). RED against the
+no-transform baseline. Verify: css+layout suites green (layout 72→73); HANG/CRASH 0.
