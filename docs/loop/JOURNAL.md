@@ -3054,6 +3054,53 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 145 — the CSS `aspect-ratio` property is mapped from the cascade (it was silently dropped; every `aspect-ratio` box had no ratio at all)
+
+**TICK SHAPE: capability wiring + layout-mechanism (CSS-LAYOUT phase-mandate row 1 — intrinsic/definite sizing). WIKI: box-layout.**
+
+**Phase mandate.** `scripts/lever-board.sh` lowest-unmet target is row 1 — intrinsic/definite sizing
+(`css-sizing 12→35%`). Histogrammed `css/css-sizing --show-failures`: the cleanest bounded non-reftest
+cluster is `aspect-ratio/*` — an abspos box with a definite `height` + `aspect-ratio` returns
+`offsetWidth = 0`. FLIP-RATE discipline picked this over the bigger `contain-intrinsic-size`/`stretch`
+buckets (subsystems; 847 of the stretch failures are message-less reftests).
+
+**The real root cause, found by probing.** The first pass added an aspect-ratio transfer to `layout_abs`
+and it moved the WPT count by **zero** — because `ComputedStyle.aspect_ratio` was **only ever set from a
+decoded image's intrinsic pixels** (`engine/page/src/lib.rs`). The **CSS `aspect-ratio` property was
+never mapped from stylo at all** — `stylo_map.rs` had no arm for it — so a `<div style="aspect-ratio:16/9">`
+reached layout with `aspect_ratio = None`, and *both* the abspos path *and* the already-correct in-flow
+transfer (`layout/src/lib.rs` §1372/§1459, coded ticks ago) never fired. The measurement caught the
+theory: *the mechanism existed; the value never reached it.* ([[parity-methodology]] — build the probe,
+and when a metric won't move, suspect the metric.)
+
+**RESULT — landed, three parts.** (1) `stylo_map.rs` maps stylo's `AspectRatio { auto, ratio }` computed
+value onto `s.aspect_ratio` (a plain `width/height` f32) whenever a `<ratio>` is present. (2) The hand
+parser (`MinimalCascade`) learns `aspect-ratio` too — `w/h`, a bare number (`n/1`), and the `auto <ratio>`
+keyword form — keeping the two cascade paths at parity so the layout tests exercise a real parse. (3)
+`layout_abs` gains a box-sizing-aware aspect-ratio transfer for its auto width (definite height → width),
+and — a pre-existing gap — now honours `box-sizing:border-box` for its own explicit `width`/`height`.
+**Measured:** `css/css-sizing` 229→**240 (+11)**, driven by the mapping (the in-flow transfer, live at
+last), NOT by `layout_abs`. css-flexbox 949, css-grid 259, css-position, css-overflow — all **flat, no
+regression** (content-box `bs_extra_*` = 0, so content-box abspos is byte-identical; only border-box
+abspos and ratio-transfer paths change, both from wrong to right).
+
+**Honest residue.** The `abspos-aspect-ratio-border.html` file (the 6 `offsetWidth`-reads-0 cases that
+started this) **still fails** — for a *different* reason, now isolated: those boxes set **no insets**
+(pure static position), and manuk does not record geometry for a static-position abspos box, so
+`offsetWidth` reads 0 regardless of the ratio. That is a separate mechanism (static-position abspos
+placement), scoped out of this tick, not smuggled in.
+
+**Gate (falsifiable).** Two: `aspect_ratio_parses_to_a_width_over_height_ratio` (`manuk-css`) asserts
+`16/9`, `2` (→`n/1`), `auto 1/1`, and `auto` (→unset) through the cascade; and
+`abspos_aspect_ratio_transfers_definite_height_to_auto_width` (`manuk-layout`) drives real CSS end to end
+— a `position:absolute; height:100px; aspect-ratio:1/1; border:150px` box is a 400×400 square, and its
+`box-sizing:border-box; border:20px` sibling a 100×100 square. **Proven RED** by neutralising the
+transfer arm (`&& false`): content-box width = 0. A dropped mapping flips the parse gate RED too.
+
+**The ratchet.** Capability: **up** — CSS `aspect-ratio` works at all now (mapping + in-flow transfer +
+abspos transfer + border-box abspos sizing). Performance: unchanged. Instrument fidelity: **up** — two
+new falsifiable gates. Bar 0 clean.
+
 ## Tick 144 — `position:absolute; inset:0` gives a `height:100%` child a definite base (the overlay/modal fill pattern stops collapsing to 0)
 
 **TICK SHAPE: layout-mechanism (CSS-LAYOUT phase-mandate row 1 territory — intrinsic/definite sizing; +2 measured WPT, but the value is the daily-driver render fix). WIKI: box-layout.**

@@ -2670,6 +2670,24 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 BoxSizing::ContentBox
             };
         }
+        "aspect-ratio" => {
+            // `auto || <ratio>`, where `<ratio>` is `<number> [ / <number> ]?` (a bare number is
+            // `n / 1`). For a non-replaced box the specified ratio always applies, so the `auto`
+            // keyword is simply dropped here — kept for parity with the stylo map (`stylo_map.rs`),
+            // which the shipping pipeline actually uses. `s.aspect_ratio` is a plain `width/height`.
+            let r = v.replace("auto", " ");
+            let mut it = r.split('/').map(|t| t.trim().parse::<f32>());
+            if let Some(Ok(w)) = it.next() {
+                let h = match it.next() {
+                    None => 1.0,
+                    Some(Ok(h)) => h,
+                    Some(Err(_)) => f32::NAN,
+                };
+                if w > 0.0 && h > 0.0 {
+                    s.aspect_ratio = Some(w / h);
+                }
+            }
+        }
         "justify-content" => {
             s.justify_content = match v.trim() {
                 "center" => JustifyContent::Center,
@@ -4035,6 +4053,38 @@ mod shadow_scoping_tests {
         // flat-tree, not scoped -- only *matching* is scoped).
         assert_eq!(map[&host].color, Rgba::new(0x12, 0x34, 0x56, 255));
         assert_eq!(map[&em].color, Rgba::new(0x12, 0x34, 0x56, 255));
+    }
+
+    #[test]
+    fn aspect_ratio_parses_to_a_width_over_height_ratio() {
+        // `<ratio>` forms: `w / h`, a bare number (`n / 1`), and the `auto <ratio>` keyword form
+        // (the keyword is dropped for a non-replaced box). This gates the hand parser at parity with
+        // the stylo map the shipping pipeline uses.
+        let (dom, map) = cascade_of(r#"<div style="aspect-ratio:16/9"></div>"#);
+        let ar = map[&dom.find_first("div").unwrap()].aspect_ratio.unwrap();
+        assert!((ar - 16.0 / 9.0).abs() < 1e-4, "16/9 -> {ar}");
+
+        let (dom, map) = cascade_of(r#"<div style="aspect-ratio:2"></div>"#);
+        assert_eq!(
+            map[&dom.find_first("div").unwrap()].aspect_ratio,
+            Some(2.0),
+            "a bare number is n / 1"
+        );
+
+        let (dom, map) = cascade_of(r#"<div style="aspect-ratio:auto 1/1"></div>"#);
+        assert_eq!(
+            map[&dom.find_first("div").unwrap()].aspect_ratio,
+            Some(1.0),
+            "the auto keyword is dropped; the ratio still applies to a non-replaced box"
+        );
+
+        // `auto` alone (no ratio) leaves it unset.
+        let (dom, map) = cascade_of(r#"<div style="aspect-ratio:auto"></div>"#);
+        assert_eq!(
+            map[&dom.find_first("div").unwrap()].aspect_ratio,
+            None,
+            "auto with no ratio => no preferred ratio"
+        );
     }
 
     #[test]

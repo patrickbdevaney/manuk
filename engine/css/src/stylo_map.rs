@@ -504,6 +504,22 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         _ => crate::BoxSizing::ContentBox,
     };
 
+    // aspect-ratio — the CSS property (not an image's intrinsic ratio, which the page layer sets from
+    // the decoded bytes). Stylo's computed value is `auto || <ratio>`; we take the `<ratio>`'s
+    // width/height whenever one is present (for a non-replaced box the specified ratio always applies,
+    // `auto` or not). `s.aspect_ratio` is a plain `width/height` f32 that the abspos and in-flow
+    // sizing paths transfer a definite length through. Without this the property was silently dropped:
+    // an `aspect-ratio: 16/9` box got no ratio at all, so `layout_abs`/the in-flow path never fired.
+    {
+        use stylo::values::generics::position::PreferredRatio;
+        if let PreferredRatio::Ratio(r) = cv.clone_aspect_ratio().ratio {
+            let (w, h) = ((r.0).0, (r.1).0);
+            if w > 0.0 && h > 0.0 {
+                s.aspect_ratio = Some(w / h);
+            }
+        }
+    }
+
     // white-space (0.19 shorthand: text-wrap-mode + white-space-collapse).
     {
         use stylo::properties::longhands::{text_wrap_mode, white_space_collapse};

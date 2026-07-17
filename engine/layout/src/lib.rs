@@ -2758,32 +2758,57 @@ impl Ctx<'_> {
         let bottom = (!s.inset.bottom.is_auto()).then(|| s.inset.bottom.resolve(cb.height, 0.0));
 
         let frame = ml + mr + pl + pr + bl + br;
-        // Width: definite wins; else if both left+right are set the box stretches to
-        // fill between them; else shrink-to-fit.
-        let content_w = match s.width {
-            Dim::Auto => match (left, right) {
-                (Some(l), Some(r)) => (cw - l - r - frame).max(0.0),
-                _ => self.shrink_to_fit(node, (cw - frame).max(0.0)),
-            },
-            other => other.resolve(cw, (cw - frame).max(0.0)).max(0.0),
+        let frame_v = mt + mb + pt + pb + bt + bb;
+        // `box-sizing:border-box` — a specified `width`/`height` names the *border box*, so the
+        // padding+border must come out to reach the content box. `auto` already resolves to content,
+        // so these deltas apply only to the explicit-size and aspect-ratio arms below.
+        let bs_extra_w = if s.box_sizing == BoxSizing::BorderBox {
+            pl + pr + bl + br
+        } else {
+            0.0
+        };
+        let bs_extra_h = if s.box_sizing == BoxSizing::BorderBox {
+            pt + pb + bt + bb
+        } else {
+            0.0
         };
 
-        let frame_v = mt + mb + pt + pb + bt + bb;
-        // A **definite** content height is known BEFORE the children are laid out in two cases:
-        // an explicit (non-`auto`) height, and `height:auto` resolved by the constraint equation
-        // (both `top` and `bottom` set, CSS2 §10.6.4). In both, a `height:100%` (or any `%`) child
-        // must resolve against it (CSS2 §10.5) — so we thread it down as the percentage base. This
-        // is the `position:absolute; inset:0` fill pattern (overlays/modals/backdrops), whose child
-        // otherwise sees an indefinite base and **collapses to 0**. When the box is content-sized
-        // instead, the base stays `None` (a `%` height there is `auto`, which is correct).
+        // A **definite** content height is known BEFORE the children (and the width) are computed in
+        // two cases: an explicit (non-`auto`) height, and `height:auto` resolved by the constraint
+        // equation (both `top` and `bottom` set, CSS2 §10.6.4). In both, a `height:100%` (or any `%`)
+        // child must resolve against it (CSS2 §10.5) — so we thread it down as the percentage base.
+        // This is the `position:absolute; inset:0` fill pattern (overlays/modals/backdrops), whose
+        // child otherwise sees an indefinite base and **collapses to 0**. When the box is
+        // content-sized instead, the base stays `None` (a `%` height there is `auto`, which is
+        // correct). Computed here (not after the children) because `aspect-ratio` transfers it into
+        // the width below.
         let definite_ch: Option<f32> = match s.height {
             Dim::Auto => match (top, bottom) {
+                // The constraint equation already yields the *content* height (`frame_v` carries the
+                // padding+border out), so it is box-sizing-agnostic — no `bs_extra_h` here.
                 (Some(t), Some(b)) => Some((cb.height - t - b - frame_v).max(0.0)),
                 _ => None,
             },
-            // A non-`auto` Dim ignores its `auto_px` fallback, so this equals the old
-            // `other.resolve(cb.height, ch)` — the height never depended on `ch` here.
-            other => Some(other.resolve(cb.height, 0.0).max(0.0)),
+            // A non-`auto` Dim ignores its `auto_px` fallback; `bs_extra_h` converts a border-box
+            // height to content (it is 0 under content-box, so this is the old value there).
+            other => Some((other.resolve(cb.height, 0.0) - bs_extra_h).max(0.0)),
+        };
+
+        // Width: definite wins; else if both left+right are set the box stretches to fill between
+        // them; else a definite height + `aspect-ratio` transfers through the ratio (CSS Sizing 4 —
+        // the media/card/placeholder pattern), else shrink-to-fit.
+        let content_w = match s.width {
+            Dim::Auto => match (left, right) {
+                (Some(l), Some(r)) => (cw - l - r - frame).max(0.0),
+                _ => match (definite_ch, s.aspect_ratio) {
+                    // The ratio relates the two axes of the box named by `box-sizing`, so scale in
+                    // that box (`ch + bs_extra_h`) then convert back to content width (`- bs_extra_w`).
+                    // Both deltas are 0 under content-box, so it is `content_h * ratio` there.
+                    (Some(ch), Some(r)) if r > 0.0 => ((ch + bs_extra_h) * r - bs_extra_w).max(0.0),
+                    _ => self.shrink_to_fit(node, (cw - frame).max(0.0)),
+                },
+            },
+            other => (other.resolve(cw, (cw - frame).max(0.0)) - bs_extra_w).max(0.0),
         };
         // Lay out content at a provisional origin, then re-origin once placed.
         let mut inner = FloatContext::new(0.0, content_w);
@@ -4378,6 +4403,46 @@ mod tests {
             rects.get(&inner).expect("child has geometry").height,
             200.0,
             "height:100% child resolves against the definite abspos parent — it was 0 before"
+        );
+    }
+
+    /// `position:absolute; height:100px; aspect-ratio:1/1` with an **auto width** transfers the
+    /// definite height through the ratio (CSS Sizing 4) — the media / card / image-placeholder
+    /// pattern. Before, auto width fell to shrink-to-fit (0 for an empty box) and the whole box
+    /// **collapsed to width 0**. Under `box-sizing`, the ratio relates the two axes of the named box,
+    /// so border/padding is added (content-box) or absorbed (border-box).
+    #[test]
+    fn abspos_aspect_ratio_transfers_definite_height_to_auto_width() {
+        // `top:0;left:0` (one inset per axis, NOT both) gives the box a recorded position without
+        // over-constraining the width — the width still comes from the aspect-ratio transfer.
+        // `aspect-ratio`/`border`/`box-sizing` all parse through the cascade now (this tick taught the
+        // hand parser `aspect-ratio`, at parity with the stylo map the shipping pipeline uses), so this
+        // is an end-to-end parse→layout gate — a dropped mapping here would flip it RED.
+        //  • content-box `<section>`: 100 content + 150*2 border → 400px square.
+        //  • border-box `<article>`: the 100px height IS the border box and the ratio relates border
+        //    boxes → 100px square, the 20px border absorbed.
+        let (dom, root) = layout_html(
+            "<body><div style='position:relative;width:800px;height:600px'>\
+               <section style='position:absolute;top:0;left:0;height:100px;aspect-ratio:1/1;border:150px solid'></section>\
+               <article style='position:absolute;top:0;left:0;height:100px;aspect-ratio:1/1;border:20px solid;box-sizing:border-box'></article>\
+             </div></body>",
+            "",
+            800.0,
+        );
+        let cbx = dom.find_first("section").unwrap();
+        let bbx = dom.find_first("article").unwrap();
+        let rects = root.node_rects(&dom);
+        let cb = rects.get(&cbx).expect("content-box abspos has geometry");
+        assert_eq!(
+            (cb.width, cb.height),
+            (400.0, 400.0),
+            "content-box: 100 content + 150*2 border = 400 square (auto width was 0 before)"
+        );
+        let bb = rects.get(&bbx).expect("border-box abspos has geometry");
+        assert_eq!(
+            (bb.width, bb.height),
+            (100.0, 100.0),
+            "border-box: the ratio relates border boxes → 100px square, border absorbed"
         );
     }
 

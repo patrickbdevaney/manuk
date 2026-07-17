@@ -73,3 +73,33 @@ only percentage-height *children* of definite abspos boxes gain a real base.
 withheld, GREEN (child = 200) with it. **Note:** the test cascade `MinimalCascade` parses the
 `top/right/bottom/left` longhands but *not* the `inset` shorthand, so the unit test uses the longhands; the
 full stylo pipeline (what the WPT run and real pages use) parses `inset:0` too.
+
+## The CSS `aspect-ratio` property was never mapped from the cascade (tick 145)
+
+`ComputedStyle.aspect_ratio` (a plain `width/height` f32) was set in exactly one place — the page layer,
+from a **decoded image's** intrinsic pixels (`engine/page/src/lib.rs`). The **CSS `aspect-ratio`
+property** had no arm in `stylo_map.rs`, so `aspect-ratio: 16/9` on a `<div>` reached layout as `None`.
+The transfer machinery already existed and was correct — the in-flow block path derives an auto width
+from a definite height (`layout/src/lib.rs` §1372) and an auto height from the width (§1459) — it just
+**never had a value to transfer**. A first attempt that added an abspos transfer moved the WPT count by
+zero and named the real bug: *the mechanism existed; the value never reached it* (the metric-won't-move →
+suspect-the-metric lesson).
+
+**Fix (three parts).**
+1. `stylo_map.rs` maps stylo's computed `AspectRatio { auto, ratio: PreferredRatio<NonNegativeNumber> }`
+   onto `s.aspect_ratio = w/h` whenever a `<ratio>` is present (the `auto` keyword is dropped — for a
+   non-replaced box the specified ratio always applies).
+2. The hand parser `MinimalCascade` (`engine/css/src/lib.rs`) learns `aspect-ratio` at parity: `w/h`, a
+   bare number (`n/1`), and `auto <ratio>`. This keeps the two cascade paths in step and lets the layout
+   tests drive real CSS instead of injecting the field.
+3. `layout_abs` gains a **box-sizing-aware** aspect-ratio transfer for its auto width (scale the definite
+   height in the box the ratio names — `ch + bs_extra_h` — then convert back to content, `- bs_extra_w`;
+   both deltas 0 under content-box) and, a pre-existing gap, now honours `box-sizing:border-box` for its
+   own explicit `width`/`height`.
+
+**WPT / gate.** `css/css-sizing` 229→240 (+11), all from the mapping (the in-flow transfer, live at
+last); css-flexbox/grid/position/overflow flat. Gated by `aspect_ratio_parses_to_a_width_over_height_ratio`
+(css) and the end-to-end `abspos_aspect_ratio_transfers_definite_height_to_auto_width` (layout, RED when
+the transfer arm is neutralised). **Residue:** `abspos-aspect-ratio-border.html` still fails — those boxes
+set no insets, and a static-position abspos box records no geometry, so `offsetWidth` reads 0 regardless
+of the ratio. That is a separate mechanism (static-position abspos placement), not an aspect-ratio bug.
