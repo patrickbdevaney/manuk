@@ -24,6 +24,7 @@ printf "  wait on its OUTPUT-FILE CONTENT (e.g. \`grep -q 'VERIFY:' out\`), neve
 # ── PHASE MANDATE (observer, tick 138+) — DAILY-DRIVER CAPABILITY via a FIXED SEQUENCE. ENFORCED. Full roadmap +
 # good-enough bars + agentic fallbacks: docs/wiki/lever-map.md. Agent picks the LOWEST-NUMBERED unmet target.
 printf "%s🎯 PHASE MANDATE — pick the LOWEST-NUMBERED unmet target below. Falsifiable bar, NOT WPT%%.%s\n" "$R$B" "$O"
+printf "  %s⛔ PARKED (observer, tick 156): SKIP step-6 grid-template-areas — it burned 2h+ across session windows without landing (too big for one atomic tick; no taffy consumer = a subsystem, not a bounded fix). WIP is in git stash. Do NOT pick it; it needs a dedicated decomposition session. Pick the next BOUNDED lever instead (any of: overflow/position render steps, OR the pull-forward/T-tier levers below: U-3 SameSite, T0.4 CORS, T2 crypto.subtle/ReadableStream/:host, T4 forms POST/validation, T5 shell-persistence, T6.1 agent actuation — all ~1 bounded tick).%s\n" "$R$B" "$O"
 printf "  html/dom (~93%%) is a done tail — a html/dom-flip tick does NOT advance the mandate. Correction: Taffy #204\n"
 printf "  ('Support CSS Grid') SHIPPED; the intrinsic-sizing blocker is MANUK'S OWN leaf measure — fixable in a tick.\n"
 printf "  %sRENDER+INTERACT SEQUENCE (build top-down; each bar = 'done for daily-driver'):%s\n" "$G$B" "$O"
