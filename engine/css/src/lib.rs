@@ -525,6 +525,12 @@ pub struct ComputedStyle {
     /// `overflow` (the more-clipping of overflow-x/overflow-y). `Visible` = no clip; any
     /// other value clips descendants to this element's padding box.
     pub overflow: Overflow,
+    /// `overflow-x` / `overflow-y` kept per-axis. The collapsed `overflow` above loses which
+    /// axis scrolls, but a *classic* scrollbar reserves space on the axis it lives on: a vertical
+    /// scrollbar (`overflow-y:scroll` in horizontal-tb) eats inline width, a horizontal one eats
+    /// block height. Scrollbar-gutter reservation needs the axis, so it reads these.
+    pub overflow_x: Overflow,
+    pub overflow_y: Overflow,
     pub table_layout: TableLayout,
     /// `border-spacing` (px) between table cells in the separated-borders model.
     pub border_spacing: f32,
@@ -626,6 +632,8 @@ impl ComputedStyle {
             inset: Sides::all(Dim::Auto),
             z_index: None,
             overflow: Overflow::Visible,
+            overflow_x: Overflow::Visible,
+            overflow_y: Overflow::Visible,
             table_layout: TableLayout::Auto,
             border_spacing: 0.0,
             border_collapse: false,
@@ -2697,13 +2705,30 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         "z-index" => s.z_index = if v == "auto" { None } else { v.parse().ok() },
         // overflow shorthand + longhands: we clip the box for any non-visible value, and
         // take the more-clipping of x/y (a single clip rect, no independent-axis scroll).
+        // The per-axis `overflow_x`/`overflow_y` are kept alongside so scrollbar-gutter
+        // reservation can tell which axis actually scrolls (`overflow: hidden scroll`).
         "overflow" | "overflow-x" | "overflow-y" => {
-            let o = match v.split_whitespace().next().unwrap_or("visible") {
+            let parse_ov = |t: &str| match t {
                 "hidden" => Overflow::Hidden,
                 "scroll" => Overflow::Scroll,
                 "auto" => Overflow::Auto,
                 "clip" => Overflow::Clip,
                 _ => Overflow::Visible,
+            };
+            let mut it = v.split_whitespace();
+            let first = parse_ov(it.next().unwrap_or("visible"));
+            match d.name.as_str() {
+                "overflow-x" => s.overflow_x = first,
+                "overflow-y" => s.overflow_y = first,
+                _ => {
+                    // shorthand: `overflow: <x> [<y>]` — second value defaults to the first.
+                    s.overflow_x = first;
+                    s.overflow_y = it.next().map(parse_ov).unwrap_or(first);
+                }
+            }
+            let o = match (s.overflow_x, s.overflow_y) {
+                (Overflow::Visible, oy) => oy,
+                (ox, _) => ox,
             };
             if o != Overflow::Visible {
                 s.overflow = o;

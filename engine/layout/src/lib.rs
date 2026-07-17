@@ -43,6 +43,12 @@ use manuk_text::{FontContext, FontFamily, FontKey};
 pub mod flex;
 mod taffy_tree;
 
+/// Width (px) of a classic, space-taking scrollbar — the inline gutter an `overflow:scroll`
+/// container reserves for its vertical scrollbar. 15px is the long-standing default UA metric on
+/// Linux/desktop and the figure `getBoundingClientRect`-driven WPT expects; overlay scrollbars
+/// (which take no space) are a separate platform mode we do not emulate here.
+const SCROLLBAR_WIDTH: f32 = 15.0;
+
 /// An axis-aligned rectangle in absolute document px.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rect {
@@ -1637,16 +1643,32 @@ impl Ctx<'_> {
             Dim::Auto => None,
         };
 
+        // **Scrollbar-gutter reservation** (CSS Overflow 4 §3.2). A classic (non-overlay) vertical
+        // scrollbar lives on the inline-end edge and eats inline space: `overflow-y:scroll` always
+        // shows one, so the content box is narrower than the border box (`offsetWidth`) by the
+        // scrollbar's width. The `html{overflow-y:scroll}` layout-shift-prevention idiom — a
+        // scrollbar reserved on every page whether or not it scrolls — depends on exactly this, and
+        // without it every such page's content was ~15px too wide. Only the deterministic case
+        // (`scroll`, scrollbar always present) is reserved; the `auto`-and-actually-overflows case
+        // needs a second layout pass and stays residue. The gutter narrows the CONTENT box passed to
+        // children (and the BFC float band), leaving `width`/`border_box_w` — the box's own
+        // offsetWidth — untouched.
+        let gutter = if s.overflow_y == Overflow::Scroll {
+            SCROLLBAR_WIDTH.min(width)
+        } else {
+            0.0
+        };
+        let inner_width = (width - gutter).max(0.0);
         // A BFC root gets a fresh float context spanning its own content box; a plain
         // block shares its parent's so floats affect content across nested blocks.
         let mut own_bfc;
         let (content, content_height) = if establishes_bfc(&s) {
-            own_bfc = FloatContext::new(content_x, content_x + width);
+            own_bfc = FloatContext::new(content_x, content_x + inner_width);
             let (c, h) = self.layout_children(
                 node,
                 content_x,
                 content_y,
-                width,
+                inner_width,
                 own_definite_h,
                 &mut own_bfc,
             );
@@ -1654,7 +1676,14 @@ impl Ctx<'_> {
             let float_h = (own_bfc.lowest_bottom() - content_y).max(0.0);
             (c, h.max(float_h))
         } else {
-            self.layout_children(node, content_x, content_y, width, own_definite_h, floats)
+            self.layout_children(
+                node,
+                content_x,
+                content_y,
+                inner_width,
+                own_definite_h,
+                floats,
+            )
         };
         // **A replaced element's auto height comes from its USED width and its intrinsic ratio**
         // (CSS2 §10.6.2) — not from the image's natural pixel height. `width` here is already
@@ -5790,6 +5819,73 @@ mod tests {
         assert!(
             (kid_h - 100.0).abs() < 1.0,
             "height:50% child of a stretched (200px) box must be 100px, got {kid_h}"
+        );
+    }
+
+    /// `overflow-y:scroll` reserves a classic vertical-scrollbar gutter: the content box is narrower
+    /// than the border box by the scrollbar width, so a `width:100%` child no longer fills the box.
+    /// This is the `html{overflow-y:scroll}` layout-shift-prevention idiom.
+    #[test]
+    fn overflow_y_scroll_reserves_inline_gutter() {
+        let html = r#"<div id="c"><div id="k">x</div></div>"#;
+        let css = "#c{width:200px;overflow-y:scroll} #k{width:100%}";
+        let (dom, root) = layout_html(html, css, 400.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let cw = rects[&by_id("c")].width;
+        let kw = rects[&by_id("k")].width;
+        assert!(
+            (cw - 200.0).abs() < 0.5,
+            "container border box (offsetWidth) is unchanged at 200, got {cw}"
+        );
+        assert!(
+            (kw - 185.0).abs() < 0.5,
+            "width:100% child fills the content box minus the 15px scrollbar gutter (185), got {kw}"
+        );
+    }
+
+    /// `overflow:visible` (the default) reserves no gutter — the `width:100%` child fills the box.
+    /// The control that proves the reservation is scoped to scroll containers, not every box.
+    #[test]
+    fn overflow_visible_reserves_no_gutter() {
+        let html = r#"<div id="c"><div id="k">x</div></div>"#;
+        let css = "#c{width:200px} #k{width:100%}";
+        let (dom, root) = layout_html(html, css, 400.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let kw = rects[&by_id("k")].width;
+        assert!(
+            (kw - 200.0).abs() < 0.5,
+            "no scroll container => no gutter => width:100% child fills 200, got {kw}"
+        );
+    }
+
+    /// `overflow-y:auto` with content that does not overflow shows no scrollbar, so it reserves no
+    /// gutter (unlike `scroll`, which always does). Guards against over-reserving on the common
+    /// `overflow:auto` pane that happens to fit.
+    #[test]
+    fn overflow_y_auto_without_overflow_reserves_no_gutter() {
+        let html = r#"<div id="c"><div id="k">x</div></div>"#;
+        let css = "#c{width:200px;height:200px;overflow-y:auto} #k{width:100%}";
+        let (dom, root) = layout_html(html, css, 400.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let kw = rects[&by_id("k")].width;
+        assert!(
+            (kw - 200.0).abs() < 0.5,
+            "overflow:auto that fits shows no scrollbar => width:100% child fills 200, got {kw}"
         );
     }
 }

@@ -6666,3 +6666,38 @@ now-definite box.
 css-sizing/css-flexbox/css-grid/css-position/CSS2-normal-flow with HANG/CRASH 0 and no suite regressing,
 else revert. Residue noted: `width:stretch` in a shrink-to-fit context (float/inline-block/abspos) still
 behaves as `auto` — a separate, smaller mechanism. Mechanism in [[box-layout]].
+
+## Tick 155 — `overflow-y: scroll` reserves a classic vertical-scrollbar gutter, narrowing the content box (2026-07-17)
+
+**TICK SHAPE: layout-mechanism (CSS-LAYOUT phase-mandate row 7 — overflow scroll-container; the "overflow-y:scroll reserves gutter" half, companion to t152's overflow-establishes-a-BFC half). WIKI: box-layout.**
+Probed css/css-overflow: every `scrollbar-gutter-001` `offsetWidth` case failed identically — a 200px
+`overflow-y:scroll` container gave its `width:100%` child a **200px** used width where Chrome gives ~185.
+A classic (space-taking) vertical scrollbar lives on the inline-end edge and eats inline width, but layout
+laid children across the box's FULL content width — no scrollbar space was ever reserved. The daily-driver
+face: the ubiquitous `html{overflow-y:scroll}` idiom (force a scrollbar on every page so navigating from a
+short page to a tall one causes no horizontal layout shift) rendered content ~15px too wide, so every
+centered container sat off-centre by half a scrollbar.
+
+**Hypothesis.** `ComputedStyle` collapsed `overflow-x`/`overflow-y` into one more-clipping `overflow`
+field, so `overflow-x:auto; overflow-y:scroll` (the test's base) read back as `auto` and LOST that the
+vertical axis force-shows a scrollbar. Restore the per-axis values and reserve an inline gutter when
+`overflow_y == Scroll` — the one deterministic case where a classic scrollbar is always present.
+
+**Fix.** New per-axis `ComputedStyle::overflow_x`/`overflow_y` (the collapsed `overflow` stays for
+clip/BFC — untouched, no regression there); set in both `stylo_map` (`s.overflow_x = ox; s.overflow_y =
+oy;`) and the hand parser (which now also handles the two-value `overflow: <x> <y>` shorthand). In
+`layout_block`, reserve `SCROLLBAR_WIDTH` (15px) of inline space when `overflow_y == Scroll`: the gutter
+narrows only the content width handed to children and the BFC float band (`inner_width = width − gutter`);
+`width` and `border_box_w` — the box's own `offsetWidth` — are untouched, so a 200px scroll container stays
+200 while its `width:100%` child becomes 185. Applies uniformly to block and taffy flex/grid leaf items
+(both route through `layout_block`), so a scroll-container flex item narrows its content too.
+
+**Gate.** Unit tests proven RED by reverting: `overflow_y_scroll_reserves_inline_gutter` (child 200→185),
+with controls `overflow_visible_reserves_no_gutter` and `overflow_y_auto_without_overflow_reserves_no_gutter`
+proving the reservation is scoped to scroll containers (not every box, not an `auto` pane that fits).
+Regression sweep, stash-rebuild-measured BEFORE vs AFTER on the same release binary:
+css-overflow **131→132 (+1)**, css-sizing/css-flexbox/css-grid/css-position **all flat (0 regression)**,
+HANG/CRASH 0. Residue: `scrollbar-gutter: stable`/`both-edges` is unreachable (crates.io stylo 0.19 has no
+`scrollbar-gutter` support — dropped at parse, so no dead surface added); the `overflow:auto`-and-actually-
+overflows case needs a second layout pass; RTL/vertical-writing-mode gutter placement and the
+horizontal-scrollbar-reserves-height axis are separate, smaller mechanisms. Mechanism in [[box-layout]].

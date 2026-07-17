@@ -474,6 +474,8 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     } else {
         oy
     };
+    s.overflow_x = ox;
+    s.overflow_y = oy;
     s.z_index = match cv.clone_z_index() {
         ZIndex::Integer(i) => Some(i),
         ZIndex::Auto => None,
