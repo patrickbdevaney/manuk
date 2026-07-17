@@ -152,6 +152,14 @@ enum NavEvent {
     },
 }
 
+/// How a native `<form>` submission navigates: a **GET** query URL, or an **urlencoded POST** body.
+enum FormSubmission {
+    /// `method=get` — the fields are in the URL; navigate there.
+    Get(String),
+    /// `method=post` — the fields are an `application/x-www-form-urlencoded` request body.
+    Post(manuk_agent::forms::UrlencodedPost),
+}
+
 /// A completed download, shown in the hamburger menu's Downloads section.
 struct DownloadRecord {
     filename: String,
@@ -672,20 +680,63 @@ impl App {
             return;
         }
 
-        let action = self.page.as_ref().and_then(|page| {
-            manuk_agent::forms::submission_url(page.dom(), form, &page.final_url).ok()
-        });
-        match action {
-            Some(url) => {
+        match self.form_submission(form) {
+            Some(FormSubmission::Get(url)) => {
                 tracing::info!(url = %url, "submit: form GET");
                 self.goto(&url);
             }
-            // POST is still unimplemented, and it is named rather than silently ignored: a login that
-            // does nothing and says nothing is the worst possible failure for the person trying to use it.
-            None => tracing::warn!(
-                "submit: this form uses method=POST, which is not implemented yet — nothing was sent"
-            ),
+            Some(FormSubmission::Post(post)) => {
+                tracing::info!(url = %post.url, "submit: form POST");
+                self.post_navigate(post);
+            }
+            None => {} // no page, or a non-navigable form — already logged by form_submission
         }
+    }
+
+    /// Decide how to submit `form`: a **GET** URL to navigate to, or an **urlencoded POST** body
+    /// (the classic login/checkout case). `None` when there is no page, or the form can't be
+    /// submitted here — a genuine error, or a `multipart/form-data` file upload, which goes through
+    /// the OS file-picker path instead and must not be silently urlencoded (that would drop the
+    /// files). Every `None` is logged so a form that does nothing never does so silently.
+    fn form_submission(&self, form: manuk_dom::NodeId) -> Option<FormSubmission> {
+        let page = self.page.as_ref()?;
+        let base = &page.final_url;
+        match manuk_agent::forms::submission_url(page.dom(), form, base) {
+            Ok(url) => Some(FormSubmission::Get(url)),
+            Err(manuk_agent::forms::SubmitError::PostUnsupported) => {
+                // A POST with a file input is a multipart upload — handled by the file-picker path,
+                // not here. Urlencoding it would drop the file, so refuse LOUDLY rather than send a
+                // broken body.
+                if !manuk_agent::forms::file_inputs(page.dom(), form).is_empty() {
+                    tracing::info!(
+                        "submit: form has a file input — a multipart upload is the picker's job, not a urlencoded POST"
+                    );
+                    return None;
+                }
+                match manuk_agent::forms::urlencoded_submission(page.dom(), form, base) {
+                    Ok(p) => Some(FormSubmission::Post(p)),
+                    Err(e) => {
+                        tracing::warn!("submit: could not build the form POST body: {e}");
+                        None
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!("submit: {e}");
+                None
+            }
+        }
+    }
+
+    /// Perform a top-level **POST navigation** (a native `<form method=post>` submission): stash the
+    /// current page into the bfcache, point the URL bar at the action, record history, and fetch the
+    /// action with the POST body off-thread. The result lands via `NavEvent::Fetched` and swaps in
+    /// exactly as a GET navigation's page does.
+    fn post_navigate(&mut self, post: manuk_agent::forms::UrlencodedPost) {
+        self.stash_current();
+        self.url = post.url.clone();
+        self.history.push(post.url.clone());
+        self.start_post_nav(post.content_type, post.body);
     }
 
     /// Drain `form.submit()` / `form.requestSubmit()` calls that scripts queued.
@@ -715,14 +766,10 @@ impl App {
 
     /// Perform the navigation for a form, with no event — the caller has already decided.
     fn navigate_form(&mut self, form: manuk_dom::NodeId) {
-        let action = self.page.as_ref().and_then(|page| {
-            manuk_agent::forms::submission_url(page.dom(), form, &page.final_url).ok()
-        });
-        match action {
-            Some(url) => self.goto(&url),
-            None => {
-                tracing::warn!("form.submit(): method=POST is not implemented yet — nothing sent")
-            }
+        match self.form_submission(form) {
+            Some(FormSubmission::Get(url)) => self.goto(&url),
+            Some(FormSubmission::Post(post)) => self.post_navigate(post),
+            None => {} // already logged by form_submission
         }
     }
 
@@ -900,6 +947,26 @@ impl App {
             let _ = proxy.send_event(NavEvent::Fetched { gen, result });
         });
         self.rerender(); // keep the old page visible; chrome stays responsive during the fetch
+    }
+
+    /// Start a top-level **POST navigation** off-thread (a native `<form method=post>` submission).
+    /// Mirrors [`start_fetch`](Self::start_fetch), but issues a POST with `content_type` + `body`
+    /// (`prefetch_document_post`, which follows the login flow's POST→redirect→GET). The result
+    /// flows through the same `NavEvent::Fetched` path, so the page swaps in identically to a GET.
+    /// The caller has already stashed the outgoing page, set `self.url`, and recorded history.
+    fn start_post_nav(&mut self, content_type: String, body: String) {
+        self.nav_gen += 1;
+        let gen = self.nav_gen;
+        self.loading = true;
+        let url = self.url.clone();
+        let proxy = self.proxy.clone();
+        self.rt.spawn(async move {
+            let result = manuk_page::prefetch_document_post(&url, &content_type, body.into_bytes())
+                .await
+                .map_err(|e| format!("{e:#}"));
+            let _ = proxy.send_event(NavEvent::Fetched { gen, result });
+        });
+        self.rerender(); // keep the old page visible; chrome stays responsive during the POST
     }
 
     /// R1 — build the page from the off-thread-fetched document and swap it in (on the UI

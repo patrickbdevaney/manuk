@@ -6957,3 +6957,42 @@ engine/net (cookies + net entry points) + one page call-site — WPT-neutral (no
 network suite runs in the gate set). HANG/CRASH 0. Residue: document-navigation and CSS/img subresource
 cookie context is still `None` (flat jar) — lower-risk GET paths whose responses are not handed to
 script; threading their top-level context is a separate tick. Mechanism in [[networking]].
+
+## Tick 164 — native `<form method=post>` submission (login/checkout POST navigation) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (DIVERSIFY steer — bounded T4 forms lever: POST navigation, the
+"method=post is not implemented yet — nothing was sent" no-op). WIKI: networking.**
+The shell's native form submission built a GET query URL (`forms::submission_url`) and, for
+`method=post`, **logged a warning and sent nothing**. So every classic login, signup and checkout
+form — a `<form method=post action=/login>` with no JS interception — did *nothing at all* when
+submitted: the worst failure shape (the user presses "Sign in" and the page just sits there). The
+POST pieces already existed but were unwired: `net::send_once` POSTs, `net::request` POSTs, and
+`forms::multipart_submission` handled the file-upload case — the common `application/x-www-form-
+urlencoded` POST navigation was the gap.
+
+**Fix (additive — the GET path is byte-identical, zero regression risk).**
+- `agent/forms.rs`: new `urlencoded_submission(dom, form, base) -> UrlencodedPost{url, content_type,
+  body}` — `x-www-form-urlencoded`-encodes the form's successful controls into the **body** (not the
+  URL, so passwords/tokens never hit the address bar or `Referer`). Requires `method=post`; GET is
+  refused (belongs in the query).
+- `net/lib.rs`: new `post_document(url, content_type, body)` — POSTs under the document deadline and
+  follows the login flow's **POST→redirect→GET** (a `3xx` is followed as a GET of its `Location`, so
+  the redirected dashboard is what renders). Top-level nav → flat cookie jar (`initiator=None`), so
+  the session cookie the login just set flows to the redirect target and the user lands logged in.
+- `page/lib.rs`: extracted the off-thread subresource prep into `prepare_prefetched(html, final_url)`;
+  new `prefetch_document_post` POSTs then runs the *same* prep, so a POST page swaps in identically
+  to a GET one.
+- `shell/gui.rs`: `form_submission(form)` decides GET-URL vs urlencoded-POST (a file-input form is
+  refused LOUD → the multipart picker path, never a files-dropping urlencode); `post_navigate` +
+  `start_post_nav` run the POST off-thread through the existing `NavEvent::Fetched` swap-in. Both
+  submit call-sites (`submit_owning_form`, `navigate_form`) now POST instead of logging "not
+  implemented".
+
+**Gate.** Two falsifiable checks, both RED against the old absence: `forms::urlencoded_post_encodes_
+fields_into_the_body_not_the_url` (fields go in the body `user=ada&pw=a+b%26c`, not the URL); and the
+E2E `net::post_document_posts_the_body_then_follows_the_redirect` — a raw-TCP mock login server
+asserts the POST arrives with its body AND that the 303 is followed to the landing page's body
+(`welcome ada`), not the empty redirect. Confined to agent/net/page + two shell call-sites. HANG/CRASH
+0. Residue: cross-site POST-navigation `SameSite` (a top-level nav withholds `Strict` cross-site) is
+the follow-on; `307/308` POST-preserving redirects are followed as GET (rare in login flows, named not
+faked). Mechanism in [[networking]].

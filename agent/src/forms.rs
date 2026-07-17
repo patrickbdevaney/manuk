@@ -1,11 +1,13 @@
 //! §4b — HTML form model: find the form around a control, read its fields, and build
 //! the URL a **GET** submission would navigate to.
 //!
-//! **Documented gaps (not faked):** only `method=get` is implemented. `POST` bodies
-//! are *not* silently downgraded to GET — that would send credentials in a URL and in
-//! the referrer. [`submission_url`] returns [`SubmitError::PostUnsupported`] instead,
-//! and the agent surfaces it. `<select multiple>`, `<input type=file>`, `formaction`
-//! overrides, and `enctype` are not modelled.
+//! **Submission model:** GET forms build a query URL ([`submission_url`]); `method=post`
+//! forms build a request body — `application/x-www-form-urlencoded` ([`urlencoded_submission`],
+//! the common login/checkout case) or `multipart/form-data` when files are attached
+//! ([`multipart_submission`]). A POST is **never** silently downgraded to a GET — that would leak
+//! field values (passwords, tokens) into the URL and the referrer; [`submission_url`] returns
+//! [`SubmitError::PostUnsupported`] rather than doing so. `<select multiple>`, `formaction`
+//! overrides and `text/plain` enctype are not modelled.
 
 use manuk_dom::{Dom, NodeId};
 use url::Url;
@@ -157,6 +159,63 @@ pub fn submission_url(dom: &Dom, form: NodeId, base: &str) -> Result<String, Sub
         url.set_query(None);
     }
     Ok(url.to_string())
+}
+
+/// A ready-to-send `application/x-www-form-urlencoded` POST built from a form's successful
+/// controls — the body a browser sends for the overwhelmingly common `<form method=post>` with no
+/// file input (every classic login, signup and checkout). Unlike [`submission_url`], the field
+/// values go in the **body**, not the URL, so passwords and CSRF tokens never leak into the address
+/// bar or the `Referer` header.
+#[derive(Clone, Debug, PartialEq)]
+pub struct UrlencodedPost {
+    /// Absolute action URL (resolved against the page). The query string is left untouched — an
+    /// `application/x-www-form-urlencoded` POST carries its data in the body, not the URL.
+    pub url: String,
+    /// `application/x-www-form-urlencoded` — the `Content-Type` header for the request.
+    pub content_type: String,
+    /// The percent-encoded request body (`a=1&b=2`).
+    pub body: String,
+}
+
+/// Build an `application/x-www-form-urlencoded` **POST** for `form` (T4 — native form submission).
+/// The successful controls (via [`fields`]) are `x-www-form-urlencoded` into the body; the action
+/// resolves against `base`. Requires `method=post` — a GET form goes through [`submission_url`],
+/// which puts the fields in the query instead. A form whose fields include a `type=file` control
+/// should be routed through [`multipart_submission`] instead (a file cannot be urlencoded); this
+/// builder ignores file inputs, matching what [`fields`] already collects.
+pub fn urlencoded_submission(
+    dom: &Dom,
+    form: NodeId,
+    base: &str,
+) -> Result<UrlencodedPost, SubmitError> {
+    let el = dom.element(form).ok_or(SubmitError::NoForm)?;
+    let method = el.attr("method").unwrap_or("get").to_ascii_lowercase();
+    if method != "post" {
+        // GET submissions belong in the URL; refusing here keeps the two paths from silently
+        // swapping (a GET encoded as a body would drop the fields the server reads from the query).
+        return Err(SubmitError::BadAction(
+            "urlencoded submission requires method=post".to_string(),
+        ));
+    }
+    let action = el.attr("action").filter(|a| !a.trim().is_empty());
+    let base_url = Url::parse(base).map_err(|_| SubmitError::BadAction(base.to_string()))?;
+    let url = match action {
+        Some(a) => base_url
+            .join(a.trim())
+            .map_err(|_| SubmitError::BadAction(a.to_string()))?,
+        // No action => submit to the page's own URL.
+        None => base_url,
+    };
+
+    let body = url::form_urlencoded::Serializer::new(String::new())
+        .extend_pairs(fields(dom, form))
+        .finish();
+
+    Ok(UrlencodedPost {
+        url: url.to_string(),
+        content_type: "application/x-www-form-urlencoded".to_string(),
+        body,
+    })
 }
 
 /// A ready-to-send `multipart/form-data` POST built from a form + the user's chosen files.
@@ -378,6 +437,34 @@ mod tests {
             "file part: {s}"
         );
         assert!(s.ends_with("--BOUND--\r\n"), "closing delimiter");
+    }
+
+    /// A `method=post` form serializes its successful controls into an urlencoded **body**, not
+    /// the URL — so a password never reaches the address bar or the referrer.
+    #[test]
+    fn urlencoded_post_encodes_fields_into_the_body_not_the_url() {
+        let dom = dom_of(
+            r#"<form method="post" action="/login">
+                 <input name="user" value="ada">
+                 <input type="password" name="pw" value="a b&c">
+                 <input type="submit" value="Go">
+               </form>"#,
+        );
+        let form = dom.find_first("form").unwrap();
+        let post = urlencoded_submission(&dom, form, "https://ex.test/page").unwrap();
+        assert_eq!(post.url, "https://ex.test/login");
+        assert_eq!(post.content_type, "application/x-www-form-urlencoded");
+        // Fields are in the body, percent/plus-encoded; the URL carries no query.
+        assert_eq!(post.body, "user=ada&pw=a+b%26c");
+    }
+
+    /// A GET form is refused by the urlencoded path — its fields belong in the query, and silently
+    /// bodying them would drop the data the server reads from the URL.
+    #[test]
+    fn urlencoded_submission_refuses_a_get_form() {
+        let dom = dom_of(r#"<form action="/s"><input name="q" value="x"></form>"#);
+        let form = dom.find_first("form").unwrap();
+        assert!(urlencoded_submission(&dom, form, "https://ex.test/").is_err());
     }
 
     #[test]

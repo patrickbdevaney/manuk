@@ -245,3 +245,29 @@ first-party signal, so **honest detection is the opposite of reverse-engineering
 
 > **The strategic argument, not merely the ethical one: impersonation substitutes for the very capability
 > that closes the coverage gap.**
+
+## Native `<form method=post>` submission — POST navigation, and POST→redirect→GET
+
+A GET form builds a query URL (`forms::submission_url`); a **POST form builds a request body** and
+navigates by POSTing it — the classic login/signup/checkout that isn't JS-intercepted. Before T4 this
+was a logged no-op ("method=post is not implemented — nothing was sent"), so those forms did nothing.
+
+**The three pieces, all pre-existing but unwired:** `forms::urlencoded_submission` encodes the
+successful controls as `application/x-www-form-urlencoded` into the **body** (never the URL — a
+password in a query leaks into history and `Referer`); `net::post_document` POSTs under the document
+deadline; `page::prefetch_document_post` runs the same off-thread subresource prep as a GET nav so the
+page swaps in identically.
+
+**POST→redirect→GET is the load-bearing detail.** Server login flows almost universally answer a
+successful POST with a `303`/`302` to a dashboard (the PRG pattern — so a browser Back doesn't
+re-submit). `post_document` therefore follows a `3xx` as a **GET of its `Location`**, and the
+redirected page is what renders. Miss this and every login "works" but shows a blank 303 body.
+
+**Cookies must flow across the redirect.** A POST navigation is **top-level**, so it uses the flat
+cookie jar (`initiator=None`): the `Set-Cookie` the login response set is stored and then attached to
+the followed GET — which is the entire point, or the user lands logged *out*. (Cross-site
+POST-navigation `SameSite` — withholding `Strict` — is the follow-on; a same-site login is correct.)
+
+**A file-input form is refused here, LOUD.** `urlencoded_submission` cannot carry file bytes, so a
+`multipart/form-data` upload goes through the OS file-picker path (`forms::multipart_submission`), not
+a urlencoded POST that would silently drop the files.

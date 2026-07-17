@@ -3286,83 +3286,110 @@ pub async fn prefetch_document(url: &str) -> Result<Loaded> {
             path,
             bytes,
         }),
-        Loaded::Document { html, final_url } => {
-            #[allow(unused_mut)]
-            let mut dom = manuk_html::parse(&html);
-            // External <script src> — fetched and inlined here, off-thread. (Execution still
-            // happens on the UI thread inside `from_dom`; only the *fetch* moves.)
-            #[cfg(feature = "spidermonkey")]
-            fetch_external_scripts(&mut dom, &final_url).await;
-
-            // External stylesheets, concurrently.
-            let mut seen = std::collections::HashSet::new();
-            let ext: Vec<String> = collect_style_sources(&dom, &final_url)
-                .iter()
-                .filter_map(|s| match s {
-                    StyleSource::External(u, _) => Some(u.clone()),
-                    _ => None,
-                })
-                .filter(|u| seen.insert(u.clone()))
-                .collect();
-            let fetched = futures_util::future::join_all(ext.into_iter().map(|u| async move {
-                let text = manuk_net::fetch(&u).await.ok().map(|r| r.decoded_text());
-                (u, text)
-            }))
-            .await;
-            let css: HashMap<String, String> = fetched
-                .into_iter()
-                .filter_map(|(u, t)| t.map(|t| (u, t)))
-                .collect();
-
-            // Images: fetch + decode off-thread as OWNED data. Never touch `Rc` here — an `Rc`
-            // anywhere inside this async fn would make the whole future `!Send`, which is exactly
-            // what pinned image fetching to the UI thread and blocked it.
-            // **FIRST PAINT DOES NOT WAIT FOR IMAGES.**
-            //
-            // This used to fetch and decode every image on the page before the shell was handed
-            // anything at all — so the window showed nothing until the last tracking pixel on a news
-            // front page had either arrived or timed out. Measured on nytimes.com: the document was
-            // parsed, cascaded and laid out — *everything needed to paint* — in **1.7s**, and the user
-            // saw it at **14s**. Twelve of those seconds were images nobody was looking at yet.
-            //
-            // Chromium does not do this, and neither does any browser a person would use: the article
-            // is on screen long before the last asset lands. So the images are left to the shell, which
-            // fetches them on a background task and applies them with `apply_images_by_url` when they
-            // arrive (`NavEvent::ImagesReady`), repainting once. The layout reflows then — which is
-            // exactly what an `<img>` without intrinsic dimensions does in a real browser too.
-            let images: HashMap<String, manuk_paint::DecodedImage> = HashMap::new();
-
-            // Masks (icons). Scanned from the CSS text rather than the cascade: this thread has no
-            // styles, and a URL-keyed cache is all the cascade needs later to bind them to nodes.
-            // Each raw url resolves against ITS OWN stylesheet, which is what CSS specifies.
-            let mask_targets: Vec<(String, String)> = {
-                let mut seen = std::collections::HashSet::new();
-                css.iter()
-                    .flat_map(|(sheet, text)| {
-                        scan_mask_urls(text).into_iter().map(move |raw| {
-                            let abs = if raw.starts_with("data:") {
-                                raw.clone()
-                            } else {
-                                resolve_url(sheet, &raw)
-                            };
-                            (raw, abs)
-                        })
-                    })
-                    .filter(|(raw, _)| seen.insert(raw.clone()))
-                    .collect()
-            };
-            let masks = fetch_masks_owned(mask_targets).await;
-
-            Ok(Loaded::Prefetched(Box::new(Prefetched {
-                dom,
-                final_url,
-                css,
-                images,
-                masks,
-            })))
-        }
+        Loaded::Document { html, final_url } => prepare_prefetched(html, final_url).await,
         other => Ok(other),
     }
+}
+
+/// A **top-level `POST` navigation** — the async half of a native `<form method=post>` submission.
+/// POSTs `body` (with `content_type`) to `url` off the UI thread, follows the login flow's
+/// POST→redirect→GET, and runs the *same* off-thread subresource prefetch (external scripts, CSS,
+/// masks) as [`prefetch_document`], so the shell swaps in a fully-prepared page exactly as it does
+/// for a GET navigation. A response that turns out to be a download is handled like any other.
+pub async fn prefetch_document_post(
+    url: &str,
+    content_type: &str,
+    body: Vec<u8>,
+) -> Result<Loaded> {
+    let resp = manuk_net::post_document(url, content_type, body.into())
+        .await
+        .with_context(|| format!("POST {url}"))?;
+    if resp.status >= 400 {
+        // A 4xx/5xx still has a body worth showing (the server's "invalid password" page), so it is
+        // rendered rather than turned into an error — matching a real browser, which shows the page.
+        tracing::info!(status = resp.status, %url, "form POST returned an error status — showing its body");
+    }
+    prepare_prefetched(resp.decoded_text(), resp.final_url.to_string()).await
+}
+
+/// Turn a fetched document (`html` at `final_url`) into a [`Loaded::Prefetched`] with its external
+/// scripts inlined and its stylesheets + mask icons fetched — all off the UI thread. Shared by
+/// [`prefetch_document`] (GET) and [`prefetch_document_post`] (form POST) so the two navigation
+/// kinds build identical pages.
+async fn prepare_prefetched(html: String, final_url: String) -> Result<Loaded> {
+    #[allow(unused_mut)]
+    let mut dom = manuk_html::parse(&html);
+    // External <script src> — fetched and inlined here, off-thread. (Execution still
+    // happens on the UI thread inside `from_dom`; only the *fetch* moves.)
+    #[cfg(feature = "spidermonkey")]
+    fetch_external_scripts(&mut dom, &final_url).await;
+
+    // External stylesheets, concurrently.
+    let mut seen = std::collections::HashSet::new();
+    let ext: Vec<String> = collect_style_sources(&dom, &final_url)
+        .iter()
+        .filter_map(|s| match s {
+            StyleSource::External(u, _) => Some(u.clone()),
+            _ => None,
+        })
+        .filter(|u| seen.insert(u.clone()))
+        .collect();
+    let fetched = futures_util::future::join_all(ext.into_iter().map(|u| async move {
+        let text = manuk_net::fetch(&u).await.ok().map(|r| r.decoded_text());
+        (u, text)
+    }))
+    .await;
+    let css: HashMap<String, String> = fetched
+        .into_iter()
+        .filter_map(|(u, t)| t.map(|t| (u, t)))
+        .collect();
+
+    // Images: fetch + decode off-thread as OWNED data. Never touch `Rc` here — an `Rc`
+    // anywhere inside this async fn would make the whole future `!Send`, which is exactly
+    // what pinned image fetching to the UI thread and blocked it.
+    // **FIRST PAINT DOES NOT WAIT FOR IMAGES.**
+    //
+    // This used to fetch and decode every image on the page before the shell was handed
+    // anything at all — so the window showed nothing until the last tracking pixel on a news
+    // front page had either arrived or timed out. Measured on nytimes.com: the document was
+    // parsed, cascaded and laid out — *everything needed to paint* — in **1.7s**, and the user
+    // saw it at **14s**. Twelve of those seconds were images nobody was looking at yet.
+    //
+    // Chromium does not do this, and neither does any browser a person would use: the article
+    // is on screen long before the last asset lands. So the images are left to the shell, which
+    // fetches them on a background task and applies them with `apply_images_by_url` when they
+    // arrive (`NavEvent::ImagesReady`), repainting once. The layout reflows then — which is
+    // exactly what an `<img>` without intrinsic dimensions does in a real browser too.
+    let images: HashMap<String, manuk_paint::DecodedImage> = HashMap::new();
+
+    // Masks (icons). Scanned from the CSS text rather than the cascade: this thread has no
+    // styles, and a URL-keyed cache is all the cascade needs later to bind them to nodes.
+    // Each raw url resolves against ITS OWN stylesheet, which is what CSS specifies.
+    let mask_targets: Vec<(String, String)> = {
+        let mut seen = std::collections::HashSet::new();
+        css.iter()
+            .flat_map(|(sheet, text)| {
+                scan_mask_urls(text).into_iter().map(move |raw| {
+                    let abs = if raw.starts_with("data:") {
+                        raw.clone()
+                    } else {
+                        resolve_url(sheet, &raw)
+                    };
+                    (raw, abs)
+                })
+            })
+            .filter(|(raw, _)| seen.insert(raw.clone()))
+            .collect()
+    };
+    let masks = fetch_masks_owned(mask_targets).await;
+
+    Ok(Loaded::Prefetched(Box::new(Prefetched {
+        dom,
+        final_url,
+        css,
+        images,
+        masks,
+    })))
 }
 
 /// The outcome of navigating to a URL: a document to render, or a file to save (the server

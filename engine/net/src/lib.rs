@@ -600,6 +600,46 @@ pub async fn fetch_document(url: &str) -> Result<Response> {
     fetch_with_deadline(url, document_timeout(), None).await
 }
 
+/// A **top-level `POST` navigation** — a classic `<form method=post>` submission (login, signup,
+/// checkout). Sends `body` with `Content-Type: content_type` under the document deadline, and
+/// follows the **POST→redirect→GET** pattern that server-side login flows almost universally use: a
+/// `3xx` response is followed as a GET of its `Location` (the redirected document is what the user
+/// sees). A non-redirect response's body is returned directly (an inline "invalid password" page).
+///
+/// This is a **top-level navigation**, so the flat cookie jar is used (`initiator = None`): the
+/// session cookie the login just set flows to the redirect target, exactly as it must for the user
+/// to land logged in. `SameSite` on a cross-site POST navigation is the follow-on; the common
+/// same-site login is correct here.
+///
+/// Redirects are followed as GET for every `3xx` (the historical `301/302` behaviour every browser
+/// still applies to a POST). `307`/`308` POST-preserving redirects are followed as GET too — rare
+/// in login flows, and named here rather than silently mishandled.
+pub async fn post_document(url: &str, content_type: &str, body: Bytes) -> Result<Response> {
+    let deadline = document_timeout();
+    let u = Url::parse(url).with_context(|| format!("invalid URL: {url}"))?;
+    let headers = [("content-type", content_type)];
+    let resp =
+        match tokio::time::timeout(deadline, send_once("POST", &u, &headers, body, None)).await {
+            Ok(r) => r?,
+            Err(_) => bail!(
+                "POST to {url} exceeded the {:.0}s document deadline",
+                deadline.as_secs_f32()
+            ),
+        };
+    // POST→redirect→GET: follow a redirect as a GET of its Location, reusing the GET redirect chain
+    // (which carries its own cookie attach + further-redirect handling).
+    if (300..400).contains(&resp.status) {
+        if let Some(loc) = resp.header("location") {
+            let next = resp
+                .final_url
+                .join(loc)
+                .with_context(|| format!("bad redirect Location {loc:?} from POST {url}"))?;
+            return fetch_with_deadline(next.as_str(), deadline, None).await;
+        }
+    }
+    Ok(resp)
+}
+
 /// The outcome of [`fetch_document_or_download`]: a **document** to render (its body buffered — a
 /// document is bounded, so buffering is correct) or a **download** that was streamed **straight to
 /// disk** because the response headers said `attachment` (or a non-renderable binary type).
@@ -1357,6 +1397,83 @@ mod tests {
     fn rejects_unknown_scheme() {
         let err = rt().block_on(fetch("ftp://example.com/")).unwrap_err();
         assert!(err.to_string().contains("scheme"), "got: {err}");
+    }
+
+    /// **The T4 form-POST gate.** A native `<form method=post>` login: `post_document` must send the
+    /// body as a POST, and then follow the login flow's POST→redirect→GET — landing on (and
+    /// returning the body of) the *redirected* page, not the bare 303. RED against a `post_document`
+    /// that doesn't follow the redirect (returns the empty 303 body) or doesn't POST at all.
+    #[test]
+    fn post_document_posts_the_body_then_follows_the_redirect() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let rt = rt();
+        let (addr, method_seen, body_seen) = rt.block_on(async {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap().to_string();
+            let method_seen = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+            let body_seen = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+            let (m, b) = (method_seen.clone(), body_seen.clone());
+            let base = addr.clone();
+            tokio::spawn(async move {
+                while let Ok((mut sock, _)) = listener.accept().await {
+                    let (m, b, base) = (m.clone(), b.clone(), base.clone());
+                    tokio::spawn(async move {
+                        let mut buf = vec![0u8; 4096];
+                        let n = sock.read(&mut buf).await.unwrap_or(0);
+                        let req = String::from_utf8_lossy(&buf[..n]);
+                        let line0 = req.lines().next().unwrap_or("").to_string();
+                        let resp = if line0.starts_with("POST") {
+                            // Record what the POST carried, then redirect-as-GET (the PRG pattern).
+                            *m.lock().unwrap() = "POST".into();
+                            if let Some(body) = req.split("\r\n\r\n").nth(1) {
+                                *b.lock().unwrap() = body.trim_end_matches('\0').to_string();
+                            }
+                            format!(
+                                "HTTP/1.1 303 See Other\r\nLocation: http://{base}/landed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                            )
+                        } else {
+                            // The followed GET lands here.
+                            let page = "<!doctype html><title>Dashboard</title>welcome ada";
+                            format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                                page.len(),
+                                page
+                            )
+                        };
+                        let _ = sock.write_all(resp.as_bytes()).await;
+                        let _ = sock.flush().await;
+                    });
+                }
+            });
+            (addr, method_seen, body_seen)
+        });
+
+        let resp = rt
+            .block_on(post_document(
+                &format!("http://{addr}/login"),
+                "application/x-www-form-urlencoded",
+                Bytes::from_static(b"user=ada&pw=hunter2"),
+            ))
+            .expect("post_document");
+
+        assert_eq!(*method_seen.lock().unwrap(), "POST", "must POST, not GET");
+        assert!(
+            body_seen.lock().unwrap().contains("user=ada&pw=hunter2"),
+            "the server must receive the urlencoded body, got: {:?}",
+            body_seen.lock().unwrap()
+        );
+        assert_eq!(resp.status, 200, "must follow the 303 to the landing page");
+        assert!(
+            resp.decoded_text().contains("welcome ada"),
+            "must return the REDIRECTED page's body, not the empty 303"
+        );
+        assert!(
+            resp.final_url.as_str().ends_with("/landed"),
+            "final_url must be the redirect target, got: {}",
+            resp.final_url
+        );
     }
 
     #[test]
