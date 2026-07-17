@@ -423,3 +423,31 @@ the simple block-style clamp rather than CSS2 §10.6's full re-solve — matchin
 Gated by `abspos_min_max_size_clamps_apply` (500→200 max-width, 50→150 min-width, 500→80 max-height; RED
 unclamped on revert). Regression sweep across css-position/css-flexbox/css-grid/css-sizing/css-values/
 css-overflow: **all flat, HANG/CRASH 0**.
+
+## `overflow-x:scroll` reserves a horizontal-scrollbar gutter — block-axis mirror (tick 158)
+
+**Symptom.** Tick 155 taught `layout_block` to reserve a classic vertical scrollbar's inline width for
+`overflow-y:scroll` (narrowing `inner_width`), but the block axis was untouched. An `overflow-x:scroll`
+pane's horizontal scrollbar lives on the block-end edge and eats block-axis space, yet children were laid
+out across the box's FULL content height — so a `height:100%` child ran 15px into the scrollbar strip.
+
+**Fix.** Mirror the inline gutter. `gutter_x = SCROLLBAR_WIDTH` when `overflow_x == Overflow::Scroll`,
+subtracted from the definite content height passed to children:
+`inner_definite_h = own_definite_h.map(|h| (h - gutter_x).max(0.0))`. Applied at BOTH `layout_children`
+call sites (BFC root and shared-float). Crucially guarded by *definiteness*: `own_definite_h` is `Some`
+only when the box has a resolved height, so an auto-height `overflow-x:scroll` box (the common case)
+reserves nothing and grows to its content as before. `content_height` (and thus `border_box_h` /
+`offsetHeight`) still uses the full `own_definite_h` — only the space *offered to children* shrinks, so
+the reserved strip is exactly where the scrollbar renders. CSS Overflow 4 §3.2, block axis.
+
+**Scope / residue.** Deterministic case only — `overflow-x:scroll` always shows a scrollbar. The
+`overflow-x:auto`-and-actually-overflows case needs a second layout pass to know a scrollbar appeared and
+stays unreserved (same as the inline `auto` case). RTL / vertical-writing-mode gutter-edge selection is
+unchanged. Symmetric with the inline reservation, so a box with both `overflow-x:scroll` and
+`overflow-y:scroll` reserves on both axes independently.
+
+**WPT / gate.** `css/css-overflow` **132 → 136 (+4)**. Gated by
+`overflow_x_scroll_reserves_block_gutter_only_when_height_definite` (a 200px-tall box gives its
+`height:100%` child 185 while offsetHeight stays 200; an auto-height control's 40px child stays 40; RED
+before at child 200). Regression sweep across css-position/css-sizing/css-flexbox/css-grid/css-values/
+css-display: **all flat, HANG/CRASH 0**; full manuk-layout suite 72/72.

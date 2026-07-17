@@ -1659,6 +1659,19 @@ impl Ctx<'_> {
             0.0
         };
         let inner_width = (width - gutter).max(0.0);
+        // **Block-axis mirror of the same gutter.** A classic horizontal scrollbar (`overflow-x:scroll`,
+        // always present) lives on the block-end edge and eats block-axis space, so the content offered
+        // to children is shorter than the box by the scrollbar's width — but ONLY when the box has a
+        // definite height. An auto-height box grows to fit its content instead, so there is nothing to
+        // reserve (and reserving would wrongly shrink a `height:100%` child's track). Like the inline
+        // case, this narrows the space passed to children while leaving `border_box_h` — the box's own
+        // `offsetHeight` — untouched; the reserved strip is where the scrollbar sits.
+        let gutter_x = if s.overflow_x == Overflow::Scroll {
+            SCROLLBAR_WIDTH
+        } else {
+            0.0
+        };
+        let inner_definite_h = own_definite_h.map(|h| (h - gutter_x).max(0.0));
         // A BFC root gets a fresh float context spanning its own content box; a plain
         // block shares its parent's so floats affect content across nested blocks.
         let mut own_bfc;
@@ -1669,7 +1682,7 @@ impl Ctx<'_> {
                 content_x,
                 content_y,
                 inner_width,
-                own_definite_h,
+                inner_definite_h,
                 &mut own_bfc,
             );
             // A BFC root grows to contain its floats (CSS2 §10.6.7 auto-height case).
@@ -1681,7 +1694,7 @@ impl Ctx<'_> {
                 content_x,
                 content_y,
                 inner_width,
-                own_definite_h,
+                inner_definite_h,
                 floats,
             )
         };
@@ -5994,6 +6007,42 @@ mod tests {
         assert!(
             (kw - 185.0).abs() < 0.5,
             "width:100% child fills the content box minus the 15px scrollbar gutter (185), got {kw}"
+        );
+    }
+
+    /// Block-axis mirror: `overflow-x:scroll` on a **definite-height** box reserves a horizontal-
+    /// scrollbar gutter, so a `height:100%` child fills the box height minus the 15px scrollbar
+    /// strip — while the box's own `offsetHeight` (border box) stays the full 200. An auto-height box
+    /// (control) reserves nothing: it grows to its content, so the reservation must not shrink it.
+    #[test]
+    fn overflow_x_scroll_reserves_block_gutter_only_when_height_definite() {
+        let html = r#"<div id="c"><div id="k"></div></div><div id="a"><div id="ak"></div></div>"#;
+        // #c: definite height => reserve; #a: auto height => no reserve (the child is a fixed 40px).
+        let css = "#c{width:200px;height:200px;overflow-x:scroll} #k{height:100%} \
+                   #a{width:200px;overflow-x:scroll} #ak{height:40px}";
+        let (dom, root) = layout_html(html, css, 400.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let ch = rects[&by_id("c")].height;
+        let kh = rects[&by_id("k")].height;
+        assert!(
+            (ch - 200.0).abs() < 0.5,
+            "container border box (offsetHeight) is unchanged at 200, got {ch}"
+        );
+        assert!(
+            (kh - 185.0).abs() < 0.5,
+            "height:100% child fills the content box minus the 15px scrollbar gutter (185), got {kh}"
+        );
+        // Auto-height control: no definite height => no reservation => the 40px child is untouched
+        // and the box is 40 tall (not 40-15).
+        let ak = rects[&by_id("ak")].height;
+        assert!(
+            (ak - 40.0).abs() < 0.5,
+            "auto-height overflow-x:scroll box reserves nothing; 40px child stays 40, got {ak}"
         );
     }
 

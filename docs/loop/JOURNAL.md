@@ -6755,3 +6755,28 @@ stable across two runs. Residue: the 30 remaining `position-absolute-replaced-mi
 replaced-element **intrinsic sizing** (empty abspos `<iframe>` → 300×150 default before the clamp table),
 a separate mechanism; the over-constrained clamp-vs-insets re-solve uses the simple block-style clamp.
 Mechanism in [[box-layout]].
+
+## Tick 158 — overflow-x:scroll reserves a horizontal-scrollbar gutter (block-axis mirror) (2026-07-17)
+
+**TICK SHAPE: layout-mechanism (CSS-LAYOUT phase-mandate — scrollbar-gutter, block axis). WIKI: box-layout.**
+Tick 155 taught `layout_block` to reserve a classic vertical scrollbar's inline width for
+`overflow-y:scroll` (the `html{overflow-y:scroll}` no-layout-shift idiom) but left the block axis
+untouched: an `overflow-x:scroll` pane's horizontal scrollbar (block-end edge) ate no space, so a
+`height:100%` child overran into the scrollbar strip and the pane's content sat 15px too tall.
+
+**Fix.** Mirror the inline gutter on the block axis. A new `gutter_x = SCROLLBAR_WIDTH` when
+`overflow_x == Scroll`, subtracted from the definite content height offered to children
+(`inner_definite_h = own_definite_h.map(|h| h - gutter_x)`) — but ONLY in the definite-height case: an
+auto-height box grows to its content, so there is nothing to reserve (and reserving would wrongly shrink
+a `height:100%` child's track). `border_box_h` (the box's own `offsetHeight`) is left untouched, exactly
+as the inline case leaves `border_box_w`; the reserved strip is where the scrollbar sits. CSS Overflow 4
+§3.2, block axis.
+
+**Gate.** Unit test `overflow_x_scroll_reserves_block_gutter_only_when_height_definite` (a 200px-tall
+`overflow-x:scroll` box gives its `height:100%` child 185px while offsetHeight stays 200; an auto-height
+control reserves nothing — its 40px child stays 40). RED before (child took the full 200). Regression
+sweep, stash-rebuild-measured BEFORE vs AFTER on the same release binary: css-overflow **132→136 (+4)**;
+css-position/css-sizing/css-flexbox/css-grid/css-values/css-display **all flat (0 regression)**,
+HANG/CRASH 0. Full manuk-layout suite 72/72. Residue: the `overflow-x:auto`-and-actually-overflows case
+(needs a second layout pass to know a scrollbar appeared) stays unreserved, same as the inline `auto`
+case; RTL/vertical-writing-mode gutter placement unchanged. Mechanism in [[box-layout]].
