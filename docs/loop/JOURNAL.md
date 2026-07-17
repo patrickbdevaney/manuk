@@ -6576,3 +6576,28 @@ collapse) — a leading/trailing out-of-flow child or clearance declines the col
 `top_border_blocks_margin_collapse`. Regression sweep across css-flexbox/position/overflow/sizing/CSS2
 normal-flow with HANG/CRASH 0. Approximation documented: percentage vertical margins deep in the spine
 resolve against an approximate width (px/em — the norm — are exact).
+
+## Tick 152 — `overflow:hidden/auto/scroll` establishes a block formatting context (contains floats; the clearfix) (2026-07-17)
+
+**TICK SHAPE: layout-mechanism (CSS-LAYOUT phase-mandate row 7 — overflow scroll-container: "overflow:hidden = BFC contains floats"). WIKI: box-layout.**
+Row 4 completed at t151; grid-template-areas (row 6) is ALREADY wired to taffy (lever-board's "no
+taffy consumer!" note is stale — confirmed at taffy_tree.rs:360). Row 7's float-containment half is a
+real, confirmed gap.
+
+**Hypothesis (probed).** `establishes_bfc` explicitly excludes `overflow` ("overflow is not modeled
+yet"). A throwaway probe confirmed it: a `overflow:hidden` parent containing a `float:left;height:60px`
+child came out **18px tall** (only its own text line) — the float ESCAPED instead of being enclosed.
+This breaks the single most common float-containment idiom on the web: `overflow:hidden` (or `auto`) on
+a container to make it wrap its floated children (the modern clearfix), and to stop its content flowing
+around an *outer* float. Both are BFC properties (CSS2 §9.4.1 / §10.6.7).
+
+**Fix.** Add `s.overflow != Overflow::Visible` to `establishes_bfc`. A non-visible-overflow box then
+gets its own float context (its floats stay inside; its content does not overlap outer floats) and grows
+to contain its floats via the existing `own_bfc.lowest_bottom()` auto-height path. `Overflow::Clip` is
+included (it too clips and does not establish the scroll-container relationship... actually clip is
+subtle — treat any non-visible as BFC, matching the clip-establishes-BFC-in-practice reading).
+
+**Gate.** Unit test `overflow_hidden_contains_floats` (parent height >= the float's 60px), proven RED by
+the probe above (18px). Regression sweep across css-flexbox/position/overflow/sizing/CSS2-normal-flow;
+HANG/CRASH 0 and no suite regresses, else revert (overflow:hidden is pervasive — this is the higher-risk
+half of the change and the sweep is the guard).

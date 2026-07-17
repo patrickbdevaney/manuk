@@ -1113,10 +1113,16 @@ fn is_out_of_flow_positioned(s: &ComputedStyle) -> bool {
 
 /// Does this element establish a new block formatting context (CSS2 §9.4.1)? Such a
 /// box does not share its parent's float context — its own floats stay inside and it
-/// does not overlap outer floats. (`overflow` is not modeled yet.)
+/// does not overlap outer floats, and it grows to contain its floats (§10.6.7).
+///
+/// `overflow` other than `visible` is a BFC root (CSS2 §9.4.1 / Display §2.1): this is the
+/// modern clearfix — `overflow:hidden`/`auto`/`scroll` on a container makes it enclose its
+/// floated children rather than let them escape, and stops its own content from wrapping an
+/// outer float. Chrome establishes a BFC for `overflow:clip` too, so any non-`visible` value counts.
 fn establishes_bfc(s: &ComputedStyle) -> bool {
     is_float(s)
         || is_out_of_flow_positioned(s)
+        || s.overflow != Overflow::Visible
         || matches!(
             s.display,
             Display::Flex
@@ -4149,6 +4155,24 @@ mod tests {
         dom.descendants(dom.root())
             .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
             .unwrap_or_else(|| panic!("id={id}"))
+    }
+
+    /// `overflow:hidden` (also `auto`/`scroll`) establishes a BFC, so the container **contains** its
+    /// floated children and grows to enclose them (the modern clearfix, CSS2 §9.4.1/§10.6.7). Before,
+    /// `establishes_bfc` ignored `overflow`, so a 60px float escaped a container that stayed one text
+    /// line tall (~18px) and the following block slid up under the float.
+    #[test]
+    fn overflow_hidden_contains_floats() {
+        let html = r#"<div id="p"><div id="f"></div>text</div>"#;
+        let css = "body{margin:0} #p{overflow:hidden} #f{float:left;width:30px;height:60px}";
+        let (dom, root) = layout_html(html, css, 400.0);
+        let rects = root.node_rects(&dom);
+        let p = rects[&by_id(&dom, "p")];
+        assert!(
+            p.height >= 60.0 - 1.0,
+            "overflow:hidden must contain its float (grow to >= 60px), got {}",
+            p.height
+        );
     }
 
     /// Parent↔child TOP margin collapse (CSS2 §8.3.1): a child's top margin escapes *upward* through

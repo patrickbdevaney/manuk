@@ -231,3 +231,29 @@ gap), plus the eligibility guards `overflow_hidden_contains_child_margin` and
 *non*-collapse). The visible wins are mostly Bar-2 reftests (deferred); the testharness sweep held or
 nudged up — css-flexbox 26.5→26.6%, css-sizing 14.5→14.8%, css-position/overflow/normal-flow flat,
 **HANG/CRASH 0**. Nothing regressed, which is the bar for a mechanism this broad.
+
+## `overflow` establishes a block formatting context — float containment / the clearfix (tick 152)
+
+`establishes_bfc` had listed float/abspos/flex/grid/inline-block but **not `overflow`** ("overflow is
+not modeled yet"). So `overflow:hidden`/`auto`/`scroll` — the single most common float-containment idiom
+on the web — did nothing structural: a container's floated children escaped it (the box stayed as tall
+as its own non-float content) and the box's content still wrapped around *outer* floats. A probe made it
+concrete: `<div style="overflow:hidden"><div style="float:left;height:60px"></div>text</div>` came out
+**18px** tall (one text line) — the 60px float escaped.
+
+**Fix.** One clause: `s.overflow != Overflow::Visible` establishes a BFC (CSS2 §9.4.1 / Display §2.1).
+Any non-`visible` value (hidden/auto/scroll/clip — Chrome establishes a BFC for `clip` too) then routes
+through the existing BFC branch in `layout_block`: the box gets its own `FloatContext`, its floats stay
+inside, its content does not overlap outer floats, and it grows to contain its floats via
+`own_bfc.lowest_bottom()` (CSS2 §10.6.7 auto-height). This is the modern clearfix and the reason
+`overflow:hidden` on a card/row makes it wrap its floated media.
+
+**Interaction with margin collapse (tick 151).** A BFC does not collapse margins with its children, and
+`top_margin_collapses`/`bottom_margin_collapses` already gate on `overflow == Visible` *and*
+`!establishes_bfc` — so `overflow:hidden` correctly both contains floats AND contains child margins, with
+no double-handling. The `overflow_hidden_contains_child_margin` guard (t151) still holds.
+
+**Gate.** `overflow_hidden_contains_floats` (parent height >= the 60px float), proven RED by the 18px
+probe. Sweep: css-flexbox 26.6%, css-position 28.8%, css-overflow 27.8%, css-sizing 14.8%,
+CSS2/normal-flow 15.4%, CSS2/floats 60% — all flat, **HANG/CRASH 0**. overflow:hidden is pervasive, so
+flat-with-no-crash across the layout suites plus the full wall (parity + oracle fidelity) is the bar.
