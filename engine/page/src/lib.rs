@@ -1058,6 +1058,11 @@ impl Page {
             let all = futures_util::future::join_all(reqs.into_iter().map(
                 |(id, raw, method, headers, body)| {
                     let url = resolve_url(&base, &raw);
+                    // The page's own document URL is the initiator of this `fetch`/XHR, so the net
+                    // layer applies `SameSite`: a cross-site request withholds this page's `Lax`/
+                    // `Strict` cookies (the CSRF/credential-leak fix). Cloned per request because the
+                    // futures are moved into `join_all`.
+                    let initiator = base.clone();
                     async move {
                         let is_get = method.eq_ignore_ascii_case("GET") || method.is_empty();
                         let out = if is_get && headers.is_empty() {
@@ -1067,7 +1072,7 @@ impl Page {
                             // A GET WITH request headers (an `Authorization: Bearer …` API read) also
                             // bypasses that path — it is not safely shareable across auth contexts, and
                             // dropping its headers was the bug this fixes.
-                            manuk_net::fetch(&url).await
+                            manuk_net::fetch_from(&url, Some(&initiator)).await
                         } else {
                             let mut hdrs: Vec<(&str, &str)> = headers
                                 .iter()
@@ -1087,8 +1092,14 @@ impl Page {
                             } else {
                                 method.as_str()
                             };
-                            manuk_net::request(m, &url, &hdrs, body.clone().into_bytes().into())
-                                .await
+                            manuk_net::request_from(
+                                m,
+                                &url,
+                                &hdrs,
+                                body.clone().into_bytes().into(),
+                                Some(&initiator),
+                            )
+                            .await
                         };
                         match out {
                             Ok(r) => (id, r.status, r.decoded_text()),

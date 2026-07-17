@@ -157,6 +157,19 @@ boundaries** (`/application` does **not** match `Path=/app`).
 must be stored before the next hop and the `Cookie` header recomputed per new host, **or a login that
 redirects loses its session.**
 
+**The live jar path enforces this only where it has request context — the page's own `fetch`/XHR.** For
+a long time the asymmetric logic above lived in `storage.rs` with **zero callers**: the network's real
+cookie attachment (`send_once`) called `jar.cookie_header(url)`, which judges by host alone and so shipped
+**every** cookie — `Lax` and `Strict` included — on a *cross-site* `fetch()`. A page on `evil.example`
+doing `fetch("https://bank.example/api")` got the bank's session cookie attached **and** read the
+response: the exact CSRF/credential-leak `SameSite` exists to stop. The fix threads the **initiator** (the
+page's document URL — available at the `finish_loading` fetch chokepoint as `self.final_url`) down to
+`send_once`; a script-initiated request is never a top-level navigation, so `cookie_header_subresource`
+withholds `Lax` **and** `Strict` cross-site and sends only `SameSite=None`. Same-site (by registrable
+domain, so `app.bank.example` → `bank.example` is same-site) is unchanged. Document navigations and
+subresource loads still pass `initiator = None` (the flat jar) — wiring their context is the follow-on;
+this tick closes the readable-response `fetch`/XHR vector, which is the one that leaks data to script.
+
 ## `__Host-`/`__Secure-` name prefixes are a promise the client must KEEP, or it is worse than useless
 
 A server that names its session cookie `__Host-sid` is opting into an integrity contract: *"reject this

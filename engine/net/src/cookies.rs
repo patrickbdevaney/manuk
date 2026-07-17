@@ -427,6 +427,35 @@ impl CookieJar {
         )
     }
 
+    /// The `Cookie:` header for a **subresource / script-initiated** request to `url` made by a
+    /// page whose top-level document is at `top_level` (a `fetch()`/`XMLHttpRequest`, never a
+    /// top-level navigation). Applies the `SameSite` policy the flat [`Self::cookie_header`] cannot:
+    /// on a **cross-site** request, `SameSite=Strict` and `SameSite=Lax` cookies are withheld and
+    /// only `SameSite=None` cookies are sent; a same-site request sends everything, unchanged.
+    ///
+    /// This is the CSRF / credential-leak fix for cross-origin `fetch`: a page on `evil.example`
+    /// that does `fetch("https://bank.example/api")` must no longer ship the bank's `Lax`/`Strict`
+    /// session cookie — which is exactly what a real browser withholds, and what the live jar used
+    /// to send because it judged cookies by host alone, with no request context.
+    pub fn cookie_header_subresource(
+        &self,
+        url: &Url,
+        top_level: &Url,
+        now: SystemTime,
+    ) -> Option<String> {
+        // Same-site is judged by registrable domain (eTLD+1), matching `storage`'s partitioning —
+        // `a.example.com` fetching `b.example.com` is same-site; `evil.com` fetching `bank.com` is not.
+        let cross_site = !crate::storage::is_same_site(url, top_level);
+        self.cookie_header_where(url, now, |c: &Cookie| {
+            if !cross_site {
+                return true;
+            }
+            // Subresource fetch is never a top-level navigation, so `Lax` is withheld too — only an
+            // explicit (and, by construction, `Secure`) `SameSite=None` cookie crosses the boundary.
+            matches!(c.same_site, SameSite::None)
+        })
+    }
+
     /// All live cookies (for inspection / the task manager).
     pub fn cookies(&self) -> impl Iterator<Item = &Cookie> {
         self.cookies.iter()
@@ -546,6 +575,48 @@ mod tests {
         assert!(!jar.store(&u("http://example.com/"), "x=1; SameSite=None"));
         assert!(jar.store(&u("https://example.com/"), "y=1; SameSite=None; Secure"));
         assert_eq!(jar.len(), 1);
+    }
+
+    /// The CSRF fix: a cross-site `fetch()`/XHR withholds `Lax`/`Strict` cookies and sends only
+    /// `SameSite=None`, while a same-site fetch (even across subdomains) still sends everything.
+    #[test]
+    fn subresource_fetch_withholds_lax_and_strict_cross_site() {
+        let mut jar = CookieJar::new();
+        jar.store(&u("https://bank.example/"), "sid=secret; Path=/"); // default = Lax
+        jar.store(
+            &u("https://bank.example/"),
+            "strict=1; Path=/; SameSite=Strict",
+        );
+        jar.store(
+            &u("https://bank.example/"),
+            "cross=1; Path=/; SameSite=None; Secure",
+        );
+        let now = SystemTime::now();
+
+        // evil.example fetching bank.example is cross-site → only SameSite=None crosses.
+        let evil = u("https://evil.example/");
+        let target = u("https://bank.example/api");
+        let hdr = jar
+            .cookie_header_subresource(&target, &evil, now)
+            .expect("SameSite=None cookie still sent");
+        assert!(hdr.contains("cross=1"), "None cookie must cross");
+        assert!(
+            !hdr.contains("sid="),
+            "Lax cookie must be withheld cross-site"
+        );
+        assert!(
+            !hdr.contains("strict="),
+            "Strict cookie must be withheld cross-site"
+        );
+
+        // bank.example (or a subdomain) fetching its own API is same-site → everything is sent.
+        let own = u("https://app.bank.example/");
+        let hdr2 = jar
+            .cookie_header_subresource(&target, &own, now)
+            .expect("same-site request sends cookies");
+        assert!(hdr2.contains("sid=secret"), "Lax cookie sent same-site");
+        assert!(hdr2.contains("strict=1"), "Strict cookie sent same-site");
+        assert!(hdr2.contains("cross=1"), "None cookie sent same-site");
     }
 
     #[test]

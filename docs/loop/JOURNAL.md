@@ -6926,3 +6926,34 @@ drains there — the same path `MutationObserver` uses). RED against the absent 
 (native + shim) + one gate — WPT-neutral. HANG/CRASH 0. Residue: the rest of SubtleCrypto
 (sign/verify/encrypt/decrypt/generateKey/importKey/deriveBits) stays honestly absent — a much larger
 key-management surface, separate work if a page class needs it. Mechanism in [[js-engine]].
+
+## Tick 163 — SameSite enforced on the live `fetch`/XHR path (cross-site CSRF/leak fix) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (DIVERSIFY steer — bounded U-3 lever: SameSite enforcement, the
+storage.rs dead-code gap). WIKI: networking.**
+The asymmetric `SameSite` algorithm lived in `storage.rs` with **zero live callers**. The network's
+real cookie attachment (`send_once`) called `jar.cookie_header(url)`, which judges by host alone — so a
+cross-site `fetch()` shipped **every** cookie, `Lax` and `Strict` included. A page on `evil.example`
+doing `fetch("https://bank.example/api")` got the bank's session cookie attached **and** read the
+response body: the exact CSRF / credential-leak `SameSite` exists to prevent, and a readable-response
+vector (the response goes back to script), which is the dangerous class.
+
+**Fix.** Thread the **initiator** (the page's own document URL — available at the `finish_loading` fetch
+chokepoint as `self.final_url`) down to `send_once`. New `CookieJar::cookie_header_subresource(url,
+top_level, now)` (cookies.rs) reuses `cookie_header_where` + `storage::is_same_site` (registrable-domain
+comparison): a script-initiated request is **never** a top-level navigation, so on a cross-site request
+it withholds `Lax` **and** `Strict` and sends only `SameSite=None`; same-site (incl. subdomains,
+`app.bank.example`→`bank.example`) is unchanged. New public `net::fetch_from` / `net::request_from`
+carry `initiator: Option<&str>`; the page JS-fetch chokepoint (page/lib.rs) now calls them with
+`self.final_url`. `fetch` / `request` / `fetch_document` delegate with `initiator = None` (flat jar,
+byte-identical behaviour) — document navigations and subresource loads keep their old path; wiring
+their context is the follow-on. An `initiator` that fails to parse falls back to the un-scoped path
+rather than dropping the request.
+
+**Gate.** New `cookies::tests::subresource_fetch_withholds_lax_and_strict_cross_site` — cross-site fetch
+sends only the `SameSite=None` cookie (`Lax`/`Strict` withheld); same-site (subdomain) fetch sends all
+three. RED against the old flat-jar attach (which sent `Lax`/`Strict` cross-site). Confined to
+engine/net (cookies + net entry points) + one page call-site — WPT-neutral (no WPT SameSite-over-real-
+network suite runs in the gate set). HANG/CRASH 0. Residue: document-navigation and CSS/img subresource
+cookie context is still `None` (flat jar) — lower-risk GET paths whose responses are not handed to
+script; threading their top-level context is a separate tick. Mechanism in [[networking]].

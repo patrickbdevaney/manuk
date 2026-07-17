@@ -487,6 +487,20 @@ pub fn reset_fetch_stats() {
 }
 
 pub async fn fetch(url: &str) -> Result<Response> {
+    fetch_from(url, None).await
+}
+
+/// As [`fetch`], but the request is a **subresource / script-initiated** GET made by the page at
+/// `initiator` (its document URL). Carries the same HTTP cache, single-flight coalescer and
+/// per-navigation negative cache, and additionally applies `SameSite` at the cookie step: a
+/// cross-site `fetch()` withholds `Lax`/`Strict` cookies. `initiator` that fails to parse falls
+/// back to the un-scoped [`fetch`] behaviour rather than dropping the request.
+pub async fn fetch_from(url: &str, initiator: Option<&str>) -> Result<Response> {
+    let init = initiator.and_then(|s| Url::parse(s).ok());
+    fetch_scoped(url, init.as_ref()).await
+}
+
+async fn fetch_scoped(url: &str, initiator: Option<&Url>) -> Result<Response> {
     FETCHES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let repeat = {
         let seen = SEEN.get_or_init(Default::default);
@@ -548,7 +562,7 @@ pub async fn fetch(url: &str) -> Result<Response> {
         bail!("already failed this navigation (not retried): {url}");
     }
 
-    let out = fetch_with_deadline(url, request_timeout()).await;
+    let out = fetch_with_deadline(url, request_timeout(), initiator).await;
     if out.is_err() {
         FAILED
             .get_or_init(Default::default)
@@ -583,7 +597,7 @@ pub fn document_timeout() -> std::time::Duration {
 }
 
 pub async fn fetch_document(url: &str) -> Result<Response> {
-    fetch_with_deadline(url, document_timeout()).await
+    fetch_with_deadline(url, document_timeout(), None).await
 }
 
 /// The outcome of [`fetch_document_or_download`]: a **document** to render (its body buffered — a
@@ -786,13 +800,17 @@ async fn fetch_file(url: &Url) -> Result<Response> {
     })
 }
 
-async fn fetch_with_deadline(url: &str, d: std::time::Duration) -> Result<Response> {
+async fn fetch_with_deadline(
+    url: &str,
+    d: std::time::Duration,
+    initiator: Option<&Url>,
+) -> Result<Response> {
     if let Ok(u) = Url::parse(url) {
         if u.scheme() == "file" {
             return fetch_file(&u).await;
         }
     }
-    match tokio::time::timeout(d, fetch_inner(url)).await {
+    match tokio::time::timeout(d, fetch_inner(url, initiator)).await {
         Ok(r) => r,
         Err(_) => {
             let secs = d.as_secs_f32();
@@ -802,7 +820,7 @@ async fn fetch_with_deadline(url: &str, d: std::time::Duration) -> Result<Respon
     }
 }
 
-async fn fetch_inner(url: &str) -> Result<Response> {
+async fn fetch_inner(url: &str, initiator: Option<&Url>) -> Result<Response> {
     if let Some(cached) = http_cache::get(url) {
         tracing::debug!(%url, "served from HTTP cache");
         return Ok(cached);
@@ -826,7 +844,7 @@ async fn fetch_inner(url: &str) -> Result<Response> {
     }
     let mut current = Url::parse(url).with_context(|| format!("invalid URL: {url}"))?;
     for _ in 0..=MAX_REDIRECTS {
-        let resp = send_once("GET", &current, &[], Bytes::new()).await?;
+        let resp = send_once("GET", &current, &[], Bytes::new(), initiator).await?;
         if (300..400).contains(&resp.status) {
             if let Some(loc) = resp.header("location") {
                 let next = current
@@ -1050,8 +1068,23 @@ pub async fn request(
     headers: &[(&str, &str)],
     body: Bytes,
 ) -> Result<Response> {
+    request_from(method, url, headers, body, None).await
+}
+
+/// As [`request`], but the request is a **script-initiated** one (a bodied `fetch`/XHR) made by
+/// the page at `initiator` (its document URL), so `SameSite` is applied: a cross-site request
+/// withholds `Lax`/`Strict` cookies. An `initiator` that fails to parse falls back to the
+/// un-scoped behaviour rather than dropping the request.
+pub async fn request_from(
+    method: &str,
+    url: &str,
+    headers: &[(&str, &str)],
+    body: Bytes,
+    initiator: Option<&str>,
+) -> Result<Response> {
     let u = Url::parse(url).with_context(|| format!("invalid URL: {url}"))?;
-    send_once(method, &u, headers, body).await
+    let init = initiator.and_then(|s| Url::parse(s).ok());
+    send_once(method, &u, headers, body, init.as_ref()).await
 }
 
 /// Process-global RFC-6265 cookie jar shared by every request (U6). Single-profile for now;
@@ -1122,9 +1155,17 @@ async fn send_once(
     url: &Url,
     headers: &[(&str, &str)],
     body: Bytes,
+    initiator: Option<&Url>,
 ) -> Result<Response> {
-    // Attach any stored cookies for this URL (so a logged-in session stays logged in).
-    let cookie = cookie_jar().lock().ok().and_then(|j| j.cookie_header(url));
+    // Attach any stored cookies for this URL (so a logged-in session stays logged in). When the
+    // request was initiated by a page (`initiator` = that page's document URL — a `fetch`/XHR,
+    // never a top-level navigation), apply `SameSite`: a cross-site fetch withholds `Lax`/`Strict`
+    // cookies. Without an initiator (a document navigation, a subresource load), the flat jar is
+    // used unchanged.
+    let cookie = cookie_jar().lock().ok().and_then(|j| match initiator {
+        Some(top) => j.cookie_header_subresource(url, top, std::time::SystemTime::now()),
+        None => j.cookie_header(url),
+    });
     let mut hdrs: Vec<(&str, &str)> = headers.to_vec();
     if let Some(c) = &cookie {
         hdrs.push(("cookie", c.as_str()));
