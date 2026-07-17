@@ -321,6 +321,7 @@
   - L235 · The bot-wall fingerprint surface is known — and matching it IS the evasion
   - L249 · Native <form method=post> submission — POST navigation, and POST→redirect→GET
   - L275 · Cross-site POST navigation withholds Lax/Strict (the form-POST CSRF defence)
+  - L290 · CORS is a READ barrier, and a missing check leaks every cross-origin body
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -409,4 +410,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-336 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+337 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

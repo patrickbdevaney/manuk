@@ -34,6 +34,8 @@ use tokio_util::io::StreamReader;
 use url::Url;
 
 pub mod cookies;
+
+pub mod cors;
 /// E7 storage layer — RFC 6265 cookie jar.
 pub mod webstorage;
 

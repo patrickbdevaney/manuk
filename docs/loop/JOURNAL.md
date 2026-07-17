@@ -7124,3 +7124,39 @@ Confined to shell (chrome + session + gui). HANG/CRASH 0. Residue: no settings U
 engine/home are still only editable in code — a settings page is a separate tick); zoom keyed by
 requested URL, not post-redirect origin (matches the URL bar). Mechanism: `SessionStore` +
 `chrome::origin_key`, shell/src.
+
+## Tick 170 — CORS read barrier on cross-origin fetch() (transport enforcement — T0.4 lever) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (T0.4 transport — the cross-origin READ barrier, the CORS half of
+the same-origin policy; the SameSite work (ticks 163/165) was the cookie half). WIKI:
+docs/wiki/networking.md "CORS is a READ barrier…". Diversified OFF the T4/T5 forms+persistence tail
+(ticks 163–169) per the lever-board's DIVERSIFY note.**
+`pump_fetches` performed a page's `fetch()`/XHR and handed the response body straight back to the page
+**regardless of origin** — so `fetch("https://api.other.example/data")` from `https://app.example/`
+always resolved with the body, a cross-origin read the server never opted into. Chromium blocks
+exactly this; we leaked every cross-origin body. (SameSite decides which cookies ride the request;
+CORS decides whether the page may READ the response — different halves, both required, only the first
+existed here.)
+
+**Fix.** New `net::cors` module — a **pure** decision (`fetch_response_readable(page_origin,
+request_url, response_headers, with_credentials)`): same-origin always readable; cross-origin readable
+only on an opt-in `Access-Control-Allow-Origin` (`*` for uncredentialed — wildcard may not carry
+credentials; or a byte-exact origin echo; credentialed also needs `Access-Control-Allow-Credentials:
+true`); missing/blank ACAO blocks; origins compared as serialized tuples (scheme+host+port, default
+port omitted; opaque → fail closed). `pump_fetches` computes the page origin once, adds an `Origin`
+header to cross-origin requests (so reflective-ACAO servers can echo it, as every browser does), and
+on a blocked read settles the request with `status 0` — which the JS glue turns into a rejected
+`fetch()` Promise (`TypeError: Failed to fetch`), the same shape Chromium produces, so page
+error-handling runs instead of seeing a silently-empty body. The check fires ONLY in `pump_fetches`
+(script subresources); top-level document navigation (a link is cross-origin by nature) is untouched.
+
+**Gate.** New `net::cors::tests` (7 cases): same-origin read ignores CORS headers; cross-origin
+without ACAO blocked; `*` allows uncredentialed only; exact-origin echo allows and rejects a
+wrong-origin echo; credentialed needs ACAC:true + exact origin; origin serialization omits default
+ports; cross-origin is scheme/host/port. RED against the absent module (pre-tick there was no CORS
+decision and no blocking at all). Confined to net (new `cors.rs`) + the shell consumer (`gui.rs`
+pump_fetches). HANG/CRASH 0. Residue: default-`fetch()` credentials modelled as uncredentialed
+(`with_credentials=false`) — a per-call credentials mode and the CORS **preflight** (`OPTIONS`
+round-trip for non-simple requests) are follow-ons; and `send_once` still attaches the flat jar's
+cookies to a cross-origin script fetch (a separate default-credentials over-send, orthogonal to this
+read barrier). Mechanism: `net::cors` + `pump_fetches`.

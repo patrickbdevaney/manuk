@@ -2425,6 +2425,11 @@ impl App {
             .as_ref()
             .map(|p| p.base_url().to_string())
             .unwrap_or_else(|| self.url.clone());
+        // The page's origin, for the CORS read barrier on cross-origin `fetch()`/XHR. `None` for an
+        // opaque page origin (`about:`, `data:`), where CORS is not enforced.
+        let page_origin = url::Url::parse(&base)
+            .ok()
+            .and_then(|u| manuk_net::cors::origin_of(&u));
         let mut did_any = false;
         for _ in 0..8 {
             let reqs = match self.page.as_ref() {
@@ -2445,7 +2450,16 @@ impl App {
                 // used to `block_on` here — a page calling a slow API froze the entire browser.
                 let gen = self.nav_gen;
                 let proxy = self.proxy.clone();
+                let page_origin = page_origin.clone();
                 self.rt.spawn(async move {
+                    // Is this a cross-origin request? If so it is subject to the CORS read barrier,
+                    // and — like every browser — it carries an `Origin` header so a server doing
+                    // reflective `Access-Control-Allow-Origin` can echo it back.
+                    let req_url = url::Url::parse(&url).ok();
+                    let cross_origin = match (&page_origin, &req_url) {
+                        (Some(po), Some(ru)) => manuk_net::cors::is_cross_origin(po, ru),
+                        _ => false,
+                    };
                     // Replay the page's request headers onto the wire — `Authorization` and a
                     // non-JSON `Content-Type` were dropped here too, so an authenticated in-shell
                     // fetch reached the server anonymous and 401'd. Default `Content-Type` only when
@@ -2462,10 +2476,43 @@ impl App {
                     {
                         hdrs.push(("content-type", "application/json"));
                     }
+                    if cross_origin
+                        && !headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("origin"))
+                    {
+                        if let Some(po) = &page_origin {
+                            hdrs.push(("origin", po.as_str()));
+                        }
+                    }
                     let bytes = manuk_net::Bytes::from(body.into_bytes());
                     let (status, text) = match manuk_net::request(&method, &url, &hdrs, bytes).await
                     {
-                        Ok(resp) => (resp.status, resp.text()),
+                        Ok(resp) => {
+                            // CORS read barrier: a cross-origin response the server did not opt in
+                            // to share (no matching `Access-Control-Allow-Origin`) is not readable.
+                            // Surface it as Chromium does — a network failure (`status 0`) that
+                            // rejects the page's `fetch()` Promise with a `TypeError` — rather than
+                            // leaking the body. Default `fetch()` credentials mode is `same-origin`,
+                            // so a cross-origin request is treated as uncredentialed.
+                            let readable = !cross_origin
+                                || match (&page_origin, &req_url) {
+                                    (Some(po), Some(ru)) => manuk_net::cors::fetch_response_readable(
+                                        po,
+                                        ru,
+                                        &resp.headers,
+                                        false,
+                                    ),
+                                    _ => true,
+                                };
+                            if readable {
+                                (resp.status, resp.text())
+                            } else {
+                                tracing::info!(
+                                    url = %url,
+                                    "page fetch blocked by CORS (no matching Access-Control-Allow-Origin)"
+                                );
+                                (0u16, String::new())
+                            }
+                        }
                         Err(e) => {
                             tracing::warn!(url = %url, error = %e, "page fetch failed");
                             (0u16, String::new())

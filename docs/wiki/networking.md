@@ -286,3 +286,33 @@ lands logged in; cross-site sends only `SameSite=None`. The POST→redirect→GE
 a top-level GET is `Lax`-eligible, so the dashboard the login redirects to is logged in even when the
 action host differs from the form host. (Lax is sent on *safe* top-level navigations; withheld on the
 unsafe POST — that asymmetry is the whole point.)
+
+## CORS is a READ barrier, and a missing check leaks every cross-origin body
+
+`SameSite` decides which *cookies* ride a request; **CORS decides whether the page may READ the
+response** to a cross-origin `fetch()`/XHR. They are different halves of the same-origin policy and
+both must hold. For a long time only the first existed here: the shell's `pump_fetches` performed the
+request and handed the body straight back to the page regardless of origin, so
+`fetch("https://api.other.example/data")` from `https://app.example/` **always** resolved with the
+body — a cross-origin read the server never opted into. Chromium blocks exactly this.
+
+`net::cors::fetch_response_readable(page_origin, request_url, response_headers, with_credentials)` is
+the decision, and it is a **pure function** (the whole gate is unit tests, no socket): same-origin is
+always readable; cross-origin is readable only when the response's `Access-Control-Allow-Origin`
+(ACAO) opts in — `*` for an **uncredentialed** request (the wildcard may **not** carry credentials),
+or a byte-exact echo of `page_origin`; a **credentialed** cross-origin read additionally needs
+`Access-Control-Allow-Credentials: true`; a **missing/blank ACAO blocks** (silence is not consent).
+Origins are compared as serialized tuples (`scheme://host[:port]`, default port omitted), so a
+scheme, host, **or** port difference is cross-origin, and an opaque origin (`data:`) fails closed.
+
+**A blocked read is a network failure, not an empty success.** `pump_fetches` settles the request
+with `status 0`, which the JS glue turns into a rejected `fetch()` Promise (`TypeError: Failed to
+fetch`) — the same shape Chromium produces — so page error-handling runs instead of the page seeing a
+silently-empty body. A cross-origin request also now carries an `Origin` header (as every browser
+does), so a server doing *reflective* ACAO can echo it and the read is allowed. The check fires
+**only in `pump_fetches`** (script-issued subresources); top-level document navigation is
+cross-origin by nature (that is what a link is) and is untouched. Default `fetch()` credentials mode
+is `same-origin`, so a cross-origin request is modelled as **uncredentialed** (`with_credentials =
+false`); a per-call credentials mode and the CORS **preflight** (the `OPTIONS` round-trip a non-simple
+request must pass *before* it is sent) are documented follow-ons — this is the response read barrier,
+the part whose absence leaked every body.
