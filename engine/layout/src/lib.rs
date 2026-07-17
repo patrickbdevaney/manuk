@@ -1626,6 +1626,14 @@ impl Ctx<'_> {
             Dim::Px(p) => Some((p - bs_extra_h).max(0.0)),
             Dim::Percent(pct) => pch.map(|h| (h * pct / 100.0 - bs_extra_h).max(0.0)),
             Dim::Calc { .. } => pch.map(|h| (s.height.resolve(h, 0.0) - bs_extra_h).max(0.0)),
+            // `height:stretch`/`-webkit-fill-available` fill the containing block's definite content
+            // height: the MARGIN box fills `pch`, so the content box is `pch` minus this box's own
+            // margins, border and padding (box-sizing-independent — stretch fills available space, not
+            // a specified length, so the full deduction applies in both modes). `None` pch (auto-height
+            // parent) leaves it content-sized, at parity with Chrome.
+            Dim::Auto if s.height_stretch => {
+                pch.map(|h| (h - mt - mb - pt - pb - bt - bb).max(0.0))
+            }
             Dim::Auto => None,
         };
 
@@ -5701,6 +5709,87 @@ mod tests {
         assert!(
             (w - 20.0).abs() < 1.0,
             "max-width:20px must clamp the max-content width to 20px, got {w}"
+        );
+    }
+
+    /// `height: stretch` on a block FILLS its parent's definite content height (margin box = CB
+    /// content box). Before this it collapsed to `Dim::Auto` = content height (one line, ~18px), so
+    /// a full-height panel came out line-tall. Unlike width, block `height:auto` is content-sized, so
+    /// `stretch` is a real, visible distinction.
+    #[test]
+    fn height_stretch_fills_definite_parent() {
+        let html = r#"<div id="p"><div id="box">x</div></div>"#;
+        let css = "#p{height:200px;width:100px} #box{height:stretch}";
+        let (dom, root) = layout_html(html, css, 400.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let h = rects[&by_id("box")].height;
+        assert!(
+            (h - 200.0).abs() < 1.0,
+            "height:stretch must fill the 200px parent, got {h}"
+        );
+    }
+
+    /// `-webkit-fill-available` is an alias of `stretch` and fills identically.
+    #[test]
+    fn height_fill_available_fills_definite_parent() {
+        let html = r#"<div id="p"><div id="box">x</div></div>"#;
+        let css = "#p{height:150px;width:100px} #box{height:-webkit-fill-available}";
+        let (dom, root) = layout_html(html, css, 400.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let h = rects[&by_id("box")].height;
+        assert!(
+            (h - 150.0).abs() < 1.0,
+            "height:-webkit-fill-available must fill the 150px parent, got {h}"
+        );
+    }
+
+    /// In an **auto-height** parent (no definite height to fill) `height:stretch` stays content-sized,
+    /// at parity with Chrome — it must not blow up to the viewport or overflow.
+    #[test]
+    fn height_stretch_in_auto_parent_stays_content() {
+        let html = r#"<div id="p"><div id="box">x</div></div>"#;
+        let css = "#p{width:100px} #box{height:stretch}";
+        let (dom, root) = layout_html(html, css, 400.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let h = rects[&by_id("box")].height;
+        assert!(
+            h > 0.0 && h < 60.0,
+            "height:stretch in an auto-height parent stays content-sized (~one line), got {h}"
+        );
+    }
+
+    /// A stretched box is a **definite-height containing block**: a `height:100%` child resolves
+    /// against the stretched height, not against nothing. Fills the parent, and the child fills it too.
+    #[test]
+    fn height_stretch_is_a_definite_base_for_percentage_child() {
+        let html = r#"<div id="p"><div id="box"><div id="kid">x</div></div></div>"#;
+        let css = "#p{height:200px;width:100px} #box{height:stretch} #kid{height:50%}";
+        let (dom, root) = layout_html(html, css, 400.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let kid_h = rects[&by_id("kid")].height;
+        assert!(
+            (kid_h - 100.0).abs() < 1.0,
+            "height:50% child of a stretched (200px) box must be 100px, got {kid_h}"
         );
     }
 }

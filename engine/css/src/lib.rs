@@ -505,6 +505,11 @@ pub struct ComputedStyle {
     /// content instead (and a `height:100%` child sees an indefinite base → auto). Without this the
     /// keyword is indistinguishable from `auto` and `inset:0; height:fit-content` wrongly stretches.
     pub height_intrinsic: bool,
+    /// `true` when `height` is `stretch` / `-webkit-fill-available` / `-moz-available` — the box FILLS
+    /// its containing block's definite content height (margin box = CB content box), unlike `auto`
+    /// (content height) and unlike the intrinsic keywords (`height_intrinsic`, indefinite). Collapses
+    /// to `Dim::Auto` for length resolution; this flag restores the fill in `layout_block`.
+    pub height_stretch: bool,
     /// `min-*`/`max-*` sizing. `Dim::Auto` on a min means 0; on a max means "no limit".
     pub min_width: Dim,
     pub max_width: Dim,
@@ -610,6 +615,7 @@ impl ComputedStyle {
             width_keyword: None,
             height: Dim::Auto,
             height_intrinsic: false,
+            height_stretch: false,
             min_width: Dim::Auto,
             max_width: Dim::Auto,
             min_height: Dim::Auto,
@@ -2638,6 +2644,12 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             s.height_intrinsic =
                 matches!(low.as_str(), "min-content" | "max-content" | "fit-content")
                     || low.starts_with("fit-content(");
+            // `stretch`/`-webkit-fill-available`/`-moz-available` are DEFINITE and FILL the containing
+            // block's height — distinct from `auto` (content) and the intrinsic keywords (indefinite).
+            s.height_stretch = matches!(
+                low.as_str(),
+                "stretch" | "-webkit-fill-available" | "-moz-available"
+            );
             s.height = values::parse_dim(v, s.font_size);
         }
         "min-width" => s.min_width = values::parse_dim(v, s.font_size),

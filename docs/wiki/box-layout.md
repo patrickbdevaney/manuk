@@ -288,3 +288,33 @@ untouched; width-only scope because block auto-height already resolves to conten
 `width_fit_content_still_clamped_by_max_width` (layout), the first three proven RED by the 300/1000px fill.
 Sweep: css-sizing 14.8%→**15.1% (+5)**, css-flexbox 26.8%, css-grid 9.2%, css-position 28.8%,
 CSS2/normal-flow 15.4% — neighbors flat, **HANG/CRASH 0**.
+
+## `height: stretch` / `-webkit-fill-available` FILLS the parent's definite height (tick 154)
+
+**Symptom.** `height:stretch` on a block inside a 200px-tall parent came out **18px** (content height) —
+a full-height panel collapsed to one line. `-webkit-fill-available` same. The vertical companion of t153:
+on the WIDTH axis `auto` already fills so `stretch` "worked" incidentally, but a block's `height:auto` is
+CONTENT height, so `stretch` vs `auto` is a real, visible distinction that was never modeled. Tick 146's
+comment even declared stretch "definite" — but nothing gave it filling behavior; it collapsed to `Dim::Auto`.
+
+**Cause.** `stretch`/`-webkit-fill-available`/`-moz-available` on `height` collapse to `Dim::Auto` and are
+NOT flagged `height_intrinsic` (they are definite, not indefinite) — so they were indistinguishable from
+plain `auto` = content height.
+
+**Fix.** New `ComputedStyle::height_stretch: bool`, set in `stylo_map` (`size_is_stretch`: `GS::Stretch |
+WebkitFillAvailable` — crates.io stylo 0.19 folds `-moz-available` into `WebkitFillAvailable`, no separate
+variant) and the hand parser at parity (`stretch`/`-webkit-fill-available`/`-moz-available`). In
+`layout_block`'s `own_definite_h`, a new arm: `Dim::Auto if height_stretch => pch.map(|h| (h − mt − mb −
+pt − pb − bt − bb).max(0))` — the MARGIN box fills the containing block's definite content height `pch`, so
+the content box is `pch` minus this box's own margins/border/padding (box-sizing-independent: stretch fills
+available space, not a specified length). `pch` (threaded since t144) is the same reference `height:%`
+children use, so a stretched box is correctly a definite-height CB for them. `pch = None` (auto-height
+parent) leaves it content-sized, at parity with Chrome. min/max-height clamps still apply; the
+bottom-margin-collapse (guarded on `own_definite_h.is_none()`) correctly skips a now-definite box.
+
+**WPT / gate.** `css/css-sizing` 253→**341 (+88)** — the `css-sizing/stretch` `block-height-*` mass — with
+css-flexbox +1, css-grid/position/normal-flow flat, **HANG/CRASH 0**. Gated by
+`height_stretch_fills_definite_parent` (RED→18px), `height_fill_available_fills_definite_parent`,
+`height_stretch_in_auto_parent_stays_content`, `height_stretch_is_a_definite_base_for_percentage_child`.
+Residue: `width:stretch` in a shrink-to-fit context (float/inline-block/abspos, where `auto` shrinks) still
+behaves as `auto` — a separate, smaller mechanism.

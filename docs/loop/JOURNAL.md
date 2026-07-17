@@ -6634,3 +6634,35 @@ correctly today (the abspos case stays covered by `height_intrinsic`).
 `width_min_content_is_longest_word`, and `width_fit_content_still_clamped_by_max_width`. Probe: s3 flips
 300→~14. Regression sweep across css-sizing/css-flexbox/css-grid/css-position/CSS2-normal-flow with
 HANG/CRASH 0 and no suite regressing, else revert. Mechanism in [[box-layout]].
+
+## Tick 154 — `height: stretch | -webkit-fill-available` on a block FILLS its parent's definite height (2026-07-17)
+
+**TICK SHAPE: layout-mechanism (CSS-LAYOUT phase-mandate row 1 — intrinsic/keyword sizing; the vertical companion of t153). WIKI: box-layout.**
+Probed after t153: `height:stretch` on a block inside a 200px-tall parent came out **18px** (content height),
+where Chrome fills to **200px**. `-webkit-fill-available` same (18px). Unlike WIDTH — where `auto` already
+fills so `stretch` "worked" incidentally — a block's `height:auto` is CONTENT height, so `stretch` and
+`auto` are a real, visible distinction that was never modeled. Tick 146's comment even declared stretch
+"definite", but nothing gave it filling behavior: it collapsed to `Dim::Auto` = content height.
+
+**Hypothesis.** `stretch`/`-webkit-fill-available`/`-moz-available` on `height` collapse to `Dim::Auto`
+(definite, so NOT flagged `height_intrinsic`) and are then indistinguishable from `auto` → the box takes
+its content height instead of filling the containing block. This breaks full-height panels/columns that
+use `height:stretch` (or the older `-webkit-fill-available` mobile-viewport idiom).
+
+**Fix.** A new `ComputedStyle::height_stretch: bool`, set in both style paths (stylo map: `GS::Stretch |
+WebkitFillAvailable | MozAvailable`; hand parser at parity). In `layout_block`'s `own_definite_h`, a new
+arm: `Dim::Auto if height_stretch => pch.map(|h| (h - mt - mb - pt - pb - bt - bb).max(0))` — the box's
+MARGIN box fills the containing block's definite content height `pch`, so the content box is that minus
+this box's own margins/border/padding (box-sizing-independent: stretch fills available space, not a
+specified length). `pch` (the parent's definite content height, threaded since t144) is the same reference
+`height:%` children use, so a stretched box is correctly a definite-height CB for its `%`-height children.
+When `pch` is `None` (auto-height parent) stretch stays content-height, at parity with Chrome. min/max-height
+clamps still apply; the bottom-margin-collapse (guarded on `own_definite_h.is_none()`) correctly skips a
+now-definite box.
+
+**Gate.** Unit tests proven RED by reverting: `height_stretch_fills_definite_parent` (18→200),
+`height_fill_available_fills_definite_parent`, `height_stretch_in_auto_parent_stays_content` (no over-fill),
+`height_stretch_is_a_definite_base_for_percentage_child`. Regression sweep across
+css-sizing/css-flexbox/css-grid/css-position/CSS2-normal-flow with HANG/CRASH 0 and no suite regressing,
+else revert. Residue noted: `width:stretch` in a shrink-to-fit context (float/inline-block/abspos) still
+behaves as `auto` — a separate, smaller mechanism. Mechanism in [[box-layout]].

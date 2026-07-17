@@ -73,6 +73,14 @@ fn size_is_intrinsic(s: &Size) -> bool {
     )
 }
 
+/// `true` when a `Size` is `stretch` / `-webkit-fill-available` / `-moz-available` — a DEFINITE size
+/// that FILLS the containing block (unlike `auto` = content, and unlike the intrinsic keywords).
+fn size_is_stretch(s: &Size) -> bool {
+    use stylo::values::generics::length::GenericSize as GS;
+    // crates.io stylo 0.19 models `-moz-available` as `WebkitFillAvailable` (no separate variant).
+    matches!(s, GS::Stretch | GS::WebkitFillAvailable)
+}
+
 /// Which intrinsic sizing keyword a `Size` carries, if any — for `width`, where the specific keyword
 /// (not just "is intrinsic") decides whether the box hugs its longest word, its whole content, or the
 /// shrink-to-fit clamp between them. `fit-content(<length>)` is treated as plain `fit-content`.
@@ -328,6 +336,7 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     s.width = size_to_dim(&cw);
     let ch = cv.clone_height();
     s.height_intrinsic = size_is_intrinsic(&ch);
+    s.height_stretch = size_is_stretch(&ch);
     s.height = size_to_dim(&ch);
     s.min_width = size_to_dim(&cv.clone_min_width());
     s.min_height = size_to_dim(&cv.clone_min_height());
