@@ -34,8 +34,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use manuk_css::{
-    BoxSizing, Clear, ComputedStyle, Dim, Display, Float, Overflow, Position, Rgba, StyleMap,
-    TextAlign, VerticalAlign, WhiteSpace,
+    BoxSizing, Clear, ComputedStyle, Dim, Display, Float, IntrinsicSize, Overflow, Position, Rgba,
+    StyleMap, TextAlign, VerticalAlign, WhiteSpace,
 };
 use manuk_dom::{Dom, NodeData, NodeId};
 use manuk_text::{FontContext, FontFamily, FontKey};
@@ -1526,6 +1526,16 @@ impl Ctx<'_> {
         let mut width = match taffy_known {
             Some(border_box) => (border_box - pl - pr - bl - br).max(0.0),
             None => match s.width {
+                // An intrinsic sizing keyword (`min-/max-/fit-content`) collapses to `Dim::Auto` for
+                // length resolution but does NOT fill — it hugs the content. Same measure functions
+                // inline-block already uses below, so identical Bar-0/recursion profile; they return
+                // content-box widths, so the box-sizing subtraction (guarded on `width != Auto`) stays
+                // correctly skipped. Takes precedence over the inline-block fall-through.
+                Dim::Auto if s.width_keyword.is_some() => match s.width_keyword.unwrap() {
+                    IntrinsicSize::MinContent => self.min_content_width(node),
+                    IntrinsicSize::MaxContent => self.max_content_width(node),
+                    IntrinsicSize::FitContent => self.shrink_to_fit(node, (cw - extra).max(0.0)),
+                },
                 Dim::Auto
                     if matches!(
                         s.display,
@@ -1570,9 +1580,10 @@ impl Ctx<'_> {
         }
         width = width.max(min_w);
 
-        // Horizontal auto-margin centering when width is definite. Only the left
-        // margin shifts the box; the right margin absorbs the remainder implicitly.
-        if s.width != Dim::Auto {
+        // Horizontal auto-margin centering when width is definite. A keyword width (`fit-content`
+        // etc.) collapses to `Dim::Auto` but IS definite for margins — `width:fit-content;margin:auto`
+        // centers the hugged box. Only the left margin shifts the box; the right absorbs the remainder.
+        if s.width != Dim::Auto || s.width_keyword.is_some() {
             let leftover = cw - (width + pl + pr + bl + br);
             match (s.margin.left.is_auto(), s.margin.right.is_auto()) {
                 (true, true) => ml = (leftover / 2.0).max(0.0),
@@ -5604,6 +5615,92 @@ mod tests {
         assert!(
             !text.contains("alert") && !text.contains("let"),
             "a display:none <script> in a FLEX container must not paint its source (got {text:?})"
+        );
+    }
+
+    /// `width: fit-content | max-content | min-content` on a **block** hugs its content instead of
+    /// filling the containing block. Before this, all three collapsed to `Dim::Auto` and took the
+    /// block auto-width *fill* branch, so a `fit-content` badge stretched edge-to-edge. The measure
+    /// functions are the ones inline-block already uses, so the intrinsic width is content-box.
+    #[test]
+    fn width_fit_content_hugs() {
+        // A short word in a wide container: fit-content = its ~1-word width, far under 500px.
+        let html = r#"<div id="box">hi</div>"#;
+        let css = "#box{width:fit-content;background:#000}";
+        let (dom, root) = layout_html(html, css, 500.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let w = rects[&by_id("box")].width;
+        assert!(
+            w > 0.0 && w < 100.0,
+            "width:fit-content must hug the word (expected ~<100px, NOT the 500px fill), got {w}"
+        );
+    }
+
+    /// `width: max-content` = the whole content unwrapped on one line — wider than the same content
+    /// under `min-content`, and independent of the (ample) available width.
+    #[test]
+    fn width_max_content_hugs() {
+        let html = r#"<div id="box">one two three four five</div>"#;
+        let css = "#box{width:max-content}";
+        let (dom, root) = layout_html(html, css, 1000.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let w = rects[&by_id("box")].width;
+        // The unwrapped phrase is well under the 1000px container but well over one short word.
+        assert!(
+            w > 40.0 && w < 900.0,
+            "width:max-content must hug the unwrapped line (not fill 1000px), got {w}"
+        );
+    }
+
+    /// `width: min-content` = the longest unbreakable run. A very long single token forces the box
+    /// at least that wide even though the container is narrow — and narrower than `max-content` of a
+    /// multi-word phrase would be only if there were breaks, so here we assert it tracks the token.
+    #[test]
+    fn width_min_content_is_longest_word() {
+        let html = r#"<div id="box">a supercalifragilisticexpialidocious b</div>"#;
+        let css = "#box{width:min-content}";
+        let (dom, root) = layout_html(html, css, 1000.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let w = rects[&by_id("box")].width;
+        // The long token is ~200px; min-content is that word, not the whole phrase and not 1000px.
+        assert!(
+            w > 120.0 && w < 400.0,
+            "width:min-content must be the longest word (not the full phrase, not 1000px), got {w}"
+        );
+    }
+
+    /// A keyword width is still clamped by `max-width`: `fit-content` capped at 20px yields 20px,
+    /// proving the intrinsic result feeds the ordinary min/max-width clamp rather than bypassing it.
+    #[test]
+    fn width_fit_content_still_clamped_by_max_width() {
+        let html = r#"<div id="box">one two three four five six seven</div>"#;
+        let css = "#box{width:max-content;max-width:20px}";
+        let (dom, root) = layout_html(html, css, 1000.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let w = rects[&by_id("box")].width;
+        assert!(
+            (w - 20.0).abs() < 1.0,
+            "max-width:20px must clamp the max-content width to 20px, got {w}"
         );
     }
 }

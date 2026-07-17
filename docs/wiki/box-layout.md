@@ -257,3 +257,34 @@ no double-handling. The `overflow_hidden_contains_child_margin` guard (t151) sti
 probe. Sweep: css-flexbox 26.6%, css-position 28.8%, css-overflow 27.8%, css-sizing 14.8%,
 CSS2/normal-flow 15.4%, CSS2/floats 60% — all flat, **HANG/CRASH 0**. overflow:hidden is pervasive, so
 flat-with-no-crash across the layout suites plus the full wall (parity + oracle fidelity) is the bar.
+
+## An intrinsic-keyword `width` HUGS its content — not the same as `auto` (which fills) (tick 153)
+
+**Symptom.** `width:fit-content` on a block filled the containing block (a probe: `<div width:fit-content>fit</div>`
+in a 300px parent came out **300px** where Chrome hugs at ~14px). `width:max-content`/`min-content` likewise
+filled. This is the companion of the tick-146 *height* case, on the axis where it actually shows: the
+"hug the contents" idiom — a `fit-content` badge/tag/pill, a `max-content` single-line label, and the
+`width:fit-content; margin-inline:auto` centered-block-that-hugs pattern — silently stretched edge-to-edge.
+
+**Cause.** All three intrinsic keywords collapse to `Dim::Auto` in both style paths (`stylo_map::size_to_dim`,
+the hand parser). Only `height_intrinsic: bool` was retained (t146, for the abspos indefinite-height case) —
+nothing carried the keyword on *width*, so a keyword width was indistinguishable from `auto` and took the
+block auto-width **fill** branch (`cw − extra`). `stretch`/`-webkit-fill-available` were already correct
+because they ARE definite fills.
+
+**Fix.** A new `IntrinsicSize { MinContent, MaxContent, FitContent }` enum, stored as
+`ComputedStyle::width_keyword: Option<IntrinsicSize>`, set in `stylo_map` (`size_intrinsic_kw`, matching the
+`GenericSize` variants; `fit-content(<len>)` → `FitContent`) and in the hand parser at parity. Block width
+resolution gains one arm before the auto-fill: `Dim::Auto if width_keyword.is_some()` →
+`MinContent → min_content_width(node)`, `MaxContent → max_content_width(node)`,
+`FitContent → shrink_to_fit(node, cw − extra)` — the *same* measure functions inline-block already uses, so
+identical Bar-0/recursion profile, and they return **content-box** widths so the box-sizing subtraction
+(guarded on `width != Auto`) correctly stays skipped. min/max-width clamps still apply after (CSS Sizing L3).
+The auto-margin centering guard also widens to `width != Auto || width_keyword.is_some()` so a keyword width
+(definite for margins) centers under `margin:auto`. Flex/grid **items** are taffy-decided (`taffy_known`) and
+untouched; width-only scope because block auto-height already resolves to content height.
+
+**Gate.** `width_fit_content_hugs`, `width_max_content_hugs`, `width_min_content_is_longest_word`,
+`width_fit_content_still_clamped_by_max_width` (layout), the first three proven RED by the 300/1000px fill.
+Sweep: css-sizing 14.8%→**15.1% (+5)**, css-flexbox 26.8%, css-grid 9.2%, css-position 28.8%,
+CSS2/normal-flow 15.4% — neighbors flat, **HANG/CRASH 0**.

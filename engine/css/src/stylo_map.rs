@@ -73,6 +73,20 @@ fn size_is_intrinsic(s: &Size) -> bool {
     )
 }
 
+/// Which intrinsic sizing keyword a `Size` carries, if any — for `width`, where the specific keyword
+/// (not just "is intrinsic") decides whether the box hugs its longest word, its whole content, or the
+/// shrink-to-fit clamp between them. `fit-content(<length>)` is treated as plain `fit-content`.
+fn size_intrinsic_kw(s: &Size) -> Option<crate::IntrinsicSize> {
+    use crate::IntrinsicSize as IS;
+    use stylo::values::generics::length::GenericSize as GS;
+    match s {
+        GS::MinContent => Some(IS::MinContent),
+        GS::MaxContent => Some(IS::MaxContent),
+        GS::FitContent | GS::FitContentFunction(_) => Some(IS::FitContent),
+        _ => None,
+    }
+}
+
 /// `max-width`/`max-height` `MaxSize` → `Dim` (`none`/keywords → `Dim::Auto` = no limit).
 fn maxsize_to_dim(s: &MaxSize) -> Dim {
     match s {
@@ -309,7 +323,9 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     s.display = map_display(cv.clone_display());
 
     // Box model — sizing.
-    s.width = size_to_dim(&cv.clone_width());
+    let cw = cv.clone_width();
+    s.width_keyword = size_intrinsic_kw(&cw);
+    s.width = size_to_dim(&cw);
     let ch = cv.clone_height();
     s.height_intrinsic = size_is_intrinsic(&ch);
     s.height = size_to_dim(&ch);

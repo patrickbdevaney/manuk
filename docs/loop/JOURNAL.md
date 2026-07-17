@@ -6601,3 +6601,36 @@ subtle — treat any non-visible as BFC, matching the clip-establishes-BFC-in-pr
 the probe above (18px). Regression sweep across css-flexbox/position/overflow/sizing/CSS2-normal-flow;
 HANG/CRASH 0 and no suite regresses, else revert (overflow:hidden is pervasive — this is the higher-risk
 half of the change and the sweep is the guard).
+
+## Tick 153 — `width: fit-content | min-content | max-content` on a block hugs its content instead of filling (2026-07-17)
+
+**TICK SHAPE: layout-mechanism (CSS-LAYOUT phase-mandate row 1 — intrinsic sizing; the remaining unmet slice). WIKI: box-layout.**
+Probed rows 1/5/6/7 of the RENDER+INTERACT mandate directly with `manuk-wpt boxes`: border-box padding
+(child=136px), calc sidebar (main=750px), flex:1-with-long-token (212/44/44), justify-between (0/130/260),
+grid repeat(3,1fr) (0/110/220), align-items stretch/center, flex-column grow — **all already correct**.
+The one that PROBED RED: `width: fit-content` on a block came out **300px (filled the container)** where
+Chrome hugs the content (~14px). `width: stretch` and `-webkit-fill-available` were already correct (300).
+
+**Hypothesis.** The three *intrinsic sizing keywords* (`min-content`/`max-content`/`fit-content`) all
+collapse to `Dim::Auto` in both style paths (`stylo_map::size_to_dim` and the hand-parser), and only a
+`height_intrinsic: bool` is retained — for the abspos indefinite-height case, never for width. So a block
+`width: fit-content` is indistinguishable from `width: auto` and takes the auto-width *fill* branch
+(`cw - extra`), stretching to the containing block. This breaks the single most common "hug the contents"
+idiom on the web: a `fit-content` badge/tag/pill, a `width:max-content` single-line label, and the
+`width:fit-content; margin-inline:auto` centered-block-that-hugs pattern.
+
+**Fix.** A new `IntrinsicSize { MinContent, MaxContent, FitContent }` tag, stored as
+`ComputedStyle::width_keyword: Option<IntrinsicSize>`, set in BOTH style paths (stylo map + hand-parser)
+next to the existing `height_intrinsic`. In block width resolution, the `Dim::Auto` branch consults it:
+`MinContent → min_content_width(node)`, `MaxContent → max_content_width(node)`, `FitContent →
+shrink_to_fit(node, cw - extra)` — the exact functions inline-block already uses (line 1535), so the
+Bar-0/recursion profile is identical to a proven-safe path, and the returned values are content-box
+widths so the box-sizing subtraction (guarded on `width != Auto`) correctly stays skipped. min/max-width
+clamps still apply after, per CSS Sizing L3. Taffy-decided flex/grid items (`taffy_known`) are untouched.
+Width-only scope: block auto-height already resolves to content height, so the height keywords behave
+correctly today (the abspos case stays covered by `height_intrinsic`).
+
+**Gate.** Unit tests proven RED by reverting: `width_fit_content_hugs`, `width_max_content_hugs`,
+`width_min_content_is_longest_word`, and `width_fit_content_still_clamped_by_max_width`. Probe: s3 flips
+300→~14. Regression sweep across css-sizing/css-flexbox/css-grid/css-position/CSS2-normal-flow with
+HANG/CRASH 0 and no suite regressing, else revert. Mechanism in [[box-layout]].

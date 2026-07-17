@@ -38,6 +38,7 @@
   - L159 · Percentage heights resolve against the initial containing block, and max-height:% on an indefinite parent is none (tick 150)
   - L190 · Parent↔child margin collapsing (tick 151)
   - L235 · overflow establishes a block formatting context — float containment / the clearfix (tick 152)
+  - L261 · An intrinsic-keyword width HUGS its content — not the same as auto (which fills) (tick 153)
 
 ## BUILD AND DEPENDENCIES — what is actually compiled, and what only looks like it is
 `docs/wiki/build-and-dependencies.md`
@@ -397,4 +398,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-324 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+325 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -37,6 +37,18 @@ pub enum Dim {
     },
 }
 
+/// An **intrinsic sizing keyword** on `width`/`height` (CSS Sizing L3). All three collapse to
+/// `Dim::Auto` for length resolution but resolve to a content-derived size, not a fill.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IntrinsicSize {
+    /// The narrowest the box can be without overflowing — its longest unbreakable content run.
+    MinContent,
+    /// The box's preferred size with no width constraint — content laid out unwrapped.
+    MaxContent,
+    /// `min(max-content, max(min-content, stretch-fit))` — shrink-to-fit against the available space.
+    FitContent,
+}
+
 impl Dim {
     /// Resolve to px against a containing-block reference length. `Auto` -> `auto_px`.
     pub fn resolve(self, reference: f32, auto_px: f32) -> f32 {
@@ -479,6 +491,12 @@ pub struct ComputedStyle {
     /// follow-ons).
     pub box_shadow: Option<BoxShadow>,
     pub width: Dim,
+    /// The **intrinsic sizing keyword** on `width`, if any. `width` itself collapses to `Dim::Auto`
+    /// for length resolution (an intrinsic width is content-driven, not a length), but unlike a plain
+    /// `auto` a keyword width does NOT fill the containing block — it hugs the content: `min-content`
+    /// is the longest unbreakable run, `max-content` the whole content unwrapped, `fit-content` the
+    /// shrink-to-fit clamp between them. `None` = `auto`/length/`stretch`/`fill-available` (all fill).
+    pub width_keyword: Option<IntrinsicSize>,
     pub height: Dim,
     /// `true` when `height` is an **intrinsic sizing keyword** (`min-content`/`max-content`/
     /// `fit-content`), which all collapse to `Dim::Auto` for length resolution but are *not* the
@@ -589,6 +607,7 @@ impl ComputedStyle {
             has_animation: false,
             box_shadow: None,
             width: Dim::Auto,
+            width_keyword: None,
             height: Dim::Auto,
             height_intrinsic: false,
             min_width: Dim::Auto,
@@ -2595,7 +2614,21 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 _ => WhiteSpace::Normal,
             }
         }
-        "width" => s.width = values::parse_dim(v, s.font_size),
+        "width" => {
+            // Intrinsic sizing keywords collapse to `Dim::Auto` for length resolution, but tag which
+            // one so block width resolution hugs the content instead of filling (`stretch` /
+            // `-webkit-fill-available` are definite fills → not tagged), at parity with the stylo map.
+            let low = v.trim().to_ascii_lowercase();
+            s.width_keyword = match low.as_str() {
+                "min-content" => Some(IntrinsicSize::MinContent),
+                "max-content" => Some(IntrinsicSize::MaxContent),
+                _ if low == "fit-content" || low.starts_with("fit-content(") => {
+                    Some(IntrinsicSize::FitContent)
+                }
+                _ => None,
+            };
+            s.width = values::parse_dim(v, s.font_size);
+        }
         "height" => {
             // Intrinsic sizing keywords collapse to `Dim::Auto` for length resolution, but flag
             // them so the abspos both-insets path treats the box as indefinite (sizes to content),
