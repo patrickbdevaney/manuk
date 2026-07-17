@@ -279,9 +279,11 @@
   - L19 · PARALLEL TRACK (layout-independent — pull forward on any crash / crash-gated tick)
   - L23 · THEN media (BIND GStreamer, never write a codec; lead royalty-free WebM/VP9/Opus)
   - L30 · Forms (server-rendered actor tier)
-  - L33 · Agentic fallbacks (the a11y tree decouples driving from rendering — v1 ships while CSS imperfect)
-  - L45 · Deferred
-  - L48 · Terminal gate — reasonable security sweep
+  - L33 · Full-tier extension (after RENDER 1–9 + MEDIA M0–M4 — the sufficient daily-driver set)
+  - L59 · Bot-wall posture (separate track — NOT engine capability; user scoped OUT)
+  - L66 · Agentic fallbacks (the a11y tree decouples driving from rendering — v1 ships while CSS imperfect)
+  - L78 · Deferred
+  - L81 · Terminal gate — reasonable security sweep
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -289,19 +291,20 @@
   - L3 · Count the WIRE, not the call
   - L9 · The three mechanisms that actually cut load time, and what each one is for
   - L17 · The page's own fetch()/XHR must actually be performed
-  - L23 · A load budget must be a HARD deadline, not a between-phases courtesy
-  - L32 · Speed is only real if it comes from doing the same work BETTER
-  - L41 · A browser with NO network timeout is hostage to every dead tracker
-  - L68 · Classic scripts require ordered EXECUTION, not ordered FETCHING
-  - L74 · 74–79% of a page's fetches were the same URL fetched again
-  - L98 · Keep-alive connections DIE with the Tokio runtime that spawned them
-  - L107 · Preconnect only pays off if it warms the SAME rustls session cache the navigation uses
-  - L117 · Stream hyper bodies with BodyExt::frame(), never collect()
-  - L123 · SameSite is ASYMMETRIC — and getting it backwards ships the exact CSRF it prevents
-  - L142 · Two proxy details that are the difference between privacy and a leak
-  - L149 · Charset sniffing is a definitive reuse
-  - L156 · HTTP/2's win is gated on SUBRESOURCES, not on the document fetch
-  - L161 · The bot-wall fingerprint surface is known — and matching it IS the evasion
+  - L23 · A page's fetch/XHR **request headers** must reach the wire — dropping them is a silent 401
+  - L41 · A load budget must be a HARD deadline, not a between-phases courtesy
+  - L50 · Speed is only real if it comes from doing the same work BETTER
+  - L59 · A browser with NO network timeout is hostage to every dead tracker
+  - L86 · Classic scripts require ordered EXECUTION, not ordered FETCHING
+  - L92 · 74–79% of a page's fetches were the same URL fetched again
+  - L116 · Keep-alive connections DIE with the Tokio runtime that spawned them
+  - L125 · Preconnect only pays off if it warms the SAME rustls session cache the navigation uses
+  - L135 · Stream hyper bodies with BodyExt::frame(), never collect()
+  - L141 · SameSite is ASYMMETRIC — and getting it backwards ships the exact CSRF it prevents
+  - L160 · Two proxy details that are the difference between privacy and a leak
+  - L167 · Charset sniffing is a definitive reuse
+  - L174 · HTTP/2's win is gated on SUBRESOURCES, not on the document fetch
+  - L179 · The bot-wall fingerprint surface is known — and matching it IS the evasion
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -390,4 +393,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-317 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+320 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

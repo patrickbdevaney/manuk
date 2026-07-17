@@ -3054,6 +3054,50 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 148 — a page's `fetch`/XHR **request headers** reach the wire (Authorization / custom headers were silently dropped; every token-auth read came back 401 and looked like a network fault)
+
+**TICK SHAPE: capability-mechanism (PULL-FORWARD U-1 — the layout lever was blocked; see below). WIKI: networking.**
+
+**Phase mandate + why not a layout row.** Opened `css/css-sizing --show-failures`. The single biggest
+cluster is the `stretch` / `-webkit-fill-available` keyword (967 subtests, 12.7%), which today collapses to
+`Dim::Auto`. I implemented the obvious model — `stretch → 100%` for the block axis and every min/max slot,
+`auto` kept for the inline axis — and it **regressed**: `css-sizing/stretch` 123→98, total 243→217. Root
+cause is exactly what the memory ([[session-145-146-css-sizing]]) warned: `stretch` is fill-available, and
+a correct fill needs margin subtraction AND the definite-vs-indefinite-CB distinction that `100%` gets
+wrong (Taffy resolves `percent` against an indefinite parent as **0**, so every `min-height:stretch` under
+an auto-height CB collapsed where `auto`→content had passed). That is the intrinsic-leaf-measure subsystem,
+not a bounded tick. **Reverted per THE RATCHET** (a capability is never bought with a regression), tree back
+to clean, and took a PULL-FORWARD unblock — U-1, explicitly flagged "best ROI / silent-fail class."
+
+**Root cause (U-1).** `fetch(url, {headers})` and `xhr.setRequestHeader(...)` were both no-ops. The JS
+surface collected no headers; the pending-request string carried none; the host hard-coded `Content-Type:
+application/json` for every non-GET and sent **nothing** else. So an `Authorization: Bearer …` request left
+as an anonymous one, came back 401, and the page's `.catch`/`onerror` ran — making a dropped header look
+like a network fault. This closes the "real request headers" follow-on first logged all the way back in
+Tick 2's reflect note.
+
+**Fix (end-to-end thread).** JS `__encHeaders` flattens the three shapes a page passes (plain object,
+`[name,value]` array, `forEach(value,name)` Headers-like) into `name\x02value\x02…`, appended to the pending
+string as `id\x01kind\x01method\x01url\x01headers\x01body` — **body stays the greedy tail** so it may still
+contain `\x01`. `drain_pending` parses it back to `Vec<(String,String)>` (`splitn(6)`); `take_fetches` and
+`Page::take_fetches` widen their tuple to `(id, url, method, headers, body)`; the host replays the headers
+onto `manuk_net::request`, defaulting `Content-Type` **only when the page did not set one** (overriding an
+explicit form encoding is its own bug). A GET *with* headers routes through `request`, not the cache-carrying
+`fetch` path — an `Authorization`-bearing GET is not safely shareable across auth contexts. XHR
+`setRequestHeader` accumulates into `this._h`. Response headers stay a stub (`headers.get()→null`) — the next half.
+
+**Gate (falsifiable).** `event_loop::tests::fetch_and_xhr_carry_request_headers` (`manuk-js`, isolated)
+issues a POST `fetch` with `{Authorization, X-A}` and a GET XHR with `setRequestHeader('X-Custom')`, drains,
+and asserts each header survives into the drained request (and the POST body still travels). **Proven RED**
+by construction: before the fix the header vec is empty and every assert fails. Passes green (the trailing
+`pthread_mutex_destroy` SIGSEGV is the known SpiderMonkey multi-Runtime teardown artifact the `#[ignore]`
+annotation exists for — not a browser Bar 0). The pre-existing `microtasks_run_before_macrotasks` fetch test
+stays green through the wire-format change.
+
+**The ratchet.** Capability: **up** — authenticated `fetch`/XHR now works at all (login/token reads stop
+404-as-401'ing). Performance: unchanged. Instrument fidelity: **up** — one falsifiable gate. No suite down;
+the stretch attempt that *would* have regressed was reverted, not landed.
+
 ## Tick 147 — a `position:relative` percentage `top`/`bottom` resolves against the containing block HEIGHT (it always computed to 0 — the box never moved vertically)
 
 **TICK SHAPE: layout-mechanism (CSS-LAYOUT phase-mandate row 1 territory — definite-height percentage resolution). WIKI: box-layout.**

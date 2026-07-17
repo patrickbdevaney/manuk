@@ -1055,23 +1055,40 @@ impl Page {
             // how a five-request page becomes a five-deadline page.
             let base = self.final_url.clone();
             let left = budget.saturating_sub(started.elapsed());
-            let all =
-                futures_util::future::join_all(reqs.into_iter().map(|(id, raw, method, body)| {
+            let all = futures_util::future::join_all(reqs.into_iter().map(
+                |(id, raw, method, headers, body)| {
                     let url = resolve_url(&base, &raw);
                     async move {
-                        let out = if method.eq_ignore_ascii_case("GET") || method.is_empty() {
-                            // GET goes through `fetch`, which carries the HTTP cache, the single-flight
-                            // coalescer and the per-navigation negative cache. A POST must not: it is not
-                            // idempotent, and de-duplicating one would drop a real request.
+                        let is_get = method.eq_ignore_ascii_case("GET") || method.is_empty();
+                        let out = if is_get && headers.is_empty() {
+                            // A header-less GET goes through `fetch`, which carries the HTTP cache, the
+                            // single-flight coalescer and the per-navigation negative cache. A POST must
+                            // not: it is not idempotent, and de-duplicating one would drop a real request.
+                            // A GET WITH request headers (an `Authorization: Bearer …` API read) also
+                            // bypasses that path — it is not safely shareable across auth contexts, and
+                            // dropping its headers was the bug this fixes.
                             manuk_net::fetch(&url).await
                         } else {
-                            manuk_net::request(
-                                &method,
-                                &url,
-                                &[("content-type", "application/json")],
-                                body.clone().into_bytes().into(),
-                            )
-                            .await
+                            let mut hdrs: Vec<(&str, &str)> = headers
+                                .iter()
+                                .map(|(k, v)| (k.as_str(), v.as_str()))
+                                .collect();
+                            // Default `Content-Type` for a bodied request only when the page did not set
+                            // one — overriding an explicit `application/x-www-form-urlencoded` would break
+                            // every classic form-POST and every OAuth token exchange.
+                            let has_ct = headers
+                                .iter()
+                                .any(|(k, _)| k.eq_ignore_ascii_case("content-type"));
+                            if !is_get && !has_ct {
+                                hdrs.push(("content-type", "application/json"));
+                            }
+                            let m = if method.is_empty() {
+                                "GET"
+                            } else {
+                                method.as_str()
+                            };
+                            manuk_net::request(m, &url, &hdrs, body.clone().into_bytes().into())
+                                .await
                         };
                         match out {
                             Ok(r) => (id, r.status, r.decoded_text()),
@@ -1083,7 +1100,8 @@ impl Page {
                             }
                         }
                     }
-                }));
+                },
+            ));
 
             // **The ROUND lives inside the budget, not merely between rounds.** Checking the clock only
             // at the top of the loop let a single round run unbounded — a 20s budget produced a 200s+
@@ -2279,10 +2297,10 @@ impl Page {
         }
     }
 
-    /// Drain the page's queued `fetch`/XHR requests as `(id, url, method, body)`, for the host
-    /// to perform over the network and settle via [`resolve_fetch`](Self::resolve_fetch). Empty
+    /// Drain the page's queued `fetch`/XHR requests as `(id, url, method, headers, body)`, for the
+    /// host to perform over the network and settle via [`resolve_fetch`](Self::resolve_fetch). Empty
     /// when the page has no JS context.
-    pub fn take_fetches(&self) -> Vec<(u32, String, String, String)> {
+    pub fn take_fetches(&self) -> Vec<(u32, String, String, Vec<(String, String)>, String)> {
         match &self.js {
             Some(ctx) => manuk_js::take_fetches(ctx),
             None => Vec::new(),
@@ -3609,7 +3627,7 @@ mod js_interactive_tests {
         );
         let reqs = page5.take_fetches();
         assert_eq!(reqs.len(), 1, "the page issued exactly one fetch");
-        let (id, url, method, _body) = &reqs[0];
+        let (id, url, method, _headers, _body) = &reqs[0];
         assert_eq!(url, "/api/data", "the requested URL reached the host queue");
         assert_eq!(method, "GET");
         page5.resolve_fetch(*id, 200, "HELLO-FROM-HOST", &fonts, 800.0);

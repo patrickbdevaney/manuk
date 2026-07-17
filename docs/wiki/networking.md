@@ -20,6 +20,24 @@ They were queued and never made outside the shell — the oracle, `boxes`, and t
 dropped them. Likely a large share of the oracle's "missing nodes": a page that fetches its content and
 never receives it renders its skeleton, which is exactly what a hydration failure looks like.
 
+## A page's `fetch`/XHR **request headers** must reach the wire — dropping them is a silent 401
+
+`fetch(url, {headers})` and `xhr.setRequestHeader(...)` were both no-ops: the JS surface collected no
+headers, the pending-request string carried none, and the host hard-coded `Content-Type:
+application/json` for every non-GET while sending **nothing** else. So an authenticated request
+(`Authorization: Bearer …`) left as an anonymous one and came back 401 — and the page's `.catch`/`onerror`
+made it look like a network fault, not a dropped header. Every token-auth SPA read, every OAuth token
+exchange, every `application/x-www-form-urlencoded` form-POST failed this way, invisibly.
+
+The fix threads headers end-to-end. JS `__encHeaders` flattens the three shapes a page passes (plain
+object, `[name,value]` array, `forEach(value,name)` Headers-like) into `name\x02value\x02…`, appended to
+the pending string as `id\x01kind\x01method\x01url\x01headers\x01body` (**body stays the greedy tail** so
+it may still contain `\x01`). `drain_pending` parses it back to `Vec<(String,String)>`; the host replays
+it onto `manuk_net::request`, defaulting `Content-Type` **only when the page did not set one** (overriding
+an explicit form encoding is its own bug). A GET *with* headers is routed through `request` too, not the
+cache-carrying `fetch` path — an `Authorization`-bearing GET is not safely shareable across auth contexts.
+Response headers are still a stub (`headers.get() -> null`); that is the next half.
+
 ## A load budget must be a HARD deadline, not a between-phases courtesy
 
 Checking the clock only *between* phases lets a phase start with a millisecond left and then run for its

@@ -109,6 +109,7 @@ architecture. Each one below was *named by a framework*, not guessed at.
 | `btoa`/`atob`, `TextEncoder`, `crypto.randomUUID` | Data URLs, JWTs, request ids, React keys | ✅ |
 | Event bubbling / capture / `stopPropagation` | All delegation-based UIs | ✅ |
 | `fetch` / XHR | Every dynamic page | ✅ |
+| `fetch`/XHR **request headers** (`Authorization`, `Content-Type`, `X-*`) | **Every authenticated API read / token exchange / form-POST** — without them the request is anonymous and 401s, looking like a network fault | ✅ (tick 148) — headers travel to the wire; `Content-Type` defaulted only when unset. Response headers still a stub. |
 | `MutationObserver` / `IntersectionObserver` / `ResizeObserver` | Lazy-loading, infinite scroll, sticky headers | ✅ |
 | `localStorage` / `sessionStorage` / cookies | Sessions, preferences | ✅ (partitioned; RFC 6265) |
 | `history.pushState` (client-side routing) | Every SPA's navigation | ✅ |

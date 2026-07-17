@@ -368,16 +368,20 @@ pub fn next_window_id() -> u64 {
 }
 
 /// Requests `ctx`'s page issued via `fetch`/`XMLHttpRequest` since the last call, each
-/// `(id, url, method, body)`. The host performs the round-trip and settles it via
-/// [`resolve_fetch`]. Empty without the JS feature.
+/// `(id, url, method, headers, body)`. The host performs the round-trip (replaying `headers` onto
+/// the wire) and settles it via [`resolve_fetch`]. Empty without the JS feature.
 #[cfg(feature = "_sm")]
-pub fn take_fetches(ctx: &PageContext) -> Vec<(u32, String, String, String)> {
+pub fn take_fetches(
+    ctx: &PageContext,
+) -> Vec<(u32, String, String, Vec<(String, String)>, String)> {
     with_runtime(|rt| ctx.take_fetches(rt).map_err(|message| JsError { message }))
         .unwrap_or_default()
 }
 
 #[cfg(not(feature = "_sm"))]
-pub fn take_fetches(_ctx: &PageContext) -> Vec<(u32, String, String, String)> {
+pub fn take_fetches(
+    _ctx: &PageContext,
+) -> Vec<(u32, String, String, Vec<(String, String)>, String)> {
     Vec::new()
 }
 

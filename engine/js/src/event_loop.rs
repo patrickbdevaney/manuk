@@ -114,7 +114,8 @@ const PRELUDE: &str = r#"
     };
 
     // --- fetch / XMLHttpRequest -------------------------------------------
-    // Requests are enqueued here (as "id\x01kind\x01method\x01url\x01body" strings). The Rust
+    // Requests are enqueued here (as "id\x01kind\x01method\x01url\x01headers\x01body" strings,
+    // headers being "name\x02value\x02…"; body is the greedy tail so it may itself contain \x01). The Rust
     // loop (run_with_fetcher) or the host (drain_pending + deliver) performs the network I/O,
     // then calls __deliver(id, status, body) — kind-agnostic; it routes to the right settler.
     // fetch() returns a REAL Promise (native promise jobs are routed into this loop via
@@ -137,12 +138,30 @@ const PRELUDE: &str = r#"
         };
     };
 
-    // fetch(url[, {method, body}]) -> Promise<Response-like>.
+    // Flatten a request's headers to "name\x02value\x02name\x02value" for the host to replay onto
+    // the wire. `Authorization`, a non-JSON `Content-Type`, `Accept`, `X-*` — every one of these was
+    // silently dropped before, so an authenticated `fetch`/XHR reached the server as an anonymous one
+    // and came back 401. Accepts the three shapes a page passes: a plain object, an array of
+    // `[name, value]` pairs, and a `forEach(value, name)` Headers-like.
+    globalThis.__encHeaders = function(h){
+        if (!h) return "";
+        var out = [];
+        if (Array.isArray(h)) {
+            for (var i = 0; i < h.length; i++) { var p = h[i]; if (p && p.length >= 2) { out.push(String(p[0])); out.push(String(p[1])); } }
+        } else if (typeof h.forEach === 'function') {
+            h.forEach(function(v, k){ out.push(String(k)); out.push(String(v)); });
+        } else {
+            for (var k in h) { if (Object.prototype.hasOwnProperty.call(h, k)) { out.push(String(k)); out.push(String(h[k])); } }
+        }
+        return out.join("\x02");
+    };
+    // fetch(url[, {method, headers, body}]) -> Promise<Response-like>.
     globalThis.fetch = function(url, opts) {
         var id = ++__fetchId;
         var method = (opts && opts.method) || "GET";
         var body = (opts && opts.body != null) ? String(opts.body) : "";
-        __pendingFetches.push(id + "\x01f\x01" + method + "\x01" + url + "\x01" + body);
+        var hdrs = (opts && opts.headers) ? __encHeaders(opts.headers) : "";
+        __pendingFetches.push(id + "\x01f\x01" + method + "\x01" + url + "\x01" + hdrs + "\x01" + body);
         return new Promise(function(resolve, reject){ __fetchCb[id] = { resolve: resolve, reject: reject }; });
     };
     globalThis.__deliverFetch = function(id, status, text) {
@@ -155,16 +174,17 @@ const PRELUDE: &str = r#"
         this.readyState = 0; this.status = 0; this.statusText = "";
         this.responseText = ""; this.response = ""; this.responseType = "";
         this.onload = null; this.onerror = null; this.onreadystatechange = null;
-        this._m = "GET"; this._u = ""; this._id = null;
+        this._m = "GET"; this._u = ""; this._id = null; this._h = [];
     };
-    XMLHttpRequest.prototype.open = function(m, u) { this._m = m || "GET"; this._u = u || ""; this.readyState = 1; };
-    XMLHttpRequest.prototype.setRequestHeader = function() {};
+    XMLHttpRequest.prototype.open = function(m, u) { this._m = m || "GET"; this._u = u || ""; this._h = []; this.readyState = 1; };
+    XMLHttpRequest.prototype.setRequestHeader = function(k, v) { if (k != null) this._h.push([k, v == null ? "" : v]); };
     XMLHttpRequest.prototype.getAllResponseHeaders = function() { return ""; };
     XMLHttpRequest.prototype.getResponseHeader = function() { return null; };
     XMLHttpRequest.prototype.abort = function() {};
     XMLHttpRequest.prototype.send = function(body) {
         var id = ++__fetchId; __xhrObj[id] = this; this._id = id;
-        __pendingFetches.push(id + "\x01x\x01" + this._m + "\x01" + this._u + "\x01" + (body != null ? String(body) : ""));
+        var hdrs = __encHeaders(this._h);
+        __pendingFetches.push(id + "\x01x\x01" + this._m + "\x01" + this._u + "\x01" + hdrs + "\x01" + (body != null ? String(body) : ""));
     };
     globalThis.__deliverXhr = function(id, status, text) {
         var x = __xhrObj[id]; if (!x) return; delete __xhrObj[id];
@@ -1706,16 +1726,31 @@ pub fn run_deferred(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Resu
     Ok(count)
 }
 
-/// Drain the page's queued `fetch`/XHR requests, returning `(id, url, method, body)` for each so
-/// the host can perform them over the real network. Kind (`fetch` vs XHR) is intentionally
+/// Parse a flattened `"name\x02value\x02name\x02value"` header string into pairs. An odd trailing
+/// element (a name with no value) is dropped rather than paired with garbage.
+fn parse_headers(s: &str) -> Vec<(String, String)> {
+    if s.is_empty() {
+        return Vec::new();
+    }
+    s.split('\u{2}')
+        .collect::<Vec<_>>()
+        .chunks(2)
+        .filter(|c| c.len() == 2)
+        .map(|c| (c[0].to_string(), c[1].to_string()))
+        .collect()
+}
+
+/// Drain the page's queued `fetch`/XHR requests, returning `(id, url, method, headers, body)` for
+/// each so the host can perform them over the real network. Kind (`fetch` vs XHR) is intentionally
 /// dropped — [`deliver`] settles by id regardless.
 pub fn drain_pending(
     rt: &mut Runtime,
     global: mozjs::rust::HandleObject,
-) -> Result<Vec<(u32, String, String, String)>, String> {
+) -> Result<Vec<(u32, String, String, Vec<(String, String)>, String)>, String> {
     let mut out = Vec::new();
     while let Some(req) = eval_string(rt, global, NEXT_PENDING, "event_loop_drain.js")? {
-        let parts: Vec<&str> = req.splitn(5, '\u{1}').collect();
+        // "id\x01kind\x01method\x01url\x01headers\x01body" — body is the greedy tail (parts[5]).
+        let parts: Vec<&str> = req.splitn(6, '\u{1}').collect();
         if parts.len() < 4 {
             continue;
         }
@@ -1725,8 +1760,9 @@ pub fn drain_pending(
         };
         let method = parts[2].to_string();
         let url = parts[3].to_string();
-        let body = parts.get(4).map(|s| s.to_string()).unwrap_or_default();
-        out.push((id, url, method, body));
+        let headers = parse_headers(parts.get(4).copied().unwrap_or(""));
+        let body = parts.get(5).map(|s| s.to_string()).unwrap_or_default();
+        out.push((id, url, method, headers, body));
     }
     Ok(out)
 }
@@ -1767,8 +1803,9 @@ where
         let mut did_io = false;
         while let Some(req) = eval_string(rt, global, NEXT_PENDING, "event_loop_net.js")? {
             did_io = true;
-            // "id\x01kind\x01method\x01url\x01body" (body optional for back-compat).
-            let parts: Vec<&str> = req.splitn(5, '\u{1}').collect();
+            // "id\x01kind\x01method\x01url\x01headers\x01body" (this loop's mock fetcher ignores
+            // headers/body; the live host path in `drain_pending` replays them onto the wire).
+            let parts: Vec<&str> = req.splitn(6, '\u{1}').collect();
             if parts.len() < 4 {
                 continue;
             }
@@ -1972,6 +2009,63 @@ mod tests {
         assert!(
             ok.is_boolean() && ok.to_boolean(),
             "fetch thenable and XHR onload should receive the mocked responses via the loop"
+        );
+    }
+
+    // Run isolated:
+    //   cargo test -p manuk-js --features spidermonkey request_headers -- --ignored
+    #[test]
+    #[ignore = "SpiderMonkey multi-Runtime-per-process teardown; run in isolation"]
+    fn fetch_and_xhr_carry_request_headers() {
+        let handle = crate::spidermonkey::engine_handle().expect("engine");
+        let mut runtime = Runtime::new(handle);
+        let options = RealmOptions::default();
+        rooted!(&in(runtime.cx()) let global = unsafe {
+            JS_NewGlobalObject(runtime.cx(), &SIMPLE_GLOBAL_CLASS, ptr::null_mut(),
+                OnNewGlobalHookOption::FireOnNewGlobalHook, &*options)
+        });
+        let _ar = mozjs::jsapi::JSAutoRealm::new(unsafe { runtime.cx().raw_cx() }, global.get());
+        install(&mut runtime, global.handle()).expect("install event loop");
+
+        // A POST fetch with an object of headers, and a GET XHR built via setRequestHeader — the two
+        // request shapes that dropped `Authorization` (fetch) and custom headers (XHR) before.
+        let user = r#"
+            fetch("http://h/api", {method:"POST", headers:{Authorization:"Bearer T", "X-A":"1"}, body:"payload"});
+            var x = new XMLHttpRequest();
+            x.open("GET", "http://h/data");
+            x.setRequestHeader("X-Custom", "zed");
+            x.send();
+        "#;
+        eval(&mut runtime, global.handle(), user, "user.js").expect("user script");
+
+        let reqs = drain_pending(&mut runtime, global.handle()).expect("drain");
+        // reqs: (id, url, method, headers, body)
+        let post = reqs
+            .iter()
+            .find(|r| r.2 == "POST")
+            .expect("the POST fetch was queued");
+        assert!(
+            post.3
+                .iter()
+                .any(|(k, v)| k == "Authorization" && v == "Bearer T"),
+            "fetch's Authorization header must reach the host, got {:?}",
+            post.3
+        );
+        assert!(
+            post.3.iter().any(|(k, v)| k == "X-A" && v == "1"),
+            "fetch's custom header must reach the host, got {:?}",
+            post.3
+        );
+        assert_eq!(post.4, "payload", "the POST body must still travel");
+
+        let get = reqs
+            .iter()
+            .find(|r| r.2 == "GET")
+            .expect("the GET xhr was queued");
+        assert!(
+            get.3.iter().any(|(k, v)| k == "X-Custom" && v == "zed"),
+            "XHR setRequestHeader must reach the host, got {:?}",
+            get.3
         );
     }
 }

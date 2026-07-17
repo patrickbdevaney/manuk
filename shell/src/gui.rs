@@ -2279,7 +2279,7 @@ impl App {
             if reqs.is_empty() {
                 break;
             }
-            for (id, raw_url, method, body) in reqs {
+            for (id, raw_url, method, headers, body) in reqs {
                 did_any = true;
                 let url = url::Url::parse(&base)
                     .ok()
@@ -2291,9 +2291,24 @@ impl App {
                 let gen = self.nav_gen;
                 let proxy = self.proxy.clone();
                 self.rt.spawn(async move {
-                    let hdrs: &[(&str, &str)] = &[];
+                    // Replay the page's request headers onto the wire — `Authorization` and a
+                    // non-JSON `Content-Type` were dropped here too, so an authenticated in-shell
+                    // fetch reached the server anonymous and 401'd. Default `Content-Type` only when
+                    // the page did not set one (an explicit form encoding must survive).
+                    let mut hdrs: Vec<(&str, &str)> = headers
+                        .iter()
+                        .map(|(k, v)| (k.as_str(), v.as_str()))
+                        .collect();
+                    let is_get = method.eq_ignore_ascii_case("GET") || method.is_empty();
+                    if !is_get
+                        && !headers
+                            .iter()
+                            .any(|(k, _)| k.eq_ignore_ascii_case("content-type"))
+                    {
+                        hdrs.push(("content-type", "application/json"));
+                    }
                     let bytes = manuk_net::Bytes::from(body.into_bytes());
-                    let (status, text) = match manuk_net::request(&method, &url, hdrs, bytes).await
+                    let (status, text) = match manuk_net::request(&method, &url, &hdrs, bytes).await
                     {
                         Ok(resp) => (resp.status, resp.text()),
                         Err(e) => {

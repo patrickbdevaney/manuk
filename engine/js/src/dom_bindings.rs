@@ -6349,12 +6349,12 @@ impl PageContext {
         Ok(proceed)
     }
 
-    /// Drain this document's queued `fetch`/XHR requests as `(id, url, method, body)` so the
-    /// host can perform them over the real network and settle each via [`resolve_fetch`].
+    /// Drain this document's queued `fetch`/XHR requests as `(id, url, method, headers, body)` so
+    /// the host can perform them over the real network and settle each via [`resolve_fetch`].
     pub fn take_fetches(
         &self,
         runtime: &mut Runtime,
-    ) -> Result<Vec<(u32, String, String, String)>, String> {
+    ) -> Result<Vec<(u32, String, String, Vec<(String, String)>, String)>, String> {
         let raw_cx = unsafe { runtime.cx().raw_cx() };
         rooted!(&in(runtime.cx()) let global = self.global.get());
         let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
