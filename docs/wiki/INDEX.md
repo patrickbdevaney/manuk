@@ -42,6 +42,7 @@
   - L292 · height: stretch / -webkit-fill-available FILLS the parent's definite height (tick 154)
   - L322 · Scrollbar-gutter reservation — overflow-y:scroll narrows the content box (tick 155)
   - L360 · Auto margins center an absolutely-positioned box — the inset:0; margin:auto modal idiom (tick 156)
+  - L396 · min-width/max-width/min-height/max-height clamp an absolutely-positioned box (tick 157)
 
 ## BUILD AND DEPENDENCIES — what is actually compiled, and what only looks like it is
 `docs/wiki/build-and-dependencies.md`
@@ -401,4 +402,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-328 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+329 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

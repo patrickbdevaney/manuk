@@ -6732,3 +6732,26 @@ subtest flips green), css-flexbox/css-grid/css-sizing/css-values/css-overflow **
 HANG/CRASH 0. Residue: the *"margin:0 auto after **dynamic** inset change"* sibling still fails — a
 dynamic-reflow gap (mutate `.style.inset`, re-read `offsetTop`), NOT layout math; writing-mode-aware
 start-edge selection is a separate, smaller mechanism. Mechanism in [[box-layout]].
+
+## Tick 157 — min/max-width/height clamp an absolutely-positioned box (2026-07-17)
+
+**TICK SHAPE: layout-mechanism (CSS-LAYOUT phase-mandate — abspos sizing). WIKI: box-layout.**
+`layout_abs` computed a used width/height and never clamped it: a `max-width:200px` dialog with
+`width:500px` came out 500 wide; `min-width` tooltips and `max-height` panels all took their
+unconstrained size. The in-flow block path has always clamped; the abspos path never grew the same lines
+— the four `min/max-*` `ComputedStyle` fields were dead on this code path.
+
+**Fix.** Mirror the block clamp on both axes. Width: after the `content_w` arm, clamp to
+`[min_width.resolve(cw)−bs_extra_w, max_width.resolve(cw)]` (auto→∞) BEFORE `layout_children` so children
+see the constrained width. Height: after `content_height`, clamp against `cb.height` (always definite for
+an abspos CB, so a `%` bound resolves — no indefinite-parent `none` case). Max first, then min wins, both
+content-box via the existing box-sizing deltas.
+
+**Gate.** Unit test `abspos_min_max_size_clamps_apply` (500→200 max-width, 50→150 min-width, 500→80
+max-height; RED unclamped on revert; probe confirmed [500→200], [50→150], [500→80]). Regression sweep,
+stash-rebuild-measured BEFORE vs AFTER on the same release binary: css-position **79→88 (+9)**,
+css-flexbox/css-grid/css-sizing/css-values/css-overflow **all flat (0 regression)**, HANG/CRASH 0, AFTER
+stable across two runs. Residue: the 30 remaining `position-absolute-replaced-minmax` iframe rows need
+replaced-element **intrinsic sizing** (empty abspos `<iframe>` → 300×150 default before the clamp table),
+a separate mechanism; the over-constrained clamp-vs-insets re-solve uses the simple block-style clamp.
+Mechanism in [[box-layout]].

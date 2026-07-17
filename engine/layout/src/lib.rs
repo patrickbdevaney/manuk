@@ -3103,12 +3103,30 @@ impl Ctx<'_> {
             },
             other => (other.resolve(cw, (cw - frame).max(0.0)) - bs_extra_w).max(0.0),
         };
+        // `min-width` / `max-width` clamp (CSS2 §10.4) — as the in-flow block path: max applied
+        // first, then min wins, both converted to the content box. An abspos box ignored these
+        // entirely, so a `max-width` dialog or `min-width` tooltip took its unconstrained size.
+        // Clamp BEFORE laying out children so they see the constrained width.
+        let min_w = (s.min_width.resolve(cw, 0.0) - bs_extra_w).max(0.0);
+        let max_w = match s.max_width {
+            Dim::Auto => f32::INFINITY,
+            other => (other.resolve(cw, f32::INFINITY) - bs_extra_w).max(0.0),
+        };
+        let content_w = content_w.min(max_w).max(min_w);
         // Lay out content at a provisional origin, then re-origin once placed.
         let mut inner = FloatContext::new(0.0, content_w);
         let (content, ch) =
             self.layout_children(node, 0.0, 0.0, content_w, definite_ch, &mut inner);
         // Height: the definite value if we have one; else content height (CSS2 §10.6.4).
         let content_height = definite_ch.unwrap_or_else(|| ch.max(inner.lowest_bottom().max(0.0)));
+        // `min-height` / `max-height` clamp (CSS2 §10.7) — the CB height is always definite here, so
+        // a `%` bound resolves against it (unlike the in-flow case's indefinite-parent → `none`).
+        let min_h = (s.min_height.resolve(cb.height, 0.0) - bs_extra_h).max(0.0);
+        let max_h = match s.max_height {
+            Dim::Auto => f32::INFINITY,
+            other => (other.resolve(cb.height, f32::INFINITY) - bs_extra_h).max(0.0),
+        };
+        let content_height = content_height.min(max_h).max(min_h);
 
         let border_box_w = bl + pl + content_w + pr + br;
         let border_box_h = bt + pt + content_height + pb + bb;
@@ -4267,6 +4285,44 @@ mod tests {
             "inset:0;margin:0 auto should center inline (x=100) but pin the block axis (y=0), got ({},{})",
             i.x,
             i.y
+        );
+    }
+
+    /// `min-width`/`max-width`/`max-height` on an absolutely-positioned box actually clamp it
+    /// (CSS2 §10.4/§10.7). `layout_abs` ignored them entirely, so a `max-width` dialog, a `min-width`
+    /// tooltip and a `max-height` panel all took their unconstrained size. Here a 500px-wide box
+    /// clamps to `max-width:200`, a 50px-wide box grows to `min-width:150`, and a 500px-tall box
+    /// clamps to `max-height:80` — mirroring the in-flow block clamp (max first, then min wins).
+    #[test]
+    fn abspos_min_max_size_clamps_apply() {
+        let html =
+            r#"<div id="cb"><div id="maxw"></div><div id="minw"></div><div id="maxh"></div></div>"#;
+        let css = "body{margin:0} \
+                   #cb{position:relative;width:400px;height:400px} \
+                   #maxw{position:absolute;top:0;left:0;width:500px;max-width:200px;height:50px} \
+                   #minw{position:absolute;top:0;left:0;width:50px;min-width:150px;height:50px} \
+                   #maxh{position:absolute;top:0;left:0;width:50px;height:500px;max-height:80px}";
+        let (dom, root) = layout_html(html, css, 800.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        assert!(
+            (rects[&by_id("maxw")].width - 200.0).abs() < 1.0,
+            "max-width should clamp 500→200, got {}",
+            rects[&by_id("maxw")].width
+        );
+        assert!(
+            (rects[&by_id("minw")].width - 150.0).abs() < 1.0,
+            "min-width should grow 50→150, got {}",
+            rects[&by_id("minw")].width
+        );
+        assert!(
+            (rects[&by_id("maxh")].height - 80.0).abs() < 1.0,
+            "max-height should clamp 500→80, got {}",
+            rects[&by_id("maxh")].height
         );
     }
 

@@ -392,3 +392,34 @@ dynamic inset change"* flips green. Gated by `abspos_auto_margins_center_a_const
 `inset:0;margin:auto` box centers at `(100,100)`, RED at `(0,0)` on revert; a `margin:0 auto` control
 proves the two axes resolve independently — inline centered, block pinned). Regression sweep across
 css-position/css-flexbox/css-grid/css-sizing/css-values/css-overflow: **all flat, HANG/CRASH 0**.
+
+## `min-width`/`max-width`/`min-height`/`max-height` clamp an absolutely-positioned box (tick 157)
+
+**Symptom.** `layout_abs` computed a used width/height and never clamped it — a `max-width:200px` dialog
+that specified `width:500px` came out 500 wide; a `min-width` tooltip, a `max-height` scroll panel, all
+took their unconstrained size. The in-flow block path has always clamped (lib.rs §min-width/max-width);
+the abspos path simply never grew the same three lines.
+
+**Cause.** The abspos width/height arms (definite / stretch-between-insets / aspect-transfer /
+shrink-to-fit) each produced a size, but there was **no `min_*`/`max_*` step at all** — the four
+`ComputedStyle` fields were dead on this code path.
+
+**Fix.** Mirror the block clamp on both axes. Width: after the `content_w` arm, `min_w =
+min_width.resolve(cw) − bs_extra_w`, `max_w = max_width.resolve(cw)` (`auto` → ∞), then
+`content_w.min(max_w).max(min_w)` — clamped **before** `layout_children` so children see the constrained
+width. Height: after `content_height` is resolved, the same against `cb.height` (which is always definite
+for an abspos CB, so a `%` bound resolves against it — no indefinite-parent `none` case). Max applied
+first, then min wins, both converted to the content box via the existing `bs_extra_*` (box-sizing) deltas.
+
+**Scope / residue.** Clamps only — it does not add **replaced-element intrinsic sizing**. The 30
+remaining `position-absolute-replaced-minmax` iframe rows still fail: an empty abspos `<iframe>` needs its
+300×150 default intrinsic size *before* the clamp table applies, and Manuk shrink-to-fits it to ~0 (a
+separate mechanism). The over-constrained interaction (an `auto`-height box stretched between two insets
+then clamped by `max-height`, where the freed space should re-open the bottom inset / auto margins) uses
+the simple block-style clamp rather than CSS2 §10.6's full re-solve — matching the in-flow path.
+
+**WPT / gate.** `css/css-position` **79 → 88 (+9)**; the explicit-size min/max rows of
+`position-absolute-replaced-minmax`, `position-absolute-*-minmax` and the abspos min/max table cases flip.
+Gated by `abspos_min_max_size_clamps_apply` (500→200 max-width, 50→150 min-width, 500→80 max-height; RED
+unclamped on revert). Regression sweep across css-position/css-flexbox/css-grid/css-sizing/css-values/
+css-overflow: **all flat, HANG/CRASH 0**.
