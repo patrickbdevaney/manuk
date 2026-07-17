@@ -1875,6 +1875,60 @@ impl Page {
         self.relayout(fonts, viewport_width);
     }
 
+    /// Dispatch a `keydown`/`keyup` keyboard event carrying `key` (the `KeyboardEvent.key` value)
+    /// to `node`, and return `true` iff the browser should perform its **default** action for that
+    /// key (i.e. no handler called `preventDefault`). This is how a page intercepts a key — a chat
+    /// composer whose `onKeyDown` calls `preventDefault()` on Enter so it sends the message instead
+    /// of submitting the form; a combobox swallowing ArrowDown. `key_code` (the legacy `keyCode`) is
+    /// derived from `key`. No JS context → always `true` (perform the default).
+    pub fn dispatch_key(
+        &mut self,
+        node: manuk_dom::NodeId,
+        ty: &str,
+        key: &str,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
+        #[cfg(feature = "spidermonkey")]
+        {
+            let Some(ctx) = &self.js else {
+                return true;
+            };
+            let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+                .root_box
+                .node_rects(&self.dom)
+                .into_iter()
+                .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+                .collect();
+            let proceed = match manuk_js::dispatch_key(
+                ctx,
+                &mut self.dom,
+                node,
+                ty,
+                key,
+                key_code_for(key),
+                &rects,
+                &self.styles,
+            ) {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::warn!("{ty} dispatch: {e}");
+                    return true;
+                }
+            };
+            let root = self.dom.root();
+            if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
+                self.relayout(fonts, viewport_width);
+            }
+            proceed
+        }
+        #[cfg(not(feature = "spidermonkey"))]
+        {
+            let _ = (node, ty, key, fonts, viewport_width);
+            true
+        }
+    }
+
     /// Fire the **commit** events when a field loses focus: `change` (only if `value_changed` — the
     /// field's value differs from when it gained focus, which is exactly when the spec fires it) then
     /// `blur`. `change` is what a form runs its validation on ("email invalid" the moment you leave
@@ -3160,6 +3214,38 @@ impl Page {
             }
         });
         words.join(" ")
+    }
+}
+
+/// The legacy `KeyboardEvent.keyCode`/`which` for a `KeyboardEvent.key` value. Handlers still read
+/// `keyCode` widely (the modern `key`/`code` never fully displaced it), so a synthesised keyboard
+/// event that left it `0` would miss every `if (e.keyCode === 13)`. Covers the keys the shell
+/// dispatches; anything else (a multi-byte key) is `0`, which is honest.
+fn key_code_for(key: &str) -> u32 {
+    match key {
+        "Backspace" => 8,
+        "Tab" => 9,
+        "Enter" => 13,
+        "Escape" => 27,
+        " " => 32,
+        "PageUp" => 33,
+        "PageDown" => 34,
+        "End" => 35,
+        "Home" => 36,
+        "ArrowLeft" => 37,
+        "ArrowUp" => 38,
+        "ArrowRight" => 39,
+        "ArrowDown" => 40,
+        "Delete" => 46,
+        _ => {
+            let mut ch = key.chars();
+            match (ch.next(), ch.next()) {
+                // A single character: its keyCode is the UPPERCASE code point for a letter, or the
+                // digit/char code otherwise — the DOM's legacy convention.
+                (Some(c), None) => c.to_ascii_uppercase() as u32,
+                _ => 0,
+            }
+        }
     }
 }
 
@@ -4842,6 +4928,46 @@ mod js_interactive_tests {
             "abort() fires loadend"
         );
         drop(page29);
+
+        // (30) **`keydown` fires with the real `key`, and `preventDefault()` suppresses the default.**
+        // A chat composer's `onKeyDown` calls `preventDefault()` on Enter to send the message instead
+        // of submitting the form; a combobox swallows ArrowDown. `Page::dispatch_key` returns whether
+        // the browser default should proceed (false = a handler prevented it), and hands the handler a
+        // real `event.key`/`event.keyCode`.
+        let html30 = r#"<!doctype html><html><body>
+            <input id="k" value="">
+            <p id="seen">-</p>
+            <script>
+              var seen = document.getElementById('seen');
+              document.getElementById('k').addEventListener('keydown', function (e) {
+                seen.textContent = e.key + ':' + e.keyCode;
+                if (e.key === 'Enter') { e.preventDefault(); }   // "I'll handle Enter myself"
+              });
+            </script></body></html>"#;
+        let mut page30 = Page::load(html30, "https://ex.test/", &fonts, 800.0);
+        let k30 = manuk_css::query_selector_all(page30.dom(), page30.dom().root(), "#k")[0];
+        let seen30 = manuk_css::query_selector_all(page30.dom(), page30.dom().root(), "#seen")[0];
+        // A normal key: the handler saw the right key + keyCode, and the default proceeds.
+        assert!(
+            page30.dispatch_key(k30, "keydown", "a", &fonts, 800.0),
+            "an un-prevented keydown returns true (perform the default: insert the character)"
+        );
+        assert_eq!(
+            page30.dom().text_content(seen30),
+            "a:65",
+            "the handler received event.key and the legacy event.keyCode"
+        );
+        // Enter is preventDefault()'d → the engine must NOT perform the default (form submit).
+        assert!(
+            !page30.dispatch_key(k30, "keydown", "Enter", &fonts, 800.0),
+            "a keydown handler's preventDefault() suppresses the browser default (Enter does not submit)"
+        );
+        assert_eq!(
+            page30.dom().text_content(seen30),
+            "Enter:13",
+            "Enter reports keyCode 13"
+        );
+        drop(page30);
 
         // Tear SpiderMonkey down before this process exits, exactly as the shell and the harness do.
         // Every page above is out of scope by now, so no rooted object outlives its runtime. Leaving

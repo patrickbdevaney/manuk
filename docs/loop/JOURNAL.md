@@ -7395,3 +7395,32 @@ fires `readystatechange` → `abort` → `loadend` (the XHR standard's abort() e
 fires → `data-onload=FIRED`). Verified: suite passes (spidermonkey, isolated); manuk-js
 `fetch_and_xhr_through_the_loop` passes isolated (non-abort path unchanged); HANG/CRASH 0. Residue: an
 `AbortSignal` passed to an XHR (rare) is still unwired. Mechanism: `XMLHttpRequest.prototype.abort`.
+
+## Tick 178 — keydown fires with the real key + preventDefault suppresses the default (interaction surface) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (interaction surface — the keyboard pre-empt contract, the keyboard's
+click). WIKI: docs/wiki/interaction-surface.md "`keydown` fires with the real `key`, and
+`preventDefault()` suppresses the default".**
+
+A page intercepts a key via `keydown` + `preventDefault()` — the chat composer catching Enter to send
+(not submit), the combobox swallowing ArrowDown. The shell went straight from a keypress to its own
+default (submit/edit/blur) and dispatched NO keydown, so the page never saw the key and couldn't
+pre-empt it.
+
+**Fix.** `PageContext::dispatch_key` (dom_bindings) builds a real `__dispatchEvent(node,
+{type,key,code,keyCode,which,bubbles,cancelable})` — the object-dispatch path already existed and
+preserves event fields, so the KeyboardEvent shape was free — and returns `!defaultPrevented`.
+`manuk_js::dispatch_key` + `Page::dispatch_key(node, ty, key)` (derives the legacy `keyCode` via a new
+`key_code_for`). The shell fires `keydown` on the focused field BEFORE its default action (new
+`key_name_for_dispatch` maps winit keys → DOM `key` names) and, if the page called `preventDefault`,
+returns early WITHOUT performing the default — so Enter does not submit, the character is not inserted.
+Deliberately additive: the existing key-handler match arms are untouched; a keydown-and-gate wraps
+them, so no default-action path regressed. Composes with 175/176: keydown (pre-empt) → default (fires
+input) → change/blur on commit.
+
+**Gate.** `js_conformance_suite` scenario (30): a `keydown` handler reads `event.key`/`event.keyCode`
+(`a`→`a:65`), and `preventDefault()` on Enter makes `dispatch_key` return false (`Enter:13`). RED
+against baseline (no `dispatch_key`). Verified: suite passes (spidermonkey, isolated); manuk-shell 58+2
+green; HANG/CRASH 0. Residue: `keyup` not yet fired (the pre-empt-the-default half is the value);
+`event.code` equals `key` for named keys, approximates for characters; unsurfaced keys (function keys,
+IME) dispatch nothing. Mechanism: `Page::dispatch_key` + shell key-handler pre-dispatch.

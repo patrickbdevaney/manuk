@@ -6365,6 +6365,62 @@ impl PageContext {
         Ok(proceed)
     }
 
+    /// Dispatch a **keyboard** event (`keydown`/`keyup`) at `node` carrying `key` (the DOM
+    /// `KeyboardEvent.key` value, e.g. `"Enter"`, `"a"`, `"ArrowDown"`) and its legacy `key_code`.
+    /// Returns `false` iff a handler called `preventDefault()` — which is exactly how a page says
+    /// "I handled this key, do not perform the browser default" (a chat composer's `onKeyDown`
+    /// preventing Enter from submitting, a combobox swallowing ArrowDown). `__dispatchEvent` already
+    /// accepts an event OBJECT and preserves its fields, so this is a real `KeyboardEvent`-shaped
+    /// dispatch, not a bare type.
+    pub fn dispatch_key(
+        &self,
+        runtime: &mut Runtime,
+        dom: &mut Dom,
+        node: NodeId,
+        ty: &str,
+        key: &str,
+        key_code: u32,
+        layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    ) -> Result<bool, String> {
+        set_view_maps(layout, styles);
+        set_current_dom(dom as *mut Dom);
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        unsafe {
+            let _ = new_reflector(raw_cx, dom as *mut Dom, node);
+        }
+        // A real KeyboardEvent-shaped object: `key` (modern) + `keyCode`/`which` (legacy) — the two
+        // ways handlers read the pressed key — plus bubbles/cancelable so delegation + preventDefault
+        // work. `__dispatchEvent` fills in target/currentTarget/preventDefault/etc.
+        let script = format!(
+            "__dispatchEvent({}, {{type:{}, key:{}, code:{}, keyCode:{kc}, which:{kc}, bubbles:true, cancelable:true}})",
+            node.0,
+            js_string_literal(ty),
+            js_string_literal(key),
+            js_string_literal(key),
+            kc = key_code,
+        );
+        rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
+        let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"dispatch_key.js".to_owned(), 1);
+        let proceed = match evaluate_script(
+            runtime.cx(),
+            global.handle(),
+            &script,
+            rval.handle_mut(),
+            opts,
+        ) {
+            Ok(()) => {
+                let v = rval.get();
+                !v.is_boolean() || v.to_boolean()
+            }
+            Err(()) => true,
+        };
+        crate::event_loop::run_deferred(runtime, global.handle())?;
+        Ok(proceed)
+    }
+
     /// Drain this document's queued `fetch`/XHR requests as `(id, url, method, headers, body)` so
     /// the host can perform them over the real network and settle each via [`resolve_fetch`].
     pub fn take_fetches(

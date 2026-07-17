@@ -446,3 +446,27 @@ Gated by `js_conformance` scenario 28: a blur with no change fires `blur` only; 
 fires `change` then `blur` (order matters). Residue: a **programmatic** focus move (page calls
 `.focus()` on another field) records the new `focus_value` but does not yet fire `blur` on the old
 field; `focus`/`focusin`/`focusout` and `keydown`/`keyup` are separate mechanisms. [[dom-semantics]]
+
+## `keydown` fires with the real `key`, and `preventDefault()` suppresses the default (tick 178)
+
+The keyboard's `click`: a page intercepts a key by listening for `keydown` and calling
+`preventDefault()`. The canonical case is the chat/comment composer — `onKeyDown` catches **Enter**,
+calls `preventDefault()`, and sends the message itself instead of letting the browser submit the form
+(Shift+Enter inserts a newline). A combobox/listbox swallows **ArrowDown** to move its highlight. None
+of this worked: the shell went straight from a keypress to its own default action (submit / edit /
+blur) and dispatched no `keydown`, so the page never saw the key and could never pre-empt it.
+
+**`Page::dispatch_key(node, "keydown", key)` fires a real keyboard event and returns whether the
+default should proceed** (`false` = a handler called `preventDefault`). The event carries `key` (the
+modern property — `"Enter"`, `"a"`, `"ArrowDown"`) *and* `keyCode`/`which` (the legacy pair handlers
+still read — Enter is 13, a letter is its uppercase code), because `__dispatchEvent` already accepts an
+event **object** and preserves its fields (see "its key... all have to survive"). The shell now fires
+`keydown` on the focused field before acting, and if the page prevents the default it stops — the Enter
+does not submit, the character is not inserted. Composes with the input/change/blur trilogy: `keydown`
+(pre-empt) → the default (which fires `input`) → `change`/`blur` on commit.
+
+Gated by `js_conformance` scenario 30: a handler reads `event.key`/`event.keyCode` (`a:65`), and
+`preventDefault()` on Enter makes `dispatch_key` return false (`Enter:13`). Residue: `keyup` is not yet
+fired (the shell fires `keydown` only — the pre-empt-the-default half is what the value is); `event.code`
+(physical key) equals `key` for named keys but approximates for characters; keys the shell does not
+surface (function keys, IME composition) dispatch nothing. [[dom-semantics]]

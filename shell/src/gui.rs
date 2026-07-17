@@ -3257,7 +3257,22 @@ impl App {
 
         // A focused text field captures typing (unless a Ctrl/Alt chord — those still reach
         // the chrome shortcuts below, e.g. Ctrl+L).
-        if self.focused_input.is_some() && !ctrl && !alt {
+        if let Some(node) = self.focused_input.filter(|_| !ctrl && !alt) {
+            // Fire `keydown` on the field FIRST. If the page's handler calls `preventDefault()` — a
+            // chat composer's `onKeyDown` swallowing Enter to send instead of submit, a listbox
+            // eating ArrowDown — the browser default (submit / edit / blur) must NOT run.
+            if let Some(kname) = key_name_for_dispatch(key) {
+                let width = self.viewport.width;
+                let prevented = self
+                    .page
+                    .as_mut()
+                    .map(|p| !p.dispatch_key(node, "keydown", &kname, &self.fonts, width))
+                    .unwrap_or(false);
+                if prevented {
+                    self.rerender();
+                    return true;
+                }
+            }
             match key {
                 Key::Named(NamedKey::Enter) => {
                     self.submit_focused_form();
@@ -3825,6 +3840,32 @@ fn unwrap_redirect(u: url::Url) -> url::Url {
         }
     }
     u
+}
+
+/// The DOM `KeyboardEvent.key` value for a winit key the shell dispatches to the page, or `None` for
+/// keys we do not surface (so no synthetic keydown fires for them). Covers the named keys a text
+/// field acts on plus arrows/navigation (which a page combobox/listbox may want) and any typed
+/// character (its own `key`).
+fn key_name_for_dispatch(key: &Key) -> Option<String> {
+    let name = match key {
+        Key::Named(NamedKey::Enter) => "Enter",
+        Key::Named(NamedKey::Escape) => "Escape",
+        Key::Named(NamedKey::Backspace) => "Backspace",
+        Key::Named(NamedKey::Tab) => "Tab",
+        Key::Named(NamedKey::Space) => " ",
+        Key::Named(NamedKey::Delete) => "Delete",
+        Key::Named(NamedKey::ArrowLeft) => "ArrowLeft",
+        Key::Named(NamedKey::ArrowRight) => "ArrowRight",
+        Key::Named(NamedKey::ArrowUp) => "ArrowUp",
+        Key::Named(NamedKey::ArrowDown) => "ArrowDown",
+        Key::Named(NamedKey::Home) => "Home",
+        Key::Named(NamedKey::End) => "End",
+        Key::Named(NamedKey::PageUp) => "PageUp",
+        Key::Named(NamedKey::PageDown) => "PageDown",
+        Key::Character(c) => return Some(c.to_string()),
+        _ => return None,
+    };
+    Some(name.to_string())
 }
 
 #[cfg(test)]
