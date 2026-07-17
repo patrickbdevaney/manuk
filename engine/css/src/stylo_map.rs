@@ -61,6 +61,18 @@ fn size_to_dim(s: &Size) -> Dim {
     }
 }
 
+/// `true` when a `Size` is an **intrinsic sizing keyword** (`min-content`/`max-content`/
+/// `fit-content` / `fit-content(...)`), which `size_to_dim` collapses to `Dim::Auto` but which are
+/// *indefinite* — unlike `auto`, `stretch` or `fill-available`, which are definite. Layout needs the
+/// distinction for the abspos both-insets constraint-equation (see `ComputedStyle::height_intrinsic`).
+fn size_is_intrinsic(s: &Size) -> bool {
+    use stylo::values::generics::length::GenericSize as GS;
+    matches!(
+        s,
+        GS::MinContent | GS::MaxContent | GS::FitContent | GS::FitContentFunction(_)
+    )
+}
+
 /// `max-width`/`max-height` `MaxSize` → `Dim` (`none`/keywords → `Dim::Auto` = no limit).
 fn maxsize_to_dim(s: &MaxSize) -> Dim {
     match s {
@@ -298,7 +310,9 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
 
     // Box model — sizing.
     s.width = size_to_dim(&cv.clone_width());
-    s.height = size_to_dim(&cv.clone_height());
+    let ch = cv.clone_height();
+    s.height_intrinsic = size_is_intrinsic(&ch);
+    s.height = size_to_dim(&ch);
     s.min_width = size_to_dim(&cv.clone_min_width());
     s.min_height = size_to_dim(&cv.clone_min_height());
     s.max_width = maxsize_to_dim(&cv.clone_max_width());

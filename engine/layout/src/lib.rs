@@ -2783,6 +2783,12 @@ impl Ctx<'_> {
         // correct). Computed here (not after the children) because `aspect-ratio` transfers it into
         // the width below.
         let definite_ch: Option<f32> = match s.height {
+            // An **intrinsic-keyword** height (`min`/`max`/`fit-content`) collapses to `Dim::Auto`
+            // but is *indefinite*: the box sizes to content and its `%`-height children see an
+            // indefinite base (→ auto). So it must NOT take the constraint-equation definite height
+            // even with both insets set (CSS Sizing 3 §cyclic-percentage-contribution). `stretch`
+            // and `auto` stay definite under both insets — they are not flagged.
+            Dim::Auto if s.height_intrinsic => None,
             Dim::Auto => match (top, bottom) {
                 // The constraint equation already yields the *content* height (`frame_v` carries the
                 // padding+border out), so it is box-sizing-agnostic — no `bs_extra_h` here.
@@ -4411,6 +4417,61 @@ mod tests {
     /// pattern. Before, auto width fell to shrink-to-fit (0 for an empty box) and the whole box
     /// **collapsed to width 0**. Under `box-sizing`, the ratio relates the two axes of the named box,
     /// so border/padding is added (content-box) or absorbed (border-box).
+    /// `position:absolute; inset:0; height:<intrinsic-keyword>` — the box is **indefinite**, so it
+    /// sizes to content and its `height:100%` child sees an indefinite base (→ auto), NOT the
+    /// CSS2 §10.6.4 constraint-equation height that both insets would otherwise give. Before, the
+    /// keyword was indistinguishable from `auto`, so `inset:0; height:fit-content` wrongly stretched
+    /// to the containing block (200) instead of hugging content. Regression guard: `height:auto` and
+    /// `height:stretch` with `inset:0` MUST still be definite (200) — they are not intrinsic keywords.
+    #[test]
+    fn abspos_intrinsic_height_with_inset_zero_sizes_to_content_not_stretch() {
+        // `<section>` is the abspos target (find_first matches by tag); the `<article>` grandchild
+        // carries the fixed height the box should hug. The unit cascade `MinimalCascade` parses the
+        // inset *longhands* but not the `inset` shorthand (a tick-144 note), so drive all four here;
+        // the WPT run uses stylo, which parses `inset:0` too.
+        let mk = |h: &str, inner: f32| {
+            format!(
+                "<body><div style='position:relative;width:200px;height:200px'>\
+                   <section style='position:absolute;top:0;right:0;bottom:0;left:0;height:{h}'>\
+                     <div style='height:100%'><article style='height:{inner}px;width:50px'></article></div>\
+                   </section>\
+                 </div></body>"
+            )
+        };
+        // Intrinsic keywords → the box hugs content (its innermost fixed-height grandchild).
+        for (kw, inner) in [
+            ("fit-content", 80.0),
+            ("max-content", 60.0),
+            ("min-content", 40.0),
+        ] {
+            let (dom, root) = layout_html(&mk(kw, inner), "", 800.0);
+            let t = dom.find_first("section").unwrap();
+            let h = root
+                .node_rects(&dom)
+                .get(&t)
+                .expect("abspos has geometry")
+                .height;
+            assert_eq!(
+                h, inner,
+                "inset:0; height:{kw} sizes to content ({inner}), not stretch"
+            );
+        }
+        // Regression guard: auto + stretch with inset:0 are DEFINITE → stretch to the CB (200).
+        for kw in ["auto", "stretch"] {
+            let (dom, root) = layout_html(&mk(kw, 80.0), "", 800.0);
+            let t = dom.find_first("section").unwrap();
+            let h = root
+                .node_rects(&dom)
+                .get(&t)
+                .expect("abspos has geometry")
+                .height;
+            assert_eq!(
+                h, 200.0,
+                "inset:0; height:{kw} is definite → stretches to CB (200)"
+            );
+        }
+    }
+
     #[test]
     fn abspos_aspect_ratio_transfers_definite_height_to_auto_width() {
         // `top:0;left:0` (one inset per axis, NOT both) gives the box a recorded position without

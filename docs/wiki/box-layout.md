@@ -103,3 +103,33 @@ last); css-flexbox/grid/position/overflow flat. Gated by `aspect_ratio_parses_to
 the transfer arm is neutralised). **Residue:** `abspos-aspect-ratio-border.html` still fails — those boxes
 set no insets, and a static-position abspos box records no geometry, so `offsetWidth` reads 0 regardless
 of the ratio. That is a separate mechanism (static-position abspos placement), not an aspect-ratio bug.
+
+## An intrinsic-keyword `height` is INDEFINITE — not the same as `auto` (tick 146)
+
+`size_to_dim` (`stylo_map.rs`) collapses **every** non-length `Size` to `Dim::Auto`: `auto`, `stretch`,
+`fill-available`, *and* the intrinsic keywords `min-content`/`max-content`/`fit-content`. That is fine for
+length *resolution* (they all lack a length), but it erases a distinction layout needs. Tick 144 taught
+`layout_abs` that an `auto` height with **both** insets set is **definite** (CSS2 §10.6.4 constraint
+equation: `CB − top − bottom`) so a `height:100%` child gets a real base. But an **intrinsic-keyword**
+height is **indefinite** (CSS Sizing 3 §cyclic-percentage-contribution): the box sizes to content and the
+`%`-height child sees an indefinite base → auto. Collapsed to `Dim::Auto`, `height:fit-content` looked
+exactly like `auto`, so an `inset:0; height:fit-content` popover **stretched to the containing block
+(200)** instead of hugging its content (80). The `top-only` case already did the right thing — only the
+both-insets definite path over-reached.
+
+**Fix.** A new `ComputedStyle::height_intrinsic: bool`, set true for `min`/`max`/`fit-content` (and
+`fit-content(...)`) — NOT for `auto`/`stretch`/`fill-available`, which stay definite. Set in `stylo_map`
+(`size_is_intrinsic`, matching the `GenericSize` keyword variants) and in the hand parser at parity.
+`layout_abs`'s `definite_ch` gains one arm — `Dim::Auto if s.height_intrinsic => None` — so the box falls
+to the existing content-sizing path. In-flow layout is deliberately untouched: a block's `auto` and
+intrinsic-keyword heights both size to content there, so the collapse stays correct; only the abspos
+both-insets path changes.
+
+**WPT / gate.** `css/css-sizing` 240→243 (+3, the fit/max/min-content subtests of
+`abspos-intrinsic-height-inset-percentage-child.html`); css-flexbox/grid flat. Gated by
+`intrinsic_height_keywords_flag_the_box_as_indefinite` (css) and
+`abspos_intrinsic_height_with_inset_zero_sizes_to_content_not_stretch` (layout) — the latter also asserts
+`auto`/`stretch` **still** stretch to 200, locking tick 144's behaviour in as a regression guard. Proven
+RED by neutralising the guard arm. **Note:** the unit cascade parses the inset *longhands* but not the
+`inset` shorthand (a tick-144 note), so the layout test drives `top/right/bottom/left:0`; the WPT run uses
+stylo, which parses `inset:0`.

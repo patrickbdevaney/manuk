@@ -33,6 +33,7 @@
   - L42 · Why the WPT calc suites barely move on a layout-calc fix
   - L51 · Absolute box with both insets set is a DEFINITE size — lay its children out with it (tick 144)
   - L77 · The CSS aspect-ratio property was never mapped from the cascade (tick 145)
+  - L107 · An intrinsic-keyword height is INDEFINITE — not the same as auto (tick 146)
 
 ## BUILD AND DEPENDENCIES — what is actually compiled, and what only looks like it is
 `docs/wiki/build-and-dependencies.md`
@@ -388,4 +389,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-315 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+316 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

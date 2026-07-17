@@ -480,6 +480,13 @@ pub struct ComputedStyle {
     pub box_shadow: Option<BoxShadow>,
     pub width: Dim,
     pub height: Dim,
+    /// `true` when `height` is an **intrinsic sizing keyword** (`min-content`/`max-content`/
+    /// `fit-content`), which all collapse to `Dim::Auto` for length resolution but are *not* the
+    /// same as `auto`: an intrinsic-keyword height is **indefinite**, so an abspos box with both
+    /// insets set must NOT take the CSS2 §10.6.4 constraint-equation definite height — it sizes to
+    /// content instead (and a `height:100%` child sees an indefinite base → auto). Without this the
+    /// keyword is indistinguishable from `auto` and `inset:0; height:fit-content` wrongly stretches.
+    pub height_intrinsic: bool,
     /// `min-*`/`max-*` sizing. `Dim::Auto` on a min means 0; on a max means "no limit".
     pub min_width: Dim,
     pub max_width: Dim,
@@ -583,6 +590,7 @@ impl ComputedStyle {
             box_shadow: None,
             width: Dim::Auto,
             height: Dim::Auto,
+            height_intrinsic: false,
             min_width: Dim::Auto,
             max_width: Dim::Auto,
             min_height: Dim::Auto,
@@ -2588,7 +2596,17 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             }
         }
         "width" => s.width = values::parse_dim(v, s.font_size),
-        "height" => s.height = values::parse_dim(v, s.font_size),
+        "height" => {
+            // Intrinsic sizing keywords collapse to `Dim::Auto` for length resolution, but flag
+            // them so the abspos both-insets path treats the box as indefinite (sizes to content),
+            // at parity with the stylo map. `stretch` / `-webkit-fill-available` ARE definite, so
+            // they are NOT flagged — they behave like the auto+insets constraint case.
+            let low = v.trim().to_ascii_lowercase();
+            s.height_intrinsic =
+                matches!(low.as_str(), "min-content" | "max-content" | "fit-content")
+                    || low.starts_with("fit-content(");
+            s.height = values::parse_dim(v, s.font_size);
+        }
         "min-width" => s.min_width = values::parse_dim(v, s.font_size),
         "max-width" => s.max_width = values::parse_dim(v, s.font_size),
         "min-height" => s.min_height = values::parse_dim(v, s.font_size),
@@ -4053,6 +4071,36 @@ mod shadow_scoping_tests {
         // flat-tree, not scoped -- only *matching* is scoped).
         assert_eq!(map[&host].color, Rgba::new(0x12, 0x34, 0x56, 255));
         assert_eq!(map[&em].color, Rgba::new(0x12, 0x34, 0x56, 255));
+    }
+
+    #[test]
+    fn intrinsic_height_keywords_flag_the_box_as_indefinite() {
+        // `min`/`max`/`fit-content` collapse to `Dim::Auto` (no length), but must set
+        // `height_intrinsic` so the abspos both-insets path treats the box as indefinite. `auto`,
+        // `stretch` and an explicit length are definite and must NOT flag. Gates the hand parser at
+        // parity with the stylo map the shipping pipeline uses.
+        for kw in [
+            "min-content",
+            "max-content",
+            "fit-content",
+            "fit-content(10px)",
+        ] {
+            let (dom, map) = cascade_of(&format!(r#"<div style="height:{kw}"></div>"#));
+            let cs = &map[&dom.find_first("div").unwrap()];
+            assert!(cs.height_intrinsic, "{kw} => height_intrinsic");
+            assert_eq!(
+                cs.height,
+                Dim::Auto,
+                "{kw} collapses to Auto for resolution"
+            );
+        }
+        for kw in ["auto", "stretch", "100px", "50%"] {
+            let (dom, map) = cascade_of(&format!(r#"<div style="height:{kw}"></div>"#));
+            assert!(
+                !map[&dom.find_first("div").unwrap()].height_intrinsic,
+                "{kw} is definite, not an intrinsic keyword"
+            );
+        }
     }
 
     #[test]

@@ -3054,6 +3054,49 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 146 — an intrinsic-keyword `height` (`min`/`max`/`fit-content`) is indefinite: an `inset:0` abspos box now hugs content instead of stretching to the containing block
+
+**TICK SHAPE: layout-mechanism (CSS-LAYOUT phase-mandate row 1 — intrinsic/definite sizing). WIKI: box-layout.**
+
+**Phase mandate.** `scripts/lever-board.sh` lowest-unmet target is row 1 (intrinsic/definite sizing,
+`css-sizing 12→35%`). Histogrammed `css/css-sizing --show-failures`: the cleanest bounded cluster is
+`abspos-intrinsic-height-inset-percentage-child.html` — a `position:absolute; inset:0; height:fit-content`
+box returned `offsetHeight = 200` (the containing block) instead of `80` (its content). Picked this over
+the flexbox/grid slogs (selector-named reftest masses, one-fix-flips-nothing) per FLIP-RATE discipline;
+it also directly *refines* tick 144's abspos definite-height work with the same test file's own guards.
+
+**Root cause.** stylo parses `height: min-content|max-content|fit-content` into distinct `Size` variants,
+but `size_to_dim` collapses **all** of them — plus `auto`, `stretch`, `fill-available` — to `Dim::Auto`.
+So an intrinsic-keyword height was indistinguishable from `auto`, and tick 144's rule ("`auto` + both
+insets ⇒ CSS2 §10.6.4 constraint-equation definite height") wrongly fired: the box stretched to the CB
+(200) and its `height:100%` child resolved against that. But an intrinsic-keyword height is **indefinite**
+(CSS Sizing 3 §cyclic-percentage-contribution): the box must size to content, and the `%`-height child
+sees an indefinite base → auto. The `top-only` case (t4) already did this correctly — only the *both-insets*
+path over-reached.
+
+**Fix (minimal, no `Dim` subsystem change).** A new `ComputedStyle::height_intrinsic: bool` — set by
+`stylo_map` (via `size_is_intrinsic`, matching `MinContent|MaxContent|FitContent|FitContentFunction`;
+`stretch`/`fill-available` are definite and NOT flagged) and by the hand parser at parity. `layout_abs`
+gains one guard arm: `Dim::Auto if s.height_intrinsic => None` (indefinite → the existing content-sizing
+path takes over, which already resolves the `%`-height child to auto). In-flow layout is untouched (a
+block's `auto` and intrinsic-keyword heights already both size to content, so collapsing them stays
+correct there); only the abspos both-insets definite path changes, from wrong to right.
+
+**Measured.** `css/css-sizing` 240→**243 (+3)** — exactly the fit/max/min-content subtests (t1/t2/t3),
+Bar 0 clean. css-flexbox 949, css-grid 259 **flat** (in-flow untouched); css-position nudged up. No
+regression.
+
+**Gate (falsifiable).** Two: `intrinsic_height_keywords_flag_the_box_as_indefinite` (`manuk-css`) asserts
+`min/max/fit-content(+function)` set the flag and `auto`/`stretch`/length/`%` do not; and
+`abspos_intrinsic_height_with_inset_zero_sizes_to_content_not_stretch` (`manuk-layout`) drives real CSS —
+an `inset:0` box hugs its 80/60/40px grandchild, while `auto`/`stretch` still stretch to the CB (200, the
+tick-144 regression guard). **Proven RED** by neutralising the guard arm (`&& false`): content-sized box
+stretches back to 200.
+
+**The ratchet.** Capability: **up** — intrinsic-keyword heights are honoured (indefinite) instead of
+mistaken for `auto`. Performance: unchanged. Instrument fidelity: **up** — two falsifiable gates, one of
+which locks in the tick-144 stretch behaviour as a regression guard. Bar 0 clean.
+
 ## Tick 145 — the CSS `aspect-ratio` property is mapped from the cascade (it was silently dropped; every `aspect-ratio` box had no ratio at all)
 
 **TICK SHAPE: capability wiring + layout-mechanism (CSS-LAYOUT phase-mandate row 1 — intrinsic/definite sizing). WIKI: box-layout.**
