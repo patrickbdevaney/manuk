@@ -7050,3 +7050,24 @@ preserved. RED against the pre-T5 store, which had no bookmark save/load at all.
 prefs are a separate T5 slice); a `(url,title,visit_count,last_visit)` history table is the other T5
 piece (searchable history already persists via `store::history_index`). Mechanism: `SessionStore`
 in shell/src/session.rs, alongside session/collection persistence.
+
+## Tick 167 — `<select multiple>` submits every selected option (form serialization) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (forms serialization correctness — hardens `forms::fields`, the
+function ticks 164-166's GET/POST navigation all build on). WIKI: none — agent-only tick (no engine/
+change); one-function DOM-read fix.**
+`forms::fields` collapsed a `<select multiple>` to a **single** value (`chosen.or(first)`) — the same
+code path as a single select. A faceted filter (`?tag=rust&tag=wasm`) or a multi-pick preference list
+therefore submitted only ONE of the user's choices; the rest were silently dropped, on both the GET
+query and the new POST body. The module even documented `<select multiple>` as "not modelled".
+
+**Fix.** A new match arm `"select" if el.attr("multiple").is_some()` emits **every** `selected`
+option as its own `name=value` pair (HTML §form-submission: each selected option of a multiple select
+is a successful control). An empty multiple-select contributes nothing — unlike a single select, there
+is no first-option fallback, because nothing was chosen. The single-select arm is unchanged.
+
+**Gate.** New `forms::tests::multiple_select_submits_every_selected_option` — two selected options
+both appear (`tag=rust`, `tag=wasm`) and an empty multiple-select adds nothing. RED against the old
+single-value collapse. Confined to agent/src/forms.rs. Runs in the `manuk-agent` suite (pure DOM read,
+no JS). HANG/CRASH 0. Improves every form path — agent GET submit + shell GET/POST navigation all call
+`fields`. Mechanism: `agent/src/forms.rs`, alongside the single-select and checkbox/radio handling.

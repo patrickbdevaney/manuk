@@ -6,8 +6,8 @@
 //! the common login/checkout case) or `multipart/form-data` when files are attached
 //! ([`multipart_submission`]). A POST is **never** silently downgraded to a GET — that would leak
 //! field values (passwords, tokens) into the URL and the referrer; [`submission_url`] returns
-//! [`SubmitError::PostUnsupported`] rather than doing so. `<select multiple>`, `formaction`
-//! overrides and `text/plain` enctype are not modelled.
+//! [`SubmitError::PostUnsupported`] rather than doing so. `formaction` overrides and `text/plain`
+//! enctype are not modelled.
 
 use manuk_dom::{Dom, NodeId};
 use url::Url;
@@ -97,6 +97,28 @@ pub fn fields(dom: &Dom, form: NodeId) -> Vec<(String, String)> {
                     .map(str::to_string)
                     .unwrap_or_else(|| dom.text_content(n)),
             )),
+            "select" if el.attr("multiple").is_some() => {
+                // A `<select multiple>` submits **every** selected option as its own `name=value`
+                // pair — a faceted filter or a multi-pick preference list loses all but one choice
+                // otherwise. Unlike a single select, an empty selection submits nothing (there is no
+                // first-option fallback: nothing was chosen).
+                for opt in dom.descendants(n) {
+                    if dom.tag_name(opt) != Some("option") {
+                        continue;
+                    }
+                    if dom
+                        .element(opt)
+                        .is_some_and(|e| e.attr("selected").is_some())
+                    {
+                        let val = dom
+                            .element(opt)
+                            .and_then(|e| e.attr("value"))
+                            .map(str::to_string)
+                            .unwrap_or_else(|| dom.text_content(opt).trim().to_string());
+                        out.push((name.clone(), val));
+                    }
+                }
+            }
             "select" => {
                 let mut chosen: Option<String> = None;
                 let mut first: Option<String> = None;
@@ -331,6 +353,34 @@ mod tests {
                 // submit + file omitted
                 ("body".into(), "hello".into()),
                 ("lang".into(), "fr".into()), // `selected` wins
+            ]
+        );
+    }
+
+    /// A `<select multiple>` submits **every** selected option, not just one — a faceted filter
+    /// (`?tag=rust&tag=wasm`) loses all but one choice otherwise. An empty selection submits nothing.
+    #[test]
+    fn multiple_select_submits_every_selected_option() {
+        let dom = dom_of(
+            r#"<form>
+                 <select name="tag" multiple>
+                   <option value="rust" selected>Rust</option>
+                   <option value="go">Go</option>
+                   <option value="wasm" selected>Wasm</option>
+                 </select>
+                 <select name="empty" multiple>
+                   <option value="a">A</option>
+                 </select>
+               </form>"#,
+        );
+        let form = dom.find_first("form").unwrap();
+        let f = fields(&dom, form);
+        assert_eq!(
+            f,
+            vec![
+                ("tag".to_string(), "rust".to_string()),
+                ("tag".to_string(), "wasm".to_string()),
+                // `empty` (nothing selected) contributes nothing — no first-option fallback.
             ]
         );
     }
