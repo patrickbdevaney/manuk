@@ -349,6 +349,19 @@ impl App {
             }
         }
 
+        // §5 — restore saved bookmarks (they used to evaporate on every quit: the ★ toggle
+        // wrote to an in-memory `Bookmarks` that was re-created empty each launch).
+        let bookmarks = store
+            .as_ref()
+            .and_then(|s| match s.load_bookmarks() {
+                Ok(b) => b,
+                Err(e) => {
+                    tracing::warn!("bookmark restore skipped: {e:#}");
+                    None
+                }
+            })
+            .unwrap_or_else(Bookmarks::new);
+
         // The CLI target is the active, eagerly-loaded tab: reuse a restored tab with the
         // same URL if present, else open a fresh focused one.
         let existing = browser.tabs().iter().find(|t| t.url == url).map(|t| t.id);
@@ -389,7 +402,7 @@ impl App {
             proxy,
             nav_gen: 0,
             loading: false,
-            bookmarks: Bookmarks::new(),
+            bookmarks,
             settings: Settings::default(),
             zoom: 1.0,
             find_open: false,
@@ -858,7 +871,18 @@ impl App {
             std::time::Instant::now(),
         ));
         self.rerender();
+        self.persist_bookmarks();
         tracing::info!(bookmarked = on, url = %url, "bookmark toggled");
+    }
+
+    /// Write the bookmarks to disk now — called on every toggle so a bookmark survives even a
+    /// crash, not just a clean quit. Best-effort: a write failure is logged, never fatal.
+    fn persist_bookmarks(&self) {
+        if let Some(store) = &self.store {
+            if let Err(e) = store.save_bookmarks(&self.bookmarks) {
+                tracing::warn!("bookmark save failed: {e:#}");
+            }
+        }
     }
 
     /// A click within the chrome band: back / forward / reload, zoom, bookmark, menu, or the field.
@@ -2599,6 +2623,8 @@ impl App {
         // Persist login cookies alongside the session so they survive a restart.
         manuk_net::save_cookies();
         manuk_net::webstorage::save();
+        // Bookmarks too — a backstop for the per-toggle save (e.g. a bookmark added, then quit).
+        self.persist_bookmarks();
     }
 
     /// Flush a pending scroll notification — called once per frame, from the paint path. A page that
@@ -3132,6 +3158,7 @@ impl App {
                         .map(|p| p.title.clone())
                         .unwrap_or_default();
                     let on = self.bookmarks.toggle(&self.url.clone(), &title);
+                    self.persist_bookmarks();
                     tracing::info!(bookmarked = on, url = %self.url, "bookmark toggled");
                     true
                 }

@@ -7024,3 +7024,29 @@ initiator's POST arrives WITH it (login works). RED against `post_document` igno
 Confined to net (one param + one call) + page + shell threading. HANG/CRASH 0. Residue: a cross-site
 POST that *redirects* to a third site follows flat-jar (rare); `307/308` still follow as GET (tick
 164). Mechanism in [[networking]].
+
+## Tick 166 — bookmarks persist across restart (shell/UX — T5 lever) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (DIVERSIFY steer — off the cookies/forms tail onto the shell
+persistence tier: T5). WIKI: none — shell-only tick (no engine/ change); mirrors the existing
+SessionStore session/collection persistence pattern.**
+The ★ toggle wrote to an in-memory `Bookmarks { items: Vec<Bookmark> }` (chrome.rs) that `App`
+re-created **empty on every launch** — no serde, no save, no load anywhere. So bookmarks *evaporated
+on quit*: a browser whose bookmarks don't survive a restart doesn't have bookmarks. Sessions, cookies
+and web storage already persist through `SessionStore`; bookmarks were the conspicuous gap.
+
+**Fix (mirrors the existing session-persistence pattern).** `Bookmark`/`Bookmarks` derive
+`Serialize`/`Deserialize`; `SessionStore` gains `save_bookmarks`/`load_bookmarks` writing
+`bookmarks.json` in the same state dir (`$MANUK_STATE`/XDG) as `session.json`. Unlike a session URL, a
+bookmark is **not** redacted — the user chose that exact address, and stripping a query they
+bookmarked on purpose would break the link. `App` startup loads saved bookmarks (best-effort; a read
+failure logs and starts empty); `persist_bookmarks()` writes on **every toggle** (survives a crash,
+not just a clean quit) and again in `save_session` as a backstop.
+
+**Gate.** New `session::tests::bookmarks_survive_a_save_load_cycle` — nothing-saved reads `None`, then
+two bookmarks (one with a `?q=rust+lang` query) round-trip through the store byte-for-byte, query
+preserved. RED against the pre-T5 store, which had no bookmark save/load at all. Confined to shell
+(chrome + session + gui). HANG/CRASH 0. Residue: `Settings` still `::default()` each launch (per-origin
+prefs are a separate T5 slice); a `(url,title,visit_count,last_visit)` history table is the other T5
+piece (searchable history already persists via `store::history_index`). Mechanism: `SessionStore`
+in shell/src/session.rs, alongside session/collection persistence.

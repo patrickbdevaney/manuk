@@ -13,13 +13,13 @@ use std::collections::HashMap;
 /// shell's local name; `position` is the spec's `index`.
 pub use manuk_page::history::SessionHistory as History;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Bookmark {
     pub url: String,
     pub title: String,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Bookmarks {
     items: Vec<Bookmark>,
 }

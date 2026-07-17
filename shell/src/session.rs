@@ -40,7 +40,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::chrome::{self, Settings};
+use crate::chrome::{self, Bookmarks, Settings};
 use crate::tab::Browser;
 
 /// One persisted tab. Order is the position in the surrounding `Vec`.
@@ -107,6 +107,25 @@ impl SessionStore {
 
     fn collections_path(&self) -> PathBuf {
         self.dir.join("collections.json")
+    }
+
+    fn bookmarks_path(&self) -> PathBuf {
+        self.dir.join("bookmarks.json")
+    }
+
+    // -- bookmarks -------------------------------------------------------------
+
+    /// Persist the user's bookmarks. Overwrites the previous file. Unlike the session, a
+    /// bookmark URL is **not** redacted: the user chose to save that exact address, and
+    /// stripping a query param the user bookmarked on purpose would break the link on restore.
+    pub fn save_bookmarks(&self, bookmarks: &Bookmarks) -> Result<()> {
+        self.ensure_dir()?;
+        write_json(&self.bookmarks_path(), bookmarks)
+    }
+
+    /// Load the saved bookmarks, or `None` if none were ever saved.
+    pub fn load_bookmarks(&self) -> Result<Option<Bookmarks>> {
+        read_json(&self.bookmarks_path())
     }
 
     fn ensure_dir(&self) -> Result<()> {
@@ -445,6 +464,35 @@ mod tests {
         let d = base.join(tag);
         let _ = std::fs::remove_dir_all(&d);
         d
+    }
+
+    /// **The bookmark-persistence gate.** Bookmarks used to live only in memory and evaporate on
+    /// every quit. Saved bookmarks must round-trip through the store byte-for-byte (URL *not*
+    /// redacted — the user chose that exact address). RED against the pre-T5 store, which had no
+    /// bookmark save/load at all.
+    #[test]
+    fn bookmarks_survive_a_save_load_cycle() {
+        let dir = tmpdir("bookmarks-roundtrip");
+        let store = SessionStore::with_dir(&dir);
+
+        // Nothing saved yet → None (an empty jar is distinguishable from "never saved").
+        assert!(store.load_bookmarks().unwrap().is_none());
+
+        let mut marks = Bookmarks::new();
+        marks.add("https://example.test/docs?q=rust+lang", "Docs");
+        marks.add("https://news.test/", "News");
+        store.save_bookmarks(&marks).unwrap();
+
+        let restored = store.load_bookmarks().unwrap().expect("saved bookmarks");
+        assert_eq!(restored, marks, "bookmarks must round-trip exactly");
+        // The query the user deliberately bookmarked is preserved (not redacted like a session URL).
+        assert!(
+            restored
+                .items()
+                .iter()
+                .any(|b| b.url.contains("q=rust+lang")),
+            "a bookmarked query string must survive verbatim"
+        );
     }
 
     // -- session restore is hibernated ---------------------------------------
