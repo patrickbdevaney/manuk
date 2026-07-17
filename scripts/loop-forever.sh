@@ -49,12 +49,12 @@ launch_agent() {
   if systemd-run --user --scope --quiet \
         --setenv=CARGO_BUILD_JOBS=12 --setenv=WPT_DIR="$HOME/wpt" \
         -p MemoryMax=22G -p MemorySwapMax=6G -p MemoryHigh=19G -p OOMPolicy=kill \
-        "$CLAUDE" --dangerously-skip-permissions --permission-mode bypassPermissions -p "$PROMPT" >>"$LOG" 2>&1
+        "$CLAUDE" --model "${MANUK_AGENT_MODEL:-claude-sonnet-5}" --dangerously-skip-permissions --permission-mode bypassPermissions -p "$PROMPT" >>"$LOG" 2>&1
   then return 0; fi
   # Fallback: systemd-run failed — launch directly with just the CARGO cap (still reduces build memory).
   say "⚠ systemd-run unavailable — launching agent UNCONTAINED (CARGO_BUILD_JOBS cap only)"
   CARGO_BUILD_JOBS=12 WPT_DIR="$HOME/wpt" \
-    "$CLAUDE" --dangerously-skip-permissions --permission-mode bypassPermissions -p "$PROMPT" >>"$LOG" 2>&1 || true
+    "$CLAUDE" --model "${MANUK_AGENT_MODEL:-claude-sonnet-5}" --dangerously-skip-permissions --permission-mode bypassPermissions -p "$PROMPT" >>"$LOG" 2>&1 || true
 }
 
 PROMPT='Continue the autonomous Manuk tick loop NOW — you are a headless grind agent, there is no user to hand back to. Read STATUS.md, docs/loop/JOURNAL.md, docs/loop/CONSTITUTION-CHECK.md and CONSTITUTION.MD first (ground truth on disk). Then run as many ticks as you can this invocation: run scripts/lever-board.sh FIRST and OBEY its PHASE MANDATE — this phase builds DAILY-DRIVER CAPABILITY, not raw WPT-flip count. html/dom is reasonably done (~93%); do NOT grind html/dom or dom for +N flips. Pick EITHER a CSS-LAYOUT tick (flexbox/grid/sizing/position/values/overflow — flex/grid INTRINSIC SIZING, min/max-content propagation via Taffy #204, is the core lever) OR a MEDIA tick (build the MediaSource/SourceBuffer JS surface and BIND a media framework GStreamer/FFmpeg — do NOT hand-write codecs). For layout, run `manuk-wpt wpt css/css-flexbox --show-failures` (or css-grid / css-sizing) to get the histogram and implement the top mechanism; a layout or media fix that makes real pages render/play correctly BEATS a bigger html/dom +N. Gate it with a falsifiable check (for media, a sample stream buffers and plays — not a WPT count), capture the mechanism in docs/wiki, and land it via ./scripts/tick.sh. Touch .git/manuk-working at the top of every command so the watchdogs see you working. SCOPE — CRITICAL: the loop HARNESS (this service, scripts/tick.sh, scripts/verify.sh, scripts/ramdisk.sh, scripts/wpt-sweep.sh, the watchdog, cgroups) is DONE and OWNED BY THE OBSERVER. Do NOT edit, 'fix', or optimize ANY scripts/ or harness file — not even if the wall is slow or something seems broken. If a harness problem blocks you, write one line in docs/loop/JOURNAL.md and CONTINUE with browser work; the observer handles all infrastructure. Every tick must be PURE BROWSER CAPABILITY per CONSTITUTION.MD PART VII / docs/loop/V1-SCOPE.md (rendering parity vs the real internet + the agentic surface). ATOMICITY: start each tick from a clean tree — if leftover WIP from a crashed tick will not cleanly complete, `git checkout -- .` back to the last commit and redo the tick fresh; never build on top of inconsistent partial state. Honor THE RATCHET absolutely: a Bar 0 crash or any regression is never traded for a capability — revert instead. Do not stop; keep landing ticks until this process is killed or the budget is spent.'
@@ -92,15 +92,24 @@ while true; do
   else
     NOPROG=$((NOPROG + 1))
     say "agent exited after ${DUR}s — NO tick landed (attempt $NOPROG)."
-    # ── USAGE-EXHAUSTION PAUSE. A fast exit (< 180s) with no tick almost always means the weekly Claude
-    # pool is spent (API rejects immediately) — NOT a code problem. Spinning would burn nothing useful and
-    # spam relaunches. If a reset time is recorded and still in the future, SLEEP UNTIL THE RESET (+60s),
-    # then resume with the fresh pool. See reference/usage/USAGE.md.
-    RESET=$(cat .git/manuk-usage-reset 2>/dev/null || echo 0); NOW=$(date +%s)
-    if [ "$DUR" -lt 180 ] && [ "$RESET" -gt "$NOW" ]; then
-      WAIT=$(( RESET - NOW + 60 ))
-      say "⏸ fast-fail (${DUR}s) + pool likely exhausted — sleeping ${WAIT}s until weekly reset $(date -d @"$RESET" '+%F %T'), then resuming"
-      sleep "$WAIT"; NOPROG=0; continue
+    # ── USAGE-EXHAUSTION PAUSE. A fast exit (<180s) with no tick that printed "session/usage limit" means the
+    # Claude pool is spent — NOT a code problem. Churning 600s relaunches burns pool on doomed retries. PARSE
+    # the real reset clock time from the agent's OWN output ("resets H:MMam (TZ)") and SLEEP UNTIL IT (+60s);
+    # the old code trusted .git/manuk-usage-reset, which nothing updates, so it never engaged and just churned.
+    if [ "$DUR" -lt 180 ] && tail -25 "$LOG" | grep -qiE 'session limit|usage limit|rate limit'; then
+      RT=$(tail -25 "$LOG" | grep -oiE 'resets [0-9]{1,2}:[0-9]{2} ?(am|pm)?' | tail -1 | sed -E 's/^resets +//I'); NOW=$(date +%s)
+      TGT=""; [ -n "$RT" ] && TGT=$(date -d "$RT" +%s 2>/dev/null)
+      if [ -n "$TGT" ]; then
+        [ "$TGT" -le "$NOW" ] && TGT=$((TGT + 86400))          # clock time already passed today → next occurrence
+        DELTA=$(( TGT - NOW ))
+        if [ "$DELTA" -gt 21600 ]; then                        # >6h out for a 5h session window = message is STALE
+          say "⏸ session-limit message stale (reset already passed) — retrying now"; sleep 15; NOPROG=0; continue
+        fi
+        WAIT=$(( DELTA + 60 ))
+        say "⏸ session limit — sleeping ${WAIT}s until reset '$RT' ($(date -d @"$TGT" '+%F %T')), then resuming"
+        echo "$TGT" > .git/manuk-usage-reset; sleep "$WAIT"; NOPROG=0; continue
+      fi
+      say "⏸ session limit but reset time unparseable — pausing 900s (not churning)"; sleep 900; NOPROG=0; continue
     fi
     # Otherwise it is a genuine no-progress condition (stuck/gated) — back off, never fully stop.
     if [ "$NOPROG" -ge 3 ]; then
