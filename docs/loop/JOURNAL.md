@@ -6701,3 +6701,34 @@ HANG/CRASH 0. Residue: `scrollbar-gutter: stable`/`both-edges` is unreachable (c
 `scrollbar-gutter` support — dropped at parse, so no dead surface added); the `overflow:auto`-and-actually-
 overflows case needs a second layout pass; RTL/vertical-writing-mode gutter placement and the
 horizontal-scrollbar-reserves-height axis are separate, smaller mechanisms. Mechanism in [[box-layout]].
+
+## Tick 156 — abspos auto margins center a fully-constrained box (`inset:0; margin:auto`) (2026-07-17)
+
+**TICK SHAPE: layout-mechanism (CSS-LAYOUT phase-mandate — abspos positioning; row-8 neighbourhood).
+WIKI: box-layout. Row 6 grid-template-areas is observer-PARKED; picked the next bounded lever.**
+Probed css/css-position: the `margin:auto on abspos` cluster failed, and a `boxes --tree` probe showed a
+`position:absolute; inset:0; margin:auto; width:200px; height:200px` box in a 400×400 relative CB laid
+out at **[0 0 200×200]** where Chrome centers it at **[100 100]**. This is the canonical centered-modal /
+dialog / backdrop idiom — pinned to the top-left corner instead of centered.
+
+**Cause.** `layout_abs` resolved every margin with `Dim::resolve(cw, 0.0)`, so an `auto` margin became
+**0**. CSS2 §10.3.7 (inline) / §10.6.4 (block): on a *fully-constrained* axis — both insets set AND a
+definite size — the free space is distributed into the auto margins. That step was absent, so the box sat
+at `cb.origin + inset`.
+
+**Fix.** After `border_box_w`/`border_box_h` are known, redistribute per axis. Inline: `left`&`right` set
+and `s.width != Dim::Auto` → `free = cw − left − right − border_box_w`; both auto → `free/2` each (negative
+free, ltr → start 0, overflow past end); start (`margin-left`) auto → `free − margin-right`; end-auto /
+neither → no-op (box already pinned by `left`+`margin-left`; an end margin only absorbs slack). Block axis
+symmetric on top/bottom/height. The `!= Auto` guard excludes both the stretch-to-fill case (`width:auto`
+between insets, auto margins = 0) and an intrinsic keyword (collapses to `Auto`) — neither is a definite
+size.
+
+**Gate.** Unit test `abspos_auto_margins_center_a_constrained_box` (200×200 `inset:0;margin:auto` centers
+at (100,100); RED at (0,0) on revert — confirmed via the before/after box probe; `margin:0 auto` control
+proves the axes resolve independently). Regression sweep, stash-rebuild-measured BEFORE vs AFTER on the
+same release binary: css-position **76→79 (+3)** (the "margin:auto on abspos after dynamic inset change"
+subtest flips green), css-flexbox/css-grid/css-sizing/css-values/css-overflow **all flat (0 regression)**,
+HANG/CRASH 0. Residue: the *"margin:0 auto after **dynamic** inset change"* sibling still fails — a
+dynamic-reflow gap (mutate `.style.inset`, re-read `offsetTop`), NOT layout math; writing-mode-aware
+start-edge selection is a separate, smaller mechanism. Mechanism in [[box-layout]].

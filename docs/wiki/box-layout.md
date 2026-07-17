@@ -356,3 +356,39 @@ flip green (the two `overflow-y:scroll` rows). Gated by `overflow_y_scroll_reser
 `overflow_y_auto_without_overflow_reserves_no_gutter` proving the reservation is scoped to scroll
 containers. Full regression sweep across css-overflow/css-sizing/css-flexbox/css-grid/css-position with
 **HANG/CRASH 0** and no suite regressing.
+
+## Auto margins center an absolutely-positioned box — the `inset:0; margin:auto` modal idiom (tick 156)
+
+**Symptom.** `position:absolute; inset:0; margin:auto` with a definite `width`/`height` — the canonical
+way to center a dialog, modal or backdrop over its containing block — pinned the box to the **top-left
+corner** instead of centering it. A 200×200 target in a 400×400 relative CB laid out at `(0,0)` where
+Chrome puts it at `(100,100)`.
+
+**Cause.** In `layout_abs`, margins were resolved with `Dim::resolve(cw, 0.0)`, so an `auto` margin fell
+straight to **0**. CSS2 §10.3.7 (inline) / §10.6.4 (block) say that when an axis is *fully constrained* —
+both insets set **and** a definite size — the leftover free space is distributed into the auto margins
+instead. That distribution step was simply missing; the box therefore sat at `cb.origin + inset`.
+
+**Fix.** After the border box is known, redistribute per axis. Inline: when `left` and `right` are both
+set and `width != auto` (a definite size, not the stretch-to-fill case), `free = cw − left − right −
+border_box_w`; **both** margins auto → `free/2` each (negative free in ltr → start margin 0, overflow
+past the end edge); a **start** (`margin-left`) auto → `free − margin-right` (it repositions the box); an
+**end** (`margin-right`) auto or neither auto → no-op, because the box is already pinned by
+`left`+`margin-left` and an end margin only absorbs slack. The block axis is symmetric on
+`top`/`bottom`/`height`/`margin-top`. The `!= auto` guard is load-bearing: it excludes both the
+stretch-to-fill case (`width:auto` between two insets, where auto margins are correctly 0) **and** an
+intrinsic keyword (`fit-content`/`min`/`max`, which collapses to `Dim::Auto`), so neither is mistaken for
+a definite size.
+
+**Scope / residue.** Static centering only. The sibling WPT subtest *"margin:0 auto on abspos resolves
+correctly after **dynamic** inset change"* still fails — not a layout-math gap but a **dynamic-reflow**
+one: it mutates `.style.inset` from JS and reads back `offsetTop`, which needs abspos re-layout on
+inline-style mutation (a separate mechanism). The `margin:auto` (both-axes) sibling passes even without
+reflow because its centered offset is inset-independent. Writing-mode-aware start-edge selection (the
+negative-overflow branch assumes ltr/ttb) is also residue.
+
+**WPT / gate.** `css/css-position` **76 → 79 (+3)**; *"margin:auto on abspos resolves correctly after
+dynamic inset change"* flips green. Gated by `abspos_auto_margins_center_a_constrained_box` (a 200×200
+`inset:0;margin:auto` box centers at `(100,100)`, RED at `(0,0)` on revert; a `margin:0 auto` control
+proves the two axes resolve independently — inline centered, block pinned). Regression sweep across
+css-position/css-flexbox/css-grid/css-sizing/css-values/css-overflow: **all flat, HANG/CRASH 0**.

@@ -3022,10 +3022,12 @@ impl Ctx<'_> {
     fn layout_abs(&self, node: NodeId, cb: Rect) -> LayoutBox {
         let s = self.style_of(node).clone();
         let cw = cb.width;
-        let ml = s.margin.left.resolve(cw, 0.0);
-        let mr = s.margin.right.resolve(cw, 0.0);
-        let mt = s.margin.top.resolve(cw, 0.0);
-        let mb = s.margin.bottom.resolve(cw, 0.0);
+        // Auto margins resolve to 0 here; a fully-constrained axis (both insets + a definite size)
+        // redistributes its free space into them below, once the border box is known.
+        let mut ml = s.margin.left.resolve(cw, 0.0);
+        let mut mr = s.margin.right.resolve(cw, 0.0);
+        let mut mt = s.margin.top.resolve(cw, 0.0);
+        let mut mb = s.margin.bottom.resolve(cw, 0.0);
         let (pl, pr) = (
             s.padding.left.resolve(cw, 0.0),
             s.padding.right.resolve(cw, 0.0),
@@ -3110,6 +3112,54 @@ impl Ctx<'_> {
 
         let border_box_w = bl + pl + content_w + pr + br;
         let border_box_h = bt + pt + content_height + pb + bb;
+
+        // Auto margins on an abspos box absorb the free space of a **fully-constrained** axis —
+        // both insets set AND a definite size — per CSS2 §10.3.7 (inline) / §10.6.4 (block). This
+        // is the `position:absolute; inset:0; margin:auto` centering idiom that anchors dialogs,
+        // modals and backdrops. In an axis's under-constrained cases (a size of `auto` that
+        // stretches to fill between the insets, or an open inset) an auto margin stays 0 — which is
+        // exactly what `resolve(_, 0.0)` already gave us, so those paths are untouched. `!= Auto`
+        // also excludes an intrinsic keyword (`fit-content`/`min`/`max`), which collapses to `Auto`
+        // and must not be treated as a definite size here.
+        if let (Some(l), Some(r)) = (left, right) {
+            if s.width != Dim::Auto {
+                let free = cw - l - r - border_box_w;
+                match (s.margin.left.is_auto(), s.margin.right.is_auto()) {
+                    (true, true) if free >= 0.0 => {
+                        ml = free / 2.0;
+                        mr = free / 2.0;
+                    }
+                    // Negative free space (ltr): pin the start margin, overflow past the end edge.
+                    (true, true) => {
+                        ml = 0.0;
+                        mr = free;
+                    }
+                    // A start (left) auto margin shifts the box; an end (right) auto margin only
+                    // absorbs slack past a box already pinned by `left`+`margin-left`, so it does
+                    // not move it — and over-constrained (neither auto) likewise uses `left`.
+                    (true, false) => ml = free - mr,
+                    (false, true) | (false, false) => {}
+                }
+            }
+        }
+        if let (Some(t), Some(b)) = (top, bottom) {
+            if s.height != Dim::Auto {
+                let free = cb.height - t - b - border_box_h;
+                match (s.margin.top.is_auto(), s.margin.bottom.is_auto()) {
+                    (true, true) if free >= 0.0 => {
+                        mt = free / 2.0;
+                        mb = free / 2.0;
+                    }
+                    (true, true) => {
+                        mt = 0.0;
+                        mb = free;
+                    }
+                    // As the inline axis: only a start (top) auto margin repositions the box.
+                    (true, false) => mt = free - mb,
+                    (false, true) | (false, false) => {}
+                }
+            }
+        }
 
         // Border-box top-left. `left`/`top` win; else offset from the far edge; else
         // the containing block's start edge (static-position approximation).
@@ -4174,6 +4224,49 @@ mod tests {
         assert!(
             (app_h - vp_h).abs() < 1.0,
             "#app{{height:100%}} through a height:100% body should fill the {vp_h}px viewport, got {app_h}"
+        );
+    }
+
+    /// The centered-modal idiom: `position:absolute; inset:0; margin:auto` with a definite size
+    /// must center in its containing block (CSS2 §10.3.7 / §10.6.4 — auto margins absorb the free
+    /// space of a fully-constrained axis). A 200×200 target in a 400×400 relative CB lands at
+    /// (100,100). Before this, auto margins resolved to 0 and the box pinned to the top-left corner
+    /// (0,0) — every `margin:auto` dialog/backdrop stuck in the corner. The `margin:0 auto` control
+    /// pins the block axis (top:0) while still centering the inline axis, proving the two axes
+    /// resolve independently and an unset auto margin stays 0.
+    #[test]
+    fn abspos_auto_margins_center_a_constrained_box() {
+        // Longhand insets/margins: the test's `MinimalCascade` does not expand the `inset` or
+        // `margin` shorthands (the stylo path the WPT run uses does), so spell them out.
+        let html = r#"<div id="cb"><div id="modal"></div><div id="inline"></div></div>"#;
+        let css = "body{margin:0} \
+                   #cb{position:relative;width:400px;height:400px} \
+                   #modal{position:absolute;top:0;right:0;bottom:0;left:0; \
+                          margin-left:auto;margin-right:auto;margin-top:auto;margin-bottom:auto; \
+                          width:200px;height:200px} \
+                   #inline{position:absolute;top:0;right:0;bottom:0;left:0; \
+                           margin-left:auto;margin-right:auto;margin-top:0;margin-bottom:0; \
+                           width:200px;height:200px}";
+        let (dom, root) = layout_html(html, css, 800.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let m = rects[&by_id("modal")];
+        assert!(
+            (m.x - 100.0).abs() < 1.0 && (m.y - 100.0).abs() < 1.0,
+            "inset:0;margin:auto should center at (100,100), got ({},{})",
+            m.x,
+            m.y
+        );
+        let i = rects[&by_id("inline")];
+        assert!(
+            (i.x - 100.0).abs() < 1.0 && i.y.abs() < 1.0,
+            "inset:0;margin:0 auto should center inline (x=100) but pin the block axis (y=0), got ({},{})",
+            i.x,
+            i.y
         );
     }
 
