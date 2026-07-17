@@ -68,7 +68,8 @@ impl Bookmarks {
 }
 
 /// Persistent shell settings.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct Settings {
     pub home_url: String,
     /// `%s` is replaced by the percent-encoded query.
@@ -77,6 +78,20 @@ pub struct Settings {
     pub block_trackers: bool,
     /// Per-origin zoom overrides, as browsers remember them.
     pub zoom_by_origin: HashMap<String, f32>,
+}
+
+/// The key a per-origin preference (e.g. remembered zoom) is stored under: the URL's
+/// **origin** (`scheme://host[:port]`), which is how a real browser scopes site zoom — every
+/// page on `https://example.com` shares one zoom, distinct from `http://` or another host.
+/// `None` for a URL with no host (`about:blank`, `data:`), which cannot own a site preference.
+pub fn origin_key(url: &str) -> Option<String> {
+    let u = url::Url::parse(url).ok()?;
+    let host = u.host_str()?;
+    let scheme = u.scheme();
+    match u.port() {
+        Some(p) => Some(format!("{scheme}://{host}:{p}")),
+        None => Some(format!("{scheme}://{host}")),
+    }
 }
 
 impl Default for Settings {

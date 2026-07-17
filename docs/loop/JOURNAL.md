@@ -7096,3 +7096,31 @@ download save/load at all. Confined to shell (gui + session). HANG/CRASH 0. Resi
 unbounded (a "clear downloads" action + a cap are follow-ons); download *progress* for an in-flight
 transfer is still not surfaced (a separate slice). Mechanism: `SessionStore` in shell/src/session.rs,
 alongside bookmark/session/collection persistence.
+
+## Tick 169 — per-origin zoom remembered across visits + restart (shell/UX — T5 lever) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (T5 shell persistence — settings persistence made non-vacuous by
+per-origin zoom, the one setting with real runtime churn). WIKI: none — shell-only tick (no engine/
+change); mirrors tick 166/168 persistence + wires the existing `zoom_by_origin` field.**
+`Settings` was doc-labelled "Persistent" but had no serde and no save/load — the App used
+`Settings::default()` every launch — and its `zoom_by_origin` map was **never written** at all. So the
+per-site zoom a real browser remembers didn't exist: every page opened at 100%, and any zoom the user
+set was forgotten the moment they navigated away, let alone quit. (Persisting settings earlier would
+have been vacuous — nothing mutated the struct; this tick makes it mutate.)
+
+**Fix.** `Settings` derives `Serialize`/`Deserialize` (`#[serde(default)]` so an old file missing a new
+field falls back to the sensible default); new `chrome::origin_key(url)` → `scheme://host[:port]` (a
+real browser scopes zoom by origin: `http`≠`https`, per host); `SessionStore::save_settings`/
+`load_settings` → `settings.json`. `apply_zoom` now **records** the new factor under the current
+origin (and drops the entry when zoom returns to default, so the map stays clean) and `persist_settings()`.
+Both page-swap-in paths (`finish_load`, `finish_load_prefetched`) set `self.zoom =
+remembered_zoom()` **before** the build (which lays out at `self.zoom`), so every site opens at the
+zoom the user last set for it. App loads settings at startup.
+
+**Gate.** `session::tests::settings_and_per_origin_zoom_survive_a_save_load_cycle` (search template +
+two origin→zoom entries round-trip) and `origin_key_scopes_by_scheme_host_port` (`http`≠`https`,
+hostless URL → `None`). RED against the pre-T5 store (no settings save/load) + the absent origin key.
+Confined to shell (chrome + session + gui). HANG/CRASH 0. Residue: no settings UI yet (search
+engine/home are still only editable in code — a settings page is a separate tick); zoom keyed by
+requested URL, not post-redirect origin (matches the URL bar). Mechanism: `SessionStore` +
+`chrome::origin_key`, shell/src.

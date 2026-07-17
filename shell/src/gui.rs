@@ -376,6 +376,19 @@ impl App {
             })
             .unwrap_or_default();
 
+        // §5 — restore saved settings (search engine, home, and the per-origin zoom the user set
+        // on each site). They used to reset to the defaults on every launch.
+        let settings = store
+            .as_ref()
+            .and_then(|s| match s.load_settings() {
+                Ok(v) => v,
+                Err(e) => {
+                    tracing::warn!("settings restore skipped: {e:#}");
+                    None
+                }
+            })
+            .unwrap_or_default();
+
         // The CLI target is the active, eagerly-loaded tab: reuse a restored tab with the
         // same URL if present, else open a fresh focused one.
         let existing = browser.tabs().iter().find(|t| t.url == url).map(|t| t.id);
@@ -417,7 +430,7 @@ impl App {
             nav_gen: 0,
             loading: false,
             bookmarks,
-            settings: Settings::default(),
+            settings,
             zoom: 1.0,
             find_open: false,
             find_query: String::new(),
@@ -909,6 +922,24 @@ impl App {
         }
     }
 
+    /// Write settings to disk now — called when the user changes one (today: per-origin zoom).
+    /// Best-effort: a write failure is logged, never fatal.
+    fn persist_settings(&self) {
+        if let Some(store) = &self.store {
+            if let Err(e) = store.save_settings(&self.settings) {
+                tracing::warn!("settings save failed: {e:#}");
+            }
+        }
+    }
+
+    /// The zoom remembered for the page currently in the URL bar — its origin's stored zoom, or the
+    /// default. Applied on navigation so every site opens at the zoom the user last set for it.
+    fn remembered_zoom(&self) -> f32 {
+        chrome::origin_key(&self.url)
+            .and_then(|k| self.settings.zoom_by_origin.get(&k).copied())
+            .unwrap_or(self.settings.default_zoom)
+    }
+
     /// A click within the chrome band: back / forward / reload, zoom, bookmark, menu, or the field.
     fn handle_chrome_click(&mut self, x: f32) {
         let w = self.viewport.width;
@@ -1034,6 +1065,9 @@ impl App {
             Some(g) => (g.config.width, g.config.height),
             None => (self.width, 768),
         };
+        // Open this site at the zoom the user last set for it (per-origin, as a real browser does).
+        // Set BEFORE the build, which lays the page out at `self.zoom`.
+        self.zoom = self.remembered_zoom();
         let Some(page) = self.build_page_contained(&html, &final_url, w) else {
             // The page's own content brought its build down. Show that, and keep the browser — and
             // every other tab — alive. This is the Bar 0 contract.
@@ -1113,6 +1147,8 @@ impl App {
             Some(g) => (g.config.width, g.config.height),
             None => (self.width, 768),
         };
+        // Per-origin zoom, set BEFORE the build (which lays out at `self.zoom`). See `finish_load`.
+        self.zoom = self.remembered_zoom();
         let page = self.build_prefetched(pre, w);
         if let Some(win) = &self.window {
             win.set_title(&format!("{} — manuk", page.title));
@@ -2548,6 +2584,17 @@ impl App {
     /// E1 full-page zoom: re-lay-out at the new factor (crisp), not a bitmap scale.
     fn apply_zoom(&mut self, zoom: f32) {
         self.zoom = zoom;
+        // Remember this zoom for the site (per-origin, as a real browser does): the next visit to
+        // any page on this origin restores it. A return to the default zoom drops the entry so the
+        // map doesn't accumulate no-op overrides.
+        if let Some(key) = chrome::origin_key(&self.url) {
+            if (zoom - self.settings.default_zoom).abs() < 0.001 {
+                self.settings.zoom_by_origin.remove(&key);
+            } else {
+                self.settings.zoom_by_origin.insert(key, zoom);
+            }
+            self.persist_settings();
+        }
         let width = self.viewport.width;
         if let Some(page) = &mut self.page {
             page.relayout_zoomed(&self.fonts, width, zoom);

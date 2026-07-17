@@ -148,6 +148,24 @@ impl SessionStore {
         read_json(&self.downloads_path())
     }
 
+    // -- settings --------------------------------------------------------------
+
+    fn settings_path(&self) -> PathBuf {
+        self.dir.join("settings.json")
+    }
+
+    /// Persist shell settings (search engine, home URL, tracker blocking, and the per-origin zoom
+    /// map a browser remembers as the user zooms sites). Overwrites the previous file.
+    pub fn save_settings(&self, settings: &Settings) -> Result<()> {
+        self.ensure_dir()?;
+        write_json(&self.settings_path(), settings)
+    }
+
+    /// Load saved settings, or `None` if none were ever saved (the caller uses `Settings::default`).
+    pub fn load_settings(&self) -> Result<Option<Settings>> {
+        read_json(&self.settings_path())
+    }
+
     fn ensure_dir(&self) -> Result<()> {
         std::fs::create_dir_all(&self.dir)
             .with_context(|| format!("creating state dir {}", self.dir.display()))
@@ -549,6 +567,56 @@ mod tests {
         );
         assert_eq!(restored[0].bytes, 1234);
         assert_eq!(restored[1].filename, "data.csv");
+    }
+
+    /// **The settings-persistence gate**, focused on the per-origin zoom map — the piece with real
+    /// runtime churn (the user zooms sites). Settings used to reset to defaults every launch. RED
+    /// against the pre-T5 store, which had no settings save/load.
+    #[test]
+    fn settings_and_per_origin_zoom_survive_a_save_load_cycle() {
+        let dir = tmpdir("settings-roundtrip");
+        let store = SessionStore::with_dir(&dir);
+
+        assert!(store.load_settings().unwrap().is_none());
+
+        let mut s = Settings::default();
+        s.search_template = "https://example.test/?q=%s".to_string();
+        s.zoom_by_origin
+            .insert("https://news.example".to_string(), 1.25);
+        s.zoom_by_origin
+            .insert("http://localhost:3000".to_string(), 0.9);
+        store.save_settings(&s).unwrap();
+
+        let restored = store.load_settings().unwrap().expect("saved settings");
+        assert_eq!(restored.search_template, "https://example.test/?q=%s");
+        assert_eq!(
+            restored.zoom_by_origin.get("https://news.example"),
+            Some(&1.25)
+        );
+        assert_eq!(
+            restored.zoom_by_origin.get("http://localhost:3000"),
+            Some(&0.9)
+        );
+    }
+
+    /// The per-origin key scopes zoom to `scheme://host[:port]`, and refuses hostless URLs.
+    #[test]
+    fn origin_key_scopes_by_scheme_host_port() {
+        assert_eq!(
+            chrome::origin_key("https://example.com/a/b?q=1"),
+            Some("https://example.com".to_string())
+        );
+        assert_eq!(
+            chrome::origin_key("http://localhost:3000/x"),
+            Some("http://localhost:3000".to_string())
+        );
+        // http vs https on the same host are distinct origins.
+        assert_ne!(
+            chrome::origin_key("http://example.com/"),
+            chrome::origin_key("https://example.com/")
+        );
+        // A hostless URL owns no site preference.
+        assert_eq!(chrome::origin_key("about:blank"), None);
     }
 
     // -- session restore is hibernated ---------------------------------------
