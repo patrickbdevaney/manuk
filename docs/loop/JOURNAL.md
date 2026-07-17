@@ -7345,3 +7345,29 @@ suite passes (spidermonkey, isolated); manuk-shell compiles + suite green; HANG/
 `input` is the controlled-component one). The shell-side wiring mirrors the ungated dispatch_click
 consumption; the engine capability itself is gated. Mechanism: `Page::dispatch_input` + shell
 `edit_focused_input`.
+
+## Tick 176 — blur fires change+blur so on-blur form validation runs (interaction surface) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (interaction surface — the field-commit event contract; the commit
+half of tick 175's per-keystroke `input`). WIKI: docs/wiki/interaction-surface.md "Blur fires `change`
+then `blur` — field-level validation runs on commit".**
+
+A form validates a field when you LEAVE it — the on-blur/on-change "email invalid", the red border —
+hung on `change`/`blur`. The shell cleared `focused_input` on click-away / Escape / submit / focus-move
+and fired NOTHING, so field-level validation never ran and the field never committed.
+
+**Fix.** New `Page::dispatch_blur(node, value_changed, …)` fires `change` (ONLY when `value_changed`)
+then `blur` — the guard matters: `change` fires only if the value differs from focus time, so tabbing
+through a field runs no change-validator. The shell snapshots the value in a new `focus_value` field
+(set by a new `focus_input(node)` helper and on programmatic `.focus()`); a new
+`blur_focused_input()` compares current vs snapshot, calls `dispatch_blur`, and is now the single
+chokepoint every user focus-loss routes through — `PageAction::Link`/`Submit`/`Clear`, focusing a
+different field (`focus_input` blurs the old first), Escape, and Enter (`submit_focused_form` commits
+before submitting). Composes with tick 175: `input` per keystroke, `change`+`blur` on commit.
+
+**Gate.** `js_conformance_suite` scenario (28): a `dispatch_blur(node, false)` fires `blur` only; after
+a `dispatch_input` edit, `dispatch_blur(node, true)` fires `change` THEN `blur` (order asserted). RED
+against baseline (no `dispatch_blur`). Verified: suite passes (spidermonkey, isolated); manuk-shell
+58+2 green; HANG/CRASH 0. Residue: a PROGRAMMATIC focus move records the new `focus_value` but does not
+yet fire `blur` on the old field; `focus`/`focusin`/`focusout` and `keydown`/`keyup` are separate
+mechanisms. Mechanism: `Page::dispatch_blur` + shell `focus_input`/`blur_focused_input` chokepoint.

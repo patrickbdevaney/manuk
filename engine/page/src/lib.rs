@@ -1875,6 +1875,53 @@ impl Page {
         self.relayout(fonts, viewport_width);
     }
 
+    /// Fire the **commit** events when a field loses focus: `change` (only if `value_changed` — the
+    /// field's value differs from when it gained focus, which is exactly when the spec fires it) then
+    /// `blur`. `change` is what a form runs its validation on ("email invalid" the moment you leave
+    /// the field), and it is deliberately NOT fired per keystroke (that is `input`, tick 175) — a
+    /// change-validator must run once, on commit, not on every character. `blur` order is after
+    /// `change`, per the HTML event model.
+    pub fn dispatch_blur(
+        &mut self,
+        node: manuk_dom::NodeId,
+        value_changed: bool,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) {
+        #[cfg(feature = "spidermonkey")]
+        {
+            let Some(ctx) = &self.js else {
+                return;
+            };
+            let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+                .root_box
+                .node_rects(&self.dom)
+                .into_iter()
+                .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+                .collect();
+            let events: &[&str] = if value_changed {
+                &["change", "blur"]
+            } else {
+                &["blur"]
+            };
+            for ty in events {
+                if let Err(e) =
+                    manuk_js::dispatch_event(ctx, &mut self.dom, node, ty, &rects, &self.styles)
+                {
+                    tracing::warn!("{ty} dispatch: {e}");
+                }
+            }
+            let root = self.dom.root();
+            if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
+                self.relayout(fonts, viewport_width);
+            }
+        }
+        #[cfg(not(feature = "spidermonkey"))]
+        {
+            let _ = (node, value_changed, fonts, viewport_width);
+        }
+    }
+
     /// Tell the page its **view changed** — it scrolled, or it was laid out again — so the
     /// observers run and `scroll` fires. Returns any scroll the callbacks then requested.
     ///
@@ -4709,6 +4756,43 @@ mod js_interactive_tests {
             "dispatch_input fires `input`, never `change` (change is for blur/commit)"
         );
         drop(page27);
+
+        // (28) **Blur fires `change` (only if the value changed) then `blur` — the commit contract.**
+        // A form's field-level validation runs on `change`/`blur` ("email invalid" the instant you
+        // leave the field). `Page::dispatch_blur(node, value_changed)` fires `change` (iff changed)
+        // then `blur`; `change` must NOT fire on a blur where nothing changed (else a change-validator
+        // runs on a field the user only tabbed through). This is the commit half of the input/change
+        // pair whose keystroke half is tick 175's `input`.
+        let html28 = r#"<!doctype html><html><body>
+            <input id="g" value="start">
+            <p id="log">-</p>
+            <script>
+              var g = document.getElementById('g');
+              var log = document.getElementById('log');
+              var events = [];
+              g.addEventListener('change', function () { events.push('change'); log.textContent = events.join(','); });
+              g.addEventListener('blur', function () { events.push('blur'); log.textContent = events.join(','); });
+            </script></body></html>"#;
+        let mut page28 = Page::load(html28, "https://ex.test/", &fonts, 800.0);
+        let r28 = page28.dom().root();
+        let g28 = manuk_css::query_selector_all(page28.dom(), r28, "#g")[0];
+        let log28 = manuk_css::query_selector_all(page28.dom(), r28, "#log")[0];
+        // Blur with no change → only `blur` fires.
+        page28.dispatch_blur(g28, false, &fonts, 800.0);
+        assert_eq!(
+            page28.dom().text_content(log28),
+            "blur",
+            "a blur with no value change fires blur ONLY, not change"
+        );
+        // The user edits, then blurs with a change → `change` then `blur`.
+        page28.dispatch_input(g28, "edited", &fonts, 800.0);
+        page28.dispatch_blur(g28, true, &fonts, 800.0);
+        assert_eq!(
+            page28.dom().text_content(log28),
+            "blur,change,blur",
+            "a changed field fires change THEN blur on commit (input in tick 175 fires neither)"
+        );
+        drop(page28);
 
         // Tear SpiderMonkey down before this process exits, exactly as the shell and the harness do.
         // Every page above is out of scope by now, so no rooted object outlives its runtime. Leaving

@@ -424,3 +424,25 @@ the same contract for the keyboard. Gated by `js_conformance` scenario 27: an `i
 Residue: `change`-on-blur (when the field loses focus) and `keydown`/`keyup`/`beforeinput` are still
 unfired — separate keyboard-event mechanisms; `input` is the one the controlled-component contract
 turns on.
+
+## Blur fires `change` then `blur` — field-level validation runs on commit (tick 176)
+
+The commit half of the input/change pair (tick 175 was the keystroke half). A form validates a field
+the moment you *leave* it — "email invalid", "username taken", the red border — and it hangs that on
+the `change` and `blur` events. The shell cleared `focused_input` on click-away / Escape / submit and
+fired **nothing**, so on-blur validation never ran and the field never committed.
+
+**`Page::dispatch_blur(node, value_changed)`** fires `change` (only when `value_changed`) then `blur`.
+The `value_changed` guard is not optional: `change` fires *only if the value differs from when the
+field gained focus* — a user who tabs through a field without editing must not trigger its
+change-validator. The shell tracks that with a `focus_value` snapshot taken in `focus_input(node)`
+(and on programmatic `.focus()`); `blur_focused_input()` compares the current value against it, fires
+`dispatch_blur` with the result, and is now the single chokepoint every user-initiated focus loss goes
+through — click-away (`PageAction::Link`/`Submit`/`Clear`), focusing a *different* field
+(`focus_input` blurs the old first), Escape, and Enter (`submit_focused_form` commits before it
+submits, so on-blur validation runs before the POST).
+
+Gated by `js_conformance` scenario 28: a blur with no change fires `blur` only; after an edit, blur
+fires `change` then `blur` (order matters). Residue: a **programmatic** focus move (page calls
+`.focus()` on another field) records the new `focus_value` but does not yet fire `blur` on the old
+field; `focus`/`focusin`/`focusout` and `keydown`/`keyup` are separate mechanisms. [[dom-semantics]]

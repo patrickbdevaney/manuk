@@ -295,6 +295,9 @@ struct App {
     cursor: (f32, f32),
     /// The text `<input>`/`<textarea>` node currently focused for typing, if any.
     focused_input: Option<manuk_dom::NodeId>,
+    /// The focused field's `value` at the moment it gained focus — so `blur` can fire `change` only
+    /// when the value actually changed (which is exactly when the spec fires `change`).
+    focus_value: Option<String>,
     /// Whether the cursor is currently over a clickable link (drives the hand cursor).
     over_link: bool,
     /// A scroll happened and the page has not been told yet. Coalesced to one notification per
@@ -468,6 +471,7 @@ impl App {
             agent_input: String::new(),
             cursor: (0.0, 0.0),
             focused_input: None,
+            focus_value: None,
             over_link: false,
             prev_canvas: None,
         }
@@ -587,25 +591,26 @@ impl App {
 
         match self.classify_page_click(doc_x, doc_y) {
             PageAction::Link(url) => {
-                self.focused_input = None;
+                self.blur_focused_input();
                 tracing::info!(url = %url, "click: follow link");
                 self.goto(&url);
             }
             PageAction::FocusInput(node) => {
-                self.focused_input = Some(node);
+                // Focuses the new field and blurs the old one (fires its change/blur).
+                self.focus_input(node);
                 self.omnibox_open = false;
                 tracing::info!("click: focused a text field");
                 self.rerender();
             }
             PageAction::Submit(node) => {
-                self.focused_input = None;
+                self.blur_focused_input();
                 self.submit_owning_form(node);
             }
             PageAction::Toggle(node) => {
                 self.toggle_checkbox(node);
             }
             PageAction::Clear => {
-                self.focused_input = None;
+                self.blur_focused_input();
                 self.rerender();
             }
         }
@@ -869,9 +874,53 @@ impl App {
         self.rerender();
     }
 
-    /// Submit the form owning the currently focused field (Enter in a text input).
+    /// Focus a text field for typing, recording its value so a later blur can tell whether it
+    /// changed. Blurs any previously-focused field first (focus moved away from it).
+    fn focus_input(&mut self, node: manuk_dom::NodeId) {
+        if self.focused_input == Some(node) {
+            return;
+        }
+        self.blur_focused_input();
+        self.focused_input = Some(node);
+        self.focus_value = self
+            .page
+            .as_ref()
+            .and_then(|p| p.dom().element(node).and_then(|e| e.attr("value")))
+            .map(str::to_string)
+            .or(Some(String::new()));
+    }
+
+    /// The currently-focused field lost focus (the user clicked away, tabbed out, submitted, or
+    /// pressed Escape): fire its **commit** events — `change` if the value changed since focus, then
+    /// `blur` — so a form's on-blur/on-change validation runs. No-op when nothing is focused.
+    fn blur_focused_input(&mut self) {
+        let Some(node) = self.focused_input.take() else {
+            return;
+        };
+        let before = self.focus_value.take();
+        let width = self.viewport.width;
+        let zoom = self.zoom;
+        if let Some(page) = self.page.as_mut() {
+            let now = page
+                .dom()
+                .element(node)
+                .and_then(|e| e.attr("value"))
+                .unwrap_or("")
+                .to_string();
+            let changed = before.as_deref() != Some(now.as_str());
+            page.dispatch_blur(node, changed, &self.fonts, width);
+            if zoom != 1.0 {
+                page.relayout_zoomed(&self.fonts, width, zoom);
+            }
+        }
+        self.rerender();
+    }
+
+    /// Submit the form owning the currently focused field (Enter in a text input). Enter commits the
+    /// field first, so its `change`/`blur` fire (running any on-blur validation) before the submit.
     fn submit_focused_form(&mut self) {
         if let Some(node) = self.focused_input {
+            self.blur_focused_input();
             self.submit_owning_form(node);
         }
     }
@@ -2853,6 +2902,19 @@ impl App {
         }
         if let Some(&f) = focuses.last() {
             self.focused_input = f;
+            // Record the newly-focused field's value so a later user blur fires `change` only if it
+            // actually changed. (A programmatic focus move does not fire `blur` on the old field yet
+            // — a separate mechanism.)
+            self.focus_value = match (f, self.page.as_ref()) {
+                (Some(n), Some(p)) => Some(
+                    p.dom()
+                        .element(n)
+                        .and_then(|e| e.attr("value"))
+                        .unwrap_or("")
+                        .to_string(),
+                ),
+                _ => None,
+            };
             self.needs_paint = true;
         }
     }
@@ -3202,8 +3264,7 @@ impl App {
                     return true;
                 }
                 Key::Named(NamedKey::Escape) => {
-                    self.focused_input = None;
-                    self.rerender();
+                    self.blur_focused_input();
                     return true;
                 }
                 Key::Named(NamedKey::Backspace) => {
