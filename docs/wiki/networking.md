@@ -271,3 +271,18 @@ POST-navigation `SameSite` — withholding `Strict` — is the follow-on; a same
 **A file-input form is refused here, LOUD.** `urlencoded_submission` cannot carry file bytes, so a
 `multipart/form-data` upload goes through the OS file-picker path (`forms::multipart_submission`), not
 a urlencoded POST that would silently drop the files.
+
+## Cross-site POST navigation withholds Lax/Strict (the form-POST CSRF defence)
+
+A native `<form method=post>` navigation is a **top-level navigation with an *unsafe* method**, so
+its `SameSite` rule matches a subresource's, not a top-level GET's: a **cross-site** POST withholds
+both `SameSite=Lax` and `SameSite=Strict` (only `None` crosses). This is the CSRF defence — it stops
+`evil.example` auto-submitting a form POST to `bank.example` with the victim's session cookie.
+
+`post_document(url, ct, body, initiator)` threads the **submitting page's URL** as the initiator
+(captured before the URL bar repoints) and hands it to `send_once`, which applies
+`cookie_header_subresource` — same-site (incl. subdomains) sends everything so the ordinary login
+lands logged in; cross-site sends only `SameSite=None`. The POST→redirect→GET follow stays flat-jar:
+a top-level GET is `Lax`-eligible, so the dashboard the login redirects to is logged in even when the
+action host differs from the form host. (Lax is sent on *safe* top-level navigations; withheld on the
+unsafe POST — that asymmetry is the whole point.)

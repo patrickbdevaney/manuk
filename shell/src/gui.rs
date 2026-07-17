@@ -733,10 +733,13 @@ impl App {
     /// action with the POST body off-thread. The result lands via `NavEvent::Fetched` and swaps in
     /// exactly as a GET navigation's page does.
     fn post_navigate(&mut self, post: manuk_agent::forms::UrlencodedPost) {
+        // The submitting page is the SameSite initiator — captured BEFORE the URL bar is repointed,
+        // so a cross-site auto-submitted form POST withholds the target's session cookie (CSRF).
+        let initiator = self.url.clone();
         self.stash_current();
         self.url = post.url.clone();
         self.history.push(post.url.clone());
-        self.start_post_nav(post.content_type, post.body);
+        self.start_post_nav(post.content_type, post.body, initiator);
     }
 
     /// Drain `form.submit()` / `form.requestSubmit()` calls that scripts queued.
@@ -954,16 +957,21 @@ impl App {
     /// (`prefetch_document_post`, which follows the login flow's POST→redirect→GET). The result
     /// flows through the same `NavEvent::Fetched` path, so the page swaps in identically to a GET.
     /// The caller has already stashed the outgoing page, set `self.url`, and recorded history.
-    fn start_post_nav(&mut self, content_type: String, body: String) {
+    fn start_post_nav(&mut self, content_type: String, body: String, initiator: String) {
         self.nav_gen += 1;
         let gen = self.nav_gen;
         self.loading = true;
         let url = self.url.clone();
         let proxy = self.proxy.clone();
         self.rt.spawn(async move {
-            let result = manuk_page::prefetch_document_post(&url, &content_type, body.into_bytes())
-                .await
-                .map_err(|e| format!("{e:#}"));
+            let result = manuk_page::prefetch_document_post(
+                &url,
+                &content_type,
+                body.into_bytes(),
+                Some(&initiator),
+            )
+            .await
+            .map_err(|e| format!("{e:#}"));
             let _ = proxy.send_event(NavEvent::Fetched { gen, result });
         });
         self.rerender(); // keep the old page visible; chrome stays responsive during the POST

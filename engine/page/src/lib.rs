@@ -3296,12 +3296,17 @@ pub async fn prefetch_document(url: &str) -> Result<Loaded> {
 /// POST→redirect→GET, and runs the *same* off-thread subresource prefetch (external scripts, CSS,
 /// masks) as [`prefetch_document`], so the shell swaps in a fully-prepared page exactly as it does
 /// for a GET navigation. A response that turns out to be a download is handled like any other.
+///
+/// `initiator` is the document URL of the submitting page, applying `SameSite`: a **cross-site**
+/// form POST withholds the target's `Lax`/`Strict` cookies (the CSRF defence), while the ordinary
+/// **same-site** login sends them so the user lands logged in.
 pub async fn prefetch_document_post(
     url: &str,
     content_type: &str,
     body: Vec<u8>,
+    initiator: Option<&str>,
 ) -> Result<Loaded> {
-    let resp = manuk_net::post_document(url, content_type, body.into())
+    let resp = manuk_net::post_document(url, content_type, body.into(), initiator)
         .await
         .with_context(|| format!("POST {url}"))?;
     if resp.status >= 400 {

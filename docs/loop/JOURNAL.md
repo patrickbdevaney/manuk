@@ -6996,3 +6996,31 @@ asserts the POST arrives with its body AND that the 303 is followed to the landi
 0. Residue: cross-site POST-navigation `SameSite` (a top-level nav withholds `Strict` cross-site) is
 the follow-on; `307/308` POST-preserving redirects are followed as GET (rare in login flows, named not
 faked). Mechanism in [[networking]].
+
+## Tick 165 — SameSite on the cross-site POST navigation (closes the tick-164 CSRF hole) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (security-hardening — completes tick 164's form-POST path;
+named residue: "cross-site POST-navigation SameSite is the follow-on"). WIKI: networking.**
+Tick 164 shipped native `<form method=post>` navigation, but `post_document` passed `initiator=None`
+(flat jar) — so it shipped **every** cookie, `Lax` and `Strict` included, on a *cross-site* POST. That
+is the classic CSRF vector: an `evil.example` page that auto-submits `<form method=post
+action=https://bank.example/transfer>` got the bank's session cookie attached. `SameSite=Lax` (the
+browser default since 2020) exists precisely to block this, and the door tick 164 opened had it wide.
+
+**Fix (threads the initiator through the POST-nav path; same machinery as tick 163's subresource
+SameSite).** `post_document` gains `initiator: Option<&str>` and passes it to `send_once`, which
+already applies `cookie_header_subresource` — a form POST is an *unsafe* method, so the subresource
+policy (cross-site withholds `Lax` **and** `Strict`, sends only `SameSite=None`) is exactly the
+cross-site-POST-navigation policy. Same-site POST (the ordinary login) still sends everything, so the
+session cookie flows and the user lands logged in. The redirect follow stays flat-jar (`None`): a
+top-level GET is `Lax`-eligible, so the dashboard lands logged in. `prefetch_document_post` +
+`shell::start_post_nav`/`post_navigate` thread the submitting page's URL (captured BEFORE the URL bar
+repoints) as the initiator.
+
+**Gate.** New E2E `net::post_document_withholds_a_lax_cookie_on_a_cross_site_post` — a raw-TCP mock
+records the `Cookie:` header of each POST it receives; with a `SameSite=Lax` cookie set by the target
+origin, a **cross-site** initiator's POST arrives WITHOUT it (CSRF blocked) and a **same-site**
+initiator's POST arrives WITH it (login works). RED against `post_document` ignoring the initiator.
+Confined to net (one param + one call) + page + shell threading. HANG/CRASH 0. Residue: a cross-site
+POST that *redirects* to a third site follows flat-jar (rare); `307/308` still follow as GET (tick
+164). Mechanism in [[networking]].

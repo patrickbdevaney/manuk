@@ -320,6 +320,7 @@
   - L230 · HTTP/2's win is gated on SUBRESOURCES, not on the document fetch
   - L235 · The bot-wall fingerprint surface is known — and matching it IS the evasion
   - L249 · Native <form method=post> submission — POST navigation, and POST→redirect→GET
+  - L275 · Cross-site POST navigation withholds Lax/Strict (the form-POST CSRF defence)
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -408,4 +409,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-335 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+336 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

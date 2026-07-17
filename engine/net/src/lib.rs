@@ -606,26 +606,43 @@ pub async fn fetch_document(url: &str) -> Result<Response> {
 /// `3xx` response is followed as a GET of its `Location` (the redirected document is what the user
 /// sees). A non-redirect response's body is returned directly (an inline "invalid password" page).
 ///
-/// This is a **top-level navigation**, so the flat cookie jar is used (`initiator = None`): the
-/// session cookie the login just set flows to the redirect target, exactly as it must for the user
-/// to land logged in. `SameSite` on a cross-site POST navigation is the follow-on; the common
-/// same-site login is correct here.
+/// `initiator` is the document URL of the page that hosted the form. It applies **`SameSite`**: a
+/// form POST is an *unsafe* method, so a **cross-site** POST navigation withholds both
+/// `SameSite=Strict` **and** `SameSite=Lax` cookies (only `SameSite=None` crosses) — the CSRF
+/// defence a real browser applies, which stops an `evil.example` page auto-submitting a form POST to
+/// `bank.example` with the bank's session cookie attached. A **same-site** POST (the ordinary login)
+/// sends everything, so the cookie the login sets still flows and the user lands logged in.
+/// `initiator = None` falls back to the flat jar (a test/shell-less caller, or no initiating page).
+///
+/// The redirect the login returns is followed as a **top-level GET navigation** with the flat jar
+/// (`None`): a `Lax` cookie is sent on a safe top-level GET, so the dashboard the user lands on is
+/// logged in even when the action host differs from the form host.
 ///
 /// Redirects are followed as GET for every `3xx` (the historical `301/302` behaviour every browser
 /// still applies to a POST). `307`/`308` POST-preserving redirects are followed as GET too — rare
 /// in login flows, and named here rather than silently mishandled.
-pub async fn post_document(url: &str, content_type: &str, body: Bytes) -> Result<Response> {
+pub async fn post_document(
+    url: &str,
+    content_type: &str,
+    body: Bytes,
+    initiator: Option<&str>,
+) -> Result<Response> {
     let deadline = document_timeout();
     let u = Url::parse(url).with_context(|| format!("invalid URL: {url}"))?;
+    let init = initiator.and_then(|s| Url::parse(s).ok());
     let headers = [("content-type", content_type)];
-    let resp =
-        match tokio::time::timeout(deadline, send_once("POST", &u, &headers, body, None)).await {
-            Ok(r) => r?,
-            Err(_) => bail!(
-                "POST to {url} exceeded the {:.0}s document deadline",
-                deadline.as_secs_f32()
-            ),
-        };
+    let resp = match tokio::time::timeout(
+        deadline,
+        send_once("POST", &u, &headers, body, init.as_ref()),
+    )
+    .await
+    {
+        Ok(r) => r?,
+        Err(_) => bail!(
+            "POST to {url} exceeded the {:.0}s document deadline",
+            deadline.as_secs_f32()
+        ),
+    };
     // POST→redirect→GET: follow a redirect as a GET of its Location, reusing the GET redirect chain
     // (which carries its own cookie attach + further-redirect handling).
     if (300..400).contains(&resp.status) {
@@ -1455,6 +1472,7 @@ mod tests {
                 &format!("http://{addr}/login"),
                 "application/x-www-form-urlencoded",
                 Bytes::from_static(b"user=ada&pw=hunter2"),
+                None,
             ))
             .expect("post_document");
 
@@ -1473,6 +1491,83 @@ mod tests {
             resp.final_url.as_str().ends_with("/landed"),
             "final_url must be the redirect target, got: {}",
             resp.final_url
+        );
+    }
+
+    /// **The cross-site POST-navigation CSRF gate.** A `SameSite=Lax` session cookie must ride an
+    /// ordinary **same-site** login POST (or the user lands logged out) but must be **withheld** on a
+    /// **cross-site** form POST — the CSRF case where `evil.example` auto-submits a POST to the
+    /// target with the victim's session cookie. RED against `post_document` ignoring the initiator
+    /// (attaching the flat jar unconditionally, which shipped `Lax` cross-site).
+    #[test]
+    fn post_document_withholds_a_lax_cookie_on_a_cross_site_post() {
+        use std::sync::{Arc, Mutex};
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let rt = rt();
+        let (addr, cookie_lines) = rt.block_on(async {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap().to_string();
+            // The `Cookie:` header of each request the server receives, in arrival order.
+            let cookie_lines: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+            let sink = cookie_lines.clone();
+            tokio::spawn(async move {
+                while let Ok((mut sock, _)) = listener.accept().await {
+                    let sink = sink.clone();
+                    tokio::spawn(async move {
+                        let mut buf = vec![0u8; 4096];
+                        let n = sock.read(&mut buf).await.unwrap_or(0);
+                        let req = String::from_utf8_lossy(&buf[..n]);
+                        let cookie = req
+                            .lines()
+                            .find(|l| l.to_ascii_lowercase().starts_with("cookie:"))
+                            .unwrap_or("")
+                            .to_string();
+                        sink.lock().unwrap().push(cookie);
+                        let _ = sock
+                            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+                            .await;
+                        let _ = sock.flush().await;
+                    });
+                }
+            });
+            (addr, cookie_lines)
+        });
+
+        // A Lax session cookie set by the target origin itself.
+        let target = Url::parse(&format!("http://{addr}/")).unwrap();
+        cookie_jar()
+            .lock()
+            .unwrap()
+            .store(&target, "csrf_sid=secret; SameSite=Lax; Path=/");
+
+        let post = |initiator: Option<&str>| {
+            rt.block_on(post_document(
+                &format!("http://{addr}/action"),
+                "application/x-www-form-urlencoded",
+                Bytes::from_static(b"x=1"),
+                initiator,
+            ))
+            .expect("post_document")
+        };
+
+        // Cross-site initiator (a different registrable domain) → Lax is WITHHELD.
+        post(Some("https://evil.example/"));
+        // Same-site initiator (the target itself) → Lax IS sent.
+        post(Some(&format!("http://{addr}/")));
+
+        let lines = cookie_lines.lock().unwrap();
+        assert_eq!(lines.len(), 2, "server should have seen two POSTs");
+        assert!(
+            !lines[0].contains("csrf_sid"),
+            "cross-site POST must WITHHOLD the Lax cookie, got: {:?}",
+            lines[0]
+        );
+        assert!(
+            lines[1].contains("csrf_sid"),
+            "same-site login POST must SEND the Lax cookie, got: {:?}",
+            lines[1]
         );
     }
 
