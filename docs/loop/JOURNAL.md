@@ -7453,3 +7453,23 @@ isolated); manuk-shell 58+2 green; HANG/CRASH 0. Residue: OS-clipboard `readText
 permissions`, legacy `document.execCommand('copy')`, and clipboard writes off the click path (timer /
 fetch reaction) are not yet pumped. Mechanism: `__clipboardWrite` native + `navigator.clipboard` +
 shell `pump_clipboard`.
+
+## Tick 180 — keyup fires on key release: search-as-you-type sees the settled value (interaction surface) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (interaction surface — the release half of the keyboard trio).
+WIKI: docs/wiki/interaction-surface.md "keyup fires on key release".**
+
+**Hypothesis.** A huge swath of the (jQuery-era and long-tail) web binds search-as-you-type,
+character counters, and shortcut-release logic to `keyup`, not `keydown` — because they want the
+field's *settled* value after the keystroke applied. The shell fires `keydown` (tick 178) and
+`input` (tick 175) on key PRESS, but never fires `keyup` at all, so a `keyup` listener never runs and
+those boxes stay dead. `Page::dispatch_key` is already generic over the event type ("keydown"/"keyup"
+per its doc); the gap is purely that the shell processes only `ElementState::Pressed` and drops every
+`Released`. Fix: on key release, fire `keyup` on the focused field (no default action is associated
+with keyup, so its `preventDefault()` return is irrelevant). Completes the trio: keydown (pre-empt) →
+input (per-keystroke) → keyup (release).
+
+**Gate.** engine/page/src/lib.rs dispatch-events scenario (32): a `keyup` handler on a field reads
+`event.key`/`event.keyCode`; `dispatch_key(node,"keyup","x",…)` fires it and the handler records
+`x:88`. RED against a shell that never dispatches on release. Verify: page suite + manuk-shell green;
+HANG/CRASH 0.

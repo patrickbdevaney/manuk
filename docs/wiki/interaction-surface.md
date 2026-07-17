@@ -493,3 +493,23 @@ after `dispatch_click`, `take_clipboard_writes()` returns exactly that text (and
 click). Residue: OS-clipboard `readText`, the `permissions` query, and the legacy
 `document.execCommand('copy')` path are not wired; a write triggered off the click path (a timer, a
 fetch reaction) is not yet pumped. [[js-engine]]
+
+## `keyup` fires on key release — the settled-value half of the keyboard trio (tick 180)
+
+A large slice of the web — jQuery-era search boxes, character counters, keyboard-shortcut-release
+logic — binds `keyup`, **not** `keydown`, because it wants the field's *settled* value after the
+keystroke has applied. The shell fired `keydown` (tick 178) and `input` (tick 175) on key PRESS but
+processed only `ElementState::Pressed`, dropping every `ElementState::Released` — so a `keyup`
+listener never ran and those boxes stayed dead.
+
+`Page::dispatch_key` was already generic over the event type (`"keydown"`/`"keyup"`), so the fix is
+purely shell wiring: on key release, `dispatch_keyup` fires `keyup` on the focused field via the same
+`key_name_for_dispatch` mapping keydown uses. No default action is associated with `keyup`, so
+`dispatch_key`'s "should the default proceed" return is irrelevant and ignored. Completes the trio:
+`keydown` (pre-empt) → `input` (per-keystroke) → `keyup` (release). Modifier-only releases
+(Ctrl/Shift/Alt) surface no key name, so no spurious `keyup` fires; no focused field → nothing fires.
+
+Gated by `js_conformance` scenario 32: a `keyup` handler reads `event.key`/`event.keyCode`;
+`dispatch_key(node,"keyup","x",…)` fires it and the handler records `x:88` (nothing before release).
+Residue: `keyup` fires only for a focused text field (not globally on the document), and `event.code`
+inherits the same key-name approximation as `keydown`. [[dom-semantics]]

@@ -4997,6 +4997,37 @@ mod js_interactive_tests {
         );
         drop(page31);
 
+        // (32) **`keyup` fires on key RELEASE** — the release half of the keyboard trio. A huge swath
+        // of the (jQuery-era) web binds search-as-you-type and character-counters to `keyup`, not
+        // `keydown`, because they want the field's *settled* value after the keystroke. `keydown`
+        // (30) and `input` (27) fire on press; without `keyup` the release listener never runs. No
+        // default action is associated with keyup, so `dispatch_key`'s return is irrelevant here.
+        let html32 = r#"<!doctype html><html><body>
+            <input id="s" value="">
+            <p id="up">-</p>
+            <script>
+              var up = document.getElementById('up');
+              document.getElementById('s').addEventListener('keyup', function (e) {
+                up.textContent = e.key + ':' + e.keyCode;   // read the released key
+              });
+            </script></body></html>"#;
+        let mut page32 = Page::load(html32, "https://ex.test/", &fonts, 800.0);
+        let s32 = manuk_css::query_selector_all(page32.dom(), page32.dom().root(), "#s")[0];
+        let up32 = manuk_css::query_selector_all(page32.dom(), page32.dom().root(), "#up")[0];
+        assert_eq!(
+            page32.dom().text_content(up32),
+            "-",
+            "no keyup handler has run before a key is released"
+        );
+        // A key is released over the focused field → keyup fires carrying event.key + event.keyCode.
+        page32.dispatch_key(s32, "keyup", "x", &fonts, 800.0);
+        assert_eq!(
+            page32.dom().text_content(up32),
+            "x:88",
+            "keyup fires on release with the real event.key and legacy event.keyCode"
+        );
+        drop(page32);
+
         // Tear SpiderMonkey down before this process exits, exactly as the shell and the harness do.
         // Every page above is out of scope by now, so no rooted object outlives its runtime. Leaving
         // the engine up means its C++ static destructors run at exit against a live context and

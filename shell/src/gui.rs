@@ -3142,6 +3142,33 @@ impl App {
         }
     }
 
+    /// Fire `keyup` on the focused field when a key is physically released — the release half of the
+    /// keyboard trio (keydown+input fire on press, tick 178/175). A large slice of the web binds
+    /// search-as-you-type, character counters, and shortcut-release logic to `keyup` because they
+    /// want the field's *settled* value after the keystroke applied. No default action is associated
+    /// with `keyup`, so `dispatch_key`'s "should the default proceed" return is irrelevant here and
+    /// ignored. Modifier-only releases (Ctrl/Shift/Alt) surface no key name, so no spurious keyup
+    /// fires. No focused field → nothing to notify.
+    fn dispatch_keyup(&mut self, key: &Key) {
+        let Some(node) = self.focused_input else {
+            return;
+        };
+        let Some(kname) = key_name_for_dispatch(key) else {
+            return;
+        };
+        let width = self.viewport.width;
+        let fired = self
+            .page
+            .as_mut()
+            .map(|p| {
+                p.dispatch_key(node, "keyup", &kname, &self.fonts, width);
+            })
+            .is_some();
+        if fired {
+            self.rerender();
+        }
+    }
+
     /// E1 keyboard chrome. Returns true when the key was consumed.
     fn handle_key(&mut self, key: &Key, event_loop: &ActiveEventLoop) -> bool {
         let ctrl = self.modifiers.control_key();
@@ -3614,11 +3641,16 @@ impl ApplicationHandler<NavEvent> for App {
                 event_loop.exit();
             }
             WindowEvent::ModifiersChanged(m) => self.modifiers = m.state(),
-            WindowEvent::KeyboardInput { event, .. } => {
-                if event.state == ElementState::Pressed {
+            WindowEvent::KeyboardInput { event, .. } => match event.state {
+                ElementState::Pressed => {
                     self.handle_key(&event.logical_key, event_loop);
                 }
-            }
+                // The release half of the keyboard trio: keydown+input fire on press (above / via
+                // edit), `keyup` fires here on release. Search-as-you-type and char-counters bind it.
+                ElementState::Released => {
+                    self.dispatch_keyup(&event.logical_key);
+                }
+            },
             WindowEvent::Resized(size) => {
                 let (w, h) = (size.width.max(1), size.height.max(1));
                 if let Some(gpu) = &mut self.gpu {
