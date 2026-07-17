@@ -186,3 +186,48 @@ chain is mostly reftest-covered (Bar 2, deferred), so it is gated by unit tests 
 and `percentage_max_height_indefinite_parent_is_none` (asserts a `height:500px; max-height:100%` box stays
 500 inside an auto-height parent). Both proven RED by reverting the respective change. flex/position/
 overflow/sizing flat, HANG/CRASH 0.
+
+## Parent↔child margin collapsing (tick 151)
+
+The last unmodeled piece of CSS2 §8.3.1: for ~150 ticks `layout_block` collapsed **adjacent-sibling**
+margins (`collapse_margins`) but left a documented gap — a parent's margin did not collapse with its
+first/last in-flow **block child's**. That left the child's margin sitting *inside* the parent as a
+spurious gap: the classic `<div class=card><h2>…</h2></div>` where the h2's top margin opened a band of
+card-background above the heading, and the symmetric bottom case where the parent's height double-counted
+the last child's trailing margin.
+
+**When it applies.** A block collapses its top (resp. bottom) margin with its first (resp. last) in-flow
+block child when the box is a plain `display:block`, `overflow:visible`, establishes no BFC, and has **no
+border and no padding on that edge** (`top_margin_collapses` / `bottom_margin_collapses`). Bottom
+additionally requires **auto height** — a definite height fixes the content box, so the margin cannot
+escape. Clearance on the first child, or a leading/trailing out-of-flow (float/abs) child, declines the
+collapse (conservative: never wrong, occasionally incomplete). `overflow:hidden`/`auto`/`scroll` — the
+card/clearfix margin-containing idiom — deliberately does **not** collapse.
+
+**Top — hoist upward.** A cheap left-spine peek `collapse_through_top(node)` computes the first in-flow
+block child's *collapse-through* top margin (its own top margin joined recursively with ITS first block
+child's, down the spine — the h2-margin has to travel up through however many border/padding-less wrappers
+sit between it and the card). `layout_block` folds that into the box's own top margin (`effective_mt`),
+which both raises the box's border-top and is reported as `margin_top` so a grandparent collapses against
+the already-collapsed value. `layout_children` recomputes the identical hoist and places the first block
+`hoist_top` higher, landing it flush at the content top. Using the *same* peek on both sides makes the
+child land exactly at `content_y` regardless of the peek's precision.
+
+**Bottom — escape downward.** `collapse_through_bottom` walks the right spine symmetrically. When the box
+is bottom-eligible and auto-height, that trailing margin is **subtracted from content height** (undoing the
+old "the last in-flow block's trailing margin still occupies the container" line) and collapsed into the
+box's own `margin_bottom` (`effective_mb`), so it escapes below the border-bottom instead of padding the
+parent from the inside.
+
+**Approximation (documented).** The spine walks resolve percentage *vertical* margins against an
+approximate width (the top box's containing-block width, not each level's own content width). px/em
+margins — width-independent and the overwhelming norm — are exact; only a percentage vertical margin deep
+in the spine drifts, and only in where the collapsed margin lands, never in whether the collapse fires.
+
+**Gate.** Four unit tests, the two collapse ones proven RED by disabling the eligibility helpers:
+`parent_child_top_margin_collapses` and `parent_child_bottom_margin_collapses` (child flush / no internal
+gap), plus the eligibility guards `overflow_hidden_contains_child_margin` and
+`top_border_blocks_margin_collapse` (which correctly stay green when collapse is off — they assert
+*non*-collapse). The visible wins are mostly Bar-2 reftests (deferred); the testharness sweep held or
+nudged up — css-flexbox 26.5→26.6%, css-sizing 14.5→14.8%, css-position/overflow/normal-flow flat,
+**HANG/CRASH 0**. Nothing regressed, which is the bar for a mechanism this broad.

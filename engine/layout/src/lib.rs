@@ -34,8 +34,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use manuk_css::{
-    BoxSizing, Clear, ComputedStyle, Dim, Display, Float, Position, Rgba, StyleMap, TextAlign,
-    VerticalAlign, WhiteSpace,
+    BoxSizing, Clear, ComputedStyle, Dim, Display, Float, Overflow, Position, Rgba, StyleMap,
+    TextAlign, VerticalAlign, WhiteSpace,
 };
 use manuk_dom::{Dom, NodeData, NodeId};
 use manuk_text::{FontContext, FontFamily, FontKey};
@@ -1127,6 +1127,28 @@ fn establishes_bfc(s: &ComputedStyle) -> bool {
         )
 }
 
+/// May this block collapse its **top** margin with its first in-flow block child (CSS2 §8.3.1)?
+/// A plain block box, `overflow:visible`, not a BFC root, with no top border and no top padding —
+/// the conditions under which the child's top margin escapes upward through this box. `cw` is the
+/// width the top padding resolves against (this box's containing-block width).
+fn top_margin_collapses(s: &ComputedStyle, cw: f32) -> bool {
+    s.display == Display::Block
+        && s.overflow == Overflow::Visible
+        && !establishes_bfc(s)
+        && s.border_width.top == 0.0
+        && s.padding.top.resolve(cw, 0.0) == 0.0
+}
+
+/// The mirror of [`top_margin_collapses`] for the **bottom** edge: additionally the box must be
+/// auto-height (checked by the caller), so the last child's bottom margin escapes downward.
+fn bottom_margin_collapses(s: &ComputedStyle, cw: f32) -> bool {
+    s.display == Display::Block
+        && s.overflow == Overflow::Visible
+        && !establishes_bfc(s)
+        && s.border_width.bottom == 0.0
+        && s.padding.bottom.resolve(cw, 0.0) == 0.0
+}
+
 /// The max right extent of already-laid-out content (used for shrink-to-fit).
 ///
 /// `origin` is the left edge the subtree was laid out from, so extents are measured **relative** to
@@ -1305,14 +1327,141 @@ fn trace_intrinsic() -> Option<&'static str> {
 }
 
 impl Ctx<'_> {
+    /// The top margin that collapses *through* `node` into a parent-child collapse (CSS2 §8.3.1):
+    /// `node`'s own top margin, joined with its first in-flow block child's collapse-through top
+    /// margin whenever `node` has no top border/padding, `overflow:visible`, and is a normal block.
+    /// The walk follows only the left spine (first in-flow block at each level), so it is O(depth)
+    /// and is depth-bounded against a hostile tree.
+    ///
+    /// `cw` is the width `node`'s vertical margins resolve against (its containing block's content
+    /// width). Percentage vertical margins deeper in the spine are resolved against this same width
+    /// (an approximation — the exact value is each level's own content width); px/em margins, which
+    /// are width-independent and dominate real pages, are exact.
+    fn collapse_through_top(&self, node: NodeId, cw: f32, depth: u32) -> f32 {
+        let s = self.style_of(node);
+        let mt = s.margin.top.resolve(cw, 0.0);
+        if depth > 64 || !top_margin_collapses(s, cw) {
+            return mt;
+        }
+        for k in rendered_children(self.dom, self.styles, node) {
+            // Whitespace-only text produces no box (matches `flush_inline_run`) and does not stop a
+            // following block from being the first in-flow child.
+            if let NodeData::Text(t) = self.dom.data(k) {
+                if t.trim().is_empty() {
+                    continue;
+                }
+                return mt; // real inline text is the first in-flow content
+            }
+            let ks = self.style_of(k);
+            if is_float(ks) || is_out_of_flow_positioned(ks) {
+                return mt; // conservative: an out-of-flow first child declines the collapse
+            }
+            if is_block_level(self.dom, self.styles, k) {
+                return collapse_margins(mt, self.collapse_through_top(k, cw, depth + 1));
+            }
+            return mt; // an inline-level element (inline-block, etc.) is the first in-flow content
+        }
+        mt // no in-flow children
+    }
+
+    /// The mirror of [`collapse_through_top`] for the **bottom** edge (CSS2 §8.3.1): `node`'s own
+    /// bottom margin, joined with its last in-flow block child's collapse-through bottom margin when
+    /// `node` is an auto-height block with no bottom border/padding, `overflow:visible`, and no BFC.
+    /// A definite-height box stops the through-collapse (its content box is fixed). Same left/right
+    /// spine cost and depth bound as the top walk; same percentage-margin width approximation.
+    fn collapse_through_bottom(&self, node: NodeId, cw: f32, depth: u32) -> f32 {
+        let s = self.style_of(node);
+        let mb = s.margin.bottom.resolve(cw, 0.0);
+        // A definite own height (explicit `px`, or `%`/`calc` — the latter would resolve against a
+        // definite parent) separates the bottom margin from the last child's, so no through-collapse.
+        let definite_height = !matches!(s.height, Dim::Auto);
+        if depth > 64 || definite_height || !bottom_margin_collapses(s, cw) {
+            return mb;
+        }
+        for k in rendered_children(self.dom, self.styles, node)
+            .into_iter()
+            .rev()
+        {
+            if let NodeData::Text(t) = self.dom.data(k) {
+                if t.trim().is_empty() {
+                    continue;
+                }
+                return mb; // trailing inline text: the box's content box ends at the text
+            }
+            let ks = self.style_of(k);
+            if is_float(ks) || is_out_of_flow_positioned(ks) {
+                return mb; // conservative: an out-of-flow last child declines the collapse
+            }
+            if is_block_level(self.dom, self.styles, k) {
+                return collapse_margins(mb, self.collapse_through_bottom(k, cw, depth + 1));
+            }
+            return mb;
+        }
+        mb
+    }
+
+    /// The collapse-through bottom margin of `node`'s last in-flow block child, or `0.0` if the last
+    /// in-flow child is not a block or is out of flow. This is the amount that escapes downward out
+    /// of the parent in a bottom collapse.
+    fn trailing_block_collapse_bottom(&self, node: NodeId, cw: f32) -> f32 {
+        for k in rendered_children(self.dom, self.styles, node)
+            .into_iter()
+            .rev()
+        {
+            if let NodeData::Text(t) = self.dom.data(k) {
+                if t.trim().is_empty() {
+                    continue;
+                }
+                return 0.0;
+            }
+            let ks = self.style_of(k);
+            if is_float(ks) || is_out_of_flow_positioned(ks) {
+                return 0.0;
+            }
+            if is_block_level(self.dom, self.styles, k) {
+                return self.collapse_through_bottom(k, cw, 1);
+            }
+            return 0.0;
+        }
+        0.0
+    }
+
+    /// The collapse-through top margin of `node`'s first in-flow block child, or `0.0` if the first
+    /// in-flow child is not a block, is out of flow, or carries clearance (clearance blocks the
+    /// parent-child collapse). This is the amount hoisted out of the parent in a top collapse.
+    fn leading_block_collapse_top(&self, node: NodeId, cw: f32) -> f32 {
+        for k in rendered_children(self.dom, self.styles, node) {
+            if let NodeData::Text(t) = self.dom.data(k) {
+                if t.trim().is_empty() {
+                    continue;
+                }
+                return 0.0;
+            }
+            let ks = self.style_of(k);
+            if is_float(ks) || is_out_of_flow_positioned(ks) {
+                return 0.0;
+            }
+            if is_block_level(self.dom, self.styles, k) {
+                if ks.clear != Clear::None {
+                    return 0.0; // clearance separates the margins — no collapse
+                }
+                return self.collapse_through_top(k, cw, 1);
+            }
+            return 0.0;
+        }
+        0.0
+    }
+
     /// Lay out a block box in a containing block of `cw` px. `y` is the border-bottom
     /// edge of the preceding in-flow sibling (or the container's content-top for the
     /// first child); `prev_margin` is that sibling's trailing collapsible margin (0
     /// if none). The block's top margin collapses with `prev_margin` to decide its
     /// border-box top. Returns the positioned box and its own top/bottom margins.
     ///
-    /// Simplification (documented, CLAUDE.md § verification): parent↔first/last-child
-    /// margin collapsing is not yet modeled — only adjacent-sibling collapsing is.
+    /// Parent↔child margin collapsing (CSS2 §8.3.1) IS modeled: a block with no border/padding on
+    /// an edge, `overflow:visible`, and no BFC collapses that edge's margin with its first/last
+    /// in-flow block child (top via `collapse_through_top`; bottom via `collapse_through_bottom`).
+    /// Adjacent-sibling collapsing is handled by `collapse_margins`.
     #[allow(clippy::too_many_arguments)]
     fn layout_block(
         &self,
@@ -1428,9 +1577,22 @@ impl Ctx<'_> {
         let _ = mr; // right margin does not affect downstream positioning here
 
         let border_x = x + ml;
-        // Collapse this block's top margin with the preceding sibling's trailing
-        // margin to place the border-box top.
-        let border_y = y + collapse_margins(prev_margin, mt);
+        // Parent↔child TOP margin collapse (CSS2 §8.3.1): when this block has no top border/padding,
+        // is `overflow:visible`, and does not establish a BFC, its top margin collapses with its
+        // first in-flow block child's collapse-through top margin. That child's margin escapes
+        // upward — folded into this box's own top margin here, and the child is placed flush to the
+        // content top by `layout_children` (which recomputes the same hoist). `effective_mt` is the
+        // collapsed top margin this box contributes to its own parent, so it is what a grandparent
+        // collapses against.
+        let hoist_top = if top_margin_collapses(&s, cw) {
+            self.leading_block_collapse_top(node, width)
+        } else {
+            0.0
+        };
+        let effective_mt = collapse_margins(mt, hoist_top);
+        // Collapse this block's (possibly child-hoisted) top margin with the preceding sibling's
+        // trailing margin to place the border-box top.
+        let border_y = y + collapse_margins(prev_margin, effective_mt);
         let content_x = border_x + bl + pl;
         let content_y = border_y + bt + pt;
 
@@ -1477,6 +1639,25 @@ impl Ctx<'_> {
             (None, Some(r)) if r > 0.0 => width / r,
             _ => own_definite_h.unwrap_or(content_height),
         };
+        // Parent↔child BOTTOM margin collapse (CSS2 §8.3.1): an auto-height block with no bottom
+        // border/padding, `overflow:visible`, not a BFC, collapses its bottom margin with its last
+        // in-flow block child's. `layout_children` returned a height that INCLUDES that trailing
+        // child margin ("still occupies the container"); here it escapes — removed from this box's
+        // content height and collapsed into its own bottom margin (`effective_mb`, reported so the
+        // parent collapses correctly). `hoist_bottom` mirrors the actual trailing margin for px/em.
+        let mut effective_mb = mb;
+        let hoist_bottom = if own_definite_h.is_none()
+            && s.aspect_ratio.is_none()
+            && bottom_margin_collapses(&s, cw)
+        {
+            self.trailing_block_collapse_bottom(node, width)
+        } else {
+            0.0
+        };
+        if hoist_bottom != 0.0 {
+            content_height = (content_height - hoist_bottom).max(0.0);
+            effective_mb = collapse_margins(mb, hoist_bottom);
+        }
         // min-height / max-height clamp (content-box).
         let min_h = (s.min_height.resolve(pch.unwrap_or(0.0), 0.0) - bs_extra_h).max(0.0);
         let max_h = match s.max_height {
@@ -1570,8 +1751,8 @@ impl Ctx<'_> {
 
         BlockResult {
             boxx,
-            margin_top: mt,
-            margin_bottom: mb,
+            margin_top: effective_mt,
+            margin_bottom: effective_mb,
             flow_bottom,
         }
     }
@@ -1690,6 +1871,18 @@ impl Ctx<'_> {
         let mut prev_margin = 0.0f32;
         let mut inline_run: Vec<NodeId> = Vec::new();
 
+        // Parent↔child TOP margin collapse (CSS2 §8.3.1): if THIS container collapses its top margin
+        // with its first in-flow block child, that child is placed flush to the content top — its
+        // leading margin has escaped upward (folded into the container's own top margin by
+        // `layout_block`, which recomputes the identical hoist). Placing the first block `hoist_top`
+        // higher lands it exactly at `cy`. `first_block` restricts the shift to that first block.
+        let hoist_top = if top_margin_collapses(self.style_of(node), cw) {
+            self.leading_block_collapse_top(node, cw)
+        } else {
+            0.0
+        };
+        let mut first_block = true;
+
         for &k in &kids {
             let ks = self.style_of(k);
             if is_float(ks) {
@@ -1739,11 +1932,19 @@ impl Ctx<'_> {
                         prev_margin = 0.0;
                     }
                 }
-                let r = self.layout_block(k, cw, pch, cx, cur_y, prev_margin, floats);
+                // The first in-flow block is placed `hoist_top` higher so it lands flush at the
+                // container's content top (its top margin escaped into the container's own margin).
+                let child_y = if first_block {
+                    cur_y - hoist_top
+                } else {
+                    cur_y
+                };
+                let r = self.layout_block(k, cw, pch, cx, child_y, prev_margin, floats);
                 // Stack against the normal-flow bottom (relative shifts are visual).
                 cur_y = r.flow_bottom;
                 prev_margin = r.margin_bottom;
                 boxes.push(r.boxx);
+                first_block = false;
             } else {
                 inline_run.push(k);
             }
@@ -3941,6 +4142,103 @@ mod tests {
         assert!(
             (box_h - 500.0).abs() < 1.0,
             "max-height:100% against an indefinite parent is `none`; box should stay 500px, got {box_h}"
+        );
+    }
+
+    fn by_id(dom: &Dom, id: &str) -> NodeId {
+        dom.descendants(dom.root())
+            .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+            .unwrap_or_else(|| panic!("id={id}"))
+    }
+
+    /// Parent↔child TOP margin collapse (CSS2 §8.3.1): a child's top margin escapes *upward* through
+    /// a parent with no top border/padding, `overflow:visible`, and no BFC. The child lands flush at
+    /// the parent's content top, and the parent gains no internal gap. Before this, the 40px margin
+    /// sat inside `#outer` — the h1-margin-inside-a-card gap on every content page.
+    #[test]
+    fn parent_child_top_margin_collapses() {
+        let html = r#"<div id="outer"><div id="inner">x</div></div>"#;
+        let css = "body{margin:0} #inner{margin-top:40px;height:20px}";
+        let (dom, root) = layout_html(html, css, 400.0);
+        let rects = root.node_rects(&dom);
+        let outer = rects[&by_id(&dom, "outer")];
+        let inner = rects[&by_id(&dom, "inner")];
+        assert!(
+            (inner.y - outer.y).abs() < 1.0,
+            "top margin must collapse: #inner flush at #outer content top (inner.y={}, outer.y={})",
+            inner.y,
+            outer.y
+        );
+        assert!(
+            (outer.height - inner.height).abs() < 1.0,
+            "#outer must not carry a 40px internal gap (outer.h={}, inner.h={})",
+            outer.height,
+            inner.height
+        );
+    }
+
+    /// Parent↔child BOTTOM margin collapse: the last child's bottom margin escapes *downward* out of
+    /// an auto-height parent with no bottom border/padding. `#outer`'s border-bottom lines up with
+    /// `#inner`'s; the 40px does not double-count as parent content height (the old behaviour, which
+    /// returned a height that still included the trailing margin).
+    #[test]
+    fn parent_child_bottom_margin_collapses() {
+        let html = r#"<div id="outer"><div id="inner">x</div></div>"#;
+        let css = "body{margin:0} #inner{margin-bottom:40px;height:20px}";
+        let (dom, root) = layout_html(html, css, 400.0);
+        let rects = root.node_rects(&dom);
+        let outer = rects[&by_id(&dom, "outer")];
+        let inner = rects[&by_id(&dom, "inner")];
+        assert!(
+            ((outer.y + outer.height) - (inner.y + inner.height)).abs() < 1.0,
+            "bottom margin must collapse: #outer bottom == #inner bottom (outer_b={}, inner_b={})",
+            outer.y + outer.height,
+            inner.y + inner.height
+        );
+        assert!(
+            (outer.height - inner.height).abs() < 1.0,
+            "#outer must not carry a 40px internal gap at the bottom (outer.h={}, inner.h={})",
+            outer.height,
+            inner.height
+        );
+    }
+
+    /// Eligibility gate: `overflow:hidden` is a margin-containing block (the clearfix/card idiom), so
+    /// the child's top margin is CONTAINED — `#inner` sits 40px below `#outer`'s top, not flush. This
+    /// is why the collapse must not fire on every block; a page that adds `overflow:hidden` to keep a
+    /// child's margin in relies on exactly this.
+    #[test]
+    fn overflow_hidden_contains_child_margin() {
+        let html = r#"<div id="outer"><div id="inner">x</div></div>"#;
+        let css = "body{margin:0} #outer{overflow:hidden} #inner{margin-top:40px;height:20px}";
+        let (dom, root) = layout_html(html, css, 400.0);
+        let rects = root.node_rects(&dom);
+        let outer = rects[&by_id(&dom, "outer")];
+        let inner = rects[&by_id(&dom, "inner")];
+        assert!(
+            (inner.y - (outer.y + 40.0)).abs() < 1.0,
+            "overflow:hidden contains the child margin: #inner 40px below #outer top (inner.y={}, outer.y={})",
+            inner.y,
+            outer.y
+        );
+    }
+
+    /// Eligibility gate: a top border separates the two margins (CSS2 §8.3.1), so no collapse —
+    /// `#inner` sits border(5px)+margin(40px) below `#outer`'s top. Proves the border/padding guard.
+    #[test]
+    fn top_border_blocks_margin_collapse() {
+        let html = r#"<div id="outer"><div id="inner">x</div></div>"#;
+        let css =
+            "body{margin:0} #outer{border-top:5px solid black} #inner{margin-top:40px;height:20px}";
+        let (dom, root) = layout_html(html, css, 400.0);
+        let rects = root.node_rects(&dom);
+        let outer = rects[&by_id(&dom, "outer")];
+        let inner = rects[&by_id(&dom, "inner")];
+        assert!(
+            (inner.y - (outer.y + 45.0)).abs() < 1.0,
+            "top border blocks collapse: #inner 5px(border)+40px(margin) below #outer top (inner.y={}, outer.y={})",
+            inner.y,
+            outer.y
         );
     }
 

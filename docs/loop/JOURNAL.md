@@ -6544,3 +6544,35 @@ unchanged; instrument fidelity up (two new falsifiable layout gates). No invaria
 spec-cited, root-only percentage change; auto-height pages untouched. Mechanism in
 [[box-layout]]. Next lever on row 4: the inline-whitespace edge (`a<b>b</b>` spacing) or margin-collapse
 parent↔child (explicitly unmodeled in `layout_block`).
+
+## Tick 151 — parent↔child margin collapsing (top + bottom); the last row-4 layout mechanism (2026-07-17)
+
+**TICK SHAPE: layout-mechanism (CSS-LAYOUT phase-mandate row 4 — block/inline edges). WIKI: box-layout.**
+Row 4's remaining unmet piece after t150's %-height half. Two candidates were flagged: the inline-space
+edge (`a<b>b</b>`) and parent↔child margin collapse. The inline-space edge PROBED CLEAN — `pending_space`
+already stays false across adjacent inline elements with no source whitespace, and collapses to one space
+when whitespace is present, so `a<b>b</b>` already gains no space. The real gap is **parent↔child margin
+collapsing (CSS2 §8.3.1)**, documented as an explicit simplification in `layout_block` for ~150 ticks.
+
+**Hypothesis.** Two symmetric bugs, both leaving a spurious gap of the child's margin *inside* the parent:
+(1) TOP — a block with no top border/padding, `overflow:visible`, not a BFC, does NOT collapse its top
+margin with its first in-flow block child's top margin; the child's margin sits below the parent's
+content-top instead of escaping upward (`<div><h1>` shows an h1-margin gap inside the div's background).
+(2) BOTTOM — the same block does not collapse its bottom margin with its last in-flow block child's;
+`layout_children` returns a height that *includes* the trailing child margin (the "still occupies the
+container" line), so the margin is double-counted (inside the parent AND added again below it).
+
+**Fix.** A cheap left-spine peek `collapse_through_top(node)` (depth-bounded, O(spine)) computes the
+first-in-flow-block child's collapse-through top margin; `layout_block` folds it into the box's own top
+margin (raising the box, placing the child flush at content-top) and reports the collapsed value as
+`margin_top` so a grandparent collapses correctly. BOTTOM: `layout_children` now also returns the trailing
+collapsible margin; when the box is bottom-eligible and auto-height, that margin is subtracted from
+content-height and collapsed into the box's own `margin_bottom`. Eligibility is conservative
+(`display:block`, `overflow:visible`, no border/padding on that edge, not a BFC, clearance blocks the top
+collapse) — a leading/trailing out-of-flow child or clearance declines the collapse rather than risk it.
+
+**Gate.** Unit tests proven RED by reverting: `parent_child_top_margin_collapses`,
+`parent_child_bottom_margin_collapses`, `overflow_hidden_contains_child_margin` (no collapse),
+`top_border_blocks_margin_collapse`. Regression sweep across css-flexbox/position/overflow/sizing/CSS2
+normal-flow with HANG/CRASH 0. Approximation documented: percentage vertical margins deep in the spine
+resolve against an approximate width (px/em — the norm — are exact).

@@ -36,6 +36,7 @@
   - L107 · An intrinsic-keyword height is INDEFINITE — not the same as auto (tick 146)
   - L137 · A position:relative percentage top/bottom resolves against the containing-block HEIGHT (tick 147)
   - L159 · Percentage heights resolve against the initial containing block, and max-height:% on an indefinite parent is none (tick 150)
+  - L190 · Parent↔child margin collapsing (tick 151)
 
 ## BUILD AND DEPENDENCIES — what is actually compiled, and what only looks like it is
 `docs/wiki/build-and-dependencies.md`
@@ -395,4 +396,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-322 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+323 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
