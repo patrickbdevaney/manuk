@@ -4794,6 +4794,55 @@ mod js_interactive_tests {
         );
         drop(page28);
 
+        // (29) **`XMLHttpRequest.abort()` honours the cancellation** — a late response must not fire
+        // `onload`. `abort()` was a no-op, so a cancelled request still applied its response when it
+        // arrived (a search-as-you-type box that aborts the stale request would clobber the new
+        // result with the old — the classic race). Now abort drops the pending callback and fires
+        // `abort`+`loadend`; a subsequent host delivery for that id is a no-op.
+        let html29 = r#"<!doctype html><html><body>
+            <div id="x" data-onload="no" data-onabort="no" data-loadend="no">idle</div>
+            <script>
+              var el = document.getElementById('x');
+              var r = new XMLHttpRequest();
+              r.open('GET', '/slow');
+              r.onload = function () { el.setAttribute('data-onload', 'FIRED'); };
+              r.onabort = function () { el.setAttribute('data-onabort', 'fired'); };
+              r.onloadend = function () { el.setAttribute('data-loadend', 'fired'); };
+              r.send();
+              r.abort();
+            </script></body></html>"#;
+        let mut page29 = Page::load(html29, "https://ex.test/", &fonts, 800.0);
+        let x29 = manuk_css::query_selector_all(page29.dom(), page29.dom().root(), "#x")[0];
+        // The request was still queued (abort doesn't unsend a drained request); deliver it LATE.
+        let reqs29 = page29.take_fetches();
+        assert_eq!(reqs29.len(), 1, "the XHR queued its request");
+        page29.resolve_fetch(reqs29[0].0, 200, "STALE-BODY", &[], &fonts, 800.0);
+        assert_eq!(
+            page29
+                .dom()
+                .element(x29)
+                .and_then(|e| e.attr("data-onload")),
+            Some("no"),
+            "an aborted XHR must NOT fire onload when the (now stale) response arrives"
+        );
+        assert_eq!(
+            page29
+                .dom()
+                .element(x29)
+                .and_then(|e| e.attr("data-onabort")),
+            Some("fired"),
+            "abort() fires the abort event"
+        );
+        assert_eq!(
+            page29
+                .dom()
+                .element(x29)
+                .and_then(|e| e.attr("data-loadend")),
+            Some("fired"),
+            "abort() fires loadend"
+        );
+        drop(page29);
+
         // Tear SpiderMonkey down before this process exits, exactly as the shell and the harness do.
         // Every page above is out of scope by now, so no rooted object outlives its runtime. Leaving
         // the engine up means its C++ static destructors run at exit against a live context and

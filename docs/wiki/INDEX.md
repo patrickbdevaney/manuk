@@ -327,6 +327,7 @@
   - L320 · Response headers are readable — headers.get() is not hard-coded to null
   - L354 · fetch(url, {signal}) honours AbortController — cancellation is not a no-op
   - L382 · fetch(FormData) sends multipart/form-data — a File is uploaded, not dropped
+  - L413 · XMLHttpRequest.abort() honours the cancellation — a late response no longer fires onload
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -415,4 +416,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-342 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+343 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

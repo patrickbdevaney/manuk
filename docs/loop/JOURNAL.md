@@ -7371,3 +7371,27 @@ against baseline (no `dispatch_blur`). Verified: suite passes (spidermonkey, iso
 58+2 green; HANG/CRASH 0. Residue: a PROGRAMMATIC focus move records the new `focus_value` but does not
 yet fire `blur` on the old field; `focus`/`focusin`/`focusout` and `keydown`/`keyup` are separate
 mechanisms. Mechanism: `Page::dispatch_blur` + shell `focus_input`/`blur_focused_input` chokepoint.
+
+## Tick 177 — XMLHttpRequest.abort() honours the cancellation (JS platform — the XHR twin of t172) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (T2 JS-platform — XHR request cancellation, the XHR twin of tick
+172's fetch/AbortSignal). WIKI: docs/wiki/networking.md "`XMLHttpRequest.abort()` honours the
+cancellation — a late response no longer fires `onload`". Fully manuk-owned JS glue.**
+
+`XMLHttpRequest.prototype.abort` was `function() {}` — a no-op. A cancelled XHR still fired `onload`
+with its full response when the host delivered it: a search-as-you-type box that aborts the stale
+request per keystroke applied the OLD response over the new (the classic stale-result race), and every
+request library's XHR cancel path did nothing.
+
+**Fix (event_loop.rs).** `abort()` now `delete`s the request from `__xhrObj` — so a later
+`__deliverXhr(id, …)` finds no object and is a no-op (the response cannot resolve a cancelled request;
+the same drop-the-callback mechanism as tick 172's fetch abort) — resets `status`/`responseText`, and
+fires `readystatechange` → `abort` → `loadend` (the XHR standard's abort() event order), leaving
+`readyState` UNSENT. Added `onabort`/`onloadend` to the XHR constructor.
+
+**Gate.** `js_conformance_suite` scenario (29): an XHR with `onload`/`onabort`/`onloadend` handlers,
+`send()` then `abort()`, then a LATE `resolve_fetch(id, 200, "STALE-BODY")` — `onload` must NEVER fire
+(`data-onload` stays `no`), and `abort`+`loadend` fired. RED against baseline (no-op abort → onload
+fires → `data-onload=FIRED`). Verified: suite passes (spidermonkey, isolated); manuk-js
+`fetch_and_xhr_through_the_loop` passes isolated (non-abort path unchanged); HANG/CRASH 0. Residue: an
+`AbortSignal` passed to an XHR (rare) is still unwired. Mechanism: `XMLHttpRequest.prototype.abort`.

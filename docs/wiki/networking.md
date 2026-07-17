@@ -409,3 +409,19 @@ text/JSON upload is exact and a true-binary upload rides the existing one-char-p
 `FormData` detection is a duck-typed `__isFormData` flag rather than `instanceof FormData` (the
 constructor can be shadowed). The native `<form enctype="multipart/form-data">` submission path (not
 the JS `fetch`/XHR path) is a separate mechanism.
+
+## `XMLHttpRequest.abort()` honours the cancellation — a late response no longer fires `onload`
+
+`abort()` was `function() {}` — a literal no-op. So a cancelled XHR still fired `onload` with its full
+response the moment the host delivered it: a search-as-you-type box that fires a request per keystroke
+and `abort()`s the stale one would **apply the old response over the new** (the classic stale-result
+race), and every request library's XHR cancel path did nothing. This is the XHR twin of the tick-172
+`fetch`/AbortSignal gap.
+
+**The fix drops the pending callback and fires the abort events.** `abort()` now `delete`s the request
+from `__xhrObj`, so a later `__deliverXhr(id, …)` finds no object and is a **no-op** — the response
+cannot resolve a cancelled request (the same drop-the-callback mechanism `fetch`'s abort uses). It
+resets `status`/`responseText` to the cancelled state and fires `readystatechange` → `abort` →
+`loadend` (the XHR standard's abort() event order), leaving `readyState` at `UNSENT`. Residue: an
+`AbortSignal` passed to an XHR (rare) is still not wired; `abort()` on an already-delivered request is
+a no-op (correct).

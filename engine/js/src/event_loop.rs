@@ -247,6 +247,7 @@ const PRELUDE: &str = r#"
         this.readyState = 0; this.status = 0; this.statusText = "";
         this.responseText = ""; this.response = ""; this.responseType = "";
         this.onload = null; this.onerror = null; this.onreadystatechange = null;
+        this.onabort = null; this.onloadend = null;
         this._m = "GET"; this._u = ""; this._id = null; this._h = []; this._respHeaders = [];
     };
     XMLHttpRequest.prototype.open = function(m, u) { this._m = m || "GET"; this._u = u || ""; this._h = []; this.readyState = 1; };
@@ -264,7 +265,23 @@ const PRELUDE: &str = r#"
         for (var i = 0; i < h.length; i++) { if (String(h[i][0]).toLowerCase() === name) vals.push(h[i][1]); }
         return vals.length ? vals.join(", ") : null;
     };
-    XMLHttpRequest.prototype.abort = function() {};
+    // Cancel an in-flight request. This was a **no-op**, so an aborted XHR still fired `onload` with
+    // the full response when the host delivered it — a search-as-you-type box that fires a request per
+    // keystroke and `abort()`s the stale one would apply the OLD response over the new (the classic
+    // race), and any request library's cancel path did nothing. Now abort drops the pending callback
+    // (a late `__deliverXhr` for this id finds no object and is a no-op — the response cannot resolve a
+    // cancelled request) and fires `readystatechange` → `abort` → `loadend`, per the XHR standard.
+    XMLHttpRequest.prototype.abort = function() {
+        if (this._id != null) { delete __xhrObj[this._id]; }
+        this.status = 0; this.statusText = ""; this.responseText = ""; this.response = "";
+        this._respHeaders = [];
+        this.readyState = 4; // DONE while the events fire...
+        if (typeof this.onreadystatechange === 'function') { try { this.onreadystatechange(); } catch (e) {} }
+        var ev = { type: 'abort', target: this };
+        if (typeof this.onabort === 'function') { try { this.onabort(ev); } catch (e) {} }
+        if (typeof this.onloadend === 'function') { try { this.onloadend({ type: 'loadend', target: this }); } catch (e) {} }
+        this.readyState = 0; // ...then back to UNSENT (XHR standard's abort() steps).
+    };
     XMLHttpRequest.prototype.send = function(body) {
         var id = ++__fetchId; __xhrObj[id] = this; this._id = id;
         var hdrs = __encHeaders(this._h);
