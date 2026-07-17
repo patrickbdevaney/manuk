@@ -378,3 +378,34 @@ failure (a cancel is expected and swallowed; a failure is surfaced). The default
 `XMLHttpRequest.prototype.abort()` is still a no-op (the XHR cancel path is a separate, rarer lever —
 `fetch` is what the frameworks use), and `AbortSignal.timeout()` marks the signal aborted but does not
 yet reject an in-flight fetch bound to it (needs the timer to route through the same drop path).
+
+## `fetch(FormData)` sends multipart/form-data — a File is uploaded, not dropped
+
+A `FormData` body has exactly one correct wire encoding: **`multipart/form-data`**. It is the only
+encoding that can carry a file, which is the entire reason `FormData` exists. But `fetch(url, {body:
+fd})` did `String(fd)`, and `FormData.toString()` is **urlencoded** — so a File part became
+`String(file)` = `"[object File]"`. Every uploaded avatar, attachment, and document was **silently
+dropped** and replaced with that placeholder; the server received a text field named after the input
+whose value was the string `[object File]`, and the upload "succeeded" with no file. This is the
+read/write mirror of the other silent-drop bugs (tick 148's dropped request headers, tick 167's
+dropped multi-select values): the request reached the server *structurally intact but missing its
+payload*.
+
+**The fix encodes a FormData body as multipart, for both `fetch` and `XMLHttpRequest.send`.** A new
+`FormData.prototype.__multipart(boundary)` walks the parts: a value that is a Blob/File (detected by
+its `__blobText`) is emitted with `Content-Disposition: form-data; name="…"; filename="…"`, its own
+`Content-Type`, and its content; a plain value is a simple text part. `fetch`/`send` generate the
+boundary (`__multipartBoundary()` — `Math.random`-based, which is fine because a boundary only needs
+to not occur in the body, not to be unguessable) and set `Content-Type: multipart/form-data;
+boundary=…`, **replacing** any page-set Content-Type — because only the browser knows the boundary, a
+page that set its own Content-Type for a FormData body would produce an unparseable request, so every
+browser overrides it (`__withContentType` strips the old one first). `FormData.toString()` stays
+urlencoded for the code that stringifies a FormData directly (`new URLSearchParams(fd)`); only the
+request-body path changed.
+
+**Bounds/residue.** A File's content is the Blob's `__blobText` (a JS string; the engine has no
+byte-accurate binary body path yet — the same lossy-UTF-8 limitation the Blob layer already has), so a
+text/JSON upload is exact and a true-binary upload rides the existing one-char-per-byte convention.
+`FormData` detection is a duck-typed `__isFormData` flag rather than `instanceof FormData` (the
+constructor can be shadowed). The native `<form enctype="multipart/form-data">` submission path (not
+the JS `fetch`/XHR path) is a separate mechanism.

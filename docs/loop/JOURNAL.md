@@ -7280,3 +7280,37 @@ exist). Verified: shell suite 57→58 green, `visited` 4 green, HANG/CRASH 0. Re
 history-management UI (clear-history / delete-entry) yet; the frecency curve is simple
 (count + normalized recency), not Chrome's decaying-bucket model; typed-URL vs link-follow visits are
 weighted equally. Mechanism: `visited::VisitedHistory` + `SessionStore` history + `record_visit`.
+
+## Tick 174 — fetch(FormData)/XHR sends multipart/form-data — files no longer silently dropped (JS platform — T4 lever) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (T4 forms — the FormData file-upload body encoding). WIKI:
+docs/wiki/networking.md "`fetch(FormData)` sends multipart/form-data — a File is uploaded, not
+dropped". Fully manuk-owned JS glue (event_loop + dom_bindings FormData), NOT stylo.**
+
+A `FormData` body has one correct wire encoding — `multipart/form-data`, the only one that can carry a
+file. But `fetch(url, {body: fd})` did `String(fd)` and `FormData.toString()` is **urlencoded**, so a
+File part became `String(file)` = `"[object File]"`: every uploaded avatar/attachment/document was
+**silently dropped** and the server got a text field valued `[object File]`. (Read/write mirror of the
+t148 dropped-request-headers and t167 dropped-multi-select silent-drop class.)
+
+**Fix.** New `FormData.prototype.__multipart(boundary)` (dom_bindings.rs): each field a part; a Blob/File
+(duck-typed by `__blobText`) emitted with `Content-Disposition: …; name; filename`, its own
+`Content-Type`, and content; a plain value a text part. `fetch` and `XMLHttpRequest.send`
+(event_loop.rs) detect a FormData body via a duck-typed `__isFormData` flag (the constructor can be
+shadowed), generate a boundary (`__multipartBoundary()`, Math.random — a boundary only needs to not
+occur in the body, not be unguessable), and set `Content-Type: multipart/form-data; boundary=…`,
+**replacing** any page-set Content-Type via `__withContentType` (only the browser knows the boundary,
+so a page-set one would make the request unparseable — every browser overrides it). `toString()` stays
+urlencoded for `new URLSearchParams(fd)`; only the request-body path changed. Per spec a FormData body
+is ALWAYS multipart (text-only too); no existing gate depended on the urlencoded-FormData-fetch
+behaviour.
+
+**Gate.** `js_conformance_suite` scenario (26): a FormData with a text field + `new File(['FILE-
+CONTENT-BYTES'], 'a.txt', {type:'text/plain'})` POSTed via `fetch`; `take_fetches()` shows the request
+has `Content-Type: multipart/form-data; boundary=…` and a well-formed body carrying the field value,
+`filename="a.txt"`, `Content-Type: text/plain`, the file CONTENT, and the closing `--boundary--`. RED
+against baseline (urlencoded body, `[object File]`, no boundary). Verified: suite passes (spidermonkey,
+isolated); manuk-js `fetch_and_xhr_through_the_loop` + `…_carry_request_headers` pass isolated
+(non-FormData path unchanged); HANG/CRASH 0. Residue: File content is a JS string (no byte-accurate
+binary body path — same lossy-UTF-8 limit as the Blob layer); native `<form enctype=multipart>` submit
+is a separate mechanism. Mechanism: `FormData.__multipart` + fetch/XHR body encoding.

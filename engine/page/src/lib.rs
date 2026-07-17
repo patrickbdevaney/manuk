@@ -4573,6 +4573,58 @@ mod js_interactive_tests {
         );
         drop(page25);
 
+        // (26) **`fetch(url, {body: FormData})` sends `multipart/form-data`, so a File is uploaded.**
+        // A FormData body used to be `String(fd)` → urlencoded, which turns a File part into the
+        // literal `"[object File]"` — every uploaded avatar/attachment/document was **silently
+        // dropped**. Now a FormData body is multipart with a browser-generated boundary, each field a
+        // part, each File carrying its filename + type + content.
+        let html26 = r#"<!doctype html><html><body>
+            <script>
+              var fd = new FormData();
+              fd.append('field', 'hello world');
+              fd.append('upload', new File(['FILE-CONTENT-BYTES'], 'a.txt', { type: 'text/plain' }));
+              fetch('/upload', { method: 'POST', body: fd });
+            </script></body></html>"#;
+        let page26 = Page::load(html26, "https://ex.test/", &fonts, 800.0);
+        let reqs26 = page26.take_fetches();
+        assert_eq!(reqs26.len(), 1, "the FormData fetch was queued");
+        let (_id, url, method, headers, body) = &reqs26[0];
+        assert_eq!(url, "/upload");
+        assert_eq!(method, "POST");
+        // The Content-Type is multipart with a boundary the browser chose (not any page-set value).
+        let ct = headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("content-type"))
+            .map(|(_, v)| v.as_str())
+            .unwrap_or("");
+        assert!(
+            ct.starts_with("multipart/form-data; boundary="),
+            "FormData body must send multipart/form-data, got {ct:?}"
+        );
+        let boundary = ct.trim_start_matches("multipart/form-data; boundary=");
+        assert!(!boundary.is_empty(), "the multipart boundary is set");
+        // The body is well-formed multipart carrying BOTH the text field and the file's real content.
+        assert!(
+            body.contains(&format!("--{boundary}")),
+            "the body is delimited by the declared boundary"
+        );
+        assert!(
+            body.contains("Content-Disposition: form-data; name=\"field\"")
+                && body.contains("hello world"),
+            "the text field is a part (got {body:?})"
+        );
+        assert!(
+            body.contains("Content-Disposition: form-data; name=\"upload\"; filename=\"a.txt\"")
+                && body.contains("Content-Type: text/plain")
+                && body.contains("FILE-CONTENT-BYTES"),
+            "the File is uploaded with filename + type + CONTENT, not dropped as [object File] (got {body:?})"
+        );
+        assert!(
+            body.trim_end().ends_with(&format!("--{boundary}--")),
+            "the multipart body has its closing boundary"
+        );
+        drop(page26);
+
         // Tear SpiderMonkey down before this process exits, exactly as the shell and the harness do.
         // Every page above is out of scope by now, so no rooted object outlives its runtime. Leaving
         // the engine up means its C++ static destructors run at exit against a live context and

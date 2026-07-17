@@ -181,6 +181,23 @@ const PRELUDE: &str = r#"
         }
         return out.join("\x02");
     };
+    // A unique multipart boundary. Not security-sensitive (it only needs to not occur in the body),
+    // so `Math.random` is fine; two draws make an accidental collision astronomically unlikely.
+    globalThis.__multipartBoundary = function(){
+        return "----manukFormBoundary" + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    };
+    // Return the `\x02`-encoded header list with `Content-Type` forced to `ctype` — any existing
+    // Content-Type (case-insensitive) is dropped first, because for a multipart body only the browser
+    // knows the boundary, so a page-set Content-Type must not survive.
+    globalThis.__withContentType = function(hdrs, ctype){
+        var parts = hdrs ? hdrs.split("\x02") : [];
+        var out = [];
+        for (var i = 0; i + 1 < parts.length; i += 2) {
+            if (parts[i].toLowerCase() !== "content-type") { out.push(parts[i], parts[i + 1]); }
+        }
+        out.push("Content-Type", ctype);
+        return out.join("\x02");
+    };
     // fetch(url[, {method, headers, body, signal}]) -> Promise<Response-like>.
     // **`signal` is honoured** — every modern `fetch` passes an `AbortController.signal`, and React's
     // `useEffect` cleanup (and StrictMode's double-mount) *depends* on the abort actually cancelling
@@ -196,8 +213,17 @@ const PRELUDE: &str = r#"
         }
         var id = ++__fetchId;
         var method = (opts && opts.method) || "GET";
-        var body = (opts && opts.body != null) ? String(opts.body) : "";
         var hdrs = (opts && opts.headers) ? __encHeaders(opts.headers) : "";
+        var body;
+        if (opts && opts.body && opts.body.__isFormData) {
+            // A FormData body is multipart/form-data — the browser generates the boundary (the page
+            // cannot know it), so any page-set Content-Type is REPLACED with the multipart one.
+            var boundary = __multipartBoundary();
+            body = opts.body.__multipart(boundary);
+            hdrs = __withContentType(hdrs, "multipart/form-data; boundary=" + boundary);
+        } else {
+            body = (opts && opts.body != null) ? String(opts.body) : "";
+        }
         __pendingFetches.push(id + "\x01f\x01" + method + "\x01" + url + "\x01" + hdrs + "\x01" + body);
         return new Promise(function(resolve, reject){
             __fetchCb[id] = { resolve: resolve, reject: reject };
@@ -242,7 +268,17 @@ const PRELUDE: &str = r#"
     XMLHttpRequest.prototype.send = function(body) {
         var id = ++__fetchId; __xhrObj[id] = this; this._id = id;
         var hdrs = __encHeaders(this._h);
-        __pendingFetches.push(id + "\x01x\x01" + this._m + "\x01" + this._u + "\x01" + hdrs + "\x01" + (body != null ? String(body) : ""));
+        var payload;
+        if (body && body.__isFormData) {
+            // Same as fetch: a FormData body is multipart/form-data with a browser-generated boundary,
+            // so a File part is actually uploaded instead of stringified to "[object File]".
+            var boundary = __multipartBoundary();
+            payload = body.__multipart(boundary);
+            hdrs = __withContentType(hdrs, "multipart/form-data; boundary=" + boundary);
+        } else {
+            payload = (body != null ? String(body) : "");
+        }
+        __pendingFetches.push(id + "\x01x\x01" + this._m + "\x01" + this._u + "\x01" + hdrs + "\x01" + payload);
     };
     globalThis.__deliverXhr = function(id, status, text, headers) {
         var x = __xhrObj[id]; if (!x) return; delete __xhrObj[id];

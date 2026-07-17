@@ -7777,11 +7777,42 @@ const WINDOW_PRELUDE: &str = r#"
                         pairs.push([n, v === undefined || v === null ? '' : v]);
                     }
                 }
-                // urlencoded serialisation, which is what `fetch(url, {body: fd})` sends until
-                // multipart is wired through the JS boundary.
+                // urlencoded serialisation — used by anything that stringifies a FormData directly
+                // (e.g. `new URLSearchParams(fd)`); `fetch`/XHR bodies now go through `__multipart`.
                 this.toString = function () {
                     var enc = function (x) { return encodeURIComponent(String(x)).replace(/%20/g, '+'); };
                     return pairs.map(function (p) { return enc(p[0]) + '=' + enc(p[1]); }).join('&');
+                };
+                // A FormData body is sent as `multipart/form-data`, NOT urlencoded — that is the whole
+                // point of FormData, and the ONLY encoding that can carry a file. Before this, a File
+                // part was `String(file)` = "[object File]", so `fetch(url, {body: fd})` **silently
+                // dropped every uploaded file** (an avatar, an attachment, a document) and sent a
+                // useless placeholder. A part whose value is a Blob/File (has `__blobText`) is emitted
+                // with a `filename` and its own `Content-Type` and body; a plain field is a simple
+                // text part. `this.__isFormData` lets `fetch`/XHR detect a FormData body without an
+                // `instanceof` against a possibly-shadowed constructor.
+                this.__isFormData = true;
+                this.__multipart = function (boundary) {
+                    var CRLF = '\r\n';
+                    var out = '';
+                    pairs.forEach(function (p) {
+                        var name = String(p[0]);
+                        var val = p[1];
+                        out += '--' + boundary + CRLF;
+                        if (val && val.__blobText !== undefined) {
+                            var filename = (val.name !== undefined && val.name !== null)
+                                ? String(val.name) : 'blob';
+                            out += 'Content-Disposition: form-data; name="' + name +
+                                   '"; filename="' + filename + '"' + CRLF;
+                            out += 'Content-Type: ' + (val.type || 'application/octet-stream') + CRLF + CRLF;
+                            out += val.__blobText + CRLF;
+                        } else {
+                            out += 'Content-Disposition: form-data; name="' + name + '"' + CRLF + CRLF;
+                            out += (val === undefined || val === null ? '' : String(val)) + CRLF;
+                        }
+                    });
+                    out += '--' + boundary + '--' + CRLF;
+                    return out;
                 };
             };
         }
