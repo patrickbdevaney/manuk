@@ -952,27 +952,22 @@ impl App {
         self.rerender();
     }
 
-    /// L04 — the navigation resolved to a **download** (server said attachment / binary). Write
-    /// the bytes to the downloads directory (de-duplicating the name), record it for the menu,
-    /// and restore the page the user was on: a download must not replace the current page or
-    /// leave the URL bar pointing at the file. Best-effort restore via the previous history
-    /// entry (re-fetched from the HTTP cache); if there's none, fall back to a blank page.
-    fn finish_download(&mut self, filename: String, bytes: Vec<u8>) {
-        let dir = manuk_net::downloads::download_dir();
-        match manuk_net::downloads::write_download(&dir, &filename, &bytes) {
-            Ok(path) => {
-                tracing::info!(file = %path.display(), bytes = bytes.len(), "download saved");
-                self.downloads.push(DownloadRecord {
-                    filename: path
-                        .file_name()
-                        .map(|s| s.to_string_lossy().into_owned())
-                        .unwrap_or(filename),
-                    path,
-                    bytes: bytes.len(),
-                });
-            }
-            Err(e) => tracing::error!(error = %e, "failed to write download {filename}"),
-        }
+    /// L04 — the navigation resolved to a **download** (server said attachment / binary). The net
+    /// layer already **streamed the file to disk** (at `path`, size `bytes`) — never buffering it in
+    /// RAM nor holding it to the document deadline — so here we only record it for the menu and
+    /// restore the page the user was on: a download must not replace the current page or leave the
+    /// URL bar pointing at the file. Best-effort restore via the previous history entry (re-fetched
+    /// from the HTTP cache); if there's none, fall back to a blank page.
+    fn finish_download(&mut self, filename: String, path: std::path::PathBuf, bytes: u64) {
+        tracing::info!(file = %path.display(), bytes, "download saved");
+        self.downloads.push(DownloadRecord {
+            filename: path
+                .file_name()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or(filename),
+            path,
+            bytes: bytes as usize,
+        });
         // Undo the navigation the download rode in on: go back to the prior page.
         if let Some(prev) = self.history.back().map(str::to_string) {
             self.goto_no_history(&prev);
@@ -3149,9 +3144,11 @@ impl ApplicationHandler<NavEvent> for App {
                     Ok(manuk_page::Loaded::Document { html, final_url }) => {
                         self.finish_load(html, final_url)
                     }
-                    Ok(manuk_page::Loaded::Download { filename, bytes }) => {
-                        self.finish_download(filename, bytes)
-                    }
+                    Ok(manuk_page::Loaded::Download {
+                        filename,
+                        path,
+                        bytes,
+                    }) => self.finish_download(filename, path, bytes),
                     Err(e) => {
                         tracing::error!("load {}: {e}", self.url);
                         self.rerender();

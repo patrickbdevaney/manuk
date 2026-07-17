@@ -3054,6 +3054,61 @@ the observer never fires → the image below the fold never arrives → red).
 images load eagerly. That renders **correctly** and merely fetches more than it must, which is a
 *performance* gap, not a capability one. The capability was never the gap. *The ledger was.*
 
+## Tick 149 — a download **streams to disk** instead of buffering the whole file in RAM under the 30s document deadline (multi-GB weights/installers/datasets OOM'd or were killed mid-transfer; the browser could not save a large file at all)
+
+**TICK SHAPE: capability-mechanism (PULL-FORWARD U-2 — "best ROI/tick"; the layout lever is the intrinsic-leaf-measure subsystem, not a bounded tick). WIKI: networking.**
+
+**Phase mandate + why not a layout row.** Ran `lever-board.sh`; probed the RENDER+INTERACT rows before
+touching code (per the "targets already met" discipline). Row 1 (intrinsic sizing) is the confirmed
+intrinsic-leaf-measure **subsystem** — `css/css-sizing`'s largest cluster is `stretch`/fill-available (967
+subtests), which tick 148 already tried and **reverted** (a correct fill needs margin subtraction + the
+definite-vs-indefinite-CB distinction Taffy resolves to 0). Row 2 (SPA link-intercept / `preventDefault`
+cancels shell nav) is **already wired end-to-end and gated** (`shell/src/gui.rs:502,515` gate on the
+`dispatch_click` return; engine contract gated by `js_conformance` item 2). Row 3 (IntersectionObserver on
+scroll, multi-value `rootMargin`, ResizeObserver) is **already built** (full 1-4-value CSS-shorthand
+`rootMargin` with % resolution + 2-D intersection; RO delivers `contentRect`/`borderBoxSize`). So the
+lowest-numbered *unmet, bounded* target is the pull-forward U-2.
+
+**Root cause (U-2).** A download's body was pulled entirely into a `Vec<u8>` (`resp.body.to_vec()` in
+`page::fetch_document`) after a `manuk_net::fetch_document` call that wraps the WHOLE transfer — connect,
+headers **and body** — in the 30s `document_timeout()`. Two consequences, both making a large file
+un-saveable: (1) a multi-GB file is held in RAM in full (in fact twice — net's buffer + the page's
+`to_vec()` copy + the shell's `Vec<u8>`), and (2) any transfer slower than 30s wall-clock is **killed
+mid-stream** and reported as a network timeout. The download deadline was the *subresource-latency*
+deadline, applied to the one request class where a long transfer is correct.
+
+**Fix (stream, header-gated, own deadline).** New `manuk_net::fetch_document_or_download(url, dir)`: send
+the GET + follow redirects under the normal header deadline, then inspect the response headers ONCE —
+`is_attachment(content-disposition, content-type)`. If it is a download, the decoded body is streamed
+chunk-by-chunk (`stream_body_decoded`, 16 KiB at a time) straight into a `<name>.part` file under the
+download dir with **no body deadline**, then atomically renamed to the deduped suggested filename — the
+file never exists whole in RAM. Otherwise the body is buffered as before (documents are bounded; buffering
+is correct). `Loaded::Download` now carries `{ filename, path, bytes: u64 }` (already on disk) instead of
+`{ filename, bytes: Vec<u8> }`; the shell's `finish_download` records the completed file rather than
+re-writing it.
+
+**Gate (falsifiable).** `manuk-net` test `attachment_streams_to_disk_without_buffering` drives the extracted
+sink `stream_attachment_to_disk` with a **200 000-byte** in-memory body (larger than the 64 KiB read
+buffer, so the stream loop MUST iterate several times) standing in for the decoded socket body, and asserts
+the file lands at the returned `path`, the `.part` file was renamed away, the reported size is the full
+length, and every byte matches on disk in order. Proven RED by construction: before this tick there was no
+stream-to-disk sink at all — the download was `resp.body.to_vec()`, so nothing to call. (A loopback-HTTP
+end-to-end test was *not* used: `manuk-net`'s dev tokio has no `net` feature, and the network round-trip —
+redirects, cookie carry, HTTP cache — is already covered; the new mechanism is the disk sink, which this
+tests directly.) **LANDED green.**
+
+**Regressions guarded against while building (all held).** (1) The document path now goes through the new
+function too, so it re-does — not skips — the HTTP-cache get/put, the wire-request accounting (`NET_REQUESTS`
+/ dedup that G_DEDUP reads), and **cookie carry + `Set-Cookie` storage** (a new `send_raw_with_cookies`
+gives the streaming path `send_once`'s cookie behaviour without buffering — else a logged-in navigation
+would drop its session cookie). (2) A DOCUMENT keeps the whole-fetch `document_timeout` (one shared
+`timeout_at` deadline over headers **and** body — a slow-but-alive server must still not hang the tab, the
+Bar-0 reason the deadline exists); only the DOWNLOAD body escapes it.
+
+**The ratchet.** Capability: **up** — a browser that could not save a file larger than RAM/30s now can.
+Performance: **up** for downloads (wire → disk, zero full-body RAM copies where there were two+). Instrument
+fidelity: **up** — one falsifiable gate. No suite down (all 47 `manuk-net` tests green).
+
 ## Tick 148 — a page's `fetch`/XHR **request headers** reach the wire (Authorization / custom headers were silently dropped; every token-auth read came back 401 and looked like a network fault)
 
 **TICK SHAPE: capability-mechanism (PULL-FORWARD U-1 — the layout lever was blocked; see below). WIKI: networking.**

@@ -303,8 +303,9 @@
   - L141 · SameSite is ASYMMETRIC — and getting it backwards ships the exact CSRF it prevents
   - L160 · Two proxy details that are the difference between privacy and a leak
   - L167 · Charset sniffing is a definitive reuse
-  - L174 · HTTP/2's win is gated on SUBRESOURCES, not on the document fetch
-  - L179 · The bot-wall fingerprint surface is known — and matching it IS the evasion
+  - L174 · A download STREAMS to disk; only a document is buffered
+  - L199 · HTTP/2's win is gated on SUBRESOURCES, not on the document fetch
+  - L204 · The bot-wall fingerprint surface is known — and matching it IS the evasion
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -393,4 +394,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-320 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+321 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

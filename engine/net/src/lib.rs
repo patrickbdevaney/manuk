@@ -586,6 +586,174 @@ pub async fn fetch_document(url: &str) -> Result<Response> {
     fetch_with_deadline(url, document_timeout()).await
 }
 
+/// The outcome of [`fetch_document_or_download`]: a **document** to render (its body buffered — a
+/// document is bounded, so buffering is correct) or a **download** that was streamed **straight to
+/// disk** because the response headers said `attachment` (or a non-renderable binary type).
+pub enum DocOrDownload {
+    Document(Response),
+    /// A file that is **already fully written to disk** at `path`. `bytes` is the on-disk size.
+    Download {
+        path: std::path::PathBuf,
+        filename: String,
+        bytes: u64,
+        final_url: Url,
+    },
+}
+
+/// Fetch `url` (following redirects) and decide, **from the response headers**, whether it is a
+/// document or a download — *without* first pulling the whole body into memory.
+///
+/// **Why this exists (the defect it closes).** The old path buffered the entire response into a
+/// `Vec<u8>` under the 30s [`document_timeout`] and only *then* asked "was this an attachment?". A
+/// multi-GB file (model weights, an installer, a dataset) therefore either exhausted RAM or was
+/// killed mid-transfer at 30s and reported as a network fault — the browser could not save a large
+/// file at all. Here the **header/connect phase keeps the document deadline** (a dead server must
+/// not hang the click), but a download's **body transfer has no deadline** and is streamed decoded,
+/// chunk-by-chunk, into a `.part` sibling file that is atomically renamed on completion. The file
+/// never exists whole in RAM, and a slow-but-alive transfer is allowed to finish.
+pub async fn fetch_document_or_download(url: &str, dir: &std::path::Path) -> Result<DocOrDownload> {
+    // A cached response is, by construction, a document: downloads are never put in the HTTP cache
+    // (they go to disk, below). So a cache hit skips the wire exactly as the document path did.
+    if let Some(cached) = http_cache::get(url) {
+        tracing::debug!(%url, "served from HTTP cache");
+        return Ok(DocOrDownload::Document(cached));
+    }
+    // Wire accounting — identical to `fetch_inner`, so G_DEDUP and the request counters see this
+    // navigation exactly as they did before the split.
+    NET_REQUESTS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    {
+        let netted = NETWORKED.get_or_init(Default::default);
+        let mut g = netted.lock().unwrap();
+        if !g.insert(url.to_string()) {
+            NET_DUPES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            tracing::warn!(%url, "DUPLICATE NETWORK REQUEST — the same URL went to the wire twice");
+        }
+    }
+
+    // A DOCUMENT keeps the old whole-fetch budget (headers **and** body under one deadline — a
+    // slow-but-alive server must not hold the tab hostage, the Bar-0 reason `document_timeout`
+    // exists). A DOWNLOAD's body, in contrast, is deliberately let out from under it below: a
+    // multi-GB transfer taking minutes is correct, not a hang. So one shared deadline covers the
+    // header phase here and the document-body read further down; only the download stream escapes it.
+    let deadline = tokio::time::Instant::now() + document_timeout();
+    let (final_url, resp) = match tokio::time::timeout_at(deadline, async {
+        let mut current = Url::parse(url).with_context(|| format!("invalid URL: {url}"))?;
+        for _ in 0..=MAX_REDIRECTS {
+            let resp = send_raw_with_cookies("GET", &current).await?;
+            let status = resp.status().as_u16();
+            if (300..400).contains(&status) {
+                if let Some(loc) = resp.headers().get(LOCATION).and_then(|v| v.to_str().ok()) {
+                    current = current
+                        .join(loc)
+                        .with_context(|| format!("bad redirect target: {loc}"))?;
+                    continue;
+                }
+            }
+            return Ok::<_, anyhow::Error>((current, resp));
+        }
+        bail!("too many redirects (>{MAX_REDIRECTS}) starting at {url}")
+    })
+    .await
+    {
+        Ok(r) => r?,
+        Err(_) => bail!("timed out reading headers for {url}"),
+    };
+
+    let status = resp.status().as_u16();
+    if status >= 400 {
+        bail!("server returned HTTP {status} for {final_url}");
+    }
+    let http_version = resp.version().into();
+    let headers = collect_headers(&resp);
+    let encoding = content_encoding(&resp);
+    let cd = headers
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case("content-disposition"))
+        .map(|(_, v)| v.as_str());
+    let ct = headers
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case("content-type"))
+        .map(|(_, v)| v.as_str());
+
+    if downloads::is_attachment(cd, ct) {
+        let decoded = wrap_decoder(body_reader(resp.into_body()), encoding.as_deref());
+        let (path, filename, bytes) =
+            stream_attachment_to_disk(cd, &final_url, dir, decoded).await?;
+        return Ok(DocOrDownload::Download {
+            path,
+            filename,
+            bytes,
+            final_url,
+        });
+    }
+
+    // Document: buffer the (bounded) body under the SAME deadline that covered the header phase, so
+    // the total budget matches the old whole-fetch timeout, then cache it exactly as before.
+    let body = match tokio::time::timeout_at(
+        deadline,
+        read_body_decoded(resp.into_body(), encoding.as_deref()),
+    )
+    .await
+    {
+        Ok(b) => b?,
+        Err(_) => bail!("timed out reading document body for {final_url}"),
+    };
+    let resp = Response {
+        status,
+        headers,
+        body,
+        final_url,
+        http_version,
+    };
+    http_cache::put(url, &resp);
+    Ok(DocOrDownload::Document(resp))
+}
+
+/// Stream a `Content-Encoding`-decoded body `decoded` straight to a file under `dir`, named from the
+/// `Content-Disposition` / URL (deduped). Returns `(path, filename, bytes)`. The body is written into
+/// a sibling `<name>.part` file and atomically renamed on completion, and only a fixed 64 KiB buffer
+/// is held at a time — the file **never exists whole in memory**, which is the entire point of the
+/// download path. `decoded` is read asynchronously (yielding between reads); the disk write is
+/// `std::fs` (a page-cache write is fast, and going async there would only pull in `tokio/fs` and its
+/// threadpool for no gain — the same reasoning [`fetch_file`] records).
+async fn stream_attachment_to_disk<R: tokio::io::AsyncRead + Unpin>(
+    content_disposition: Option<&str>,
+    final_url: &Url,
+    dir: &std::path::Path,
+    mut decoded: R,
+) -> Result<(std::path::PathBuf, String, u64)> {
+    use std::io::Write;
+    let filename = downloads::suggested_filename(content_disposition, final_url.as_str());
+    std::fs::create_dir_all(dir)
+        .with_context(|| format!("creating download dir {}", dir.display()))?;
+    let dest = downloads::dedupe_path(dir, &filename);
+    let part = match dest.extension().and_then(|e| e.to_str()) {
+        Some(e) => dest.with_extension(format!("{e}.part")),
+        None => dest.with_extension("part"),
+    };
+    let mut file =
+        std::fs::File::create(&part).with_context(|| format!("creating {}", part.display()))?;
+    let mut buf = vec![0u8; 64 * 1024];
+    let mut bytes: u64 = 0;
+    loop {
+        let n = decoded
+            .read(&mut buf)
+            .await
+            .with_context(|| format!("reading download body for {final_url}"))?;
+        if n == 0 {
+            break;
+        }
+        file.write_all(&buf[..n])
+            .with_context(|| format!("writing download to {}", part.display()))?;
+        bytes += n as u64;
+    }
+    file.flush().ok();
+    drop(file);
+    std::fs::rename(&part, &dest)
+        .with_context(|| format!("finalizing download {}", dest.display()))?;
+    Ok((dest, filename, bytes))
+}
+
 /// **`file://` — reading a local file, which is a thing a browser does.**
 ///
 /// This scheme was rejected outright (`unsupported URL scheme: file`), and the consequence was much
@@ -992,6 +1160,34 @@ async fn send_once(
     })
 }
 
+/// Like [`send_raw`] but with the cookie behaviour of [`send_once`] — attach the jar's `Cookie:`
+/// header for `url`, and store any `Set-Cookie` the response carried (flushing to disk on a login
+/// cookie) — while leaving the body **unconsumed** so a download can be streamed. `send_once`
+/// buffers the whole body; the download path must not, which is the only reason this exists.
+async fn send_raw_with_cookies(method: &str, url: &Url) -> Result<hyper::Response<Incoming>> {
+    let cookie = cookie_jar().lock().ok().and_then(|j| j.cookie_header(url));
+    let mut hdrs: Vec<(&str, &str)> = Vec::new();
+    if let Some(c) = &cookie {
+        hdrs.push(("cookie", c.as_str()));
+    }
+    let resp = send_raw(method, url, &hdrs, Bytes::new()).await?;
+    let mut saw_set_cookie = false;
+    if let Ok(mut jar) = cookie_jar().lock() {
+        for (k, v) in resp.headers().iter() {
+            if k.as_str().eq_ignore_ascii_case("set-cookie") {
+                if let Ok(sv) = v.to_str() {
+                    jar.store(url, sv);
+                    saw_set_cookie = true;
+                }
+            }
+        }
+    }
+    if saw_set_cookie {
+        save_cookies();
+    }
+    Ok(resp)
+}
+
 /// Build and send one request, returning the raw hyper response with its body
 /// **unconsumed** (so callers can either buffer it or stream it).
 async fn send_raw(
@@ -1189,6 +1385,40 @@ mod tests {
                 .await,
             Preconnect::DeclinedCrossOrigin
         );
+    }
+
+    // GATE (U-2): an attachment body is **streamed to disk** — larger than any single read buffer,
+    // written via `.part`→rename, its exact bytes on disk — proving the download path no longer
+    // depends on buffering the whole file in RAM. Falsifiable: before this tick there was no
+    // stream-to-disk sink at all (the download was `resp.body.to_vec()`), so this could not pass.
+    #[tokio::test]
+    async fn attachment_streams_to_disk_without_buffering() {
+        let dir = std::env::temp_dir().join(format!("manuk-dl-gate-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        // 200_000 bytes > the 64 KiB read buffer → the stream loop MUST run several iterations.
+        let big: Vec<u8> = (0..200_000usize).map(|i| (i % 251) as u8).collect();
+        let url = Url::parse("https://host.test/path/weights.bin").unwrap();
+        let (path, filename, bytes) = stream_attachment_to_disk(
+            Some("attachment; filename=\"model.bin\""),
+            &url,
+            &dir,
+            &big[..], // an in-memory `AsyncRead`, standing in for the decoded socket body
+        )
+        .await
+        .expect("stream to disk");
+        assert_eq!(
+            filename, "model.bin",
+            "Content-Disposition filename honoured"
+        );
+        assert_eq!(bytes, big.len() as u64, "reported size is the full body");
+        assert!(path.exists(), "the download landed at {}", path.display());
+        assert!(
+            !dir.join("model.bin.part").exists(),
+            ".part file was renamed away on completion"
+        );
+        let on_disk = std::fs::read(&path).expect("read back");
+        assert_eq!(on_disk, big, "every streamed byte reached disk, in order");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -3266,7 +3266,15 @@ pub struct Prefetched {
 /// on the UI thread without ever blocking it.
 pub async fn prefetch_document(url: &str) -> Result<Loaded> {
     match fetch_document(url).await? {
-        Loaded::Download { filename, bytes } => Ok(Loaded::Download { filename, bytes }),
+        Loaded::Download {
+            filename,
+            path,
+            bytes,
+        } => Ok(Loaded::Download {
+            filename,
+            path,
+            bytes,
+        }),
         Loaded::Document { html, final_url } => {
             #[allow(unused_mut)]
             let mut dom = manuk_html::parse(&html);
@@ -3353,9 +3361,12 @@ pub enum Loaded {
         html: String,
         final_url: String,
     },
+    /// A file that was **streamed straight to disk** (never buffered whole in RAM, never subject to
+    /// the document deadline while its body transferred). `path` is where it landed; `bytes` its size.
     Download {
         filename: String,
-        bytes: Vec<u8>,
+        path: std::path::PathBuf,
+        bytes: u64,
     },
     /// DEBT-1: a document whose subresources were already fetched off-thread. The UI thread can
     /// build this with **no network calls at all**.
@@ -3368,27 +3379,30 @@ pub enum Loaded {
 /// `data:`/`file:` URLs are always documents.
 pub async fn fetch_document(url: &str) -> Result<Loaded> {
     if url.starts_with("http://") || url.starts_with("https://") {
-        // The document gets the long deadline; its subresources get the short one. See
-        // `manuk_net::fetch_document`.
-        let resp = manuk_net::fetch_document(url)
+        // The document gets the long deadline; its subresources get the short one. A download,
+        // however, is **streamed to disk** by the net layer — decision made from headers, before the
+        // body, so a multi-GB file neither buffers in RAM nor dies at the document deadline. See
+        // `manuk_net::fetch_document_or_download`.
+        let dir = manuk_net::downloads::download_dir();
+        match manuk_net::fetch_document_or_download(url, &dir)
             .await
-            .with_context(|| format!("fetching {url}"))?;
-        if resp.status >= 400 {
-            anyhow::bail!("server returned HTTP {} for {}", resp.status, url);
-        }
-        let cd = resp.header("content-disposition");
-        let ct = resp.header("content-type");
-        if manuk_net::downloads::is_attachment(cd, ct) {
-            let filename = manuk_net::downloads::suggested_filename(cd, resp.final_url.as_str());
-            return Ok(Loaded::Download {
+            .with_context(|| format!("fetching {url}"))?
+        {
+            manuk_net::DocOrDownload::Download {
+                path,
                 filename,
-                bytes: resp.body.to_vec(),
-            });
+                bytes,
+                ..
+            } => Ok(Loaded::Download {
+                filename,
+                path,
+                bytes,
+            }),
+            manuk_net::DocOrDownload::Document(resp) => Ok(Loaded::Document {
+                html: resp.decoded_text(),
+                final_url: resp.final_url.to_string(),
+            }),
         }
-        Ok(Loaded::Document {
-            html: resp.decoded_text(),
-            final_url: resp.final_url.to_string(),
-        })
     } else {
         let (html, final_url) = fetch_html(url).await?;
         Ok(Loaded::Document { html, final_url })

@@ -171,6 +171,31 @@ Firefox's** fallback detector. Only the **orchestration** is hand-rolled, in WHA
 bytes) → HTTP `Content-Type` charset → `<meta>` prescan of the first 1024 bytes → chardetng → default.**
 Content-decoding (gzip/br/deflate) **precedes** charset decoding.
 
+## A download STREAMS to disk; only a document is buffered
+
+**A document is bounded; a download is not — and they must not share a memory model or a deadline.** The
+navigation entry point `fetch_document_or_download(url, dir)` decides between them **from the response
+headers, before touching the body** (`is_attachment` on `Content-Disposition` / a non-renderable
+`Content-Type`). A document is buffered (correct — HTML is small) and cached; a download is streamed
+**decoded, chunk-by-chunk (64 KiB), straight into a `<name>.part` file** that is atomically renamed on
+completion, so the file **never exists whole in RAM** and a half-written download never appears under its
+real name.
+
+**Two deadlines, not one.** The header/connect phase and the *document* body read share one `timeout_at`
+deadline (`document_timeout`, ~30s) — a slow-but-alive server must not hang the tab, which is the Bar-0
+reason that deadline exists. The **download body is deliberately let out from under it**: a multi-GB
+transfer taking minutes is *correct*, not a hang. The old path applied the 30s document deadline to the
+whole download and buffered it in a `Vec<u8>` — so a large file OOM'd or was killed mid-transfer and
+surfaced as a network fault. That is the defect this closes.
+
+**What the streaming path must NOT drop, because the buffering path did it for free.** Splitting header
+detection from body consumption means re-doing, not skipping, everything `send_once`/`fetch_inner` gave the
+buffered fetch: the **HTTP cache** get/put, the **wire-request accounting** (`NET_REQUESTS` + the dedup set
+`G_DEDUP` reads), and **cookie carry + `Set-Cookie` storage**. The last is the trap — `send_raw` (unconsumed
+body) has *no* cookie behaviour, so the streaming path uses `send_raw_with_cookies`, which attaches the
+jar's `Cookie:` header and stores any `Set-Cookie` (login persistence) exactly as `send_once` does, but
+leaves the body unconsumed to stream. Miss it and a logged-in navigation drops its session cookie.
+
 ## HTTP/2's win is gated on SUBRESOURCES, not on the document fetch
 
 Advertising `h2` over ALPN is cheap and correct — but **multiplexing's payoff is real only with many
