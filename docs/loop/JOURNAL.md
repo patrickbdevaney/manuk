@@ -6862,3 +6862,37 @@ differ; two 32-byte draws differ; over-quota throws; a `Float64Array` throws. RE
 HANG/CRASH 0. Residue: `crypto.subtle` (SubtleCrypto — digest/sign/encrypt) stays **undefined**, which is
 the honest "cannot" (real browsers expose it only in secure contexts) — a larger, separate tick if a page
 class needs `subtle.digest`. Mechanism in [[js-engine]].
+
+## Tick 161 — HTML Constraint Validation: checkValidity / validity / the `invalid` event (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (DIVERSIFY steer — bounded T4 forms lever: constraint validation
+JS API). WIKI: js-engine.**
+The form-validity API was **entirely absent**: `input.checkValidity`, `input.validity`, `willValidate`,
+`setCustomValidity` were all `undefined`. Every validation path on the web reads this surface — the
+browser's native validation and every library that reimplements it (React Hook Form, Formik,
+VeeValidate) reads `el.validity.valueMissing`, calls `form.checkValidity()`, and listens for the
+`invalid` event. `if (!input.checkValidity())` on an `undefined` method is a `TypeError` that takes the
+submit handler with it, so the form silently cannot submit (the `G_GLOBALS` "a missing method is a thrown
+exception" failure, specialised to forms).
+
+**Fix.** A prelude shim (event_loop.rs) defines the API **once on the shared HTMLElement prototype**
+(`__protoHTMLElement`, built in Rust — so every element inherits it) rather than per instance. The
+members compute from already-reflected content attributes (`required`/`pattern`/`type`/`min`/`max`/
+`minLength`/`maxLength`, all live via G_REFLECT) plus the current `value`: `validity` returns a fresh
+`ValidityState` (`valueMissing`, `typeMismatch` for email/url, `patternMismatch`, `tooLong`/`tooShort`,
+`rangeUnderflow`/`rangeOverflow`, `customError`, `valid`); `willValidate` is false for non-controls,
+disabled/readonly, and barred input types (hidden/submit/reset/button/image); `checkValidity()` fires a
+cancelable `invalid` event when it fails and returns `validity.valid`, and on a `<form>` aggregates over
+`input,select,textarea`; `setCustomValidity`/`validationMessage`/`reportValidity` round it out. Pure JS
+over existing reflectors — no Rust, no new native.
+
+**Gate.** New `engine/page/tests/g_constraint_validation.rs`
+(`constraint_validation_computes_and_reports_validity`) — 11 claims: required+empty → valueMissing +
+checkValidity false; required+value → valid; type=email bad/good; pattern mismatch/match; a `type=hidden`
+control does not validate; numeric rangeUnderflow; setCustomValidity forces then clears; checkValidity
+fires the cancelable `invalid` event; `form.checkValidity()` aggregates false while a child is empty.
+RED against the absent API (a TypeError before the first assert). Confined to engine/js (prelude) + one
+gate — WPT-neutral (the css/dom sweep areas don't cover the constraint-validation WPT tree). HANG/CRASH 0.
+Residue: the `:valid`/`:invalid` **CSS pseudo-classes** are NOT wired (they need Stylo pseudo-class
+matching keyed on live validity) — a separate cascade tick; `stepMismatch`/`badInput` stay false
+(`badInput` needs the input's raw-text buffer). Mechanism in [[js-engine]].

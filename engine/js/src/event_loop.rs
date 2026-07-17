@@ -1397,6 +1397,96 @@ const PRELUDE: &str = r#"
         };
       }
 
+      // ── HTML Constraint Validation (the form-validity API). Every validation library — the browser's
+      // own native validation, React Hook Form, Formik, VeeValidate — reads `el.validity.valueMissing`,
+      // calls `form.checkValidity()`, and listens for the `invalid` event. All of it was ABSENT:
+      // `input.checkValidity` was `undefined`, so `if (!input.checkValidity())` is a TypeError that takes
+      // the submit handler with it, and the form silently cannot submit. Defined once on the shared
+      // HTMLElement prototype (built in Rust, see dom_bindings::dom_protos) so every element inherits it;
+      // the members read the reflected content attributes (`required`/`pattern`/`type`/`min`/`max`/
+      // `minLength`/`maxLength`, all live via G_REFLECT) plus the current `value`.
+      var __HP = globalThis.__protoHTMLElement;
+      if (__HP && typeof __HP.checkValidity === 'undefined') {
+        var __isFormControl = function(el) {
+          var t = el && el.tagName;
+          return t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA';
+        };
+        // A "barred from constraint validation" element never validates (spec §form-control-infrastructure).
+        var __barredType = { hidden: 1, submit: 1, reset: 1, button: 1, image: 1 };
+        var __numericType = { number: 1, range: 1 };
+        var __willValidate = function(el) {
+          if (!__isFormControl(el)) { return false; }
+          if (el.disabled || el.readOnly) { return false; }
+          if (el.tagName === 'INPUT' && __barredType[String(el.type || 'text').toLowerCase()]) { return false; }
+          return true;
+        };
+        // A single fresh ValidityState per read (browsers return a live object; a snapshot is
+        // indistinguishable to the synchronous code that reads it right after a value change).
+        var __computeValidity = function(el) {
+          var v = {
+            valueMissing: false, typeMismatch: false, patternMismatch: false,
+            tooLong: false, tooShort: false, rangeUnderflow: false, rangeOverflow: false,
+            stepMismatch: false, badInput: false, customError: false, valid: true
+          };
+          if (!__willValidate(el)) { v.customError = !!el.__customValidity; v.valid = !v.customError; return v; }
+          var val = el.value == null ? '' : String(el.value);
+          var type = String(el.type || 'text').toLowerCase();
+          if (el.required && val === '') { v.valueMissing = true; }
+          if (val !== '') {
+            if (type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) { v.typeMismatch = true; }
+            if (type === 'url') { try { new URL(val); } catch (e) { v.typeMismatch = true; } }
+            var pat = el.pattern;
+            if (pat != null && pat !== '') {
+              try { if (!(new RegExp('^(?:' + pat + ')$', 'u')).test(val)) { v.patternMismatch = true; } }
+              catch (e) { /* an invalid pattern does not constrain (spec) */ }
+            }
+            var maxL = el.maxLength;
+            if (typeof maxL === 'number' && maxL >= 0 && val.length > maxL) { v.tooLong = true; }
+            var minL = el.minLength;
+            if (typeof minL === 'number' && minL >= 0 && val.length < minL) { v.tooShort = true; }
+            if (__numericType[type]) {
+              var num = parseFloat(val);
+              if (!isNaN(num)) {
+                if (el.min !== '' && el.min != null && num < parseFloat(el.min)) { v.rangeUnderflow = true; }
+                if (el.max !== '' && el.max != null && num > parseFloat(el.max)) { v.rangeOverflow = true; }
+              }
+            }
+          }
+          if (el.__customValidity) { v.customError = true; }
+          v.valid = !(v.valueMissing || v.typeMismatch || v.patternMismatch || v.tooLong ||
+                      v.tooShort || v.rangeUnderflow || v.rangeOverflow || v.stepMismatch ||
+                      v.badInput || v.customError);
+          return v;
+        };
+        Object.defineProperty(__HP, 'validity', { configurable: true, get: function() { return __computeValidity(this); } });
+        Object.defineProperty(__HP, 'willValidate', { configurable: true, get: function() {
+          return __willValidate(this);
+        } });
+        Object.defineProperty(__HP, 'validationMessage', { configurable: true, get: function() {
+          if (this.__customValidity) { return String(this.__customValidity); }
+          return __computeValidity(this).valid ? '' : 'Please fill out this field.';
+        } });
+        __HP.setCustomValidity = function(msg) { this.__customValidity = (msg == null ? '' : String(msg)) || ''; };
+        // A single element's check: fire a cancelable `invalid` event when it fails, then report validity.
+        var __checkOne = function(el) {
+          var v = __computeValidity(el);
+          if (!v.valid && __willValidate(el)) {
+            try { el.dispatchEvent(new Event('invalid', { cancelable: true, bubbles: false })); } catch (e) {}
+          }
+          return v.valid;
+        };
+        __HP.checkValidity = function() {
+          if (this.tagName === 'FORM') {
+            var ok = true, ctrls = this.querySelectorAll('input,select,textarea');
+            for (var i = 0; i < ctrls.length; i++) { if (!__checkOne(ctrls[i])) { ok = false; } }
+            return ok;
+          }
+          return __willValidate(this) ? __checkOne(this) : true;
+        };
+        // No native validation UI here, so reportValidity is checkValidity (it still fires `invalid`).
+        __HP.reportValidity = function() { return this.checkValidity(); };
+      }
+
       // `CSS.escape` / `CSS.supports` — feature detection, and the correct way to build a selector.
       if (typeof globalThis.CSS === 'undefined') {
         globalThis.CSS = {

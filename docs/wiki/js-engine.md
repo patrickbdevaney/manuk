@@ -684,3 +684,28 @@ merely that the call returns — the same "construct AND answer honestly" bar th
 holds, extended to "answer *securely*". `crypto.subtle` (SubtleCrypto) stays **undefined** — the honest
 "cannot" (browsers expose it only in secure contexts), a separate larger tick if a page class needs
 `subtle.digest`.
+
+## HTML Constraint Validation, on the shared prototype (tick 161)
+
+The form-validity API (`el.validity`, `el.checkValidity()`, `el.willValidate`, `setCustomValidity`, the
+`invalid` event) is installed as a **prelude shim on `__protoHTMLElement`** — the real HTMLElement
+prototype built in Rust (`dom_bindings::dom_protos`), which every element instance has in its
+`[[Prototype]]` chain. This is the correct attach point precisely because our reflectors carry their DOM
+members as OWN properties with no shared prototype: a NEW method (one not already an own-property
+reflector) must go on the shared proto or no instance will find it. Defining `validity`/`checkValidity`
+there gives every `<input>`/`<select>`/`<textarea>`/`<form>` the API for free.
+
+The shim is **pure JS over existing reflectors** — it reads `el.required`, `el.pattern`, `el.type`,
+`el.min`/`el.max`, `el.minLength`/`el.maxLength` (all live via G_REFLECT, numeric ones defaulting to
+`-1` per G_REFLECT_NUMERIC so an unset `maxLength` correctly imposes no limit) and the current `el.value`,
+and computes the eight `ValidityState` flags. Two spec subtleties worth keeping: (1) an element **barred
+from constraint validation** (a `type=hidden`/submit/reset/button/image input, or a disabled/readonly
+control) has `willValidate === false` and `checkValidity()` short-circuits to `true` — it is not "valid",
+it is "not a candidate"; (2) `checkValidity()` must fire a **cancelable `invalid` event** at each failing
+control *before* returning, and `form.checkValidity()` fires one per failing descendant control — which
+is how native validation lets a page `preventDefault` and show its own message.
+
+What is deliberately NOT here: the `:valid`/`:invalid` **CSS pseudo-classes**. Those require Stylo to
+match a pseudo keyed on the element's live validity (a restyle on every value change), which is a cascade
+tick, not a JS-shim tick. Leaving them unwired is honest — a page's *script* validation works; only the
+*CSS-driven* red-border styling is absent, and that degrades to "no styling" rather than to a throw.
