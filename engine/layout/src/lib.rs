@@ -1889,6 +1889,7 @@ impl Ctx<'_> {
                 space_before: false,
                 node: Some(node),
                 no_wrap: true,
+                break_word: false,
             }];
             let (frags, _atomics, h) =
                 self.layout_inline(items, cx, cy, cw, TextAlign::Left, floats);
@@ -3539,6 +3540,7 @@ impl Ctx<'_> {
                 space_before: false,
                 node: owner,
                 no_wrap: true,
+                break_word: false,
             });
             first = false;
         }
@@ -3552,6 +3554,7 @@ impl Ctx<'_> {
                 space_before: pending_space && !first,
                 node: owner,
                 no_wrap: true,
+                break_word: false,
             });
         }
         out
@@ -3580,6 +3583,13 @@ impl Ctx<'_> {
                 // `white-space` is inherited, so the text node carries it. `nowrap` and `pre`
                 // both suppress wrapping between words.
                 let no_wrap = matches!(cs.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre);
+                // `overflow-wrap:break-word` / `word-break:break-all` permit char-level breaking of
+                // an over-long token so it does not overflow its column. Carried on each word; the
+                // actual split (against the live line width) happens in the inline placement pass.
+                let break_word = matches!(
+                    cs.overflow_wrap,
+                    manuk_css::OverflowWrap::BreakWord | manuk_css::OverflowWrap::Anywhere
+                ) || cs.word_break == manuk_css::WordBreak::BreakAll;
                 // `pre-wrap` / `pre-line` preserve newlines but still wrap long lines: break at each
                 // newline, then split the line into words as usual.
                 if matches!(cs.white_space, WhiteSpace::PreWrap | WhiteSpace::PreLine) {
@@ -3604,6 +3614,7 @@ impl Ctx<'_> {
                                         first,
                                         owner,
                                         false,
+                                        break_word,
                                     );
                                 }
                                 *pending_space = true;
@@ -3612,7 +3623,16 @@ impl Ctx<'_> {
                             }
                         }
                         if !buf.is_empty() {
-                            push_word(out, &mut buf, style, pending_space, first, owner, false);
+                            push_word(
+                                out,
+                                &mut buf,
+                                style,
+                                pending_space,
+                                first,
+                                owner,
+                                false,
+                                break_word,
+                            );
                         }
                     }
                     return;
@@ -3640,6 +3660,7 @@ impl Ctx<'_> {
                             space_before: false,
                             node: owner,
                             no_wrap: true,
+                            break_word: false,
                         });
                         *first = false;
                     }
@@ -3649,7 +3670,16 @@ impl Ctx<'_> {
                 for ch in t.chars() {
                     if ch.is_whitespace() {
                         if !buf.is_empty() {
-                            push_word(out, &mut buf, style, pending_space, first, owner, no_wrap);
+                            push_word(
+                                out,
+                                &mut buf,
+                                style,
+                                pending_space,
+                                first,
+                                owner,
+                                no_wrap,
+                                break_word,
+                            );
                         }
                         *pending_space = true;
                     } else {
@@ -3657,7 +3687,16 @@ impl Ctx<'_> {
                     }
                 }
                 if !buf.is_empty() {
-                    push_word(out, &mut buf, style, pending_space, first, owner, no_wrap);
+                    push_word(
+                        out,
+                        &mut buf,
+                        style,
+                        pending_space,
+                        first,
+                        owner,
+                        no_wrap,
+                        break_word,
+                    );
                 }
             }
             NodeData::Element(_) => {
@@ -3766,6 +3805,72 @@ impl Ctx<'_> {
     /// word's line height as the height estimate — exact for uniform-size text, an
     /// approximation when a taller inline box lands mid-line.
     #[allow(clippy::type_complexity)]
+    /// `overflow-wrap:break-word` / `word-break:break-all`: a single token wider than the content
+    /// box — a long URL, a 64-char hex hash, an unspaced foreign string — has no whitespace and no
+    /// UAX-14 opportunity to wrap at, so the normal line-filler would let it overflow the column and
+    /// break the layout. Split each such `break_word` word at char boundaries into chunks that each
+    /// fit `cw`, so the filler wraps them across lines instead. Only over-wide `break_word` words are
+    /// rewritten; every other item passes through untouched (so the parity gate is unmoved).
+    fn break_overwide_words(&self, items: Vec<InlineItem>, cw: f32) -> Vec<InlineItem> {
+        if cw <= 0.0 {
+            return items;
+        }
+        let mut out = Vec::with_capacity(items.len());
+        for item in items {
+            match item {
+                InlineItem::Word {
+                    text,
+                    style,
+                    space_before,
+                    node,
+                    no_wrap,
+                    break_word,
+                } if break_word
+                    && !no_wrap
+                    && self.fonts.measure(&text, style.font_key, style.font_size) > cw =>
+                {
+                    let key = style.font_key;
+                    let size = style.font_size;
+                    let mut chunk = String::new();
+                    let mut chunk_w = 0.0f32;
+                    let mut first_chunk = true;
+                    let mut buf = [0u8; 4];
+                    for ch in text.chars() {
+                        let adv = self.fonts.measure(ch.encode_utf8(&mut buf), key, size);
+                        // Flush before the char that would overflow — but never an empty chunk, so a
+                        // single char wider than `cw` still lands (unbreakable, an accepted overflow).
+                        if !chunk.is_empty() && chunk_w + adv > cw {
+                            out.push(InlineItem::Word {
+                                text: std::mem::take(&mut chunk),
+                                style,
+                                space_before: first_chunk && space_before,
+                                node,
+                                no_wrap: false,
+                                break_word: false,
+                            });
+                            first_chunk = false;
+                            chunk_w = 0.0;
+                        }
+                        chunk.push(ch);
+                        chunk_w += adv;
+                    }
+                    if !chunk.is_empty() {
+                        out.push(InlineItem::Word {
+                            text: chunk,
+                            style,
+                            space_before: first_chunk && space_before,
+                            node,
+                            no_wrap: false,
+                            break_word: false,
+                        });
+                    }
+                }
+                other => out.push(other),
+            }
+        }
+        out
+    }
+
     fn layout_inline(
         &self,
         items: Vec<InlineItem>,
@@ -3775,6 +3880,7 @@ impl Ctx<'_> {
         align: TextAlign,
         floats: &FloatContext,
     ) -> (Vec<TextFragment>, Vec<LayoutBox>, f32) {
+        let items = self.break_overwide_words(items, cw);
         // Usable (left_x, width) at vertical `y` for a line of height `h`: the float
         // exclusions intersected with this container's content box, dropping past
         // floats that leave no room.
@@ -3868,6 +3974,7 @@ impl Ctx<'_> {
                     space_before,
                     node,
                     no_wrap,
+                    break_word: _,
                 } => {
                     let key = style.font_key;
                     let size = style.font_size;
@@ -4143,6 +4250,9 @@ enum InlineItem {
         node: Option<NodeId>,
         /// `white-space:nowrap` — no line break may occur before this word within its run.
         no_wrap: bool,
+        /// `overflow-wrap:break-word` / `word-break:break-all` — this word may be split at an
+        /// arbitrary character when it would otherwise overflow the line (a long URL / hash).
+        break_word: bool,
     },
     /// An `inline-block`: `advance` is its margin-box main-axis size; `box_` is its already
     /// laid-out block box (positioned at the origin, translated into place at line close).
@@ -4212,6 +4322,7 @@ fn break_segments(word: &str) -> Vec<String> {
     segs
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_word(
     out: &mut Vec<InlineItem>,
     buf: &mut String,
@@ -4220,6 +4331,7 @@ fn push_word(
     first: &mut bool,
     node: Option<NodeId>,
     no_wrap: bool,
+    break_word: bool,
 ) {
     let text = std::mem::take(buf);
     // `nowrap`/`pre` forbid breaks inside the run, so never split those.
@@ -4236,6 +4348,7 @@ fn push_word(
             space_before: i == 0 && *pending_space && !*first,
             node,
             no_wrap,
+            break_word,
         });
         *first = false;
     }
@@ -5893,6 +6006,65 @@ mod tests {
         assert!(
             dom.text_content(n).contains("home"),
             "text-transform must NOT mutate the DOM text (JS reads the author's casing)"
+        );
+    }
+
+    /// `overflow-wrap:break-word` (and `word-break:break-all`) breaks a long unbreakable token — a
+    /// URL, a hex hash, an unspaced string — at char boundaries so it fits its column instead of
+    /// overflowing it. Baseline: char-level breaking was unimplemented, so the token stayed one
+    /// fragment wider than the column (the classic "long link blows out the layout").
+    #[test]
+    fn overflow_wrap_break_word_wraps_long_token() {
+        // A 60-char unbreakable token (no whitespace, no hyphen) in a 100px column.
+        let token = "a".repeat(60);
+        let html = format!(r#"<div id="d">{token}</div>"#);
+
+        let collect_frags = |root: &LayoutBox| -> Vec<(String, f32)> {
+            let mut v = Vec::new();
+            root.walk(&mut |b| {
+                if let BoxContent::Inline(frags) = &b.content {
+                    for f in &*frags {
+                        if !f.text.is_empty() {
+                            v.push((f.text.clone(), f.width));
+                        }
+                    }
+                }
+            });
+            v
+        };
+
+        // Control: overflow-wrap:normal — the token stays a single fragment, wider than the column.
+        let (_d, root) = layout_html(&html, "#d{width:100px}", 400.0);
+        let base = collect_frags(&root);
+        assert!(
+            base.iter().any(|(_, w)| *w > 100.0),
+            "baseline: an unbreakable token overflows its 100px column (got {base:?})"
+        );
+
+        // overflow-wrap:break-word — split into chunks that each fit the 100px column, across lines,
+        // and losslessly (every character preserved, none duplicated).
+        let (_d2, root2) = layout_html(&html, "#d{width:100px;overflow-wrap:break-word}", 400.0);
+        let broken = collect_frags(&root2);
+        assert!(
+            broken.len() > 1,
+            "break-word must split the token into multiple fragments (got {broken:?})"
+        );
+        assert!(
+            broken.iter().all(|(_, w)| *w <= 100.5),
+            "every broken chunk must fit the 100px column (got {broken:?})"
+        );
+        let joined: String = broken.iter().map(|(t, _)| t.as_str()).collect();
+        assert_eq!(
+            joined, token,
+            "breaking must be lossless — no chars lost or duplicated"
+        );
+
+        // `word-break:break-all` reaches the same char-level breaking through the other property.
+        let (_d3, root3) = layout_html(&html, "#d{width:100px;word-break:break-all}", 400.0);
+        let broken3 = collect_frags(&root3);
+        assert!(
+            broken3.len() > 1 && broken3.iter().all(|(_, w)| *w <= 100.5),
+            "word-break:break-all must also break the token to fit (got {broken3:?})"
         );
     }
 

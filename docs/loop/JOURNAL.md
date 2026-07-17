@@ -7516,3 +7516,29 @@ each whitespace word (common-case approximation of the spec's typographic-letter
 "hello world"→"Hello World", straße→STRASSE) + E2E (a nav with inherited uppercase renders HOME; a
 child `text-transform:none` stays "Keep"; `dom.text_content` still contains "home"). RED against the
 no-transform baseline. Verify: css+layout suites green (layout 72→73); HANG/CRASH 0.
+
+## Tick 183 — overflow-wrap: break-word — a long URL wraps instead of blowing out the column (CSS render / text) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (CSS render — intra-word line breaking). WIKI:
+docs/wiki/text-layout.md "overflow-wrap / word-break — char-level breaking of an unbreakable token".**
+
+**Hypothesis.** A single unbreakable token — a long URL, a 64-char commit hash, an unspaced foreign
+string, an API key — has no whitespace and no UAX-14 opportunity (hyphen/soft-hyphen/ZWSP/CJK) to wrap
+at, so `break_segments` leaves it as one word and the line-filler lets it overflow its column,
+visibly blowing out the layout (the classic "long link in a narrow sidebar pushes everything sideways").
+`overflow-wrap:break-word` (and its legacy alias `word-wrap:break-word`, plus `word-break:break-all`)
+is the ubiquitous fix — break the token at an arbitrary char so it fits. It was **unimplemented** (0
+hits). Fix: parse `overflow-wrap`/`word-wrap`→`OverflowWrap` and `word-break`→`WordBreak` (css, both
+inherited, recovered from MinimalCascade on the shipping Stylo path); carry a derived `break_word` flag
+on `InlineItem::Word`; and in a pre-pass over the inline items (`break_overwide_words`, where the
+content width `cw` and font metrics are known) split any `break_word` word wider than `cw` at char
+boundaries into chunks that each fit `cw`, so the existing line-filler wraps them across lines. Only
+over-wide break-word words are rewritten — every other word passes through byte-identical, so parity is
+unmoved. `keep-all`/`anywhere` parsed; `word-break:break-all` mid-line-when-it-would-still-fit and
+`anywhere`'s min-content contribution are follow-ons.
+
+**Gate.** engine/layout `overflow_wrap_break_word_wraps_long_token`: a 60-char token in a 100px column —
+control (`overflow-wrap:normal`) leaves one fragment wider than 100px (overflows); `overflow-wrap:
+break-word` splits it into >1 fragment, each ≤100px, and losslessly (joined == token); `word-break:
+break-all` reaches the same breaking. RED against the no-char-break baseline (both cases overflow as one
+fragment). Verify: css+layout suites green (layout 73→74); HANG/CRASH 0.

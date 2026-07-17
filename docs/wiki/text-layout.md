@@ -235,3 +235,37 @@ a child `text-transform:none` island stays "Keep"; `dom.text_content` still cont
 the no-transform baseline. css+layout suites green (layout 72→73), HANG/CRASH 0. Residue:
 `full-width`/`full-size-kana` keywords; the spec's exact grapheme-cluster word boundary for capitalize
 (digits/punctuation-prefixed words); `letter-spacing`/`word-spacing` are separate unbuilt properties.
+
+## overflow-wrap / word-break — char-level breaking of an unbreakable token (tick 183)
+
+A single unbreakable token — a long URL, a 64-char commit hash, an unspaced foreign string, an API key
+— has no whitespace and no UAX-14 opportunity (hyphen / soft-hyphen / U+200B / CJK) for `break_segments`
+to split at, so it stays one word and the line-filler lets it overflow its column, pushing the layout
+sideways (the classic "long link blows out a narrow sidebar"). `overflow-wrap: break-word` — with its
+legacy alias `word-wrap: break-word`, and the CJK/code cousin `word-break: break-all` — is the
+everywhere fix: break the token at an arbitrary character so it wraps. It was **unimplemented** (0 hits).
+
+Mechanism (css + layout):
+- **css** — `OverflowWrap` (`Normal`/`BreakWord`/`Anywhere`) parsed from `overflow-wrap` **and** the
+  legacy `word-wrap` (same computed value); `WordBreak` (`Normal`/`BreakAll`/`KeepAll`) from
+  `word-break`. Both **inherited** (copied in the MinimalCascade inheritance step beside `white_space`
+  / `text_transform`), added to the style-change set, and recovered from MinimalCascade on the shipping
+  **Stylo** path (servo build models them as keyword enums we don't consume directly).
+- **layout** — a derived predicate `break_word = overflow_wrap ∈ {BreakWord, Anywhere} ||
+  word_break == BreakAll` is computed in `collect_inline_node` and carried on `InlineItem::Word`. The
+  actual split happens in `break_overwide_words`, a pre-pass at the head of `layout_inline` where the
+  content width `cw` and font metrics are both known: any `break_word` word whose measured width
+  exceeds `cw` is greedily split at char boundaries into chunks that each fit `cw` (never an empty
+  chunk — a single glyph wider than `cw` is an accepted unbreakable overflow), emitted as ordinary
+  breakable words so the existing line-filler wraps them across lines. Only over-wide break-word words
+  are rewritten; every other item passes through untouched, so the whitespace/UAX-14 path and the
+  parity gate are unmoved. The split is lossless (chunks concatenate back to the original token) and
+  only the first chunk keeps the token's leading space.
+
+**Gate.** `overflow_wrap_break_word_wraps_long_token` (engine/layout): a 60-char token in a 100px
+column — control (`overflow-wrap:normal`) leaves one fragment >100px (overflows); `break-word` splits
+into >1 fragment each ≤100px and losslessly; `word-break:break-all` reaches the same breaking. RED vs
+the no-char-break baseline. css+layout suites green (layout 73→74), HANG/CRASH 0. Residue:
+`word-break:break-all` breaking a word that *would* still fit later in the line (we only split words
+wider than a full line); `overflow-wrap:anywhere`'s smaller min-content contribution; `line-break`
+and `hyphens`.

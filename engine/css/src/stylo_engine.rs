@@ -427,6 +427,12 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
             // `text-transform` recovered from MinimalCascade (inherited there) so the shipping path
             // renders uppercase nav/buttons — Stylo's servo build models it as a bitflags type.
             cs.text_transform = m.text_transform;
+            // `overflow-wrap`/`word-wrap` and `word-break` recovered from MinimalCascade so the
+            // shipping path also breaks long unbreakable tokens (a URL in a narrow column) instead
+            // of letting them overflow. Stylo's servo build models these as keyword enums we don't
+            // consume directly.
+            cs.overflow_wrap = m.overflow_wrap;
+            cs.word_break = m.word_break;
             cs.background_repeat = m.background_repeat;
             cs.text_decoration = m.text_decoration;
             cs.list_style_type = m.list_style_type;

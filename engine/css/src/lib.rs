@@ -278,6 +278,35 @@ pub enum TextTransform {
     Capitalize,
 }
 
+/// `overflow-wrap` (and its legacy alias `word-wrap`) — whether an otherwise-unbreakable word may
+/// be broken at an arbitrary character to stop it overflowing its line box. `break-word` is the
+/// ubiquitous fix for a long URL / hash / email in a narrow column: without it the token spills out
+/// past the container edge and breaks the layout. Inherited.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum OverflowWrap {
+    #[default]
+    Normal,
+    /// Break inside a word only when it would otherwise overflow the line (the common case).
+    BreakWord,
+    /// Like `break-word`, but the broken word also counts as a soft-wrap opportunity for
+    /// min-content sizing. We treat it identically to `break-word` for wrapping.
+    Anywhere,
+}
+
+/// `word-break` — where line breaks are allowed *within* a run. `break-all` lets a break fall
+/// between any two characters (common in CJK text and code listings); we honour it as "may break a
+/// word at any character to fit", the same char-level breaking `overflow-wrap:break-word` enables.
+/// Inherited.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum WordBreak {
+    #[default]
+    Normal,
+    BreakAll,
+    /// `keep-all` — never break within a word (parsed but not yet distinguished from `normal` for
+    /// Latin text, where it already never breaks mid-word).
+    KeepAll,
+}
+
 /// `box-sizing`: whether `width`/`height` size the content box (CSS default) or the
 /// border box (padding + border counted inside the given dimension).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -493,6 +522,10 @@ pub struct ComputedStyle {
     pub white_space: WhiteSpace,
     /// `text-transform` — rendered casing (inherited); applied in layout, DOM text unchanged.
     pub text_transform: TextTransform,
+    /// `overflow-wrap`/`word-wrap` — allow breaking a long word at an arbitrary char (inherited).
+    pub overflow_wrap: OverflowWrap,
+    /// `word-break` — char-level break control within a run (inherited).
+    pub word_break: WordBreak,
     pub margin: Sides<Dim>,
     pub padding: Sides<Dim>,
     pub border_width: Sides<f32>,
@@ -626,6 +659,8 @@ impl ComputedStyle {
             text_align: TextAlign::Left,
             white_space: WhiteSpace::Normal,
             text_transform: TextTransform::None,
+            overflow_wrap: OverflowWrap::Normal,
+            word_break: WordBreak::Normal,
             margin: Sides::all(Dim::Px(0.0)),
             padding: Sides::all(Dim::Px(0.0)),
             border_width: Sides::all(0.0),
@@ -717,6 +752,8 @@ impl ComputedStyle {
         s.text_align = parent.text_align;
         s.white_space = parent.white_space;
         s.text_transform = parent.text_transform;
+        s.overflow_wrap = parent.overflow_wrap;
+        s.word_break = parent.word_break;
         // `list-style-*` is inherited (that is how `ul{list-style:none}` silences its `li`s).
         s.list_style_type = parent.list_style_type;
         s.list_style_inside = parent.list_style_inside;
@@ -825,6 +862,8 @@ pub fn diff_style(old: &ComputedStyle, new: &ComputedStyle) -> RestyleDamage {
         || old.text_align != new.text_align
         || old.white_space != new.white_space
         || old.text_transform != new.text_transform
+        || old.overflow_wrap != new.overflow_wrap
+        || old.word_break != new.word_break
         || old.float != new.float
         || old.clear != new.clear
         || old.position != new.position
@@ -2674,6 +2713,21 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 "lowercase" => TextTransform::Lowercase,
                 "capitalize" => TextTransform::Capitalize,
                 _ => TextTransform::None,
+            }
+        }
+        // `overflow-wrap` and its legacy alias `word-wrap` map to the same computed value.
+        "overflow-wrap" | "word-wrap" => {
+            s.overflow_wrap = match v.trim().to_ascii_lowercase().as_str() {
+                "break-word" => OverflowWrap::BreakWord,
+                "anywhere" => OverflowWrap::Anywhere,
+                _ => OverflowWrap::Normal,
+            }
+        }
+        "word-break" => {
+            s.word_break = match v.trim().to_ascii_lowercase().as_str() {
+                "break-all" => WordBreak::BreakAll,
+                "keep-all" => WordBreak::KeepAll,
+                _ => WordBreak::Normal,
             }
         }
         "width" => {
