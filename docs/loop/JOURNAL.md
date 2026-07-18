@@ -7689,3 +7689,42 @@ Tick 188 (text-decoration-thickness / text-underline-offset) is COMPLETE and sta
 1. **Recurring 327s `manuk_wpt` LTO rebuild (feature-union cache thrash).** verify.sh runs a full-feature build AND a `--no-default-features` headless `cargo check` (gate added by HEAD commit 0eb4910) in one invocation; a shared build-script/proc-macro fingerprint flips between the two feature sets, so nearly every verify rebuilds the LTO parity binary (~327s > the 93s ceiling). Once triggered (it persisted after an incidental debug `cargo test -p manuk-shell`) it recurs run-to-run. When warm it is 72s and the WALL gate is GREEN (observer rebaselined the mark 48s→72s / ceiling 93s mid-session — infrastructure being actively managed, as SCOPE promises).
 2. **Intermittent shell-gate false-RED** (affordance/G_TEARDOWN/G_RUNTIME_COUNT/G_INTERACT): the debug manuk-shell timing tests are starved when verify's `_launch shell` runs concurrently with the release parity sweep. They pass cleanly in isolation (58+2 green) every time; this is the known parallel-build-race false-RED (STATUS wall-false-RED note).
 Per SCOPE both are observer/infrastructure — the grind agent must not edit scripts/. Left staged to land unchanged once a warm, unstarved verify lands (or the observer settles the feature-thrash); do NOT `git checkout` it (verified work). Tick 187 (text-decoration-color) DID land this invocation (commit 05accec).
+
+## Tick 189 — box-shadow is a LIST of layers, each with spread — Tailwind elevation renders right (CSS render / paint) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (CSS render — box-shadow layer list + spread). WIKI:
+docs/wiki/box-layout.md "box-shadow — a LIST of shadow layers, each with spread".**
+
+**Hypothesis.** `box-shadow` is a comma-separated LIST of layers and each layer has a `spread`
+radius — but the engine modelled it as a single `Option<BoxShadow>` with no spread, taking only the
+first layer. That renders every modern elevation wrong: Tailwind's `shadow`, `shadow-md`, `shadow-lg`,
+`shadow-xl` are all TWO stacked layers, the second tightened with a negative spread
+(`shadow-md` = `0 4px 6px -1px …, 0 2px 4px -2px …`). One un-spread layer is a flatter, wrong shadow —
+on cards, dropdowns, popovers, modals, buttons, toasts: essentially every elevated surface.
+
+Fix (css + layout + paint + the Stylo map): `BoxShadow` gains `spread: f32` and `inset: bool`;
+`ComputedStyle.box_shadow: Option<_>` becomes `box_shadows: Vec<_>`. `parse_box_shadows` splits on
+top-level commas (commas inside `rgba()` don't separate layers) and reads `[inset] dx dy [blur
+[spread]] [color]` per layer (a layer missing dx/dy is dropped, not the whole value). `stylo_map.rs`
+maps Stylo's own `clone_box_shadow().0` to the FULL layer list (was `.find(|sh| !sh.inset)` → one
+layer) with `spread: sh.spread.px()` + `inset: sh.inset` in source order — the shipping path, so real
+pages get every layer with Stylo's own selector matching. `stylo_engine.rs` falls back to
+MinimalCascade only when Stylo left the list empty (`if cs.box_shadows.is_empty()`), never overwriting
+a shadow Stylo resolved. `LayoutBox::shadow` → `shadows: Vec` (~12 construction sites, clone not Copy).
+Paint iterates the list in REVERSE (source order = first layer on top, so it paints last), skips
+`inset` layers (inner painting not built — an inset-only shadow paints nothing, exactly as before),
+and inflates each shadow rect by `spread` before offset/blur
+(`x = rect.x + dx − spread`, `width = (rect.width + 2·spread).max(0)`).
+
+**Safety.** An empty list reproduces the old `None` (no shadow); a single outer layer with `spread: 0`
+inflates by nothing and offsets identically, so every existing single-shadow render is byte-for-byte
+unchanged and the ratchet cannot regress — behaviour changes only when a value has a second layer, a
+spread, or `inset`.
+
+**Gate.** engine/paint `box_shadow_is_a_list_with_spread`: a two-layer `box-shadow` emits TWO Shadow
+items (old single-shadow model: one); `spread:10px` inflates a 100×40 shadow rect to 120×60; an
+inset-only shadow paints nothing. RED against the single-shadow/no-spread baseline (proven: old
+`Option<BoxShadow>` took the first layer only and ignored spread). Verify: css+layout+paint suites
+green (paint 13→14); HANG/CRASH 0. Residue: `inset` (inner) shadow painting clipped inside the box;
+per-layer blur differs from tiny-skia's single-pass gaussian at large radii; the T1 render-polish
+lever board names for further paint fidelity.

@@ -422,18 +422,21 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         _ => 0.0,
     };
 
-    // `box-shadow` — the first outer shadow (inset / spread / multiple are follow-ons).
-    s.box_shadow = cv
+    // `box-shadow` — the full layer list in source order (first on top). Spread and `inset` are
+    // carried per layer; Tailwind's elevation utilities stack two layers with a negative spread.
+    s.box_shadows = cv
         .clone_box_shadow()
         .0
         .iter()
-        .find(|sh| !sh.inset)
         .map(|sh| crate::BoxShadow {
             dx: sh.base.horizontal.px(),
             dy: sh.base.vertical.px(),
             blur: sh.base.blur.0.px().max(0.0),
+            spread: sh.spread.px(),
+            inset: sh.inset,
             color: abs_to_rgba(&sh.base.color.clone().resolve_to_absolute(&current)),
-        });
+        })
+        .collect();
 
     // Position mode — drives whether the insets below are actually applied by layout.
     use stylo::values::computed::{

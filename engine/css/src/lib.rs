@@ -473,15 +473,22 @@ pub struct Sides<T> {
     pub left: T,
 }
 
-/// A single **outer** `box-shadow`: `offset-x offset-y blur color`. `spread`, `inset`, and
-/// multiple comma-separated shadows are follow-ons — this is the shape real pages overwhelmingly
-/// use (a soft drop shadow under a card).
+/// One `box-shadow` layer: `[inset] offset-x offset-y [blur [spread]] [color]`. A `box-shadow`
+/// value is a comma-separated LIST of these — Tailwind's elevation utilities (`shadow`, `shadow-md`,
+/// `shadow-lg`) all stack two layers, the second with a negative spread, so a single-shadow model
+/// rendered every one of them wrong.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BoxShadow {
     pub dx: f32,
     pub dy: f32,
     /// Blur radius in px (`0` = a hard-edged offset rect).
     pub blur: f32,
+    /// Spread radius in px — inflates (positive) or shrinks (negative) the shadow rect before the
+    /// offset and blur. Tailwind's stacked shadows tighten their second layer with a negative spread.
+    pub spread: f32,
+    /// `inset` — an inner shadow. Parsed so a mixed list keeps its outer layers; inner painting is
+    /// not yet done (an inset-only shadow paints nothing, exactly as before).
+    pub inset: bool,
     pub color: Rgba,
 }
 
@@ -601,9 +608,9 @@ pub struct ComputedStyle {
     /// Measured: **21% of the corpus (52 of 237 sites)** has a rule that starts at `opacity: 0` together
     /// with an animation. That is not a visual nicety — it is a fifth of the web with invisible content.
     pub has_animation: bool,
-    /// `box-shadow` — the first outer shadow, if any (multiple shadows / `inset` / `spread` are
-    /// follow-ons).
-    pub box_shadow: Option<BoxShadow>,
+    /// `box-shadow` — the ordered list of shadow layers (front-to-back, first on top). Empty == no
+    /// shadow. A comma list stacks layers (Tailwind's `shadow-md`); each carries its own spread/inset.
+    pub box_shadows: Vec<BoxShadow>,
     pub width: Dim,
     /// The **intrinsic sizing keyword** on `width`, if any. `width` itself collapses to `Dim::Auto`
     /// for length resolution (an intrinsic width is content-driven, not a length), but unlike a plain
@@ -738,7 +745,7 @@ impl ComputedStyle {
             },
             opacity: 1.0,
             has_animation: false,
-            box_shadow: None,
+            box_shadows: Vec::new(),
             width: Dim::Auto,
             width_keyword: None,
             height: Dim::Auto,
@@ -3092,7 +3099,7 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 }
             }
         }
-        "box-shadow" => s.box_shadow = parse_box_shadow(v, s.font_size),
+        "box-shadow" => s.box_shadows = parse_box_shadows(v, s.font_size),
         "mask-image" | "-webkit-mask-image" => {
             let v = v.trim();
             if let Some(rest) = v.strip_prefix("url(") {
@@ -3653,55 +3660,66 @@ fn tokens_keeping_parens(v: &str) -> Vec<String> {
     out
 }
 
-/// Parse `box-shadow: <offset-x> <offset-y> [<blur>] [<color>]` — the first **outer** shadow.
-/// `none`, `inset`, and shadows past the first comma are not painted (documented follow-ons), and
-/// yield `None` rather than a wrong shadow.
-fn parse_box_shadow(v: &str, fs: f32) -> Option<BoxShadow> {
+/// Parse `box-shadow` — a comma-separated LIST of `[inset] <offset-x> <offset-y> [<blur> [<spread>]]
+/// [<color>]` layers, in source order (first layer paints on top). `none`/empty is no shadow.
+/// `inset` layers are captured (so a mixed list keeps its outer layers) but not yet painted.
+fn parse_box_shadows(v: &str, fs: f32) -> Vec<BoxShadow> {
     let v = v.trim();
     if v.is_empty() || v.eq_ignore_ascii_case("none") {
-        return None;
+        return Vec::new();
     }
-    // Only the first shadow: split on the first *top-level* comma (commas inside rgba() don't count).
+    // Split on *top-level* commas (commas inside rgba()/hsl() don't separate layers).
     let mut depth = 0i32;
-    let mut end = v.len();
+    let mut start = 0usize;
+    let mut layers: Vec<&str> = Vec::new();
     for (i, c) in v.char_indices() {
         match c {
             '(' => depth += 1,
             ')' => depth -= 1,
             ',' if depth == 0 => {
-                end = i;
-                break;
+                layers.push(&v[start..i]);
+                start = i + 1;
             }
             _ => {}
         }
     }
-    let first = &v[..end];
-    if first
-        .split_whitespace()
-        .any(|t| t.eq_ignore_ascii_case("inset"))
-    {
-        return None; // inset shadows aren't painted yet
-    }
+    layers.push(&v[start..]);
 
-    let mut lens: Vec<f32> = Vec::new();
-    let mut color: Option<Rgba> = None;
-    for tok in tokens_keeping_parens(first) {
-        if let Some(px) = values::parse_length_px(&tok, fs) {
-            lens.push(px);
-        } else if let Some(c) = values::parse_color(&tok) {
-            color = Some(c);
+    let mut out = Vec::new();
+    for layer in layers {
+        let layer = layer.trim();
+        if layer.is_empty() {
+            continue;
         }
+        let inset = layer
+            .split_whitespace()
+            .any(|t| t.eq_ignore_ascii_case("inset"));
+        let mut lens: Vec<f32> = Vec::new();
+        let mut color: Option<Rgba> = None;
+        for tok in tokens_keeping_parens(layer) {
+            if tok.eq_ignore_ascii_case("inset") {
+                continue;
+            }
+            if let Some(px) = values::parse_length_px(&tok, fs) {
+                lens.push(px);
+            } else if let Some(c) = values::parse_color(&tok) {
+                color = Some(c);
+            }
+        }
+        // offset-x and offset-y are required; a layer missing them is dropped, not the whole value.
+        if lens.len() < 2 {
+            continue;
+        }
+        out.push(BoxShadow {
+            dx: lens[0],
+            dy: lens[1],
+            blur: lens.get(2).copied().unwrap_or(0.0).max(0.0),
+            spread: lens.get(3).copied().unwrap_or(0.0),
+            inset,
+            color: color.unwrap_or(Rgba::BLACK),
+        });
     }
-    // offset-x and offset-y are required.
-    if lens.len() < 2 {
-        return None;
-    }
-    Some(BoxShadow {
-        dx: lens[0],
-        dy: lens[1],
-        blur: lens.get(2).copied().unwrap_or(0.0).max(0.0),
-        color: color.unwrap_or(Rgba::BLACK),
-    })
+    out
 }
 
 /// Parse a `transform` value into an ordered list of [`TransformFn`]s (translate/scale/

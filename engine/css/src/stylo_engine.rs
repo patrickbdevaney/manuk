@@ -446,6 +446,12 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
             cs.letter_spacing = m.letter_spacing;
             cs.word_spacing = m.word_spacing;
             cs.background_repeat = m.background_repeat;
+            // `box-shadow`: stylo_map already fills this from Stylo's own computed value (richer
+            // selector matching), so only fall back to MinimalCascade's parse when Stylo left it
+            // empty — never overwrite a shadow Stylo already resolved.
+            if cs.box_shadows.is_empty() {
+                cs.box_shadows = m.box_shadows.clone();
+            }
             cs.text_decoration = m.text_decoration;
             cs.list_style_type = m.list_style_type;
             cs.list_style_inside = m.list_style_inside;

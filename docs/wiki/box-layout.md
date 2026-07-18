@@ -508,3 +508,37 @@ is byte-identical and the ratchet cannot regress; only an explicit `object-posit
 left of that, `right` 100px left; `0%` == `left`. RED vs the hardcoded-center baseline (all three equal).
 css+layout+paint green (paint 10→11), HANG/CRASH 0. Residue: `px`-length object-position (a length can't
 become a fraction without the box size — falls back to centred), and the 3–4-value edge-offset form.
+
+## box-shadow — a LIST of shadow layers, each with spread (tick 189)
+
+`box-shadow` is a comma-separated **list** of shadow layers, and each layer has a `spread` radius —
+but the engine modelled it as a single `Option<BoxShadow>` with no spread, taking only the first layer
+and dropping the rest. That renders *every* modern elevation wrong: **Tailwind's `shadow`, `shadow-md`,
+`shadow-lg`, `shadow-xl` are all two stacked layers**, the second tightened with a *negative* spread
+(`shadow-md` = `0 4px 6px -1px …, 0 2px 4px -2px …`). One un-spread layer is a different, flatter shadow.
+
+Mechanism (css + layout + paint, + the Stylo map):
+- **css** — `BoxShadow` gains `spread: f32` and `inset: bool`; `ComputedStyle.box_shadow:
+  Option<BoxShadow>` becomes `box_shadows: Vec<BoxShadow>`. `parse_box_shadows` splits on *top-level*
+  commas (commas inside `rgba()` don't separate layers), and per layer reads `[inset] dx dy [blur
+  [spread]] [color]` — a layer missing dx/dy is dropped, not the whole value.
+- **Stylo map** (`stylo_map.rs`) — maps Stylo's own `clone_box_shadow().0` to the **full** layer list
+  (was `.find(|sh| !sh.inset)` → one layer): `spread: sh.spread.px()`, `inset: sh.inset`, in source
+  order. This is the shipping path, so real pages get every layer with correct selector matching.
+- **Stylo engine** (`stylo_engine.rs`) — only falls back to MinimalCascade's parse **when Stylo left
+  the list empty** (`if cs.box_shadows.is_empty()`), never overwriting a shadow Stylo resolved.
+- **layout** — `LayoutBox::shadow` → `shadows: Vec<BoxShadow>` (clone, not Copy; ~12 construction sites).
+- **paint** — iterate the list in **reverse** (source order = first layer on top, so it must paint
+  last), skip `inset` layers (inner painting not built — an inset-only shadow honestly paints nothing,
+  as before), and inflate each shadow rect by `spread` before offset/blur:
+  `x = rect.x + dx − spread`, `width = (rect.width + 2·spread).max(0)`.
+
+**Safety.** An empty list reproduces the old `None` (no shadow); a single outer layer with `spread: 0`
+inflates by nothing and offsets identically, so every existing single-shadow render is byte-for-byte
+unchanged. Behaviour changes only when a value actually has a second layer, a spread, or `inset`.
+
+**Gate.** `box_shadow_is_a_list_with_spread` (engine/paint): a two-layer `box-shadow` emits **two**
+Shadow items (old model: one); `spread:10px` inflates a 100×40 shadow rect to 120×60; an inset-only
+shadow paints nothing. RED against the single-shadow/no-spread baseline. css+layout+paint green,
+HANG/CRASH 0. Residue: `inset` painting (an inner shadow clipped inside the box), and per-layer
+blur that differs from tiny-skia's single-pass gaussian at large radii. [[box-layout]]

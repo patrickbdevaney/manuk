@@ -296,25 +296,29 @@ impl DisplayList {
                     }
                 }
             };
-            // `box-shadow` paints *beneath* the background.
-            if let Some(sh) = b.shadow {
-                let sh = manuk_css::BoxShadow {
-                    color: fade(sh.color),
-                    ..sh
-                };
-                if sh.color.a > 0 {
-                    items.push(DisplayItem::Shadow {
-                        rect: Rect {
-                            x: b.rect.x + sh.dx,
-                            y: b.rect.y + sh.dy,
-                            width: b.rect.width,
-                            height: b.rect.height,
-                        },
-                        color: sh.color,
-                        radius,
-                        blur: sh.blur.max(0.0),
-                    });
+            // `box-shadow` paints *beneath* the background. A comma list stacks layers (Tailwind's
+            // `shadow-md` is two); the FIRST layer paints on top, so push in reverse. `inset` layers
+            // are honestly skipped (inner painting is not built yet — same as before).
+            for sh in b.shadows.iter().rev() {
+                if sh.inset {
+                    continue;
                 }
+                let color = fade(sh.color);
+                if color.a == 0 {
+                    continue;
+                }
+                // `spread` inflates the shadow rect before offset/blur (negative shrinks it).
+                items.push(DisplayItem::Shadow {
+                    rect: Rect {
+                        x: b.rect.x + sh.dx - sh.spread,
+                        y: b.rect.y + sh.dy - sh.spread,
+                        width: (b.rect.width + 2.0 * sh.spread).max(0.0),
+                        height: (b.rect.height + 2.0 * sh.spread).max(0.0),
+                    },
+                    color,
+                    radius,
+                    blur: sh.blur.max(0.0),
+                });
             }
             // An element with `mask-image` whose mask decoded: paint its background through the
             // mask instead of as a rectangle. (Fetched into the same per-node bitmap map — a
@@ -1329,6 +1333,56 @@ mod bg_tests {
         assert!(
             inked > 40,
             "the 16px paragraph must still paint; only {inked}px inked"
+        );
+    }
+
+    /// `box-shadow` is a comma-separated LIST, and each layer carries a `spread`. Tailwind's
+    /// elevation utilities (`shadow`, `shadow-md`, `shadow-lg`) all stack TWO layers, the second
+    /// with a negative spread — so a single-shadow, spread-less model painted every one of them
+    /// wrong: one layer, at the wrong size. An `inset`-only shadow honestly paints nothing (inner
+    /// shadows are captured in the list but not yet rendered).
+    #[test]
+    fn box_shadow_is_a_list_with_spread() {
+        let build = |css: &str| -> Vec<(Rect, f32)> {
+            let dom = manuk_html::parse(r#"<div id="c">x</div>"#);
+            let styles = MinimalCascade.cascade(&dom, &[Stylesheet::parse(css)]);
+            let fonts = FontContext::new();
+            let root = manuk_layout::layout_document(&dom, &styles, &fonts, 400.0);
+            DisplayList::build(&root)
+                .items
+                .iter()
+                .filter_map(|it| match it {
+                    DisplayItem::Shadow { rect, blur, .. } => Some((*rect, *blur)),
+                    _ => None,
+                })
+                .collect()
+        };
+
+        // Two comma-separated layers → TWO Shadow items. The old single-shadow model emitted one.
+        let two = build(
+            "#c{width:100px;height:40px;box-shadow:0 4px 6px -1px #000, 0 2px 4px -2px #000}",
+        );
+        assert_eq!(
+            two.len(),
+            2,
+            "a two-layer box-shadow must emit two Shadow items; got {two:?}"
+        );
+
+        // `spread` inflates the shadow rect: +10px on a 100×40 box → 120×60 (before offset/blur).
+        let spread = build("#c{width:100px;height:40px;box-shadow:0 0 5px 10px #000}");
+        assert_eq!(spread.len(), 1, "one shadow expected; got {spread:?}");
+        assert!(
+            (spread[0].0.width - 120.0).abs() < 0.01 && (spread[0].0.height - 60.0).abs() < 0.01,
+            "box-shadow spread:10px must inflate the 100×40 shadow rect to 120×60; got {:?}",
+            spread[0].0
+        );
+
+        // An `inset`-only shadow paints no outer Shadow item (honest — inner painting not built).
+        let inset = build("#c{width:100px;height:40px;box-shadow:inset 0 2px 4px #000}");
+        assert_eq!(
+            inset.len(),
+            0,
+            "an inset-only box-shadow must paint no outer Shadow item; got {inset:?}"
         );
     }
 
