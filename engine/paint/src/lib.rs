@@ -330,7 +330,6 @@ impl DisplayList {
             // `background-image` sits ON TOP of `background-color` (CSS backgrounds paint
             // colour first, then each image layer). A gradient paints directly; a `url()` is
             // resolved to a decoded bitmap by the page layer and blitted into the box.
-            let bg_img = b.background_image.clone();
             if let Some(bg) = b.background.map(fade) {
                 if bg.a > 0 {
                     if let Some(m) = &mask {
@@ -353,7 +352,9 @@ impl DisplayList {
                     }
                 }
             }
-            if let Some(img) = &bg_img {
+            // `background-image` is a LIST of layers; the FIRST is on top, and CSS paints
+            // back-to-front, so iterate in REVERSE (last layer painted first = bottom).
+            for img in b.background_images.iter().rev() {
                 match img {
                     manuk_css::BackgroundImage::Linear { angle_deg, stops } => {
                         items.push(DisplayItem::Gradient {
@@ -438,7 +439,10 @@ impl DisplayList {
             //
             // A `url()` background on the box is the signal that this node's bitmap belongs to the
             // background layer, which already painted it properly.
-            let bg_is_url = matches!(b.background_image, Some(manuk_css::BackgroundImage::Url(_)));
+            let bg_is_url = b
+                .background_images
+                .iter()
+                .any(|i| matches!(i, manuk_css::BackgroundImage::Url(_)));
             if let Some(node) = b.node.filter(|_| mask.is_none() && !bg_is_url) {
                 if let Some(img) = images.get(&node) {
                     let (rect, content_clip) = object_fit_geometry(

@@ -542,3 +542,43 @@ Shadow items (old model: one); `spread:10px` inflates a 100×40 shadow rect to 1
 shadow paints nothing. RED against the single-shadow/no-spread baseline. css+layout+paint green,
 HANG/CRASH 0. Residue: `inset` painting (an inner shadow clipped inside the box), and per-layer
 blur that differs from tiny-skia's single-pass gaussian at large radii. [[box-layout]]
+
+
+## background-image — a LIST of layers, painted back-to-front (tick 190)
+
+`background-image` is a comma-separated **list** of layers painted back-to-front — the **first** layer
+sits on top — but the engine modelled it as a single `Option<BackgroundImage>`, and worse, the parser
+scanned for `url(` **first**. So the single most common layered pattern on the modern web — a darkening
+scrim over a hero photo, `background: linear-gradient(rgba(0,0,0,.5), rgba(0,0,0,.5)), url(hero.jpg)` —
+returned **only** the url and silently dropped the overlay. Every hero/banner with text over a photo
+rendered the photo at full brightness with the scrim gone, which is exactly the case where white text
+becomes unreadable.
+
+Mechanism (css + layout + paint + page):
+- **css** — `ComputedStyle.background_image: Option<_>` becomes `background_images: Vec<_>` (source
+  order, index 0 = topmost). `parse_background_images` splits the value on **top-level** commas (commas
+  inside `linear-gradient(...)` don't separate layers) and parses each piece as one layer via the
+  single-layer `parse_background_image`, dropping only unreadable layers rather than the whole value.
+- **Stylo engine** (`stylo_engine.rs`) — recovers the **full** layer list from MinimalCascade exactly
+  as it did the single image (Stylo's servo build models background-image as a generic type we don't
+  consume), so the shipping path renders every layer.
+- **layout** — `LayoutBox::background_image` becomes `background_images: Vec<_>` (~10 construction sites).
+- **paint** — iterate the layers in **reverse** after `background-color` (last layer painted first =
+  bottom; first layer painted last = on top). A gradient paints directly; a `url()` layer blits from
+  the per-node bitmap.
+- **page** (`fetch_and_apply_background_images`) — takes the **first** url() layer across the list.
+
+**The one-url constraint.** The per-node bitmap map holds **one** decoded image per node, so at most
+one `url()` image per element is fetchable — this is the architectural cap. Multiple **gradient**
+layers over one photo (the common case) is fully supported; two url() layers on one element is not.
+
+**Safety.** An empty list reproduces the old `None` (no image); a single-layer list — one gradient OR
+one url — paints byte-for-byte identically (same item, same order, same node-bitmap path), so every
+existing background render is unchanged. Behaviour changes only when a value has two or more layers. The
+`bg_is_url` guard that suppresses the replaced-image blit now checks whether **any** layer is a url.
+
+**Gate.** `background_image_is_a_layer_list` (engine/css): `linear-gradient(...), url(x)` parses **two**
+layers with the gradient at index 0 (old single-`Option` model: one, and it was the url); a comma
+inside a gradient doesn't split; `none` yields no layers. RED against the single-`Option` baseline.
+css+layout+paint+page green, HANG/CRASH 0. Residue: one url() image per element (per-node bitmap
+keying); per-layer `background-size`/`-repeat`/`-position` still apply to the url layer only. [[box-layout]]

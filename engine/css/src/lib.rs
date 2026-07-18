@@ -519,9 +519,11 @@ pub struct ComputedStyle {
     pub display: Display,
     pub color: Rgba,
     pub background_color: Option<Rgba>,
-    /// `background-image` — a URL or a gradient. Painting only the colour and dropping this is why
-    /// gradient heroes, washed cards and CSS-only icons rendered as blank rectangles.
-    pub background_image: Option<BackgroundImage>,
+    /// `background-image` — a LIST of layers (url or gradient), painted back-to-front: index 0 is the
+    /// TOPMOST layer. Painting only the colour and dropping this is why gradient heroes, washed cards
+    /// and CSS-only icons rendered as blank rectangles; modelling it as a single layer is why a
+    /// `linear-gradient(...) , url(hero.jpg)` scrim rendered the photo with no darkening overlay.
+    pub background_images: Vec<BackgroundImage>,
     pub background_size: BackgroundSize,
     /// `object-fit` — how a replaced element's content is fitted into its box (default `fill`).
     pub object_fit: ObjectFit,
@@ -724,7 +726,7 @@ impl ComputedStyle {
             visibility: Visibility::Visible,
             line_height_normal: true,
             mask_image: None,
-            background_image: None,
+            background_images: Vec::new(),
             background_size: BackgroundSize::Auto,
             object_fit: ObjectFit::Fill,
             object_position: ObjectPosition::default(),
@@ -3120,13 +3122,14 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 _ => Visibility::Visible,
             }
         }
-        "background-image" => s.background_image = parse_background_image(v),
+        "background-image" => s.background_images = parse_background_images(v),
         "background" => {
-            // The shorthand: pull out whatever we understand — a colour, an image/gradient — and
-            // ignore the rest. A page that writes `background: linear-gradient(...)` (very common)
-            // otherwise gets nothing at all.
-            if let Some(img) = parse_background_image(v) {
-                s.background_image = Some(img);
+            // The shorthand: pull out whatever we understand — a colour, an image/gradient (possibly
+            // several comma-separated layers) — and ignore the rest. A page that writes
+            // `background: linear-gradient(...)` (very common) otherwise gets nothing at all.
+            let imgs = parse_background_images(v);
+            if !imgs.is_empty() {
+                s.background_images = imgs;
             } else if let Some(c) = values::parse_color(v) {
                 s.background_color = Some(c);
             }
@@ -3469,10 +3472,26 @@ fn parse_list_style_type(v: &str) -> ListStyleType {
     parse_list_style_type_opt(v).unwrap_or(ListStyleType::Disc)
 }
 
-/// `background-image: url(...) | linear-gradient(...) | radial-gradient(...) | none`.
+/// `background-image` / the image part of the `background` shorthand — a comma-separated LIST of
+/// layers. The list is returned in SOURCE ORDER (index 0 is the topmost layer, per CSS). A layer the
+/// parser can't read is dropped, not the whole value, so `linear-gradient(...), url(x)` keeps the url
+/// even if the gradient is malformed. `none`/empty yields no layers.
+pub fn parse_background_images(v: &str) -> Vec<BackgroundImage> {
+    let v = v.trim();
+    if v.eq_ignore_ascii_case("none") || v.is_empty() {
+        return Vec::new();
+    }
+    // Split on TOP-LEVEL commas — commas inside `linear-gradient(rgba(...), ...)` don't separate
+    // layers. Each piece is then parsed as a single layer.
+    split_top_level_commas(v)
+        .iter()
+        .filter_map(|layer| parse_background_image(layer))
+        .collect()
+}
+
+/// A single `background-image` layer: `url(...) | linear-gradient(...) | radial-gradient(...)`.
 ///
-/// Only the first layer is taken (multiple backgrounds are a documented v1 simplification), and
-/// gradient syntax is handled to the depth the web actually uses: an optional angle or `to <side>`,
+/// Gradient syntax is handled to the depth the web actually uses: an optional angle or `to <side>`,
 /// then colour stops with optional percentage positions.
 pub fn parse_background_image(v: &str) -> Option<BackgroundImage> {
     let v = v.trim();
@@ -4159,6 +4178,30 @@ mod tests {
         assert_eq!(map[&p].color, Rgba::new(0, 128, 0, 255));
         // #x id selector wins on the span.
         assert_eq!(map[&span].color, Rgba::new(0, 0, 255, 255));
+    }
+
+    #[test]
+    fn background_image_is_a_layer_list() {
+        // The ubiquitous scrim-over-hero pattern: a darkening gradient ON TOP of a photo. The old
+        // single-`Option` model scanned for `url(` first and returned ONLY the image, dropping the
+        // overlay. It is a LIST, source order = top-to-bottom, so the gradient is index 0.
+        let layers = parse_background_images(
+            "linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url(hero.jpg)",
+        );
+        assert_eq!(layers.len(), 2, "two layers, not one");
+        assert!(
+            matches!(layers[0], BackgroundImage::Linear { .. }),
+            "the gradient scrim is the TOP layer (index 0)"
+        );
+        assert!(
+            matches!(layers[1], BackgroundImage::Url(ref u) if u == "hero.jpg"),
+            "the photo is the bottom layer"
+        );
+        // A comma INSIDE a gradient does not split layers.
+        let one = parse_background_images("linear-gradient(90deg, red, blue)");
+        assert_eq!(one.len(), 1, "internal commas are not layer separators");
+        // `none`/empty yields no layers (the old `None`).
+        assert!(parse_background_images("none").is_empty());
     }
 
     #[test]

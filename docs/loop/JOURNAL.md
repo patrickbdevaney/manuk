@@ -7728,3 +7728,46 @@ inset-only shadow paints nothing. RED against the single-shadow/no-spread baseli
 green (paint 13→14); HANG/CRASH 0. Residue: `inset` (inner) shadow painting clipped inside the box;
 per-layer blur differs from tiny-skia's single-pass gaussian at large radii; the T1 render-polish
 lever board names for further paint fidelity.
+
+## Tick 190 — background-image is a LIST of layers — the dark scrim over a hero image renders (CSS render / paint) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (CSS render — background-image layer list). WIKI:
+docs/wiki/box-layout.md "background-image — a LIST of layers, painted back-to-front".**
+
+**Hypothesis.** `background-image` is a comma-separated LIST of layers painted back-to-front (the
+FIRST layer sits on top), but the engine modelled it as a single `Option<BackgroundImage>`. Worse, the
+parser scanned for `url(` FIRST, so the single most common layered pattern on the modern web —
+`background: linear-gradient(rgba(0,0,0,.5), rgba(0,0,0,.5)), url(hero.jpg)` (a darkening scrim over a
+hero image so white text stays readable) — returned ONLY the url and silently dropped the scrim. Every
+hero/banner with text over a photo rendered the photo at full brightness with the overlay gone, which
+is exactly the case where the text becomes unreadable.
+
+Fix (css + layout + paint + page): `ComputedStyle.background_image: Option<_>` becomes
+`background_images: Vec<_>` (source order, index 0 = topmost). `parse_background_images` splits the
+value on top-level commas (commas inside `linear-gradient(...)` don't separate layers) and parses each
+piece as one layer, dropping only the layers it can't read rather than the whole value. The Stylo
+shipping path (`stylo_engine.rs`) recovers the full layer list from MinimalCascade exactly as it did
+the single image. Paint iterates the layers in REVERSE after `background-color` (last layer painted
+first = bottom; first layer painted last = on top), each gradient painted directly and a `url()` layer
+blitted from the per-node bitmap. `page::fetch_and_apply_background_images` finds the FIRST url() layer
+across the list (the per-node bitmap map holds one image per node — the architectural constraint that
+caps this at one url image per element; multiple gradient layers over one photo, the common case, is
+fully supported).
+
+**Safety.** An empty list reproduces the old `None` (no image); a single-layer list (one gradient OR
+one url) paints byte-for-byte identically — same item, same order, same node-bitmap path — so every
+existing background render is unchanged and the ratchet cannot regress. Behaviour changes only when a
+value has two or more layers. The `bg_is_url` guard that suppresses the replaced-image blit now checks
+whether ANY layer is a url, preserving old.reddit.com's small-header-art fix.
+
+**Gate.** engine/css `background_image_is_a_layer_list`: `linear-gradient(...), url(...)` parses TWO
+layers with the gradient at index 0 (old single-Option model: one, and it was the url); a lone
+gradient still parses to one layer. RED against the single-`Option` baseline (proven: the old parser
+found `url(` first and returned one image, dropping the overlay). Verify: css+layout+paint+page suites
+green; HANG/CRASH 0. Residue: one url() image per element (per-node bitmap keying); per-layer
+`background-size`/`-repeat`/`-position` still apply to the url layer only, not per-layer — the T1
+render-polish lever names further background fidelity.
+
+_Note (tick 190): `manuk-page::hard_wall_detection_and_honest_interstitial` fails on the committed
+HEAD too (pre-existing, unrelated to background-image; not in the verify wall's test set). Left for a
+dedicated tick — flagged here so it is not mistaken for a tick-190 regression._

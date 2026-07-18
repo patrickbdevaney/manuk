@@ -419,7 +419,7 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
             // them as generic image/keyword types we would have to reimplement to consume. Dropping
             // them was not cosmetic — a gradient hero, an underlined link and a bulleted list are
             // three of the most common things on a web page, and all three rendered as nothing.
-            cs.background_image = m.background_image.clone();
+            cs.background_images = m.background_images.clone();
             cs.background_size = m.background_size;
             // `object-fit` recovered from MinimalCascade like the rest of this block, so the shipping
             // Stylo path renders it too: a card grid's `object-fit:cover` thumbnails must not distort.

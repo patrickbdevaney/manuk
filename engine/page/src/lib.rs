@@ -2167,16 +2167,20 @@ impl Page {
             .styles
             .iter()
             .filter(|(n, _)| !have.contains(n))
-            .filter_map(|(&n, s)| match s.background_image.as_ref()? {
-                manuk_css::BackgroundImage::Url(u) => {
-                    let abs = if u.starts_with("data:") {
-                        u.clone()
-                    } else {
-                        resolve_url(&self.final_url, u)
-                    };
-                    Some((n, abs))
-                }
-                _ => None,
+            .filter_map(|(&n, s)| {
+                // The per-node bitmap map holds ONE image per node, so at most one url() layer per
+                // element is fetchable — take the first. (Multiple gradient layers over one photo,
+                // the common case, need no fetch.)
+                let u = s.background_images.iter().find_map(|i| match i {
+                    manuk_css::BackgroundImage::Url(u) => Some(u),
+                    _ => None,
+                })?;
+                let abs = if u.starts_with("data:") {
+                    u.clone()
+                } else {
+                    resolve_url(&self.final_url, u)
+                };
+                Some((n, abs))
             })
             .collect();
         if targets.is_empty() {

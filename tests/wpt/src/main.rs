@@ -693,7 +693,10 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
             "element", "natural", "size", "repeat", "url", "box"
         );
         for (&n, st) in page.styles_map().iter() {
-            let Some(manuk_css::BackgroundImage::Url(u)) = st.background_image.as_ref() else {
+            let Some(u) = st.background_images.iter().find_map(|i| match i {
+                manuk_css::BackgroundImage::Url(u) => Some(u),
+                _ => None,
+            }) else {
                 continue;
             };
             let tag = dom.tag_name(n).unwrap_or("?");
