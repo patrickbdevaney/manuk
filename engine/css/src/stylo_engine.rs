@@ -681,6 +681,19 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
                 s.height = h;
             }
         }
+        // The dimension attributes are also an aspect-ratio hint (HTML §"dimension attributes":
+        // `aspect-ratio: auto <width> / <height>`). Twin of the block in `apply_ua_defaults` —
+        // see there for why the ratio, not the lengths, is the load-bearing half.
+        if s.aspect_ratio.is_none() && !matches!(tag, "iframe" | "embed" | "object") {
+            if let (Some(crate::Dim::Px(w)), Some(crate::Dim::Px(h))) = (
+                el.attr("width").and_then(crate::parse_dimension_attr_dim),
+                el.attr("height").and_then(crate::parse_dimension_attr_dim),
+            ) {
+                if w > 0.0 && h > 0.0 {
+                    s.aspect_ratio = Some(w / h);
+                }
+            }
+        }
         // **An unsized `<iframe>` is 300x150.** That is the spec's default, and it is not arbitrary
         // trivia: an iframe has no intrinsic size to fall back on, so with no default it collapses to
         // nothing and the embed is invisible *before* any question of content arises. `iframe` was not

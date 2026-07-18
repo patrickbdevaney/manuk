@@ -9118,3 +9118,43 @@ assertions, (b) never registering the listener fails the click assertion.
 **Residue:** this does not run a real framework bundle — it exercises the primitives. `Suspense`
 streaming boundaries, selective hydration and islands are unmeasured, as is the `#418` mismatch
 *recovery* path (we assert the check can conclude MATCH, not that a real mismatch re-renders).
+
+## Tick 218 — the dimension attributes are a ratio, and a clamp transfers through it (2026-07-18)
+
+**Selected:** the board's PHASE MANDATE (CSS-LAYOUT ★). Histogramming `css/css-flexbox
+--show-failures` first pointed at a text-sized flex item (`expected 70, got 41`) — and the probe
+refused to reproduce it: our engine already gives that item its max-content width. The number was
+wrong because the test is an **Ahem** test and the corpus has no Ahem. Re-aimed at `css/css-sizing`,
+whose failures are font-independent, and the histogram there is unambiguous: `<canvas width="15"
+height="15" style="max-width:0">` expects `0x0` and rendered `15x15`.
+
+**Two gaps, and they only bite together.** (1) `aspect_ratio` was only ever set from a **decoded
+bitmap**, so `<canvas>`/`<video>` had no ratio *ever* and an `<img>` had none *until it loaded* — the
+exact window `<img width height>` exists to cover. (2) A min/max-width clamp did not transfer through
+the ratio (CSS2.1 §10.4), because the height was derived from the ratio only when it was `auto`. So
+`img { max-width: 100% }` — in every CSS reset on the web — narrowed an 800x400 asset to a 400px
+column and left the height at 400: **the picture renders squashed to half its width**, at every
+viewport narrower than the image. Fixed in both cascade paths (attribute → `aspect-ratio: auto w/h`,
+into an empty slot only, so a real decode still wins) and in `layout_block` (transfer on an actual
+constraint violation, replaced elements only).
+
+**Measured:** css-sizing 343 → 395 subtests (20.5% → 23.6%), +52. css-flexbox 968 and css-grid 272
+flat. Bar 0 clean (0 HANG/CRASH across all three). Mechanism in `docs/wiki/box-layout.md`.
+
+**Gate.** `g_replaced_ratio` (end-to-end, shipping stylo+spidermonkey: an 800x400 `<img>` AND an
+800x400 `<canvas>` — the canvas has no bitmap to decode, so it passes only if the ratio came from the
+attributes — plus the `max-width:0` collapse and an unclamped control). Proven RED **two independent
+ways**: disabling the §10.4 transfer and disabling the attribute hint each yield `400x400`, which is
+the squashed render itself. Mirrored as a `manuk-layout` unit test, because `verify.sh`'s gate list is
+observer-owned and a new `engine/page/tests/` file is not picked up by the wall on its own — the
+`manuk-layout` suite is, so the mechanism is wall-covered either way.
+
+⚠ **INSTRUMENT, observer-owned (not fixed here).** `/home/patrickd/wpt` is a **sparse checkout with
+no `fonts/` directory** → `@import "/fonts/ahem.css"` 404s and every Ahem test measures in a fallback
+font, so its `data-expected-width` assertions cannot pass however correct the layout is. **838
+css-grid files reference Ahem** (plus 93 css-flexbox, 40 css-sizing). css-grid's 9.6% is therefore a
+floor on the instrument, not a reading of the engine, and layout ticks aimed at that number will
+appear to do nothing. Recommend the observer add `fonts/` to the sparse checkout and re-baseline.
+
+**Residue:** only width→height transfers; a `max-height` clamp does not yet push back into the width,
+and §10.4's full ten-case table is approximated by one pass.

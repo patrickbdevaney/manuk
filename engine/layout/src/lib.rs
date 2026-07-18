@@ -1286,6 +1286,16 @@ fn is_out_of_flow_positioned(s: &ComputedStyle) -> bool {
 /// modern clearfix — `overflow:hidden`/`auto`/`scroll` on a container makes it enclose its
 /// floated children rather than let them escape, and stops its own content from wrapping an
 /// outer float. Chrome establishes a BFC for `overflow:clip` too, so any non-`visible` value counts.
+/// Is this a **replaced** element — a box whose content comes from outside CSS (a bitmap, a video
+/// frame, a canvas surface) and which therefore has an intrinsic size and ratio of its own?
+///
+/// Only replaced elements take CSS2.1 §10.4's proportional constraint adjustment: for an ordinary
+/// box a specified height stands even when `max-width` cuts the width, but a replaced element's two
+/// axes are tied together by the ratio of the thing being displayed.
+fn is_replaced_element(tag: Option<&str>) -> bool {
+    matches!(tag, Some("img" | "canvas" | "video" | "svg"))
+}
+
 fn establishes_bfc(s: &ComputedStyle) -> bool {
     is_float(s)
         || is_out_of_flow_positioned(s)
@@ -1747,10 +1757,15 @@ impl Ctx<'_> {
             Dim::Auto => f32::INFINITY,
             other => (other.resolve(cw, f32::INFINITY) - bs_extra_w).max(0.0),
         };
+        let unclamped_width = width;
         if max_w.is_finite() {
             width = width.min(max_w);
         }
         width = width.max(min_w);
+        // Did a min/max-width constraint actually move the width? For a **replaced** element that
+        // is a constraint violation in CSS2.1 §10.4's sense, and the height has to follow the ratio
+        // — see the height derivation below.
+        let inline_constraint_violated = width != unclamped_width;
 
         // Horizontal auto-margin centering when width is definite. A keyword width (`fit-content`
         // etc.) collapses to `Dim::Auto` but IS definite for margins — `width:fit-content;margin:auto`
@@ -1870,6 +1885,22 @@ impl Ctx<'_> {
         // height with it, which is the entire point of that reset.
         let mut content_height = match (own_definite_h, s.aspect_ratio) {
             (None, Some(r)) if r > 0.0 => width / r,
+            // **CSS2.1 §10.4 constraint violation: the clamp transfers through the ratio.** A
+            // replaced element whose width was cut down by `max-width` (or pushed up by
+            // `min-width`) does not keep its specified height — the used height is recomputed from
+            // the used width so the ratio survives. This is the case a specified height alone would
+            // otherwise win, and it is exactly the shape of the responsive web: `<img width="800"
+            // height="400">` (the attributes are there to reserve the box before the bitmap
+            // arrives) under the universal `img { max-width: 100% }` reset, in a 400px column.
+            // Without the transfer the box is 400x400 and the picture renders squashed to half its
+            // width at full height; with it, 400x200.
+            (Some(_), Some(r))
+                if r > 0.0
+                    && inline_constraint_violated
+                    && is_replaced_element(self.dom.tag_name(node)) =>
+            {
+                width / r
+            }
             _ => own_definite_h.unwrap_or(content_height),
         };
         // Parent↔child BOTTOM margin collapse (CSS2 §8.3.1): an auto-height block with no bottom
@@ -4991,6 +5022,57 @@ mod tests {
             "the height must follow the CLAMPED width through the 4:3 ratio → 112.5px, got {} \
              (300 means the natural height was kept and the image renders stretched)",
             r.height
+        );
+    }
+
+    /// The **pre-load** half of the same story, and the one the test above cannot reach: the ratio
+    /// has to come from the `width`/`height` **attributes**, not from a decoded bitmap.
+    ///
+    /// Those attributes exist for exactly this — reserve the right-shaped box *before* the image
+    /// arrives (Next.js `<Image>`, WordPress and GitHub all emit them for that reason). Deriving the
+    /// ratio only at decode time means the box is the wrong shape for the whole load, and for a
+    /// `<canvas>` or `<video>` — which never decode a bitmap at all — it is the wrong shape forever.
+    ///
+    /// Two constraints in one, both CSS2.1 §10.4: the clamp transfers proportionally (`800x400` in
+    /// a `400px` column is `400x200`), and it only fires on an actual constraint *violation* — an
+    /// unclamped element keeps its declared size.
+    #[test]
+    fn dimension_attributes_give_a_replaced_element_its_ratio_before_it_loads() {
+        let dom = manuk_html::parse(
+            r#"<div class="col"><canvas id="c" width="800" height="400"></canvas></div>
+               <div class="col"><canvas id="u" width="800" height="400" style="max-width:none"></canvas></div>"#,
+        );
+        let sheets = vec![Stylesheet::parse(
+            ".col{width:400px} canvas{max-width:100%}",
+        )];
+        let styles = MinimalCascade.cascade(&dom, &sheets);
+        let fonts = FontContext::new();
+        let root = layout_document(&dom, &styles, &fonts, 800.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .and_then(|n| rects.get(&n).copied())
+                .expect("laid-out canvas")
+        };
+
+        let c = by_id("c");
+        assert!(
+            (c.width - 400.0).abs() < 1.0 && (c.height - 200.0).abs() < 1.0,
+            "an 800x400 <canvas> clamped to a 400px column is 400x200 — the attributes' 2:1 ratio \
+             survives the clamp. Got {}x{} (400x400 = the clamp did not transfer and the content \
+             renders squashed; 400x0 = the attributes gave no ratio at all)",
+            c.width,
+            c.height
+        );
+
+        let u = by_id("u");
+        assert!(
+            (u.width - 800.0).abs() < 1.0 && (u.height - 400.0).abs() < 1.0,
+            "with no clamp there is no constraint violation, so the declared 800x400 stands \
+             unchanged — got {}x{}",
+            u.width,
+            u.height
         );
     }
 

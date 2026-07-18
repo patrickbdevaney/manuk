@@ -745,3 +745,48 @@ unit gate passes.
 Still open for lever 4: `overflow-anchor: none`. Honouring it means a `ComputedStyle` field fed by
 Stylo, which is where the shipping cascade reads from — a bigger change than it looks, and it is the
 one remaining honest divergence here: a site that opted out is still anchored.
+
+## The `width`/`height` attributes are an aspect ratio, and a clamp transfers through it (tick 218)
+
+Two gaps that only bite together, and together they broke the most common image markup on the web.
+
+**Gap 1 — the ratio only ever came from a decoded bitmap.** `Page::apply_images` sets
+`aspect_ratio` when the pixels arrive. So `<canvas>` and `<video>`, which never decode a bitmap,
+had **no ratio at all, ever**, and an `<img>` had none **until it loaded** — which is precisely the
+window `<img width="800" height="400">` exists to cover. Those attributes are an
+`aspect-ratio: auto 800 / 400` presentational hint (HTML §"dimension attributes"), and reserving the
+right-shaped box before the bytes arrive is the whole anti-layout-shift story that Next.js `<Image>`,
+WordPress and GitHub all ship. Now set in both cascade paths (`apply_ua_defaults` and
+`apply_presentational_hints`), and only into an empty slot — `auto` means a real intrinsic ratio
+still wins, so the decode pipeline continues to overwrite it. `iframe`/`embed`/`object` are excluded:
+they get the 300x150 default instead, not a ratio.
+
+**Gap 2 — a min/max-width clamp did not transfer through the ratio.** CSS2.1 §10.4: for a *replaced*
+element, clamping one axis is a constraint violation and the other axis is recomputed proportionally
+— even when it was specified. `layout_block` only derived the height from the ratio when the height
+was `auto` (`(None, Some(r))`), so with both axes specified the clamp narrowed the box and left the
+height alone. `img { max-width: 100% }` is in every CSS reset on the web, so an 800x400 asset in a
+400px column rendered **400x400**: the picture squashed to half its width, at every viewport narrower
+than the image. The new arm fires only on an actual violation (`inline_constraint_violated`) and only
+for replaced elements (`is_replaced_element` — an ordinary box's specified height stands; only a
+replaced box's two axes are tied together by the thing being displayed).
+
+**Measured:** `css/css-sizing` 343 → 395 subtests (20.5% → 23.6%); css-flexbox and css-grid flat;
+Bar 0 clean. Gated by `g_replaced_ratio` (end-to-end, shipping stylo+spidermonkey config) and
+`dimension_attributes_give_a_replaced_element_its_ratio_before_it_loads` (layout, in the wall's
+`manuk-layout` suite). Both proven RED **two independent ways** — disabling the transfer and
+disabling the attribute hint each yield `400x400`, which is exactly the squashed render.
+
+**Residue:** only the width→height direction transfers. A `max-height` clamp does not yet push back
+into the width (CSS2.1 §10.4's other half), and the full ten-case constraint table — where both axes
+violate at once — is approximated by the single pass.
+
+### The instrument note that outranks the above
+
+`/home/patrickd/wpt` is a **sparse checkout with no `fonts/` directory**, so `@import
+"/fonts/ahem.css"` 404s and every Ahem-based layout test measures in a fallback font. Ahem's whole
+purpose is that each glyph is exactly 1em square, which is what makes `data-expected-width` legible;
+without it those assertions cannot pass no matter how correct the layout is. This is not a small
+tail: **838 of the css-grid files reference Ahem**, plus 93 in css-flexbox and 40 in css-sizing. Any
+read of "css-grid is at 9.6%" has to be discounted by that. Corpus fixture, observer-owned — recorded
+here and in the journal rather than fixed from inside a tick.

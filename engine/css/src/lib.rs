@@ -2783,6 +2783,24 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
         if let Some(h) = el.attr("height").and_then(parse_dimension_attr) {
             s.height = Dim::Px(h);
         }
+        // **The dimension attributes are also an aspect-ratio hint** (HTML §"dimension attributes":
+        // `aspect-ratio: auto <width> / <height>`), and that half is the load-bearing one. Without it
+        // a `<canvas>`/`<video>` — which never has a decoded bitmap to derive a ratio from — and an
+        // `<img>` that has not loaded yet have NO ratio at all, so the `max-width:100%` in every CSS
+        // reset narrows the box and leaves the height at its attribute value: the image renders
+        // squashed, and the pre-load box that `width`/`height` exist to reserve is the wrong shape.
+        // `auto` in the spec's value means a real intrinsic ratio still wins, which is why this only
+        // fills an empty slot — the decode pipeline overwrites it (`Page::apply_images`).
+        if s.aspect_ratio.is_none() && !matches!(tag, "iframe" | "embed" | "object") {
+            if let (Some(w), Some(h)) = (
+                el.attr("width").and_then(parse_dimension_attr),
+                el.attr("height").and_then(parse_dimension_attr),
+            ) {
+                if w > 0.0 && h > 0.0 {
+                    s.aspect_ratio = Some(w / h);
+                }
+            }
+        }
         // An unsized `<iframe>` is 300x150 — the spec's default. It has no intrinsic size to fall back
         // on, so without this it collapses to nothing and the embed is invisible before any question of
         // its content arises. See the twin of this block in `stylo_engine`.
