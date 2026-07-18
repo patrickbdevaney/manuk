@@ -979,6 +979,75 @@ pub async fn fetch_streaming<F: FnMut(&[u8])>(url: &str, mut on_chunk: F) -> Res
     bail!("too many redirects (>{MAX_REDIRECTS}) starting at {url}")
 }
 
+/// **Streaming fetch for page-issued `fetch()`/XHR** — what [`fetch_streaming`] is for the document.
+///
+/// Three things the document-loader version cannot do, each of which a page request needs: an
+/// arbitrary `method`, request `headers` (an API call without its `Authorization` is a 401), and a
+/// request `body`. And one it does not do: **`on_head` fires with the response metadata BEFORE the
+/// body starts arriving**, because that is when a page's `fetch()` promise resolves. Waiting until
+/// the body completed — which is all a returned `ResponseMeta` can express — would hand the page a
+/// stream that is already finished, which is buffering wearing a stream's costume.
+///
+/// Redirects follow the same rule browsers use: 301/302/303 rewrite to `GET` and drop the body,
+/// 307/308 replay the method and body as-is.
+pub async fn request_streaming<H, F>(
+    method: &str,
+    url: &str,
+    headers: &[(&str, &str)],
+    body: Bytes,
+    mut on_head: H,
+    mut on_chunk: F,
+) -> Result<ResponseMeta>
+where
+    H: FnMut(&ResponseMeta),
+    F: FnMut(&[u8]),
+{
+    let mut current = Url::parse(url).with_context(|| format!("invalid URL: {url}"))?;
+    let mut method = if method.is_empty() {
+        "GET".to_string()
+    } else {
+        method.to_ascii_uppercase()
+    };
+    let mut body = body;
+
+    for _ in 0..=MAX_REDIRECTS {
+        let resp = send_raw(&method, &current, headers, body.clone()).await?;
+        let status = resp.status().as_u16();
+
+        // Follow 3xx (its body is dropped unconsumed when `resp` goes out of scope).
+        if (300..400).contains(&status) {
+            if let Some(loc) = resp.headers().get(LOCATION).and_then(|v| v.to_str().ok()) {
+                let next = current
+                    .join(loc)
+                    .with_context(|| format!("bad redirect target: {loc}"))?;
+                tracing::debug!(%current, %next, status, method, "following redirect (streaming request)");
+                // 303 always, and 301/302 by universal practice, become a bodiless GET.
+                if matches!(status, 301 | 302 | 303) {
+                    method = "GET".to_string();
+                    body = Bytes::new();
+                }
+                current = next;
+                continue;
+            }
+        }
+
+        let http_version = resp.version().into();
+        let headers = collect_headers(&resp);
+        let encoding = content_encoding(&resp);
+        let meta = ResponseMeta {
+            status,
+            headers,
+            final_url: current,
+            http_version,
+        };
+        // Headers first — the page's promise resolves here, with the body still on the wire.
+        on_head(&meta);
+        stream_body_decoded(resp.into_body(), encoding.as_deref(), &mut on_chunk).await?;
+        return Ok(meta);
+    }
+    bail!("too many redirects (>{MAX_REDIRECTS}) starting at {url}")
+}
+
 /// Outcome of a speculative preconnect attempt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Preconnect {
@@ -1416,6 +1485,122 @@ mod tests {
     fn rejects_unknown_scheme() {
         let err = rt().block_on(fetch("ftp://example.com/")).unwrap_err();
         assert!(err.to_string().contains("scheme"), "got: {err}");
+    }
+
+    /// **The streaming-request gate.** `request_streaming` must do the three things
+    /// `fetch_streaming` cannot — carry a method, request headers and a body — and, the part that
+    /// matters most, hand the caller its **headers before the body**, then each chunk **as it comes
+    /// off the socket**.
+    ///
+    /// The falsifiable claim is a TIMING one, because that is the only kind buffering cannot fake:
+    /// the server holds the second half of the body back for 250ms, so an implementation that
+    /// collected the whole body before calling back would deliver both chunks at the same instant.
+    /// Here the first chunk must land well before the last.
+    #[test]
+    fn request_streaming_carries_the_request_and_delivers_the_body_as_it_arrives() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let rt = rt();
+        let (addr, req_seen) = rt.block_on(async {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap().to_string();
+            let req_seen = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+            let r = req_seen.clone();
+            tokio::spawn(async move {
+                while let Ok((mut sock, _)) = listener.accept().await {
+                    let r = r.clone();
+                    tokio::spawn(async move {
+                        let mut buf = vec![0u8; 8192];
+                        let n = sock.read(&mut buf).await.unwrap_or(0);
+                        *r.lock().unwrap() = String::from_utf8_lossy(&buf[..n]).to_string();
+
+                        // Headers, then half the body, then a real pause, then the rest.
+                        let _ = sock
+                            .write_all(
+                                b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\
+                                  Transfer-Encoding: chunked\r\nConnection: close\r\n\r\n",
+                            )
+                            .await;
+                        let _ = sock.flush().await;
+                        let _ = sock
+                            .write_all(b"18\r\ndata: {\"delta\":\"Hello\"}\n\r\n")
+                            .await;
+                        let _ = sock.flush().await;
+                        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                        let _ = sock
+                            .write_all(b"19\r\ndata: {\"delta\":\" world\"}\n\r\n")
+                            .await;
+                        let _ = sock.flush().await;
+                        let _ = sock.write_all(b"0\r\n\r\n").await;
+                        let _ = sock.flush().await;
+                    });
+                }
+            });
+            (addr, req_seen)
+        });
+
+        let started = std::time::Instant::now();
+        let head: std::sync::Arc<std::sync::Mutex<Option<(u16, u128)>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(None));
+        let chunks: std::sync::Arc<std::sync::Mutex<Vec<(String, u128)>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let (h, c) = (head.clone(), chunks.clone());
+
+        let meta = rt
+            .block_on(request_streaming(
+                "POST",
+                &format!("http://{addr}/v1/chat"),
+                &[("authorization", "Bearer sk-test"), ("x-a", "1")],
+                Bytes::from_static(b"{\"prompt\":\"hi\"}"),
+                |m| *h.lock().unwrap() = Some((m.status, started.elapsed().as_millis())),
+                |bytes| {
+                    c.lock().unwrap().push((
+                        String::from_utf8_lossy(bytes).to_string(),
+                        started.elapsed().as_millis(),
+                    ));
+                },
+            ))
+            .expect("streaming request succeeded");
+
+        // The request carried what a page's fetch() put on it.
+        let req = req_seen.lock().unwrap().clone();
+        assert!(req.starts_with("POST "), "method reached the wire: {req:?}");
+        assert!(
+            req.to_lowercase().contains("authorization: bearer sk-test"),
+            "request headers reached the wire — an API call without its Authorization is a 401: {req:?}"
+        );
+        assert!(
+            req.contains("{\"prompt\":\"hi\"}"),
+            "the request body reached the wire: {req:?}"
+        );
+
+        // Headers arrived, and arrived FIRST.
+        let (status, head_ms) = head.lock().unwrap().expect("on_head fired");
+        assert_eq!(status, 200);
+        assert_eq!(meta.status, 200);
+        let got = chunks.lock().unwrap().clone();
+        assert!(!got.is_empty(), "the body was delivered in chunks");
+        assert!(
+            head_ms <= got[0].1,
+            "on_head must fire BEFORE the first body chunk — that is when a page's fetch() promise \
+             resolves, and resolving later hands the page a stream that is already complete"
+        );
+
+        // THE claim: the body was delivered as it arrived, not collected and handed over at the end.
+        let body: String = got.iter().map(|(s, _)| s.as_str()).collect();
+        assert!(
+            body.contains("Hello") && body.contains(" world"),
+            "the whole body arrived across the chunks: {body:?}"
+        );
+        let (first_ms, last_ms) = (got[0].1, got[got.len() - 1].1);
+        assert!(
+            last_ms >= first_ms + 200,
+            "G_STREAM: the first chunk must be delivered ~250ms before the last — the server held \
+             the second half back that long. A buffered implementation delivers both at the same \
+             instant. first={first_ms}ms last={last_ms}ms chunks={}",
+            got.len()
+        );
     }
 
     /// **The T4 form-POST gate.** A native `<form method=post>` login: `post_document` must send the

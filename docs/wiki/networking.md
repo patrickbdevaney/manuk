@@ -523,3 +523,44 @@ uses `manuk_net::request`, and `manuk_net::fetch_streaming` is GET-only with no 
 wiring the two (plus a `NavEvent` per step) is the next tick. Until then this path is exercised by
 the engine and its gate, not by live navigation. `EventSource`/SSE and XHR `readyState 3` are still
 stubs and should ride this same spine.
+
+## The wire is connected — `request_streaming` + `PageFetchStream` (finish-line lever 1, done)
+
+Tick 197 built the engine spine but the host still called the buffered `resolve_fetch`, so nothing
+streamed during real navigation. This closes it.
+
+**`manuk_net::request_streaming(method, url, headers, body, on_head, on_chunk)`** is to a page's
+`fetch()` what `fetch_streaming` is to the document. It adds the three things the document-loader
+version cannot do — an arbitrary **method**, request **headers** (an API call without its
+`Authorization` is a 401) and a request **body** — and one it does not do: **`on_head` fires with the
+response metadata before the body starts arriving.** Returning `ResponseMeta` at the end, as
+`fetch_streaming` does, cannot express "headers now, body later", and handing the page its headers
+only once the body finished would give it a stream that is already complete.
+
+Redirects follow the browser rule: 301/302/303 rewrite to a bodiless `GET`, 307/308 replay method and
+body as-is.
+
+**`NavEvent::PageFetch` became `NavEvent::PageFetchStream { gen, id, event }`** — one event per step
+instead of one per response. The worker sends `Head` the instant headers land, a `Chunk` per piece off
+the socket, then `End`; the `gen` guard still drops a response for a page the user has navigated away
+from.
+
+**The CORS read barrier moved to the headers, and is strictly stronger there.** The buffered path
+read the entire cross-origin body and *then* decided it was unreadable. Now a response the server did
+not opt into sharing is refused before a single body byte is forwarded, with the chunk callback
+dropping the rest on the floor. Still surfaced as Chromium does — `status 0`, rejecting the page's
+promise with a `TypeError`.
+
+**Failure has two shapes and they are not the same.** A failure *before* the headers must reject the
+promise (`Head { status: 0 }`); one *after* them can only truncate the body, so it sends `End` — a
+page whose reader never sees `done` spins forever waiting for an answer that is not coming.
+
+**On the UI thread**, the follow-on work (re-pump the fetch queue, history ops, messages, persist
+cookies/storage) runs **only on `End`** — doing it per chunk would re-drain the queue and re-save
+cookies on every token — while `rerender()` runs on **every** step, which is the visible half of
+streaming.
+
+The gate is a timing claim, because that is the only kind buffering cannot fake: a raw-TCP server
+sends the headers, half the body, then holds the rest back for 250ms. The first chunk must be
+delivered at least 200ms before the last. Proven RED by making the implementation collect the body
+and hand it over at the end — `chunks=1, first=last=253ms`, exactly the failure the claim names.

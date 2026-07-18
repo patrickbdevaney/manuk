@@ -8141,3 +8141,54 @@ harness-scope rule.
 them plus a `NavEvent` per step is the NEXT tick and finishes finish-line lever 1. Until then this
 path is exercised by the engine and its gate, not by live navigation. `EventSource`/SSE and XHR
 `readyState 3` are still stubs and should ride this same spine.
+
+## Tick 198 — the wire is connected: a page's fetch() streams during real navigation (net / shell) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (Phase-0 FINISH-LINE lever 1, COMPLETE). WIKI:
+docs/wiki/networking.md "The wire is connected — `request_streaming` + `PageFetchStream`".**
+
+**Selection.** The second half of the decomposition tick 197 declared: that tick built the engine
+spine and named the host wire-up as the next tick. Finish-line lever 1 is now done end to end.
+
+**Hypothesis.** Tick 197's spine was real but unreachable from the browser: `pump_fetches` still
+called `manuk_net::request` + buffered `resolve_fetch`, so during actual navigation nothing streamed.
+A capability only the gate can reach is not a capability.
+
+**Implemented.** `manuk_net::request_streaming(method, url, headers, body, on_head, on_chunk)` — what
+`fetch_streaming` is to the document, plus the three things it cannot do (arbitrary method, request
+headers, request body) and one it does not: **`on_head` fires before the body starts arriving.**
+Returning `ResponseMeta` at the end cannot express "headers now, body later". Redirects follow the
+browser rule (301/302/303 → bodiless GET; 307/308 replay method+body). `NavEvent::PageFetch` became
+`NavEvent::PageFetchStream { gen, id, event }`, one event per step, `gen` guard unchanged.
+
+**The CORS barrier moved to the headers and got STRONGER doing it.** The buffered path read the whole
+cross-origin body and *then* judged it unreadable. It is now refused before a single body byte is
+forwarded to the page, with the chunk callback dropping the remainder. Same surface as Chromium
+(`status 0` → `TypeError`). This is a security improvement that fell out of the shape of the fix, not
+a trade for it.
+
+**Failure has two shapes, and conflating them hangs the page.** A failure BEFORE the headers must
+reject the promise (`Head { status: 0 }`); one AFTER them can only truncate the body, so it must send
+`End` — a reader that never sees `done` spins forever waiting for an answer that is not coming.
+
+**UI thread.** Follow-on work (re-pump, history ops, messages, cookie/storage persist) runs only on
+`End`; per-chunk would re-drain the fetch queue and re-save cookies on every token. `rerender()` runs
+on EVERY step — that is the visible half of streaming.
+
+**Gate — a TIMING claim, because buffering cannot fake time.** A raw-TCP server sends the headers,
+half the body, then holds the rest back for 250ms; the first chunk must be delivered ≥200ms before
+the last, `on_head` must precede the first chunk, and the POST/`Authorization`/body must reach the
+wire. **Proven RED by making the implementation collect the body and hand it over at the end:
+`chunks=1, first=last=253ms`** — precisely the failure mode the assertion names. manuk-net 59 and
+manuk-shell 58+2 green.
+
+**Not gated, and said plainly.** The shell half (`pump_fetches` → `PageFetchStream` → the UI handler)
+has no wall gate, because there is no UI test harness — the same honest limitation recorded for T6.1
+agent-click. The net half is gated, the engine half was gated in tick 197, and the shell code between
+them is straight-line wiring reviewed against both. It is not claimed as gate-proven.
+
+**Residue.** `EventSource`/SSE and XHR `readyState 3` are still stubs and should now ride this spine —
+the expensive part is built, so each is a bounded tick. No per-header `Access-Control-Expose-Headers`
+safelist (the wholesale read barrier still bounds exposure). The two pre-existing failures flagged in
+ticks 196/197 (`hard_wall_detection_and_honest_interstitial`, `g_capability`
+`createDocumentType validates`) remain open for the observer, unchanged by this tick.

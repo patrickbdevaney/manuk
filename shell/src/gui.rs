@@ -124,12 +124,14 @@ enum NavEvent {
     /// DEBT-1 — a page-issued `fetch()`/XHR completed **off-thread**. Settled on the UI thread.
     /// `gen` guards against a stale response landing in a page the user has since navigated away
     /// from. This used to `block_on` the UI thread: a slow API call froze the whole browser.
-    PageFetch {
+    /// One step of a page-issued `fetch()` — `Head` (where the page's promise resolves), a `Chunk`
+    /// per piece of body **as it comes off the socket**, then `End`. Replaces a single buffered
+    /// `PageFetch`: the whole body arriving at once meant a streamed answer could only appear when
+    /// the server had finished, however real the page's `ReadableStream` was.
+    PageFetchStream {
         gen: u64,
         id: u32,
-        status: u16,
-        body: String,
-        headers: Vec<(String, String)>,
+        event: manuk_page::FetchStreamEvent,
     },
     /// An `<iframe>`'s document arrived — AFTER first paint, for the same reason images do. A heavy
     /// third-party embed must not hold the parent's article hostage.
@@ -2603,54 +2605,102 @@ impl App {
                         }
                     }
                     let bytes = manuk_net::Bytes::from(body.into_bytes());
-                    let (status, text, headers) =
-                        match manuk_net::request(&method, &url, &hdrs, bytes).await {
-                            Ok(resp) => {
-                                // CORS read barrier: a cross-origin response the server did not opt in
-                                // to share (no matching `Access-Control-Allow-Origin`) is not readable.
-                                // Surface it as Chromium does — a network failure (`status 0`) that
-                                // rejects the page's `fetch()` Promise with a `TypeError` — rather than
-                                // leaking the body. Default `fetch()` credentials mode is `same-origin`,
-                                // so a cross-origin request is treated as uncredentialed.
-                                let readable = !cross_origin
-                                    || match (&page_origin, &req_url) {
-                                        (Some(po), Some(ru)) => {
-                                            manuk_net::cors::fetch_response_readable(
-                                                po,
-                                                ru,
-                                                &resp.headers,
-                                                false,
-                                            )
-                                        }
-                                        _ => true,
-                                    };
-                                if readable {
-                                    // The page reads these as `Response.headers.get(…)` /
-                                    // `XHR.getResponseHeader(…)`. (Cross-origin exposure is bounded by
-                                    // the CORS read barrier above, which already blocks unreadable
-                                    // bodies wholesale; the per-header Expose-Headers safelist is a
-                                    // documented follow-on.)
-                                    (resp.status, resp.text(), resp.headers)
-                                } else {
-                                    tracing::info!(
-                                        url = %url,
-                                        "page fetch blocked by CORS (no matching Access-Control-Allow-Origin)"
-                                    );
-                                    (0u16, String::new(), Vec::new())
+
+                    // **Streamed, not buffered.** `Head` goes up the moment the response headers
+                    // land — which is when a real `fetch()` promise resolves — and each body chunk
+                    // follows as it comes off the socket, so the page renders a token stream as it
+                    // types rather than in one lump when the server finishes.
+                    use std::sync::atomic::{AtomicBool, Ordering};
+                    use std::sync::Arc;
+                    let head_sent = Arc::new(AtomicBool::new(false));
+                    let blocked = Arc::new(AtomicBool::new(false));
+
+                    let (hp, cp) = (proxy.clone(), proxy.clone());
+                    let (hs, hb) = (head_sent.clone(), blocked.clone());
+                    let cb = blocked.clone();
+                    let (hurl, hpo, hru) = (url.clone(), page_origin.clone(), req_url.clone());
+
+                    let result = manuk_net::request_streaming(
+                        &method,
+                        &url,
+                        &hdrs,
+                        bytes,
+                        |meta| {
+                            hs.store(true, Ordering::SeqCst);
+                            // CORS read barrier, now applied AT THE HEADERS — which is strictly
+                            // better than the buffered path did it: a cross-origin response the
+                            // server did not opt in to share is refused before a single body byte
+                            // is forwarded to the page, rather than after the whole body was read.
+                            // Surfaced as Chromium does, a network failure (`status 0`) rejecting
+                            // the promise with a TypeError. Default `fetch()` credentials mode is
+                            // `same-origin`, so a cross-origin request is uncredentialed.
+                            let readable = !cross_origin
+                                || match (&hpo, &hru) {
+                                    (Some(po), Some(ru)) => manuk_net::cors::fetch_response_readable(
+                                        po,
+                                        ru,
+                                        &meta.headers,
+                                        false,
+                                    ),
+                                    _ => true,
+                                };
+                            let event = if readable {
+                                manuk_page::FetchStreamEvent::Head {
+                                    status: meta.status,
+                                    headers: meta.headers.clone(),
                                 }
+                            } else {
+                                hb.store(true, Ordering::SeqCst);
+                                tracing::info!(
+                                    url = %hurl,
+                                    "page fetch blocked by CORS (no matching Access-Control-Allow-Origin)"
+                                );
+                                manuk_page::FetchStreamEvent::Head {
+                                    status: 0,
+                                    headers: Vec::new(),
+                                }
+                            };
+                            let _ = hp.send_event(NavEvent::PageFetchStream { gen, id, event });
+                        },
+                        |chunk| {
+                            // A CORS-refused body is dropped on the floor here — it must never
+                            // reach the page, and the promise it belongs to is already rejected.
+                            if cb.load(Ordering::SeqCst) {
+                                return;
                             }
-                            Err(e) => {
-                                tracing::warn!(url = %url, error = %e, "page fetch failed");
-                                (0u16, String::new(), Vec::new())
-                            }
-                        };
-                    let _ = proxy.send_event(NavEvent::PageFetch {
-                        gen,
-                        id,
-                        status,
-                        body: text,
-                        headers,
-                    });
+                            let _ = cp.send_event(NavEvent::PageFetchStream {
+                                gen,
+                                id,
+                                event: manuk_page::FetchStreamEvent::Chunk(chunk.to_vec()),
+                            });
+                        },
+                    )
+                    .await;
+
+                    match result {
+                        Ok(_) => {
+                            let _ = proxy.send_event(NavEvent::PageFetchStream {
+                                gen,
+                                id,
+                                event: manuk_page::FetchStreamEvent::End,
+                            });
+                        }
+                        Err(e) => {
+                            tracing::warn!(url = %url, error = %e, "page fetch failed");
+                            // A failure BEFORE the headers has to reject the promise; one after
+                            // them can only truncate the body, and a page that never sees `done`
+                            // spins forever waiting for an answer that is not coming.
+                            let event = if head_sent.load(Ordering::SeqCst) {
+                                manuk_page::FetchStreamEvent::End
+                            } else {
+                                manuk_page::FetchStreamEvent::Head {
+                                    status: 0,
+                                    headers: Vec::new(),
+                                }
+                            };
+                            let _ = proxy.send_event(NavEvent::PageFetchStream { gen, id, event });
+                        }
+                    }
                 });
             }
             // Nothing to drain synchronously any more — the responses arrive as events.
@@ -3568,28 +3618,28 @@ impl ApplicationHandler<NavEvent> for App {
                 html,
                 url,
             } => self.finish_iframe(gen, tab, node, html, url),
-            NavEvent::PageFetch {
-                gen,
-                id,
-                status,
-                body,
-                headers,
-            } => {
+            NavEvent::PageFetchStream { gen, id, event } => {
                 // A response for a page the user has navigated away from must not be applied.
                 if gen != self.nav_gen {
                     return;
                 }
                 let w = self.viewport.width;
+                let is_end = matches!(event, manuk_page::FetchStreamEvent::End);
                 if let Some(page) = self.page.as_mut() {
-                    page.resolve_fetch(id, status, &body, &headers, &self.fonts, w);
+                    page.deliver_fetch_stream(id, &event, &self.fonts, w);
                 }
-                // The reaction may have issued a follow-on fetch, mutated the DOM, routed, or
-                // posted a message — pump those, then repaint.
-                self.pump_fetches();
-                self.handle_history_ops();
-                self.pump_messages();
-                manuk_net::save_cookies();
-                manuk_net::webstorage::save();
+                if is_end {
+                    // The reaction may have issued a follow-on fetch, mutated the DOM, routed, or
+                    // posted a message — pump those, then repaint. Only at the END: doing this per
+                    // chunk would re-drain the fetch queue and re-save cookies on every token.
+                    self.pump_fetches();
+                    self.handle_history_ops();
+                    self.pump_messages();
+                    manuk_net::save_cookies();
+                    manuk_net::webstorage::save();
+                }
+                // Repaint on EVERY step, which is the visible half of streaming — this is what
+                // makes the answer type itself out instead of appearing when the body completes.
                 self.rerender();
             }
         }
