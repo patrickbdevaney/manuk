@@ -7996,3 +7996,74 @@ g_popover_render). They pass standalone under `--features stylo,spidermonkey`.
 opening a child closes its parent); anchor positioning (`anchor-name`/`position-area`), so a popover
 is a block in flow rather than floating next to its invoker; `::backdrop`; inertness + focus trap;
 the `HTMLElement.prototype` unification above.
+
+## Tick 196 — `response.body` is a real ReadableStream: a streamed AI answer renders at all (net / js) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (domain PIVOT out of engine/css per the lever-board HORIZON STALE
+warning — last 5 ticks all clustered in engine/css). WIKI: docs/wiki/networking.md "`response.body` is
+a real `ReadableStream` — a streamed answer renders at all".**
+
+**Selection.** `lever-board.sh` opened with **HORIZON STALE — PIVOT DOMAINS** (5 consecutive
+engine/css ticks, Phase-0 readiness flat) and a DIVERSIFY note: stop mining the CSS-layout tail, whose
+remaining steps are subsystem-scope, and take a bounded high-value lever from another tier. The scope
+commit two before this one had already named the target: *"fetch response-body streaming
+(ReadableStream/SSE/progressive XHR) is inert → AI-chat answers never render … one subsystem flips the
+whole AI-chat class."* T2 on the tier list. A different domain (engine/js), one file, and the
+highest-value unserved class on the board.
+
+**Hypothesis.** `__makeResponse` hardcoded `body: null` and `ReadableStream` was an `__inertNames`
+stub (named, empty, no `getReader`), so the canonical
+`const reader = (await fetch(url)).body.getReader()` threw a TypeError **inside the response
+handler** — the answer never appears at all, rather than appearing slowly.
+
+**Probe first, and it was exact.** Wrote `g_fetch_stream.rs` before touching the engine; it failed
+with `THREW:TypeError: can't access property "locked", res.body is null`. Hypothesis confirmed
+verbatim before a line of implementation.
+
+**Implemented** (`engine/js/src/event_loop.rs`, prelude only). A real `ReadableStream`: a chunk queue
+plus a list of `read()` calls parked on an empty queue — `enqueue`/`close`/`error` settle the parked
+readers, and that is the whole mechanism. `getReader()` (locking) + `ReadableStreamDefaultReader`
+(`read`/`releaseLock`/`cancel`/`closed`), `locked`, `cancel()`, `tee()` and `Symbol.asyncIterator` for
+`for await (const chunk of res.body)`. `Response` gained a **lazy** `body` (eager construction would
+copy bytes for every response a page only `.json()`s), an accessor-backed honest `bodyUsed` that flips
+on any consumption route, and `arrayBuffer()`/`bytes()`/`blob()`. Defined ahead of the inert sweep
+that runs last, which is what suppresses the stub — the `AbortSignal` ordering mechanism.
+
+**`typeof` would have lied, twice.** `typeof ReadableStream === 'function'` was already true against
+the stub, and `'body' in res` already true against the `null`. The gate asserts a reader that actually
+READS. This is the `g_globals` lesson and it keeps earning its keep.
+
+**HONEST BOUNDARY — stated in the wiki, the gate's doc comment and here.** The body reaches JS **fully
+buffered** (`manuk_net::request` → `NavEvent::PageFetch` → `deliver` carries one `String` as a JS
+string literal), so the stream yields from memory, not off the wire. The *page's* code path is
+entirely real — pump loop, `done`, `TextDecoder`, SSE framing all execute as written and the answer
+renders — but incremental wire-level delivery needs a per-chunk channel through shell → page → js that
+does not exist below `manuk_net::fetch_streaming` (wired only to the document loader). That is a
+**subsystem, not a tick**; it is residue and is NOT claimed. A long answer appears in one go rather
+than token by token. This is deliberately not smuggled in as "streaming works".
+
+**Safety.** Additive and guarded on `typeof globalThis.ReadableStream === 'undefined'`. The only
+behavioural change to an existing surface is `Response`: `bodyUsed` went from a static `false` to an
+honest accessor, and `body` from `null` to a stream. `text()`/`json()`/`clone()` keep their exact
+previous semantics (a double `text()` stays permissive rather than rejecting — logged as residue,
+because tightening it is a regression risk the ratchet would refuse).
+
+**Gates.** `g_fetch_stream.rs` — 12 claims through one `Page::load` → `take_fetches` →
+`resolve_fetch` round-trip against a real SSE body: `body` non-null with a `getReader`, `locked`
+before/after, the pump loop receives `Uint8Array` chunks, the final read is `{done:true,
+value:undefined}`, `bodyUsed` flips, SSE `data:` framing reassembles to "Hello world" **and reaches
+the DOM**, plus `clone()` freshness, `tee()` mirroring both branches, and `arrayBuffer()` byte length.
+Proven RED as described above. `tee()` and async-iteration are gated rather than left as unasserted
+claims.
+
+**PRE-EXISTING FAILURE, not this tick (observer note).** `manuk-page --lib
+tests::hard_wall_detection_and_honest_interstitial` fails at lib.rs:5346
+(`visible_text().contains("blocks non-mainstream browsers")`) — **verified identical on the clean tree
+at HEAD by stashing this work**, so it predates tick 196 and is not a regression. It is not caught by
+`verify.sh` (different feature set), which is why tick 195 landed green over it. Flagged for the
+observer; continuing with browser work per the harness-scope rule.
+
+**Residue.** Incremental wire-level chunking (the subsystem above) — the one that turns this from "the
+answer renders" into "the answer streams"; `EventSource`/SSE is still an honest stub, so a page using
+`new EventSource()` rather than fetch-with-streaming is unserved; permissive double-`text()`; no BYOB
+readers, no backpressure (`desiredSize` constant), no `WritableStream`/`TransformStream`/`pipeThrough`.

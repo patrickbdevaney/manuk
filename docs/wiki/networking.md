@@ -425,3 +425,52 @@ resets `status`/`responseText` to the cancelled state and fires `readystatechang
 `loadend` (the XHR standard's abort() event order), leaving `readyState` at `UNSENT`. Residue: an
 `AbortSignal` passed to an XHR (rare) is still not wired; `abort()` on an already-delivered request is
 a no-op (correct).
+
+## `response.body` is a real `ReadableStream` — a streamed answer renders at all
+
+The canonical streaming read on the modern web is three lines:
+
+```js
+const reader = (await fetch(url)).body.getReader();
+for (;;) { const {done, value} = await reader.read(); if (done) break; render(decode(value)); }
+```
+
+Until tick 196 the first of those lines threw. `__makeResponse` hardcoded **`body: null`**, and
+`ReadableStream` was one of the `__inertNames` stubs — a *named, empty constructor* with no
+`getReader` on its prototype. So `res.body.getReader()` raised a `TypeError` **inside the response
+handler**, which took the rest of the handler with it.
+
+**The symptom is not "the answer streams in slowly" — it is that the answer never appears.** Every AI
+chat (claude.ai, ChatGPT, Gemini), every cloud-console live-log tail and every inference token stream
+ships this exact loop, so the entire class rendered blank. This was named the **#1 unlock** by the
+Phase-0 edge audit, and it was one file.
+
+**`typeof` would have lied.** `typeof ReadableStream === 'function'` was ALREADY true against the
+inert stub, and `'body' in res` was already true against the `null`. The gate therefore asserts a
+reader that actually **reads** — the `g_globals` lesson, restated: assert behaviour, never a name.
+
+**What was built.** A real `ReadableStream` — a chunk queue plus a list of `read()` calls parked on an
+empty queue, which is the entire mechanism; `enqueue`/`close`/`error` settle parked readers.
+`getReader()` (locking, with `ReadableStreamDefaultReader`: `read`/`releaseLock`/`cancel`/`closed`),
+`locked`, `cancel()`, `tee()` (an AI SDK forks the token stream — one branch to the UI, one to a log)
+and `Symbol.asyncIterator`, so `for await (const chunk of res.body)` works as the short spelling.
+`Response` gained a **lazy** `body` (constructing it eagerly would allocate a byte copy for every
+response a page only calls `.json()` on), an honest accessor-backed `bodyUsed` that flips on *any*
+consumption route, plus `arrayBuffer()`, `bytes()` and `blob()`.
+
+Defining it here, ahead of the inert sweep that runs **last**, is what suppresses the stub — the same
+ordering mechanism `AbortSignal` uses.
+
+**The honest boundary, stated out loud.** The body reaches JS **fully buffered**: the host path
+`manuk_net::request` → `NavEvent::PageFetch` → `event_loop::deliver` carries one `String` embedded as
+a JS string literal, so this stream yields its chunks from memory, not off the wire. The *page's* code
+path is entirely real — the pump loop, `done`, `TextDecoder` and SSE framing all execute exactly as
+written, and the answer renders. But incremental wire-level delivery needs a per-chunk channel through
+shell → page → js that does not exist below `manuk_net::fetch_streaming` (wired only to the document
+loader), and that is a **subsystem, not a tick**. It is residue, and it is not claimed here. Until it
+lands, a long answer appears in one go rather than token by token.
+
+Residue: incremental wire-level chunking (above); `EventSource`/SSE remains an honest stub, so a page
+using `new EventSource()` rather than fetch-with-streaming is still unserved; a double `text()` is
+permissive rather than rejecting on `bodyUsed`; no BYOB readers, no backpressure (`desiredSize` is a
+constant), no `WritableStream`/`TransformStream`/`pipeThrough`.

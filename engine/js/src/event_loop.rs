@@ -152,17 +152,159 @@ const PRELUDE: &str = r#"
         };
     };
 
+    // ── ReadableStream — a REAL one, because `response.body` is the streaming entry point. ──────
+    // The canonical streaming read on the web is:
+    //
+    //     const reader = (await fetch(url)).body.getReader();
+    //     for (;;) { const {done, value} = await reader.read(); if (done) break; ... }
+    //
+    // Until this existed, `ReadableStream` was one of the `__inertNames` stubs (a named, EMPTY
+    // constructor with no `getReader`) and `__makeResponse` hardcoded `body: null` — so that first
+    // line threw a TypeError *inside* the response handler and took the whole handler with it. The
+    // symptom is not "the answer streams in slowly", it is **the answer never appears**: every AI
+    // chat, cloud-console live-log tail and inference token stream ships exactly this loop.
+    //
+    // Note that `typeof ReadableStream === 'function'` was ALREADY true against the stub — which is
+    // why the gate asserts a reader that actually READS, not a name that exists (the `g_globals`
+    // lesson; see the `__inertNames` comment). Defining it HERE, ahead of the inert sweep that runs
+    // last, is what suppresses the stub — the same mechanism `AbortSignal` uses.
+    if (typeof globalThis.ReadableStream === 'undefined') {
+        var RS = function ReadableStream(source) {
+            this.__q = [];          // chunks enqueued and not yet read
+            this.__done = false;    // the source called close()
+            this.__err = null;      // the source called error()
+            this.__locked = false;  // a reader holds the stream
+            this.__waiters = [];    // read() calls parked on an empty queue
+            var self = this;
+            this.__controller = {
+                enqueue: function(c) { self.__push(c); },
+                close:   function()  { self.__close(); },
+                error:   function(e) { self.__fail(e); },
+                get desiredSize() { return self.__done ? null : 1; }
+            };
+            this.__src = source || null;
+            if (source && typeof source.start === 'function') {
+                try {
+                    var p = source.start(this.__controller);
+                    if (p && typeof p.then === 'function') { p.then(null, function(e){ self.__fail(e); }); }
+                } catch (e) { this.__fail(e); }
+            }
+        };
+        // Settle one parked read() if we can, else leave it parked.
+        RS.prototype.__serve = function() {
+            while (this.__waiters.length) {
+                if (this.__err !== null)      { this.__waiters.shift().reject(this.__err); continue; }
+                if (this.__q.length)          { this.__waiters.shift().resolve({ value: this.__q.shift(), done: false }); continue; }
+                if (this.__done)              { this.__waiters.shift().resolve({ value: undefined, done: true }); continue; }
+                return;
+            }
+        };
+        RS.prototype.__push  = function(c) { if (!this.__done && this.__err === null) { this.__q.push(c); this.__serve(); } };
+        RS.prototype.__close = function()  { this.__done = true; this.__serve(); };
+        RS.prototype.__fail  = function(e) { if (this.__err === null) { this.__err = e; this.__serve(); } };
+        RS.prototype.getReader = function() {
+            if (this.__locked) throw new TypeError("ReadableStream is locked to a reader");
+            this.__locked = true;
+            return new globalThis.ReadableStreamDefaultReader(this);
+        };
+        RS.prototype.cancel = function(reason) {
+            this.__q = []; this.__done = true; this.__serve();
+            if (this.__src && typeof this.__src.cancel === 'function') {
+                try { this.__src.cancel(reason); } catch (e) {}
+            }
+            return Promise.resolve(undefined);
+        };
+        // `tee()` — an AI SDK routinely forks the token stream (one branch to the UI, one to a log).
+        // Pump the source once and mirror every chunk into both branches.
+        RS.prototype.tee = function() {
+            var reader = this.getReader(), cA = null, cB = null;
+            var mk = function(assign) { return new RS({ start: function(c) { assign(c); } }); };
+            var a = mk(function(c) { cA = c; }), b = mk(function(c) { cB = c; });
+            var pump = function() {
+                return reader.read().then(function(step) {
+                    if (step.done) { cA.close(); cB.close(); return; }
+                    cA.enqueue(step.value); cB.enqueue(step.value);
+                    return pump();
+                }, function(e) { cA.error(e); cB.error(e); });
+            };
+            pump();
+            return [a, b];
+        };
+        Object.defineProperty(RS.prototype, 'locked', {
+            get: function() { return this.__locked; }, enumerable: true, configurable: true
+        });
+        // `for await (const chunk of res.body)` — the shorter spelling of the same pump loop.
+        if (typeof Symbol !== 'undefined' && Symbol.asyncIterator) {
+            RS.prototype[Symbol.asyncIterator] = function() {
+                var reader = this.getReader();
+                return {
+                    next: function() { return reader.read(); },
+                    "return": function(v) { reader.releaseLock(); return Promise.resolve({ value: v, done: true }); }
+                };
+            };
+        }
+        globalThis.ReadableStream = RS;
+
+        var RSDR = function ReadableStreamDefaultReader(stream) { this.__s = stream; };
+        RSDR.prototype.read = function() {
+            var s = this.__s;
+            if (!s) return Promise.reject(new TypeError("reader has been released"));
+            if (s.__ondisturb) { s.__ondisturb(); }   // this is what flips Response.bodyUsed
+            if (s.__err !== null)  return Promise.reject(s.__err);
+            if (s.__q.length)      return Promise.resolve({ value: s.__q.shift(), done: false });
+            if (s.__done)          return Promise.resolve({ value: undefined, done: true });
+            return new Promise(function(resolve, reject) { s.__waiters.push({ resolve: resolve, reject: reject }); });
+        };
+        RSDR.prototype.releaseLock = function() { if (this.__s) { this.__s.__locked = false; this.__s = null; } };
+        RSDR.prototype.cancel = function(reason) { return this.__s ? this.__s.cancel(reason) : Promise.resolve(undefined); };
+        Object.defineProperty(RSDR.prototype, 'closed', {
+            get: function() { return Promise.resolve(undefined); }, enumerable: true, configurable: true
+        });
+        globalThis.ReadableStreamDefaultReader = RSDR;
+    }
+
     globalThis.__makeResponse = function(status, text, headers) {
-        return {
+        // `bodyUsed` is now HONEST — it flips when the body is actually consumed, by any of the
+        // routes that consume it (a reader read, or text/json/arrayBuffer/blob/bytes).
+        var used = false;
+        var stream = null;
+        var res = {
             ok: (status >= 200 && status < 300), status: status, statusText: "",
-            url: "", redirected: false, type: "basic", bodyUsed: false, body: null,
+            url: "", redirected: false, type: "basic",
             headers: globalThis.__makeHeaders(headers),
-            text: function(){ return Promise.resolve(text); },
-            json: function(){ try { return Promise.resolve(JSON.parse(text)); }
+            text: function(){ used = true; return Promise.resolve(text); },
+            json: function(){ used = true;
+                              try { return Promise.resolve(JSON.parse(text)); }
                               catch (e) { return Promise.reject(e); } },
+            arrayBuffer: function(){ used = true; return Promise.resolve(globalThis.__bodyBytes(text).buffer); },
+            bytes: function(){ used = true; return Promise.resolve(globalThis.__bodyBytes(text)); },
+            blob: function(){ used = true; return Promise.resolve(new globalThis.Blob([text])); },
             clone: function(){ return globalThis.__makeResponse(status, text, headers); }
         };
+        Object.defineProperty(res, 'bodyUsed', {
+            get: function(){ return used; }, enumerable: true, configurable: true
+        });
+        // **Lazy, and one per response.** Constructing the stream eagerly would allocate a byte copy
+        // for every response a page ever fetches, including the ones it only calls `.json()` on.
+        Object.defineProperty(res, 'body', {
+            get: function() {
+                if (stream === null) {
+                    var bytes = globalThis.__bodyBytes(text);
+                    stream = new globalThis.ReadableStream({
+                        start: function(c) { if (bytes.length) { c.enqueue(bytes); } c.close(); }
+                    });
+                    stream.__ondisturb = function() { used = true; };
+                }
+                return stream;
+            },
+            enumerable: true, configurable: true
+        });
+        return res;
     };
+
+    // The body as bytes. `TextEncoder` is defined further down the prelude, which is fine — this only
+    // runs when a page calls it, long after the whole prelude has been evaluated.
+    globalThis.__bodyBytes = function(text) { return new globalThis.TextEncoder().encode(String(text)); };
 
     // Flatten a request's headers to "name\x02value\x02name\x02value" for the host to replay onto
     // the wire. `Authorization`, a non-JSON `Content-Type`, `Accept`, `X-*` — every one of these was
