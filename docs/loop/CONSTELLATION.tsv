@@ -5,9 +5,9 @@ doc	box model / floats / block layout	every document	gated	F1/F2 perf floors	eng
 doc	tables (colspan/rowspan)	academic + gov pages	works	-	tick 40s; layout/table
 doc	lists + markers	every wiki	works	-	LayoutBox.marker (tick 67)
 doc	text shaping (swash)	all text	gated	F1/F2	engine/text
-doc	font fallback across scripts (CJK/emoji)	Japanese/Chinese pages render as TOFU	unknown	-	NEVER MEASURED — probe it
-doc	bidi (Arabic/Hebrew)	RTL web is unreadable	unknown	-	NEVER MEASURED — probe it
-doc	CJK line breaking	CJK text overflows its box	unknown	-	NEVER MEASURED — probe it
+doc	font fallback across scripts (CJK/emoji)	Japanese/Chinese pages render as TOFU	gated	G_COMPLEX_SCRIPT	tick 214 measured working (zero .notdef); engine/text/tests/g_complex_script.rs
+doc	bidi (Arabic/Hebrew)	RTL web is unreadable	gated	G_BIDI_BASE	tick 215; engine/text/tests/g_bidi_base_direction.rs
+doc	CJK line breaking	CJK text overflows its box	gated	G_PROBE_CAPABILITIES	tick 225 probe: 16px CJK wraps inside a 60px box
 doc	web fonts (@font-face, WOFF2)	every branded site falls back	works	-	fontdb; webfont_live test
 doc	legacy encodings (Shift_JIS/Big5/GBK/EUC-KR)	the pre-2010 CJK web is MOJIBAKE	gated	G_IFRAME	tick 84: encoding 128 -> ~721k subtests. The decoder was always correct (encoding_rs); the tests read expectations from an IFRAME, which now works
 doc	images: PNG/JPEG/GIF/WebP	every page	works	-	G_FIRST_PAINT
@@ -16,11 +16,11 @@ doc	srcset / <picture>	2x displays get 1x images	works	-	capability-probe.html
 doc	SVG (inline + <img>)	icons everywhere	partial	-	renders; namespaces not modelled
 doc	lazy loading (loading=lazy + IO)	feeds load the whole timeline	gated	G_VIEWPORT	tick ~59
 doc	find-in-page / selection	reading is not passive	partial	G_RANGE	Range works; Selection is a stub
-doc	print / media queries	every 'print this page'	unknown	-	NEVER MEASURED — probe it
-doc	multicol	academic + news layout	unknown	-	NEVER MEASURED — probe it
+doc	print / media queries	every 'print this page'	gated	G_PROBE_CAPABILITIES	tick 225 probe: @media screen applies, @media print does not; matchMedia agrees
+doc	multicol	academic + news layout	missing	-	tick 225 probe: column-count produces no column boxes
 doc	accessibility / semantic tree	screen readers, agent observation, our own hit-testing	partial	-	manuk-a11y (1.3k LOC): role+accessible-name+geometry+hit-test, feeds the agent. NO AccessKit platform bridge yet. Constitution I3 — the moat, already load-bearing
 app	real DOM prototypes (patchable)	Sentry/ad-blockers/devtools hook nothing	gated	G_PROTOTYPE	tick 64: 60x faster too
-app	attribute reflection (a.href, input.disabled)	every branch on a DOM property is wrong	gated	G_REFLECT	tick 82: +9,940; tick 113: +10,249 MORE (setAttribute HTML qualified-name lowercasing was missing — "gated" hid a hole as large as the first win)
+app	attribute reflection (a.href, input.disabled)	every branch on a DOM property is wrong	gated	G_REFLECT	"tick 82: +9,940; tick 113: +10,249 MORE (setAttribute HTML qualified-name lowercasing was missing — ""gated"" hid a hole as large as the first win)"
 app	inline event handlers (onclick, onload, onsubmit)	the oldest way to attach behaviour to markup; every legacy form	gated	G_CAPABILITY	tick 84: compiled + wired at parse; body/frameset on* map to window
 app	element.dataset (data-* map)	data-testid, Stimulus, Bootstrap, Hotwire	gated	G_CAPABILITY	tick 84: live Proxy over data-*, works across the iframe boundary
 app	live HTMLCollection / NodeList	`while(el.children.length)` is an INFINITE LOOP	gated	G_COLLECTIONS	tick 73
@@ -41,10 +41,10 @@ app	forms: validation + FormData	every login form	gated	G_FORM	-
 app	form method=POST	logins, checkouts	works	-	net/src/lib.rs:626 post_document (+cross-site CSRF withholding), tick 164 — row was STALE
 app	hydration (SSR markup + client attach)	the dominant delivery pattern; fails SILENTLY	unknown	-	React renders (tick 64) but hydration unmeasured
 app	Web Workers	heavy compute freezes the UI	missing	-	deliberately absent
-app	WebAssembly	Figma, games, ffmpeg.wasm	unknown	-	NEVER MEASURED — probe it
+app	WebAssembly	Figma, games, ffmpeg.wasm	gated	G_PROBE_CAPABILITIES	tick 225 probe: real module instantiated, export called, add(3,4)==7
 app	structuredClone	state transfer	works	-	G_CAPABILITY
 platform	cookies (SameSite/Secure/HttpOnly)	no session, no login	partial	-	cookie jar exists; flags unmeasured
-platform	CORS + credentialed requests	every API call from an SPA	unknown	-	NEVER MEASURED — probe it
+platform	CORS + credentialed requests	every API call from an SPA	gated	engine/net cors	ticks 170-173; engine/net/src/cors.rs (7 tests)
 platform	OAuth redirect flow	YOU CANNOT LOG IN TO THE MODERN WEB	unknown	-	CRITICAL — gates the logged-in web. ASSURE via a REAL-PROVIDER MATRIX gate (Google GIS/GitHub/Microsoft/Apple/Facebook/Auth0/Okta/Clerk round-trips). Redirect+popup+iframe-rerender+cookies cover ~all Sign-in-with-X; FedCM = the modern One-Tap. (t222-223)
 platform	window.open + postMessage (popup auth)	OAuth popups; the other login path	partial	-	window.open recorded; postMessage routing exists
 platform	REAL iframes (nested browsing context)	embeds, payments, OAuth frames, ads, players	gated	G_IFRAME	tick 84: cross-boundary readable; BUT pixels are a snapshot — no re-render on mutation. Blocks 3-D Secure challenge + interactive OAuth frames (edge sweep t193b)
@@ -54,7 +54,7 @@ platform	WebSocket	live feeds, chat, presence	works	-	tokio-tungstenite transpor
 platform	Server-Sent Events	live updates	missing	-	VERIFIED pure non-connecting stub (event_loop.rs:954) — never delivers a message. CRITICAL: streaming logs + AI token output (edge sweep t193b)
 platform	Service Worker + Cache API	offline, PWA, instant repeat visits	missing	-	navigator.serviceWorker absent
 platform	file upload (input[file], FileReader, Blob)	avatars, attachments, everything	partial	-	Blob/File/FileReader exist; input[file] unmeasured
-platform	drag and drop	editors, uploads	unknown	-	NEVER MEASURED — probe it
+platform	drag and drop	editors, uploads	missing	-	tick 225 probe: DataTransfer is an INERT stub only (prelude inert sweep), ondragstart absent
 platform	clipboard	copy/paste in apps	works	-	navigator.clipboard writeText/readText, dom_bindings.rs:8075 — row was STALE (edge sweep t193)
 platform	canvas 2D	charts, maps, dashboards	gated	G_CANVAS	tick 66 — it RASTERIZES
 platform	WebGL	Figma, maps, games	missing	-	getContext('webgl') returns null. COMPLETENESS: a null context reads as headless to Cloudflare/LinkedIn — needs a REAL software-GL backend + honest renderer strings (edge sweep t193)
@@ -80,16 +80,16 @@ cross	100-tab RSS budget	the whole memory thesis	unknown	-	benchmark defined, NE
 cross	process-per-tab isolation	a C++ fault in SpiderMonkey kills one tab, not all	missing	-	DECIDED, not built
 cross	HTTP caching + compression	every repeat visit	partial	-	http_cache exists
 app	<dialog> + popover	modals, menus, tooltips — Interop 2026 focus area	partial	-	dialog GATED (engine/page/tests/g_dialog.rs); popover still missing — split (edge sweep t193)
-app	scroll snap	carousels, paged feeds, every mobile gallery	unknown	-	SURFACE AUDIT t83: Interop 2026
+app	scroll snap	carousels, paged feeds, every mobile gallery	missing	-	tick 225 probe: scroll-snap-type does not round-trip the cascade
 app	scroll-driven animations	modern scroll UX; replaces JS scroll handlers	unknown	-	SURFACE AUDIT t83: Interop 2026
-app	View Transitions	animated state changes; shipping in SPAs now	unknown	-	SURFACE AUDIT t83: Interop 2026
-app	Navigation API	the modern replacement for History; SPA routing	unknown	-	SURFACE AUDIT t83: Interop 2026
-app	scoped custom element registries	large apps with conflicting component libs	unknown	-	SURFACE AUDIT t83: Interop 2026
+app	View Transitions	animated state changes; shipping in SPAs now	missing	-	tick 225 probe: document.startViewTransition absent
+app	Navigation API	the modern replacement for History; SPA routing	missing	-	tick 225 probe: navigation.navigate absent
+app	scoped custom element registries	large apps with conflicting component libs	missing	-	tick 225 probe: CustomElementRegistry.prototype.initialize absent
 app	JSPI (WebAssembly promise integration)	async wasm — ffmpeg.wasm, Figma	unknown	-	SURFACE AUDIT t83: Interop 2026
-doc	container queries (incl. style queries)	component-responsive layout; the biggest CSS shift in a decade	unknown	-	SURFACE AUDIT t83: Interop 2026
+doc	container queries (incl. style queries)	component-responsive layout; the biggest CSS shift in a decade	missing	-	tick 225 probe: @container rule does not apply
 doc	CSS anchor positioning	tooltips, menus, popovers without JS	unknown	-	SURFACE AUDIT t83: Interop 2026
 doc	CSS attr() / zoom / shape() / contrast-color()	modern CSS authors use these now	unknown	-	SURFACE AUDIT t83: Interop 2026
-doc	custom highlights	find-in-page, editors, code highlighting without DOM churn	unknown	-	SURFACE AUDIT t83: Interop 2026
+doc	custom highlights	find-in-page, editors, code highlighting without DOM churn	missing	-	tick 225 probe: Highlight / CSS.highlights absent
 doc	JPEG XL	Interop 2026 investigation; Apple ships it	unknown	-	SURFACE AUDIT t83: Interop 2026
 platform	fetch uploads + ranges (streaming)	large uploads, resumable downloads, video range requests	unknown	-	SURFACE AUDIT t83: Interop 2026
 platform	WebTransport (HTTP/3)	low-latency data; games, live apps	unknown	-	SURFACE AUDIT t83: Interop 2026
@@ -102,14 +102,14 @@ cross	developer tools	not a rendering capability, but a browser without them is 
 doc	CSS nesting (native &)	modern stylesheets nest rules; a flat-only parser drops the nested block	gated	G_CSS_NESTING	tick 124: MEASURED — Stylo backs native nesting (& descendant + bare &); reaches getComputedStyle
 doc	subgrid	nested grids that must align to the parent grid track lines	unknown	-	NEVER MEASURED — probe (surface-audit t123)
 doc	@scope / scoped styles	component-scoped CSS without leakage	unknown	-	NEVER MEASURED — probe (surface-audit t123)
-doc	text-wrap: balance / pretty	headings and paragraphs wrap raggedly; a visible typographic gap	unknown	-	NEVER MEASURED — probe (surface-audit t123)
-app	WebCodecs (VideoDecoder/AudioDecoder/VideoFrame)	low-level media apps, in-browser video editors, custom players	unknown	-	NEVER MEASURED — distinct from MSE (surface-audit t123)
-platform	Sanitizer API (Element.setHTML / setHTMLUnsafe)	XSS-safe HTML injection; the platform replacement for DOMPurify	unknown	-	NEVER MEASURED — probe (surface-audit t123)
+doc	text-wrap: balance / pretty	headings and paragraphs wrap raggedly; a visible typographic gap	missing	-	tick 225 probe: text-wrap does not round-trip the cascade
+app	WebCodecs (VideoDecoder/AudioDecoder/VideoFrame)	low-level media apps, in-browser video editors, custom players	missing	-	tick 225 probe: VideoDecoder absent
+platform	Sanitizer API (Element.setHTML / setHTMLUnsafe)	XSS-safe HTML injection; the platform replacement for DOMPurify	missing	-	tick 225 probe: Element.prototype.setHTML absent
 platform	scroll anchoring (overflow-anchor)	feeds JUMP on load-more; a re-layout un-scrolls the container	works	-	feed stops jumping (203) + live gate (204), g_scroll_anchor_live. Phase-0 lever LANDED
 app	forced reflow (getBoundingClientRect after mid-tick mutation)	react-window/virtuoso read stale/zero geometry -> blank/overlapping rows	works	-	read path lays out before it answers (tick 213, g_forced_reflow) — relayout_incremental wired into getBoundingClientRect. Phase-0 lever LANDED
-app	URL.createObjectURL / blob: URLs	MSE video setup + blob image previews TypeError	missing	-	edge sweep t193: verified absent in engine/js,engine/page
+app	URL.createObjectURL / blob: URLs	MSE video setup + blob image previews TypeError	gated	G_MSE	tick 223; engine/page/tests/g_mse.rs
 cross	large-DOM + code-blob paint perf	GitHub 1k-5k-line blobs & long PR threads stutter	unknown	-	edge sweep t193: no node budget; F1/F2 don't cover a big single DOM
-doc	<details>/<summary> disclosure toggle	GitHub/MDN/docs collapsibles render always-open, no toggle	missing	-	edge sweep t193: no open/toggle/marker in layout — bounded tick
+doc	<details>/<summary> disclosure toggle	GitHub/MDN/docs collapsibles render always-open, no toggle	gated	G_DETAILS	tick 216; engine/page/tests/g_details.rs
 doc	MathML rendering	Wikipedia/arXiv/MDN math renders raw/broken	missing	-	edge sweep t193: foreign content not modelled (html/sink.rs)
 platform	document.visibilityState + Page Visibility	anti-bot flags 'background bot'; autoplay/animation loops gate on it	missing	-	edge sweep t193: verified absent — trivial (return 'visible' + fire visibilitychange)
 platform	navigator.permissions.query()	detectors cross-check vs Notification.permission -> the inconsistency is a bot tell; unguarded calls throw	missing	-	edge sweep t193: small shim returning {state}

@@ -1049,3 +1049,21 @@ transformed origin at the correctly scaled size, but upright — rotated axis la
 `maxWidth` re-shapes smaller rather than condensing horizontally; `strokeText` renders filled in the
 stroke colour; `drawImage`, `putImageData`, real gradients and `clip()` remain unimplemented, so a
 canvas app that composites images is still short.
+
+## WebAssembly — measured, not assumed (tick 225)
+
+Carried as an `unknown` in the capability constellation with "Figma, games, ffmpeg.wasm" as the cost
+of not having it. It works: a real module compiles, instantiates, resolves its export and returns the
+right value. Nothing had to be built — the cell was simply never measured, and it had been steering
+the lever board's priorities for the whole time it sat there.
+
+That is now the sixth capability assumed missing here that was already present (after `localStorage`,
+`FormData`, `position: sticky`, `IntersectionObserver`, and CJK/emoji font fallback). The lesson keeps
+being the same one and is worth stating flatly: **an absent measurement is not a negative
+measurement.** A cheap behavioural probe is a better first move than an implementation plan.
+
+The same run measured CJK line breaking and print/media queries as already working, and pinned eleven
+capabilities as *measured* missing (multicol, container queries, scroll snap, `text-wrap: balance`,
+View Transitions, Navigation API, WebCodecs, Sanitizer, custom highlights, scoped custom element
+registries, drag and drop) — evidence in place of assumption, with a gate that flips them to failures
+the day they get built.

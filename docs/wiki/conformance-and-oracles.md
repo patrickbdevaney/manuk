@@ -458,3 +458,39 @@ SpiderMonkey** with NaN-boxed GC values on the faulting stack (no OUR-code frame
 regression** (every JS change that window is pure-JS prelude or a native binding the crashing files never
 call; crashes=0 at sweeps 114–116 was a flaky sample). Needs **ASAN** to localize the corrupting write —
 tracked open Bar-0 for a fresh, well-resourced context, exactly like the flexbox one. [[js-engine]]
+
+## Probing the constellation: `unknown` is a bug, not a state
+
+`docs/loop/CONSTELLATION.tsv` carries a `status` per capability, and the lever board computes its
+priorities **from it**. That makes an `unknown` row actively harmful rather than neutral: it steers
+the loop while carrying no evidence. Tick 225 probed 16 of them and the result argues the point —
+**WebAssembly, CJK line breaking and media queries were all carried as `unknown` and all already
+worked.** WebAssembly in particular ("Figma, games, ffmpeg.wasm") compiles a real module, instantiates
+it, resolves an export and returns the right integer.
+
+Two failure modes the file had accumulated, worth checking for periodically:
+
+- **Stale cells.** Five rows still said `unknown`/`missing` for capabilities that later ticks had
+  *landed with gates*: bidi (t215, `G_BIDI_BASE`), CJK/emoji font fallback (t214, `G_COMPLEX_SCRIPT`),
+  `<details>`/`<summary>` (t216, `G_DETAILS`), `URL.createObjectURL` (t223, `G_MSE`), CORS (t170-173,
+  `engine/net/src/cors.rs`). Nothing updates these automatically, so a landed capability keeps
+  reporting as a hole and keeps attracting ticks.
+- **Never-measured cells** that are cheap to settle and were simply never looked at.
+
+### A probe must be behavioural, and in this engine that is not pedantry
+
+`typeof X === 'function'` is exactly the check an **inert stub** passes, and this engine deliberately
+ships a whole list of them (`event_loop.rs`'s inert-name sweep, whose own comment records a stub
+having once silently disabled a working implementation). `drag and drop` is the live example:
+`DataTransfer` *exists* — as an inert stub — while `ondragstart` does not, so a presence check would
+have reported a capability that does nothing. So `g_probe_capabilities` measures behaviour:
+WebAssembly by calling the export, multicol and container queries by reading back the geometry they
+should produce, CJK breaking by whether the text actually wrapped inside its box.
+
+### The probe gate is a ratchet, not a survey
+
+It asserts only what measured **true**, so a capability found working can never silently regress to
+missing. What measured false is written into the TSV as `missing` with the gate as its receipt —
+*measured absence*, which is a different and far more useful thing than never having looked, and
+which starts failing the day someone implements it (at which point the claim moves into the pinned
+list). One run therefore both flips cells green and installs the guard that keeps them green.

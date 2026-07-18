@@ -9415,3 +9415,51 @@ horizontally; `strokeText` renders filled in the stroke colour. `drawImage`/`put
 `clip()` remain unimplemented, so a canvas app that composites images is still short of running.
 
 **Mechanism captured:** `docs/wiki/text-layout.md`.
+
+## Tick 225 — probing the unknowns: three capabilities we already had (2026-07-18)
+
+**Selected:** the board's CO-#1 **(D) PROBE the ~35 unknowns** — explicitly the cheap measure-and-pin
+lever, and "? outranks X".
+
+**Why this is not bookkeeping.** `CONSTELLATION.tsv` is what the lever board computes its priorities
+FROM, so an `unknown` row is not a neutral blank — it steers the loop while carrying no evidence. The
+file had accumulated two distinct defects: cells never measured, and **cells made stale by our own
+landed ticks**. Five rows still read `unknown`/`missing` for capabilities that shipped with gates —
+bidi (t215 `G_BIDI_BASE`), CJK/emoji fallback (t214 `G_COMPLEX_SCRIPT`), `<details>`/`<summary>`
+(t216 `G_DETAILS`), `URL.createObjectURL` (t223 `G_MSE`), CORS (t170-173, `engine/net/src/cors.rs`).
+Nothing updates those automatically, so a capability we had built kept advertising itself as a hole.
+
+**The headline measurement: WebAssembly already works.** Carried as `unknown` with "Figma, games,
+ffmpeg.wasm" as the cost — the probe hand-assembles a module exporting `add(i32,i32)`, instantiates
+it, resolves the export and gets `add(3,4) === 7`. Compile, instantiate, export lookup, call and
+return marshalling are all real. **CJK line breaking** (16px CJK wraps inside a 60px box) and
+**print/media queries** (`@media screen` applies, `@media print` does not, `matchMedia` agrees) were
+likewise unknown and likewise already working. That is now the sixth time a feature assumed missing
+here was already built.
+
+**Measured ABSENT, which is worth having:** multicol, container queries, scroll snap,
+`text-wrap: balance`, View Transitions, Navigation API, WebCodecs, Sanitizer, custom highlights,
+scoped custom element registries, drag and drop. Each carries the probe as its receipt, so they are
+now *evidence* rather than assumption — and `column-count`/`@container` were confirmed to have zero
+implementation hits anywhere in `engine/`, so the probe is not lying about them.
+
+**Behavioural, and in this engine that is not pedantry.** `typeof X === 'function'` is exactly what an
+**inert stub** passes, and the prelude ships a whole list of them — whose own comment records a stub
+having once silently *disabled* a working implementation. `drag and drop` is the live case:
+`DataTransfer` exists as an inert stub while `ondragstart` does not, so a presence check would have
+scored a capability that does nothing. The receipt for that row says so explicitly.
+
+**Gate.** `g_probe_capabilities` is a **ratchet, not a survey**: it asserts only the five claims that
+measured true (`wasm`, `mediaq`, `matchmedia`, `cjkbreak`, `quirksflag`), so none can silently regress;
+the `no` results live in the TSV and will start failing here the day someone builds them, at which
+point the claim moves into the pinned list. One run both flips cells and installs their guard.
+
+**Deliberately NOT flipped:** `quirks-mode rendering` stays `unknown`. The probe only checks that
+`document.compatMode` reports correctly for a doctype'd document, which is not the same question as
+whether the quirks *layout* rules are implemented — that needs a doctype-less document, so a second
+page load, so its own tick. Unknowns: 35 → 18.
+
+**Harness note (observer, not acted on):** `scripts/phase0-progress.sh`'s footer still prints a stale
+"37 unknowns" while its own table computes 18 correctly.
+
+**Mechanism captured:** `docs/wiki/conformance-and-oracles.md`.

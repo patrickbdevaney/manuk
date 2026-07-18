@@ -121,6 +121,9 @@
   - L409 · The batch-size crash class — heavy layout areas OOM a shared process
   - L418 · The crash class is a real SIGSEGV UAF, not OOM — and ISOLATION-RETRY separates it from a per-page Bar 0
   - L438 · A SECOND, distinct SIGSEGV: css-values/calc-size interpolate-size — a REAL per-page crash (survives isolation)
+  - L462 · Probing the constellation: unknown is a bug, not a state
+  - L480 · A probe must be behavioural, and in this engine that is not pedantry
+  - L490 · The probe gate is a ratchet, not a survey
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -491,4 +494,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-410 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+413 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
