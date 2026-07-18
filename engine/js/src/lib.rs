@@ -530,6 +530,38 @@ pub fn resolve_fetch(
     })
 }
 
+/// As [`resolve_fetch`], but also carrying the response's raw bytes, so `arrayBuffer()` and an
+/// `arraybuffer` XHR see the bytes the server sent rather than a UTF-8 re-encoding of the decoded
+/// text. See `event_loop::deliver_bytes` for why both channels exist.
+#[cfg(feature = "_sm")]
+#[allow(clippy::too_many_arguments)]
+pub fn resolve_fetch_bytes(
+    ctx: &PageContext,
+    dom: &mut manuk_dom::Dom,
+    id: u32,
+    status: u16,
+    body: &str,
+    raw: &[u8],
+    headers: &[(String, String)],
+    layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<(), JsError> {
+    with_runtime(|rt| {
+        ctx.resolve_fetch_bytes(
+            rt,
+            dom,
+            id,
+            status,
+            body,
+            Some(raw),
+            headers,
+            layout,
+            styles,
+        )
+        .map_err(|message| JsError { message })
+    })
+}
+
 #[cfg(not(feature = "_sm"))]
 pub fn resolve_fetch(
     _ctx: &PageContext,
@@ -537,6 +569,22 @@ pub fn resolve_fetch(
     _id: u32,
     _status: u16,
     _body: &str,
+    _headers: &[(String, String)],
+    _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<(), JsError> {
+    Ok(())
+}
+
+#[cfg(not(feature = "_sm"))]
+#[allow(clippy::too_many_arguments)]
+pub fn resolve_fetch_bytes(
+    _ctx: &PageContext,
+    _dom: &mut manuk_dom::Dom,
+    _id: u32,
+    _status: u16,
+    _body: &str,
+    _raw: &[u8],
     _headers: &[(String, String)],
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
     _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,

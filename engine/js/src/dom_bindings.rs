@@ -6836,13 +6836,33 @@ impl PageContext {
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
         styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
     ) -> Result<(), String> {
+        self.resolve_fetch_bytes(
+            runtime, dom, id, status, body, None, headers, layout, styles,
+        )
+    }
+
+    /// As [`Self::resolve_fetch`], but carrying the response's raw bytes alongside its decoded text
+    /// so `arrayBuffer()` and an `arraybuffer` XHR return what the server actually sent.
+    #[allow(clippy::too_many_arguments)]
+    pub fn resolve_fetch_bytes(
+        &self,
+        runtime: &mut Runtime,
+        dom: &mut Dom,
+        id: u32,
+        status: u16,
+        body: &str,
+        raw: Option<&[u8]>,
+        headers: &[(String, String)],
+        layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    ) -> Result<(), String> {
         set_view_maps(layout, styles);
         let _ = dom; // reflectors cache the stable `*mut Dom` from `load`; kept for API symmetry.
 
         let raw_cx = unsafe { runtime.cx().raw_cx() };
         rooted!(&in(runtime.cx()) let global = self.global.get());
         let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
-        crate::event_loop::deliver(runtime, global.handle(), id, status, body, headers)?;
+        crate::event_loop::deliver_bytes(runtime, global.handle(), id, status, body, raw, headers)?;
         // Run the reactions (`.then` / `onload`) and any DOM mutations they make; a follow-on
         // fetch they issue stays queued for the host's next pump.
         crate::event_loop::run_deferred(runtime, global.handle())?;

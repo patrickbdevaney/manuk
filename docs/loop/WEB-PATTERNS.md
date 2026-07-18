@@ -1105,3 +1105,11 @@ fetched over the network, binary file uploads read back, and any `arrayBuffer()`
 Byte-range requests, the other half of segmented delivery, **do** work: `Range` reaches the wire and
 `206` surfaces intact. Gated by `g_media_segment_fetch`, which pins the working half today and has
 the binary claims written and waiting.
+
+## Binary response bodies — FIXED (tick 228)
+
+The 260-byte media segment that came back as 407 now round-trips byte-exact. The body crosses the JS
+boundary on two channels: charset-decoded text for `.text()`/`.json()`, raw bytes for
+`.arrayBuffer()`/`.bytes()`/`.body` and an `arraybuffer` XHR. This unblocks MSE segment fetching (and
+therefore the demuxer step), WASM modules fetched over the network, and every other `arrayBuffer()`
+consumer. Byte ranges already worked and are gated alongside it in `g_media_segment_fetch`.

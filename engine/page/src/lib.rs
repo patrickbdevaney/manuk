@@ -2752,6 +2752,54 @@ impl Page {
         fonts: &FontContext,
         viewport_width: f32,
     ) {
+        // A caller that already has text is telling us the body IS text, and for a text body the
+        // correct bytes are its UTF-8 encoding — so this stays exactly what it always was.
+        self.resolve_fetch_bytes_inner(
+            id,
+            status,
+            body,
+            body.as_bytes(),
+            headers,
+            fonts,
+            viewport_width,
+        )
+    }
+
+    /// Settle a request from the **raw response bytes**, decoding the text channel here.
+    ///
+    /// This is the entry point a host with real wire bytes should use. `resolve_fetch` above cannot
+    /// serve that case: a media segment reaching it as a `&str` has already been through a charset
+    /// decode, and re-encoding it to UTF-8 for `arrayBuffer()` inflates every byte above `0x7F` into
+    /// two — a 260-byte segment came back as 407, which no demuxer can parse and which surfaces as a
+    /// codec bug rather than a transport one.
+    pub fn resolve_fetch_bytes(
+        &mut self,
+        id: u32,
+        status: u16,
+        bytes: &[u8],
+        headers: &[(String, String)],
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) {
+        let ct = headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("content-type"))
+            .map(|(_, v)| v.as_str());
+        let text = manuk_net::charset::decode_html(bytes, ct);
+        self.resolve_fetch_bytes_inner(id, status, &text, bytes, headers, fonts, viewport_width)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn resolve_fetch_bytes_inner(
+        &mut self,
+        id: u32,
+        status: u16,
+        body: &str,
+        raw: &[u8],
+        headers: &[(String, String)],
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) {
         let Some(ctx) = &self.js else { return };
         let rects: std::collections::HashMap<manuk_dom::NodeId, [f32; 4]> = self
             .root_box
@@ -2759,12 +2807,13 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
-        if let Err(e) = manuk_js::resolve_fetch(
+        if let Err(e) = manuk_js::resolve_fetch_bytes(
             ctx,
             &mut self.dom,
             id,
             status,
             body,
+            raw,
             headers,
             &rects,
             &self.styles,

@@ -166,11 +166,10 @@ fn a_media_segment_survives_the_fetch_boundary_byte_for_byte() {
                 body.into(),
                 Some(&base),
             )) {
-                Ok(r) => {
-                    let text = r.decoded_text();
-                    page.resolve_fetch(id, r.status, &text, &r.headers, &fonts, 800.0);
-                }
-                Err(_) => page.resolve_fetch(id, 0, "", &[], &fonts, 800.0),
+                // The BYTES entry point, deliberately: handing a media segment across as text is
+                // the exact bug this gate was written to catch.
+                Ok(r) => page.resolve_fetch_bytes(id, r.status, &r.body, &r.headers, &fonts, 800.0),
+                Err(_) => page.resolve_fetch_bytes(id, 0, b"", &[], &fonts, 800.0),
             }
         }
     }
@@ -195,37 +194,22 @@ fn a_media_segment_survives_the_fetch_boundary_byte_for_byte() {
     }
 }
 
-/// **What this probe MEASURED, and what it therefore pins.**
+/// **Fixed in tick 228; this gate is the ratchet on it.**
 ///
-/// The ranged half works and is pinned here: the `Range` header reaches the wire, the `206` surfaces
-/// instead of being flattened to `200`, and the eight requested bytes come back — all eight of them
-/// happening to be `0x00..0x07`, which is why the range claim passes while the full-segment one does
-/// not.
+/// The corruption was real and is measured above: 260 bytes sent, **407 received** — not truncation
+/// and not U+FFFD replacement, but UTF-8 **inflation**, because the buffered fetch path carried the
+/// body only as text and `arrayBuffer()` re-encoded it (`0xDF` → `0xC3 0x9F`; the `194` was `0xC2`,
+/// that lead byte). Every byte below `0x80` survived, which is why JSON/HTML/SSE never noticed and
+/// only binary was destroyed.
 ///
-/// **The binary half is BROKEN, measured, and deliberately not asserted yet** — a gate that cannot
-/// go green is not a ratchet, it is a blocked tick. The measurement, exactly:
+/// The fix carries the body on **two channels**: the host's charset-decoded `text` for
+/// `.text()`/`.json()`, and the raw bytes as a one-code-unit-per-byte binary string for
+/// `.arrayBuffer()`/`.bytes()`/`.body` and an `arraybuffer` XHR. Neither derives from the other
+/// without loss, which is the whole reason there are two.
 ///
-/// ```text
-/// len:407 magic:false allbytes:differs@0=194 replacement:0
-/// ```
+/// **RED, run:** settling the request through the text-only `Page::resolve_fetch` instead of
+/// `resolve_fetch_bytes` reproduces `len:407 magic:false allbytes:differs@0=194` exactly.
 ///
-/// 260 bytes sent, **407 received**. Not truncation and — the reason the probe reports it separately
-/// — **not** U+FFFD replacement either, which is what I expected to find. It is UTF-8 **inflation**:
-/// the response body crosses the boundary as a Rust `&str`, so each byte above `0x7F` is carried as a
-/// codepoint and re-encoded as two bytes (`0xDF` → `0xC3 0x9F`, and `differs@0=194` is `0xC2`, that
-/// lead byte). Every low byte survives, which is exactly why this hides: JSON, HTML and any
-/// ASCII-ish payload round-trip perfectly, and only binary is destroyed.
-///
-/// The consequence for the media track is total. `appendBuffer` would accept the segment and the
-/// demuxer would reject a stream that was valid when it left the server — a codec bug that is not a
-/// codec bug. **M3 cannot be started until this is fixed**, and it is not a demuxer problem.
-///
-/// The fix is a transport-representation change, not a parser fix: carry the body as a *binary
-/// string* (one code unit per byte, `charCode & 0xFF`), which is the convention this codebase already
-/// uses on the WebSocket path, and move the UTF-8 decode into `.text()`/`.json()` where it belongs.
-/// That touches `Page::resolve_fetch`, the shell pump and the prelude's body accessors together, so
-/// it is its own tick — and it now has a gate waiting for it: when it lands, the three commented
-/// claims below move into this list and the constellation cell flips.
 const CLAIMS: &[(&str, &str)] = &[
     (
         "done:true",
@@ -239,8 +223,20 @@ const CLAIMS: &[(&str, &str)] = &[
         "range:true",
         "the ranged response must be exactly the requested 8 bytes, with the right values",
     ),
-    // BLOCKED on the binary-body transport fix described above. Measured today as:
-    //   ("magic:true",      got magic:false)
-    //   ("allbytes:true",   got allbytes:differs@0=194)
-    //   ("len:260",         got len:407)
+    (
+        "len:260",
+        "the segment must arrive at its real length; 407 was every byte above 0x7F inflated into two",
+    ),
+    (
+        "magic:true",
+        "the EBML magic must arrive intact — it is the first thing a demuxer reads, and the first thing a re-encode destroys",
+    ),
+    (
+        "allbytes:true",
+        "every one of the 256 byte values must survive the fetch boundary; a media segment is not text, and altered bytes read as a codec bug that is not a codec bug",
+    ),
+    (
+        "replacement:0",
+        "no U+FFFD sequences — those would mean a lossy decode replaced the bytes a re-encode did not inflate",
+    ),
 ];

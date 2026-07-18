@@ -94,11 +94,11 @@ opened, append threw, listener never fired — reports the identical empty `-`, 
 pointing at no mechanism. Per-push flushing makes the last recorded claim the failure's location.
 This was not hypothetical: the first RED probe reported `got: -` and proved nothing until fixed.
 
-## M2: a media segment does NOT survive the fetch boundary (measured, tick 227)
+## M2: the segment corruption at the fetch boundary (found t227, FIXED t228)
 
 Tick 223 built the pipe a player appends into. What it appends comes from an `XHR`/`fetch` with
 `responseType = 'arraybuffer'`, usually over a byte `Range`. That path was measured with a 260-byte
-probe segment — a real EBML magic followed by all 256 byte values — and it is **broken**:
+probe segment — a real EBML magic followed by all 256 byte values — and it was **broken**:
 
 ```
 sent 260 bytes  →  received 407.   magic:false   allbytes:differs@0=194
@@ -115,12 +115,12 @@ codepoint and re-encoded as two bytes on the way back out: `0xDF` → `0xC3 0x9F
 the fetch path has been used for so far — round-trips exactly. Only binary is destroyed, and the
 first binary consumer is the media track.
 
-**Why it is a hard blocker for M3.** `appendBuffer` accepts the segment (it accepts any bytes), and
+**Why it was a hard blocker for M3.** `appendBuffer` accepts the segment (it accepts any bytes), and
 the demuxer then rejects a stream that was valid when it left the server. The symptom appears in the
 demuxer, so it reads as a codec bug — but no amount of work on symphonia fixes a corrupted input.
-Demux cannot be started until this is fixed.
+Demux could not be started until it was fixed.
 
-**The fix is a transport representation, not a parser.** Carry the body as a **binary string** — one
+**The fix was a transport representation, not a parser.** Carry the body as a **binary string** — one
 code unit per byte, `charCode & 0xFF` — which is the convention this codebase already uses on the
 WebSocket path, and move the UTF-8 decode into `.text()`/`.json()`, where it belongs. That is
 correct rather than merely expedient: a `Response` has one body, and *the page* decides whether it is
@@ -128,9 +128,18 @@ text or bytes; deciding for it at the boundary is what caused this. It touches `
 the shell's `pump_fetches` and the prelude's body accessors together, which is why it is its own
 tick.
 
-`g_media_segment_fetch` is already written against the fixed behaviour: the `Range`/`206` half is
-pinned green today, and the three binary claims sit commented beside their measured values, ready to
-move into the assertion list the moment the transport changes.
+**What landed (t228).** The body now crosses on **two channels**: the host's charset-decoded text
+for `.text()`/`.json()`, and the raw bytes as a one-code-unit-per-byte binary string for
+`.arrayBuffer()`/`.bytes()`/`.body` and an `arraybuffer` XHR. Neither derives from the other without
+loss — re-encoding the text inflates, and decoding the bytes as UTF-8 in JS would throw away the
+charset sniffing that makes a legacy-encoded page readable. `Page::resolve_fetch_bytes` is the entry
+point a host with real wire bytes should use; the old `resolve_fetch(&str)` still means "this body IS
+text" and remains exactly correct for that.
+
+**The streaming path was never affected**, and that is the tell: `deliver_chunk` already used
+`js_bytes_literal`, the one-char-per-byte convention. The buffered path being the odd one out is
+precisely how this survived — the fix reuses that same helper rather than inventing a second
+encoding.
 
 ### What DOES work, and is now pinned
 

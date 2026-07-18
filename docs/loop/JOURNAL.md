@@ -9553,3 +9553,40 @@ reaches the wire and the whole-file download that results is what adaptive strea
 recorded as its receipt.
 
 **Mechanism captured:** `docs/wiki/media-pipeline.md`.
+
+## Tick 228 — the binary body: two channels, and media M2 is unblocked (2026-07-18)
+
+**Selected:** the fix t227 specified — the blocker between M2 and M3.
+
+**It was much smaller than t227 scoped it, and the reason matters.** t227 planned a transport rework
+of the whole fetch body. Reading the code first showed the streaming path (`deliver_chunk`) had used
+`js_bytes_literal` — one code unit per byte — since it was written. **Only the buffered path was
+broken**, and its being the odd one out is exactly how the corruption survived. The fix reuses that
+existing helper rather than inventing a second encoding.
+
+**Two channels, because a Response has two genuine readings.** The host's charset-decoded `text`
+serves `.text()`/`.json()`; the raw bytes, as a binary string, serve
+`.arrayBuffer()`/`.bytes()`/`.body` and an `arraybuffer` XHR (which is how players actually pull
+segments). Neither derives from the other without loss: re-encoding the text is what inflated
+`0xDF` into `0xC3 0x9F`, and decoding the bytes as UTF-8 in JS would discard the host's charset
+sniffing — the thing that makes a legacy-encoded page readable. `Page::resolve_fetch_bytes` is the
+entry point for a host holding wire bytes; the old `resolve_fetch(&str)` still means *this body IS
+text* and stays exactly right for that, so **all 19 existing callers are untouched** and the change
+carries no regression surface by construction. Full wall: 95 gates green.
+
+**Measured: `len:260 magic:true allbytes:true` — byte-exact**, against `len:407 magic:false` before.
+
+**The methodology failure of this tick, which is the part worth keeping.** My first "verified fixed"
+was resting on assertions that did not exist. A scripted multi-part edit had one combined
+`assert s != orig`; `cargo fmt` had already reformatted the `CLAIMS` table into multi-line tuples, so
+that replacement silently matched nothing while the *other* replacement satisfied the assert. The
+gate then passed in both directions — and I only caught it because the RED probe passed when it had
+no business passing, so I printed the probe output instead of trusting the exit code. **A RED probe
+that passes is information, not noise.** Per-replacement assertions from now on, and never run a
+string-match edit across a formatter boundary.
+
+**Constellation:** `fetch uploads + ranges (streaming)` partial → **gated**.
+
+**M3 (symphonia demux) is now unblocked** and is the next media step.
+
+**Mechanism captured:** `docs/wiki/media-pipeline.md`.

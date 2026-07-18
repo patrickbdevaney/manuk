@@ -354,8 +354,8 @@
   - L66 · The append sequence is a task sequence, and that is load-bearing
   - L78 · An updateend handler that appends is re-entered by its own append
   - L89 · Gates: flush the record on every push, not at the end
-  - L97 · M2: a media segment does NOT survive the fetch boundary (measured, tick 227)
-  - L135 · What DOES work, and is now pinned
+  - L97 · M2: the segment corruption at the fetch boundary (found t227, FIXED t228)
+  - L144 · What DOES work, and is now pinned
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`

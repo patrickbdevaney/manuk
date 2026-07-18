@@ -263,7 +263,19 @@ const PRELUDE: &str = r#"
         globalThis.ReadableStreamDefaultReader = RSDR;
     }
 
-    globalThis.__makeResponse = function(status, text, headers) {
+    // `raw` is the response body as a BINARY STRING — one code unit per byte, values 0..255 — and
+    // it is what `arrayBuffer()`/`bytes()`/`body` read. `text` remains the host's charset-decoded
+    // string and is what `text()`/`json()` read, unchanged.
+    //
+    // Two channels rather than one, because a `Response` genuinely has two readings and deriving
+    // either from the other loses. Re-encoding `text` to UTF-8 (what this did until tick 228)
+    // INFLATES every byte above 0x7F into two — a 260-byte media segment came back as 407, so no
+    // demuxer could ever parse it. Going the other way and decoding `raw` as UTF-8 in JS would throw
+    // away the host's charset sniffing, which is what makes a legacy-encoded page readable.
+    //
+    // `raw` is optional: an older call site that omits it falls back to encoding `text`, which is
+    // exactly right for a body that really was text.
+    globalThis.__makeResponse = function(status, text, headers, raw) {
         // `bodyUsed` is now HONEST — it flips when the body is actually consumed, by any of the
         // routes that consume it (a reader read, or text/json/arrayBuffer/blob/bytes).
         var used = false;
@@ -276,10 +288,10 @@ const PRELUDE: &str = r#"
             json: function(){ used = true;
                               try { return Promise.resolve(JSON.parse(text)); }
                               catch (e) { return Promise.reject(e); } },
-            arrayBuffer: function(){ used = true; return Promise.resolve(globalThis.__bodyBytes(text).buffer); },
-            bytes: function(){ used = true; return Promise.resolve(globalThis.__bodyBytes(text)); },
+            arrayBuffer: function(){ used = true; return Promise.resolve(globalThis.__bodyBytes(text, raw).buffer); },
+            bytes: function(){ used = true; return Promise.resolve(globalThis.__bodyBytes(text, raw)); },
             blob: function(){ used = true; return Promise.resolve(new globalThis.Blob([text])); },
-            clone: function(){ return globalThis.__makeResponse(status, text, headers); }
+            clone: function(){ return globalThis.__makeResponse(status, text, headers, raw); }
         };
         Object.defineProperty(res, 'bodyUsed', {
             get: function(){ return used; }, enumerable: true, configurable: true
@@ -289,7 +301,7 @@ const PRELUDE: &str = r#"
         Object.defineProperty(res, 'body', {
             get: function() {
                 if (stream === null) {
-                    var bytes = globalThis.__bodyBytes(text);
+                    var bytes = globalThis.__bodyBytes(text, raw);
                     stream = new globalThis.ReadableStream({
                         start: function(c) { if (bytes.length) { c.enqueue(bytes); } c.close(); }
                     });
@@ -304,7 +316,16 @@ const PRELUDE: &str = r#"
 
     // The body as bytes. `TextEncoder` is defined further down the prelude, which is fine — this only
     // runs when a page calls it, long after the whole prelude has been evaluated.
-    globalThis.__bodyBytes = function(text) { return new globalThis.TextEncoder().encode(String(text)); };
+    globalThis.__bodyBytes = function(text, raw) {
+        // The binary-string channel: each code unit IS a byte, so mask and copy. No encoder is
+        // involved, which is the entire point — an encoder is what corrupted this.
+        if (typeof raw === 'string') {
+            var out = new Uint8Array(raw.length);
+            for (var i = 0; i < raw.length; i++) { out[i] = raw.charCodeAt(i) & 0xff; }
+            return out;
+        }
+        return new globalThis.TextEncoder().encode(String(text));
+    };
 
     // ── INCREMENTAL delivery — the response arrives in pieces, as it does on the wire. ──────────
     // `__deliverFetch` settles a request with its WHOLE body at once, which is all the buffered host
@@ -501,10 +522,10 @@ const PRELUDE: &str = r#"
             }
         });
     };
-    globalThis.__deliverFetch = function(id, status, text, headers) {
+    globalThis.__deliverFetch = function(id, status, text, headers, raw) {
         var cb = __fetchCb[id]; if (!cb) return; delete __fetchCb[id];
         if (status === 0) { cb.reject(new TypeError("Failed to fetch")); return; }
-        cb.resolve(globalThis.__makeResponse(status, text, headers));
+        cb.resolve(globalThis.__makeResponse(status, text, headers, raw));
     };
 
     globalThis.XMLHttpRequest = function() {
@@ -561,13 +582,19 @@ const PRELUDE: &str = r#"
         }
         __pendingFetches.push(id + "\x01x\x01" + this._m + "\x01" + this._u + "\x01" + hdrs + "\x01" + payload);
     };
-    globalThis.__deliverXhr = function(id, status, text, headers) {
+    globalThis.__deliverXhr = function(id, status, text, headers, raw) {
         var x = __xhrObj[id]; if (!x) return; delete __xhrObj[id];
         x._respHeaders = headers || [];
         x.status = status; x.statusText = ""; x.responseText = text;
+        // `responseType = 'arraybuffer'` is how every adaptive player fetches a media segment, so it
+        // reads the binary channel rather than the decoded text.
         x.response = (x.responseType === "json")
             ? (function(){ try { return JSON.parse(text); } catch (e) { return null; } })()
-            : text;
+            : (x.responseType === "arraybuffer")
+                ? globalThis.__bodyBytes(text, raw).buffer
+                : (x.responseType === "blob")
+                    ? new globalThis.Blob([text])
+                    : text;
         x.readyState = 4;
         if (typeof x.onreadystatechange === 'function') { try { x.onreadystatechange(); } catch (e) {} }
         if (status === 0) { if (typeof x.onerror === 'function') { try { x.onerror(new Error("network")); } catch (e) {} } }
@@ -576,9 +603,9 @@ const PRELUDE: &str = r#"
 
     // Kind-agnostic delivery: the host settles a request by id without tracking whether it was
     // a fetch or an XHR.
-    globalThis.__deliver = function(id, status, text, headers) {
-        if (__fetchCb[id]) { globalThis.__deliverFetch(id, status, text, headers); return; }
-        if (__xhrObj[id]) { globalThis.__deliverXhr(id, status, text, headers); return; }
+    globalThis.__deliver = function(id, status, text, headers, raw) {
+        if (__fetchCb[id]) { globalThis.__deliverFetch(id, status, text, headers, raw); return; }
+        if (__xhrObj[id]) { globalThis.__deliverXhr(id, status, text, headers, raw); return; }
     };
 
     // ---------------------------------------------------------------------------------------------
@@ -2898,12 +2925,41 @@ pub fn deliver(
     body: &str,
     headers: &[(String, String)],
 ) -> Result<(), String> {
+    deliver_bytes(rt, global, id, status, body, None, headers)
+}
+
+/// As [`deliver`], but also carrying the response's **raw bytes**.
+///
+/// `raw` is the body as a binary string — one code unit per byte — and it is what
+/// `arrayBuffer()`/`bytes()`/`response.body` and an `arraybuffer` XHR read. `body` stays the host's
+/// charset-decoded text for `text()`/`json()`.
+///
+/// Both, because a `Response` has two genuine readings and neither derives from the other without
+/// loss. Encoding the text back to UTF-8 (what happened before tick 228) inflates every byte above
+/// `0x7F` into two, so a 260-byte media segment arrived as 407 and no demuxer could parse it;
+/// decoding the bytes as UTF-8 in JS would instead discard the charset sniffing that makes a
+/// legacy-encoded page readable.
+pub fn deliver_bytes(
+    rt: &mut Runtime,
+    global: mozjs::rust::HandleObject,
+    id: u32,
+    status: u16,
+    body: &str,
+    raw: Option<&[u8]>,
+    headers: &[(String, String)],
+) -> Result<(), String> {
+    // `js_bytes_literal` — the SAME one-char-per-byte convention the streaming chunk path and the
+    // binary-upload path already use. Reused rather than re-derived: the streaming path was always
+    // byte-safe, and this buffered one being the odd path out is precisely how the corruption
+    // survived unnoticed.
+    let raw_lit = raw.map(js_bytes_literal);
     let script = format!(
-        "__deliver({}, {}, {}, {})",
+        "__deliver({}, {}, {}, {}, {})",
         id,
         status,
         js_string_literal(body),
-        js_headers_literal(headers)
+        js_headers_literal(headers),
+        raw_lit.as_deref().unwrap_or("undefined")
     );
     eval(rt, global, &script, "event_loop_deliver.js").map(|_| ())
 }
