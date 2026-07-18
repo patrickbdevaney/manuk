@@ -146,6 +146,11 @@ printf '  %s✓%s %s\n' "$GRN" "$OFF" "$(git log --oneline -1)"
 # It runs AFTER the push, on purpose: a tick that did not land is not a tick, and must not appear as one.
 ./scripts/tick-log.sh "$TICK" || true
 
+# ── PHASE-0 PROGRESS METER (observer). Append a daily-driver readiness row per LANDED tick so progress is a
+# visible TREND, not just a snapshot (docs/loop/PHASE0-PROGRESS.tsv). Informational — the script exits 0, so
+# it can never fail a tick. Runs after the push, like tick-log.sh, so it never gates the commit.
+./scripts/phase0-progress.sh --ledger || true
+
 # The marks only ever RISE. `bank` takes max(mark, current), so a regression cannot be laundered into the
 # baseline by re-running it, and a bad day cannot lower the bar for a good one.
 ./scripts/ratchet.sh bank || true
