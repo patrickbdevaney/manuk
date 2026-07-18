@@ -251,6 +251,19 @@ head_ "G3 · affordance completeness (§1.8 — no dead buttons)"
 # shell test surfaces (nothing masked by a `grep ok | head -1`). G_TEARDOWN/G_RUNTIME_COUNT/G_INTERACT below
 # read this same captured output.
 SHELL_OUT=$(_out shell); SHELL_FAILED=$(printf '%s' "$SHELL_OUT" | grep -c 'test result: FAILED')
+# ── FLAKY-GATE RETRY (observer). The shell suite carries the timing gates G_INTERACT (UI-thread latency
+# <16ms) and G_RUNTIME_COUNT, which measure PERFORMANCE and false-RED under the CPU contention of the ~25
+# gate builds launched in parallel above (confirmed tick 188: the suite passed 58/58 in the per-crate run
+# while this parallel invocation reported FAILED, costing the agent a full-wall re-run). A REAL regression
+# fails deterministically; a contention false-RED clears on a quiet machine. So on a reported failure, drain
+# the other gates and re-run the suite ONCE, serially, alone — nothing is masked (a real regression still
+# fails the quiet re-run), and this ends the flaky-gate re-run thrash instead of teaching the loop to
+# distrust a RED.
+if [ "$SHELL_FAILED" -ne 0 ]; then
+  wait 2>/dev/null || true
+  SHELL_OUT=$(cargo test -q -p manuk-shell -- --nocapture 2>&1)
+  SHELL_FAILED=$(printf '%s' "$SHELL_OUT" | grep -c 'test result: FAILED')
+fi
 AFF=$(printf '%s' "$SHELL_OUT" | grep -oE 'test result: ok\. [0-9]+ passed' | head -1)
 if [ "$SHELL_FAILED" -eq 0 ] && [ -n "$AFF" ]; then ok "affordances (full shell suite green): $AFF"; else bad "affordance gate failed — a control may be dead, or another manuk-shell test regressed"; fi
 
