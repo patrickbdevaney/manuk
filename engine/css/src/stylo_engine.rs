@@ -421,6 +421,9 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
             // three of the most common things on a web page, and all three rendered as nothing.
             cs.background_images = m.background_images.clone();
             cs.background_size = m.background_size;
+            // `background-position` recovered from MinimalCascade so the shipping path places a sprite/
+            // logo where the design put it (Stylo's servo build models it as a generic `Position`).
+            cs.background_position = m.background_position;
             // `object-fit` recovered from MinimalCascade like the rest of this block, so the shipping
             // Stylo path renders it too: a card grid's `object-fit:cover` thumbnails must not distort.
             cs.object_fit = m.object_fit;

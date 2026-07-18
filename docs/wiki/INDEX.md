@@ -48,6 +48,7 @@
   - L484 · object-position — placing the fitted image within its box (tick 185)
   - L512 · box-shadow — a LIST of shadow layers, each with spread (tick 189)
   - L547 · background-image — a LIST of layers, painted back-to-front (tick 190)
+  - L587 · background-position — placing a background image in its box (tick 191)
 
 ## BUILD AND DEPENDENCIES — what is actually compiled, and what only looks like it is
 `docs/wiki/build-and-dependencies.md`
@@ -429,4 +430,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-356 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+357 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

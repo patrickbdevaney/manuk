@@ -7771,3 +7771,39 @@ render-polish lever names further background fidelity.
 _Note (tick 190): `manuk-page::hard_wall_detection_and_honest_interstitial` fails on the committed
 HEAD too (pre-existing, unrelated to background-image; not in the verify wall's test set). Left for a
 dedicated tick — flagged here so it is not mistaken for a tick-190 regression._
+
+## Tick 191 — background-position — a sprite/logo lands where the design placed it (CSS render / paint) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (CSS render — background-position). WIKI:
+docs/wiki/box-layout.md "background-position — placing a background image in its box".**
+
+**Hypothesis.** `background-position` is unimplemented (0 hits): a `url()` background is always painted
+from the box's top-left corner. So the standard icon/logo/sprite idiom — `background: url(sprite.png)
+no-repeat; background-position: -16px -48px` (or `center` / `right 12px bottom 12px`) — renders the
+WRONG slice of a sprite sheet, and a `no-repeat` logo meant to sit centred or bottom-right sits jammed
+in the corner. It is the positioning half of the `background-size`/`-repeat` idiom the engine already
+half-implements.
+
+Fix (css + layout + paint, + the Stylo recovery path): a new `BackgroundPosition { x, y }` where each
+axis is a `BgPos` — `Pct(f32)` (a fraction of the box's FREE space, per CSS `<percentage>`/keyword
+semantics: `left/top`=0, `center`=0.5, `right/bottom`=1) or `Px(f32)` (an absolute offset from the
+top-left, per CSS `<length>`). `parse_background_position` reads 1–2 keyword/percentage/length values
+(one value sets the horizontal, vertical defaults to `center`; keywords bind to their own axis so
+`top right` resolves). Default `Pct(0.0), Pct(0.0)` == the current top-left blit, byte-for-byte. Carried
+on `ComputedStyle` (recovered from MinimalCascade on the shipping Stylo path beside `object_position`),
+threaded through `LayoutBox`, and consumed in `blit_background`: the tile origin shifts by
+`offset = match axis { Pct(f) => f·(box − tile), Px(p) => p }` on each axis (`lx = fx − rect.x −
+offset_x`), which places a `no-repeat` image and shifts the tiling phase of a `repeat` one exactly as
+CSS specifies.
+
+**Safety.** The default `Pct(0,0)` yields offset 0 on both axes — every existing background render (the
+top-left blit) is byte-identical, so the ratchet cannot regress. Behaviour changes only when a value
+sets a non-default position. Applies to `url()` image layers only; gradients still fill the box
+(gradient-position is out of scope, noted as residue, same as `background-size` already ignores them).
+
+**Gate.** engine/paint `background_position_places_the_image`: a 20×20 image in a 100×100 no-repeat box
+with `background-position: right bottom` (`Pct(1,1)`) paints the image at the box's bottom-right (a
+sample pixel there is opaque, top-left is not); `Px(-16,-48)` offsets a sprite slice; default `Pct(0,0)`
+paints top-left (RED-proving the old fixed-origin blit is only the default case). Verify:
+css+layout+paint suites green; HANG/CRASH 0. Residue: gradient-layer position, 3–4-value edge-offset
+form (`right 10px bottom 20px`), per-layer positions for multi-layer backgrounds.

@@ -154,6 +154,7 @@ pub enum DisplayItem {
         image: std::rc::Rc<DecodedImage>,
         size: manuk_css::BackgroundSize,
         repeat: manuk_css::BackgroundRepeat,
+        position: manuk_css::BackgroundPosition,
         radius: f32,
     },
     /// A **gradient** filling `rect`. `angle_deg` uses CSS's convention (0° points up, clockwise);
@@ -398,6 +399,7 @@ impl DisplayList {
                                     image: bmp.clone(),
                                     size: b.background_size,
                                     repeat: b.background_repeat,
+                                    position: b.background_position,
                                     radius,
                                 });
                             }
@@ -840,11 +842,21 @@ impl CpuPainter<'_> {
                         image,
                         size,
                         repeat,
+                        position,
                         radius,
                     } => {
                         let mut r = *rect;
                         r.y -= scroll_y;
-                        blit_background(&mut pixmap, image, r, *size, *repeat, *radius, clip);
+                        blit_background(
+                            &mut pixmap,
+                            image,
+                            r,
+                            *size,
+                            *repeat,
+                            *position,
+                            *radius,
+                            clip,
+                        );
                     }
                     DisplayItem::Gradient {
                         rect,
@@ -1521,6 +1533,82 @@ mod bg_tests {
         );
     }
 
+    /// `background-position` places a `no-repeat` image where the design put it, instead of always at
+    /// the box's top-left corner — the icon/logo/sprite idiom (`url(sprite.png) no-repeat;
+    /// background-position: -16px -48px` / `center` / `right bottom`). Baseline: the fixed-origin blit
+    /// only ever painted the default `0% 0%`, so a positioned image showed the wrong slice / sat jammed
+    /// in the corner.
+    #[test]
+    fn background_position_places_the_image() {
+        use manuk_css::{BackgroundPosition, BackgroundRepeat, BackgroundSize, BgPos};
+        // A 20×20 fully-opaque red tile.
+        let mut rgba = Vec::with_capacity(20 * 20 * 4);
+        for _ in 0..(20 * 20) {
+            rgba.extend_from_slice(&[255, 0, 0, 255]);
+        }
+        let img = DecodedImage {
+            width: 20,
+            height: 20,
+            rgba,
+        };
+        let paint = |pos: BackgroundPosition| -> tiny_skia::Pixmap {
+            let mut pm = tiny_skia::Pixmap::new(100, 100).unwrap();
+            blit_background(
+                &mut pm,
+                &img,
+                Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    width: 100.0,
+                    height: 100.0,
+                },
+                BackgroundSize::Auto,
+                BackgroundRepeat::NoRepeat,
+                pos,
+                0.0,
+                None,
+            );
+            pm
+        };
+        let is_red = |pm: &tiny_skia::Pixmap, x: u32, y: u32| {
+            let p = pm.pixel(x, y).unwrap();
+            p.alpha() > 200 && p.red() > 200 && p.green() < 50
+        };
+
+        // Default `0% 0%`: the historic top-left blit — byte-for-byte the old behaviour.
+        let tl = paint(BackgroundPosition::default());
+        assert!(is_red(&tl, 5, 5), "default `0% 0%` must paint the top-left");
+        assert!(
+            !is_red(&tl, 95, 95),
+            "default `0% 0%` must leave the bottom-right corner empty (20×20 tile in a 100×100 box)"
+        );
+
+        // `right bottom` (`Pct(1,1)`): free space 80 on each axis, so the tile occupies [80,100).
+        let br = paint(BackgroundPosition {
+            x: BgPos::Pct(1.0),
+            y: BgPos::Pct(1.0),
+        });
+        assert!(
+            is_red(&br, 95, 95),
+            "`right bottom` must place the image in the bottom-right corner"
+        );
+        assert!(
+            !is_red(&br, 5, 5),
+            "`right bottom` must move the image OFF the top-left origin"
+        );
+
+        // A `<length>` is an absolute offset: `50px 50px` places the tile at [50,70).
+        let px = paint(BackgroundPosition {
+            x: BgPos::Px(50.0),
+            y: BgPos::Px(50.0),
+        });
+        assert!(is_red(&px, 60, 60), "a px offset places the sprite slice");
+        assert!(
+            !is_red(&px, 5, 5),
+            "a px offset moves the image off the origin"
+        );
+    }
+
     /// `object-fit` — a 2:1 photo in a 1:1 tile must NOT distort. This is the near-universal thumbnail
     /// idiom (`img { width:100%; height:100%; object-fit:cover }` in a card grid). Baseline: the
     /// replaced blit stretched the bitmap to the box, so a 200×100 photo in a 100×100 tile came out
@@ -2170,16 +2258,18 @@ fn inside_round_rect(x: f32, y: f32, r: &Rect, rad: f32) -> bool {
 /// size and repeats. Painting a background the first way stretched a subreddit's banner across the
 /// entire page and buried the content beneath it.
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 fn blit_background(
     pixmap: &mut tiny_skia::Pixmap,
     img: &DecodedImage,
     rect: Rect,
     size: manuk_css::BackgroundSize,
     repeat: manuk_css::BackgroundRepeat,
+    position: manuk_css::BackgroundPosition,
     radius: f32,
     clip: Option<Rect>,
 ) {
-    use manuk_css::{BackgroundRepeat as R, BackgroundSize as S};
+    use manuk_css::{BackgroundRepeat as R, BackgroundSize as S, BgPos};
     if rect.width <= 0.0 || rect.height <= 0.0 || img.width == 0 || img.height == 0 {
         return;
     }
@@ -2199,6 +2289,15 @@ fn blit_background(
     if tw < 0.5 || th < 0.5 {
         return;
     }
+    // `background-position`: a percentage/keyword aligns the p-point of the image with the p-point of
+    // the box (an offset over the FREE space, `box − tile`); a length is an absolute offset. Default
+    // `0% 0%` gives offset 0 on both axes — the historic top-left blit, byte-for-byte.
+    let resolve = |p: BgPos, free: f32| match p {
+        BgPos::Pct(f) => f * free,
+        BgPos::Px(px) => px,
+    };
+    let off_x = resolve(position.x, rect.width - tw);
+    let off_y = resolve(position.y, rect.height - th);
 
     let mut r = rect;
     if let Some(cl) = clip {
@@ -2221,9 +2320,10 @@ fn blit_background(
             if rad > 0.0 && !inside_round_rect(fx, fy, &rect, rad) {
                 continue;
             }
-            // Position within the tile, measured from the box's origin.
-            let mut lx = fx - rect.x;
-            let mut ly = fy - rect.y;
+            // Position within the tile, measured from the box's origin, shifted by
+            // `background-position` (so the image starts at `origin + offset`).
+            let mut lx = fx - rect.x - off_x;
+            let mut ly = fy - rect.y - off_y;
             if tile {
                 lx = lx.rem_euclid(tw);
                 ly = ly.rem_euclid(th);

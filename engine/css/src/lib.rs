@@ -249,6 +249,32 @@ pub enum BackgroundRepeat {
     NoRepeat,
 }
 
+/// One axis of `background-position`. CSS resolves a `<percentage>`/keyword against the box's FREE
+/// space (so `right` aligns the image's right edge with the box's right edge), but a `<length>` is an
+/// absolute offset from the top-left. The two resolve differently, so they are kept distinct until the
+/// box and tile sizes are known at paint time.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum BgPos {
+    /// Fraction of the free space (`box − tile`): `left/top`=0.0, `center`=0.5, `right/bottom`=1.0.
+    Pct(f32),
+    /// Absolute offset in px from the top-left edge.
+    Px(f32),
+}
+
+impl Default for BgPos {
+    fn default() -> Self {
+        BgPos::Pct(0.0)
+    }
+}
+
+/// `background-position` — where a `url()` background image sits in its box. The initial value is
+/// `0% 0%` (top-left), which is exactly the fixed-origin blit the painter did before this existed.
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub struct BackgroundPosition {
+    pub x: BgPos,
+    pub y: BgPos,
+}
+
 /// `text-decoration-line`. Bitflags, because `underline line-through` is legal and used.
 /// (No `Eq` — `underline_offset`/`thickness` carry `f32`, and nothing keys a map on this.)
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
@@ -525,6 +551,8 @@ pub struct ComputedStyle {
     /// `linear-gradient(...) , url(hero.jpg)` scrim rendered the photo with no darkening overlay.
     pub background_images: Vec<BackgroundImage>,
     pub background_size: BackgroundSize,
+    /// `background-position` — where a `url()` background image sits (default `0% 0%`, top-left).
+    pub background_position: BackgroundPosition,
     /// `object-fit` — how a replaced element's content is fitted into its box (default `fill`).
     pub object_fit: ObjectFit,
     /// `object-position` — where the fitted content sits in its box (default centered).
@@ -728,6 +756,7 @@ impl ComputedStyle {
             mask_image: None,
             background_images: Vec::new(),
             background_size: BackgroundSize::Auto,
+            background_position: BackgroundPosition::default(),
             object_fit: ObjectFit::Fill,
             object_position: ObjectPosition::default(),
             aspect_ratio: None,
@@ -3218,6 +3247,7 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             }
             s.object_position = pos;
         }
+        "background-position" => s.background_position = parse_background_position(v, s.font_size),
         "background-repeat" => {
             s.background_repeat = if v.contains("no-repeat") {
                 BackgroundRepeat::NoRepeat
@@ -3487,6 +3517,63 @@ pub fn parse_background_images(v: &str) -> Vec<BackgroundImage> {
         .iter()
         .filter_map(|layer| parse_background_image(layer))
         .collect()
+}
+
+/// `background-position` — 1–2 keyword/percentage/length values. A `<percentage>`/keyword becomes a
+/// `Pct` fraction of the free space; a `<length>` becomes an absolute `Px` offset. One value sets the
+/// horizontal axis and leaves the vertical `center`; two values are `x y`, with keyword axis binding so
+/// `top right` resolves as well as `right top`. Anything unreadable leaves the default `0% 0%`.
+pub fn parse_background_position(v: &str, font_size: f32) -> BackgroundPosition {
+    let axis = |tok: &str| -> Option<BgPos> {
+        let t = tok.trim();
+        match t.to_ascii_lowercase().as_str() {
+            "left" | "top" => Some(BgPos::Pct(0.0)),
+            "center" => Some(BgPos::Pct(0.5)),
+            "right" | "bottom" => Some(BgPos::Pct(1.0)),
+            _ => {
+                if let Some(n) = t.strip_suffix('%') {
+                    n.trim().parse::<f32>().ok().map(|p| BgPos::Pct(p / 100.0))
+                } else {
+                    values::parse_length_px(t, font_size).map(BgPos::Px)
+                }
+            }
+        }
+    };
+    let is_vertical =
+        |tok: &str| matches!(tok.trim().to_ascii_lowercase().as_str(), "top" | "bottom");
+    let is_horizontal =
+        |tok: &str| matches!(tok.trim().to_ascii_lowercase().as_str(), "left" | "right");
+    let toks: Vec<&str> = v.split_whitespace().collect();
+    // `background-position`'s initial value is `0% 0%`, but a lone value leaves the OTHER axis centered.
+    let mut pos = BackgroundPosition::default();
+    match toks.as_slice() {
+        [a] => {
+            if is_vertical(a) {
+                if let Some(p) = axis(a) {
+                    pos.y = p;
+                    pos.x = BgPos::Pct(0.5);
+                }
+            } else if let Some(p) = axis(a) {
+                pos.x = p;
+                pos.y = BgPos::Pct(0.5); // horizontal set, vertical centered
+            }
+        }
+        [a, b] => {
+            let (xa, ya) = if is_vertical(a) || is_horizontal(b) {
+                (b, a)
+            } else {
+                (a, b)
+            };
+            if let Some(p) = axis(xa) {
+                pos.x = p;
+            }
+            if let Some(p) = axis(ya) {
+                pos.y = p;
+            }
+        }
+        _ => {}
+    }
+    pos
 }
 
 /// A single `background-image` layer: `url(...) | linear-gradient(...) | radial-gradient(...)`.
