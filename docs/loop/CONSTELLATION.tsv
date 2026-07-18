@@ -45,7 +45,7 @@ app	WebAssembly	Figma, games, ffmpeg.wasm	unknown	-	NEVER MEASURED — probe it
 app	structuredClone	state transfer	works	-	G_CAPABILITY
 platform	cookies (SameSite/Secure/HttpOnly)	no session, no login	partial	-	cookie jar exists; flags unmeasured
 platform	CORS + credentialed requests	every API call from an SPA	unknown	-	NEVER MEASURED — probe it
-platform	OAuth redirect flow	YOU CANNOT LOG IN TO THE MODERN WEB	unknown	-	NEVER MEASURED — the single biggest platform unknown
+platform	OAuth redirect flow	YOU CANNOT LOG IN TO THE MODERN WEB	unknown	-	CRITICAL — gates login to the logged-in web. Google GIS v3: redirect flow (navigate+POST+cookies, PROBE end-to-end), popup+postMessage (needs iframe RE-RENDER — row 50 gap), FedCM One-Tap (missing). Build+verify e2e (edge sweep t222)
 platform	window.open + postMessage (popup auth)	OAuth popups; the other login path	partial	-	window.open recorded; postMessage routing exists
 platform	REAL iframes (nested browsing context)	embeds, payments, OAuth frames, ads, players	gated	G_IFRAME	tick 84: cross-boundary readable; BUT pixels are a snapshot — no re-render on mutation. Blocks 3-D Secure challenge + interactive OAuth frames (edge sweep t193b)
 platform	postMessage across frames	every embed talks this way	partial	-	-
