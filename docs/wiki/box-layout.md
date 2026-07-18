@@ -622,3 +622,35 @@ bottom-right (top-left empty); `50px 50px` (`Px`) places the slice at `[50,70)`.
 fixed-origin blit. css+layout+paint green (paint 14→15), HANG/CRASH 0. Residue: gradient-layer
 position, the 3–4-value edge-offset form (`right 10px bottom 20px`), and per-layer positions for
 multi-layer backgrounds. [[box-layout]]
+
+
+## border-style — dashed / dotted / double borders (tick 192)
+
+`border-style` was **parsed then discarded**: `parse_border_shorthand` used the style keyword only to
+default the width, and `ComputedStyle` had no `border_style` field. Every `dashed`/`dotted`/`double`
+border rendered **solid** — a drop-zone outline, a ticket-card perforation, a `double` frame, a dashed
+divider all came out as a plain line.
+
+Model: a uniform `BorderStyle` (Solid/Dashed/Dotted/Double), stored uniform to match `border_color`
+(also uniform — per-side styles are a follow-on). `groove`/`ridge`/`inset`/`outset` collapse to `Solid`
+(their bevel is a paint refinement; a solid line is the honest approximation).
+
+Mechanism (css + layout + paint, + the Stylo recovery path):
+- **css** — `border_style_of` maps the keyword; `parse_border_shorthand` returns the style alongside
+  width/color; `border`/`border-<side>` set it; the `border-style`/`border-<side>-style` longhands take
+  the first style token (`none`/`hidden` still zero the width). Recovered from MinimalCascade in
+  `stylo_engine.rs`, so the shipping Stylo path renders it.
+- **layout** — `Border` gains `style`, set from `s.border_style`.
+- **paint** — the per-edge closure dispatches on the style. **Solid** emits one Rect (byte-identical to
+  before). **Dashed** breaks the edge into `3×thickness` dashes with equal gaps; **Dotted** into
+  one-thickness square dots with one-thickness gaps; **Double** into two `⌊thickness/3⌋` lines at the
+  outer edges with a middle gap (below 3px the thirds collapse → reads solid, the honest degradation).
+
+**Safety.** The default `Solid` emits exactly the single Rect per edge the painter drew before — every
+existing border is byte-for-byte unchanged, so the ratchet cannot regress. Only a declared
+`dashed`/`dotted`/`double` changes.
+
+**Gate.** `border_style_breaks_the_line` (engine/paint): a plain bordered `<div>` (no background) emits
+one Rect per edge, so the Rect count separates the styles — `solid`=4, `double`=8, `dashed`/`dotted`≫8.
+RED against the all-solid baseline. css+layout+paint green (paint 15→16), HANG/CRASH 0. Residue: per-side
+border styles, groove/ridge/inset/outset bevels, exact dash-length fitting. [[box-layout]]

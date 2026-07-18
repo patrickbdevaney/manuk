@@ -300,6 +300,7 @@ struct PlacedCell {
 pub struct Border {
     pub widths: [f32; 4],
     pub color: Rgba,
+    pub style: manuk_css::BorderStyle,
 }
 
 impl LayoutBox {
@@ -751,6 +752,7 @@ fn border_of(s: &ComputedStyle) -> Option<Border> {
         Some(Border {
             widths: [w.top, w.right, w.bottom, w.left],
             color: s.border_color,
+            style: s.border_style,
         })
     }
 }

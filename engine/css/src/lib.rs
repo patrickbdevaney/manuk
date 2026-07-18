@@ -275,6 +275,19 @@ pub struct BackgroundPosition {
     pub y: BgPos,
 }
 
+/// `border-style` — the LINE style of a border. Stored uniform (matching `border_color`, which is also
+/// uniform); per-side styles are a follow-on. `groove`/`ridge`/`inset`/`outset` collapse to `Solid`
+/// (their bevel shading is a paint refinement, and a solid line is the honest approximation).
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub enum BorderStyle {
+    #[default]
+    Solid,
+    Dashed,
+    Dotted,
+    /// Two parallel lines with a gap between them.
+    Double,
+}
+
 /// `text-decoration-line`. Bitflags, because `underline line-through` is legal and used.
 /// (No `Eq` — `underline_offset`/`thickness` carry `f32`, and nothing keys a map on this.)
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
@@ -612,6 +625,8 @@ pub struct ComputedStyle {
     pub padding: Sides<Dim>,
     pub border_width: Sides<f32>,
     pub border_color: Rgba,
+    /// `border-style` — the line style (solid/dashed/dotted/double), uniform like `border_color`.
+    pub border_style: BorderStyle,
     /// `border-radius` — a single uniform corner radius in px (per-corner radii are a follow-on).
     /// `0.0` = square corners.
     pub border_radius: f32,
@@ -750,6 +765,7 @@ impl ComputedStyle {
             padding: Sides::all(Dim::Px(0.0)),
             border_width: Sides::all(0.0),
             border_color: Rgba::BLACK,
+            border_style: BorderStyle::default(),
             border_radius: 0.0,
             visibility: Visibility::Visible,
             line_height_normal: true,
@@ -3099,16 +3115,19 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         // The `border` family. Widths feed the box model; the color feeds paint; the line
         // style is not tracked (only presence, since `none`/`hidden` zero the width).
         "border" => {
-            let (w, c) = parse_border_shorthand(v, s.font_size);
+            let (w, c, st) = parse_border_shorthand(v, s.font_size);
             if let Some(w) = w {
                 s.border_width = Sides::all(w);
             }
             if let Some(c) = c {
                 s.border_color = c;
             }
+            if let Some(st) = st {
+                s.border_style = st;
+            }
         }
         "border-top" | "border-right" | "border-bottom" | "border-left" => {
-            let (w, c) = parse_border_shorthand(v, s.font_size);
+            let (w, c, st) = parse_border_shorthand(v, s.font_size);
             if let Some(w) = w {
                 match d.name.as_str() {
                     "border-top" => s.border_width.top = w,
@@ -3119,6 +3138,9 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             }
             if let Some(c) = c {
                 s.border_color = c;
+            }
+            if let Some(st) = st {
+                s.border_style = st;
             }
         }
         "border-radius" => {
@@ -3380,10 +3402,20 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 s.border_color = c;
             }
         }
-        "border-style" => {
-            // `none`/`hidden` remove the border; other styles keep whatever width is set.
-            if matches!(v.trim(), "none" | "hidden") {
-                s.border_width = Sides::all(0.0);
+        "border-style"
+        | "border-top-style"
+        | "border-right-style"
+        | "border-bottom-style"
+        | "border-left-style" => {
+            // `none`/`hidden` remove the border; other styles keep whatever width is set. The style
+            // is stored uniform (like `border_color`): the FIRST style token of a multi-value
+            // `border-style: solid dashed` wins (per-side styles are a follow-on).
+            if let Some(first) = v.split_whitespace().next() {
+                if matches!(first, "none" | "hidden") {
+                    s.border_width = Sides::all(0.0);
+                } else if let Some(st) = border_style_of(first) {
+                    s.border_style = st;
+                }
             }
         }
         _ => {}
@@ -3415,23 +3447,34 @@ fn parse_font_family(v: &str) -> Vec<String> {
         .collect()
 }
 
-/// Parse the `border`/`border-<side>` shorthand into an optional width and color. The line
-/// style is consumed but not stored; `none`/`hidden` force width 0.
-fn parse_border_shorthand(v: &str, fs: f32) -> (Option<f32>, Option<Rgba>) {
+/// Map a `border-style` keyword to a `BorderStyle`. `groove`/`ridge`/`inset`/`outset` collapse to
+/// `Solid` (their bevel is a paint refinement). Returns `None` for a non-style token.
+fn border_style_of(tok: &str) -> Option<BorderStyle> {
+    match tok.trim() {
+        "solid" | "groove" | "ridge" | "inset" | "outset" => Some(BorderStyle::Solid),
+        "dashed" => Some(BorderStyle::Dashed),
+        "dotted" => Some(BorderStyle::Dotted),
+        "double" => Some(BorderStyle::Double),
+        _ => None,
+    }
+}
+
+/// Parse the `border`/`border-<side>` shorthand into an optional width, color and line style.
+/// `none`/`hidden` force width 0.
+fn parse_border_shorthand(v: &str, fs: f32) -> (Option<f32>, Option<Rgba>, Option<BorderStyle>) {
     let mut width = None;
     let mut color = None;
-    let mut saw_visible_style = false;
+    let mut style = None;
     for tok in v.split_whitespace() {
         match tok {
             "none" | "hidden" => width = Some(0.0),
-            "solid" | "dashed" | "dotted" | "double" | "groove" | "ridge" | "inset" | "outset" => {
-                saw_visible_style = true
-            }
             "thin" => width = Some(1.0),
             "medium" => width = Some(3.0),
             "thick" => width = Some(5.0),
             t => {
-                if let Some(px) = values::parse_length_px(t, fs) {
+                if let Some(bs) = border_style_of(t) {
+                    style = Some(bs);
+                } else if let Some(px) = values::parse_length_px(t, fs) {
                     width = Some(px);
                 } else if let Some(c) = values::parse_color(t) {
                     color = Some(c);
@@ -3440,10 +3483,10 @@ fn parse_border_shorthand(v: &str, fs: f32) -> (Option<f32>, Option<Rgba>) {
         }
     }
     // A visible line style with no explicit width defaults to `medium` (3px).
-    if width.is_none() && saw_visible_style {
+    if width.is_none() && style.is_some() {
         width = Some(3.0);
     }
-    (width, color)
+    (width, color, style)
 }
 
 /// Split `v` on top-level whitespace, keeping parenthesised groups (`rgba(0, 0, 0, .3)`) intact.

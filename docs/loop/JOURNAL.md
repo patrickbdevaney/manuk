@@ -7807,3 +7807,42 @@ sample pixel there is opaque, top-left is not); `Px(-16,-48)` offsets a sprite s
 paints top-left (RED-proving the old fixed-origin blit is only the default case). Verify:
 css+layout+paint suites green; HANG/CRASH 0. Residue: gradient-layer position, 3–4-value edge-offset
 form (`right 10px bottom 20px`), per-layer positions for multi-layer backgrounds.
+
+## Tick 192 — border-style — a dashed drop-zone / double frame renders broken, not solid (CSS render / paint) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (CSS render — border-style). WIKI:
+docs/wiki/box-layout.md "border-style — dashed / dotted / double borders".**
+
+**Hypothesis.** `border-style` was **parsed then discarded** — `parse_border_shorthand` only used the
+style keyword to default the width, and `ComputedStyle` had no `border_style` field at all. So every
+`dashed`/`dotted`/`double` border rendered **solid**: a drag-and-drop zone's dashed outline, a
+coupon/ticket card's perforation, a `double` frame, a dashed divider or empty-state box all came out as
+a plain solid line.
+
+Fix (css + layout + paint, + the Stylo recovery path): a new uniform `BorderStyle`
+(Solid/Dashed/Dotted/Double; `groove`/`ridge`/`inset`/`outset` collapse to Solid — their bevel is a
+paint refinement) on `ComputedStyle.border_style`, stored uniform to match `border_color` (also
+uniform; per-side styles are a follow-on). `border_style_of` maps the keyword; `parse_border_shorthand`
+now returns the style alongside width/color; the `border`/`border-<side>` handlers set it, and the
+`border-style`/`border-<side>-style` longhands take the first style token (`none`/`hidden` still zero
+the width). Recovered from MinimalCascade in `stylo_engine.rs` so the shipping Stylo path renders it.
+`layout::Border` gains `style`; paint's per-edge closure dispatches on it: **Solid** emits one Rect
+(byte-identical to before), **Dashed** breaks each edge into `3×thickness` dashes with equal gaps,
+**Dotted** into one-thickness square dots with one-thickness gaps, **Double** into two `⌊thickness/3⌋`
+lines at the outer edges with a middle gap.
+
+**Safety.** The default `Solid` emits exactly the single Rect per edge the painter drew before, so every
+existing border render is byte-for-byte unchanged and the ratchet cannot regress. Behaviour changes only
+when a border actually declares `dashed`/`dotted`/`double`. Below 3px a `double` border's thirds
+collapse and it reads as solid — the honest degradation.
+
+**Gate.** engine/paint `border_style_breaks_the_line`: a plain bordered `<div>` (no background) emits one
+Rect per edge, so Rect count separates the styles — `solid`=4, `double`=8 (two per edge), `dashed`/
+`dotted`≫8 (segments). RED against the all-solid baseline (proven: the old edge closure drew one Rect
+regardless of style). Verify: css+layout+paint suites green (paint 15→16); HANG/CRASH 0. Residue:
+per-side border styles (uniform today), groove/ridge/inset/outset bevel shading, dash-length rounding to
+fit the edge exactly (browsers nudge the pattern; we let the last dash clip).
+
+_Note (tick 192): first tick.sh attempt hit a WALL false-RED — verify wall 486s > 74s ceiling driven by
+a load-slow PARITY section (P=267s; build was warm at 36s, all capability gates green). Load-driven wall
+variance is a known harness condition (observer-owned); re-ran on a quiet box (load 1.1)._

@@ -424,6 +424,9 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
             // `background-position` recovered from MinimalCascade so the shipping path places a sprite/
             // logo where the design put it (Stylo's servo build models it as a generic `Position`).
             cs.background_position = m.background_position;
+            // `border-style` recovered from MinimalCascade so the shipping path renders dashed/dotted/
+            // double borders (drop-zones, dividers, ticket cards) instead of solid.
+            cs.border_style = m.border_style;
             // `object-fit` recovered from MinimalCascade like the rest of this block, so the shipping
             // Stylo path renders it too: a card grid's `object-fit:cover` thumbnails must not distort.
             cs.object_fit = m.object_fit;

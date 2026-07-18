@@ -408,10 +408,12 @@ impl DisplayList {
                 }
             }
             if let Some(border) = &b.border {
+                use manuk_css::BorderStyle as BS;
                 let r = b.rect;
                 let [t, rr, bb, l] = border.widths;
                 let c = border.color;
-                let mut edge = |x: f32, y: f32, w: f32, h: f32| {
+                let style = border.style;
+                let mut rect = |x: f32, y: f32, w: f32, h: f32| {
                     if w > 0.0 && h > 0.0 {
                         items.push(DisplayItem::Rect {
                             rect: Rect {
@@ -424,10 +426,53 @@ impl DisplayList {
                         });
                     }
                 };
-                edge(r.x, r.y, r.width, t); // top
-                edge(r.x, r.y + r.height - bb, r.width, bb); // bottom
-                edge(r.x, r.y, l, r.height); // left
-                edge(r.x + r.width - rr, r.y, rr, r.height); // right
+                // One edge strip (`horizontal` = a top/bottom bar, else a left/right bar). `thick` is
+                // the strip's short dimension; `len` its long one. Solid emits one rect (byte-identical
+                // to before); dashed/dotted emit segments along `len`; double splits `thick` into two
+                // lines with a gap.
+                let mut edge = |x: f32, y: f32, w: f32, h: f32, horizontal: bool| {
+                    if w <= 0.0 || h <= 0.0 {
+                        return;
+                    }
+                    let (thick, len) = if horizontal { (h, w) } else { (w, h) };
+                    match style {
+                        BS::Solid => rect(x, y, w, h),
+                        BS::Dashed | BS::Dotted => {
+                            let (dash, gap) = if matches!(style, BS::Dashed) {
+                                (3.0 * thick, 3.0 * thick)
+                            } else {
+                                (thick, thick) // dotted: square dots, one-thickness gap
+                            };
+                            let period = (dash + gap).max(0.5);
+                            let mut pos = 0.0;
+                            while pos < len {
+                                let seg = dash.min(len - pos);
+                                if horizontal {
+                                    rect(x + pos, y, seg, h);
+                                } else {
+                                    rect(x, y + pos, w, seg);
+                                }
+                                pos += period;
+                            }
+                        }
+                        BS::Double => {
+                            // Two lines each ~1/3 of the thickness, at the outer edges. Below 3px the
+                            // thirds collapse and it reads as solid — the honest degradation.
+                            let unit = (thick / 3.0).floor().max(1.0);
+                            if horizontal {
+                                rect(x, y, w, unit);
+                                rect(x, y + h - unit, w, unit);
+                            } else {
+                                rect(x, y, unit, h);
+                                rect(x + w - unit, y, unit, h);
+                            }
+                        }
+                    }
+                };
+                edge(r.x, r.y, r.width, t, true); // top
+                edge(r.x, r.y + r.height - bb, r.width, bb, true); // bottom
+                edge(r.x, r.y, l, r.height, false); // left
+                edge(r.x + r.width - rr, r.y, rr, r.height, false); // right
             }
             // **This blit is for REPLACED elements, and only for them.**
             //
@@ -1530,6 +1575,45 @@ mod bg_tests {
             replaced, 0,
             "and the REPLACED-element blit must NOT also fire: it stretches the bitmap to fill the \
              box, painting a scaled copy straight over the tiled background"
+        );
+    }
+
+    /// `border-style` — dashed/dotted/double borders must render as broken/paired lines, not solid.
+    /// Baseline: the painter drew every edge as one solid Rect regardless of style, so a drop-zone's
+    /// dashed outline, a ticket card's perforation and a `double` frame all came out solid. A plain
+    /// bordered `<div>` (no background) emits exactly one Rect per non-zero edge, so counting Rects
+    /// distinguishes the styles: solid=4 (one/edge), double=8 (two/edge), dashed/dotted≫4 (segments).
+    #[test]
+    fn border_style_breaks_the_line() {
+        use manuk_css::{MinimalCascade, Stylesheet};
+        let rects = |style: &str| -> usize {
+            let dom = manuk_html::parse(r#"<div id="d"></div>"#);
+            let css = format!("#d{{width:120px;height:60px;border:9px {style} #333}}");
+            let styles = MinimalCascade.cascade(&dom, &[Stylesheet::parse(&css)]);
+            let fonts = FontContext::new();
+            let root = manuk_layout::layout_document(&dom, &styles, &fonts, 400.0);
+            let images = std::collections::HashMap::new();
+            DisplayList::build_with_images(&root, &images)
+                .items
+                .iter()
+                .filter(|i| matches!(i, DisplayItem::Rect { .. }))
+                .count()
+        };
+        assert_eq!(rects("solid"), 4, "a solid border is one Rect per edge (4)");
+        assert_eq!(
+            rects("double"),
+            8,
+            "a double border is TWO lines per edge (8) — was 4 solid"
+        );
+        assert!(
+            rects("dashed") > 8,
+            "a dashed border breaks each edge into multiple segments — was 4 solid ({} rects)",
+            rects("dashed")
+        );
+        assert!(
+            rects("dotted") > 8,
+            "a dotted border is a run of dots per edge — was 4 solid ({} rects)",
+            rects("dotted")
         );
     }
 
