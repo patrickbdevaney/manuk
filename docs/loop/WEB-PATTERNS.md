@@ -1113,3 +1113,18 @@ boundary on two channels: charset-decoded text for `.text()`/`.json()`, raw byte
 `.arrayBuffer()`/`.bytes()`/`.body` and an `arraybuffer` XHR. This unblocks MSE segment fetching (and
 therefore the demuxer step), WASM modules fetched over the network, and every other `arrayBuffer()`
 consumer. Byte ranges already worked and are gated alongside it in `g_media_segment_fetch`.
+
+## Hydration (SSR markup + client attach) — measured working (tick 229)
+
+The dominant delivery pattern of the modern web — Next.js, Nuxt, Remix, SvelteKit, Astro — and it
+works: server markup is in the DOM before any script runs, node identity survives the client's
+attach, listeners bound to that server markup fire on a real dispatched click, and a server/client
+mismatch is both detectable and patchable.
+
+It is the canonical **silent** failure, which is why it needed driving rather than looking at: every
+step is ordinary DOM work, so a broken hydration throws nothing and the page looks perfect while
+being dead — inert buttons, menus that never open, forms that never validate. Gated by
+`g_hydration`, whose decisive assertion is a `dispatch_click` on the server-sent button, not anything
+the page script can report about itself. The identity claim is the load-bearing one: a framework that
+re-created the node instead of adopting it would produce a byte-identical DOM while discarding the
+server's work and every listener on it.

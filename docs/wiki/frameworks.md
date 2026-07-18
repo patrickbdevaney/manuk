@@ -204,3 +204,23 @@ Pinned by `G_HYDRATION`, proven RED two ways (alter the SSR tree shape → the w
 never register the listener → the click assertion fails). **Residue:** no real framework bundle runs
 here; `Suspense` streaming boundaries, selective hydration, islands, and the mismatch *recovery* path
 are unmeasured.
+
+## Hydration works, and only a driven click can prove it (tick 229)
+
+Hydration — Next.js, Nuxt, Remix, SvelteKit, Astro — ships real HTML from the server and has the
+client **adopt** it: walk the existing markup, compare it against what it would have rendered, attach
+listeners to the nodes already there. Measured in tick 229 and working: markup present pre-script,
+node identity preserved across attach, listeners on server markup firing, mismatch detectable and
+patchable.
+
+**It is the canonical silent failure, and that shapes how it must be tested.** Every step is ordinary
+DOM work, so a broken hydration throws nothing. The page looks *right* — the server's markup is on
+screen — and is dead: inert buttons, menus that never open. No error, no blank screen, no missing
+API. Rendering a page and inspecting it cannot tell hydrated from un-hydrated, so `g_hydration`'s
+decisive assertion lives outside the page script: `Page::dispatch_click` on the server-sent button,
+then read the text back. Disabling the JS dispatch yields `Clicked 0 times` — the inert page exactly.
+
+**Node identity is the claim that carries the weight.** Adoption means the *same object*, so the gate
+stamps a JS property on the node before attaching and requires it after. A framework that re-created
+the node would produce a byte-identical DOM while discarding the server's work and every listener on
+it — indistinguishable by inspection, caught by the stamp.

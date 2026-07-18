@@ -241,6 +241,7 @@
   - L156 · The measured capability list that ranked the whole backlog
   - L166 · The first named hydration failure: aljazeera, and React discarding its own server-rendered tree
   - L177 · SSR hydration — measured working, and pinned (tick 217)
+  - L208 · Hydration works, and only a driven click can prove it (tick 229)
 
 ## THE INTERACTION SURFACE — clicks, scroll, focus, and automation
 `docs/wiki/interaction-surface.md`
@@ -499,4 +500,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-418 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+419 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

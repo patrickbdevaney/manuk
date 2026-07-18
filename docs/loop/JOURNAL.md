@@ -9590,3 +9590,39 @@ string-match edit across a formatter boundary.
 **M3 (symphonia demux) is now unblocked** and is the next media step.
 
 **Mechanism captured:** `docs/wiki/media-pipeline.md`.
+
+## Tick 229 — hydration: the server's markup is adopted, not rebuilt (2026-07-18)
+
+**Selected:** CO-#1 **(D)**, the `hydration (SSR markup + client attach)` unknown — "the dominant
+delivery pattern; fails SILENTLY", `unknown` since tick 64 rendered React but never drove an attach.
+
+**Result: it works.** Server markup is in the DOM before any script runs, node identity survives the
+client's attach, listeners bound to that server markup fire on a real engine-dispatched click, and a
+server/client text mismatch is both visible and patchable.
+
+**Why "looks fine" could never have answered this.** Every part of hydration is ordinary DOM work,
+so nothing throws when it fails. The page *looks* correct — the server's HTML is on screen — and is
+simply **dead**: buttons inert, menus that never open, forms that never validate. No error, no blank
+screen, no missing API. Rendering the page and looking at it cannot distinguish hydrated from
+un-hydrated. Only driving it can, which is why the sharp half of this gate is outside the page
+script: `page.dispatch_click(btn)` on the button the server sent, then reading the text back.
+
+**The claim that carries the most weight is node IDENTITY.** Hydration means *adopting* the existing
+node; a framework that quietly re-created it would produce a byte-identical DOM while throwing away
+the server's work and every listener attached to it. The gate stamps a JS property on the node before
+attaching and requires the same object (`===`, plus the stamp) after — a look-alike replacement fails
+while looking perfect. The handler's attribute write is then checked on the adopted node, because if
+identity were lost it would land on a detached copy and the visible node would never change.
+
+**RED, run:** disabling the JS dispatch in `Page::dispatch_click` yields `Clicked 0 times` against
+`Clicked 1 times` — the inert page exactly.
+
+**A no-op RED probe caught, immediately after writing the lesson down.** My first attempt inserted a
+`Some(_ctx) if false =>` arm, which by construction never executes and changed nothing; the gate
+passed and briefly looked like a falsification failure. Same class as tick 228's silent replacement —
+*a probe must be shown to change behaviour before its result means anything.* The second attempt
+replaced the match scrutinee outright and produced a real RED.
+
+**Unknowns: 17 → 16.**
+
+**Mechanism captured:** `docs/wiki/frameworks.md`.
