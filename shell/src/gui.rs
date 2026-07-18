@@ -161,13 +161,9 @@ enum FormSubmission {
     Post(manuk_agent::forms::UrlencodedPost),
 }
 
-/// A completed download, shown in the hamburger menu's Downloads section.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub(crate) struct DownloadRecord {
-    pub(crate) filename: String,
-    pub(crate) path: std::path::PathBuf,
-    pub(crate) bytes: usize,
-}
+// `DownloadRecord` lives in `crate::session` (not here) so the headless build, which compiles
+// session persistence but not this GUI module, can use it. The menu shows these records.
+use crate::session::DownloadRecord;
 
 pub fn run(url: String, width: u32, measure_frames: Option<usize>) -> Result<()> {
     let event_loop = EventLoop::<NavEvent>::with_user_event()

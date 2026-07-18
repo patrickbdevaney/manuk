@@ -43,6 +43,16 @@ use serde::{Deserialize, Serialize};
 use crate::chrome::{self, Bookmarks, Settings};
 use crate::tab::Browser;
 
+/// A completed download (filename, on-disk path, size), persisted so the menu's Downloads section
+/// survives a restart. Lives here (not in the GUI-only `gui` module) so the headless
+/// (`--no-default-features`) build — which compiles session persistence but not the GUI — can use it.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct DownloadRecord {
+    pub(crate) filename: String,
+    pub(crate) path: PathBuf,
+    pub(crate) bytes: usize,
+}
+
 /// One persisted tab. Order is the position in the surrounding `Vec`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TabRecord {
@@ -138,13 +148,13 @@ impl SessionStore {
     /// Downloads section survives a restart, as every browser's does. Overwrites the previous
     /// file. Not redacted: a download is a file the user saved, and its path is exactly what the
     /// "open / show in folder" action needs.
-    pub fn save_downloads(&self, downloads: &[crate::gui::DownloadRecord]) -> Result<()> {
+    pub fn save_downloads(&self, downloads: &[DownloadRecord]) -> Result<()> {
         self.ensure_dir()?;
         write_json(&self.downloads_path(), &downloads)
     }
 
     /// Load the persisted downloads (oldest first), or `None` if none were ever saved.
-    pub fn load_downloads(&self) -> Result<Option<Vec<crate::gui::DownloadRecord>>> {
+    pub fn load_downloads(&self) -> Result<Option<Vec<DownloadRecord>>> {
         read_json(&self.downloads_path())
     }
 
@@ -602,12 +612,12 @@ mod tests {
         assert!(store.load_downloads().unwrap().is_none());
 
         let recs = vec![
-            crate::gui::DownloadRecord {
+            DownloadRecord {
                 filename: "report.pdf".to_string(),
                 path: PathBuf::from("/home/u/Downloads/report.pdf"),
                 bytes: 1234,
             },
-            crate::gui::DownloadRecord {
+            DownloadRecord {
                 filename: "data.csv".to_string(),
                 path: PathBuf::from("/home/u/Downloads/data.csv"),
                 bytes: 42,
