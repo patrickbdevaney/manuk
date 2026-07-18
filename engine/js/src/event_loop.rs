@@ -981,16 +981,102 @@ const PRELUDE: &str = r#"
           ctx.clip = function(){};                      // honest no-op: clipping is not wired yet
           ctx.isPointInPath = function(){ return false; };
 
-          // ── Text. NOT rasterized — and `measureText` must still return a real shape, because layout
-          // code multiplies by `.width` and `undefined * n` is NaN, which then poisons every coordinate
-          // downstream. A missing label beats a chart drawn at NaN.
-          ctx.fillText = function(){};
-          ctx.strokeText = function(){};
+          // ── Text. Rasterized through the SAME swash pipeline as DOM text (see `canvas.rs`).
+          //
+          // The parsing and the arithmetic live here; only a resolved pen origin, colour, size and
+          // family list cross into Rust — the division of labour every other op in this file uses.
+
+          // The `ctx.font` CSS shorthand. Order is [style] [variant] [weight] [stretch] size[/lh] family,
+          // and the family is everything after the size — which is what makes the size token the anchor
+          // to parse around rather than trying to tokenize left-to-right.
+          var parseFont = function(spec) {
+            var s = String(spec == null ? '' : spec).trim();
+            var bold = false, italic = false, size = 10, family = 'sans-serif';
+            // The size token: the first length, optionally followed by /line-height (which canvas
+            // ignores — there is no line box here to apply it to).
+            var m = s.match(/(^|\s)(-?[\d.]+)(px|pt|pc|in|cm|mm|em|rem|%)(\s*\/\s*[^\s]+)?\s+(.+)$/);
+            if (m) {
+              var n = parseFloat(m[2]);
+              var unit = m[3];
+              // Absolute units only; em/rem/% have no element context inside a canvas, so they resolve
+              // against the 16px initial font size rather than silently becoming pixels.
+              var mul = unit === 'pt' ? (96/72) : unit === 'pc' ? 16 : unit === 'in' ? 96 :
+                        unit === 'cm' ? (96/2.54) : unit === 'mm' ? (96/25.4) :
+                        (unit === 'em' || unit === 'rem') ? 16 : unit === '%' ? 0.16 : 1;
+              if (n === n && n > 0) { size = n * mul; }
+              family = m[5].trim();
+              var pre = s.slice(0, m.index).toLowerCase();
+              italic = /(^|\s)(italic|oblique)(\s|$)/.test(pre);
+              // 'bold', 'bolder', or a numeric weight >= 600 — sites write all three.
+              bold = /(^|\s)(bold|bolder)(\s|$)/.test(pre) || /(^|\s)([6-9]\d\d|1000)(\s|$)/.test(pre);
+            }
+            return { size: size, family: family, bold: bold, italic: italic };
+          };
+
+          var measureRaw = function(t, f) {
+            var r = el.__cvMeasureText(String(t == null ? '' : t), f.size, f.family, f.bold, f.italic);
+            return r || [0, 0, 0];
+          };
+
+          // textAlign/textBaseline are pen-origin offsets, and they are the difference between a
+          // centred chart label and one starting at the centre. 'start'/'end' follow `direction`.
+          var alignDx = function(w, rtl) {
+            var a = ctx.textAlign;
+            if (a === 'center') { return -w / 2; }
+            if (a === 'right')  { return -w; }
+            if (a === 'left')   { return 0; }
+            if (a === 'end')    { return rtl ? 0 : -w; }
+            return rtl ? -w : 0;                      // 'start' (the initial value)
+          };
+          var baselineDy = function(asc, desc) {
+            var b = ctx.textBaseline;
+            if (b === 'top' || b === 'hanging') { return asc; }
+            if (b === 'middle') { return (asc - desc) / 2; }
+            if (b === 'bottom') { return -desc; }
+            return 0;                                  // 'alphabetic' / 'ideographic'
+          };
+
+          var drawText = function(t, x, y, maxWidth, style) {
+            t = String(t == null ? '' : t);
+            if (!t) { return; }
+            var f = parseFont(ctx.font);
+            var rtl = ctx.direction === 'rtl';
+            var mt = measureRaw(t, f);
+            var w = mt[0];
+            // maxWidth is condensed inside Rust (it must be applied to the SHAPED width), so the
+            // alignment offset uses the width the text will actually occupy.
+            if (maxWidth > 0 && w > maxWidth) { w = maxWidth; }
+            var c = color(style);
+            el.__cvText(t, x + alignDx(w, rtl), y + baselineDy(mt[1], mt[2]),
+                        c[0], c[1], c[2], c[3] * ctx.globalAlpha,
+                        f.size, f.family, f.bold, f.italic, rtl,
+                        (maxWidth > 0 ? maxWidth : 0), M);
+          };
+
+          ctx.fillText = function(t, x, y, maxWidth){
+            drawText(t, +x, +y, arguments.length > 3 ? +maxWidth : 0, ctx.fillStyle);
+          };
+          // strokeText renders FILLED in the stroke colour. An outline-only glyph needs the outline
+          // path rather than the coverage bitmap, which the raster does not hand back; filling is the
+          // bounded approximation, and it is much closer to right than drawing nothing (the idiom is
+          // stroke-behind-fill for text over imagery, where absence is a hole).
+          ctx.strokeText = function(t, x, y, maxWidth){
+            drawText(t, +x, +y, arguments.length > 3 ? +maxWidth : 0, ctx.strokeStyle);
+          };
           ctx.measureText = function(t){
-            var w = String(t == null ? '' : t).length * 7;
-            return { width: w, actualBoundingBoxLeft: 0, actualBoundingBoxRight: w,
-                     actualBoundingBoxAscent: 10, actualBoundingBoxDescent: 3,
-                     fontBoundingBoxAscent: 10, fontBoundingBoxDescent: 3 };
+            var f = parseFont(ctx.font);
+            var mt = measureRaw(t, f);
+            var w = mt[0], asc = mt[1], desc = mt[2];
+            var rtl = ctx.direction === 'rtl';
+            var dx = alignDx(w, rtl), dy = baselineDy(asc, desc);
+            // The `actualBoundingBox*` values are reported relative to the alignment point, which is
+            // what a page uses them for (hit-testing a label it just drew, sizing a background pill).
+            return { width: w,
+                     actualBoundingBoxLeft: -dx, actualBoundingBoxRight: w + dx,
+                     actualBoundingBoxAscent: asc + dy, actualBoundingBoxDescent: desc - dy,
+                     fontBoundingBoxAscent: asc, fontBoundingBoxDescent: desc,
+                     emHeightAscent: asc, emHeightDescent: desc,
+                     alphabeticBaseline: 0, hangingBaseline: asc, ideographicBaseline: -desc };
           };
 
           // ── Pixels. Real ones.

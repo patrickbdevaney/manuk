@@ -280,3 +280,232 @@ pub fn reset() {
     CANVASES.with(|c| c.borrow_mut().clear());
     DIRTY.with(|d| d.borrow_mut().clear());
 }
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// TEXT — `fillText` / `strokeText` / `measureText`
+//
+// Every drawing op above produces geometry. Text is the one that produces *glyphs*, and the engine
+// already has a shaper-and-rasterizer for those: `engine/text`, swash-backed, with the bidi
+// reordering, per-glyph font fallback and complex-script shaping that ticks 214/215 put there. So
+// this is a WIRING job, not a new renderer. The alternative — a second text stack living inside the
+// canvas — would drift from the DOM's within one tick and would have to re-learn every one of those
+// lessons separately.
+//
+// What that buys, concretely: a canvas draws Arabic joined, Devanagari with conjuncts, CJK and emoji
+// through the fallback chain, and it hits the same glyph raster cache as the paragraph next to it.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+thread_local! {
+    /// One font context per thread, built on first use.
+    ///
+    /// Lazily, because constructing it scans the system font database — a page that never touches a
+    /// canvas (or touches one but only draws rects) must not pay for that. `FontContext` is `Rc`-based
+    /// and single-threaded by design, which is exactly the shape a `thread_local` wants, and it
+    /// matches how `CANVASES` above already stores per-thread canvas state.
+    static FONTS: RefCell<Option<manuk_text::FontContext>> = const { RefCell::new(None) };
+}
+
+/// Resolve a parsed canvas font into the shaper's key.
+///
+/// The JS side parses the `ctx.font` CSS shorthand (that is where the string ergonomics belong) and
+/// hands down a resolved size, a comma-split family list, and the two style bits.
+fn font_key(
+    fonts: &manuk_text::FontContext,
+    families: &str,
+    bold: bool,
+    italic: bool,
+) -> manuk_text::FontKey {
+    let names: Vec<String> = families
+        .split(',')
+        .map(|f| f.trim().trim_matches(['"', '\'']).to_string())
+        .filter(|f| !f.is_empty())
+        .collect();
+    manuk_text::FontKey {
+        family: fonts.resolve_family(&names),
+        bold,
+        italic,
+    }
+}
+
+fn with_fonts<R>(f: impl FnOnce(&manuk_text::FontContext) -> R) -> R {
+    FONTS.with(|c| {
+        let mut slot = c.borrow_mut();
+        f(slot.get_or_insert_with(manuk_text::FontContext::new))
+    })
+}
+
+/// The transform's effect on text, reduced to a scale and a mapped origin.
+///
+/// **This is the documented limit of canvas text under a transform.** Glyphs are rasterized from
+/// outlines at a size, so a uniform scale is exact — `ctx.scale(2,2)` really does render at twice the
+/// size rather than magnifying a bitmap. Rotation and skew are NOT applied to the glyph raster: the
+/// text lands at the correctly transformed origin, at the correctly scaled size, but upright. That is
+/// wrong for rotated axis labels and right for everything else, and it is a bounded, honest gap
+/// rather than a silent one (see the module residue note in `docs/wiki/`).
+fn text_transform(m: &[f32], x: f32, y: f32) -> (f32, f32, f32) {
+    if m.len() != 6 {
+        return (1.0, x, y);
+    }
+    let sx = (m[0] * m[0] + m[1] * m[1]).sqrt();
+    let sy = (m[2] * m[2] + m[3] * m[3]).sqrt();
+    let scale = ((sx + sy) * 0.5).clamp(0.01, 100.0);
+    (
+        scale,
+        m[0] * x + m[2] * y + m[4],
+        m[1] * x + m[3] * y + m[5],
+    )
+}
+
+/// Source-over composite one glyph into the canvas.
+///
+/// **Not shareable with `manuk_paint`'s blit, and the difference is the whole point.** That one
+/// writes `alpha = 255` because it composites onto an opaque page background. A canvas is
+/// transparent-backed — that is what makes it compose over the page — so alpha has to *accumulate*
+/// (`a_out = a_src + a_dst(1 - a_src)`), in premultiplied space, which is what `Pixmap` stores.
+/// Reusing the opaque blit here would fill every glyph's bounding box with opaque black fringing.
+fn blit_glyph(
+    px: &mut Pixmap,
+    bmp: &manuk_text::GlyphBitmap,
+    left: i32,
+    top: i32,
+    col: (u8, u8, u8, f32),
+) {
+    let (pw, ph) = (px.width() as i32, px.height() as i32);
+    let alpha = col.3.clamp(0.0, 1.0);
+    if alpha <= 0.0 {
+        return;
+    }
+    let data = px.data_mut();
+    for row in 0..bmp.height as i32 {
+        let py = top + row;
+        if py < 0 || py >= ph {
+            continue;
+        }
+        for c in 0..bmp.width as i32 {
+            let pxx = left + c;
+            if pxx < 0 || pxx >= pw {
+                continue;
+            }
+            let i = (row as usize) * bmp.width as usize + c as usize;
+            // A color glyph (emoji) carries straight-alpha RGBA; a normal one carries 8-bit coverage
+            // to be tinted with the fill colour.
+            let (sr, sg, sb, sa) = if bmp.is_color {
+                let p = i * 4;
+                if p + 3 >= bmp.coverage.len() {
+                    continue;
+                }
+                (
+                    bmp.coverage[p],
+                    bmp.coverage[p + 1],
+                    bmp.coverage[p + 2],
+                    (bmp.coverage[p + 3] as f32 / 255.0) * alpha,
+                )
+            } else {
+                match bmp.coverage.get(i) {
+                    Some(0) | None => continue,
+                    Some(cov) => (col.0, col.1, col.2, (*cov as f32 / 255.0) * alpha),
+                }
+            };
+            if sa <= 0.0 {
+                continue;
+            }
+            let idx = ((py * pw + pxx) as usize) * 4;
+            let inv = 1.0 - sa;
+            for (k, s) in [sr, sg, sb].into_iter().enumerate() {
+                let src = s as f32 * sa; // premultiply
+                data[idx + k] = (src + data[idx + k] as f32 * inv).round().clamp(0.0, 255.0) as u8;
+            }
+            let da = data[idx + 3] as f32 / 255.0;
+            data[idx + 3] = ((sa + da * inv) * 255.0).round().clamp(0.0, 255.0) as u8;
+        }
+    }
+}
+
+/// `fillText` / `strokeText`.
+///
+/// `max_width <= 0` means the argument was omitted.
+#[allow(clippy::too_many_arguments)]
+pub fn fill_text(
+    node: u64,
+    text: &str,
+    x: f32,
+    y: f32,
+    col: (u8, u8, u8, f32),
+    size: f32,
+    families: &str,
+    bold: bool,
+    italic: bool,
+    rtl: bool,
+    max_width: f32,
+    m: &[f32],
+) {
+    if text.is_empty() || !size.is_finite() || !x.is_finite() || !y.is_finite() {
+        return;
+    }
+    let (scale, ox, oy) = text_transform(m, x, y);
+    // The same guard `manuk_paint::draw_text` uses: a zero-or-absurd size is a page bug, and the
+    // rasterizer must not be asked to allocate for it.
+    let mut render_size = (size * scale).clamp(0.0, 1024.0);
+    if render_size < 0.5 {
+        return;
+    }
+
+    with_fonts(|fonts| {
+        let key = font_key(fonts, families, bold, italic);
+        let mut run = fonts.shape_bidi(text, key, render_size, rtl);
+
+        // `maxWidth` — the spec condenses the text horizontally. We re-shape smaller instead, which
+        // is an approximation (it loses height as well as width) but keeps the label INSIDE the box
+        // the author reserved for it. Overflowing would be the worse failure: chart axis labels pass
+        // maxWidth precisely because they know the column is narrow.
+        if max_width > 0.0 && run.width > max_width && run.width > 0.0 {
+            render_size = (render_size * (max_width / run.width)).max(0.5);
+            run = fonts.shape_bidi(text, key, render_size, rtl);
+        }
+
+        CANVASES.with(|c| {
+            if let Some(px) = c.borrow_mut().get_mut(&node) {
+                for g in &run.glyphs {
+                    let pen = ox + g.x;
+                    if let Some(bmp) = fonts.rasterize(g.glyph_id, g.face, render_size, pen) {
+                        blit_glyph(
+                            px,
+                            &bmp,
+                            pen.floor() as i32 + bmp.left,
+                            oy.round() as i32 - bmp.top,
+                            col,
+                        );
+                    }
+                }
+            }
+        });
+    });
+    mark_dirty(node);
+}
+
+/// `measureText` → `(width, font_ascent, font_descent)`.
+///
+/// Real shaped advances, not a character count. The old stub returned `len * 7`, which is not merely
+/// imprecise: every layout a page derives from it — centring, wrapping, column fitting, hit-testing a
+/// terminal cell — is computed from a number that has no relationship to the glyphs drawn.
+pub fn measure_text(
+    text: &str,
+    size: f32,
+    families: &str,
+    bold: bool,
+    italic: bool,
+) -> (f32, f32, f32) {
+    if !size.is_finite() || size < 0.5 {
+        return (0.0, 0.0, 0.0);
+    }
+    with_fonts(|fonts| {
+        let key = font_key(fonts, families, bold, italic);
+        let lm = fonts.line_metrics(key, size);
+        let w = if text.is_empty() {
+            0.0
+        } else {
+            fonts.measure(text, key, size)
+        };
+        (w, lm.ascent, lm.descent.abs())
+    })
+}

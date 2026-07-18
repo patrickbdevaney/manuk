@@ -459,6 +459,11 @@
   - L366 · text-decoration-thickness / text-underline-offset — a decoration line the design's own weight and position
   - L397 · The shaper must be told WHICH SCRIPT it is shaping (tick 214)
   - L443 · The bidi BASE direction — direction: rtl / dir="rtl" (tick 215)
+  - L492 · Canvas text is the DOM text stack, wired to a different surface
+  - L506 · The canvas blit cannot be manuk_paint's blit
+  - L514 · measureText returning length * 7 was worse than an imprecise width
+  - L521 · Transforms: uniform scale is exact, rotation is the documented gap
+  - L536 · Gate lesson: a pixel claim must re-assert that ink exists
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -486,4 +491,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-405 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+410 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

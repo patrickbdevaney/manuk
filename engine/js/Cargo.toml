@@ -35,6 +35,10 @@ spidermonkey-noicu = ["_sm", "mozjs/jit", "mozjs/libz-sys"]
 [dependencies]
 tiny-skia.workspace = true
 manuk-dom.workspace = true
+# Canvas `fillText` shapes and rasterizes through the SAME swash pipeline as DOM text
+# (`engine/text`), rather than growing a second one — so a glyph drawn into a canvas and the
+# same glyph drawn in a paragraph come from one shaper, one fallback chain and one raster cache.
+manuk-text.workspace = true
 manuk-css.workspace = true
 manuk-net.workspace = true
 serde_json.workspace = true

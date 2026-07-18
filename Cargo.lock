@@ -3069,6 +3069,7 @@ dependencies = [
  "manuk-dom",
  "manuk-html",
  "manuk-net",
+ "manuk-text",
  "mozjs",
  "serde_json",
  "sha1",

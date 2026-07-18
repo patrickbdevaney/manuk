@@ -1593,6 +1593,8 @@ unsafe fn define_members(
         def_guarded!(def, c"__cvRect", cv_rect, 10);
         def_guarded!(def, c"__cvClear", cv_clear, 5);
         def_guarded!(def, c"__cvPath", cv_path, 8);
+        def_guarded!(def, c"__cvText", cv_text, 14);
+        def_guarded!(def, c"__cvMeasureText", cv_measure_text, 5);
         def_guarded!(def, c"__cvGetImageData", cv_get_image_data, 4);
         def_guarded!(def, c"__cvToDataURL", cv_to_data_url, 0);
         // The nested browsing context. `null` on anything that is not a frame — see `iframe_js`, which
@@ -2278,6 +2280,76 @@ unsafe fn cv_path(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
         crate::canvas::path(node.0, &cmds, fill, col, f(cx, vp, argc, 6), &m);
     }
     *vp = UndefinedValue();
+    true
+}
+
+/// Extract boolean argument `i` (strictly a JS boolean; anything else is `false`).
+unsafe fn arg_bool(vp: *mut Value, argc: u32, i: u32) -> bool {
+    let args = mozjs::jsapi::CallArgs::from_vp(vp, argc);
+    argc > i && args.get(i).get().is_boolean() && args.get(i).get().to_boolean()
+}
+
+/// `__cvText(text, x, y, r, g, b, a, size, families, bold, italic, rtl, maxWidth, matrix)`
+///
+/// The JS side owns the `ctx.font` shorthand parse and the `textAlign`/`textBaseline` offsets (string
+/// ergonomics and cheap arithmetic belong there), so what crosses the boundary is already resolved:
+/// a pen origin, a colour, a size, a family list and the two style bits — the same division of labour
+/// `__cvPath` uses.
+unsafe fn cv_text(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((_, node)) = this_node(vp) {
+        let text = arg_string(cx, vp, argc, 0).unwrap_or_default();
+        let families = arg_string(cx, vp, argc, 8).unwrap_or_default();
+        let col = (
+            f(cx, vp, argc, 3) as u8,
+            f(cx, vp, argc, 4) as u8,
+            f(cx, vp, argc, 5) as u8,
+            f(cx, vp, argc, 6),
+        );
+        let m = arg_f32_array(cx, vp, argc, 13);
+        crate::canvas::fill_text(
+            node.0,
+            &text,
+            f(cx, vp, argc, 1),
+            f(cx, vp, argc, 2),
+            col,
+            f(cx, vp, argc, 7),
+            &families,
+            arg_bool(vp, argc, 9),
+            arg_bool(vp, argc, 10),
+            arg_bool(vp, argc, 11),
+            f(cx, vp, argc, 12),
+            &m,
+        );
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `__cvMeasureText(text, size, families, bold, italic)` → `[width, fontAscent, fontDescent]`.
+///
+/// Needs no canvas backing store — it is a pure font query — but it lives on the element beside the
+/// other canvas natives because that is where the context can reach it.
+unsafe fn cv_measure_text(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let text = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    let families = arg_string(cx, vp, argc, 2).unwrap_or_default();
+    let (w, asc, desc) = crate::canvas::measure_text(
+        &text,
+        f(cx, vp, argc, 1),
+        &families,
+        arg_bool(vp, argc, 3),
+        arg_bool(vp, argc, 4),
+    );
+
+    rooted!(in(cx) let arr = NewArrayObject1(&mut wrap_cx(cx), 3));
+    if arr.get().is_null() {
+        *vp = NullValue();
+        return true;
+    }
+    for (i, val) in [w, asc, desc].iter().enumerate() {
+        rooted!(in(cx) let v = mozjs::jsval::DoubleValue(*val as f64));
+        JS_SetElement(&mut wrap_cx(cx), arr.handle(), i as u32, v.handle());
+    }
+    *vp = ObjectValue(arr.get());
     true
 }
 

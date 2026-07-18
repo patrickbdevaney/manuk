@@ -1018,3 +1018,34 @@ steers the player onto the adaptive path, where it appends segments and polls `b
 that can never grow — a silent hang, surfacing far from its cause, instead of a clean fallback. That
 registry is the seam M3/M4/M5 (demux, AAC, VP9) fill in, at which point `isTypeSupported` begins
 saying yes for exactly what can genuinely be played and nothing else changes.
+
+## Canvas text — the labels on every chart, and the whole of a canvas-rendered app
+
+`ctx.fillText` was `function(){}` and `measureText` returned `text.length * 7` until tick 224. This is
+the **silent** shape of failure: a page feature-detects canvas, is told yes, draws its axis labels,
+legend, tooltips and cell text, and gets back a picture with every label missing and nothing thrown
+anywhere. It reads as a rendering bug, not a missing API, which is why it survives so long.
+
+The class this unlocks is wider than "charts", though charts are the visible half — Chart.js, ECharts,
+Plotly, D3-on-canvas, every sparkline and dashboard tile. Canvas is also how a growing set of apps
+render **all** of their text: Google Docs/Sheets draw their document surface as glyphs on a canvas,
+and terminal emulators (xterm.js and everything built on it) draw every cell that way. For those,
+`fillText` is not a label — it is the entire application.
+
+The `length * 7` half mattered independently, and is worse than an imprecise width: it has **no
+relationship to the glyphs**, so everything derived from it compounds — centring, wrapping, column
+fitting, "does this label collide with its neighbour", and hit-testing a terminal cell. Under it,
+`IIIIIIIIII` and `WWWWWWWWWW` measure identically.
+
+Both halves now run through `engine/text` — the same swash shaper, bidi reordering, per-glyph
+fallback and raster cache as DOM text — so a canvas draws joined Arabic, Devanagari conjuncts, CJK
+and emoji with no additional work, and cannot drift from the paragraph beside it. Gated by
+`g_canvas_text`, which reads the canvas back with `getImageData` and counts **pixels**: a stub that
+recorded the call, or a plausible `measureText` over a `fillText` that drew nothing, passes any
+API-shaped assertion and fails this one. Proven RED both ways independently.
+
+Residue, bounded and recorded: rotation/skew are not applied to the glyph raster (text lands at the
+transformed origin at the correctly scaled size, but upright — rotated axis labels are the loss);
+`maxWidth` re-shapes smaller rather than condensing horizontally; `strokeText` renders filled in the
+stroke colour; `drawImage`, `putImageData`, real gradients and `clip()` remain unimplemented, so a
+canvas app that composites images is still short.

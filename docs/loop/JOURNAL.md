@@ -9369,3 +9369,49 @@ so the last recorded claim is the failure's location.
 
 **Mechanism captured:** `docs/wiki/media-pipeline.md`. **Next (M2/M3):** arraybuffer/Range fetch,
 then symphonia demux — which registers its first codec string and turns the honest `no` into a yes.
+
+## Tick 224 — canvas fillText: the labels on every chart, and the whole of some apps (2026-07-18)
+
+**Selected:** the board's CO-#1 **(C) canvas fillText** — explicitly scoped as "wire the EXISTING
+engine/text swash glyph-raster to the 2D ctx", and it is one mechanism, not a subsystem.
+
+**What was broken, and why it hid.** `ctx.fillText` was `function(){}` and `measureText` returned
+`text.length * 7`. The no-op is the silent failure shape: a page feature-detects canvas, is told yes,
+draws its labels, and gets a picture with all of them missing and nothing thrown — it reads as a
+rendering bug rather than a missing API. The `length * 7` half is worse than an imprecise width: it
+has *no relationship to the glyphs*, so centring, wrapping, column fitting, label-collision checks
+and terminal-cell hit-testing all compound the error. Under it `IIIIIIIIII` and `WWWWWWWWWW` measure
+identically, which is the cheapest proof it is a fiction rather than an estimate.
+
+**Wiring, not a renderer — and that is the load-bearing decision.** Text goes through `engine/text`:
+the same swash shaper, bidi reordering, per-glyph fallback chain and raster cache as DOM text. A
+second text stack inside the canvas would drift from the DOM's within a tick and would have to
+re-learn ticks 214 (complex-script shaping) and 215 (bidi base) separately. Sharing it means a canvas
+draws joined Arabic, Devanagari conjuncts, CJK and emoji for free. The JS/Rust split follows the rest
+of `canvas.rs`: JS parses the `ctx.font` shorthand and applies the `textAlign`/`textBaseline` pen
+offsets; Rust receives a resolved origin, colour, size and family list. One native call per `fillText`.
+
+**The one thing that could not be reused:** `manuk_paint`'s glyph blit writes `alpha = 255` because
+it composites onto an opaque page. A canvas is transparent-backed — that is what lets it compose over
+the page — so alpha must accumulate in premultiplied space. Same glyph bitmaps, necessarily a
+different compositor; reusing the opaque one fills every glyph's bounding box with fringing.
+
+**Gate.** `g_canvas_text` — twelve claims read back through `getImageData`, so they are about
+**pixels**, not the API surface: ink exists, ink is the fill colour, coverage is the glyph's and not
+its bounding box, ink lands at the requested origin, `W`s measure wider than `I`s, width scales with
+font size, metrics come from the font, and `textAlign`/`textBaseline` move the ink. RED **two ways,
+independently run**: restoring the `fillText` no-op drops ink/inkcolor/align/baseline while every
+`measure*` claim still passes — exactly the half-working state that makes this bug invisible from the
+API; restoring `length * 7` breaks proportional/scales/metrics while the ink claims still pass.
+
+**Gate lesson worth keeping.** The first draft's `sparse` and `placed` claims passed *vacuously* on a
+blank canvas (`n < 25%` and an empty extent both hold when there is no ink), so the no-op probe
+printed two false greens beside its real failure. Every pixel-extent claim now re-asserts `n > 0`.
+
+**Residue, bounded and recorded:** rotation/skew are not applied to the glyph raster (text lands at
+the transformed origin at the correctly scaled size, but upright — rotated axis labels are the loss;
+closing it needs an outline API on `FontContext`); `maxWidth` re-shapes smaller rather than condensing
+horizontally; `strokeText` renders filled in the stroke colour. `drawImage`/`putImageData`/gradients/
+`clip()` remain unimplemented, so a canvas app that composites images is still short of running.
+
+**Mechanism captured:** `docs/wiki/text-layout.md`.

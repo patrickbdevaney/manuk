@@ -488,3 +488,54 @@ support introduces is perturbing the 99% case.
 **Residue:** `dir="auto"`, `unicode-bidi` (`isolate`/`embed`/`bidi-override`), RTL `text-align`
 defaulting to `right`, and RTL block-level layout (list markers, scrollbar side, `float` reversal).
 This tick makes RTL text **read correctly**; it does not yet make an RTL *page* lay out mirrored.
+
+## Canvas text is the DOM text stack, wired to a different surface
+
+`ctx.fillText` shapes and rasterizes through **`engine/text`** — the same swash pipeline, the same
+bidi reordering, the same per-glyph fallback chain, the same glyph raster cache as a paragraph. It is
+a wiring job, not a second renderer, and that is the load-bearing decision: a text stack living
+inside the canvas would drift from the DOM's within one tick and would have to re-learn ticks 214
+(complex-script shaping) and 215 (bidi base direction) separately. Because it shares the pipeline, a
+canvas draws joined Arabic, Devanagari conjuncts, CJK and emoji for free.
+
+**The split follows the rest of `canvas.rs`.** JS owns the state machine and the string ergonomics —
+the `ctx.font` CSS shorthand parse, `textAlign`/`textBaseline` pen offsets, colour resolution. Rust
+receives a resolved pen origin, colour, size, family list and two style bits. One native call per
+`fillText`.
+
+### The canvas blit cannot be `manuk_paint`'s blit
+
+`manuk_paint::blit_coverage` writes `alpha = 255`, because it composites onto an opaque page
+background. A canvas is **transparent-backed** — that is exactly what lets it compose over the page —
+so alpha has to accumulate (`a_out = a_src + a_dst·(1−a_src)`) in the premultiplied space `Pixmap`
+stores. Reusing the opaque blit fills every glyph's bounding box with opaque fringing. Same glyph
+bitmaps, necessarily different compositor.
+
+### `measureText` returning `length * 7` was worse than an imprecise width
+
+It is a width with **no relationship to the glyphs**, so every layout derived from it compounds the
+error: centring, wrapping, column fitting, label-collision checks, terminal cell hit-testing. The
+cheapest proof it is a fiction rather than an estimate: under it `IIIIIIIIII` and `WWWWWWWWWW`
+measure identically. `g_canvas_text` asserts exactly that pair.
+
+### Transforms: uniform scale is exact, rotation is the documented gap
+
+Glyphs are rasterized from outlines *at a size*, so `ctx.scale(2,2)` genuinely renders at twice the
+size rather than magnifying a bitmap. The transform is reduced to a scale (mean of the two column
+norms) plus a mapped origin: text lands at the correctly transformed position, at the correctly
+scaled size, **upright**. Rotation and skew are not applied to the glyph raster — wrong for rotated
+axis labels, right for everything else. Closing it means an outline API on `FontContext`
+(`scale_outline`) so glyphs can be filled as paths through the transform, which is its own tick.
+
+Two smaller bounded approximations, recorded so they are not rediscovered as bugs: `maxWidth`
+re-shapes at a smaller size instead of condensing horizontally (loses height with width, but keeps
+the label inside the box the author reserved — overflow is the worse failure for the axis labels that
+pass it); and `strokeText` renders **filled** in the stroke colour, because the raster hands back
+coverage, not an outline path.
+
+### Gate lesson: a pixel claim must re-assert that ink exists
+
+`sparse` ("the ink is not everywhere") and `placed` ("the ink is in the right place") are both
+trivially true of a **blank** canvas. Written without an explicit `n > 0`, a no-op `fillText` would
+satisfy them, and the gate would print two false greens beside its real failure. Every pixel-extent
+claim in `g_canvas_text` carries the ink-count conjunct for that reason.
