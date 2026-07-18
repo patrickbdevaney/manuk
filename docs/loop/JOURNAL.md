@@ -8431,3 +8431,44 @@ close reports 1000 regardless of what the peer sent — worth closing when a pag
 close codes. Finish-line levers 4 (scroll-anchoring/overflow-anchor) and 5 (forced reflow for
 getBoundingClientRect/ResizeObserver mid-tick) remain; when they land, Phase 0 is declared
 good-enough (`touch .git/manuk-phase0-complete` + a JOURNAL note, triggering the Phase-1 cascade).
+
+## Tick 203 — scroll anchoring: the feed stops jumping (layout) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (Phase-0 FINISH-LINE lever 4, mechanism half). WIKI:
+docs/wiki/box-layout.md "Scroll anchoring — the feed stops jumping".**
+
+**Selection.** Lever 3 completed in tick 202, so top-down gives lever 4:
+*"scroll-anchoring/overflow-anchor [feeds stop jumping on load-more]"*. It also rotates domain again,
+from net/shell to layout.
+
+**Hypothesis.** Zero hits for scroll anchoring anywhere in the tree. Content loading above the
+reading position pushes every following box down, so the line being read jumps off screen — on an
+infinite feed, on every lazy-loaded image.
+
+**Implemented.** `Page::capture_scroll_anchor(scroll_y)` and `Page::scroll_anchor_delta(&anchor,
+scroll_y)`, to be used around any mutation that may reflow. The delta is `0.0` when nothing moved
+(the common case, one map lookup) and when the anchor is gone — correcting for an element that no
+longer exists would move the page for no reason.
+
+**Choosing the anchor IS the correctness here, and the obvious choice was wrong — the gate caught
+it.** My first implementation preferred the box closest to the top edge by absolute distance. That
+picks `<body>`, which *straddles* the viewport top, begins at `y = 0`, and **does not move when
+content is inserted inside it** — so it reported `delta = 0` while the read line sat 300px lower:
+anchoring that does exactly nothing, and would have looked implemented. The rule has to be *the first
+box beginning at or below the top edge*. (The deepest box is wrong too: a text run is what a reflow
+is most likely to destroy.)
+
+**Gate.** `g_scroll_anchor` — reader's line at the viewport top, a 300px ad appended above it by a
+real click handler. It asserts the **uncorrected** jump equals the inserted height first, so the
+scenario is proven real before the fix is measured; then that applying the delta restores the exact
+screen position; then that a relayout changing nothing above the fold yields a correction of
+**zero**, because anchoring that is not inert when nothing moved becomes its own source of drift.
+RED was observed directly during development (`delta=0`, `after=300px`).
+
+**Residue, and it is a real divergence rather than a missing nicety.** **`overflow-anchor: none` is
+not honoured** — the property is not parsed, so anchoring applies unconditionally and a site that
+deliberately opted out is still anchored. It needs a `ComputedStyle` field and is worth doing before
+this is on by default. Anchoring is document-scroll only (not per-`overflow:auto` container), and
+**the shell does not call it yet** — wiring it around `gui.rs`'s relayout paths is the completing
+step for lever 4, after which only lever 5 (forced reflow for `getBoundingClientRect`/
+`ResizeObserver` mid-tick) stands between here and Phase-0 being declared good-enough.

@@ -17,6 +17,14 @@ pub use manuk_js::FetchStreamEvent;
 /// `manuk-js` directly.
 pub use manuk_js::{WsEvent, WsOp};
 
+/// The element a scroll is anchored to, and where it sat relative to the viewport top when it was
+/// captured. Produced by [`Page::capture_scroll_anchor`], consumed by [`Page::scroll_anchor_delta`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ScrollAnchor {
+    pub node: manuk_dom::NodeId,
+    pub offset_from_top: f32,
+}
+
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
@@ -2471,6 +2479,64 @@ impl Page {
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
         }
+    }
+
+    /// An element remembered as the visual fixed point of a scroll, with where it sat relative to
+    /// the viewport's top edge. See [`Page::capture_scroll_anchor`].
+    ///
+    /// **Why this exists.** A feed loads an image, an ad or the next page of posts *above* what the
+    /// user is reading, the document gets taller above them, and the line they were on jumps down
+    /// the screen. Scroll anchoring is what makes the browser keep that line still: pick the
+    /// element at the top of the viewport, remember where it was, and after the relayout move the
+    /// scroll offset by however far it moved. The user's content stays put and the growth happens
+    /// off-screen, where it belongs.
+    pub fn capture_scroll_anchor(&self, scroll_y: f32) -> Option<ScrollAnchor> {
+        let rects = self.root_box.node_rects(&self.dom);
+        // The anchor is the FIRST element in document order that the viewport's top edge cuts
+        // through or that begins just below it — that is the thing the user is looking at. Taking
+        // the first box overall would anchor to <body>, which never moves and so never corrects
+        // anything; taking the deepest would anchor to a text run that a reflow may destroy.
+        let mut best: Option<(NodeId, f32)> = None;
+        for node in self.dom.descendants(self.dom.root()) {
+            if !self.dom.is_element(node) {
+                continue;
+            }
+            let Some(r) = rects.get(&node) else { continue };
+            // Zero-height boxes cannot be a fixed point, and a box that STARTS ABOVE the top edge
+            // must not be one either. That second rule is the whole correctness of this: <body> and
+            // every ancestor container straddle the viewport top, they begin at y=0, and they do
+            // not move when content is inserted inside them — so anchoring to one yields a
+            // correction of zero and the page jumps exactly as if there were no anchoring at all.
+            // The fixed point has to be the first box that begins at or below the fold.
+            if r.height <= 0.0 || r.y < scroll_y {
+                continue;
+            }
+            let offset = r.y - scroll_y;
+            match best {
+                // Closest to the top edge wins; ties go to document order (first seen).
+                Some((_, bo)) if bo <= offset => {}
+                _ => best = Some((node, offset)),
+            }
+        }
+        best.map(|(node, offset_from_top)| ScrollAnchor {
+            node,
+            offset_from_top,
+        })
+    }
+
+    /// How far the scroll offset must move so `anchor` stays visually where it was.
+    ///
+    /// Add this to the host's `scroll_y`. `0.0` when the anchor did not move — the overwhelmingly
+    /// common case, and it costs one map lookup — or when it no longer exists, because guessing at
+    /// a correction for an element that is gone would move the page for no reason.
+    pub fn scroll_anchor_delta(&self, anchor: &ScrollAnchor, scroll_y: f32) -> f32 {
+        let rects = self.root_box.node_rects(&self.dom);
+        let Some(r) = rects.get(&anchor.node) else {
+            return 0.0;
+        };
+        // Where the anchor sits now, versus where it must sit for nothing to appear to move.
+        let want = scroll_y + anchor.offset_from_top;
+        r.y - want
     }
 
     /// What the page's WebSockets asked for since the last call, each `(socket_id, op)`. The host

@@ -51,6 +51,7 @@
   - L587 · background-position — placing a background image in its box (tick 191)
   - L627 · border-style — dashed / dotted / double borders (tick 192)
   - L659 · text-shadow — a shadow behind the glyphs (tick 193)
+  - L687 · Scroll anchoring — the feed stops jumping (tick 203)
 
 ## BUILD AND DEPENDENCIES — what is actually compiled, and what only looks like it is
 `docs/wiki/build-and-dependencies.md`
@@ -453,4 +454,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-376 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+377 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

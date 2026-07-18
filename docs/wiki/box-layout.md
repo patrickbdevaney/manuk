@@ -683,3 +683,42 @@ single main pass it was before, so the ratchet cannot regress. Only authored `te
 ~no dark pixels (<10) without a shadow but >60 with `text-shadow: 4px 4px 0 black`. RED against the
 no-shadow baseline. css+layout+paint green (paint 16→17), HANG/CRASH 0. Residue: gaussian blur, stacked
 shadows, `currentColor` resolution. [[box-layout]]
+
+## Scroll anchoring — the feed stops jumping (tick 203)
+
+Phase-0 finish-line lever 4. A feed loads an image, an ad or the next page of posts **above** the
+user's reading position; the document grows there, every following box shifts down, and the line they
+were mid-sentence on jumps off the screen. On an infinite feed that fires on every lazy load, which
+is why it is one of the most complained-about behaviours on the mobile web and why every engine
+implements anchoring.
+
+Two `Page` methods, used around any mutation that may reflow:
+
+- `capture_scroll_anchor(scroll_y) -> Option<ScrollAnchor>` — remember the element at the top of the
+  viewport and how far below the top edge it sat.
+- `scroll_anchor_delta(&anchor, scroll_y) -> f32` — how far `scroll_y` must move so that element
+  stays visually still. `0.0` when nothing moved (the common case) or when the anchor is gone.
+
+**Choosing the anchor is the entire correctness of this, and the obvious choice is wrong.** The
+anchor must be the first box that begins **at or below** the viewport's top edge. A box that
+*straddles* the top edge — `<body>`, `<html>`, the article container, every ancestor — begins at
+`y = 0` and **does not move when content is inserted inside it**, so anchoring to one yields a
+correction of exactly zero and the page jumps precisely as if there were no anchoring at all. The
+gate caught this: the first implementation preferred the box closest to the top edge by absolute
+distance, picked `<body>`, and reported `delta=0` while the read line sat 300px lower.
+
+Nor is the deepest box right: a text run is the thing a reflow is most likely to destroy, and an
+anchor that no longer exists corrects nothing.
+
+Gated by `g_scroll_anchor`: with the reader's line at the viewport top, a 300px ad is appended above
+it via a real click handler; the gate first asserts the *uncorrected* jump is exactly the inserted
+height (so the scenario is real), then that applying the delta restores the line to the same screen
+position, then that a relayout changing nothing above the fold produces a correction of **zero** —
+anchoring must be inert when nothing moved, or it becomes its own source of drift.
+
+Residue, stated plainly: **`overflow-anchor: none` is not honoured yet** — the property is not parsed,
+so anchoring applies unconditionally, and a site that deliberately opted out will still be anchored.
+That is a real (if narrow) divergence and it needs a `ComputedStyle` field. Anchoring is also
+document-scroll only (not per-`overflow:auto` container), and **the shell does not call it yet** —
+wiring it around the relayout paths in `gui.rs` is what makes it live during browsing, and is the
+completing step for lever 4.
