@@ -269,3 +269,36 @@ the no-char-break baseline. css+layout suites green (layout 73→74), HANG/CRASH
 `word-break:break-all` breaking a word that *would* still fit later in the line (we only split words
 wider than a full line); `overflow-wrap:anywhere`'s smaller min-content contribution; `line-break`
 and `hyphens`.
+
+## letter-spacing / word-spacing — tracking a run's advance in measure and paint (tick 184)
+
+`letter-spacing` (inter-character tracking) and `word-spacing` (extra inter-word space) are on a large
+slice of styled UI — tracked uppercase nav bars, buttons, small-caps labels, kickers/eyebrows, hero
+headings — and pair directly with `text-transform:uppercase` (tick 182). Both were **unimplemented** (0
+hits): a tracked run measured and painted at its untracked width, so its box was too narrow and its
+glyphs too tight wherever the design asked for tracking.
+
+Mechanism (css + layout + paint):
+- **css** — `ComputedStyle::{letter_spacing, word_spacing}: f32` (px), parsed from the two properties
+  via `values::parse_length_px` (`normal` and anything unparseable → 0; `em` resolves against this
+  element's font size). Both **inherited** (copied in the MinimalCascade inheritance step beside
+  `white_space`/`text_transform`), added to the style-change set, recovered from MinimalCascade on the
+  shipping **Stylo** path (servo build exposes them as a `Spacing<Length>` we don't consume directly).
+- **layout** — carried on `TextStyle`. A word's measured width gains `letter_spacing × char_count`
+  (trailing tracking included, matching Chrome — so a word of *n* chars reserves *n*×ls, the last of
+  which is the trailing gap); each inter-word space gains `word_spacing`. `close_line` (alignment slack)
+  and `inline_extent` (min/max-content) switched from re-measuring the fragment text to the stored
+  `f.width`, which already carries the tracking (and equals `measure(text)` when spacing is 0).
+- **paint** — `draw_text` offsets glyph *i* by `i × letter_spacing` past its shaped pen, exactly
+  mirroring the layout width bump so a tracked run measures and paints in step.
+
+**Safety.** The computed default is `0`, at which shaping, measurement, alignment and paint are
+byte-identical to before — so all existing content and every parity/WPT number is unmoved and the
+ratchet cannot regress. Only an explicitly-tracked run changes.
+
+**Gate.** `letter_and_word_spacing_widen_runs` (engine/layout): `letter-spacing:4px` adds exactly 20px
+to the 5-char word "hello"; `word-spacing:10px` pushes the second word of "aa bb" right by 10px. RED vs
+the no-tracking baseline (both deltas 0). css+layout+paint green (layout 74→75), HANG/CRASH 0. Residue:
+`word-spacing` inside a `pre` run's internal spaces; per-grapheme-cluster tracking for
+ligatures/combining marks (we count chars — exact for the Latin common case); negative letter-spacing
+is honoured arithmetically but not clamped against a zero-width run.

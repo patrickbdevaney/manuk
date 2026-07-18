@@ -123,6 +123,11 @@ pub struct TextStyle {
     /// is what the line is drawn under, and because the decoration propagates from an ancestor
     /// block down to the inline fragments that actually paint.
     pub decoration: manuk_css::TextDecoration,
+    /// `letter-spacing` — extra px added after each character. `0` (the default) leaves shaping and
+    /// measurement byte-identical, so ordinary text is unaffected.
+    pub letter_spacing: f32,
+    /// `word-spacing` — extra px added to each inter-word space. `0` (default) is a no-op.
+    pub word_spacing: f32,
 }
 
 /// A positioned run of text produced by inline layout. `baseline` is the absolute
@@ -968,6 +973,8 @@ fn text_style(cs: &ComputedStyle, fonts: &FontContext) -> TextStyle {
         font_size: cs.font_size,
         color: cs.color,
         line_height,
+        letter_spacing: cs.letter_spacing,
+        word_spacing: cs.word_spacing,
     }
 }
 
@@ -1252,15 +1259,20 @@ fn content_right_extent(
     /// Both are wrong for the same reason: a line's *position* is slack, its *span* is content. So
     /// span each line from its own leftmost fragment, and keep the line's offset only when it is a
     /// real indent (a padding, a margin) rather than half a million pixels of centring.
-    fn inline_extent(frags: &[TextFragment], fonts: &FontContext, rel: &dyn Fn(f32) -> f32) -> f32 {
+    fn inline_extent(
+        frags: &[TextFragment],
+        _fonts: &FontContext,
+        rel: &dyn Fn(f32) -> f32,
+    ) -> f32 {
         let mut lines: std::collections::HashMap<u32, (f32, f32)> =
             std::collections::HashMap::new();
         for f in frags {
-            let w = fonts.measure(&f.text, f.style.font_key, f.style.font_size);
+            // `f.width` already includes any `letter-spacing` (and equals `measure(text)` when it is
+            // zero), so use it rather than re-measuring, which would drop the tracking.
             let key = f.line_top.to_bits();
             let e = lines.entry(key).or_insert((f32::MAX, f32::MIN));
             e.0 = e.0.min(f.x);
-            e.1 = e.1.max(f.x + w);
+            e.1 = e.1.max(f.x + f.width);
         }
         lines
             .values()
@@ -3936,6 +3948,8 @@ impl Ctx<'_> {
                             color: Rgba::BLACK,
                             line_height: height,
                             decoration: Default::default(),
+                            letter_spacing: 0.0,
+                            word_spacing: 0.0,
                         },
                         ascent: 0.0,
                         descent: 0.0,
@@ -3979,9 +3993,15 @@ impl Ctx<'_> {
                     let key = style.font_key;
                     let size = style.font_size;
                     let lm = self.fonts.line_metrics(key, size);
-                    let word_w = self.fonts.measure(&text, key, size);
+                    // `letter-spacing` adds a fixed advance after each character (trailing included,
+                    // matching Chrome), so a word's rendered width grows by `ls × char_count`; paint
+                    // offsets each glyph by the same running amount so measure and paint agree. Zero
+                    // (the default) leaves the width byte-identical.
+                    let word_w = self.fonts.measure(&text, key, size)
+                        + style.letter_spacing * text.chars().count() as f32;
+                    // `word-spacing` widens each inter-word space.
                     let space_w = if space_before {
-                        self.fonts.measure(" ", key, size)
+                        self.fonts.measure(" ", key, size) + style.word_spacing
                     } else {
                         0.0
                     };
@@ -4038,6 +4058,8 @@ impl Ctx<'_> {
                                 color: Rgba::BLACK,
                                 line_height: height,
                                 decoration: Default::default(),
+                                letter_spacing: 0.0,
+                                word_spacing: 0.0,
                             },
                             // Treated as all-ascent so text on the same line shares the top.
                             ascent: height,
@@ -4086,6 +4108,8 @@ impl Ctx<'_> {
                                 color: Rgba::BLACK,
                                 line_height: report_height,
                                 decoration: Default::default(),
+                                letter_spacing: 0.0,
+                                word_spacing: 0.0,
                             },
                             ascent: 0.0,
                             descent: 0.0,
@@ -4175,7 +4199,7 @@ fn close_line(
     line_left: f32,
     line_avail: f32,
     align: TextAlign,
-    fonts: &FontContext,
+    _fonts: &FontContext,
 ) -> f32 {
     let ascent = line.iter().map(|f| f.ascent).fold(0.0, f32::max);
     let descent = line.iter().map(|f| f.descent).fold(0.0, f32::max);
@@ -4187,16 +4211,10 @@ fn close_line(
     let leading = ((line_h - (ascent + descent)) / 2.0).max(0.0);
     let baseline = y + leading + ascent;
 
-    let line_width = line
-        .last()
-        .map(|f| {
-            if f.atomic.is_some() {
-                f.x + f.width
-            } else {
-                f.x + fonts.measure(&f.text, f.style.font_key, f.style.font_size)
-            }
-        })
-        .unwrap_or(0.0);
+    // `f.width` already carries any `letter-spacing` (it equals `measure(text)` when spacing is 0),
+    // so use it directly for both atomics and text rather than re-measuring — the re-measure would
+    // drop letter-spacing and mis-place a centered/right-aligned tracked run.
+    let line_width = line.last().map(|f| f.x + f.width).unwrap_or(0.0);
     let offset = match align {
         TextAlign::Center => (line_avail - line_width).max(0.0) / 2.0,
         TextAlign::Right => (line_avail - line_width).max(0.0),
@@ -6065,6 +6083,50 @@ mod tests {
         assert!(
             broken3.len() > 1 && broken3.iter().all(|(_, w)| *w <= 100.5),
             "word-break:break-all must also break the token to fit (got {broken3:?})"
+        );
+    }
+
+    /// `letter-spacing` widens a run by a fixed advance per character; `word-spacing` widens each
+    /// inter-word space. Both pair constantly with tracked uppercase nav/buttons/labels. Baseline:
+    /// unimplemented (0px), so a tracked heading measured and painted at its untracked width.
+    #[test]
+    fn letter_and_word_spacing_widen_runs() {
+        let collect = |root: &LayoutBox| -> Vec<(String, f32, f32)> {
+            let mut v = Vec::new();
+            root.walk(&mut |b| {
+                if let BoxContent::Inline(frags) = &b.content {
+                    for f in &*frags {
+                        if !f.text.is_empty() {
+                            v.push((f.text.clone(), f.x, f.width));
+                        }
+                    }
+                }
+            });
+            v
+        };
+        let word = |v: &[(String, f32, f32)], t: &str| -> (f32, f32) {
+            let f = v.iter().find(|(s, _, _)| s == t).expect("word present");
+            (f.1, f.2) // (x, width)
+        };
+
+        // letter-spacing: a 5-char word grows by exactly 5 × 4px = 20px of tracking.
+        let (_d0, r0) = layout_html(r#"<p id="p">hello</p>"#, "#p{letter-spacing:0}", 800.0);
+        let (_d1, r1) = layout_html(r#"<p id="p">hello</p>"#, "#p{letter-spacing:4px}", 800.0);
+        let (_, w0) = word(&collect(&r0), "hello");
+        let (_, w1) = word(&collect(&r1), "hello");
+        assert!(
+            (w1 - w0 - 20.0).abs() < 0.5,
+            "letter-spacing:4px must add 5×4=20px to a 5-char word ({w0} -> {w1})"
+        );
+
+        // word-spacing: the second word is pushed right by the 10px added to the space before it.
+        let (_d2, r2) = layout_html(r#"<p id="p">aa bb</p>"#, "#p{word-spacing:0}", 800.0);
+        let (_d3, r3) = layout_html(r#"<p id="p">aa bb</p>"#, "#p{word-spacing:10px}", 800.0);
+        let (x2, _) = word(&collect(&r2), "bb");
+        let (x3, _) = word(&collect(&r3), "bb");
+        assert!(
+            (x3 - x2 - 10.0).abs() < 0.5,
+            "word-spacing:10px must push the second word right by 10px ({x2} -> {x3})"
         );
     }
 

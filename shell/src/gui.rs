@@ -1758,6 +1758,8 @@ impl App {
             font_size: size,
             color,
             line_height: size + 3.0,
+            letter_spacing: 0.0,
+            word_spacing: 0.0,
         };
 
         // --- Tab strip ---
@@ -2012,6 +2014,8 @@ impl App {
             font_size: size,
             color,
             line_height: size + 3.0,
+            letter_spacing: 0.0,
+            word_spacing: 0.0,
         };
 
         // FIND BAR (Tick 18 CRITICAL fix). Ctrl+F used to only set a flag and log "type to search"

@@ -433,6 +433,11 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
             // consume directly.
             cs.overflow_wrap = m.overflow_wrap;
             cs.word_break = m.word_break;
+            // `letter-spacing`/`word-spacing` recovered from MinimalCascade so the shipping path
+            // tracks uppercase nav/buttons/labels too (Stylo's servo build exposes them as a
+            // `Spacing<Length>` we'd otherwise map by hand).
+            cs.letter_spacing = m.letter_spacing;
+            cs.word_spacing = m.word_spacing;
             cs.background_repeat = m.background_repeat;
             cs.text_decoration = m.text_decoration;
             cs.list_style_type = m.list_style_type;

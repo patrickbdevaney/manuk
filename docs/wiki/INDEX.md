@@ -395,6 +395,7 @@
   - L200 · Shrink-to-fit content extent must include the child's RIGHT margin (margin box, not border box)
   - L210 · text-transform — rendered casing without touching the DOM text (tick 182)
   - L239 · overflow-wrap / word-break — char-level breaking of an unbreakable token (tick 183)
+  - L273 · letter-spacing / word-spacing — tracking a run's advance in measure and paint (tick 184)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -422,4 +423,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-349 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+350 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

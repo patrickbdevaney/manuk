@@ -7542,3 +7542,39 @@ control (`overflow-wrap:normal`) leaves one fragment wider than 100px (overflows
 break-word` splits it into >1 fragment, each ≤100px, and losslessly (joined == token); `word-break:
 break-all` reaches the same breaking. RED against the no-char-break baseline (both cases overflow as one
 fragment). Verify: css+layout suites green (layout 73→74); HANG/CRASH 0.
+
+## Tick 184 — letter-spacing / word-spacing — tracked nav/buttons/labels measure and paint at the right width (CSS render / text) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (CSS render — inter-character / inter-word tracking). WIKI:
+docs/wiki/text-layout.md "letter-spacing / word-spacing — tracking a run's advance in measure and paint".**
+
+**Hypothesis.** `letter-spacing` (and `word-spacing`) is on a large fraction of styled UI — tracked
+uppercase nav bars, buttons, small-caps labels, hero headings, kickers/eyebrows — and pairs directly
+with tick 182's `text-transform:uppercase`. It was **unimplemented** (0 hits): a tracked heading
+measured and painted at its *untracked* width, so its box was too narrow and its glyphs too tight
+everywhere the design specified tracking. Fix: parse `letter-spacing`/`word-spacing` lengths (css, both
+inherited, `normal`→0, recovered from MinimalCascade on the shipping Stylo path) into
+`ComputedStyle::{letter_spacing,word_spacing}`; carry them on `TextStyle`; in inline layout add
+`letter_spacing × char_count` to each word's measured width (trailing tracking included, matching
+Chrome) and `word_spacing` to each inter-word space; in paint offset glyph *i* by `i × letter_spacing`
+so measure and paint stay in step. `close_line`/`inline_extent` now use the stored `f.width` (which
+carries the tracking) instead of re-measuring the text. **Safety: the default is 0, which leaves shaping,
+measurement, alignment and paint byte-identical — the ratchet cannot regress; behaviour changes only
+when tracking is explicitly set.**
+
+**Gate.** engine/layout `letter_and_word_spacing_widen_runs`: `letter-spacing:4px` adds exactly
+5×4=20px to the 5-char word "hello"; `word-spacing:10px` pushes the second word of "aa bb" right by
+10px. RED against the no-tracking baseline (both deltas 0). Verify: css+layout+paint suites green
+(layout 74→75); HANG/CRASH 0. Residue: `word-spacing` inside a `pre` run's internal spaces (paint
+applies letter-spacing there but not word-spacing); per-grapheme-cluster tracking for ligatures/combining
+marks (we count chars, exact for the Latin common case).
+
+**BLOCKER (tick 184, environmental — observer):** tick 184 code + gate + all crate suites are GREEN
+(css 25, layout 75, paint 10), but the VERIFY WALL ratchet refuses it at 374–494s > 62s ceiling across
+4 attempts (loaded AND quiet box, load 0.24; `manuk-wpt` release pre-built at 20:00; wall varies so it's
+a live measure, not a stale receipt). The wall is dominated by `P · parity` = 176s (`cargo run -p
+manuk-wpt --release -- parity`, 72-page headless-Chrome render-compare) — an ~88× blow-up from tick
+182/183's 59s wall that a default-0 letter-spacing change (byte-identical render) cannot cause. Harness/
+environment (headless-Chrome parity slowness), not browser regression. Per V1-SCOPE the harness is
+observer-owned; NOT touching scripts/. Tick 184 is staged and complete — one `./scripts/tick.sh
+/tmp/tick184-msg.txt` lands it once the parity wall recovers.

@@ -526,6 +526,10 @@ pub struct ComputedStyle {
     pub overflow_wrap: OverflowWrap,
     /// `word-break` — char-level break control within a run (inherited).
     pub word_break: WordBreak,
+    /// `letter-spacing` — extra px added after each character (tracking). `0` = `normal`. Inherited.
+    pub letter_spacing: f32,
+    /// `word-spacing` — extra px added to each inter-word space. `0` = `normal`. Inherited.
+    pub word_spacing: f32,
     pub margin: Sides<Dim>,
     pub padding: Sides<Dim>,
     pub border_width: Sides<f32>,
@@ -661,6 +665,8 @@ impl ComputedStyle {
             text_transform: TextTransform::None,
             overflow_wrap: OverflowWrap::Normal,
             word_break: WordBreak::Normal,
+            letter_spacing: 0.0,
+            word_spacing: 0.0,
             margin: Sides::all(Dim::Px(0.0)),
             padding: Sides::all(Dim::Px(0.0)),
             border_width: Sides::all(0.0),
@@ -754,6 +760,8 @@ impl ComputedStyle {
         s.text_transform = parent.text_transform;
         s.overflow_wrap = parent.overflow_wrap;
         s.word_break = parent.word_break;
+        s.letter_spacing = parent.letter_spacing;
+        s.word_spacing = parent.word_spacing;
         // `list-style-*` is inherited (that is how `ul{list-style:none}` silences its `li`s).
         s.list_style_type = parent.list_style_type;
         s.list_style_inside = parent.list_style_inside;
@@ -864,6 +872,8 @@ pub fn diff_style(old: &ComputedStyle, new: &ComputedStyle) -> RestyleDamage {
         || old.text_transform != new.text_transform
         || old.overflow_wrap != new.overflow_wrap
         || old.word_break != new.word_break
+        || old.letter_spacing != new.letter_spacing
+        || old.word_spacing != new.word_spacing
         || old.float != new.float
         || old.clear != new.clear
         || old.position != new.position
@@ -2728,6 +2738,22 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 "break-all" => WordBreak::BreakAll,
                 "keep-all" => WordBreak::KeepAll,
                 _ => WordBreak::Normal,
+            }
+        }
+        // `letter-spacing`/`word-spacing`: a length added after each char / to each space. `normal`
+        // (and any unparseable value) is zero. `em` resolves against this element's font size.
+        "letter-spacing" => {
+            s.letter_spacing = if v.trim().eq_ignore_ascii_case("normal") {
+                0.0
+            } else {
+                values::parse_length_px(v.trim(), s.font_size).unwrap_or(0.0)
+            }
+        }
+        "word-spacing" => {
+            s.word_spacing = if v.trim().eq_ignore_ascii_case("normal") {
+                0.0
+            } else {
+                values::parse_length_px(v.trim(), s.font_size).unwrap_or(0.0)
             }
         }
         "width" => {

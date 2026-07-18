@@ -629,8 +629,13 @@ impl Canvas {
         style: &TextStyle,
     ) {
         let run = fonts.shape(text, style.font_key, style.font_size);
-        for g in &run.glyphs {
-            let pen_x = origin_x + g.x;
+        // `letter-spacing` pushes each successive glyph out by a running multiple of the tracking, so
+        // glyph `i` sits at `i × letter_spacing` past its shaped pen position. This mirrors layout's
+        // width bump (`letter_spacing × char_count`), so a tracked run measures and paints in step.
+        // Zero (the default) leaves every pen position exactly as shaped.
+        let ls = style.letter_spacing;
+        for (i, g) in run.glyphs.iter().enumerate() {
+            let pen_x = origin_x + g.x + ls * i as f32;
             let Some(bitmap) = fonts.rasterize(g.glyph_id, g.face, style.font_size, pen_x) else {
                 continue;
             };
