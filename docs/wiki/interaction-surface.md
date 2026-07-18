@@ -693,3 +693,35 @@ Residue: `formaction`/`formmethod`/`formnovalidate` on the button are not carrie
 and the submitter is not recorded (so a form with two submit buttons cannot tell which one was used —
 `<button name=action value=delete>` is a real pattern). Link navigation from `element.click()` is
 still not wired.
+
+## The submitter reaches the server — "Save" vs "Delete" (tick 212)
+
+A submit button contributes its `name=value` to the submission **only when it is the control that
+activated the form**, which is why the field walk skips every button. `agent/src/forms.rs` said so in
+a comment: *"Buttons only submit their own value when they are the activating control; we do not
+model that, so they are skipped."* This models it.
+
+**The failure it closes is a silent wrong-action bug, not a missing field.**
+`<button name="action" value="delete">` beside `<button name="action" value="save">` is how a great
+many forms say what the user asked for. Without the submitter both buttons post a **byte-identical
+body** — the server cannot tell the destructive action from the safe one, and an agent driving the
+page has no way to detect it.
+
+Threaded end to end: `Page::pending_submits` records `(form, submitter)` on click →
+`take_form_submits()` yields `Vec<(NodeId, Option<NodeId>)>` → `gui.rs::navigate_form_with` →
+`forms::urlencoded_submission_with_submitter` → `fields_with_submitter`.
+
+- **`None` is the honest answer for a script's `requestSubmit()`** — it has no submitter unless one
+  is passed (which is not modelled yet), so nothing is guessed.
+- **The submitter goes LAST** in the entry list, matching the order a browser builds it.
+- **A button with no `name` is not a successful control** and contributes nothing — its `value` must
+  not be smuggled in under another key.
+- A button that was **not** clicked still never appears.
+
+Gated in `agent/src/forms.rs` (`the_clicked_button_contributes_its_name_and_value`): Save and Delete
+must produce **different** bodies; the nameless button contributes nothing; and the submitter reaches
+the **POST body**, not just the field list — the wire is what the server reads. Proven RED by
+ignoring the submitter — Save and Delete collapse to the same body.
+
+Residue: `formaction`/`formmethod`/`formnovalidate` on the button still do not override the form's,
+and `requestSubmit(submitter)` does not carry its argument.

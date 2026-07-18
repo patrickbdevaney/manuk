@@ -63,6 +63,21 @@ fn input_type(dom: &Dom, n: NodeId) -> String {
 /// The successful controls of `form`, in document order, as `(name, value)` pairs —
 /// i.e. what a browser would serialize on submit (HTML §form-submission).
 pub fn fields(dom: &Dom, form: NodeId) -> Vec<(String, String)> {
+    fields_with_submitter(dom, form, None)
+}
+
+/// As [`fields`], plus the **submitter** — the button that was actually clicked.
+///
+/// A submit button contributes its `name=value` **only when it is the control that activated the
+/// form**, which is why the plain field walk skips every button. Modelling it matters because
+/// `<button name="action" value="delete">` next to `<button name="action" value="save">` is how a
+/// great many forms distinguish what the user asked for: without the submitter, both buttons post
+/// an identical body and the server cannot tell save from delete.
+pub fn fields_with_submitter(
+    dom: &Dom,
+    form: NodeId,
+    submitter: Option<NodeId>,
+) -> Vec<(String, String)> {
     let mut out = Vec::new();
     for n in dom.descendants(form) {
         let Some(el) = dom.element(n) else { continue };
@@ -150,6 +165,18 @@ pub fn fields(dom: &Dom, form: NodeId) -> Vec<(String, String)> {
             _ => {}
         }
     }
+    // The submitter goes LAST, matching the order a browser builds the entry list.
+    if let Some(sub) = submitter {
+        if let Some(el) = dom.element(sub) {
+            if let Some(name) = el.attr("name").filter(|n| !n.is_empty()) {
+                out.push((
+                    name.to_string(),
+                    el.attr("value").unwrap_or_default().to_string(),
+                ));
+            }
+        }
+    }
+
     out
 }
 
@@ -210,6 +237,17 @@ pub fn urlencoded_submission(
     form: NodeId,
     base: &str,
 ) -> Result<UrlencodedPost, SubmitError> {
+    urlencoded_submission_with_submitter(dom, form, base, None)
+}
+
+/// As [`urlencoded_submission`], carrying the **submitter** so `<button name=action value=delete>`
+/// reaches the server. See [`fields_with_submitter`].
+pub fn urlencoded_submission_with_submitter(
+    dom: &Dom,
+    form: NodeId,
+    base: &str,
+    submitter: Option<NodeId>,
+) -> Result<UrlencodedPost, SubmitError> {
     let el = dom.element(form).ok_or(SubmitError::NoForm)?;
     let method = el.attr("method").unwrap_or("get").to_ascii_lowercase();
     if method != "post" {
@@ -230,7 +268,7 @@ pub fn urlencoded_submission(
     };
 
     let body = url::form_urlencoded::Serializer::new(String::new())
-        .extend_pairs(fields(dom, form))
+        .extend_pairs(fields_with_submitter(dom, form, submitter))
         .finish();
 
     Ok(UrlencodedPost {
@@ -321,6 +359,83 @@ mod tests {
 
     fn dom_of(html: &str) -> Dom {
         manuk_html::parse(html)
+    }
+
+    /// **G_SUBMITTER — the server can tell "Save" from "Delete".**
+    ///
+    /// A submit button contributes its `name=value` **only when it is the control that activated
+    /// the form**, which is why the plain field walk skips every button. Before this was modelled,
+    /// `<button name="action" value="delete">` and `<button name="action" value="save">` posted a
+    /// **byte-identical body** — the server could not tell the destructive action from the safe
+    /// one, and an agent driving the page had no way to detect it. That is a silent wrong-action
+    /// bug, not a missing feature.
+    #[test]
+    fn the_clicked_button_contributes_its_name_and_value() {
+        let dom = dom_of(
+            r#"<form method="post" action="/items/7">
+                 <input type="text" name="title" value="notes">
+                 <button name="action" value="save">Save</button>
+                 <button name="action" value="delete">Delete</button>
+                 <button value="nameless">No name</button>
+               </form>"#,
+        );
+        let form = dom
+            .descendants(dom.root())
+            .find(|n| dom.element(*n).is_some_and(|e| e.name == "form"))
+            .expect("the form");
+        let buttons: Vec<NodeId> = dom
+            .descendants(form)
+            .filter(|n| dom.element(*n).is_some_and(|e| e.name == "button"))
+            .collect();
+        let (save, delete, anon) = (buttons[0], buttons[1], buttons[2]);
+
+        // With no submitter, NO button contributes — one that was not clicked must never appear.
+        let plain = fields(&dom, form);
+        assert_eq!(
+            plain,
+            vec![("title".to_string(), "notes".to_string())],
+            "no submitter means no button value at all: {plain:?}"
+        );
+
+        let saved = fields_with_submitter(&dom, form, Some(save));
+        let deleted = fields_with_submitter(&dom, form, Some(delete));
+        assert_eq!(
+            saved,
+            vec![
+                ("title".to_string(), "notes".to_string()),
+                ("action".to_string(), "save".to_string()),
+            ],
+            "the clicked button contributes name=value LAST, matching the order a browser builds \
+             the entry list"
+        );
+        assert_ne!(
+            saved, deleted,
+            "G_SUBMITTER: Save and Delete must not produce the same body. Without the submitter \
+             both post byte-identically and the server cannot tell the destructive action from \
+             the safe one."
+        );
+        assert_eq!(
+            deleted.last(),
+            Some(&("action".to_string(), "delete".to_string()))
+        );
+
+        // A button with no `name` is not a successful control.
+        assert_eq!(
+            fields_with_submitter(&dom, form, Some(anon)),
+            plain,
+            "a nameless button's value must not be smuggled into the body under another key"
+        );
+
+        // End to end: the submitter reaches the POST BODY the shell actually sends.
+        let post =
+            urlencoded_submission_with_submitter(&dom, form, "https://app.test/", Some(delete))
+                .expect("a method=post form yields a urlencoded body");
+        assert!(
+            post.body.contains("action=delete"),
+            "G_SUBMITTER: the submitter must reach the WIRE, not just the field list — the POST \
+             body is what the server reads. Got: {:?}",
+            post.body
+        );
     }
 
     #[test]

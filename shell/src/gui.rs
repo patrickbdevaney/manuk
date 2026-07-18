@@ -782,6 +782,17 @@ impl App {
     /// the OS file-picker path instead and must not be silently urlencoded (that would drop the
     /// files). Every `None` is logged so a form that does nothing never does so silently.
     fn form_submission(&self, form: manuk_dom::NodeId) -> Option<FormSubmission> {
+        self.form_submission_with(form, None)
+    }
+
+    /// As [`form_submission`](Self::form_submission), carrying the **submitter** — the button that
+    /// was clicked — so `<button name="action" value="delete">` reaches the server. Without it two
+    /// buttons on one form post an identical body and the server cannot tell save from delete.
+    fn form_submission_with(
+        &self,
+        form: manuk_dom::NodeId,
+        submitter: Option<manuk_dom::NodeId>,
+    ) -> Option<FormSubmission> {
         let page = self.page.as_ref()?;
         let base = &page.final_url;
         match manuk_agent::forms::submission_url(page.dom(), form, base) {
@@ -796,7 +807,12 @@ impl App {
                     );
                     return None;
                 }
-                match manuk_agent::forms::urlencoded_submission(page.dom(), form, base) {
+                match manuk_agent::forms::urlencoded_submission_with_submitter(
+                    page.dom(),
+                    form,
+                    base,
+                    submitter,
+                ) {
                     Ok(p) => Some(FormSubmission::Post(p)),
                     Err(e) => {
                         tracing::warn!("submit: could not build the form POST body: {e}");
@@ -836,13 +852,13 @@ impl App {
             None => (Vec::new(), Vec::new()),
         };
         let w = self.viewport.width;
-        for form in requested {
+        for (form, submitter) in requested {
             let proceed = match self.page.as_mut() {
                 Some(p) => p.dispatch_submit(form, &self.fonts, w),
                 None => true,
             };
             if proceed {
-                self.navigate_form(form);
+                self.navigate_form_with(form, submitter);
             }
         }
         for form in direct {
@@ -852,7 +868,16 @@ impl App {
 
     /// Perform the navigation for a form, with no event — the caller has already decided.
     fn navigate_form(&mut self, form: manuk_dom::NodeId) {
-        match self.form_submission(form) {
+        self.navigate_form_with(form, None)
+    }
+
+    /// As [`navigate_form`](Self::navigate_form), carrying the button that submitted it.
+    fn navigate_form_with(
+        &mut self,
+        form: manuk_dom::NodeId,
+        submitter: Option<manuk_dom::NodeId>,
+    ) {
+        match self.form_submission_with(form, submitter) {
             Some(FormSubmission::Get(url)) => self.goto(&url),
             Some(FormSubmission::Post(post)) => self.post_navigate(post),
             None => {} // already logged by form_submission

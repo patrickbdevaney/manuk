@@ -42,7 +42,7 @@ fn clicking_a_submit_button_queues_its_form_for_submission() {
     let (direct, requested) = page.take_form_submits();
     assert_eq!(
         requested,
-        vec![login],
+        vec![(login, Some(node(&page, "#go")))],
         "G_SUBMIT_CLICK: clicking a submit button must submit its form. A bare <button> inside a \
          form defaults to type=submit — that default is the classic source of 'why did my page \
          reload', and skipping it means 'click Sign in' does nothing at all."
@@ -79,7 +79,7 @@ fn clicking_a_submit_button_queues_its_form_for_submission() {
     let (_, requested) = page.take_form_submits();
     assert_eq!(
         requested,
-        vec![other],
+        vec![(other, Some(node(&page, "#remote")))],
         "form=\"id\" submits the named form, not the nearest ancestor — a button can live outside \
          the form it drives"
     );

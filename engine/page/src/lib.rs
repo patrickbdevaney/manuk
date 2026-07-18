@@ -652,7 +652,7 @@ pub struct Page {
     /// Forms whose **submit button was clicked**, awaiting the host's next
     /// [`take_form_submits`](Page::take_form_submits). `RefCell` because that getter takes `&self`
     /// (it is a drain, and every other `take_*` on `Page` has the same shape).
-    pending_submits: std::cell::RefCell<Vec<manuk_dom::NodeId>>,
+    pending_submits: std::cell::RefCell<Vec<(manuk_dom::NodeId, Option<manuk_dom::NodeId>)>>,
     /// Whether any element uses `position:sticky` — gates the per-frame sticky paint pass so
     /// non-sticky pages pay nothing.
     has_sticky: bool,
@@ -2508,7 +2508,9 @@ impl Page {
         // submit so the `submit` handler runs first and the page can validate or cancel.
         if proceed && !self.is_disabled(node) {
             if let Some(form) = self.submit_target(node) {
-                self.pending_submits.borrow_mut().push(form);
+                // Record WHICH button submitted: `<button name="action" value="delete">` next to
+                // `value="save"` is how many forms say what the user asked for.
+                self.pending_submits.borrow_mut().push((form, Some(node)));
             }
         }
         // If a handler mutated the DOM, re-style + re-lay-out so it renders (at base zoom;
@@ -2903,13 +2905,22 @@ impl Page {
     /// `requested` fires the `submit` event first, and a click-to-submit is exactly the case a page
     /// validates in that handler. Putting it in `direct` would skip every client-side validator on
     /// the web.
-    pub fn take_form_submits(&self) -> (Vec<manuk_dom::NodeId>, Vec<manuk_dom::NodeId>) {
+    pub fn take_form_submits(
+        &self,
+    ) -> (
+        Vec<manuk_dom::NodeId>,
+        Vec<(manuk_dom::NodeId, Option<manuk_dom::NodeId>)>,
+    ) {
         let from_click = std::mem::take(&mut *self.pending_submits.borrow_mut());
         match &self.js {
             Some(ctx) => {
                 let (d, mut r) = manuk_js::take_form_submits(ctx);
-                let mut requested: Vec<manuk_dom::NodeId> =
-                    r.drain(..).map(|x| manuk_dom::NodeId(x as u64)).collect();
+                // A script's `requestSubmit()` has no submitter (unless it passes one, which we do
+                // not model yet) — `None` is the honest answer, not a guessed button.
+                let mut requested: Vec<(manuk_dom::NodeId, Option<manuk_dom::NodeId>)> = r
+                    .drain(..)
+                    .map(|x| (manuk_dom::NodeId(x as u64), None))
+                    .collect();
                 requested.extend(from_click);
                 (
                     d.into_iter().map(|x| manuk_dom::NodeId(x as u64)).collect(),

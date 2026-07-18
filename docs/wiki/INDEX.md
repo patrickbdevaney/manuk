@@ -268,6 +268,7 @@
   - L603 · <label> forwards its click to the control (tick 209)
   - L630 · A disabled control is inert — and a script-free form still works (tick 210)
   - L665 · Clicking "Sign in" submits the form (tick 211)
+  - L697 · The submitter reaches the server — "Save" vs "Delete" (tick 212)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -462,4 +463,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-385 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+386 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

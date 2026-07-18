@@ -8806,3 +8806,45 @@ applied here); and the queue is a **drain**, so the host cannot submit the same 
 submission. The **submitter is not recorded**, so a form with two submit buttons cannot tell which
 was used — `<button name="action" value="delete">` is a real pattern and this is the more valuable of
 the two gaps. Link navigation from `element.click()` is still not wired.
+
+## Tick 212 — the submitter reaches the server: "Save" vs "Delete" (forms) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (tick 211 residue, the one I called the more valuable of the two).
+WIKI: docs/wiki/interaction-surface.md "The submitter reaches the server — \"Save\" vs \"Delete\"".**
+
+**Selection.** Named in tick 211's residue — and the codebase had already named it too:
+`agent/src/forms.rs` carried the comment *"Buttons only submit their own value when they are the
+activating control; we do not model that, so they are skipped."* An honest gap left in place until
+something needed it. Tick 211 made clicks submit forms, so now something does.
+
+**Why this is worth a tick rather than a footnote.** It is a **silent wrong-action bug**, not a
+missing field. `<button name="action" value="delete">` beside `<button name="action" value="save">`
+is how a great many forms say what the user asked for. Without the submitter both buttons post a
+**byte-identical body** — the server cannot distinguish the destructive action from the safe one, and
+an **agent driving the page has no way to detect it**: the click succeeded, the form submitted, the
+navigation happened, and the wrong thing occurred.
+
+**Implemented end to end**, because a field list that never reaches the wire proves nothing:
+`Page::pending_submits` records `(form, submitter)` on click → `take_form_submits()` now yields
+`Vec<(NodeId, Option<NodeId>)>` → `gui.rs::navigate_form_with` →
+`forms::urlencoded_submission_with_submitter` → `fields_with_submitter`.
+
+**`None` is the honest answer for a script's `requestSubmit()`.** It has no submitter unless one is
+passed (which is not modelled yet), so nothing is guessed — the alternative would be inventing a
+button the page never activated.
+
+Spec details, each gated: the submitter goes **last** in the entry list, matching the order a browser
+builds it; **a button with no `name` is not a successful control** and contributes nothing (its
+`value` must not be smuggled in under another key); a button that was not clicked still never
+appears.
+
+**Gate.** `the_clicked_button_contributes_its_name_and_value` in `agent/src/forms.rs` — Save and
+Delete must produce **different** bodies (`assert_ne!`, which is the claim stated directly), the
+nameless button contributes nothing, and the submitter reaches the **POST body** rather than only the
+field list. **Proven RED by ignoring the submitter** — Save and Delete collapse to the identical
+body. manuk-agent 126 green, `g_submit_click` updated for the new tuple shape and green,
+`cargo check --workspace` green.
+
+**Residue.** `formaction`/`formmethod`/`formnovalidate` on the button do not yet override the form's
+(a button that posts elsewhere is a real pattern), and `requestSubmit(submitter)` does not carry its
+argument. Link navigation from `element.click()` remains the other open item from tick 208's list.
