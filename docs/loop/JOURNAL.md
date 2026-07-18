@@ -7932,3 +7932,67 @@ modal is a `margin:auto` block IN FLOW, so it occupies layout space instead of o
 (Chrome's UA gives it `position:fixed; inset:0; width:fit-content`). Stacking is right; geometry is
 not yet. **Unrelated bug surfaced while probing:** a `position:absolute` element with no background
 emits NO display item at all — its text never reaches the display list. Pre-existing, not fixed here.
+
+_Note (tick 194, readiness meter): PHASE0-PROGRESS shows ready_pct 44→42 and gated_pct 25→22 at this
+tick. **Not a regression — dilution.** The capability inventory grew 106→122 caps in the same run
+(works 14→16, partial 11→16, missing 17→27, unknown 37→36), so the gated count (27, flat) now divides
+a larger denominator. The two signals that are not denominator-bound both IMPROVED: working
+46.5→51.0, measured_pct 65→70. Do not chase this as a phantom ❌._
+
+## Tick 195 — the `popover` API: menus, tooltips and dropdowns open, close, and stop rendering inline (app / render) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (finishes the constellation "app" cell `<dialog>` + popover,
+Interop 2026). WIKI: docs/wiki/dialog-and-top-layer.md "The `popover` attribute API (tick 195)".**
+
+**Selection.** The same constellation cell tick 194 opened. Popover shares the top layer built last
+tick, so the expensive half was already paid for — the cheapest available way to flip a cell rather
+than a WPT count, which is exactly what the tick-193 REFRESH mandate asks for.
+
+**Hypothesis.** Identical two-part failure to `<dialog>`: (1) `showPopover()` was `undefined`, a
+TypeError inside the click handler; (2) with no `[popover]` UA rule the menu's items, the tooltip's
+copy and the whole dropdown were laid out and painted into the page in tree order before anyone
+opened them. Every menu/tooltip/dropdown/toast that stopped being a hand-rolled
+`<div class="dropdown">` + outside-click listener is a popover.
+
+Fix: **js prelude** — `showPopover`/`hidePopover`/`togglePopover(force)`, `el.popover` reflecting
+auto/manual/null (`auto` is the enumerated attribute's invalid-value default), `beforetoggle`
+(cancelable — the veto hook) and `toggle`, both carrying `oldState`/`newState`;
+`<button popovertarget popovertargetaction=show|hide|toggle>` declaratively, with no script; light
+dismiss (an outside click or Escape closes an `auto` popover, a `manual` one ignores both); `auto`
+popovers mutually exclusive. **Both cascades in lockstep** — `[popover]` hidden,
+`[popover][data-manuk-popover-open]` a bordered block (attribute-keyed, not tag-keyed: `popover` is a
+global attribute). **page/lib.rs** — the existing modal branch in `z_index_map` widened, so an open
+popover gets the same `TOP_LAYER_Z` promotion.
+
+`data-manuk-popover-open` IS the `:popover-open` state — same JS↔Rust boundary problem as
+`data-manuk-modal`, same solution.
+
+**A real bug the gate caught.** `'popover' in HTMLElement.prototype` — the canonical detection for
+this whole API — was FALSE while every element in the page had the members. The custom-elements shim
+gives the `HTMLElement` constructor a fresh `{}` prototype ON PURPOSE (upgrade grafts onto the host
+object; a reflector's prototype cannot be swapped), so the constructor's prototype and the real
+element prototype are different objects and detection reads the wrong one. Mirrored the dialog +
+popover descriptors onto the constructor's prototype so both reads agree. **This is a plaster on a
+wider hole: EVERY `'x' in HTMLElement.prototype` detection has the same blind spot.** Unifying the
+two prototypes is its own tick, gated by the custom-element suite — logged as residue, not smuggled
+into this one.
+
+**Safety.** Additive. The UA rule keys on an attribute nothing else in the sheet mentions; the
+`z_index_map` branch fires only on `[data-manuk-popover-open]`; the prelude block is guarded on
+`typeof __HP.showPopover === 'undefined'`; the prototype mirror only defines descriptors that are
+absent.
+
+**Gates.** `g_popover.rs` (14 claims) + `g_popover_render.rs` (a closed popover yields no box and no
+display item; an open one paints AFTER a `z-index: 50` header). Both halves proven RED independently
+(`[popover] { display: none }` → `block` gave the closed menu a real 18.4px box; disabling the
+top-layer branch put the menu at index 5 behind the header at 7). g_dialog + g_dialog_render still
+green.
+
+**HARNESS NOTE (observer, not agent work):** these two gates are also not registered in
+`scripts/verify.sh` — four unregistered gates now (g_dialog, g_dialog_render, g_popover,
+g_popover_render). They pass standalone under `--features stylo,spidermonkey`.
+
+**Residue.** Nested popovers (a submenu inside its parent menu — `auto` exclusivity is flat today, so
+opening a child closes its parent); anchor positioning (`anchor-name`/`position-area`), so a popover
+is a block in flow rather than floating next to its invoker; `::backdrop`; inertness + focus trap;
+the `HTMLElement.prototype` unification above.

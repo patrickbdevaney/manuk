@@ -2601,6 +2601,18 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
         _ => (Inline, 0.0, 400, 1.0),
     };
     s.display = display;
+    // `[popover]` — a popover is hidden until it is SHOWN, whatever element carries it. Same failure
+    // as a closed `<dialog>`: with no rule, the menu's items, the tooltip's copy and the whole
+    // dropdown render inline in the middle of the page before anyone opens them. Attribute-keyed, not
+    // tag-keyed, because `popover` is a global attribute. Keep in lockstep with the `[popover]` pair
+    // in stylo_engine.rs.
+    if el.attr("popover").is_some() {
+        s.display = if el.attr("data-manuk-popover-open").is_some() {
+            Block
+        } else {
+            None
+        };
+    }
     // Form-control default appearance (UA stylesheet): a bordered, padded box. A text input
     // gets a default width; buttons hug their label. This is what makes fields visible.
     if matches!(tag, "input" | "button" | "textarea" | "select") {

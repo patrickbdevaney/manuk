@@ -1,4 +1,4 @@
-# `<dialog>` and the top layer (tick 194)
+# `<dialog>`, `popover`, and the top layer (ticks 194-195)
 
 The modern web's modal. Since ~2022 the cookie banner, the confirm-delete, the command palette, the
 Radix/Headless-UI dialog primitive and the shadcn `<Dialog>` all bottom out in `<dialog>` +
@@ -63,18 +63,62 @@ button overrides the form's `method`, per spec.
   cancelable `cancel`, and `show()` *not* joining the top layer).
 - `engine/page/tests/g_dialog_render.rs` — the half script cannot see: a closed dialog produces no
   box and no display item; an open modal paints after a `z-index: 50` overlay.
+- `engine/page/tests/g_popover.rs` — 14 claims (detection, reflection, show/hide/toggle, the
+  cancelable `beforetoggle`, `popovertarget`, `auto` exclusivity vs `manual`, light dismiss, Escape).
+- `engine/page/tests/g_popover_render.rs` — a closed popover produces no box and no display item; an
+  open one paints after a `z-index: 50` header.
 
-Both were proven red by reverting each half independently (`dialog { display: none }` → `block`, and
-`TOP_LAYER_Z` → `z`). Run them with `--features stylo,spidermonkey`; they are **not yet registered in
-`scripts/verify.sh`** (harness is observer-owned — see the tick 194 journal entry).
+Every one was proven red by reverting each half independently — `display: none` → `block` gave the
+closed dialog/popover a real 18.4px box, and disabling the `TOP_LAYER_Z` branch put the modal/menu
+behind the overlay. Run them with `--features stylo,spidermonkey`; they are **not yet registered in
+`scripts/verify.sh`** (harness is observer-owned — see the tick 194/195 journal entries).
+
+## The `popover` attribute API (tick 195)
+
+The other half of the top layer, and the same two-part failure: `showPopover()` was a TypeError, and
+with no `[popover]` UA rule the menu's items rendered inline in the middle of the page. Every menu,
+tooltip, dropdown and toast that has stopped being a hand-rolled `<div class="dropdown">` plus an
+outside-click listener is a popover.
+
+Built on exactly the machinery tick 194 laid down, which is why it fits in one tick:
+
+- **State flag** — `data-manuk-popover-open` **is** the `:popover-open` state. The UA sheet keys
+  `display` off it (`[popover]` hidden, `[popover][data-manuk-popover-open]` a bordered block, in both
+  cascades) and `z_index_map` reads it for the same `TOP_LAYER_Z` promotion a modal gets. Same
+  JS↔Rust boundary problem, same solution as `data-manuk-modal`.
+- **`showPopover` / `hidePopover` / `togglePopover(force)`**, and `el.popover` reflecting
+  `auto`/`manual`/`null` (`auto` is the enumerated attribute's invalid-value default).
+- **`beforetoggle` / `toggle`** with `oldState`/`newState`. `beforetoggle` is **cancelable**, which is
+  the veto hook; `toggle` is the after-the-fact notification.
+- **`<button popovertarget="menu" popovertargetaction="show|hide|toggle">`** — declarative, no script.
+  This is how the API is meant to be used and the reason it shipped.
+- **Light dismiss** — a click anywhere outside an open `auto` popover closes it, and so does Escape.
+  A `manual` popover ignores both. Opening an `auto` popover closes the other `auto` ones (the flat
+  exclusivity case; nested submenus are residue).
+
+### `HTMLElement.prototype` is not `__protoHTMLElement`
+
+`'popover' in HTMLElement.prototype` — the canonical detection for this API — was **false** while
+every element in the page had the members. The custom-elements shim
+(`dom_bindings.rs`) gives the `HTMLElement` constructor a fresh `{}` prototype on purpose, because
+upgrade grafts methods onto the host object and a reflector's prototype cannot be swapped. So the
+constructor's prototype and the real element prototype are different objects, and detection reads the
+wrong one. Tick 195 mirrors the dialog + popover descriptors onto the constructor's prototype so both
+reads agree.
+
+**This is a plaster on a wider hole:** *every* `'x' in HTMLElement.prototype` feature detection has
+the same blind spot. Logged as residue — unifying the two prototypes is its own tick, with the
+custom-element gates as the thing that must stay green.
 
 ## Known gaps, deliberately not in this tick
 
 - **`::backdrop`** — the dimming layer behind a modal. Needs a pseudo-element box with no DOM node.
 - **Inertness** — a modal should make the rest of the document non-interactive (no clicks, no focus,
   no hit-test) and trap focus. Today the page behind a modal is still clickable.
-- **Light-dismiss / `popover`** — the `popover` attribute API (`showPopover`/`hidePopover`,
-  `popovertarget`) shares the top layer and is still absent.
+- **Nested popovers** — a submenu inside its parent menu; today `auto` exclusivity is flat, so
+  opening a child closes its parent.
+- **Popover positioning** — anchor positioning (`anchor-name`/`position-area`) is absent, so a popover
+  is a block in flow rather than floating next to its invoker.
 - **Auto-centering** — Chrome's UA sheet gives a modal `position: fixed; inset: 0; width: fit-content`
   so it floats centered in the viewport. Ours is a centered-by-`margin: auto` block in flow, so an
   open modal still occupies layout space rather than overlaying it. `z_index_map` puts it on top; the

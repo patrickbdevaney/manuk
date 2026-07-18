@@ -178,6 +178,19 @@ dialog[open] {
   color: #000000;
   padding: 1em;
 }
+/* `[popover]` — the same rule shape as `<dialog>`, for the same reason: a popover (menu, tooltip,
+   dropdown, toast) is hidden until shown, and without this its contents render inline in the middle
+   of the page. `popover` is a GLOBAL attribute, so this is keyed on the attribute, not a tag.
+   `data-manuk-popover-open` is what `showPopover()` sets — the `:popover-open` state, in a form the
+   Rust top-layer stacking can also read. */
+[popover] { display: none; }
+[popover][data-manuk-popover-open] {
+  display: block;
+  border: 1px solid #767676;
+  background-color: #ffffff;
+  color: #000000;
+  padding: 0.25em;
+}
 p, blockquote { margin: 1em 0; }
 h1 { font-size: 2em; font-weight: bold; margin: 0.67em 0; }
 h2 { font-size: 1.5em; font-weight: bold; margin: 0.75em 0; }

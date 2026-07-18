@@ -1724,6 +1724,130 @@ const PRELUDE: &str = r#"
         } catch (e) {}
       }
 
+      // ── The `popover` attribute API — `showPopover()` / `hidePopover()` / `togglePopover()`,
+      // `popovertarget`, `beforetoggle`/`toggle`, and light dismiss. The other half of the top layer
+      // (see the `<dialog>` block above): every menu, tooltip, dropdown, toast and select-listbox that
+      // has stopped being a hand-rolled `<div class="dropdown">` is a popover, and the entire surface
+      // was absent — so `showPopover()` was a TypeError AND, with no `[popover]` UA rule, the menu's
+      // items were rendering inline in the middle of the page before anyone opened it.
+      //
+      // `data-manuk-popover-open` IS the `:popover-open` state: the UA sheet keys its `display` off it
+      // and `Page::z_index_map` reads it for the top-layer promotion, so the flag has to live on the
+      // element where both sides can see it (same reasoning as `data-manuk-modal`).
+      if (__HP && typeof __HP.showPopover === 'undefined') {
+        var __popType = function(el) {
+          // `popover` / `popover=""` / `popover="auto"` are auto; anything else that is not `manual`
+          // is invalid — the attribute is an enumerated one, and `auto` is its invalid-value default.
+          if (!el || !el.hasAttribute || !el.hasAttribute('popover')) { return null; }
+          var v = String(el.getAttribute('popover') || '').toLowerCase();
+          return v === 'manual' ? 'manual' : 'auto';
+        };
+        var __popOpen = function(el) { return el.hasAttribute('data-manuk-popover-open'); };
+        // `beforetoggle` is cancelable on the way OPEN (a guard can veto); `toggle` is the
+        // notification after the fact. Both carry oldState/newState, which is what handlers switch on.
+        var __popToggleEvent = function(el, name, oldState, newState, cancelable) {
+          var ev;
+          try { ev = new Event(name, { bubbles: false, cancelable: !!cancelable }); }
+          catch (e) { return true; }
+          ev.oldState = oldState;
+          ev.newState = newState;
+          try { return el.dispatchEvent(ev); } catch (e) { return true; }
+        };
+        __HP.showPopover = function() {
+          if (__popType(this) === null || __popOpen(this)) { return; }
+          if (__popToggleEvent(this, 'beforetoggle', 'closed', 'open', true) === false) { return; }
+          // An `auto` popover is exclusive with the other auto popovers: opening one closes the rest.
+          // (Nesting — a submenu inside its parent menu — is residue; this is the flat common case.)
+          if (__popType(this) === 'auto') {
+            var others = document.querySelectorAll('[data-manuk-popover-open]');
+            for (var i = 0; i < others.length; i++) {
+              if (others[i] !== this && __popType(others[i]) === 'auto') { others[i].hidePopover(); }
+            }
+          }
+          this.setAttribute('data-manuk-popover-open', '');
+          __popToggleEvent(this, 'toggle', 'closed', 'open', false);
+        };
+        __HP.hidePopover = function() {
+          if (__popType(this) === null || !__popOpen(this)) { return; }
+          if (__popToggleEvent(this, 'beforetoggle', 'open', 'closed', true) === false) { return; }
+          this.removeAttribute('data-manuk-popover-open');
+          __popToggleEvent(this, 'toggle', 'open', 'closed', false);
+        };
+        __HP.togglePopover = function(force) {
+          var want = (force === undefined) ? !__popOpen(this) : !!force;
+          if (want) { this.showPopover(); } else { this.hidePopover(); }
+          return __popOpen(this);
+        };
+        // `el.popover` reflects the attribute (`null` when absent) — feature detection reads exactly
+        // this: `'popover' in HTMLElement.prototype`.
+        Object.defineProperty(__HP, 'popover', {
+          configurable: true,
+          get: function() { return __popType(this); },
+          set: function(v) {
+            if (v == null) { this.removeAttribute('popover'); } else { this.setAttribute('popover', String(v)); }
+          }
+        });
+        // `<button popovertarget="menu">` — declarative, no script at all. This is how the API is
+        // meant to be used, and the whole point of it shipping.
+        var __popClick = function(ev) {
+          var t = ev.target;
+          while (t && !(t.getAttribute && t.getAttribute('popovertarget'))) { t = t.parentElement; }
+          if (t) {
+            var target = document.getElementById(t.getAttribute('popovertarget'));
+            if (target) {
+              var action = String(t.getAttribute('popovertargetaction') || 'toggle').toLowerCase();
+              if (action === 'show') { target.showPopover(); }
+              else if (action === 'hide') { target.hidePopover(); }
+              else { target.togglePopover(); }
+              return;   // the invoker's own click never light-dismisses the popover it just opened
+            }
+          }
+          // **Light dismiss**: a click anywhere outside an open `auto` popover closes it. Without
+          // this a menu opens and never closes, because the page is relying on the UA for it.
+          var open = document.querySelectorAll('[data-manuk-popover-open]');
+          for (var i = 0; i < open.length; i++) {
+            var p = open[i];
+            if (__popType(p) !== 'auto') { continue; }
+            var inside = false;
+            for (var n = ev.target; n; n = n.parentElement) { if (n === p) { inside = true; break; } }
+            if (!inside) { p.hidePopover(); }
+          }
+        };
+        // Escape light-dismisses `auto` popovers too (the dialog handler above owns modals).
+        var __popEscape = function(ev) {
+          if (ev.key !== 'Escape' && ev.keyCode !== 27) { return; }
+          var open = document.querySelectorAll('[data-manuk-popover-open]');
+          for (var i = open.length - 1; i >= 0; i--) {
+            if (__popType(open[i]) === 'auto') { open[i].hidePopover(); }
+          }
+        };
+        try {
+          document.addEventListener('click', __popClick, true);
+          document.addEventListener('keydown', __popEscape, true);
+        } catch (e) {}
+        // **Feature detection reads `HTMLElement.prototype`, and ours is not `__protoHTMLElement`.**
+        // The custom-elements shim gives the `HTMLElement` constructor a fresh `{}` prototype on
+        // purpose (upgrade grafts methods onto the host object, since a reflector's prototype cannot
+        // be swapped) — so `'popover' in HTMLElement.prototype`, which is the canonical detection for
+        // this whole API, was FALSE while every element in the page had the members. Mirror the four
+        // descriptors onto the constructor's prototype so both reads agree. They are functions of
+        // `this`, so calling one through either object behaves identically.
+        // (Residue: the two prototypes being different objects at all is a broader divergence than
+        // this tick — every `'x' in HTMLElement.prototype` detection has the same blind spot.)
+        try {
+          var __ctorProto = globalThis.HTMLElement && globalThis.HTMLElement.prototype;
+          if (__ctorProto && __ctorProto !== __HP) {
+            ['showPopover', 'hidePopover', 'togglePopover', 'popover',
+             'show', 'showModal', 'close', 'returnValue'].forEach(function(k) {
+              var d = Object.getOwnPropertyDescriptor(__HP, k);
+              if (d && !Object.getOwnPropertyDescriptor(__ctorProto, k)) {
+                Object.defineProperty(__ctorProto, k, d);
+              }
+            });
+          }
+        } catch (e) {}
+      }
+
       // `CSS.escape` / `CSS.supports` — feature detection, and the correct way to build a selector.
       if (typeof globalThis.CSS === 'undefined') {
         globalThis.CSS = {

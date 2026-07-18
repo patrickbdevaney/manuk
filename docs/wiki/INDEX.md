@@ -140,7 +140,7 @@
   - L227 · Full-page zoom scales ABSOLUTE lengths only
   - L235 · Selector identifiers decode CSS escapes — take_ident used to stop at the backslash (tick 137)
 
-## `<dialog>` and the top layer (tick 194)
+## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
 
   - L8 · What "absent" actually looked like
@@ -149,8 +149,10 @@
   - L42 · The top layer is one line at one choke point
   - L52 · <form method="dialog"> is markup, not script
   - L59 · Gates
-  - L71 · Known gaps, deliberately not in this tick
-  - L83 · An unrelated bug this tick surfaced
+  - L76 · The popover attribute API (tick 195)
+  - L99 · HTMLElement.prototype is not __protoHTMLElement
+  - L113 · Known gaps, deliberately not in this tick
+  - L127 · An unrelated bug this tick surfaced
 
 ## DOM SEMANTICS — spec behaviour, mutation, and tree edge cases
 `docs/wiki/dom-semantics.md`
@@ -444,4 +446,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-367 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+369 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -3052,11 +3052,12 @@ impl Page {
             // the sticky header and the z-50 overlay it is supposed to cover. Modality is marked by
             // `showModal()` (see the dialog prelude in js/src/event_loop.rs); a non-modal `show()`
             // dialog is deliberately not here — it stays in flow, where the spec puts it.
-            let z = if self
-                .dom
-                .element(node)
-                .is_some_and(|e| e.name == "dialog" && e.attr("data-manuk-modal").is_some())
-            {
+            // An OPEN POPOVER joins the same top layer (spec: both are "top layer" elements). A menu
+            // that renders under the sticky header it hangs off is the same bug as a modal that does.
+            let z = if self.dom.element(node).is_some_and(|e| {
+                (e.name == "dialog" && e.attr("data-manuk-modal").is_some())
+                    || e.attr("data-manuk-popover-open").is_some()
+            }) {
                 TOP_LAYER_Z
             } else {
                 z
