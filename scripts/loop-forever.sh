@@ -24,12 +24,46 @@ STORE=docs/loop/AUTOLOOP
 WORKING=.git/manuk-working
 HEARTBEAT=.git/manuk-loop-heartbeat
 
+# ── HUNG-AGENT REAPER. The cron watchdog restarts a DEAD supervisor, but a supervisor blocked on a HUNG
+# agent (infinite loop / stuck build / a self-matching `while pgrep; do sleep` wait-loop) still looks alive,
+# so nothing recovered it — this is the exact "handed back / didn't move forward automatically" stall. The
+# agent touches $WORKING at the top of every command (~1–2 min cadence in a healthy tick); if that flag
+# goes stale this long, the agent is HUNG (not merely slow) → kill its tree and relaunch. 30 min is ~4× the
+# longest healthy no-touch gap (a cold build or a verify-wall run), so it never false-kills a slow-but-live
+# tick. Override with MANUK_STALL_SECS.
+STALL_SECS="${MANUK_STALL_SECS:-1800}"
+AGENT_SCOPE="manuk-agent-tick"
+
 # Single instance: if another supervisor holds the lock, exit quietly.
 exec 9>"$LOCK" || exit 1
 flock -n 9 || { echo "$(date '+%F %T')  another loop-forever already holds the lock — exiting" >>"$LOG"; exit 0; }
 
 say() { printf '%s  %s\n' "$(date '+%F %T')" "$1" >>"$LOG"; }
 CLAUDE=$(command -v claude 2>/dev/null || echo "$HOME/.local/bin/claude")
+
+# Recursively signal a process tree, children first. `pgrep -P` matches by PARENT pid, not a command
+# pattern, so this can never self-match the reaper (unlike a `pgrep -f loop` scan).
+killtree() {
+  local p=$1 sig=$2 c
+  for c in $(pgrep -P "$p" 2>/dev/null); do killtree "$c" "$sig"; done
+  kill "-$sig" "$p" 2>/dev/null || true
+}
+
+# Watch a launched agent (by pid) and kill its whole tree if the working-flag goes stale — the agent is
+# hung, not merely slow. Uses `kill -0 $pid` (pid liveness) and `stat` on the flag — neither self-matches.
+reap_stall() {
+  local watch=$1 age
+  while kill -0 "$watch" 2>/dev/null; do
+    sleep 120
+    kill -0 "$watch" 2>/dev/null || break
+    age=$(( $(date +%s) - $(stat -c %Y "$WORKING" 2>/dev/null || echo 0) ))
+    [ "$age" -lt "$STALL_SECS" ] && continue
+    say "⏰ working-flag stale ${age}s ≥ ${STALL_SECS}s — agent appears HUNG; killing its tree to force a fresh relaunch"
+    systemctl --user stop "${AGENT_SCOPE}.scope" 2>/dev/null || true   # contained path (no-op when uncontained)
+    killtree "$watch" TERM; sleep 5; killtree "$watch" KILL
+    break
+  done
+}
 
 # ── OOM DILIGENCE #1: protect THIS supervisor from the OOM killer. It is a tiny bash loop; it must survive
 # so it can relaunch a fresh agent after an OOM. -900 makes the kernel pick almost anything else first.
@@ -46,7 +80,8 @@ export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${XDG_RUN
 # MemoryHigh throttles allocation before the hard MemoryMax kill. If systemd --user is unavailable, fall
 # back to a direct (uncontained) launch so the loop never fully stalls — better uncontained than stopped.
 launch_agent() {
-  if systemd-run --user --scope --quiet \
+  systemctl --user reset-failed "${AGENT_SCOPE}.scope" 2>/dev/null || true   # clear any lingering scope name
+  if systemd-run --user --scope --quiet --unit="$AGENT_SCOPE" \
         --setenv=CARGO_BUILD_JOBS=12 --setenv=WPT_DIR="$HOME/wpt" \
         -p MemoryMax=22G -p MemorySwapMax=6G -p MemoryHigh=19G -p OOMPolicy=kill \
         "$CLAUDE" --model "${MANUK_AGENT_MODEL:-claude-opus-4-8}" --dangerously-skip-permissions --permission-mode bypassPermissions -p "$PROMPT" >>"$LOG" 2>&1
@@ -58,6 +93,11 @@ launch_agent() {
 }
 
 PROMPT='Continue the autonomous Manuk tick loop NOW — you are a headless grind agent, there is no user to hand back to. Read STATUS.md, docs/loop/JOURNAL.md, docs/loop/CONSTITUTION-CHECK.md and CONSTITUTION.MD first (ground truth on disk). Then run as many ticks as you can this invocation: run scripts/lever-board.sh FIRST and OBEY its PHASE MANDATE — this phase builds DAILY-DRIVER CAPABILITY, not raw WPT-flip count. html/dom is reasonably done (~93%); do NOT grind html/dom or dom for +N flips. Pick EITHER a CSS-LAYOUT tick (flexbox/grid/sizing/position/values/overflow — flex/grid INTRINSIC SIZING, min/max-content propagation via Taffy #204, is the core lever) OR a MEDIA tick (build the MediaSource/SourceBuffer JS surface and BIND a media framework GStreamer/FFmpeg — do NOT hand-write codecs). For layout, run `manuk-wpt wpt css/css-flexbox --show-failures` (or css-grid / css-sizing) to get the histogram and implement the top mechanism; a layout or media fix that makes real pages render/play correctly BEATS a bigger html/dom +N. Gate it with a falsifiable check (for media, a sample stream buffers and plays — not a WPT count), capture the mechanism in docs/wiki, and land it via ./scripts/tick.sh. Touch .git/manuk-working at the top of every command so the watchdogs see you working. SCOPE — CRITICAL: the loop HARNESS (this service, scripts/tick.sh, scripts/verify.sh, scripts/ramdisk.sh, scripts/wpt-sweep.sh, the watchdog, cgroups) is DONE and OWNED BY THE OBSERVER. Do NOT edit, 'fix', or optimize ANY scripts/ or harness file — not even if the wall is slow or something seems broken. If a harness problem blocks you, write one line in docs/loop/JOURNAL.md and CONTINUE with browser work; the observer handles all infrastructure. Every tick must be PURE BROWSER CAPABILITY per CONSTITUTION.MD PART VII / docs/loop/V1-SCOPE.md (rendering parity vs the real internet + the agentic surface). ATOMICITY: start each tick from a clean tree — if leftover WIP from a crashed tick will not cleanly complete, `git checkout -- .` back to the last commit and redo the tick fresh; never build on top of inconsistent partial state. Honor THE RATCHET absolutely: a Bar 0 crash or any regression is never traded for a capability — revert instead. Do not stop; keep landing ticks until this process is killed or the budget is spent.'
+
+# If this supervisor is killed (stop, watchdog swap, reboot signal), take the agent tree with it — otherwise
+# an orphaned agent would keep running while a fresh supervisor starts, breaking single-instance.
+cleanup() { [ -n "${AGENT_PID:-}" ] && killtree "$AGENT_PID" TERM 2>/dev/null; systemctl --user stop "${AGENT_SCOPE}.scope" 2>/dev/null || true; }
+trap cleanup EXIT INT TERM
 
 say "=== loop-forever supervisor START (pid $$) ==="
 NOPROG=0
@@ -82,8 +122,16 @@ while true; do
   # comparing it before/after always read "no progress" and forced a 600s backoff even while ticks landed.
   BEFORE=$(git rev-parse HEAD 2>/dev/null || echo none)
   START=$(date +%s)
-  launch_agent   # memory-capped cgroup (falls back to uncontained if systemd --user is down)
+  # Run the agent in the BACKGROUND so the stall-reaper can watch its liveness and kill it if it hangs — a
+  # blocked agent would otherwise stall this supervisor forever (the watchdog only revives a DEAD one).
+  launch_agent &   # memory-capped cgroup (falls back to uncontained if systemd --user is down)
+  AGENT_PID=$!
+  reap_stall "$AGENT_PID" &
+  REAPER_PID=$!
+  wait "$AGENT_PID" 2>/dev/null   # returns when the agent exits — on its own, or killed by the reaper
   DUR=$(( $(date +%s) - START ))
+  kill "$REAPER_PID" 2>/dev/null; wait "$REAPER_PID" 2>/dev/null   # agent done → retire the reaper
+  AGENT_PID=
 
   AFTER=$(git rev-parse HEAD 2>/dev/null || echo none)
   if [ "$AFTER" != "$BEFORE" ]; then
