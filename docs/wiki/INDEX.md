@@ -399,6 +399,7 @@
   - L273 · letter-spacing / word-spacing — tracking a run's advance in measure and paint (tick 184)
   - L306 · text-overflow: ellipsis — truncating a clipped single line (tick 186)
   - L335 · text-decoration-color — a colored underline paints in its own hue, not the text color (tick 187)
+  - L366 · text-decoration-thickness / text-underline-offset — a decoration line the design's own weight and position
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -426,4 +427,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-353 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+354 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

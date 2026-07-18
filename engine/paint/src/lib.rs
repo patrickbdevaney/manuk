@@ -471,7 +471,12 @@ impl DisplayList {
                     // `text-decoration`: a line ACROSS the run, not part of the glyphs.
                     let d = f.style.decoration;
                     if d.any() && f.width > 0.0 {
-                        let thickness = (f.style.font_size / 14.0).max(1.0);
+                        // `text-decoration-thickness` defaults to `auto` (font-derived); a length
+                        // overrides it (Tailwind `decoration-2`, thick brand underlines).
+                        let thickness = d
+                            .thickness
+                            .filter(|t| *t > 0.0)
+                            .unwrap_or((f.style.font_size / 14.0).max(1.0));
                         // `text-decoration-color` defaults to `currentColor` — the text color —
                         // but a colored underline (hover states, brand links) sets its own.
                         let line_color = fade(d.color.unwrap_or(f.style.color));
@@ -485,7 +490,12 @@ impl DisplayList {
                             });
                         };
                         if d.underline {
-                            line(f.baseline + (f.style.font_size * 0.12).max(1.0));
+                            // `text-underline-offset` pushes the underline further below the text.
+                            line(
+                                f.baseline
+                                    + (f.style.font_size * 0.12).max(1.0)
+                                    + d.underline_offset,
+                            );
                         }
                         if d.overline {
                             line(f.baseline - f.style.font_size * 0.9);
@@ -1726,6 +1736,59 @@ mod tests {
         assert!(
             has_blue,
             "without a decoration color, the underline must default to the blue currentColor"
+        );
+    }
+
+    /// `text-decoration-thickness` sets the line thickness and `text-underline-offset` pushes the
+    /// underline down — both are Tailwind staples (`decoration-2`, `underline-offset-4`).
+    ///
+    /// Before this, thickness was hardcoded to `font_size / 14` and the underline sat at a fixed
+    /// offset, so `decoration-2` on a small font drew a hairline and `underline-offset-*` did
+    /// nothing — the underline crowded the text on every design that asked for breathing room.
+    #[test]
+    fn text_decoration_thickness_and_offset_shape_the_underline() {
+        let dom = manuk_html::parse(r#"<p class="l">link</p>"#);
+        let fonts = FontContext::new();
+
+        let extract = |css: &str| -> Vec<(f32, f32)> {
+            let styles = MinimalCascade.cascade(&dom, &[Stylesheet::parse(css)]);
+            let root = manuk_layout::layout_document(&dom, &styles, &fonts, 400.0);
+            DisplayList::build(&root)
+                .items
+                .iter()
+                .filter_map(|it| match it {
+                    DisplayItem::TextLine { y, thickness, .. } => Some((*y, *thickness)),
+                    _ => None,
+                })
+                .collect()
+        };
+
+        // Baseline: a plain underline at font-size 14 → auto thickness = 14/14 = 1px.
+        let base = extract(".l{font-size:14px;text-decoration:underline}");
+        assert_eq!(base.len(), 1, "one underline expected; got {base:?}");
+        let (base_y, base_thick) = base[0];
+        assert!(
+            (base_thick - 1.0).abs() < 0.01,
+            "auto thickness at 14px must be ~1px; got {base_thick}"
+        );
+
+        // text-decoration-thickness:6px → a 6px line, regardless of the tiny font.
+        let thick =
+            extract(".l{font-size:14px;text-decoration:underline;text-decoration-thickness:6px}");
+        assert!(
+            thick.iter().any(|(_, t)| (*t - 6.0).abs() < 0.01),
+            "text-decoration-thickness:6px must paint a 6px line; got {thick:?}"
+        );
+
+        // text-underline-offset:8px → the SAME thickness, but the line sits 8px lower.
+        let offset =
+            extract(".l{font-size:14px;text-decoration:underline;text-underline-offset:8px}");
+        assert_eq!(offset.len(), 1, "one underline expected; got {offset:?}");
+        let (off_y, _) = offset[0];
+        assert!(
+            (off_y - (base_y + 8.0)).abs() < 0.01,
+            "text-underline-offset:8px must push the underline 8px below the default \
+             (base y {base_y}, offset y {off_y})"
         );
     }
 

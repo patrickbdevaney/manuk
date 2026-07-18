@@ -7654,3 +7654,38 @@ hardcoded-text-color baseline (line == text color always). Verify: css+paint sui
 0. Residue: text-decoration-style (dotted/dashed/wavy/double still paint solid),
 text-decoration-thickness, text-underline-offset, text-decoration-skip-ink; the T1 render-polish
 text-metric lever the board names.
+
+## Tick 188 — text-decoration-thickness / text-underline-offset — a decoration line at the design's own weight and position (CSS render / paint) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (CSS render — decoration line metrics). WIKI:
+docs/wiki/text-layout.md "text-decoration-thickness / text-underline-offset".**
+
+**Hypothesis.** `text-decoration-thickness` (Tailwind `decoration-2`, thick brand underlines) and
+`text-underline-offset` (Tailwind `underline-offset-4`) are everywhere in modern design, but paint drew
+the decoration line at a hardcoded thickness (`font_size / 14` — a 14px font always got a 1px hairline)
+at a fixed underline position, so `decoration-2` drew a hairline and `underline-offset-*` did nothing.
+Fix: `TextDecoration` gains `thickness: Option<f32>` (`None`==auto/from-font, font-derived) and
+`underline_offset: f32` (px below the default underline y, default 0). The `text-decoration-thickness`
+longhand parses a length (`auto`→None); `text-underline-offset` parses a length (`auto`→0). The
+`text-decoration` shorthand resets `thickness` (a longhand of the shorthand) but LEAVES
+`underline_offset` (not a longhand) — done via field mutation, not a struct literal. Recovered wholesale
+from MinimalCascade on the shipping Stylo path (`cs.text_decoration = m.text_decoration`). Dropping the
+struct's `Eq` derive (`f32` can't be `Eq`) is safe — nothing keys a map on it, and TextStyle already
+only derives PartialEq. Paint: `thickness = d.thickness.filter(|t|*t>0).unwrap_or((fs/14).max(1))` and
+the underline y gains `+ d.underline_offset` (underline only, per spec). **Safety: the defaults
+(None / 0.0) reproduce the old thickness and y byte-for-byte, so every run without these properties is
+unchanged and the ratchet cannot regress — no new DisplayItem field, so the manuk-wpt TextLine match
+is untouched.**
+
+**Gate.** engine/paint `text_decoration_thickness_and_offset_shape_the_underline`: a 14px underline
+defaults to ~1px; `text-decoration-thickness:6px` paints a 6px line; `text-underline-offset:8px` keeps
+the thickness but sits the line exactly 8px below the default y. RED against the hardcoded-thickness /
+fixed-position baseline (proven by reverting both mechanisms). Verify: css+paint suites green;
+HANG/CRASH 0. Residue: text-decoration-style (dotted/dashed/wavy/double still paint solid),
+text-decoration-skip-ink, from-font exact metrics; the T1 render-polish text-metric lever the board names.
+
+## Tick 188 — HARNESS BLOCKER (observer domain, not browser work)
+Tick 188 (text-decoration-thickness / text-underline-offset) is COMPLETE and staged: when verify runs warm+unstarved, ALL 68 gates GREEN, every WPT count (=), behavior-neutral by construction, gate proven RED-at-baseline (reverting both mechanisms fails it). It is refused only by two HARNESS/build-environment conditions, NOT by anything in the browser diff:
+1. **Recurring 327s `manuk_wpt` LTO rebuild (feature-union cache thrash).** verify.sh runs a full-feature build AND a `--no-default-features` headless `cargo check` (gate added by HEAD commit 0eb4910) in one invocation; a shared build-script/proc-macro fingerprint flips between the two feature sets, so nearly every verify rebuilds the LTO parity binary (~327s > the 93s ceiling). Once triggered (it persisted after an incidental debug `cargo test -p manuk-shell`) it recurs run-to-run. When warm it is 72s and the WALL gate is GREEN (observer rebaselined the mark 48s→72s / ceiling 93s mid-session — infrastructure being actively managed, as SCOPE promises).
+2. **Intermittent shell-gate false-RED** (affordance/G_TEARDOWN/G_RUNTIME_COUNT/G_INTERACT): the debug manuk-shell timing tests are starved when verify's `_launch shell` runs concurrently with the release parity sweep. They pass cleanly in isolation (58+2 green) every time; this is the known parallel-build-race false-RED (STATUS wall-false-RED note).
+Per SCOPE both are observer/infrastructure — the grind agent must not edit scripts/. Left staged to land unchanged once a warm, unstarved verify lands (or the observer settles the feature-thrash); do NOT `git checkout` it (verified work). Tick 187 (text-decoration-color) DID land this invocation (commit 05accec).

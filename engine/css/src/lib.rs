@@ -250,7 +250,8 @@ pub enum BackgroundRepeat {
 }
 
 /// `text-decoration-line`. Bitflags, because `underline line-through` is legal and used.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+/// (No `Eq` — `underline_offset`/`thickness` carry `f32`, and nothing keys a map on this.)
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct TextDecoration {
     pub underline: bool,
     pub overline: bool,
@@ -258,6 +259,12 @@ pub struct TextDecoration {
     /// `text-decoration-color`. `None` == the `currentColor` default (paint falls back to the
     /// text color); `Some` is an explicitly-set line color (colored underlines, hover states).
     pub color: Option<Rgba>,
+    /// `text-decoration-thickness`. `None` == `auto` (paint derives it from the font size);
+    /// `Some(px)` is an explicit thickness (Tailwind `decoration-2`, thick brand underlines).
+    pub thickness: Option<f32>,
+    /// `text-underline-offset`. Extra px pushing the *underline* down, away from the text
+    /// (Tailwind `underline-offset-4`). Default 0; applies only to the underline line.
+    pub underline_offset: f32,
 }
 
 impl TextDecoration {
@@ -3237,12 +3244,13 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                     )
                 })
                 .find_map(values::parse_color);
-            s.text_decoration = TextDecoration {
-                underline: lv.contains("underline"),
-                overline: lv.contains("overline"),
-                line_through: lv.contains("line-through"),
-                color,
-            };
+            // Reset the lines/color/thickness longhands this shorthand covers; `text-underline-offset`
+            // is NOT a longhand of `text-decoration`, so leave it untouched.
+            s.text_decoration.underline = lv.contains("underline");
+            s.text_decoration.overline = lv.contains("overline");
+            s.text_decoration.line_through = lv.contains("line-through");
+            s.text_decoration.color = color;
+            s.text_decoration.thickness = None;
         }
         "text-decoration-color" => {
             // `currentColor` keeps the currentColor default (paint follows the text color).
@@ -3250,6 +3258,27 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 None
             } else {
                 values::parse_color(v)
+            };
+        }
+        "text-decoration-thickness" => {
+            // `auto`/`from-font` keep the font-derived default (paint's `font_size / 14`); a length
+            // is an explicit line thickness (Tailwind `decoration-2`, thick brand underlines).
+            let tv = v.trim();
+            s.text_decoration.thickness =
+                if tv.eq_ignore_ascii_case("auto") || tv.eq_ignore_ascii_case("from-font") {
+                    None
+                } else {
+                    values::parse_length_px(tv, s.font_size)
+                };
+        }
+        "text-underline-offset" => {
+            // Extra px below the underline's default position (Tailwind `underline-offset-4`).
+            // `auto` is the 0 default; a length pushes the underline away from the text.
+            let tv = v.trim();
+            s.text_decoration.underline_offset = if tv.eq_ignore_ascii_case("auto") {
+                0.0
+            } else {
+                values::parse_length_px(tv, s.font_size).unwrap_or(0.0)
             };
         }
         "content" => {

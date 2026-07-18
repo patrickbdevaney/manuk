@@ -362,3 +362,34 @@ TextLine is the blue text color; the control (no decoration color) defaults the 
 RED vs the hardcoded-text-color baseline (line == text color always). css+paint green, HANG/CRASH 0.
 Residue: `text-decoration-style` (dotted/dashed/wavy/double still paint solid),
 `text-decoration-thickness`, `text-underline-offset`, and `text-decoration-skip-ink`.
+
+## `text-decoration-thickness` / `text-underline-offset` — a decoration line the design's own weight and position
+
+`text-decoration-thickness` (Tailwind `decoration-2`, thick brand underlines) and
+`text-underline-offset` (Tailwind `underline-offset-4`, breathing room under links) are everywhere in
+modern design, but the decoration line was drawn at a **hardcoded** thickness (`font_size / 14`, so a
+14px font always got a 1px hairline) at a **fixed** underline position, so `decoration-2` drew a
+hairline and `underline-offset-*` did nothing — the underline crowded the text on every design that
+asked it not to.
+
+- **css** — `TextDecoration` gains `thickness: Option<f32>` (`None` == `auto`/`from-font`, the
+  font-derived default) and `underline_offset: f32` (px below the default underline position, default
+  0). The `text-decoration-thickness` longhand parses a length via `values::parse_length_px` (`auto`
+  → `None`); `text-underline-offset` parses a length (`auto` → 0). The `text-decoration` *shorthand*
+  resets `thickness` to `None` (it is a longhand of the shorthand) but **leaves `underline_offset`
+  untouched** (it is *not* a longhand of `text-decoration`). Recovered wholesale from MinimalCascade on
+  the shipping **Stylo** path (`cs.text_decoration = m.text_decoration` — the new fields ride along).
+  Dropping the struct's `Eq` derive (an `f32` cannot be `Eq`) is safe: nothing keys a map on it.
+- **paint** — thickness becomes `d.thickness.filter(|t| *t > 0.0).unwrap_or((font_size/14).max(1))`,
+  and the *underline* line's y gains `+ d.underline_offset` (overline/line-through are unaffected —
+  the offset is underline-only per spec).
+
+**Safety.** `thickness: None` + `underline_offset: 0.0` (the defaults) reproduce the old thickness and
+y byte-for-byte, so every run without these properties is unchanged and the ratchet cannot regress —
+behaviour changes only when a thickness or offset is actually set.
+
+**Gate.** `text_decoration_thickness_and_offset_shape_the_underline` (engine/paint): a 14px underline
+defaults to a ~1px line; `text-decoration-thickness:6px` paints a 6px line; `text-underline-offset:8px`
+keeps the thickness but sits the line exactly 8px below the default y. RED vs the hardcoded-thickness /
+fixed-position baseline. css+paint green, HANG/CRASH 0. Residue: `text-decoration-style`
+(dotted/dashed/wavy/double still paint solid), `text-decoration-skip-ink`, `from-font` exact metrics.
