@@ -265,6 +265,7 @@
   - L497 · keyup fires on key release — the settled-value half of the keyboard trio (tick 180)
   - L517 · A11y node STATES — the agent can confirm its own action (tick 199)
   - L571 · Click ACTIVATION behaviour — the checkbox actually ticks (tick 208)
+  - L603 · <label> forwards its click to the control (tick 209)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -459,4 +460,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-382 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+383 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

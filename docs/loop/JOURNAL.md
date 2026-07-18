@@ -8686,3 +8686,42 @@ submit **from `element.click()`** — the native GUI paths handle those separate
 the scripted/agent path specifically and worth closing for the agentic surface.
 `<select>`/`<option>` selection and `<label>`→control forwarding (clicking a label should activate
 its control) are also not done.
+
+## Tick 209 — `<label>` forwards its click to the control (interaction) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (tick 208 residue). WIKI: docs/wiki/interaction-surface.md
+"`<label>` forwards its click to the control".**
+
+**Selection.** Named in tick 208's residue, and the natural completion of it: activation behaviour is
+only reachable if the thing the user (or agent) actually clicks routes to the control.
+
+**Hypothesis.** Clicking a `<label>` did nothing — and the label is *how most checkboxes on the web
+are actually clicked*, because the visible target is the text, not the 12px box. **For an agent it is
+worse than for a person:** the label carries the accessible name, so "click the Remember me checkbox"
+resolves to the label, clicks it, and nothing happens. A click that does nothing is indistinguishable
+from a control that does nothing.
+
+**Implemented.** Both association forms: `for="id"` resolved to a **labelable** element (`input`,
+`select`, `textarea`, `button`, `meter`), and a label **wrapping** its control (first labelable
+descendant). A `for` naming nothing labelable labels nothing and deliberately does **not** fall back
+to a descendant — the author said which control they meant.
+
+**The recursion trap, and it is the real design content here.** A control nested inside its own label
+is the common markup. Forward naively and the control's own click forwards back through the label
+forever — or double-toggles, which looks exactly like nothing happening. Forwarding only fires when
+the clicked node *is* the label, which is what stops it; the gate asserts the nested control toggles
+**exactly once**.
+
+**The label's own click still fires and is still cancellable** — `preventDefault()` on the label
+stops the control being activated, exactly as on the control itself.
+
+**Gate.** `g_label_click` — a `for=` label ticks and unticks its box; a wrapping label forwards to
+its descendant; clicking the control inside its own label toggles exactly once; a cancelled label
+click does not reach the control; a label pointing at nothing activates nothing and does not panic.
+**Proven RED by not forwarding** — the box never ticks. `g_click_activation`, `g_a11y_state`,
+`g_form` still green.
+
+**Residue.** Unchanged from tick 208 otherwise: from `element.click()` a link still does not navigate
+and a submit button does not submit, and `<select>`/`<option>` selection is not activated. Clicking a
+label whose control is `disabled` should do nothing and is not special-cased yet (it currently
+activates, which is a small divergence worth closing).

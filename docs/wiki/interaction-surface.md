@@ -599,3 +599,30 @@ Residue: only checkbox and radio activate. A link still does not navigate and a 
 not submit **from `element.click()`** (the native GUI paths handle those separately, so this is a
 gap in the scripted/agent path specifically); `<select>`/`<option>` selection, and the
 `labels`→control forwarding (clicking a `<label>` should activate its control) are not done either.
+
+## `<label>` forwards its click to the control (tick 209)
+
+Clicking a `<label>` did nothing. That is the label being *how most checkboxes on the web are
+actually clicked* — the visible target is the text, not the 12px box.
+
+**For an agent it is worse than for a person.** The label is what carries the accessible name, so
+"click the Remember me checkbox" resolves to the label, clicks it, and nothing happens — and a click
+that does nothing is indistinguishable from a control that does nothing.
+
+Both association forms are handled: `for="id"` (resolved to a **labelable** element — `input`,
+`select`, `textarea`, `button`, `meter`), and a label **wrapping** its control (first labelable
+descendant). A `for` naming nothing labelable labels nothing and does *not* fall back to a
+descendant, because the author said which control they meant.
+
+**The recursion trap.** A control nested inside its own label is the common markup, and forwarding
+naively means the control's own click forwards back through the label forever — or double-toggles and
+so appears to do nothing at all. Forwarding only happens when the clicked node *is* the label, which
+is what stops it.
+
+**The label's own click still fires and can still be cancelled.** `preventDefault()` on the label
+stops the control being activated, exactly as it does on the control itself.
+
+Gated by `g_label_click`: a `for=` label ticks and unticks its box; a wrapping label forwards to its
+descendant; clicking the control *inside* its own label toggles exactly once; a cancelled label click
+does not reach the control; a label pointing at nothing activates nothing and does not panic. Proven
+RED by not forwarding — the box never ticks.

@@ -2414,6 +2414,33 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
+        // ── A <label> forwards its click to the control it labels. ─────────────────────────
+        // This is how most checkboxes on the web are actually clicked: the visible target is the
+        // text, not the 12px box. Without forwarding, clicking "Remember me" does nothing at all.
+        if let Some(control) = self.labeled_control(node) {
+            let ctx = self.js.as_ref().expect("checked above");
+            // The label's own click still fires and can still be cancelled — a handler on the
+            // label that calls preventDefault() stops the control being activated.
+            let proceed = match manuk_js::dispatch_event(
+                ctx,
+                &mut self.dom,
+                node,
+                "click",
+                &rects,
+                &self.styles,
+            ) {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::warn!("label click dispatch: {e}");
+                    return true;
+                }
+            };
+            if proceed {
+                return self.dispatch_click(control, fonts, viewport_width);
+            }
+            return proceed;
+        }
+
         // ── ACTIVATION BEHAVIOUR, part 1: the PRE-click steps. ──────────────────────────────
         // A click on a checkbox toggles it, and it does so **before** the event is dispatched —
         // which is why a real handler reading `this.checked` sees the NEW state. Firing the event
@@ -2512,6 +2539,38 @@ impl Page {
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
         }
+    }
+
+    /// The form control a `<label>` labels — `for="id"`, else the first labelable descendant.
+    ///
+    /// `None` when `node` is not a label, when the label labels nothing, or when the click already
+    /// landed **on the control itself** (a control nested inside its own label). That last case is
+    /// what stops the forwarding recursing: without it, clicking the checkbox inside
+    /// `<label><input>text</label>` would forward to itself forever.
+    fn labeled_control(&self, node: manuk_dom::NodeId) -> Option<manuk_dom::NodeId> {
+        let el = self.dom.element(node)?;
+        if el.name != "label" {
+            return None;
+        }
+        const LABELABLE: [&str; 5] = ["input", "select", "textarea", "button", "meter"];
+        if let Some(id) = el.attr("for") {
+            let want = id.to_string();
+            for n in self.dom.descendants(self.dom.root()) {
+                if let Some(e) = self.dom.element(n) {
+                    if e.attr("id") == Some(want.as_str()) && LABELABLE.contains(&e.name.as_str()) {
+                        return Some(n);
+                    }
+                }
+            }
+            // `for` naming nothing labelable labels nothing — it does not fall back to a
+            // descendant, because the author said which control they meant.
+            return None;
+        }
+        self.dom.descendants(node).find(|n| {
+            self.dom
+                .element(*n)
+                .is_some_and(|e| LABELABLE.contains(&e.name.as_str()))
+        })
     }
 
     /// The pre-click activation steps for a form control, returning the state to restore if the
