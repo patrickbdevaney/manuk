@@ -130,6 +130,9 @@ pub struct TextStyle {
     pub word_spacing: f32,
     /// `text-shadow` — a single shadow painted behind the glyphs (inherited). `None` == no shadow.
     pub shadow: Option<manuk_css::TextShadow>,
+    /// The paragraph's bidi **base direction** (`direction: rtl` / `dir="rtl"`), carried to paint
+    /// because visual order is resolved at shaping time, not at layout time.
+    pub rtl: bool,
 }
 
 /// A positioned run of text produced by inline layout. `baseline` is the absolute
@@ -1072,6 +1075,10 @@ fn text_style(cs: &ComputedStyle, fonts: &FontContext) -> TextStyle {
         cs.line_height
     };
     TextStyle {
+        // The paragraph's bidi base direction. Resolved here, from the cascade, because by paint
+        // time the only thing left is glyphs — visual order has to be decided while the style is
+        // still in hand.
+        rtl: cs.direction == manuk_css::Direction::Rtl,
         decoration: cs.text_decoration,
         font_key: FontKey {
             // Resolve the CSS font-family list to a concrete face (installed or
@@ -4084,6 +4091,8 @@ impl Ctx<'_> {
                         width: 0.0,
                         text: String::new(),
                         style: TextStyle {
+                            // A synthetic empty fragment — no text, so no order to get wrong.
+                            rtl: false,
                             font_key: key,
                             font_size: 16.0,
                             color: Rgba::BLACK,
@@ -4195,6 +4204,8 @@ impl Ctx<'_> {
                             width: advance,
                             text: String::new(),
                             style: TextStyle {
+                                // A synthetic empty fragment — no text, so no order to get wrong.
+                                rtl: false,
                                 font_key: key,
                                 font_size: 16.0,
                                 color: Rgba::BLACK,
@@ -4246,6 +4257,8 @@ impl Ctx<'_> {
                             // `line_height` is only what the fragment's RECT reports; ascent/
                             // descent stay 0 so a spacer never grows the line box.
                             style: TextStyle {
+                                // A synthetic empty fragment — no text, so no order to get wrong.
+                                rtl: false,
                                 font_key: key,
                                 font_size: 16.0,
                                 color: Rgba::BLACK,

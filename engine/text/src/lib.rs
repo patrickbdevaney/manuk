@@ -107,8 +107,12 @@ pub struct GlyphBitmap {
 /// Single-threaded by design (uses `Rc`/`RefCell`) — the focused-tab pipeline runs
 /// on one thread. A `Send` variant for the compositor's background tiers is a small
 /// change (swap to `Arc`/`Mutex`).
-/// Key for the shaped-run/measure cache: `(font, quantized size bits, run text)`.
-type RunKey = (FontKey, u32, String);
+/// Key for the shaped-run/measure cache: `(font, quantized size bits, base RTL, run text)`.
+///
+/// ⚠ The base direction is part of the key. The same string under an LTR base and an RTL base
+/// resolves to a **different visual order**, so omitting it would serve one paragraph's ordering to
+/// the other — a cache hit that silently returns correctly-shaped glyphs in the wrong places.
+type RunKey = (FontKey, u32, bool, String);
 /// Key for the glyph raster cache: `(face, size bits, glyph id, subpixel bucket 0..4)`.
 type GlyphKey = (FaceId, u32, u16, u8);
 
@@ -618,7 +622,9 @@ impl FontContext {
     /// repeat measure of the same `(text, font, size)` is an LRU hit that skips the
     /// per-glyph metrics.
     pub fn measure(&self, text: &str, key: FontKey, size: f32) -> f32 {
-        let ck: RunKey = (key, size.to_bits(), text.to_owned());
+        // Base direction is irrelevant to WIDTH — bidi reorders runs, it does not resize them — so
+        // measurement pins it at `false` and both directions share one cache entry.
+        let ck: RunKey = (key, size.to_bits(), false, text.to_owned());
         if let Some(&w) = self.measure_cache.borrow_mut().get(&ck) {
             self.hits.set(self.hits.get() + 1);
             return w;
@@ -717,7 +723,18 @@ impl FontContext {
     /// fallback** (swash), placing each resulting glyph (by glyph id + face) at its pen
     /// position. Runs of characters the primary font lacks are shaped with a fallback face.
     pub fn shape(&self, text: &str, key: FontKey, size: f32) -> ShapedRun {
-        let ck: RunKey = (key, size.to_bits(), text.to_owned());
+        self.shape_bidi(text, key, size, false)
+    }
+
+    /// Shape a run against an explicit **bidi base direction** (`base_rtl`), which is the paragraph's
+    /// resolved `direction` / `dir` — not a property of the text itself.
+    ///
+    /// The base level is what the Unicode Bidi Algorithm resolves every other run against, so it
+    /// decides where a trailing period lands, which end the line starts from, and how embedded Latin
+    /// and numbers are ordered inside Arabic or Hebrew. With the wrong base every character is
+    /// present and correctly shaped, and the line reads backwards.
+    pub fn shape_bidi(&self, text: &str, key: FontKey, size: f32, base_rtl: bool) -> ShapedRun {
+        let ck: RunKey = (key, size.to_bits(), base_rtl, text.to_owned());
         if let Some(cached) = self.shape_cache.borrow_mut().get(&ck) {
             return cached.clone();
         }
@@ -731,10 +748,15 @@ impl FontContext {
         };
         let mut glyphs = Vec::new();
         let mut pen = 0.0f32;
-        // Bidi: reorder the text into visual runs (LTR base), then within each run
-        // face-segment and shape with the run's direction. Pure-LTR text yields a single
-        // LTR run identical to the non-bidi path.
-        let info = unicode_bidi::BidiInfo::new(text, Some(unicode_bidi::Level::ltr()));
+        // Bidi: reorder the text into visual runs against the PARAGRAPH's base level, then within
+        // each run face-segment and shape with that run's own direction. An LTR base over pure-LTR
+        // text yields a single LTR run, identical to the non-bidi path.
+        let base = if base_rtl {
+            unicode_bidi::Level::rtl()
+        } else {
+            unicode_bidi::Level::ltr()
+        };
+        let info = unicode_bidi::BidiInfo::new(text, Some(base));
         for para in &info.paragraphs {
             let (levels, vruns) = info.visual_runs(para, para.range.clone());
             for vr in vruns {

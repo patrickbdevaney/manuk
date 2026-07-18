@@ -439,3 +439,52 @@ Arabic, Hebrew and Devanagari all resolve real faces with zero `.notdef` (`FALLB
 lever board's "CJK/emoji renders as TOFU" was a `?`, and the answer is **no** — this is the fifth
 time a feature assumed missing here turned out to be built (after `localStorage`, `FormData`,
 `position: sticky`, `IntersectionObserver`). **An absent measurement is not a negative measurement.**
+
+## The bidi BASE direction — `direction: rtl` / `dir="rtl"` (tick 215)
+
+Shaping decides which glyph; the **base level** decides where it goes. `FontContext::shape`
+hard-coded that base to LTR (`BidiInfo::new(text, Some(Level::ltr()))`), so `direction: rtl` and
+`dir="rtl"` — how the entire Arabic, Hebrew, Persian and Urdu web declares itself — changed nothing.
+After tick 214 every character was present and correctly *shaped*, and still in the **wrong order**:
+a trailing period on the wrong end of the line, an embedded Latin word or number on the wrong side
+of its neighbours, short lines hugging the wrong margin.
+
+**This is the same failure shape as tick 214, one layer up**, and worth naming as a pair: a
+*coverage* instrument cannot see either. Nothing is missing, nothing is `.notdef`, the width is
+plausible. Tick 214's invariant was `glyphs == chars`; this one's is **"the same string under two
+bases must not shape identically"** — also script-agnostic, also needing no ability to read the text.
+
+**The plumbing**, six touch points in `manuk-css` following the tick-183 `OverflowWrap` template
+(enum · `ComputedStyle` field · default · inherit · parse · relayout-damage), plus:
+
+- **`stylo_engine.rs` must recover it from `MinimalCascade`.** The shipping path is Stylo, whose
+  servo build does not surface `direction` in a form we consume — without the recovery line the
+  property works in tests and does nothing in the browser.
+- **`dir="rtl"` is a presentational hint in `apply_ua_defaults`**, and it is not optional: nearly
+  every RTL site sets the attribute on `<html>` rather than writing `direction: rtl` in CSS, so a
+  stylesheet-only implementation reads as "RTL unsupported" on exactly the sites that need it.
+- **`TextStyle.rtl`** carries it layout → paint, because visual order is resolved at shaping time.
+  ⚠ Adding a field to `TextStyle` breaks constructors in **`shell/src/gui.rs`** too — grep every
+  crate, not just `engine/`.
+- **`RunKey` gained the base direction.** Without it the second paragraph is a cache HIT returning
+  the first one's ordering: correctly-shaped glyphs in the wrong places, only sometimes.
+
+**HTML's initial value is `ltr`, NOT content detection**, and the gate pins that. Inferring RTL from
+an unmarked Arabic paragraph would look more "correct" and would be a *structural divergence from
+Chromium* — which the north star calls a bug regardless of how it looks. `dir="auto"` is the opt-in
+for detection and is not implemented yet.
+
+**A measured residual, stated rather than smoothed over:** the two bases give run widths differing by
+~0.89px on a 70px mixed line (~1.3%). The bases split the line into different bidi runs, so the space
+between scripts is shaped in a different run and picks up a slightly different advance. Per-run
+shaping is what every browser does, so this is inherent — but it matters because `measure()` is
+direction-agnostic (base pinned LTR) while paint shapes with the real base. `G_BIDI_BASE` bounds it
+at 3%; a real divergence would be painted text overflowing the box layout reserved for it.
+
+Held by `G_BIDI_BASE` (`engine/text/tests/g_bidi_base_direction.rs`), **proven RED** by pinning the
+base back to LTR. It also pins that pure-LTR text is byte-identical under both bases — the risk RTL
+support introduces is perturbing the 99% case.
+
+**Residue:** `dir="auto"`, `unicode-bidi` (`isolate`/`embed`/`bidi-override`), RTL `text-align`
+defaulting to `right`, and RTL block-level layout (list markers, scrollbar side, `float` reversal).
+This tick makes RTL text **read correctly**; it does not yet make an RTL *page* lay out mirrored.

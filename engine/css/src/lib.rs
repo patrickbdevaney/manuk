@@ -369,6 +369,25 @@ pub enum OverflowWrap {
     Anywhere,
 }
 
+/// `direction` — the **base direction** of a paragraph's bidi algorithm, and the single thing that
+/// makes an RTL page readable rather than merely present.
+///
+/// It is not "which way the glyphs face" (that is the script's own property, resolved by shaping).
+/// It is the base embedding level the Unicode Bidi Algorithm resolves everything else against, and
+/// it decides where a trailing period sits, which end a line starts from, and how embedded Latin
+/// words and numbers are ordered inside Arabic or Hebrew text. Get it wrong and every character is
+/// present, correctly shaped, and in the wrong order. Inherited.
+///
+/// ⚠ HTML's initial value is `ltr`, **not** auto-detection — an unmarked Arabic paragraph is LTR in
+/// Chrome too, so we must not "helpfully" infer RTL from content. Real RTL sites say so, with
+/// `dir="rtl"` on `<html>` or `direction: rtl` in CSS.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Direction {
+    #[default]
+    Ltr,
+    Rtl,
+}
+
 /// `word-break` — where line breaks are allowed *within* a run. `break-all` lets a break fall
 /// between any two characters (common in CJK text and code listings); we honour it as "may break a
 /// word at any character to fit", the same char-level breaking `overflow-wrap:break-word` enables.
@@ -629,6 +648,8 @@ pub struct ComputedStyle {
     pub overflow_wrap: OverflowWrap,
     /// `word-break` — char-level break control within a run (inherited).
     pub word_break: WordBreak,
+    /// `direction` — the paragraph's bidi base direction (inherited).
+    pub direction: Direction,
     /// `letter-spacing` — extra px added after each character (tracking). `0` = `normal`. Inherited.
     pub letter_spacing: f32,
     /// `word-spacing` — extra px added to each inter-word space. `0` = `normal`. Inherited.
@@ -774,6 +795,7 @@ impl ComputedStyle {
             text_transform: TextTransform::None,
             overflow_wrap: OverflowWrap::Normal,
             word_break: WordBreak::Normal,
+            direction: Direction::Ltr,
             letter_spacing: 0.0,
             word_spacing: 0.0,
             margin: Sides::all(Dim::Px(0.0)),
@@ -873,6 +895,7 @@ impl ComputedStyle {
         s.text_transform = parent.text_transform;
         s.overflow_wrap = parent.overflow_wrap;
         s.word_break = parent.word_break;
+        s.direction = parent.direction;
         s.letter_spacing = parent.letter_spacing;
         s.word_spacing = parent.word_spacing;
         // `text-shadow` is inherited (a shadow on a heading carries to its inline `<span>`s).
@@ -986,6 +1009,7 @@ pub fn diff_style(old: &ComputedStyle, new: &ComputedStyle) -> RestyleDamage {
         || old.white_space != new.white_space
         || old.text_transform != new.text_transform
         || old.overflow_wrap != new.overflow_wrap
+        || old.direction != new.direction
         || old.word_break != new.word_break
         || old.letter_spacing != new.letter_spacing
         || old.word_spacing != new.word_spacing
@@ -2706,6 +2730,21 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
     if let Some(c) = el.attr("text").and_then(values::parse_color) {
         s.color = c;
     }
+    // `dir="rtl"` — how the RTL web ACTUALLY declares itself. Nearly every Arabic, Hebrew, Persian
+    // and Urdu site sets it on <html> or <body> rather than writing `direction: rtl` in CSS, so a
+    // stylesheet-only implementation of `direction` would read as "RTL is unsupported" on the sites
+    // that matter most. It inherits like the CSS property (setting it on <html> is the whole page),
+    // which the ordinary inheritance step already provides once it lands here.
+    //
+    // `dir="auto"` asks for content detection — the first strong character decides — which is what
+    // an unmarked paragraph must NOT get (HTML's initial value is `ltr`, and Chrome agrees).
+    if let Some(d) = el.attr("dir") {
+        match d.trim().to_ascii_lowercase().as_str() {
+            "rtl" => s.direction = Direction::Rtl,
+            "ltr" => s.direction = Direction::Ltr,
+            _ => {}
+        }
+    }
 
     // Replaced elements: an <img>/<canvas>/<video> is an atomic inline-block box sized by
     // its presentational width/height attributes (author CSS width/height still overrides,
@@ -2879,6 +2918,12 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 "break-word" => OverflowWrap::BreakWord,
                 "anywhere" => OverflowWrap::Anywhere,
                 _ => OverflowWrap::Normal,
+            }
+        }
+        "direction" => {
+            s.direction = match v.trim().to_ascii_lowercase().as_str() {
+                "rtl" => Direction::Rtl,
+                _ => Direction::Ltr,
             }
         }
         "word-break" => {

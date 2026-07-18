@@ -8975,3 +8975,58 @@ Devanagari 6 glyphs → 5. manuk-text/layout/paint/css all green — no regressi
 **Residue:** `lang`-driven Han disambiguation (JP/SC/KR shape identically today), Thai word
 segmentation (needs a dictionary), `line-break`/`hyphens`, vertical writing modes. Hebrew resolves via
 the Latin primary (DejaVu covers it) rather than a fallback face — correct, but worth knowing.
+
+## Tick 215 — an RTL line is ordered from the right: the bidi base direction (text) (2026-07-18)
+
+**Selected:** the board's remaining `?` in the domain tick 214 opened — *"bidi (Arabic/Hebrew) — RTL
+web is unreadable."* Probing first closed two of the listed unknowns for free: **CJK line breaking
+already works** (`break_segments("日本語")` → three segments, asserted in an existing unit test), and
+**per-glyph fallback already works** (tick 214). Bidi was the one that was actually broken.
+
+**The bug.** Shaping decides *which* glyph; the **base level** decides *where it goes*.
+`FontContext::shape` hard-coded `BidiInfo::new(text, Some(Level::ltr()))`, so `direction: rtl` and
+`dir="rtl"` — how the entire Arabic/Hebrew/Persian/Urdu web declares itself — changed nothing. After
+tick 214 every character was present and correctly shaped **and in the wrong order**: a trailing
+period on the wrong end of the line, an embedded Latin word or number on the wrong side of its
+neighbours, short lines hugging the wrong margin.
+
+**The same failure shape as tick 214, one layer up, and the pair is the lesson.** A *coverage*
+instrument cannot see either: nothing missing, no `.notdef`, a plausible width. Tick 214's invariant
+was `glyphs == chars`; this one's is **"the same string under two bases must not shape identically."**
+Both are script-agnostic and neither requires the ability to read the text.
+
+**Implemented.** Six touch points in `manuk-css` on the tick-183 `OverflowWrap` template (enum ·
+`ComputedStyle` field · default · inherit · parse · relayout-damage), plus three things that would
+each have made it a no-op in the real browser:
+
+- **`stylo_engine.rs` recovery from `MinimalCascade`.** The shipping path is Stylo, which does not
+  surface `direction` in a form we consume — without that line the property passes its tests and does
+  nothing in the browser.
+- **`dir="rtl"` as a presentational hint** in `apply_ua_defaults`. Nearly every RTL site sets the
+  ATTRIBUTE on `<html>`, not `direction: rtl` in CSS, so a stylesheet-only implementation reads as
+  "RTL unsupported" on precisely the sites that need it.
+- **The base direction added to `RunKey`.** Without it the second paragraph is a cache HIT returning
+  the first one's ordering — correctly-shaped glyphs in the wrong places, and only sometimes.
+
+`TextStyle.rtl` carries it layout → paint. ⚠ That field broke constructors in **`shell/src/gui.rs`**
+as well as `engine/` — the shared-type-ctor trap that has bitten this loop before.
+
+**HTML's initial value is `ltr`, NOT content detection**, and the gate pins it. Inferring RTL from an
+unmarked Arabic paragraph would look *more* correct and would be a **structural divergence from
+Chromium**, which the north star calls a bug regardless of how it looks.
+
+**Gate.** `G_BIDI_BASE` — the same mixed line `مرحبا ABC` must NOT shape identically under an LTR and
+an RTL base; pure-LTR text must be byte-identical under both (the risk RTL support introduces is
+perturbing the 99% case); and re-shaping must not serve one base's order to the other. **Proven RED**
+by pinning the base back to LTR.
+
+**A measured residual, recorded rather than smoothed away.** The two bases give run widths differing
+by 0.89px on a 70px mixed line (~1.3%) — they split the line into different bidi runs, so the
+inter-script space is shaped in a different run and picks up a different advance. Per-run shaping is
+what every browser does, so this is inherent; but `measure()` is direction-agnostic while paint shapes
+with the real base, so the gate **bounds it at 3%** rather than asserting equality it cannot have. A
+real divergence there is painted text overflowing the box layout reserved for it.
+
+**Residue:** `dir="auto"`, `unicode-bidi` (isolate/embed/override), RTL `text-align` default, and RTL
+*block* layout (list markers, scrollbar side, float reversal). This tick makes RTL text **read**
+correctly; it does not yet make an RTL **page** lay out mirrored.

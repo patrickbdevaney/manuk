@@ -1800,6 +1800,9 @@ impl App {
         let w = w as f32;
 
         let font = |size: f32, color: Rgba| TextStyle {
+            // Browser chrome (omnibox, tabs, menus) is LTR: it is the app's own UI, not page
+            // content. A page's own direction is resolved from its cascade, not from here.
+            rtl: false,
             decoration: Default::default(),
             font_key: FontKey {
                 family: FontFamily::SansSerif,
@@ -2057,6 +2060,9 @@ impl App {
             a: 255,
         };
         let font = |size: f32, color: Rgba| TextStyle {
+            // Browser chrome (omnibox, tabs, menus) is LTR: it is the app's own UI, not page
+            // content. A page's own direction is resolved from its cascade, not from here.
+            rtl: false,
             decoration: Default::default(),
             font_key: FontKey {
                 family: FontFamily::SansSerif,

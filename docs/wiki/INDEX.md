@@ -438,6 +438,7 @@
   - L335 · text-decoration-color — a colored underline paints in its own hue, not the text color (tick 187)
   - L366 · text-decoration-thickness / text-underline-offset — a decoration line the design's own weight and position
   - L397 · The shaper must be told WHICH SCRIPT it is shaping (tick 214)
+  - L443 · The bidi BASE direction — direction: rtl / dir="rtl" (tick 215)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -465,4 +466,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-388 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+389 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

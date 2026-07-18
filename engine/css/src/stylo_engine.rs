@@ -477,6 +477,10 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
             // consume directly.
             cs.overflow_wrap = m.overflow_wrap;
             cs.word_break = m.word_break;
+            // `direction` likewise: the bidi base level decides ORDER, and Stylo's servo build
+            // does not surface it in a form we consume, so the shipping path would otherwise
+            // render every RTL paragraph LTR-ordered.
+            cs.direction = m.direction;
             // `letter-spacing`/`word-spacing` recovered from MinimalCascade so the shipping path
             // tracks uppercase nav/buttons/labels too (Stylo's servo build exposes them as a
             // `Spacing<Length>` we'd otherwise map by hand).

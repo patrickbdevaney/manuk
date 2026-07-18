@@ -701,7 +701,7 @@ impl Canvas {
         text: &str,
         style: &TextStyle,
     ) {
-        let run = fonts.shape(text, style.font_key, style.font_size);
+        let run = fonts.shape_bidi(text, style.font_key, style.font_size, style.rtl);
         // `letter-spacing` pushes each successive glyph out by a running multiple of the tracking, so
         // glyph `i` sits at `i × letter_spacing` past its shaped pen position. This mirrors layout's
         // width bump (`letter_spacing × char_count`), so a tracked run measures and paints in step.
@@ -965,7 +965,9 @@ impl CpuPainter<'_> {
         if style.font_size < 0.5 {
             return;
         }
-        let run = self.fonts.shape(text, style.font_key, style.font_size);
+        let run = self
+            .fonts
+            .shape_bidi(text, style.font_key, style.font_size, style.rtl);
         // Blit every glyph of the run at (origin + offset) in `color`. Called once for the
         // `text-shadow` pass (offset, shadow colour) and once for the text itself.
         let mut paint_run =
