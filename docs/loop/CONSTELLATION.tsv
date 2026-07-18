@@ -45,7 +45,7 @@ app	WebAssembly	Figma, games, ffmpeg.wasm	unknown	-	NEVER MEASURED — probe it
 app	structuredClone	state transfer	works	-	G_CAPABILITY
 platform	cookies (SameSite/Secure/HttpOnly)	no session, no login	partial	-	cookie jar exists; flags unmeasured
 platform	CORS + credentialed requests	every API call from an SPA	unknown	-	NEVER MEASURED — probe it
-platform	OAuth redirect flow	YOU CANNOT LOG IN TO THE MODERN WEB	unknown	-	CRITICAL — gates login to the logged-in web. Google GIS v3: redirect flow (navigate+POST+cookies, PROBE end-to-end), popup+postMessage (needs iframe RE-RENDER — row 50 gap), FedCM One-Tap (missing). Build+verify e2e (edge sweep t222)
+platform	OAuth redirect flow	YOU CANNOT LOG IN TO THE MODERN WEB	unknown	-	CRITICAL — gates the logged-in web. ASSURE via a REAL-PROVIDER MATRIX gate (Google GIS/GitHub/Microsoft/Apple/Facebook/Auth0/Okta/Clerk round-trips). Redirect+popup+iframe-rerender+cookies cover ~all Sign-in-with-X; FedCM = the modern One-Tap. (t222-223)
 platform	window.open + postMessage (popup auth)	OAuth popups; the other login path	partial	-	window.open recorded; postMessage routing exists
 platform	REAL iframes (nested browsing context)	embeds, payments, OAuth frames, ads, players	gated	G_IFRAME	tick 84: cross-boundary readable; BUT pixels are a snapshot — no re-render on mutation. Blocks 3-D Secure challenge + interactive OAuth frames (edge sweep t193b)
 platform	postMessage across frames	every embed talks this way	partial	-	-
@@ -122,6 +122,8 @@ app	native <select> choose + selectedIndex/change	dropdowns undrivable by an age
 media	binary transport (arraybuffer XHR/fetch + Range)	adaptive players (hls.js/dash.js) can't append segments — PREREQ for MSE	missing	-	edge sweep t193: __deliverXhr is text-only; hyper does Range trivially
 media	<video> playback engine + A/V sync (currentTime/seek/timeupdate)	play/seek/timeupdate/playing/ended don't work	missing	-	edge sweep t193: wiring on the cpal master clock
 app	fetch streaming response body (ReadableStream / progressive XHR / SSE delivery)	AI-chat answers (claude.ai/ChatGPT/Gemini/Grok) NEVER RENDER; live console logs + inference token output dead	works	-	ReadableStream(196-198)+SSE(205)+reconnect(207)+readyState-3 XHR(206) — all gated. Phase-0 finish-line lever LANDED
-platform	canvas fillText/strokeText rasterization	canvas chart labels + xterm.js terminals + Google Docs/Sheets render BLANK	missing	-	edge sweep t193b: no-op today (event_loop.rs:723); glyph raster exists in engine/text — wire to the 2D context
+platform	canvas fillText/strokeText rasterization	canvas chart labels + xterm.js terminals + Google Docs/Sheets render BLANK	missing	-	wire the EXISTING engine/text swash glyph-raster to the 2D ctx. THE Google Docs/Sheets/Slides enabler (they render text on canvas — canvas-2D-text, NOT WebGL) + chart labels/terminals (corrected t223)
 platform	clipboard.read() + paste-image (ClipboardItem / image blob)	AI-chat paste-screenshot, rich/image paste	missing	-	edge sweep t193b: only writeText/readText-own-string exist; no clipboard.read()
 cross	password vault (save + autofill credentials)	re-type every password; not a real daily driver	missing	-	edge sweep t193b: shell/session.rs has credential-URL REDACTION only, no save/autofill vault — v1 UX scope
+platform	canvas-text office apps (Google Docs/Sheets/Slides)	office suites render blank	missing	-	CORRECTED t223: reachable-WITH-EFFORT via canvas fillText (glyph raster EXISTS) + measureText accuracy + IME; VIEWING close, full EDITING a lift; NOT the WebGL wall of Canva/Figma
+app	IME / composition events	CJK/mobile text entry + Google Docs editing	missing	-	CompositionEvent is an inert stub; needed for canvas-app EDITING (t223)
