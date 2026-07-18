@@ -16,8 +16,15 @@ and perfected AS MUCH AS POSSIBLE given everything available at that time (the i
 the current SOTA research), then ships as part of the first release browser/agent suite. The modular decoupling
 is exactly what makes this safe: any module can be cleanly re-derived and perfected in a LATER pass — when the
 daily-driver/WPT parity surface expands, or we learn more from traces/usage — without an entangled rewrite. So:
-ship the best v1 the ground truth supports now; iterate each decoupled module independently later. "Good enough
-given current ground truth" is the per-step bar, not "final."
+ship the best v1 the ground truth supports now; iterate each decoupled module independently later.
+
+**Crucially, this does not relax the quality bar.** "Best-possible-v1" means driving each system to the most
+refined state achievable given the current ground truth — pushed until it reaches genuine SATURATION / the
+PARETO FRONTIER / an explicit DEFINITION-OF-DONE, not a first-pass approximation. The ceiling is "cannot be
+improved further without new ground truth," not "merely adequate." Each cascade step MUST define, up front, a
+falsifiable DoD / saturation criterion (the good-enough bars + the expanded gates in §4) and drive to it with the
+same rigor the tick loop applies to daily-driver capability — then, and only then, ship and move to the next
+layer. Later per-module iteration refines against NEW ground truth; it does not defer effort that belongs now.
 
 ---
 
