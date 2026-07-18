@@ -9030,3 +9030,55 @@ real divergence there is painted text overflowing the box layout reserved for it
 **Residue:** `dir="auto"`, `unicode-bidi` (isolate/embed/override), RTL `text-align` default, and RTL
 *block* layout (list markers, scrollbar side, float reversal). This tick makes RTL text **read**
 correctly; it does not yet make an RTL **page** lay out mirrored.
+
+## Tick 216 — the disclosure widget works: `<details>`/`<summary>` (dom + interaction) (2026-07-18)
+
+**Selected:** with the text-domain unknowns closed (214 shaping, 215 bidi; CJK line breaking and
+per-glyph fallback both probed and found **already working**), rotated to the board's top bounded
+`✗`: *"`<details>`/`<summary>` disclosure toggle — GitHub/MDN/docs collapsibles render always-open,
+no toggle."* A grep for `"details"`/`"summary"` across css/layout/page/dom returned **zero hits** —
+confirmed absent, not incomplete.
+
+**Why it matters more than its size.** There is no script behind this anywhere: the browser is the
+entire implementation. So every collapsible on the web rendered **permanently expanded** — GitHub's
+folded diffs and collapsed review threads, MDN's sections, every docs FAQ. That is not cosmetic: a
+page of collapsed sections becomes a wall of everything at once and the summary stops meaning
+anything. And clicking did nothing, so a section could never be opened *or* closed — "click Show
+more" was unactionable for a user and for an agent.
+
+**Implemented**, following the `<dialog>` precedent rather than inventing a shape:
+- **Rendering** — a UA rule pair mirrored in both cascades. Stylo: `summary{display:block}` +
+  `details > *:not(summary){display:none}` + `details[open] > *{display:block}` in `UA_CSS`.
+  MinimalCascade: `summary`→`Block` in `apply_ua_defaults`, and the collapse in **`cascade_node`**,
+  because it needs the PARENT's `open` and a per-element function cannot see it.
+- **Toggling** — *activation behaviour* in `dispatch_click`: after the click event, and only if
+  nothing cancelled it, so `preventDefault()` keeps the section shut (how a page implements its own
+  animated disclosure). `toggle` is then dispatched on the `<details>` **after** the attribute
+  changes, so a handler reading `details.open` sees the new state.
+- `summary_details_target` **walks up** from the clicked node. Load-bearing: a click lands on a
+  `<span>`, an `<svg>` chevron or a text element inside the summary, essentially never on the
+  summary box. Exact-hit matching passes a test and fails on every real page. Only the FIRST
+  `summary` child toggles; a second is ordinary content.
+
+**The bug underneath, which is the real find and is NOT details-specific.** The closing half of the
+gate failed, and the cause was that **`set_attr` called `mark_dirty` and `remove_attr` did not**. So
+*unsetting* any boolean content attribute — `open`, `checked`, `hidden`, `disabled` — changed the DOM
+and never triggered a restyle. **The asymmetry is invisible in one direction, which is why it
+survived: things could be turned ON and never back OFF.** A closing `<details>`, an unchecking box
+and an un-hiding `hidden` all render stale until something else happens to dirty the tree — so it
+presents as an intermittent "sometimes the UI doesn't update", never as a reproducible bug.
+
+**Gate.** `G_DETAILS` — four assertions falsifying **three independent mechanisms**, each proven RED
+separately: the UA collapse rule (closed body renders), the summary toggle (first click does
+nothing), and `remove_attr`'s dirty marking (second click does not close). It also pins
+`details[open]` rendering its body, because "details never renders children" would otherwise pass the
+closed-case check while making the element useless.
+
+⚠ **A falsification that came back GREEN, and the lesson in it.** Disabling the `MinimalCascade`
+collapse changed nothing — the gate runs `--features stylo`, the shipping path, so it was falsifying
+`UA_CSS` all along. Recorded in the gate's own header: the MinimalCascade mirror is lockstep **by
+convention, not by this test**, the same standing hazard `<dialog>` carries. *A falsification that
+passes is not a gate that is weak — it is a gate that is measuring a different thing than you think.*
+
+**Residue:** the disclosure triangle marker (`::marker`/`list-item`) is not drawn; `name=` accordion
+grouping and find-in-page auto-expansion are unimplemented.

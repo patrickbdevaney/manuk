@@ -2613,6 +2613,44 @@ impl Page {
                 self.pending_submits.borrow_mut().push((form, Some(node)));
             }
         }
+        // ── A <summary> CLICK TOGGLES ITS <details>. ────────────────────────────────────────
+        // The disclosure widget is the web's standard "show more", and it is pure UA behaviour:
+        // GitHub's folded diffs and review threads, MDN's collapsible sections and every docs
+        // site's FAQ carry NO script for it — the browser is the entire implementation. Without
+        // this, clicking a summary does nothing at all and the section can never be opened.
+        //
+        // It is **activation behaviour**, so it runs AFTER the event and only if nothing cancelled
+        // it: a handler calling preventDefault() on the summary keeps the section shut, which is
+        // how a page implements its own animated disclosure.
+        if proceed {
+            if let Some(details) = self.summary_details_target(node) {
+                let open = self
+                    .dom
+                    .element(details)
+                    .is_some_and(|e| e.attr("open").is_some());
+                if open {
+                    self.dom.remove_attr(details, "open");
+                } else {
+                    self.dom.set_attr(details, "open", "");
+                }
+                // `toggle` is the event the spec fires and the one a page listens for to lazy-load
+                // the section's contents. Dispatched after the attribute changes, so a handler
+                // reading `details.open` sees the new state.
+                if let Some(ctx) = self.js.as_ref() {
+                    if let Err(e) = manuk_js::dispatch_event(
+                        ctx,
+                        &mut self.dom,
+                        details,
+                        "toggle",
+                        &rects,
+                        &self.styles,
+                    ) {
+                        tracing::warn!("toggle dispatch: {e}");
+                    }
+                }
+            }
+        }
+
         // If a handler mutated the DOM, re-style + re-lay-out so it renders (at base zoom;
         // the caller re-applies zoom on its next relayout).
         let root = self.dom.root();
@@ -2679,6 +2717,41 @@ impl Page {
     /// landed **on the control itself** (a control nested inside its own label). That last case is
     /// what stops the forwarding recursing: without it, clicking the checkbox inside
     /// `<label><input>text</label>` would forward to itself forever.
+    /// The `<details>` a click should toggle: the nearest `<summary>` at or above `node`, if it is
+    /// a child of a `<details>`.
+    ///
+    /// The walk upward is the load-bearing part. A click lands on whatever is under the cursor —
+    /// the text node's element, a `<span>`, an `<svg>` chevron, a `<b>` — essentially never on the
+    /// `<summary>` box itself. Matching only an exact hit would make the widget work in a test and
+    /// fail on every real page, because real summaries have markup inside them.
+    ///
+    /// Only a summary that is a **child of** a details toggles it (the spec's requirement), and
+    /// only the FIRST such summary is the disclosure's label — a second `<summary>` is ordinary
+    /// content and must not toggle anything.
+    fn summary_details_target(&self, node: manuk_dom::NodeId) -> Option<manuk_dom::NodeId> {
+        let mut cur = Some(node);
+        while let Some(n) = cur {
+            if self.dom.element(n).is_some_and(|e| e.name == "summary") {
+                let parent = self.dom.parent(n)?;
+                if !self
+                    .dom
+                    .element(parent)
+                    .is_some_and(|e| e.name == "details")
+                {
+                    return None;
+                }
+                let first = self
+                    .dom
+                    .children(parent)
+                    .into_iter()
+                    .find(|c| self.dom.element(*c).is_some_and(|e| e.name == "summary"));
+                return (first == Some(n)).then_some(parent);
+            }
+            cur = self.dom.parent(n);
+        }
+        None
+    }
+
     fn labeled_control(&self, node: manuk_dom::NodeId) -> Option<manuk_dom::NodeId> {
         let el = self.dom.element(node)?;
         if el.name != "label" {

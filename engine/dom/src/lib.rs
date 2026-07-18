@@ -663,13 +663,26 @@ impl Dom {
     /// boolean content attributes (`checked`, `hidden`) — setting them to `""` still
     /// counts as present, per HTML.
     pub fn remove_attr(&mut self, id: NodeId, name: &str) -> bool {
-        if let NodeData::Element(el) = &mut self.nodes[id.index()].data {
+        let removed = if let NodeData::Element(el) = &mut self.nodes[id.index()].data {
             if let Some(i) = el.attrs.iter().position(|a| a.name == name) {
                 el.attrs.remove(i);
-                return true;
+                true
+            } else {
+                false
             }
+        } else {
+            false
+        };
+        if removed {
+            // **Removing an attribute is a style change exactly as much as setting one is**, and
+            // this was missing while `set_attr` had it — so every *unset* of a boolean attribute
+            // (`open`, `checked`, `hidden`, `disabled`) changed the DOM and never triggered a
+            // restyle. The asymmetry is invisible in one direction: things could always be turned
+            // ON and never back OFF. A closing `<details>`, an unchecking box and an un-hiding
+            // `hidden` all render stale until something else in the page happens to dirty the tree.
+            self.mark_dirty(id);
         }
-        false
+        removed
     }
 
     pub fn set_attr(&mut self, id: NodeId, name: impl Into<String>, value: impl Into<String>) {

@@ -965,3 +965,52 @@ etc. That is **structurally gated on the text-storage layer**: the DOM stores `d
 `String`, which cannot represent a lone surrogate, and `from_utf16_lossy` replaces it with U+FFFD. Fixing it
 needs WTF-8 / UTF-16 text storage plus a `JS_NewUCStringCopyN` return path — a subsystem, not a bounded
 tick. [[js-engine]]
+
+## `<details>`/`<summary>` — the disclosure widget is entirely the UA's job (tick 216)
+
+`details` and `summary` appeared **nowhere** in the engine. Two consequences, the first worse than it
+sounds:
+
+- Every collapsible on the web rendered **permanently expanded** — GitHub's folded diffs and
+  collapsed review threads, MDN's collapsible sections, every docs FAQ. A page of collapsed sections
+  becomes a wall of everything at once and the summary stops meaning anything.
+- Clicking the summary did **nothing**, so a section could never be opened *or* closed. For an agent
+  driving the page, "click Show more" was unactionable.
+
+There is no script behind any of this: the browser is the entire implementation.
+
+**Rendering** follows the `<dialog>` precedent exactly — a UA rule pair, mirrored in both cascades:
+
+- Stylo (shipping): `summary { display: block } · details > *:not(summary) { display: none } ·
+  details[open] > * { display: block }` in `UA_CSS`.
+- `MinimalCascade`: `summary` gets `Block` in `apply_ua_defaults`, and the collapse lives in
+  **`cascade_node`** — it needs the PARENT's `open` attribute, which a per-element function cannot
+  see. ⚠ Lockstep is by convention; `G_DETAILS` exercises the Stylo path only.
+
+**Toggling** is *activation behaviour* on `<summary>`, in `dispatch_click`: it runs AFTER the click
+event and only if nothing cancelled it, so `preventDefault()` keeps the section shut (how a page
+implements its own animated disclosure). Then `toggle` is dispatched on the `<details>`, after the
+attribute changes, so a handler reading `details.open` sees the new state.
+
+`summary_details_target` **walks up** from the clicked node. This is load-bearing: a click lands on
+whatever is under the cursor — a text node's element, a `<span>`, an `<svg>` chevron — essentially
+never on the `<summary>` box itself. Matching only an exact hit works in a test and fails on every
+real page, because real summaries have markup inside them. Only the **first** `summary` child of a
+`details` toggles it; a second one is ordinary content.
+
+### The bug underneath it — `remove_attr` never marked the tree dirty
+
+Found by the closing half of the gate, and it is **not** specific to `<details>`: `set_attr` called
+`mark_dirty` and `remove_attr` did not. So *unsetting* any boolean content attribute — `open`,
+`checked`, `hidden`, `disabled` — changed the DOM and never triggered a restyle.
+
+The asymmetry is invisible in one direction, which is why it survived: **things could always be
+turned ON and never back OFF.** A closing `<details>`, an unchecking box and an un-hiding `hidden`
+all render stale until something else in the page happens to dirty the tree — so it presents as an
+intermittent "sometimes the UI doesn't update", not as a reproducible bug.
+
+Held by `G_DETAILS` (`engine/page/tests/g_details.rs`), whose four assertions falsify **three
+independent mechanisms**: the UA collapse rule (closed body renders), the summary toggle (first click
+does nothing), and `remove_attr`'s dirty marking (second click does not close). It also pins
+`details[open]` rendering its body — without that, "details never renders children" would pass the
+closed-case check while making the element useless.

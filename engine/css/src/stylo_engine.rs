@@ -169,6 +169,15 @@ input[type=hidden] { display: none; }
    pair: hidden until `open`, then a centered auto-margin box. Keep in lockstep with
    `apply_ua_defaults` in css/src/lib.rs — the two cascades disagreeing about whether a modal
    renders is exactly the `<source>` bug again. */
+/* `<details>` — a CLOSED disclosure renders ONLY its summary. Without this every collapsible on
+   GitHub (every "Show diff", every folded review comment), MDN and every docs site rendered
+   permanently expanded, which is not a cosmetic difference: a page of collapsed sections becomes a
+   wall of everything at once, and the summary loses any meaning. Same lockstep requirement as
+   `<dialog>` below — `apply_ua_defaults` + `cascade_node` in css/src/lib.rs must agree, or the two
+   cascades disagree about whether a section renders. */
+summary { display: block; }
+details > *:not(summary) { display: none; }
+details[open] > * { display: block; }
 dialog { display: none; }
 dialog[open] {
   display: block;

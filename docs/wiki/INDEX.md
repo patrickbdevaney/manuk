@@ -209,6 +209,8 @@
   - L885 · The CharacterData abstract base interface (tick 133)
   - L902 · createDocumentType name validation + per-document .implementation (tick 135)
   - L935 · CharacterData offsets are unsigned long = ToUint32, not clamp-to-0 (tick 136)
+  - L969 · <details>/<summary> — the disclosure widget is entirely the UA's job (tick 216)
+  - L1001 · The bug underneath it — remove_attr never marked the tree dirty
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -466,4 +468,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-389 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+391 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

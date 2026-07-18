@@ -2490,6 +2490,24 @@ impl MinimalCascade {
             NodeData::Element(el) => {
                 let mut s = ComputedStyle::inherit_from(parent_style);
                 apply_ua_defaults(&mut s, el);
+                // `<details>`: a CLOSED disclosure renders ONLY its summary. This needs the PARENT,
+                // so it cannot live in the per-element `apply_ua_defaults` — it is the Stylo path's
+                // `details > *:not(summary)` rule, expressed against the tree we already have.
+                // Keep the two in lockstep: the cascades disagreeing about whether a section renders
+                // is the `<source>` bug again (see the note in stylo_engine.rs).
+                if !el.name.eq_ignore_ascii_case("summary")
+                    && dom
+                        .parent(node)
+                        .and_then(|p| match dom.data(p) {
+                            NodeData::Element(pe) => Some(pe),
+                            _ => Option::None,
+                        })
+                        .is_some_and(|pe| {
+                            pe.name.eq_ignore_ascii_case("details") && pe.attr("open").is_none()
+                        })
+                {
+                    s.display = Display::None;
+                }
 
                 // Author rules, ordered by (specificity, source order). Only the rules the index
                 // says could possibly match this element are tested (EPOCH-1: this is the fix for
@@ -2612,6 +2630,10 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
         | "noembed" | "noframes" | "rp" => (None, 0.0, 400, 1.0),
         // Form controls render as replaced-ish inline-block boxes (styled below).
         "input" | "button" | "textarea" | "select" => (InlineBlock, 0.0, 400, 1.0),
+        // `<summary>` is a block: it is the disclosure's always-visible label. Whether the
+        // *rest* of the `<details>` renders depends on the PARENT's `open` attribute, which this
+        // per-element function cannot see — `cascade_node` applies that part.
+        "summary" => (Block, 0.0, 700, 1.0),
         // `<dialog>`: rendered only while `open`. A closed dialog that renders is a modal's contents
         // spilled into the page — see the matching `dialog`/`dialog[open]` pair in stylo_engine.rs.
         "dialog" => {
