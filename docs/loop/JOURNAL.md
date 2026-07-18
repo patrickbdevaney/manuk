@@ -8067,3 +8067,77 @@ observer; continuing with browser work per the harness-scope rule.
 answer renders" into "the answer streams"; `EventSource`/SSE is still an honest stub, so a page using
 `new EventSource()` rather than fetch-with-streaming is unserved; permissive double-`text()`; no BYOB
 readers, no backpressure (`desiredSize` constant), no `WritableStream`/`TransformStream`/`pipeThrough`.
+
+## Tick 197 — incremental fetch delivery: the streamed answer types itself out (net / js) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (Phase-0 FINISH-LINE lever 1, second half). WIKI:
+docs/wiki/networking.md "Incremental delivery — the answer TYPES ITSELF OUT (`FetchStreamEvent`)".**
+
+**Selection.** `lever-board.sh` now carries a USER DIRECTIVE (tick 195): the **Phase-0 finish line**,
+five levers, worked top-down. Lever 1 is *"fetch STREAMING response body — bridge
+manuk_net::fetch_streaming to a JS ReadableStream + real SSE + readyState-3 XHR"*, marked HIGHEST
+VALUE / HALF-BUILT. Tick 196 built the JS half and logged the wire half as residue; this is that
+residue, which the directive promotes from "subsystem, defer" to "the top lever".
+
+**Decomposed rather than attempted whole.** The full bridge spans engine/net (streaming request with
+method+headers), engine/js, engine/page AND shell (`pump_fetches`, a `NavEvent` per step). That is
+exactly the shape that stalled on grid (2h) and t159 (86min WIP discarded). Split at the seam where
+each half is independently gateable: **this tick = the engine spine** (js/page delivery path, gated
+end-to-end at the page level); **next tick = net+shell wire-up**. The spine is the load-bearing half
+and it is real capability on its own.
+
+**Hypothesis.** `Page::resolve_fetch` settles a request with one complete `String`, so even with tick
+196's real `ReadableStream` the page could only ever be fed the whole body at once — a streamed
+answer appears in one lump when the server finishes. Streaming that only *reads* like streaming is
+still buffered.
+
+**Implemented.** `manuk_js::FetchStreamEvent { Head{status,headers}, Chunk(Vec<u8>), End }` and one
+entry point per layer: `Page::deliver_fetch_stream` → `manuk_js::deliver_fetch_stream` →
+`PageContext::deliver_fetch_stream` → `event_loop::{deliver_head,deliver_chunk,deliver_end}`. One
+enum-carrying function per layer rather than three functions × cfg-pairs × four layers.
+
+**`Head` resolves the promise — that is the load-bearing detail.** A real `fetch()` settles when the
+response HEADERS arrive, not when the body ends; that is exactly what lets the page take a reader and
+pump while the rest is in flight. Resolving at the end would make `response.body` a stream that is
+always already complete — buffered behaviour in a stream's costume. Each step runs the page's
+reactions before returning, and the relayout after is **guarded on the dirty bit**, which is what
+renders the answer BETWEEN chunks at no cost for a chunk the page ignores.
+
+**Bytes stay bytes, and the gate proves why.** Chunks cross as one `\u00NN` escape per byte
+(`js_bytes_literal` ↔ `__bytesFromLatin1`), explicitly NOT `String::from_utf8_lossy`: a chunk
+boundary lands where the wire put it, routinely mid-character, and lossy decoding substitutes U+FFFD.
+
+**A real bug the gate caught, one layer down.** With bytes preserved the "café" case still failed —
+`TextDecoder` had no streaming state, so a sequence split across two chunks was mangled anyway.
+Implemented `decode(chunk, {stream:true})`: walk back over the `10xxxxxx` continuation bytes to the
+lead byte and, if the run is shorter than that lead byte announces, hold it for the next call. Every
+streaming client on the web passes this flag. Without it the entire `response.body` path corrupts any
+non-ASCII answer — the feature would have shipped looking correct in English.
+
+**A streaming response does not also buffer.** The mirror kept for `text()`/`json()` is DROPPED the
+moment the page takes a reader; otherwise an SSE stream that never ends accumulates a copy of every
+token forever. `clone()` on a still-streaming body throws (`body.tee()` is the honest fork).
+
+**Gates.** `g_fetch_stream_incremental.rs` drives Head→Chunk→Chunk→End and asserts the DOM **between**
+the chunks — each claim is checked at a moment when the rest of the body **does not exist yet**, so a
+buffered implementation cannot pass it by construction. Plus a chunk boundary splitting "café"'s é,
+and `done` terminating the pump loop. **Proven RED by disabling the per-step reaction drain** —
+`head:200` never reached the DOM. `g_fetch_stream`, `g_globals`, `g_dedup`, `g_form` still green.
+
+**One test per binary, learned the hard way (again).** The first draft had two `#[test]` fns, each
+building a `Page`; the binary died with SIGSEGV on teardown — the two-SpiderMonkey-contexts problem
+`g_globals` documents. Both claims now ride one stream in one test.
+
+**PRE-EXISTING failures, verified by stash on the clean tree at HEAD — NOT this tick (observer).**
+Under `--features stylo,spidermonkey`: `manuk-page --lib
+tests::hard_wall_detection_and_honest_interstitial` (lib.rs:5346, also flagged in tick 196) and
+`--test g_capability` (`createDocumentType validates` — the pattern ledger claiming something it never
+measured, PROCESS #19/#20/#21/#35/#41). `verify.sh` runs a different feature set and catches neither,
+which is why ticks have been landing green over them. Flagged, continuing with browser work per the
+harness-scope rule.
+
+**Residue.** The host still calls buffered `resolve_fetch` — `shell/src/gui.rs::pump_fetches` uses
+`manuk_net::request`, and `manuk_net::fetch_streaming` is GET-only with no request headers, so wiring
+them plus a `NavEvent` per step is the NEXT tick and finishes finish-line lever 1. Until then this
+path is exercised by the engine and its gate, not by live navigation. `EventSource`/SSE and XHR
+`readyState 3` are still stubs and should ride this same spine.

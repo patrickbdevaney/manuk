@@ -353,6 +353,7 @@
   - L382 · fetch(FormData) sends multipart/form-data — a File is uploaded, not dropped
   - L413 · XMLHttpRequest.abort() honours the cancellation — a late response no longer fires onload
   - L429 · response.body is a real ReadableStream — a streamed answer renders at all
+  - L478 · Incremental delivery — the answer TYPES ITSELF OUT (FetchStreamEvent)
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -447,4 +448,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-370 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+371 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

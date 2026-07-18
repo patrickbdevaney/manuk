@@ -449,6 +449,57 @@ pub fn resolve_fetch(
     Ok(())
 }
 
+/// One step of a **streaming** response, in the order the wire produces them: `Head` once (which is
+/// where the page's `fetch()` promise resolves), then a `Chunk` per piece of body as it arrives, then
+/// `End` once.
+///
+/// This is the shape the buffered [`resolve_fetch`] cannot express: it settles a request with its
+/// whole body at once, so a page that streams sees a single lump at the end. The difference is an AI
+/// answer that appears only when the server has finished versus one that types itself out.
+#[derive(Debug, Clone)]
+pub enum FetchStreamEvent {
+    /// Response headers — the promise resolves here, with the body still arriving.
+    Head {
+        status: u16,
+        headers: Vec<(String, String)>,
+    },
+    /// Raw body bytes. A chunk boundary may split a multi-byte UTF-8 sequence; the page's own
+    /// `TextDecoder` reassembles, so these stay bytes and are never lossily decoded en route.
+    Chunk(Vec<u8>),
+    /// The body is complete — the page's pump loop sees `{done: true}`.
+    End,
+}
+
+/// Deliver one [`FetchStreamEvent`] for request `id`, running the page's reactions (and any DOM
+/// mutations they make) before returning — which is what lets the page re-render BETWEEN chunks.
+/// No-op without the JS feature.
+#[cfg(feature = "_sm")]
+pub fn deliver_fetch_stream(
+    ctx: &PageContext,
+    dom: &mut manuk_dom::Dom,
+    id: u32,
+    event: &FetchStreamEvent,
+    layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<(), JsError> {
+    with_runtime(|rt| {
+        ctx.deliver_fetch_stream(rt, dom, id, event, layout, styles)
+            .map_err(|message| JsError { message })
+    })
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn deliver_fetch_stream(
+    _ctx: &PageContext,
+    _dom: &mut manuk_dom::Dom,
+    _id: u32,
+    _event: &FetchStreamEvent,
+    _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<(), JsError> {
+    Ok(())
+}
+
 /// `history` ops (`pushState`/`replaceState`/`back`/`forward`/`go`) the page performed since the
 /// last call, each `(kind, state_json, url)`. The host reflects them in the omnibox +
 /// back/forward stack without a network navigation. Empty without the JS feature.

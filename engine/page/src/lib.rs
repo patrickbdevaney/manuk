@@ -2466,6 +2466,44 @@ impl Page {
         }
     }
 
+    /// Deliver one step of a **streaming** response for request `id`: `Head` (where the page's
+    /// `fetch()` promise resolves, body still arriving), then a `Chunk` per piece, then `End`.
+    ///
+    /// The relayout at the end is the point of the whole path. [`resolve_fetch`](Self::resolve_fetch)
+    /// hands the page its body in one lump, so a streamed answer can only appear once the server has
+    /// finished. Re-cascading and re-laying-out after EACH chunk is what makes the answer type itself
+    /// out — and it is guarded on the dirty bit, so a chunk the page's handler ignores costs nothing.
+    pub fn deliver_fetch_stream(
+        &mut self,
+        id: u32,
+        event: &manuk_js::FetchStreamEvent,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) {
+        let Some(ctx) = &self.js else { return };
+        let rects: std::collections::HashMap<manuk_dom::NodeId, [f32; 4]> = self
+            .root_box
+            .node_rects(&self.dom)
+            .into_iter()
+            .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+            .collect();
+        if let Err(e) =
+            manuk_js::deliver_fetch_stream(ctx, &mut self.dom, id, event, &rects, &self.styles)
+        {
+            tracing::warn!("fetch stream deliver: {e}");
+            return;
+        }
+        let root = self.dom.root();
+        if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
+            let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
+            self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
+            self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            self.reapply_scroll_offsets();
+            self.content_height = self.root_box.content_bottom();
+            self.dom.clear_all_dirty();
+        }
+    }
+
     /// Drain the page's queued `fetch`/XHR requests as `(id, url, method, headers, body)`, for the
     /// host to perform over the network and settle via [`resolve_fetch`](Self::resolve_fetch). Empty
     /// when the page has no JS context.

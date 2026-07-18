@@ -6635,6 +6635,39 @@ impl PageContext {
         crate::event_loop::run_deferred(runtime, global.handle())?;
         Ok(())
     }
+
+    /// Deliver one step of a STREAMING response for request `id` — headers, a body chunk, or the
+    /// end. Each step runs the page's reactions before returning, which is what lets the DOM update
+    /// between chunks instead of only once the body is complete.
+    pub fn deliver_fetch_stream(
+        &self,
+        runtime: &mut Runtime,
+        dom: &mut Dom,
+        id: u32,
+        event: &crate::FetchStreamEvent,
+        layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    ) -> Result<(), String> {
+        set_view_maps(layout, styles);
+        let _ = dom; // reflectors cache the stable `*mut Dom` from `load`; kept for API symmetry.
+
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        match event {
+            crate::FetchStreamEvent::Head { status, headers } => {
+                crate::event_loop::deliver_head(runtime, global.handle(), id, *status, headers)?
+            }
+            crate::FetchStreamEvent::Chunk(bytes) => {
+                crate::event_loop::deliver_chunk(runtime, global.handle(), id, bytes)?
+            }
+            crate::FetchStreamEvent::End => {
+                crate::event_loop::deliver_end(runtime, global.handle(), id)?
+            }
+        }
+        crate::event_loop::run_deferred(runtime, global.handle())?;
+        Ok(())
+    }
 }
 
 /// Compile + link + evaluate `source` as an ES module in the current realm. Returns false

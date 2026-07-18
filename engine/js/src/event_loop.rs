@@ -306,6 +306,90 @@ const PRELUDE: &str = r#"
     // runs when a page calls it, long after the whole prelude has been evaluated.
     globalThis.__bodyBytes = function(text) { return new globalThis.TextEncoder().encode(String(text)); };
 
+    // ── INCREMENTAL delivery — the response arrives in pieces, as it does on the wire. ──────────
+    // `__deliverFetch` settles a request with its WHOLE body at once, which is all the buffered host
+    // path can do. The streaming path instead settles the promise at the HEADERS (which is when the
+    // real `fetch()` resolves) and then feeds the body in as it arrives, so a page's pump loop sees
+    // chunk after chunk and re-renders between them. That is the difference between an AI answer
+    // that appears in one lump when the server is finished and one that types itself out.
+    //
+    // Bytes cross from Rust as one JS char per byte (the same convention the binary-upload path
+    // uses) — see `js_bytes_literal`.
+    globalThis.__streamCtl = {};
+    globalThis.__bytesFromLatin1 = function(str) {
+        var out = new Uint8Array(str.length);
+        for (var i = 0; i < str.length; i++) { out[i] = str.charCodeAt(i) & 0xff; }
+        return out;
+    };
+
+    globalThis.__makeStreamingResponse = function(status, headers) {
+        var ctl = null;
+        var stream = new globalThis.ReadableStream({ start: function(c) { ctl = c; } });
+        // A buffered mirror, so `text()`/`json()` still work on a streamed response — but it is
+        // DROPPED the moment the page takes a reader. Keeping both would mean an SSE stream that
+        // never ends grows a copy of every token forever; a page that streams does not also buffer.
+        var mirror = [];
+        var ended = false, endWaiters = [], used = false;
+        stream.__ondisturb = function() { used = true; mirror = null; };
+
+        var whenEnded = function() {
+            if (ended) return Promise.resolve();
+            return new Promise(function(r) { endWaiters.push(r); });
+        };
+        var buffered = function() {
+            return whenEnded().then(function() {
+                if (mirror === null) throw new TypeError("Body has already been consumed.");
+                var total = 0, i;
+                for (i = 0; i < mirror.length; i++) { total += mirror[i].length; }
+                var out = new Uint8Array(total), off = 0;
+                for (i = 0; i < mirror.length; i++) { out.set(mirror[i], off); off += mirror[i].length; }
+                return out;
+            });
+        };
+
+        var res = {
+            ok: (status >= 200 && status < 300), status: status, statusText: "",
+            url: "", redirected: false, type: "basic",
+            headers: globalThis.__makeHeaders(headers),
+            text: function(){ used = true; return buffered().then(function(b){ return new globalThis.TextDecoder().decode(b); }); },
+            json: function(){ return res.text().then(function(t){ return JSON.parse(t); }); },
+            arrayBuffer: function(){ used = true; return buffered().then(function(b){ return b.buffer; }); },
+            bytes: function(){ used = true; return buffered(); },
+            blob: function(){ return res.text().then(function(t){ return new globalThis.Blob([t]); }); },
+            // A streaming body cannot be cloned without teeing it; `body.tee()` is the honest way.
+            clone: function(){ throw new TypeError("cannot clone a Response whose body is still streaming"); }
+        };
+        Object.defineProperty(res, 'bodyUsed', { get: function(){ return used; }, enumerable: true, configurable: true });
+        Object.defineProperty(res, 'body',     { get: function(){ return stream; }, enumerable: true, configurable: true });
+
+        return {
+            res: res,
+            push: function(bytes) { if (mirror !== null) { mirror.push(bytes); } ctl.enqueue(bytes); },
+            end:  function() { ended = true; ctl.close(); var w = endWaiters; endWaiters = []; w.forEach(function(f){ f(); }); }
+        };
+    };
+
+    // Headers are in: resolve the promise NOW, with a body that is still arriving.
+    globalThis.__deliverHead = function(id, status, headers) {
+        var cb = globalThis.__fetchCb[id];
+        if (!cb) return;                       // aborted, already settled, or an XHR (residue)
+        delete globalThis.__fetchCb[id];
+        if (status === 0) { cb.reject(new TypeError("Failed to fetch")); return; }
+        var s = globalThis.__makeStreamingResponse(status, headers);
+        globalThis.__streamCtl[id] = s;
+        cb.resolve(s.res);
+    };
+    globalThis.__deliverChunk = function(id, str) {
+        var s = globalThis.__streamCtl[id];
+        if (s) { s.push(globalThis.__bytesFromLatin1(str)); }
+    };
+    globalThis.__deliverEnd = function(id) {
+        var s = globalThis.__streamCtl[id];
+        if (!s) return;
+        delete globalThis.__streamCtl[id];
+        s.end();
+    };
+
     // Flatten a request's headers to "name\x02value\x02name\x02value" for the host to replay onto
     // the wire. `Authorization`, a non-JSON `Content-Type`, `Accept`, `X-*` — every one of these was
     // silently dropped before, so an authenticated `fetch`/XHR reached the server as an anonymous one
@@ -1530,12 +1614,41 @@ const PRELUDE: &str = r#"
           }
           return new Uint8Array(out);
         };
-        globalThis.TextDecoder = function TextDecoder(){ this.encoding = 'utf-8'; };
-        globalThis.TextDecoder.prototype.decode = function(buf) {
-          if (!buf) { return ''; }
-          var b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+        globalThis.TextDecoder = function TextDecoder(){ this.encoding = 'utf-8'; this.__tail = null; };
+        // `decode(chunk, {stream: true})` — **the streaming contract, and it is not optional.**
+        // A network chunk boundary lands wherever the wire put it, which is routinely in the MIDDLE
+        // of a multi-byte character: "café" split after 0xC3 leaves a lead byte with no continuation.
+        // Decoding each chunk independently turns that into U+FFFD and silently corrupts the text —
+        // so with `{stream:true}` we hold the incomplete trailing sequence back and prepend it to the
+        // next call. Every streaming client on the web passes this flag; without support for it the
+        // whole `response.body` path mangles any non-ASCII answer.
+        globalThis.TextDecoder.prototype.decode = function(buf, opts) {
+          var streaming = !!(opts && opts.stream);
+          var input = buf ? (buf instanceof Uint8Array ? buf : new Uint8Array(buf)) : new Uint8Array(0);
+          var b = input;
+          if (this.__tail && this.__tail.length) {
+            b = new Uint8Array(this.__tail.length + input.length);
+            b.set(this.__tail, 0);
+            b.set(input, this.__tail.length);
+          }
+          this.__tail = null;
+          var end = b.length;
+          if (streaming) {
+            // Walk back over the trailing continuation bytes (10xxxxxx) to the lead byte. If that
+            // sequence is short of the length its lead byte announces, it is incomplete — hold it.
+            var start = end - 1, steps = 0;
+            while (start >= 0 && steps < 4) {
+              var lead = b[start];
+              if ((lead & 0xc0) !== 0x80) {
+                var need = lead < 0x80 ? 1 : lead < 0xe0 ? 2 : lead < 0xf0 ? 3 : 4;
+                if (end - start < need) { this.__tail = new Uint8Array(b.subarray(start, end)); end = start; }
+                break;
+              }
+              start--; steps++;
+            }
+          }
           var s = '', i = 0;
-          while (i < b.length) {
+          while (i < end) {
             var c = b[i++];
             if (c < 0x80) { s += String.fromCharCode(c); }
             else if (c < 0xe0) { s += String.fromCharCode(((c & 31) << 6) | (b[i++] & 63)); }
@@ -2422,6 +2535,69 @@ pub fn deliver(
         js_headers_literal(headers)
     );
     eval(rt, global, &script, "event_loop_deliver.js").map(|_| ())
+}
+
+/// Settle request `id` at its RESPONSE HEADERS, with a body that is still arriving. This is where a
+/// real `fetch()` promise resolves — not at the end of the body — so the page gets its `Response`,
+/// takes a reader off `response.body`, and pumps while the rest is still on the wire.
+///
+/// `status == 0` rejects, exactly as [`deliver`] does. Follow with [`deliver_chunk`] per piece and
+/// [`deliver_end`] once.
+pub fn deliver_head(
+    rt: &mut Runtime,
+    global: mozjs::rust::HandleObject,
+    id: u32,
+    status: u16,
+    headers: &[(String, String)],
+) -> Result<(), String> {
+    let script = format!(
+        "__deliverHead({}, {}, {})",
+        id,
+        status,
+        js_headers_literal(headers)
+    );
+    eval(rt, global, &script, "event_loop_deliver_head.js").map(|_| ())
+}
+
+/// Feed one body chunk to request `id`'s open response stream. Unknown ids are a no-op (the page may
+/// have aborted, or already been torn down).
+pub fn deliver_chunk(
+    rt: &mut Runtime,
+    global: mozjs::rust::HandleObject,
+    id: u32,
+    bytes: &[u8],
+) -> Result<(), String> {
+    let script = format!("__deliverChunk({}, {})", id, js_bytes_literal(bytes));
+    eval(rt, global, &script, "event_loop_deliver_chunk.js").map(|_| ())
+}
+
+/// Close request `id`'s response stream — the page's pump loop sees `{done: true}`.
+pub fn deliver_end(
+    rt: &mut Runtime,
+    global: mozjs::rust::HandleObject,
+    id: u32,
+) -> Result<(), String> {
+    let script = format!("__deliverEnd({})", id);
+    eval(rt, global, &script, "event_loop_deliver_end.js").map(|_| ())
+}
+
+/// Serialize raw body bytes as a JS string literal of **one char per byte** — the same convention the
+/// binary-upload path uses. Every byte becomes an explicit `\u00NN` escape, so the result is pure
+/// ASCII source and cannot be mangled by any encoding step between here and the engine; the page side
+/// (`__bytesFromLatin1`) reads it back with `charCodeAt(i) & 0xff`.
+///
+/// **Deliberately NOT `String::from_utf8_lossy` + a string literal.** A chunk boundary can fall in the
+/// middle of a multi-byte UTF-8 sequence — which is the normal case for a stream, not an edge one —
+/// and lossy decoding would replace the split character with U+FFFD, silently corrupting the body.
+/// Bytes stay bytes until the page's own `TextDecoder` reassembles them.
+fn js_bytes_literal(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() * 6 + 2);
+    s.push('"');
+    for b in bytes {
+        s.push_str(&format!("\\u{:04x}", b));
+    }
+    s.push('"');
+    s
 }
 
 /// Serialize response headers as a JS array-of-pairs literal — `[["content-type","..."], …]` — for

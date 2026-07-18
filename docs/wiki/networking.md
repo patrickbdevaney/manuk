@@ -474,3 +474,52 @@ Residue: incremental wire-level chunking (above); `EventSource`/SSE remains an h
 using `new EventSource()` rather than fetch-with-streaming is still unserved; a double `text()` is
 permissive rather than rejecting on `bodyUsed`; no BYOB readers, no backpressure (`desiredSize` is a
 constant), no `WritableStream`/`TransformStream`/`pipeThrough`.
+
+## Incremental delivery — the answer TYPES ITSELF OUT (`FetchStreamEvent`)
+
+Tick 196 gave the page a real `response.body` to read from; it could still only be *fed* the whole
+body at once, because `Page::resolve_fetch` settles a request with one complete `String`. So a
+streamed answer appeared in a single lump the moment the server finished. This is the other half.
+
+**`manuk_js::FetchStreamEvent`** is the shape the buffered path cannot express:
+
+| step | meaning |
+|---|---|
+| `Head { status, headers }` | **where the page's `fetch()` promise resolves** — body still arriving |
+| `Chunk(Vec<u8>)` | raw body bytes, as they come off the wire |
+| `End` | the pump loop sees `{done: true}` |
+
+One entry point per layer carries it: `Page::deliver_fetch_stream` → `manuk_js::deliver_fetch_stream`
+→ `PageContext::deliver_fetch_stream` → `event_loop::{deliver_head, deliver_chunk, deliver_end}`.
+
+**Resolving at the HEADERS is the load-bearing detail.** A real `fetch()` promise settles when the
+response headers arrive, not when the body ends — that is precisely what lets a page take a reader
+and pump while the rest is still in flight. Resolving at the end instead would make `response.body`
+a stream that is always already complete, which is the buffered behaviour wearing a stream's costume.
+
+**Each step runs the page's reactions before returning,** and `Page::deliver_fetch_stream`
+re-cascades + re-lays-out afterwards, guarded on the dirty bit. That guard is what makes the answer
+render *between* chunks rather than only at the end, at no cost for a chunk the page ignores.
+
+**Bytes stay bytes across the Rust↔JS boundary.** `js_bytes_literal` emits one `\u00NN` escape per
+byte and `__bytesFromLatin1` reads it back with `charCodeAt(i) & 0xff`. **Not**
+`String::from_utf8_lossy`: a chunk boundary lands wherever the wire put it, which is routinely in the
+middle of a multi-byte sequence, and lossy decoding would substitute U+FFFD and silently corrupt the
+text.
+
+**`TextDecoder` gained `{stream: true}`,** which the same fact makes mandatory. It now holds an
+incomplete trailing sequence back (walk back over the `10xxxxxx` continuation bytes to the lead byte;
+if the run is shorter than the length that lead byte announces, keep it) and prepends it to the next
+call. Every streaming client on the web passes this flag; without it the whole `response.body` path
+mangles any non-ASCII answer — "café" split after `0xC3` becomes a replacement character.
+
+A streaming `Response` keeps a **buffered mirror** so `text()`/`json()` still work, but **drops it the
+moment the page takes a reader** — otherwise an SSE stream that never ends would accumulate a copy of
+every token forever. A page that streams does not also buffer. `clone()` on a still-streaming
+response throws; `body.tee()` is the honest way to fork it.
+
+Residue: the host side still calls the buffered `resolve_fetch` — `shell/src/gui.rs::pump_fetches`
+uses `manuk_net::request`, and `manuk_net::fetch_streaming` is GET-only with no request headers, so
+wiring the two (plus a `NavEvent` per step) is the next tick. Until then this path is exercised by
+the engine and its gate, not by live navigation. `EventSource`/SSE and XHR `readyState 3` are still
+stubs and should ride this same spine.
