@@ -7569,12 +7569,35 @@ when tracking is explicitly set.**
 applies letter-spacing there but not word-spacing); per-grapheme-cluster tracking for ligatures/combining
 marks (we count chars, exact for the Latin common case).
 
-**BLOCKER (tick 184, environmental — observer):** tick 184 code + gate + all crate suites are GREEN
-(css 25, layout 75, paint 10), but the VERIFY WALL ratchet refuses it at 374–494s > 62s ceiling across
-4 attempts (loaded AND quiet box, load 0.24; `manuk-wpt` release pre-built at 20:00; wall varies so it's
-a live measure, not a stale receipt). The wall is dominated by `P · parity` = 176s (`cargo run -p
-manuk-wpt --release -- parity`, 72-page headless-Chrome render-compare) — an ~88× blow-up from tick
-182/183's 59s wall that a default-0 letter-spacing change (byte-identical render) cannot cause. Harness/
-environment (headless-Chrome parity slowness), not browser regression. Per V1-SCOPE the harness is
-observer-owned; NOT touching scripts/. Tick 184 is staged and complete — one `./scripts/tick.sh
-/tmp/tick184-msg.txt` lands it once the parity wall recovers.
+**WALL note (tick 184, RESOLVED):** tick 184's wall first read 374–494s (> 62s ceiling) across ~6
+attempts and looked hard-blocked, but it was the tick-171 warm-up nuance, not a regression: `cargo build
+--release --workspace` does NOT warm the parity phase (cargo feature unification differs from `cargo run
+-p manuk-wpt --release -- parity`), so the first parity paid a ~176s `manuk-wpt` relink; and changing 3
+core crates (css/layout/paint) forced a one-time ~210s of `cargo test` binary relinks unattributed to any
+timed section (total 310s while sections summed 99s). Recipe that landed it: run `cargo run -p manuk-wpt
+--release -- parity` twice (176s→15s), then `./scripts/verify.sh` twice (310s→58s as test bins warm),
+then `./scripts/status-update.sh` (writes `LAST_WALL_TIME:58`), then `tick.sh` → WALL 58s ✓. A transient
+manuk-shell-test build-race false-RED appeared mid-warm and cleared on the next run. Landed `7558a3c`.
+
+## Tick 185 — object-position — a cropped hero/avatar keeps its subject in frame (CSS render / replaced) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (CSS render — replaced-element positioning). WIKI:
+docs/wiki/box-layout.md "object-position — placing the fitted image within its box".**
+
+**Hypothesis.** `object-fit:cover` (tick 181) crops an over-sized image to its box but hardcoded the
+crop to CENTER (`object-position: 50% 50%`). Real pages routinely override that — `object-position: top`
+on a portrait avatar so the face isn't cut off, `object-position: 20% 50%` / `right` to keep a banner's
+subject in frame — and without it the wrong slice of every non-centered cropped image shows. Fix: parse
+`object-position` (css, 1–2 keyword/percentage values → a per-axis 0..1 free-space fraction, default
+0.5/0.5, recovered from MinimalCascade on the shipping Stylo path) into `ObjectPosition`; carry it on
+`LayoutBox` beside `object_fit`; and in paint's `object_fit_geometry` distribute the free space (negative
+for cover/none, i.e. an overflow) by the fraction — `x = box.x + (bw-dw)·pos.x` — instead of `/2`.
+Keyword axis binding (`top`/`bottom`→vertical, `left`/`right`→horizontal) lets `top left` and `left top`
+both resolve. **Safety: the default 0.5/0.5 reproduces tick 181's centering exactly, so every existing
+image is byte-identical and the ratchet cannot regress.**
+
+**Gate.** engine/paint `object_position_places_cropped_image`: a 2:1 photo in a 100×100 `object-fit:cover`
+tile overflows 100px horizontally — `left` pins the dest at box.x, `50% 50%` sits 50px left of that,
+`right` 100px left; `0%` == `left`. RED against the hardcoded-center baseline (all three equal). Verify:
+css+layout+paint suites green (paint 10→11); HANG/CRASH 0. Residue: px-length object-position (only
+keywords/percentages convert to a fraction without the box size), the 3-4 value form with edge offsets.

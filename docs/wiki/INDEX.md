@@ -45,6 +45,7 @@
   - L396 · min-width/max-width/min-height/max-height clamp an absolutely-positioned box (tick 157)
   - L427 · overflow-x:scroll reserves a horizontal-scrollbar gutter — block-axis mirror (tick 158)
   - L455 · object-fit — a replaced image fits its box without distorting (tick 181)
+  - L484 · object-position — placing the fitted image within its box (tick 185)
 
 ## BUILD AND DEPENDENCIES — what is actually compiled, and what only looks like it is
 `docs/wiki/build-and-dependencies.md`
@@ -423,4 +424,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-350 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+351 sections across 17 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

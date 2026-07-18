@@ -480,3 +480,31 @@ letterboxed, no clip. RED against the stretch baseline, which reports 100×100 f
 paint suites green; HANG/CRASH 0. Residue: explicit `object-position` (only the 50% 50% default is
 applied); `object-fit` on `<video>`/`<canvas>` follows the same path once those decode; `none` uses
 raw bitmap pixels (approximate at devicePixelRatio ≠ 1). [[box-layout]]
+
+## object-position — placing the fitted image within its box (tick 185)
+
+`object-fit:cover`/`none` (tick 181) scales a replaced image to overflow its box and crops the excess,
+but hardcoded the crop to the CENTRE (`object-position: 50% 50%`). Pages override that constantly to
+keep a subject in frame — `object-position: top` on a portrait avatar so the face survives the crop,
+`object-position: right` / `20% 50%` on a banner — and without it the wrong slice of every non-centered
+cropped image shows.
+
+Mechanism (css + layout + paint):
+- **css** — `ObjectPosition { x: f32, y: f32 }` (0..1 free-space fractions, default `0.5/0.5`), parsed
+  from `object-position`: 1–2 values, each a keyword (`left`/`center`/`right`, `top`/`center`/`bottom`)
+  or a percentage → a fraction; `top`/`bottom` bind the vertical axis and `left`/`right` the horizontal,
+  so `top left` resolves as well as `left top`. Non-inherited (a box property like `object-fit`),
+  recovered from MinimalCascade on the shipping **Stylo** path.
+- **layout** — carried on `LayoutBox::object_position` beside `object_fit` (no layout-math change).
+- **paint** — `object_fit_geometry` distributes the free space `(box − dest)` — which is NEGATIVE (an
+  overflow) for `cover`/`none` — by the per-axis fraction: `x = box.x + (bw − dw)·pos.x` (and y), so
+  `0` pins the start edge, `1` the end, `0.5` centres. The crop clip is unchanged (still the box).
+
+**Safety.** The default `0.5/0.5` reproduces tick 181's centering to the float, so every existing image
+is byte-identical and the ratchet cannot regress; only an explicit `object-position` moves anything.
+
+**Gate.** `object_position_places_cropped_image` (engine/paint): a 2:1 photo in a 100×100
+`object-fit:cover` tile overflows 100px horizontally — `left` pins the dest at box.x, `50% 50%` sits 50px
+left of that, `right` 100px left; `0%` == `left`. RED vs the hardcoded-center baseline (all three equal).
+css+layout+paint green (paint 10→11), HANG/CRASH 0. Residue: `px`-length object-position (a length can't
+become a fraction without the box size — falls back to centred), and the 3–4-value edge-offset form.

@@ -437,8 +437,13 @@ impl DisplayList {
             let bg_is_url = matches!(b.background_image, Some(manuk_css::BackgroundImage::Url(_)));
             if let Some(node) = b.node.filter(|_| mask.is_none() && !bg_is_url) {
                 if let Some(img) = images.get(&node) {
-                    let (rect, content_clip) =
-                        object_fit_geometry(b.object_fit, b.rect, img.width, img.height);
+                    let (rect, content_clip) = object_fit_geometry(
+                        b.object_fit,
+                        b.object_position,
+                        b.rect,
+                        img.width,
+                        img.height,
+                    );
                     items.push(DisplayItem::Image {
                         rect,
                         image: img.clone(),
@@ -1114,6 +1119,7 @@ fn fill_shadow(
 /// crop rect because the image can exceed it. Explicit `object-position` is not yet parsed.
 fn object_fit_geometry(
     fit: manuk_css::ObjectFit,
+    pos: manuk_css::ObjectPosition,
     box_rect: Rect,
     img_w: u32,
     img_h: u32,
@@ -1132,9 +1138,11 @@ fn object_fit_geometry(
         ObjectFit::ScaleDown => (bw / iw).min(bh / ih).min(1.0),
     };
     let (dw, dh) = (iw * scale, ih * scale);
+    // `object-position` distributes the free space (which is negative — an overflow — for `cover`/
+    // `none`) by the per-axis fraction: 0.5 centers (the default), 0 pins the start edge, 1 the end.
     let dest = Rect {
-        x: box_rect.x + (bw - dw) / 2.0, // center: object-position 50% 50%
-        y: box_rect.y + (bh - dh) / 2.0,
+        x: box_rect.x + (bw - dw) * pos.x,
+        y: box_rect.y + (bh - dh) * pos.y,
         width: dw,
         height: dh,
     };
@@ -1520,6 +1528,61 @@ mod bg_tests {
         assert!(
             contain_clip.is_none(),
             "contain fits inside the box, so nothing is cropped"
+        );
+    }
+
+    /// `object-position` slides the fitted image within its box. For `object-fit:cover` a 2:1 photo in
+    /// a square tile overflows horizontally by 100px, and `object-position` picks which 100px slice
+    /// shows: `left` pins the image's left edge to the box, `right` the right edge, the default
+    /// centers. Baseline (tick 181): the position was hardcoded to center, so a subject at the top/side
+    /// of a cropped hero was always cut off.
+    #[test]
+    fn object_position_places_cropped_image() {
+        fn dest_x(pos: &str) -> f32 {
+            let dom = manuk_html::parse(r#"<img id="p">"#);
+            let css =
+                format!("#p{{width:100px;height:100px;object-fit:cover;object-position:{pos}}}");
+            let styles = MinimalCascade.cascade(&dom, &[Stylesheet::parse(&css)]);
+            let fonts = FontContext::new();
+            let root = manuk_layout::layout_document(&dom, &styles, &fonts, 400.0);
+            let node = dom
+                .descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some("p"))
+                .expect("the img");
+            let mut images = std::collections::HashMap::new();
+            images.insert(
+                node,
+                std::rc::Rc::new(DecodedImage {
+                    width: 200,
+                    height: 100,
+                    rgba: vec![255; 200 * 100 * 4],
+                }),
+            );
+            let items = DisplayList::build_with_images(&root, &images).items;
+            items
+                .iter()
+                .find_map(|i| match i {
+                    DisplayItem::Image { rect, .. } => Some(rect.x),
+                    _ => None,
+                })
+                .expect("a replaced-image display item")
+        }
+        // The 200px image overflows the 100px box by 100px: `left` pins at box.x, `center` is 50px
+        // further left, `right` 100px further left. Measured relative so box.x need not be known.
+        let left = dest_x("left");
+        let center = dest_x("50% 50%");
+        let right = dest_x("right");
+        assert!(
+            (center - (left - 50.0)).abs() < 0.5,
+            "centered sits 50px left of the left-pinned image ({left} vs {center})"
+        );
+        assert!(
+            (right - (left - 100.0)).abs() < 0.5,
+            "object-position:right pins the right edge (100px left of the left-pin) ({left} vs {right})"
+        );
+        assert!(
+            (dest_x("0% 50%") - left).abs() < 0.5,
+            "the keyword `left` and `0%` resolve to the same edge"
         );
     }
 }

@@ -214,6 +214,22 @@ pub enum ObjectFit {
     ScaleDown,
 }
 
+/// `object-position` — where the fitted content sits inside its box, as a fraction of the free space
+/// on each axis (`0.0` = start edge, `0.5` = centered, `1.0` = end edge). The initial value is
+/// `50% 50%` (centered), which `object-fit` (tick 181) already assumed; this makes it explicit, so a
+/// cropped hero/avatar can keep its subject in frame (`object-position: top`, `object-position: 20% 50%`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ObjectPosition {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl Default for ObjectPosition {
+    fn default() -> Self {
+        ObjectPosition { x: 0.5, y: 0.5 }
+    }
+}
+
 /// `background-repeat`.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub enum BackgroundRepeat {
@@ -481,6 +497,8 @@ pub struct ComputedStyle {
     pub background_size: BackgroundSize,
     /// `object-fit` — how a replaced element's content is fitted into its box (default `fill`).
     pub object_fit: ObjectFit,
+    /// `object-position` — where the fitted content sits in its box (default centered).
+    pub object_position: ObjectPosition,
     /// **Intrinsic aspect ratio (width / height) of a REPLACED element** — an `<img>`, `<video>`,
     /// `<canvas>`. Set from the decoded image once it arrives; `None` for everything else.
     ///
@@ -678,6 +696,7 @@ impl ComputedStyle {
             background_image: None,
             background_size: BackgroundSize::Auto,
             object_fit: ObjectFit::Fill,
+            object_position: ObjectPosition::default(),
             aspect_ratio: None,
             background_repeat: BackgroundRepeat::Repeat,
             text_decoration: TextDecoration::default(),
@@ -3103,6 +3122,55 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             } else {
                 ObjectFit::Fill
             };
+        }
+        // `object-position: <x> <y>` — 1 or 2 values, each a keyword (`left`/`center`/`right`,
+        // `top`/`center`/`bottom`) or a percentage. Resolved to a 0..1 free-space fraction per axis;
+        // percentages relative to length (px) aren't fraction-convertible without the box, so they
+        // (and any unrecognized token) fall back to centered. A single value sets its axis, the other
+        // stays centered. `top`/`bottom` bind the vertical axis and `left`/`right` the horizontal even
+        // when written first, so `object-position: top` and `object-position: right` both work.
+        "object-position" => {
+            let axis_frac = |tok: &str| -> Option<f32> {
+                let t = tok.trim();
+                match t.to_ascii_lowercase().as_str() {
+                    "left" | "top" => Some(0.0),
+                    "center" => Some(0.5),
+                    "right" | "bottom" => Some(1.0),
+                    _ => t
+                        .strip_suffix('%')
+                        .and_then(|n| n.trim().parse::<f32>().ok())
+                        .map(|p| (p / 100.0).clamp(0.0, 1.0)),
+                }
+            };
+            let is_vertical =
+                |tok: &str| matches!(tok.trim().to_ascii_lowercase().as_str(), "top" | "bottom");
+            let is_horizontal =
+                |tok: &str| matches!(tok.trim().to_ascii_lowercase().as_str(), "left" | "right");
+            let toks: Vec<&str> = v.split_whitespace().collect();
+            let mut pos = ObjectPosition::default();
+            match toks.as_slice() {
+                [a] => {
+                    if is_vertical(a) {
+                        pos.y = axis_frac(a).unwrap_or(0.5);
+                    } else if is_horizontal(a) {
+                        pos.x = axis_frac(a).unwrap_or(0.5);
+                    } else if let Some(f) = axis_frac(a) {
+                        pos.x = f; // `center` or a percentage → horizontal, vertical stays centered
+                    }
+                }
+                [a, b] => {
+                    // Keyword axis binding lets `top left` resolve as well as `left top`.
+                    let (xa, ya) = if is_vertical(a) || is_horizontal(b) {
+                        (b, a)
+                    } else {
+                        (a, b)
+                    };
+                    pos.x = axis_frac(xa).unwrap_or(0.5);
+                    pos.y = axis_frac(ya).unwrap_or(0.5);
+                }
+                _ => {}
+            }
+            s.object_position = pos;
         }
         "background-repeat" => {
             s.background_repeat = if v.contains("no-repeat") {
