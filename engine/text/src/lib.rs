@@ -13,6 +13,7 @@ use std::num::NonZeroUsize;
 use std::rc::Rc;
 
 use lru::LruCache;
+use swash::text::Script;
 
 pub mod woff2;
 pub use woff2::{decode_webfont, decode_woff1, decode_woff2};
@@ -627,8 +628,8 @@ impl FontContext {
         if let Some(primary) = self.primary_face(key) {
             // Width is order-independent, so measure without bidi reordering.
             let mut pen = 0.0f32;
-            for (face, run) in self.segment(text, primary) {
-                self.shape_run(&run, face, size, false, |g, _| pen += g.advance);
+            for (face, script, run) in self.segment(text, primary) {
+                self.shape_run(&run, face, script, size, false, |g, _| pen += g.advance);
             }
             total = Some(pen);
         }
@@ -640,13 +641,25 @@ impl FontContext {
 
     /// Split `text` into maximal runs sharing a resolved face (primary + per-glyph
     /// fallback), so each run can be shaped by a single font.
-    fn segment(&self, text: &str, primary: FaceId) -> Vec<(FaceId, String)> {
-        let mut runs: Vec<(FaceId, String)> = Vec::new();
+    fn segment(&self, text: &str, primary: FaceId) -> Vec<(FaceId, Script, String)> {
+        use swash::text::Codepoint;
+        let mut runs: Vec<(FaceId, Script, String)> = Vec::new();
         for ch in text.chars() {
             let face = self.resolve_face(ch, primary);
+            let script = ch.script();
+            // `Common` (spaces, digits, most punctuation) and `Inherited` (combining marks) carry
+            // no script of their own. Opening a new run for them would cut a word in half — and an
+            // Arabic word split at its own comma stops joining across the cut, which is exactly the
+            // disconnected-letterforms bug this segmentation exists to prevent. So they EXTEND the
+            // run in progress, and only start one (as Latin) when nothing precedes them.
+            let neutral = matches!(script, Script::Common | Script::Inherited | Script::Unknown);
             match runs.last_mut() {
-                Some((f, s)) if *f == face => s.push(ch),
-                _ => runs.push((face, ch.to_string())),
+                Some((f, s, buf)) if *f == face && (neutral || *s == script) => buf.push(ch),
+                _ => runs.push((
+                    face,
+                    if neutral { Script::Latin } else { script },
+                    ch.to_string(),
+                )),
             }
         }
         runs
@@ -659,6 +672,7 @@ impl FontContext {
         &self,
         text: &str,
         face: FaceId,
+        script: Script,
         size: f32,
         rtl: bool,
         mut emit: impl FnMut(&swash::shape::cluster::Glyph, f32),
@@ -675,7 +689,19 @@ impl FontContext {
             swash::shape::Direction::LeftToRight
         };
         let mut ctx = self.shape_ctx.borrow_mut();
-        let mut shaper = ctx.builder(font).size(size).direction(dir).build();
+        // **The script is what selects the OpenType feature set**, and swash defaults it to
+        // `Latin` — so before this, every run on the web was shaped as Latin. Latin needs no
+        // joining, no reordering and no conjunct formation, so those features were never applied:
+        // Arabic came out as disconnected isolated letterforms (`مرحبا` as five unjoined shapes),
+        // and Devanagari as one glyph per codepoint with matras unreordered and conjuncts unformed.
+        // Both are *legible-looking* to someone who does not read the script — which is why this
+        // survived: nothing was missing, nothing was `.notdef`, the text was simply wrong.
+        let mut shaper = ctx
+            .builder(font)
+            .size(size)
+            .script(script)
+            .direction(dir)
+            .build();
         shaper.add_str(text);
         let mut pen = 0.0f32;
         shaper.shape_with(|cluster| {
@@ -714,8 +740,8 @@ impl FontContext {
             for vr in vruns {
                 let rtl = levels[vr.start].is_rtl();
                 let sub = &text[vr.clone()];
-                for (face, run) in self.segment(sub, primary) {
-                    let advance = self.shape_run(&run, face, size, rtl, |g, x| {
+                for (face, script, run) in self.segment(sub, primary) {
+                    let advance = self.shape_run(&run, face, script, size, rtl, |g, x| {
                         glyphs.push(GlyphPos {
                             glyph_id: g.id,
                             face,

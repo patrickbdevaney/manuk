@@ -8898,3 +8898,80 @@ written down in `docs/wiki/js-engine.md`).
 on the clean tree** under the identical feature set. Same multiple-runtimes-per-binary class.
 
 **This is the fifth and last Phase-0 finish-line lever.**
+
+## PHASE 0 — DECLARED COMPLETE (after tick 213, 2026-07-18)
+
+The five locked finish-line levers of the tick-195 user directive have all landed:
+
+1. **fetch STREAMING response body** — ticks 196–198 (ReadableStream, real SSE + resume at 207, wired
+   into real navigation). AI-chat answers render as they arrive.
+2. **a11y node STATES** — tick 199. checked/expanded/selected/disabled/value/focused on `A11yNode`;
+   the agent can **confirm its own actions** rather than assuming they took.
+3. **WebSocket** — ticks 200–202, via tokio-tungstenite (**borrowed, not hand-rolled**). Live chat/DMs
+   /presence receive server pushes.
+4. **scroll-anchoring / overflow-anchor** — ticks 203–204. Feeds stop jumping when content loads above.
+5. **forced synchronous reflow** — tick 213 (this tick). Virtualized lists size their rows correctly.
+
+`.git/manuk-phase0-complete` touched, which triggers the **AGENTIC-PHASES-PLAN Phase-1 cascade**
+(`docs/loop/AGENTIC-PHASES-PLAN.md`).
+
+**What Phase 0 does NOT mean.** Not "the browser is done" — it means the *daily-driver substrate* is
+good enough to stop grinding it and start exposing it. The parked work is parked, not finished, and is
+named so it stays visible: the actuation-completers (`formaction`/`formmethod` overriding the form's,
+`requestSubmit(submitter)` carrying its argument, link navigation from `element.click()`, hover/dblclick
+dispatchers); grid-template-areas (a decomposition session, not a tick); the CSS-layout Taffy tail
+(flexbox/grid distribution + intrinsic leaf measure); ch/ex font-metrics; the CSSOM `.sheet` cascade
+bridge; and the pre-existing multiple-SpiderMonkey-runtimes-per-test-binary SIGSEGV.
+
+Per the mandate, the next tick **re-runs `scripts/lever-board.sh`** and obeys whatever board the
+observer has steered to for Phase 1 — this declaration does not itself choose the next lever.
+
+## Tick 214 — Arabic joins, Devanagari forms conjuncts: the shaper is told its script (text) (2026-07-18)
+
+**Selected:** the board's `HORIZON STALE — PIVOT DOMAINS` steer (5 ticks clustered in `engine/page`,
+Phase-0 readiness flat) plus its own tie-break rule, *"`?` outranks `✗` — probe an unknown first, it
+is a cheap tick."* Top unknown: **font fallback across scripts (CJK/emoji) — "pages render as TOFU."**
+New domain (`engine/text`), and Phase 0 having just been declared complete, the right moment to rotate.
+
+**The probe answered the asked question NO and found a worse one.** `probe_script_fallback.rs` shaped
+eight scripts and printed glyph count / `.notdef` count / resolving face. Per-glyph fallback **works**:
+CJK, emoji, Arabic, Hebrew and Devanagari all resolve real faces, **zero `.notdef`, no tofu anywhere.**
+That is the **fifth** time a feature assumed missing here was already built (`localStorage`, `FormData`,
+`position: sticky`, `IntersectionObserver`). *An absent measurement is not a negative measurement.*
+
+What the probe *did* surface, from one column nobody would have thought to ask for: **Devanagari
+`नमस्ते` shaped to 6 glyphs for 6 codepoints, and Arabic `مرحبا` to 5 for 5.** Both are 1:1, and both
+must not be — a complex script whose glyph count equals its codepoint count has not been shaped.
+
+**The bug.** swash's `ShaperBuilder` defaults `script` to `Script::Latin` (swash-0.2.9 `shape/mod.rs:414`)
+and `shape_run` never called `.script()`. **The script selects the OpenType feature set.** Latin needs no
+joining, no reordering, no conjuncts — so `init`/`medi`/`fina` and `akhn`/`half`/`pres` never ran, for
+every run on the web. Arabic rendered as disconnected isolated letterforms; Devanagari with conjuncts
+unformed and the virama a visible dangling mark; Thai/Bengali/Tamil/Khmer wrong the same way.
+
+**Why it survived, and this is the part worth keeping.** *Nothing was missing.* No `.notdef`, no error,
+a plausible width, and the fallback picking exactly the right face — **real letters, correct font,
+wrong text**, which looks fine to anyone who does not read the script. Every instrument this project
+owns points at *coverage*, and this bug has perfect coverage. The invariant that caught it needs no
+ability to read the script: **for a complex script, `glyphs == chars` is the bug.**
+
+**Implemented.** `segment()` returns `(FaceId, Script, String)` and breaks a run when **either** the
+face or the script changes; the script reaches `ctx.builder(font).script(script)`.
+`Common`/`Inherited`/`Unknown` chars (spaces, punctuation, combining marks) **extend** the run in
+progress rather than opening one — otherwise an Arabic word split at its own comma stops joining across
+the cut, which is the same bug hiding in running text where it is hardest to see.
+
+**Gate.** `G_COMPLEX_SCRIPT` (`engine/text/tests/g_complex_script.rs`). Devanagari must emit fewer
+glyphs than codepoints; an Arabic interior letter must NOT keep its isolated glyph id inside the word
+(font-constant-free, so it survives a font bump); Latin (5) and CJK (4) glyph counts pinned, because
+the risk script segmentation introduces is **over-splitting**; a mixed `hi مرحبا 你好` line must still
+cover every character. **Both complex-script claims proven RED independently** by removing
+`.script(script)` — the Arabic one verified separately, since the Devanagari failure would otherwise
+have masked it. Font-absent paths skip **loudly** (the crate's existing precedent), never silently.
+
+**Measured:** Arabic run width 43.54 → 33.66 at 16px (joined forms are narrower and overlap);
+Devanagari 6 glyphs → 5. manuk-text/layout/paint/css all green — no regression.
+
+**Residue:** `lang`-driven Han disambiguation (JP/SC/KR shape identically today), Thai word
+segmentation (needs a dictionary), `line-break`/`hyphens`, vertical writing modes. Hebrew resolves via
+the Latin primary (DejaVu covers it) rather than a fallback face — correct, but worth knowing.

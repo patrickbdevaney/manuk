@@ -393,3 +393,49 @@ defaults to a ~1px line; `text-decoration-thickness:6px` paints a 6px line; `tex
 keeps the thickness but sits the line exactly 8px below the default y. RED vs the hardcoded-thickness /
 fixed-position baseline. css+paint green, HANG/CRASH 0. Residue: `text-decoration-style`
 (dotted/dashed/wavy/double still paint solid), `text-decoration-skip-ink`, `from-font` exact metrics.
+
+## The shaper must be told WHICH SCRIPT it is shaping (tick 214)
+
+swash's `ShaperBuilder` defaults `script` to `Script::Latin`, and `shape_run` never called
+`.script()`. **The script is what selects the OpenType feature set**, so every run on the web was
+shaped with Latin's — which needs no joining, no reordering and no conjunct formation, so none of
+those features ever ran:
+
+- **Arabic** rendered as disconnected isolated letterforms. `init`/`medi`/`fina` never applied, so
+  `مرحبا` came out as five standalone shapes instead of one joined word.
+- **Devanagari** was a flat 1:1 codepoint→glyph mapping. `akhn`/`half`/`pres` never applied, so
+  conjuncts never formed and the virama rendered as a visible dangling mark.
+- Thai, Bengali, Tamil, Khmer and every other complex script were wrong the same way.
+
+**Why it survived so long, and this is the transferable part.** *Nothing was missing.* No `.notdef`,
+no tofu, no error, no exception, a plausible width, and the per-glyph **fallback worked correctly**
+and picked exactly the right face. The text rendered as real letters from the right font that happen
+to be **wrong** — which, to anyone who does not read the script, looks fine. Every instrument the
+project had was pointed at *coverage* ("is there a glyph?") and this bug has perfect coverage.
+
+The probe that found it (`engine/text/tests/probe_script_fallback.rs`) only saw it by comparing
+**glyph count against codepoint count** — a cheap, script-agnostic invariant that needs no ability to
+read the script. That is the reusable instrument: *for a complex script, glyphs ≠ chars is the
+signal, and glyphs == chars is the bug.*
+
+**The fix** is script-aware run segmentation. `segment()` returns `(FaceId, Script, String)` instead
+of `(FaceId, String)` — a run breaks when **either** the face or the script changes — and the script
+is passed to `ctx.builder(font).script(script)`.
+
+⚠ **`Common`/`Inherited`/`Unknown` characters must EXTEND the run in progress, not open a new one.**
+Spaces, digits and most punctuation carry no script of their own. If they started a new run, an
+Arabic word split at its own comma would stop joining across the cut — reintroducing the same bug in
+running text only, where it is hardest to spot. They only start a run (as Latin) when nothing
+precedes them.
+
+Held by `G_COMPLEX_SCRIPT` (`engine/text/tests/g_complex_script.rs`). **Both claims proven RED**
+independently by removing `.script(script)`: Devanagari falls back to 6 glyphs for 6 codepoints, and
+the Arabic interior letter keeps its isolated glyph id inside the word. The gate also pins Latin (5)
+and CJK (4) glyph counts, because the risk script segmentation introduces is **over-splitting** — a
+run cut per character shapes nothing correctly and loses kerning.
+
+**Confirmed already working, so do not re-probe:** per-glyph font fallback itself. CJK, emoji,
+Arabic, Hebrew and Devanagari all resolve real faces with zero `.notdef` (`FALLBACK_FAMILIES`). The
+lever board's "CJK/emoji renders as TOFU" was a `?`, and the answer is **no** — this is the fifth
+time a feature assumed missing here turned out to be built (after `localStorage`, `FormData`,
+`position: sticky`, `IntersectionObserver`). **An absent measurement is not a negative measurement.**
