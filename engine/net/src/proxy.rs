@@ -94,9 +94,16 @@ pub async fn fetch_via_proxy(proxy: &SocksProxy, url: &str) -> Result<Response> 
     }
 }
 
-/// Wrap a proxied TCP stream in TLS. Certificate validation is the **normal** webpki
-/// path — proxying must never weaken TLS verification.
-async fn tls_connect<S>(stream: S, host: &str) -> Result<tokio_rustls::client::TlsStream<S>>
+/// Wrap a TCP stream in TLS. Certificate validation is the **normal** webpki path — proxying must
+/// never weaken TLS verification.
+///
+/// `pub(crate)` because `wss://` needs exactly this connector: the ring-pinned one. Letting
+/// `tokio-tungstenite` bring its own TLS would re-enable the `aws-lc` backend across the whole
+/// dependency graph via cargo's feature union (see the warning in `Cargo.toml`).
+pub(crate) async fn tls_connect<S>(
+    stream: S,
+    host: &str,
+) -> Result<tokio_rustls::client::TlsStream<S>>
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {

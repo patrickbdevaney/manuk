@@ -8252,3 +8252,65 @@ gate exercises; native activation is its own tick and is NOT claimed here.
 `aria-level`; `A11yDiff` still diffs on `(role, name)` only, so a pure state change shows up in
 `to_observation_lines()` but not in `diff()` — worth closing when an agent starts driving off diffs.
 Finish-line levers 3 (WebSocket), 4 (scroll-anchoring) and 5 (forced reflow) remain.
+
+## Tick 200 — WebSocket transport: borrowed, not hand-rolled (net) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (Phase-0 FINISH-LINE lever 3, transport half). WIKI:
+docs/wiki/networking.md "WebSocket transport — borrowed, not hand-rolled".**
+
+**Selection.** Lever 2 landed in tick 199, so top-down gives lever 3: *"WebSocket via
+tokio-tungstenite [BORROW the crate — live chat/DMs/presence + cloud live-logs]"*. The directive
+names the crate, which settles the build-vs-borrow question before it can be re-litigated.
+
+**Decomposed on the now-proven seam** (as ticks 197/198 did for streaming): this tick is the
+**transport**, gated end-to-end against a real WebSocket server; the JS surface + shell pump is the
+next tick. Each half is independently gateable, which is what keeps a multi-layer lever from
+becoming a stall.
+
+**Hypothesis.** The page-facing `WebSocket` has existed as an honest stub — it constructs, then
+reports failure — so a live-blog silently never updated rather than throwing. There was no client
+transport at all beneath it.
+
+**Implemented.** `manuk_net::websocket::WebSocketConn` — connect (`ws://` and `wss://`), send/recv of
+text and binary, close. Borrowed because RFC 6455 framing, client masking, the close handshake,
+continuation frames and ping/pong are precisely the wheel not to reinvent: subtly wrong masking
+produces a client that works against one server and hangs against another.
+
+**The TLS is deliberately OURS, and this is the load-bearing build decision.** `tokio-tungstenite`'s
+TLS features pull an unpinned `tokio-rustls`, and cargo's feature **union** would re-enable the
+`aws-lc` backend across the whole dependency graph — the exact failure already written down in
+`engine/net/Cargo.toml`, which once broke the Windows build outright (`link.exe: exit code 1104`). So
+the crate is taken with `default-features = false, features = ["handshake"]`; we connect the socket,
+run TLS with the ring-pinned `proxy::tls_connect` (promoted to `pub(crate)` for exactly this), and
+hand tungstenite a ready stream via `client_async`. **Borrowing a crate does not mean accepting its
+dependency defaults.**
+
+**Subprotocols are negotiated, not assumed.** The handshake request is built by hand so
+`Sec-WebSocket-Protocol` carries the page's offered list, and `protocol()` reports what the SERVER
+chose — a client that offered two and got `""` back must speak neither.
+
+**A real trap the gate caught, and it was in the GATE.** The first version of the test *server*
+returned as soon as it read a `Close` frame; the client then failed with `Connection reset without
+closing handshake`. That is not a client bug — tungstenite replies to a close from inside `next()`,
+so bailing out on the first Close drops the socket before the reply is flushed, and a server that
+drops the socket is indistinguishable from a crashed one. A browser is RIGHT to surface that as an
+unclean close. Fixed the server to keep polling; the client's strictness is correct behaviour worth
+keeping.
+
+**Gate.** Against a **real server** (tungstenite's accept side — not a mock of our own client, which
+would only prove we agree with ourselves): the handshake completes, the subprotocol is negotiated,
+text and binary round-trip intact, **the server pushes a message the client never asked for** — the
+capability polling cannot express and the entire reason this transport exists — and a clean close is
+observed as end-of-stream so a page's `onclose` fires instead of hanging. manuk-net 60 green,
+`cargo check --workspace` green.
+
+**Honest note on RED.** This module did not exist, so the gate is RED by construction rather than by
+reverting a behaviour — there was no client to break. The falsifiable content is in the assertions
+(subprotocol echo, unprompted push, clean-close-as-EOF), each of which a plausible-but-wrong
+implementation fails; the close-handshake trap above is a live example of one that did.
+
+**Residue.** The page-facing JS `WebSocket` is **still the stub** — wiring this transport to it
+(shell event pump, per-connection id, `onopen`/`onmessage`/`onclose`/`onerror`, `bufferedAmount`,
+`binaryType`) is the next tick and finishes lever 3. No permessage-deflate (offered by many servers,
+optional by spec); no auto-reconnect (correctly the page's job); no `Blob` binaryType. Finish-line
+levers 4 (scroll-anchoring) and 5 (forced reflow) remain after that.

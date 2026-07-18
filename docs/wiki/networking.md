@@ -564,3 +564,49 @@ The gate is a timing claim, because that is the only kind buffering cannot fake:
 sends the headers, half the body, then holds the rest back for 250ms. The first chunk must be
 delivered at least 200ms before the last. Proven RED by making the implementation collect the body
 and hand it over at the end — `chunks=1, first=last=253ms`, exactly the failure the claim names.
+
+## WebSocket transport — borrowed, not hand-rolled (tick 200)
+
+Phase-0 finish-line lever 3. The page-facing `WebSocket` constructor has existed for a while as an
+**honest stub**: it constructs, then reports failure, so a live-news site's live-blog silently never
+updated rather than throwing a ReferenceError. `manuk_net::websocket::WebSocketConn` is the transport
+that makes it real.
+
+**Borrowed from `tokio-tungstenite`.** RFC 6455 framing, client-side masking, the close handshake,
+continuation frames and ping/pong are exactly the wheel that should not be reinvented — and getting
+masking or the close handshake subtly wrong yields a connection that works against one server and
+hangs against another.
+
+**But the TLS is ours, and that is load-bearing.** `tokio-tungstenite`'s TLS features pull an
+unpinned `tokio-rustls`, and cargo's feature **union** would re-enable the `aws-lc` backend across the
+whole dependency graph — the exact failure already documented in `engine/net/Cargo.toml`, which once
+broke the Windows build outright (`link.exe: exit code 1104`). So the crate is taken with
+`default-features = false, features = ["handshake"]`, we connect the socket and run TLS with the
+ring-pinned connector (`proxy::tls_connect`, now `pub(crate)` for exactly this), and hand tungstenite
+a ready stream via `client_async`.
+
+**Subprotocols are negotiated, not assumed.** The handshake request is built by hand so
+`Sec-WebSocket-Protocol` can carry the page's offered list, and `protocol()` reports what the
+**server** chose. A client that offered `["chat.v1", "chat.v0"]` and got `""` back must not then
+speak chat.v1 at it.
+
+Ping/pong are consumed rather than surfaced: they are keepalive, not page data, and the `WebSocket`
+API does not expose them either.
+
+**The close handshake is a real trap, and the gate caught it.** The first version of the gate's
+*server* returned as soon as it read a `Close` frame. tungstenite replies to a close from inside
+`next()`, so bailing out on the first Close drops the socket before the reply is flushed — and the
+client correctly reported `Connection reset without closing handshake`. That is not a client bug: a
+server that drops the socket is indistinguishable from a crashed one, and a browser is right to
+surface it as an unclean close. The fix is to keep polling and let the loop end on its own.
+
+Gated against a **real server** (tungstenite's accept side, not a mock of our own client): handshake
+completes, subprotocol negotiated, text and binary round-trip intact, **the server pushes a message
+the client never asked for** — the capability polling cannot express and the whole reason this
+transport exists — and a clean close is observed as end-of-stream so a page's `onclose` fires instead
+of hanging.
+
+Residue: the page-facing JS `WebSocket` is **still the stub** — wiring this transport to it (plus the
+shell's event pump, a per-connection id, `onopen`/`onmessage`/`onclose`/`onerror`, `bufferedAmount`
+and `binaryType`) is the next tick, and finishes lever 3. No permessage-deflate (offered by many
+servers, optional by spec), no auto-reconnect (correctly the page's job), no `Blob` binaryType yet.

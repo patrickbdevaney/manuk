@@ -49,6 +49,10 @@ pub mod storage;
 /// E7 — SOCKS5 proxying (user-provided proxy; no bundled VPN).
 pub mod proxy;
 
+/// WebSocket transport (live chat, DMs, presence, cloud live-logs) — borrowed from
+/// `tokio-tungstenite`, with our own ring-pinned TLS. See [`websocket::WebSocketConn`].
+pub mod websocket;
+
 /// E5 native content-blocking (feature `adblock`).
 #[cfg(feature = "adblock")]
 pub mod blocker;

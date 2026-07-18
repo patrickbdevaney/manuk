@@ -356,6 +356,7 @@
   - L429 · response.body is a real ReadableStream — a streamed answer renders at all
   - L478 · Incremental delivery — the answer TYPES ITSELF OUT (FetchStreamEvent)
   - L527 · The wire is connected — request_streaming + PageFetchStream (finish-line lever 1, done)
+  - L568 · WebSocket transport — borrowed, not hand-rolled (tick 200)
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -450,4 +451,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-373 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+374 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -40,6 +40,13 @@ serde_json.workspace = true
 tower-service = "0.3"
 psl = "2"
 tokio-socks = "0.5"
+# WebSocket — BORROWED, not hand-rolled (RFC 6455 framing, masking, close handshake and the
+# permessage-deflate negotiation are exactly the wheel that should not be reinvented).
+# ⚠ `default-features = false` for the same load-bearing reason as tokio-rustls below: the crate's
+# TLS features pull an unpinned tokio-rustls and cargo's feature UNION would re-enable aws-lc across
+# the whole graph. We do our own TLS with the ring-pinned connector and hand it a ready stream via
+# `client_async`, so only the `handshake` feature is needed here.
+tokio-tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
 # ⚠ `default-features = false` is load-bearing. tokio-rustls's DEFAULTS enable `rustls/aws-lc-rs`,
 # which drags in `aws-lc-sys` — a C/asm crypto backend needing NASM+CMake — and on Windows that fails
 # the link outright (`link.exe: exit code 1104`). Every other rustls dependency here is already pinned to
@@ -52,3 +59,5 @@ adblock = { version = "0.13", optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "macros"] }
+# The gate needs a real WebSocket SERVER to talk to — same crate, accept side.
+tokio-tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
