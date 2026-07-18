@@ -9504,3 +9504,52 @@ does not exercise that path and I have not measured it, so it is recorded as a l
 **Unknowns: 18 → 17.**
 
 **Mechanism captured:** `docs/wiki/networking.md`.
+
+## Tick 227 — media M2: the segment does not survive the fetch boundary (2026-07-18)
+
+**Selected:** CO-#1 **(A) MEDIA, step M2** (arraybuffer/Range) — the input side of the pipe t223
+built, and the thing M3's demuxer will eat.
+
+**Probed before building, and the probe found the blocker.** A 260-byte segment — real EBML magic
+followed by all 256 byte values — sent through a real server and read back via
+`fetch().arrayBuffer()`:
+
+```
+sent 260 bytes → received 407.   magic:false   allbytes:differs@0=194   replacement:0
+```
+
+**Not truncation, and NOT the U+FFFD replacement I wrote the probe to catch** — that expectation was
+wrong, which is the argument for measuring. It is UTF-8 **inflation**: the body crosses the boundary
+as a Rust `&str` (`Page::resolve_fetch(id, status, body: &str, …)`), so every byte above `0x7F` is
+carried as a codepoint and re-encoded as two (`0xDF` → `0xC3 0x9F`; the `194` is `0xC2`, that lead
+byte). Every byte below `0x80` survives perfectly, which is exactly why this has hidden: JSON, HTML,
+SSE and form bodies — everything the fetch path has carried until now — round-trip exactly. Only
+binary is destroyed, and the media track is its first binary consumer.
+
+**M3 is blocked on this, and would have misdiagnosed it.** `appendBuffer` accepts any bytes, so the
+corruption surfaces inside the demuxer as a rejected stream — it reads as a codec bug, and no amount
+of work on symphonia fixes a corrupted input. Starting M3 first would have cost a tick chasing the
+wrong organ.
+
+**Deliberately did NOT fix it in this tick.** The fix is a transport representation, not a parser:
+carry the body as a **binary string** (one code unit per byte, `charCode & 0xFF` — the convention
+this codebase already uses on the WebSocket path) and move the UTF-8 decode into `.text()`/`.json()`,
+where the page decides what its own body is. That touches `Page::resolve_fetch`, the shell's
+`pump_fetches` and the prelude's body accessors *together*, and every existing fetch consumer runs
+through those — a half-done pass regresses the whole fetch surface, and the RATCHET refuses that
+trade. It is the next tick, and it is now fully specified with a gate already written against it.
+
+**What DOES work, and is now pinned.** Byte ranges are real: the page's `Range: bytes=4-11` reaches
+the wire, the `206` surfaces instead of being flattened to `200`, and the requested bytes come back.
+Segmented delivery is not the problem.
+
+**Gate.** `g_media_segment_fetch` is a ratchet on the working half (`done`, `rangestatus:206`,
+`range`) plus a wire assertion that the `Range` header actually leaves the client; the three binary
+claims sit commented beside their measured values, ready to move into the assertion list the moment
+the transport lands. RED proven by dropping the page's headers in the pump — the `Range` never
+reaches the wire and the whole-file download that results is what adaptive streaming cannot survive.
+
+**Constellation:** `fetch uploads + ranges (streaming)` unknown → **partial**, with the corruption
+recorded as its receipt.
+
+**Mechanism captured:** `docs/wiki/media-pipeline.md`.

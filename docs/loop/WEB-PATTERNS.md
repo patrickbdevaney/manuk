@@ -1089,3 +1089,19 @@ reason for that: the RED probe that drops page headers still renders a logged-in
 Still unbuilt on this track (O2-O5): interactive cross-origin iframe re-render, popup +
 `postMessage`, third-party/cross-site cookie policy, and FedCM `navigator.credentials`. The redirect
 flow — which is what the overwhelming majority of "sign in with" buttons actually use — is done.
+
+## Binary response bodies (media segments, and everything after them)
+
+Measured in tick 227 and **broken**: a 260-byte media segment fetched with `.arrayBuffer()` comes
+back as 407 bytes. The response body crosses the JS boundary as a Rust `&str`, so every byte above
+`0x7F` is carried as a codepoint and re-encoded as two on the way out (`0xDF` → `0xC3 0x9F`).
+
+Bytes below `0x80` survive perfectly, which is why nothing noticed until now — JSON, HTML, SSE and
+form bodies all round-trip exactly. The classes this blocks are the ones that fetch *bytes*: MSE
+media segments (and therefore the entire watch-the-web track — a demuxer cannot parse a corrupted
+stream, and the failure surfaces inside the demuxer as if it were a codec bug), plus WASM modules
+fetched over the network, binary file uploads read back, and any `arrayBuffer()` consumer.
+
+Byte-range requests, the other half of segmented delivery, **do** work: `Range` reaches the wire and
+`206` surfaces intact. Gated by `g_media_segment_fetch`, which pins the working half today and has
+the binary claims written and waiting.

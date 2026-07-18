@@ -93,3 +93,47 @@ completes on `sourceended`, so a single end-of-run write means any earlier break
 opened, append threw, listener never fired — reports the identical empty `-`, naming no claim and
 pointing at no mechanism. Per-push flushing makes the last recorded claim the failure's location.
 This was not hypothetical: the first RED probe reported `got: -` and proved nothing until fixed.
+
+## M2: a media segment does NOT survive the fetch boundary (measured, tick 227)
+
+Tick 223 built the pipe a player appends into. What it appends comes from an `XHR`/`fetch` with
+`responseType = 'arraybuffer'`, usually over a byte `Range`. That path was measured with a 260-byte
+probe segment — a real EBML magic followed by all 256 byte values — and it is **broken**:
+
+```
+sent 260 bytes  →  received 407.   magic:false   allbytes:differs@0=194
+```
+
+**It is not truncation, and it is not U+FFFD replacement** (which is what the probe was originally
+written to catch, and what the codebase's earlier lossy-storage bugs looked like). It is UTF-8
+**inflation**. The response body crosses the boundary as a Rust `&str`
+(`Page::resolve_fetch(id, status, body: &str, …)`), so every byte above `0x7F` is carried as a
+codepoint and re-encoded as two bytes on the way back out: `0xDF` → `0xC3 0x9F`, and the `194` in
+`differs@0` is `0xC2`, that lead byte.
+
+**Why it hid.** Every byte below `0x80` survives perfectly. JSON, HTML, SSE, form bodies — everything
+the fetch path has been used for so far — round-trips exactly. Only binary is destroyed, and the
+first binary consumer is the media track.
+
+**Why it is a hard blocker for M3.** `appendBuffer` accepts the segment (it accepts any bytes), and
+the demuxer then rejects a stream that was valid when it left the server. The symptom appears in the
+demuxer, so it reads as a codec bug — but no amount of work on symphonia fixes a corrupted input.
+Demux cannot be started until this is fixed.
+
+**The fix is a transport representation, not a parser.** Carry the body as a **binary string** — one
+code unit per byte, `charCode & 0xFF` — which is the convention this codebase already uses on the
+WebSocket path, and move the UTF-8 decode into `.text()`/`.json()`, where it belongs. That is
+correct rather than merely expedient: a `Response` has one body, and *the page* decides whether it is
+text or bytes; deciding for it at the boundary is what caused this. It touches `Page::resolve_fetch`,
+the shell's `pump_fetches` and the prelude's body accessors together, which is why it is its own
+tick.
+
+`g_media_segment_fetch` is already written against the fixed behaviour: the `Range`/`206` half is
+pinned green today, and the three binary claims sit commented beside their measured values, ready to
+move into the assertion list the moment the transport changes.
+
+### What DOES work, and is now pinned
+
+Byte-range requests are real: the page's `Range: bytes=4-11` reaches the wire, the server's `206`
+surfaces instead of being flattened to `200`, and the requested bytes come back. Segmented delivery —
+the other half of adaptive streaming — is not the problem.

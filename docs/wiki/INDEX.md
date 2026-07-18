@@ -354,6 +354,8 @@
   - L66 · The append sequence is a task sequence, and that is load-bearing
   - L78 · An updateend handler that appends is re-entered by its own append
   - L89 · Gates: flush the record on every push, not at the end
+  - L97 · M2: a media segment does NOT survive the fetch boundary (measured, tick 227)
+  - L135 · What DOES work, and is now pinned
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -497,4 +499,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-416 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+418 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

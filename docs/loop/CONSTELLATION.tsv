@@ -91,7 +91,7 @@ doc	CSS anchor positioning	tooltips, menus, popovers without JS	unknown	-	SURFAC
 doc	CSS attr() / zoom / shape() / contrast-color()	modern CSS authors use these now	unknown	-	SURFACE AUDIT t83: Interop 2026
 doc	custom highlights	find-in-page, editors, code highlighting without DOM churn	missing	-	tick 225 probe: Highlight / CSS.highlights absent
 doc	JPEG XL	Interop 2026 investigation; Apple ships it	unknown	-	SURFACE AUDIT t83: Interop 2026
-platform	fetch uploads + ranges (streaming)	large uploads, resumable downloads, video range requests	unknown	-	SURFACE AUDIT t83: Interop 2026
+platform	fetch uploads + ranges (streaming)	large uploads, resumable downloads, video range requests	partial	G_MEDIA_SEGMENT_FETCH	tick 227: Range+206 work (gated); BINARY BODIES CORRUPTED — 260B segment arrives as 407B, UTF-8 inflation at the &str fetch boundary; blocks media M3
 platform	WebTransport (HTTP/3)	low-latency data; games, live apps	unknown	-	SURFACE AUDIT t83: Interop 2026
 platform	WebAuthn / passkeys	THE modern login. Ladybird still lacks it; so do we	missing	-	confirmed absent (navigator.credentials zero hits). TOTP/password fallback survives (edge sweep t193b)
 media	media pseudo-classes (:playing/:muted etc)	styling player state	unknown	-	SURFACE AUDIT t83: Interop 2026
