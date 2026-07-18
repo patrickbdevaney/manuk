@@ -8560,3 +8560,48 @@ honouring the server's `retry:` interval and resending `Last-Event-ID`; we parse
 it, and a finished stream fires `error` and stays closed. That is what makes SSE resilient in
 practice and is the one substantial gap. XHR `readyState 3` (streaming progress) is also still
 unimplemented — the third item in lever 1's text. And lever 5 stands as analysed above.
+
+## Tick 206 — XHR readyState 3: progress instead of nothing-then-done (js) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (completes Phase-0 FINISH-LINE lever 1 IN FULL). WIKI:
+docs/wiki/networking.md "XHR `readyState 3` — progress instead of nothing-then-done".**
+
+**Selection.** The last of the three things lever 1's text names ("ReadableStream + real SSE +
+readyState-3 XHR"), and my own residue from ticks 197/205. Lever 5 remains refused-as-subsystem per
+tick 205's analysis.
+
+**Hypothesis.** The streaming delivery path built in 197-198 only knew about `fetch` —
+`__deliverHead` bailed out on an XHR id, which I documented at the time. So an XHR still received its
+whole body in one delivery: `readyState` went 1 → 4, `onprogress` never fired, and `responseText` was
+empty right up until it was complete. **A download progress bar showed nothing and then 100%**, so
+the transfer appeared to take zero time.
+
+**Implemented.** The three delivery entry points branch on which kind of request the id belongs to.
+`__deliverHead` → `readyState 2` (HEADERS_RECEIVED): status and headers readable, body still empty.
+`__deliverChunk` → append, `readyState 3` (LOADING), fire `readystatechange` + `onprogress` with
+`loaded`. `__deliverEnd` → `readyState 4` (DONE), parse `responseType: "json"` **at this point and
+not before** — partial JSON does not parse, and attempting it per chunk would set `response` to null
+repeatedly — then `onload`/`onerror` and `onloadend`. `{stream: true}` decoding, for the same reason
+as everywhere else on this path.
+
+**The buffered `__deliverXhr` stays.** The headless loader and the mock-fetcher event loop deliver a
+complete body in one call, and going straight to DONE there is *correct* rather than a shortcut —
+that path genuinely has the whole body. Keeping both is what let every existing XHR test stay green.
+
+**Gate.** `g_xhr_progress` — the lifecycle is `2 → 3 → 3 → 4` rather than `1 → 4`; at `readyState 3`
+the page reads a **partial** `responseText` and `onprogress` reports `loaded`; the body **grows**
+across chunks; `onload` has not fired while the body is unfinished and fires once with the complete
+body at the end. Every assertion is made where the rest of the body does not exist yet. **Proven RED
+by never reporting LOADING** — the recorded state string collapses from `23` to `22`.
+
+**Lever 1 is now complete in full**: `ReadableStream` + `response.body` (196), the incremental spine
+(197), the wire (198), real SSE (205), XHR `readyState 3` (206). Regression-checked
+`g_fetch_stream`, `g_fetch_stream_incremental`, `g_eventsource`, `g_websocket`, `g_globals`, and
+`cargo check --workspace`.
+
+**Residue.** `onloadend` now fires on the streaming path but the buffered path still does not fire it
+on success (pre-existing asymmetry, worth unifying). No `lengthComputable`/`total` from
+`Content-Length`, so a progress bar can show bytes but not a percentage — a bounded follow-on.
+`responseType: "arraybuffer"/"blob"` still yield text. Finish-line status: levers 1, 2, 3 done;
+lever 4 done except `overflow-anchor: none` (Stylo-gated); lever 5 refused as a subsystem needing a
+dedicated session.

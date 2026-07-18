@@ -728,3 +728,34 @@ the server's `retry:` interval and resending `Last-Event-ID`; we parse `retry:` 
 finished stream fires `error` and stays closed. That is the one substantial gap and it is what makes
 SSE resilient in practice, so it is worth closing. No `withCredentials` enforcement beyond recording
 the flag.
+
+## XHR `readyState 3` — progress instead of nothing-then-done (tick 206)
+
+The last item in finish-line lever 1's stated scope. The streaming delivery path from ticks 197-198
+only knew about `fetch`: `__deliverHead` bailed out on an XHR id, a documented residue. So an XHR
+still received its whole body in one delivery — `readyState` went 1 → 4, `onprogress` never fired,
+and `responseText` was empty right up until it was complete. **A download progress bar showed nothing
+and then 100%**: the transfer appeared to take zero time.
+
+The three delivery entry points now branch on which kind of request the id belongs to:
+
+- `__deliverHead` → `readyState 2` (HEADERS_RECEIVED), status and headers readable, body still empty.
+- `__deliverChunk` → append to `responseText`, `readyState 3` (LOADING), fire `readystatechange` and
+  `onprogress` with `loaded`.
+- `__deliverEnd` → `readyState 4` (DONE), parse `responseType: "json"` at this point (not before —
+  partial JSON does not parse), then `onload`/`onerror` and `onloadend`.
+
+Decoding uses `{stream: true}` for the same reason everything else on this path does: a chunk
+boundary can split a multi-byte character.
+
+The buffered `__deliverXhr` remains for the non-streaming path (the headless loader and the
+mock-fetcher event loop), so `readyState` still goes straight to DONE there — correct, because that
+path genuinely has the whole body at once.
+
+Gated by `g_xhr_progress`: the lifecycle is `2 → 3 → 3 → 4` rather than `1 → 4`; at `readyState 3` the
+page reads a **partial** `responseText` and `onprogress` reports `loaded`; the body **grows** across
+chunks; `onload` has not fired while the body is unfinished, and fires once with the complete body at
+the end. Proven RED by never reporting LOADING — the state string collapses from `23` to `22`.
+
+**Finish-line lever 1 is now complete in full**: ReadableStream + `response.body` (196), the
+incremental spine (197), the wire (198), real SSE (205), and XHR `readyState 3` (206).

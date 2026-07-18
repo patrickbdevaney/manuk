@@ -372,22 +372,60 @@ const PRELUDE: &str = r#"
     // Headers are in: resolve the promise NOW, with a body that is still arriving.
     globalThis.__deliverHead = function(id, status, headers) {
         var cb = globalThis.__fetchCb[id];
-        if (!cb) return;                       // aborted, already settled, or an XHR (residue)
-        delete globalThis.__fetchCb[id];
-        if (status === 0) { cb.reject(new TypeError("Failed to fetch")); return; }
-        var s = globalThis.__makeStreamingResponse(status, headers);
-        globalThis.__streamCtl[id] = s;
-        cb.resolve(s.res);
+        if (cb) {
+            delete globalThis.__fetchCb[id];
+            if (status === 0) { cb.reject(new TypeError("Failed to fetch")); return; }
+            var s = globalThis.__makeStreamingResponse(status, headers);
+            globalThis.__streamCtl[id] = s;
+            cb.resolve(s.res);
+            return;
+        }
+        // **XHR takes the same streaming path (tick 206).** `readyState 3` (LOADING) with a
+        // growing `responseText` is how an XHR reports progress, and it is what every
+        // upload/download progress bar and pre-fetch-era streaming client reads. Delivering the
+        // whole body at once means `readyState` goes 1 → 4 and the page's progress handler never
+        // runs — the download appears to take zero time and then be finished.
+        var x = globalThis.__xhrObj[id];
+        if (!x) return;                        // aborted, or already settled
+        x._respHeaders = headers || [];
+        x.status = status; x.statusText = "";
+        x.responseText = ""; x.response = "";
+        x._dec = new globalThis.TextDecoder();
+        x.readyState = 2;                      // HEADERS_RECEIVED
+        if (typeof x.onreadystatechange === 'function') { try { x.onreadystatechange(); } catch (e) {} }
     };
     globalThis.__deliverChunk = function(id, str) {
         var s = globalThis.__streamCtl[id];
-        if (s) { s.push(globalThis.__bytesFromLatin1(str)); }
+        if (s) { s.push(globalThis.__bytesFromLatin1(str)); return; }
+        var x = globalThis.__xhrObj[id];
+        if (!x || x.readyState < 2) return;
+        // `{stream:true}` — a chunk boundary can split a multi-byte character.
+        x.responseText += x._dec.decode(globalThis.__bytesFromLatin1(str), { stream: true });
+        if (x.responseType !== "json") { x.response = x.responseText; }
+        x.readyState = 3;                      // LOADING — more is coming
+        if (typeof x.onreadystatechange === 'function') { try { x.onreadystatechange(); } catch (e) {} }
+        if (typeof x.onprogress === 'function') {
+            try { x.onprogress({ type: 'progress', target: x, loaded: x.responseText.length, lengthComputable: false }); }
+            catch (e) {}
+        }
     };
     globalThis.__deliverEnd = function(id) {
         var s = globalThis.__streamCtl[id];
-        if (!s) return;
-        delete globalThis.__streamCtl[id];
-        s.end();
+        if (s) { delete globalThis.__streamCtl[id]; s.end(); return; }
+        var x = globalThis.__xhrObj[id];
+        if (!x) return;
+        delete globalThis.__xhrObj[id];
+        if (x.responseType === "json") {
+            try { x.response = JSON.parse(x.responseText); } catch (e) { x.response = null; }
+        }
+        x.readyState = 4;                      // DONE
+        if (typeof x.onreadystatechange === 'function') { try { x.onreadystatechange(); } catch (e) {} }
+        if (x.status === 0) {
+            if (typeof x.onerror === 'function') { try { x.onerror(new Error("network")); } catch (e) {} }
+        } else if (typeof x.onload === 'function') { try { x.onload(); } catch (e) {} }
+        if (typeof x.onloadend === 'function') {
+            try { x.onloadend({ type: 'loadend', target: x }); } catch (e) {}
+        }
     };
 
     // Flatten a request's headers to "name\x02value\x02name\x02value" for the host to replay onto
