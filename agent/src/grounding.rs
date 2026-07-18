@@ -96,6 +96,7 @@ mod tests {
             name: name.to_string(),
             bbox,
             z: 0,
+            state: Default::default(),
             children,
         }
     }

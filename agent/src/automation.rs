@@ -187,6 +187,7 @@ mod tests {
                 height: 20.0,
             }),
             z: 0,
+            state: Default::default(),
             children,
         }
     }

@@ -2845,6 +2845,32 @@ impl Page {
         manuk_a11y::build_tree_with_geometry(&self.dom, &rects, &self.z_index_map())
     }
 
+    /// The accessibility tree with `state.focused` filled in for `focused`.
+    ///
+    /// Focus is **host-owned** — the shell tracks it and publishes it into the JS world via
+    /// [`publish_view_state`](Self::publish_view_state) — so it cannot be read back out of the DOM.
+    /// A caller that knows the focused node passes it here; [`a11y_tree`](Self::a11y_tree) leaves
+    /// `focused` false rather than guessing.
+    pub fn a11y_tree_with_focus(&self, focused: Option<manuk_dom::NodeId>) -> manuk_a11y::A11yNode {
+        let rects: std::collections::HashMap<manuk_dom::NodeId, manuk_a11y::Rect> = self
+            .root_box
+            .node_rects(&self.dom)
+            .into_iter()
+            .map(|(node, r)| {
+                (
+                    node,
+                    manuk_a11y::Rect {
+                        x: r.x,
+                        y: r.y,
+                        width: r.width,
+                        height: r.height,
+                    },
+                )
+            })
+            .collect();
+        manuk_a11y::build_tree_with_focus(&self.dom, &rects, &self.z_index_map(), focused)
+    }
+
     /// Mutable access to the DOM (so a caller/JS binding can mutate the tree, then
     /// call [`relayout_incremental`](Self::relayout_incremental)).
     pub fn dom_mut(&mut self) -> &mut Dom {

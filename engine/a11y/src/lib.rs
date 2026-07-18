@@ -239,7 +239,180 @@ pub struct A11yNode {
     /// a higher-`z` box on top wins a click even if a lower-`z` box also contains the point.
     /// `0` for the common non-positioned case (then hit-testing falls back to deepest-wins).
     pub z: i32,
+    /// Interaction state — checked, expanded, selected, disabled, value. **This is what lets an
+    /// agent confirm its own action.** See [`A11yState`].
+    pub state: A11yState,
     pub children: Vec<A11yNode>,
+}
+
+/// Tri-state checkedness. A checkbox is not a boolean: `mixed` is the real third value a
+/// "select all" parent checkbox shows, and flattening it to `false` tells an agent the opposite of
+/// what the page means.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Checked {
+    False,
+    True,
+    Mixed,
+}
+
+/// The interaction state of an accessibility node.
+///
+/// **Why this exists, and it is the agentic moat rather than a nicety.** Without it the tree says
+/// `checkbox "Remember me"` before a click and `checkbox "Remember me"` after it — identical. An
+/// agent that cannot observe the result of its own action cannot verify it, so it either proceeds on
+/// faith or re-clicks and toggles the setting back off. Every field here is one an agent needs to
+/// answer "did that work?".
+///
+/// `Option` means **not applicable** rather than false: a link is not "unchecked", it simply has no
+/// checkedness, and reporting `checked: false` on it would be a lie an agent could act on.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct A11yState {
+    /// Checkboxes, radios, and anything with `aria-checked` (including `mixed`).
+    pub checked: Option<Checked>,
+    /// Disclosure state — `aria-expanded`, and `<details open>`. How an agent knows whether the
+    /// menu it just clicked actually opened.
+    pub expanded: Option<bool>,
+    /// `<option selected>` and `aria-selected` (tabs, listbox rows, grid cells).
+    pub selected: Option<bool>,
+    /// `disabled` or `aria-disabled`. An agent that clicks a disabled button waits forever for a
+    /// result that is never coming; this is what tells it not to.
+    pub disabled: bool,
+    /// `required` / `aria-required` — which field a blocked form submission is complaining about.
+    pub required: bool,
+    /// `readonly` / `aria-readonly`.
+    pub readonly: bool,
+    /// The element has DOM focus. Host-owned (the shell tracks it), so it is only populated by
+    /// [`build_tree_with_focus`]; the plain builders leave it `false`.
+    pub focused: bool,
+    /// Current value: a field's text, a select's chosen option, or `aria-valuenow` for a slider or
+    /// progress bar. This is how an agent reads back what it just typed.
+    pub value: Option<String>,
+}
+
+impl A11yState {
+    /// Nothing to report — the common case for static content, and rendered as no suffix at all.
+    pub fn is_empty(&self) -> bool {
+        *self == A11yState::default()
+    }
+
+    /// A compact agent-readable suffix, e.g. ` [checked disabled value="ada"]`. Empty when there is
+    /// no state, so a static document's observation lines are unchanged.
+    pub fn render(&self) -> String {
+        let mut parts: Vec<String> = Vec::new();
+        match self.checked {
+            Some(Checked::True) => parts.push("checked".into()),
+            Some(Checked::False) => parts.push("unchecked".into()),
+            Some(Checked::Mixed) => parts.push("mixed".into()),
+            None => {}
+        }
+        if let Some(e) = self.expanded {
+            parts.push(if e {
+                "expanded".into()
+            } else {
+                "collapsed".into()
+            });
+        }
+        if let Some(true) = self.selected {
+            parts.push("selected".into());
+        }
+        if self.disabled {
+            parts.push("disabled".into());
+        }
+        if self.required {
+            parts.push("required".into());
+        }
+        if self.readonly {
+            parts.push("readonly".into());
+        }
+        if self.focused {
+            parts.push("focused".into());
+        }
+        if let Some(v) = &self.value {
+            if !v.is_empty() {
+                parts.push(format!("value={v:?}"));
+            }
+        }
+        if parts.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}]", parts.join(" "))
+        }
+    }
+}
+
+/// Read an element's interaction state out of the DOM.
+///
+/// ARIA wins over the native attribute where both are present, which is the cascade assistive tech
+/// uses: an author who wrote `aria-checked="mixed"` on a checkbox means it, and the native attribute
+/// cannot express `mixed` at all.
+pub fn state_of(dom: &Dom, node: NodeId, role: &Role) -> A11yState {
+    let Some(el) = dom.element(node) else {
+        return A11yState::default();
+    };
+    let tag = el.name.as_str();
+    let attr = |n: &str| el.attr(n);
+    let aria_bool = |n: &str| match attr(n) {
+        Some("true") => Some(true),
+        Some("false") => Some(false),
+        _ => None,
+    };
+    let ty = attr("type").unwrap_or("").to_ascii_lowercase();
+
+    // Checked. `el.checked = true` from script writes the `checked` attribute (see the reflector),
+    // so reading the attribute sees script-driven state as well as authored state.
+    let checked = match attr("aria-checked") {
+        Some("mixed") => Some(Checked::Mixed),
+        Some("true") => Some(Checked::True),
+        Some("false") => Some(Checked::False),
+        _ if tag == "input" && (ty == "checkbox" || ty == "radio") => {
+            Some(if attr("checked").is_some() {
+                Checked::True
+            } else {
+                Checked::False
+            })
+        }
+        _ => None,
+    };
+
+    let expanded = aria_bool("aria-expanded").or(if tag == "details" {
+        Some(attr("open").is_some())
+    } else {
+        None
+    });
+
+    let selected = aria_bool("aria-selected").or(if tag == "option" {
+        Some(attr("selected").is_some())
+    } else {
+        None
+    });
+
+    // Value. A text field's `value`, a slider's `aria-valuenow`, a progress/meter's `value`.
+    let value = match tag {
+        "input"
+            if !matches!(
+                ty.as_str(),
+                "checkbox" | "radio" | "submit" | "button" | "reset"
+            ) =>
+        {
+            attr("value").map(str::to_string)
+        }
+        "textarea" => Some(dom.text_content(node)),
+        "progress" | "meter" => attr("value").map(str::to_string),
+        _ => attr("aria-valuenow").map(str::to_string),
+    }
+    .filter(|v| !v.is_empty());
+
+    let _ = role;
+    A11yState {
+        checked,
+        expanded,
+        selected,
+        disabled: attr("disabled").is_some() || aria_bool("aria-disabled") == Some(true),
+        required: attr("required").is_some() || aria_bool("aria-required") == Some(true),
+        readonly: attr("readonly").is_some() || aria_bool("aria-readonly") == Some(true),
+        focused: false, // host-owned; filled in by `build_tree_with_focus`
+        value,
+    }
 }
 
 /// The result of [`A11yNode::diff`]: semantic `(role, name)` nodes that appeared
@@ -307,6 +480,10 @@ impl A11yNode {
     }
 
     fn render(n: &A11yNode) -> String {
+        format!("{}{}", Self::render_role_name(n), n.state.render())
+    }
+
+    fn render_role_name(n: &A11yNode) -> String {
         match &n.role {
             Role::Heading { level } if !n.name.is_empty() => {
                 format!("heading level {level} {:?}", n.name)
@@ -713,7 +890,34 @@ pub fn build_tree_with_geometry(
         name: String::new(),
         bbox: None,
         z: 0,
+        state: A11yState::default(),
         children,
+    }
+}
+
+/// As [`build_tree_with_geometry`], plus the **focused** node — which the host owns (the shell
+/// tracks focus and publishes it into the JS world via `set_view_state`), so it cannot be read out
+/// of the DOM here. A caller that knows the focused node passes it and gets `state.focused` filled
+/// in; the plain builders leave it `false` rather than guessing.
+pub fn build_tree_with_focus(
+    dom: &Dom,
+    rects: &HashMap<NodeId, Rect>,
+    z_index: &ZIndex,
+    focused: Option<NodeId>,
+) -> A11yNode {
+    let mut tree = build_tree_with_geometry(dom, rects, z_index);
+    if let Some(f) = focused {
+        mark_focused(&mut tree, f);
+    }
+    tree
+}
+
+fn mark_focused(node: &mut A11yNode, focused: NodeId) {
+    if node.node == focused {
+        node.state.focused = true;
+    }
+    for c in &mut node.children {
+        mark_focused(c, focused);
     }
 }
 
@@ -743,12 +947,14 @@ fn build_children(
         match role_of(dom, child) {
             Some(role) => {
                 let name = accessible_name_with(dom, child, &role, index);
+                let state = state_of(dom, child, &role);
                 out.push(A11yNode {
                     node: child,
                     role,
                     name,
                     bbox: rects.get(&child).copied(),
                     z: z_index.get(&child).copied().unwrap_or(0),
+                    state,
                     children: build_children(dom, child, index, rects, z_index),
                 });
             }
@@ -770,6 +976,7 @@ mod tests {
             name: name.to_string(),
             bbox: None,
             z: 0,
+            state: A11yState::default(),
             children: vec![],
         }
     }
@@ -789,6 +996,7 @@ mod tests {
                 height: 20.0,
             }),
             z: 0,
+            state: A11yState::default(),
             children: vec![],
         };
         let overlay = A11yNode {
@@ -802,6 +1010,7 @@ mod tests {
                 height: 200.0,
             }),
             z: 10,
+            state: A11yState::default(),
             children: vec![],
         };
         let root = A11yNode {
@@ -810,6 +1019,7 @@ mod tests {
             name: String::new(),
             bbox: None,
             z: 0,
+            state: A11yState::default(),
             children: vec![button, overlay],
         };
         assert_eq!(root.hit_test(20.0, 15.0).map(|n| n.node), Some(NodeId(2)));
@@ -823,6 +1033,7 @@ mod tests {
             name: String::new(),
             bbox: None,
             z: 0,
+            state: A11yState::default(),
             children: vec![leaf(Role::Link, "Sign in"), leaf(Role::Button, "Menu")],
         };
         let after = A11yNode {
@@ -831,6 +1042,7 @@ mod tests {
             name: String::new(),
             bbox: None,
             z: 0,
+            state: A11yState::default(),
             children: vec![leaf(Role::Button, "Menu"), leaf(Role::Button, "Sign out")],
         };
         let d = after.diff(&before);

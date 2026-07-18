@@ -8192,3 +8192,63 @@ the expensive part is built, so each is a bounded tick. No per-header `Access-Co
 safelist (the wholesale read barrier still bounds exposure). The two pre-existing failures flagged in
 ticks 196/197 (`hard_wall_detection_and_honest_interstitial`, `g_capability`
 `createDocumentType validates`) remain open for the observer, unchanged by this tick.
+
+## Tick 199 — a11y node STATES: the agent can confirm its own action (agentic) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (Phase-0 FINISH-LINE lever 2). WIKI:
+docs/wiki/interaction-surface.md "A11y node STATES — the agent can confirm its own action".**
+
+**Selection.** Finish-line lever 1 completed in tick 198, so top-down puts lever 2 next: *"a11y node
+STATES — add checked/expanded/selected/disabled/value/focused to A11yNode; the agent can CONFIRM ITS
+OWN ACTIONS [the agentic moat, bounded a11y/src/lib.rs]"*. It also rotates the domain away from
+net/js, which the horizon warning wants.
+
+**Hypothesis.** `A11yNode` carried role/name/bbox/z and nothing about state, so the observation an
+agent reads is byte-identical before and after its own click: `checkbox "Remember me"` →
+`checkbox "Remember me"`. An agent that cannot observe the result of its action cannot verify it —
+it proceeds on faith, or re-clicks and toggles the setting straight back off.
+
+**Because that is the failure, the gate asserts `before != after`,** not the presence of a field. A
+gate that checked "does A11yNode have a `checked` field" would pass on a field that is always `None`.
+
+**Implemented.** `A11yState { checked, expanded, selected, disabled, required, readonly, focused,
+value }` on every node, computed by `state_of` from the DOM, with three deliberate decisions:
+
+- **`Option` means NOT APPLICABLE, not false.** A link is not "unchecked" — it has no checkedness,
+  and reporting `checked: false` on it is a lie an agent could act on.
+- **Checkedness is TRI-STATE.** `mixed` is the real third value a "select all" parent checkbox shows;
+  flattening it to `false` tells the agent the opposite of what the page means.
+- **ARIA wins over the native attribute**, the cascade assistive tech uses — and the native attribute
+  cannot express `mixed` at all.
+
+Script-driven state is visible because `el.checked = true` writes the `checked` ATTRIBUTE through the
+reflector, which is what makes click-then-read-back work. `render()` returns "" when there is no
+state, so a static document's observation lines are byte-unchanged and state stays signal, not noise.
+
+**Focus is host-owned and is not guessed at.** The shell tracks focus and publishes it into JS via
+`set_view_state`; it cannot be read back out of the DOM. So `build_tree_with_focus` /
+`Page::a11y_tree_with_focus` accept it from a caller that knows, and the plain builders leave
+`focused: false`. Added as a NEW entry point rather than by changing `build_tree_with_geometry`'s
+signature — no caller breakage.
+
+**Adding a field to a shared struct is a workspace-wide edit** (the recurring lesson): `A11yNode`
+literals also live in `agent/src/{targeting,grounding,automation}.rs`. `cargo test -p manuk-a11y`
+was green while `manuk-agent` did not compile. Grep every crate for the constructor.
+
+**Gates.** `g_a11y_state.rs` — click a button whose handler flips `checked`, `aria-expanded`, `value`
+and `details[open]`, then assert `before != after` plus each specific read-back; that exactly the
+disabled button reports `disabled`; that `mixed` survives untflattened; that a required field is
+marked; and that a plain button gets NO state suffix. Focus asserted through both entry points.
+**Proven RED by stubbing `state_of` to return `A11yState::default()`** — `before == after`, the exact
+failure the tick names. manuk-a11y 14, manuk-agent 125, `cargo check --workspace` green.
+
+**The larger gap this exposed, logged not smuggled.** `element.click()` fires the *event* but does not
+run **activation behaviour** — a click does not itself toggle a checkbox (`el_click` says so in its
+own doc comment). So the read-back confirms script-driven and authored state today, which is what the
+gate exercises; native activation is its own tick and is NOT claimed here.
+
+**Residue.** `disabled` does not inherit from an ancestor `<fieldset disabled>`; no
+`aria-valuemin`/`valuemax`/`valuetext`, `aria-invalid`, `aria-busy`, `aria-pressed`, `aria-current`,
+`aria-level`; `A11yDiff` still diffs on `(role, name)` only, so a pure state change shows up in
+`to_observation_lines()` but not in `diff()` — worth closing when an agent starts driving off diffs.
+Finish-line levers 3 (WebSocket), 4 (scroll-anchoring) and 5 (forced reflow) remain.

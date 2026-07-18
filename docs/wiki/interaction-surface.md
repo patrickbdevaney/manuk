@@ -513,3 +513,57 @@ Gated by `js_conformance` scenario 32: a `keyup` handler reads `event.key`/`even
 `dispatch_key(node,"keyup","x",…)` fires it and the handler records `x:88` (nothing before release).
 Residue: `keyup` fires only for a focused text field (not globally on the document), and `event.code`
 inherits the same key-name approximation as `keydown`. [[dom-semantics]]
+
+## A11y node STATES — the agent can confirm its own action (tick 199)
+
+`A11yNode` carried `role`, `name`, `bbox`, `z` — and nothing about state. So the observation an agent
+read was:
+
+```text
+checkbox "Remember me"      <- before the click
+checkbox "Remember me"      <- after the click
+```
+
+Byte-identical. **An agent that cannot observe the result of its own action cannot verify it**: it
+proceeds on faith, or re-clicks and toggles the setting straight back off. This is the agentic moat,
+not an accessibility nicety — which is why the gate asserts the *difference between two snapshots*
+rather than the presence of a field.
+
+**`A11yState`** hangs off every node: `checked` (tri-state), `expanded`, `selected`, `disabled`,
+`required`, `readonly`, `focused`, `value`.
+
+**`Option` means NOT APPLICABLE, not false.** A link is not "unchecked" — it has no checkedness, and
+reporting `checked: false` on it would be a lie an agent could act on. Only controls that can carry a
+state report one.
+
+**Checkedness is tri-state.** `mixed` is the real third value a "select all" parent checkbox shows;
+flattening it to `false` tells an agent the opposite of what the page means.
+
+**ARIA wins over the native attribute** where both are present — the cascade assistive tech uses. An
+author who wrote `aria-checked="mixed"` on a checkbox means it, and the native attribute cannot
+express `mixed` at all.
+
+**Script-driven state is visible** because `el.checked = true` writes the `checked` *attribute*
+through the reflector, so reading the attribute sees script state as well as authored state. That is
+what makes "click, then read back" work at all.
+
+**Rendering is signal, not noise**: `A11yState::render()` returns an empty string when there is no
+state, so a static document's observation lines are unchanged; a control appends ` [checked disabled
+value="ada"]`.
+
+**Focus is host-owned.** The shell tracks the focused element and publishes it into the JS world via
+`set_view_state`, so it cannot be read back out of the DOM. `build_tree_with_focus` /
+`Page::a11y_tree_with_focus` take it from a caller that knows; the plain builders leave `focused`
+false rather than guessing.
+
+**Adding a field to a shared struct is a workspace-wide edit** — `A11yNode` literals live in
+`agent/src/{targeting,grounding,automation}.rs` as well as the a11y crate's own tests. Grep every
+crate for the constructor, not just the defining one.
+
+Residue: `disabled` does not yet inherit from an ancestor `<fieldset disabled>` or `aria-disabled`
+container; no `aria-valuemin`/`valuemax`/`valuetext`, `aria-invalid`, `aria-busy`, `aria-pressed`,
+`aria-current`, or `aria-level`; `A11yDiff` still diffs on `(role, name)` only, so a pure state change
+shows up in `to_observation_lines()` but not in `diff()`. **The larger gap this exposes:
+`element.click()` fires the event but does not run activation behaviour** (a click does not itself
+toggle a checkbox — see `el_click`), so the read-back confirms script-driven and authored state today;
+native activation is its own tick.
