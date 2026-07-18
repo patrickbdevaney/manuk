@@ -81,14 +81,14 @@ export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${XDG_RUN
 # back to a direct (uncontained) launch so the loop never fully stalls — better uncontained than stopped.
 launch_agent() {
   systemctl --user reset-failed "${AGENT_SCOPE}.scope" 2>/dev/null || true   # clear any lingering scope name
-  if systemd-run --user --scope --quiet --unit="$AGENT_SCOPE" \
-        --setenv=CARGO_BUILD_JOBS=12 --setenv=WPT_DIR="$HOME/wpt" \
-        -p MemoryMax=22G -p MemorySwapMax=6G -p MemoryHigh=19G -p OOMPolicy=kill \
+  if systemd-run --user --scope --quiet \
+        --setenv=CARGO_BUILD_JOBS=8 --setenv=WPT_DIR="$HOME/wpt" \
+        -p MemoryMax=20G -p MemorySwapMax=4G -p MemoryHigh=16G -p OOMPolicy=kill \
         "$CLAUDE" --model "${MANUK_AGENT_MODEL:-claude-opus-4-8}" --dangerously-skip-permissions --permission-mode bypassPermissions -p "$PROMPT" >>"$LOG" 2>&1
   then return 0; fi
   # Fallback: systemd-run failed — launch directly with just the CARGO cap (still reduces build memory).
   say "⚠ systemd-run unavailable — launching agent UNCONTAINED (CARGO_BUILD_JOBS cap only)"
-  CARGO_BUILD_JOBS=12 WPT_DIR="$HOME/wpt" \
+  CARGO_BUILD_JOBS=8 WPT_DIR="$HOME/wpt" \
     "$CLAUDE" --model "${MANUK_AGENT_MODEL:-claude-opus-4-8}" --dangerously-skip-permissions --permission-mode bypassPermissions -p "$PROMPT" >>"$LOG" 2>&1 || true
 }
 
