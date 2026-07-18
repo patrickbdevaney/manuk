@@ -633,7 +633,7 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
         let ty = el.attr("type").unwrap_or("text").to_ascii_lowercase();
         match ty.as_str() {
             "checkbox" | "radio" => {
-                if s.width == crate::Dim::Auto {
+                if s.width == crate::Dim::Auto && !s.width_stretch {
                     s.width = crate::Dim::Px(13.0);
                 }
                 if s.height == crate::Dim::Auto {
@@ -645,7 +645,11 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
             // advance of the default UI font at 16px — the same approximation Chrome's own default
             // ends up at (`size=20` → ~173px).
             _ => {
-                if s.width == crate::Dim::Auto {
+                // A UA intrinsic width is a DEFAULT, so an author declaration outranks it — and
+                // `width: stretch` is a declaration that merely *looks* absent (`Dim::Auto`). Same
+                // guard as the dimension attributes below: without it a `width:stretch` text field
+                // stays 173px wide instead of filling its form row.
+                if s.width == crate::Dim::Auto && !s.width_stretch {
                     let cols = el
                         .attr("size")
                         .and_then(|v| v.trim().parse::<f32>().ok())
@@ -656,7 +660,7 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
             }
         }
     }
-    if tag == "textarea" && s.width == crate::Dim::Auto {
+    if tag == "textarea" && s.width == crate::Dim::Auto && !s.width_stretch {
         let cols = el
             .attr("cols")
             .and_then(|v| v.trim().parse::<f32>().ok())
@@ -671,12 +675,17 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
         if s.display == crate::Display::Inline {
             s.display = crate::Display::InlineBlock;
         }
-        if s.width == crate::Dim::Auto {
+        // A presentational hint is the LOWEST-priority source, so it may only fill a genuinely
+        // absent width. `width: stretch` and the intrinsic keywords both compute to `Dim::Auto`,
+        // which made them look absent — so `<canvas width="40">` beat the author's `width: stretch`
+        // and the element kept hugging its 40px instead of filling its column. The flags are what
+        // tell "no width was specified" apart from "a width was specified that resolves later".
+        if s.width == crate::Dim::Auto && !s.width_stretch && s.width_keyword.is_none() {
             if let Some(w) = el.attr("width").and_then(crate::parse_dimension_attr_dim) {
                 s.width = w;
             }
         }
-        if s.height == crate::Dim::Auto {
+        if s.height == crate::Dim::Auto && !s.height_stretch && !s.height_intrinsic {
             if let Some(h) = el.attr("height").and_then(crate::parse_dimension_attr_dim) {
                 s.height = h;
             }

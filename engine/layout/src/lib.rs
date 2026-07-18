@@ -1718,6 +1718,14 @@ impl Ctx<'_> {
                     IntrinsicSize::MaxContent => self.max_content_width(node),
                     IntrinsicSize::FitContent => self.shrink_to_fit(node, (cw - extra).max(0.0)),
                 },
+                // `width: stretch` FILLS, and it has to be checked *before* the shrink-to-fit arms
+                // below, because those are exactly the boxes it changes. On a plain block `auto`
+                // already fills, so this looks like a no-op — but an inline-block, a form control
+                // and a replaced element all hug their content on `auto`, and `stretch` is how an
+                // author says "fill the column anyway". Inline mirror of the `height_stretch` arm in
+                // `own_definite_h`; the margin box fills, so the margins come out of the content
+                // width (which `extra` already does).
+                Dim::Auto if s.width_stretch => (cw - extra).max(0.0),
                 Dim::Auto
                     if matches!(
                         s.display,
@@ -1732,7 +1740,11 @@ impl Ctx<'_> {
         };
         // The mirror case: an `auto` width on a replaced element with a definite height comes from
         // that height and the ratio.
-        if s.width == Dim::Auto && taffy_known.is_none() {
+        // `width: stretch` is a DEFINITE width, not an auto one — it just happens to share
+        // `Dim::Auto`'s representation — so the ratio must not derive a width over the top of it.
+        // (This is what kept a `width:stretch` `<canvas width="40" height="20">` at 40px: the
+        // stretch arm sized it correctly and then `height x ratio` overwrote the answer.)
+        if s.width == Dim::Auto && !s.width_stretch && taffy_known.is_none() {
             if let (Some(r), Dim::Px(h)) = (s.aspect_ratio, s.height) {
                 if r > 0.0 {
                     width = h * r;
@@ -2276,6 +2288,10 @@ impl Ctx<'_> {
         let non_content = ml + mr + pl + pr + bl + br;
         let avail = (cw - non_content).max(0.0);
         let width = match s.width {
+            // A float shrink-to-fits on `auto` — that is the whole point of a float — so `stretch`
+            // is the only way to say "this floated card fills its column", and it is the difference
+            // between a full-width banner and one hugging its text.
+            Dim::Auto if s.width_stretch => avail,
             Dim::Auto => self.shrink_to_fit(node, avail),
             other => other.resolve(cw, avail).max(0.0),
         };
@@ -3333,6 +3349,10 @@ impl Ctx<'_> {
         // them; else a definite height + `aspect-ratio` transfers through the ratio (CSS Sizing 4 —
         // the media/card/placeholder pattern), else shrink-to-fit.
         let content_w = match s.width {
+            // `stretch` on an abspos box fills its containing block exactly as `left:0; right:0`
+            // would — it is the same constraint, said in one property instead of two, and without
+            // it the box shrink-to-fits and a `width:stretch` overlay collapses onto its content.
+            Dim::Auto if s.width_stretch => (cw - frame).max(0.0),
             Dim::Auto => match (left, right) {
                 (Some(l), Some(r)) => (cw - l - r - frame).max(0.0),
                 _ => match (definite_ch, s.aspect_ratio) {

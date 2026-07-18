@@ -9158,3 +9158,37 @@ appear to do nothing. Recommend the observer add `fonts/` to the sparse checkout
 
 **Residue:** only width→height transfers; a `max-height` clamp does not yet push back into the width,
 and §10.4's full ten-case table is approximated by one pass.
+
+## Tick 219 — `width: stretch` fills, for the boxes that never filled on `auto` (2026-07-18)
+
+**Selected:** the board's PHASE MANDATE (CSS-LAYOUT ★), continuing in `css/css-sizing` because its
+failures are font-independent — the one suite the Ahem gap (tick 218) does not distort. The histogram
+put ~700 of its remaining failures in `css-sizing/stretch`, and the probe found the cause in one
+line: `stretch` was reaching layout as plain `Dim::Auto`.
+
+**Why it hid.** On an ordinary block box `auto` fills too, so the two are indistinguishable exactly
+where the value is most often written. Everything that **shrink-to-fits** diverged — float,
+inline-block, form control, replaced element, abspos. `height_stretch` has existed since tick 154;
+this is its inline mirror, wired to four consumers (block, float, abspos, and the replaced-element
+aspect-ratio mirror that was overwriting the stretched width with `height x ratio`).
+
+**The second half generalises past `stretch`, and is the more interesting bug.** A UA default and an
+HTML presentational hint are the lowest-priority width sources, so each may only fill an *absent*
+width — but every one of those sites tested `s.width == Dim::Auto`, and `stretch` and the intrinsic
+keywords **compute to `Dim::Auto`**. So `<canvas width="40">`, `<input size=20>` and
+`<textarea cols=20>` all beat the author's own declaration. Guarded on the flags now, everywhere.
+
+**Measured:** css-sizing 395 → 407 (23.6% → 24.3%). css-flexbox 968 and css-position 87 flat. Bar 0
+clean. Mechanism in `docs/wiki/box-layout.md`.
+
+**Gate.** `g_width_stretch` — six boxes that must each come out `170px` (200px container less 30px of
+margin, border and padding *inside* that number, so it checks the stretch definition and not merely
+"got wider"), plus a `width:auto` control that must still hug. RED two independent ways: dropping the
+cascade flag collapses all five stretch boxes (`50/18/50/10`); dropping only the block-path arm
+collapses exactly the two it owns while float and abspos still fill — which also proves the four
+consumers are independent rather than one accidental path.
+
+**Residue / found-in-passing:** an abspos box with **no** inset at all produces **no box whatsoever**
+(pre-existing, unrelated to `stretch` — the gate uses `left:0` to work around it, and this is worth
+its own tick). Logical `inset-inline-start`/`-end` are unmapped, which is most of what still fails in
+`css-sizing/stretch`.

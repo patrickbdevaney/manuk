@@ -333,6 +333,7 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
     // Box model — sizing.
     let cw = cv.clone_width();
     s.width_keyword = size_intrinsic_kw(&cw);
+    s.width_stretch = size_is_stretch(&cw);
     s.width = size_to_dim(&cw);
     let ch = cv.clone_height();
     s.height_intrinsic = size_is_intrinsic(&ch);

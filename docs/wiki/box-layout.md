@@ -790,3 +790,36 @@ without it those assertions cannot pass no matter how correct the layout is. Thi
 tail: **838 of the css-grid files reference Ahem**, plus 93 in css-flexbox and 40 in css-sizing. Any
 read of "css-grid is at 9.6%" has to be discounted by that. Corpus fixture, observer-owned — recorded
 here and in the journal rather than fixed from inside a tick.
+
+## `width: stretch` was thrown away, and it only mattered where `auto` does not fill (tick 219)
+
+`stretch` / `-webkit-fill-available` / `-moz-available` reached layout as plain `Dim::Auto`. On an
+ordinary block box that is the *right answer* — `auto` fills there too — and that equivalence is
+precisely what hid the gap for so long, because it holds for the one box shape where it does not
+matter. Every box that **shrink-to-fits on `auto`** diverged: a float, an inline-block, a form
+control, a replaced element, and an abspos box without both insets. `height_stretch` had existed
+since tick 154; this is its inline mirror.
+
+**Four consumers, because there are four places a width is decided:** the block/inline-block path
+(`layout_block`), the float path, the abspos path (`layout_abs`), and — the one that took the longest
+to find — the replaced-element **aspect-ratio mirror**, which derived `height x ratio` straight over
+the top of the stretched width and kept a `width:stretch` `<canvas width="40" height="20">` at 40px.
+
+**The second half is a precedence rule, and it generalises past `stretch`.** A UA default and an HTML
+presentational hint are the two lowest-priority sources of a width, so both may only fill a
+*genuinely absent* one. Every such site tested `s.width == Dim::Auto` — and `stretch` and the
+intrinsic keywords **compute to `Dim::Auto`**, so they read as absent. `<canvas width="40">`,
+`<input size=20>` and `<textarea cols=20>` each beat the author's declaration. The flags
+(`width_stretch`, `width_keyword`) are what tell "no width was specified" apart from "a width was
+specified that resolves later", and the guard is now on all of them.
+
+**Measured:** `css/css-sizing` 395 → 407 (23.6% → 24.3%); css-flexbox and css-position flat; Bar 0
+clean. Gated by `g_width_stretch` — six boxes at `170px` (a 200px container less 30px of margin) plus
+a `width:auto` control that must **still** hug, so a change that simply made everything fill fails.
+RED two independent ways: dropping the cascade flag collapses all five (`50/18/50/10`), and dropping
+only the block-path arm collapses exactly the two it owns while the float and abspos arms still fill
+— which also demonstrates the four consumers are genuinely independent.
+
+**Residue:** an abspos box with **no** inset at all produces no box whatsoever (found while building
+this gate — pre-existing, unrelated to `stretch`, and the reason the gate uses `left:0`).
+Logical `inset-inline-start`/`-end` are likewise unmapped, which is the rest of the stretch suite.

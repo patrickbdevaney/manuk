@@ -699,6 +699,14 @@ pub struct ComputedStyle {
     /// is the longest unbreakable run, `max-content` the whole content unwrapped, `fit-content` the
     /// shrink-to-fit clamp between them. `None` = `auto`/length/`stretch`/`fill-available` (all fill).
     pub width_keyword: Option<IntrinsicSize>,
+    /// `true` when `width` is `stretch` / `-webkit-fill-available` / `-moz-available` — the inline
+    /// mirror of [`Self::height_stretch`]. It collapses to `Dim::Auto`, and for a plain block box
+    /// that is already the right answer, which is exactly why its absence hid: `auto` fills there
+    /// too. It is **every other box** that diverges — a float, an abspos, an inline-block, a form
+    /// control and a replaced element all *shrink to fit* on `auto` and *fill* on `stretch`. Without
+    /// this flag a `width: stretch` `<canvas>` or floated card collapses to its content instead of
+    /// filling its column.
+    pub width_stretch: bool,
     pub height: Dim,
     /// `true` when `height` is an **intrinsic sizing keyword** (`min-content`/`max-content`/
     /// `fit-content`), which all collapse to `Dim::Auto` for length resolution but are *not* the
@@ -833,6 +841,7 @@ impl ComputedStyle {
             text_shadow: None,
             width: Dim::Auto,
             width_keyword: None,
+            width_stretch: false,
             height: Dim::Auto,
             height_intrinsic: false,
             height_stretch: false,
@@ -2777,11 +2786,20 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
         "img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe"
     ) {
         s.display = Display::InlineBlock;
-        if let Some(w) = el.attr("width").and_then(parse_dimension_attr) {
-            s.width = Dim::Px(w);
+        // A presentational hint may only fill a genuinely ABSENT width. `width: stretch` and the
+        // intrinsic keywords compute to `Dim::Auto`, so they look absent — and `<canvas width="40">`
+        // would beat the author's `width: stretch` and keep hugging its 40px. The flags tell "no
+        // width specified" apart from "a width specified that resolves later". Twin of the guard in
+        // `stylo_engine::apply_presentational_hints`.
+        if !s.width_stretch && s.width_keyword.is_none() {
+            if let Some(w) = el.attr("width").and_then(parse_dimension_attr) {
+                s.width = Dim::Px(w);
+            }
         }
-        if let Some(h) = el.attr("height").and_then(parse_dimension_attr) {
-            s.height = Dim::Px(h);
+        if !s.height_stretch && !s.height_intrinsic {
+            if let Some(h) = el.attr("height").and_then(parse_dimension_attr) {
+                s.height = Dim::Px(h);
+            }
         }
         // **The dimension attributes are also an aspect-ratio hint** (HTML §"dimension attributes":
         // `aspect-ratio: auto <width> / <height>`), and that half is the load-bearing one. Without it
@@ -3002,6 +3020,13 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 }
                 _ => None,
             };
+            // The inline mirror of `height_stretch`: DEFINITE, and it FILLS — which only differs
+            // from `auto` for the boxes that shrink-to-fit (float / abspos / inline-block / replaced
+            // / form control), and that is precisely where it matters.
+            s.width_stretch = matches!(
+                low.as_str(),
+                "stretch" | "-webkit-fill-available" | "-moz-available"
+            );
             s.width = values::parse_dim(v, s.font_size);
         }
         "height" => {
