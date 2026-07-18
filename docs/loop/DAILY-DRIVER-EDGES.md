@@ -225,3 +225,45 @@ PaymentRequest/Apple-Pay (card-form fallback reachable), autofill-engine polish,
 named, mostly-bounded subsystems* (streaming, a11y-states, scroll-anchoring, canvas-text, the media chain) plus
 a short honest out-of-reach list (office suites, heavy-WebGL creative apps, DRM). That is a sound foundation to
 build the downstream agentic layer on — because the automation surface IS this daily-driver surface.
+
+---
+
+# PART III — comprehensiveness & the honest parity verdict
+
+## Business / banking / finance — no new primitive, same edges (the key structural finding)
+Adding enterprise SaaS (Salesforce/Workday/ServiceNow/Jira/Slack-web), banking apps, and stock/finance/trading
+platforms introduces **zero new critical unscoped edges** — each recombines primitives already on the list:
+- real-time price feeds + rapid grid updates → **WebSocket + streaming + forced-reflow + large-DOM perf** (finish-line/scoped)
+- transaction tables / resource grids → **virtualized data grid = forced-reflow + scroll-anchoring** (finish-line)
+- enterprise/bank auth → **form-POST (works) + OAuth-probe + iframes (gated) + completeness-identity**; **WebAuthn/passkeys** missing but **TOTP/password fallback** survives
+- dashboards/charts → **SVG (works-ish) + canvas-fillText (scoped)**; **advanced WebGL charts (TradingView-tier) out-of-reach**
+- reports → **print/@media-print (unknown, minor gap)**; collaborative rich-text (Notion/Confluence) → **Selection (partial gap)**
+
+Reachability: business SaaS + web-banking + finance-*data* are **reachable** once the finish-line lands (WebSocket
++ completeness + grids), with three honest exceptions — **advanced WebGL charts**, **canvas-native office suites
+(Office 365 web, like Google Docs)**, and **banks that whitelist Chromium-only** (their policy, not our capability).
+
+## The honest verdict on "runs almost every website with Chromium parity"
+The question bundles two different claims; they have different answers.
+- **"Runs almost every *type* of website, usably and faithfully"** — **YES by end of Phase 0.** The classes are
+  covered, the primitives generalize (business/banking/finance prove it by re-using them), and rendering is
+  Chromium-*faithful* (fidelity oracle, ~0.75+ structural). This is the claim to hold.
+- **"Full Chromium *parity* — pixel-identical + every API — on almost every website"** — **NO, and that is not the
+  Phase-0 bar.** There is an honest tail Phase 0 consciously does not close: (a) **out-of-reach subsystems** —
+  canvas-native office/creative (Google Docs/Sheets, Office-365-web, Canva, Figma), heavy/advanced WebGL (vector
+  maps, TradingView-tier charts), DRM; (b) a **rendering tail** — complex flex/grid distribution, subgrid,
+  container-queries (unmeasured), MathML, bidi-reorder, `ch`/`ex` font metrics → sub-pixel-perfect on hard layouts;
+  (c) **quirks-mode + the niche-API long tail**; (d) **whitelist-only sites** that block non-Chromium by policy.
+
+**So: by end of Phase 0 the browser faithfully renders and is usable on the large majority of mainstream sites
+across every major class — "runs almost every website" in the practical sense — but it is NOT literal
+pixel-and-API parity with Chromium on 100% of the web.** The gap is a conscious, named tail (diminishing-return
+CSS/quirks + genuinely-out-of-reach canvas/WebGL/DRM subsystems), not a hidden hole.
+
+## Is the checklist comprehensive? (the honest hedge)
+High, *measured* confidence it captures the generalized primitives — the recurrence of the same edges across
+unrelated classes is the evidence. But it is **not a proof of exhaustiveness**: ~35 capabilities remain `unknown`
+(unprobed), and some are Interop-2026 rows never measured. The **surface-audit** (reconcile the map against the
+world) and the **fidelity oracle** (visual diff vs Chromium) are the standing checks that catch a class we
+haven't stress-tested — so the honest posture is "comprehensive for what we've measured, with an explicit
+instrument for what we haven't," not "certified complete."
