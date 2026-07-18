@@ -10,6 +10,15 @@ The core idea: each agentic layer is a decoupled module, and its research prompt
 truth of the implemented layer beneath it, then run, then implemented* — a cascade that melds real
 prerequisites with fresh web research to model the best possible v1 without pre-committing the architecture.
 
+**RELEASE PHILOSOPHY (governs every step): best-possible-v1, not perfection.** No module has to be intractably
+perfect on the first comprehensive implementation — that is impossible. Each cascade step aims to be optimized
+and perfected AS MUCH AS POSSIBLE given everything available at that time (the implemented layers beneath it +
+the current SOTA research), then ships as part of the first release browser/agent suite. The modular decoupling
+is exactly what makes this safe: any module can be cleanly re-derived and perfected in a LATER pass — when the
+daily-driver/WPT parity surface expands, or we learn more from traces/usage — without an entangled rewrite. So:
+ship the best v1 the ground truth supports now; iterate each decoupled module independently later. "Good enough
+given current ground truth" is the per-step bar, not "final."
+
 ---
 
 ## 1. PHASE-0 COMPLETION — trigger + marker
