@@ -9234,3 +9234,50 @@ recording half and the placement half are separately load-bearing.
 **Residue:** text *preceding* the abs box on a line should push its static position along that line;
 we place it at the line start instead. `blkoff` measures the block-path case, where the offset is
 exact.
+
+## Tick 221 — an inline image has a size, and the ratio reaches taffy (2026-07-18)
+
+**Selected:** the board's PHASE MANDATE (CSS-LAYOUT ★). The largest testharness cluster in
+`css/css-flexbox` is `image-as-flexitem-size` (14 files), so I probed a 16x16 image as a flex item —
+and the probe said the symptom was naming the wrong organ. The image was `0x0` **as a plain block
+too**, and `naturalWidth` came back `undefined`. Nothing about it was flex.
+
+**What was actually wrong, and it is two things.**
+
+*One: image sizing lived entirely in the async subresource pass.* `apply_images` fetches, decodes,
+writes the natural size into the computed style and relayouts — correct, and the shell gets it. But a
+`data:` image **carries its own bytes**: there is nothing to fetch and nothing to await. Every path
+that never runs the async pass — `Page::load`, every gate, the WPT runner — laid an inline image out
+at `0x0`. Decoding it before the first layout is the fix, and the honest one: the information was
+already in the document. Factored the natural-sizing rule out of `apply_images` into
+`apply_natural_size` so the two paths cannot drift into sizing the same image two different ways
+depending on how its bytes arrived.
+
+*Two: the aspect ratio never crossed into taffy.* `to_taffy_style` maps thirty-odd properties and
+never set `aspect_ratio`, which taffy has. The block path derives an `auto` axis from the other one
+through `ComputedStyle::aspect_ratio`, but a flex or grid item's size is taffy's to decide — so an
+image given only a `height` came out **zero pixels wide**. That is the worst failure shape available:
+the element is present, laid out, measurable, and invisible. One line, and it fixed the grid case
+too, which I had not attributed to it.
+
+**Measured:** css-flexbox 972, css-grid 303, css-sizing 417, css-position 98, css-values 240,
+css-overflow 140 — all **flat**, no regressions. This tick buys **no WPT flips**, and that is not a
+disappointment but the expected reading: the `image-as-flexitem` files load `support/solidblue.png`
+off local disk, which the runner does not fetch, and the flex/grid ratio tests are **reftests**
+(Bar 2). The capability is real and the instrument cannot see it — per the mandate, a layout fix that
+makes real pages render correctly beats a bigger flip count. Bar 0 clean.
+
+**Gate.** `g_inline_image_size` — a 16x16 inline PNG must be `16x16` as a block, as a flex item and
+as a grid item; `30x30` from a width alone *and from a height alone*; and `8x8` under a `max-width`
+clamp in both flex and block (the `max-width:100%` reset every site ships, which must transfer
+through the ratio rather than squash the image). RED two independent ways: dropping the inline decode
+pass returns every case to `0x0`; keeping it but setting taffy's `aspect_ratio` back to `None`
+leaves the intrinsic cases right and breaks exactly the ratio-transfer ones (`16x40`) — which proves
+the decode half and the taffy half are separately load-bearing rather than one path doing the work.
+
+**Residue:** `naturalWidth`/`naturalHeight` are **absent from the reflector entirely** (they read
+`undefined`, which is what first exposed this). They need a per-node snapshot channel into the JS
+bindings of the same shape as `layout_rect`, so they are their own tick — and a well-shaped one,
+because lazy-loaders, lightboxes and responsive-image code all read them. Network images still size
+only after the async pass, which is correct (they genuinely must be fetched) but means a page's first
+paint has no size for them unless the author supplied `width`/`height` attributes.

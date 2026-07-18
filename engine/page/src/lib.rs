@@ -483,19 +483,99 @@ fn decode_svg(bytes: &[u8], url: &str) -> Option<manuk_paint::DecodedImage> {
     })
 }
 
+/// The bytes of a `data:` image URL. **Synchronous, because there is nothing to wait for** — the
+/// payload is already in the string. That is the whole point of the split: an inline image needs no
+/// network, so it can be decoded during load rather than in the async subresource pass, and a page
+/// that never reaches that pass (a gate, the WPT runner, `Page::load`) still gets its size.
+fn data_url_image_bytes(url: &str) -> Option<Vec<u8>> {
+    let rest = url.strip_prefix("data:")?;
+    let comma = rest.find(',')?;
+    let data = &rest[comma + 1..];
+    if rest[..comma].contains("base64") {
+        use base64::Engine;
+        base64::engine::general_purpose::STANDARD.decode(data).ok()
+    } else {
+        // Non-base64 data URLs are percent-encoded (e.g. `%23` for `#` in inline SVG).
+        Some(percent_decode(data))
+    }
+}
+
+/// Apply a decoded image's **natural size** to the element's computed style.
+///
+/// The *aspect ratio* is the load-bearing part: an `auto` dimension of a replaced element is derived
+/// from the USED value of the other one, not from the image's natural pixels. Pinning `height` to the
+/// natural height means a `max-width: 100%` clamp narrows the box and leaves the height alone, and
+/// the image renders stretched — a reset that is on essentially every site on the web.
+///
+/// So: record the ratio, give `width` its natural value only when BOTH axes are auto (the
+/// unconstrained case), and otherwise leave the auto axis auto for layout to derive.
+///
+/// Shared by the async subresource pass and the inline-`data:` pass so the two cannot drift into
+/// sizing the same image two different ways depending on how its bytes arrived.
+fn apply_natural_size(style: &mut manuk_css::ComputedStyle, img: &manuk_paint::DecodedImage) {
+    if img.width > 0 && img.height > 0 {
+        style.aspect_ratio = Some(img.width as f32 / img.height as f32);
+    }
+    if style.width == manuk_css::Dim::Auto && style.height == manuk_css::Dim::Auto {
+        style.width = manuk_css::Dim::Px(img.width as f32);
+    } else if style.width == manuk_css::Dim::Auto && style.aspect_ratio.is_none() {
+        style.width = manuk_css::Dim::Px(img.width as f32);
+    }
+    if style.height == manuk_css::Dim::Auto && style.aspect_ratio.is_none() {
+        style.height = manuk_css::Dim::Px(img.height as f32);
+    }
+}
+
+/// Decode every `<img src="data:...">` in the tree and give it its natural size, **before the first
+/// layout**. Inline images carry their own bytes, so unlike a network image there is nothing to wait
+/// for and no reason to make the page reflow later.
+///
+/// Without this an inline image laid out as `0x0` on every path that does not run the async
+/// subresource pass — which is every gate, the WPT runner, and `Page::load` itself.
+fn decode_inline_images(
+    dom: &Dom,
+    styles: &mut StyleMap,
+) -> std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>> {
+    let mut out = std::collections::HashMap::new();
+    // One decode per distinct URL: a sprite or icon repeated across the page costs one.
+    let mut by_url: std::collections::HashMap<
+        String,
+        Option<std::rc::Rc<manuk_paint::DecodedImage>>,
+    > = std::collections::HashMap::new();
+    for node in dom.descendants(dom.root()) {
+        if dom.tag_name(node) != Some("img") {
+            continue;
+        }
+        let Some(src) = dom.element(node).and_then(|e| e.attr("src")) else {
+            continue;
+        };
+        if !src.starts_with("data:") {
+            continue;
+        }
+        let src = src.to_string();
+        let decoded = by_url
+            .entry(src.clone())
+            .or_insert_with(|| {
+                data_url_image_bytes(&src)
+                    .and_then(|bytes| decode_bitmap(&bytes, &src))
+                    .map(std::rc::Rc::new)
+            })
+            .clone();
+        if let Some(img) = decoded {
+            if let Some(style) = styles.get_mut(&node) {
+                apply_natural_size(style, &img);
+            }
+            out.insert(node, img);
+        }
+    }
+    out
+}
+
 /// Fetch the raw bytes of an image URL: `data:` (base64 or literal), `http(s)://`, or a
 /// local `file://`/path (for the render CLI on local pages).
 async fn fetch_image_bytes(url: &str) -> Option<Vec<u8>> {
-    if let Some(rest) = url.strip_prefix("data:") {
-        let comma = rest.find(',')?;
-        let data = &rest[comma + 1..];
-        return if rest[..comma].contains("base64") {
-            use base64::Engine;
-            base64::engine::general_purpose::STANDARD.decode(data).ok()
-        } else {
-            // Non-base64 data URLs are percent-encoded (e.g. `%23` for `#` in inline SVG).
-            Some(percent_decode(data))
-        };
+    if url.starts_with("data:") {
+        return data_url_image_bytes(url);
     }
     if url.starts_with("http://") || url.starts_with("https://") {
         let resp = manuk_net::fetch(url).await.ok()?;
@@ -1752,27 +1832,12 @@ impl Page {
         if images.is_empty() {
             return 0;
         }
-        // Natural sizing. The *aspect ratio* is the load-bearing part: an `auto` dimension of a
-        // replaced element is derived from the USED value of the other one, not from the image's
-        // natural pixels. Pinning `height` to the natural height here — which is what this did —
-        // means a `max-width: 100%` clamp narrows the box and leaves the height alone, and the image
-        // renders stretched. That reset is on essentially every site on the web.
-        //
-        // So: record the ratio, give `width` its natural value only when BOTH axes are auto (the
-        // unconstrained case), and otherwise leave the auto axis auto for layout to derive.
+        // Natural sizing — see `apply_natural_size`, shared with the inline-`data:` pass so an image
+        // is sized the same way regardless of whether its bytes came off the network or out of its
+        // own URL.
         for (&node, img) in &images {
             if let Some(style) = self.styles.get_mut(&node) {
-                if img.width > 0 && img.height > 0 {
-                    style.aspect_ratio = Some(img.width as f32 / img.height as f32);
-                }
-                if style.width == manuk_css::Dim::Auto && style.height == manuk_css::Dim::Auto {
-                    style.width = manuk_css::Dim::Px(img.width as f32);
-                } else if style.width == manuk_css::Dim::Auto && style.aspect_ratio.is_none() {
-                    style.width = manuk_css::Dim::Px(img.width as f32);
-                }
-                if style.height == manuk_css::Dim::Auto && style.aspect_ratio.is_none() {
-                    style.height = manuk_css::Dim::Px(img.height as f32);
-                }
+                apply_natural_size(style, img);
             }
         }
         let count = images.len();
@@ -2416,6 +2481,11 @@ impl Page {
         let mut dom = Box::new(dom);
         let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&dom);
         let mut styles = cascade_styles(&dom, &sheets, viewport_width);
+        // **Inline images are sized BEFORE the first layout.** A `data:` image carries its own bytes,
+        // so there is nothing to wait for — decoding it here means it has its natural size in the
+        // very first box tree, instead of laying out `0x0` and never being corrected on any path that
+        // does not run the async subresource pass.
+        let inline_images = decode_inline_images(&dom, &mut styles);
         let mut root_box = layout_document(&dom, &styles, fonts, viewport_width);
 
         let rects: std::collections::HashMap<manuk_dom::NodeId, [f32; 4]> = root_box
@@ -2484,7 +2554,9 @@ impl Page {
             js,
             has_sticky,
             zoom: 1.0,
-            images: std::collections::HashMap::new(),
+            // The inline images decoded above already have their natural size in `styles`; carrying
+            // them here is what lets them PAINT as well as lay out.
+            images: inline_images,
             scroll_offsets: std::collections::HashMap::new(),
             external_css: HashMap::new(),
             fetched_urls: std::collections::HashSet::new(),

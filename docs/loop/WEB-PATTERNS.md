@@ -976,3 +976,12 @@ and that branch never recorded the child's static position, which is the one thi
 all-`auto`-inset abs box placeable. Unlocks React portal roots, JS-positioned dropdowns and tooltips,
 badge overlays, and `.sr-only` accessibility nodes written this way. Neighbouring shapes (a
 block-level sibling, or a flex/grid parent) always worked, which is why the gap survived this long.
+
+## Inline `data:` images, and images sized from one axis
+
+An inline `data:` image had **no size at all** until tick 221 on any path that skips the async
+subresource pass — it carries its own bytes, so nothing needed fetching, but nothing decoded it
+either. Inline icons, base64 logos and sprite data-URIs are ubiquitous in component libraries and
+bundled SPAs. Separately, any image that was given only a `width` **or** only a `height` inside a flex
+or grid container came out zero-sized on the other axis, because the intrinsic ratio never reached
+taffy: the avatar/logo/thumbnail case in every card and nav bar. Both render correctly now.

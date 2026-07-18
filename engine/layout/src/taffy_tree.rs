@@ -251,6 +251,14 @@ pub fn to_taffy_style(cs: &ComputedStyle, calc: &mut Vec<(f32, f32)>) -> Style {
             .collect(),
         grid_column: grid_line(cs.grid_column),
         grid_row: grid_line(cs.grid_row),
+        // **The intrinsic ratio has to cross into taffy, or it does not exist inside flex and grid.**
+        // The block path derives an `auto` axis from the other one through `cs.aspect_ratio`, but a
+        // flex or grid item's size is taffy's to decide, and taffy was never told the ratio — so an
+        // image given only a `height` came out `0` wide: present in the tree, laid out, invisible.
+        // This is the same value the block path uses (an `aspect-ratio` declaration, or the natural
+        // ratio of a decoded image / the `width`+`height` attribute pair), so all three formatting
+        // contexts now transfer a definite axis through the ratio the same way.
+        aspect_ratio: cs.aspect_ratio,
         ..Default::default()
     }
 }

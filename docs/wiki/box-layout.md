@@ -848,3 +848,29 @@ overlay / dropdown / tooltip / portal-root idiom. It hid because every neighbour
 block-level sibling is enough to route the parent onto the block path, which always recorded
 correctly. When debugging a vanished absolutely positioned element, the first question is therefore
 **what formatting context does its parent establish**, not what the box's own style says.
+
+## Where a replaced element's size comes from (three channels, and they must agree)
+
+An image's used size can be decided in three places, and the bugs come from one of them not knowing
+what the others know:
+
+1. **The `width`/`height` attributes** — a presentational hint, and also an aspect-ratio hint. Lowest
+   priority: it may only fill a genuinely absent width (see the `stretch` note above).
+2. **The decoded bytes** — the natural size. `apply_natural_size` records the *ratio* and only pins an
+   axis when both are `auto`. Pinning the natural height outright is wrong: a `max-width:100%` clamp
+   then narrows the box and leaves the height alone, and the image renders stretched. That reset is
+   on essentially every site on the web.
+3. **The formatting context** — block, flex or grid decides the used value from whichever axis is
+   definite.
+
+The two failures worth remembering both come from a channel being starved:
+
+- **Sizing that only exists on the async path.** Decoding used to happen exclusively in the
+  subresource pass, so a `data:` image — which carries its own bytes and has nothing to wait for —
+  laid out `0x0` on every path that does not run that pass. Inline images are decoded before the
+  first layout now (`decode_inline_images`).
+- **A ratio the layout engine cannot see.** The block path derives an `auto` axis through
+  `ComputedStyle::aspect_ratio`, but flex and grid items are sized by taffy, and `to_taffy_style` did
+  not pass the ratio along. An image with only a `height` came out **zero pixels wide** — present,
+  laid out, invisible. Any value the block path uses to derive a size has to cross into
+  `to_taffy_style`, or it silently does not exist inside flex and grid.
