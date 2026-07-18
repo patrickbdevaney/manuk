@@ -567,3 +567,35 @@ shows up in `to_observation_lines()` but not in `diff()`. **The larger gap this 
 `element.click()` fires the event but does not run activation behaviour** (a click does not itself
 toggle a checkbox — see `el_click`), so the read-back confirms script-driven and authored state today;
 native activation is its own tick.
+
+## Click ACTIVATION behaviour — the checkbox actually ticks (tick 208)
+
+`dispatch_click` fired the *event* and stopped there. It ran no **activation behaviour**, so clicking
+a checkbox left it unchecked, clicking a radio selected nothing, and no `input`/`change` ever fired.
+Tick 199 gave the agent the ability to read control state back and flagged this as the thing that
+made the read-back only half useful: an agent could see a checkbox was unchecked, click it, and see
+it still unchecked.
+
+**The ordering is the subtle half, and getting it backwards still passes a naive test.** The toggle
+happens **before** the click event is dispatched, which is why a real handler reading `this.checked`
+sees the NEW state. Toggling afterwards would end in the same final state while handing every handler
+on the web a stale value — so the gate asserts what the handler *saw*, not just where things landed.
+
+- **checkbox** — toggles. `preventDefault()` on the click undoes it (the "canceled activation
+  steps"), which is what a page validating before allowing a toggle depends on.
+- **radio** — is a **group, not a toggle**. Clicking one deselects its peers, grouped by `name`
+  (which is how the form serialises); a radio never unchecks itself; a different `name` group is
+  untouched. Two checked radios in one group means the form submits the wrong value.
+- **`input` then `change`**, in that order, both after the state is committed — every
+  controlled-component binding is written for exactly that.
+
+Gated by `g_click_activation`: the box ticks and unticks; the handler log reads
+`click:true input:true change:true click:false input:false change:false` (the ordering claim);
+`preventDefault()` leaves the box unticked; selecting a radio deselects its group peer and not the
+other group; and an already-selected radio stays selected. Proven RED by returning no activation —
+the box never ticks and the log's `click:true` collapses.
+
+Residue: only checkbox and radio activate. A link still does not navigate and a submit button does
+not submit **from `element.click()`** (the native GUI paths handle those separately, so this is a
+gap in the scripted/agent path specifically); `<select>`/`<option>` selection, and the
+`labels`→control forwarding (clicking a `<label>` should activate its control) are not done either.

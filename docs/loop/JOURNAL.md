@@ -8645,3 +8645,44 @@ all. `g_eventsource` still green.
 clean stream end are treated identically (both retry). Finish-line status unchanged: levers 1, 2, 3
 complete; 4 complete except `overflow-anchor: none` (Stylo-gated); 5 refused as a subsystem needing a
 dedicated session (see tick 205's analysis).
+
+## Tick 208 — click activation behaviour: the checkbox actually ticks (interaction) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (closes the gap tick 199 exposed). WIKI:
+docs/wiki/interaction-surface.md "Click ACTIVATION behaviour — the checkbox actually ticks".**
+
+**Selection.** Tick 199's own finding: `element.click()` fires the event but runs no activation
+behaviour, which made the a11y state read-back only half useful — an agent could see a checkbox
+unchecked, click it, and see it still unchecked. `el_click`'s doc comment had said so in as many
+words ("it does not yet run the full activation behaviour ... that is the follow-on, and it is real
+work rather than a 'TODO' meaning never"). This is that follow-on.
+
+**Implemented in `Page::dispatch_click`**, which is the choke point the GUI, the agent and
+`element.click()` all reach.
+
+**Ordering is the subtle half, and getting it backwards still passes a naive test.** The toggle
+happens **before** the event is dispatched, because that is why a real handler reading `this.checked`
+sees the NEW state. Toggling afterwards ends in the same final state while handing every handler on
+the web a stale value — so the gate asserts **what the handler saw**, not just where things landed.
+`preventDefault()` runs the canceled-activation steps and undoes the toggle.
+
+**A radio is a group, not a toggle.** Clicking one deselects its peers, grouped by `name` because
+that is how the form serialises; a radio never unchecks itself; a different `name` group is
+untouched. Two checked radios in one group means the form submits the wrong value — a silent
+data-corruption bug rather than a visual one.
+
+`input` then `change` fire after the state is committed, in that order, which is what every
+controlled-component binding is written for.
+
+**Gate.** `g_click_activation` — the box ticks and unticks; the handler log reads exactly
+`click:true input:true change:true click:false input:false change:false`; `preventDefault()` leaves
+it unticked; selecting a radio deselects its group peer and leaves the other group alone; an
+already-selected radio stays selected. **Proven RED by returning no activation** — the box never
+ticks and the `click:true` ordering claim collapses with it. `g_a11y_state`, `g_form`, `g_popover`,
+`g_dialog` still green; `cargo check --workspace` green.
+
+**Residue.** Only checkbox and radio activate. A link does not navigate and a submit button does not
+submit **from `element.click()`** — the native GUI paths handle those separately, so this is a gap in
+the scripted/agent path specifically and worth closing for the agentic surface.
+`<select>`/`<option>` selection and `<label>`→control forwarding (clicking a label should activate
+its control) are also not done.

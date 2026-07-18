@@ -2405,13 +2405,23 @@ impl Page {
         fonts: &FontContext,
         viewport_width: f32,
     ) -> bool {
-        let Some(ctx) = &self.js else { return true };
+        if self.js.is_none() {
+            return true;
+        }
         let rects: std::collections::HashMap<manuk_dom::NodeId, [f32; 4]> = self
             .root_box
             .node_rects(&self.dom)
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
+        // ── ACTIVATION BEHAVIOUR, part 1: the PRE-click steps. ──────────────────────────────
+        // A click on a checkbox toggles it, and it does so **before** the event is dispatched —
+        // which is why a real handler reading `this.checked` sees the NEW state. Firing the event
+        // and toggling afterwards would hand every handler on the web the stale value. If the
+        // handler then cancels the event, the toggle is undone (the "canceled activation steps").
+        let activation = self.pre_click_activation(node);
+
+        let ctx = self.js.as_ref().expect("checked above");
         let proceed =
             match manuk_js::dispatch_event(ctx, &mut self.dom, node, "click", &rects, &self.styles)
             {
@@ -2421,6 +2431,29 @@ impl Page {
                     return true;
                 }
             };
+
+        // ── ACTIVATION BEHAVIOUR, part 2: commit or undo. ───────────────────────────────────
+        if let Some(prev) = activation {
+            if proceed {
+                // `input` then `change`, in that order — a framework listening for either must see
+                // the committed state, and every controlled-component binding is written for it.
+                let ctx = self.js.as_ref().expect("js context checked above");
+                for kind in ["input", "change"] {
+                    if let Err(e) = manuk_js::dispatch_event(
+                        ctx,
+                        &mut self.dom,
+                        node,
+                        kind,
+                        &rects,
+                        &self.styles,
+                    ) {
+                        tracing::warn!("{kind} dispatch: {e}");
+                    }
+                }
+            } else {
+                self.undo_click_activation(node, prev);
+            }
+        }
         // If a handler mutated the DOM, re-style + re-lay-out so it renders (at base zoom;
         // the caller re-applies zoom on its next relayout).
         let root = self.dom.root();
@@ -2478,6 +2511,88 @@ impl Page {
             self.reapply_scroll_offsets();
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
+        }
+    }
+
+    /// The pre-click activation steps for a form control, returning the state to restore if the
+    /// click is cancelled. `None` for anything with no activation behaviour.
+    ///
+    /// The returned `Vec` is every node whose `checked` was changed, with its prior value — a radio
+    /// activation touches the whole group, not just the one clicked.
+    fn pre_click_activation(
+        &mut self,
+        node: manuk_dom::NodeId,
+    ) -> Option<Vec<(manuk_dom::NodeId, bool)>> {
+        let el = self.dom.element(node)?;
+        if el.name != "input" {
+            return None;
+        }
+        let ty = el.attr("type").unwrap_or("").to_ascii_lowercase();
+        let was = el.attr("checked").is_some();
+        match ty.as_str() {
+            "checkbox" => {
+                let mut prev = vec![(node, was)];
+                let _ = &mut prev;
+                if was {
+                    self.dom.remove_attr(node, "checked");
+                } else {
+                    self.dom.set_attr(node, "checked", "");
+                }
+                Some(prev)
+            }
+            "radio" => {
+                // **A radio is not a toggle — it is a group.** Clicking one must uncheck its
+                // siblings, or the page ends up with two "selected" options and a form that
+                // submits the wrong one. Grouping is by `name`, which is how the form serialises.
+                let name = self
+                    .dom
+                    .element(node)?
+                    .attr("name")
+                    .unwrap_or("")
+                    .to_string();
+                let mut prev = Vec::new();
+                if !name.is_empty() {
+                    let all: Vec<manuk_dom::NodeId> =
+                        self.dom.descendants(self.dom.root()).collect();
+                    for other in all {
+                        if other == node || !self.dom.is_element(other) {
+                            continue;
+                        }
+                        let Some(oe) = self.dom.element(other) else {
+                            continue;
+                        };
+                        let is_peer = oe.name == "input"
+                            && oe.attr("type").unwrap_or("").eq_ignore_ascii_case("radio")
+                            && oe.attr("name").unwrap_or("") == name;
+                        if is_peer && oe.attr("checked").is_some() {
+                            prev.push((other, true));
+                            self.dom.remove_attr(other, "checked");
+                        }
+                    }
+                }
+                prev.push((node, was));
+                // Clicking a radio always CHECKS it; it never unchecks (unlike a checkbox).
+                self.dom.set_attr(node, "checked", "");
+                Some(prev)
+            }
+            _ => None,
+        }
+    }
+
+    /// Restore what [`pre_click_activation`](Self::pre_click_activation) changed, because the click
+    /// was cancelled. `preventDefault()` on a checkbox means the box does not tick — a page that
+    /// validates before allowing a toggle depends on exactly this.
+    fn undo_click_activation(
+        &mut self,
+        _node: manuk_dom::NodeId,
+        prev: Vec<(manuk_dom::NodeId, bool)>,
+    ) {
+        for (n, was_checked) in prev {
+            if was_checked {
+                self.dom.set_attr(n, "checked", "");
+            } else {
+                self.dom.remove_attr(n, "checked");
+            }
         }
     }
 
