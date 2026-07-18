@@ -81,27 +81,27 @@ cross	process-per-tab isolation	a C++ fault in SpiderMonkey kills one tab, not a
 cross	HTTP caching + compression	every repeat visit	partial	-	http_cache exists
 app	<dialog> + popover	modals, menus, tooltips — Interop 2026 focus area	partial	-	dialog GATED (engine/page/tests/g_dialog.rs); popover still missing — split (edge sweep t193)
 app	scroll snap	carousels, paged feeds, every mobile gallery	missing	-	tick 225 probe: scroll-snap-type does not round-trip the cascade
-app	scroll-driven animations	modern scroll UX; replaces JS scroll handlers	unknown	-	SURFACE AUDIT t83: Interop 2026
+app	scroll-driven animations	modern scroll UX; replaces JS scroll handlers	missing	-	tick 230 probe: ScrollTimeline absent and animation-timeline does not round-trip
 app	View Transitions	animated state changes; shipping in SPAs now	missing	-	tick 225 probe: document.startViewTransition absent
 app	Navigation API	the modern replacement for History; SPA routing	missing	-	tick 225 probe: navigation.navigate absent
 app	scoped custom element registries	large apps with conflicting component libs	missing	-	tick 225 probe: CustomElementRegistry.prototype.initialize absent
-app	JSPI (WebAssembly promise integration)	async wasm — ffmpeg.wasm, Figma	unknown	-	SURFACE AUDIT t83: Interop 2026
+app	JSPI (WebAssembly promise integration)	async wasm — ffmpeg.wasm, Figma	missing	-	tick 230 probe: WebAssembly.Suspending/promising absent (the wasm CORE works — see G_PROBE_CAPABILITIES wasm)
 doc	container queries (incl. style queries)	component-responsive layout; the biggest CSS shift in a decade	missing	-	tick 225 probe: @container rule does not apply
-doc	CSS anchor positioning	tooltips, menus, popovers without JS	unknown	-	SURFACE AUDIT t83: Interop 2026
-doc	CSS attr() / zoom / shape() / contrast-color()	modern CSS authors use these now	unknown	-	SURFACE AUDIT t83: Interop 2026
+doc	CSS anchor positioning	tooltips, menus, popovers without JS	missing	-	tick 230 probe: position-anchor/anchor() absent
+doc	CSS attr() / zoom / shape() / contrast-color()	modern CSS authors use these now	missing	-	tick 230 probe: attr(data-w type(<length>)) does not resolve as a width
 doc	custom highlights	find-in-page, editors, code highlighting without DOM churn	missing	-	tick 225 probe: Highlight / CSS.highlights absent
 doc	JPEG XL	Interop 2026 investigation; Apple ships it	unknown	-	SURFACE AUDIT t83: Interop 2026
 platform	fetch uploads + ranges (streaming)	large uploads, resumable downloads, video range requests	gated	G_MEDIA_SEGMENT_FETCH	tick 228: Range+206 AND byte-exact binary bodies (260B segment round-trips intact); unblocks media M3
 platform	WebTransport (HTTP/3)	low-latency data; games, live apps	unknown	-	SURFACE AUDIT t83: Interop 2026
 platform	WebAuthn / passkeys	THE modern login. Ladybird still lacks it; so do we	missing	-	confirmed absent (navigator.credentials zero hits). TOTP/password fallback survives (edge sweep t193b)
-media	media pseudo-classes (:playing/:muted etc)	styling player state	unknown	-	SURFACE AUDIT t83: Interop 2026
+media	media pseudo-classes (:playing/:muted etc)	styling player state	missing	-	tick 230 probe: video:muted selects neither the muted nor the unmuted video
 cross	real-world QUIRKS (not just the spec)	'the work that has historically KILLED independent engines' — a strict spec impl that breaks sites fails the only test that matters	partial	G_FIDELITY	265-site Chromium differential oracle. THIS is why WPT alone is insufficient
 cross	quirks-mode rendering	the pre-standards web; a huge fraction of the long tail	unknown	-	SURFACE AUDIT t83: never measured
 cross	test262 (JS conformance)	Ladybird tracks 97.8% of 53,207 subtests. We have NEVER RUN IT	unknown	-	SURFACE AUDIT t83: we embed SpiderMonkey, so this should be cheap and high
 cross	developer tools	not a rendering capability, but a browser without them is not a daily driver for the people who build the web	missing	-	SURFACE AUDIT t83: Ladybird names this a gap too
 doc	CSS nesting (native &)	modern stylesheets nest rules; a flat-only parser drops the nested block	gated	G_CSS_NESTING	tick 124: MEASURED — Stylo backs native nesting (& descendant + bare &); reaches getComputedStyle
-doc	subgrid	nested grids that must align to the parent grid track lines	unknown	-	NEVER MEASURED — probe (surface-audit t123)
-doc	@scope / scoped styles	component-scoped CSS without leakage	unknown	-	NEVER MEASURED — probe (surface-audit t123)
+doc	subgrid	nested grids that must align to the parent grid track lines	missing	-	tick 230 probe: grid-template-columns:subgrid does not round-trip the cascade
+doc	@scope / scoped styles	component-scoped CSS without leakage	missing	-	tick 230 probe: @scope rule does not apply
 doc	text-wrap: balance / pretty	headings and paragraphs wrap raggedly; a visible typographic gap	missing	-	tick 225 probe: text-wrap does not round-trip the cascade
 app	WebCodecs (VideoDecoder/AudioDecoder/VideoFrame)	low-level media apps, in-browser video editors, custom players	missing	-	tick 225 probe: VideoDecoder absent
 platform	Sanitizer API (Element.setHTML / setHTMLUnsafe)	XSS-safe HTML injection; the platform replacement for DOMPurify	missing	-	tick 225 probe: Element.prototype.setHTML absent

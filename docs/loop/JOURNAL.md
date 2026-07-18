@@ -9626,3 +9626,40 @@ replaced the match scrutinee outright and produced a real RED.
 **Unknowns: 17 → 16.**
 
 **Mechanism captured:** `docs/wiki/frameworks.md`.
+
+## Tick 230 — probe batch 2, and two claims that measured nothing (2026-07-18)
+
+**Selected:** CO-#1 **(D)**, the remaining constellation unknowns. Cheap per cell, and it only
+rebuilds one gate binary.
+
+**Measured absent, each with a behavioural check and the probe as its receipt:** subgrid, `@scope`,
+CSS anchor positioning, `attr()` as a length, scroll-driven animations, JSPI, and media
+pseudo-classes. Unknowns **16 → 8**.
+
+**The part worth keeping: two of my own probes were VACUOUS, and one would have pinned a lie.**
+
+- `mediapseudo` asked only that `querySelectorAll('video:muted').length >= 0` — true of every engine
+  that does not throw, *including one that ignores the pseudo-class and returns nothing*. It reported
+  **yes**. Rewritten to discriminate (a muted and an unmuted `<video>`; the selector must match
+  exactly the muted one) it reports **no**. A claim that cannot fail measures nothing, and this one
+  was one commit away from flipping a cell to "works" on no evidence at all.
+- `cspmeta` tested a flag nothing ever set, so it was unconditionally true.
+
+**CSP is deliberately left `unknown`, and the reason is structural.** The natural test — an inline
+script must be blocked by `script-src 'self'` — **cannot be run from an inline script**, because a
+working implementation would prevent the probe itself from executing. It needs an external-script
+harness and a real response header. Giving it a verdict this file cannot earn would be worse than
+the honest blank.
+
+**Third tick running in which a check passed for the wrong reason** (t228's silent no-op edit, t229's
+`if false` probe arm, and now these). The pattern is one thing: *a green that arrives without a
+demonstrated way to go red is not evidence.* Every claim added here was checked against a state where
+it must fail.
+
+**M3 blocker recorded, not worked around.** Media M3 (symphonia demux) is unblocked by t228 but has no
+committed test fixture: the real fragmented-MP4 and VP9 files live under `WebKit/`, which is
+gitignored, so a gate built on them would fail on a clean checkout. M3 needs a small committed
+fixture — a repo-policy decision plus a dependency, i.e. a fresh-context subsystem tick, not a
+tail-end-of-session one.
+
+**Mechanism captured:** `docs/wiki/conformance-and-oracles.md`.

@@ -124,6 +124,8 @@
   - L462 · Probing the constellation: unknown is a bug, not a state
   - L480 · A probe must be behavioural, and in this engine that is not pedantry
   - L490 · The probe gate is a ratchet, not a survey
+  - L498 · A probe whose claim cannot fail measures nothing (tick 230)
+  - L516 · Some capabilities cannot be probed from inside the page
 
 ## CSS AND THE CASCADE — Stylo realities and quirks actually encountered
 `docs/wiki/css-cascade.md`
@@ -500,4 +502,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-419 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+421 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

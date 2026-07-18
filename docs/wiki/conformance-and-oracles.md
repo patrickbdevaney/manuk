@@ -494,3 +494,29 @@ missing. What measured false is written into the TSV as `missing` with the gate 
 *measured absence*, which is a different and far more useful thing than never having looked, and
 which starts failing the day someone implements it (at which point the claim moves into the pinned
 list). One run therefore both flips cells green and installs the guard that keeps them green.
+
+### A probe whose claim cannot fail measures nothing (tick 230)
+
+Two probes in the second batch were **vacuous**, and one of them reported a capability that does not
+exist:
+
+- `querySelectorAll('video:muted').length >= 0` is true of every engine that does not throw —
+  including one that ignores the pseudo-class entirely and returns an empty list. It reported **yes**.
+  Rewritten to discriminate — a muted and an unmuted `<video>`, with the selector required to match
+  exactly the muted one — it reports **no**.
+- A flag-based check (`__cspInlineRan !== true`) where nothing ever set the flag.
+
+Both would have flipped a constellation cell on no evidence, which is strictly worse than the
+`unknown` they replaced: an `unknown` invites measurement, a false `works` closes the question.
+
+**The rule this yields:** every probe must be written so that some reachable state makes it FAIL, and
+that state should be named. `wasm` fails if the export returns anything but 7; `multicol` fails if the
+column box is full width; `mediapseudo` fails if the selector matches neither video or both.
+
+### Some capabilities cannot be probed from inside the page
+
+CSP enforcement is the example, and it is structural rather than incidental. The natural test — an
+inline script must be blocked by `script-src 'self'` — **cannot be run from an inline script**,
+because a working implementation prevents the probe from executing at all. Absence of the result is
+indistinguishable from the probe never running. It needs an external-script harness and a real
+response header, so the cell stays `unknown` rather than taking a verdict this harness cannot earn.

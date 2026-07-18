@@ -1128,3 +1128,15 @@ being dead — inert buttons, menus that never open, forms that never validate. 
 the page script can report about itself. The identity claim is the load-bearing one: a framework that
 re-created the node instead of adopting it would produce a byte-identical DOM while discarding the
 server's work and every listener on it.
+
+## Modern CSS surfaces — measured absent (tick 230)
+
+subgrid, `@scope`, CSS anchor positioning, `attr()` as a typed length, and scroll-driven animations
+are all **measured** missing, along with JSPI and the media pseudo-classes (`:muted`/`:playing`).
+These are evidence now rather than assumptions: each was checked by the geometry or computed value it
+should produce, not by whether the property parsed.
+
+The practical read for daily-driver work: none of these blanks a page. They are progressive
+enhancements — a site using anchor positioning falls back to its own positioning, `@scope` degrades
+to ordinary specificity. That is a different class from the boot-critical holes, and they should be
+weighed accordingly rather than by count.

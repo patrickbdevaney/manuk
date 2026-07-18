@@ -30,6 +30,13 @@ const HTML: &str = r##"<!doctype html>
   @media print { #printonly { color: rgb(4, 5, 6); } }
   @media screen { #screenonly { color: rgb(7, 8, 9); } }
   #balance { text-wrap: balance; width: 200px; }
+  #sg-outer { display: grid; grid-template-columns: repeat(3, 1fr); }
+  #sg { display: grid; grid-column: span 3; grid-template-columns: subgrid; }
+  @scope (#scope-root) { #scoped { color: rgb(10, 20, 30); } }
+  #anchor-el { anchor-name: --a; }
+  #anchored { position: absolute; position-anchor: --a; top: anchor(bottom); }
+  #attrbox { width: attr(data-w type(<length>), 50px); }
+  #sda { animation-timeline: scroll(); }
 </style></head><body>
   <div id="mc"><p>alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima</p></div>
   <div id="cq-outer"><div id="cq">container query target</div></div>
@@ -38,6 +45,12 @@ const HTML: &str = r##"<!doctype html>
   <div id="printonly">print</div>
   <div id="screenonly">screen</div>
   <div id="balance">balance me across two lines please</div>
+  <div id="sg-outer"><div id="sg"><span>a</span></div></div>
+  <div id="scope-root"><div id="scoped">scoped</div></div>
+  <div id="anchor-el">anchor</div><div id="anchored">anchored</div>
+  <div id="attrbox" data-w="120px">attr</div>
+  <div id="sda">scroll driven</div>
+  <video id="vidmuted" muted></video><video id="vidloud"></video>
   <div id="out">-</div>
   <script>
     var R = {
@@ -123,6 +136,43 @@ const HTML: &str = r##"<!doctype html>
     // ── Quirks mode: a document WITHOUT a doctype must report BackCompat. This document has one,
     // so the honest check here is that the mode is reported at all and is the standards one.
     probe('quirksflag', function () { return document.compatMode === 'CSS1Compat'; });
+
+    // ── Second batch (tick 230). Same rule as above: behaviour, never presence.
+
+    // CSS features, each measured by the geometry or computed value it is supposed to produce.
+    probe('subgrid', function () { return cs('sg').gridTemplateColumns.indexOf('subgrid') >= 0; });
+    probe('scopedstyles', function () { return cs('scoped').color.indexOf('10, 20, 30') >= 0; });
+    probe('anchorpos', function () { return cs('anchored').position === 'absolute' &&
+                                            cs('anchored').top !== '' &&
+                                            cs('anchored').positionAnchor !== undefined &&
+                                            String(cs('anchored').positionAnchor || '').length > 0; });
+    probe('attrfn', function () { return cs('attrbox').width === '120px'; });
+    probe('scrolldriven', function () { return typeof ScrollTimeline === 'function' ||
+                                               String(cs('sda').animationTimeline || '').indexOf('scroll') >= 0; });
+
+    // JSPI — the WebAssembly promise-integration constructors, on top of the working wasm core.
+    probe('jspi', function () {
+      return typeof WebAssembly === 'object' && typeof WebAssembly.Suspending === 'function' &&
+             typeof WebAssembly.promising === 'function';
+    });
+
+    // media pseudo-classes: `:muted` must SELECT the muted video and NOT the unmuted one.
+    //
+    // The first draft asked only that `querySelectorAll('video:muted').length >= 0`, which is true of
+    // every engine that does not throw — including one that ignores the pseudo-class entirely and
+    // returns nothing. A probe whose claim cannot fail measures nothing; this one fails on both an
+    // engine that selects neither video and one that selects both.
+    probe('mediapseudo', function () {
+      try {
+        var m = document.querySelectorAll('video:muted');
+        return m.length === 1 && m[0].id === 'vidmuted';
+      } catch (e) { return false; }
+    });
+
+    // NOT probed here: CSP enforcement. The natural test — "an inline script must be blocked by
+    // `script-src 'self'`" — cannot be run FROM an inline script, because a working implementation
+    // would prevent this very probe from executing. It needs an external-script harness and a real
+    // response header, so it stays `unknown` rather than being given a verdict this file cannot earn.
 
     // ── Drag and drop: the event surface pages actually bind to.
     probe('dragdrop', function () {
