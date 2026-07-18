@@ -1249,6 +1249,7 @@ const PRELUDE: &str = r#"
       iface('HTMLStyleElement',    tagIs('STYLE'));
       iface('HTMLLinkElement',     tagIs('LINK'));
       iface('HTMLTemplateElement', tagIs('TEMPLATE'));
+      iface('HTMLDialogElement',   tagIs('DIALOG'));
       iface('HTMLDivElement',      tagIs('DIV'));
       iface('HTMLSpanElement',     tagIs('SPAN'));
       // The structural elements a created document is made of — `DOMImplementation-createHTMLDocument`
@@ -1635,6 +1636,92 @@ const PRELUDE: &str = r#"
         };
         // No native validation UI here, so reportValidity is checkValidity (it still fires `invalid`).
         __HP.reportValidity = function() { return this.checkValidity(); };
+      }
+
+      // ── `<dialog>`: show() / showModal() / close() — the modal. Every cookie banner, every
+      // confirm-delete, every command palette shipped since the pattern stopped being a hand-rolled
+      // `<div class="modal">` is a `<dialog>`, and the whole surface was ABSENT: `open` reflected as an
+      // attribute and nothing else. `dlg.showModal()` was a TypeError that took the click handler with
+      // it, so the button did nothing at all — and because a dialog with no UA `display:none` rule is
+      // just a block, its contents were ALREADY PAINTED into the page, inline, before anyone opened it.
+      // Both halves are fixed here: the methods (below) and the UA rule (css: `dialog:not([open])`).
+      //
+      // Modality is marked with `data-manuk-modal` — same device as `data-manuk-adopted`, because the
+      // Rust side (top-layer stacking in `Page::z_index_map`) has to see the flag and a JS-side property
+      // is invisible to it. Non-modal `show()` deliberately does NOT set it: only a modal dialog joins
+      // the top layer, so a `show()`n dialog stays in flow where the spec puts it.
+      if (__HP && typeof __HP.showModal === 'undefined') {
+        var __isDialog = function(el) { return !!el && el.tagName === 'DIALOG'; };
+        // The open modals, innermost last — a stack, because a dialog may open a dialog.
+        var __modalStack = [];
+        __HP.show = function() {
+          if (!__isDialog(this) || this.hasAttribute('open')) { return; }
+          this.setAttribute('open', '');
+        };
+        __HP.showModal = function() {
+          if (!__isDialog(this)) { return; }
+          // Spec: showModal() on an already-open dialog is an InvalidStateError, and libraries DO
+          // double-open (a re-render calls it again). Throwing the right name lets them catch it.
+          if (this.hasAttribute('open')) {
+            var e = new Error('The element already has an "open" attribute');
+            e.name = 'InvalidStateError';
+            throw e;
+          }
+          this.setAttribute('open', '');
+          this.setAttribute('data-manuk-modal', '');
+          __modalStack.push(this);
+        };
+        __HP.close = function(rv) {
+          if (!__isDialog(this) || !this.hasAttribute('open')) { return; }
+          if (rv !== undefined) { this.returnValue = rv; }
+          this.removeAttribute('open');
+          this.removeAttribute('data-manuk-modal');
+          var i = __modalStack.indexOf(this);
+          if (i >= 0) { __modalStack.splice(i, 1); }
+          // `close` is the event the calling code waits on to read `returnValue`. Not cancelable:
+          // by the time it fires the dialog is already closed.
+          try { this.dispatchEvent(new Event('close', { bubbles: false, cancelable: false })); } catch (e) {}
+        };
+        Object.defineProperty(__HP, 'returnValue', {
+          configurable: true,
+          get: function() { return this.__returnValue == null ? '' : this.__returnValue; },
+          set: function(v) { this.__returnValue = String(v); }
+        });
+        // `<form method="dialog">` — the canonical close button, and it is pure markup: the page
+        // ships `<form method="dialog"><button value="ok">OK</button></form>` and expects the click
+        // to close the dialog with `returnValue === 'ok'` and NO navigation. Handled at the document
+        // in the capture phase so it runs before the native submit path can treat it as a GET.
+        var __dialogSubmit = function(ev) {
+          var t = ev.target;
+          while (t && t.tagName !== 'BUTTON' && t.tagName !== 'INPUT') { t = t.parentElement; }
+          if (!t) { return; }
+          var type = String(t.type || (t.tagName === 'BUTTON' ? 'submit' : '')).toLowerCase();
+          if (type !== 'submit' && type !== 'image') { return; }
+          // `formmethod` on the button overrides the form's own `method` (spec).
+          var fm = t.getAttribute && t.getAttribute('formmethod');
+          var form = t.form || (t.closest && t.closest('form'));
+          var method = String(fm || (form && form.getAttribute('method')) || '').toLowerCase();
+          if (method !== 'dialog') { return; }
+          var dlg = t.closest && t.closest('dialog');
+          if (!dlg) { return; }
+          // A dialog-method submit navigates NOWHERE — it closes, with the button's value.
+          ev.preventDefault();
+          dlg.close(t.getAttribute('value') || '');
+        };
+        // Escape dismisses the topmost modal, firing a cancelable `cancel` first — the hook every
+        // "are you sure you want to discard?" guard hangs off.
+        var __dialogEscape = function(ev) {
+          if (ev.key !== 'Escape' && ev.keyCode !== 27) { return; }
+          var dlg = __modalStack[__modalStack.length - 1];
+          if (!dlg || !dlg.hasAttribute('open')) { return; }
+          var ok = true;
+          try { ok = dlg.dispatchEvent(new Event('cancel', { bubbles: false, cancelable: true })); } catch (e) {}
+          if (ok !== false) { dlg.close(); }
+        };
+        try {
+          document.addEventListener('click', __dialogSubmit, true);
+          document.addEventListener('keydown', __dialogEscape, true);
+        } catch (e) {}
       }
 
       // `CSS.escape` / `CSS.supports` — feature detection, and the correct way to build a selector.

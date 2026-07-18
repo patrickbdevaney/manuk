@@ -1,0 +1,161 @@
+# DAILY-DRIVER EDGES — the tractable tail to "it does almost everything"
+
+**Purpose.** Get Manuk from the current ~44% Phase-0 readiness to the *good* end of Phase 0 — reasonably
+daily-driving **almost every site a human uses** — with a **minimal, bounded** amount of work, and without
+sinking ticks into an obscure diminishing-return long tail. Derived from a 4-way capability sweep (tick 193)
+against the named target sites, cross-referenced to `CONSTELLATION.tsv` and verified against engine source.
+
+**The thesis (why this is the whole game).** The browser's daily-driver capability surface *is* the
+automation-agent surface. What a human can do — see the page (DOM + a11y tree + pixels), click/type/submit,
+traverse links, go back/forward, scroll a feed, log in, play a video — is exactly what an agent can do. The
+API surface, the harness, MCP, and consumer prompt-to-action are all **downstream** of this. So closing these
+edges is not just "render more sites"; it is widening what any agent built on Manuk can accomplish.
+
+**Target corpus (what "almost everything" means here):** YouTube (home / watch / playlist / shorts / recs),
+X/Twitter & Instagram (profile + feed scroll, in-feed media), HuggingFace (model/dataset search + cards),
+GitHub (repos, blobs, PRs), and the broad doc web (Wikipedia/MDN/docs/news/blogs/forums). **Explicitly out:**
+DRM/Widevine (Netflix/Disney+/Spotify) — a licensed proprietary CDM, cannot be built.
+
+---
+
+## 0. First, the map UNDERSTATES the engine — several rows are STALE
+
+The 4 agents independently found capabilities marked `unknown`/`missing` that are **actually built** (verified
+against source this session). Correcting these *raises* the readiness number and stops the lever from chasing
+things we already have:
+
+| CONSTELLATION row | says | actually | evidence |
+|---|---|---|---|
+| form method=POST (41) | missing | **works** | `net/src/lib.rs:626 post_document` (+ cross-site CSRF withholding), tick 164 |
+| clipboard (58) | unknown | **works** | `navigator.clipboard.writeText/readText`, dom_bindings.rs:8075 |
+| `<dialog>` (82) | unknown | **gated** (dialog); popover still missing | `engine/page/tests/g_dialog.rs` exists |
+| CORS + credentialed (47) | unknown | **likely works** | `net/cors.rs`, response headers ~tick 170 — *surface-audit to confirm* |
+| font fallback CJK/emoji (8) | unknown | **partial** (built, gated on Noto install) | `engine/text FALLBACK_FAMILIES` (Noto CJK/Emoji) |
+| bidi (9) | unknown | **partial** (RTL shaping yes; full reordering deferred) | swash RTL; reorder is a "drop-in upgrade" |
+| object-fit / aspect-ratio | — | **works** | ticks 181 / 145 — the near-universal thumbnail idiom is covered |
+| navigator identity | (no row) | **90% built** | `webdriver:false`, hardwareConcurrency, vendor, screen, matchMedia all present |
+
+**Action:** a `surface-audit` reconciliation pass alone moves readiness up several points. The risk has shifted
+from *"API absent"* to *"is it measured, does it stay fast, does it attach to SSR markup."*
+
+---
+
+## 1. THE CRITICAL UNSCOPED EDGES (the tractable tail — do these)
+
+Grouped by kind. Each is either genuinely missing or under-scoped; none is a diminishing-return tail.
+
+### 1a. Feed & app rendering/interactivity — the make-or-break for X / IG / HF / GitHub
+| edge | what breaks without it | scope | notes |
+|---|---|---|---|
+| **Scroll anchoring** (`overflow-anchor`) | X/IG/LinkedIn feeds JUMP on every load-more and every image reflow | **missing** | `page/src/lib.rs:1473` — "a re-layout silently un-scrolls every container." **The #1 feed-correctness fix.** |
+| **Synchronous forced reflow** (`getBoundingClientRect`/`ResizeObserver` after intra-tick mutation) | react-window/virtuoso measure→mutate→measure in one frame → blank/overlapping rows | **under-scoped** | Engine uses *batch* relayout (script runs vs a pre-script snapshot). Needs on-demand reflow when JS reads geometry after a dirtying write. This is the mechanism behind "infinite scroll ❓". |
+| **`URL.createObjectURL` / `blob:`** | MSE video setup, blob image previews, blob workers all TypeError | **missing** (verified) | Small, named. Prereq for in-feed video. |
+| **SSR hydration** (attach to server markup) | HuggingFace (SvelteKit SSR) is a dead screenshot; GitHub React islands inert | **unknown — PROBE FIRST** | Frameworks *mount* (proven, tick 26); attaching to server-rendered DOM is never measured. May already work like React did — cheap to check, huge if it fails silently. |
+| **Large-DOM / code-blob paint perf** | GitHub 1k–5k-line blobs & long PR threads stutter | **unknown** | No node budget / incremental paint. v1 "feels good" is untested on exactly these page shapes. |
+| **`<details>`/`<summary>` disclosure** | GitHub READMEs / MDN / docs collapsibles render always-open, no toggle | **missing** | Bounded tick: open attr + click-to-toggle + default marker. |
+| **MathML rendering** | Wikipedia math, arXiv, MDN render raw/broken | **missing** | Foreign-content not modelled (`html/sink.rs`). The visible hole in our doc-web strength. |
+| **bidi reordering** (Arabic/Hebrew) | RTL doc web in wrong visual order | **partial → finish** | RTL shaping exists; full line reordering is the deferred "drop-in." |
+
+### 1b. Browser-completeness identity — present as a REAL browser (completeness, not evasion)
+| edge | what breaks without it | scope | notes |
+|---|---|---|---|
+| **WebGL context + honest renderer/vendor strings** | Cloudflare/LinkedIn flag a `null`-WebGL browser as headless | **missing** | Biggest residual "looks-headless" tell. Fix = a **real** (software/llvmpipe) GL backend reporting its **true** strings — not a spoof. Also unlocks WebGL apps (row 60). |
+| **`document.visibilityState` + Page Visibility** | anti-bot heuristics flag "tab never visible"; autoplay/animation loops gate on it | **missing** (verified) | Trivial: return `'visible'`, fire `visibilitychange`. |
+| **`navigator.permissions.query()`** | detectors cross-check it vs `Notification.permission`; the *inconsistency* is itself a bot tell; unguarded calls throw | **missing** | Small shim returning `{state}` consistent with the Notification stub. |
+| **`navigator.userAgentData` (Client Hints)** + canonical UA/`platform` | modern UA-sniff reads us as stale/fake; UA contains `"Manuk"`, `platform` is non-canonical `"linux x86_64"` → LinkedIn degraded path | **partial** | navigator is 90% built. Add `deviceMemory`+`userAgentData`, canonicalize `platform` → `"Linux x86_64"`, decide UA policy (a recognized UA string). |
+
+### 1c. Agent-actuation — the automation moat (how an agent acts & confirms)
+| edge | what breaks without it | scope | notes |
+|---|---|---|---|
+| **A11y node STATES** (checked/expanded/selected/disabled/value/focused) | agent CANNOT confirm the result of its own action — is the box checked? is the menu open? | **missing** | `A11yNode` carries only role/name/bbox/z (verified). **Highest-leverage agentic fix**; `a11y/src/lib.rs:229`. |
+| **Richer interactive a11y roles** (menu/tab/dialog/switch/slider/progressbar) | agent can't ground the web-app widgets it most needs to drive | **partial** | `Role` enum stops at ~26 roles. |
+| **hover / dblclick / contextmenu dispatch** | hover-reveal menus, right-click, double-click-select undrivable | **missing** | Only `dispatch_click` exists; add sibling dispatchers. |
+| **file-input actuation** (set `FileList` on `input[type=file]`) | every upload flow undrivable | **missing** | `DataTransfer` is an inert stub; no `set_files`. |
+| **native `<select>` choose + `selectedIndex`/`change`** | dropdowns undrivable | **partial** | Attrs reflect; synthetic option-choice + change firing looks unbuilt. |
+| **drag-and-drop** (`dragstart`/`drop`/`dataTransfer`) | Kanban/reorder/drag-upload undrivable | **unknown** | `DragEvent`/`DataTransfer` inert. |
+| **contenteditable + Selection** | rich editors (Notion/Gmail-compose) shaky | **partial** | Range works, Selection is a stub. |
+| **IndexedDB** | X/LinkedIn session cache; some auth SDKs (Firebase) hard-fail | **missing** | More a hard capability wall than a detection tell. |
+
+### 1d. Media — the borrow-plan (≈8–9 bounded ticks to a WATCHABLE YouTube)
+The de-risking facts: the **frame sink is already built** (`DecodedImage` → wgpu present); the media JS surface
+is a clean stub at one wiring point; the net stack does Range trivially. The adaptive players (hls.js/dash.js/
+YouTube's own) are **ordinary JS** — they need only (a) binary transport, (b) MSE, (c) `<video>` events.
+
+**Steering insight:** YouTube picks formats from `MediaSource.isTypeSupported()`. Report `true` for VP9 + AAC
+and `false` for Opus → YouTube serves **VP9 + AAC**, which **removes Opus (C libopus) and H.264 (patent) from
+the critical path**. Borrow **à-la-carte, pure-Rust-first**; reject full ffmpeg for v1 (LGPL packaging + huge C
+attack surface vs Manuk's memory-safety value + WALL-punishing build). Each decoder behind a feature flag in
+the per-tab sandbox.
+
+| step | capability | borrow | tick |
+|---|---|---|---|
+| 1 | **Binary transport** — `arraybuffer` XHR + `Response.arrayBuffer()` carrying real bytes; Range header | *(wiring; hyper already does Range)* | 1 |
+| 2 | **MSE state machine** — MediaSource/SourceBuffer/`isTypeSupported`(steering)/`createObjectURL`/appendBuffer/`updateend`/`sourceopen`/`.buffered`/`endOfStream` | *(wiring)* | ~2 (subsystem, fresh context) |
+| 3 | **Demux** fMP4/WebM | **`symphonia`** (MPL-2.0 — same license as Manuk) | 1 |
+| 4 | **AAC decode + audio out** | `symphonia` (AAC, pure-Rust) + **`cpal`** (audio device = master clock) | 1 |
+| 5 | **VP9 decode** → RGBA `DecodedImage` | **`libvpx`** (mature/fast) or **`rav1d`** for AV1 (memory-safe Rust) | 1 |
+| 6 | **Playback engine + A/V sync** — currentTime/seek/timeupdate/playing/waiting/ended, play/pause | *(wiring on cpal clock)* | ~2 (subsystem) |
+| 7 | **Controls + buffering + fullscreen + WebVTT** | *(shell chrome)* | 1 |
+
+Home/playlist/shorts/recs are ordinary DOM+JS that already render — once the watch page plays, they come along
+(Shorts = same MSE path, portrait layout). **Twitch (live), +~3–4 ticks later:** MPEG-TS demux (`mpeg2ts`, or
+ffmpeg escape-hatch) + H.264 (`openh264` Cisco binary) + low-latency tuning.
+
+---
+
+## 2. THE DIMINISHING-RETURN TAIL — consciously SKIP (do NOT spend ticks here)
+
+- **DRM / EME / Widevine** — *permanently out* (licensed CDM; cannot be built).
+- **Opus decode** — steer YouTube to AAC via `isTypeSupported`; no mature pure-Rust decoder, not worth C libopus.
+- **H.264** — out for YouTube (VP9/AV1 served); Twitch-only, and only via Cisco `openh264` prebuilt.
+- **Full ffmpeg** — rejected for v1 (LGPL + C surface + WALL build cost); reserve only as Twitch-TS escape hatch.
+- **Service Worker / Cache API / PWA / Web Push** — progressive enhancement; sites load fine on first visit.
+- **WebSocket / SSE for feed render** — X's timeline is GraphQL *polling*; WS only affects DMs/live badges.
+- **Variable-font axes, Popover API, multicol, `@media print`, code-fold, `-webkit-line-clamp`, backdrop-filter,
+  PiP, WebCodecs, `navigator.plugins` real enumeration, XPath targeting, IME/composition** — cosmetic, niche,
+  or covered by a cheaper path (dialog covers modals; agents inject final text sidestepping IME; empty plugin
+  stub suffices).
+
+---
+
+## 3. Completeness vs the "no bot-detection-fighting" scope — reconciled
+
+These are compatible; the line is **whether the underlying thing is real**:
+- **In scope (completeness):** expose surfaces a genuine headful browser *has*, with **honest** values —
+  `webdriver:false` because we truly aren't WebDriver-driven; a **real** software-GL context with its **true**
+  renderer string; `visibilityState:'visible'` because the tab is; real `screen`/`devicePixelRatio`. When a
+  site challenges Manuk here, it is *mis-classifying a real browser* — fixing that makes the browser more real.
+- **Out of scope (evasion), unchanged:** lying — claiming a GPU we lack, rotating/randomizing fingerprints,
+  spoofing a *specific* competitor build, defeating a challenge by pretending to be something we're not.
+- **The one honest tension:** a truthfully *software-rendered* WebGL string is itself sometimes used as a
+  headless heuristic. We ship the real string; if a site still blocks a truthfully-software browser, that is
+  the site over-fitting, and chasing it further is the evasion arms race the constitution declines.
+
+This refines [[scope-botdetection-shell]]: **completeness IS in scope; evasion is NOT.**
+
+---
+
+## 4. Site-class readiness map (the gating edge per target)
+
+| site class | already strong | the gating edge(s) to reach good-enough |
+|---|---|---|
+| **Doc web** (Wikipedia/MDN/news/blogs/forums) | ~90%+ — DOM/CSS/tables/fonts | MathML, `<details>`, bidi reorder |
+| **GitHub** | DOM, routing, markdown, syntax spans | large-blob paint perf, `<details>`, hydration-probe |
+| **HuggingFace** | SPA routing, fetch, cards | **hydration** (probe first), virtualized-list forced-reflow |
+| **X / Instagram** | fetch/GraphQL, IO, scroll, object-fit tiles | **scroll anchoring**, forced-reflow, `createObjectURL`, in-feed video (media), completeness identity |
+| **LinkedIn** | most of the app surface | completeness identity (userAgentData/UA/WebGL/visibilityState), IndexedDB |
+| **YouTube** | home/playlist/shorts DOM renders | the media borrow-plan (steps 1–7) |
+| **agent driving any of the above** | click/type/key/focus/scroll-into-view, a11y roles+names | **a11y STATES**, richer roles, hover/dblclick, file-input, `<select>`, drag-drop |
+
+## 5. Suggested sequencing (probe-cheap first, then bounded builds, then media)
+1. **Reconcile the stale rows** (surface-audit) — free readiness + honest map.
+2. **Probe the cheap unknowns** (`? outranks ✗`): hydration, CORS-confirm, drag-drop, AVIF — each either flips
+   green or reveals a real hole to prioritize.
+3. **Bounded high-value builds:** scroll-anchoring, forced-reflow, `createObjectURL`, a11y-states, `<details>`,
+   visibilityState + permissions.query + userAgentData, hover/dblclick dispatch, file-input actuation.
+4. **The two subsystems** (fresh context, not bounded ticks): the completeness WebGL backend; the MSE→playback
+   media chain (steps 1–7).
+5. **MathML, richer a11y roles, `<select>`/drag-drop actuation, IndexedDB** as they surface as gating.
+
+The lever-pivot (`scripts/lever-pivot.sh`) + this checklist keep the loop aimed at *constellation-moving*
+capability instead of an incremental render tail.

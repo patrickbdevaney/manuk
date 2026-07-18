@@ -2588,6 +2588,15 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
         | "noembed" | "noframes" | "rp" => (None, 0.0, 400, 1.0),
         // Form controls render as replaced-ish inline-block boxes (styled below).
         "input" | "button" | "textarea" | "select" => (InlineBlock, 0.0, 400, 1.0),
+        // `<dialog>`: rendered only while `open`. A closed dialog that renders is a modal's contents
+        // spilled into the page — see the matching `dialog`/`dialog[open]` pair in stylo_engine.rs.
+        "dialog" => {
+            if el.attr("open").is_some() {
+                (Block, 0.0, 400, 1.0)
+            } else {
+                (None, 0.0, 400, 1.0)
+            }
+        }
         // Default for unknown/other elements is inline (per CSS).
         _ => (Inline, 0.0, 400, 1.0),
     };

@@ -691,6 +691,12 @@ pub struct Page {
 pub const MIN_ZOOM: f32 = 0.25;
 pub const MAX_ZOOM: f32 = 5.0;
 
+/// The **top layer** — the stacking level a modal `<dialog>` is promoted to, above every author
+/// `z-index`. Deliberately far above any number a stylesheet would plausibly write (the web's
+/// "just make it win" idiom tops out around `z-index: 2147483647`, but real sheets live in the
+/// hundreds), and below `i32::MAX` so nothing that adds to it overflows.
+pub const TOP_LAYER_Z: i32 = 1_000_000_000;
+
 /// **Bar 0 containment (METHODOLOGY Part 23.2): a panic kills the PAGE, not the process.**
 ///
 /// You will not prevent every crash-class bug before Bar 1. That is not pessimism, it is the premise
@@ -3028,6 +3034,9 @@ impl Page {
     /// explicit `z-index` establishes a layer that applies to its whole subtree (an
     /// approximation of CSS stacking contexts). Non-positioned / `z-index:auto` inherit the
     /// nearest such ancestor's layer (0 at the root).
+    ///
+    /// The **top layer** (modal `<dialog>`) sits above every author z-index by construction —
+    /// see [`TOP_LAYER_Z`].
     fn z_index_map(&self) -> HashMap<manuk_dom::NodeId, i32> {
         use manuk_css::Position;
         let mut map = HashMap::new();
@@ -3036,6 +3045,21 @@ impl Page {
             let z = match self.styles.get(&node) {
                 Some(s) if s.position != Position::Static => s.z_index.unwrap_or(parent_z),
                 _ => parent_z,
+            };
+            // **The top layer.** A modal dialog paints above the whole document regardless of where it
+            // sits in the tree or what z-index the page gave anything else — that is what makes it
+            // modal. Without this, `showModal()` on a dialog declared early in the body renders BEHIND
+            // the sticky header and the z-50 overlay it is supposed to cover. Modality is marked by
+            // `showModal()` (see the dialog prelude in js/src/event_loop.rs); a non-modal `show()`
+            // dialog is deliberately not here — it stays in flow, where the spec puts it.
+            let z = if self
+                .dom
+                .element(node)
+                .is_some_and(|e| e.name == "dialog" && e.attr("data-manuk-modal").is_some())
+            {
+                TOP_LAYER_Z
+            } else {
+                z
             };
             map.insert(node, z);
             for c in self.dom.children(node) {

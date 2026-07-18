@@ -163,6 +163,21 @@ input[type=submit], input[type=reset], input[type=button], button {
   text-align: center;
 }
 input[type=hidden] { display: none; }
+/* `<dialog>` — a CLOSED dialog is not rendered. Without this rule a dialog is just a block, so
+   every modal's contents (the confirm-delete copy, the cookie-consent form, the command palette)
+   were painted into the middle of the page before anyone opened it. Chrome's html.css has the same
+   pair: hidden until `open`, then a centered auto-margin box. Keep in lockstep with
+   `apply_ua_defaults` in css/src/lib.rs — the two cascades disagreeing about whether a modal
+   renders is exactly the `<source>` bug again. */
+dialog { display: none; }
+dialog[open] {
+  display: block;
+  margin: auto;
+  border: 2px solid #767676;
+  background-color: #ffffff;
+  color: #000000;
+  padding: 1em;
+}
 p, blockquote { margin: 1em 0; }
 h1 { font-size: 2em; font-weight: bold; margin: 0.67em 0; }
 h2 { font-size: 1.5em; font-weight: bold; margin: 0.75em 0; }

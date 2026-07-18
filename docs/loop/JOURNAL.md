@@ -7878,3 +7878,57 @@ in dark pixels (>60). RED against the no-shadow baseline (proven: without the sh
 glyphs leave the white canvas blank). Verify: css+layout+paint suites green (paint 16→17); HANG/CRASH 0.
 Residue: gaussian blur, multiple stacked shadows, `currentColor` resolution (defaults to translucent
 black when the author gives no colour).
+
+## Tick 194 — `<dialog>`: showModal() works, and a closed modal stops painting into the page (app / render) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (constellation "app" hole — `<dialog>` + popover, Interop 2026).
+WIKI: docs/wiki/dialog-and-top-layer.md.**
+
+**Selection.** Obeyed the tick-193 REFRESH mandate: stop mining CSS-paint polish (flat Phase-0
+readiness at 44%), run `constellation.sh --gaps`, and PROBE an unknown. Probed `<dialog>`/popover
+(app-class `?`): `grep showModal|popover|::backdrop|top_layer` over engine/ + shell/ = **zero hits**;
+`dialog` appears once, in `reflect_table.rs`, as `{"open": boolean}`. The probe turned the `?` into a
+measured hole small enough to close in one bounded tick, so it became the tick.
+
+**Hypothesis (two failures, one of them invisible to script).** (1) `dlg.showModal()` was `undefined`
+— a TypeError inside the click handler that takes the rest of the handler with it, so the button does
+nothing at all. Every cookie banner, confirm-delete and command palette shipped since ~2022 bottoms
+out here. (2) With no UA `display:none` rule a `<dialog>` is an unknown element, so a **closed**
+dialog's contents were laid out and painted into the page in tree order — "DELETE EVERYTHING?" as a
+paragraph in the middle of the article. Same shape as the `<source>`/`<script>`-paints-its-own-source
+bugs. Fixing only (1) yields a browser where the modal opens *and was already there*.
+
+Fix, in four places: **js/event_loop.rs** prelude — `show`/`showModal`/`close(v)`/`returnValue`, the
+`close` event, `InvalidStateError` on re-`showModal()`, `<form method="dialog">` (capture-phase click
+on the document, so it closes with the button's value and never reaches the native GET path;
+`formmethod` overrides), Escape → cancelable `cancel` → dismiss the topmost modal, and
+`iface('HTMLDialogElement', tagIs('DIALOG'))`. **css/stylo_engine.rs `UA_CSS` + css/lib.rs
+`apply_ua_defaults`** (both cascades, in lockstep) — `dialog` hidden, `dialog[open]` a bordered
+auto-margin block. **page/lib.rs** — `TOP_LAYER_Z` + a modal branch in `z_index_map`, the single choke
+point paint/hit-test/a11y all read, so a modal outranks every author `z-index` and the subtree
+inherits it for free.
+
+Modality crosses the JS↔Rust boundary as `data-manuk-modal` (set by `showModal`, cleared by `close`)
+— a JS property is invisible to `z_index_map`, and this is the same device as the existing
+`data-manuk-adopted` marker. Non-modal `show()` deliberately does not set it: only a modal joins the
+top layer.
+
+**Safety.** Additive. The UA rule touches one tag that previously had no rule at all; the `z_index_map`
+branch fires only on `dialog[data-manuk-modal]`; the prelude block is guarded on
+`typeof __HP.showModal === 'undefined'`.
+
+**Gates.** `engine/page/tests/g_dialog.rs` (13 claims, JS surface) and
+`engine/page/tests/g_dialog_render.rs` (a closed dialog yields no box and no display item; an open
+modal paints AFTER a `z-index: 50` overlay). Both proven RED by reverting each half independently
+(`dialog { display: none }` → `block` gave the closed dialog a real 18.4px box; `TOP_LAYER_Z` → `z`
+put the modal at index 5 behind the overlay at 7). Run with `--features stylo,spidermonkey`.
+
+**HARNESS NOTE (observer, not agent work — scripts/ is observer-owned):** the two new gates are not
+registered in `scripts/verify.sh`, so they do not yet ride the wall. They pass standalone.
+
+**Residue.** `::backdrop`; **inertness + focus trap** (the page behind a modal is still clickable);
+the `popover` attribute API (`showPopover`/`popovertarget`, shares the top layer); auto-centering — a
+modal is a `margin:auto` block IN FLOW, so it occupies layout space instead of overlaying the viewport
+(Chrome's UA gives it `position:fixed; inset:0; width:fit-content`). Stacking is right; geometry is
+not yet. **Unrelated bug surfaced while probing:** a `position:absolute` element with no background
+emits NO display item at all — its text never reaches the display list. Pre-existing, not fixed here.
