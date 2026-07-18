@@ -18,6 +18,15 @@ K="${LEVER_PIVOT_WINDOW:-5}"
 LEDGER=docs/loop/PHASE0-PROGRESS.tsv
 B=$'\033[1m'; R=$'\033[31m'; Y=$'\033[33m'; G=$'\033[32m'; C=$'\033[36m'; O=$'\033[0m'
 
+# While the Phase-0 FINISH LINE is locked (explicit user directive: work the 5 levers top-down), clustering on
+# those levers' subsystems is EXPECTED, not stale — defer the pivot to the finish line. The readiness meter also
+# lags here (a landed lever reads 'missing' until surface-audit reconciles), which would otherwise false-trigger
+# staleness. The pivot resumes its steering role once Phase 0 is declared complete.
+if [ -f .git/manuk-phase0-finish-line ] && [ ! -f .git/manuk-phase0-complete ]; then
+  printf '%s\U0001F3C1 Phase-0 FINISH LINE active%s — the 5 locked levers (fetch-streaming, a11y-states, WebSocket, scroll-anchoring, forced-reflow) ARE the mandate; work them top-down. Clustering on them is expected, not stale. Pivot deferred until Phase 0 is declared complete.\n' "$B" "$O"
+  exit 0
+fi
+
 # Dominant engine/shell subsystem touched by one commit (top-2 path segment, e.g. engine/css, shell).
 area_of() { git show --name-only --format= "$1" 2>/dev/null \
   | grep -E '^(engine/[a-z0-9_]+|shell)/' \
