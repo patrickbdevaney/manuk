@@ -1253,7 +1253,13 @@ const PRELUDE: &str = r#"
               if (field === 'data') { data.push(value); }
               else if (field === 'event') { type = value; }
               else if (field === 'id') { id = value; }
-              else if (field === 'retry') { /* reconnect time — see residue */ }
+              else if (field === 'retry') {
+                // The SERVER sets the reconnect delay. Honouring it is not optional politeness:
+                // it is how a server sheds load after an incident instead of being hammered by
+                // every reconnecting client at its own fixed interval.
+                var ms = parseInt(value, 10);
+                if (!isNaN(ms) && ms >= 0) { self.__retry = ms; }
+              }
             });
             if (id !== null) { self.__lastId = id; }
             if (!data.length) { return; }   // a frame with no data dispatches nothing
@@ -1263,11 +1269,33 @@ const PRELUDE: &str = r#"
             });
           };
 
-          fetch(this.url, { headers: { 'Accept': 'text/event-stream' } }).then(function (res) {
+          // **Reconnection is the defining feature of SSE, not a nicety.** The contract a page is
+          // written against is "this stream stays alive": servers close idle connections, proxies
+          // time out, laptops sleep. Without this, one blip ends the live updates permanently and
+          // the page has no way to know it should care.
+          self.__retry = 3000;                       // spec default, overridden by `retry:`
+          var reconnect = function () {
             if (self.__closed) { return; }
-            if (!res.ok || !res.body) {
+            self.readyState = 0;                     // CONNECTING
+            fire('error', { type: 'error', target: self });
+            // A MACROtask, so a stream that fails instantly cannot spin the microtask queue
+            // without yielding — the same reason the old honest-failure stub used setTimeout.
+            setTimeout(function () { if (!self.__closed) { connect(); } }, self.__retry);
+          };
+
+          var connect = function () {
+          var headers = { 'Accept': 'text/event-stream' };
+          // `Last-Event-ID` is what makes a reconnect RESUME rather than restart: the server
+          // replays what was missed instead of the page silently losing every event during the gap.
+          if (self.__lastId) { headers['Last-Event-ID'] = self.__lastId; }
+          fetch(self.url, { headers: headers }).then(function (res) {
+            if (self.__closed) { return; }
+            // A 204 or a client error is the server saying "stop"; anything else transient
+            // gets a retry. Reconnecting into a 404 forever would be a self-inflicted DoS.
+            if (res.status === 204 || (res.status >= 400 && res.status < 500)) {
               self.readyState = 2; fire('error', { type: 'error', target: self }); return;
             }
+            if (!res.ok || !res.body) { reconnect(); return; }
             self.readyState = 1;                                   // OPEN
             fire('open', { type: 'open', target: self });
 
@@ -1278,9 +1306,9 @@ const PRELUDE: &str = r#"
               return reader.read().then(function (step) {
                 if (self.__closed) { return; }
                 if (step.done) {
-                  // The stream ended. A real EventSource RECONNECTS here; see residue.
-                  self.readyState = 2;
-                  fire('error', { type: 'error', target: self });
+                  // The stream ended — reconnect, resuming from `Last-Event-ID`.
+                  buf = '';
+                  reconnect();
                   return;
                 }
                 // `{stream:true}` — a chunk boundary can split a multi-byte character.
@@ -1297,9 +1325,10 @@ const PRELUDE: &str = r#"
             return pump();
           }).catch(function () {
             if (self.__closed) { return; }
-            self.readyState = 2;
-            fire('error', { type: 'error', target: self });
+            reconnect();
           });
+          };
+          connect();
         };
         globalThis.EventSource.prototype.addEventListener = function (t, fn) {
           (this.__ls[t] = this.__ls[t] || []).push(fn);

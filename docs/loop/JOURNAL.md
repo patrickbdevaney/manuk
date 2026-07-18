@@ -8605,3 +8605,43 @@ on success (pre-existing asymmetry, worth unifying). No `lengthComputable`/`tota
 `responseType: "arraybuffer"/"blob"` still yield text. Finish-line status: levers 1, 2, 3 done;
 lever 4 done except `overflow-anchor: none` (Stylo-gated); lever 5 refused as a subsystem needing a
 dedicated session.
+
+## Tick 207 — SSE reconnects and RESUMES (js) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (closes tick 205's flagged gap). WIKI: docs/wiki/networking.md
+"SSE reconnects and RESUMES".**
+
+**Selection.** My own tick-205 residue, named there as "the one substantial gap". Bounded (prelude
+only) and it is the difference between SSE that demos and SSE that survives a real network.
+
+**Hypothesis.** Reconnection is the defining feature of SSE, not a nicety — the contract a page is
+written against is "this stream stays alive". Servers close idle connections, proxies time out,
+laptops sleep. Without reconnection one blip ends the live updates permanently: the ticker freezes,
+the log tail stops, and the page has no way to know it should care.
+
+**Implemented.** The stream ending (or a transient failure) schedules a reconnect on a **macrotask**,
+so a stream that fails instantly cannot spin the microtask queue without yielding — the same
+reasoning the old honest-failure stub used, and the reason this cannot hang the page.
+
+**`Last-Event-ID` is what separates a reconnect from a restart**, and it is the part that would have
+been easy to skip. The reconnect sends the last `id:` seen, so the server replays what was missed.
+Without it the reconnect *looks* like it works while silently dropping every event in the gap — a
+failure that would never show up in a demo and always show up in production.
+
+**The server sets the delay.** `retry:` is parsed and honoured (default 3000ms). Not politeness: it
+is how a server sheds load after an incident instead of being hammered by every reconnecting client
+at its own fixed interval.
+
+**A `204` or any 4xx means STOP** and is not retried. Reconnecting into a 404 forever is a
+self-inflicted DoS, and it is the obvious way to get this wrong.
+
+**Gate.** `g_eventsource_reconnect` — the first request carries no `Last-Event-ID`; after a frame
+with `id: 42` the stream is dropped and the client reconnects to the same URL **carrying
+`Last-Event-ID: 42`**; the resumed stream appends to the page state already there; and a `204` is not
+reconnected into. **Proven RED by never scheduling the reconnect** — no second request is issued at
+all. `g_eventsource` still green.
+
+**Residue.** No exponential backoff beyond what the server asks for; a network-level failure and a
+clean stream end are treated identically (both retry). Finish-line status unchanged: levers 1, 2, 3
+complete; 4 complete except `overflow-anchor: none` (Stylo-gated); 5 refused as a subsystem needing a
+dedicated session (see tick 205's analysis).

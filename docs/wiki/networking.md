@@ -759,3 +759,34 @@ the end. Proven RED by never reporting LOADING — the state string collapses fr
 
 **Finish-line lever 1 is now complete in full**: ReadableStream + `response.body` (196), the
 incremental spine (197), the wire (198), real SSE (205), and XHR `readyState 3` (206).
+
+## SSE reconnects and RESUMES (tick 207)
+
+Tick 205 shipped `EventSource` without reconnection and flagged it as the one substantial gap. This
+closes it.
+
+**Reconnection is the defining feature of SSE, not a nicety.** The contract a page is written against
+is *"this stream stays alive"*: servers close idle connections, proxies time out, laptops sleep. One
+blip otherwise ends the live updates permanently — the ticker freezes, the log tail stops — and the
+page has no way to know it should care.
+
+- **The stream ending triggers a reconnect**, on a **macrotask** (`setTimeout`), so a stream that
+  fails instantly cannot spin the microtask queue without yielding. That is the same reasoning the
+  old honest-failure stub used.
+- **`Last-Event-ID` is what makes it a RESUME rather than a restart.** The reconnect sends the last
+  `id:` it saw, so the server replays what was missed instead of the page silently losing every event
+  during the gap. A reconnect without it looks like it works and quietly drops data.
+- **The server sets the delay.** `retry:` is now parsed and honoured (default 3000ms). This is not
+  politeness: it is how a server sheds load after an incident instead of being hammered by every
+  reconnecting client at its own fixed interval.
+- **A `204` or any 4xx means STOP** and is not retried. Reconnecting into a 404 forever is a
+  self-inflicted DoS, and the spec says so.
+
+Gated by `g_eventsource_reconnect`: the first request carries no `Last-Event-ID`; after a frame with
+`id: 42` the stream is dropped and the client reconnects to the same URL **carrying
+`Last-Event-ID: 42`**; the resumed stream appends to the page state that was already there; and a
+`204` is not reconnected into. Proven RED by never scheduling the reconnect — no second request is
+issued at all.
+
+Residue: the reconnect delay is not exponentially backed off beyond what the server asks for; a
+network-level failure and a clean stream end are treated identically (both retry).

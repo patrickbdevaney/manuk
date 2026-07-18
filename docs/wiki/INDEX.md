@@ -363,6 +363,7 @@
   - L658 · WebSocket is LIVE in the browser (tick 202) — lever 3 complete
   - L698 · EventSource (SSE) connects — built on our own fetch (tick 205)
   - L732 · XHR readyState 3 — progress instead of nothing-then-done (tick 206)
+  - L763 · SSE reconnects and RESUMES (tick 207)
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -457,4 +458,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-380 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+381 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
