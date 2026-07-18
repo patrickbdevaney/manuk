@@ -9082,3 +9082,39 @@ passes is not a gate that is weak — it is a gate that is measuring a different
 
 **Residue:** the disclosure triangle marker (`::marker`/`list-item`) is not drawn; `name=` accordion
 grouping and find-in-page auto-expansion are unimplemented.
+
+## Tick 217 — hydration measured, and pinned: the SSR primitives (instrument fidelity) (2026-07-18)
+
+**Selected:** the board's highest-value remaining `?` — *"hydration (SSR markup + client attach): the
+dominant delivery pattern; fails SILENTLY."* Both halves of that note earn it the slot. Next.js,
+Nuxt, SvelteKit, Remix and Astro all ship server-rendered HTML plus a client bundle that **attaches**
+to it, and when hydration fails the page still *looks* right — the SSR markup is there — while no
+button, menu or form does anything.
+
+**Stated plainly: this tick adds no capability, because none was missing.** The probe exercised every
+primitive a hydrator is built out of and **all of them already work**: the `childNodes`/`nodeType`
+walk sees 6 elements and 4 text nodes, server attributes read back, `querySelectorAll` finds the
+mount points, the mismatch check can conclude MATCH, a node patches in place, and — the one that
+actually matters — **a listener attached to the EXISTING server-rendered node fires on a real click**
+(`fired=1`).
+
+That is the **sixth** time this project assumed a feature missing and found it built (after
+`localStorage`, `FormData`, `position: sticky`, `IntersectionObserver`, and per-glyph font fallback
+two ticks ago). *An absent measurement is not a negative measurement*, and the board's `?` column has
+now been wrong four times in four probes this session (fallback, CJK line breaking, hydration — only
+bidi was genuinely broken).
+
+**So it lands on the ratchet's THIRD face — instrument fidelity — not capability**, which the
+constitution names as co-equal and which is the honest place for it. The gate exists because the
+failure mode is silent and catastrophic and **nothing else in the wall covered it**: a regression
+here reports as *"every modern site looks perfect and nothing on it responds"*, the single hardest
+report to act on. Pinning it now costs one gate; discovering it later costs a session.
+
+**Gate.** `G_HYDRATION` (`engine/page/tests/g_hydration.rs`), converted from the probe. **Proven RED
+two independent ways**, because a pinning gate that cannot fail is exactly the vacuous coverage the
+`G_SPAWN`/`G_POOL_ISOLATION` retirement was about: (a) altering the SSR tree shape fails the walk
+assertions, (b) never registering the listener fails the click assertion.
+
+**Residue:** this does not run a real framework bundle — it exercises the primitives. `Suspense`
+streaming boundaries, selective hydration and islands are unmeasured, as is the `#418` mismatch
+*recovery* path (we assert the check can conclude MATCH, not that a real mismatch re-renders).

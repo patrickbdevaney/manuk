@@ -173,3 +173,34 @@ leaving **141 of 2,131 elements (5%)**. Fixing the ~40-name interface surface br
 **Every other measured site — github, HN, bbc, wikipedia, techcrunch, vimeo, deviantart, replit — retained
 100%** of its parsed elements through script execution. *So this is one site's class, not a general
 hydration collapse.*
+
+## SSR hydration — measured working, and pinned (tick 217)
+
+Next.js, Nuxt, SvelteKit, Remix and Astro all ship **server-rendered HTML plus a client bundle that
+attaches to it** rather than building the DOM from scratch. The failure mode is uniquely nasty: when
+hydration breaks, the page still *looks* right — the SSR markup is sitting there — and nothing on it
+responds. "Every modern site looks perfect and no button works" is the hardest bug report to act on.
+
+**It already works.** Probed tick 217, every primitive a hydrator is built out of:
+
+| Step a real hydrator takes | Result |
+|---|---|
+| walk SSR tree by `childNodes`/`nodeType`, text nodes included | ✅ 6 elements, 4 text nodes |
+| read server attributes back out | ✅ |
+| `querySelectorAll` to locate mount points | ✅ |
+| compare server output vs client expectation (the mismatch check) | ✅ concludes MATCH |
+| **attach a listener to the EXISTING node** | ✅ **fires on a real click** |
+| patch a node in place | ✅ |
+
+The text-node row is the one worth calling out: a hydrator that cannot see text nodes cannot match
+them, and that is exactly where React's `#418 hydration failed` comes from.
+
+**Do not re-probe this.** It is the sixth feature assumed missing and found built (`localStorage`,
+`FormData`, `position: sticky`, `IntersectionObserver`, per-glyph font fallback, hydration) — and it
+is consistent with this file's standing finding that **framework failures are bugs in our own
+primitives**, not framework internals. Four of five app-web blockers were ours.
+
+Pinned by `G_HYDRATION`, proven RED two ways (alter the SSR tree shape → the walk assertions fail;
+never register the listener → the click assertion fails). **Residue:** no real framework bundle runs
+here; `Suspense` streaming boundaries, selective hydration, islands, and the mismatch *recovery* path
+are unmeasured.
