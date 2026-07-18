@@ -694,3 +694,37 @@ Residue: no `Blob` binaryType read path; no permessage-deflate; no auto-reconnec
 page's job); the close CODE from the server is not yet threaded through `WebSocketConn::recv` (a
 clean close is reported as 1000 regardless of what the peer sent). Finish-line levers 4
 (scroll-anchoring) and 5 (forced reflow) remain.
+
+## `EventSource` (SSE) connects — built on our own fetch (tick 205)
+
+The last piece of finish-line lever 1's stated scope ("ReadableStream + real SSE + readyState-3
+XHR"). `EventSource` used to construct and then report that it could not connect — honest, and far
+better than throwing, but it left every live-updates page dead: score tickers, CI/deploy log tails,
+notification streams, dashboard metrics, and the many AI chats that use SSE rather than
+fetch-streaming.
+
+**It is implemented on top of our own `fetch`, and that is why it is small.** Ticks 196-198 made
+`response.body` a real `ReadableStream` fed incrementally off the wire, and SSE is precisely *a text
+stream cut into frames on blank lines*. So this needed **no new Rust plumbing at all** — the same
+route a polyfill takes, except our fetch is real. It is also the first proof that the streaming spine
+carries a second consumer.
+
+The frame parser is where the correctness lives:
+
+- **A frame ends at a blank line, not at a chunk boundary.** The trailing partial frame stays
+  buffered. Dispatching per chunk delivers half a message — the gate falsifies to exactly that
+  (`[first\npar/1]`).
+- **CRLF/CR are normalised first.** A server sending `\r\n` would otherwise never appear to
+  terminate a frame at all.
+- **Multiple `data:` lines join with `\n` as ONE message**, not several.
+- **One leading space after the colon is stripped** (exactly one, per spec).
+- **A comment line (`: keepalive`) dispatches nothing** — it is the standard idle heartbeat.
+- **A named `event:` goes to its own listener and NOT to `onmessage`.**
+- `id:` persists as `lastEventId` across subsequent frames.
+- `{stream: true}` decoding, because a chunk boundary can split a multi-byte character.
+
+Residue: **no automatic reconnection.** A real `EventSource` reconnects when the stream ends, honouring
+the server's `retry:` interval and resending `Last-Event-ID`; we parse `retry:` but ignore it, and a
+finished stream fires `error` and stays closed. That is the one substantial gap and it is what makes
+SSE resilient in practice, so it is worth closing. No `withCredentials` enforcement beyond recording
+the flag.

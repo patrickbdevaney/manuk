@@ -1175,26 +1175,104 @@ const PRELUDE: &str = r#"
         globalThis.PerformanceObserver.supportedEntryTypes = [];
       }
 
-      // `EventSource` (SSE) and `BroadcastChannel` — same honesty as WebSocket: construct, then report
-      // that we cannot connect. Never throw at construction.
+      // **`EventSource` (SSE) — it CONNECTS now (tick 205).** It used to construct and then report
+      // that it could not connect, which was honest but left every live-updates page dead: score
+      // tickers, deploy/CI log tails, notification streams, dashboard metrics, and the many AI chats
+      // that use SSE rather than fetch-streaming.
+      //
+      // **Built ON TOP of our own `fetch`, which is the whole reason this is small.** Ticks 196-198
+      // made `response.body` a real ReadableStream fed incrementally off the wire, and SSE is
+      // precisely "a text stream cut into frames on blank lines". So this needs NO new Rust
+      // plumbing at all — it is the same code path a polyfill would take, except our fetch is real.
       if (typeof globalThis.EventSource === 'undefined') {
-        globalThis.EventSource = function EventSource(url) {
+        globalThis.EventSource = function EventSource(url, init) {
           this.url = String(url || ''); this.readyState = 0;
+          this.withCredentials = !!(init && init.withCredentials);
           this.onopen = null; this.onmessage = null; this.onerror = null;
           this.__ls = {};
+          this.__closed = false;
+          this.__lastId = '';
           var self = this;
-          setTimeout(function () {
-            self.readyState = 2;   // CLOSED
-            var ev = { type: 'error', target: self };
-            if (typeof self.onerror === 'function') { try { self.onerror(ev); } catch (e) {} }
-            (self.__ls['error'] || []).forEach(function (f) { try { f.call(self, ev); } catch (e) {} });
-          }, 0);
+
+          var fire = function (type, ev) {
+            var on = self['on' + type];
+            if (typeof on === 'function') { try { on.call(self, ev); } catch (e) {} }
+            var a = (self.__ls[type] || []).slice();
+            for (var i = 0; i < a.length; i++) { try { a[i].call(self, ev); } catch (e) {} }
+          };
+          self.__fire = fire;
+
+          // One SSE frame: blank-line separated, `field: value` lines. `data` accumulates across
+          // lines (joined with \n — a multi-line payload is one message, not several).
+          var dispatchFrame = function (raw) {
+            var type = 'message', data = [], id = null;
+            raw.split('\n').forEach(function (line) {
+              if (!line || line.charAt(0) === ':') { return; }   // blank or comment (the keepalive)
+              var i = line.indexOf(':');
+              var field = i < 0 ? line : line.slice(0, i);
+              var value = i < 0 ? '' : line.slice(i + 1);
+              if (value.charAt(0) === ' ') { value = value.slice(1); }  // ONE leading space, per spec
+              if (field === 'data') { data.push(value); }
+              else if (field === 'event') { type = value; }
+              else if (field === 'id') { id = value; }
+              else if (field === 'retry') { /* reconnect time — see residue */ }
+            });
+            if (id !== null) { self.__lastId = id; }
+            if (!data.length) { return; }   // a frame with no data dispatches nothing
+            fire(type, {
+              type: type, target: self, data: data.join('\n'),
+              lastEventId: self.__lastId, origin: self.url
+            });
+          };
+
+          fetch(this.url, { headers: { 'Accept': 'text/event-stream' } }).then(function (res) {
+            if (self.__closed) { return; }
+            if (!res.ok || !res.body) {
+              self.readyState = 2; fire('error', { type: 'error', target: self }); return;
+            }
+            self.readyState = 1;                                   // OPEN
+            fire('open', { type: 'open', target: self });
+
+            var reader = res.body.getReader();
+            var dec = new TextDecoder();
+            var buf = '';
+            var pump = function () {
+              return reader.read().then(function (step) {
+                if (self.__closed) { return; }
+                if (step.done) {
+                  // The stream ended. A real EventSource RECONNECTS here; see residue.
+                  self.readyState = 2;
+                  fire('error', { type: 'error', target: self });
+                  return;
+                }
+                // `{stream:true}` — a chunk boundary can split a multi-byte character.
+                buf += dec.decode(step.value, { stream: true });
+                // Frames are separated by a blank line. Normalise CRLF/CR first: a server that
+                // sends \r\n would otherwise never appear to terminate a frame.
+                buf = buf.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+                var parts = buf.split('\n\n');
+                buf = parts.pop();          // the trailing partial frame stays buffered
+                parts.forEach(dispatchFrame);
+                return pump();
+              });
+            };
+            return pump();
+          }).catch(function () {
+            if (self.__closed) { return; }
+            self.readyState = 2;
+            fire('error', { type: 'error', target: self });
+          });
         };
         globalThis.EventSource.prototype.addEventListener = function (t, fn) {
           (this.__ls[t] = this.__ls[t] || []).push(fn);
         };
-        globalThis.EventSource.prototype.removeEventListener = function () {};
-        globalThis.EventSource.prototype.close = function () { this.readyState = 2; };
+        globalThis.EventSource.prototype.removeEventListener = function (t, fn) {
+          var a = this.__ls[t]; if (!a) { return; }
+          var i = a.indexOf(fn); if (i >= 0) { a.splice(i, 1); }
+        };
+        globalThis.EventSource.prototype.close = function () {
+          this.__closed = true; this.readyState = 2;
+        };
         globalThis.EventSource.CONNECTING = 0;
         globalThis.EventSource.OPEN = 1;
         globalThis.EventSource.CLOSED = 2;

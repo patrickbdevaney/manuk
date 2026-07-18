@@ -8510,3 +8510,53 @@ only, not per-`overflow:auto` container.
 **Remaining.** Finish-line lever 5 (forced reflow for `getBoundingClientRect`/`ResizeObserver`
 mid-tick, for virtualized lists) plus the `overflow-anchor` gap above stand between here and Phase 0
 being declared good-enough.
+
+## Tick 205 — EventSource (SSE) connects, on our own fetch (js) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (completes Phase-0 FINISH-LINE lever 1's stated scope). WIKI:
+docs/wiki/networking.md "`EventSource` (SSE) connects — built on our own fetch".**
+
+**Selection, and a deliberate REFUSAL first.** Top-down said lever 5 (forced reflow for
+`getBoundingClientRect`/`ResizeObserver` mid-tick). I probed it and stopped: `el_get_bounding_rect`
+reads a **pre-script layout snapshot** published by `set_view_maps`, so a script that mutates then
+measures gets stale geometry — the virtualized-list bug, correctly diagnosed. But forcing a
+synchronous reflow at that read means **re-entrant layout while `Page` is already mutably borrowed by
+the running script**, and `manuk-js` cannot call into `manuk-layout`/`manuk-page` without a cycle. It
+needs a host-installed reflow callback and a re-entrancy story. That is a **subsystem, not a bounded
+tick** — precisely the shape the complexity-wall playbook says not to start mid-session. Recorded
+here so the next session begins with the design constraint understood rather than rediscovering it,
+and took the bounded lever instead. Lever 1's own text was *"ReadableStream + real SSE + readyState-3
+XHR"*, and SSE was still a stub — my own tick-196 residue predicted it would now be cheap.
+
+**Hypothesis.** `EventSource` constructed and then reported it could not connect — honest, and much
+better than throwing, but every live-updates page was dead: score tickers, CI/deploy log tails,
+notification streams, dashboard metrics, and the many AI chats that use SSE rather than
+fetch-streaming.
+
+**Implemented on top of our own `fetch`, and that is the whole point.** Ticks 196-198 made
+`response.body` a real `ReadableStream` fed incrementally off the wire, and SSE is precisely "a text
+stream cut into frames on blank lines" — so this needed **no new Rust plumbing at all**, the same
+route a polyfill takes except our fetch is real. It is also the first evidence that the streaming
+spine carries a **second consumer**, which is the return on having built it as a spine rather than as
+a one-off for `fetch`.
+
+**The frame parser is where the correctness lives.** A frame ends at a **blank line, not a chunk
+boundary** (the trailing partial stays buffered); CRLF/CR are normalised first, or a server sending
+`\r\n` never appears to terminate a frame at all; multiple `data:` lines join with `\n` as ONE
+message; exactly one leading space is stripped after the colon; a comment line (`: keepalive`)
+dispatches nothing; a named `event:` goes to its own listener and NOT to `onmessage`; `id:` persists
+as `lastEventId`; decoding uses `{stream: true}` because a chunk boundary can split a multi-byte
+character.
+
+**Gate.** `g_eventsource` — the SSE `Accept` header reached the request; `onopen` at the headers with
+`readyState 1`; a complete frame dispatches while a **partial one does not**; the split frame
+reassembles across chunks with `lastEventId` carried over; a named multi-line event reaches its own
+listener and not `onmessage`; the keepalive dispatches nothing. Every assertion is made where the
+later frames have not been delivered yet. **Proven RED by dispatching per chunk instead of per blank
+line — `[first\npar/1]`, literally half a message delivered.**
+
+**Residue.** **No automatic reconnection** — a real `EventSource` reconnects when the stream ends,
+honouring the server's `retry:` interval and resending `Last-Event-ID`; we parse `retry:` and ignore
+it, and a finished stream fires `error` and stays closed. That is what makes SSE resilient in
+practice and is the one substantial gap. XHR `readyState 3` (streaming progress) is also still
+unimplemented — the third item in lever 1's text. And lever 5 stands as analysed above.
