@@ -472,13 +472,16 @@ impl DisplayList {
                     let d = f.style.decoration;
                     if d.any() && f.width > 0.0 {
                         let thickness = (f.style.font_size / 14.0).max(1.0);
+                        // `text-decoration-color` defaults to `currentColor` — the text color —
+                        // but a colored underline (hover states, brand links) sets its own.
+                        let line_color = fade(d.color.unwrap_or(f.style.color));
                         let mut line = |y: f32| {
                             items.push(DisplayItem::TextLine {
                                 x: f.x,
                                 y,
                                 width: f.width,
                                 thickness,
-                                color: fade(f.style.color),
+                                color: line_color,
                             });
                         };
                         if d.underline {
@@ -1667,6 +1670,63 @@ mod tests {
         );
         // A solid red block should paint ~100*50 non-white pixels.
         assert!(count_non_white(&canvas) > 4000, "background not painted");
+    }
+
+    /// `text-decoration-color` paints the line in its own color, not the text color.
+    ///
+    /// A colored underline (brand links, hover states, a strikethrough price in a distinct hue) is
+    /// everywhere in modern design. Before this, every decoration line was drawn in `f.style.color`,
+    /// so `text-decoration-color:red` on blue text drew a *blue* underline — the wrong color on any
+    /// link whose underline was meant to contrast with its text.
+    #[test]
+    fn text_decoration_color_overrides_text_color() {
+        let dom = manuk_html::parse(r#"<p class="l">link</p>"#);
+        let fonts = FontContext::new();
+
+        // A red underline under blue text: the TextLine must be red, and no TextLine may be blue.
+        let styles = MinimalCascade.cascade(
+            &dom,
+            &[Stylesheet::parse(
+                ".l{color:#0000ff;text-decoration:underline;text-decoration-color:#ff0000}",
+            )],
+        );
+        let root = manuk_layout::layout_document(&dom, &styles, &fonts, 400.0);
+        let lines: Vec<Rgba> = DisplayList::build(&root)
+            .items
+            .iter()
+            .filter_map(|it| match it {
+                DisplayItem::TextLine { color, .. } => Some(*color),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            !lines.is_empty(),
+            "the underline must reach the display list as a TextLine"
+        );
+        assert!(
+            lines.iter().any(|c| *c == Rgba::new(255, 0, 0, 255)),
+            "text-decoration-color:red must paint a RED underline; got {lines:?}"
+        );
+        assert!(
+            lines.iter().all(|c| *c != Rgba::new(0, 0, 255, 255)),
+            "no underline may be painted in the blue TEXT color once a decoration color is set"
+        );
+
+        // Control: with no text-decoration-color, the line follows the text color (blue).
+        let styles2 = MinimalCascade.cascade(
+            &dom,
+            &[Stylesheet::parse(
+                ".l{color:#0000ff;text-decoration:underline}",
+            )],
+        );
+        let root2 = manuk_layout::layout_document(&dom, &styles2, &fonts, 400.0);
+        let has_blue = DisplayList::build(&root2).items.iter().any(|it| {
+            matches!(it, DisplayItem::TextLine { color, .. } if *color == Rgba::new(0, 0, 255, 255))
+        });
+        assert!(
+            has_blue,
+            "without a decoration color, the underline must default to the blue currentColor"
+        );
     }
 
     #[test]

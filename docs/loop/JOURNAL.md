@@ -7627,3 +7627,30 @@ the no-truncation baseline (ellipsis == clip == full text). Verify: css+layout s
 75→76); HANG/CRASH 0. Residue: ellipsis only on the pure-inline path (not mixed block/float lines);
 `-webkit-line-clamp` multi-line ellipsis; the leading (line-start) ellipsis value; grapheme clusters cut
 on char boundaries.
+
+## Tick 187 — text-decoration-color — a colored underline paints in its own hue, not the text color (CSS render / paint) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (CSS render — decoration line color). WIKI:
+docs/wiki/text-layout.md "text-decoration-color — a colored underline paints in its own hue".**
+
+**Hypothesis.** A colored decoration line — a brand/hover underline, a strikethrough price in a
+distinct hue, an overline accent — is the single most common way `text-decoration` is customised in
+modern design. But paint hardcoded the line color to the run's text color (`fade(f.style.color)`) and
+the parser discarded any color token, so `text-decoration-color:red` on blue text drew a *blue*
+underline — the wrong color on every link whose underline was meant to contrast with its text. Fix:
+`TextDecoration` gains `color: Option<Rgba>` (`None` == currentColor). The `text-decoration` shorthand
+resets it (color = first token `parse_color` accepts, skipping line/style keywords); the
+`text-decoration-color` longhand sets it directly (`currentColor`→None); `text-decoration-line` leaves
+it intact; recovered wholesale from MinimalCascade on the shipping Stylo path (the whole
+`TextDecoration` is already recovered there — the new field rides along). Paint's line color becomes
+`fade(d.color.unwrap_or(f.style.color))`. **Safety: the default None reproduces the old
+`fade(f.style.color)` byte-for-byte, so every run without a decoration color is unchanged and the
+ratchet cannot regress — behaviour changes only when a decoration color is actually set.**
+
+**Gate.** engine/paint `text_decoration_color_overrides_text_color`: `.l{color:#00f;
+text-decoration:underline;text-decoration-color:#f00}` emits a TextLine that is RED and no TextLine is
+the blue text color; the control (no decoration color) defaults the underline to blue. RED against the
+hardcoded-text-color baseline (line == text color always). Verify: css+paint suites green; HANG/CRASH
+0. Residue: text-decoration-style (dotted/dashed/wavy/double still paint solid),
+text-decoration-thickness, text-underline-offset, text-decoration-skip-ink; the T1 render-polish
+text-metric lever the board names.

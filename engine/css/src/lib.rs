@@ -255,6 +255,9 @@ pub struct TextDecoration {
     pub underline: bool,
     pub overline: bool,
     pub line_through: bool,
+    /// `text-decoration-color`. `None` == the `currentColor` default (paint falls back to the
+    /// text color); `Some` is an explicitly-set line color (colored underlines, hover states).
+    pub color: Option<Rgba>,
 }
 
 impl TextDecoration {
@@ -3205,12 +3208,48 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 BackgroundRepeat::Repeat
             };
         }
-        "text-decoration" | "text-decoration-line" => {
-            let v = v.to_ascii_lowercase();
+        "text-decoration-line" => {
+            // Longhand: touches only the lines, leaving any set color intact.
+            let lv = v.to_ascii_lowercase();
+            s.text_decoration.underline = lv.contains("underline");
+            s.text_decoration.overline = lv.contains("overline");
+            s.text_decoration.line_through = lv.contains("line-through");
+        }
+        "text-decoration" => {
+            // Shorthand: resets every longhand it omits. Lines come from keyword presence; the
+            // color is whatever token in the value parses as a color (`underline dotted red`).
+            let lv = v.to_ascii_lowercase();
+            let color = lv
+                .split_whitespace()
+                .filter(|t| {
+                    !matches!(
+                        *t,
+                        "underline"
+                            | "overline"
+                            | "line-through"
+                            | "blink"
+                            | "none"
+                            | "solid"
+                            | "double"
+                            | "dotted"
+                            | "dashed"
+                            | "wavy"
+                    )
+                })
+                .find_map(values::parse_color);
             s.text_decoration = TextDecoration {
-                underline: v.contains("underline"),
-                overline: v.contains("overline"),
-                line_through: v.contains("line-through"),
+                underline: lv.contains("underline"),
+                overline: lv.contains("overline"),
+                line_through: lv.contains("line-through"),
+                color,
+            };
+        }
+        "text-decoration-color" => {
+            // `currentColor` keeps the currentColor default (paint follows the text color).
+            s.text_decoration.color = if v.trim().eq_ignore_ascii_case("currentcolor") {
+                None
+            } else {
+                values::parse_color(v)
             };
         }
         "content" => {

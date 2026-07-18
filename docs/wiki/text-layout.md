@@ -331,3 +331,34 @@ part is a proper prefix of the original; the `clip` control keeps the full run w
 no-truncation baseline. css+layout green (layout 75→76), HANG/CRASH 0. Residue: only the pure-inline
 path (mixed block/float lines not yet truncated); `-webkit-line-clamp` multi-line clamp; the line-start
 (leading) ellipsis value; char- not grapheme-cluster boundaries.
+
+## text-decoration-color — a colored underline paints in its own hue, not the text color (tick 187)
+
+A colored decoration line — a brand/hover underline, a strikethrough price in a distinct hue, an
+overline accent — is everywhere in modern design, and it is the single most common way
+`text-decoration` is customised. But the paint side hardcoded the line color to the run's text color
+(`fade(f.style.color)`), and the parser threw away any color token, so `text-decoration-color:red` on
+blue text drew a **blue** underline: the wrong color on every link whose underline was meant to
+contrast with its text.
+
+- **css** — `TextDecoration` gains `color: Option<Rgba>` (`None` == the `currentColor` default). The
+  `text-decoration` *shorthand* resets it: lines come from keyword presence, and the color is the
+  first value token that `parse_color` accepts (`underline dotted red`), skipping the line/style
+  keywords (`underline`/`overline`/`line-through`/`blink`/`none`/`solid`/`double`/`dotted`/`dashed`/
+  `wavy`). The `text-decoration-color` *longhand* sets it directly (`currentColor` → `None`). The
+  `text-decoration-line` longhand touches only the line bits, leaving a set color intact. Recovered
+  wholesale from MinimalCascade on the shipping **Stylo** path (the whole `TextDecoration` is already
+  recovered there — the new field rides along for free).
+- **paint** — the decoration line color becomes `fade(d.color.unwrap_or(f.style.color))`: an explicit
+  decoration color wins, otherwise it follows the text color exactly as before.
+
+**Safety.** The default `None` reproduces the old `fade(f.style.color)` byte-for-byte, so every run
+without a decoration color is unchanged and the ratchet cannot regress — behaviour changes only when
+`text-decoration-color` (or a color in the shorthand) is actually set.
+
+**Gate.** `text_decoration_color_overrides_text_color` (engine/paint): `.l{color:#00f;
+text-decoration:underline;text-decoration-color:#f00}` emits a TextLine that is **red**, and no
+TextLine is the blue text color; the control (no decoration color) defaults the underline to blue.
+RED vs the hardcoded-text-color baseline (line == text color always). css+paint green, HANG/CRASH 0.
+Residue: `text-decoration-style` (dotted/dashed/wavy/double still paint solid),
+`text-decoration-thickness`, `text-underline-offset`, and `text-decoration-skip-ink`.
