@@ -8770,3 +8770,39 @@ skipping the disabled check** — the disabled box ticks. `g_click_activation`, 
 spec — `aria-disabled` is advisory to AT and does not make a control inert — but worth stating so it
 is not mistaken for an oversight). From `element.click()`, link navigation, submit-button submission
 and `<select>`/`<option>` selection are still not activated.
+
+## Tick 211 — clicking "Sign in" submits the form (interaction) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (residue named in ticks 208-210). WIKI:
+docs/wiki/interaction-surface.md "Clicking \"Sign in\" submits the form".**
+
+**Selection.** Flagged as residue three ticks running, and it is the highest-value item left in that
+list: **"click Sign in" is the single most common thing an agent is asked to do.** Until now
+`element.click()` on a submit button fired an event and stopped — the form never submitted, and the
+agent could not distinguish "the button is broken" from "we never submitted".
+
+**Implemented.** A submit-button click pushes its form onto `Page::pending_submits`, which
+`take_form_submits()` drains into the **`requested`** list the shell already services. No new host
+plumbing — the queue the shell polls for `form.requestSubmit()` was already there and is the right
+one.
+
+**`requested`, not `direct`, and that is the load-bearing choice.** `requested` fires the `submit`
+event first, so the page's validation handler runs and can cancel — and a click-to-submit is exactly
+the case pages validate. Queueing it as `direct` would skip every client-side validator on the web,
+which would look like it worked right up until it silently posted invalid data.
+
+**The details are what decide whether real pages work**, so each is gated: a bare `<button>` inside a
+form **defaults to `type=submit`** (the classic "why did my page reload", and not honouring it means
+`Sign in` does nothing); `type=button`/`type=reset` do **not** submit (otherwise every toggle and
+menu built from a `<button>` reloads the page); `form="id"` associates a button with a form it is not
+inside and wins over the ancestor; a **disabled** submit button submits nothing (tick 210's rule
+applied here); and the queue is a **drain**, so the host cannot submit the same form twice.
+
+**Gate.** `g_submit_click` — covers each of those, including asserting the submit lands in
+`requested` and **not** in `direct`. **Proven RED by not queueing** — the form never submits.
+`g_form`, `g_click_activation`, `g_disabled_inert` green; `cargo check --workspace` green.
+
+**Residue.** `formaction`/`formmethod`/`formnovalidate` on the button are not carried to the
+submission. The **submitter is not recorded**, so a form with two submit buttons cannot tell which
+was used — `<button name="action" value="delete">` is a real pattern and this is the more valuable of
+the two gaps. Link navigation from `element.click()` is still not wired.

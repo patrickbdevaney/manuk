@@ -661,3 +661,35 @@ Gated by `g_disabled_inert`: a disabled checkbox does not tick, directly or via 
 inside `<fieldset disabled>` does not tick, directly or via its label; a control in a normal fieldset
 still does; and exactly two nodes report `disabled` in the a11y tree. Proven RED by skipping the
 disabled check — the disabled box ticks.
+
+## Clicking "Sign in" submits the form (tick 211)
+
+`element.click()` on a submit button fired a click event and stopped — nothing was queued, so the
+form never submitted. **"Click Sign in" is the single most common thing an agent is asked to do**, and
+it silently did nothing: the agent clicks, sees no navigation, and cannot distinguish "the button is
+broken" from "we never submitted".
+
+A submit-button click now pushes its form onto `Page::pending_submits`, which
+`take_form_submits()` drains into the **`requested`** list the shell already services.
+
+**`requested`, not `direct`, and that is the load-bearing choice.** `requested` fires the `submit`
+event first, so the page's validation handler runs and can cancel — and a click-to-submit is exactly
+the case pages validate. Queueing it as `direct` would skip every client-side validator on the web.
+
+Details that decide whether real pages work:
+
+- **A bare `<button>` inside a form defaults to `type=submit`.** That default is the classic source
+  of "why did my page reload", and not honouring it means `Sign in` does nothing.
+- **`type=button` and `type=reset` do not submit** — every toggle and menu built from a `<button>`
+  would otherwise reload the page.
+- **`form="id"` associates a button with a form it is not inside**, and wins over the ancestor.
+- A **disabled** submit button submits nothing (tick 210's rule, applied here).
+- The queue is a **drain**, so the host cannot submit the same form twice.
+
+Gated by `g_submit_click`, covering each of those. Proven RED by not queueing — the form never
+submits.
+
+Residue: `formaction`/`formmethod`/`formnovalidate` on the button are not carried to the submission,
+and the submitter is not recorded (so a form with two submit buttons cannot tell which one was used —
+`<button name=action value=delete>` is a real pattern). Link navigation from `element.click()` is
+still not wired.

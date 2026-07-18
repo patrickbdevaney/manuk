@@ -649,6 +649,10 @@ pub struct Page {
     /// scripts survive to fire on user input (a click, an input). `None` if scripts failed to
     /// load or (always) without the `spidermonkey` feature.
     js: Option<manuk_js::PageContext>,
+    /// Forms whose **submit button was clicked**, awaiting the host's next
+    /// [`take_form_submits`](Page::take_form_submits). `RefCell` because that getter takes `&self`
+    /// (it is a drain, and every other `take_*` on `Page` has the same shape).
+    pending_submits: std::cell::RefCell<Vec<manuk_dom::NodeId>>,
     /// Whether any element uses `position:sticky` — gates the per-frame sticky paint pass so
     /// non-sticky pages pay nothing.
     has_sticky: bool,
@@ -2373,6 +2377,7 @@ impl Page {
             .values()
             .any(|s| s.position == manuk_css::Position::Sticky);
         Page {
+            pending_submits: std::cell::RefCell::new(Vec::new()),
             final_url: final_url.to_string(),
             title,
             content_height,
@@ -2496,6 +2501,16 @@ impl Page {
                 self.undo_click_activation(node, prev);
             }
         }
+
+        // ── A SUBMIT BUTTON submits its form. ───────────────────────────────────────────────
+        // "Click Sign in" is the single most common thing an agent is asked to do, and until now
+        // `element.click()` on a submit button fired an event and stopped. Queued as a *requested*
+        // submit so the `submit` handler runs first and the page can validate or cancel.
+        if proceed && !self.is_disabled(node) {
+            if let Some(form) = self.submit_target(node) {
+                self.pending_submits.borrow_mut().push(form);
+            }
+        }
         // If a handler mutated the DOM, re-style + re-lay-out so it renders (at base zoom;
         // the caller re-applies zoom on its next relayout).
         let root = self.dom.root();
@@ -2586,6 +2601,42 @@ impl Page {
                 .element(*n)
                 .is_some_and(|e| LABELABLE.contains(&e.name.as_str()))
         })
+    }
+
+    /// The form a click on `node` submits, if `node` is a submit button.
+    ///
+    /// `<button>`'s default type IS submit — a bare `<button>` inside a form submits it, which is a
+    /// classic source of "why did my page reload". `type=button` and `type=reset` do not submit.
+    /// Association is the ancestor `<form>`, or an explicit `form="id"` (which lets a button live
+    /// outside the form it submits).
+    fn submit_target(&self, node: manuk_dom::NodeId) -> Option<manuk_dom::NodeId> {
+        let el = self.dom.element(node)?;
+        let ty = el.attr("type").unwrap_or("").to_ascii_lowercase();
+        let submits = match el.name.as_str() {
+            // A bare <button> defaults to type=submit.
+            "button" => ty.is_empty() || ty == "submit",
+            "input" => ty == "submit" || ty == "image",
+            _ => false,
+        };
+        if !submits {
+            return None;
+        }
+        if let Some(id) = el.attr("form") {
+            let want = id.to_string();
+            return self.dom.descendants(self.dom.root()).find(|n| {
+                self.dom
+                    .element(*n)
+                    .is_some_and(|e| e.name == "form" && e.attr("id") == Some(want.as_str()))
+            });
+        }
+        let mut cur = self.dom.parent(node);
+        while let Some(n) = cur {
+            if self.dom.element(n).is_some_and(|e| e.name == "form") {
+                return Some(n);
+            }
+            cur = self.dom.parent(n);
+        }
+        None
     }
 
     /// Whether a form control is disabled — by its own `disabled` attribute, or by inheriting it
@@ -2847,16 +2898,25 @@ impl Page {
     }
 
     /// Forms a script asked to submit: `(direct, requested)`. See `manuk_js::take_form_submits`.
+    ///
+    /// A form submitted by **clicking its submit button** joins the `requested` list, not `direct`:
+    /// `requested` fires the `submit` event first, and a click-to-submit is exactly the case a page
+    /// validates in that handler. Putting it in `direct` would skip every client-side validator on
+    /// the web.
     pub fn take_form_submits(&self) -> (Vec<manuk_dom::NodeId>, Vec<manuk_dom::NodeId>) {
+        let from_click = std::mem::take(&mut *self.pending_submits.borrow_mut());
         match &self.js {
             Some(ctx) => {
-                let (d, r) = manuk_js::take_form_submits(ctx);
+                let (d, mut r) = manuk_js::take_form_submits(ctx);
+                let mut requested: Vec<manuk_dom::NodeId> =
+                    r.drain(..).map(|x| manuk_dom::NodeId(x as u64)).collect();
+                requested.extend(from_click);
                 (
                     d.into_iter().map(|x| manuk_dom::NodeId(x as u64)).collect(),
-                    r.into_iter().map(|x| manuk_dom::NodeId(x as u64)).collect(),
+                    requested,
                 )
             }
-            None => (Vec::new(), Vec::new()),
+            None => (Vec::new(), from_click),
         }
     }
 
