@@ -19,7 +19,7 @@ Each carries a Chromium reference render, so each one can be disbelieved. Point 
 shows you **Stylo's actual computed style and Taffy's actual box** — read out of the live engine, not
 re-derived for display — next to the real cost of each stage: parse, cascade, layout, raster.
 
-*What is not real, said in-product too:* **no JavaScript** and **no live fetching** (bundled snapshots).
+*What is not real **in this wasm demo** (the native browser does far more — see [What works](#what-works)), said in-product too:* **no JavaScript** and **no live fetching** (bundled snapshots).
 SpiderMonkey *can* target wasm, but only as an **interpreter** — WebAssembly forbids runtime code
 generation, which is what a JIT is — and it ships as a separate WASI module that cannot be linked into this
 binary. Saying so is the only thing that makes the rest believable.
@@ -113,14 +113,27 @@ dispatch and bubbling, `fetch`/XHR, timers, promises/microtasks, custom elements
 
 **Agent-native.** The same engine core, headless: a11y-tree observation, in-process automation
 (selectors/wait/assert), WebDriver BiDi, and an `InferenceBackend` trait so any provider — local
-`llama-server`, Ollama, or a hosted endpoint — drives it identically.
+`llama-server`, Ollama, or a hosted endpoint — drives it identically. Agent actions fire the *real* DOM
+events (`input`/`keydown`/`focus`/`blur`/`change`), so React- and Vue-controlled inputs actually update.
+
+**Daily-driver hardening (recent).** The request path carries headers and bodies faithfully — an
+`Authorization` header and a JSON POST body reach the socket, no silent drops — with CORS enforcement,
+`SameSite` + `__Host-`/`__Secure-` cookie-prefix rules, and streaming download-to-disk (multi-GB files, no
+OOM under the document deadline). `crypto.subtle` + a real CSPRNG (off `Math.random`), `AbortController`/
+`AbortSignal`, `<form method=POST>` navigation, multipart `FormData` file uploads, and constraint validation
+(`required`/`type=email`/`pattern`/`:invalid`/`checkValidity`). CSS text-metric fidelity —
+`letter-spacing`/`word-spacing`, `text-transform`, `overflow-wrap`/`word-break`, `object-fit`/`object-position`,
+`aspect-ratio`, `text-overflow` — so styled UI measures and paints at the width the design specified. Shell
+state persists across restart: bookmarks, settings, the downloads list, per-origin zoom, and a visited-history
+table for the omnibox, on top of the hibernated session restore.
 
 ## What doesn't
 
 Stated plainly, because a README that only lists wins is marketing:
 
-- **WPT `dom/` is at 26.7%.** The spec surface is measured now (`docs/wiki/wpt-horizon.md`), and most of
-  it is not yet implemented. That is the honest distance to "parity".
+- **WPT `dom/` is at 44.7%** (73.4% across all reachable areas; `html/dom` 93.3%). The spec surface is
+  measured continuously, and the remaining subsystems (grid-template-areas, IndexedDB, Service Workers, MSE,
+  full shadow-DOM lifecycle) are not yet implemented. That is the honest distance to "parity".
 - **No JS in the wasm demo.** SpiderMonkey is C++ and does not target wasm — the in-browser demo is
   render-only, and says so on its own front page.
 - **Bar 2 (pixel precision) is deferred**, not achieved.
@@ -139,6 +152,14 @@ Stated plainly, because a README that only lists wins is marketing:
 > oracle at all, and sees the adversarial cases no real site generates. The second was wired up in tick
 > 43 and immediately found a Bar 0 hang — `child.after(child)` — that no amount of crawling could have
 > surfaced. Cumulative findings are captured by topic in **`docs/wiki/`**.
+
+**One capability per tick, highest-leverage first.** Each commit lands exactly one verify-gated capability.
+The oracle's failing subtests are ranked by impact — the largest same-signature cluster first
+(`scripts/lever-board.sh`), weighted toward *daily-driver* leverage rather than raw WPT count — so the loop
+attacks the highest-leverage lever available, not the nearest one. If a lever turns out to be a
+subsystem-sized rabbit hole (grid-template-areas, IndexedDB), it is parked and the loop diversifies to the
+next bounded lever rather than stalling. The ratchet is absolute: a Bar 0 crash or *any* measured regression
+is reverted, never traded for a feature.
 
 The methodology (`docs/loop/METHODOLOGY.md`) exists because a solo project cannot hand-verify the web.
 Its central claim: **automated, self-correcting measurement substitutes for the headcount this project
@@ -636,11 +657,23 @@ periodically.
 
 ## Roadmap
 
-The full, objective-organized roadmap (performance, web-traversal versatility,
-lightweightness, agent capability, correctness, portability, security) lives in
-[`CLAUDE.md` → Directions of improvement](./CLAUDE.md). Nearest term: layout
-floats/tables/positioning, external stylesheet + image loading, the real Stylo and
-Vello integrations, and viewport-clipped agent observation.
+A finite, phase-ordered plan — the full version, with falsifiable good-enough bars and the self-executing
+research→implement cascade, lives in [`docs/loop/HORIZON.md`](./docs/loop/HORIZON.md) and
+[`reference/cap-research/ROADMAP.md`]. The seven phases:
+
+0. **Daily-driver capability** *(in progress)* — render + JS-platform + forms + shell parity for the
+   "document + download + un-gated-SPA" web. The tiers: transport/session → CSS render (±1px) →
+   JS-platform + storage → media (optional) → forms/autofill → shell/UX persistence → agentic actuation.
+1. **UI/UX features** — tab-set restore, pin-to-stay-warm, mute/unmute, and the hibernate-vs-keep-warm decision.
+2. **Agentic browser-automation API surface** — the pinnable ingress any automation framework drives.
+3. **Reference agent harness** — "Claude Code for browsers": the LLM tool-loop over that surface.
+4. **Consumer prompt-to-action UI** — an optional in-browser chat that drives the browser via a small local
+   gguf *or* a user-configured endpoint.
+5. **Performance** · 6. **Security.**
+
+Each phase after 0 opens with a deep-research sweep updated against the implemented layer beneath it, and every
+step is held to the same verify-gated ratchet. Nearest term: the remaining daily-driver bounded levers
+(networking enforcement, JS-platform APIs, forms, shell persistence, agent actuation).
 
 ## License
 
