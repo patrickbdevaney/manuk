@@ -117,3 +117,14 @@ and complete. Fine-tuning is a separate, owner-gated track outside this project'
 **Phases 0–6 are LOCKED as the refined optimal roadmap** — the direct, quickest path to the goals in a bounded
 tick/time budget. This is a FINITE project (we know exactly what we want and need), and every phase 0–6 is
 autonomously tick-executable; only the owner-gated fine-tuning track sits outside the loop.
+
+## Execution plan for phases 1–6 (self-executing)
+See **`docs/loop/AGENTIC-PHASES-PLAN.md`** — the standing directive that runs phases 1–6 WITHOUT owner input:
+- **Phase-0 completion trigger + marker** (`.git/manuk-phase0-complete` + JOURNAL/HORIZON status when the
+  shortest-sufficient-path table-stakes in `reference/cap-research/ROADMAP.md` are met at their ±1px/falsifiable bars).
+- **The nested research→implement cascade**: API surface → harness → MCP → consumer UI → perf/security. Each
+  layer's DEEP-RESEARCH PROMPT is drafted now (§6 of that file) and UPDATED with the implemented layer beneath it
+  immediately before it runs — so each v1 is optimal against real ground truth, not pre-guessed architecture.
+- **Decoupled modules** (clean upgrade cascade), **expanded tick-loop gates** (conformance / task-completion /
+  zero-shot / perf-regression / adversarial-injection), and a **bespoke workflow escalation** for hard subsystems.
+- Owner latitude: tab hibernation/warming + consumer-UI placement/UX are observer-decided, web-search-informed.
