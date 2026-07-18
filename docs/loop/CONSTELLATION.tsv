@@ -50,7 +50,7 @@ platform	window.open + postMessage (popup auth)	OAuth popups; the other login pa
 platform	REAL iframes (nested browsing context)	embeds, payments, OAuth frames, ads, players	gated	G_IFRAME	tick 84: cross-boundary readable; BUT pixels are a snapshot — no re-render on mutation. Blocks 3-D Secure challenge + interactive OAuth frames (edge sweep t193b)
 platform	postMessage across frames	every embed talks this way	partial	-	-
 platform	infinite scroll (IO + scrollTop + virtualisation)	every feed	gated	G_SCROLL + G_VIEWPORT	ticks 67, 59
-platform	WebSocket	live feeds, chat, presence	missing	-	BORROW tokio-tungstenite (mature Rust WS client) into the sandboxed net + a JS message pump — NOT from scratch. CRITICAL for live chat/DMs/presence/collab + cloud live-logs; stub always errors today (edge sweep t193b)
+platform	WebSocket	live feeds, chat, presence	works	-	tokio-tungstenite transport(200) + page-facing JS(201) + live(202), g_websocket. Phase-0 lever LANDED
 platform	Server-Sent Events	live updates	missing	-	VERIFIED pure non-connecting stub (event_loop.rs:954) — never delivers a message. CRITICAL: streaming logs + AI token output (edge sweep t193b)
 platform	Service Worker + Cache API	offline, PWA, instant repeat visits	missing	-	navigator.serviceWorker absent
 platform	file upload (input[file], FileReader, Blob)	avatars, attachments, everything	partial	-	Blob/File/FileReader exist; input[file] unmeasured
@@ -105,8 +105,8 @@ doc	@scope / scoped styles	component-scoped CSS without leakage	unknown	-	NEVER 
 doc	text-wrap: balance / pretty	headings and paragraphs wrap raggedly; a visible typographic gap	unknown	-	NEVER MEASURED — probe (surface-audit t123)
 app	WebCodecs (VideoDecoder/AudioDecoder/VideoFrame)	low-level media apps, in-browser video editors, custom players	unknown	-	NEVER MEASURED — distinct from MSE (surface-audit t123)
 platform	Sanitizer API (Element.setHTML / setHTMLUnsafe)	XSS-safe HTML injection; the platform replacement for DOMPurify	unknown	-	NEVER MEASURED — probe (surface-audit t123)
-platform	scroll anchoring (overflow-anchor)	feeds JUMP on load-more; a re-layout un-scrolls the container	missing	-	edge sweep t193: page/src/lib.rs:1473 says so — #1 feed-correctness fix (X/IG/LinkedIn)
-app	forced reflow (getBoundingClientRect after mid-tick mutation)	react-window/virtuoso read stale/zero geometry -> blank/overlapping rows	partial	-	edge sweep t193: batch-relayout model; measure-mutate-measure in one rAF
+platform	scroll anchoring (overflow-anchor)	feeds JUMP on load-more; a re-layout un-scrolls the container	works	-	feed stops jumping (203) + live gate (204), g_scroll_anchor_live. Phase-0 lever LANDED
+app	forced reflow (getBoundingClientRect after mid-tick mutation)	react-window/virtuoso read stale/zero geometry -> blank/overlapping rows	works	-	read path lays out before it answers (tick 213, g_forced_reflow) — relayout_incremental wired into getBoundingClientRect. Phase-0 lever LANDED
 app	URL.createObjectURL / blob: URLs	MSE video setup + blob image previews TypeError	missing	-	edge sweep t193: verified absent in engine/js,engine/page
 cross	large-DOM + code-blob paint perf	GitHub 1k-5k-line blobs & long PR threads stutter	unknown	-	edge sweep t193: no node budget; F1/F2 don't cover a big single DOM
 doc	<details>/<summary> disclosure toggle	GitHub/MDN/docs collapsibles render always-open, no toggle	missing	-	edge sweep t193: no open/toggle/marker in layout — bounded tick
@@ -114,14 +114,14 @@ doc	MathML rendering	Wikipedia/arXiv/MDN math renders raw/broken	missing	-	edge 
 platform	document.visibilityState + Page Visibility	anti-bot flags 'background bot'; autoplay/animation loops gate on it	missing	-	edge sweep t193: verified absent — trivial (return 'visible' + fire visibilitychange)
 platform	navigator.permissions.query()	detectors cross-check vs Notification.permission -> the inconsistency is a bot tell; unguarded calls throw	missing	-	edge sweep t193: small shim returning {state}
 platform	navigator.userAgentData + canonical UA/platform + deviceMemory	LinkedIn/Cloudflare degraded-browser path; UA contains 'Manuk', platform non-canonical	partial	-	edge sweep t193: navigator 90% built (webdriver:false ok) — COMPLETENESS not evasion
-cross	a11y node STATES (checked/expanded/selected/disabled/value/focused)	agent CANNOT confirm the result of its own action (is the box checked? menu open?)	missing	-	edge sweep t193: A11yNode has only role/name/bbox/z — highest-leverage agentic fix (a11y/src/lib.rs:229)
+cross	a11y node STATES (checked/expanded/selected/disabled/value/focused)	agent CANNOT confirm the result of its own action (is the box checked? menu open?)	gated	-	tick 199 g_ gate — agent confirms its own actions. Phase-0 lever LANDED
 cross	a11y interactive roles (menu/tab/dialog/switch/slider/progressbar)	agent can't ground the web-app widgets it most drives	partial	-	edge sweep t193: Role enum stops at ~26 roles
 cross	hover/dblclick/contextmenu dispatch	hover-reveal menus, right-click, double-click-select undrivable	missing	-	edge sweep t193: only dispatch_click exists
 cross	file-input actuation (set FileList on input[type=file])	every upload flow undrivable by an agent	missing	-	edge sweep t193: DataTransfer is an inert stub; no set_files
 app	native <select> choose + selectedIndex/change	dropdowns undrivable by an agent	partial	-	edge sweep t193: attrs reflect; synthetic option-choice + change firing unbuilt
 media	binary transport (arraybuffer XHR/fetch + Range)	adaptive players (hls.js/dash.js) can't append segments — PREREQ for MSE	missing	-	edge sweep t193: __deliverXhr is text-only; hyper does Range trivially
 media	<video> playback engine + A/V sync (currentTime/seek/timeupdate)	play/seek/timeupdate/playing/ended don't work	missing	-	edge sweep t193: wiring on the cpal master clock
-app	fetch streaming response body (ReadableStream / progressive XHR / SSE delivery)	AI-chat answers (claude.ai/ChatGPT/Gemini/Grok) NEVER RENDER; live console logs + inference token output dead	partial	-	ReadableStream + incremental fetch delivery LANDED (ticks 196-197); real SSE + readyState-3 XHR still pending (finish-line lever 1)
+app	fetch streaming response body (ReadableStream / progressive XHR / SSE delivery)	AI-chat answers (claude.ai/ChatGPT/Gemini/Grok) NEVER RENDER; live console logs + inference token output dead	works	-	ReadableStream(196-198)+SSE(205)+reconnect(207)+readyState-3 XHR(206) — all gated. Phase-0 finish-line lever LANDED
 platform	canvas fillText/strokeText rasterization	canvas chart labels + xterm.js terminals + Google Docs/Sheets render BLANK	missing	-	edge sweep t193b: no-op today (event_loop.rs:723); glyph raster exists in engine/text — wire to the 2D context
 platform	clipboard.read() + paste-image (ClipboardItem / image blob)	AI-chat paste-screenshot, rich/image paste	missing	-	edge sweep t193b: only writeText/readText-own-string exist; no clipboard.read()
 cross	password vault (save + autofill credentials)	re-type every password; not a real daily driver	missing	-	edge sweep t193b: shell/session.rs has credential-URL REDACTION only, no save/autofill vault — v1 UX scope
