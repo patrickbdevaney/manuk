@@ -2405,9 +2405,10 @@ impl Page {
         fonts: &FontContext,
         viewport_width: f32,
     ) -> bool {
-        if self.js.is_none() {
-            return true;
-        }
+        // **Activation does NOT require a JS context.** A static form with no `<script>` still has
+        // working checkboxes in every browser; gating the whole path on `self.js` meant a
+        // script-free page's controls were inert. Event dispatch is what needs JS — the toggle is
+        // not, so the two are separated below.
         let rects: std::collections::HashMap<manuk_dom::NodeId, [f32; 4]> = self
             .root_box
             .node_rects(&self.dom)
@@ -2417,23 +2418,28 @@ impl Page {
         // ── A <label> forwards its click to the control it labels. ─────────────────────────
         // This is how most checkboxes on the web are actually clicked: the visible target is the
         // text, not the 12px box. Without forwarding, clicking "Remember me" does nothing at all.
-        if let Some(control) = self.labeled_control(node) {
-            let ctx = self.js.as_ref().expect("checked above");
+        // A label whose control is disabled activates nothing — the control is inert, and routing
+        // through the label must not be a way around that.
+        if let Some(control) = self.labeled_control(node).filter(|c| !self.is_disabled(*c)) {
             // The label's own click still fires and can still be cancelled — a handler on the
-            // label that calls preventDefault() stops the control being activated.
-            let proceed = match manuk_js::dispatch_event(
-                ctx,
-                &mut self.dom,
-                node,
-                "click",
-                &rects,
-                &self.styles,
-            ) {
-                Ok(p) => p,
-                Err(e) => {
-                    tracing::warn!("label click dispatch: {e}");
-                    return true;
-                }
+            // label that calls preventDefault() stops the control being activated. With no JS
+            // there is nothing to cancel it, so it always proceeds.
+            let proceed = match self.js.as_ref() {
+                None => true,
+                Some(ctx) => match manuk_js::dispatch_event(
+                    ctx,
+                    &mut self.dom,
+                    node,
+                    "click",
+                    &rects,
+                    &self.styles,
+                ) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        tracing::warn!("label click dispatch: {e}");
+                        return true;
+                    }
+                },
             };
             if proceed {
                 return self.dispatch_click(control, fonts, viewport_width);
@@ -2448,23 +2454,32 @@ impl Page {
         // handler then cancels the event, the toggle is undone (the "canceled activation steps").
         let activation = self.pre_click_activation(node);
 
-        let ctx = self.js.as_ref().expect("checked above");
-        let proceed =
-            match manuk_js::dispatch_event(ctx, &mut self.dom, node, "click", &rects, &self.styles)
-            {
+        let proceed = match self.js.as_ref() {
+            None => true,
+            Some(ctx) => match manuk_js::dispatch_event(
+                ctx,
+                &mut self.dom,
+                node,
+                "click",
+                &rects,
+                &self.styles,
+            ) {
                 Ok(p) => p,
                 Err(e) => {
                     tracing::warn!("click dispatch: {e}");
                     return true;
                 }
-            };
+            },
+        };
 
         // ── ACTIVATION BEHAVIOUR, part 2: commit or undo. ───────────────────────────────────
         if let Some(prev) = activation {
             if proceed {
                 // `input` then `change`, in that order — a framework listening for either must see
                 // the committed state, and every controlled-component binding is written for it.
-                let ctx = self.js.as_ref().expect("js context checked above");
+                let Some(ctx) = self.js.as_ref() else {
+                    return proceed;
+                };
                 for kind in ["input", "change"] {
                     if let Err(e) = manuk_js::dispatch_event(
                         ctx,
@@ -2573,6 +2588,26 @@ impl Page {
         })
     }
 
+    /// Whether a form control is disabled — by its own `disabled` attribute, or by inheriting it
+    /// from an ancestor `<fieldset disabled>`.
+    ///
+    /// **The inherited case is not an edge case.** Disabling a whole step of a multi-step form by
+    /// wrapping it in one `<fieldset disabled>` is the idiomatic way to do it, and checking only
+    /// the control's own attribute leaves every control in that fieldset live.
+    fn is_disabled(&self, node: manuk_dom::NodeId) -> bool {
+        let mut cur = Some(node);
+        while let Some(n) = cur {
+            if let Some(e) = self.dom.element(n) {
+                // Only a `<fieldset>` propagates disabledness; a disabled `<div>` means nothing.
+                if e.attr("disabled").is_some() && (n == node || e.name == "fieldset") {
+                    return true;
+                }
+            }
+            cur = self.dom.parent(n);
+        }
+        false
+    }
+
     /// The pre-click activation steps for a form control, returning the state to restore if the
     /// click is cancelled. `None` for anything with no activation behaviour.
     ///
@@ -2582,6 +2617,13 @@ impl Page {
         &mut self,
         node: manuk_dom::NodeId,
     ) -> Option<Vec<(manuk_dom::NodeId, bool)>> {
+        // **A disabled control is inert.** Not "styled grey" — it does not activate, and clicking
+        // it must leave the page exactly as it was. Getting this wrong is worse than cosmetic for
+        // an agent: it ticks a disabled consent box, reads the state back, sees it ticked, and
+        // reports success on a form the server will reject.
+        if self.is_disabled(node) {
+            return None;
+        }
         let el = self.dom.element(node)?;
         if el.name != "input" {
             return None;

@@ -8725,3 +8725,48 @@ click does not reach the control; a label pointing at nothing activates nothing 
 and a submit button does not submit, and `<select>`/`<option>` selection is not activated. Clicking a
 label whose control is `disabled` should do nothing and is not special-cased yet (it currently
 activates, which is a small divergence worth closing).
+
+## Tick 210 — a disabled control is inert, and a script-free form works (interaction) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (tick 209 residue + a bug its gate exposed). WIKI:
+docs/wiki/interaction-surface.md "A disabled control is inert — and a script-free form still works".**
+
+**Selection.** Named in tick 209's residue. Small, but a correctness divergence rather than a missing
+feature, and the agentic cost is high.
+
+**Hypothesis.** Ticks 208/209 ran activation without checking disabledness, so clicking a disabled
+checkbox ticked it — and so did clicking its label. A disabled control is not "styled grey"; it is
+**inert**.
+
+**Why this earns its own tick rather than a footnote.** For an agent it is worse than cosmetic: it
+ticks a disabled consent box, reads the state back (tick 199 gave it that), sees it ticked, and
+reports success on a form the server will reject. **A wrong observation is more expensive than a
+failed action, because nothing downstream questions it.** So the a11y tree was fixed in the same
+tick — `disabled` now inherits from an ancestor `<fieldset disabled>` there too — and the gate
+asserts the tree and the activation path **agree**. A tree that said "actionable" about something
+inert would be the same failure one layer up.
+
+**`<fieldset disabled>` inheritance is not an edge case.** Disabling a whole step of a multi-step
+form with one fieldset is the idiomatic way to do it; checking only the control's own attribute
+leaves every control in that step live. Only a `<fieldset>` propagates it — a disabled `<div>` means
+nothing.
+
+**A SECOND bug, and the gate is why I found it.** The "control that must still work" case (`#live`,
+in an enabled fieldset) failed. Not the disabled logic: `dispatch_click` returned early when
+`self.js` was `None`, so **a static form with no `<script>` had inert checkboxes** — they tick in
+every real browser. Event *dispatch* needs JS; the toggle does not, and the two are now separated
+(with no JS nothing can call `preventDefault()`, so activation always proceeds). This has been true
+since tick 208 and I would not have caught it without deliberately gating a **positive** case
+alongside the negative ones: an implementation that made *everything* inert passes every other
+assertion in this gate. Worth remembering as a gate-design rule, not just a fix.
+
+**Gate.** `g_disabled_inert` — a disabled checkbox does not tick, directly or via its label; a
+control inside `<fieldset disabled>` does not tick, directly or via its label; a control in a normal
+fieldset still does; and exactly two nodes report `disabled` in the a11y tree. **Proven RED by
+skipping the disabled check** — the disabled box ticks. `g_click_activation`, `g_label_click`,
+`g_a11y_state`, `g_form` green; manuk-a11y 14; `cargo check --workspace` green.
+
+**Residue.** `aria-disabled` is honoured by the a11y tree but not by the activation path (correct per
+spec — `aria-disabled` is advisory to AT and does not make a control inert — but worth stating so it
+is not mistaken for an oversight). From `element.click()`, link navigation, submit-button submission
+and `<select>`/`<option>` selection are still not activated.

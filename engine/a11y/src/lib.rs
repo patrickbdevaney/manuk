@@ -340,6 +340,21 @@ impl A11yState {
     }
 }
 
+/// Whether `node` is disabled by its own attribute or by an ancestor `<fieldset disabled>`.
+/// Only a `<fieldset>` propagates disabledness; a disabled `<div>` means nothing.
+fn inherits_disabled(dom: &Dom, node: NodeId) -> bool {
+    let mut cur = Some(node);
+    while let Some(n) = cur {
+        if let Some(e) = dom.element(n) {
+            if e.attr("disabled").is_some() && (n == node || e.name == "fieldset") {
+                return true;
+            }
+        }
+        cur = dom.parent(n);
+    }
+    false
+}
+
 /// Read an element's interaction state out of the DOM.
 ///
 /// ARIA wins over the native attribute where both are present, which is the cascade assistive tech
@@ -407,7 +422,10 @@ pub fn state_of(dom: &Dom, node: NodeId, role: &Role) -> A11yState {
         checked,
         expanded,
         selected,
-        disabled: attr("disabled").is_some() || aria_bool("aria-disabled") == Some(true),
+        // Disabledness is INHERITED from an ancestor `<fieldset disabled>` — the idiomatic way to
+        // disable a whole step of a multi-step form. Reporting only the control's own attribute
+        // tells an agent that every control in that fieldset is actionable when none of them are.
+        disabled: inherits_disabled(dom, node) || aria_bool("aria-disabled") == Some(true),
         required: attr("required").is_some() || aria_bool("aria-required") == Some(true),
         readonly: attr("readonly").is_some() || aria_bool("aria-readonly") == Some(true),
         focused: false, // host-owned; filled in by `build_tree_with_focus`

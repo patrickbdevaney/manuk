@@ -626,3 +626,38 @@ Gated by `g_label_click`: a `for=` label ticks and unticks its box; a wrapping l
 descendant; clicking the control *inside* its own label toggles exactly once; a cancelled label click
 does not reach the control; a label pointing at nothing activates nothing and does not panic. Proven
 RED by not forwarding — the box never ticks.
+
+## A disabled control is inert — and a script-free form still works (tick 210)
+
+Two things, found together because the gate for the first exposed the second.
+
+**A disabled control does not activate.** Ticks 208/209 ran activation without checking, so clicking
+a disabled checkbox ticked it, and so did clicking its label. A disabled control is not "styled grey"
+— it is inert, and clicking it must leave the page exactly as it was.
+
+**For an agent this is worse than cosmetic**, which is why it earns its own gate: the agent ticks a
+disabled consent box, reads the state back (tick 199 gave it that), sees it ticked, and reports
+success on a form the server will reject. **A wrong observation is more expensive than a failed
+action, because nothing downstream questions it.** So the a11y tree was fixed in the same tick:
+`disabled` now inherits from an ancestor `<fieldset disabled>` there too, and the gate asserts the
+tree and the activation path **agree** — a tree that said "actionable" about something inert would
+be the same failure one layer up.
+
+**`<fieldset disabled>` inheritance is not an edge case.** Disabling a whole step of a multi-step
+form with one fieldset is the idiomatic way to do it; checking only the control's own attribute
+leaves every control in that step live. Only a `<fieldset>` propagates disabledness — a disabled
+`<div>` means nothing.
+
+**The second finding: activation was gated on having a JS context.** `dispatch_click` returned early
+when `self.js` was `None`, so **a static form with no `<script>` had inert checkboxes** — they tick
+in every real browser. Event *dispatch* needs JS; the toggle does not, and the two are now separate.
+With no JS there is nothing to call `preventDefault()`, so activation always proceeds.
+
+This surfaced only because the gate deliberately included a *control that must still work*
+(`#live`, in an enabled fieldset) alongside the ones that must not. Without that positive case, an
+implementation that made everything inert would have passed every other assertion.
+
+Gated by `g_disabled_inert`: a disabled checkbox does not tick, directly or via its label; a control
+inside `<fieldset disabled>` does not tick, directly or via its label; a control in a normal fieldset
+still does; and exactly two nodes report `disabled` in the a11y tree. Proven RED by skipping the
+disabled check — the disabled box ticks.
