@@ -7601,3 +7601,29 @@ tile overflows 100px horizontally — `left` pins the dest at box.x, `50% 50%` s
 `right` 100px left; `0%` == `left`. RED against the hardcoded-center baseline (all three equal). Verify:
 css+layout+paint suites green (paint 10→11); HANG/CRASH 0. Residue: px-length object-position (only
 keywords/percentages convert to a fraction without the box size), the 3-4 value form with edge offsets.
+
+## Tick 186 — text-overflow: ellipsis — a clipped title truncates with … instead of a hard cut (CSS render / text) (2026-07-17)
+
+**TICK SHAPE: capability-mechanism (CSS render — clipped inline truncation). WIKI:
+docs/wiki/text-layout.md "text-overflow: ellipsis — truncating a clipped single line".**
+
+**Hypothesis.** `text-overflow: ellipsis` (with the `white-space:nowrap; overflow:hidden` it always rides
+with) is one of the most common idioms in real UIs — a card/list title, a nav/tab label, a table cell, a
+file name, a chat preview that must fit one line and end in `…` rather than being cut mid-glyph. It was
+**unimplemented** (0 hits): a `nowrap; overflow:hidden` title was simply clipped at the box edge with no
+ellipsis, cutting a word in half. Fix: parse `text-overflow` (css → `TextOverflow{Clip,Ellipsis}`,
+recovered from MinimalCascade on the shipping Stylo path); and after inline layout of a pure
+inline-formatting-context block, if the box has `text-overflow:ellipsis` AND clips (`overflow` ≠ visible)
+AND doesn't wrap (`nowrap`/`pre`) AND its single line overflows `cx+cw`, `apply_text_overflow_ellipsis`
+keeps the fragments fitting before `cutoff = cx+cw − width('…')`, truncates the straddling one to that
+budget (`truncate_to_width`, char-boundary), drops the rest, and appends an `…` fragment. **Safety: a
+line that fits is left untouched and `clip` is a no-op, so no box without a real overflow changes — the
+default path is byte-identical and the ratchet cannot regress.**
+
+**Gate.** engine/layout `text_overflow_ellipsis_truncates_clipped_line`: a long title in an 80px
+`nowrap; overflow:hidden; text-overflow:ellipsis` box renders truncated text ending in `…` whose kept
+part is a proper prefix of the original; the `clip` control keeps the full run with no `…`. RED against
+the no-truncation baseline (ellipsis == clip == full text). Verify: css+layout suites green (layout
+75→76); HANG/CRASH 0. Residue: ellipsis only on the pure-inline path (not mixed block/float lines);
+`-webkit-line-clamp` multi-line ellipsis; the leading (line-start) ellipsis value; grapheme clusters cut
+on char boundaries.

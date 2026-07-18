@@ -944,6 +944,105 @@ fn apply_text_transform(s: &str, transform: manuk_css::TextTransform) -> std::bo
     }
 }
 
+/// The longest char prefix of `text` whose rendered width fits `budget`, and that width. Grapheme
+/// clusters aren't split (we cut on `char` boundaries — exact for the Latin common case).
+fn truncate_to_width(
+    text: &str,
+    style: &TextStyle,
+    budget: f32,
+    fonts: &FontContext,
+) -> (String, f32) {
+    let mut best = String::new();
+    let mut best_w = 0.0;
+    let mut cur = String::new();
+    for ch in text.chars() {
+        cur.push(ch);
+        let w = fonts.measure(&cur, style.font_key, style.font_size);
+        if w > budget {
+            break;
+        }
+        best.push(ch);
+        best_w = w;
+    }
+    (best, best_w)
+}
+
+/// `text-overflow: ellipsis` — truncate an overflowing single (`nowrap`) line with `…`. The line's
+/// fragments are absolute-positioned starting at `cx`; anything past `cx + cw` is clipped, so we keep
+/// the fragments that fit before `cutoff = cx + cw − width('…')`, cut the one straddling it to that
+/// budget, drop the rest, and append an ellipsis fragment. A line that fits within the box is left
+/// untouched (the overwhelming common case — so no page without an actual overflow changes at all).
+fn apply_text_overflow_ellipsis(
+    frags: &mut Vec<TextFragment>,
+    cx: f32,
+    cw: f32,
+    fonts: &FontContext,
+) {
+    if frags.is_empty() || cw <= 0.0 {
+        return;
+    }
+    let clip_right = cx + cw;
+    let line_right = frags.iter().map(|f| f.x + f.width).fold(f32::MIN, f32::max);
+    if line_right <= clip_right + 0.5 {
+        return; // fits — nothing to truncate
+    }
+    let base_style = frags[0].style;
+    let ell = "\u{2026}";
+    let ell_w = fonts.measure(ell, base_style.font_key, base_style.font_size);
+    let cutoff = clip_right - ell_w;
+
+    let mut out: Vec<TextFragment> = Vec::with_capacity(frags.len());
+    // The ellipsis anchor: position, and the vertical/style/owner it inherits from the last kept run.
+    let mut ell_x = cx;
+    let mut ell_style = base_style;
+    let mut line_top = frags[0].line_top;
+    let mut baseline = frags[0].baseline;
+    let mut node = frags[0].node;
+    for f in frags.drain(..) {
+        line_top = f.line_top;
+        baseline = f.baseline;
+        if f.x + f.width <= cutoff {
+            // Fits entirely before the cutoff: keep it, and move the ellipsis anchor to its end.
+            ell_x = f.x + f.width;
+            ell_style = f.style;
+            node = f.node;
+            out.push(f);
+        } else if f.x < cutoff {
+            // Straddles the cutoff: truncate to the budget, keep the prefix, place the ellipsis after.
+            let budget = (cutoff - f.x).max(0.0);
+            let (prefix, pw) = truncate_to_width(&f.text, &f.style, budget, fonts);
+            ell_x = f.x + pw;
+            ell_style = f.style;
+            node = f.node;
+            if !prefix.is_empty() {
+                out.push(TextFragment {
+                    x: f.x,
+                    line_top: f.line_top,
+                    baseline: f.baseline,
+                    width: pw,
+                    text: prefix,
+                    style: f.style,
+                    node: f.node,
+                });
+            }
+            break; // everything after this is clipped away
+        } else {
+            // Starts past the cutoff: entirely clipped — the ellipsis sits at the last anchor.
+            break;
+        }
+    }
+    out.push(TextFragment {
+        x: ell_x,
+        line_top,
+        baseline,
+        width: ell_w,
+        text: ell.to_string(),
+        style: ell_style,
+        node,
+    });
+    *frags = out;
+}
+
 fn text_style(cs: &ComputedStyle, fonts: &FontContext) -> TextStyle {
     let key = FontKey {
         family: fonts.resolve_family(&cs.font_family),
@@ -1946,8 +2045,18 @@ impl Ctx<'_> {
         if !has_block && !kids.iter().any(|&k| is_float(self.style_of(k))) {
             // Pure inline formatting context (no floats to flow around).
             let items = self.collect_inline_group(&flow_kids, cw, Some(node));
-            let align = self.style_of(node).text_align;
-            let (frags, atomics, h) = self.layout_inline(items, cx, cy, cw, align, floats);
+            let bcs = self.style_of(node);
+            let align = bcs.text_align;
+            let (mut frags, atomics, h) = self.layout_inline(items, cx, cy, cw, align, floats);
+            // `text-overflow: ellipsis` truncates a clipped, non-wrapping single line with `…`. Only
+            // fires on a box that clips (`overflow` ≠ visible) and doesn't wrap (`nowrap`/`pre`); a
+            // line that fits is untouched, so nothing without a real overflow changes.
+            if bcs.text_overflow == manuk_css::TextOverflow::Ellipsis
+                && !matches!(bcs.overflow_x, manuk_css::Overflow::Visible)
+                && matches!(bcs.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre)
+            {
+                apply_text_overflow_ellipsis(&mut frags, cx, cw, self.fonts);
+            }
             if atomics.is_empty() {
                 return (BoxContent::Inline(frags), h);
             }
@@ -6140,6 +6249,52 @@ mod tests {
         assert!(
             (x3 - x2 - 10.0).abs() < 0.5,
             "word-spacing:10px must push the second word right by 10px ({x2} -> {x3})"
+        );
+    }
+
+    /// `text-overflow: ellipsis` truncates a clipped, non-wrapping line with `…` — the ubiquitous
+    /// truncated title/label/tab/table-cell. Baseline: unimplemented, so a `nowrap; overflow:hidden`
+    /// title just got cut off mid-glyph with no ellipsis. Control (`clip`) keeps the full text.
+    #[test]
+    fn text_overflow_ellipsis_truncates_clipped_line() {
+        let collect_text = |root: &LayoutBox| -> String {
+            let mut s = String::new();
+            root.walk(&mut |b| {
+                if let BoxContent::Inline(frags) = &b.content {
+                    for f in &*frags {
+                        s.push_str(&f.text);
+                    }
+                }
+            });
+            s
+        };
+        // Words are separate fragments (spaces are gaps, not text), so the collected text is the
+        // words concatenated without spaces.
+        let long = "This is a very long title that does not fit a narrow box";
+        let long_nospace: String = long.split_whitespace().collect();
+        let html = format!(r#"<div id="d">{long}</div>"#);
+
+        // ellipsis: truncated, ends with `…`, and the kept part is a prefix of the original.
+        let css_e = "#d{width:80px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}";
+        let (_de, re) = layout_html(&html, css_e, 400.0);
+        let te = collect_text(&re);
+        assert!(
+            te.ends_with('\u{2026}'),
+            "an ellipsis box must end with … (got {te:?})"
+        );
+        let kept = te.trim_end_matches('\u{2026}');
+        assert!(
+            !kept.is_empty() && long_nospace.starts_with(kept) && kept.len() < long_nospace.len(),
+            "the kept text is a proper prefix of the original (kept {kept:?})"
+        );
+
+        // control: text-overflow:clip (default) keeps the whole run and adds no ellipsis.
+        let css_c = "#d{width:80px;white-space:nowrap;overflow:hidden}";
+        let (_dc, rc) = layout_html(&html, css_c, 400.0);
+        let tc = collect_text(&rc);
+        assert!(
+            !tc.contains('\u{2026}') && tc == long_nospace,
+            "clip keeps the full text with no ellipsis (got {tc:?})"
         );
     }
 

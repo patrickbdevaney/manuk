@@ -159,6 +159,17 @@ pub enum TextAlign {
     Justify,
 }
 
+/// `text-overflow` — how inline content that is clipped by its box is signalled. `clip` (the initial
+/// value) just cuts it off; `ellipsis` replaces the trailing clipped text with `…`. Only takes effect
+/// on a box that actually clips (`overflow` ≠ `visible`) and doesn't wrap (`white-space: nowrap`) —
+/// the near-universal single-line-truncated title/label/tab/table-cell idiom.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum TextOverflow {
+    #[default]
+    Clip,
+    Ellipsis,
+}
+
 /// One colour stop of a gradient, at a position in `0.0..=1.0` along the gradient line.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ColorStop {
@@ -538,6 +549,8 @@ pub struct ComputedStyle {
     pub line_height: f32,
     pub text_align: TextAlign,
     pub white_space: WhiteSpace,
+    /// `text-overflow` — `ellipsis` truncates clipped single-line inline content with `…`.
+    pub text_overflow: TextOverflow,
     /// `text-transform` — rendered casing (inherited); applied in layout, DOM text unchanged.
     pub text_transform: TextTransform,
     /// `overflow-wrap`/`word-wrap` — allow breaking a long word at an arbitrary char (inherited).
@@ -680,6 +693,7 @@ impl ComputedStyle {
             line_height: 16.0 * 1.2,
             text_align: TextAlign::Left,
             white_space: WhiteSpace::Normal,
+            text_overflow: TextOverflow::Clip,
             text_transform: TextTransform::None,
             overflow_wrap: OverflowWrap::Normal,
             word_break: WordBreak::Normal,
@@ -2734,6 +2748,18 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 "pre-wrap" => WhiteSpace::PreWrap,
                 "pre-line" => WhiteSpace::PreLine,
                 _ => WhiteSpace::Normal,
+            }
+        }
+        "text-overflow" => {
+            // `text-overflow` may carry two values (line-start, line-end); the common single value
+            // sets both. `ellipsis` on the end value is what we honour; anything else is `clip`.
+            s.text_overflow = if v
+                .split_whitespace()
+                .any(|t| t.eq_ignore_ascii_case("ellipsis"))
+            {
+                TextOverflow::Ellipsis
+            } else {
+                TextOverflow::Clip
             }
         }
         "text-transform" => {
