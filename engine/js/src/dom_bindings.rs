@@ -517,12 +517,32 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
     };
     // The computed `font-family` list, joined (its first entry is the primary).
     let family = cs.font_family.join(", ");
-    let overflow = match cs.overflow {
+    // **`overflow` is two properties, and the axes are what scripts actually read.** A dropdown, a
+    // modal or a virtualised list finds its scroll container by walking up the tree asking each
+    // ancestor for `overflowY` — and that read returned `undefined` here, so the walk fell through to
+    // the document every time and the popup positioned itself against the wrong box.
+    //
+    // `cs.overflow` alone cannot answer it: it is the single more-clipping value layout uses for its
+    // clip rect, so `overflow-x: hidden; overflow-y: scroll` collapses to one keyword and the axis
+    // that scrolls is unrecoverable. The per-axis values (which stylo already computes correctly,
+    // including CSS Overflow §3's rule that a `visible` paired with a non-`visible` computes to
+    // `auto`) are serialized from `overflow_x`/`overflow_y` instead.
+    let ov_css = |o: Overflow| match o {
         Overflow::Visible => "visible",
         Overflow::Hidden => "hidden",
         Overflow::Scroll => "scroll",
         Overflow::Auto => "auto",
         Overflow::Clip => "clip",
+    };
+    let overflow_x = ov_css(cs.overflow_x);
+    let overflow_y = ov_css(cs.overflow_y);
+    // The shorthand serializes as ONE value when the axes agree and TWO when they differ — the
+    // CSSOM shorthand-serialization rule. Collapsing an `overflow: hidden scroll` box to `"hidden"`
+    // loses the scrolling axis in the one property most code looks at first.
+    let overflow = if overflow_x == overflow_y {
+        overflow_x.to_string()
+    } else {
+        format!("{overflow_x} {overflow_y}")
     };
     let visibility = match cs.visibility {
         Visibility::Visible => "visible",
@@ -588,7 +608,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
     let q = js_string_literal;
     format!(
         "({{color:{}, backgroundColor:{}, fontSize:{}, fontWeight:{}, fontStyle:{}, \
-          fontFamily:{}, lineHeight:{}, textAlign:{}, display:{}, position:{}, overflow:{}, \
+          fontFamily:{}, lineHeight:{}, textAlign:{}, display:{}, position:{}, overflow:{}, overflowX:{}, overflowY:{}, \
           visibility:{}, whiteSpace:{}, opacity:{}, \
           width:{}, height:{}, marginTop:{}, marginRight:{}, marginBottom:{}, marginLeft:{}, \
           paddingTop:{}, paddingRight:{}, paddingBottom:{}, paddingLeft:{}, \
@@ -608,7 +628,8 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
           'flex-direction':'flexDirection','flex-wrap':'flexWrap','flex-grow':'flexGrow',\
           'flex-shrink':'flexShrink','flex-basis':'flexBasis','row-gap':'rowGap',\
           'column-gap':'columnGap','box-sizing':'boxSizing','min-width':'minWidth',\
-          'max-width':'maxWidth','min-height':'minHeight','max-height':'maxHeight'}};\
+          'max-width':'maxWidth','min-height':'minHeight','max-height':'maxHeight',\
+          'overflow-x':'overflowX','overflow-y':'overflowY'}};\
           return this[m[p]||p];}}}})",
         q(&rgba_css(&cs.color)),
         q(&cs.background_color.map(|c| rgba_css(&c)).unwrap_or_else(|| "rgba(0, 0, 0, 0)".into())),
@@ -620,7 +641,9 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         q(text_align),
         q(display),
         q(position),
-        q(overflow),
+        q(&overflow),
+        q(overflow_x),
+        q(overflow_y),
         q(visibility),
         q(white_space),
         q(&opacity),

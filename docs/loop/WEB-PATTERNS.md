@@ -985,3 +985,11 @@ either. Inline icons, base64 logos and sprite data-URIs are ubiquitous in compon
 bundled SPAs. Separately, any image that was given only a `width` **or** only a `height` inside a flex
 or grid container came out zero-sized on the other axis, because the intrinsic ratio never reached
 taffy: the avatar/logo/thumbnail case in every card and nav bar. Both render correctly now.
+
+## Scroll-container detection (`getComputedStyle(el).overflowY`)
+
+Until tick 222 the per-axis overflow values were absent from `getComputedStyle` entirely, so the
+scroll-parent walk that every dropdown, modal, virtualised list and scroll-into-view helper performs
+matched nothing and fell through to the document. Popups anchored to the viewport instead of their
+scroll container, with nothing visibly wrong in the DOM. Unlocks the positioning layer of essentially
+every component library (Floating UI / Popper and everything built on them).

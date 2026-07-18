@@ -9281,3 +9281,48 @@ bindings of the same shape as `layout_rect`, so they are their own tick — and 
 because lazy-loaders, lightboxes and responsive-image code all read them. Network images still size
 only after the async pass, which is correct (they genuinely must be fetched) but means a page's first
 paint has no size for them unless the author supplied `width`/`height` attributes.
+
+## Tick 222 — the scroll parent a script could not find: overflowX/overflowY (2026-07-18)
+
+**Selected:** the board's PHASE MANDATE (CSS-LAYOUT ★), `css/css-overflow`. Before implementing I
+probed two other candidates and both were already correct, which is the tick's real methodology note:
+the abspos static position of a **flex** item is already spec-correct, and so is **flex container
+intrinsic sizing** (`min`/`max`/`fit-content`, wrap, gap, padding — nine cases, all green). The
+board's Taffy #204 line is stale; it self-corrects, and the probe confirms the correction. I also
+tested the hypothesis that the large `TH_TIMEOUT` counts were a **promise-draining** gap — they are
+not: `.then`, chains, `async`/`await`, `queueMicrotask`, `setTimeout` and promise-plus-timer all
+settle. That is a runner support-script issue, noted for the observer, not engine work.
+
+**What was actually broken.** `getComputedStyle(el).overflowY` returned **`undefined`**. Only the
+single combined `cs.overflow` — the more-clipping of the two axes, which layout keeps for its clip
+rect — was ever serialized, and that value *cannot* answer the question: `overflow-x: hidden;
+overflow-y: scroll` collapses to one keyword and the axis that actually scrolls is unrecoverable.
+
+**Why it is a rendering bug and not a trivia bug.** Finding the scroll container is a walk up the
+tree asking each ancestor whether it scrolls. It is how a dropdown decides what to position against,
+how a modal decides what to lock, how a virtualised list decides what to listen to, and how "scroll
+into view" picks its container. With `overflowY` undefined the walk matches nothing, falls through to
+the document every time, and the popup anchors to the wrong box — silently, with nothing wrong in
+the DOM to see.
+
+The computed values were already right: stylo applies CSS Overflow §3, where a `visible` paired with
+a non-`visible` computes to `auto` (which is why setting only `overflow-x` changes what `overflow-y`
+reads back). Only the CSSOM exposure was missing. Added `overflowX`/`overflowY` plus their kebab
+`getPropertyValue` names, and made the shorthand serialize **two values when the axes differ**, per
+the CSSOM shorthand rule.
+
+**Measured:** css-overflow 140 → 141; css-flexbox 972, css-sizing 417, css-position 98 flat. Bar 0
+clean. The flip count is small and the capability is not: this is the property every popup library
+reads first.
+
+**Gate.** `g_overflow_cssom` — seven declarations checked across five readings each (`overflowX`,
+`overflowY`, the shorthand, and both kebab accessors, which must agree because scripts use either),
+including `clip` staying distinct from `hidden` and both §3 asymmetry cases; then **the scroll-parent
+walk itself**, written the way libraries write it, which must return `mid,outer` — the nearest
+scrolling ancestor, skipping a non-scrolling div in between. RED two independent ways: blanking the
+per-axis values reproduces the original `||visible||`; keeping them but collapsing the shorthand to
+one value breaks exactly the two-axis case (`hidden` for `hidden scroll`) and nothing else.
+
+**Found in passing (Bar 0, worth knowing).** A second `#[test]` in a gate binary **SIGSEGVs** — each
+`Page::load` stands up a JS context and a second in one process is not survivable. Every sibling gate
+already uses exactly one `#[test]`; that convention is load-bearing, not stylistic. Merged to one.

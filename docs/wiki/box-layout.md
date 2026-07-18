@@ -874,3 +874,23 @@ The two failures worth remembering both come from a channel being starved:
   not pass the ratio along. An image with only a `height` came out **zero pixels wide** — present,
   laid out, invisible. Any value the block path uses to derive a size has to cross into
   `to_taffy_style`, or it silently does not exist inside flex and grid.
+
+## `overflow` is two properties, and layout's copy is lossy
+
+`ComputedStyle` keeps three overflow values and they answer different questions:
+
+- `overflow_x` / `overflow_y` — the real per-axis computed values. CSS Overflow §3 applies: a
+  `visible` paired with a non-`visible` **computes to `auto`**, so setting one axis silently changes
+  what the other reads back.
+- `overflow` — the *more-clipping* of the two, kept for layout's single clip rect.
+
+The third is a lossy summary and must never be what a script reads: `overflow-x: hidden; overflow-y:
+scroll` collapses to one keyword, and the axis that actually scrolls cannot be recovered from it.
+`getComputedStyle` therefore serializes the axes, and the shorthand renders as one value when they
+agree and two when they differ (the CSSOM shorthand-serialization rule).
+
+This matters because of one specific walk: **finding the scroll container** by climbing ancestors and
+testing `overflowY`/`overflowX` for `auto|scroll`. Dropdowns, modals, virtualised lists and
+scroll-into-view all do it. If the property reads `undefined` the walk silently matches nothing and
+falls through to the document — the popup anchors to the viewport instead of its container, and the
+DOM looks perfectly fine.
