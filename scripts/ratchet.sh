@@ -215,10 +215,13 @@ bank)
     MEAS=$(current_measured); MM=$(mark MEASURED); MM=${MM:-0}
     [ "$MEAS" -gt "$MM" ] && MM=$MEAS
     printf 'MEASURED\t%s\t%s\n' "$MM" "$NOW"
-    # The WALL ratchets DOWNWARD — a faster wall is the improvement, so the mark is the best time seen.
+    # The WALL mark is OBSERVER-MANAGED, not auto-ratcheted. It USED to take min(mark, current) — "the fastest
+    # wall ever seen" — but a noisy metric cannot be min-ratcheted: one lucky-fast run min-locked the mark and
+    # drove the ceiling (mark*1.3) BELOW the genuine warm wall, false-RED'ing EVERY tick (bricked 127->188, then
+    # re-locked 72->57 by tick 192). So bank now PRESERVES the mark; the observer re-baselines it deliberately in
+    # RATCHET.tsv, and wall-audit.sh lowers it only when the wall genuinely improves. [[wall-mark-min-lock-rebaseline]]
     W=$(current_wall); MW=$(mark WALL)
-    if [ -z "$MW" ] || { [ "$W" -gt 0 ] && [ "$W" -lt "$MW" ]; }; then MW=$W; fi
-    printf 'WALL\t%s\t%s\n' "${MW:-0}" "$NOW"
+    printf 'WALL\t%s\t%s\n' "${MW:-$W}" "$NOW"
   } > "$TMP"
   mv "$TMP" "$MARKS"
   printf '  %s✓%s ratchet banked → %s\n' "$GRN" "$OFF" "$MARKS"
