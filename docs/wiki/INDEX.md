@@ -341,6 +341,17 @@
   - L78 · Deferred
   - L81 · Terminal gate — reasonable security sweep
 
+## MEDIA PIPELINE — MSE, the attachment handshake, and the decode registry
+`docs/wiki/media-pipeline.md`
+
+  - L6 · Adaptive streaming never touches <video src="file.mp4">
+  - L19 · The attachment handshake is the ONLY channel from element to MediaSource
+  - L43 · The decode registry: a false is worth more than an unbacked true
+  - L60 · buffered is a media timeline, not a byte count
+  - L66 · The append sequence is a task sequence, and that is load-bearing
+  - L78 · An updateend handler that appends is re-entered by its own append
+  - L89 · Gates: flush the record on every push, not at the end
+
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
 
@@ -475,4 +486,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-398 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+405 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

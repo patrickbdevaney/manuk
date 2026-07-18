@@ -1619,13 +1619,30 @@ const PRELUDE: &str = r#"
           Object.defineProperty(el, name, { get: function(){ return value; }, configurable: true });
         };
         ro('error', err);
-        ro('readyState', 0);        // HAVE_NOTHING
-        ro('networkState', 3);      // NETWORK_NO_SOURCE
+        ro('readyState', 0);        // HAVE_NOTHING — and it stays 0 until a frame is genuinely decoded
         ro('paused', true);
         ro('ended', false);
         ro('seeking', false);
-        ro('duration', NaN);
-        ro('buffered',  { length: 0, start: function(){ return 0; }, end: function(){ return 0; } });
+
+        // ── The three members a MediaSource makes LIVE.
+        //
+        // These were fixed-value closures, which is fine while the element can never have a source
+        // — but MSE gives it one, and a player polls exactly these to decide whether to append more.
+        // A `duration` frozen at NaN after the page set `mediaSource.duration = 600` reads as "this
+        // stream has no length", and the append loop has nothing to measure its progress against.
+        var live = function(name, get) {
+          Object.defineProperty(el, name, { get: get, configurable: true });
+        };
+        // NETWORK_LOADING once a MediaSource is attached: the element genuinely is being fed.
+        live('networkState', function(){ return el.__ms ? 2 : 3; });
+        live('duration',     function(){ return el.__ms ? el.__ms.duration : NaN; });
+        // The union of the source buffers' ranges — empty today, because nothing is demuxed, and
+        // reporting an empty range is the honest answer rather than a fabricated one.
+        live('buffered', function() {
+          if (!el.__ms) { return { length: 0, start: function(){ return 0; }, end: function(){ return 0; } }; }
+          var sbs = el.__ms.sourceBuffers;
+          return sbs.length ? sbs[0].buffered : new globalThis.TimeRanges([]);
+        });
         ro('played',    { length: 0, start: function(){ return 0; }, end: function(){ return 0; } });
         ro('seekable',  { length: 0, start: function(){ return 0; }, end: function(){ return 0; } });
         ro('textTracks', []);
@@ -1635,6 +1652,59 @@ const PRELUDE: &str = r#"
         // Writable, because scripts set them and expect them to stick. They just do not do anything.
         el.currentTime = 0; el.volume = 1; el.muted = false; el.playbackRate = 1;
         el.autoplay = el.autoplay || false; el.loop = el.loop || false;
+        el.__ms = null;
+
+        // ── `video.src = URL.createObjectURL(mediaSource)` — the MSE attachment handshake.
+        //
+        // This assignment is the ONLY moment the element learns which MediaSource it is playing,
+        // and every player library performs it. Without an interception here the object URL is
+        // stored as an ordinary attribute, the source stays 'closed', `sourceopen` never fires, and
+        // the player waits on that event forever — a hang with nothing in the DOM to see.
+        //
+        // The reflected accessor is found lazily on the prototype chain rather than captured now,
+        // because reflection installs `src` on the prototype and this runs per-element; looking it
+        // up eagerly would depend on an install order that is not ours to rely on.
+        var reflected = function() {
+          var p = Object.getPrototypeOf(el);
+          while (p) {
+            var d = Object.getOwnPropertyDescriptor(p, 'src');
+            if (d && (d.get || d.set)) { return d; }
+            p = Object.getPrototypeOf(p);
+          }
+          return null;
+        };
+        Object.defineProperty(el, 'src', {
+          configurable: true,
+          get: function() {
+            // An object URL is returned verbatim: it is already absolute and has no base to
+            // resolve against, so round-tripping it through URL reflection would corrupt it.
+            if (el.__objectSrc) { return el.__objectSrc; }
+            var d = reflected();
+            if (d && d.get) { return d.get.call(el); }
+            return (el.getAttribute && el.getAttribute('src')) || '';
+          },
+          set: function(v) {
+            var s = String(v);
+            el.__objectSrc = s.indexOf('blob:') === 0 ? s : null;
+            var d = reflected();
+            if (d && d.set) { d.set.call(el, s); }
+            else if (el.setAttribute) { el.setAttribute('src', s); }
+            if (globalThis.__mseAttach) { globalThis.__mseAttach(el, s); }
+          }
+        });
+
+        // `srcObject = mediaSource` — the newer attachment form, no object URL in between.
+        Object.defineProperty(el, 'srcObject', {
+          configurable: true,
+          get: function() { return el.__ms; },
+          set: function(v) {
+            if (v && globalThis.MediaSource && v instanceof globalThis.MediaSource) {
+              el.__ms = v; v.__element = el; v.__setReadyState('open');
+            } else if (el.__ms) {
+              var old = el.__ms; el.__ms = null; old.__element = null; old.__setReadyState('closed');
+            }
+          }
+        });
 
         el.HAVE_NOTHING = 0; el.HAVE_METADATA = 1; el.HAVE_CURRENT_DATA = 2;
         el.HAVE_FUTURE_DATA = 3; el.HAVE_ENOUGH_DATA = 4;
@@ -2605,6 +2675,12 @@ pub fn install(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<()
     // AFTER reflection: `contentDocument` must not collide with a reflected accessor, and reflect.js
     // skips any IDL name already `in proto`.
     eval(rt, global, crate::iframe_js::IFRAME_JS, "iframe.js")?;
+    // **MSE.** After the prelude (it needs `setTimeout` and `DOMException`, and it must land AFTER
+    // the inert-name sweep rather than be overwritten by it) and after `dom_bindings`' `install`,
+    // which is where `URL` comes from — `URL.createObjectURL` is the whole attachment channel, so
+    // installing this before `URL` exists would silently drop it and leave `video.src` unable to
+    // ever name a MediaSource.
+    eval(rt, global, crate::mse_js::MSE_JS, "mse.js")?;
     eval(
         rt,
         global,

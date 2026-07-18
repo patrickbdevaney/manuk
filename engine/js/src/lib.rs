@@ -953,6 +953,8 @@ pub mod iframe_js;
 #[cfg(feature = "_sm")]
 pub mod inline_handlers_js;
 #[cfg(feature = "_sm")]
+pub mod mse_js;
+#[cfg(feature = "_sm")]
 pub mod mutation_js;
 #[cfg(feature = "_sm")]
 pub mod range_js;

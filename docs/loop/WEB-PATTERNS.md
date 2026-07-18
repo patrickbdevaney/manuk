@@ -993,3 +993,28 @@ scroll-parent walk that every dropdown, modal, virtualised list and scroll-into-
 matched nothing and fell through to the document. Popups anchored to the viewport instead of their
 scroll container, with nothing visibly wrong in the DOM. Unlocks the positioning layer of essentially
 every component library (Floating UI / Popper and everything built on them).
+
+## Adaptive streaming (MSE) — the player script itself, not just the video
+
+Until tick 223 `MediaSource`, `SourceBuffer`, `SourceBufferList` and `TimeRanges` did not exist. The
+class of the web this blocked is larger than it sounds: adaptive players — hls.js, dash.js, shaka,
+video.js, and YouTube's own — construct a `MediaSource` inside a **capability probe at
+module-evaluation time**, so the missing name was a `ReferenceError` that killed the player script
+before it rendered a single control, and took the rest of the surrounding bundle's evaluation with
+it. Not "the video does not play" — *the player is absent, and the page around it is damaged.* Nor
+could such a player fall back to progressive download, since it died before reaching its own
+fallback.
+
+What works now is the **byte pipe**: `new MediaSource()`, `video.src = URL.createObjectURL(ms)`
+flipping the source to `open` and firing `sourceopen`, `addSourceBuffer(mime)`, and an
+`appendBuffer()` loop clocked by the real `updatestart`→`update`→`updateend` task sequence with a
+correct `updating` flag. That is byte-for-byte the control flow every player executes, and it must
+survive unchanged when a demuxer takes over the middle of it.
+
+What deliberately does **not** work is decoding, and the way that is reported is the point.
+`isTypeSupported()` answers from an empty decode registry, so every player is told **no** and takes
+its documented fallback path. A stubbed `true` would be strictly worse than the honest `false`: it
+steers the player onto the adaptive path, where it appends segments and polls `buffered` for a range
+that can never grow — a silent hang, surfacing far from its cause, instead of a clean fallback. That
+registry is the seam M3/M4/M5 (demux, AAC, VP9) fill in, at which point `isTypeSupported` begins
+saying yes for exactly what can genuinely be played and nothing else changes.

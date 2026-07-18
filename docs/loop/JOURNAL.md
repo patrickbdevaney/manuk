@@ -9326,3 +9326,46 @@ one value breaks exactly the two-axis case (`hidden` for `hidden scroll`) and no
 **Found in passing (Bar 0, worth knowing).** A second `#[test]` in a gate binary **SIGSEGVs** — each
 `Page::load` stands up a JS context and a second in one process is not survivable. Every sibling gate
 already uses exactly one `#[test]`; that convention is load-bearing, not stylistic. Merged to one.
+
+## Tick 223 — MSE: the byte pipe, built before the decoder (2026-07-18)
+
+**Selected:** the board's CO-#1 **(A) MEDIA/YouTube**, step M1. MEDIA is the checklist's biggest gap
+(5%), and every step after it — demux, decode, playback — appends into an object graph that has to
+exist first.
+
+**Recovered rather than redone.** The tree opened with WIP from a crashed tick (`mse_js.rs`,
+`g_mse.rs`, the `event_loop.rs` media-element diff). It was coherent and fully wired, so per
+ATOMICITY I completed it instead of resetting — but the first gate run **hung at 86% CPU for 15
+minutes**, which is what the tick actually turned out to be about.
+
+**The hang was in the gate, not the engine, and it is a real player bug in miniature.** The
+`updateend` listener appended the next segment — so it was re-invoked by the very append it had just
+made, an unbounded append/timer chain that never lets the event loop drain. The page does not fail,
+it *hangs*, indistinguishable from a slow build. Rewritten as one listener dispatching on a step
+counter. Engine consequence noted, not fixed here: a runaway timer chain in page script spins
+`Page::load` without a bound.
+
+**What is built.** `MediaSource` (readyState/duration/`sourceopen`,`sourceended`,`sourceclose`),
+`SourceBuffer` (real bytes queued, the `updating` flag, and the `updatestart`→`update`→`updateend`
+*task* sequence — tasks not microtasks, so a re-entrant append finds the previous one unwound),
+`SourceBufferList`, `TimeRanges`, `URL.createObjectURL`/`revokeObjectURL`, and the attachment
+handshake: `video.src = URL.createObjectURL(ms)` intercepted so the source flips `closed`→`open`.
+`duration`/`networkState`/`buffered` on the element became live reads through the attached source.
+
+**The honesty is the design, not a caveat.** There is no decoder, so `isTypeSupported` answers from
+`__mseCodecs` — empty — and every player is told **no** and takes its documented fallback. A stubbed
+`true` would steer it onto the adaptive path to poll a `buffered` range that can never grow: a hang
+instead of a fallback. `buffered` stays empty for the same reason. That registry is the M3/M4/M5
+hand-off seam, and the gate proves it *is* a seam by asserting `false`, registering a codec, and
+asserting the answer flips.
+
+**Gate.** `g_mse` — 26 claims over the real append loop. RED **two ways, both actually run**:
+removing the `mse.js` eval reproduces the original engine exactly (`THREW:ReferenceError:
+MediaSource is not defined`, script dead at line one); removing *only* the `__mseAttach` call — every
+object present, just no handshake — passes the first seven claims and fails at `syncopen:false`,
+which is the silent forever-wait this gate exists to catch. The first probe reported `got: -` and
+proved nothing, because the gate flushed its record only at the end; it now flushes on every push,
+so the last recorded claim is the failure's location.
+
+**Mechanism captured:** `docs/wiki/media-pipeline.md`. **Next (M2/M3):** arraybuffer/Range fetch,
+then symphonia demux — which registers its first codec string and turns the honest `no` into a yes.
