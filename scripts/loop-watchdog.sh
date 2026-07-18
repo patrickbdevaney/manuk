@@ -15,6 +15,12 @@ LOG=.git/manuk-loop-watchdog.log
 LOCK=.git/manuk-watchdog.lock
 say(){ printf '%s  %s\n' "$(date '+%F %T')" "$1" >>"$LOG"; }
 
+# List all descendants of a pid (recursive). `pgrep -P` matches by PARENT pid, never a command pattern,
+# so this can't self-match the watchdog (unlike a `pgrep -f loop` scan).
+descendants(){ local p=$1 c; for c in $(pgrep -P "$p" 2>/dev/null); do echo "$c"; descendants "$c"; done; }
+# Signal a process tree, children first, so parents can't respawn a just-killed child.
+killtree(){ local p=$1 sig=$2 c; for c in $(pgrep -P "$p" 2>/dev/null); do killtree "$c" "$sig"; done; kill "-$sig" "$p" 2>/dev/null || true; }
+
 exec 8>"$LOCK" || exit 1
 flock -n 8 || exit 0                                   # another watchdog run already in progress
 [ -f .git/manuk-loop-DISABLED ] && exit 0              # hard off-switch
@@ -24,13 +30,37 @@ TICK=$(grep -oP '^TICK:\s*\K[0-9]+' STATUS.md 2>/dev/null || echo 0)
 TARGET=$(grep -oP '^LOOP_UNTIL_TICK=\K[0-9]+' docs/loop/AUTOLOOP 2>/dev/null || echo 0)
 [ "$TICK" -ge "$TARGET" ] 2>/dev/null && exit 0        # budget spent — nothing to keep alive
 
-# Precise /proc scan: is a loop-forever supervisor (bash running the script) alive?
-sup=0
+# Precise /proc scan: is a loop-forever supervisor (bash running the script) alive? Collect their pids.
+sup=0; SUP_PIDS=""
 for d in /proc/[0-9]*; do
   [ "$(cat "$d/comm" 2>/dev/null)" = bash ] || continue
-  tr '\0' ' ' < "$d/cmdline" 2>/dev/null | grep -q 'scripts/loop-forever.sh' && sup=$((sup+1))
+  tr '\0' ' ' < "$d/cmdline" 2>/dev/null | grep -q 'scripts/loop-forever.sh' || continue
+  sup=$((sup+1)); SUP_PIDS="$SUP_PIDS ${d#/proc/}"
 done
-[ "$sup" -ge 1 ] && exit 0                             # already running → do nothing
+
+if [ "$sup" -ge 1 ]; then
+  # A supervisor is alive — normally we stand down. But FIRST reap a HUNG agent: the supervisor only
+  # relaunches on agent EXIT, so a stuck agent (infinite loop / wedged build / self-matching wait-loop)
+  # blocks it forever while it still LOOKS alive — the exact "didn't move forward automatically" stall
+  # nothing else recovers. The agent touches .git/manuk-working at the top of every command (~1–2min in a
+  # healthy tick); if that flag is stale this long AND a `claude` agent is a live descendant of a
+  # supervisor, the agent is hung → kill its tree so the supervisor relaunches a fresh one. Running from
+  # cron every 2min, this is live within 2min of any code change here — no supervisor restart needed. The
+  # descendant gate means a between-ticks gap or usage-limit pause (no claude descendant) is never touched.
+  STALL="${MANUK_STALL_SECS:-1800}"
+  AGE=$(( $(date +%s) - $(stat -c %Y .git/manuk-working 2>/dev/null || echo 0) ))
+  if [ "$AGE" -ge "$STALL" ]; then
+    for sp in $SUP_PIDS; do
+      for c in $(descendants "$sp"); do
+        [ "$(cat /proc/"$c"/comm 2>/dev/null)" = claude ] || continue
+        say "⏰ HUNG-AGENT REAPER: working-flag stale ${AGE}s ≥ ${STALL}s — killing hung agent tree (claude $c under supervisor $sp)"
+        killtree "$c" TERM; sleep 3; killtree "$c" KILL
+        systemctl --user stop manuk-agent-tick.scope 2>/dev/null || true
+      done
+    done
+  fi
+  exit 0                                               # supervisor already running → do nothing else
+fi
 
 say "no supervisor alive (tick $TICK/$TARGET) — (re)starting loop-forever"
 touch .git/manuk-working .git/manuk-loop-heartbeat
