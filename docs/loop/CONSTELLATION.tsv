@@ -47,11 +47,11 @@ platform	cookies (SameSite/Secure/HttpOnly)	no session, no login	partial	-	cooki
 platform	CORS + credentialed requests	every API call from an SPA	unknown	-	NEVER MEASURED — probe it
 platform	OAuth redirect flow	YOU CANNOT LOG IN TO THE MODERN WEB	unknown	-	NEVER MEASURED — the single biggest platform unknown
 platform	window.open + postMessage (popup auth)	OAuth popups; the other login path	partial	-	window.open recorded; postMessage routing exists
-platform	REAL iframes (nested browsing context)	embeds, payments, OAuth frames, ads, players	gated	G_IFRAME	tick 84: contentDocument/contentWindow readable, per-arena reflectors, node identity across the boundary. Pixels are still a snapshot (no re-render on mutation)
+platform	REAL iframes (nested browsing context)	embeds, payments, OAuth frames, ads, players	gated	G_IFRAME	tick 84: cross-boundary readable; BUT pixels are a snapshot — no re-render on mutation. Blocks 3-D Secure challenge + interactive OAuth frames (edge sweep t193b)
 platform	postMessage across frames	every embed talks this way	partial	-	-
 platform	infinite scroll (IO + scrollTop + virtualisation)	every feed	gated	G_SCROLL + G_VIEWPORT	ticks 67, 59
-platform	WebSocket	live feeds, chat, presence	missing	-	deliberately absent — page must feature-detect
-platform	Server-Sent Events	live updates	partial	-	EventSource shim exists
+platform	WebSocket	live feeds, chat, presence	missing	-	stub always errors->close (tokio-tungstenite absent). Row framing was for SOCIAL FEEDS (tail); RECLASSIFIED CRITICAL for cloud-console/AI-inference live logs+terminals (edge sweep t193b)
+platform	Server-Sent Events	live updates	missing	-	VERIFIED pure non-connecting stub (event_loop.rs:954) — never delivers a message. CRITICAL: streaming logs + AI token output (edge sweep t193b)
 platform	Service Worker + Cache API	offline, PWA, instant repeat visits	missing	-	navigator.serviceWorker absent
 platform	file upload (input[file], FileReader, Blob)	avatars, attachments, everything	partial	-	Blob/File/FileReader exist; input[file] unmeasured
 platform	drag and drop	editors, uploads	unknown	-	NEVER MEASURED — probe it
@@ -93,7 +93,7 @@ doc	custom highlights	find-in-page, editors, code highlighting without DOM churn
 doc	JPEG XL	Interop 2026 investigation; Apple ships it	unknown	-	SURFACE AUDIT t83: Interop 2026
 platform	fetch uploads + ranges (streaming)	large uploads, resumable downloads, video range requests	unknown	-	SURFACE AUDIT t83: Interop 2026
 platform	WebTransport (HTTP/3)	low-latency data; games, live apps	unknown	-	SURFACE AUDIT t83: Interop 2026
-platform	WebAuthn / passkeys	THE modern login. Ladybird still lacks it; so do we	unknown	-	SURFACE AUDIT t83: Ladybird gap list
+platform	WebAuthn / passkeys	THE modern login. Ladybird still lacks it; so do we	missing	-	confirmed absent (navigator.credentials zero hits). TOTP/password fallback survives (edge sweep t193b)
 media	media pseudo-classes (:playing/:muted etc)	styling player state	unknown	-	SURFACE AUDIT t83: Interop 2026
 cross	real-world QUIRKS (not just the spec)	'the work that has historically KILLED independent engines' — a strict spec impl that breaks sites fails the only test that matters	partial	G_FIDELITY	265-site Chromium differential oracle. THIS is why WPT alone is insufficient
 cross	quirks-mode rendering	the pre-standards web; a huge fraction of the long tail	unknown	-	SURFACE AUDIT t83: never measured
@@ -121,3 +121,7 @@ cross	file-input actuation (set FileList on input[type=file])	every upload flow 
 app	native <select> choose + selectedIndex/change	dropdowns undrivable by an agent	partial	-	edge sweep t193: attrs reflect; synthetic option-choice + change firing unbuilt
 media	binary transport (arraybuffer XHR/fetch + Range)	adaptive players (hls.js/dash.js) can't append segments — PREREQ for MSE	missing	-	edge sweep t193: __deliverXhr is text-only; hyper does Range trivially
 media	<video> playback engine + A/V sync (currentTime/seek/timeupdate)	play/seek/timeupdate/playing/ended don't work	missing	-	edge sweep t193: wiring on the cpal master clock
+app	fetch streaming response body (ReadableStream / progressive XHR / SSE delivery)	AI-chat answers (claude.ai/ChatGPT/Gemini/Grok) NEVER RENDER; live console logs + inference token output dead	missing	-	edge sweep t193b: THE top unlock. manuk_net::fetch_streaming(on_chunk) EXISTS — bridge it to a JS ReadableStream + readyState-3 XHR. Fresh-context subsystem
+platform	canvas fillText/strokeText rasterization	canvas chart labels + xterm.js terminals + Google Docs/Sheets render BLANK	missing	-	edge sweep t193b: no-op today (event_loop.rs:723); glyph raster exists in engine/text — wire to the 2D context
+platform	clipboard.read() + paste-image (ClipboardItem / image blob)	AI-chat paste-screenshot, rich/image paste	missing	-	edge sweep t193b: only writeText/readText-own-string exist; no clipboard.read()
+cross	password vault (save + autofill credentials)	re-type every password; not a real daily driver	missing	-	edge sweep t193b: shell/session.rs has credential-URL REDACTION only, no save/autofill vault — v1 UX scope

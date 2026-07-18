@@ -159,3 +159,69 @@ This refines [[scope-botdetection-shell]]: **completeness IS in scope; evasion i
 
 The lever-pivot (`scripts/lever-pivot.sh`) + this checklist keep the loop aimed at *constellation-moving*
 capability instead of an incremental render tail.
+
+---
+
+# PART II — THE GENERALIZED INTERNET (representative classes + honest reachability)
+
+Extends the target set from a few sites to a representative split of what a present-day user actually uses,
+from a second sweep (cloud-console/dev-infra/AI-inference + productivity/AI-chat/commerce), verified in source.
+
+## The dominant finding: STREAMING is the #1 unlock
+Every modern **AI-chat UI (claude.ai / ChatGPT / Gemini / Grok)** streams its answer via
+`fetch().body.getReader()`; **cloud-console live logs** and **AI-inference playgrounds (Groq / Cerebras)**
+stream via SSE / chunked fetch. Today **all of it is inert** — `ReadableStream` is a name-only stub, SSE is a
+non-connecting stub, and `__deliverXhr` hands the whole body over at once (no `readyState 3`). So an AI-chat
+**answer literally never renders.** The plumbing is *half-built*: `manuk_net::fetch_streaming(url, on_chunk)`
+already exists — the missing piece is **bridging chunks into a JS `ReadableStream` / progressive XHR / a real
+EventSource**. This one fresh-context subsystem flips the entire AI-chat class (the highest-value new target)
+from broken to daily-drivable, and unblocks console live-logs + inference token output at the same time.
+
+## Reachability by class — the honest map
+| tier | classes / sites | state |
+|---|---|---|
+| **Reachable now (rendering-bound)** | doc/reference web (Wikipedia/MDN/news/blogs/forums), marketing & realty pages (Wix/Squarespace/Zillow chrome), **GitHub** repos/blobs, e-commerce browse/cart/gallery, **Google Drive** file list, simpler SaaS dashboards | strongest; residual risk is hydration-probe + large-DOM perf |
+| **One subsystem away (highest ROI)** | **AI-chat** (claude.ai/ChatGPT/Gemini/Grok) + **inference playgrounds** (Groq/Cerebras) + **console live logs** → all gated on **streaming**; **social feeds** (X/IG/LinkedIn) → gated on **scroll-anchoring + forced-reflow** | bounded/subsystem work already scoped |
+| **Login-gated** | **AWS & GCP consoles** — blocked at the front door by **IndexedDB**-backed auth SDKs (Cognito/Amplify, Google Identity); **banks** — need completeness identity + strong cookies (passkey-only would block; TOTP survives); OAuth/OIDC consoles pending the **OAuth redirect probe** | **DigitalOcean / GroqCloud / Cerebras plausibly reachable** if OAuth probes pass |
+| **Out-of-reach subsystems (honest)** | **Google Docs / Sheets** (custom **canvas-text** engine — `fillText` is a no-op → blank doc/grid; also IME + rich clipboard); **Canva** (WebGL editor); **vector Google Maps** (WebGL tiles); **DRM media** (Netflix/Spotify) | consciously deferred; each is a Figma-class hole, not a bounded tick |
+
+## New critical edges this sweep added (folded into CONSTELLATION.tsv)
+- **fetch streaming response body** (ReadableStream / progressive XHR / real SSE) — *the* AI-chat/console unlock.
+- **canvas `fillText` rasterization** — chart labels, xterm.js terminals, canvas apps (bounded: raster exists in `engine/text`).
+- **`clipboard.read()` + paste-image** — AI-chat screenshot paste; pairs with file-input actuation + `createObjectURL` as the upload path (also the agent-upload path).
+- **cross-origin iframe re-render on mutation** — 3-D Secure checkout challenge, interactive OAuth frames (row 50: readable but a frozen snapshot).
+- **password vault (save + autofill)** — the one real gap in the persistence layer (below).
+- Reclassified: **WebSocket** (row 53) & **SSE** (row 54) from social-feed-TAIL to **CRITICAL** for cloud/AI; **WebAuthn** (row 96) unknown→missing (TOTP fallback survives).
+
+## PERSISTENCE / UX — the state layer (audited: strong, one gap)
+`shell/src/session.rs` persists to disk and restores on launch — **bookmarks · history** (credential-URL
+redacted) **· settings · downloads · session/tab restore** (incl. named collections) **· cookies** (RFC 6265,
+flushed on exit) **· localStorage** (per-origin, beside the jar). Session retention across restarts — what
+makes it a *real* daily driver — is built. **The one gap: a password vault (save + autofill);** today only
+credential-URL redaction exists. Bounded shell work, in v1 scope.
+
+## AGENTIC FOUNDATION — solid core, small named gaps
+Present: CSS + role/name targeting, `dispatch_click / type / input / key / blur / submit`, `scrollIntoView`.
+So an agent can find, click, type into controlled React/Vue fields, submit, key, and scroll. The gaps are
+**named and bounded**, not architectural: (1) **a11y node STATES** (checked/expanded/selected/value — an agent
+acts blind to its own result); (2) **extra dispatchers** (hover/dblclick/contextmenu/file-input/drag);
+(3) the upload path (file-input + `createObjectURL` + `clipboard.read`).
+
+## Prioritized unlock sequence (max coverage per tick)
+1. **fetch streaming subsystem** → AI-chat + inference + console logs (highest value; half-built).
+2. **a11y node STATES** → the agentic moat (agent can confirm its own actions).
+3. **scroll-anchoring + forced-reflow** → all feeds + console data grids.
+4. **canvas `fillText`** → chart labels + terminals (bounded).
+5. **clipboard.read + file-input + `createObjectURL`** → AI-chat upload + agent upload.
+6. **password vault** → daily-driver UX completeness.
+7. **IndexedDB** → unblocks AWS/GCP login.
+8. **completeness identity** (WebGL string / visibilityState / permissions.query / userAgentData) → banks + enterprise consoles behind Cloudflare.
+9. **media borrow-plan** → YouTube.
+
+**Consciously OUT (don't spend ticks):** Google Docs/Sheets canvas-text, Canva/vector-Maps WebGL, DRM,
+PaymentRequest/Apple-Pay (card-form fallback reachable), autofill-engine polish, Web Workers for this class.
+
+**Confidence read:** the path from here to "daily-drives almost everything a person uses" is a *small set of
+named, mostly-bounded subsystems* (streaming, a11y-states, scroll-anchoring, canvas-text, the media chain) plus
+a short honest out-of-reach list (office suites, heavy-WebGL creative apps, DRM). That is a sound foundation to
+build the downstream agentic layer on — because the automation surface IS this daily-driver surface.
