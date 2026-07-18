@@ -175,6 +175,12 @@ fi
 
 head_ "B · build (workspace)"
 if cargo build -q --workspace 2>&1 | grep -qE '^error'; then bad "workspace does not compile"; else ok "workspace compiles (shipping)"; fi
+# HEADLESS GATE (observer, tick 186). The `--no-default-features` lane broke CI on EVERY OS (E0433: the
+# GUI-feature type `DownloadRecord` was referenced from an always-compiled module) and the wall never built
+# headless — "headless is CI's job, not the wall's" (tick 88) — so it slipped through silently. Catch that
+# class here: manuk-shell is where the `#[cfg(feature="gui")]` split lives, so a headless check there is
+# cheap (~5s warm) and covers the likely source. CI still runs the full `--workspace --no-default-features`.
+if cargo check -q -p manuk-shell --no-default-features 2>&1 | grep -qE '^error'; then bad "headless (--no-default-features) broken — a gui-feature item referenced from always-compiled code?"; else ok "headless compiles (--no-default-features)"; fi
 # **The headless lane (`--no-default-features`) is CI's job, not the wall's.** Tick 88 added it here to
 # stop a headless-only regression (tick 84's `diag`) from passing a green wall — a real gap — but a third
 # feature configuration taxed EVERY wall ~350s via cargo cache thrash, and the wall runs every tick. CI's
