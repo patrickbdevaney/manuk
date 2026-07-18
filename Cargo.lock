@@ -3146,6 +3146,7 @@ dependencies = [
  "manuk-text",
  "resvg",
  "tokio",
+ "tokio-tungstenite",
  "tracing",
  "tracing-subscriber",
  "url",

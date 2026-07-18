@@ -654,3 +654,43 @@ Residue: **the shell is not wired yet** — nothing calls `take_ws_ops`/`deliver
 true end of lever 3; it needs a per-connection task holding the `WebSocketConn` plus an mpsc from the
 UI thread for sends (bidirectional, unlike fetch). `bufferedAmount` decrements via `Sent` but nothing
 emits it yet; no `Blob` binaryType read path; no permessage-deflate.
+
+## WebSocket is LIVE in the browser (tick 202) — lever 3 complete
+
+`gui.rs::pump_websockets` is the last piece: the page's ops now reach a real socket during ordinary
+browsing.
+
+**Why it is not shaped like `pump_fetches`.** A fetch is one request and one response, so its worker
+can be a fire-and-forget task. **A socket stays open and is written to long after it was opened**, so
+each connection gets a task that owns the `WebSocketConn` plus an `mpsc::UnboundedSender` the UI
+thread queues frames onto (`App::ws_send`, keyed by socket id). The task `select!`s between "the page
+wants to send" and "the server said something" — the only way to service both without one starving
+the other, and the reason a polling loop would not do.
+
+**Dropping the sender IS the close signal.** `WsOp::Close` removes the entry; the task's `rx.recv()`
+returns `None`, completes the closing handshake and reports the real close back. So the page's
+`onclose` reflects what actually happened rather than an optimistic local guess.
+
+**Navigation closes every socket** — `ws_send.clear()` beside the `nav_gen` bump. A live-chat socket
+must not keep streaming into a document the user has left, and the `gen` guard drops any frame
+already in flight.
+
+`WsEvent::Sent { bytes }` is emitted once a frame is actually on the wire, which is what makes
+`bufferedAmount` fall — a client polling it to avoid flooding a slow socket now gets a real answer.
+A failed connect sends `error` then `close(1006, wasClean: false)`, which is what a reconnect loop
+backs off on.
+
+**Gated by composition, because the shell itself cannot be.** `gui.rs` has no UI harness (the same
+honest limitation as T6.1 agent-click and the tick-198 fetch wiring). But the *composition* is the
+part that can silently disagree, so `g_websocket_live` does exactly what `pump_websockets` does, in
+the same order, with a **real server** in the middle: drain the page's ops, connect a real
+`WebSocketConn`, resolve the page's relative `'/live'` against the document URL, put the page's own
+frame on the wire, pump the replies back, and assert the DOM reads
+`offline[pong:ping][push](closed 1000)`. If the two halves disagreed about the op encoding, the
+one-char-per-byte convention, the subprotocol or the close semantics, that gate fails where the unit
+gates pass.
+
+Residue: no `Blob` binaryType read path; no permessage-deflate; no auto-reconnect (correctly the
+page's job); the close CODE from the server is not yet threaded through `WebSocketConn::recv` (a
+clean close is reported as 1000 regardless of what the peer sent). Finish-line levers 4
+(scroll-anchoring) and 5 (forced reflow) remain.

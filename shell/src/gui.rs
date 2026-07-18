@@ -124,6 +124,13 @@ enum NavEvent {
     /// DEBT-1 — a page-issued `fetch()`/XHR completed **off-thread**. Settled on the UI thread.
     /// `gen` guards against a stale response landing in a page the user has since navigated away
     /// from. This used to `block_on` the UI thread: a slow API call froze the whole browser.
+    /// Something happened to one of the page's WebSockets. `gen` guards the same way it does for
+    /// fetch: a frame for a page the user has navigated away from must not be applied.
+    PageWebSocket {
+        gen: u64,
+        id: u32,
+        event: manuk_page::WsEvent,
+    },
     /// One step of a page-issued `fetch()` — `Head` (where the page's promise resolves), a `Chunk`
     /// per piece of body **as it comes off the socket**, then `End`. Replaces a single buffered
     /// `PageFetch`: the whole body arriving at once meant a streamed answer could only appear when
@@ -245,6 +252,15 @@ struct App {
     /// R1 — the current navigation generation. Incremented per navigation; a `NavEvent` with
     /// a stale `gen` (the user navigated again first) is discarded, giving free cancellation.
     nav_gen: u64,
+    /// Open page WebSockets, by socket id. The value is the SEND half — the UI thread queues a
+    /// frame onto it and the connection's own task writes it to the wire. A WebSocket is
+    /// bidirectional, unlike a fetch, so it needs this channel as well as the `NavEvent` path back.
+    /// Dropping the sender is what tells the task to close, so clearing this map on navigation
+    /// closes every socket the old page had open.
+    ws_send: std::collections::HashMap<
+        u32,
+        tokio::sync::mpsc::UnboundedSender<manuk_net::websocket::WsMessage>,
+    >,
     /// R1 — a navigation's main-document fetch is in flight off-thread (chrome stays live).
     loading: bool,
     bookmarks: Bookmarks,
@@ -447,6 +463,7 @@ impl App {
             bfcache: Vec::new(),
             proxy,
             nav_gen: 0,
+            ws_send: std::collections::HashMap::new(),
             loading: false,
             bookmarks,
             visited,
@@ -579,6 +596,7 @@ impl App {
         self.pump_clipboard();
         // A handler may have issued fetch/XHR — perform them and settle the page's Promises.
         self.pump_fetches();
+        self.pump_websockets();
         // A handler may have routed client-side (history.pushState) — reflect it in the chrome.
         self.handle_history_ops();
         // A handler may have posted a cross-window message — route it to the target tab.
@@ -736,6 +754,7 @@ impl App {
         };
         // The handler may have re-rendered the page — that is the entire point of intercepting submit.
         self.pump_fetches();
+        self.pump_websockets();
         self.pump_messages();
         self.rerender();
 
@@ -1105,6 +1124,9 @@ impl App {
             return;
         }
         self.nav_gen += 1;
+        // Dropping every sender closes the old page's sockets: a live-chat socket must not keep
+        // streaming into a document the user has navigated away from.
+        self.ws_send.clear();
         let gen = self.nav_gen;
         self.loading = true;
         let url = self.url.clone();
@@ -1127,6 +1149,9 @@ impl App {
     /// The caller has already stashed the outgoing page, set `self.url`, and recorded history.
     fn start_post_nav(&mut self, content_type: String, body: String, initiator: String) {
         self.nav_gen += 1;
+        // Dropping every sender closes the old page's sockets: a live-chat socket must not keep
+        // streaming into a document the user has navigated away from.
+        self.ws_send.clear();
         let gen = self.nav_gen;
         self.loading = true;
         let url = self.url.clone();
@@ -1193,6 +1218,7 @@ impl App {
         // The page's load scripts may have kicked off fetch/XHR (SPA data hydration) — perform
         // and settle them so the first paint reflects the fetched data.
         self.pump_fetches();
+        self.pump_websockets();
         // Load scripts may also have routed (history.replaceState on boot) — reflect it.
         self.handle_history_ops();
         // ...and may have posted to their opener (the OAuth popup pattern) — route it.
@@ -1262,6 +1288,7 @@ impl App {
             p.set_identity(win, opener);
         }
         self.pump_fetches();
+        self.pump_websockets();
         self.handle_history_ops();
         self.pump_messages();
         self.pump_form_submits();
@@ -1350,6 +1377,7 @@ impl App {
             self.viewport.content_height = p.content_height;
         }
         self.pump_fetches();
+        self.pump_websockets();
         self.handle_history_ops();
         self.pump_messages();
         self.rerender();
@@ -2535,6 +2563,150 @@ impl App {
         }
     }
 
+    /// Drain what the page's WebSockets asked for and perform it.
+    ///
+    /// **A WebSocket is bidirectional, which is what makes this different from `pump_fetches`.** A
+    /// fetch is one request and one response, so the worker can be a fire-and-forget task. A socket
+    /// stays open and is written to long after it was opened, so each connection gets a task that
+    /// owns the `WebSocketConn` and an mpsc the UI thread queues frames onto. The task selects
+    /// between "the page wants to send" and "the server said something", which is the only way to
+    /// service both without one starving the other.
+    fn pump_websockets(&mut self) {
+        let base = self
+            .page
+            .as_ref()
+            .map(|p| p.base_url().to_string())
+            .unwrap_or_else(|| self.url.clone());
+        let ops = match self.page.as_ref() {
+            Some(p) => p.take_ws_ops(),
+            None => return,
+        };
+        for (id, op) in ops {
+            match op {
+                manuk_page::WsOp::Connect { url, protocols } => {
+                    // Resolve against the document, so a page can write `new WebSocket("/live")`.
+                    let abs = url::Url::parse(&base)
+                        .ok()
+                        .and_then(|b| b.join(&url).ok())
+                        .map(|u| u.to_string())
+                        .unwrap_or(url);
+                    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+                    self.ws_send.insert(id, tx);
+                    let (gen, proxy) = (self.nav_gen, self.proxy.clone());
+                    self.rt.spawn(async move {
+                        let send = |event| {
+                            let _ = proxy.send_event(NavEvent::PageWebSocket { gen, id, event });
+                        };
+                        let mut conn =
+                            match manuk_net::websocket::WebSocketConn::connect(&abs, &protocols)
+                                .await
+                            {
+                                Ok(c) => c,
+                                Err(e) => {
+                                    tracing::warn!(url = %abs, error = %e, "websocket connect failed");
+                                    // A page is written to survive this: `error` then `close`, with
+                                    // 1006 (abnormal) and wasClean=false, which is what a reconnect
+                                    // loop backs off on.
+                                    send(manuk_page::WsEvent::Error {
+                                        message: e.to_string(),
+                                    });
+                                    send(manuk_page::WsEvent::Close {
+                                        code: 1006,
+                                        reason: String::new(),
+                                        clean: false,
+                                    });
+                                    return;
+                                }
+                            };
+                        send(manuk_page::WsEvent::Open {
+                            protocol: conn.protocol().to_string(),
+                            extensions: String::new(),
+                        });
+                        loop {
+                            tokio::select! {
+                                // The page wants to send. `None` = the UI thread dropped the
+                                // sender (navigation, or the page called close()), so we close.
+                                outgoing = rx.recv() => match outgoing {
+                                    Some(msg) => {
+                                        let n = match &msg {
+                                            manuk_net::websocket::WsMessage::Text(t) => t.len(),
+                                            manuk_net::websocket::WsMessage::Binary(b) => b.len(),
+                                        };
+                                        if let Err(e) = conn.send(msg).await {
+                                            tracing::warn!(error = %e, "websocket send failed");
+                                            send(manuk_page::WsEvent::Error { message: e.to_string() });
+                                            break;
+                                        }
+                                        // Frame is on the wire — release the page's bufferedAmount.
+                                        send(manuk_page::WsEvent::Sent { bytes: n });
+                                    }
+                                    None => {
+                                        let _ = conn.close().await;
+                                        send(manuk_page::WsEvent::Close {
+                                            code: 1000,
+                                            reason: String::new(),
+                                            clean: true,
+                                        });
+                                        break;
+                                    }
+                                },
+                                // The server said something — including nothing ever, which is
+                                // why this must not be a polling loop.
+                                incoming = conn.recv() => match incoming {
+                                    Ok(Some(manuk_net::websocket::WsMessage::Text(t))) => {
+                                        send(manuk_page::WsEvent::Message {
+                                            data: t.into_bytes(),
+                                            binary: false,
+                                        });
+                                    }
+                                    Ok(Some(manuk_net::websocket::WsMessage::Binary(b))) => {
+                                        send(manuk_page::WsEvent::Message { data: b, binary: true });
+                                    }
+                                    Ok(None) => {
+                                        send(manuk_page::WsEvent::Close {
+                                            code: 1000,
+                                            reason: String::new(),
+                                            clean: true,
+                                        });
+                                        break;
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!(error = %e, "websocket receive failed");
+                                        send(manuk_page::WsEvent::Error { message: e.to_string() });
+                                        send(manuk_page::WsEvent::Close {
+                                            code: 1006,
+                                            reason: String::new(),
+                                            clean: false,
+                                        });
+                                        break;
+                                    }
+                                },
+                            }
+                        }
+                    });
+                }
+                manuk_page::WsOp::Send { data, binary } => {
+                    if let Some(tx) = self.ws_send.get(&id) {
+                        let msg = if binary {
+                            manuk_net::websocket::WsMessage::Binary(data)
+                        } else {
+                            manuk_net::websocket::WsMessage::Text(
+                                String::from_utf8_lossy(&data).into_owned(),
+                            )
+                        };
+                        let _ = tx.send(msg);
+                    }
+                }
+                manuk_page::WsOp::Close { .. } => {
+                    // Dropping the sender is the close signal — the task completes the closing
+                    // handshake and reports it back, so the page's `onclose` reflects the real
+                    // close rather than an optimistic one.
+                    self.ws_send.remove(&id);
+                }
+            }
+        }
+    }
+
     /// Drain page-issued `fetch`/`XHR` requests, perform each over the network, and settle the
     /// page's Promise / XHR callbacks — looping so a reaction that issues a follow-on request
     /// (a common SPA pattern) also runs. Bounded to keep a runaway request chain from stalling
@@ -2951,6 +3123,7 @@ impl App {
         self.apply_view_requests();
         self.handle_window_opens();
         self.pump_fetches();
+        self.pump_websockets();
     }
 
     /// Apply the view changes a script asked for: scrolling and focus. The host owns the viewport
@@ -3618,6 +3791,23 @@ impl ApplicationHandler<NavEvent> for App {
                 html,
                 url,
             } => self.finish_iframe(gen, tab, node, html, url),
+            NavEvent::PageWebSocket { gen, id, event } => {
+                if gen != self.nav_gen {
+                    return;
+                }
+                let closed = matches!(event, manuk_page::WsEvent::Close { .. });
+                let w = self.viewport.width;
+                if let Some(page) = self.page.as_mut() {
+                    page.deliver_ws_event(id, &event, &self.fonts, w);
+                }
+                if closed {
+                    self.ws_send.remove(&id);
+                }
+                // A handler may have sent a frame, opened another socket, or issued a fetch.
+                self.pump_websockets();
+                self.pump_fetches();
+                self.rerender();
+            }
             NavEvent::PageFetchStream { gen, id, event } => {
                 // A response for a page the user has navigated away from must not be applied.
                 if gen != self.nav_gen {
@@ -3633,6 +3823,7 @@ impl ApplicationHandler<NavEvent> for App {
                     // posted a message — pump those, then repaint. Only at the END: doing this per
                     // chunk would re-drain the fetch queue and re-save cookies on every token.
                     self.pump_fetches();
+                    self.pump_websockets();
                     self.handle_history_ops();
                     self.pump_messages();
                     manuk_net::save_cookies();

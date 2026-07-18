@@ -12,6 +12,10 @@ pub use manuk_dom::history;
 /// One step of a streaming response — see [`Page::deliver_fetch_stream`]. Re-exported so the shell
 /// can drive the streaming path without depending on `manuk-js` directly.
 pub use manuk_js::FetchStreamEvent;
+/// What a page's WebSocket asked for, and what happened to it — see [`Page::take_ws_ops`] and
+/// [`Page::deliver_ws_event`]. Re-exported so the shell can drive sockets without depending on
+/// `manuk-js` directly.
+pub use manuk_js::{WsEvent, WsOp};
 
 use std::collections::HashMap;
 

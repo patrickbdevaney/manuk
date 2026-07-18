@@ -45,6 +45,10 @@ criterion = { version = "0.8", default-features = false, features = ["cargo_benc
 tokio = { workspace = true, features = ["rt", "macros"] }
 # Parse the decoded sfnt in the live web-font test (A3, #[ignore]d network test).
 fontdb.workspace = true
+# The live WebSocket gate needs a real server to talk to (accept side) — the same crate the
+# transport borrows, so the gate proves the composition rather than agreeing with itself.
+tokio-tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
+futures-util.workspace = true
 
 [[bench]]
 name = "pipeline"

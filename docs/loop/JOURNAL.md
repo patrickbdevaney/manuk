@@ -8382,3 +8382,52 @@ lessons, both already written down elsewhere and both re-learned: **a new public
 feature boundary belongs above that boundary**, and **"unmeasurable is not passing" earns its keep** —
 a gate that reported green-because-it-could-not-run would have shipped a broken JS-less build. Checked
 `cargo check` in all three configurations (default, `spidermonkey`, workspace) before re-running._
+
+## Tick 202 — WebSocket is LIVE in the browser: finish-line lever 3 complete (shell) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (Phase-0 FINISH-LINE lever 3, COMPLETE). WIKI:
+docs/wiki/networking.md "WebSocket is LIVE in the browser (tick 202) — lever 3 complete".**
+
+**Selection.** The last piece of the three-way decomposition: t200 transport, t201 page surface, t202
+the shell. Until this tick nothing called `take_ws_ops`/`deliver_ws_event`, so the capability was
+engine-reachable but **not live during browsing** — which is not a capability.
+
+**Implemented.** `gui.rs::pump_websockets`, wired at all 7 `pump_fetches` call sites plus the new
+`NavEvent::PageWebSocket` handler.
+
+**It is deliberately NOT shaped like `pump_fetches`, and that is the whole design.** A fetch is one
+request and one response, so its worker can be fire-and-forget. A socket **stays open and is written
+to long after it was opened**, so each connection gets a task that owns the `WebSocketConn` plus an
+`mpsc::UnboundedSender` the UI thread queues frames onto (`App::ws_send`, keyed by socket id). The
+task `select!`s between "the page wants to send" and "the server said something" — the only way to
+service both without one starving the other, and the reason a polling loop would not do.
+
+**Dropping the sender IS the close signal.** `WsOp::Close` removes the map entry; the task's
+`rx.recv()` returns `None`, completes the closing handshake, and reports the REAL close back. The
+page's `onclose` therefore reflects what actually happened rather than an optimistic local guess.
+
+**Navigation closes every socket** — `ws_send.clear()` beside the `nav_gen` bump. A live-chat socket
+must not keep streaming into a document the user has navigated away from, and the `gen` guard drops
+any frame already in flight.
+
+**Gated by COMPOSITION, because the shell itself cannot be.** `gui.rs` has no UI harness — the same
+honest limitation recorded for T6.1 agent-click and the tick-198 fetch wiring, and I am not going to
+claim otherwise. But the composition is exactly what can silently disagree, so `g_websocket_live`
+does what `pump_websockets` does, in the same order, with a **real server** in the middle: drain the
+page's ops, connect a real `WebSocketConn`, resolve the page's relative `'/live'` against the
+document URL, put the page's own frame on the wire, pump the replies back, and assert the DOM reads
+`offline[pong:ping][push](closed 1000)`. If the two halves disagreed about the op encoding, the
+one-char-per-byte byte convention, the subprotocol or the close semantics, that gate fails where both
+unit gates pass. That is a stronger claim than "the shell compiles", which is all a wiring tick
+usually gets.
+
+**Lever 3 is COMPLETE**: transport (t200) + page surface (t201) + shell (t202), each independently
+gated, plus a composition gate over the whole path. The three-way split is the same seam that made
+the streaming lever land in two ticks instead of stalling.
+
+**Residue.** No `Blob` binaryType read path; no permessage-deflate; no auto-reconnect (correctly the
+page's job); the server's close CODE is not threaded through `WebSocketConn::recv` yet, so a clean
+close reports 1000 regardless of what the peer sent — worth closing when a page starts branching on
+close codes. Finish-line levers 4 (scroll-anchoring/overflow-anchor) and 5 (forced reflow for
+getBoundingClientRect/ResizeObserver mid-tick) remain; when they land, Phase 0 is declared
+good-enough (`touch .git/manuk-phase0-complete` + a JOURNAL note, triggering the Phase-1 cascade).
