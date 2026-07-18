@@ -83,7 +83,7 @@ launch_agent() {
   systemctl --user reset-failed "${AGENT_SCOPE}.scope" 2>/dev/null || true   # clear any lingering scope name
   if systemd-run --user --scope --quiet \
         --setenv=CARGO_BUILD_JOBS=8 --setenv=WPT_DIR="$HOME/wpt" \
-        -p MemoryMax=20G -p MemorySwapMax=4G -p MemoryHigh=16G -p OOMPolicy=kill \
+        -p MemoryMax=24G -p MemorySwapMax=4G -p MemoryHigh=20G -p OOMPolicy=kill \
         "$CLAUDE" --model "${MANUK_AGENT_MODEL:-claude-opus-4-8}" --dangerously-skip-permissions --permission-mode bypassPermissions -p "$PROMPT" >>"$LOG" 2>&1
   then return 0; fi
   # Fallback: systemd-run failed — launch directly with just the CARGO cap (still reduces build memory).
