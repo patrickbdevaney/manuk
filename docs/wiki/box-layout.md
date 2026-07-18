@@ -823,3 +823,28 @@ only the block-path arm collapses exactly the two it owns while the float and ab
 **Residue:** an abspos box with **no** inset at all produces no box whatsoever (found while building
 this gate — pre-existing, unrelated to `stretch`, and the reason the gate uses `left:0`).
 Logical `inset-inline-start`/`-end` are likewise unmapped, which is the rest of the stretch suite.
+
+## The static position of an out-of-flow box (and how it goes missing)
+
+`position: absolute` with all-`auto` insets does **not** go to its containing block's origin. It goes
+to its **static position** — the spot it would have occupied had it stayed in normal flow. That spot
+exists for exactly one instant: while flow layout walks past the box. Nothing later can reconstruct
+it, so flow records it (`Ctx::static_pos`) and `position_absolutes` reads it back.
+
+The consequence of a miss is severe and asymmetric. `position_absolutes` treats "no recorded static
+position" as unplaceable and `continue`s, so the box **generates no box at all** — it does not render
+in the wrong place, it renders nowhere. Any layout path that returns *before* the child walk must
+therefore record the static position of its out-of-flow children on the way out.
+
+Two paths return early:
+
+- the **pure inline formatting context** branch (`!has_block` and no floats). Out-of-flow children
+  are filtered out of `flow_kids`, so a parent whose only children are out-of-flow has none left,
+  takes this branch, and used to lose them. It records `(cx, cy)` now.
+- **flex** and **grid**, which place their abs children through their own machinery.
+
+The failing shape was `position: relative` wrapping *only* an absolutely positioned child — the
+overlay / dropdown / tooltip / portal-root idiom. It hid because every neighbouring case is fine: one
+block-level sibling is enough to route the parent onto the block path, which always recorded
+correctly. When debugging a vanished absolutely positioned element, the first question is therefore
+**what formatting context does its parent establish**, not what the box's own style says.

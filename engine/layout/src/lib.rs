@@ -2104,6 +2104,29 @@ impl Ctx<'_> {
 
         if !has_block && !kids.iter().any(|&k| is_float(self.style_of(k))) {
             // Pure inline formatting context (no floats to flow around).
+            //
+            // **Record the static position of the out-of-flow children before returning.** This
+            // branch returns without ever reaching the block child loop, which is the only other
+            // place that records it — so an abs box with all-`auto` insets found nothing in
+            // `static_pos`, and `position_absolutes` dropped it (see the `continue` there). The box
+            // did not merely land in the wrong place: it GENERATED NO BOX AT ALL.
+            //
+            // The shape that hits it is `position: relative` wrapping *only* an absolutely
+            // positioned child — the overlay / dropdown / tooltip / portal-root idiom, and the
+            // single most common way `position:absolute` is written. It hid because the sibling
+            // cases work: one block-level sibling puts the parent on the block path, and flex and
+            // grid parents return earlier still through paths that place abs children by other
+            // means. Only the pure-IFC parent lost them.
+            //
+            // `(cx, cy)` is the content-box origin, which is exact when the abs box is the first
+            // thing in the parent (the idiom above). Text *preceding* it on the line should push
+            // the static position along that line; that refinement is not modelled here, and the
+            // box lands at the line start instead.
+            for &k in &kids {
+                if is_out_of_flow_positioned(self.style_of(k)) {
+                    self.static_pos.borrow_mut().insert(k, (cx, cy));
+                }
+            }
             let items = self.collect_inline_group(&flow_kids, cw, Some(node));
             let bcs = self.style_of(node);
             let align = bcs.text_align;

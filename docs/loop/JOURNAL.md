@@ -9192,3 +9192,45 @@ consumers are independent rather than one accidental path.
 (pre-existing, unrelated to `stretch` — the gate uses `left:0` to work around it, and this is worth
 its own tick). Logical `inset-inline-start`/`-end` are unmapped, which is most of what still fails in
 `css-sizing/stretch`.
+
+## Tick 220 — the abs box that generated no box: the inline-only parent (2026-07-18)
+
+**Selected:** the board's PHASE MANDATE (CSS-LAYOUT ★), following tick 219's found-in-passing
+residue — "an abspos box with **no** inset at all produces **no box whatsoever**". That residue
+turned out to understate it: the box is not mispositioned, it is *absent*, and the shape that
+triggers it is the most common way `position:absolute` is written on the real web.
+
+**The mechanism.** An abs box with all-`auto` insets sits at its **static position** — its would-be
+in-flow spot — and normal flow is the only moment in layout when that spot is known. The block child
+loop records it into `static_pos`; `position_absolutes` looks it up and, finding nothing, `continue`s
+— *dropping the box*. The **pure inline formatting context** branch (`!has_block && no floats`)
+returns before it ever reaches that loop. Out-of-flow children are filtered out of `flow_kids`, so a
+parent whose only child is absolutely positioned has *no* flow children, takes the inline branch, and
+loses the child.
+
+In other words: `position: relative` wrapping **only** an absolutely positioned child — the overlay /
+dropdown / tooltip / portal-root idiom — rendered nothing.
+
+**Why it hid, and it hid well.** Every adjacent case works, so the bug is invisible unless you write
+the empty-parent case on purpose. A single **block-level sibling** routes the parent onto the block
+path, which records correctly. A **flex** or **grid** parent returns through earlier paths that place
+abs children by other means. The probe made this legible in one table — `only child` and `text
+sibling` at `0x0`, `block sibling`, `flex` and `grid` all at the correct `50x20` — and that table is
+what turned "abspos is broken" into a four-line fix in one branch.
+
+**Measured:** css-position 87 → 98, css-sizing 407 → 417, css-flexbox 968 → 972 (+25 across three
+suites, none down). Bar 0 clean. Mechanism in `docs/wiki/box-layout.md`.
+
+**Gate.** `g_abspos_static_ifc` — the two inline-only parents must produce a real `50x20` box, and
+the three cases that already worked (block sibling, flex, grid) are asserted alongside them as
+**controls**, because they are precisely what made the bug deniable. Plus `blkoff:7` (the static
+position is the would-be in-flow spot, not the containing block's origin) and `outofflow:true`
+(recording a static position must not put the box back into flow). RED two independent ways:
+disabling the recording collapses exactly the two IFC cases and leaves all three controls green;
+keeping the recording but not anchoring the containing block at it generates every box but pins them
+to the corner (`blkoff:0`) and breaks out-of-flow-ness (`outofflow:false`) — which proves the
+recording half and the placement half are separately load-bearing.
+
+**Residue:** text *preceding* the abs box on a line should push its static position along that line;
+we place it at the line start instead. `blkoff` measures the block-path case, where the offset is
+exact.

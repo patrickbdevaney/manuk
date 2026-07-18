@@ -56,6 +56,7 @@
   - L749 · The width/height attributes are an aspect ratio, and a clamp transfers through it (tick 218)
   - L784 · The instrument note that outranks the above
   - L794 · width: stretch was thrown away, and it only mattered where auto does not fill (tick 219)
+  - L827 · The static position of an out-of-flow box (and how it goes missing)
 
 ## BUILD AND DEPENDENCIES — what is actually compiled, and what only looks like it is
 `docs/wiki/build-and-dependencies.md`
@@ -472,4 +473,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-395 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+396 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
