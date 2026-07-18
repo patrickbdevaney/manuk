@@ -2563,6 +2563,31 @@ impl App {
         }
     }
 
+    /// Run `f` (anything that may reflow the document) with **scroll anchoring** applied.
+    ///
+    /// A feed loads an image, an ad or the next page of posts *above* the user's reading position;
+    /// the document grows there and every following box shifts down, so the line they were reading
+    /// jumps off the screen. This captures the element at the top of the viewport first, and
+    /// afterwards moves `scroll_y` by however far that element moved — so the growth happens
+    /// off-screen, where it belongs, and the user's content stays still.
+    ///
+    /// The half-pixel threshold keeps the correction from fighting normal sub-pixel layout noise:
+    /// anchoring that is not inert when nothing moved becomes its own source of drift.
+    fn with_scroll_anchor<F: FnOnce(&mut Self)>(&mut self, f: F) {
+        let anchor = self
+            .page
+            .as_ref()
+            .and_then(|p| p.capture_scroll_anchor(self.scroll_y));
+        f(self);
+        if let (Some(a), Some(page)) = (anchor, self.page.as_ref()) {
+            let delta = page.scroll_anchor_delta(&a, self.scroll_y);
+            if delta.abs() > 0.5 {
+                let max = self.viewport.max_scroll();
+                self.scroll_y = (self.scroll_y + delta).clamp(0.0, max.max(0.0));
+            }
+        }
+    }
+
     /// Drain what the page's WebSockets asked for and perform it.
     ///
     /// **A WebSocket is bidirectional, which is what makes this different from `pump_fetches`.** A
@@ -3797,9 +3822,11 @@ impl ApplicationHandler<NavEvent> for App {
                 }
                 let closed = matches!(event, manuk_page::WsEvent::Close { .. });
                 let w = self.viewport.width;
-                if let Some(page) = self.page.as_mut() {
-                    page.deliver_ws_event(id, &event, &self.fonts, w);
-                }
+                self.with_scroll_anchor(|app| {
+                    if let Some(page) = app.page.as_mut() {
+                        page.deliver_ws_event(id, &event, &app.fonts, w);
+                    }
+                });
                 if closed {
                     self.ws_send.remove(&id);
                 }
@@ -3815,9 +3842,14 @@ impl ApplicationHandler<NavEvent> for App {
                 }
                 let w = self.viewport.width;
                 let is_end = matches!(event, manuk_page::FetchStreamEvent::End);
-                if let Some(page) = self.page.as_mut() {
-                    page.deliver_fetch_stream(id, &event, &self.fonts, w);
-                }
+                // A fetch that appends the next page of a feed is the canonical scroll-jump: the
+                // new posts land above nothing, but a late image or ad inside them grows the
+                // document under the reader.
+                self.with_scroll_anchor(|app| {
+                    if let Some(page) = app.page.as_mut() {
+                        page.deliver_fetch_stream(id, &event, &app.fonts, w);
+                    }
+                });
                 if is_end {
                     // The reaction may have issued a follow-on fetch, mutated the DOM, routed, or
                     // posted a message — pump those, then repaint. Only at the END: doing this per

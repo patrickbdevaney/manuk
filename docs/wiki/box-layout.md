@@ -722,3 +722,26 @@ That is a real (if narrow) divergence and it needs a `ComputedStyle` field. Anch
 document-scroll only (not per-`overflow:auto` container), and **the shell does not call it yet** —
 wiring it around the relayout paths in `gui.rs` is what makes it live during browsing, and is the
 completing step for lever 4.
+
+## Scroll anchoring is live (tick 204) — `with_scroll_anchor`
+
+Tick 203 built the mechanism; nothing called it. `gui.rs::with_scroll_anchor(f)` wraps any operation
+that may reflow: capture the anchor, run `f`, then move `scroll_y` by however far the anchor moved.
+
+It wraps the two delivery handlers that can grow the document under the reader —
+`PageFetchStream` and `PageWebSocket`. Those are the paths a real feed uses: a lazy image, a late ad,
+or the next page of posts arriving over the network and being appended above the reading position.
+
+**The half-pixel threshold is not a fudge.** Anchoring that is not inert when nothing moved becomes
+its own source of drift, so a correction under 0.5px is discarded rather than applied. The result is
+clamped to `[0, max_scroll]`, because a correction must not scroll past the end of the document.
+
+Gated by `g_scroll_anchor_live`, which does what `with_scroll_anchor` does — capture, deliver,
+measure, apply — around the same `deliver_fetch_stream` call, with the ad's height arriving as the
+fetch body. The shell has no UI harness (the standing limitation), so this gates the **composition**:
+if the mechanism and the delivery path disagreed about when geometry is valid, it fails where the
+unit gate passes.
+
+Still open for lever 4: `overflow-anchor: none`. Honouring it means a `ComputedStyle` field fed by
+Stylo, which is where the shipping cascade reads from — a bigger change than it looks, and it is the
+one remaining honest divergence here: a site that opted out is still anchored.

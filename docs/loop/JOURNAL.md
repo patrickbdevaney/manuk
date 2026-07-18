@@ -8472,3 +8472,41 @@ this is on by default. Anchoring is document-scroll only (not per-`overflow:auto
 **the shell does not call it yet** — wiring it around `gui.rs`'s relayout paths is the completing
 step for lever 4, after which only lever 5 (forced reflow for `getBoundingClientRect`/
 `ResizeObserver` mid-tick) stands between here and Phase-0 being declared good-enough.
+
+## Tick 204 — scroll anchoring is live in the browser (shell) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (Phase-0 FINISH-LINE lever 4, reachability half). WIKI:
+docs/wiki/box-layout.md "Scroll anchoring is live (tick 204) — `with_scroll_anchor`".**
+
+**Selection.** Tick 203 built the mechanism and nothing called it — the same "engine-reachable but
+not live" gap that ticks 198 and 202 closed for streaming and WebSocket.
+
+**Implemented.** `gui.rs::with_scroll_anchor(f)`: capture the anchor, run `f` (anything that may
+reflow), then move `scroll_y` by however far the anchor moved. It wraps the two delivery handlers
+that can grow the document under the reader — `PageFetchStream` and `PageWebSocket` — because those
+are the paths a real feed uses: a lazy image, a late ad, or the next page of posts arriving over the
+network and being appended above the reading position.
+
+**The half-pixel threshold is not a fudge.** A correction under 0.5px is discarded, because anchoring
+that is not inert when nothing moved becomes its own source of drift — the same property tick 203's
+gate asserts. The result is clamped to `[0, max_scroll]`: a correction must not scroll past the end
+of the document.
+
+**Gate.** `g_scroll_anchor_live` does what `with_scroll_anchor` does — capture, deliver, measure,
+apply — around the same `deliver_fetch_stream` call, with the ad's height arriving **as the fetch
+body**, so the whole thing runs through the real network delivery path rather than a click handler.
+The shell has no UI harness (the standing honest limitation, stated again rather than papered over),
+so what this gates is the **composition**: if the mechanism and the delivery path disagreed about
+when geometry is valid, it fails where tick 203's unit gate passes. manuk-shell 58+2 green.
+
+**What is still open on lever 4, and I am not calling it done.** `overflow-anchor: none` is still not
+honoured. Doing it properly means a `ComputedStyle` field fed by **Stylo**, which is where the
+shipping cascade reads from — bigger than it looks, and prior sessions recorded that CSS properties
+routed through Stylo are not a bounded tick. It is the one remaining honest divergence here: a site
+that deliberately opted out of anchoring is still anchored. Logged rather than smuggled, and it
+should be closed before anchoring is considered complete. Anchoring also remains document-scroll
+only, not per-`overflow:auto` container.
+
+**Remaining.** Finish-line lever 5 (forced reflow for `getBoundingClientRect`/`ResizeObserver`
+mid-tick, for virtualized lists) plus the `overflow-anchor` gap above stand between here and Phase 0
+being declared good-enough.
