@@ -8848,3 +8848,53 @@ body. manuk-agent 126 green, `g_submit_click` updated for the new tuple shape an
 **Residue.** `formaction`/`formmethod`/`formnovalidate` on the button do not yet override the form's
 (a button that posts elsewhere is a real pattern), and `requestSubmit(submitter)` does not carry its
 argument. Link navigation from `element.click()` remains the other open item from tick 208's list.
+
+## Tick 213 — the read path lays out before it answers: forced synchronous reflow (layout) (2026-07-18)
+
+**Selected:** the lever-board's Phase-0 FINISH LINE, lever 5 of 5 and the only one left — the observer's
+tick-211 steer said it plainly: *bounded, not architectural; the relayout machinery already exists; the
+only missing piece is wiring it into the READ path.* That is what this is.
+
+**The bug, stated as a page sees it.** The engine lays out in a **batch**: script runs against a snapshot
+taken before it started, one relayout after. Correct for measure-only, correct for mutate-only, and wrong
+for `measure -> mutate -> measure` inside one task — the shape every virtualized list (react-window,
+react-virtuoso, every data grid) sizes its rows with. The second read returned pre-mutation geometry,
+`0` for a node that did not exist yet, so rows collapse or render blank.
+
+**Implemented.** `Dom::mutation_seq` — a **monotonic** counter bumped by `mark_dirty`, deliberately not
+the dirty bits: the bits are *consumed* by the batch pass, so they cannot answer a mid-script question
+without disturbing it. A counter answers by comparison, so repeated reads on an unchanged tree cost one
+integer compare and the post-script relayout still sees exactly the bits it always saw. A `ReflowFn` hook
+installed per script round calls **upward** from `manuk-js` into `manuk-page` (layout lives there and
+`manuk-js` must not grow a layout dependency). Armed at every round-entry: load, `dispatch_click`
+(covering the nested `<label>` forward), input/change, focus/blur, WS delivery, fetch-stream delivery,
+popstate.
+
+**Three things that would each have been a silent use-after-free**, recorded because the shape recurs:
+a **stack** of hooks rather than a slot (nested rounds — the inner teardown would otherwise disarm the
+outer one and every later read reverts to the stale snapshot); the reflow builds its **own** maps and
+re-points the bindings (it cannot write into the host's, which the script holds through a shared
+reference), with `ReflowScope::Drop` restoring the previous pointers — whose absence reads not as a crash
+but as *the next document measuring freed memory*; and an `IN_REFLOW` re-entrancy guard.
+
+**Extended past the WIP I inherited:** `with_style` did **not** force reflow, so `getComputedStyle`
+returned the pre-write cascade while the doc comment claimed otherwise. Real browsers force reflow there
+too, and gating only the geometry read leaves the two APIs disagreeing about the same element one line
+apart. Wired + asserted (`cs:70px`) rather than narrowing the doc to match the gap.
+
+**Gate.** `engine/page/tests/g_forced_reflow.rs` (`G_FORCED_REFLOW`) — append-then-measure, a node
+measuring *itself* the tick it was created, a style write visible to the next read, `offsetHeight` on the
+same path, `getComputedStyle` fresh, and idempotence on a clean tree; plus the same guarantee inside a
+**click handler**, which is where a real feed's "load more" does it. **Proven RED** by removing the
+`force_reflow_if_stale()` call: `after:0 row:0 grown:10 offset:0` — the blank-list bug exactly.
+
+**Recovered rather than redone.** The tree held a crashed tick's WIP. It SIGSEGV'd, but each test passed
+*individually* — the fault was two `#[test]` fns faulting two SpiderMonkey runtimes against each other,
+not the mechanism. Consolidated to one test fn per JS gate binary (the `g_canvas.rs` convention, now
+written down in `docs/wiki/js-engine.md`).
+
+**Pre-existing, NOT from this tick, noted and stepped around:** `cargo test -p manuk-js` under
+`manuk-page/spidermonkey` SIGSEGVs in the lib tests. **Verified by stashing this diff and reproducing it
+on the clean tree** under the identical feature set. Same multiple-runtimes-per-binary class.
+
+**This is the fifth and last Phase-0 finish-line lever.**

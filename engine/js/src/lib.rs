@@ -272,6 +272,101 @@ pub fn set_scroll_geometry(g: std::collections::HashMap<manuk_dom::NodeId, [f32;
 #[cfg(not(feature = "_sm"))]
 pub fn set_scroll_geometry(_g: std::collections::HashMap<manuk_dom::NodeId, [f32; 6]>) {}
 
+/// A host callback that lays the document out synchronously — see [`set_reflow_hook`].
+#[cfg(feature = "_sm")]
+pub type ReflowFn = dom_bindings::ReflowFn;
+#[cfg(not(feature = "_sm"))]
+pub type ReflowFn = unsafe fn(ctx: *mut std::ffi::c_void, dom: *mut manuk_dom::Dom);
+
+/// Install the **forced synchronous reflow** callback for the coming script round.
+///
+/// Geometry reads (`getBoundingClientRect`, `getClientRects`, `offsetWidth`/`offsetHeight`,
+/// `offsetLeft`/`offsetTop`, `scrollIntoView`, used-value `getComputedStyle`) answer from a layout
+/// snapshot taken before the script ran. When the script has since mutated the DOM that snapshot is
+/// a lie, and this callback is how the read gets the truth: the binding calls up into the host, the
+/// host re-cascades and re-lays-out, re-publishes the maps, and the read proceeds against fresh
+/// geometry.
+///
+/// The host decides whether a reflow is actually needed — it knows which DOM state its current
+/// layout was computed against (see `manuk_dom::Dom::mutation_seq`) — so this may be called on
+/// every read.
+///
+/// # Safety
+/// `ctx` must outlive the script round, must not alias any live reference held across it, and must
+/// be torn down with [`clear_reflow_hook`].
+#[cfg(feature = "_sm")]
+pub unsafe fn set_reflow_hook(f: ReflowFn, ctx: *mut std::ffi::c_void) {
+    unsafe { dom_bindings::set_reflow_hook(f, ctx) }
+}
+
+#[cfg(not(feature = "_sm"))]
+pub unsafe fn set_reflow_hook(_f: ReflowFn, _ctx: *mut std::ffi::c_void) {}
+
+/// Remove the forced-reflow callback. Paired with [`set_reflow_hook`] on every path out, including
+/// the early returns — a stale `ctx` pointer outliving its owner is a use-after-free.
+#[cfg(feature = "_sm")]
+pub fn clear_reflow_hook() {
+    dom_bindings::clear_reflow_hook();
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn clear_reflow_hook() {}
+
+/// The view-map pointers currently published to JS, so a caller that is about to replace them can
+/// put back exactly what it found. See [`restore_view_maps`].
+#[cfg(feature = "_sm")]
+pub type ViewMaps = dom_bindings::ViewMaps;
+#[cfg(not(feature = "_sm"))]
+#[derive(Clone, Copy)]
+pub struct ViewMaps;
+
+#[cfg(feature = "_sm")]
+pub fn view_maps() -> ViewMaps {
+    dom_bindings::view_maps()
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn view_maps() -> ViewMaps {
+    ViewMaps
+}
+
+/// Restore view-map pointers taken by [`view_maps`].
+///
+/// A forced reflow publishes maps it owns; when those die, the bindings must be pointed back at
+/// live ones. Without this the pointers dangle past the script round — a use-after-free that reads
+/// as *the next page measuring garbage*, not as a crash at the site of the bug.
+///
+/// # Safety
+/// The maps `v` refers to must still be alive (or `v` must carry the nulls from before anything
+/// was published).
+#[cfg(feature = "_sm")]
+pub unsafe fn restore_view_maps(v: ViewMaps) {
+    unsafe { dom_bindings::restore_view_maps(v) }
+}
+
+#[cfg(not(feature = "_sm"))]
+pub unsafe fn restore_view_maps(_v: ViewMaps) {}
+
+/// Re-point the layout/style maps at freshly laid-out ones, from inside a [`set_reflow_hook`]
+/// callback.
+///
+/// # Safety
+/// The maps must outlive the rest of the script round.
+#[cfg(feature = "_sm")]
+pub unsafe fn republish_view_maps(
+    layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) {
+    unsafe { dom_bindings::republish_view_maps(layout, styles) }
+}
+
+#[cfg(not(feature = "_sm"))]
+pub unsafe fn republish_view_maps(
+    _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) {
+}
+
 /// Publish the live child documents — the arena behind each `<iframe>`'s `contentDocument`.
 ///
 /// The map is `iframe element → (arena address, that document's root node)`. The arenas belong to child

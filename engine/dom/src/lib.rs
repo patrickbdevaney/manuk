@@ -200,6 +200,16 @@ pub struct Dom {
     /// pass — a box was added or removed, so incremental relayout must reflow (an
     /// attribute-only change, by contrast, is classified by the style diff).
     structure_changed: bool,
+    /// Monotonic count of mutations, bumped by every [`mark_dirty`](Self::mark_dirty).
+    ///
+    /// The dirty *bits* answer "must the next batch pass do work?" and are cleared by that
+    /// pass. That makes them useless for the **forced-reflow** question, which is asked
+    /// mid-script and must not disturb the batch: *"has anything changed since the layout I
+    /// am about to hand back was computed?"* A monotonic sequence answers it by comparison
+    /// rather than consumption — a reader records the value it laid out against and reflows
+    /// only when it differs, so repeated reads on an unchanged tree are free and the
+    /// post-script batch relayout still sees exactly the bits it always saw.
+    mutation_seq: u64,
 }
 
 impl Default for Dom {
@@ -220,6 +230,7 @@ impl Dom {
             free: Vec::new(),
             root: NodeId(0),
             structure_changed: false,
+            mutation_seq: 0,
         }
     }
 
@@ -688,6 +699,7 @@ impl Dom {
             return;
         }
         self.nodes[node.index()].dirty = true;
+        self.mutation_seq = self.mutation_seq.wrapping_add(1);
         let mut cur = self.nodes[node.index()].parent;
         while let Some(p) = cur {
             if self.nodes[p.index()].dirty_descendants {
@@ -730,6 +742,14 @@ impl Dom {
     /// pass? Structural changes add/remove boxes, so incremental relayout must reflow.
     pub fn structure_changed(&self) -> bool {
         self.structure_changed
+    }
+
+    /// How many mutations this tree has seen — see [`mutation_seq`](Self#structfield.mutation_seq).
+    ///
+    /// Only ever compared for equality against a previously observed value; the absolute number
+    /// and its wraparound carry no meaning.
+    pub fn mutation_seq(&self) -> u64 {
+        self.mutation_seq
     }
 
     /// Clear every dirty bit in the tree (call after a full clean layout pass).

@@ -220,6 +220,116 @@ fn set_view_maps(
     STYLES_PTR.with(|c| c.set(styles as *const _));
 }
 
+/// Re-publish the view maps mid-re-entry, after a forced reflow has rebuilt them.
+///
+/// Same contract as [`set_view_maps`]: borrowed, and the caller must keep the maps alive for the
+/// rest of the re-entry. A forced reflow therefore cannot write into the maps the host passed in
+/// (a script is reading them through a shared reference) — it builds fresh ones it owns and points
+/// here instead.
+///
+/// # Safety
+/// `layout` and `styles` must outlive the current re-entry into JS.
+pub unsafe fn republish_view_maps(
+    layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+) {
+    set_view_maps(layout, styles);
+}
+
+/// The raw view-map pointers, captured so a scope can put back what it found.
+///
+/// A forced reflow re-points the bindings at buffers it owns; when those buffers die the pointers
+/// must not outlive them. Saving and restoring is what keeps that true through nesting — the inner
+/// round puts the outer round's maps back rather than clearing to null.
+#[derive(Clone, Copy)]
+pub struct ViewMaps {
+    layout: *const std::collections::HashMap<NodeId, [f32; 4]>,
+    styles: *const std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+}
+
+/// Snapshot the currently published view-map pointers.
+pub fn view_maps() -> ViewMaps {
+    ViewMaps {
+        layout: LAYOUT_RECTS_PTR.with(|c| c.get()),
+        styles: STYLES_PTR.with(|c| c.get()),
+    }
+}
+
+/// Put back pointers taken by [`view_maps`].
+///
+/// # Safety
+/// The maps must still be alive, or `v` must be a snapshot taken before anything was published
+/// (whose pointers are null, which every reader already treats as "no snapshot").
+pub unsafe fn restore_view_maps(v: ViewMaps) {
+    LAYOUT_RECTS_PTR.with(|c| c.set(v.layout));
+    STYLES_PTR.with(|c| c.set(v.styles));
+}
+
+/// A host-supplied "lay this document out **now**" callback, and its context pointer.
+///
+/// The layout engine lives above this crate (`manuk-page` owns the cascade, the box tree, and the
+/// stylesheet set — this crate has no `manuk-layout` dependency and must not grow one), so the
+/// forced reflow is a call *upward*. The host installs it for the duration of a re-entry, exactly
+/// like the view maps.
+pub type ReflowFn = unsafe fn(ctx: *mut std::ffi::c_void, dom: *mut Dom);
+
+thread_local! {
+    /// A **stack**, not a slot: script rounds nest — a click on a `<label>` dispatches a click at
+    /// the control it labels, which is a second round inside the first. With a slot, the inner
+    /// round's teardown would silently disarm the outer one, and every geometry read after it
+    /// would quietly go back to answering from a stale snapshot.
+    static REFLOW_HOOK: std::cell::RefCell<Vec<(ReflowFn, *mut std::ffi::c_void)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+    /// Re-entrancy guard. The hook lays out; layout must never re-enter a geometry read.
+    static IN_REFLOW: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Push the forced-reflow callback for one re-entry into JS.
+///
+/// # Safety
+/// `ctx` must remain valid — and must not be aliased by any live reference the host holds — for
+/// the whole re-entry, and must be popped with [`clear_reflow_hook`] before it dies.
+pub unsafe fn set_reflow_hook(f: ReflowFn, ctx: *mut std::ffi::c_void) {
+    REFLOW_HOOK.with(|c| c.borrow_mut().push((f, ctx)));
+}
+
+/// Pop the innermost forced-reflow callback, re-arming the enclosing round's. Paired with
+/// [`set_reflow_hook`] on every path out.
+pub fn clear_reflow_hook() {
+    REFLOW_HOOK.with(|c| {
+        c.borrow_mut().pop();
+    });
+}
+
+/// The forced synchronous reflow, guarding every geometry read.
+///
+/// A browser answers `getBoundingClientRect()` on a dirtied DOM by laying out *before* it answers.
+/// The engine otherwise lays out in a batch — script runs against a pre-script snapshot — which is
+/// right up until a script does `measure -> mutate -> measure` inside one task, the shape every
+/// virtualized list (react-window, react-virtuoso, any data grid) is built out of. Against the
+/// snapshot the second read returns pre-mutation geometry, typically `0` for a node that did not
+/// exist yet, and rows render blank or overlapping.
+///
+/// Cheap when nothing changed: it compares the DOM's mutation counter against the value the current
+/// layout was computed at, so a run of reads on an unchanged tree costs one integer compare each.
+fn force_reflow_if_stale() {
+    // Reflow re-enters this crate only through layout reads it performs itself; without the guard
+    // a hook that touched a rect would recurse forever.
+    if IN_REFLOW.with(|c| c.get()) {
+        return;
+    }
+    let Some((f, ctx)) = REFLOW_HOOK.with(|c| c.borrow().last().copied()) else {
+        return;
+    };
+    let dom = CURRENT_DOM.with(|c| c.get());
+    if !dom_is_live(dom) {
+        return;
+    }
+    IN_REFLOW.with(|c| c.set(true));
+    unsafe { f(ctx, dom) };
+    IN_REFLOW.with(|c| c.set(false));
+}
+
 /// Publish the per-element scroll geometry for one re-entry. Owned by the host; copied, not borrowed,
 /// because a script can *change* it mid-round (by assigning `scrollTop`) and must read its own write.
 pub fn set_scroll_geometry(g: std::collections::HashMap<NodeId, [f32; 6]>) {
@@ -252,8 +362,10 @@ fn scroll_geom(node: NodeId) -> [f32; 6] {
     SCROLL_GEOM.with(|c| c.borrow().get(&node).copied().unwrap_or([0.0; 6]))
 }
 
-/// Read one node's layout rect from the borrowed snapshot.
+/// Read one node's layout rect from the borrowed snapshot, **laying out first if the script has
+/// dirtied the DOM since that snapshot was taken** — a forced synchronous reflow.
 fn layout_rect(node: NodeId) -> Option<[f32; 4]> {
+    force_reflow_if_stale();
     LAYOUT_RECTS_PTR.with(|c| {
         let p = c.get();
         (!p.is_null())
@@ -262,8 +374,14 @@ fn layout_rect(node: NodeId) -> Option<[f32; 4]> {
     })
 }
 
-/// Read one node's computed style from the borrowed snapshot.
+/// Read one node's computed style from the borrowed snapshot, **re-cascading first if the script
+/// has dirtied the DOM** — `getComputedStyle` is a forced-reflow trigger just like a geometry read.
+///
+/// Without this, a script that writes a style and immediately reads it back gets the value from
+/// before its own write. That is the same staleness `layout_rect` guards, one stage earlier in the
+/// pipeline: the forced reflow re-runs the cascade, so the styles it publishes are fresh too.
 fn with_style<R>(node: NodeId, f: impl FnOnce(&manuk_css::ComputedStyle) -> R) -> Option<R> {
+    force_reflow_if_stale();
     STYLES_PTR.with(|c| {
         let p = c.get();
         if p.is_null() {

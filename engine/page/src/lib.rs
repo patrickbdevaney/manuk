@@ -630,6 +630,95 @@ fn collect_subresources(dom: &Dom, base: &str) -> Vec<Subresource> {
     out
 }
 
+/// The buffers a **forced synchronous reflow** lays out into, plus the DOM state its current
+/// layout was computed against.
+///
+/// Owned separately from the caller's snapshot on purpose: a script reading geometry holds the
+/// host's `rects`/`styles` maps through a shared reference for the whole round, so a reflow cannot
+/// write into them. It builds its own and re-points the bindings at those instead.
+struct ReflowCtx {
+    /// Valid for the script round only — `ReflowScope` ties the lifetime.
+    fonts: *const FontContext,
+    viewport_width: f32,
+    /// `Dom::mutation_seq` as of the layout currently published. Equal means nothing has changed
+    /// and the read is already answerable — the case that must stay free, since this is consulted
+    /// on *every* geometry read.
+    laid_out_at: u64,
+    rects: HashMap<NodeId, [f32; 4]>,
+    styles: HashMap<NodeId, manuk_css::ComputedStyle>,
+}
+
+/// The reflow itself, called up from the JS bindings when a geometry read finds a dirtied DOM.
+///
+/// # Safety
+/// `ctx` is a `*mut ReflowCtx` from a live [`ReflowScope`]; `dom` is the re-entry's live arena.
+unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
+    let c = unsafe { &mut *(ctx as *mut ReflowCtx) };
+    let dom = unsafe { &*dom };
+    // Idempotent: a run of reads with no mutation between them lays out once, not once each.
+    if dom.mutation_seq() == c.laid_out_at {
+        return;
+    }
+    let fonts = unsafe { &*c.fonts };
+    // The same cascade the surrounding batch relayout uses, so a forced reflow and the post-script
+    // pass can never disagree about the same tree.
+    let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(dom);
+    c.styles = cascade_styles(dom, &sheets, c.viewport_width);
+    let root_box = layout_document(dom, &c.styles, fonts, c.viewport_width);
+    c.rects = root_box
+        .node_rects(dom)
+        .into_iter()
+        .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+        .collect();
+    c.laid_out_at = dom.mutation_seq();
+    // The box tree is dropped: the read wants rects, and the host's own post-script relayout still
+    // produces the tree that gets painted. A forced reflow answers a question; it does not commit.
+    unsafe { manuk_js::republish_view_maps(&c.rects, &c.styles) };
+}
+
+/// Installs [`forced_reflow`] for one script round and guarantees its teardown.
+///
+/// The hook holds a raw pointer to the context; if it outlived the context that pointer is a
+/// use-after-free on the next geometry read. `Drop` is what makes that impossible on every path
+/// out, including a panic unwinding from script.
+struct ReflowScope {
+    // Boxed so the address is stable across the move into this struct.
+    _ctx: Box<ReflowCtx>,
+    /// What was published before this scope armed itself — see the `Drop` impl.
+    prev_maps: manuk_js::ViewMaps,
+}
+
+impl ReflowScope {
+    /// `dom`/`fonts`/`viewport_width` must describe the layout currently published to JS.
+    fn install(dom: &Dom, fonts: &FontContext, viewport_width: f32) -> ReflowScope {
+        let mut ctx = Box::new(ReflowCtx {
+            fonts: fonts as *const FontContext,
+            viewport_width,
+            laid_out_at: dom.mutation_seq(),
+            rects: HashMap::new(),
+            styles: HashMap::new(),
+        });
+        let p = &mut *ctx as *mut ReflowCtx as *mut std::ffi::c_void;
+        let prev_maps = manuk_js::view_maps();
+        unsafe { manuk_js::set_reflow_hook(forced_reflow, p) };
+        ReflowScope {
+            _ctx: ctx,
+            prev_maps,
+        }
+    }
+}
+
+impl Drop for ReflowScope {
+    fn drop(&mut self) {
+        manuk_js::clear_reflow_hook();
+        // **The context's maps die here, and the bindings may be pointing at them.** If a forced
+        // reflow ran, it re-pointed the view maps at buffers owned by `_ctx`; letting those
+        // pointers outlive this drop is a use-after-free whose symptom is not a crash but the
+        // *next* document silently measuring freed memory. Put back what was published before.
+        unsafe { manuk_js::restore_view_maps(self.prev_maps) };
+    }
+}
+
 /// A loaded, styled, laid-out page. Retains the DOM + computed styles so it can be
 /// re-laid-out at a new width (window resize / different agent viewport) and
 /// queried for links/text without re-fetching.
@@ -1801,6 +1890,7 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
+        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
         let proceed = match manuk_js::dispatch_event(
             ctx,
             &mut self.dom,
@@ -1852,6 +1942,7 @@ impl Page {
                 .into_iter()
                 .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                 .collect();
+            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
             for ty in ["input", "change"] {
                 if let Err(e) =
                     manuk_js::dispatch_event(ctx, &mut self.dom, node, ty, &rects, &self.styles)
@@ -1891,6 +1982,7 @@ impl Page {
                 .into_iter()
                 .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                 .collect();
+            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
             if let Err(e) =
                 manuk_js::dispatch_event(ctx, &mut self.dom, node, "input", &rects, &self.styles)
             {
@@ -1983,6 +2075,7 @@ impl Page {
             } else {
                 &["blur"]
             };
+            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
             for ty in events {
                 if let Err(e) =
                     manuk_js::dispatch_event(ctx, &mut self.dom, node, ty, &rects, &self.styles)
@@ -2341,6 +2434,10 @@ impl Page {
                 &styles,
                 &std::collections::HashMap::new(),
             ));
+            // A geometry read during these scripts must see the DOM they have built so far, not
+            // the snapshot above — `measure -> mutate -> measure` in one round is how every
+            // virtualized list sizes its rows.
+            let _reflow = ReflowScope::install(&dom, fonts, viewport_width);
             match manuk_js::load_document(&mut dom, final_url, &rects, &styles) {
                 Ok((ctx, n)) => {
                     if n > 0 {
@@ -2420,6 +2517,9 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
+        // Covers every dispatch below, including the nested `dispatch_click` a <label> forwards
+        // into — a handler that mutates and then measures must see what it just built.
+        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
         // ── A <label> forwards its click to the control it labels. ─────────────────────────
         // This is how most checkboxes on the web are actually clicked: the visible target is the
         // text, not the 12px box. Without forwarding, clicking "Remember me" does nothing at all.
@@ -2834,6 +2934,7 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
+        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
         if let Err(e) =
             manuk_js::deliver_ws_event(ctx, &mut self.dom, id, event, &rects, &self.styles)
         {
@@ -2872,6 +2973,7 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
+        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
         if let Err(e) =
             manuk_js::deliver_fetch_stream(ctx, &mut self.dom, id, event, &rects, &self.styles)
         {
@@ -3022,6 +3124,7 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
+        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
         if let Err(e) =
             manuk_js::fire_popstate(ctx, &mut self.dom, state_json, url, &rects, &self.styles)
         {

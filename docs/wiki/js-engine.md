@@ -734,3 +734,52 @@ Two things worth reusing:
   stub is worse than an honest absence, because the caller cannot route around a method that pretends to
   exist. (SHA-1 is deliberately kept, not dropped: SubtleCrypto still exposes it for verifying legacy
   signatures, even though it is not collision-resistant — "available" is a spec fact, not an endorsement.)
+
+## Forced synchronous reflow — the read path lays out before it answers (tick 213)
+
+The engine lays out in a **batch**: script runs against a layout snapshot taken *before* it started, and
+one relayout happens after. That is correct for a script that only measures, and correct for one that only
+mutates. It is wrong for the shape every virtualized list is built out of:
+
+```
+  measure  ->  mutate  ->  measure       (all inside ONE task / rAF)
+```
+
+react-window, react-virtuoso and every data grid size their rows by writing to the DOM and immediately
+reading it back. Against a pre-script snapshot the second read returns the geometry the element had
+*before* the write — `0` for a node that did not exist yet — so rows collapse, overlap, or render blank.
+A real browser answers this by **forcing a synchronous reflow**: a geometry read on a dirtied DOM lays out
+first, then returns. It is the *read path's* job; the page never asks for it.
+
+**The relayout machinery already existed** (`relayout_incremental`, `RestyleDamage`). The only missing
+piece was wiring it into the read path, and the shape of that wiring is the reusable part:
+
+- **A monotonic `Dom::mutation_seq`, not the dirty bits.** The dirty *bits* answer "must the next batch
+  pass do work?" and are **consumed** by that pass — useless for a question asked mid-script that must not
+  disturb the batch. A monotonic counter answers by *comparison* instead: the reflow context records the
+  seq it laid out against and reflows only when it differs. Repeated reads on an unchanged tree cost one
+  integer compare, and the post-script batch relayout still sees exactly the bits it always saw.
+- **The hook is a call UPWARD.** Layout lives in `manuk-page` (cascade, box tree, stylesheet set);
+  `manuk-js` has no layout dependency and must not grow one. So the host installs a `ReflowFn` +  context
+  pointer for the duration of a re-entry, exactly like the view maps.
+- **A STACK of hooks, not a slot.** Script rounds nest — a click on a `<label>` dispatches a second click
+  at the control it labels, inside the first. With a slot, the inner round's teardown silently disarms the
+  outer one and every read after it quietly reverts to the stale snapshot.
+- **The reflow builds its OWN maps and re-points the bindings.** It cannot write into the maps the host
+  passed in: a script is reading those through a shared reference for the whole round. `ReflowScope`'s
+  `Drop` then restores the previously-published pointers — without that, buffers owned by the scope
+  outlive it, and the symptom is not a crash but *the next document silently measuring freed memory*.
+- **An `IN_REFLOW` re-entrancy guard**, because the reflow performs reads of its own.
+
+**Both `layout_rect` AND `with_style` force it.** `getComputedStyle` is a forced-reflow trigger in real
+browsers just as much as `getBoundingClientRect` — the forced reflow re-runs the cascade, so the styles it
+publishes are fresh too. Gating only the geometry read would leave the two APIs disagreeing about the same
+element one line apart.
+
+Held by `engine/page/tests/g_forced_reflow.rs` (`G_FORCED_REFLOW`). Falsified by removing the
+`force_reflow_if_stale()` call: every read reverts to `after:0 row:0 grown:10 offset:0` — pre-mutation
+geometry, which is the blank-virtualized-list bug exactly.
+
+⚠ **One `#[test]` fn per JS gate binary** (see `g_canvas.rs`). A test fn that dispatches a click leaves a
+live `PageContext` parked on its thread; a second test fn loading a page on another thread faults two
+SpiderMonkey runtimes against each other. Sequential `Page::load`s inside ONE fn are fine.

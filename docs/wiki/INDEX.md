@@ -317,6 +317,7 @@
   - L656 · Web Crypto entropy: crypto.getRandomValues / randomUUID (tick 160)
   - L688 · HTML Constraint Validation, on the shared prototype (tick 161)
   - L713 · crypto.subtle.digest — async surface over a sync host hash (tick 162)
+  - L738 · Forced synchronous reflow — the read path lays out before it answers (tick 213)
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -463,4 +464,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-386 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+387 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
