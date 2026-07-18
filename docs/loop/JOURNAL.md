@@ -9463,3 +9463,44 @@ page load, so its own tick. Unknowns: 35 → 18.
 "37 unknowns" while its own table computes 18 correctly.
 
 **Mechanism captured:** `docs/wiki/conformance-and-oracles.md`.
+
+## Tick 226 — "Sign in with…" already worked, end to end (2026-07-18)
+
+**Selected:** CO-#1 **(B) OAuth login, O1 (redirect flow e2e)** — which was also still carried as
+`unknown` in the constellation, so this is (B) and (D) in one tick: probe first, build only the gap.
+
+**Result: there was no gap.** A full authorization-code login completes across two real origins on
+the first run. That is the seventh capability assumed missing here that was already built, and the
+most consequential one yet — the row's own cost line read *"YOU CANNOT LOG IN TO THE MODERN WEB"*.
+
+**Why it had to be an integration gate.** The flow is not one feature; it is six agreeing across two
+origins: a cross-origin 302; the query surviving it (the authorization code IS the query); the
+post-redirect `final_url` reaching the page; `location.search` therefore being the callback's;
+a cross-origin `fetch` POST carrying a body and the page's chosen `Content-Type`; and an
+`Authorization: Bearer` header surviving onto the wire. Each lives in a different layer
+(`manuk-net` redirects, `Page::load`'s URL threading, the JS `location` shim, the fetch pump), and
+any one failing produces the *same* symptom — a login that hangs on the callback screen. A unit test
+on any single one passes while login stays broken. Built like `g_websocket_live`: two real
+`TcpListener`s on distinct ports, so the cross-origin hop is genuinely cross-origin.
+
+**Gate.** `g_oauth_redirect` asserts the DOM (`signedin:ada`) *and* what the servers actually
+received — the POST reaching `/token` with the code **in its body**, the page's
+`application/x-www-form-urlencoded` surviving onto the wire, and `authorization: bearer t0ken` on the
+userinfo request. The DOM claim alone could be satisfied by a page that guessed; the wire log cannot.
+`state` is asserted separately from `code` on purpose: both ride the same query, so `code` alone
+would pass a redirect that truncated after the first parameter.
+
+**RED two ways, both run.** Serving `Location: /callback` without the query leaves `final_url`
+codeless and the page on `waiting` — the hung-callback bug exactly. Dropping the page's headers in
+the pump (the U-1 "headers DROPPED" class) yields **`signedin:ANONYMOUS`**: a fully rendered
+logged-in shell with nobody in it, which is the failure mode that looks most like success and the
+reason the wire assertions exist.
+
+**Flagged, NOT measured — for a future tick.** While mapping the code, `request_streaming`'s redirect
+loop appears to replay the same request headers on every hop *including cross-origin*, which would
+mean an `Authorization` header follows a redirect to another origin (browsers strip it). This gate
+does not exercise that path and I have not measured it, so it is recorded as a lead, not a finding.
+
+**Unknowns: 18 → 17.**
+
+**Mechanism captured:** `docs/wiki/networking.md`.

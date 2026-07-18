@@ -1067,3 +1067,25 @@ capabilities as *measured* missing (multicol, container queries, scroll snap, `t
 View Transitions, Navigation API, WebCodecs, Sanitizer, custom highlights, scoped custom element
 registries, drag and drop) — evidence in place of assumption, with a gate that flips them to failures
 the day they get built.
+
+## "Sign in with…" — the OAuth redirect login (tick 226)
+
+Carried as `unknown` in the constellation with the bluntest cost line in the file: *you cannot log in
+to the modern web*. GitHub, Google, every SaaS dashboard, every "continue with" button. It **already
+worked** — a full authorization-code flow completes across two real origins, first run.
+
+The flow is six features agreeing, each in a different layer, and they fail into one
+indistinguishable symptom (the callback screen hangs forever): the cross-origin 302 is followed; the
+query survives it (the authorization code *is* the query); the post-redirect `final_url` reaches the
+page, so `location.search` is the callback's and not the authorize URL's; a cross-origin `fetch` POST
+carries both its body and the page's chosen `Content-Type`; and `Authorization: Bearer` survives onto
+the wire.
+
+Gated by `g_oauth_redirect` against two real `TcpListener`s, asserting the **wire** as well as the
+DOM — the code in the POST body, the form content type, the bearer token on the userinfo call. The
+reason for that: the RED probe that drops page headers still renders a logged-in page, reading
+`signedin:ANONYMOUS` — a complete logged-in shell with nobody in it. A DOM-only assertion passes it.
+
+Still unbuilt on this track (O2-O5): interactive cross-origin iframe re-render, popup +
+`postMessage`, third-party/cross-site cookie policy, and FedCM `navigator.credentials`. The redirect
+flow — which is what the overwhelming majority of "sign in with" buttons actually use — is done.

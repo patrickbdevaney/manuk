@@ -393,6 +393,9 @@
   - L698 · EventSource (SSE) connects — built on our own fetch (tick 205)
   - L732 · XHR readyState 3 — progress instead of nothing-then-done (tick 206)
   - L763 · SSE reconnects and RESUMES (tick 207)
+  - L794 · The OAuth redirect flow is six features agreeing, and it works (tick 226)
+  - L815 · Assert the wire, not just the DOM
+  - L823 · Test hygiene: the cookie jar is process-global
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -494,4 +497,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-413 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+416 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

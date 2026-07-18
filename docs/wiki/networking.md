@@ -790,3 +790,39 @@ issued at all.
 
 Residue: the reconnect delay is not exponentially backed off beyond what the server asks for; a
 network-level failure and a clean stream end are treated identically (both retry).
+
+## The OAuth redirect flow is six features agreeing, and it works (tick 226)
+
+`g_oauth_redirect` drives a full authorization-code login against two real `TcpListener`s on distinct
+ports — genuinely cross-origin, not simulated. It passed on the first run: the capability was carried
+as `unknown` and was already built.
+
+What the flow actually requires, and where each part lives — this is the list to check when a login
+breaks, because they fail into one indistinguishable symptom (the callback screen hangs):
+
+1. **cross-origin 302 followed** — `manuk_net::fetch_document_or_download`'s redirect loop (11 hops
+   max, no origin check, cookies re-evaluated per hop).
+2. **query carried through the redirect** — resolution is `current.join(location)`, so an absolute
+   `Location` keeps its query. The authorization code *is* the query string.
+3. **post-redirect `final_url` reaching the page** — `Loaded::Document { final_url }` must be what is
+   handed to `Page::load`, not the pre-redirect URL.
+4. **`location.search`** — populated from that `final_url` via the prelude's `__parseUrl` shim
+   (`%URL%` substitution), so 3 and 4 are the same bug when they break.
+5. **cross-origin `fetch` POST with a body and the page's `Content-Type`** — a token endpoint rejects
+   a form POST sent as JSON, so the header must survive, not just the body.
+6. **`Authorization: Bearer` onto the wire** — headers replayed verbatim by the pump.
+
+### Assert the wire, not just the DOM
+
+The gate asserts what the servers *received*: the code in the POST body, the content type, the bearer
+token. A DOM-only assertion can be satisfied by a page that guessed. The sharpest case is the RED
+probe that drops page headers: the login still "succeeds" and renders `signedin:ANONYMOUS` — a fully
+rendered logged-in shell with nobody in it. That is the failure mode that looks most like success,
+and only a wire assertion catches it.
+
+### Test hygiene: the cookie jar is process-global
+
+`cookie_jar()` is a private `OnceLock` loaded from `$MANUK_STATE`/`$XDG_STATE_HOME/manuk` on first
+use and written back after any `Set-Cookie`. A net gate must set `MANUK_STATE` to a temp dir **before
+its first net call**, or it reads and rewrites the developer's real cookie file. (The implicit sharing
+is also what makes a session span the provider and the app for free — there is no jar to thread.)

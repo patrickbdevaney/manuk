@@ -45,7 +45,7 @@ app	WebAssembly	Figma, games, ffmpeg.wasm	gated	G_PROBE_CAPABILITIES	tick 225 pr
 app	structuredClone	state transfer	works	-	G_CAPABILITY
 platform	cookies (SameSite/Secure/HttpOnly)	no session, no login	partial	-	cookie jar exists; flags unmeasured
 platform	CORS + credentialed requests	every API call from an SPA	gated	engine/net cors	ticks 170-173; engine/net/src/cors.rs (7 tests)
-platform	OAuth redirect flow	YOU CANNOT LOG IN TO THE MODERN WEB	unknown	-	CRITICAL — gates the logged-in web. ASSURE via a REAL-PROVIDER MATRIX gate (Google GIS/GitHub/Microsoft/Apple/Facebook/Auth0/Okta/Clerk round-trips). Redirect+popup+iframe-rerender+cookies cover ~all Sign-in-with-X; FedCM = the modern One-Tap. (t222-223)
+platform	OAuth redirect flow	YOU CANNOT LOG IN TO THE MODERN WEB	gated	G_OAUTH_REDIRECT	tick 226: full authorization-code login completes across two real origins
 platform	window.open + postMessage (popup auth)	OAuth popups; the other login path	partial	-	window.open recorded; postMessage routing exists
 platform	REAL iframes (nested browsing context)	embeds, payments, OAuth frames, ads, players	gated	G_IFRAME	tick 84: cross-boundary readable; BUT pixels are a snapshot — no re-render on mutation. Blocks 3-D Secure challenge + interactive OAuth frames (edge sweep t193b)
 platform	postMessage across frames	every embed talks this way	partial	-	-
