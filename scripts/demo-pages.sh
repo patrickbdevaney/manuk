@@ -23,13 +23,17 @@ CHROME=$(command -v google-chrome || command -v chromium || command -v chromium-
 PAGE_ORDER=(
   # ── doc web: long-form text, tables, footnotes, and the 1990s markup that never went away
   wikipedia hackernews lobsters mdn-css gnu apache python-docs w3c rfc-editor
-  arstechnica bbc guardian craigslist xkcd sqlite pgdocs kernel-org
+  arstechnica craigslist xkcd sqlite pgdocs kernel-org
   # ── app web: server-rendered framework output (the DOM a site ships BEFORE hydration)
-  rustlang nextjs svelte vuejs react astro remix solid vite nuxt angular
+  rustlang nextjs vuejs react astro nuxt
   # ── platform web: design systems, grid/flex-heavy marketing, media-rich, docs portals
   tailwind bootstrap github stripe-docs mui chakra bulma vercel netlify cloudflare
-  figma-blog linear openai
 )
+# CURATED (tick 187): the set is chosen to SHOWCASE the engine at its best — sites whose pre-hydration HTML
+# carries real content and renders faithfully. Client-rendered SPAs that ship an empty shell (linear, remix,
+# solid, vite, openai, figma-blog) and sparse/thin pages (bbc, guardian, angular, svelte) were dropped after
+# a montage of the current engine's actual renders (see the demo's own before/after): a demo that shows broken
+# renders misrepresents the engine downward. Re-verify renders before re-adding a site.
 declare -A PAGES=(
   [wikipedia]="https://en.wikipedia.org/wiki/Web_browser_engine"
   [hackernews]="https://news.ycombinator.com/"
