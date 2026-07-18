@@ -128,6 +128,8 @@ pub struct TextStyle {
     pub letter_spacing: f32,
     /// `word-spacing` — extra px added to each inter-word space. `0` (default) is a no-op.
     pub word_spacing: f32,
+    /// `text-shadow` — a single shadow painted behind the glyphs (inherited). `None` == no shadow.
+    pub shadow: Option<manuk_css::TextShadow>,
 }
 
 /// A positioned run of text produced by inline layout. `baseline` is the absolute
@@ -1083,6 +1085,7 @@ fn text_style(cs: &ComputedStyle, fonts: &FontContext) -> TextStyle {
         line_height,
         letter_spacing: cs.letter_spacing,
         word_spacing: cs.word_spacing,
+        shadow: cs.text_shadow,
     }
 }
 
@@ -4088,6 +4091,7 @@ impl Ctx<'_> {
                             decoration: Default::default(),
                             letter_spacing: 0.0,
                             word_spacing: 0.0,
+                            shadow: None,
                         },
                         ascent: 0.0,
                         descent: 0.0,
@@ -4198,6 +4202,7 @@ impl Ctx<'_> {
                                 decoration: Default::default(),
                                 letter_spacing: 0.0,
                                 word_spacing: 0.0,
+                                shadow: None,
                             },
                             // Treated as all-ascent so text on the same line shares the top.
                             ascent: height,
@@ -4248,6 +4253,7 @@ impl Ctx<'_> {
                                 decoration: Default::default(),
                                 letter_spacing: 0.0,
                                 word_spacing: 0.0,
+                                shadow: None,
                             },
                             ascent: 0.0,
                             descent: 0.0,

@@ -1756,6 +1756,7 @@ impl App {
             line_height: size + 3.0,
             letter_spacing: 0.0,
             word_spacing: 0.0,
+            shadow: None,
         };
 
         // --- Tab strip ---
@@ -2012,6 +2013,7 @@ impl App {
             line_height: size + 3.0,
             letter_spacing: 0.0,
             word_spacing: 0.0,
+            shadow: None,
         };
 
         // FIND BAR (Tick 18 CRITICAL fix). Ctrl+F used to only set a flag and log "type to search"

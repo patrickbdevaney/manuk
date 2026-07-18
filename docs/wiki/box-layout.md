@@ -654,3 +654,32 @@ existing border is byte-for-byte unchanged, so the ratchet cannot regress. Only 
 one Rect per edge, so the Rect count separates the styles — `solid`=4, `double`=8, `dashed`/`dotted`≫8.
 RED against the all-solid baseline. css+layout+paint green (paint 15→16), HANG/CRASH 0. Residue: per-side
 border styles, groove/ridge/inset/outset bevels, exact dash-length fitting. [[box-layout]]
+
+
+## text-shadow — a shadow behind the glyphs (tick 193)
+
+`text-shadow` was unimplemented (0 hits): the painter drew each text run once, in the text colour. The
+readability treatment on hero/heading text — a dark shadow under light text over a photo/gradient, the
+raised look on buttons/logos — did nothing, and light-on-light or light-on-image headings lost all
+contrast.
+
+Model: a `TextShadow { dx, dy, blur, color }` (Copy; like `BoxShadow` without spread/inset), stored as
+`ComputedStyle.text_shadow: Option<_>`, **inherited** (a shadow on a heading flows to its inline spans).
+
+Mechanism (css + layout + paint, + the Stylo recovery path):
+- **css** — `parse_text_shadow` reads the FIRST layer (`offset-x offset-y [blur] [color]`; a comma list
+  takes the first — multi-shadow is residue); a missing colour defaults to semi-transparent black. The
+  field is inherited in `inherit_from` and recovered from MinimalCascade in `stylo_engine.rs` (Stylo's
+  servo build models it as a generic list), so the shipping path paints it.
+- **layout** — the shadow rides `TextStyle` onto every text fragment (`text_style()` copies
+  `cs.text_shadow`; the marker/spacer fragments carry `None`).
+- **paint** — `draw_text` factors the glyph loop into a run-painter and calls it twice: once at
+  `(dx, dy)` in the shadow colour (BEHIND), then at the origin in the text colour.
+
+**Safety.** The default `None` skips the shadow pass — every existing text render is byte-for-byte the
+single main pass it was before, so the ratchet cannot regress. Only authored `text-shadow` changes.
+
+**Gate.** `text_shadow_paints_behind_the_glyphs` (engine/paint): white text on a white canvas paints
+~no dark pixels (<10) without a shadow but >60 with `text-shadow: 4px 4px 0 black`. RED against the
+no-shadow baseline. css+layout+paint green (paint 16→17), HANG/CRASH 0. Residue: gaussian blur, stacked
+shadows, `currentColor` resolution. [[box-layout]]

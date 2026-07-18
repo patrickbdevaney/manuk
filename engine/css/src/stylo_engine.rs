@@ -427,6 +427,9 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
             // `border-style` recovered from MinimalCascade so the shipping path renders dashed/dotted/
             // double borders (drop-zones, dividers, ticket cards) instead of solid.
             cs.border_style = m.border_style;
+            // `text-shadow` recovered from MinimalCascade (inherited there) so the shipping path paints
+            // the shadow behind hero/heading text — Stylo's servo build models it as a generic list.
+            cs.text_shadow = m.text_shadow;
             // `object-fit` recovered from MinimalCascade like the rest of this block, so the shipping
             // Stylo path renders it too: a card grid's `object-fit:cover` thumbnails must not distort.
             cs.object_fit = m.object_fit;

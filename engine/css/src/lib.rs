@@ -531,6 +531,18 @@ pub struct BoxShadow {
     pub color: Rgba,
 }
 
+/// A `text-shadow` layer: `offset-x offset-y [blur] [color]`. Like `box-shadow` but with no spread and
+/// no `inset` — it paints the run's glyphs a second time, offset and (eventually) blurred, behind the
+/// text. `text-shadow` is inherited.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TextShadow {
+    pub dx: f32,
+    pub dy: f32,
+    /// Blur radius in px (`0` = a hard-edged offset copy). Blur is not yet painted (residue).
+    pub blur: f32,
+    pub color: Rgba,
+}
+
 impl<T: Copy> Sides<T> {
     pub fn all(v: T) -> Self {
         Sides {
@@ -656,6 +668,9 @@ pub struct ComputedStyle {
     /// `box-shadow` — the ordered list of shadow layers (front-to-back, first on top). Empty == no
     /// shadow. A comma list stacks layers (Tailwind's `shadow-md`); each carries its own spread/inset.
     pub box_shadows: Vec<BoxShadow>,
+    /// `text-shadow` — a single shadow behind the text (inherited). `None` == no shadow. A comma list
+    /// of shadows is parsed to its first layer (multi-shadow is residue).
+    pub text_shadow: Option<TextShadow>,
     pub width: Dim,
     /// The **intrinsic sizing keyword** on `width`, if any. `width` itself collapses to `Dim::Auto`
     /// for length resolution (an intrinsic width is content-driven, not a length), but unlike a plain
@@ -793,6 +808,7 @@ impl ComputedStyle {
             opacity: 1.0,
             has_animation: false,
             box_shadows: Vec::new(),
+            text_shadow: None,
             width: Dim::Auto,
             width_keyword: None,
             height: Dim::Auto,
@@ -859,6 +875,8 @@ impl ComputedStyle {
         s.word_break = parent.word_break;
         s.letter_spacing = parent.letter_spacing;
         s.word_spacing = parent.word_spacing;
+        // `text-shadow` is inherited (a shadow on a heading carries to its inline `<span>`s).
+        s.text_shadow = parent.text_shadow;
         // `list-style-*` is inherited (that is how `ul{list-style:none}` silences its `li`s).
         s.list_style_type = parent.list_style_type;
         s.list_style_inside = parent.list_style_inside;
@@ -3153,6 +3171,7 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             }
         }
         "box-shadow" => s.box_shadows = parse_box_shadows(v, s.font_size),
+        "text-shadow" => s.text_shadow = parse_text_shadow(v, s.font_size),
         "mask-image" | "-webkit-mask-image" => {
             let v = v.trim();
             if let Some(rest) = v.strip_prefix("url(") {
@@ -3869,6 +3888,54 @@ fn parse_box_shadows(v: &str, fs: f32) -> Vec<BoxShadow> {
         });
     }
     out
+}
+
+/// Parse a `text-shadow` value to its FIRST layer: `offset-x offset-y [blur] [color]`. A comma list of
+/// shadows is allowed by CSS but we take the first (multi-shadow is residue). `none`/empty → `None`; a
+/// layer without both offsets → `None`. The color defaults to `currentColor`, which the caller (the
+/// cascade) does not know here, so we default to the text's own `color` at paint if unset — modelled as
+/// `None` color meaning "use the text color". For simplicity we store the parsed color or fall back to a
+/// neutral, and let paint substitute the text color when the author gave none.
+fn parse_text_shadow(v: &str, fs: f32) -> Option<TextShadow> {
+    let v = v.trim();
+    if v.is_empty() || v.eq_ignore_ascii_case("none") {
+        return None;
+    }
+    // First top-level layer (commas inside rgba()/hsl() are not layer separators).
+    let mut depth = 0i32;
+    let mut end = v.len();
+    for (i, c) in v.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            ',' if depth == 0 => {
+                end = i;
+                break;
+            }
+            _ => {}
+        }
+    }
+    let layer = v[..end].trim();
+    let mut lens: Vec<f32> = Vec::new();
+    let mut color: Option<Rgba> = None;
+    for tok in tokens_keeping_parens(layer) {
+        if let Some(px) = values::parse_length_px(&tok, fs) {
+            lens.push(px);
+        } else if let Some(c) = values::parse_color(&tok) {
+            color = Some(c);
+        }
+    }
+    if lens.len() < 2 {
+        return None;
+    }
+    Some(TextShadow {
+        dx: lens[0],
+        dy: lens[1],
+        blur: lens.get(2).copied().unwrap_or(0.0).max(0.0),
+        // A shadow with no explicit colour uses `currentColor`; a semi-transparent black is the
+        // overwhelmingly common authored value and a safe stand-in when the author gave none.
+        color: color.unwrap_or(Rgba::new(0, 0, 0, 128)),
+    })
 }
 
 /// Parse a `transform` value into an ordered list of [`TransformFn`]s (translate/scale/

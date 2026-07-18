@@ -7846,3 +7846,35 @@ fit the edge exactly (browsers nudge the pattern; we let the last dash clip).
 _Note (tick 192): first tick.sh attempt hit a WALL false-RED — verify wall 486s > 74s ceiling driven by
 a load-slow PARITY section (P=267s; build was warm at 36s, all capability gates green). Load-driven wall
 variance is a known harness condition (observer-owned); re-ran on a quiet box (load 1.1)._
+
+## Tick 193 — text-shadow — hero/heading text stays readable over a busy background (CSS render / paint) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (CSS render — text-shadow). WIKI:
+docs/wiki/box-layout.md "text-shadow — a shadow behind the glyphs".**
+
+**Hypothesis.** `text-shadow` was unimplemented (0 hits): the painter drew each text run once, in the
+text colour. So the readability treatment on hero/heading text — a dark `text-shadow` under light text
+laid over a photo or gradient, and the raised/engraved look on buttons and logos — did nothing, and
+light-on-light or light-on-image headings lost their contrast entirely.
+
+Fix (css + layout + paint, + the Stylo recovery path): a new `TextShadow { dx, dy, blur, color }`
+(Copy; like `BoxShadow` but no spread/inset). `parse_text_shadow` reads the FIRST layer
+(`offset-x offset-y [blur] [color]`; a comma list takes the first — multi-shadow is residue) with a
+missing colour defaulting to a semi-transparent black (the overwhelmingly common authored value).
+`ComputedStyle.text_shadow: Option<_>` is **inherited** (a shadow on a heading flows to its inline
+`<span>`s) and recovered from MinimalCascade in `stylo_engine.rs` so the shipping Stylo path paints it.
+It rides `TextStyle` onto every text fragment; paint's `draw_text` factors the glyph loop into a
+run-painter and calls it twice — once at `(dx, dy)` in the shadow colour (BEHIND), once at the origin
+in the text colour.
+
+**Safety.** The default `None` skips the shadow pass entirely — every existing text render is
+byte-for-byte the single main pass it was before, so the ratchet cannot regress. Behaviour changes only
+when `text-shadow` is authored. Blur is not yet applied (a hard-edged offset copy) — noted as residue;
+it already restores contrast, which is the point.
+
+**Gate.** engine/paint `text_shadow_paints_behind_the_glyphs`: white text on a white canvas paints
+~no dark pixels (<10) without a shadow, but a `text-shadow: 4px 4px 0 black` paints the glyph outline
+in dark pixels (>60). RED against the no-shadow baseline (proven: without the shadow pass the white
+glyphs leave the white canvas blank). Verify: css+layout+paint suites green (paint 16→17); HANG/CRASH 0.
+Residue: gaussian blur, multiple stacked shadows, `currentColor` resolution (defaults to translucent
+black when the author gives no colour).

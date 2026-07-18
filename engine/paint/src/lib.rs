@@ -966,23 +966,35 @@ impl CpuPainter<'_> {
             return;
         }
         let run = self.fonts.shape(text, style.font_key, style.font_size);
-        for g in &run.glyphs {
-            let pen_x = origin_x + g.x;
-            // swash rasterizes at the fractional pen position for crisp subpixel placement.
-            let Some(bitmap) = self
-                .fonts
-                .rasterize(g.glyph_id, g.face, style.font_size, pen_x)
-            else {
-                continue;
+        // Blit every glyph of the run at (origin + offset) in `color`. Called once for the
+        // `text-shadow` pass (offset, shadow colour) and once for the text itself.
+        let mut paint_run =
+            |pixmap: &mut tiny_skia::Pixmap, off_x: f32, off_y: f32, color: Rgba| {
+                for g in &run.glyphs {
+                    let pen_x = origin_x + off_x + g.x;
+                    // swash rasterizes at the fractional pen position for crisp subpixel placement.
+                    let Some(bitmap) =
+                        self.fonts
+                            .rasterize(g.glyph_id, g.face, style.font_size, pen_x)
+                    else {
+                        continue;
+                    };
+                    if bitmap.width == 0 || bitmap.height == 0 {
+                        continue; // whitespace and zero-area glyphs
+                    }
+                    // swash placement: `left` = pen→bitmap-left, `top` = baseline→bitmap-top (up).
+                    let left = pen_x.floor() as i32 + bitmap.left;
+                    let top = (baseline + off_y).round() as i32 - bitmap.top;
+                    blit_glyph(pixmap, &bitmap, left, top, color, clip);
+                }
             };
-            if bitmap.width == 0 || bitmap.height == 0 {
-                continue; // whitespace and zero-area glyphs
-            }
-            // swash placement: `left` = pen→bitmap-left, `top` = baseline→bitmap-top (up).
-            let left = pen_x.floor() as i32 + bitmap.left;
-            let top = baseline.round() as i32 - bitmap.top;
-            blit_glyph(pixmap, &bitmap, left, top, style.color, clip);
+        // `text-shadow` paints a second, offset copy of the glyphs BEHIND the text. Blur is residue —
+        // a hard-edged offset copy is the honest first approximation and already restores readability
+        // of hero/heading text over a busy background.
+        if let Some(sh) = style.shadow {
+            paint_run(pixmap, sh.dx, sh.dy, sh.color);
         }
+        paint_run(pixmap, 0.0, 0.0, style.color);
     }
 }
 
@@ -1575,6 +1587,39 @@ mod bg_tests {
             replaced, 0,
             "and the REPLACED-element blit must NOT also fire: it stretches the bitmap to fill the \
              box, painting a scaled copy straight over the tiled background"
+        );
+    }
+
+    /// `text-shadow` paints a second, offset copy of the glyphs behind the text — the readability
+    /// treatment on hero/heading text over a busy or light background. Baseline: text-shadow was
+    /// unimplemented, so a white heading with `text-shadow:...black` painted only the (invisible on a
+    /// light page) white text. Falsifiable: white text on a white canvas with a BLACK shadow must
+    /// produce dark pixels that the same text without a shadow does not.
+    #[test]
+    fn text_shadow_paints_behind_the_glyphs() {
+        use manuk_css::{MinimalCascade, Stylesheet};
+        let dark_px = |extra: &str| -> usize {
+            let dom = manuk_html::parse(r#"<p id="t">Hi</p>"#);
+            let css = format!("#t{{color:white;font-size:48px;{extra}}}");
+            let styles = MinimalCascade.cascade(&dom, &[Stylesheet::parse(&css)]);
+            let fonts = FontContext::new();
+            let root = manuk_layout::layout_document(&dom, &styles, &fonts, 400.0);
+            let canvas = CpuPainter::new(&fonts).render(&root, 400, 120, Rgba::WHITE);
+            canvas
+                .rgba_bytes()
+                .chunks_exact(4)
+                .filter(|p| p[0] < 90 && p[1] < 90 && p[2] < 90)
+                .count()
+        };
+        let none = dark_px("");
+        let shadowed = dark_px("text-shadow: 4px 4px 0 black");
+        assert!(
+            none < 10,
+            "white text on a white canvas should paint ~no dark pixels ({none})"
+        );
+        assert!(
+            shadowed > 60,
+            "a black text-shadow must paint the glyph outline in dark pixels ({shadowed}) — was {none} without it"
         );
     }
 
