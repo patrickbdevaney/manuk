@@ -500,6 +500,87 @@ pub fn deliver_fetch_stream(
     Ok(())
 }
 
+/// One thing a page asked its WebSocket to do. The host owns the socket; the page queues.
+///
+/// `Connect` carries the offered subprotocols, `Send` the frame payload as raw bytes, `Close` the
+/// code and reason the page passed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WsOp {
+    Connect { url: String, protocols: Vec<String> },
+    Send { data: Vec<u8>, binary: bool },
+    Close { code: Option<u16>, reason: String },
+}
+
+/// Something that happened to a page's WebSocket, in the order the transport produces it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WsEvent {
+    /// The handshake completed. `protocol` is what the SERVER chose (`""` if none).
+    Open {
+        protocol: String,
+        extensions: String,
+    },
+    Message {
+        data: Vec<u8>,
+        binary: bool,
+    },
+    /// A queued frame reached the wire — decrements the page's `bufferedAmount`.
+    Sent {
+        bytes: usize,
+    },
+    /// The spec's `error` event carries no detail to the page (it would be a cross-origin info
+    /// leak); `message` is for our logs.
+    Error {
+        message: String,
+    },
+    Close {
+        code: u16,
+        reason: String,
+        clean: bool,
+    },
+}
+
+/// What the page's WebSockets asked for since the last call, each `(socket_id, op)`. The host owns
+/// the socket: the page queues a connect/send/close and the host performs it. Empty without JS.
+#[cfg(feature = "_sm")]
+pub fn take_ws_ops(ctx: &PageContext) -> Vec<(u32, WsOp)> {
+    with_runtime(|rt| ctx.take_ws_ops(rt).map_err(|message| JsError { message }))
+        .unwrap_or_default()
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn take_ws_ops(_ctx: &PageContext) -> Vec<(u32, WsOp)> {
+    Vec::new()
+}
+
+/// Deliver one [`WsEvent`] to socket `id`, running the page's handlers (and any DOM mutations they
+/// make) before returning. No-op without the JS feature.
+#[cfg(feature = "_sm")]
+pub fn deliver_ws_event(
+    ctx: &PageContext,
+    dom: &mut manuk_dom::Dom,
+    id: u32,
+    event: &WsEvent,
+    layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<(), JsError> {
+    with_runtime(|rt| {
+        ctx.deliver_ws_event(rt, dom, id, event, layout, styles)
+            .map_err(|message| JsError { message })
+    })
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn deliver_ws_event(
+    _ctx: &PageContext,
+    _dom: &mut manuk_dom::Dom,
+    _id: u32,
+    _event: &WsEvent,
+    _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<(), JsError> {
+    Ok(())
+}
+
 /// `history` ops (`pushState`/`replaceState`/`back`/`forward`/`go`) the page performed since the
 /// last call, each `(kind, state_json, url)`. The host reflects them in the omnibox +
 /// back/forward stack without a network navigation. Empty without the JS feature.

@@ -357,6 +357,7 @@
   - L478 · Incremental delivery — the answer TYPES ITSELF OUT (FetchStreamEvent)
   - L527 · The wire is connected — request_streaming + PageFetchStream (finish-line lever 1, done)
   - L568 · WebSocket transport — borrowed, not hand-rolled (tick 200)
+  - L614 · The page-facing WebSocket connects (tick 201) — lever 3's other half
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -451,4 +452,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-374 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+375 sections across 18 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

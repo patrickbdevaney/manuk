@@ -2469,6 +2469,49 @@ impl Page {
         }
     }
 
+    /// What the page's WebSockets asked for since the last call, each `(socket_id, op)`. The host
+    /// owns the socket — the page queues a connect/send/close and the host performs it, the same
+    /// shape `fetch` uses.
+    pub fn take_ws_ops(&self) -> Vec<(u32, manuk_js::WsOp)> {
+        match &self.js {
+            Some(ctx) => manuk_js::take_ws_ops(ctx),
+            None => Vec::new(),
+        }
+    }
+
+    /// Deliver one WebSocket event to socket `id` and re-render if the page's handler changed the
+    /// document — a chat message that arrives has to appear, which is the entire point.
+    pub fn deliver_ws_event(
+        &mut self,
+        id: u32,
+        event: &manuk_js::WsEvent,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) {
+        let Some(ctx) = &self.js else { return };
+        let rects: std::collections::HashMap<manuk_dom::NodeId, [f32; 4]> = self
+            .root_box
+            .node_rects(&self.dom)
+            .into_iter()
+            .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+            .collect();
+        if let Err(e) =
+            manuk_js::deliver_ws_event(ctx, &mut self.dom, id, event, &rects, &self.styles)
+        {
+            tracing::warn!("websocket deliver: {e}");
+            return;
+        }
+        let root = self.dom.root();
+        if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
+            let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
+            self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
+            self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            self.reapply_scroll_offsets();
+            self.content_height = self.root_box.content_bottom();
+            self.dom.clear_all_dirty();
+        }
+    }
+
     /// Deliver one step of a **streaming** response for request `id`: `Head` (where the page's
     /// `fetch()` promise resolves, body still arriving), then a `Chunk` per piece, then `End`.
     ///

@@ -1316,30 +1316,33 @@ const PRELUDE: &str = r#"
       // CONNECTING, and then asynchronously fires `error` and `close` — which is exactly what a real
       // browser does behind a captive portal, and every client on the web is written to survive it. What
       // it must not do is throw at construction, because then nothing is written to survive anything.
+      // **It CONNECTS now (tick 201).** The comment above is the history of the stub this replaced;
+      // it is kept because the lesson is the expensive one. What changed: the constructor no longer
+      // schedules its own failure, it QUEUES a connect op for the host, which owns the socket (the
+      // same shape `fetch` uses — the page asks, the host performs, the result is delivered back).
+      // A page that still cannot connect gets the identical honest `error`+`close` it always did,
+      // now because the connection genuinely failed rather than because we never tried.
+      globalThis.__wsOps = [];
+      globalThis.__wsObj = {};
+      globalThis.__wsId = 0;
       if (typeof globalThis.WebSocket === 'undefined') {
         var WS = function WebSocket(url, protocols) {
           this.url = String(url || '');
-          this.protocol = Array.isArray(protocols) ? (protocols[0] || '') : (protocols || '');
+          // `protocol` is what the SERVER selects, and it is empty until it does. Pre-filling it with
+          // the client's first offer (as the stub did) tells the page a subprotocol was negotiated
+          // when nothing has been negotiated yet.
+          this.protocol = '';
           this.readyState = 0;                    // CONNECTING
           this.bufferedAmount = 0;
           this.extensions = '';
           this.binaryType = 'blob';
           this.onopen = null; this.onmessage = null; this.onerror = null; this.onclose = null;
           this.__ls = {};
-          var self = this;
-          // Report the failure on a MACROtask, not a microtask: a client that reconnects in its `close`
-          // handler would otherwise spin the microtask queue without ever yielding, and the page would
-          // hang instead of degrade. `setTimeout` lets the drain make progress between attempts, and the
-          // task ceiling (MAX_TASKS_PER_DRAIN) is the backstop if it still will not converge.
-          setTimeout(function () {
-            if (self.readyState === 3) { return; }
-            self.readyState = 3;                  // CLOSED
-            var err = { type: 'error', target: self, message: 'websocket is not supported' };
-            self.__fire('error', err);
-            self.__fire('close', {
-              type: 'close', target: self, code: 1006, reason: 'unsupported', wasClean: false
-            });
-          }, 0);
+          var offered = Array.isArray(protocols) ? protocols
+                      : (protocols ? [String(protocols)] : []);
+          this.__id = ++globalThis.__wsId;
+          globalThis.__wsObj[this.__id] = this;
+          globalThis.__wsOps.push(this.__id + '\x01c\x01' + this.url + '\x01' + offered.join(','));
         };
         WS.prototype.__fire = function (type, ev) {
           var on = this['on' + type];
@@ -1358,24 +1361,85 @@ const PRELUDE: &str = r#"
         // `send` on a socket that is not open THROWS in a real browser (InvalidStateError), and clients
         // are written for it. Ours is never open, so this is the honest answer — but it is a *caught*
         // error in every client, not a boot-time ReferenceError, and that is the entire difference.
-        WS.prototype.send = function () {
-          throw new DOMException('websocket is not connected', 'InvalidStateError');
+        // `send` before OPEN still throws InvalidStateError — that is the spec, and clients are
+        // written for it. What is new is that a socket can actually BE open.
+        WS.prototype.send = function (data) {
+          if (this.readyState === 0) {
+            throw new DOMException('still connecting', 'InvalidStateError');
+          }
+          if (this.readyState !== 1) { return; }  // CLOSING/CLOSED: drop, per spec
+          var payload, kind;
+          if (typeof data === 'string') {
+            payload = data; kind = 's';
+          } else {
+            // ArrayBuffer / typed array / DataView → one char per byte, the convention the whole
+            // Rust↔JS byte boundary uses.
+            var b = (data instanceof Uint8Array) ? data
+                  : (data && data.buffer instanceof ArrayBuffer)
+                    ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+                    : (data instanceof ArrayBuffer) ? new Uint8Array(data)
+                    : new Uint8Array(0);
+            var out = '';
+            for (var i = 0; i < b.length; i++) { out += String.fromCharCode(b[i]); }
+            payload = out; kind = 'b';
+          }
+          // `bufferedAmount` is what a client polls to avoid flooding a slow socket. It rises here
+          // and falls when the host reports the frame written.
+          this.bufferedAmount += payload.length;
+          globalThis.__wsOps.push(this.__id + '\x01' + kind + '\x01' + payload + '\x01');
         };
         WS.prototype.close = function (code, reason) {
-          if (this.readyState === 3) { return; }
-          this.readyState = 3;
-          var self = this;
-          setTimeout(function () {
-            self.__fire('close', {
-              type: 'close', target: self, code: code || 1000, reason: reason || '', wasClean: true
-            });
-          }, 0);
+          if (this.readyState === 2 || this.readyState === 3) { return; }
+          this.readyState = 2;                    // CLOSING — the handshake is not instant
+          globalThis.__wsOps.push(
+            this.__id + '\x01x\x01' + (code === undefined ? '' : String(code)) + '\x01' + (reason || '')
+          );
         };
         WS.CONNECTING = 0; WS.OPEN = 1; WS.CLOSING = 2; WS.CLOSED = 3;
         WS.prototype.CONNECTING = 0; WS.prototype.OPEN = 1;
         WS.prototype.CLOSING = 2; WS.prototype.CLOSED = 3;
         globalThis.WebSocket = WS;
       }
+
+      // ── Host → page delivery. One entry point per event the transport can produce. ────────────
+      // Unknown ids are a no-op throughout: the page may have dropped the socket, or the document
+      // may have been torn down while a frame was in flight.
+      globalThis.__wsOpen = function (id, protocol, extensions) {
+        var w = globalThis.__wsObj[id]; if (!w || w.readyState !== 0) { return; }
+        w.readyState = 1;                          // OPEN
+        w.protocol = protocol || '';               // what the SERVER chose
+        w.extensions = extensions || '';
+        w.__fire('open', { type: 'open', target: w });
+      };
+      globalThis.__wsMessage = function (id, data, isBinary) {
+        var w = globalThis.__wsObj[id]; if (!w || w.readyState !== 1) { return; }
+        var payload = data;
+        if (isBinary) {
+          var b = globalThis.__bytesFromLatin1(data);
+          // `binaryType` decides the shape a page receives, and a client that set 'arraybuffer'
+          // and got a Blob (or vice versa) breaks on the first byte it reads.
+          payload = (w.binaryType === 'arraybuffer') ? b.buffer : new globalThis.Blob([data]);
+        }
+        w.__fire('message', { type: 'message', target: w, data: payload, origin: w.url });
+      };
+      globalThis.__wsSent = function (id, n) {
+        var w = globalThis.__wsObj[id]; if (!w) { return; }
+        w.bufferedAmount = Math.max(0, w.bufferedAmount - (n || 0));
+      };
+      globalThis.__wsError = function (id, message) {
+        var w = globalThis.__wsObj[id]; if (!w) { return; }
+        // The spec's `error` event carries NO detail (deliberately — it would be a cross-origin
+        // information leak). The message is for our own logging, not for the page.
+        w.__fire('error', { type: 'error', target: w });
+      };
+      globalThis.__wsClose = function (id, code, reason, clean) {
+        var w = globalThis.__wsObj[id]; if (!w || w.readyState === 3) { return; }
+        w.readyState = 3;                          // CLOSED
+        delete globalThis.__wsObj[id];
+        w.__fire('close', {
+          type: 'close', target: w, code: code || 1006, reason: reason || '', wasClean: !!clean
+        });
+      };
 
       // **`Notification`** — 14% of the corpus. Almost always feature-detected, so the honest answer is
       // the useful one: the constructor exists, permission is `"denied"`, and `requestPermission()`
@@ -2535,6 +2599,107 @@ pub fn deliver(
         js_headers_literal(headers)
     );
     eval(rt, global, &script, "event_loop_deliver.js").map(|_| ())
+}
+
+/// Drain what the page's WebSockets asked for since the last call, each paired with its socket id.
+pub fn drain_ws_ops(
+    rt: &mut Runtime,
+    global: mozjs::rust::HandleObject,
+) -> Result<Vec<(u32, crate::WsOp)>, String> {
+    let mut out = Vec::new();
+    loop {
+        let Some(rec) = eval_string(
+            rt,
+            global,
+            "(function(){ return __wsOps.length ? __wsOps.shift() : null; })()",
+            "ws_ops.js",
+        )?
+        else {
+            break;
+        };
+        let parts: Vec<&str> = rec.splitn(4, '\u{1}').collect();
+        if parts.len() < 3 {
+            continue;
+        }
+        let Ok(id) = parts[0].parse::<u32>() else {
+            continue;
+        };
+        let op = match parts[1] {
+            "c" => crate::WsOp::Connect {
+                url: parts[2].to_string(),
+                protocols: parts
+                    .get(3)
+                    .map(|p| {
+                        p.split(',')
+                            .map(str::trim)
+                            .filter(|p| !p.is_empty())
+                            .map(str::to_string)
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+            },
+            // Payload is one char per byte (see the `send` shim), so the low byte of each code
+            // unit is the byte. Not `as_bytes()`: that would UTF-8-encode 0x80..0xFF into two
+            // bytes each and corrupt every binary frame.
+            k @ ("s" | "b") => crate::WsOp::Send {
+                data: parts[2].chars().map(|c| (c as u32 & 0xff) as u8).collect(),
+                binary: k == "b",
+            },
+            "x" => crate::WsOp::Close {
+                code: parts[2].parse::<u16>().ok(),
+                reason: parts.get(3).unwrap_or(&"").to_string(),
+            },
+            _ => continue,
+        };
+        out.push((id, op));
+    }
+    Ok(out)
+}
+
+/// Deliver one [`WsEvent`] to socket `id`.
+pub fn deliver_ws_event(
+    rt: &mut Runtime,
+    global: mozjs::rust::HandleObject,
+    id: u32,
+    event: &crate::WsEvent,
+) -> Result<(), String> {
+    let script = match event {
+        crate::WsEvent::Open {
+            protocol,
+            extensions,
+        } => format!(
+            "__wsOpen({}, {}, {})",
+            id,
+            js_string_literal(protocol),
+            js_string_literal(extensions)
+        ),
+        crate::WsEvent::Message { data, binary } => format!(
+            "__wsMessage({}, {}, {})",
+            id,
+            if *binary {
+                js_bytes_literal(data)
+            } else {
+                js_string_literal(&String::from_utf8_lossy(data))
+            },
+            binary
+        ),
+        crate::WsEvent::Sent { bytes } => format!("__wsSent({}, {})", id, bytes),
+        crate::WsEvent::Error { message } => {
+            format!("__wsError({}, {})", id, js_string_literal(message))
+        }
+        crate::WsEvent::Close {
+            code,
+            reason,
+            clean,
+        } => format!(
+            "__wsClose({}, {}, {}, {})",
+            id,
+            code,
+            js_string_literal(reason),
+            clean
+        ),
+    };
+    eval(rt, global, &script, "ws_event.js").map(|_| ())
 }
 
 /// Settle request `id` at its RESPONSE HEADERS, with a body that is still arriving. This is where a

@@ -6636,6 +6636,35 @@ impl PageContext {
         Ok(())
     }
 
+    /// Drain what the page's WebSockets asked for (connect / send / close).
+    pub fn take_ws_ops(&self, runtime: &mut Runtime) -> Result<Vec<(u32, crate::WsOp)>, String> {
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        crate::event_loop::drain_ws_ops(runtime, global.handle())
+    }
+
+    /// Deliver one WebSocket event to socket `id`, then run the page's reactions — a chat message
+    /// that arrives must be able to mutate the DOM before this returns.
+    pub fn deliver_ws_event(
+        &self,
+        runtime: &mut Runtime,
+        dom: &mut Dom,
+        id: u32,
+        event: &crate::WsEvent,
+        layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    ) -> Result<(), String> {
+        set_view_maps(layout, styles);
+        let _ = dom;
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        crate::event_loop::deliver_ws_event(runtime, global.handle(), id, event)?;
+        crate::event_loop::run_deferred(runtime, global.handle())?;
+        Ok(())
+    }
+
     /// Deliver one step of a STREAMING response for request `id` — headers, a body chunk, or the
     /// end. Each step runs the page's reactions before returning, which is what lets the DOM update
     /// between chunks instead of only once the body is complete.

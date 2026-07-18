@@ -610,3 +610,47 @@ Residue: the page-facing JS `WebSocket` is **still the stub** — wiring this tr
 shell's event pump, a per-connection id, `onopen`/`onmessage`/`onclose`/`onerror`, `bufferedAmount`
 and `binaryType`) is the next tick, and finishes lever 3. No permessage-deflate (offered by many
 servers, optional by spec), no auto-reconnect (correctly the page's job), no `Blob` binaryType yet.
+
+## The page-facing `WebSocket` connects (tick 201) — lever 3's other half
+
+Tick 200 built the transport; the JS `WebSocket` was still the honest stub. It now queues ops for the
+host and receives events back — the same shape `fetch` uses, because the host owns the socket.
+
+**Page → host: `WsOp`** — `Connect { url, protocols }`, `Send { data, binary }`, `Close { code,
+reason }`, drained via `Page::take_ws_ops()`.
+**Host → page: `WsEvent`** — `Open { protocol, extensions }`, `Message { data, binary }`,
+`Sent { bytes }`, `Error`, `Close { code, reason, clean }`, delivered via
+`Page::deliver_ws_event()`, which runs the page's handlers and re-renders if they changed the DOM.
+
+**What the stub got wrong beyond not connecting.** It pre-filled `socket.protocol` with the client's
+*first offered* subprotocol. `protocol` is what the **server** selects, and it is empty until it
+does — pre-filling it tells the page a negotiation happened when none has.
+
+**`send()` before OPEN still throws `InvalidStateError`.** That is the spec and clients are written
+for it; what is new is that a socket can actually *be* open. `send()` after CLOSING drops the frame
+rather than throwing, also per spec.
+
+**`close()` moves to CLOSING(2), not straight to CLOSED(3)** — the closing handshake is not instant,
+and a page that watches `readyState` sees the real intermediate state.
+
+**Bytes stay bytes, again.** Frames cross as one char per byte, and the Rust side decodes with
+`c as u32 & 0xff` rather than `as_bytes()` — the latter would UTF-8-encode 0x80..0xFF into two bytes
+each and corrupt every binary frame. `binaryType` then decides the page-visible shape
+(`arraybuffer` → `ArrayBuffer`, otherwise `Blob`); a client that set one and got the other breaks on
+the first byte it reads.
+
+**The `error` event carries no detail to the page,** deliberately — the spec withholds it because it
+would be a cross-origin information leak. The message rides along for our logs only.
+
+Gated by `g_websocket`: the connect op carries URL + offered protocols; `send()` before open throws
+`InvalidStateError`; `onopen` reports the *server's* protocol and `readyState 1`; a frame sent from
+`onopen` reaches the host queue; **an unprompted server push lands in `onmessage` and mutates the
+DOM**, twice, appending; a binary frame preserves `0xFF`; `onclose` reports code, `wasClean` and
+`readyState 3`. Proven RED by making `deliver_ws_event` not reach the page — `onopen` never fires and
+the status stays at the pre-connect value.
+
+Residue: **the shell is not wired yet** — nothing calls `take_ws_ops`/`deliver_ws_event` from
+`gui.rs`, so this is engine-reachable but not yet live during browsing. That is the next tick and the
+true end of lever 3; it needs a per-connection task holding the `WebSocketConn` plus an mpsc from the
+UI thread for sends (bidirectional, unlike fetch). `bufferedAmount` decrements via `Sent` but nothing
+emits it yet; no `Blob` binaryType read path; no permessage-deflate.

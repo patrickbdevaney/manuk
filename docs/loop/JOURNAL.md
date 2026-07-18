@@ -8314,3 +8314,71 @@ implementation fails; the close-handshake trap above is a live example of one th
 `binaryType`) is the next tick and finishes lever 3. No permessage-deflate (offered by many servers,
 optional by spec); no auto-reconnect (correctly the page's job); no `Blob` binaryType. Finish-line
 levers 4 (scroll-anchoring) and 5 (forced reflow) remain after that.
+
+## Tick 201 — the page-facing WebSocket connects (js / page) (2026-07-18)
+
+**TICK SHAPE: capability-mechanism (Phase-0 FINISH-LINE lever 3, page half). WIKI:
+docs/wiki/networking.md "The page-facing `WebSocket` connects (tick 201) — lever 3's other half".**
+
+**Selection.** The second half of tick 200's declared decomposition. Transport landed; the JS surface
+above it was still the stub.
+
+**Hypothesis.** `WebSocket` constructed, sat in CONNECTING, then fired `error` + `close` — a
+deliberate improvement over the `ReferenceError` that once wiped aljazeera.com's article, but it
+means every live-blog, DM thread, presence indicator and console log-tail connected, failed and
+rendered nothing. `send()` threw unconditionally, because the socket was never open.
+
+**Implemented.** The page queues, the host performs, the result comes back — the `fetch` shape.
+`WsOp { Connect{url,protocols}, Send{data,binary}, Close{code,reason} }` drained by
+`Page::take_ws_ops()`; `WsEvent { Open{protocol,extensions}, Message{data,binary}, Sent{bytes},
+Error, Close{code,reason,clean} }` delivered by `Page::deliver_ws_event()`, which runs the page's
+handlers and re-renders when they dirty the DOM.
+
+**A bug in the stub BEYOND "it does not connect."** It pre-filled `socket.protocol` with the client's
+first *offered* subprotocol. `protocol` is what the **server** selects and is empty until it does —
+so the stub told every page a negotiation had happened when none had. Fixed to `''` at construction
+and set only from the server's choice in `Open`.
+
+**Spec details that are load-bearing, not pedantry.** `send()` before OPEN still throws
+`InvalidStateError` (clients are written for it; what is new is that a socket can actually be open),
+and after CLOSING it drops the frame rather than throwing. `close()` moves to CLOSING(2) rather than
+straight to CLOSED(3), because the closing handshake is not instant and a page watching `readyState`
+must see the real intermediate. The `error` event carries **no detail** to the page — the spec
+withholds it because it would be a cross-origin information leak, so the message rides along for our
+logs only.
+
+**Bytes stay bytes, the same trap as the streaming tick.** Frames cross as one char per byte and the
+Rust side decodes with `c as u32 & 0xff`, explicitly NOT `as_bytes()` — the latter would UTF-8-encode
+0x80..0xFF into two bytes each and corrupt every binary frame. `binaryType` then decides the
+page-visible shape; a client that set `arraybuffer` and got a `Blob` breaks on the first byte.
+
+**Gate.** `g_websocket` — the connect op carries the URL and the OFFERED protocols (a server cannot
+select from a list it was never sent); an early `send()` throws `InvalidStateError`; `onopen` reports
+the SERVER's protocol and `readyState 1`; a frame sent from `onopen` reaches the host queue; **an
+unprompted server push lands in `onmessage` and mutates the DOM**, twice, appending; a binary frame
+preserves `0xFF`; `onclose` reports code, `wasClean` and `readyState 3`. Every assertion is made at a
+point where the next event has not happened yet. **Proven RED by making `deliver_ws_event` not reach
+the page** — `onopen` never fires and the status stays at its pre-connect value.
+
+**Pre-existing failure re-confirmed, not mine.** `g_capability` still fails on
+`createDocumentType validates` — byte-identical to the message recorded in ticks 196/197, nothing
+WebSocket-related. `g_globals` green, `cargo check --workspace` green.
+
+**Residue — and lever 3 is NOT yet complete.** Nothing in `gui.rs` calls
+`take_ws_ops`/`deliver_ws_event`, so this is engine-reachable but **not live during browsing**. The
+shell wiring is the next tick and the true end of lever 3; it is harder than the fetch equivalent
+because the channel is bidirectional — a per-connection task holding the `WebSocketConn` plus an mpsc
+from the UI thread for sends. `bufferedAmount` decrements via `Sent` but nothing emits it yet; no
+`Blob` binaryType read path; no permessage-deflate. Then levers 4 and 5.
+
+_Addendum (tick 201): `verify.sh` refused this tick first time with **"manuk-agent: INSTRUMENT FAULT
+— no verdict on two runs. Unmeasurable is not passing."** That was a REAL break, not a flake:
+`WsOp`/`WsEvent` were defined inside `event_loop`, which is `#[cfg(feature = "_sm")]`, while
+`Page`'s public API references them unconditionally — so the **JS-less build did not compile** and the
+agent suite could produce no verdict. Fixed by defining both enums in `engine/js/src/lib.rs` (always
+present) with `event_loop` referring to `crate::{WsOp, WsEvent}` — exactly the arrangement
+`FetchStreamEvent` already uses, which I had followed for the streaming ticks and not here. Two
+lessons, both already written down elsewhere and both re-learned: **a new public type crossing a
+feature boundary belongs above that boundary**, and **"unmeasurable is not passing" earns its keep** —
+a gate that reported green-because-it-could-not-run would have shipped a broken JS-less build. Checked
+`cargo check` in all three configurations (default, `spidermonkey`, workspace) before re-running._
