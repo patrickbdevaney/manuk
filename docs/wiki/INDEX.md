@@ -159,6 +159,7 @@
   - L296 · Reporting and rendering are ONE capability
   - L305 · LimitedQuirks folds to false, deliberately
   - L313 · Gate note
+  - L321 · The half-fix trap: a custom rule index must be keyed the way it is queried (tick 243)
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -536,4 +537,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-455 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+456 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

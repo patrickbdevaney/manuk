@@ -1288,3 +1288,28 @@ a worse lie than the constant: a site branching on it would take a quirks path w
 Residue: the ~9 `MatchingContext`/media-query `NoQuirks` sites in `stylo_engine.rs` still say standards,
 so **case-insensitive id/class matching is not yet enabled** — a real quirk, deliberately left for a
 follow-up rather than claimed. `LimitedQuirks` folds to `false` (it does not enable the unitless quirk).
+
+## Tick 243 — quirks mode, completed: case-insensitive id/class, and the index that would have eaten it
+
+Tick 242 wired the unitless-length quirk and named its own residue honestly: the `MatchingContext`
+sites still said standards, so **case-insensitive id/class matching was not enabled**. This closes it,
+and the closing turned out to contain the interesting part.
+
+**`#FOO { }` must match `id="foo"` in quirks mode.** That is not a curiosity — it is how a large share
+of hand-authored legacy markup was written, back when the id in the stylesheet and the id in the
+markup being spelled differently was simply not a bug. The same documents that lack a doctype.
+
+**THE HALF-FIX TRAP.** Flipping the matcher's constants is *not* the fix. This engine buckets rules in
+its own `RuleIndex` by id/class before matching, as a cascade optimisation. With the index keyed by
+exact case, `#FOO` files under `FOO`, the element queries `foo`, the bucket misses, and the rule is
+**discarded before matching ever runs** — the change compiles, reads as complete, and does nothing.
+Proven rather than reasoned: reverting only `index_key` makes the gate report 800px instead of 250px
+while every `MatchingContext` already says `Quirks`.
+
+**This is the second time this exact index has silently eaten rules** — the CSS-nesting bug was the
+same structure dropping rules it never looked at. The rule worth keeping: **an index is a lossy copy of
+the rule set, and every predicate added to the matcher must be reflected in the key**, or the index
+pre-filters the very thing the matcher was just taught to accept.
+
+Residue: `LimitedQuirks` still folds to `false` (it does not enable either quirk implemented here), and
+the `<font size>` mapping table quirk is available from Stylo but unexercised by any gate.

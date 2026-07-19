@@ -317,3 +317,22 @@ and **SIGSEGV** — SpiderMonkey is not shared-thread-safe — and before crashi
 artifact: `compatMode` read back as the fixture's placeholder on one test and the real value on
 another, i.e. a script that silently did not run. **A gate whose fixture races itself cannot tell a
 regression from its own harness.**
+
+### The half-fix trap: a custom rule index must be keyed the way it is queried (tick 243)
+
+Enabling quirks' **case-insensitive id/class matching** is not "flip the `MatchingContext` constants".
+This engine buckets rules in its own `RuleIndex` (`by_id`/`by_class`) *before* matching, as a cascade
+optimisation. Telling Stylo's matcher "case-insensitive" while the index still keys by exact case means
+`#FOO` is filed under `FOO`, the element `id="foo"` queries `foo`, the bucket misses, and **the rule is
+discarded before matching ever runs.** The fix compiles, reads as complete, and does nothing.
+
+**Proven, not reasoned about:** with `index_key` reverted to exact case and every `MatchingContext`
+already passing `Quirks`, `g_quirks_mode` reports `#FOO` giving 800px instead of 250px. Both ends have
+to agree, so both go through one `index_key(v, qm)` helper — applied when bucketing in `add_rules` and
+when querying in `candidates`.
+
+**The general shape, and this file already contains the other instance of it:** the CSS-nesting bug a
+few sections up was the *same* index dropping rules it never looked at. **An index is a lossy copy of
+the rule set, and every predicate you add to the matcher has to be reflected in the key — or the index
+silently pre-filters the thing you just taught the matcher to accept.** Ask what the index dropped,
+every time the matching semantics change.

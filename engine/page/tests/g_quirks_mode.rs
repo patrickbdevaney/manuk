@@ -27,22 +27,29 @@ use manuk_text::FontContext;
 /// Identical documents, distinguished ONLY by the presence of `<!doctype html>`.
 fn doc(doctype: &str) -> String {
     format!(
-        r#"{doctype}<html><body style="margin:0">
+        r#"{doctype}<html><head><style>#FOO {{ width: 250px; }}</style></head><body style="margin:0">
 <div id="a" style="width: 100; height: 40px; background: #00f"></div>
+<div id="foo" style="height: 10px"></div>
 <div id="out">-</div>
 <script>document.getElementById('out').textContent = document.compatMode;</script>
 </body></html>"#
     )
 }
 
-fn measure(doctype: &str) -> (f32, String) {
+/// Returns (unitless-length width, `#FOO`-vs-`id=foo` width, compatMode).
+fn measure(doctype: &str) -> (f32, f32, String) {
     let fonts = FontContext::new();
     let page = manuk_page::Page::load(&doc(doctype), "https://quirks.test/", &fonts, 800.0);
     let root = page.dom().root();
     let a = manuk_css::query_selector_all(page.dom(), root, "#a")[0];
+    let foo = manuk_css::query_selector_all(page.dom(), root, "#foo")[0];
     let out = manuk_css::query_selector_all(page.dom(), root, "#out")[0];
-    let width = page.node_rects()[&a].width;
-    (width, page.dom().text_content(out))
+    let rects = page.node_rects();
+    (
+        rects[&a].width,
+        rects[&foo].width,
+        page.dom().text_content(out),
+    )
 }
 
 // **ONE test function, deliberately.** Three `#[test]`s in this binary SIGSEGV'd: each runs
@@ -54,8 +61,8 @@ fn measure(doctype: &str) -> (f32, String) {
 
 #[test]
 fn the_parsers_quirks_verdict_reaches_both_layout_and_compat_mode() {
-    let (qw, qc) = measure("");
-    let (sw, sc) = measure("<!doctype html>");
+    let (qw, qcase, qc) = measure("");
+    let (sw, scase, sc) = measure("<!doctype html>");
 
     // ── 1. Reporting, both directions.
     assert_eq!(
@@ -89,6 +96,25 @@ fn the_parsers_quirks_verdict_reaches_both_layout_and_compat_mode() {
         "G_QUIRKS_MODE: compatMode reported {qc:?} for BOTH documents — the value is constant, i.e. \
          nobody is reading the parser's verdict."
     );
+    // ── 4. CASE-INSENSITIVE id MATCHING — the other half of quirks, and the one with a trap.
+    //    `#FOO { width: 250px }` must match `id="foo"` in quirks and must NOT in standards.
+    //
+    //    THE TRAP: this engine buckets rules in its own `RuleIndex` by id/class before matching. Telling
+    //    Stylo's `MatchingContext` "case-insensitive" while the index still keys by exact case filters
+    //    the rule out BEFORE matching runs — the fix would look complete and do nothing. So the index is
+    //    keyed and queried through the same `index_key`, and this claim is what proves both ends agree.
+    assert!(
+        (qcase - 250.0).abs() < 0.5,
+        "G_QUIRKS_MODE: in quirks mode `#FOO` must match id=\"foo\" (case-insensitive) and give 250px \
+         — got {qcase}. ~800 means the rule never matched: either MatchingContext is still NoQuirks, or \
+         the RuleIndex bucket lookup discarded the rule before matching ever ran."
+    );
+    assert!(
+        scase > 700.0,
+        "G_QUIRKS_MODE: in standards mode `#FOO` must NOT match id=\"foo\" — got {scase}. Case-\
+         insensitive id matching leaking into standards documents is the same bug mirrored."
+    );
+
     assert!(
         (qw - sw).abs() > 50.0,
         "G_QUIRKS_MODE: the same `width: 100` laid out at {qw} in quirks and {sw} in standards — the \

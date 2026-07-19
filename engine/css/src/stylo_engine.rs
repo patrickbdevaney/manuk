@@ -99,6 +99,28 @@ impl FontMetricsProvider for StubFontMetrics {
     }
 }
 
+/// **The quirks verdict, as Stylo's enum.** Read off the `Dom` every one of these call sites already
+/// holds, so no signature has to carry it.
+fn qm_of(dom: &Dom) -> QuirksMode {
+    if dom.quirks() {
+        QuirksMode::Quirks
+    } else {
+        QuirksMode::NoQuirks
+    }
+}
+
+/// **Quirks mode matches id and class CASE-INSENSITIVELY**, so the index must be keyed the same way it
+/// is queried or the bucket lookup filters candidates out *before* matching ever runs — a half-fix that
+/// looks complete, because `MatchingContext` would be saying "case-insensitive" about rules the index
+/// had already discarded. Applied at BOTH ends: here when bucketing, and in `candidates` when querying.
+fn index_key(v: &str, qm: QuirksMode) -> String {
+    if qm == QuirksMode::Quirks {
+        v.to_ascii_lowercase()
+    } else {
+        v.to_string()
+    }
+}
+
 fn make_device(width: f32, height: f32, quirks: QuirksMode) -> Device {
     Device::new(
         MediaType::screen(),
@@ -251,11 +273,7 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
     // say `QuirksMode::NoQuirks` unconditionally now says `qm`. Stylo already implements the quirks
     // themselves (unitless lengths, case-insensitive id/class matching, the `<font size>` table) — this
     // function was simply never telling it which mode the document was in.
-    let qm = if dom.quirks() {
-        QuirksMode::Quirks
-    } else {
-        QuirksMode::NoQuirks
-    };
+    let qm = qm_of(dom);
     let lock = SharedRwLock::new();
     let Ok(url) = ::url::Url::parse("about:manuk") else {
         return MinimalCascade.cascade(dom, sheets);
@@ -309,7 +327,7 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
     // A measurement must never be able to break the thing it measures.
     #[cfg(not(target_arch = "wasm32"))]
     let _ti = std::time::Instant::now();
-    let index = RuleIndex::build(&stylo_sheets, &guard, stylist.device());
+    let index = RuleIndex::build(&stylo_sheets, &guard, stylist.device(), qm);
     #[cfg(not(target_arch = "wasm32"))]
     tracing::debug!(
         ms = _ti.elapsed().as_millis(),
@@ -782,6 +800,7 @@ impl RuleIndex {
         sheets: &[ServoArc<StyloStylesheet>],
         guard: &SharedRwLockReadGuard<'_>,
         device: &Device,
+        qm: QuirksMode,
     ) -> Self {
         let mut idx = RuleIndex {
             rules: Vec::new(),
@@ -793,7 +812,7 @@ impl RuleIndex {
         let mut order = 0usize;
         for sheet in sheets {
             let rules = sheet.contents.read_with(guard).rules(guard);
-            idx.add_rules(rules, guard, device, &mut order);
+            idx.add_rules(rules, guard, device, &mut order, qm);
         }
         idx
     }
@@ -804,6 +823,7 @@ impl RuleIndex {
         guard: &SharedRwLockReadGuard<'_>,
         device: &Device,
         order: &mut usize,
+        qm: QuirksMode,
     ) {
         use selectors::parser::Component;
         for rule in rules {
@@ -816,8 +836,8 @@ impl RuleIndex {
                         let mut key: Option<(u8, String)> = None;
                         for comp in sel.iter() {
                             let cand = match comp {
-                                Component::ID(v) => Some((0u8, v.to_string())),
-                                Component::Class(v) => Some((1u8, v.to_string())),
+                                Component::ID(v) => Some((0u8, index_key(&v.to_string(), qm))),
+                                Component::Class(v) => Some((1u8, index_key(&v.to_string(), qm))),
                                 Component::LocalName(n) => Some((2u8, n.lower_name.to_string())),
                                 _ => None,
                             };
@@ -865,26 +885,26 @@ impl RuleIndex {
                     // whether the rules it indexed were all the rules there were.
                     if let Some(nested) = &sr.rules {
                         let nested = nested.read_with(guard);
-                        self.add_rules(&nested.0, guard, device, order);
+                        self.add_rules(&nested.0, guard, device, order, qm);
                     }
                 }
                 CssRule::Media(media_rule) => {
                     let ml = media_rule.media_queries.read_with(guard);
                     let mut custom = CustomMediaEvaluator::none();
-                    if ml.evaluate(device, QuirksMode::NoQuirks, &mut custom) {
+                    if ml.evaluate(device, qm, &mut custom) {
                         let nested = media_rule.rules.read_with(guard);
-                        self.add_rules(&nested.0, guard, device, order);
+                        self.add_rules(&nested.0, guard, device, order, qm);
                     }
                 }
                 CssRule::Supports(supports_rule) => {
                     if supports_rule.enabled {
                         let nested = supports_rule.rules.read_with(guard);
-                        self.add_rules(&nested.0, guard, device, order);
+                        self.add_rules(&nested.0, guard, device, order, qm);
                     }
                 }
                 CssRule::LayerBlock(layer) => {
                     let nested = layer.rules.read_with(guard);
-                    self.add_rules(&nested.0, guard, device, order);
+                    self.add_rules(&nested.0, guard, device, order, qm);
                 }
                 _ => {}
             }
@@ -902,13 +922,15 @@ impl RuleIndex {
             }
         }
         if let Some(e) = dom.element(node) {
+            // Same key shape as `add_rules` used when bucketing — see `index_key`.
+            let qm = qm_of(dom);
             if let Some(id) = e.attr("id") {
-                if let Some(v) = self.by_id.get(id) {
+                if let Some(v) = self.by_id.get(&index_key(id, qm)) {
                     out.extend_from_slice(v);
                 }
             }
             for c in e.classes() {
-                if let Some(v) = self.by_class.get(c) {
+                if let Some(v) = self.by_class.get(&index_key(&c, qm)) {
                     out.extend_from_slice(v);
                 }
             }
@@ -940,7 +962,7 @@ fn match_rules_recursive(
                         MatchingMode::Normal,
                         None,
                         caches,
-                        selectors::context::QuirksMode::NoQuirks,
+                        qm_of(el.dom),
                         NeedsSelectorFlags::No,
                         MatchingForInvalidation::No,
                     );
@@ -953,7 +975,7 @@ fn match_rules_recursive(
             CssRule::Media(media_rule) => {
                 let ml = media_rule.media_queries.read_with(guard);
                 let mut custom = CustomMediaEvaluator::none();
-                if ml.evaluate(device, QuirksMode::NoQuirks, &mut custom) {
+                if ml.evaluate(device, qm_of(el.dom), &mut custom) {
                     let nested = media_rule.rules.read_with(guard);
                     match_rules_recursive(&nested.0, guard, device, el, caches, winners, order);
                 }
@@ -1084,7 +1106,7 @@ fn match_pseudo_rules(
                         MatchingMode::ForStatelessPseudoElement,
                         None,
                         caches,
-                        selectors::context::QuirksMode::NoQuirks,
+                        qm_of(el.dom),
                         NeedsSelectorFlags::No,
                         MatchingForInvalidation::No,
                     );
@@ -1097,7 +1119,7 @@ fn match_pseudo_rules(
             CssRule::Media(media_rule) => {
                 let ml = media_rule.media_queries.read_with(guard);
                 let mut custom = CustomMediaEvaluator::none();
-                if ml.evaluate(device, QuirksMode::NoQuirks, &mut custom) {
+                if ml.evaluate(device, qm_of(el.dom), &mut custom) {
                     let nested = media_rule.rules.read_with(guard);
                     match_pseudo_rules(&nested.0, guard, device, el, want, caches, winners, order);
                 }
@@ -1149,7 +1171,7 @@ fn cascade_one_element(
         MatchingMode::Normal,
         None,
         caches,
-        selectors::context::QuirksMode::NoQuirks,
+        qm_of(el.dom),
         NeedsSelectorFlags::No,
         MatchingForInvalidation::No,
     );
@@ -1176,17 +1198,8 @@ fn cascade_one_element(
         // quirks page while the same rule in a `<style>` block worked — and legacy markup, which is
         // exactly the markup that lands in quirks mode, is overwhelmingly inline-styled. `el.dom` is
         // already in scope, so this is a field read rather than another parameter.
-        let block = parse_style_attribute(
-            inline,
-            url_data,
-            None,
-            if el.dom.quirks() {
-                selectors::context::QuirksMode::Quirks
-            } else {
-                selectors::context::QuirksMode::NoQuirks
-            },
-            CssRuleType::Style,
-        );
+        let block =
+            parse_style_attribute(inline, url_data, None, qm_of(el.dom), CssRuleType::Style);
         for (decl, importance) in block.declaration_importance_iter() {
             merged.push(decl.clone(), importance);
         }

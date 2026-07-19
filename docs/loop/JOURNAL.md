@@ -10588,3 +10588,49 @@ unread field; the case key filtered out before matching; focus published to `act
 never to the cascade). None of the three is visible to a capability probe, because the feature
 *appears* present at every layer anyone inspects. That suggests a cheap, high-yield audit shape:
 **grep for values that are computed and have exactly one reader, or none.**
+
+## Tick 243 — quirks completed, and the index that would have eaten the fix
+
+TICK SHAPE: close tick 242's named residue — case-insensitive id/class matching in quirks mode.
+
+**HYPOTHESIS:** tick 242 left ~8 `MatchingContext`/media-query sites hard-coded to `NoQuirks`, so
+case-insensitive id/class matching was off. All the enclosing functions carry `el: &StyloElement`
+(which holds `.dom`), so this should be a mechanical `qm_of(el.dom)` substitution. **It was not, and
+the reason is the tick.**
+
+**THE HALF-FIX TRAP, FOUND BY ASKING WHAT ELSE TOUCHES ID/CLASS BEFORE MATCHING.** This engine buckets
+rules in its own `RuleIndex` (`by_id`/`by_class`) as a cascade optimisation, *before* Stylo's matcher
+runs. Keyed by exact case, `#FOO` files under `FOO` while the element `id="foo"` queries `foo` — the
+bucket misses and **the rule is discarded before matching**. Flipping the `MatchingContext` constants
+alone compiles, reads as complete, and does nothing. Both ends now go through one `index_key(v, qm)`:
+applied when bucketing in `add_rules`, and when querying in `candidates` (which already had `&Dom`).
+
+**PROVEN, NOT REASONED ABOUT.** With `index_key` reverted to exact case and every `MatchingContext`
+already passing `Quirks`, the gate reports `#FOO` at 800px instead of 250px. That probe is the whole
+justification for the extra work, and without it I would have shipped the constants and believed it.
+
+**This is the SECOND time this same index has silently eaten rules.** The CSS-nesting bug — 41% of the
+corpus affected — was the identical structure dropping rules it never looked at, and its comment is
+still in the file a few lines above. The generalisation now recorded in the wiki: **an index is a lossy
+copy of the rule set; every predicate added to the matcher must be reflected in the key, or the index
+pre-filters the thing the matcher was just taught to accept.**
+
+**TWO RED PROBES EXECUTED, NOT ASSERTED (process rule 3):**
+  · `index_key` reverted to exact case      -> `#FOO` claim FAILS at 800px (the index half is real)
+  · `MatchingContext` back to `NoQuirks`     -> attempted; the scripted edit produced a delimiter error
+    because the replacement carried a trailing `// RED PROBE` comment that commented out the remainder
+    of inline call sites. Caught by the compiler, restored, re-verified green. Recording it because the
+    *assert-every-scripted-edit* rule caught a bad edit for the second time this session.
+
+**REGRESSION RISK MEASURED, NOT ASSUMED:** case-insensitive matching changes selector behaviour on
+every doctype-less fixture. Full page suite: **122 passed, 1 failed** — byte-identical to the
+pre-change baseline, the failure being the pre-existing `hard_wall_detection` lib test (tick 239).
+manuk-css 33, manuk-layout 77, manuk-dom 11, manuk-html 12, manuk-paint 17, all green.
+
+**HARNESS NOTE (observer-owned, not touched):** the first sweep died with `failed to move dependency
+graph ... /dev/shm/manuk-build/debug-incremental/...dep-graph.bin: No such file` — the ramdisk
+incremental cache being flushed underneath a running build (disk-hygiene calls `ramdisk.sh --flush`).
+A clean re-run was fine. Same family as the pruner/wall race, on the incremental dir rather than deps.
+
+Residue: `LimitedQuirks` still folds to `false`; the `<font size>` mapping-table quirk is available from
+Stylo but unexercised by any gate. `g_quirks_mode` remains outside the verify wall (tick 239).
