@@ -39,6 +39,9 @@ manuk-dom.workspace = true
 # (`engine/text`), rather than growing a second one — so a glyph drawn into a canvas and the
 # same glyph drawn in a paragraph come from one shaper, one fallback chain and one raster cache.
 manuk-text.workspace = true
+# Media container demux (M3) — `SourceBuffer.appendBuffer` needs something to read the bytes it
+# has been faithfully storing and never inspecting. No codec: see engine/media.
+manuk-media.workspace = true
 manuk-css.workspace = true
 manuk-net.workspace = true
 serde_json.workspace = true

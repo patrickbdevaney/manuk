@@ -1,0 +1,20 @@
+[package]
+name = "manuk-media"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Media container demux (ISO-BMFF / fragmented MP4). The plumbing under MSE — no codecs."
+
+# BORROW, DO NOT BUILD (docs/loop/MEDIA.md). This crate's job is demux, buffer accounting and
+# timeline arithmetic — the parts that are browser work. Decoding is a codec's job and a codec is
+# never hand-written here.
+#
+# `re_mp4` (Rerun's fork of the `mp4` crate) is the box parser, chosen over the alternatives for one
+# reason the trap-list in MEDIA.md records: it reads the *fragmented* case. `symphonia` leaves its
+# ISO-MP4 video `SampleEntry` commented out (audio only); `mp4parse` is a box parser with no sample
+# reader; `re_video` shells out to an ffmpeg *binary*. `re_mp4` walks `moof`/`traf`/`trun` and
+# produces a real sample table, which is exactly what an MSE `SourceBuffer` needs.
+[dependencies]
+re_mp4 = "0.4"
+tracing.workspace = true

@@ -19,17 +19,22 @@
 //! `SourceBufferList`, `TimeRanges`, `URL.createObjectURL`/`revokeObjectURL`, and the attachment
 //! handshake that flips a `<video>` over to a MediaSource when its `src` is set to an object URL.
 //!
-//! **There is no decoder yet, and this file does not pretend otherwise.** Bytes are accepted and
-//! held; nothing demuxes them, so `buffered` is honestly empty and no frame is produced. That
-//! honesty is load-bearing in exactly one place: [`CODECS`] is the registry of MIME types the decode
-//! layer can *actually* handle, it is **empty today**, and `MediaSource.isTypeSupported()` answers
-//! from it. So every player asks "can you do VP9?", is told **no**, and takes its documented
-//! fallback path — instead of being told yes and then stalling forever on a `buffered` range that
-//! never grows, which is the strictly worse outcome and the one a stub would have produced.
+//! **Since M3 (tick 234) the bytes are read.** `__demux` hands the accumulated stream to
+//! `manuk-media` and populates `buffered`, `videoTracks`/`audioTracks` and the source's `duration`
+//! from the container itself — so an adaptive player's `updateend` loop can finally steer, which is
+//! what it reads `buffered` for. Gated by `g_media_buffered`.
 //!
-//! That registry is the hand-off point for the rest of the media track: M3 (demux) and M4/M5
-//! (AAC / VP9 decode) populate `__mseCodecs`, and `isTypeSupported` starts saying yes for exactly
-//! what can be played, with no change to any of the machinery below.
+//! **There is still no decoder, and this file does not pretend otherwise.** Knowing *where* the
+//! H.264 is and being able to decode it are different claims. No frame is produced. That honesty is
+//! load-bearing in exactly one place: `__mseCodecs` is the registry of MIME types the decode layer
+//! can *actually* handle, it is **empty today**, and `MediaSource.isTypeSupported()` answers from
+//! it. So every player asks "can you do VP9?", is told **no**, and takes its documented fallback
+//! path — instead of being told yes and then stalling forever on a `buffered` range whose media
+//! never decodes, which is the strictly worse outcome and the one a stub would have produced.
+//!
+//! That registry is the hand-off point for the rest of the media track: M4/M5 (AAC / VP9 decode)
+//! populate `__mseCodecs`, and `isTypeSupported` starts saying yes for exactly what can be played,
+//! with no change to any of the machinery below.
 
 /// The MSE surface. Evaluated after the main prelude (so `setTimeout`, `DOMException` and the inert
 /// sweep have all run) and after `dom_bindings`' `install` (so `URL` exists to hang
@@ -124,10 +129,16 @@ pub const MSE_JS: &str = r#"
     this.__parent = parent;
     this.__type = type;
     this.__updating = false;
-    // The appended segments, held in order. This is the queue M3's demuxer reads from; until then
-    // it is a faithful record of what the page handed us and nothing more.
+    // The appended segments, held in order — and, since M3, actually read. `__bin` is the same
+    // bytes in the one-char-per-byte form the Rust boundary takes, accumulated as they arrive
+    // rather than rebuilt per append: the demuxer needs the *whole* stream (an init segment
+    // defines the tracks that every later media segment's samples belong to), so re-concatenating
+    // the chunk list on every append would make an N-segment stream O(N²) in exactly the case that
+    // matters — a long video, appended segment by segment, for an hour.
     this.__chunks = [];
+    this.__bin = '';
     this.__bytes = 0;
+    this.__ranges = [];
     this.mode = 'segments';
     this.timestampOffset = 0;
     this.appendWindowStart = 0;
@@ -135,8 +146,9 @@ pub const MSE_JS: &str = r#"
     this.audioTracks = []; this.videoTracks = []; this.textTracks = [];
     var self = this;
     Object.defineProperty(this, 'updating', { get: function () { return self.__updating; } });
-    // Honestly empty: nothing has been demuxed, so no media timeline exists to report. A player
-    // reading this sees "you have nothing buffered", which is true.
+    // The demuxed presentation timeline (M3). Empty until something has been appended AND parsed —
+    // a player reading an empty one sees "you have nothing buffered", which stays true rather than
+    // becoming a comfortable lie the moment a demuxer exists.
     Object.defineProperty(this, 'buffered', {
       get: function () {
         if (self.__parent === null) { throw fail('the source buffer has been removed', 'InvalidStateError'); }
@@ -169,17 +181,60 @@ pub const MSE_JS: &str = r#"
 
     this.__chunks.push(bytes);
     this.__bytes += bytes.byteLength;
+    var s = '';
+    for (var i = 0; i < bytes.length; i++) { s += String.fromCharCode(bytes[i]); }
+    this.__bin += s;
     this.__updating = true;
     this.__fire('updatestart');
     var self = this;
     // The append completes on a later task, exactly as it does when a real demuxer is doing the
-    // work — so the page's `updateend`-driven loop is a real asynchronous loop today, and stays
-    // byte-for-byte the same code path once M3 lands.
+    // work — and since M3 a real demuxer *is* doing the work, on this task, which is why the
+    // asynchrony was built this way in the first place.
     g.setTimeout(function () {
+      self.__demux();
       self.__updating = false;
       self.__fire('update');
       self.__fire('updateend');
     }, 0);
+  };
+
+  // ── M3: read what was appended.
+  //
+  // **Failure here is silent by design, and that is not the same as ignored.** An MSE append is
+  // incremental: a player hands over an init segment that defines tracks but contains no media,
+  // then media segments that contain no track definitions, and either can arrive split across
+  // several `appendBuffer` calls. "I cannot parse this *yet*" is therefore the ordinary state of a
+  // healthy stream, not an error — so a failed demux leaves the previous ranges standing and waits
+  // for more bytes. Throwing, or clearing `buffered`, would break every player on its first
+  // partial append.
+  //
+  // What a demux failure must never do is *invent* a timeline, which is the failure mode MEDIA.md
+  // names: a player told it has buffered media it does not have stalls forever waiting for a frame
+  // that never decodes. Empty is honest; wrong is fatal.
+  SourceBuffer.prototype.__demux = function () {
+    if (typeof g.__mseDemux !== 'function') { return; }
+    var info;
+    try { info = JSON.parse(g.__mseDemux(this.__bin)); } catch (e) { return; }
+    if (!info || !info.ok) { return; }
+    this.__ranges = info.ranges || [];
+    this.__info = info;
+    // The track lists a player reads to decide what it is about to play. Populated from the
+    // container, so an audio-only or video-only stream reports itself as one — which is how an
+    // adaptive player knows it still needs to open the other SourceBuffer.
+    var vt = [], at = [];
+    for (var i = 0; i < (info.tracks || []).length; i++) {
+      var t = info.tracks[i];
+      var entry = { id: String(t.id), kind: t.kind, codec: t.codec, language: '', label: '' };
+      if (t.kind === 'video') { entry.width = t.width; entry.height = t.height; vt.push(entry); }
+      else if (t.kind === 'audio') { entry.channels = t.channels; entry.sampleRate = t.sampleRate; at.push(entry); }
+    }
+    this.videoTracks = vt;
+    this.audioTracks = at;
+    // `MediaSource.duration` is NaN until something knows better. A demuxed `moov` knows better —
+    // but only when it actually carries a duration: a bare media segment reports 0, and writing
+    // that over a known duration would truncate the timeline the player is seeking within.
+    var ms = this.__parent;
+    if (ms && info.duration > 0 && !(ms.__duration > 0)) { ms.__duration = info.duration; }
   };
 
   SourceBuffer.prototype.abort = function () {

@@ -9796,3 +9796,72 @@ noted as a separate gap, not fixed here.
 into frames (only clicks); body-background → canvas propagation is unimplemented.
 
 **Mechanism captured:** `docs/wiki/interaction-surface.md`.
+
+## Tick 234 — media M3: the engine can open a media file, and `buffered` answers (2026-07-18)
+
+**Selected:** the board's CO-#1 (A) MEDIA — the largest hole in the constellation (media class 5%),
+and the row that read *"container demux (MP4/WebM): cannot even open a file"*. Two of the board's
+other CO-#1 levers were **probed first and found already built**: canvas `fillText` landed at tick
+224 (the board is stale on it) and MSE M1/M2 landed at 223/227/228. Probing before implementing
+saved the tick; the board's (C) entry should be retired.
+
+**The gap, precisely.** The MSE byte pipe was complete and **inert**. A page could construct a
+`MediaSource`, attach it to a `<video>`, fetch a segment byte-exactly and `appendBuffer` it — and
+`sb.buffered.length` was `0`, because nothing had ever looked at the bytes. `SourceBuffer.__chunks`
+called itself "a faithful record of what the page handed us and nothing more". That zero is not
+cosmetic: **`buffered` is the variable an adaptive player's fetch loop steers by.** It appends, reads
+how far its buffer reaches, decides what to fetch next. A `buffered` that never advances is a loop
+that never advances — so a perfect byte pipe still gets no streaming site past its first segment.
+
+**Built:** `engine/media` (`manuk-media`), borrowing `re_mp4` per the MEDIA.md trap-list (symphonia's
+ISO-MP4 video sample entry is commented out; `mp4parse` has no sample reader; `re_video` shells out
+to an ffmpeg binary). Produces tracks (kind, RFC 6381 codec string, dimensions, channels/rate, and
+the `avcC`/`av1C`/`vpcC`/AAC config record extracted **now** so M4/M5 are decoder steps and not
+another parsing step), a sample table, and merged presentation-time ranges. Wired to JS through
+`__mseDemux` — a global native taking the accumulated stream as a one-char-per-byte string (the
+convention this boundary already uses; inventing a second is how the two drift) and answering in
+JSON. `SourceBuffer.__demux` populates `buffered`, `videoTracks`/`audioTracks` and `duration`.
+
+**AAC needed writing, not borrowing.** `re_mp4` returns `None` for `mp4a` — it has no branch for it.
+AAC is the audio codec of essentially every MP4 on the web, and a player reading a null codec treats
+the stream as undecodable before it ever asks whether we can decode it. `mp4a.40.2` is built here
+from the `esds` descriptor (RFC 6381 spells the OTI in hex and the audio object type in decimal —
+`mp4a.40.2`, never `mp4a.40.02`; players string-compare it).
+
+**The borrowed bug, and how it was caught.** `re_mp4` inverts the sync flag of **every fragmented
+sample**: `reader.rs:443` reads bit 16 of a `trun` sample-flags word as `is_sync`, but that bit is
+`sample_is_NON_sync_sample`. Found by **differential test, not by reading the source** — the source
+looks right until you check which flag bit 16 is. Chromium ships three fixtures differing only in
+their sync flags and `re_mp4` returned the exact complement for all three. A seek must land on a sync
+sample, so inverted, every seek into a fragmented stream lands on a frame that cannot decode
+standalone: garbage or a silent stall, nothing thrown. It would have surfaced much later as "our
+H.264 decoder is broken", one layer below the actual bug. Corrected per sample by origin (`stbl`
+count vs `trun`), not per file.
+
+**Two assertions I got wrong from assumption, both instructive.** (1) `buffered` does **not** start
+at zero — the fixture carries a two-frame composition offset (decode at 0/1001, present at
+2002/4004), ordinary B-frame reorder delay, and `buffered` is a presentation timeline. "Fixing" it
+would have discarded a real timestamp, and in MSE that offset is how a segment appended at minute
+three reports minute three. (2) The range does **not** span exactly two frames — those frames present
+one frame apart, leaving a genuine 33ms hole that the 100ms gap tolerance merges. Reported literally
+that is two ranges, and a player reading `buffered.length === 2` across 33ms concludes its download
+failed and re-fetches forever. Both were fixed by measuring and asserting the real relationship.
+
+**Honesty held.** No decoder, no frame, and `isTypeSupported` still answers `false` from the empty
+`__mseCodecs` registry. `g_media_buffered` **asserts that false**, so this landing cannot silently
+start over-promising — advertising MSE we cannot honour turns a working YouTube into a black
+rectangle. WebM is recognised by `sniff` and refused by name (`Unsupported`), not blamed as corrupt.
+
+**Gates.** `engine/media/tests/demux.rs` — real Chromium fixtures (checked in; a fixture written by
+our own code only proves our writer and reader agree), both container forms, the differential
+sync-flag test. `engine/page/tests/g_media_buffered.rs` — the JS-observable surface: a real fMP4 over
+a real socket, fetched as an `ArrayBuffer`, appended, read back through the public API only.
+**RED, run:** dropping the sync correction reproduces `[false, true]` against the expected
+`[true, false]`; making `__demux` return immediately reproduces `ranges:0 start:- end:- vtracks:0`,
+the inert pipe exactly.
+
+**Residue:** no decode (M4 AAC via symphonia + cpal, M5 video); WebM/EBML unread; the demuxer
+re-parses the accumulated buffer per append rather than incrementally (the SourceBuffer retains the
+chunks anyway, and there is no decoder downstream to spend the latency on yet).
+
+**Mechanism captured:** `docs/wiki/media-pipeline.md`.

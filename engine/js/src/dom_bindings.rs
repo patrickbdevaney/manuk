@@ -2405,6 +2405,97 @@ unsafe fn cv_to_data_url(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> b
     true
 }
 
+/// `__mseDemux(bytes)` → a JSON description of what a `SourceBuffer` has accumulated.
+///
+/// Media step **M3**'s crossing of the JS↔Rust boundary. `bytes` arrives as a **one-char-per-byte
+/// string**, the convention this boundary already uses everywhere else (`WebSocket.send`,
+/// `event_loop.rs`) — inventing a second byte convention for one caller is how the two drift.
+///
+/// The answer goes back as **JSON** rather than a hand-built JS object. Constructing an object
+/// graph through the raw JSAPI is a dozen rooted locals and a leak waiting to happen; `JSON.parse`
+/// on a string this size is not measurable next to the demux itself, and the shape stays legible
+/// on both sides of the boundary.
+///
+/// Failure is **reported, never thrown**: an append that cannot be parsed yet is the *normal* state
+/// of an incremental stream, so `{"ok":false,"incomplete":true}` means "ask me again with more
+/// bytes" and the JS keeps its existing ranges. Throwing here would turn every partial append into
+/// a page error.
+unsafe fn mse_demux(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let s = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    let bytes: Vec<u8> = s.chars().map(|c| (c as u32 & 0xff) as u8).collect();
+
+    let json = match manuk_media::demux(&bytes) {
+        Ok(m) => {
+            let mut tracks = String::new();
+            for (i, t) in m.tracks.iter().enumerate() {
+                if i > 0 {
+                    tracks.push(',');
+                }
+                // The codec string is RFC 6381 — alphanumerics and dots — but it comes from file
+                // bytes, so it is escaped rather than trusted to be quote-free.
+                let codec = match &t.codec {
+                    Some(c) => js_string_literal(c),
+                    None => "null".to_string(),
+                };
+                tracks.push_str(&format!(
+                    r#"{{"id":{},"kind":"{}","codec":{},"width":{},"height":{},"channels":{},"sampleRate":{},"samples":{}}}"#,
+                    t.id,
+                    t.kind.as_str(),
+                    codec,
+                    t.width,
+                    t.height,
+                    t.channels,
+                    t.sample_rate,
+                    t.samples.len()
+                ));
+            }
+            let ranges = m
+                .buffered()
+                .iter()
+                .map(|r| format!("[{},{}]", fin(r.start), fin(r.end)))
+                .collect::<Vec<_>>()
+                .join(",");
+            format!(
+                r#"{{"ok":true,"fragmented":{},"duration":{},"tracks":[{}],"ranges":[{}]}}"#,
+                m.fragmented,
+                fin(m.duration_seconds()),
+                tracks,
+                ranges
+            )
+        }
+        Err(manuk_media::DemuxError::Incomplete) => r#"{"ok":false,"incomplete":true}"#.to_string(),
+        Err(e) => format!(
+            r#"{{"ok":false,"incomplete":false,"error":{}}}"#,
+            js_string_literal(&e.to_string())
+        ),
+    };
+
+    let cs = match std::ffi::CString::new(json) {
+        Ok(c) => c,
+        Err(_) => return true,
+    };
+    rooted!(in(cx) let mut out = UndefinedValue());
+    let js = mozjs::jsapi::JS_NewStringCopyZ(cx, cs.as_ptr());
+    if js.is_null() {
+        *vp = NullValue();
+        return true;
+    }
+    out.set(mozjs::jsval::StringValue(&*js));
+    *vp = out.get();
+    true
+}
+
+/// A finite JSON number. `NaN`/`Infinity` are not JSON, and a duration of `NaN` is a real value
+/// here (a media segment appended with no `moov` has no known duration), so it must serialise as
+/// something `JSON.parse` accepts rather than producing a syntax error the caller cannot see past.
+fn fin(v: f64) -> String {
+    if v.is_finite() {
+        format!("{v:.6}")
+    } else {
+        "null".to_string()
+    }
+}
+
 /// `__iframeDoc()` → the `Document` reflector for the document **inside** this `<iframe>`, or `null`.
 ///
 /// The document object is built exactly the way the top-level `document` is — `Document.prototype` →
@@ -6228,6 +6319,14 @@ pub unsafe fn install(
         c"__postMessage".as_ptr(),
         host_fn!(post_message),
         4,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__mseDemux".as_ptr(),
+        host_fn!(mse_demux),
+        1,
         0,
     );
     let platform = format!("{} {}", std::env::consts::OS, std::env::consts::ARCH);

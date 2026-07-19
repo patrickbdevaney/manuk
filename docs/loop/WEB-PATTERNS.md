@@ -1181,3 +1181,29 @@ pixels changed, and — the negative — that a click *outside* the frame's box 
 
 Residue: keyboard/typing is still not routed into frames, a frame's own timers/fetches do not drive a
 repaint, and a child's `body { background }` does not propagate to the frame's canvas.
+
+## The adaptive-streaming append loop — every player that is not `<video src>` (tick 234)
+
+Every site that matters for watching — YouTube, Twitch, Vimeo, and every player library (hls.js,
+dash.js, Shaka, video.js) — never puts a media file in `src`. It constructs a `MediaSource`, waits
+for `sourceopen`, `addSourceBuffer(mime)`, and then runs a loop: fetch a segment, `appendBuffer` it,
+and on `updateend` **read `buffered` to decide what to fetch next**.
+
+That last clause is the pattern, and it is why a complete byte pipe was still worth nothing. Ticks
+223/227/228 built everything up to the append — the object graph, the attachment handshake, and a
+byte-exact `arrayBuffer()` fetch with `Range` — and `sb.buffered.length` stayed `0` because nothing
+demuxed the bytes. A player reading a `buffered` that never advances either re-fetches the same
+segment forever or stalls, so no adaptive site progressed past its first segment regardless of how
+correct the transport underneath was.
+
+Since M3 the appended stream is demuxed (`engine/media`): `buffered` reports real presentation-time
+ranges, and `videoTracks`/`audioTracks` carry the container's own codec strings and dimensions. The
+loop can steer.
+
+**What this does NOT unlock, deliberately: playback.** There is no decoder and no frame is produced.
+`isTypeSupported` still answers `false`, which is what keeps YouTube serving its progressive fallback
+rather than a stream we would accept and never render — `g_media_buffered` asserts that `false` so
+the demuxer landing cannot quietly start over-promising. WebM/EBML is recognised and refused by name.
+
+Residue: M4 (AAC via symphonia + cpal) and M5 (video decode); WebM demux; incremental rather than
+whole-buffer parsing.

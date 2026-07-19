@@ -17,6 +17,7 @@ members = [
     "engine/css",
     "engine/layout",
     "engine/text",
+    "engine/media",
     "engine/js",
     "engine/paint",
     "engine/compositor",
@@ -104,6 +105,7 @@ manuk-html = { path = "engine/html" }
 manuk-css = { path = "engine/css" }
 manuk-layout = { path = "engine/layout" }
 manuk-text = { path = "engine/text" }
+manuk-media = { path = "engine/media" }
 manuk-js = { path = "engine/js" }
 manuk-paint = { path = "engine/paint" }
 manuk-compositor = { path = "engine/compositor" }

@@ -62,7 +62,7 @@ platform	CSP enforcement	security; also many sites break without it	unknown	-	NE
 platform	notifications / permissions	-	missing	-	-
 platform	WebRTC	calls	missing	-	out of scope for now
 media	<video>/<audio> element layout	the box exists, nothing plays	partial	-	lays out; HTMLMediaElement surface is an honest NO
-media	container demux (MP4/WebM)	cannot even open a file	missing	-	-
+media	container demux (MP4/WebM)	cannot even open a file	gated	G_MEDIA_BUFFERED	tick 234: MP4/fMP4 demux (engine/media, re_mp4) -> tracks/samples/codec-strings + SourceBuffer.buffered. WebM/EBML recognised but NOT demuxed (named Unsupported, not a parse error). Corrected an inverted trun sync flag in re_mp4
 media	video decode (H.264/VP9/AV1)	no video anywhere	missing	-	BORROW: dav1d/openh264, not build
 media	audio decode (AAC/MP3/Opus)	no audio anywhere	missing	-	BORROW: symphonia
 media	audio output device	-	missing	-	BORROW: cpal

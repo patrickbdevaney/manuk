@@ -366,6 +366,9 @@
   - L89 · Gates: flush the record on every push, not at the end
   - L97 · M2: the segment corruption at the fetch boundary (found t227, FIXED t228)
   - L144 · What DOES work, and is now pinned
+  - L152 · M3 — container demux (tick 234): the engine can open a media file
+  - L176 · Three things this cost, each worth keeping
+  - L204 · What is deliberately still missing
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -509,4 +512,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-428 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+431 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

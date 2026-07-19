@@ -146,3 +146,76 @@ encoding.
 Byte-range requests are real: the page's `Range: bytes=4-11` reaches the wire, the server's `206`
 surfaces instead of being flattened to `200`, and the requested bytes come back. Segmented delivery —
 the other half of adaptive streaming — is not the problem.
+
+---
+
+## M3 — container demux (tick 234): the engine can open a media file
+
+`engine/media` (`manuk-media`) is the demuxer. It is the first step of the media chain that reads
+the bytes rather than moving them.
+
+**Why it is demux and not decode.** The MSE pipe was complete and inert: a page could construct a
+`MediaSource`, attach it, fetch a segment byte-exactly (t227/t228) and `appendBuffer` it, and
+`sb.buffered.length` was `0` because nothing had ever looked at the bytes. That zero is not
+cosmetic — **`buffered` is the variable an adaptive player's fetch loop steers by.** It appends,
+reads how far the buffer now reaches, and decides what to request next. A `buffered` that never
+advances is a loop that never advances, so a perfect byte pipe still gets no site past its first
+segment. Demux is what turns the pipe into a loop, and it needs no codec.
+
+**The borrow.** `re_mp4` (Rerun's fork of `mp4`), per the MEDIA.md trap-list: `symphonia` leaves its
+ISO-MP4 video `SampleEntry` commented out (audio only), `mp4parse` is a box parser with no sample
+reader, and `re_video` shells out to an ffmpeg *binary*. `re_mp4` walks `moof`/`traf`/`trun`, which
+is the fragmented form MSE actually streams.
+
+**What the crate produces:** tracks (kind, RFC 6381 `codecs=` string, dimensions, channels/sample
+rate, and the `avcC`/`av1C`/`vpcC`/AAC decoder-configuration record extracted for M4/M5), a sample
+table (byte range, decode + presentation timestamps, duration, sync flag), and contiguous
+presentation-time ranges. `SourceBuffer.__demux` calls it through `__mseDemux`, a global native that
+takes the accumulated stream as a one-char-per-byte string and answers in JSON.
+
+### Three things this cost, each worth keeping
+
+**1. A borrowed parser inverted every fragmented sync flag.** `re_mp4`'s `reader.rs:443` computes
+`is_sync: (sample_flags >> 16) & 0x1 != 0`, but bit 16 of a `trun` sample-flags word is
+`sample_is_NON_sync_sample` — the negation, and the negation was missing. The progressive path is
+fine; it reads the `stss` table, which is a positive list.
+
+It was found by **differential test, not by reading the source** — the source looks right until you
+check which flag bit 16 is. Chromium ships three fixtures differing only in their sync flags, and
+`re_mp4` returned the exact complement for all three. A seek must land on a sync sample, so inverted,
+every seek into a fragmented stream lands on a frame that cannot decode standalone: a garbage frame
+or a silent stall, nothing thrown. It would have surfaced much later as "our H.264 decoder is
+broken", one layer below where the bug is. Corrected per sample by origin (`stbl` count vs `trun`),
+not per file, so a file with both is handled rather than assumed away.
+
+**2. `buffered` does not start at zero, and normalising it would be a bug.** The fixture carries a
+two-frame composition offset: its samples decode at 0/1001 and present at 2002/4004. That is
+ordinary B-frame reorder delay, and `buffered` is a *presentation* timeline. The gate asserted
+`start == 0` first, from assumption rather than measurement, and "fixing" it would have meant
+discarding a real timestamp — in MSE that offset is how a segment appended at minute three reports
+minute three.
+
+**3. The gap tolerance is not a fudge, it is the difference between a loop and a stall.** Those two
+frames present one frame apart, leaving a genuine 33ms interior hole. Reported literally that is two
+ranges, and a player reading `buffered.length === 2` across 33ms concludes its download failed and
+re-fetches what it already has. Merging under a 100ms tolerance is what every shipping
+implementation does, for exactly this reason.
+
+### What is deliberately still missing
+
+- **No decoder. No frame is produced.** `isTypeSupported` still answers from the empty `__mseCodecs`
+  registry and still says **no**. Knowing where the H.264 is and being able to decode it are
+  different claims, and `g_media_buffered` asserts the honest `false` so this landing cannot start
+  over-promising. Advertising MSE we cannot honour turns a working YouTube into a black rectangle.
+- **WebM/Matroska is not demuxed.** `sniff` recognises EBML and returns a named `Unsupported`, so the
+  failure is "this is WebM and we only demux MP4" rather than a parse error blaming the bytes.
+- **The demuxer re-parses the accumulated buffer per append**, rather than being incremental. The
+  `SourceBuffer` retains every chunk anyway (eviction is its own spec'd algorithm), and an
+  incremental parser buys latency there is no decoder downstream to spend yet.
+
+**Gates:** `engine/media/tests/demux.rs` (real fixtures, both container forms, the differential
+sync-flag test) and `engine/page/tests/g_media_buffered.rs` (the JS-observable surface: a real fMP4
+over a real socket, appended, read back through `sb.buffered` / `sb.videoTracks`).
+
+**Next:** M4 — AAC decode via `symphonia` (audio only, per the trap-list) plus `cpal` for output,
+and M5 video decode. Both consume the decoder-configuration record this step already extracts.
