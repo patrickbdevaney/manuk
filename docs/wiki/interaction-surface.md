@@ -877,3 +877,64 @@ Both RED probes here (fire only `drop`; build `types` as `[]`) go red at the **s
 first bad read masks every later claim.** Contrast tick 247's multipart probe, which flipped exactly
 one claim because the claims there were independent. Worth carrying when designing a gate: **claims
 asserted inside a sequential chain cannot pinpoint; claims asserted over independent surfaces can.**
+
+## Mouse actuation (tick 251): the sequence, the verdict, and a ledger that was wrong about itself
+
+Two dispatchers landed — `Page::dispatch_dblclick` and `Page::dispatch_contextmenu` — but the more
+durable finding is *how they were chosen*.
+
+### The ledger nominated a phantom as its own top priority
+
+`DAILY-DRIVER-EDGES.md` §1c listed **A11y node STATES** as *"missing (verified)"* and, in the same
+cell, **"Highest-leverage agentic fix"**. It was already built: `A11yNode.state: A11yState`, with a
+tri-state `Checked`, gated by `g_a11y_state.rs`. Two more rows (`file-input actuation`,
+`drag-and-drop`) were falsified by ticks 247 and 248 — *three ticks earlier in the same session*. A
+fourth (`hover/dblclick/contextmenu`) was half-stale: hover landed at t245.
+
+**The checklist goes stale fastest from our own landed ticks**, which is the least intuitive
+direction and the reason process rule 2 exists. Re-probing cost minutes; building the phantom would
+have cost a tick and produced nothing. This is the seventh time the ledger has been wrong about its
+top item.
+
+The genuinely-missing hole was the one *next to* the phantom, and only visible once the phantoms
+were cleared: `dblclick` and `contextmenu` had **zero hits across the whole engine**.
+
+### A double-click is a sequence, not an event
+
+Firing `dblclick` alone would have been the third half-fix of the week. A real double-click is
+`click` (detail 1) → `click` (detail 2) → `dblclick` (detail 2), and **`event.detail` is the click
+count**. `if (e.detail === 2)` on an ordinary `click` listener is the idiomatic double-click handler
+— used precisely because it needs no second listener.
+
+The first implementation dispatched both clicks correctly and **carried no `detail` at all**, because
+`dispatch_click` routed through the bare-type `dispatch_event`. The gate caught it: `clicks=2 dbl=1`
+— every handler running, sequence perfect — with `details=` empty and the `detail === 2` branch
+unreachable forever. The fix threads a click count through `dispatch_click_detail`, so
+label-forwarding and activation still behave exactly as for a single click.
+
+Confirmed by RED probe, and the two failures are instructively different:
+- **dblclick alone** → `clicks=0 dbl=1`. The notification arrives; the interaction never happened.
+- **`detail: 0`** → `clicks=2 details=0,0`. Every listener runs and the branch is dead.
+
+### A right-click's return value IS the capability
+
+`contextmenu` is cancelable, and cancelling it is how every custom right-click menu on the web works.
+So `dispatch_contextmenu` returns the page's verdict, and a browser ignoring a `false` would draw its
+native menu on top of the page's own. Same shape as tick 248's drop verdict. `button: 2` is passed
+explicitly (menu code guards on it), and `buttons` is computed rather than aliased — it is a
+**bitmask**, so the right button is index 2 but bit 4. They coincide for no button and differ for the
+middle one, which is exactly the kind of coincidence that hides a bug.
+
+### A harness Bar-0 that was not an engine Bar-0
+
+The four-test version of this gate **SIGSEGV'd**, while each test passed in isolation. A
+`PageContext` is per-process here, so a second `Page::load` in one test binary races the first one's
+runtime. Every JS-driving gate in `engine/page/tests/` is a single `#[test]` for this reason — a
+convention that was load-bearing and undocumented. The crash signature is Bar-0-shaped and the cause
+is entirely the test harness; **reading it as an engine regression would have sent the next tick into
+the wrong organ.**
+
+A related trap on the way: `eval_for_test` silently does nothing on a page with **no `<script>`**,
+because no JS context is created. Activation itself does not need JS (`dispatch_click` says so), so
+the checkbox assertions observe through the **a11y tree** instead — which is also how a real agent
+confirms its own action, and doubles as proof the `A11yState` row above is no longer a phantom.

@@ -11074,3 +11074,81 @@ The `<video>` element's JS surface still answers the pre-decode era's honest NO,
 lie in the other direction; that is M6b-element and it is the next door.
 
 WIKI: docs/wiki/media-pipeline.md
+
+## Tick 251 — the ledger said the fix was missing; the fix had shipped, and the real hole was next to it
+
+TICK SHAPE: board item (D)/(E) — PROBE the constellation before building from it. Process rule 2 says
+a cheap re-probe MUST precede any build tick aimed at an unknown, and the ledger has now been wrong
+about its own top priority **seven** times.
+
+MEASURED, and 3 of 8 agent-actuation rows are PHANTOMS — two of them falsified by my own ticks
+earlier this same session:
+  · **A11y node STATES** — table: *"missing (verified). A11yNode carries only role/name/bbox/z.
+    **HIGHEST-LEVERAGE AGENTIC FIX**"*. Reality: `A11yNode.state: A11yState` exists, with tri-state
+    `Checked` (False/True/Mixed). The row nominating itself as the top agentic priority was a ghost.
+  · **file-input actuation** — table: *"missing. DataTransfer is an inert stub; no set_files"*.
+    Landed tick 247.
+  · **drag-and-drop** — table: *"unknown. DragEvent/DataTransfer inert"*. Landed tick 248, yesterday
+    in wall-clock terms and three ticks ago in loop terms.
+  · **hover/dblclick/contextmenu** — table: *"missing. Only dispatch_click exists"*. HALF stale:
+    `dispatch_hover_at` landed at tick 245.
+
+So the genuinely-missing, genuinely-cheap actuation hole is what was left after the stale rows were
+cleared: **`dblclick` and `contextmenu` have no dispatcher at all** (grep: zero hits in the whole
+engine). Right-click menus and double-click-to-select are undrivable by an agent, and unlike the
+phantoms above nothing has ever built them.
+
+HYPOTHESIS: dispatching a bare `dblclick` is the wrong shape and would be the third half-fix of the
+week. A real double-click is a SEQUENCE — click, click, dblclick — and pages read `event.detail` (the
+click count) to tell the second click from the first. A dispatcher that fires `dblclick` alone leaves
+every click-counting handler unrun and every `detail === 2` branch untaken, while looking correct
+from the outside.
+
+THE CLAIM THE GATE MUST FALSIFY: `contextmenu` is *cancelable*, and its return value is the whole
+capability — a page that builds a custom right-click menu calls `preventDefault()`, and a browser
+that ignored that verdict would show its native menu over the page's own. Same shape as tick 248's
+drop verdict.
+
+**THE CAPABILITY.** `Page::dispatch_dblclick` (the real `click`/`click`/`dblclick` sequence) and
+`Page::dispatch_contextmenu` (returning the page's verdict), plus `PageContext::dispatch_mouse`
+carrying `detail`/`button`/`buttons`. Four ledger rows in DAILY-DRIVER-EDGES.md §1c corrected from
+measurement.
+
+**THE HYPOTHESIS WAS RIGHT, AND THE GATE CAUGHT ME BUILDING THE HALF-FIX ANYWAY.** The first
+implementation dispatched both clicks correctly and carried **no `detail` at all** — `dispatch_click`
+routed through the bare-type `dispatch_event`, so `e.detail` was `undefined`. The gate read
+`clicks=2 dbl=1 details= detail2=false`: sequence perfect, every handler running, and the
+`e.detail === 2` branch unreachable forever. Fixed by threading a click count through
+`dispatch_click_detail`, so label-forwarding/activation/disabled all still behave as for one click.
+
+**RED PROBES EXECUTED, NOT ASSERTED (process rule 3) — three, and the first two fail DIFFERENTLY:**
+  · fire only `dblclick`, drop the click pair → `clicks=0 dbl=1`. The notification arrives and looks
+    correct; the interaction never happened.
+  · `detail: 0` (the UIEvent default) → `clicks=2 details=0,0`. Every listener runs; the branch is
+    dead. **A gate asserting only "the handler fired" passes both of these.**
+  · discard the contextmenu verdict → RED on the preventDefault claim. Contextmenu claims stayed
+    green through the first two probes and vice versa, so the two halves are independent.
+
+**A HARNESS Bar-0 THAT WAS NOT AN ENGINE Bar-0 — worth the paragraph.** The four-test version of this
+gate **SIGSEGV'd**, while every test passed in isolation. A `PageContext` is per-process, so a second
+`Page::load` in one binary races the first one's runtime. Every JS-driving gate in
+`engine/page/tests/` is a single `#[test]` for exactly this reason — a convention that was
+load-bearing and nowhere written down. Per THE RATCHET a Bar-0 crash is never traded for a
+capability; this one is the harness, and consolidating to one test removes it. **Had I read the
+signature as an engine regression I would have sent the next tick into the wrong organ.**
+
+Also found: `eval_for_test` silently no-ops on a page with **no `<script>`** (no JS context is
+created). Activation does not require JS, so the checkbox claims observe through the **a11y tree** —
+which is how an agent actually confirms its action, and doubles as proof the `A11yState` row is real.
+
+Gate: `engine/page/tests/g_mouse_actuation.rs` (`G_MOUSE_ACTUATION`), 12 claims in one test.
+Regression: full `manuk-page` **127 passed / 1 failed** (was 126/1 at tick 248 — the +1 is this
+gate), the 1 being the PRE-EXISTING `hard_wall_detection_and_honest_interstitial` from tick 239.
+
+Residue, named honestly: drag-to-**reorder** is still closed (no `dragstart` from a draggable source,
+no drag image, no `effectAllowed` negotiation) — t248 built the upload half, which is the half that
+matters for uploads. `selectedIndex`/native `<select>` choose has **zero hits** and is genuinely
+missing, as is IndexedDB (confirmed absent, not stale). `mousedown`/`mouseup` are still not part of
+the click sequence — a page that tracks press-then-release sees neither.
+
+WIKI: docs/wiki/interaction-surface.md

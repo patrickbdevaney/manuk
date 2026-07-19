@@ -314,6 +314,11 @@
   - L843 · The dropzone: a handler that threw, and an opt-in that looks like ceremony (tick 248)
   - L855 · Why the whole sequence, not just the interesting event
   - L873 · A gate over a sequential handler chain has coarser resolution
+  - L881 · Mouse actuation (tick 251): the sequence, the verdict, and a ledger that was wrong about itself
+  - L886 · The ledger nominated a phantom as its own top priority
+  - L902 · A double-click is a sequence, not an event
+  - L919 · A right-click's return value IS the capability
+  - L928 · A harness Bar-0 that was not an engine Bar-0
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -563,4 +568,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-482 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+487 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

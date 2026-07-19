@@ -6910,6 +6910,70 @@ impl PageContext {
         Ok(proceed)
     }
 
+    /// Dispatch one **mouse** event carrying the fields a handler actually branches on: `detail`
+    /// (the click count), `button`/`buttons`, and the coordinate pairs. Returns `false` iff a
+    /// handler called `preventDefault()`.
+    ///
+    /// **`detail` is the field that makes this more than a bare type.** It is how a page tells the
+    /// second click of a double-click from the first — `if (e.detail === 2)` is the idiomatic way to
+    /// handle double-click on a plain `click` listener, and a dispatcher that leaves `detail` at its
+    /// `UIEvent` default of `0` makes that branch permanently unreachable while every event still
+    /// arrives and every listener still runs.
+    ///
+    /// `button` matters for the same reason one layer down: `contextmenu` is a right-button event
+    /// (`button: 2`), and handlers that guard on `e.button === 2` are common enough that dispatching
+    /// with the left-button default would silently skip them.
+    #[allow(clippy::too_many_arguments)]
+    pub fn dispatch_mouse(
+        &self,
+        runtime: &mut Runtime,
+        dom: &mut Dom,
+        node: NodeId,
+        ty: &str,
+        detail: u32,
+        button: u32,
+        layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    ) -> Result<bool, String> {
+        set_view_maps(layout, styles);
+        set_current_dom(dom as *mut Dom);
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        unsafe {
+            let _ = new_reflector(raw_cx, dom as *mut Dom, node);
+        }
+        // `buttons` is a BITMASK of held buttons, not the same encoding as `button` (an index):
+        // right is button 2 but bit 2, i.e. `buttons: 2`. They coincide for the right button by
+        // arithmetic accident and differ for the middle one, so both are computed rather than
+        // aliased.
+        let buttons = if button == 0 { 1u32 } else { 1u32 << button };
+        let script = format!(
+            "__dispatchEvent({}, {{type:{}, detail:{detail}, button:{button}, buttons:{buttons}, \
+             bubbles:true, cancelable:true}})",
+            node.0,
+            js_string_literal(ty),
+        );
+        rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
+        let opts =
+            CompileOptionsWrapper::new(runtime.cx_no_gc(), c"dispatch_mouse.js".to_owned(), 1);
+        let proceed = match evaluate_script(
+            runtime.cx(),
+            global.handle(),
+            &script,
+            rval.handle_mut(),
+            opts,
+        ) {
+            Ok(()) => {
+                let v = rval.get();
+                !v.is_boolean() || v.to_boolean()
+            }
+            Err(()) => true,
+        };
+        crate::event_loop::run_deferred(runtime, global.handle())?;
+        Ok(proceed)
+    }
+
     /// Drain this document's queued `fetch`/XHR requests as `(id, url, method, headers, body)` so
     /// the host can perform them over the real network and settle each via [`resolve_fetch`].
     pub fn take_fetches(

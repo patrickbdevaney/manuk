@@ -2176,6 +2176,130 @@ impl Page {
         }
     }
 
+    /// **Double-click `node` — the full sequence, not a bare `dblclick`.**
+    ///
+    /// Fires `click` (detail 1), `click` (detail 2), then `dblclick` (detail 2), which is the order
+    /// and the numbering a real browser produces. Returns `false` iff a handler called
+    /// `preventDefault()` on the `dblclick`.
+    ///
+    /// **Firing `dblclick` alone would be the shape of a fix that reads as complete and is not.**
+    /// `event.detail` is the click count, and `if (e.detail === 2)` on an ordinary `click` listener
+    /// is the idiomatic way to handle double-click — used precisely because it does not require a
+    /// separate listener. A dispatcher that emits only `dblclick` leaves that branch permanently
+    /// unreachable, and also skips the two `click` handlers a real double-click always runs, so a
+    /// page that (say) selects on first click and opens on second would open something it never
+    /// selected. The two clicks are the interaction; `dblclick` is the notification that it happened.
+    ///
+    /// The `click`s route through [`Page::dispatch_click`] rather than being synthesised here, so
+    /// label-forwarding, checkbox activation and the disabled check all behave exactly as they do
+    /// for a single click — a double-click on a `<label>` must still reach its control twice.
+    pub fn dispatch_dblclick(
+        &mut self,
+        node: manuk_dom::NodeId,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
+        // The two constituent clicks, with their real activation behaviour and their real click
+        // COUNTS — the second click of a double-click reports `detail: 2`, which is what a page
+        // handling double-click on a plain `click` listener branches on.
+        self.dispatch_click_detail(node, 1, fonts, viewport_width);
+        self.dispatch_click_detail(node, 2, fonts, viewport_width);
+
+        #[cfg(feature = "spidermonkey")]
+        {
+            let Some(ctx) = &self.js else {
+                self.relayout(fonts, viewport_width);
+                return true;
+            };
+            let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+                .root_box
+                .node_rects(&self.dom)
+                .into_iter()
+                .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+                .collect();
+            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+            let proceed = match manuk_js::dispatch_mouse(
+                ctx,
+                &mut self.dom,
+                node,
+                "dblclick",
+                2,
+                0,
+                &rects,
+                &self.styles,
+            ) {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::warn!("dblclick dispatch: {e}");
+                    true
+                }
+            };
+            self.relayout(fonts, viewport_width);
+            return proceed;
+        }
+        #[cfg(not(feature = "spidermonkey"))]
+        {
+            self.relayout(fonts, viewport_width);
+            true
+        }
+    }
+
+    /// **Right-click `node`.** Returns `false` iff a handler called `preventDefault()` — which is
+    /// the whole point of the call rather than a detail of it.
+    ///
+    /// `contextmenu` is cancelable, and cancelling it is how *every* page with a custom right-click
+    /// menu works: the handler calls `preventDefault()` and draws its own menu. So the return value
+    /// is the browser's question — *"did the page take over?"* — and a browser that ignored a
+    /// `false` would render its native menu on top of the page's own. Same shape as the drop verdict
+    /// in tick 248, and the same reason it is returned rather than discarded.
+    ///
+    /// `button: 2` is passed rather than defaulted: handlers guarding on `e.button === 2` are common
+    /// enough that dispatching with the left-button default would silently skip them.
+    pub fn dispatch_contextmenu(
+        &mut self,
+        node: manuk_dom::NodeId,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
+        #[cfg(feature = "spidermonkey")]
+        {
+            let Some(ctx) = &self.js else {
+                self.relayout(fonts, viewport_width);
+                return true;
+            };
+            let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+                .root_box
+                .node_rects(&self.dom)
+                .into_iter()
+                .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+                .collect();
+            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+            let proceed = match manuk_js::dispatch_mouse(
+                ctx,
+                &mut self.dom,
+                node,
+                "contextmenu",
+                0,
+                2,
+                &rects,
+                &self.styles,
+            ) {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::warn!("contextmenu dispatch: {e}");
+                    true
+                }
+            };
+            self.relayout(fonts, viewport_width);
+            return proceed;
+        }
+        #[cfg(not(feature = "spidermonkey"))]
+        {
+            self.relayout(fonts, viewport_width);
+            true
+        }
+    }
+
     /// **Choose files on an `<input type=file>` — the actuation a file picker performs.** Returns
     /// `false` if `node` is not a file input.
     ///
@@ -2855,6 +2979,22 @@ impl Page {
         fonts: &FontContext,
         viewport_width: f32,
     ) -> bool {
+        self.dispatch_click_detail(node, 1, fonts, viewport_width)
+    }
+
+    /// [`Page::dispatch_click`], carrying the **click count** in `detail`.
+    ///
+    /// Split out for [`Page::dispatch_dblclick`], which needs the second click of a pair to say so.
+    /// `detail` is not decoration: `if (e.detail === 2)` on an ordinary `click` listener is the
+    /// idiomatic double-click handler, and a click dispatched without it leaves that branch
+    /// unreachable while every listener still runs.
+    pub(crate) fn dispatch_click_detail(
+        &mut self,
+        node: manuk_dom::NodeId,
+        detail: u32,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
         // **Activation does NOT require a JS context.** A static form with no `<script>` still has
         // working checkboxes in every browser; gating the whole path on `self.js` meant a
         // script-free page's controls were inert. Event dispatch is what needs JS — the toggle is
@@ -2879,11 +3019,13 @@ impl Page {
             // there is nothing to cancel it, so it always proceeds.
             let proceed = match self.js.as_ref() {
                 None => true,
-                Some(ctx) => match manuk_js::dispatch_event(
+                Some(ctx) => match manuk_js::dispatch_mouse(
                     ctx,
                     &mut self.dom,
                     node,
                     "click",
+                    detail,
+                    0,
                     &rects,
                     &self.styles,
                 ) {
@@ -2895,7 +3037,7 @@ impl Page {
                 },
             };
             if proceed {
-                return self.dispatch_click(control, fonts, viewport_width);
+                return self.dispatch_click_detail(control, detail, fonts, viewport_width);
             }
             return proceed;
         }
@@ -2909,11 +3051,13 @@ impl Page {
 
         let proceed = match self.js.as_ref() {
             None => true,
-            Some(ctx) => match manuk_js::dispatch_event(
+            Some(ctx) => match manuk_js::dispatch_mouse(
                 ctx,
                 &mut self.dom,
                 node,
                 "click",
+                detail,
+                0,
                 &rects,
                 &self.styles,
             ) {

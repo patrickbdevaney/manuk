@@ -1437,3 +1437,32 @@ the classic "my app vanished when I missed the drop target" bug.
 
 **Still closed:** pointer-driven drag between elements (no `dragstart` from a draggable source, no
 drag image), so drag-to-REORDER — sortable lists, Trello columns, editor blocks — does not work yet.
+
+## Double-click to select, and the right-click menu the page draws itself (tick 251)
+
+**Pattern:** two interactions an agent could not perform at all. **Double-click** — rename in a file
+manager, select-a-word in an editor, open-a-row in a table, expand a Kanban card. **Right-click** —
+every application-grade web app replaces the browser's native menu with its own: Google Drive, Figma,
+VS Code for the Web, Notion, GitHub's file tree, any data grid.
+
+**A double-click is a SEQUENCE, and dispatching the notification alone is the trap.** A real
+double-click fires `click`, `click`, `dblclick` — and `event.detail` carries the click count. The
+idiomatic handler on the web is `if (e.detail === 2)` on an *ordinary click listener*, used precisely
+because it needs no second listener at all. So a host that fires `dblclick` by itself leaves that
+branch permanently unreachable, and skips the two `click` handlers a real double-click always runs: a
+page that selects on the first click and opens on the second **opens something it never selected**.
+The two clicks are the interaction; `dblclick` is only the notification that it happened.
+
+**This failed in the intermediate state and looked fine.** With the sequence correct but `detail`
+absent, the gate read `clicks=2 dbl=1` — every handler firing, order perfect — while `e.detail` was
+`undefined` and no page could tell the second click from the first.
+
+**For right-click, the RETURN VALUE is the capability.** `contextmenu` is cancelable, and cancelling
+it is *how* a custom menu works: the handler calls `preventDefault()` and draws its own. A browser
+that ignored that verdict would render its native menu **on top of the page's own**, which is the
+visible symptom users report as "the right-click menu is doubled". `button` is 2 and `buttons` is 4 —
+one is an index, the other a bitmask, and they coincide often enough to hide a bug.
+
+**Still closed:** `mousedown`/`mouseup` are not part of the click sequence, so a page tracking
+press-then-release (drag handles, press-and-hold, custom sliders) sees neither. Native `<select>`
+option-choice (`selectedIndex`) has zero implementation and is genuinely missing, not stale.

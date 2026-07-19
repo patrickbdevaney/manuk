@@ -1019,6 +1019,41 @@ pub fn dispatch_drop(
     Ok(true)
 }
 
+/// Dispatch one mouse event carrying `detail` (the click count) and `button`. Returns `false` iff a
+/// handler called `preventDefault()`. See [`PageContext::dispatch_mouse`].
+#[cfg(feature = "_sm")]
+#[allow(clippy::too_many_arguments)]
+pub fn dispatch_mouse(
+    ctx: &PageContext,
+    dom: &mut manuk_dom::Dom,
+    node: manuk_dom::NodeId,
+    ty: &str,
+    detail: u32,
+    button: u32,
+    layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<bool, JsError> {
+    with_runtime(|rt| {
+        ctx.dispatch_mouse(rt, dom, node, ty, detail, button, layout, styles)
+            .map_err(|message| JsError { message })
+    })
+}
+
+#[cfg(not(feature = "_sm"))]
+#[allow(clippy::too_many_arguments)]
+pub fn dispatch_mouse(
+    _ctx: &PageContext,
+    _dom: &mut manuk_dom::Dom,
+    _node: manuk_dom::NodeId,
+    _ty: &str,
+    _detail: u32,
+    _button: u32,
+    _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<bool, JsError> {
+    Ok(true)
+}
+
 /// The JS-less build: `<script>`s are parsed into the DOM but not executed.
 #[cfg(not(feature = "_sm"))]
 pub fn run_document_scripts(

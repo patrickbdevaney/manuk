@@ -67,12 +67,12 @@ Grouped by kind. Each is either genuinely missing or under-scoped; none is a dim
 ### 1c. Agent-actuation — the automation moat (how an agent acts & confirms)
 | edge | what breaks without it | scope | notes |
 |---|---|---|---|
-| **A11y node STATES** (checked/expanded/selected/disabled/value/focused) | agent CANNOT confirm the result of its own action — is the box checked? is the menu open? | **missing** | `A11yNode` carries only role/name/bbox/z (verified). **Highest-leverage agentic fix**; `a11y/src/lib.rs:229`. |
+| **A11y node STATES** (checked/expanded/selected/disabled/value/focused) | agent CANNOT confirm the result of its own action — is the box checked? is the menu open? | ✅ **BUILT** (re-probed t251) | `A11yNode.state: A11yState` exists, with **tri-state `Checked`** (False/True/Mixed). Gated by `g_a11y_state.rs`. ⚠ **This row read "missing (verified)" and nominated itself the "highest-leverage agentic fix" — it was a PHANTOM.** |
 | **Richer interactive a11y roles** (menu/tab/dialog/switch/slider/progressbar) | agent can't ground the web-app widgets it most needs to drive | **partial** | `Role` enum stops at ~26 roles. |
-| **hover / dblclick / contextmenu dispatch** | hover-reveal menus, right-click, double-click-select undrivable | **missing** | Only `dispatch_click` exists; add sibling dispatchers. |
-| **file-input actuation** (set `FileList` on `input[type=file]`) | every upload flow undrivable | **missing** | `DataTransfer` is an inert stub; no `set_files`. |
+| **hover / dblclick / contextmenu dispatch** | hover-reveal menus, right-click, double-click-select undrivable | ✅ **BUILT** (t245 hover, t251 dblclick+contextmenu) | `dispatch_hover_at` (t245), `dispatch_dblclick` + `dispatch_contextmenu` (t251, `g_mouse_actuation.rs`). dblclick fires the real **click/click/dblclick sequence** with `detail` as the click count. |
+| **file-input actuation** (set `FileList` on `input[type=file]`) | every upload flow undrivable | ✅ **BUILT** (t247) | `Page::set_input_files` + a real `FileList`; multipart encode gated. **Row was stale: `DataTransfer` is no longer inert (t248).** |
 | **native `<select>` choose + `selectedIndex`/`change`** | dropdowns undrivable | **partial** | Attrs reflect; synthetic option-choice + change firing looks unbuilt. |
-| **drag-and-drop** (`dragstart`/`drop`/`dataTransfer`) | Kanban/reorder/drag-upload undrivable | **unknown** | `DragEvent`/`DataTransfer` inert. |
+| **drag-and-drop** (`dragstart`/`drop`/`dataTransfer`) | Kanban/reorder/drag-upload undrivable | **partial** (t248) | `Page::dispatch_drop` fires `dragenter`/`dragover`/`drop` with a real `DataTransfer` carrying files (`g_drop_upload.rs`) — the **upload** half. Drag-to-REORDER is still closed: no `dragstart` from a draggable source, no `effectAllowed`. |
 | **contenteditable + Selection** | rich editors (Notion/Gmail-compose) shaky | **partial** | Range works, Selection is a stub. |
 | **IndexedDB** | X/LinkedIn session cache; some auth SDKs (Firebase) hard-fail | **missing** | More a hard capability wall than a detection tell. |
 
