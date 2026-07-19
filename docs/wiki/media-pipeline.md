@@ -619,3 +619,61 @@ Gate: `engine/page/tests/g_cue_change.rs` (`G_CUE_CHANGE`).
 another prelude tick. Cue settings on `VTTCue` are still accepted and inert, so nothing *positions* a
 caption, and no cue is painted anywhere: `cuechange` now tells a page's own renderer what to draw,
 but the UA draws nothing itself. `enter`/`exit` events on individual cues are absent.
+
+## M7d — the two halves of captions are joined (tick 258b/259), and a limit found by measuring
+
+Ticks 255–257 built three correct pieces and left **no path between them**. The WebVTT parser had no
+caller outside its own unit tests. The `TextTrack` API could only ever hold cues the page's own
+JavaScript constructed with `new VTTCue`. That covers hls.js and dash.js — and nothing else, while a
+news clip, a course video and a documentation screencast all ship
+`<track kind=subtitles src="subs.vtt" default>` and expect the *browser* to load it.
+
+`__parseVtt(text)` is the join: a host function in `manuk-js` (which already depends on both
+`manuk-media` and the DOM) returning the parsed cues as JSON. It lives there rather than in
+`manuk-page` because `manuk-page` does not depend on `manuk-media`, and adding that crate edge to
+fetch one file is heavier coupling than the boundary `manuk-js` already owns. The fetch goes through
+the page's own `fetch()`, so it inherits base-URL resolution and the host pump rather than growing a
+second network path.
+
+### The sweep is document-driven, and that is not a detail
+
+The obvious hook is `__manukMedia`, which installs the media surface when an element is **reflected**
+— i.e. when the page's JS touches it. That is exactly backwards for this feature: a page that ships
+`<track>` typically never mentions the video again. So the load is swept from the document in
+`run_deferred_scripts`, after the scripts run and before the drain, so the fetches it starts are
+pumped by the same pass. `__loadTracks` marks each `<track>` `__loading`, so re-sweeping later rounds
+picks up tracks added since without re-fetching.
+
+### The limit this tick MEASURED and did not remove
+
+A document with **no `<script>` at all never gets a JS context.** This was measured, not assumed: a
+probe page without a script could not evaluate a single expression, and adding one line of JS made
+every piece appear at once. So the honest claim is that `<track src>` loads on any page running
+*some* JavaScript — essentially every real video page — and does not load on a fully static one.
+That is a context-creation policy question, not a caption question, and creating a JS realm for every
+static document to service a `<track>` trades a large universal cost for a narrow case. Written down,
+not papered over.
+
+### Two RED probes came back GREEN, and the claim was narrowed rather than the probe discarded
+
+Making the parse failure `throw`, and separately deleting the `.catch(fail)`, both left the gate
+passing — the paths are equivalent because the throw lands in the same rejection handler. So the gate
+does **not** measure "reports rather than throws", however reasonable that sentence sounds. It
+measures the ERROR state and the absence of cues, which stayed falsifiable: dropping the `!res.ok`
+branch leaves the track in `readyState` 1, LOADING forever, which is what a page's captions button
+waits on. This is the second time in this module a probe has stayed green; the rule that catches it is
+that a probe which cannot fail measured nothing.
+
+The probes that DID go red: removing the document sweep (nothing is ever fetched), and ignoring
+`default` (`mode=disabled`, `fires=0` — every other assertion still passes while the feature renders
+nothing).
+
+Gate: `engine/page/tests/g_track_src.rs` (`G_TRACK_SRC`), against a real TCP origin.
+
+### Residue
+
+Nothing PAINTS a cue. `cuechange` hands a page's own renderer what to draw, and every adaptive player
+has one — but a plain `<video>` with `<track default>` now holds the right cues, in `showing` mode,
+and still shows the viewer nothing, because the UA has no caption overlay of its own. That, plus cue
+positioning settings (still parsed and inert), is what stands between this and captions a user can
+actually read.

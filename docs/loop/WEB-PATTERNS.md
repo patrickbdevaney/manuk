@@ -1608,3 +1608,27 @@ no-change while the viewer sits on the previous caption.
 unconnected; cue positioning settings are inert; the UA paints no cue of its own (a page that relies
 on native caption rendering rather than its own overlay still shows nothing); no per-cue
 `enter`/`exit` events.
+
+## The caption file nobody fetched (tick 259)
+
+**Pattern:** `<video><track kind="subtitles" srclang="en" src="/captions.vtt" default></video>` — the
+plain-HTML way captions ship, with no player library and often no JavaScript touching the video at
+all. News clips, course videos, conference talks, documentation screencasts, `<video>` in a wiki
+article.
+
+**The class this unlocks:** any video whose captions are a *file* rather than something a player
+parses out of the media segments. Ticks 255–257 built the parser, the `TextTrack` and the timeline —
+all three reachable only through `new VTTCue`, i.e. only by hls.js and dash.js. The file half was
+never requested by anything, so `video.textTracks` was empty on every one of these pages.
+
+**`default` is the whole on-switch.** There is no script to set `mode` and no captions button in our
+chrome, so a `<track default>` whose attribute is ignored parses correctly, holds every cue, reports
+`mode=disabled` and renders nothing — passing every other check while delivering zero.
+
+**Load from the DOCUMENT, not from element reflection.** The tempting hook fires when the page's JS
+touches the video; these pages never touch it.
+
+**Two things still closed, and they bound the claim.** A page with *no* `<script>` at all gets no JS
+context, so its `<track>` never loads — measured, not assumed. And nothing paints a cue: the track is
+loaded, `showing`, holding the right cues at the right times, and a viewer of a plain `<video>` still
+sees no text, because the UA has no caption overlay of its own.

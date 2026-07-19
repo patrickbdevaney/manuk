@@ -440,6 +440,11 @@
   - L593 · The comparison is by IDENTITY, and length is the trap
   - L603 · Three RED probes, three distinct predicted bugs (process rule 3)
   - L615 · Residue, named honestly
+  - L623 · M7d — the two halves of captions are joined (tick 258b/259), and a limit found by measuring
+  - L638 · The sweep is document-driven, and that is not a detail
+  - L647 · The limit this tick MEASURED and did not remove
+  - L657 · Two RED probes came back GREEN, and the claim was narrowed rather than the probe discarded
+  - L673 · Residue
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -591,4 +596,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-510 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+515 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

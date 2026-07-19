@@ -11514,3 +11514,58 @@ Residue: 37 cells remain UNKNOWN and unmeasured — `?` still outranks `✗`, an
 (100-tab RSS budget, test262) are the ones that would falsify our own positioning.
 
 WIKI: docs/loop/GATE-COVERAGE.md
+
+## Tick 259 — the caption file that nobody ever fetched
+
+TICK SHAPE: the residue tick 257 named, and the one that makes the previous three worth having.
+Ticks 255-257 built the WebVTT parser, the `TextTrack` API and the `cuechange` timeline — three
+correct pieces with **no path between them.** The parser had no caller outside its own unit tests;
+the only cues a page could hold were ones its own JavaScript constructed with `new VTTCue`. That
+covers hls.js and dash.js and **nothing else**, while news clips, course videos and documentation
+screencasts ship `<track kind=subtitles src="subs.vtt" default>` and expect the browser to load it.
+
+**THE CAPABILITY.** `__parseVtt(text)` — a host function in `manuk-js` returning parsed cues as JSON
+— plus `<track>` element loading in the media prelude: fetch the `src`, parse with the REAL parser,
+build VTTCues, land them on a `TextTrack`, honour `kind`/`label`/`srclang`, drive `readyState`
+NONE→LOADING→LOADED/ERROR, and fire `load`/`error` on the element. It crosses in `manuk-js` because
+`manuk-page` does **not** depend on `manuk-media`, and adding that crate edge to fetch one file is
+heavier coupling than the boundary `manuk-js` already owns. The fetch uses the page's own `fetch()`,
+inheriting base-URL resolution and the host pump rather than growing a second network path.
+
+**THE SWEEP IS DOCUMENT-DRIVEN, and that is the design decision, not a detail.** The obvious hook is
+`__manukMedia`, which runs when a media element is REFLECTED — when the page's JS touches it. Exactly
+backwards: a page that ships `<track>` typically never mentions the video again. So it sweeps from
+the document in `run_deferred_scripts`, after the scripts and before the drain, so the fetches it
+starts are pumped by the same pass. Idempotent via a per-element `__loading` flag.
+
+**A LIMIT MEASURED RATHER THAN ASSUMED — and the first build was wrong because of it.** The gate was
+written for a page with NO script, and it failed with an empty request log. The probe that explained
+it: **a document with no `<script>` at all never gets a JS context** — a probe page without one could
+not evaluate a single expression, and adding one line made every piece appear at once. So the claim
+was narrowed to what is true: `<track src>` loads on any page running SOME JavaScript (essentially
+every real video page) and not on a fully static one. Creating a JS realm for every static document
+to service a `<track>` trades a large universal cost for a narrow case; it is written down, not
+papered over.
+
+**RED PROBES (process rule 3).** Two went red as predicted: removing the document sweep → nothing is
+ever fetched; ignoring `default` → `mode=disabled`, `fires=0`, with every other assertion still
+passing while the feature renders nothing.
+
+**TWO PROBES CAME BACK GREEN, and the CLAIM was narrowed rather than the probe discarded.** Making
+the parse failure `throw`, and separately deleting the `.catch(fail)`, both left the gate passing —
+the paths are equivalent because the throw lands in the same rejection handler. So this gate does
+NOT measure "reports rather than throws", however reasonable that sentence sounds. It measures the
+ERROR state and the absence of cues, which stayed falsifiable: dropping the `!res.ok` branch leaves
+the track in `readyState` 1, LOADING forever, which is exactly what a page's captions button waits
+on. **Second time in this module a probe stayed green** — a probe that cannot fail measured nothing.
+
+Gate: `engine/page/tests/g_track_src.rs` (`G_TRACK_SRC`), against a real TCP origin serving both a
+valid `.vtt` and an HTML error page with a 200. `g_text_tracks` + `g_cue_change` still green.
+
+Residue: **nothing PAINTS a cue.** A plain `<video>` with `<track default>` now holds the right cues,
+in `showing` mode, at the right times — and shows the viewer nothing, because the UA has no caption
+overlay of its own. That, plus cue positioning settings (parsed and inert), is what stands between
+this and captions a user can actually read. The constellation's `WebVTT subtitles` row stays
+`partial` for exactly that reason.
+
+WIKI: docs/wiki/media-pipeline.md

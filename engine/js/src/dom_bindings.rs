@@ -2564,6 +2564,63 @@ unsafe fn mse_demux(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     true
 }
 
+/// `__parseVtt(text)` → the cues of a WebVTT file, as JSON.
+///
+/// The join the caption track has been missing since tick 255. The parser (`manuk_media::vtt`) and
+/// the `TextTrack` API (ticks 256/257) were both built and had **no path between them**: the parser
+/// had no caller outside its own unit tests, and the only cues a page could ever hold were ones its
+/// own JavaScript constructed. `<track src>` — the way captions arrive on a plain `<video>`, with no
+/// player library involved — reached neither.
+///
+/// It crosses here rather than in `manuk-page` because `manuk-page` does not depend on
+/// `manuk-media`, and adding that edge to fetch one file would be a heavier coupling than the
+/// boundary this crate already owns. `manuk-js` already depends on both.
+///
+/// **A parse failure is reported, not thrown.** `{"ok":false}` means "this was not WebVTT" — an
+/// `.srt` renamed, or an HTML error page served with a 200. The caller fires `error` on the track
+/// element, which is what a browser does; throwing would take out whatever ran after it.
+unsafe fn parse_vtt(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let src = arg_string(cx, vp, argc, 0).unwrap_or_default();
+
+    let json = match manuk_media::vtt::VttTrack::parse(&src) {
+        Ok(track) => {
+            let cues = track
+                .cues()
+                .iter()
+                .map(|c| {
+                    format!(
+                        r#"{{"id":{},"start":{},"end":{},"text":{}}}"#,
+                        js_string_literal(c.id.as_deref().unwrap_or("")),
+                        fin(c.start),
+                        fin(c.end),
+                        js_string_literal(&c.text)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(",");
+            format!(r#"{{"ok":true,"cues":[{cues}]}}"#)
+        }
+        Err(e) => format!(
+            r#"{{"ok":false,"error":{}}}"#,
+            js_string_literal(&e.to_string())
+        ),
+    };
+
+    let cs = match std::ffi::CString::new(json) {
+        Ok(c) => c,
+        Err(_) => return true,
+    };
+    rooted!(in(cx) let mut out = UndefinedValue());
+    let js = mozjs::jsapi::JS_NewStringCopyZ(cx, cs.as_ptr());
+    if js.is_null() {
+        *vp = NullValue();
+        return true;
+    }
+    out.set(mozjs::jsval::StringValue(&*js));
+    *vp = out.get();
+    true
+}
+
 /// A finite JSON number. `NaN`/`Infinity` are not JSON, and a duration of `NaN` is a real value
 /// here (a media segment appended with no `moov` has no known duration), so it must serialise as
 /// something `JSON.parse` accepts rather than producing a syntax error the caller cannot see past.
@@ -6739,6 +6796,14 @@ pub unsafe fn install(
         1,
         0,
     );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__parseVtt".as_ptr(),
+        host_fn!(parse_vtt),
+        1,
+        0,
+    );
     let platform = format!("{} {}", std::env::consts::OS, std::env::consts::ARCH);
     // JS string-literal-escape the document URL so it can't break out of the "%URL%" slot.
     let url_lit = {
@@ -6825,6 +6890,24 @@ pub fn run_scripts(
         }
         ran += 1;
     }
+
+    // `<track src>` load, swept from the document rather than driven by the page.
+    //
+    // It has to happen HERE, and not from `__manukMedia`, because `__manukMedia` runs when a media
+    // element is REFLECTED — i.e. when the page's own JavaScript touches it. The pages that ship
+    // `<track src>` are exactly the pages with **no** JavaScript: a news clip, a course video, a
+    // documentation screencast. Those never reflect anything, so a load hung off reflection would
+    // fire for every case except the one this is for.
+    //
+    // Before the drain below, so the fetches it starts are pumped by the same pass that pumps the
+    // scripts' own promises rather than waiting for a later round.
+    let _ = unsafe {
+        eval_in_current_global(
+            raw_cx,
+            "(function(){var m=document.querySelectorAll('video,audio');\
+             for(var i=0;i<m.length;i++){if(m[i].__loadTracks){m[i].__loadTracks();}}})()",
+        )
+    };
 
     // Drain microtasks (Promise reactions) and macrotasks (setTimeout) the scripts queued.
     crate::event_loop::run(runtime, global.handle())?;
@@ -6981,7 +7064,28 @@ impl PageContext {
             self.ran.borrow_mut().insert(node);
             ran += 1;
         }
-        if ran > 0 {
+        // `<track src>` load, swept from the DOCUMENT rather than driven by the page.
+        //
+        // It cannot hang off `__manukMedia`, which runs when a media element is REFLECTED — i.e.
+        // when the page's own JavaScript touches it. The pages that ship `<track src>` are exactly
+        // the pages with **no** JavaScript: a news clip, a course video, a documentation screencast.
+        // A load driven by reflection would fire for every case except the one it is for.
+        //
+        // `__loadTracks` is idempotent (each `<track>` marks itself `__loading`), so re-sweeping on
+        // later rounds picks up tracks added since without re-fetching the ones already handled.
+        let swept = unsafe {
+            eval_in_current_global(
+                raw_cx,
+                "(function(){var m=document.querySelectorAll('video,audio');var n=0;\
+                 for(var i=0;i<m.length;i++){if(m[i].__loadTracks){m[i].__loadTracks();n++;}}\
+                 return n;})()",
+            )
+        }
+        .is_some();
+
+        // Unconditionally, not `if ran > 0`: a page with NO scripts still has fetches to pump now,
+        // which is the whole point — that page is the one this tick is for.
+        if ran > 0 || swept {
             crate::event_loop::run_deferred(runtime, global.handle())?;
         }
         Ok(ran)

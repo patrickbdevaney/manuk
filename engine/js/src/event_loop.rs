@@ -2027,6 +2027,67 @@ const PRELUDE: &str = r#"
           el.__textTracks.push(track);
           return track;
         };
+        // ── `<track src>` — the way captions arrive on a plain `<video>`, with no player library.
+        //
+        // Ticks 255-257 built the parser, the TextTrack and the cuechange timeline, and left them
+        // with NO PATH BETWEEN THEM: the parser had no caller outside its own unit tests, and the
+        // only cues a page could hold were ones its own JavaScript constructed. That covers the
+        // adaptive players and covers nothing else — a news clip, a course video, a documentation
+        // screencast all ship `<track src="subs.vtt">` and no JS at all, and got nothing.
+        //
+        // The fetch goes through the page's OWN `fetch()` rather than a new host path, so it
+        // inherits the one set of rules that already exist here: base-URL resolution, the host
+        // pump, and whatever the network layer decides.
+        el.__loadTracks = function () {
+          var kids = el.children || [];
+          for (var i = 0; i < kids.length; i++) {
+            (function (te) {
+              if (!te || te.tagName !== 'TRACK' || te.__loading) { return; }
+              var src = te.getAttribute && te.getAttribute('src');
+              if (!src) { return; }
+              te.__loading = true;
+              // NONE(0) -> LOADING(1) -> LOADED(2) / ERROR(3), the values a page reads to decide
+              // whether to show its caption button yet.
+              te.readyState = 1;
+              var track = el.addTextTrack(
+                te.getAttribute('kind') || 'subtitles',
+                te.getAttribute('label') || '',
+                te.getAttribute('srclang') || ''
+              );
+              te.track = track;
+              // `default` is the author saying "on unless the user says otherwise". It is the ONLY
+              // way a plain `<video>` ever shows a caption, because there is no script to set
+              // `mode` and our chrome has no captions button — without honouring it, every
+              // `<track default>` on the web renders exactly nothing.
+              if (te.hasAttribute && te.hasAttribute('default')) { track.mode = 'showing'; }
+
+              var fail = function () {
+                te.readyState = 3;
+                if (typeof te.onerror === 'function') { te.onerror({ type: 'error', target: te }); }
+              };
+              try {
+                globalThis.fetch(src).then(function (r) {
+                  if (!r || !r.ok) { fail(); return; }
+                  return r.text().then(function (body) {
+                    // The REAL parser, not a second one written in JS. A file that is not WebVTT
+                    // reports rather than throws — an .srt renamed, or an HTML error page served
+                    // with a 200, is a track that fails to load, not a page that dies.
+                    var res = JSON.parse(globalThis.__parseVtt(body));
+                    if (!res.ok) { fail(); return; }
+                    for (var c = 0; c < res.cues.length; c++) {
+                      var cue = new globalThis.VTTCue(res.cues[c].start, res.cues[c].end, res.cues[c].text);
+                      cue.id = res.cues[c].id || '';
+                      track.addCue(cue);
+                    }
+                    te.readyState = 2;
+                    if (typeof te.onload === 'function') { te.onload({ type: 'load', target: te }); }
+                  });
+                }).catch(fail);
+              } catch (e) { fail(); }
+            })(kids[i]);
+          }
+        };
+
         el.requestPictureInPicture = function() {
           return Promise.reject(new DOMException('picture-in-picture is not supported', 'NotSupportedError'));
         };
