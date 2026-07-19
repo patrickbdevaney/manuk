@@ -1155,3 +1155,17 @@ way to learn who sent a message. Both fixed, in the shell's real load paths as w
 
 Residue: `targetOrigin` is still not enforced as a delivery restriction, and `window.close()` from the
 popup is not modelled.
+
+## Interactive frames — 3-D Secure, embedded OAuth, payment forms (tick 232)
+
+An `<iframe>`'s pixels were a one-time snapshot: the child document stayed live and mutable, but
+nothing repainted it, so the DOM changed and the screen did not. Every read from script came back
+correct, which is why it survived — and it lands on exactly the content the web puts in frames
+*because* it is interactive. A 3-D Secure challenge, an embedded OAuth consent screen, a payment form
+or a CAPTCHA showed its first state forever, so the payment or login could never be completed and the
+frame read to the user as frozen.
+
+Frames now re-render when a script round mutates them, gated by `g_iframe_rerender` — which asserts
+the frame's actual pixels change, since the DOM half already worked. Residue: a frame's own
+timers/fetches do not yet trigger a repaint, and clicks are not routed into a frame (script can drive
+the embedded form; a user cannot yet click it).

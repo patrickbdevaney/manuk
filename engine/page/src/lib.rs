@@ -2218,6 +2218,18 @@ impl Page {
 
     /// Evaluate a script in the page's context. Used by the conformance suite to read state back
     /// out of the JS world through the DOM, which is the only channel a test has into a page.
+    /// The painted bitmap the parent holds for `node` — the pixels an `<iframe>` (or `<img>`, or
+    /// `<canvas>`) actually shows. Exposed so a gate can assert what is ON SCREEN rather than what the
+    /// DOM says, which for frames are two different questions.
+    ///
+    /// Deliberately NOT feature-gated: pixels exist in the JS-less build too.
+    pub fn image_for(
+        &self,
+        node: manuk_dom::NodeId,
+    ) -> Option<&std::rc::Rc<manuk_paint::DecodedImage>> {
+        self.images.get(&node)
+    }
+
     #[cfg(feature = "spidermonkey")]
     pub fn eval_for_test(&mut self, src: &str) {
         let Some(ctx) = &self.js else { return };
@@ -2753,6 +2765,9 @@ impl Page {
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
         }
+        // A script round can mutate ONLY a child frame, leaving the parent clean — so this sits
+        // OUTSIDE the parent dirty guard above. It is a flag check per frame when nothing changed.
+        self.repaint_child_frames(fonts);
         proceed
     }
 
@@ -2849,6 +2864,9 @@ impl Page {
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
         }
+        // A script round can mutate ONLY a child frame, leaving the parent clean — so this sits
+        // OUTSIDE the parent dirty guard above. It is a flag check per frame when nothing changed.
+        self.repaint_child_frames(fonts);
     }
 
     /// The form control a `<label>` labels — `for="id"`, else the first labelable descendant.
@@ -3163,6 +3181,9 @@ impl Page {
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
         }
+        // A script round can mutate ONLY a child frame, leaving the parent clean — so this sits
+        // OUTSIDE the parent dirty guard above. It is a flag check per frame when nothing changed.
+        self.repaint_child_frames(fonts);
     }
 
     /// Deliver one step of a **streaming** response for request `id`: `Head` (where the page's
@@ -3202,6 +3223,9 @@ impl Page {
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
         }
+        // A script round can mutate ONLY a child frame, leaving the parent clean — so this sits
+        // OUTSIDE the parent dirty guard above. It is a flag check per frame when nothing changed.
+        self.repaint_child_frames(fonts);
     }
 
     /// Drain the page's queued `fetch`/XHR requests as `(id, url, method, headers, body)`, for the
@@ -3308,6 +3332,9 @@ impl Page {
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
         }
+        // A script round can mutate ONLY a child frame, leaving the parent clean — so this sits
+        // OUTSIDE the parent dirty guard above. It is a flag check per frame when nothing changed.
+        self.repaint_child_frames(fonts);
     }
 
     /// Drain the page's queued `history` ops (`pushState`/`replaceState`/`back`/`forward`/`go`)
@@ -3353,6 +3380,9 @@ impl Page {
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
         }
+        // A script round can mutate ONLY a child frame, leaving the parent clean — so this sits
+        // OUTSIDE the parent dirty guard above. It is a flag check per frame when nothing changed.
+        self.repaint_child_frames(fonts);
     }
 
     /// **Streaming load with a first-paint checkpoint (B-latency).** Feeds `chunks` to
@@ -3385,6 +3415,62 @@ impl Page {
     }
 
     /// Re-run layout at a new viewport width (reuses the DOM + computed styles).
+    /// Re-lay-out and re-paint every child frame whose document has changed, refreshing the bitmap
+    /// the parent shows for it.
+    ///
+    /// **Why frames need this and ordinary elements do not.** A frame is composited as a *bitmap*
+    /// into the parent's image map — the same map an `<img>` lands in — because it is a whole
+    /// separate document with its own viewport and its own cascade. `render_iframe` painted that
+    /// bitmap once. The child `Page` stayed alive (which is what made `contentDocument` work), so
+    /// scripts could reach in and mutate it, and nothing ever repainted: the DOM changed and the
+    /// screen did not.
+    ///
+    /// That is the worst shape of bug, because **every read comes back correct** — the parent can
+    /// query the frame's DOM and see the new state while showing the old pixels. It lands on exactly
+    /// the content the web puts in frames precisely because it is interactive: a **3-D Secure
+    /// challenge**, an embedded **OAuth consent screen**, a payment form, a CAPTCHA. Each shows its
+    /// first state forever, so the payment or the login cannot be completed and the frame reads to a
+    /// user as frozen.
+    ///
+    /// Guarded on the child's dirty bits, so an untouched frame costs one flag check rather than a
+    /// full paint on every script round.
+    pub fn repaint_child_frames(&mut self, fonts: &FontContext) {
+        if self.child_pages.is_empty() {
+            return;
+        }
+        let rects = self.root_box.node_rects(&self.dom);
+        let nodes: Vec<manuk_dom::NodeId> = self.child_pages.keys().copied().collect();
+        for node in nodes {
+            // A frame with no box is not painted at all — same rule as the first paint.
+            let Some(r) = rects.get(&node) else { continue };
+            if r.width < 1.0 || r.height < 1.0 {
+                continue;
+            }
+            let (w, h) = (
+                r.width.round().max(1.0) as u32,
+                r.height.round().max(1.0) as u32,
+            );
+            let Some(child) = self.child_pages.get_mut(&node) else {
+                continue;
+            };
+            let croot = child.dom.root();
+            if !(child.dom.is_dirty(croot) || child.dom.has_dirty_descendants(croot)) {
+                continue;
+            }
+            // The child lays out at the FRAME's width, not the window's — that is what makes a
+            // responsive embed responsive, and it must stay true on every repaint.
+            child.relayout(fonts, w as f32);
+            child.dom.clear_all_dirty();
+            let canvas = child.paint(fonts, w, h);
+            let img = manuk_paint::DecodedImage {
+                width: canvas.width(),
+                height: canvas.height(),
+                rgba: canvas.rgba_bytes().to_vec(),
+            };
+            self.images.insert(node, std::rc::Rc::new(img));
+        }
+    }
+
     pub fn relayout(&mut self, fonts: &FontContext, viewport_width: f32) {
         self.relayout_zoomed(fonts, viewport_width, self.zoom);
     }

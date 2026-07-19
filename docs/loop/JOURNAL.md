@@ -9710,3 +9710,50 @@ comment so the next reader does not "restore" it.
 popup and the opener's `closed` polling are not modelled.
 
 **Mechanism captured:** `docs/wiki/interaction-surface.md`.
+
+## Tick 232 — a frame whose document changes now changes on screen (2026-07-18)
+
+**Selected:** CO-#1 **(B) OAuth O2** — constellation row 50's explicit caveat: *"REAL iframes … BUT
+pixels are a snapshot — no re-render on mutation. Blocks 3-D Secure challenge + interactive OAuth
+frames."*
+
+**The mechanism.** A frame is composited as a **bitmap** into the parent's image map — the same map
+an `<img>` lands in — because it is a whole separate document with its own viewport and cascade.
+`render_iframe` painted that bitmap once. Tick 84 kept the child `Page` alive (which is what made
+`contentDocument` work), so scripts could reach in and mutate it, and **nothing ever repainted**.
+
+**The worst shape of bug: every read comes back correct.** The parent can query the frame's DOM and
+see the new state while showing the old pixels, so nothing in script looks wrong. And it lands on
+exactly the content the web puts in frames *because* it is interactive — a 3-D Secure challenge, an
+embedded OAuth consent screen, a payment form, a CAPTCHA. Each shows its first state forever, so the
+payment or the login cannot be completed and the frame reads to a user as frozen.
+
+**Fix:** `Page::repaint_child_frames` re-lays-out and re-paints any child whose document is dirty,
+at the **frame's** width (so a responsive embed stays responsive across repaints), and refreshes the
+parent's bitmap. Called from the six script-round exits — `dispatch_click`,
+`resolve_fetch_bytes_inner`, `deliver_ws_event`, `deliver_fetch_stream`, `deliver_message`,
+`fire_popstate` — and deliberately **outside** each one's parent-dirty guard, because a script can
+mutate only the child and leave the parent clean. Guarded on the child's dirty bits, so an untouched
+frame costs a flag check rather than a paint.
+
+**Gate.** `g_iframe_rerender` asserts **pixels**, not DOM state — the DOM half already worked and is
+precisely what made the gap invisible. It sums the frame's stored RGBA before and after and requires
+them to differ. Driven by a **real dispatched click** whose handler reaches into the frame, not by
+the test-only `eval_for_test`, so it exercises the path a page actually takes; a preceding assertion
+confirms the handler ran, so the pixel claim cannot pass vacuously. New `Page::image_for` exposes what
+is on screen.
+
+**RED, run:** making `repaint_child_frames` skip every frame reproduces identical ink totals — the
+frozen challenge exactly.
+
+**Two bad edits caught before they landed**, continuing this session's theme. Inserting the call
+by line number first produced an `if false {` scaffold (compiles, unreadable) and then a seventh
+insertion inside `relayout_zoomed` — a *function* end rather than a dirty-block end, which broke the
+`impl` and would have recursed. Both were found by compiling and by re-deriving each call site's
+enclosing method name rather than trusting the line numbers.
+
+**Residue:** the frame repaints from parent-side script rounds; a frame's OWN timers/fetches do not
+yet drive a repaint, and clicks are not routed INTO a frame (so a user cannot press the bank's button
+— only script can). Those are the next steps on this row.
+
+**Mechanism captured:** `docs/wiki/architecture.md`.

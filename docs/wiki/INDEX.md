@@ -25,6 +25,7 @@
   - L235 · Chromium splits tab dormancy into two mechanisms, and only ONE reclaims RAM
   - L243 · Retained-heap accounting is NOT RSS, and saying so is the whole point of the metric
   - L256 · Two design decisions recorded as DECIDED-BUT-UNDONE
+  - L267 · A frame is a bitmap, so its pixels need explicit refreshing (tick 232)
 
 ## BOX LAYOUT — taffy mapping realities and quirks (flex / grid / sizing)
 `docs/wiki/box-layout.md`
@@ -505,4 +506,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-424 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+425 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

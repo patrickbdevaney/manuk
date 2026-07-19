@@ -263,3 +263,31 @@ does exactly this, **and still lands 30–45% in "heap-unclassified"**).
   The decision was *"kill the string-eval bindings, use direct JSAPI."* **Still undone.**
 - **Methods are defined PER-INSTANCE** (N nodes × M methods) rather than hung off **one shared prototype per
   interface** — *which is what breaks the `instanceof`/`constructor` semantics pages test for.*
+
+## A frame is a bitmap, so its pixels need explicit refreshing (tick 232)
+
+An `<iframe>` is composited into the parent as a **`DecodedImage`** in the same map an `<img>` lands
+in, because it is a whole separate document with its own viewport width and its own cascade.
+`render_iframe` paints that bitmap once. Tick 84 kept the child `Page` alive so `contentDocument`
+would work — which means scripts can mutate the child freely, and until tick 232 nothing repainted it.
+
+**The failure is invisible from script**, which is what makes it expensive: the parent reads the
+frame's DOM and sees the new state while the screen shows the old pixels. Nothing throws, every query
+is correct, and the frame simply looks frozen. It lands on precisely the content the web puts in
+frames *because* it is interactive — 3-D Secure challenges, embedded OAuth consent, payment forms,
+CAPTCHAs — so the flow cannot be completed at all.
+
+`Page::repaint_child_frames` re-lays-out and re-paints any child whose DOM is dirty and replaces the
+parent's bitmap. Two things about where it is called:
+
+- **From every script-round exit** (`dispatch_click`, `resolve_fetch_bytes_inner`,
+  `deliver_ws_event`, `deliver_fetch_stream`, `deliver_message`, `fire_popstate`), because any of
+  them can run a handler that reaches into a frame.
+- **Outside each one's parent-dirty guard.** A script can mutate *only* the child, leaving the parent
+  perfectly clean — guarding on the parent's dirty bits would skip exactly the case this exists for.
+
+It re-lays-out at the **frame's** width, not the window's; that is what makes a responsive embed
+responsive, and it has to stay true on every repaint, not just the first.
+
+Still open on this path: a frame's own timers/fetches do not drive a repaint, and input is not routed
+into a frame (script can change the bank's form; a user cannot click its button).
