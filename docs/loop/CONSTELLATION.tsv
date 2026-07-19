@@ -116,7 +116,7 @@ platform	navigator.permissions.query()	detectors cross-check vs Notification.per
 platform	navigator.userAgentData + canonical UA/platform + deviceMemory	LinkedIn/Cloudflare degraded-browser path; UA contains 'Manuk', platform non-canonical	partial	-	edge sweep t193: navigator 90% built (webdriver:false ok) — COMPLETENESS not evasion
 cross	a11y node STATES (checked/expanded/selected/disabled/value/focused)	agent CANNOT confirm the result of its own action (is the box checked? menu open?)	gated	-	tick 199 g_ gate — agent confirms its own actions. Phase-0 lever LANDED
 cross	a11y interactive roles (menu/tab/dialog/switch/slider/progressbar)	agent can't ground the web-app widgets it most drives	partial	-	edge sweep t193: Role enum stops at ~26 roles
-cross	hover/dblclick/contextmenu dispatch	hover-reveal menus, right-click, double-click-select undrivable	missing	-	edge sweep t193: only dispatch_click exists
+cross	hover/dblclick/contextmenu dispatch	hover-reveal menus, right-click, double-click-select undrivable	partial	G_HOVER	tick 245: :hover state + ancestor chain + mouseover/out/enter/leave/move via Page::dispatch_hover_at. dblclick/contextmenu still absent
 cross	file-input actuation (set FileList on input[type=file])	every upload flow undrivable by an agent	missing	-	edge sweep t193: DataTransfer is an inert stub; no set_files
 app	native <select> choose + selectedIndex/change	dropdowns undrivable by an agent	partial	-	edge sweep t193: attrs reflect; synthetic option-choice + change firing unbuilt
 media	binary transport (arraybuffer XHR/fetch + Range)	adaptive players (hls.js/dash.js) can't append segments — PREREQ for MSE	missing	-	edge sweep t193: __deliverXhr is text-only; hyper does Range trivially

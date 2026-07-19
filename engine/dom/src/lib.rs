@@ -224,6 +224,16 @@ pub struct Dom {
     /// distinction currently drives. If a limited-quirks-only behaviour is ever needed, this becomes a
     /// three-state enum of our own — but inventing one before anything reads it is speculation.
     quirks: bool,
+    /// **The element the pointer is currently over** — the anchor of the `:hover` chain.
+    ///
+    /// It lives on `Dom` for the same reason `quirks` does: every consumer that needs to answer
+    /// `:hover` (the cascade, layout, JS) already holds a `&Dom`, so riding on that handle reaches
+    /// all of them with **no signature change anywhere**. Threading it as a parameter would touch
+    /// every `cascade_styles` call site to deliver one `Option`.
+    ///
+    /// `None` is the honest default and the correct answer for a static render: a page being laid
+    /// out for the first time is not being hovered. The shell writes it on pointer motion.
+    hovered: Option<NodeId>,
 }
 
 impl Default for Dom {
@@ -249,6 +259,7 @@ impl Dom {
             // layout tree, `createDocument`) has no doctype to be missing, and treating those as
             // quirks would enable the unitless-length quirk for documents no parser ever saw.
             quirks: false,
+            hovered: None,
         }
     }
 
@@ -260,6 +271,71 @@ impl Dom {
     /// Record the parser's quirks verdict. Called once, by the HTML tree sink.
     pub fn set_quirks(&mut self, quirks: bool) {
         self.quirks = quirks;
+    }
+
+    /// The element the pointer is over, if any. The `:hover` chain is this node and its ancestors.
+    pub fn hovered(&self) -> Option<NodeId> {
+        self.hovered
+    }
+
+    /// Move the pointer to `node` (or off the document with `None`).
+    ///
+    /// Returns `true` if the hover target actually **changed**, which is what the caller uses to
+    /// decide whether a restyle is needed at all — pointer-move events arrive at motion rates, and
+    /// the overwhelming majority land on the element already hovered. Marking the tree dirty on
+    /// every one of those would recascade the document tens of times a second for no visual change.
+    ///
+    /// Marking dirty is done HERE rather than left to the caller. `:hover` is a cascade input, so a
+    /// hover change that does not dirty the tree is a style change nobody recomputes: the rule
+    /// matches and the pixels never move. That is the same asymmetry `remove_attr` had (see
+    /// `docs/wiki/dom-semantics.md`), and it presents the same way — as "sometimes the UI doesn't
+    /// update" rather than as a reproducible bug.
+    pub fn set_hovered(&mut self, node: Option<NodeId>) -> bool {
+        // A stale id from a node freed since the pointer last moved must not resurrect a dead slot.
+        let node = node.filter(|n| self.is_alive(*n));
+        if node == self.hovered {
+            return false;
+        }
+        let previous = self.hovered;
+        self.hovered = node;
+        // **BOTH chains, not just the two endpoints.** `:hover` matches every ancestor of the
+        // hovered element, so every ancestor's style can change when the pointer moves — and the
+        // dirty bit is per node, not per subtree. Marking only the target leaves an ancestor whose
+        // `li:hover` rule just started (or stopped) matching un-restyled, which is precisely the
+        // hover-menu case: the `<li>` is the element whose style changes and the element the
+        // pointer is never actually over.
+        for end in [previous, node].into_iter().flatten() {
+            let mut cur = Some(end);
+            while let Some(n) = cur {
+                self.mark_dirty(n);
+                cur = self.parent(n);
+            }
+        }
+        true
+    }
+
+    /// Does `:hover` match this node?
+    ///
+    /// **`:hover` matches the hovered element AND every ancestor of it**, which is not a detail —
+    /// it is the whole mechanism behind the hover-reveal navigation menu. `nav li:hover > ul`
+    /// keeps a submenu open while the pointer is down inside that submenu, because the `<li>` is
+    /// an ancestor of whatever the pointer is actually over. Matching only the exact target makes
+    /// every such menu flicker shut the instant the pointer enters the panel it just opened.
+    pub fn is_hovered(&self, node: NodeId) -> bool {
+        let Some(target) = self.hovered else {
+            return false;
+        };
+        if target == node {
+            return true;
+        }
+        let mut cur = self.parent(target);
+        while let Some(p) = cur {
+            if p == node {
+                return true;
+            }
+            cur = self.parent(p);
+        }
+        false
     }
 
     /// Whether `id` still points at a live node of the generation it was minted at. A

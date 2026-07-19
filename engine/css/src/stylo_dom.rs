@@ -365,8 +365,12 @@ mod selector_impl {
                 P::UserValid => false,
                 P::Defined => true,
                 P::Open => has("open"),
-                // Genuinely dynamic: correct answer for a static layout is "no".
-                P::Hover | P::Active | P::Focus | P::FocusWithin | P::FocusVisible => false,
+                // `:hover` is fed by the shell (`Page::dispatch_hover_at` → `Dom::set_hovered`) and
+                // matches the hovered element AND ALL ITS ANCESTORS — see `Dom::is_hovered` for why
+                // the ancestor half is the entire hover-reveal-menu mechanism rather than a detail.
+                P::Hover => self.dom.is_hovered(self.node),
+                // Still genuinely dynamic and still unfed: correct answer for a static layout is "no".
+                P::Active | P::Focus | P::FocusWithin | P::FocusVisible => false,
                 _ => false,
             }
         }

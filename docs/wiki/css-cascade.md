@@ -336,3 +336,58 @@ few sections up was the *same* index dropping rules it never looked at. **An ind
 the rule set, and every predicate you add to the matcher has to be reflected in the key — or the index
 silently pre-filters the thing you just taught the matcher to accept.** Ask what the index dropped,
 every time the matching semantics change.
+
+## `:hover` is a cascade INPUT, and the two relayout paths each miss it differently
+
+`:hover` was hard-coded `false` in `stylo_dom.rs` alongside `:active` and `:focus` (tick 245,
+`G_HOVER`), behind a comment that was correct about a static render and wrong about a browser: *"a
+page is not being hovered when it is laid out."* True — and nothing fed it afterwards either.
+
+**What it cost is a whole category of navigation, not a visual polish item.** `nav li:hover > ul {
+display: block }` is how a large share of the desktop web builds top navigation **with no JavaScript
+at all** — structurally the same trick as the checkbox hack that `:checked` unblocked. With `:hover`
+never matching, every one of those menus is permanently closed: the links inside are unreachable to
+a user, invisible to an agent, and **nothing reports a problem**, because the page renders exactly
+what it was told to render.
+
+### `:hover` matches ANCESTORS, and that half is the mechanism
+
+The state lives on `Dom` (`hovered: Option<NodeId>`), for the same reason `quirks` does: every
+consumer already holds a `&Dom`, so it reaches the cascade with no signature change anywhere.
+`Dom::is_hovered` walks the ancestor chain, and matching only the exact hit target fails in a way
+that *looks like it works*: the pointer enters the `<li>`, the submenu opens, the pointer moves one
+pixel into that submenu — it is now over an `<a>` inside the `<ul>`, the `<li>` stops matching, and
+the menu closes underneath the cursor. That is the flickering-menu bug.
+
+The dirty bits follow the same rule. `set_hovered` marks **every node on both the old and the new
+chain**, because the dirty bit is per node, not per subtree, and the element whose style actually
+changes — the `<li>` — is the one the pointer is never over.
+
+### The trap: neither existing relayout recascades a state change, and they fail oppositely
+
+This is the part that cost the tick, and both halves are the *half-fix* shape (tick 243's index bug
+again): the code compiles, reads as complete, and does nothing.
+
+| path | when it recascades | how it fails a hover |
+|---|---|---|
+| `relayout` | only when the **tree GREW** (node count vs `styles.len()`) | a hover adds no nodes → re-lays-out the OLD styles. `:hover` matches, `hovered` is set, every piece of wiring is correct, **not one pixel moves.** |
+| `relayout_incremental` | on the dirty bits — correct trigger | rebuilds its sheet list from `MinimalCascade::collect_style_elements`, which sees inline `<style>` and **not `<link>`ed sheets**. Hover any link on any site with external CSS and **every external stylesheet drops out of the cascade.** |
+
+The second one had **no production callers** (tests only), so nothing had ever paid for that
+limitation, and it is invisible to any fixture written with an inline `<style>` — which the first
+version of `G_HOVER` was. The gate now puts the rules under test in an **external** sheet
+specifically so the trap is inside its blast radius; the RED probe returns 800px rather than 100px,
+because the base rule vanishes along with the hover rule.
+
+`Page::recascade_all_sources` is the answer: recascade over the full source set without requiring
+tree growth. It is extracted rather than inlined because **`:active` and `:focus` are exactly this
+shape** and are the obvious next fills — they should not each rediscover this.
+
+### The general form, worth carrying past this pseudo-class
+
+**A cascade input can change while the tree does not.** Every incremental path here was built around
+*tree* mutation — nodes added, attributes set — and answers "did the DOM change?" rather than "did
+anything the cascade reads change?". State pseudo-classes are the first inputs that move without the
+tree moving, and they will not be the last (`:focus-visible`, container queries, `@media` on a
+resize). When adding one, the question is not "does it match" but **"what recomputes when it starts
+matching?"**

@@ -3609,6 +3609,33 @@ impl Page {
         self.relayout_zoomed(fonts, viewport_width, self.zoom);
     }
 
+    /// **Re-run the cascade over EVERY stylesheet the document has** — inline `<style>` and
+    /// `<link>`ed alike — without requiring the tree to have grown.
+    ///
+    /// This exists because the two relayout paths each answer a different question and neither
+    /// answers *"a cascade INPUT changed while the tree stayed the same"*, which is what a `:hover`
+    /// transition is. `relayout` recascades only when the node count outgrew the style map;
+    /// `relayout_incremental` recascades on dirty bits but rebuilds its sheet list from inline
+    /// `<style>` elements only, so it would quietly drop every external stylesheet.
+    ///
+    /// Extracted rather than inlined because `:active` and `:focus` are the same shape and are the
+    /// obvious next fills — they should not each rediscover this.
+    fn recascade_all_sources(&mut self, viewport_width: f32) {
+        let sources = collect_style_sources(&self.dom, &self.final_url);
+        let sheets: Vec<Stylesheet> = sources
+            .iter()
+            .filter_map(|src| match src {
+                StyleSource::Inline(css, m) => Some(Stylesheet::parse(&wrap_media(css, m))),
+                StyleSource::External(url, m) => self
+                    .external_css
+                    .get(url)
+                    .map(|css| Stylesheet::parse(&wrap_media(css, m))),
+            })
+            .collect();
+        self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
+        self.last_cascade = None; // the fingerprint no longer describes this tree
+    }
+
     /// The current full-page zoom factor (1.0 = 100%).
     pub fn zoom(&self) -> f32 {
         self.zoom
@@ -3807,6 +3834,100 @@ impl Page {
             }
         }
         self.dispatch_click(hit, fonts, viewport_width)
+    }
+
+    /// **Move the pointer to a document point** — updates the `:hover` chain, restyles, and fires
+    /// the mouse events a page listens for. Returns `true` if the hover target changed.
+    ///
+    /// Until this existed `:hover` was hard-coded `false` everywhere in the cascade, which is the
+    /// correct answer for a static render and the wrong one for a browser. What that cost is not
+    /// "buttons don't light up": **the hover-reveal navigation menu is a desktop-web primitive**,
+    /// and `nav li:hover > ul { display: block }` is how a large share of sites build their top
+    /// navigation with no JavaScript at all. With `:hover` never matching, every one of those menus
+    /// is permanently closed — the links inside them are unreachable to a user and invisible to an
+    /// agent, and nothing anywhere reports a problem, because the page is rendering exactly what it
+    /// was told to render.
+    ///
+    /// **The out-then-in ordering is the spec's and it is load-bearing.** `mouseout`/`mouseleave`
+    /// fire on what the pointer left *before* `mouseover`/`mouseenter` fire on what it entered.
+    /// Menu code is written against that order — the leave handler starts a close timer that the
+    /// enter handler cancels — so firing enter first makes a menu close behind a pointer that is
+    /// still inside it.
+    pub fn dispatch_hover_at(
+        &mut self,
+        doc_x: f32,
+        doc_y: f32,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
+        let hit = self.a11y_tree().hit_test(doc_x, doc_y).map(|n| n.node);
+        let previous = self.dom.hovered();
+        // `set_hovered` is the one that decides whether anything changed, and it marks the tree
+        // dirty when it did. Pointer-move events arrive at motion rates and almost all of them land
+        // on the element already hovered; recascading the document for those would be a per-frame
+        // cost for zero visual change.
+        if !self.dom.set_hovered(hit) {
+            return false;
+        }
+
+        // The cascade is what `:hover` feeds, so the restyle must happen BEFORE the page's handlers
+        // run: a handler that measures on `mouseover` (menu code positioning a submenu is exactly
+        // this) must see the geometry the hover itself produced, not the previous frame's.
+        //
+        // **NEITHER EXISTING RELAYOUT IS CORRECT HERE, and both fail silently — in opposite
+        // directions.** This cost the tick's second half, and both traps are worth naming.
+        //
+        // `relayout` only re-runs the cascade when the tree GREW (a node count against
+        // `styles.len()`), because its job is catching nodes a script injected after the last
+        // cascade. A hover change adds no nodes, so it re-lays-out the OLD styles: `:hover`
+        // matches, `Dom::hovered` is set, every piece of the wiring is correct, and **not one pixel
+        // moves.** That is the tick-243 half-fix shape exactly — a fix that compiles, reads as
+        // complete, and does nothing.
+        //
+        // `relayout_incremental` does recascade on the dirty bits `set_hovered` just marked, and it
+        // is what I reached for next — but it rebuilds its sheet list from
+        // `MinimalCascade::collect_style_elements`, which sees inline `<style>` blocks and **not
+        // `<link>`ed stylesheets**. It has no production callers today (tests only), so nothing had
+        // ever paid for that. Shipping it on the hover path would mean: hover any link on any site
+        // with external CSS, and every external stylesheet silently drops out of the cascade.
+        // A gate whose fixture used inline `<style>` — as mine did — passes that with no complaint.
+        //
+        // So the hover path recascades with the FULL source set, the way `relayout_zoomed`'s
+        // tree-grew branch does, and then lays out.
+        self.recascade_all_sources(viewport_width);
+        self.relayout(fonts, viewport_width);
+
+        let Some(ctx) = self.js.as_ref() else {
+            return true;
+        };
+        let rects: std::collections::HashMap<manuk_dom::NodeId, [f32; 4]> = self
+            .root_box
+            .node_rects(&self.dom)
+            .into_iter()
+            .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+            .collect();
+        let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+
+        // Leaving, then entering — see the note above on why the order is not cosmetic.
+        if let Some(old) = previous.filter(|n| self.dom.is_alive(*n)) {
+            for kind in ["mouseout", "mouseleave"] {
+                if let Err(e) =
+                    manuk_js::dispatch_event(ctx, &mut self.dom, old, kind, &rects, &self.styles)
+                {
+                    tracing::warn!("{kind} dispatch: {e}");
+                }
+            }
+        }
+        if let Some(new) = hit {
+            for kind in ["mouseover", "mousemove", "mouseenter"] {
+                if let Err(e) =
+                    manuk_js::dispatch_event(ctx, &mut self.dom, new, kind, &rects, &self.styles)
+                {
+                    tracing::warn!("{kind} dispatch: {e}");
+                }
+            }
+        }
+        true
     }
 
     pub fn a11y_tree(&self) -> manuk_a11y::A11yNode {

@@ -1337,3 +1337,27 @@ here can deliver: a hang dressed as a feature.
 **The class this unlocks** is every page that budgets its own work — which is now most of them.
 Backgrounded-tab throttling, autoplay gating, poll suspension and reconnect-on-return all key off
 these two surfaces, and a browser that cannot answer them is a browser that never rests.
+
+## The hover-reveal navigation menu — a whole category of navigation, missing in silence (tick 245)
+
+**Pattern:** `nav li:hover > ul { display: block }`. Top navigation built with **no JavaScript at
+all** — structurally the same trick as the checkbox hack, and just as common. `:hover` was
+hard-coded `false` in the cascade, so every one of those menus was permanently closed. The links
+inside were unreachable to a user and invisible to an agent, and **nothing anywhere reported a
+problem**: the page rendered exactly what it was told to render.
+
+**`:hover` matches the hovered element AND ALL ITS ANCESTORS, and that half is the mechanism.**
+Match only the exact hit target and the menu fails in a way that looks like it works: the pointer
+enters the `<li>` and the submenu opens; the pointer moves one pixel into that submenu and is now
+over an `<a>` inside the `<ul>`, so the `<li>` stops matching and the menu closes underneath the
+cursor. The element whose style actually changes is the one the pointer is never over.
+
+**The class this unlocks** is the desktop navigation bar — plus hover cards, tooltips, image-swap
+affordances, and `:hover`-gated "reveal on hover" controls, which together are on a large fraction
+of desktop pages. It is also an **agentic** unlock: a menu that never opens is a set of links no
+agent can see, let alone click.
+
+**The trap worth carrying forward:** a cascade *input* can change while the *tree* does not. Every
+incremental path in this engine was built around tree mutation and asks "did the DOM change?" rather
+than "did anything the cascade reads change?". State pseudo-classes are the first inputs that move
+without the tree moving and will not be the last. Details in `docs/wiki/css-cascade.md`.

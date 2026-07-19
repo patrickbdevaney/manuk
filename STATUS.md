@@ -15,7 +15,7 @@ LAST_CONSTITUTION_CHECK: 127     (constitution re-read due every 8 ticks — fro
 LOOP_BUDGET:       960 ticks remaining (target tick 1088) — from docs/loop/AUTOLOOP; the loop STOPS and reports at 0
 LAST_WALL_AUDIT:   113         (wall-time audit due every 20 ticks — scripts/wall-audit.sh; hunts wall bloat without cutting a gate)
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)
-LAST_WALL_TIME:    68s
+LAST_WALL_TIME:    61s
 ORACLE_CORPUS:     265 sites
 ORACLE_CRAWLED:    0 (PARTIAL — of 265; this run did not finish, so the hang count is a FLOOR, not a number) sites, 640 clusters  → docs/loop/CLUSTERS.md
 ORACLE_HANGS:      0?   ← Bar 0, on OUR clock (manuk_ms > 30s). Outranks every visual cluster.

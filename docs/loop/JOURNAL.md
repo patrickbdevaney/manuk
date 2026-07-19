@@ -10698,3 +10698,72 @@ Residue: `visibilitychange` is only driven by `Page::set_visibility`; no shell c
 tab-focus to it yet, so the capability is complete at the engine boundary and unexercised above it.
 `permissions.query` returns a `PermissionStatus` whose `change` event can never fire — honest, since
 none of these states can change without a permission UI, but it is a stub-shaped edge worth naming.
+
+## Tick 245 — `:hover`, and a cascade input that changes while the tree does not
+
+TICK SHAPE: `CONSTELLATION.tsv` row `cross / hover-dblclick-contextmenu dispatch`, carried as
+`missing`. Probed first (process rule 2): `grep -rn hover engine/*/src` found the pseudo-class
+answered `false` at exactly one site and fed from nowhere. Genuinely absent, unlike three of the
+four levers probed at tick 244.
+
+**WHAT IT COST IS A CATEGORY OF NAVIGATION, NOT A POLISH ITEM.** `nav li:hover > ul { display:
+block }` is how a large share of the desktop web builds top navigation **with no JavaScript at
+all** — structurally the same trick as the checkbox hack that `:checked` unblocked at an earlier
+tick. With `:hover` never matching, every one of those menus is permanently closed: the links inside
+are unreachable to a user, invisible to an agent, and **nothing reports a problem**, because the
+page renders exactly what it was told to render.
+
+**THE ANCESTOR HALF IS THE MECHANISM.** `:hover` matches the hovered element AND every ancestor.
+Match only the exact hit target and it fails in a way that LOOKS like it works: pointer enters the
+`<li>`, submenu opens; pointer moves one pixel into that submenu and is now over an `<a>` inside the
+`<ul>`, so the `<li>` stops matching and the menu closes underneath the cursor. The element whose
+style actually changes is the one the pointer is never over — which is also why `set_hovered` marks
+every node on BOTH chains dirty, not the two endpoints: the dirty bit is per node, not per subtree.
+
+State lives on `Dom` (`hovered: Option<NodeId>`), the tick-242 pattern — every consumer already
+holds a `&Dom`, so it reaches the cascade with no signature change anywhere.
+
+**THE TRAP, AND IT COST THE SECOND HALF OF THE TICK. NEITHER EXISTING RELAYOUT RECASCADES A STATE
+CHANGE, AND THEY FAIL IN OPPOSITE DIRECTIONS.** Both are the tick-243 half-fix shape: compiles,
+reads as complete, does nothing.
+  · `relayout` recascades only when the tree GREW (node count vs `styles.len()`); a hover adds no
+    nodes, so it re-lays-out the OLD styles. Every piece of the wiring correct, not one pixel moved.
+    This is what the gate caught first.
+  · `relayout_incremental` recascades on the dirty bits — right trigger — but rebuilds its sheet
+    list from `MinimalCascade::collect_style_elements`, which sees inline `<style>` and NOT
+    `<link>`ed sheets. It has **no production callers** (tests only), so nothing had ever paid for
+    that. Shipping it on the hover path would mean: hover any link on any site with external CSS,
+    and every external stylesheet silently drops out of the cascade.
+
+**I NEARLY SHIPPED THE SECOND ONE, AND THE ONLY REASON I DID NOT IS THAT THE FIXTURE WAS WRONG.**
+The first `G_HOVER` put `#btn`'s rules in an inline `<style>` — where the bug is invisible. Moving
+them to an external sheet is what put the trap inside the gate's blast radius, and the RED probe now
+returns **800px, not 100px**: the base rule vanishes along with the hover rule. *A fixture that uses
+one kind of stylesheet cannot see a bug that only affects the other kind.* `recascade_all_sources`
+is the fix, extracted rather than inlined because `:active` and `:focus` are the same shape.
+
+**THE GENERALISATION, now in the wiki:** a cascade INPUT can change while the TREE does not. Every
+incremental path here was built around tree mutation and asks *"did the DOM change?"* rather than
+*"did anything the cascade reads change?"*. State pseudo-classes are the first inputs that move
+without the tree moving, and they will not be the last (`:focus-visible`, container queries, `@media`
+on a resize). The question when adding one is not "does it match" but **"what recomputes when it
+starts matching?"**
+
+**FOUR RED PROBES EXECUTED, NOT ASSERTED (process rule 3), each hitting its own claim:**
+  · `P::Hover => false` restored              -> the `#btn:hover` width claim FAILS at 100px
+  · `is_hovered` exact-target only            -> the ANCESTOR claim FAILS; the flickering-menu bug
+  · `relayout_incremental` on the hover path  -> width claim FAILS at **800px** (external sheet gone)
+  · `mouseout` moved after `mouseover`        -> the ORDER claim FAILS
+
+**REGRESSION MEASURED, NOT ASSUMED:** full `manuk-page` suite **123 passed, 1 failed** — the +1 is
+this tick's gate, the failure is the PRE-EXISTING `hard_wall_detection_and_honest_interstitial`
+(tick 239). manuk-dom 11, manuk-css 33, manuk-layout 77, manuk-paint 17 — all green.
+
+**PARKED on `wip/tick245-hover`** for the same reason as 243 and 244: the wall is 922s against a 93s
+mark from the observer-owned ramdisk-flush pathology. Gate + full-suite regression run directly.
+
+Residue: `:active`, `:focus`, `:focus-within` and `:focus-visible` still answer `false` — the same
+shape, now one helper away, deliberately left rather than bundled. `dblclick` and `contextmenu` are
+still absent, so the constellation row is `partial`, not `gated`. No shell caller wires real pointer
+motion to `dispatch_hover_at` yet, so the capability is complete at the engine boundary and
+unexercised above it — the same residue tick 244 left for visibility.

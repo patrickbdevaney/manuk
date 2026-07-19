@@ -160,6 +160,10 @@
   - L305 · LimitedQuirks folds to false, deliberately
   - L313 · Gate note
   - L321 · The half-fix trap: a custom rule index must be keyed the way it is queried (tick 243)
+  - L340 · :hover is a cascade INPUT, and the two relayout paths each miss it differently
+  - L353 · :hover matches ANCESTORS, and that half is the mechanism
+  - L366 · The trap: neither existing relayout recascades a state change, and they fail oppositely
+  - L386 · The general form, worth carrying past this pseudo-class
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -540,4 +544,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-459 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+463 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
