@@ -996,6 +996,25 @@ fn scroll_geometry_of(
 
 impl Page {
     /// Parse + style + lay out `html` for a viewport of `viewport_width` px.
+    /// As [`load`](Self::load), but the document is born knowing its window id and opener, so its
+    /// **load-time** scripts can read `window.opener`.
+    ///
+    /// `set_identity` cannot serve that case — it only exists once the page's render-blocking
+    /// scripts have already run. A popup's login script reads `window.opener` at load time to post
+    /// its token back, so with the late seeding it read `null`, posted nothing, and the opener
+    /// waited on its callback forever with nothing thrown.
+    pub fn load_with_identity(
+        html: &str,
+        final_url: &str,
+        fonts: &FontContext,
+        viewport_width: f32,
+        win_id: u64,
+        opener_win: u64,
+    ) -> Page {
+        manuk_js::set_pending_identity(win_id, opener_win);
+        Page::load(html, final_url, fonts, viewport_width)
+    }
+
     pub fn load(html: &str, final_url: &str, fonts: &FontContext, viewport_width: f32) -> Page {
         let mut page = Page::from_dom(manuk_html::parse(html), final_url, fonts, viewport_width);
         // **Both passes, back to back.** `from_dom` runs only the scripts that block first paint; the
@@ -4393,6 +4412,16 @@ pub enum Loaded {
 /// headers say "attachment" (or a clearly binary content-type) becomes [`Loaded::Download`]
 /// carrying the suggested filename + bytes, for the shell to write to disk instead of rendering.
 /// `data:`/`file:` URLs are always documents.
+/// Seed the window identity (own id + opener) the NEXT page built on this thread is born with.
+///
+/// Call this BEFORE constructing the page. `Page::set_identity` can only run once the page's
+/// render-blocking scripts have already executed, which is too late for the case that matters: a
+/// popup's login script reads `window.opener` at load time to post its token back to the opener. With
+/// late seeding it reads `null`, posts nothing, and the opener waits on its callback forever.
+pub fn set_pending_identity(win_id: u64, opener_win: u64) {
+    manuk_js::set_pending_identity(win_id, opener_win);
+}
+
 pub async fn fetch_document(url: &str) -> Result<Loaded> {
     if url.starts_with("http://") || url.starts_with("https://") {
         // The document gets the long deadline; its subresources get the short one. A download,
@@ -4789,7 +4818,22 @@ mod js_interactive_tests {
         assert_eq!(msgs.len(), 1, "one postMessage queued");
         let (target, json, origin, source) = &msgs[0];
         assert!(*target > 0, "routed to the opened popup's window id");
-        assert_eq!(origin, "https://auth.test", "targetOrigin preserved");
+        // **This assertion used to read `origin == "https://auth.test"` — "targetOrigin preserved" —
+        // and it was pinning a security bug** (corrected tick 231).
+        //
+        // The slot is not a scratch field: `gui.rs::pump_messages` passes it straight into
+        // `deliver_message`, where it becomes the receiver's `e.origin`. So carrying the sender's own
+        // `targetOrigin` ARGUMENT there let any page forge its identity — every popup-login SDK
+        // guards with `if (e.origin !== PROVIDER) return;`, and `postMessage(payload, PROVIDER)`
+        // walked straight through it, because the receiver has no other way to learn who sent a
+        // message.
+        //
+        // `e.origin` is the SENDER's origin, per spec. This page is `https://app.test`, so that is
+        // what the receiver must see — regardless of which target the sender addressed.
+        assert_eq!(
+            origin, "https://app.test",
+            "e.origin must be the SENDER's origin, not the caller-supplied targetOrigin"
+        );
         assert!(
             json.contains("token") && json.contains('T'),
             "payload serialized: {json}"

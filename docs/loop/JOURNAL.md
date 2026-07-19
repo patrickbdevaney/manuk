@@ -9663,3 +9663,50 @@ fixture — a repo-policy decision plus a dependency, i.e. a fresh-context subsy
 tail-end-of-session one.
 
 **Mechanism captured:** `docs/wiki/conformance-and-oracles.md`.
+
+## Tick 231 — the popup login, and an origin any page could forge (2026-07-18)
+
+**Selected:** CO-#1 **(B) OAuth, O3** — the popup flow. t226 gated the redirect half; the other half
+of the modern web's logins never navigates at all: Google Identity Services, Stripe Checkout, Auth0
+`loginWithPopup`, GitHub's OAuth popup all open a provider window and hand the result back over
+`postMessage`.
+
+**The gate found two real bugs, and the second is a security bug.**
+
+**(1) `window.opener` was `null` at load time.** `Page::set_identity` can only run on a *finished*
+context — i.e. after `load_document` has already executed every render-blocking script. The shell
+called it right after building the page, under a comment saying identity must resolve "before any
+load-time script posts a message"; the ordering did not match the intent. Every popup SDK posts its
+result from a load-time script, so the popup read `null`, posted nothing, and the opener waited on
+its callback forever with nothing thrown. Fixed with a pending-identity channel consumed during
+prelude install, *before* any script runs — `Page::load_with_identity`, plus the shell seeding it
+before the build in both load paths (so this is fixed for real browsing, not only for the gate).
+
+**(2) `e.origin` carried the SENDER'S OWN `targetOrigin` ARGUMENT.** Every popup SDK guards with
+`if (e.origin !== PROVIDER) return;`, and that guard was defeated by writing
+`postMessage(payload, PROVIDER)` — the receiver has no other way to learn who sent a message, so the
+one value the check rests on was **attacker-supplied**. `e.origin` is now the sender's document
+origin. `targetOrigin` is a delivery *restriction* and remains unenforced — it always was; it was
+only ever misreported — and is recorded as residue rather than quietly dropped.
+
+**Gate.** `g_oauth_popup` runs **two live `Page`s in one process**, routed exactly as `gui.rs` routes
+them, and is the first gate to prove two pages can talk. It asserts the whole chain (real window
+handle → `window.opener` → queued message with target/source/payload → handler mutates the opener's
+DOM) and then sends the same message shape from a **third page on a hostile origin**, which must be
+rejected. That last step is why the origin bug surfaced at all.
+
+**RED both ways, both run:** restoring `targetOrigin` into the origin slot gives
+`https://app.test` where `https://idp.test` is required (the forgery); disabling the pending-identity
+seed gives `noopener` (the original hang).
+
+**A conformance assertion was pinning the bug.** The wall caught G2 (JS conformance), which asserted
+`origin == "https://auth.test"` under the label *"targetOrigin preserved"*. That was not a test to
+edit around — it had to be adjudicated. `gui.rs::pump_messages` passes that exact slot straight into
+`deliver_message`, where it becomes the receiver's `e.origin`, so the assertion was pinning the
+forgery end to end. Corrected to require the SENDER's origin, with the routing path written into the
+comment so the next reader does not "restore" it.
+
+**Residue:** `targetOrigin` is not enforced as a delivery restriction; `window.close()` from the
+popup and the opener's `closed` polling are not modelled.
+
+**Mechanism captured:** `docs/wiki/interaction-surface.md`.

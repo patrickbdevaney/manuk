@@ -725,3 +725,36 @@ ignoring the submitter — Save and Delete collapse to the same body.
 
 Residue: `formaction`/`formmethod`/`formnovalidate` on the button still do not override the form's,
 and `requestSubmit(submitter)` does not carry its argument.
+
+## Cross-window messaging: `e.origin` is the security boundary (tick 231)
+
+A receiver of a `postMessage` has **no other way** to learn who sent it. Every popup-login SDK — Google
+Identity Services, Stripe Checkout, Auth0 `loginWithPopup` — guards with
+`if (e.origin !== PROVIDER) return;`. So the value in that slot is not a reporting detail, it is the
+whole boundary.
+
+Until tick 231 it carried the sender's own **`targetOrigin` argument**, which is caller-supplied. Any
+page that could reach the window could therefore forge its identity by writing
+`postMessage(payload, PROVIDER)` — the guard compares the attacker's string against itself and
+passes. `e.origin` is now the sender's document origin.
+
+`targetOrigin` is a delivery **restriction** (deliver only if the receiver's origin matches) and is
+still not enforced. It never was; it was only misreported. Recorded as residue rather than dropped
+silently.
+
+## Window identity must be seeded BEFORE a document's scripts run
+
+`Page::set_identity` operates on a finished `PageContext` — i.e. after `load_document` has already
+executed every render-blocking script. That is too late for the case it exists to serve: a popup's
+login script reads `window.opener` **at load time** to post its token back. With late seeding it
+reads `null`, posts nothing, and the opener spins forever with nothing thrown.
+
+The shell had a comment asserting identity resolved "before any load-time script posts a message"
+while calling `set_identity` after the build — intent and ordering disagreed, which is the kind of
+gap only an end-to-end gate finds. Use `Page::load_with_identity` (or `manuk_page::set_pending_identity`
+before constructing the page); the identity is applied during prelude install, ahead of any script.
+
+## Two live pages in one process
+
+`g_oauth_popup` is the first gate to drive two `Page`s at once and route messages between them the way
+`gui.rs` does. The shell has always held many pages; nothing had proven they could talk.

@@ -1207,6 +1207,10 @@ impl App {
         // Open this site at the zoom the user last set for it (per-origin, as a real browser does).
         // Set BEFORE the build, which lays the page out at `self.zoom`.
         self.zoom = self.remembered_zoom();
+        // Identity BEFORE the build, not after it. The post-build `set_identity` below cannot help a
+        // script that reads `window.opener` at LOAD time — which every popup-login SDK does — because
+        // by then those scripts have already run against a null opener.
+        self.seed_pending_identity();
         let Some(page) = self.build_page_contained(&html, &final_url, w) else {
             // The page's own content brought its build down. Show that, and keep the browser — and
             // every other tab — alive. This is the Bar 0 contract.
@@ -1291,6 +1295,7 @@ impl App {
         };
         // Per-origin zoom, set BEFORE the build (which lays out at `self.zoom`). See `finish_load`.
         self.zoom = self.remembered_zoom();
+        self.seed_pending_identity(); // see `finish_load` — before the build, not after.
         let page = self.build_prefetched(pre, w);
         if let Some(win) = &self.window {
             win.set_title(&format!("{} — manuk", page.title));
@@ -1468,6 +1473,14 @@ impl App {
     /// off-thread into [`manuk_page::Prefetched`]. This used to `block_on` twice (external scripts,
     /// then external CSS) *on the UI thread*, freezing the window for the whole round-trip. That is
     /// what made the reload button lag.
+    /// Seed the identity the next page built on this thread is born with, so its load-time scripts
+    /// can read `window.opener`.
+    fn seed_pending_identity(&mut self) {
+        let win = self.win_id_for(self.tab_id);
+        let opener = self.tab_opener.get(&self.tab_id).copied().unwrap_or(0);
+        manuk_page::set_pending_identity(win, opener);
+    }
+
     fn build_prefetched(&self, pre: manuk_page::Prefetched, w: u32) -> Page {
         // **Only the scripts that BLOCK paint.** The deferred ones — `defer`, `async`, and
         // `type="module"` (deferred by default in every real browser, and what every Vite bundle ships

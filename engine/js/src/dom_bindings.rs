@@ -61,6 +61,11 @@ use mozjs::rust::{
 use manuk_dom::{Dom, NodeData, NodeId};
 
 thread_local! {
+    /// Window identity for the NEXT document loaded on this thread — see
+    /// `PageContext::set_pending_identity`.
+    static PENDING_IDENTITY: std::cell::RefCell<Option<(u64, u64)>> =
+        const { std::cell::RefCell::new(None) };
+
     /// The layout snapshot (`NodeId` → `[x, y, width, height]`) behind `getBoundingClientRect()`,
     /// and the computed styles behind `getComputedStyle()`.
     ///
@@ -6359,6 +6364,28 @@ impl PageContext {
         let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
         unsafe { install(raw_cx, &global, dom as *mut Dom, doc_url) };
         crate::event_loop::install(runtime, global.handle())?;
+        // Identity BEFORE scripts. A popup's load-time script reads `window.opener` to post its
+        // result back; seeding after the scripts have run (which is all `set_identity` can do) means
+        // it reads `null` and the opener's callback never fires.
+        if let Some((win_id, opener_win)) = Self::take_pending_identity() {
+            let script = format!(
+                "globalThis.__winId = {win_id}; globalThis.opener = {};",
+                if opener_win == 0 {
+                    "null".to_string()
+                } else {
+                    format!("globalThis.__makeWindowRef({opener_win})")
+                }
+            );
+            rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
+            let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"identity.js".to_owned(), 1);
+            let _ = evaluate_script(
+                runtime.cx(),
+                global.handle(),
+                &script,
+                rval.handle_mut(),
+                opts,
+            );
+        }
         unsafe {
             mozjs::jsapi::SetModuleResolveHook(
                 mozjs::jsapi::JS_GetRuntime(raw_cx),
@@ -6742,6 +6769,26 @@ impl PageContext {
     /// Seed this document's window **identity** after load: its own window id (stamped as the
     /// `source` on messages it posts) and its opener's id (`window.opener`, `0` = none). Called
     /// by the host once the tab's id linkage is known.
+    /// Seed the identity a document will be born with, BEFORE its scripts run.
+    ///
+    /// [`Self::set_identity`] can only be called on a finished `PageContext` — i.e. after
+    /// `load_document` has already executed every render-blocking script. That is too late for the
+    /// case it exists to serve: a popup's login script reads `window.opener` at **load time**, so it
+    /// saw `null`, posted nothing, and the opener waited forever. The whole popup-OAuth family
+    /// (Google Identity Services, Stripe Checkout, Auth0 `loginWithPopup`) is written exactly that
+    /// way.
+    ///
+    /// A thread-local rather than a `load` parameter because `load_document`'s signature is threaded
+    /// through several crates and every caller would have to pass `None`; this matches how the
+    /// window-id counter and canvas store already scope per-thread state.
+    pub fn take_pending_identity() -> Option<(u64, u64)> {
+        PENDING_IDENTITY.with(|p| p.borrow_mut().take())
+    }
+
+    pub fn set_pending_identity(win_id: u64, opener_win: u64) {
+        PENDING_IDENTITY.with(|p| *p.borrow_mut() = Some((win_id, opener_win)));
+    }
+
     pub fn set_identity(
         &self,
         runtime: &mut Runtime,
@@ -8580,9 +8627,24 @@ const WINDOW_PRELUDE: &str = r#"
                 postMessage: function (msg, targetOrigin) {
                     var json;
                     try { json = JSON.stringify(msg === undefined ? null : msg); } catch (e) { json = 'null'; }
+                    // **`e.origin` is the SENDER's origin, never the `targetOrigin` argument.**
+                    //
+                    // This slot used to carry `targetOrigin`, which is caller-supplied — so any page
+                    // could spoof its own identity simply by passing the value the receiver was
+                    // checking for. Every popup-login SDK guards with `if (e.origin !== PROVIDER)
+                    // return;`, and that guard was defeated by writing
+                    // `postMessage(payload, PROVIDER)`. The receiver has no other way to learn who
+                    // sent a message, which is what makes this the whole security boundary of
+                    // cross-window messaging rather than a reporting detail.
+                    var senderOrigin = 'null';
                     try {
-                        g.__postMessage(String(winId), json,
-                            String(targetOrigin == null ? '*' : targetOrigin), String(g.__winId || 0));
+                        if (g.location && g.location.origin) { senderOrigin = String(g.location.origin); }
+                    } catch (e) {}
+                    // NOTE: `targetOrigin` is a delivery RESTRICTION (deliver only if the receiver's
+                    // origin matches) and is still not enforced — it was never enforced, it was only
+                    // misreported. Recorded as residue rather than silently dropped.
+                    try {
+                        g.__postMessage(String(winId), json, senderOrigin, String(g.__winId || 0));
                     } catch (e) {}
                 },
                 close: function () { this.closed = true; }, focus: function () {}, blur: function () {}

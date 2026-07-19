@@ -1140,3 +1140,18 @@ The practical read for daily-driver work: none of these blanks a page. They are 
 enhancements — a site using anchor positioning falls back to its own positioning, `@scope` degrades
 to ordinary specificity. That is a different class from the boot-critical holes, and they should be
 weighed accordingly rather than by count.
+
+## The popup login (`window.open` + `postMessage`) — and a forgeable origin
+
+Gated in tick 231. This is the half of OAuth that never navigates the page: Google Identity Services,
+Stripe Checkout, Auth0 `loginWithPopup`, GitHub's popup. Sites prefer it precisely because the opener
+keeps its state — no reload, no lost form.
+
+Two real bugs, both silent. `window.opener` was `null` during the popup's load-time scripts (identity
+was seeded after they had run), so the popup posted nothing and the opener spun forever. And
+`e.origin` carried the sender's own `targetOrigin` **argument** — so the origin check every one of
+those SDKs performs could be defeated by passing the expected value, since the receiver has no other
+way to learn who sent a message. Both fixed, in the shell's real load paths as well as the gate.
+
+Residue: `targetOrigin` is still not enforced as a delivery restriction, and `window.close()` from the
+popup is not modelled.

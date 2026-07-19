@@ -795,6 +795,20 @@ pub fn set_identity(_ctx: &PageContext, _win_id: u64, _opener_win: u64) -> Resul
     Ok(())
 }
 
+/// Seed the window identity the NEXT document loaded on this thread is born with.
+///
+/// Must be used instead of [`set_identity`] whenever a page's own load-time scripts read
+/// `window.opener` — which is the entire popup-login family (Google Identity Services, Stripe
+/// Checkout, Auth0 `loginWithPopup`). `set_identity` can only run after `load_document` has already
+/// executed those scripts, so they see `null` and never post their result back.
+#[cfg(feature = "_sm")]
+pub fn set_pending_identity(win_id: u64, opener_win: u64) {
+    dom_bindings::PageContext::set_pending_identity(win_id, opener_win);
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn set_pending_identity(_win_id: u64, _opener_win: u64) {}
+
 /// Deliver a cross-window message into `ctx`'s document: fire a `message` MessageEvent
 /// (`{data, origin, source}`) and run the handler. No-op without the JS feature.
 #[cfg(feature = "_sm")]

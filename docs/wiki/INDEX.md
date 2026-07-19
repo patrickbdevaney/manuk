@@ -284,6 +284,9 @@
   - L630 · A disabled control is inert — and a script-free form still works (tick 210)
   - L665 · Clicking "Sign in" submits the form (tick 211)
   - L697 · The submitter reaches the server — "Save" vs "Delete" (tick 212)
+  - L729 · Cross-window messaging: e.origin is the security boundary (tick 231)
+  - L745 · Window identity must be seeded BEFORE a document's scripts run
+  - L757 · Two live pages in one process
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -502,4 +505,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-421 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+424 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
