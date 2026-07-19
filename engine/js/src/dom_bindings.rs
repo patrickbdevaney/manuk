@@ -8378,6 +8378,91 @@ const WINDOW_PRELUDE: &str = r#"
                 }
             };
         }
+        // ---- FileList + `input.files` — the upload flow, and why it was undrivable -------------
+        //
+        // `FileList` was an INERT stub (it existed, named nothing, and claimed nothing) and
+        // `input.files` did not exist at all. Both halves matter, and the second is the one that
+        // makes an upload *silently wrong* rather than merely absent:
+        //
+        //   · A page that guards on `input.files && input.files.length` took the "no file chosen"
+        //     branch forever — the upload button stayed disabled and nothing threw.
+        //   · `new FormData(form)` harvested `e.value` for EVERY control including `type=file`, so a
+        //     file part was submitted as the *string* `"C:\fakepath\a.txt"` (or `""`). The multipart
+        //     encoder below is real and has always been able to carry bytes; it was simply never
+        //     handed any. **The bytes were dropped one layer above the code that knew how to send
+        //     them.**
+        //
+        // And for an agent it is the whole capability: every upload flow on the web —
+        // avatar, attachment, document, photo — is unreachable if `files` cannot be populated
+        // without a native file-picker dialog. `Page::set_input_files` is the actuation entry;
+        // this is the half the page sees.
+        //
+        // **Where the data lives.** The selected files are stored on the element as the
+        // `data-manuk-files` attribute (a JSON array of `{name, type, text}`), for the same reason
+        // `checked` and `value` live in attributes here: every consumer already reaches the DOM, so
+        // nothing needs a new bridge. The honest residue is that the attribute is visible to
+        // `getAttribute`/`outerHTML`, where a real browser keeps the selection off the tree.
+        //
+        // **Why the prototype is fetched from a probe element rather than `globalThis.Element`.**
+        // There is no `Element` binding in this prelude — the chain
+        // (instance → HTMLElement.prototype → Element.prototype → Node.prototype) is built in Rust
+        // and is real, but unnamed here. `Object.getPrototypeOf(document.createElement('input'))` is
+        // the live link, so a getter defined on it is inherited by every element that already
+        // exists AND every one created later. Defining it per-instance would miss both.
+        if (typeof g.__FileListReal === 'undefined') {
+            var FileListCtor = function FileList() { this.length = 0; };
+            FileListCtor.prototype.item = function (i) {
+                i = i >>> 0;
+                return i < this.length ? this[i] : null;
+            };
+            FileListCtor.prototype[Symbol.iterator] = function () {
+                var i = 0, self = this;
+                return { next: function () {
+                    return i < self.length ? { value: self[i++], done: false } : { value: undefined, done: true };
+                } };
+            };
+            g.__FileListReal = FileListCtor;
+            // Installed BEFORE the inert-name list runs (that list installs last and only fills
+            // names nobody implemented), so this is the `FileList` a page sees.
+            g.FileList = FileListCtor;
+
+            g.__makeFileList = function (json) {
+                var list = new FileListCtor();
+                var recs = [];
+                try { recs = json ? JSON.parse(json) : []; } catch (e) { recs = []; }
+                for (var i = 0; i < recs.length; i++) {
+                    var r = recs[i] || {};
+                    var f = new g.File([String(r.text === undefined ? '' : r.text)],
+                                       String(r.name === undefined ? '' : r.name),
+                                       { type: String(r.type === undefined ? '' : r.type) });
+                    list[i] = f;
+                }
+                list.length = recs.length;
+                return list;
+            };
+
+            (function () {
+                try {
+                    var proto = Object.getPrototypeOf(document.createElement('input'));
+                    if (!proto) return;
+                    Object.defineProperty(proto, 'files', {
+                        configurable: true,
+                        get: function () {
+                            // Spec: `files` is `null` on every control that is not a file input —
+                            // NOT an empty list. Pages branch on `input.files === null` to tell a
+                            // text field from a file field, so an empty FileList here would answer
+                            // "a file input with nothing chosen" about an `<input type=text>`.
+                            var t = '';
+                            try { t = (this.getAttribute('type') || '').toLowerCase(); } catch (e) { return null; }
+                            if (t !== 'file') return null;
+                            var raw = null;
+                            try { raw = this.getAttribute('data-manuk-files'); } catch (e) {}
+                            return g.__makeFileList(raw);
+                        }
+                    });
+                } catch (e) {}
+            })();
+        }
         if (typeof g.FormData === 'undefined') {
             g.FormData = function (form) {
                 var pairs = [];
@@ -8412,6 +8497,21 @@ const WINDOW_PRELUDE: &str = r#"
                         if (!n) continue;
                         var ty = (e.getAttribute('type') || '').toLowerCase();
                         if ((ty === 'checkbox' || ty === 'radio') && !e.checked) continue;
+                        // **A file input contributes its FILES, not its `value`.** `value` is the
+                        // spec's deliberately-useless `C:\fakepath\a.txt`, so harvesting it here sent
+                        // that literal string as the field and dropped the bytes — with `__multipart`
+                        // below fully capable of carrying them. An empty file input still submits one
+                        // empty part (that is what a real browser does), which is why this pushes
+                        // nothing only when files are present but zero-length.
+                        if (ty === 'file') {
+                            var fl = e.files;
+                            if (fl && fl.length) {
+                                for (var fi = 0; fi < fl.length; fi++) pairs.push([n, fl[fi]]);
+                            } else {
+                                pairs.push([n, new g.File([], '', { type: 'application/octet-stream' })]);
+                            }
+                            continue;
+                        }
                         var v = e.value;
                         // **A checked checkbox with no `value` submits the string `"on"`.** Not `""` —
                         // servers branch on the difference, and "the box was ticked" arriving as an empty

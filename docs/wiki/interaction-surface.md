@@ -789,3 +789,53 @@ Recorded because it cost a debugging detour: mutating `document.body.style.backg
 does **not** change the frame's bitmap. A box *inside* the frame's viewport does. The canvas-background
 propagation from the root/body element is unimplemented — an independent gap, and one that makes
 `body { background }` a poor thing to assert a repaint with.
+
+## File upload: the interaction with no door, and the encoder nobody fed (tick 247)
+
+`Page::set_input_files(node, &[(name, mime, contents)], …)` is the actuation entry for
+`<input type=file>` — `G_FILE_INPUT`. It stores the selection, sets `value`, and fires **`input`
+then `change`**, in that order, as a real picker does.
+
+**Why it needed an entry point at all.** Every other interaction has a scriptable analogue: a click
+is an event, typing is an event. **Choosing a file is not** — the bytes arrive through a native OS
+picker dialog with no scriptable surface. So avatar, attachment, document and photo flows were not
+*broken*, they were **unreachable**, and no capability probe reports a missing door.
+
+### The bytes were dropped one layer ABOVE the code that knew how to send them
+
+`manuk-net::multipart` is real, tested and correct, and had **never once been handed a file.**
+`new FormData(form)` harvested `e.value` for every control including `type=file` — and the spec makes
+a file input's `value` the deliberately-useless `C:\fakepath\a.txt`, so the field was submitted as
+that literal string.
+
+**This is a silent corruption, not an absence, and the distinction decides how you gate it.** The
+page can see the file perfectly — `files.length`, `name`, `size`, `type` all read correct — while the
+server receives `"C:\fakepath\a.txt"` where a JPEG should be. The RED probe proves the separation:
+restoring the `value` harvest flips **the multipart claim alone** and leaves every page-visible claim
+green. **An upload that succeeds and delivers garbage is worse than one that fails**, so "the page can
+see the file" is not the property worth asserting — *"the bytes reached the wire"* is.
+
+`C:\fakepath\` is spec, not whimsy: the real path is withheld (it leaks the user's directory layout),
+and that exact prefix is mandated because sites had already been written to parse a Windows path out
+of `value`. Returning a bare filename broke them.
+
+### Installing a getter with no `Element` binding to hang it on
+
+There is no `globalThis.Element` in this prelude — the chain
+(instance → `HTMLElement.prototype` → `Element.prototype` → `Node.prototype`) is built in Rust and is
+real, but **unnamed in JS**. `Object.getPrototypeOf(document.createElement('input'))` is the live
+link, so a getter defined on it is inherited by every element that already exists *and* every one
+created later. Per-instance definition would have missed both. **The general move: when the prototype
+is real but unnamed, fetch it from a probe instance rather than adding a binding.**
+
+`files` returns **`null`** on a non-file control, not an empty list — pages branch on
+`input.files === null` to tell a text field from a file field, so an empty `FileList` would answer
+"a file input with nothing chosen" about an `<input type=text>`.
+
+### The fourth dead-end wire in six ticks
+
+242 (quirks verdict), 243 (index key), 246 (focus), and now the multipart encoder. Same shape every
+time: **the engine holds the right answer and throws it away at the last hop**, invisible to any probe
+because the feature appears present at every layer anyone inspects. The tick-246 audit shape — *grep
+for values computed with exactly one reader, or none* — extends here to **capabilities with no
+producer**: a correct, tested encoder that nothing ever calls with real input.

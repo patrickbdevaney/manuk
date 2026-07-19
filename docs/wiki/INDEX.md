@@ -307,6 +307,10 @@
   - L762 · Clicking into a frame: by point, not by node (tick 233)
   - L775 · A dirty-bit guard cannot see a child's own script round
   - L786 · Body background does not reach the frame's canvas
+  - L793 · File upload: the interaction with no door, and the encoder nobody fed (tick 247)
+  - L804 · The bytes were dropped one layer ABOVE the code that knew how to send them
+  - L822 · Installing a getter with no Element binding to hang it on
+  - L835 · The fourth dead-end wire in six ticks
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -546,4 +550,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-465 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+469 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

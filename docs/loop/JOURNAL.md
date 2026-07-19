@@ -10832,3 +10832,69 @@ focus, and is deliberately left rather than bundled. No shell caller routes its 
 tracking into `Page::set_focus` yet, so the capability is complete at the engine boundary and
 unexercised above it — the same residue ticks 244 and 245 left. Focus/blur EVENT dispatch is
 unchanged and already existed; this tick is the cascade half only.
+
+## Tick 247 — the upload had no door, and the bytes were dropped one layer above the encoder
+
+TICK SHAPE: board item (6)/constellation `file-input actuation` — make `<input type=file>` drivable
+by an agent, and make the chosen bytes survive the trip to the wire.
+
+**RE-PROBE FIRST, and it paid twice (process rule 2).** Before building I re-probed the board's own
+top levers. **(C) canvas `fillText` is STALE** — it is implemented and gated by `G_CANVAS_TEXT`; the
+board still lists it as a lever. **Server-Sent Events is a phantom ✗** — `EventSource` landed at tick
+205 with two gates (`g_eventsource`, `g_eventsource_reconnect`), yet `constellation.sh --gaps` prints
+it as the platform class's #1 hole. The remaining gap rows (AVIF, multicol, container queries,
+IndexedDB, Web Workers, scroll-snap, Service Worker, drag-and-drop) re-probed as genuinely absent.
+**The checklist goes stale from our own landed ticks, exactly as the rule says.**
+
+**THE CAPABILITY.** Uploading was the one common web interaction with **no door at all**. The bytes
+normally arrive through a native OS picker, which has no scriptable surface, so every avatar /
+attachment / document / photo flow was unreachable — not broken, *unreachable*. `Page::set_input_files`
+is that door: it stores the selection, sets `value` to the spec's `C:\fakepath\<name>`, and fires
+`input` then `change` as a real picker does.
+
+**TWO BUGS, AND THE SECOND IS THE DANGEROUS ONE.**
+  1. `input.files` did not exist and `FileList` was an **inert stub** — a name that existed and
+     claimed nothing. A page guarding on `input.files && input.files.length` took the "no file
+     chosen" branch permanently: the upload button stayed disabled and **nothing threw**.
+  2. `new FormData(form)` harvested `e.value` for **every** control including `type=file`. The spec
+     makes that value the deliberately-useless `C:\fakepath\a.txt`, so the field was submitted as
+     **that literal string** and the file's bytes were dropped — **one layer above `__multipart`,
+     which was already fully capable of carrying them.** The encoder was right; nothing ever handed
+     it a file.
+
+**That second one is a SILENT CORRUPTION, not an absence, and it is why the multipart claim is a
+separate assertion.** RED probe 1 (restore the `e.value` harvest) flips **`mp:` alone** to false
+while every page-visible claim — `len:`, `name0:`, `type0:`, `value:` — stays green. The page can see
+the file perfectly; the server receives the string `C:\fakepath\a.txt` where a JPEG should be. An
+upload that *succeeds* and delivers garbage is worse than one that fails, and a gate that only
+asserted "the page can see the file" would have reported green on it.
+
+**A THIRD DEAD-END WIRE, WHICH MAKES IT FOUR IN SIX TICKS** (242 quirks, 243 index key, 246 focus).
+Same shape every time: the engine computes or holds the right answer and throws it away at the last
+hop. `manuk-net::multipart` is real, tested, and correct — and had never once been handed a file.
+**The audit shape named at tick 246 (grep for values with exactly one reader, or none) would have
+found this**, and the generalisation is now sharper: also grep for *capabilities* with no producer.
+
+**WHERE THE DATA LIVES, AND WHY.** The selection is stored on the element as `data-manuk-files`
+(JSON `{name,type,text}`), read by a `files` getter installed in the JS prelude. There is no
+`globalThis.Element` binding in this prelude, so the getter goes onto the **live prototype fetched
+from a probe element** — `Object.getPrototypeOf(document.createElement('input'))` — which is a real
+link in the Rust-built chain, so it is inherited by every element that already exists and every one
+created later. Defining it per-instance would have missed both.
+
+**RED PROBES EXECUTED, NOT ASSERTED (process rule 3):**
+  · restore the `e.value` harvest for `type=file` → **`mp:` alone fails**, page-visible claims green
+  · `files` returns an empty `FileList` instead of the real one → gate RED at `fired:` (the change
+    handler throws on `fl[0].name`, so `#ev` never fills). Honest note: that probe falsifies the
+    gate but through a **coarser** signal than probe 1 — the throw masks which claim broke.
+
+Gate: `engine/page/tests/g_file_input.rs` (`G_FILE_INPUT`), 14 claims. Regression: full `manuk-page`
+**126 passed / 1 failed**, the 1 being the PRE-EXISTING `hard_wall_detection_and_honest_interstitial`
+documented at tick 239.
+
+Residue, named honestly: `data-manuk-files` is visible to `getAttribute`/`outerHTML`, where a real
+browser keeps the selection off the tree. `File.size` is character count, not UTF-8 byte length
+(inherited from the existing `Blob` shim), so a multi-byte filename's file reports short.
+`DataTransfer` stays inert, so drag-and-drop upload is still unreachable — that is the next door.
+
+WIKI: docs/wiki/interaction-surface.md (+ INDEX.md)

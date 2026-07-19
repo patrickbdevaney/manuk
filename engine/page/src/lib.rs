@@ -2118,6 +2118,109 @@ impl Page {
         self.relayout(fonts, viewport_width);
     }
 
+    /// **Choose files on an `<input type=file>` — the actuation a file picker performs.** Returns
+    /// `false` if `node` is not a file input.
+    ///
+    /// **This is the entry point that makes every upload flow on the web drivable.** Uploading is
+    /// the one common interaction an agent could not reach: the bytes normally arrive through a
+    /// native OS picker dialog, which has no scriptable surface, so avatar/attachment/document/photo
+    /// flows were all dead ends. Nothing was broken — there was simply no door.
+    ///
+    /// `files` is `(name, mime_type, contents)`. The selection is stored on the element as
+    /// `data-manuk-files` (JSON), which is what the `input.files` getter in the JS prelude reads;
+    /// see the `FileList` block in `dom_bindings` for why the data lives in an attribute and what
+    /// that costs.
+    ///
+    /// **`value` is set to `C:\fakepath\<name>`, and the fake path is not a joke.** It is what every
+    /// browser reports, deliberately: the real path is withheld from the page (it leaks the user's
+    /// username and directory layout), and the `C:\fakepath\` prefix specifically is in the spec
+    /// because sites had already been written to parse a Windows path out of `value`, so returning a
+    /// bare filename broke them. A page reading `value` to show "a.txt" splits on `\` and still works.
+    ///
+    /// Fires **`input` then `change`**, in that order, exactly as a real picker does — `change` is
+    /// the event upload widgets actually listen on, and firing only `input` leaves the file chosen
+    /// and the page unaware.
+    pub fn set_input_files(
+        &mut self,
+        node: manuk_dom::NodeId,
+        files: &[(String, String, String)],
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
+        let is_file_input = self
+            .dom
+            .element(node)
+            .map(|e| {
+                e.name.eq_ignore_ascii_case("input")
+                    && e.attr("type")
+                        .is_some_and(|t| t.eq_ignore_ascii_case("file"))
+            })
+            .unwrap_or(false);
+        if !is_file_input {
+            return false;
+        }
+        // Hand-rolled JSON so the escaping is visible at the point it matters: a filename or a file
+        // body containing `"` or `\` would otherwise produce a document the prelude's `JSON.parse`
+        // silently rejects, and the getter would report "no files chosen" for a file that IS chosen.
+        let esc = |s: &str| {
+            let mut out = String::with_capacity(s.len());
+            for c in s.chars() {
+                match c {
+                    '"' => out.push_str("\\\""),
+                    '\\' => out.push_str("\\\\"),
+                    '\n' => out.push_str("\\n"),
+                    '\r' => out.push_str("\\r"),
+                    '\t' => out.push_str("\\t"),
+                    c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+                    c => out.push(c),
+                }
+            }
+            out
+        };
+        let json = format!(
+            "[{}]",
+            files
+                .iter()
+                .map(|(name, ty, text)| format!(
+                    r#"{{"name":"{}","type":"{}","text":"{}"}}"#,
+                    esc(name),
+                    esc(ty),
+                    esc(text)
+                ))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        self.dom.set_attr(node, "data-manuk-files", json);
+        let shown = files
+            .first()
+            .map(|(name, _, _)| format!("C:\\fakepath\\{name}"))
+            .unwrap_or_default();
+        self.dom.set_attr(node, "value", shown);
+        #[cfg(feature = "spidermonkey")]
+        {
+            let Some(ctx) = &self.js else {
+                self.relayout(fonts, viewport_width);
+                return true;
+            };
+            let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+                .root_box
+                .node_rects(&self.dom)
+                .into_iter()
+                .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+                .collect();
+            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+            for ty in ["input", "change"] {
+                if let Err(e) =
+                    manuk_js::dispatch_event(ctx, &mut self.dom, node, ty, &rects, &self.styles)
+                {
+                    tracing::warn!("{ty} dispatch: {e}");
+                }
+            }
+        }
+        self.relayout(fonts, viewport_width);
+        true
+    }
+
     /// Set the focused control's `value` to `value` and fire an **`input`** event on it — what a
     /// single keystroke does. This is the event a **controlled component** listens on: React's
     /// `onChange`, Vue's `v-model`, Svelte's `bind:value` all update their state from the `input`

@@ -1386,3 +1386,29 @@ visibly or structurally marks where focus is.
 any ancestor, and `:focus-visible` adds *"and the ring is warranted"* — which is false for a
 mouse-clicked button. Only the caller knows how focus arrived, so the engine takes that as an input
 rather than guessing. Details in `docs/wiki/css-cascade.md`.
+
+## The upload form, and the file that arrives as the string `C:\fakepath\a.txt` (tick 247)
+
+**Pattern:** `<input type="file">` + `new FormData(form)` + `fetch(url, {method:'POST', body: fd})`.
+This is how every avatar picker, attachment control, photo uploader and document dropzone on the web
+submits — and it is first-interaction code on most sites that have accounts.
+
+**It had no door.** Choosing a file is the one common interaction with no scriptable analogue: a
+click is an event and typing is an event, but the bytes arrive through a native OS picker with no
+scriptable surface. So the whole class was not broken — it was **unreachable**, and nothing reports a
+missing door. `Page::set_input_files` is the entry point.
+
+**And the encoder was already right.** `manuk-net::multipart` is real, tested and correct, and had
+never once been handed a file: `new FormData(form)` harvested `e.value` for every control, and a file
+input's `value` is the spec's deliberately-useless `C:\fakepath\a.txt`. **The bytes were dropped one
+layer above the code that knew how to send them.**
+
+**The failure direction is the point.** The page could see the file perfectly — `files.length`,
+`name`, `size`, `type` all correct — while the server received the literal string where a JPEG should
+be. **An upload that succeeds and delivers garbage is worse than one that fails**, and it is invisible
+to any assertion of the form "the page can see the file". The gate therefore asserts the multipart
+body carries the file's actual *bytes*, and the RED probe flips that claim **alone**.
+
+**The class this unlocks** is every account-holding site an agent has to get a file into: profile
+photos, support-ticket attachments, résumé uploads, CSV imports, image posts. Drag-and-drop upload is
+still closed — `DataTransfer` remains inert — and that is the next door.
