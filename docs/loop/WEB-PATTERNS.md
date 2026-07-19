@@ -1338,6 +1338,7 @@ here can deliver: a hang dressed as a feature.
 Backgrounded-tab throttling, autoplay gating, poll suspension and reconnect-on-return all key off
 these two surfaces, and a browser that cannot answer them is a browser that never rests.
 
+
 ## The hover-reveal navigation menu — a whole category of navigation, missing in silence (tick 245)
 
 **Pattern:** `nav li:hover > ul { display: block }`. Top navigation built with **no JavaScript at
@@ -1361,3 +1362,27 @@ agent can see, let alone click.
 incremental path in this engine was built around tree mutation and asks "did the DOM change?" rather
 than "did anything the cascade reads change?". State pseudo-classes are the first inputs that move
 without the tree moving and will not be the last. Details in `docs/wiki/css-cascade.md`.
+
+
+
+## The focus ring, and the search box that expands when you click into it (tick 246)
+
+**Pattern:** `.searchbox:focus-within { height: 300px }` and `a:focus-visible { outline: 2px solid }`.
+The first is how a large share of sites build an expanding search field or an open combobox panel —
+the `<input>` takes focus, the wrapping `<div>` is what changes size. The second is, on many sites,
+**the only focus cue that exists**, because authors spent twenty years writing
+`:focus { outline: none }` to remove the ring mouse users did not want.
+
+Focus never reached the cascade. The shell tracked it and published it to
+`document.activeElement`, so it looked present at every layer anyone would inspect — but `:focus`
+answered a hard-coded `false`, so those search boxes never expanded and tabbing through those pages
+moved an invisible cursor.
+
+**The class this unlocks is keyboard navigability**, which is both an accessibility floor and an
+agentic one: an agent driving a page by keyboard has the same problem a human does if nothing
+visibly or structurally marks where focus is.
+
+**The distinction that must not collapse:** `:focus` is the exact element, `:focus-within` is it or
+any ancestor, and `:focus-visible` adds *"and the ring is warranted"* — which is false for a
+mouse-clicked button. Only the caller knows how focus arrived, so the engine takes that as an input
+rather than guessing. Details in `docs/wiki/css-cascade.md`.

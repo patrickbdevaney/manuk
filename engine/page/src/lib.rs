@@ -3930,6 +3930,44 @@ impl Page {
         true
     }
 
+    /// **Route the shell's focus into the cascade** — `:focus`, `:focus-within`, `:focus-visible`.
+    /// Returns `true` if anything changed.
+    ///
+    /// This was a **dead-end wire**, the same shape as the parser's quirks verdict at tick 242. The
+    /// shell has tracked focus for many ticks and publishes it into the JS world through
+    /// [`publish_view_state`](Self::publish_view_state) — that is what backs
+    /// `document.activeElement` — but it never reached the style system, so `:focus` answered
+    /// `false` for the life of every page. The engine had the answer and threw it away, which no
+    /// capability probe surfaces: the feature *appears* present at every layer you inspect.
+    ///
+    /// **What it costs is accessibility, not decoration.** The focus ring is the only thing telling
+    /// a keyboard user where they are on the page — and because authors have spent twenty years
+    /// writing `:focus { outline: none }` to remove the ring mouse users did not want, on a great
+    /// many sites the *only* remaining cue is an author's own `:focus`/`:focus-visible` rule. With
+    /// the pseudo-class never matching, tabbing through those pages moves an invisible cursor.
+    /// `:focus-within` is separately load-bearing: the expanding search box and the open combobox
+    /// panel are both written as `.box:focus-within { … }`.
+    ///
+    /// `from_keyboard` decides `:focus-visible`. Only the caller knows how focus arrived, and it is
+    /// the entire distinction the pseudo-class was added to draw — see [`Dom::set_focused`].
+    pub fn set_focus(
+        &mut self,
+        node: Option<manuk_dom::NodeId>,
+        from_keyboard: bool,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
+        if !self.dom.set_focused(node, from_keyboard) {
+            return false;
+        }
+        // Same pair as the hover path, and for the same reason — see `dispatch_hover_at`, where the
+        // two relayout traps are written out in full. `relayout` alone recascades only a GROWN tree
+        // and would move nothing; `relayout_incremental` would drop every external stylesheet.
+        self.recascade_all_sources(viewport_width);
+        self.relayout(fonts, viewport_width);
+        true
+    }
+
     pub fn a11y_tree(&self) -> manuk_a11y::A11yNode {
         let rects: std::collections::HashMap<_, _> = self
             .root_box

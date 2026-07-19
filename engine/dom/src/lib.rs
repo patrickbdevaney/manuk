@@ -234,6 +234,21 @@ pub struct Dom {
     /// `None` is the honest default and the correct answer for a static render: a page being laid
     /// out for the first time is not being hovered. The shell writes it on pointer motion.
     hovered: Option<NodeId>,
+    /// **The focused element** — the anchor of `:focus` and `:focus-within`.
+    ///
+    /// The shell has tracked focus for many ticks and publishes it into the JS world through
+    /// `publish_view_state` (that is what backs `document.activeElement`). It never reached the
+    /// **cascade**, so `:focus` answered `false` for the life of every page: the same dead-end-wire
+    /// shape as the parser's quirks verdict at tick 242 — the engine had the answer and threw it
+    /// away, which no capability probe can see, because the feature *appears* present at the layer
+    /// anyone would inspect.
+    focused: Option<NodeId>,
+    /// Whether the current focus should draw a **visible** ring — what `:focus-visible` asks.
+    ///
+    /// This is not the same question as "is it focused", and conflating them undoes the whole point
+    /// of the pseudo-class: clicking a button focuses it, and a ring on a mouse-clicked button is
+    /// the visual noise `:focus-visible` was added to remove. See `Dom::set_focused`.
+    focus_visible: bool,
 }
 
 impl Default for Dom {
@@ -260,6 +275,8 @@ impl Dom {
             // quirks would enable the unitless-length quirk for documents no parser ever saw.
             quirks: false,
             hovered: None,
+            focused: None,
+            focus_visible: false,
         }
     }
 
@@ -312,6 +329,76 @@ impl Dom {
             }
         }
         true
+    }
+
+    /// The focused element, if any.
+    pub fn focused(&self) -> Option<NodeId> {
+        self.focused
+    }
+
+    /// **Move focus**, recording whether the ring should be visible.
+    ///
+    /// `visible` is what separates `:focus` from `:focus-visible`, and the distinction is the whole
+    /// reason the second pseudo-class exists. **Clicking a button focuses it**, and a browser that
+    /// drew a ring there would be putting a box around every button a mouse user presses — which is
+    /// exactly the noise authors used to strip with `:focus { outline: none }`, taking keyboard
+    /// users' only navigation cue with it. So: keyboard focus is visible, pointer focus is not, and
+    /// the caller — which is the only thing that knows *how* focus arrived — says which.
+    ///
+    /// Returns `true` if anything changed, on the same reasoning as [`set_hovered`](Self::set_hovered):
+    /// focus is republished on ordinary event turns and most of those republish the same value.
+    pub fn set_focused(&mut self, node: Option<NodeId>, visible: bool) -> bool {
+        let node = node.filter(|n| self.is_alive(*n));
+        let visible = visible && node.is_some();
+        if node == self.focused && visible == self.focus_visible {
+            return false;
+        }
+        let previous = self.focused;
+        self.focused = node;
+        self.focus_visible = visible;
+        // BOTH chains, for the same reason hover walks both: `:focus-within` matches every ancestor
+        // of the focused element, so an ancestor's style can change without the focus target itself
+        // being the element that restyles. A search bar that expands via
+        // `.searchbox:focus-within { height: 300px }` is exactly this — the `<input>` takes focus,
+        // the `<div>` is what changes size.
+        for end in [previous, node].into_iter().flatten() {
+            let mut cur = Some(end);
+            while let Some(n) = cur {
+                self.mark_dirty(n);
+                cur = self.parent(n);
+            }
+        }
+        true
+    }
+
+    /// Does `:focus` match? Exact node only — **`:focus` does not match ancestors**; that is
+    /// precisely what `:focus-within` is for, and conflating them puts a focus ring around the
+    /// whole form every time one field is focused.
+    pub fn is_focused(&self, node: NodeId) -> bool {
+        self.focused == Some(node)
+    }
+
+    /// Does `:focus-visible` match? Focused **and** focus arrived in a way that warrants a ring.
+    pub fn is_focus_visible(&self, node: NodeId) -> bool {
+        self.focus_visible && self.focused == Some(node)
+    }
+
+    /// Does `:focus-within` match? The focused element **or any ancestor of it**.
+    pub fn is_focus_within(&self, node: NodeId) -> bool {
+        let Some(target) = self.focused else {
+            return false;
+        };
+        if target == node {
+            return true;
+        }
+        let mut cur = self.parent(target);
+        while let Some(p) = cur {
+            if p == node {
+                return true;
+            }
+            cur = self.parent(p);
+        }
+        false
     }
 
     /// Does `:hover` match this node?

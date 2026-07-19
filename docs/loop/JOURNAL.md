@@ -10699,6 +10699,7 @@ tab-focus to it yet, so the capability is complete at the engine boundary and un
 `permissions.query` returns a `PermissionStatus` whose `change` event can never fire — honest, since
 none of these states can change without a permission UI, but it is a stub-shaped edge worth naming.
 
+
 ## Tick 245 — `:hover`, and a cascade input that changes while the tree does not
 
 TICK SHAPE: `CONSTELLATION.tsv` row `cross / hover-dblclick-contextmenu dispatch`, carried as
@@ -10767,3 +10768,67 @@ shape, now one helper away, deliberately left rather than bundled. `dblclick` an
 still absent, so the constellation row is `partial`, not `gated`. No shell caller wires real pointer
 motion to `dispatch_hover_at` yet, so the capability is complete at the engine boundary and
 unexercised above it — the same residue tick 244 left for visibility.
+
+
+
+## Tick 246 — focus was a dead-end wire, and that is now three in five ticks
+
+TICK SHAPE: tick 245's named residue — `:focus`, `:focus-within`, `:focus-visible` still answered a
+hard-coded `false` in `stylo_dom.rs`, one helper away from the `:hover` work.
+
+**PROBED FIRST, AND THE PROBE CHANGED THE TICK'S DESCRIPTION.** I expected "focus is not tracked".
+It is: the shell has tracked focus for many ticks and publishes it through `publish_view_state`,
+which is what backs `document.activeElement`. Nothing was missing — the verdict simply never reached
+the **cascade**. That reframes the tick from *build a feature* to *connect a wire*, and it is the
+difference between an hour and a day.
+
+**THIS IS THE THIRD INSTANCE OF THE SAME SHAPE IN FIVE TICKS, so it is a named failure mode now and
+not a coincidence:** the parser's quirks verdict (tick 242 — written to a field nobody read), the
+`RuleIndex` case key (tick 243 — computed, then filtered away before matching), and now focus. In
+all three the engine HAD the answer and threw it away. **No capability probe can see any of them**,
+which is why they survive: `document.activeElement` returns the right element, the shell highlights
+the right control, `typeof` checks pass — the feature appears present at every layer anyone would
+inspect, and only the one consumer that matters was never told.
+
+**WHAT IT COSTS IS ACCESSIBILITY, NOT DECORATION.** The focus ring is the only thing telling a
+keyboard user where they are. Because authors spent twenty years writing `:focus { outline: none }`
+to strip the ring mouse users did not want, on a great many sites the author's own
+`:focus`/`:focus-visible` rule is the ONLY remaining cue — so with the pseudo-class never matching,
+tabbing through those pages moves an invisible cursor. `:focus-within` is separately load-bearing:
+the expanding search field and the open combobox panel are both `.box:focus-within { … }`.
+
+**THE THREE ARE THREE QUESTIONS, AND EACH COLLAPSE IS ITS OWN BUG:**
+  · `:focus` is the EXACT element and never an ancestor — collapse it into `:focus-within` and every
+    form gets a ring around all of it.
+  · `:focus-within` is the element OR any ancestor — collapse it to the exact node and the search
+    box never expands.
+  · `:focus-visible` is focused AND the ring is warranted — collapse it into `:focus` and the
+    pseudo-class has no reason to exist, because a ring on every mouse-clicked button is exactly the
+    noise it was added to remove. Only the CALLER knows how focus arrived, so `Page::set_focus`
+    takes `from_keyboard` rather than guessing.
+
+**A FIXTURE BUG CAUGHT ITSELF, and it is the more useful kind.** My `:focus`-must-not-match-ancestors
+claim first read `wrap < 700.0` against a `<div>` with no width — whose AUTO width is 800, i.e.
+larger than the 700 the rule would have set. The assertion could not distinguish *"the rule did not
+match"* from *"the rule matched and I measured the wrong thing"*, so it would have passed for the
+wrong reason. Giving `#wrap` an explicit 600px base makes the two answers different numbers. **A
+claim whose pass and fail values are on the same side of the threshold is not a claim.**
+
+**FOUR RED PROBES EXECUTED, NOT ASSERTED (process rule 3), each hitting its own claim and no other:**
+  · `P::Focus => false` restored                     -> the `#inp:focus` width claim FAILS at 100px
+  · `is_focused` delegating to `is_focus_within`     -> `#wrap` resolves to 700; the ancestor claim FAILS
+  · `is_focus_within` exact-node only                -> `#box:focus-within` FAILS at 50px
+  · `is_focus_visible` ignoring the flag             -> the MOUSE-focus claim FAILS at height 60
+
+**REGRESSION MEASURED, NOT ASSUMED:** full `manuk-page` suite **124 passed, 1 failed** — the +2
+over main is this tick's gate plus tick 245's, and the only failure remains the PRE-EXISTING `hard_wall_detection_and_honest_interstitial`
+(tick 239). `recascade_all_sources` is reused from tick 245 unchanged — which is the whole reason it
+was extracted rather than inlined, and the first evidence that the extraction was right.
+
+**PARKED on `wip/tick246-focus`** (stacked on `wip/tick245-hover`), same wall blocker as 243-245.
+
+Residue: `:active` still answers `false` — it needs mousedown/mouseup, a different input path from
+focus, and is deliberately left rather than bundled. No shell caller routes its existing focus
+tracking into `Page::set_focus` yet, so the capability is complete at the engine boundary and
+unexercised above it — the same residue ticks 244 and 245 left. Focus/blur EVENT dispatch is
+unchanged and already existed; this tick is the cascade half only.

@@ -369,8 +369,17 @@ mod selector_impl {
                 // matches the hovered element AND ALL ITS ANCESTORS — see `Dom::is_hovered` for why
                 // the ancestor half is the entire hover-reveal-menu mechanism rather than a detail.
                 P::Hover => self.dom.is_hovered(self.node),
-                // Still genuinely dynamic and still unfed: correct answer for a static layout is "no".
-                P::Active | P::Focus | P::FocusWithin | P::FocusVisible => false,
+                // Focus reaches the cascade from the shell's own focus tracking (tick 246). The
+                // three are deliberately three different questions: `:focus` is the exact element,
+                // `:focus-within` is it or any ancestor (the expanding search box), and
+                // `:focus-visible` adds "…and the ring should be shown", which is false for a
+                // mouse-clicked button.
+                P::Focus => self.dom.is_focused(self.node),
+                P::FocusWithin => self.dom.is_focus_within(self.node),
+                P::FocusVisible => self.dom.is_focus_visible(self.node),
+                // Still genuinely dynamic and still unfed: `:active` needs mousedown/mouseup, which
+                // is a separate input path from focus. Correct answer until then is "no".
+                P::Active => false,
                 _ => false,
             }
         }

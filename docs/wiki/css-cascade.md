@@ -337,6 +337,7 @@ the rule set, and every predicate you add to the matcher has to be reflected in 
 silently pre-filters the thing you just taught the matcher to accept.** Ask what the index dropped,
 every time the matching semantics change.
 
+
 ## `:hover` is a cascade INPUT, and the two relayout paths each miss it differently
 
 `:hover` was hard-coded `false` in `stylo_dom.rs` alongside `:active` and `:focus` (tick 245,
@@ -391,3 +392,43 @@ anything the cascade reads change?". State pseudo-classes are the first inputs t
 tree moving, and they will not be the last (`:focus-visible`, container queries, `@media` on a
 resize). When adding one, the question is not "does it match" but **"what recomputes when it starts
 matching?"**
+
+
+
+## Focus was a DEAD-END WIRE, and `:focus` / `:focus-within` / `:focus-visible` are three questions
+
+Tick 246, `G_FOCUS`. The shell has tracked focus for many ticks and publishes it into the JS world
+through `Page::publish_view_state` — that is what backs `document.activeElement`. It never reached
+the **style system**, so `:focus` answered a hard-coded `false` for the life of every page.
+
+**This is the third instance of the same shape in five ticks**, and by now it is a named failure
+mode rather than a coincidence: the parser's quirks verdict (tick 242, written and never read), the
+`RuleIndex` case key (tick 243, computed then filtered away), and now focus. *The engine had the
+answer and threw it away* — and **no capability probe can see it**, because the feature appears
+present at every layer anyone would inspect. `document.activeElement` returns the right element. The
+shell highlights the right control. Only the cascade was never told.
+
+**What it costs is accessibility, not decoration.** The focus ring is the only thing telling a
+keyboard user where they are on the page. And because authors spent twenty years writing
+`:focus { outline: none }` to remove the ring *mouse* users did not want, on a great many sites the
+only remaining cue is the author's own `:focus`/`:focus-visible` rule. With the pseudo-class never
+matching, tabbing through those pages moves an invisible cursor.
+
+### They are not one feature with three names
+
+| selector | matches | the thing it is actually for |
+|---|---|---|
+| `:focus` | the exact element, **never an ancestor** | the control's own styling |
+| `:focus-within` | the element **or any ancestor** | the expanding search box, the open combobox panel — the `<input>` takes focus, the `<div>` changes size |
+| `:focus-visible` | focused **and** the ring is warranted | suppressing the ring on a mouse-clicked button, which is the noise that made authors strip `:focus` in the first place |
+
+Collapsing `:focus` into `:focus-within` puts a ring around the whole form every time one field is
+focused. Collapsing `:focus-visible` into `:focus` leaves the pseudo-class with no reason to exist.
+Both are RED probes on `G_FOCUS`, and both fail on their own claim and nothing else.
+
+**Only the caller knows how focus arrived**, so `Page::set_focus` takes `from_keyboard` rather than
+guessing. `Dom::set_focused` marks **both** chains dirty for the same reason `set_hovered` does —
+`:focus-within` matches ancestors, so an ancestor restyles without being the focus target.
+
+`recascade_all_sources` (added for `:hover` one tick earlier) is reused unchanged, which is the
+whole reason it was extracted rather than inlined.
