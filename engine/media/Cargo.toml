@@ -77,3 +77,7 @@ required-features = ["video"]
 [[test]]
 name = "playback_clock"
 required-features = ["video"]
+
+[[test]]
+name = "av_sync"
+required-features = ["audio", "video"]

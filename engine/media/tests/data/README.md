@@ -21,3 +21,16 @@ All three are from the Chromium `media/test/data` corpus, which is BSD-licensed 
    -movflags +frag_keyframe+empty_moov -an bear-baseline_frag.mp4`
   Needed because **both** other video fixtures are High profile (`AVCProfileIndication = 100`) and
   the M5 openh264 backend is Constrained Baseline only, so it would fail against its own input.
+
+- `bear-av-baseline_frag.mp4` — the **first multi-track fixture** in this tree: Constrained Baseline
+  H.264 (`avc1.42C01E`, 640x360, 3 frames, 30000 timescale) **and** AAC-LC (`mp4a.40.2`, 44100 Hz
+  stereo, 4096 PCM frames) in one fragmented file. Muxed from the two single-track fixtures above
+  with the system `ffmpeg` binary as a **dev tool** (authoring a test file, not linking ffmpeg into
+  the browser):
+  `ffmpeg -i bear-baseline_frag.mp4 -i bear-mpeg2-aac-only_frag.mp4 -map 0:v:0 -map 1:a:0 \
+   -c:v copy -c:a aac -shortest -movflags +frag_keyframe+empty_moov bear-av-baseline_frag.mp4`
+  Needed because every other fixture carries exactly ONE track, so nothing had demuxed a real
+  fragment with both a video and an audio `traf` — and A/V sync is unassertable without both on one
+  timeline. **Its two tracks deliberately have different durations** (video 0.1001s, audio 0.0929s):
+  one stream ending before the other is the realistic case, not a defect, and `av_sync.rs` depends
+  on it.

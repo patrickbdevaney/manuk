@@ -65,7 +65,7 @@ pub use video::{
 #[cfg(feature = "video")]
 pub mod playback;
 #[cfg(feature = "video")]
-pub use playback::{FrameTimeline, Transport};
+pub use playback::{AudioClock, FrameTimeline, Transport};
 
 /// What a byte prefix looks like. Recognising a container we cannot read is worth doing: it turns
 /// "the segment is corrupt" into "this is WebM and we only demux MP4", which is the truth.

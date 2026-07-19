@@ -11013,3 +11013,64 @@ correcting it (element → timeline → `set_video_frame`) is M6b, the next door
 not yet slaved to one clock, and nothing drives the clock from a frame callback yet.
 
 WIKI: docs/wiki/media-pipeline.md
+
+## Tick 250 — audio is master, and a clock that accumulates floats is a clock that drifts
+
+TICK SHAPE: tick 249's clock advances by a wall-clock delta, which MEDIA.md (trap #9) names as the
+FALLBACK — correct for the muted/video-only case that is most of the open web's `<video>`, and wrong
+the moment there is an audio track. The rule it records is that the **audio device clock is master**:
+a dropped video frame is invisible, a stretched audio sample is not.
+
+HYPOTHESIS: the master clock is not a float that gets added to. `cpal` reports a *count of samples
+consumed*, so the position is an exact rational — `frames_played / sample_rate` — and the correct
+implementation stores the integer and divides once. Accumulating `position += frames / rate` in f64
+is the same number in the first second and a visibly wrong one an hour in.
+
+THE CLAIM THE GATE MUST BE ABLE TO FALSIFY: syncing SNAPS the transport to audio. It does not
+average the two clocks, does not take the later of them, and does not nudge toward audio — any of
+which leaves video authoritative in part, which is the bug the rule exists to prevent.
+
+Also: this is the tree's FIRST multi-track fixture (video AND audio in one file); every existing one
+carries a single track, so nothing had ever demuxed a real `moof` with two `traf`s.
+
+**THE CAPABILITY.** `AudioClock` (the master) + `Transport::sync_to_audio` / `drift_from`. Plus the
+tree's first multi-track fixture, `bear-av-baseline_frag.mp4` — Baseline H.264 AND AAC-LC in one
+fragmented file, muxed with system ffmpeg as a DEV TOOL (authoring a test file, not linking ffmpeg).
+Our demuxer read a two-`traf` fragment correctly on the first try; nothing had ever asked it to.
+
+**THE NUMBER THE HYPOTHESIS PREDICTED, MEASURED BY PROBE RATHER THAN ARGUED.** Over ~1 hour of
+device callbacks the f64-accumulating clock reaches 158,696,652 sample frames where the exact one
+has 158,720,000 — **23,348 frames lost = 0.53 SECONDS of lip-sync drift per hour**, one-directional.
+Every short-horizon assertion stayed GREEN under the broken clock. That is the archetype: correct for
+the first minute, and the complaint it eventually produces is unreproducible by whoever receives it.
+
+**RED PROBES EXECUTED, NOT ASSERTED (process rule 3):**
+  · average the two clocks instead of snapping → RED at **two independent** assertions (the snap
+    discriminator AND audio-runs-out). Two claims catching one defect is the signal it is
+    load-bearing rather than decorative.
+  · f64-accumulate the master clock → RED at the exactness assertion ONLY; snap, sync and
+    audio-runs-out all stayed green. The bug is invisible to every test that does not run an hour.
+
+**AN ASSERTION I WROTE WRONG, AND THE GENERALISATION IS WORTH MORE THAN THE FIX.** I claimed "submit
+one frame interval of audio → frame 1 is on screen". FALSE. 44100 Hz and 30000 Hz are incommensurate:
+one frame interval is 1471.47 audio samples, a device delivers WHOLE samples, and 1471 lands **0.47
+samples short** of frame 1 — so frame 0 is correctly still held. The code was right and the test was
+wrong, which is the third time this session the instrument was the thing at fault (cf. tick 249's
+guessed 1% threshold). **An audio clock can never be assumed to land ON a video frame boundary**, so
+any sync policy phrased as "when the clocks are equal" fires rarely and by luck — and tick 249's hold
+semantics are exactly what makes that harmless. The two halves of M6 are load-bearing for each other.
+
+**Enforced by the TYPE, not by discipline:** `sync_to_audio` takes the clock by `&`, so the sync path
+cannot write it. Taking `&mut` and nudging `frames_played` toward the transport would compile and
+would appear to fix drift — while being the one correction a listener can hear.
+
+Gate: `engine/media/tests/av_sync.rs` (`G_AV_SYNC`), 4 tests. Regression: full `manuk-media`
+**21 passed / 0 failed** under `--features audio,video`.
+
+Residue, named honestly: **there is still no audio device.** `AudioClock` is fed by whoever owns the
+`cpal` stream and nothing owns one yet — deliberate, since decoded-PCM correctness is gateable
+headlessly and audible playback is not (a gate needing a sound card false-REDs on a headless box).
+The `<video>` element's JS surface still answers the pre-decode era's honest NO, which has become a
+lie in the other direction; that is M6b-element and it is the next door.
+
+WIKI: docs/wiki/media-pipeline.md

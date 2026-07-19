@@ -440,3 +440,60 @@ Residue: this is the clock, not the element. `<video>`'s JS surface still answer
 from the pre-decode era — `play()` rejects and `canPlayType` returns `''` even for `avc1.42001E`,
 which we can now decode. That NO has become a lie in the other direction, and correcting it (element
 → timeline → `set_video_frame`) is M6b. Audio and video are also not yet sync'd to one clock.
+
+## M6b — audio is master (tick 250), and two numbers that came out of it
+
+Tick 249's clock advances by a wall-clock delta. MEDIA.md (trap #9) names that the **fallback** —
+right for the muted/video-only case that is most of the open web's `<video>`, wrong the moment there
+is an audio track, where the **audio device clock is master**. The reason is asymmetric cost: a
+dropped video frame is invisible, a stretched audio sample is not. (It is also why `cpal` was taken
+over `rodio`: `rodio`'s `Sink` hides the clock, and the clock is the thing needed.)
+
+### The master clock holds an integer, and the drift is 0.53s/hour
+
+An audio device reports **a count of sample frames consumed**. Position is that count divided by the
+sample rate — an exact rational, one division on read. The naive alternative keeps an `f64 position`
+and adds `frames / sample_rate` per callback; `1024/44100` is not representable in binary floating
+point, the error is one-directional, and at ~43 callbacks/second it never cancels.
+
+**Measured, by RED probe rather than by argument:** over ~1 hour of callbacks the accumulating clock
+lands on 158,696,652 sample frames where the exact one has 158,720,000 — **23,348 frames lost, 0.53
+seconds of lip-sync drift.** Every short-horizon assertion stayed green under the broken clock. This
+is the archetype of a bug no quick test catches: it is correct for the first minute and the
+complaint it eventually generates ("audio drifts out on long videos") is unreproducible by whoever
+receives it.
+
+### Sync SNAPS; it does not blend
+
+`sync_to_audio` assigns the audio position. Averaging the two clocks, or taking whichever is further
+along, leaves the video clock authoritative *in part* — and any video contribution to the position
+eventually has to be paid back by resampling audio, the one correction a listener can hear. The RED
+probe (average instead of snap) broke **two independent assertions**, which is the signal that the
+claim is load-bearing rather than decorative.
+
+The correction always lands on the video side, and that is enforced by the **type**: `sync_to_audio`
+takes the clock by `&`, so the sync path *cannot* write it. Taking it by `&mut` and nudging
+`frames_played` toward the transport would compile and would appear to fix drift.
+
+### 44100 and 30000 are incommensurate — an assertion written wrong first
+
+The obvious claim is "submit one frame interval of audio and frame 1 is on screen." **It is false,
+and it failed.** One 30000-timescale frame interval is 1471.47 audio samples; a device delivers whole
+samples; 1471 samples lands **0.47 samples short** of frame 1's presentation time, so frame 0 is
+correctly still held.
+
+The generalisation is worth more than the fix: **an audio clock can never be assumed to land on a
+video frame boundary**, so any sync policy phrased as "when the clocks are equal" fires rarely and by
+luck. Hold semantics (M6, above) are exactly what make the incommensurability harmless — the two
+halves of this step are load-bearing for each other.
+
+### One stream ends before the other
+
+The fixture's audio (0.0929s) is shorter than its video (0.1001s), deliberately. Audio ending is not
+the media ending: the transport keeps playing and the wall-clock fallback carries the remaining
+video to its end. A player that treats the master clock stopping as the media stopping truncates
+every file whose tracks are not exactly equal in length — which is most of them.
+
+Residue: still no device. `AudioClock` is fed by whoever owns the `cpal` stream, and nothing owns one
+yet — decoded PCM correctness is gateable headlessly, audible playback is not. And the `<video>`
+element's JS surface still answers the pre-decode era's honest NO (M6b-element, unbuilt).

@@ -407,6 +407,11 @@
   - L408 · Presentation order is written before it can matter
   - L416 · The threshold that was guessed wrong, and what the real numbers were
   - L431 · The clock does not own the frames
+  - L444 · M6b — audio is master (tick 250), and two numbers that came out of it
+  - L452 · The master clock holds an integer, and the drift is 0.53s/hour
+  - L466 · Sync SNAPS; it does not blend
+  - L478 · 44100 and 30000 are incommensurate — an assertion written wrong first
+  - L490 · One stream ends before the other
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -558,4 +563,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-477 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+482 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

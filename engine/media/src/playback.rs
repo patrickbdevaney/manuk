@@ -143,6 +143,64 @@ impl FrameTimeline {
     }
 }
 
+/// **The master clock** — the audio device's own count of what it has consumed.
+///
+/// `docs/loop/MEDIA.md` (trap #9) settles the policy: the audio device clock is master and video is
+/// slaved to it, because **a dropped video frame is invisible and a stretched audio sample is not.**
+/// The same trap entry is why `cpal` was chosen over `rodio` — `rodio`'s `Sink` *hides* the clock,
+/// and the clock is the thing that is needed.
+///
+/// ## Why this holds an integer and not a position
+///
+/// An audio device reports **a count of sample frames it has consumed**. That count divided by the
+/// sample rate is the position, exactly — it is a rational number and both parts are known. Storing
+/// the integer and dividing on read is therefore *exact at every horizon*.
+///
+/// The obvious alternative — keep an `f64 position` and add `frames / sample_rate` on each callback
+/// — is the same number for the first few seconds and accumulates rounding error forever after,
+/// because `1024.0 / 44100.0` is not representable in binary floating point. At a typical 1024-frame
+/// buffer that is ~43 additions a second, each carrying error, and the drift is one-directional
+/// rather than cancelling. It is a bug that **cannot be caught by any short test** and shows up as
+/// audio and video visibly parting company late in a long video — a lip-sync complaint nobody can
+/// reproduce in the first minute.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AudioClock {
+    sample_rate: u32,
+    frames_played: u64,
+}
+
+impl AudioClock {
+    pub fn new(sample_rate: u32) -> Self {
+        Self {
+            sample_rate: sample_rate.max(1),
+            frames_played: 0,
+        }
+    }
+
+    /// Report sample frames consumed by the device — what a `cpal` output callback knows.
+    pub fn submit(&mut self, frames: u64) {
+        self.frames_played += frames;
+    }
+
+    /// The master position, in seconds. Exact: one division, never an accumulation.
+    pub fn position(&self) -> f64 {
+        self.frames_played as f64 / self.sample_rate as f64
+    }
+
+    pub fn frames_played(&self) -> u64 {
+        self.frames_played
+    }
+
+    pub fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
+    /// A seek moves the device's playhead — the count restarts from the new position.
+    pub fn seek(&mut self, seconds: f64) {
+        self.frames_played = (seconds.max(0.0) * self.sample_rate as f64).round() as u64;
+    }
+}
+
 /// The transport state a `<video>` element exposes: position, playing, ended.
 ///
 /// Deliberately holds no frames — see the module note on the audio clock being master.
@@ -213,5 +271,34 @@ impl Transport {
         if self.position >= self.duration {
             self.playing = false;
         }
+    }
+
+    /// **Slave this clock to the audio device.** Use this instead of [`Transport::advance`] whenever
+    /// there is an audio track; `advance` is the fallback for the muted and video-only case.
+    ///
+    /// This **SNAPS** — it assigns the audio position rather than blending toward it. Averaging the
+    /// two clocks, or taking whichever is further along, would leave the video clock authoritative
+    /// in part, and "partly authoritative" is precisely the state the audio-is-master rule exists to
+    /// forbid: any video contribution to the position eventually has to be paid back by resampling
+    /// audio, which is the one thing a listener can hear.
+    ///
+    /// The correction is therefore always applied to the *video* side. Whatever
+    /// [`FrameTimeline::frame_at`] returns for the new position is the frame to show — if that skips
+    /// frames the device got ahead and those frames are simply never displayed, and if it repeats a
+    /// frame the device is behind and the current picture is held. Both are invisible; stretching
+    /// the audio to avoid them would not be.
+    pub fn sync_to_audio(&mut self, clock: &AudioClock) {
+        self.position = clock.position().clamp(0.0, self.duration);
+        if self.position >= self.duration && self.duration > 0.0 {
+            self.playing = false;
+        }
+    }
+
+    /// How far the transport is from the audio device, in seconds. Positive means video is ahead.
+    ///
+    /// Exposed for a future frame-drop policy: a player wants to know the size of the correction
+    /// `sync_to_audio` is about to make, not merely that one happened.
+    pub fn drift_from(&self, clock: &AudioClock) -> f64 {
+        self.position - clock.position()
     }
 }
