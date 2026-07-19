@@ -11468,3 +11468,49 @@ page's own renderer what to draw, which is what the streaming players need, and 
 the browser rendering captions. Per-cue `enter`/`exit` events are absent.
 
 WIKI: docs/wiki/media-pipeline.md
+
+## Tick 258 — the tracker was reporting the media class at 5% while nine landed ticks sat in it
+
+TICK SHAPE: board priority (E)/(D) and process rule 2, taken as the tick itself rather than as the
+five minutes before a build tick. Rule 2 says re-probe stale unknowns BEFORE building them. Tick 247
+DID that, wrote down that Server-Sent Events was a phantom ✗ and that canvas `fillText` was stale —
+**and did not correct the file.** So the tracker kept lying for another eleven ticks, and
+`constellation.sh --gaps` kept printing SSE as the platform class's #1 hole. Noticing a lie and not
+fixing it is how the next tick re-derives it.
+
+**WHAT WAS MEASURED (this tree, every gate run, all green):** `g_mse`, `g_media_buffered`,
+`g_media_segment_fetch`, `g_video_frame`, `g_text_tracks`, `g_cue_change`, `g_eventsource`,
+`g_eventsource_reconnect`, `g_canvas_text`, `g_file_input`, `g_drop_upload`, and the whole
+`manuk-media` crate under `--features audio,video` (demux, AAC→PCM, H.264 baseline, playback clock,
+A/V sync, VTT).
+
+**SEVEN CELLS RE-PINNED**, each from `missing` to a measured verdict with the gate that proves it:
+SSE → **gated** (phantom, landed t205/207); file-input actuation → **gated** (t247); binary transport
+→ **gated**; drag-and-drop → **partial** (the file-drop half is real; the EDITOR half —
+dragstart/setData/effectAllowed — is genuinely absent); MSE → **partial** (attach/append/buffered off
+real demux; nothing DRIVES playback from appended segments, no ABR); WebVTT subtitles → **partial**
+(parser 255 + API 256 + timeline 257; `<track src>` still unfetched); `<video>` playback + A/V sync →
+**partial** (real clock, audio-master sync, frame paints; not joined to a network stream, `play()`
+still rejects).
+
+Each `partial` carries the residue in its receipt, because the point is an HONEST instrument, not a
+better-looking one. A cell flipped to `gated` on a gate that only covers half the capability would be
+the same lie in the other direction.
+
+**RESULT — the number the whole loop steers by was wrong.** Constellation media class **5% → 45%**;
+the "biggest hole in each class" list now names WebGL, CSP, media pseudo-classes and audio-output
+instead of MSE and SSE. Ten ticks could have gone into rebuilding what was already built.
+
+**HARNESS FINDING, recorded not acted on (`scripts/verify.sh` is observer-owned).** Re-measuring the
+wall shows **none** of the media gates run in it — not `g_mse`, `g_media_buffered`,
+`g_media_segment_fetch`, `g_video_frame`, `g_text_tracks`, `g_cue_change`, nor the `manuk-media`
+crate. `verify.sh` launches page gates one `--test` at a time, so a gate is watched only if a line
+was added for it. Nine ticks of media work are green on demand and **regression-invisible**: if they
+broke, the RATCHET would still print "nothing went backwards". Written up in
+docs/loop/GATE-COVERAGE.md, and every re-pinned media receipt carries a `⚠ GATE NOT IN THE VERIFY
+WALL` marker so the caveat travels with the number.
+
+Residue: 37 cells remain UNKNOWN and unmeasured — `?` still outranks `✗`, and the two oldest
+(100-tab RSS budget, test262) are the ones that would falsify our own positioning.
+
+WIKI: docs/loop/GATE-COVERAGE.md

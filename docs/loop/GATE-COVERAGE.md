@@ -70,3 +70,34 @@ The same question has not been asked of the other crates: `manuk-shell`, `manuk-
 crate tests`), so their tests DO all run. `manuk-media`'s two gates (`audio_decode`, `video_decode`,
 ticks 235/236) are `required-features` tests and appear in **no** wall invocation — they are watched by
 nothing at all.
+
+## Re-measured tick 258: the media track is unwatched END TO END, not just its two decoders
+
+The residue above named `audio_decode` and `video_decode` as the unwatched pair. Re-measuring
+`verify.sh` on this tree while re-pinning the constellation shows the hole is **the whole media
+track**, not two tests:
+
+| gate | proves | in the wall? |
+|---|---|---|
+| `g_mse` | MediaSource attach + appendBuffer | **no** |
+| `g_media_buffered` | `buffered` from real demux | **no** |
+| `g_media_segment_fetch` | segment bytes survive fetch | **no** |
+| `g_video_frame` | a decoded frame paints | **no** |
+| `g_text_tracks` | the TextTrack API (t256) | **no** |
+| `g_cue_change` | the caption timeline (t257) | **no** |
+| whole `manuk-media` crate | demux, decode, clock, A/V sync, VTT | **no** |
+
+`verify.sh` launches its page gates one `--test` at a time (`_launch g… cargo test … --test g_x`), so
+a gate is watched only if someone added a line for it. Nine ticks of media work — 255 through 257 and
+234 through 250 — are green on demand and **regression-invisible**: nothing would go red if they
+broke, and the RATCHET would report "nothing went backwards" while it had.
+
+This matters more now than when it was two decoders, because tick 258 raised the constellation's
+media class from 5% to 45% on the strength of exactly these gates. A tracker that counts a capability
+as `gated` when the wall never runs the gate is the "gated ≠ watched" failure this file exists to
+name, one level up.
+
+**Not acted on — `scripts/verify.sh` is observer-owned.** The receipts for every media row re-pinned
+at tick 258 carry a `⚠ GATE NOT IN THE VERIFY WALL` marker so the claim travels with the number.
+Option (a) above still looks right: sweep them off the per-tick path and bank a pass/fail, rather
+than spending wall on them.
