@@ -15,6 +15,61 @@ description = "Media container demux (ISO-BMFF / fragmented MP4). The plumbing u
 # ISO-MP4 video `SampleEntry` commented out (audio only); `mp4parse` is a box parser with no sample
 # reader; `re_video` shells out to an ffmpeg *binary*. `re_mp4` walks `moof`/`traf`/`trun` and
 # produces a real sample table, which is exactly what an MSE `SourceBuffer` needs.
+[features]
+# Demux is always available. DECODE is opt-in, and the split is not cosmetic — see below.
+#
+# `audio` is deliberately NOT in `default`. Cargo unifies features across a workspace build, so a
+# default-on decoder ends up in every configuration that builds this crate at all — including the
+# `--no-default-features` headless check on `manuk-shell`, a feature combination nothing else
+# builds, which meant compiling symphonia from scratch on EVERY wall. That is ~100s per tick, on a
+# gate whose whole job is to be cheap. Opt-in is what actually keeps it out of the link.
+default = []
+audio = ["dep:symphonia"]
+# `video` is opt-in for the same reason `audio` is, and one more: openh264 compiles C. Leaving it
+# on by default would put a `cc` invocation into every configuration that builds this crate.
+video = ["dep:openh264"]
+
 [dependencies]
 re_mp4 = "0.4"
+# AAC decode (M4). `default-features = false` + `aac` only: symphonia ships a dozen demuxers and
+# codecs we must not silently acquire, and its ISO-MP4 demuxer in particular is AUDIO-ONLY (its
+# video `SampleEntry` is commented out — MEDIA.md trap #1), which is exactly why demux is re_mp4's
+# job here and symphonia's role is confined to turning AAC packets into PCM.
+#
+# **OPTIONAL, and that is load bearing.** `manuk-js` depends on this crate for `__mseDemux`, and
+# `manuk-page` depends on `manuk-js`, so *every* gate test binary links whatever is in this
+# dependency tree. Making the decoder unconditional put symphonia into all ~25 of them and added
+# minutes to the wall — a real cost the RATCHET caught and refused, correctly. The JS boundary needs
+# to know what a stream *contains*; it does not decode. So it takes this crate with
+# `default-features = false` and the decoder stays out of its link.
+symphonia = { version = "0.6", default-features = false, features = ["aac"], optional = true }
+
+# H.264 decode (M5). Cisco's OpenH264, BSD-2, via idiomatic bindings.
+#
+# **It decodes Constrained Baseline and nothing else** — B-frame reordering is unimplemented — and
+# that limit is the reason it is here rather than a reason against it. MEDIA.md's survey found no
+# pure-Rust H.264 decoder that reads the High profile the open web actually serves, so the choice is
+# not "openh264 vs something better", it is "a working pipeline with zero system dependencies, or
+# nothing until ffmpeg/VA-API". Firefox makes the same call: OpenH264 for WebRTC, never for
+# `<video>`. The `trait VideoDecoder` this module defines is what lets the High-profile backend drop
+# in later without touching a caller.
+#
+# Optional for the same load-bearing reason symphonia is: `manuk-js` -> `manuk-media` puts this
+# crate's tree into all ~25 gate binaries, and this one would drag a C compile with it.
+#
+# **Pinned exactly, and the pin is not cosmetic.** 0.9.1+ pulls `safe_arch 1.0`/`wide 1.5`, which
+# declare `rust-version = 1.89`; this workspace is on 1.88, so the build fails at resolution with an
+# MSRV error that names two SIMD crates and never mentions H.264 — a confusing failure a caret range
+# would re-introduce on the next unrelated `cargo update`. Unpin when the toolchain moves past 1.89.
+openh264 = { version = "=0.9.0", optional = true }
 tracing.workspace = true
+
+# The decode gate needs the decoder. `required-features` is what keeps `cargo test -p manuk-media`
+# from failing to compile when the feature is off, while still running under `--features audio`.
+[[test]]
+name = "audio_decode"
+required-features = ["audio"]
+
+[[test]]
+name = "video_decode"
+required-features = ["video"]

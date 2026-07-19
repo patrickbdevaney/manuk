@@ -1117,7 +1117,35 @@ const PRELUDE: &str = r#"
             return { width: w, height: h, colorSpace: 'srgb', data: new Uint8ClampedArray(w*h*4) };
           };
           ctx.putImageData = function(){};              // honest no-op
-          ctx.drawImage = function(){};                 // honest no-op: no image source plumbing yet
+
+          // ── drawImage. Three overloads, normalised HERE to one nine-argument shape so the FFI has a
+          // single signature — argument COUNT is the only thing that distinguishes them, and that is
+          // knowable only on this side of the boundary.
+          //   (img, dx, dy)                          — intrinsic size
+          //   (img, dx, dy, dw, dh)                  — scaled
+          //   (img, sx, sy, sw, sh, dx, dy, dw, dh)  — cropped and scaled
+          ctx.drawImage = function(src, a, b, c, d, e, f, g, h){
+            if (!src) return;
+            // A source is identified by NODE, not by its pixels: an image is megabytes and a sprite
+            // blitted every animation frame would otherwise copy it 60 times a second.
+            var id = src.__nodeId;
+            if (id == null) return;   // ImageBitmap / OffscreenCanvas / <video>: no pixels of ours yet
+            var sz = el.__cvSourceSize(id);
+            // Not decoded yet. Per spec drawing an unloaded image is a silent no-op, and a chart that
+            // draws on every frame will simply land it once the bytes arrive.
+            if (!sz) return;
+            var iw = sz[0], ih = sz[1];
+            var n = arguments.length;
+            var sx, sy, sw, sh, dx, dy, dw, dh;
+            if (n >= 9)      { sx=+a; sy=+b; sw=+c; sh=+d; dx=+e; dy=+f; dw=+g; dh=+h; }
+            else if (n >= 5) { sx=0; sy=0; sw=iw; sh=ih; dx=+a; dy=+b; dw=+c; dh=+d; }
+            else             { sx=0; sy=0; sw=iw; sh=ih; dx=+a; dy=+b; dw=iw; dh=ih; }
+            // `M`, the closure's live transform — NOT `ctx.M`, which does not exist. Reading the
+            // wrong one hands the native `undefined`, the matrix decodes as identity, and every
+            // transformed draw silently lands at the untransformed origin.
+            el.__cvDrawImage(id, sx, sy, sw, sh, dx, dy, dw, dh,
+                             ctx.globalAlpha == null ? 1 : ctx.globalAlpha, M);
+          };
 
           // ── Gradients: a real object, and the last stop's colour is used as a flat approximation.
           // A bar drawn in the gradient's end colour beats a bar that is not drawn.

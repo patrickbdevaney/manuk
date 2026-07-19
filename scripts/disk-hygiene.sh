@@ -31,6 +31,72 @@ echo "▶ /home is ${pct}% full ($before free)"
 echo "  · incremental fragments (RAM-resident; flushed, not written to disk at all)"
 ./scripts/ramdisk.sh --flush >/dev/null 2>&1 || rm -rf target/debug/incremental target/release/incremental 2>/dev/null
 
+# ── BUILD-ACTIVE GUARD (observer, tick 235) — THE PRUNER AND THE VERIFY WALL WERE RACING, AND THE WALL
+# ALWAYS LOST. Diagnosed by the grind agent, and the bug was mine: I tightened this cron to */3 while a
+# verify wall takes 8–13 minutes, so hygiene fired 3–4 times MID-WALL and deleted the very test binaries
+# and the release manuk-wpt that verify was building and about to run. Every individual cargo command
+# measured sub-second (`cargo build --workspace` 0.4s) while `verify.sh` reported 480–800s against a 93s
+# ceiling — pure relink churn. The WALL ratchet then refused every tick.
+#
+# It was also self-reinforcing, which is how I missed it: the pruner deleted build output, the build
+# regenerated it, and I read that regeneration as "orphan churn" and tightened the cron further. The
+# ~25G/6min I measured was substantially THIS LOOP, not natural accumulation.
+#
+# So: while a build is live, skip the two deps prunes (the dangerous ones — they touch the working set).
+# The safe reclaims below (banked builds, oracle snapshots, /tmp) still run; they cannot race a build.
+# SAFETY VALVE: if disk is genuinely tight the prune runs anyway — ENOSPC beats a slow wall.
+BUILD_ACTIVE=0
+if pgrep -x rustc >/dev/null 2>&1 || pgrep -x cargo >/dev/null 2>&1; then BUILD_ACTIVE=1; fi
+FREE_G=$(df --output=avail -BG /home 2>/dev/null | tail -1 | tr -dc '0-9')
+# REFINED (tick 235, same session): the first guard skipped BOTH prunes during a build, and disk then fell
+# 61G -> 38G in an hour because the agent builds near-continuously. That would have driven us into the 25G
+# valve and resumed the very race we just fixed. But the two prunes do NOT carry the same risk:
+#
+#   · the `-atime +1` prune is INHERENTLY SAFE during a build — it deletes only files unread for >1 day, and
+#     anything the running build just wrote or linked has a fresh atime by construction. It can never touch
+#     the working set. So it ALWAYS runs, and keeps reclaiming while a build is live.
+#   · the keep-newest-per-stem prune is the racy one: it deletes "superseded" hash-duplicates, and mid-build
+#     a binary being written can look superseded. THAT is what deleted verify's test bins. Only this one is
+#     gated on the build.
+# ── FINAL FORM (tick 235, third cut). SKIPPING the stem prune during builds was still wrong: the agent
+# builds near-continuously, so it almost never ran, disk fell 61G->38G in an hour, and we were heading back
+# into the 25G valve — which fires MID-BUILD and resumes the exact race. The atime prune cannot cover the
+# gap either: it only catches files unread >1 day, while the orphans a live build produces are minutes old.
+#
+# The correct rule is not "when" but "WHAT": never delete anything the RUNNING build produced. So compute a
+# cutoff = the start time of the OLDEST live cargo/rustc, and prune only stem-duplicates strictly OLDER than
+# that. Those provably predate the current build, so they cannot be in its working set — which was the whole
+# safety argument for this prune in the first place, just applied against the right reference point.
+# Reclaim keeps working during builds; the wall stops being sabotaged. No skip, no valve needed.
+# ── VARIANT-SAFE FLOOR (observer, tick 235). THE STEM PRUNE WAS EATING LIVE FEATURE VARIANTS.
+# verify.sh builds manuk-page under TWO feature sets (`spidermonkey` and `stylo,spidermonkey`).
+# Cargo emits both as the SAME name-stem with different hashes — `g_load_budget-<hashA>` and
+# `g_load_budget-<hashB>` — so "keep newest per stem" deleted whichever variant was built second,
+# every 3 minutes. The next verify then relinked a ~400MB mozjs test binary to replace it. Measured:
+# with both variants present cargo reports 380 units Fresh and finishes in 0.26s; after a prune the
+# same command costs 11-23s, and across ~23 gates that is the ~363 unaccounted seconds and the 5x
+# wall regression (48-80s at ticks 117-128 -> 426s).
+#
+# The prune cannot tell a stale orphan from a live sibling variant by name. So give it a TIME FLOOR:
+# never delete a stem-duplicate younger than STEM_MIN_AGE, regardless of build state. Genuine orphans
+# from older builds still age out (that is the bloat this exists to reclaim); everything the current
+# gate suite actually links is minutes old and now survives.
+STEM_MIN_AGE="${MANUK_STEM_MIN_AGE:-12 hours ago}"
+STEM_FLOOR="@$(date -d "$STEM_MIN_AGE" +%s 2>/dev/null || echo 0)"
+STEM_CUTOFF=""
+if [ "$BUILD_ACTIVE" = 1 ]; then
+  _oldest=$(ps -eo lstart=,comm= 2>/dev/null | awk '$NF=="rustc"||$NF=="cargo"' | head -1 | sed 's/[a-z]*$//')
+  if [ -n "$_oldest" ]; then
+    _epoch=$(date -d "$_oldest" +%s 2>/dev/null)
+    # 60s margin: a binary being linked right as the build started must stay.
+    [ -n "$_epoch" ] && STEM_CUTOFF="@$(( _epoch - 60 ))"
+  fi
+  # If the build start cannot be read, fall back to a conservative 1h cutoff rather than pruning blind.
+  [ -z "$STEM_CUTOFF" ] && STEM_CUTOFF="@$(( $(date +%s) - 3600 ))"
+  echo "  · build is LIVE — stem prune restricted to duplicates older than $(date -d "$STEM_CUTOFF" '+%H:%M:%S')"
+  echo "    (anything this build produced is newer than that and is untouchable; that race cost us tick 235)"
+fi
+
 # ── GRANULAR ORPHAN PRUNE (observer, tick 141) — the SYSTEMATIC, SAFE, FREQUENT reclaim that keeps target/
 # bounded so the 95% full-purge (cold rebuild) below never fires. target/*/deps accumulates old-hash dep
 # versions + stale test binaries that cargo never garbage-collects (73G observed). A file NOT read by ANY
@@ -52,8 +118,16 @@ echo "  · target/*/deps orphan test-binaries (old-hash duplicates; keep newest 
 for _d in target/debug/deps target/release/deps; do
   [ -d "$_d" ] || continue
   for _stem in $(find "$_d" -maxdepth 1 -type f -executable ! -name '*.*' -printf '%f\n' 2>/dev/null | sed -E 's/-[0-9a-f]{8,}$//' | sort -u); do
+    # Rank ALL duplicates newest-first and always keep the newest (that IS the bin the next verify links),
+    # then, if a build is live, drop from the delete-list anything newer than the build cutoff.
     find "$_d" -maxdepth 1 -type f -executable -name "${_stem}-*" ! -name '*.*' -printf '%T@ %p\n' 2>/dev/null \
-      | sort -rn | tail -n +2 | cut -d' ' -f2- | xargs -r rm -f
+      | sort -rn | tail -n +2 | cut -d' ' -f2- \
+      | while IFS= read -r _f; do
+          # never delete a live sibling variant: honour the build cutoff AND the age floor
+          [ -n "$STEM_CUTOFF" ] && [ -n "$(find "$_f" -newermt "$STEM_CUTOFF" 2>/dev/null)" ] && continue
+          [ -n "$(find "$_f" -newermt "$STEM_FLOOR" 2>/dev/null)" ] && continue
+          rm -f "$_f"
+        done
   done
 done
 

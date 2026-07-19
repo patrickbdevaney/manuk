@@ -11,7 +11,7 @@ doc	CJK line breaking	CJK text overflows its box	gated	G_PROBE_CAPABILITIES	tick
 doc	web fonts (@font-face, WOFF2)	every branded site falls back	works	-	fontdb; webfont_live test
 doc	legacy encodings (Shift_JIS/Big5/GBK/EUC-KR)	the pre-2010 CJK web is MOJIBAKE	gated	G_IFRAME	tick 84: encoding 128 -> ~721k subtests. The decoder was always correct (encoding_rs); the tests read expectations from an IFRAME, which now works
 doc	images: PNG/JPEG/GIF/WebP	every page	works	-	G_FIRST_PAINT
-doc	images: AVIF	modern sites serve it first	unknown	-	NEVER MEASURED — probe it
+doc	images: AVIF	modern sites serve it first	missing	-	MEASURED t237 (was NEVER MEASURED): cargo tree -p manuk-page has ZERO avif/dav1d/ravif crates, so decode is impossible by construction, not merely untested. Present decoders are png/zune-jpeg/image-webp/gif/weezl — ALL pure Rust, which is the no-C-image-FFI property worth keeping. NOTE: AVIF is an AV1 still image, so the re_rav1d decoder the MEDIA ladder already plans would unlock BOTH — do not buy a separate C dav1d for it
 doc	srcset / <picture>	2x displays get 1x images	works	-	capability-probe.html
 doc	SVG (inline + <img>)	icons everywhere	partial	-	renders; namespaces not modelled
 doc	lazy loading (loading=lazy + IO)	feeds load the whole timeline	gated	G_VIEWPORT	tick ~59
@@ -64,7 +64,7 @@ platform	WebRTC	calls	missing	-	out of scope for now
 media	<video>/<audio> element layout	the box exists, nothing plays	partial	-	lays out; HTMLMediaElement surface is an honest NO
 media	container demux (MP4/WebM)	cannot even open a file	gated	G_MEDIA_BUFFERED	tick 234: MP4/fMP4 demux (engine/media, re_mp4) -> tracks/samples/codec-strings + SourceBuffer.buffered. WebM/EBML recognised but NOT demuxed (named Unsupported, not a parse error). Corrected an inverted trun sync flag in re_mp4
 media	video decode (H.264/VP9/AV1)	no video anywhere	missing	-	BORROW: dav1d/openh264, not build
-media	audio decode (AAC/MP3/Opus)	no audio anywhere	missing	-	BORROW: symphonia
+media	audio decode (AAC/MP3/Opus)	no audio anywhere	partial	G_MEDIA_AAC	tick 235: AAC->PCM via symphonia (engine/media/src/audio.rs), gated on frame-count==declared duration. NO audio device yet (cpal is a separate step) and NO MP3/Opus/Vorbis/FLAC/AC-3 — those are refused by name
 media	audio output device	-	missing	-	BORROW: cpal
 media	MSE (Media Source Extensions)	YOUTUBE AND EVERY ADAPTIVE PLAYER. <video src> alone plays nothing on the real web	missing	-	the true short pole
 media	EME / Widevine	Netflix, Spotify	missing	-	SETTLED DEFERRAL — requires a proprietary CDM; cannot be built, only licensed
@@ -90,7 +90,7 @@ doc	container queries (incl. style queries)	component-responsive layout; the big
 doc	CSS anchor positioning	tooltips, menus, popovers without JS	missing	-	tick 230 probe: position-anchor/anchor() absent
 doc	CSS attr() / zoom / shape() / contrast-color()	modern CSS authors use these now	missing	-	tick 230 probe: attr(data-w type(<length>)) does not resolve as a width
 doc	custom highlights	find-in-page, editors, code highlighting without DOM churn	missing	-	tick 225 probe: Highlight / CSS.highlights absent
-doc	JPEG XL	Interop 2026 investigation; Apple ships it	unknown	-	SURFACE AUDIT t83: Interop 2026
+doc	JPEG XL	Interop 2026 investigation; Apple ships it	missing	-	MEASURED t237 (was unknown): zero jxl crates in the dep tree. A pure-Rust decoder exists (jxl-oxide) but adoption is Safari-only — correctly BELOW the ROI line, now recorded as measured-absent rather than unknown
 platform	fetch uploads + ranges (streaming)	large uploads, resumable downloads, video range requests	gated	G_MEDIA_SEGMENT_FETCH	tick 228: Range+206 AND byte-exact binary bodies (260B segment round-trips intact); unblocks media M3
 platform	WebTransport (HTTP/3)	low-latency data; games, live apps	unknown	-	SURFACE AUDIT t83: Interop 2026
 platform	WebAuthn / passkeys	THE modern login. Ladybird still lacks it; so do we	missing	-	confirmed absent (navigator.credentials zero hits). TOTP/password fallback survives (edge sweep t193b)
@@ -122,7 +122,8 @@ app	native <select> choose + selectedIndex/change	dropdowns undrivable by an age
 media	binary transport (arraybuffer XHR/fetch + Range)	adaptive players (hls.js/dash.js) can't append segments — PREREQ for MSE	missing	-	edge sweep t193: __deliverXhr is text-only; hyper does Range trivially
 media	<video> playback engine + A/V sync (currentTime/seek/timeupdate)	play/seek/timeupdate/playing/ended don't work	missing	-	edge sweep t193: wiring on the cpal master clock
 app	fetch streaming response body (ReadableStream / progressive XHR / SSE delivery)	AI-chat answers (claude.ai/ChatGPT/Gemini/Grok) NEVER RENDER; live console logs + inference token output dead	works	-	ReadableStream(196-198)+SSE(205)+reconnect(207)+readyState-3 XHR(206) — all gated. Phase-0 finish-line lever LANDED
-platform	canvas fillText/strokeText rasterization	canvas chart labels + xterm.js terminals + Google Docs/Sheets render BLANK	missing	-	wire the EXISTING engine/text swash glyph-raster to the 2D ctx. THE Google Docs/Sheets/Slides enabler (they render text on canvas — canvas-2D-text, NOT WebGL) + chart labels/terminals (corrected t223)
+platform	canvas fillText/strokeText rasterization	canvas chart labels + xterm.js terminals + Google Docs/Sheets render BLANK	gated	g_canvas_text	STALE ROW CORRECTED t237: this was ALREADY DONE and gated. canvas.rs fill_text/measure_text wire the swash raster in engine/text; g_canvas_text asserts ink/inkcolor/sparse/placed/proportional/scales/metrics/align/baseline/cleared as PIXELS. The board still listed it as CO-#1 lever (C); re-probing before building (process rule 2) is what caught it
+platform	canvas drawImage (sprites/thumbnails/tiles)	sprite games, image editors, thumbnail grids, PDF.js-style tile renderers and chart legend icons all blit NOTHING, silently	gated	g_canvas_image	LANDED t237 (parked on wip/tick237-canvas-drawimage; wall-blocked, not gate-blocked). Was an HONEST no-op: canvas had one pixel channel and it pointed OUTWARD only. publish_image_source is the host->js mirror of canvas_bitmaps. 9 pixel claims incl. 9-arg source crop, dst/src scale, negative-extent MIRROR, globalAlpha, ctx transform, both source paths (canvas->canvas live registry AND <img> decoded bytes)
 platform	clipboard.read() + paste-image (ClipboardItem / image blob)	AI-chat paste-screenshot, rich/image paste	missing	-	edge sweep t193b: only writeText/readText-own-string exist; no clipboard.read()
 cross	password vault (save + autofill credentials)	re-type every password; not a real daily driver	missing	-	edge sweep t193b: shell/session.rs has credential-URL REDACTION only, no save/autofill vault — v1 UX scope
 platform	canvas-text office apps (Google Docs/Sheets/Slides)	office suites render blank	missing	-	CORRECTED t223: reachable-WITH-EFFORT via canvas fillText (glyph raster EXISTS) + measureText accuracy + IME; VIEWING close, full EDITING a lift; NOT the WebGL wall of Canva/Figma

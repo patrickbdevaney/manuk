@@ -157,7 +157,26 @@ show|check)
 
   # ── The wall. It is allowed to breathe, but not to drift: it taxes every future tick, so a slow wall is
   #    compounding interest charged against the loop itself.
+  # ── DEADLOCK BREAKER (observer, tick 235). This check used to FAIL on STATUS.md's stored wall
+  # unconditionally — and it runs BEFORE verify.sh. STATUS only refreshes from a GREEN receipt, so a
+  # single bad reading (ours came from a disk-hygiene cron sabotaging the wall) refused EVERY tick
+  # forever, while the verify run that would have replaced it never got to execute. A gate whose
+  # precondition can only be satisfied by passing the gate is a deadlock, not a gate. It held two
+  # complete, tested media ticks hostage for ~6 hours and drove the supervisor into backoff.
+  #
+  # Rule now: BLOCK only on a measurement we TRUST — i.e. one from a green receipt. An untrusted or
+  # stale figure WARNS and lets the tick proceed to verify.sh, which is the real gate and will fail
+  # honestly if the wall is genuinely slow. This cannot hide a regression: a slow wall on a GREEN run
+  # still fails here on the next tick, exactly as before.
   W=$(current_wall); MW=$(mark WALL); MW=${MW:-0}
+  _rcpt=".git/manuk-verify-receipt"
+  _rres=$(grep -oP '^result:\s*\K\w+' "$_rcpt" 2>/dev/null || echo "")
+  if [ "$MW" -gt 0 ] && [ "$W" -gt 0 ] && [ "$_rres" != "green" ]; then
+    printf '  %s! WALL       %4ss  (mark %ss) — ADVISORY: last receipt is %s, so this figure is not\n' \
+      "$YEL" "$W" "$MW" "${_rres:-absent}" 
+    printf '               trusted and will NOT block. verify.sh below is the real gate.%s\n' "$OFF"
+    MW=0
+  fi
   if [ "$MW" -gt 0 ] && [ "$W" -gt 0 ]; then
     LIMIT=$(( MW * 13 / 10 ))
     if [ "$W" -gt "$LIMIT" ]; then

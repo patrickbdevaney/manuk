@@ -105,7 +105,12 @@ manuk-html = { path = "engine/html" }
 manuk-css = { path = "engine/css" }
 manuk-layout = { path = "engine/layout" }
 manuk-text = { path = "engine/text" }
-manuk-media = { path = "engine/media" }
+# `default-features = false` belongs HERE, not on the member. Cargo IGNORES a member's
+# `default-features` for a `workspace = true` dependency unless the workspace declaration states it
+# too (it warns, and warns that it may become a hard error). engine/js said it and got nothing.
+# Today `manuk-media`'s `default` is empty so the decoder stays out regardless — but that made the
+# member's line read as a guard that was never load-bearing. Stated at the level cargo enforces.
+manuk-media = { path = "engine/media", default-features = false }
 manuk-js = { path = "engine/js" }
 manuk-paint = { path = "engine/paint" }
 manuk-compositor = { path = "engine/compositor" }

@@ -279,6 +279,169 @@ pub fn take_dirty() -> Vec<(u64, u32, u32, Vec<u8>)> {
 pub fn reset() {
     CANVASES.with(|c| c.borrow_mut().clear());
     DIRTY.with(|d| d.borrow_mut().clear());
+    SOURCES.with(|s| s.borrow_mut().clear());
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// IMAGE SOURCES — `drawImage`
+//
+// Every op above draws something the *script* described: a colour, a path, a string. `drawImage` is the
+// first that draws something the *host* owns — the decoded pixels of an `<img>` that the network fetched
+// and `engine/paint` decoded. So it needs plumbing in the direction canvas has never needed before.
+//
+// [`take_dirty`] is the js→host edge: finished canvases go out to the image map. This is the exact
+// MIRROR, host→js: decoded images come in, keyed by the same `NodeId`. The two maps stay separate on
+// purpose. `Page` drops canvases into `self.images` alongside `<img>`s, so a single shared map would
+// feed a canvas's own output back in as a source — and `drawImage(myCanvas, …)` would then read a stale
+// copy of itself from one script round ago instead of its live pixels. Looking CANVASES up first is what
+// makes canvas→canvas compositing (the standard double-buffering idiom) read the live surface.
+thread_local! {
+    /// Decoded `<img>` pixels the host has published, keyed by the image element's `NodeId`.
+    /// Stored premultiplied, because that is what tiny-skia composites and converting once at publish
+    /// beats converting on every frame of an animation loop.
+    static SOURCES: RefCell<HashMap<u64, Pixmap>> = RefCell::new(HashMap::new());
+}
+
+/// Publish a decoded image so scripts can `drawImage` it. Idempotent: re-publishing the same node at the
+/// same size is a no-op, because the host has no cheap way to know whether we already have it and a
+/// per-script-round re-upload of every image on the page would be a performance bug wearing a feature's
+/// clothes.
+///
+/// `rgba` is **non-premultiplied** — the shape [`manuk_paint::DecodedImage`] holds.
+pub fn publish_source(node: u64, w: u32, h: u32, rgba: &[u8]) {
+    if w == 0 || h == 0 || rgba.len() < (w as usize) * (h as usize) * 4 {
+        return;
+    }
+    SOURCES.with(|s| {
+        let mut m = s.borrow_mut();
+        if let Some(p) = m.get(&node) {
+            if p.width() == w && p.height() == h {
+                return;
+            }
+        }
+        let Some(mut px) = Pixmap::new(w, h) else {
+            return;
+        };
+        for (dst, src) in px.pixels_mut().iter_mut().zip(rgba.chunks_exact(4)) {
+            // `from_rgba8` premultiplies. An image with alpha drawn without this is the classic
+            // too-bright halo, and it looks like a blending bug rather than a colour-space one.
+            *dst = tiny_skia::ColorU8::from_rgba(src[0], src[1], src[2], src[3]).premultiply();
+        }
+        m.insert(node, px);
+    });
+}
+
+/// The intrinsic size of a publishable source, for the 3-argument `drawImage(img, dx, dy)` overload,
+/// which takes its destination extent from the image itself. `None` means "not a source we know", which
+/// is what lets the JS shim skip a call that would draw nothing.
+pub fn source_size(node: u64) -> Option<(u32, u32)> {
+    CANVASES
+        .with(|c| c.borrow().get(&node).map(|p| (p.width(), p.height())))
+        .or_else(|| SOURCES.with(|s| s.borrow().get(&node).map(|p| (p.width(), p.height()))))
+}
+
+/// `drawImage(src, sx, sy, sw, sh, dx, dy, dw, dh)` — all three overloads normalised to nine arguments
+/// in JS, so exactly one shape crosses the FFI.
+///
+/// Implemented as a **pattern fill of the destination rect** rather than tiny-skia's `draw_pixmap`,
+/// because `draw_pixmap` takes an integer offset and cannot express the source-rect crop, the
+/// non-uniform dst/src scale, and the context transform at once. A pattern carries its own matrix, so
+/// all three compose: map the source crop onto the destination rect, then let the ctx transform apply to
+/// the rect itself. That is what makes a rotated, cropped, scaled sprite land correctly in one call.
+#[allow(clippy::too_many_arguments)]
+pub fn draw_image(
+    node: u64,
+    src: u64,
+    sx: f32,
+    sy: f32,
+    sw: f32,
+    sh: f32,
+    dx: f32,
+    dy: f32,
+    dw: f32,
+    dh: f32,
+    alpha: f32,
+    m: &[f32],
+) {
+    // A non-finite argument draws nothing per spec, and would otherwise produce a NaN transform that
+    // silently blanks the fill.
+    if ![sx, sy, sw, sh, dx, dy, dw, dh]
+        .iter()
+        .all(|v| v.is_finite())
+    {
+        return;
+    }
+    // NEGATIVE EXTENTS MEAN TWO DIFFERENT THINGS, and conflating them is the classic drawImage bug.
+    // On the SOURCE rect a negative extent just selects the same region from the other corner. On the
+    // DESTINATION rect it MIRRORS the image — `drawImage(img, x+w, y, -w, h)` is how a sprite sheet
+    // draws a character facing left, and dropping it would silently render every sprite facing right.
+    let (sx, sw) = if sw < 0.0 { (sx + sw, -sw) } else { (sx, sw) };
+    let (sy, sh) = if sh < 0.0 { (sy + sh, -sh) } else { (sy, sh) };
+    let (flip_x, flip_y) = (dw < 0.0, dh < 0.0);
+    let (dx, dw) = if flip_x { (dx + dw, -dw) } else { (dx, dw) };
+    let (dy, dh) = if flip_y { (dy + dh, -dh) } else { (dy, dh) };
+    // A zero extent on either rect draws nothing. Per spec this is a silent no-op, not an exception —
+    // and it must be caught here because it would otherwise divide by zero below.
+    if sw <= 0.0 || sh <= 0.0 || dw <= 0.0 || dh <= 0.0 {
+        return;
+    }
+    let Some(dest) = Rect::from_xywh(dx, dy, dw, dh) else {
+        return;
+    };
+
+    // Copy the source out before touching CANVASES mutably: `drawImage(c, …)` with c as BOTH source and
+    // destination is legal and common (scroll-by-blit), and holding a borrow of the map while mutating an
+    // entry in it would panic at runtime.
+    let src_px: Option<Pixmap> = CANVASES
+        .with(|c| c.borrow().get(&src).cloned())
+        .or_else(|| SOURCES.with(|s| s.borrow().get(&src).cloned()));
+    let Some(src_px) = src_px else {
+        return; // an image that has not decoded yet draws nothing, exactly as in a real browser
+    };
+
+    // Source crop → destination rect. Read right-to-left: shift the crop's top-left to the origin, scale
+    // it to the destination extent, then move it to the destination position. A mirrored axis scales
+    // negatively and anchors at the *far* edge, which is what turns the flip into a reflection about the
+    // destination rect rather than a translation off it.
+    let pat_t = Transform::from_translate(
+        if flip_x { dx + dw } else { dx },
+        if flip_y { dy + dh } else { dy },
+    )
+    .pre_scale(
+        if flip_x { -(dw / sw) } else { dw / sw },
+        if flip_y { -(dh / sh) } else { dh / sh },
+    )
+    .pre_translate(-sx, -sy);
+    // **The context transform is applied by `fill_path`, to the pattern as well as the path** — tiny-skia
+    // concatenates the fill transform onto the shader's own matrix, so `pat_t` is expressed purely in the
+    // canvas's user space and must NOT pre-multiply `xform(m)` itself. Folding it in again type-checks,
+    // and passes a one-corner test by accident: the doubly-transformed sample lands off the image and the
+    // `Pad` spread clamps every pixel to the source's top-left texel, which looks correct wherever that
+    // texel's colour is what you asserted. The gate's `xform` claim checks all four quadrants for exactly
+    // this reason, and a RED probe confirmed the fold is wrong rather than merely redundant.
+
+    let mut paint = Paint::default();
+    paint.shader = tiny_skia::Pattern::new(
+        src_px.as_ref(),
+        // `Pad` rather than `Repeat`: bilinear sampling reads half a texel outside the crop at its
+        // edges, and repeating would wrap the opposite edge of the image in as a one-pixel fringe.
+        tiny_skia::SpreadMode::Pad,
+        tiny_skia::FilterQuality::Bilinear,
+        alpha.clamp(0.0, 1.0),
+        pat_t,
+    );
+    paint.anti_alias = true;
+
+    CANVASES.with(|c| {
+        if let Some(px) = c.borrow_mut().get_mut(&node) {
+            let mut pb = PathBuilder::new();
+            pb.push_rect(dest);
+            if let Some(path) = pb.finish() {
+                px.fill_path(&path, &paint, FillRule::Winding, xform(m), None);
+            }
+        }
+    });
+    mark_dirty(node);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────

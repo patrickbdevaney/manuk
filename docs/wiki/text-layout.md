@@ -539,3 +539,74 @@ coverage, not an outline path.
 trivially true of a **blank** canvas. Written without an explicit `n > 0`, a no-op `fillText` would
 satisfy them, and the gate would print two false greens beside its real failure. Every pixel-extent
 claim in `g_canvas_text` carries the ink-count conjunct for that reason.
+
+## Canvas `drawImage` — the first operation that needs pixels flowing INWARD
+
+### The plumbing was directional, and that is why the method was a no-op
+
+Every canvas operation before this one draws something the *script* described: a colour, a path, a
+string. `drawImage` draws something the **host** owns — the decoded bytes of an `<img>` the network
+fetched. Canvas had exactly one pixel channel, `canvas_bitmaps()` → the image map the painter reads,
+and it pointed **outward**. There was no way in, which is precisely what
+`ctx.drawImage = function(){}  // no image source plumbing yet` was recording.
+
+`manuk_js::publish_image_source` is the deliberate mirror of `canvas_bitmaps`, keyed by the same
+`NodeId`, and `Page::publish_image_sources` calls it before each script round. A source is named by
+**node id, never by handing pixels across the FFI**: a sprite sheet is megabytes and an animation
+loop would copy it sixty times a second.
+
+### Canvases and images must live in SEPARATE registries even though `Page` merges them
+
+`drain_canvases` drops finished canvases into `self.images` alongside `<img>` — that is the trick
+that lets the painter treat a canvas as a replaced element and know nothing about canvas at all. So
+the obvious implementation, "look the source up in `self.images`", is wrong in a way that is very
+hard to see: `CANVASES` holds **live** surfaces, `self.images` holds a **snapshot taken at the end of
+the previous script round**. Under a shared map, the standard double-buffer idiom
+`dst.drawImage(scratch, 0, 0)` composites the *previous frame*. Canvases are therefore excluded from
+publishing, and `CANVASES` is looked up first.
+
+### A negative extent means two different things on the two rects
+
+On the **source** rect it merely re-anchors the same region and is otherwise a no-op. On the
+**destination** rect it MIRRORS — `drawImage(img, x+w, y, -w, h)` is how a sprite sheet draws a
+character facing the other way. Conflating them (normalising both, or rejecting both) leaves every
+sprite in a game facing the same direction, with nothing thrown and no visual clue that an argument
+was dropped.
+
+### It is a PATTERN FILL of the destination rect, not `draw_pixmap`
+
+tiny-skia's `draw_pixmap` takes an integer offset and cannot express the source crop, the non-uniform
+dst/src scale, and the context transform simultaneously. A `Pattern` carries its own matrix, so all
+three compose: the pattern maps the source crop onto the destination rect, and the fill transform
+handles the rest. `SpreadMode::Pad` rather than `Repeat`, because bilinear sampling reads half a texel
+past the crop at its edges and repeating wraps the opposite edge in as a one-pixel fringe.
+
+### tiny-skia applies the fill transform to the SHADER as well as the path
+
+This is the trap, and the gate caught it only because the claim was strong enough. `fill_path`'s
+transform is concatenated onto the shader's own matrix, so the pattern matrix must be expressed purely
+in user space. Pre-multiplying `xform(m)` into it as well type-checks and looks obviously correct —
+and **passes a single-corner pixel assertion by accident**: the doubly-transformed sample lands
+entirely off the image, `Pad` clamps every pixel to the source's top-left texel, and a flat fill of
+that one colour satisfies any claim that happens to name it. The fixture's top-left is red, the naive
+claim asserted red, and it went green on a completely broken draw.
+
+The fix in the *gate*, not just the code: `xform` asserts **all four quadrants** of an asymmetric
+fixture. A flat clamped fill cannot impersonate four distinct colours. The general rule — a claim
+about a transformed image needs at least two distinguishable colours in each axis, or it is really
+only asserting "something was painted".
+
+### RED probes executed, not asserted (process rule 3)
+
+  · restore `ctx.drawImage = function(){}`  → 8 of 9 claims fail (`undecoded` correctly survives:
+    a no-op and a spec no-op are indistinguishable, which is the point of keeping that claim separate)
+  · delete both publish hooks              → `imgblit`/`imgcrop` fail, every canvas→canvas claim
+    stays GREEN — proving the two source paths are independently exercised, not one claim twice
+  · fold `xform(m)` into the pattern matrix → `xform` fails on the four-quadrant claim (and passed
+    on the one-corner version, which is how the latent bug was found)
+
+### Residue
+
+`putImageData` and `clip()` remain honest no-ops. `ImageBitmap`, `OffscreenCanvas` and `<video>` as
+sources return no `__nodeId` and draw nothing — the shim skips them explicitly rather than throwing.
+Canvas still keeps its own `FontContext`, so `@font-face` webfonts do not resolve inside a canvas.

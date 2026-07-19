@@ -195,6 +195,20 @@ pub fn canvas_bitmaps() -> Vec<(u64, u32, u32, Vec<u8>)> {
     }
 }
 
+/// **The mirror of [`canvas_bitmaps`]** — hand a decoded image *in*, so `ctx.drawImage(img, …)` has
+/// something to draw. Keyed by the `<img>` element's `NodeId`, non-premultiplied RGBA8.
+///
+/// Idempotent, so the host can call it for every loaded image on every script round without thinking
+/// about which ones it has already sent; re-publishing the same node at the same size is dropped inside.
+/// A no-op without the JS feature, which is correct: no scripts, nothing to draw with.
+#[allow(unused_variables)]
+pub fn publish_image_source(node: u64, width: u32, height: u32, rgba: &[u8]) {
+    #[cfg(feature = "_sm")]
+    {
+        canvas::publish_source(node, width, height, rgba);
+    }
+}
+
 pub fn shutdown() {
     #[cfg(feature = "_sm")]
     {

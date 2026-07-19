@@ -23,12 +23,21 @@
 //!
 //! ## What this deliberately does NOT do
 //!
-//! **No decoding, and no codec is hand-written here** (`docs/loop/MEDIA.md`, the standing rule). A
-//! demuxer that reports `avc1.64001E` is not a claim that we can decode H.264 — it is a claim that
-//! we can find the H.264 in the file. Those are different, and conflating them is precisely the
-//! failure MEDIA.md warns about: **advertising MSE we cannot honour turns a working YouTube into a
-//! black rectangle**. `MediaSource.isTypeSupported` therefore still answers from `__mseCodecs`,
-//! which this crate does not touch and which stays empty until a real decoder lands.
+//! **This module does no decoding, and no codec is hand-written anywhere here**
+//! (`docs/loop/MEDIA.md`, the standing rule). A demuxer that reports `avc1.64001E` is not a claim
+//! that we can decode H.264 — it is a claim that we can find the H.264 in the file. Those are
+//! different, and conflating them is precisely the failure MEDIA.md warns about: **advertising MSE
+//! we cannot honour turns a working YouTube into a black rectangle**.
+//!
+//! Decode does now exist, in two **opt-in** sibling modules that this one never calls: [`audio`]
+//! (M4, AAC via symphonia, `--features audio`) and [`video`] (M5, Constrained-Baseline H.264 via
+//! openh264, `--features video`). Both are off by default so their dependencies — and openh264's C
+//! compile — stay out of the ~25 gate binaries reached through `manuk-js -> manuk-media`.
+//!
+//! `MediaSource.isTypeSupported` still answers from `__mseCodecs`, which this crate does not touch
+//! and which stays empty: **a stream needs both tracks decoded and then played**, and M5 decodes a
+//! frame rather than playing a video. Flipping it on a partial pipeline is the black-rectangle
+//! failure, so it flips at M6, not here.
 //!
 //! **WebM/Matroska is not demuxed yet.** [`sniff`] recognises it — so the failure is a named
 //! `Unsupported`, not a parse error blamed on the bytes — but there is no EBML reader here. Saying
@@ -36,6 +45,19 @@
 //! "invalid stream".
 
 use std::ops::Range;
+
+#[cfg(feature = "audio")]
+pub mod audio;
+#[cfg(feature = "audio")]
+pub use audio::{can_decode as can_decode_audio, decode_track, DecodeError, Pcm};
+
+#[cfg(feature = "video")]
+pub mod video;
+#[cfg(feature = "video")]
+pub use video::{
+    can_decode as can_decode_video, decode_first_frame, Frame, H264Decoder, VideoDecoder,
+    VideoError,
+};
 
 /// What a byte prefix looks like. Recognising a container we cannot read is worth doing: it turns
 /// "the segment is corrupt" into "this is WebM and we only demux MP4", which is the truth.
@@ -146,8 +168,8 @@ pub struct Track {
     /// Track duration in timescale units. Zero for a media segment appended on its own.
     pub duration: u64,
     /// The decoder configuration record: `avcC`, `av1C`, `vpcC`, or the AAC `AudioSpecificConfig`.
-    /// Nothing here consumes it — M4/M5 will, and extracting it at demux time is what keeps the
-    /// decoder step from re-parsing boxes.
+    /// Consumed by [`audio`] (M4) and [`video`] (M5); extracting it at demux time is what keeps the
+    /// decoder steps from re-parsing boxes.
     pub codec_config: Option<Vec<u8>>,
     pub samples: Vec<Sample>,
 }
@@ -430,10 +452,40 @@ fn describe(t: &re_mp4::Track, mp4: &re_mp4::Mp4) -> (Option<String>, u16, u32, 
         } else {
             m.channelcount
         };
-        return (Some(codec), chans, rate, None);
+        let asc = audio_specific_config(
+            dc.dec_specific.profile,
+            dc.dec_specific.freq_index,
+            dc.dec_specific.chan_conf,
+        );
+        return (Some(codec), chans, rate, Some(asc));
     }
 
     (None, 0, 0, None)
+}
+
+/// Rebuild the AAC `AudioSpecificConfig` from the `esds` descriptor's parsed fields.
+///
+/// **Why this is rebuilt rather than sliced out of the file.** An AAC decoder needs the
+/// `AudioSpecificConfig` — it is the `extra_data` without which the first packet cannot be
+/// interpreted at all. `re_mp4` parses the descriptor into fields and does not retain the original
+/// bytes, so there is nothing to slice; the two bytes are re-encoded from the parsed values.
+///
+/// The layout (ISO/IEC 14496-3) is five bits of audio object type, four of sampling-frequency
+/// index, four of channel configuration, then three flag bits (frame length, core-coder dependency,
+/// extension) that are zero for the plain AAC-LC case every MP4 on the web uses:
+///
+/// ```text
+///   AAAAA FFFF CCCC 000
+/// ```
+///
+/// Only the two-byte form is emitted. A frequency index of 15 means the rate is written out
+/// explicitly as a 24-bit field, which this descriptor does not carry — so that case would need
+/// the original bytes and is not synthesised here rather than being guessed at.
+fn audio_specific_config(audio_object_type: u8, freq_index: u8, chan_conf: u8) -> Vec<u8> {
+    let bits = ((audio_object_type as u16 & 0x1F) << 11)
+        | ((freq_index as u16 & 0x0F) << 7)
+        | ((chan_conf as u16 & 0x0F) << 3);
+    vec![(bits >> 8) as u8, (bits & 0xFF) as u8]
 }
 
 /// The MPEG-4 audio sampling-frequency table. Index 15 means "written out explicitly", which the

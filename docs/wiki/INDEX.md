@@ -369,6 +369,14 @@
   - L152 · M3 — container demux (tick 234): the engine can open a media file
   - L176 · Three things this cost, each worth keeping
   - L204 · What is deliberately still missing
+  - L223 · M4 — AAC decode (tick 235): sound-shaped numbers, not yet sound
+  - L262 · M5 — H.264 decode: the first real frame
+  - L266 · The trait exists because the backend is known to be temporary
+  - L279 · The format mismatch that is the actual work
+  - L294 · isTypeSupported stays honest
+  - L301 · What makes the gate a decode gate rather than a did-it-run gate
+  - L316 · Isolation, proven in both directions
+  - L325 · Fixture note, and the pin
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -485,6 +493,14 @@
   - L514 · measureText returning length * 7 was worse than an imprecise width
   - L521 · Transforms: uniform scale is exact, rotation is the documented gap
   - L536 · Gate lesson: a pixel claim must re-assert that ink exists
+  - L543 · Canvas drawImage — the first operation that needs pixels flowing INWARD
+  - L545 · The plumbing was directional, and that is why the method was a no-op
+  - L558 · Canvases and images must live in SEPARATE registries even though Page merges them
+  - L568 · A negative extent means two different things on the two rects
+  - L576 · It is a PATTERN FILL of the destination rect, not draw_pixmap
+  - L584 · tiny-skia applies the fill transform to the SHADER as well as the path
+  - L599 · RED probes executed, not asserted (process rule 3)
+  - L608 · Residue
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -512,4 +528,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-431 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+447 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

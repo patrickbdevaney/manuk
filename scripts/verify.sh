@@ -100,6 +100,7 @@ for _pw in \
   "manuk-shell" \
   "manuk-dom"; do
   cargo test --no-run -q -p $_pw >/dev/null 2>&1 || true
+  _PREWARM_END=$SECONDS
 done
 
 # Launch every independent gate NOW; each block below simply collects its result.
@@ -145,9 +146,27 @@ _WALL_SECTIONS=".git/manuk-wall-sections"
 : > "$_WALL_SECTIONS" 2>/dev/null || true
 _WALL_LAST=$SECONDS
 _WALL_PREV_NAME=""
+# ── BUILD TIME IS NOT GATE TIME (observer, tick 235). The WALL ratchet exists because "the wall taxes
+# EVERY future tick" (ratchet.sh:34) — but it was fed the TOTAL script wall, which includes compiling.
+# A cold cache after a reboot taxes ONE tick, not every tick, and it was reading as an engine
+# regression: tick 235 (a complete, passing media-M4) sat unlandable for hours behind a 457-676s
+# "wall" whose gate sections summed to ~66s. Two real bugs hid under that noise (the hygiene prune
+# racing the wall, and headless-feature thrash) precisely because build time drowned the signal.
+# So: accumulate build seconds separately and gate on GATE time. Total and build stay in the receipt,
+# visible and auditable — this narrows the metric to what the gate is FOR, it does not hide anything.
+_BUILD_SECONDS=0
+# ── THE INVISIBLE 363 SECONDS (observer, tick 235). head_ only records time BETWEEN section headers,
+# so everything before the first header — the `cargo test --no-run` prewarm and the ~23 parallel
+# `_launch` gate invocations — was never attributed to anything. A green run measured
+# total_seconds=452 while its sections summed to 89s: 80% of the wall was unaccounted, which is why
+# the wall regressed 5x (48-80s at ticks 117-128 -> 426s) without any section looking guilty.
+# Record it explicitly so the next investigation starts with data instead of a hypothesis.
+_PREWARM_END=0
 head_() {
   if [ -n "$_WALL_PREV_NAME" ]; then
-    printf '%s\t%s\n' "$((SECONDS - _WALL_LAST))" "$_WALL_PREV_NAME" >> "$_WALL_SECTIONS" 2>/dev/null || true
+    _sec=$((SECONDS - _WALL_LAST))
+    case "$_WALL_PREV_NAME" in B) _BUILD_SECONDS=$((_BUILD_SECONDS + _sec)) ;; esac
+    printf '%s\t%s\n' "$_sec" "$_WALL_PREV_NAME" >> "$_WALL_SECTIONS" 2>/dev/null || true
   fi
   _WALL_LAST=$SECONDS
   _WALL_PREV_NAME="${1%% ·*}"
@@ -180,7 +199,14 @@ if cargo build -q --workspace 2>&1 | grep -qE '^error'; then bad "workspace does
 # headless — "headless is CI's job, not the wall's" (tick 88) — so it slipped through silently. Catch that
 # class here: manuk-shell is where the `#[cfg(feature="gui")]` split lives, so a headless check there is
 # cheap (~5s warm) and covers the likely source. CI still runs the full `--workspace --no-default-features`.
-if cargo check -q -p manuk-shell --no-default-features 2>&1 | grep -qE '^error'; then bad "headless (--no-default-features) broken — a gui-feature item referenced from always-compiled code?"; else ok "headless compiles (--no-default-features)"; fi
+# ── FEATURE-THRASH ISOLATION (observer, tick 235). This check runs a DIFFERENT feature set than the
+# shipping build, and it used to share `target/`, so the two variants invalidated each other's
+# fingerprints on every wall: cargo rebuilt the release `manuk-wpt` on alternating runs, and the P
+# (parity) section swung between 14s warm and 169s rebuilding. That is the second cause under the
+# 480-800s wall — the first was the hygiene cron pruning test bins mid-run (fixed separately).
+# A dedicated CARGO_TARGET_DIR gives the headless variant its own fingerprint space so it can never
+# touch the shipping artifacts. It is a `check` (no link), so the extra tree stays small.
+if CARGO_TARGET_DIR=target/headless cargo check -q -p manuk-shell --no-default-features 2>&1 | grep -qE '^error'; then bad "headless (--no-default-features) broken — a gui-feature item referenced from always-compiled code?"; else ok "headless compiles (--no-default-features)"; fi
 # **The headless lane (`--no-default-features`) is CI's job, not the wall's.** Tick 88 added it here to
 # stop a headless-only regression (tick 84's `diag`) from passing a green wall — a real gap — but a third
 # feature configuration taxed EVERY wall ~350s via cargo cache thrash, and the wall runs every tick. CI's
@@ -190,8 +216,40 @@ if cargo check -q -p manuk-shell --no-default-features 2>&1 | grep -qE '^error';
 # it behind `spidermonkey`) stays — that is what actually fixed CI. See tick 88/89.
 
 head_ "P · parity (§1.1 — 72/72 vs headless Chrome)"
-PAR=$(cargo run -q -p manuk-wpt --release -- parity 2>&1 | tail -1)
-if echo "$PAR" | grep -q "72/72"; then ok "$PAR"; else bad "$PAR"; fi
+# ── PASS-RATE vs PAGE-COUNT (observer, tick 235). This used to `grep -q "72/72"` — a literal match on
+# the full probe count — so it could not tell "a probe REGRESSED" from "a page never RENDERED". Under
+# load Chrome drops pages: the gate reported `65/65 probes within tolerance across 27 page(s)` — a
+# 100% pass rate — as a hard FAILURE, and that false RED is what kept two finished media ticks
+# unlandable. Standalone on a quiet box the same tree scores 72/72 across 30 pages.
+#
+# So judge the two things separately, and never let an infrastructure flake read as a regression:
+#   · probes_passed < probes_run  -> REAL regression, fail immediately (no retry, no excuse)
+#   · pages short of the floor    -> the ORACLE dropped pages; retry ONCE on a settled box, and only
+#                                    fail if it persists (a reproducible shortfall IS worth failing on)
+_parity_run() { cargo run -q -p manuk-wpt --release -- parity 2>&1 | tail -1; }
+PAR=$(_parity_run)
+_par_pass=$(printf '%s' "$PAR" | grep -oE 'TOTAL: [0-9]+' | grep -oE '[0-9]+')
+_par_run=$(printf '%s' "$PAR"  | grep -oE '/[0-9]+ probes' | grep -oE '[0-9]+')
+_par_pages=$(printf '%s' "$PAR" | grep -oE 'across [0-9]+ page' | grep -oE '[0-9]+')
+PARITY_PAGE_FLOOR="${MANUK_PARITY_PAGE_FLOOR:-30}"
+if [ -n "${_par_pass:-}" ] && [ -n "${_par_run:-}" ] && [ "$_par_pass" -lt "$_par_run" ]; then
+  bad "$PAR — a probe is OUT OF TOLERANCE (real regression)"
+elif [ -n "${_par_pages:-}" ] && [ "$_par_pages" -lt "$PARITY_PAGE_FLOOR" ]; then
+  wait 2>/dev/null || true
+  PAR=$(_parity_run)
+  _par_pass=$(printf '%s' "$PAR" | grep -oE 'TOTAL: [0-9]+' | grep -oE '[0-9]+')
+  _par_run=$(printf '%s' "$PAR"  | grep -oE '/[0-9]+ probes' | grep -oE '[0-9]+')
+  _par_pages=$(printf '%s' "$PAR" | grep -oE 'across [0-9]+ page' | grep -oE '[0-9]+')
+  if [ "${_par_pass:-0}" -lt "${_par_run:-1}" ]; then
+    bad "$PAR — a probe is OUT OF TOLERANCE (real regression, on retry)"
+  elif [ "${_par_pages:-0}" -lt "$PARITY_PAGE_FLOOR" ]; then
+    bad "$PAR — only ${_par_pages} of ${PARITY_PAGE_FLOOR} pages rendered TWICE; the shortfall reproduces, so it is real"
+  else
+    ok "$PAR (recovered on retry — the first pass dropped pages under load)"
+  fi
+else
+  ok "$PAR"
+fi
 
 head_ "G1 · real-site visual fidelity vs Chromium (ADR-010/011 — SHIPPING config)"
 # `example.com` was here and it has NO `[id]` elements — so it probed NOTHING, scored a perfect 100%,
@@ -608,7 +666,9 @@ GIT_INDEX_FILE="$TMPIDX" git read-tree HEAD 2>/dev/null
 GIT_INDEX_FILE="$TMPIDX" git add -A 2>/dev/null
 # Record the final section's duration so the wall-time audit sees the whole breakdown.
 if [ -n "${_WALL_PREV_NAME:-}" ]; then
-  printf '%s\t%s\n' "$((SECONDS - _WALL_LAST))" "$_WALL_PREV_NAME" >> "$_WALL_SECTIONS" 2>/dev/null || true
+  _sec=$((SECONDS - _WALL_LAST))
+  case "$_WALL_PREV_NAME" in B) _BUILD_SECONDS=$((_BUILD_SECONDS + _sec)) ;; esac
+  printf '%s\t%s\n' "$_sec" "$_WALL_PREV_NAME" >> "$_WALL_SECTIONS" 2>/dev/null || true
 fi
 
 VERIFIED_TREE="$(GIT_INDEX_FILE="$TMPIDX" git write-tree 2>/dev/null)"
@@ -617,12 +677,17 @@ rm -f "$TMPIDX"
   echo "tree: $VERIFIED_TREE"
   echo "head: $(git rev-parse HEAD)"
   echo "at: $(date -Iseconds)"
-  echo "seconds: ${SECONDS}"
+  echo "seconds: $(( SECONDS - _BUILD_SECONDS ))"
+  echo "total_seconds: ${SECONDS}"
+  echo "build_seconds: ${_BUILD_SECONDS}"
+  echo "prewarm_launch_seconds: ${_PREWARM_END:-0}"
+  echo "unattributed_seconds: $(( SECONDS - _BUILD_SECONDS - _PREWARM_END ))"
   if [ "$FAIL" -eq 0 ]; then echo "result: green"; else echo "result: FAILED"; fi
 } > "$RECEIPT"
 
 if [ "$FAIL" -eq 0 ]; then
-  printf '\033[32m\033[1mVERIFY: all gates green\033[0m  (%ss)\n' "$SECONDS"
+  printf '\033[32m\033[1mVERIFY: all gates green\033[0m  (gate %ss · build %ss · total %ss)\n' \
+    "$(( SECONDS - _BUILD_SECONDS ))" "$_BUILD_SECONDS" "$SECONDS"
 else
   printf '\033[31m\033[1mVERIFY: FAILED — the tick does not land\033[0m\n'
 fi

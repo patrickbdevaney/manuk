@@ -15,7 +15,18 @@ cd "$(dirname "$0")/.."
 
 TICK=$(grep -oP '^TICK:\s*\K[0-9]+' STATUS.md 2>/dev/null || echo 0)
 LAST_AUDIT=$(grep -oP '^LAST_AUDIT_TICK:\s*\K[0-9]+' STATUS.md 2>/dev/null || echo 0)
-WALL=$(grep -oP '^seconds:\s*\K[0-9]+' .git/manuk-verify-receipt 2>/dev/null || echo "?")
+# ── ONLY BANK A WALL FROM A GREEN RUN (observer, tick 235). This read the receipt's `seconds:`
+# unconditionally, so a verify that DIED EARLY banked its short runtime as the wall — and since the
+# ratchet now judges STATUS.md's LAST_WALL_TIME immediately after this runs, that made "fail fast"
+# the cheapest way to satisfy the wall gate. A gate you can pass by crashing is not a gate. Real
+# case that exposed it: a verify aborted at 3s on a half-written manifest and wrote `seconds: 3`.
+# On a non-green receipt, KEEP the previous value rather than inventing a flattering one.
+_RES=$(grep -oP '^result:\s*\K\w+' .git/manuk-verify-receipt 2>/dev/null || echo "")
+if [ "$_RES" = "green" ]; then
+  WALL=$(grep -oP '^seconds:\s*\K[0-9]+' .git/manuk-verify-receipt 2>/dev/null || echo "?")
+else
+  WALL=$(grep -oP '^LAST_WALL_TIME:\s*\K[0-9]+' STATUS.md 2>/dev/null || echo "?")
+fi
 SITES=$(grep -cE '^[a-z_]+[[:space:]]+https' docs/bench/oracle-corpus.txt 2>/dev/null || echo 0)
 CLUSTERS=$(grep -cE '^C[0-9a-f]{4} ' docs/loop/CLUSTERS.md 2>/dev/null || echo 0)
 CRAWLED=$(ls /tmp/manuk-oracle-run/*.jsonl 2>/dev/null | wc -l)

@@ -1602,6 +1602,8 @@ unsafe fn define_members(
         def_guarded!(def, c"__cvMeasureText", cv_measure_text, 5);
         def_guarded!(def, c"__cvGetImageData", cv_get_image_data, 4);
         def_guarded!(def, c"__cvToDataURL", cv_to_data_url, 0);
+        def_guarded!(def, c"__cvDrawImage", cv_draw_image, 11);
+        def_guarded!(def, c"__cvSourceSize", cv_source_size, 1);
         // The nested browsing context. `null` on anything that is not a frame — see `iframe_js`, which
         // puts the `contentDocument`/`contentWindow` IDL surface on top of this one native.
         def_guarded!(def, c"__iframeDoc", el_content_document, 0);
@@ -2352,6 +2354,68 @@ unsafe fn cv_measure_text(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> b
     }
     for (i, val) in [w, asc, desc].iter().enumerate() {
         rooted!(in(cx) let v = mozjs::jsval::DoubleValue(*val as f64));
+        JS_SetElement(&mut wrap_cx(cx), arr.handle(), i as u32, v.handle());
+    }
+    *vp = ObjectValue(arr.get());
+    true
+}
+
+/// `__cvDrawImage(srcNodeId, sx, sy, sw, sh, dx, dy, dw, dh, alpha, matrix)`.
+///
+/// The JS shim normalises all three `drawImage` overloads to this one nine-rect shape, so the FFI has a
+/// single signature and the overload-resolution rules live in JS where the argument count is known.
+unsafe fn cv_draw_image(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((_, node)) = this_node(vp) {
+        // The source is identified by NodeId, not by handing pixels across — an image is megabytes and a
+        // sprite blitted every animation frame would copy it 60 times a second.
+        let src = f(cx, vp, argc, 0);
+        // A NaN or negative id is not a node; `as u64` on NaN is 0 in Rust, which would alias node 0.
+        if !src.is_finite() || src < 0.0 {
+            *vp = UndefinedValue();
+            return true;
+        }
+        let m = arg_f32_array(cx, vp, argc, 10);
+        crate::canvas::draw_image(
+            node.0,
+            src as u64,
+            f(cx, vp, argc, 1),
+            f(cx, vp, argc, 2),
+            f(cx, vp, argc, 3),
+            f(cx, vp, argc, 4),
+            f(cx, vp, argc, 5),
+            f(cx, vp, argc, 6),
+            f(cx, vp, argc, 7),
+            f(cx, vp, argc, 8),
+            f(cx, vp, argc, 9),
+            &m,
+        );
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `__cvSourceSize(srcNodeId)` → `[w, h]`, or `null` if that node has no decoded pixels yet.
+///
+/// This is what lets the 3- and 5-argument `drawImage` overloads know the intrinsic size they are
+/// supposed to use, and what lets the shim skip a draw that would silently do nothing.
+unsafe fn cv_source_size(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let src = f(cx, vp, argc, 0);
+    let size = if src.is_finite() && src >= 0.0 {
+        crate::canvas::source_size(src as u64)
+    } else {
+        None
+    };
+    let Some((w, h)) = size else {
+        *vp = NullValue();
+        return true;
+    };
+    rooted!(in(cx) let arr = NewArrayObject1(&mut wrap_cx(cx), 2));
+    if arr.get().is_null() {
+        *vp = NullValue();
+        return true;
+    }
+    for (i, n) in [w, h].iter().enumerate() {
+        rooted!(in(cx) let v = Int32Value(*n as i32));
         JS_SetElement(&mut wrap_cx(cx), arr.handle(), i as u32, v.handle());
     }
     *vp = ObjectValue(arr.get());

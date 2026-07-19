@@ -9865,3 +9865,344 @@ re-parses the accumulated buffer per append rather than incrementally (the Sourc
 chunks anyway, and there is no decoder downstream to spend the latency on yet).
 
 **Mechanism captured:** `docs/wiki/media-pipeline.md`.
+
+### ⚠ UNLANDED WORK — tick 235 is on branch `wip/tick235-media-m4` (2026-07-19)
+
+**Media M4 (AAC decode) is complete, gated and green — but it could not land, and the blocker is the
+wall, not the code.** It is preserved on `wip/tick235-media-m4` (commit `6aa0d9c`, 13 files). Do NOT
+redo it; rebase or cherry-pick it once the wall is fixed. It does not touch `scripts/`.
+
+**Why it did not land.** The WALL ratchet (mark 72s, ceiling 93s) refused at 468s, and the wall then
+measured 457–800s across eight consecutive runs. Diagnosis, with measurements, is in the "WALL
+DIAGNOSIS" block above: **`scripts/disk-hygiene.sh` runs every 3 minutes and prunes `target/*/deps`
+test binaries, while a wall takes 8–13 minutes** — so the pruner deletes the binaries the wall is
+building, 3–4 times per wall. Every individual cargo command is sub-second
+(`cargo build --workspace` 0.4s; `cargo check -p manuk-shell --no-default-features` 0.3s) while the
+aggregate is ten minutes, which is the signature of work being *removed* between steps. Two gates
+(`G_FIRST_PAINT`, and earlier a `manuk-page` test compile) false-RED'd under the same race and both
+pass in isolation. **Harness-owned; not touched.**
+
+**Tick 235's own wall cost was real, was caught, and is fixed in that commit** — the decoder had
+landed in every gate test binary and in the `--no-default-features` shell graph; `audio` is now an
+opt-in feature and `cargo tree -p manuk-shell --no-default-features` shows zero symphonia. Note that
+feature-gating alone was NOT sufficient: `default = ["audio"]` still unified it back in across the
+workspace build. The residual 457–800s is the cron race and predates the tick.
+
+**Also unactioned, by scope:** FID-SWEEP (the board's top item) is harness work in `scripts/` — the
+observer has since built it themselves (`8dcd280`), which confirms the split. And
+`scripts/verify.sh:239` greps for `MEAN FIDELITY` while `fidelity.rs` prints `MEAN VISUAL:` /
+`MEAN COVERAGE:`, so G1's numbers never reach the verify output.
+
+### ✅ RESOLVED (tick 236, 2026-07-19) — the M4 work above LANDED from `wip/tick235-media-m4`.
+
+The observer fixed the wall-vs-hygiene race (deps prunes now skip while rustc/cargo is live), so the
+tick-235 code was brought onto `main` unchanged rather than redone. Its full entry follows verbatim.
+
+### Observer notes (tick 234/235) — harness items, NOT actioned by the agent (scope: harness is observer-owned)
+
+1. **FID-SWEEP is on the board as top priority but is HARNESS work** (`scripts/fidelity-sweep.sh`),
+   and this session's standing scope rule is that `scripts/`/harness is observer-owned and the agent
+   builds browser capability only. Not built. Everything it needs already exists and is mapped:
+   `manuk-wpt fidelity --urls <name=url,…> --out --floor` already scores visual (40×40 grid, tol 26)
+   and structural coverage (`[id]` `getBoundingClientRect` vs Chrome, tol 8px); Chrome is installed;
+   `chrome.rs` already enforces the one-snapshot `file://` rule; `docs/bench/oracle-corpus.txt` has
+   265 sites already CLASS-labelled (docs 40, saas 31, news 31, reference 20, blog 19, corp 18,
+   gov_edu 17, media 16, ecommerce 14, code 14, tools 13, social 10, forum 9, travel_food 8,
+   finance 5). `RATCHET.tsv` is `invariant<TAB>mark<TAB>banked_at` and has NO fidelity key; `WALL` is
+   the precedent for an observer-managed, non-auto-ratcheted mark.
+2. **Real bug in `scripts/verify.sh:239`** — it greps the fidelity output for `MEAN FIDELITY`, but
+   `fidelity.rs:338,341` print `MEAN VISUAL:` and `MEAN COVERAGE:`. The grep never matches, so the
+   G1 numbers never reach the verify output and the line always falls through to the literal
+   `fidelity ok`. The gate still gates correctly (the floor is applied in Rust); only the reporting
+   is blind. Not fixed here — harness.
+3. **`scripts/lever-board.sh` emits `line 32: syntax error: unexpected end of file`** from a command
+   substitution while still printing the board. Cosmetic today; noted so it does not become load
+   bearing.
+
+## Tick 235 — media M4: AAC decodes, and the length proves it (2026-07-18)
+
+**Selected:** CO-#1 (A) MEDIA, the next step after t234's M3. The board's new top item (FID-SWEEP)
+is harness work and was logged for the observer instead of built — see the observer notes above.
+
+**Built:** `engine/media/src/audio.rs` — AAC → interleaved f32 PCM via `symphonia`, pulled in
+narrowly (`default-features = false, features = ["aac"]`) so its audio-only ISO-MP4 demuxer is not
+silently acquired alongside re_mp4's. `decode_track` + `can_decode`; M3's `codec_config` now carries
+the AAC `AudioSpecificConfig`, which had to be **rebuilt from the parsed `esds` fields** because
+`re_mp4` does not retain the original bytes and a decoder cannot interpret a single packet without
+it (`AAAAA FFFF CCCC 000`; AAC-LC/44100/stereo = `0x12 0x10`).
+
+**The assertion that makes it a decode gate rather than a did-it-run gate.** Decoded PCM frames must
+equal the track's declared duration in its own timescale — 121856 at 44100, exactly. The two numbers
+come from independent sources (container headers vs summing decoder output packet by packet), so a
+decoder that dropped, doubled, truncated or mis-counted channels lands elsewhere. Plus a non-zero
+peak assertion, because correctly-sized **silence** passes every length check.
+
+**Kept honest:** `isTypeSupported` unchanged, still `false` — audio decodes, video does not, and a
+stream needs both. No audio device: `cpal` is a separate step because a device is not headlessly
+gateable, and bundling it would mean the decode could only be proven by listening to it. Non-AAC
+audio is refused up front, by name.
+
+**Codec-string subtlety:** the fixture is `mp4a.67` (MPEG-2 AAC-LC object type), not `mp4a.40.2`
+(the MPEG-4 spelling, which takes the audio-object-type suffix). Players string-compare these.
+
+**Gate:** `engine/media/tests/audio_decode.rs`. **RED, run:** decoding only the first packet yields
+1024 frames against 121856 — off by the whole track.
+
+**The RATCHET refused this tick once, and it was right.** The first attempt made the decoder an
+unconditional dependency. `manuk-js` links `manuk-media` (for `__mseDemux`) and `manuk-page` links
+`manuk-js`, so symphonia landed in every gate test binary — and, worse, in the
+`--no-default-features` headless check on `manuk-shell`, a feature combination nothing else builds,
+which meant compiling it from scratch on EVERY wall. Measured: the `B` section went from ~0.4s of
+actual workspace build to **101s**, and the wall from ~80s to 468-573s. That is a capability bought
+with the wall — a trade, and the ratchet does not trade.
+
+**The fix is architectural, not a mark adjustment.** `audio` is now an opt-in feature
+(`default = []`) and `manuk-js` takes the crate with `default-features = false`: the JS boundary
+needs to know what a stream *contains*, it does not decode. `cargo tree -p manuk-shell
+--no-default-features` now shows zero symphonia. The decode gate declares `required-features` and
+runs under `cargo test -p manuk-media --features audio`. Feature-gating alone was NOT enough —
+`default = ["audio"]` still unified the decoder back in across the workspace build, which is the
+part worth remembering.
+
+**Residue:** M5 video decode; `cpal` output + A/V sync; WebM demux; MP3/Opus/Vorbis/FLAC/AC-3.
+
+**Mechanism captured:** `docs/wiki/media-pipeline.md`.
+
+### ⚠ WALL DIAGNOSIS (tick 235) — for the observer. The wall is racing the hygiene cron.
+
+The WALL ratchet (mark 72s, ceiling 93s) refused tick 235 at 468s, and the wall then measured
+480–800s on six consecutive runs. It is **not** load, **not** feature thrash, and **not** any single
+dependency. All three were measured and cleared:
+
+| measurement | result |
+|---|---|
+| `cargo build --workspace` | **0.4s** |
+| `cargo check -p manuk-shell --no-default-features` (the "headless thrash" suspect) | **0.3s** |
+| `verify.sh` section `B` | **101–112s** |
+| `verify.sh` section `P` | **181s** |
+| `verify.sh` total | **480–800s** |
+
+Every individual command is sub-second while the aggregate is ten minutes, which is the signature of
+something *removing* work between steps rather than of work being slow.
+
+**It is the pruner.** `crontab` runs `scripts/disk-hygiene.sh` every **3 minutes**, and it deletes
+`target/*/deps` "orphan test-binaries (old-hash duplicates; keep newest per name)" plus release
+artifacts. A wall takes 8–13 minutes, so it is pruned **3–4 times mid-wall** — including the release
+`manuk-wpt` that G1 runs and the ~25 gate test binaries the `_launch` block builds. The hygiene log
+shows a 1–2G reclaim on essentially every 3-minute tick throughout a wall. The pruner and the wall
+race for the same files, and the wall always loses.
+
+**Not fixed here — `scripts/` and the cron are observer-owned** (this session's standing scope rule).
+Candidate fixes, in the observer's hands: hold a marker/lock file for the duration of a wall and skip
+the prune while it exists; lengthen the cadence; or scope the prune to artifacts older than the
+current wall's start.
+
+**Consequence, and it is the important part: no tick can land while this holds.** `ratchet.sh:54`
+reads the wall from STATUS.md's `LAST_WALL_TIME`, so landing requires one verify run ≤93s banked by
+`status-update.sh`. That is currently a coin flip against the pruner. Tick 234 landed only because a
+lucky 80s run was banked before `tick.sh`'s own 236s run.
+
+**Tick 235's own contribution to the wall was real, was caught by the ratchet, and has been fixed**
+(the decoder was in every gate binary and in the `--no-default-features` shell graph; `audio` is now
+an opt-in feature and `cargo tree -p manuk-shell --no-default-features` shows zero symphonia). The
+residual 480–800s is the cron race and predates it.
+
+**Re-landing note (tick 235, second attempt).** Two things the first attempt got wrong, both found
+by trying to run the gate rather than by re-reading the diff:
+
+1. **The feature guard was not the thing holding.** `engine/js` declared
+   `manuk-media = { workspace = true, default-features = false }` and cargo **ignored it** — a
+   member's `default-features` is inert for a `workspace = true` dependency unless the *workspace*
+   declaration states it too. Cargo says so in a warning that scrolls past every build. Nothing
+   leaked, because `manuk-media`'s `default = []` has nothing to leak; the danger was that the line
+   *read* as protection, so the first entry added to `default` would have walked into all ~25 gate
+   binaries with a guard sitting right there looking correct. Moved to the workspace declaration.
+   Isolation is now asserted in both directions (0 symphonia in shell default / `--no-default-features`
+   / manuk-js; **9** under `-p manuk-media --features audio`, so the probe can see it when present).
+
+2. **Harness, observer-owned, not touched:** `target/{debug,release}/incremental` are symlinks into
+   `/dev/shm/manuk-build/`, and the ramdisk had been cleared while the symlinks survived, so every
+   cargo invocation died with `failed to create directory ... File exists (os error 17)`. Recreating
+   the two directories unblocked it. Noting the shape only — a cleared ramdisk leaves dangling
+   symlinks that read as a corrupt build dir rather than as a missing mount.
+
+### ⚠ WALL DIAGNOSIS **CORRECTED** (tick 236 session) — the pruner was FIXED and the wall did NOT come back
+
+The tick-235 entry above blames the `disk-hygiene` cron race. **That fix landed, it works, and it was not
+the whole cause.** The observer's pruner change is visibly correct in `.git/manuk-hygiene.log`
+(`build is LIVE — stem prune restricted to duplicates older than 03:48:02`), and yet three consecutive
+green walls on a freshly-rebooted, uncontended box measured **722s (cold) / 519s / 676s** against a 93s
+ceiling. All gates GREEN every time — this is cost, not failure.
+
+**Measured, not theorised:**
+
+| measurement | result |
+|---|---|
+| `cargo build --workspace` (debug), warm | **0.40s** |
+| `cargo build --release --workspace` immediately after a verify | **2m26s — full rebuild** |
+| `cargo build --release --workspace` immediately after itself | **0.34s** |
+| warm `verify.sh` | **519–676s**, ~28min *user* CPU |
+
+The release cache is valid back-to-back but is **invalidated by every `verify.sh` run**, so each wall pays
+a from-scratch optimized rebuild. The trigger is visible in section `B`, which builds the workspace twice
+under **different feature sets** — `workspace compiles (shipping)` then
+`headless compiles (--no-default-features)`. Flipping features flips cargo's fingerprint, so the two
+builds evict each other every run. This is the "headless-gate feature thrash" class, and it is
+**pre-existing — NOT tick 235's doing** (`cargo tree` shows 0 symphonia in the shell default,
+`--no-default-features`, and manuk-js graphs; the decoder is opt-in behind `features = ["audio"]`).
+
+**Second, compounding factor, and it is NOT a bug:** `mem-guard` reports
+`27495 MB available → CARGO_BUILD_JOBS=8 (of 32 cores)`. This box is **31 GB RAM / 32 cores**, so the
+8-job cap is *correct* — it is the guard that prevents the uncontained-rustc OOM hang. The consequence is
+simply that a full rebuild costs ~4x what the core count suggests. The cap should not be raised blindly.
+
+**Consequence: the loop cannot land ANY tick.** `ratchet.sh` reads `LAST_WALL_TIME` from STATUS.md against
+a 93s ceiling, which is unreachable while every wall pays a full release rebuild at 8 jobs. This is the
+gate-arithmetic deadlock `agent-doctor.sh` names.
+
+**NOT FIXED HERE — `scripts/` is observer-owned** (standing scope rule), and I did not touch it. Candidate
+fixes in the observer's hands, cheapest first: give the `--no-default-features` headless check its own
+`CARGO_TARGET_DIR` so the two feature sets stop evicting each other (this alone should restore the warm
+wall); or make that check a `cargo check` rather than a build; or re-baseline the WALL mark to the genuine
+warm cost. **I did NOT re-baseline the mark myself** — `WALL` stays at 72 and `RATCHET.tsv`'s only change
+is a `status-update.sh` timestamp re-bank. Buying a capability with the wall is exactly the trade the
+ratchet exists to refuse, and the refusal still stands.
+
+**Tick 235 (media M4, AAC decode) is COMPLETE and GREEN** — all 65 gates pass on all three runs. It is
+preserved on `wip/tick235-media-m4` and is blocked ONLY by the wall ceiling. It needs no rework; it needs
+one verify under the ceiling.
+
+## Tick 236 — media M5: a real frame, and the honest refusal of the ones we cannot decode
+
+**Built while the wall blocks landing** (see the corrected diagnosis above). The capability is
+complete and gated; it is parked on `wip/tick236-media-m5` alongside tick 235, and both need one
+verify under the ceiling — not rework.
+
+`engine/media/src/video.rs` decodes H.264 to RGBA via `openh264`. `trait VideoDecoder` ships with
+exactly one implementation on purpose: that implementation is **known to be temporary**. openh264 is
+Constrained **Baseline** only, the web's H.264 is overwhelmingly **High**, and the trait is what lets
+the VA-API backend replace it later without a caller changing.
+
+**The work was a silent double format mismatch.** MP4 stores H.264 as *AVCC* (big-endian NAL length
+prefixes); decoders want *Annex-B* (`00 00 00 01` start codes) — feed the raw sample and the length
+parses as a garbage NAL header, producing no frame and no readable error. And the **SPS/PPS are not
+in the samples at all**: in MP4 they live once, out of band, in `avcC`, so a decoder given only coded
+frames was never told the geometry. The NAL length width is *read* from `avcC` (1/2/4), never
+assumed.
+
+**`isTypeSupported` is UNCHANGED and still empty.** M5 decodes a frame; it does not play a video.
+Flipping the advertisement on a partial pipeline is exactly the black-rectangle failure MEDIA.md
+warns about. That flips at M6.
+
+**Three RED probes executed, not asserted** (process rule 3): dropping the parameter sets, skipping
+the Annex-B rewrite, and widening `can_decode` to any `avc1.*` each turned the relevant test RED.
+The load-bearing assertion is **non-uniformity** — dimensions agree from two independent sources,
+but a correctly-sized flat green field passes every size check ever written, and that is precisely
+what a mis-fed decoder emits.
+
+**An input bug was pre-empted.** Both committed video fixtures are High profile, so this tick would
+have failed against its own fixture in a way that reads exactly like a wiring bug. A Baseline fixture
+was minted with the *system ffmpeg binary as a dev tool* — authoring a test file, not linking ffmpeg
+into the browser.
+
+**Isolation proven in both directions:** `cargo tree` finds 0 openh264 in `manuk-shell` (default and
+`--no-default-features`) and `manuk-js`, and **2** under `--features video`. `openh264` is pinned to
+`=0.9.0` (0.9.1+ needs rustc 1.89 against this workspace's 1.88, and fails naming two SIMD crates
+without mentioning H.264).
+
+**Gate:** `engine/media/tests/video_decode.rs`, 3 tests; full crate 14/14 green.
+**Mechanism captured:** `docs/wiki/media-pipeline.md`.
+**Residue:** High profile; the decode thread + wall clock that make it *play* (M6); A/V sync against
+M4's PCM; AV1 via `re_rav1d`; WebM.
+
+## Harness note (agent, tick 237 session) — the wall is GATE RUNTIME, not the cold build
+
+Reporting only; `scripts/` is observer-owned and I did not touch it. **This is the "new information"
+the tick-235 board note asked for.** The pruner race IS fixed (hygiene log shows `stem prune restricted
+to duplicates older than <build start>` on every run during my window, and free disk never fell below
+38G), and the headless lane now has its own `CARGO_TARGET_DIR`. Neither was the cause.
+
+Two full `verify.sh` runs, both **all 65 gates GREEN**, on a quiet box (load 3.0, 69G free), with the
+release workspace pre-warmed (`cargo build --release --workspace`, 3m35s, run to completion first):
+
+  · run 1 — gate **404s** · build 2s · total 406s   (user 9m13s)
+  · run 2 — gate **426s** · build 26s · total 452s  (user 32m47s)
+
+The warm re-run was SLOWER, which rules out "it just needed warming". The user/wall ratio inverts
+(1.4x → 4.4x): on run 2 the ~21 `cargo test` gate invocations were all cache-hot and therefore all ran
+CONCURRENTLY against `CARGO_BUILD_JOBS=8`, so the wall is now the *contended execution* of the gate
+suite itself, not compilation. `target/debug/deps` had ZERO files written in the 20min covering run 2 —
+nothing was being rebuilt.
+
+So the 426s is real gate work against a 93s ceiling (mark 72 +30%), and `ratchet.sh:174` correctly
+BLOCKS it because the receipt is green — the advisory escape hatch only applies to untrusted receipts.
+**No tick can land until the observer either re-baselines the WALL mark to the genuine warm cost or
+reduces gate-suite runtime.** The browser's own perf is NOT the cause and did not regress: F1 cascade
+0.24 <= 0.55, F2 pipeline 6.07x <= 7.5x, G_INTERACT every tab op under one frame — all green.
+
+Continuing with browser capability per scope; work parks on `wip/` branches as ticks 235/236 did.
+
+## Board correction (agent, tick 237) — CO-#1 lever (C) "canvas fillText" is ALREADY DONE
+
+Process rule 2 (re-probe stale unknowns before building) caught this before a line was written.
+`ctx.fillText`/`strokeText`/`measureText` are fully wired to the swash raster in `engine/text`
+(`engine/js/src/canvas.rs:428` `fill_text`, `:491` `measure_text`), and there is already a PIXEL gate,
+`engine/page/tests/g_canvas_text.rs`, asserting ink/inkcolor/sparse/placed/proportional/scales/
+metrics/align/baseline/cleared. The board's claim that this "unlocks Google Docs/Sheets + chart labels
++ terminals in ONE fix" is stale by at least one landed tick.
+
+The REAL remaining canvas gap is `ctx.drawImage`, an honest no-op at `engine/js/src/event_loop.rs:1120`
+("no image source plumbing yet"), alongside `putImageData` and `clip()`. That is the bigger
+daily-driver hole — drawImage is how sprites, thumbnails, image editors, video frames and most chart
+libraries' image compositing reach a canvas — and it is what this session builds instead.
+
+## Tick 237 — canvas `drawImage`: the first operation that needs pixels flowing INWARD
+
+Built after the board's CO-#1 lever (C) turned out to be already done (see the correction above).
+`drawImage` was an *honest* no-op carrying its own diagnosis in a comment — "no image source plumbing
+yet" — and that comment was exactly right about the shape of the problem. Every canvas op before this
+draws something the *script* described; `drawImage` draws what the *host* owns. Canvas had one pixel
+channel, `canvas_bitmaps()`, and it pointed **outward**. `manuk_js::publish_image_source` is its
+deliberate mirror, keyed by the same `NodeId`; sources are named by node, never by copying pixels
+across the FFI, because a sprite sheet is megabytes and an animation loop would copy it 60×/second.
+
+**The design decision worth keeping:** canvases and images need separate registries even though `Page`
+merges them into `self.images`. That map holds a snapshot from the *end of the previous script round*,
+while `CANVASES` holds the live surfaces — so a shared lookup makes the standard double-buffer idiom
+`dst.drawImage(scratch, 0, 0)` composite the previous frame.
+
+**Two bugs the gate found that reading the code did not.** (1) The shim read `ctx.M` for the transform
+when `M` is a *closure* variable — `ctx.M` is `undefined`, the matrix decoded as identity, and every
+transformed draw landed silently at the untransformed origin. (2) tiny-skia concatenates `fill_path`'s
+transform onto the **shader** as well as the path, so folding `xform(m)` into the pattern matrix
+double-applies it — and that **passed a one-corner pixel assertion by accident**, because the
+doubly-transformed sample lands off the image and `Pad` clamps every pixel to the source's top-left
+texel, which was the red the claim happened to name. The fix was in the *gate* as much as the code:
+`xform` now asserts all four quadrants of an asymmetric fixture, which a flat clamped fill cannot
+impersonate. Generalised in `docs/wiki/text-layout.md`.
+
+Three RED probes executed, not asserted. `g_canvas_image`, 9 pixel claims, both source paths.
+Neighbours green: g_canvas, g_canvas_text, g_inline_image_size, g_first_paint, g_dedup.
+
+## Tick 238 — measure-and-pin: the checklist was stale in BOTH directions
+
+`canvas fillText` was carried as **missing** while its pixel gate had been green for ticks
+(pessimistic); `AVIF` and `JPEG XL` sat at **unknown** with the receipt "NEVER MEASURED", and unknown
+quietly reads as *maybe fine* (optimistic). Both corrected with measurements: the fillText gate was
+run, and `cargo tree -p manuk-page` shows **zero** avif/dav1d/ravif/jxl crates — decode is impossible
+by construction, which is a stronger statement than a failed fixture, since that cannot tell a missing
+decoder from a bad file. The same tree shows every present decoder (png, zune-jpeg, image-webp, gif,
+weezl, resvg) is pure Rust.
+
+**The finding worth more than the rows: AVIF is an AV1 still image.** The media ladder already plans
+`re_rav1d` (pure-Rust AV1), so one decoder closes the video gap *and* the AVIF image gap — buying a
+separate C dav1d for images would spend the no-C-image-FFI property to solve a problem the media track
+is already paying for. Recorded in the AVIF row so the next builder finds it before shopping.
+
+Readiness 53% → 54%, platform gated 8 → 9, unknowns 8 → 6.
+
+**Both ticks are PARKED, not landed** — `wip/tick237-canvas-drawimage`, `wip/tick238-probe-stale-rows`,
+stacked on the media pair, in landing order 235 → 236 → 237 → 238. `ratchet.sh check` refuses on the
+WALL alone (426s vs a 93s ceiling) and recognised the advance it should: **GATES 103 → 104**, every
+other mark `(=)`. I did not lower the WALL mark — it is observer-managed, and buying a capability with
+the wall is the trade the ratchet exists to refuse.

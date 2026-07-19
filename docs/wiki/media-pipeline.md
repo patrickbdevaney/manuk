@@ -219,3 +219,119 @@ over a real socket, appended, read back through `sb.buffered` / `sb.videoTracks`
 
 **Next:** M4 — AAC decode via `symphonia` (audio only, per the trap-list) plus `cpal` for output,
 and M5 video decode. Both consume the decoder-configuration record this step already extracts.
+
+## M4 — AAC decode (tick 235): sound-shaped numbers, not yet sound
+
+`engine/media/src/audio.rs`. M3 could find the audio and name it (`mp4a.67`, 44100 Hz, stereo) and
+could not produce one sample of it. Naming a codec and decoding it are different claims.
+
+**Borrowed:** `symphonia`, pulled in as `default-features = false, features = ["aac"]` — deliberately
+narrow. Symphonia ships a dozen demuxers we must not silently acquire, and its ISO-MP4 demuxer is
+**audio-only** (MEDIA.md trap #1), so demux stays re_mp4's job and symphonia's role is confined to
+turning AAC packets into PCM. Two parsers with overlapping jobs is how they drift.
+
+**The AudioSpecificConfig had to be rebuilt, not sliced.** An AAC decoder cannot interpret a single
+packet without it, and `re_mp4` parses the `esds` descriptor into fields without retaining the
+original bytes — so there is nothing to slice. It is re-encoded from the parsed values:
+five bits of audio object type, four of sampling-frequency index, four of channel configuration,
+three zero flag bits (`AAAAA FFFF CCCC 000`). AAC-LC at 44100 stereo is `0x12 0x10`.
+
+**The assertion that makes it a decode gate.** The decoded PCM frame count must equal the track's
+declared duration **in its own timescale** — 121856 units at 44100 is 121856 frames, exactly. Those
+numbers come from independent places: the duration from the container headers, the frame count from
+summing what the decoder emitted packet by packet. A decoder that dropped packets, doubled a buffer,
+mis-read the channel count or returned early lands somewhere else. The gate also asserts a non-zero
+peak, because correctly-sized **silence** satisfies every length check.
+
+**Codec-string subtlety worth keeping:** this file is `mp4a.67`, not `mp4a.40.2`. Object type
+indication 0x67 is MPEG-2 AAC-LC; `0x40` is the MPEG-4 spelling and takes the `.2` audio-object-type
+suffix. Players string-compare these, so reporting one for the other is a rejection.
+
+**Still not playback.** There is no audio device — `cpal` is a separate step, deliberately, because a
+device is not headlessly gateable and bundling it would mean the decode could only be proven by
+listening. `isTypeSupported` is unchanged and still answers `false`: audio decodes, video does not,
+and a stream needs both. Non-AAC audio (MP3, Opus, Vorbis, FLAC, AC-3) is refused up front by name
+rather than accepted and failed mid-stream.
+
+**Gate:** `engine/media/tests/audio_decode.rs`. **RED, run:** decoding only the first packet yields
+1024 frames against 121856.
+
+**Next:** M5 video decode, then `cpal` output and A/V sync (audio device clock is master; wall clock
+when there is no audio track — which is the majority of web `<video>`).
+
+## M5 — H.264 decode: the first real frame
+
+`engine/media/src/video.rs`. Demux names the video track; this turns its samples into pixels.
+
+### The trait exists because the backend is known to be temporary
+
+`trait VideoDecoder` is defined with exactly one implementation, deliberately. `openh264` (Cisco,
+BSD-2) decodes **Constrained Baseline only** — B-frame reordering is unimplemented — while the open
+web's H.264 is overwhelmingly **High** profile, `libx264`'s default. Firefox makes the same call:
+OpenH264 for WebRTC, never for `<video>`.
+
+So this backend cannot play most video on the web, and the value of the step is not that it can. It
+is that YouTube's no-MSE fallback is `avc1.42001E` (Baseline, 360p), which decodes with `cargo
+build` and **zero system dependencies** — and that the VA-API/ffmpeg backend for High profile drops
+in behind the same trait later without a caller changing. Retrofitting that boundary after callers
+exist costs multiples of writing it on day one.
+
+### The format mismatch that is the actual work
+
+**MP4 does not store H.264 the way a decoder eats it**, and both halves of the mismatch fail
+silently:
+
+1. **AVCC vs Annex-B.** In MP4 each NAL unit carries a big-endian *length prefix*; decoders expect
+   `00 00 00 01` *start codes*. Hand a decoder the raw sample and the length parses as a garbage NAL
+   header — no frame, no useful error. The prefix width is 1, 2 or 4 bytes and is recorded in `avcC`
+   (`avcc[4] & 0b11`, plus one); it is **read, never assumed to be 4**, because assuming 4 against a
+   2-byte stream desynchronises on the first NAL.
+2. **The SPS/PPS are not in the samples.** They live once, out of band, in the `avcC` record. A
+   decoder given only coded frames has never been told the resolution, profile or reference layout,
+   so it discards everything until it is. They are converted to Annex-B and prepended to the first
+   sample.
+
+### `isTypeSupported` stays honest
+
+`can_decode` parses the profile out of the codec string (`avc1.PPCCLL`, `PP` = `profile_idc`) and
+accepts **only 66**. Answering `true` for High would be accepted up front and fail mid-stream, which
+is strictly worse for a player than an honest `false` — it has a fallback, and a refusal is how it
+gets to use it.
+
+### What makes the gate a decode gate rather than a did-it-run gate
+
+`engine/media/tests/video_decode.rs`, and all three failure modes were **executed, not asserted**:
+
+| RED probe | result |
+|---|---|
+| `parameter_sets: None` (drop SPS/PPS) | first-frame test FAILED |
+| feed raw AVCC, skip the Annex-B rewrite | first-frame test FAILED |
+| widen `can_decode` to any `avc1.*` | High-profile refusal test FAILED |
+
+The load-bearing assertion is **non-uniformity**. Dimensions come from two independent sources
+(container header vs the decoder's own SPS read), but a correctly-sized *flat green field* passes
+every size check ever written — and a flat field is exactly what a mis-fed decoder produces. So the
+gate asserts the frame is not a single repeated pixel.
+
+### Isolation, proven in both directions
+
+`video` is opt-in (`default = []`) for the reason `audio` is, plus one more: **openh264 compiles C**,
+so a default-on decoder would put a `cc` invocation into every configuration that builds this crate
+— including all ~25 gate binaries reached via `manuk-js -> manuk-media`. `cargo tree` finds **0**
+openh264 in `manuk-shell` (default *and* `--no-default-features`), in `manuk-js`, and in
+`manuk-media` default — and **2** under `--features video`, so the probe can see it when present.
+A guard that is never observed to detect anything is not a guard.
+
+### Fixture note, and the pin
+
+The Baseline fixture was minted with the **system ffmpeg binary as a dev tool**. That does not
+violate the no-ffmpeg rule, which forbids *linking* ffmpeg into the browser, not using it to author
+a test file. Both pre-existing video fixtures are High profile, so tick M5 would otherwise have
+failed against its own input — a failure that reads exactly like a wiring bug.
+
+`openh264` is pinned to `=0.9.0`: 0.9.1+ pulls `safe_arch 1.0`/`wide 1.5`, which require rustc 1.89
+against this workspace's 1.88, and the resolution error names two SIMD crates without ever
+mentioning H.264. Unpin when the toolchain moves.
+
+**Residue:** High profile (VA-API/`cros-codecs`); a decode thread + wall clock for actual playback
+(M6); A/V sync against the M4 PCM; AV1 via `re_rav1d`; WebM containers.

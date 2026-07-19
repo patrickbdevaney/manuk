@@ -120,6 +120,15 @@ ok "fmt clean"
 # 2 in an area it was not looking at, and tick 80 shipped while the wall was red. **A rule I can recite
 # while breaking it is a decoration.** So it is a gate now, and it runs BEFORE the wall, because a
 # regression is a one-second check and the wall is a four-minute one.
+# ── BANK THE WALL BEFORE JUDGING IT (observer, tick 235). `status-update.sh` used to run only at
+# line ~130, AFTER this ratchet check — so STATUS.md's LAST_WALL_TIME was always one full cycle
+# stale, and the ratchet judged a wall measured before the previous tick's verify. A fast verify
+# could therefore never be credited to the tick that produced it, which is why landing required the
+# manual "run verify, then status-update, then tick.sh" dance by hand. That dance is now automatic:
+# refresh STATUS from the most recent receipt FIRST, so the ratchet judges what was actually just
+# measured. The real gate is still verify.sh below, on the final tree — this only fixes WHICH
+# measurement the wall check reads.
+./scripts/status-update.sh >/dev/null 2>&1 || true
 if [ -f docs/loop/WPT-AREAS.tsv ]; then
   ./scripts/ratchet.sh check || die "the RATCHET refuses this tick — something went backwards"
 else

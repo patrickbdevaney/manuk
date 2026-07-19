@@ -1416,6 +1416,9 @@ impl Page {
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
         manuk_js::set_scroll_geometry(self.scroll_geometry_map());
+        // Before the scripts run, not after: a script that draws an image on its first tick must find
+        // the pixels already there, or the draw silently no-ops and the canvas stays blank.
+        self.publish_image_sources();
         let ran = match manuk_js::run_deferred_scripts(ctx, &mut self.dom, &rects, &self.styles) {
             Ok(n) => n,
             Err(e) => {
@@ -1753,6 +1756,30 @@ impl Page {
     /// Only *dirty* canvases cross: a chart that was drawn once must not be re-uploaded on every script
     /// round, and a megabyte-sized pixmap copied per event handler would be a performance bug wearing a
     /// feature's clothes.
+    /// **The mirror of [`drain_canvases`](Self::drain_canvases): decoded images go IN, so a script can
+    /// `ctx.drawImage(img, …)` them.**
+    ///
+    /// Canvas has only ever pushed pixels outward. `drawImage` is the first operation that needs the
+    /// host's pixels going the other way, because the thing it draws is an `<img>` the network fetched
+    /// and the image decoder decoded — data a script cannot produce for itself.
+    ///
+    /// **Canvases are deliberately excluded even though they live in the same map.** `drain_canvases`
+    /// drops finished canvases into `self.images` alongside `<img>`, which is the trick that lets the
+    /// painter treat them identically. Publishing them back would hand `drawImage` a snapshot of a
+    /// canvas as it was at the *end of the last script round* — so the standard double-buffer idiom,
+    /// `dst.drawImage(scratch, 0, 0)`, would composite a stale frame. The canvas registry already holds
+    /// the live surfaces and is looked up first; this is only for pixels it does not have.
+    ///
+    /// Publishing is idempotent, so this can run every round without re-uploading a megabyte per image.
+    fn publish_image_sources(&self) {
+        for (node, img) in &self.images {
+            if self.dom.tag_name(*node) == Some("canvas") {
+                continue;
+            }
+            manuk_js::publish_image_source(node.0, img.width, img.height, &img.rgba);
+        }
+    }
+
     fn drain_canvases(&mut self) {
         for (id, w, h, rgba) in manuk_js::canvas_bitmaps() {
             self.images.insert(
@@ -2244,6 +2271,7 @@ impl Page {
             &self.styles,
             &self.scroll_offsets,
         ));
+        self.publish_image_sources();
         let _ = manuk_js::eval_in_page(ctx, &mut self.dom, src, &rects, &self.styles);
         self.drain_canvases();
         self.drain_element_scrolls();
@@ -2539,6 +2567,14 @@ impl Page {
             // the snapshot above — `measure -> mutate -> measure` in one round is how every
             // virtualized list sizes its rows.
             let _reflow = ReflowScope::install(&dom, fonts, viewport_width);
+            // **The inline images decoded above are publishable RIGHT NOW, before the first script.**
+            // `Page` does not exist yet at this point — it is constructed below — so the ordinary
+            // `publish_image_sources` hook cannot have run, and a BLOCKING script that draws a `data:`
+            // image would find nothing. Those bytes came with the document; there is nothing to wait
+            // for, which is the same reasoning that decodes them ahead of the first layout.
+            for (node, img) in &inline_images {
+                manuk_js::publish_image_source(node.0, img.width, img.height, &img.rgba);
+            }
             match manuk_js::load_document(&mut dom, final_url, &rects, &styles) {
                 Ok((ctx, n)) => {
                     if n > 0 {

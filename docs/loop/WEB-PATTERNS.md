@@ -1207,3 +1207,17 @@ the demuxer landing cannot quietly start over-promising. WebM/EBML is recognised
 
 Residue: M4 (AAC via symphonia + cpal) and M5 (video decode); WebM demux; incremental rather than
 whole-buffer parsing.
+
+## Audio that is real numbers — AAC decode (tick 235)
+
+The web's audio is AAC-in-MP4: every `<video>` with sound, every podcast player, every adaptive
+stream's audio track. M3 could find it and name it and could not produce a sample of it.
+
+AAC now decodes to PCM (`symphonia`, borrowed narrowly). What this unlocks is *not* audible playback
+— there is no audio device yet, and `isTypeSupported` still answers `false` because a stream needs
+video too. What it unlocks is the next step being a *device* step rather than another decode step,
+and it is proven by length rather than by listening: decoded frames must equal the container's
+declared duration to the sample.
+
+Residue: M5 video decode; `cpal` output + A/V sync; MP3/Opus/Vorbis/FLAC/AC-3 (refused by name, not
+silently accepted).
