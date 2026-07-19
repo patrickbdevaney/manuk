@@ -2118,6 +2118,64 @@ impl Page {
         self.relayout(fonts, viewport_width);
     }
 
+    /// **Drop files onto `node` — the actuation a drag-and-drop upload performs.** Returns `false`
+    /// iff a handler called `preventDefault()` on the `drop`.
+    ///
+    /// The other half of [`set_input_files`](Self::set_input_files), and not a niche one: Gmail
+    /// attachments, GitHub issue images, Slack, Drive and every modern uploader put a dashed
+    /// rectangle on the screen and read `e.dataTransfer.files`. With `DataTransfer` inert that read
+    /// was `undefined.files` — **a TypeError inside the `drop` handler**, so the page did not merely
+    /// ignore the drop, its handler threw.
+    ///
+    /// Fires `dragenter`, `dragover`, `drop` in order, sharing one `DataTransfer`. See
+    /// [`manuk_js::PageContext::dispatch_drop`] for why all three are required rather than just the
+    /// last: the page opts *in* to being a drop target by cancelling `dragover`, and a dropzone that
+    /// never receives one never receives a drop either.
+    pub fn dispatch_drop(
+        &mut self,
+        node: manuk_dom::NodeId,
+        files: &[(String, String, String)],
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
+        let _json = files_to_json(files);
+        #[cfg(feature = "spidermonkey")]
+        {
+            let Some(ctx) = &self.js else {
+                self.relayout(fonts, viewport_width);
+                return true;
+            };
+            let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+                .root_box
+                .node_rects(&self.dom)
+                .into_iter()
+                .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+                .collect();
+            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+            let proceed = match manuk_js::dispatch_drop(
+                ctx,
+                &mut self.dom,
+                node,
+                &_json,
+                &rects,
+                &self.styles,
+            ) {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::warn!("drop dispatch: {e}");
+                    true
+                }
+            };
+            self.relayout(fonts, viewport_width);
+            return proceed;
+        }
+        #[cfg(not(feature = "spidermonkey"))]
+        {
+            self.relayout(fonts, viewport_width);
+            true
+        }
+    }
+
     /// **Choose files on an `<input type=file>` — the actuation a file picker performs.** Returns
     /// `false` if `node` is not a file input.
     ///
@@ -2159,37 +2217,7 @@ impl Page {
         if !is_file_input {
             return false;
         }
-        // Hand-rolled JSON so the escaping is visible at the point it matters: a filename or a file
-        // body containing `"` or `\` would otherwise produce a document the prelude's `JSON.parse`
-        // silently rejects, and the getter would report "no files chosen" for a file that IS chosen.
-        let esc = |s: &str| {
-            let mut out = String::with_capacity(s.len());
-            for c in s.chars() {
-                match c {
-                    '"' => out.push_str("\\\""),
-                    '\\' => out.push_str("\\\\"),
-                    '\n' => out.push_str("\\n"),
-                    '\r' => out.push_str("\\r"),
-                    '\t' => out.push_str("\\t"),
-                    c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
-                    c => out.push(c),
-                }
-            }
-            out
-        };
-        let json = format!(
-            "[{}]",
-            files
-                .iter()
-                .map(|(name, ty, text)| format!(
-                    r#"{{"name":"{}","type":"{}","text":"{}"}}"#,
-                    esc(name),
-                    esc(ty),
-                    esc(text)
-                ))
-                .collect::<Vec<_>>()
-                .join(",")
-        );
+        let json = files_to_json(files);
         self.dom.set_attr(node, "data-manuk-files", json);
         let shown = files
             .first()
@@ -6911,4 +6939,42 @@ impl Drop for Page {
             manuk_js::unregister_dom(d);
         }
     }
+}
+
+/// Serialise `(name, mime_type, contents)` triples into the `[{name,type,text}]` document that both
+/// [`Page::set_input_files`] and [`Page::dispatch_drop`] hand to the JS side.
+///
+/// Hand-rolled rather than pulled from a serialiser so the escaping is visible at the point it
+/// matters: a filename or a file body containing `"` or `\` would otherwise produce a document the
+/// prelude's `JSON.parse` silently rejects — and the failure mode of that is not an error, it is
+/// `files.length === 0`, i.e. **"no file chosen" reported for a file that IS chosen.**
+fn files_to_json(files: &[(String, String, String)]) -> String {
+    fn esc(s: &str) -> String {
+        let mut out = String::with_capacity(s.len());
+        for c in s.chars() {
+            match c {
+                '"' => out.push_str("\\\""),
+                '\\' => out.push_str("\\\\"),
+                '\n' => out.push_str("\\n"),
+                '\r' => out.push_str("\\r"),
+                '\t' => out.push_str("\\t"),
+                c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+                c => out.push(c),
+            }
+        }
+        out
+    }
+    format!(
+        "[{}]",
+        files
+            .iter()
+            .map(|(name, ty, text)| format!(
+                r#"{{"name":"{}","type":"{}","text":"{}"}}"#,
+                esc(name),
+                esc(ty),
+                esc(text)
+            ))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
 }

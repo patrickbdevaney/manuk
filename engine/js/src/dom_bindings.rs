@@ -6850,6 +6850,66 @@ impl PageContext {
         Ok(proceed)
     }
 
+    /// Dispatch the **drag sequence that ends in a drop** — `dragenter`, `dragover`, `drop` — with a
+    /// real `DataTransfer` carrying `files_json` (the same `[{name,type,text}]` shape
+    /// `set_input_files` stores). Returns `false` iff a handler called `preventDefault()` on the
+    /// `drop`.
+    ///
+    /// **All three events, in order, and that is not ceremony.** The HTML drag protocol makes the
+    /// page *opt in* to being a drop target: a dropzone that does not `preventDefault()` its
+    /// `dragover` never receives a `drop` at all, and the standard React/vanilla dropzone is written
+    /// as exactly that pair of handlers. Firing `drop` alone would deliver a drop to pages that
+    /// never agreed to accept one — testing a path no real browser can reach — and would silently
+    /// skip the `dragenter`/`dragover` handlers that set the "drag active" styling every dropzone
+    /// uses to highlight itself.
+    pub fn dispatch_drop(
+        &self,
+        runtime: &mut Runtime,
+        dom: &mut Dom,
+        node: NodeId,
+        files_json: &str,
+        layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    ) -> Result<bool, String> {
+        set_view_maps(layout, styles);
+        set_current_dom(dom as *mut Dom);
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        unsafe {
+            let _ = new_reflector(raw_cx, dom as *mut Dom, node);
+        }
+        // ONE DataTransfer for the whole sequence, as a real drag has: a dropzone that stashes
+        // `e.dataTransfer` on dragenter and reads `.files` on drop must see the same object.
+        let script = format!(
+            "(function(){{var dt=__makeDataTransfer({});var r=true;\
+             ['dragenter','dragover','drop'].forEach(function(t){{\
+               var ok=__dispatchEvent({}, {{type:t, dataTransfer:dt, bubbles:true, cancelable:true}});\
+               if(t==='drop'){{r=!(ok===false);}}\
+             }});return r;}})()",
+            js_string_literal(files_json),
+            node.0,
+        );
+        rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
+        let opts =
+            CompileOptionsWrapper::new(runtime.cx_no_gc(), c"dispatch_drop.js".to_owned(), 1);
+        let proceed = match evaluate_script(
+            runtime.cx(),
+            global.handle(),
+            &script,
+            rval.handle_mut(),
+            opts,
+        ) {
+            Ok(()) => {
+                let v = rval.get();
+                !v.is_boolean() || v.to_boolean()
+            }
+            Err(()) => true,
+        };
+        crate::event_loop::run_deferred(runtime, global.handle())?;
+        Ok(proceed)
+    }
+
     /// Drain this document's queued `fetch`/XHR requests as `(id, url, method, headers, body)` so
     /// the host can perform them over the real network and settle each via [`resolve_fetch`].
     pub fn take_fetches(
@@ -8439,6 +8499,52 @@ const WINDOW_PRELUDE: &str = r#"
                 }
                 list.length = recs.length;
                 return list;
+            };
+
+            // ---- DataTransfer — the OTHER way a file gets into a page ------------------------
+            //
+            // `DataTransfer` was inert alongside `FileList`, which closed the drop-zone half of
+            // uploading. That half is not a niche: Gmail attachments, GitHub issue images, Slack,
+            // Drive and every modern uploader put a dashed rectangle on the screen and expect
+            // `e.dataTransfer.files`. A dropzone reads exactly that, and `undefined.files` is a
+            // TypeError inside a `drop` handler — so the page did not merely ignore the drop, its
+            // handler THREW.
+            //
+            // `types` and `getData` are here because a dropzone routinely branches on them before
+            // it ever looks at `files` — `types.indexOf('Files') >= 0` is the standard "is this a
+            // file drag or a text drag" test, and answering it wrong sends the handler down the
+            // text path where it will read `getData('text/plain')` and get nothing.
+            g.__makeDataTransfer = function (json) {
+                var files = g.__makeFileList(json);
+                var data = {};
+                var dt = {
+                    dropEffect: 'none',
+                    effectAllowed: 'all',
+                    files: files,
+                    // 'Files' is the spec's literal token for a file drag, capital F.
+                    types: files.length ? ['Files'] : [],
+                    getData: function (fmt) { return data[String(fmt)] || ''; },
+                    setData: function (fmt, v) { data[String(fmt)] = String(v); return true; },
+                    clearData: function (fmt) {
+                        if (fmt === undefined) { data = {}; } else { delete data[String(fmt)]; }
+                    },
+                    setDragImage: function () {}
+                };
+                // `items` is the newer parallel surface; a dropzone written against it calls
+                // `getAsFile()` and would otherwise see an empty list next to a populated `files`.
+                var items = [];
+                for (var i = 0; i < files.length; i++) {
+                    (function (f) {
+                        items.push({
+                            kind: 'file', type: f.type,
+                            getAsFile: function () { return f; },
+                            getAsString: function (cb) { if (cb) setTimeout(function () { cb(''); }, 0); }
+                        });
+                    })(files[i]);
+                }
+                items.length = files.length;
+                dt.items = items;
+                return dt;
             };
 
             (function () {

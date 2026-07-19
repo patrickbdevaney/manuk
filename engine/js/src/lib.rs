@@ -989,6 +989,36 @@ pub fn dispatch_key(
     Ok(true)
 }
 
+/// Dispatch `dragenter`/`dragover`/`drop` to `node` with a real `DataTransfer` carrying
+/// `files_json`. Returns `false` iff a handler called `preventDefault()` on the `drop`.
+/// See [`PageContext::dispatch_drop`].
+#[cfg(feature = "_sm")]
+pub fn dispatch_drop(
+    ctx: &PageContext,
+    dom: &mut manuk_dom::Dom,
+    node: manuk_dom::NodeId,
+    files_json: &str,
+    layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<bool, JsError> {
+    with_runtime(|rt| {
+        ctx.dispatch_drop(rt, dom, node, files_json, layout, styles)
+            .map_err(|message| JsError { message })
+    })
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn dispatch_drop(
+    _ctx: &PageContext,
+    _dom: &mut manuk_dom::Dom,
+    _node: manuk_dom::NodeId,
+    _files_json: &str,
+    _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<bool, JsError> {
+    Ok(true)
+}
+
 /// The JS-less build: `<script>`s are parsed into the DOM but not executed.
 #[cfg(not(feature = "_sm"))]
 pub fn run_document_scripts(

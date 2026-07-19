@@ -839,3 +839,41 @@ time: **the engine holds the right answer and throws it away at the last hop**, 
 because the feature appears present at every layer anyone inspects. The tick-246 audit shape — *grep
 for values computed with exactly one reader, or none* — extends here to **capabilities with no
 producer**: a correct, tested encoder that nothing ever calls with real input.
+
+## The dropzone: a handler that threw, and an opt-in that looks like ceremony (tick 248)
+
+`Page::dispatch_drop(node, files, …)` fires `dragenter`, `dragover`, `drop` with one shared, real
+`DataTransfer` — `G_DROP_UPLOAD`. It is the second half of the upload story begun at tick 247, and on
+the modern web it is the *more* common half.
+
+**The inert `DataTransfer` did not make drops a no-op — it made drop handlers THROW.**
+`e.dataTransfer.files` is the first line of essentially every dropzone, and `undefined.files` is a
+TypeError *inside* the handler. A page that throws there falls back to nothing: the dashed rectangle
+stays lit and the upload never starts. **"Feature absent" and "handler throws" are different failure
+classes**, and the second is the one that leaves the UI in a lying state.
+
+### Why the whole sequence, not just the interesting event
+
+The HTML drag protocol makes a page **opt in** to being a drop target: **a dropzone that does not
+`preventDefault()` its `dragover` never receives a `drop`.** So dispatching `drop` alone would test a
+path *no real browser can reach*, and would skip the `dragenter`/`dragover` handlers that set the
+"drag active" styling — silently omitting the visible half of the interaction. The `DataTransfer` is
+shared across all three because a dropzone that stashes it on `dragenter` must find the same object
+on `drop`.
+
+The return value carries the page's `preventDefault()` verdict and the host must honour it: a browser
+that performs its default action after the dropzone accepted the drop **navigates to the dropped
+file**, replacing the page the user was uploading to. That is the classic "my app vanished when I
+missed the drop target" bug.
+
+`types` must contain the literal token `Files`. `types.indexOf('Files') >= 0` is the standard
+file-drag-vs-text-drag test, and a dropzone that gets it wrong takes the text branch and never looks
+at `files` at all.
+
+### A gate over a sequential handler chain has coarser resolution
+
+Both RED probes here (fire only `drop`; build `types` as `[]`) go red at the **same** claim, `enter:`
+— including the one predicted to isolate `types:`. The dropzone's handlers run in order, so **the
+first bad read masks every later claim.** Contrast tick 247's multipart probe, which flipped exactly
+one claim because the claims there were independent. Worth carrying when designing a gate: **claims
+asserted inside a sequential chain cannot pinpoint; claims asserted over independent surfaces can.**

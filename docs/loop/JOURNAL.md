@@ -10898,3 +10898,56 @@ browser keeps the selection off the tree. `File.size` is character count, not UT
 `DataTransfer` stays inert, so drag-and-drop upload is still unreachable — that is the next door.
 
 WIKI: docs/wiki/interaction-surface.md (+ INDEX.md)
+
+## Tick 248 — the dashed rectangle, and a drop handler that threw instead of ignoring
+
+TICK SHAPE: tick 247's named residue — `DataTransfer` was still inert, so drag-and-drop upload was
+the door left closed.
+
+**THE CAPABILITY.** `Page::dispatch_drop(node, files, …)` fires `dragenter`, `dragover`, `drop` on a
+dropzone with one real `DataTransfer` carrying the files. On the modern web this is the *more*
+common of the two upload paths — Gmail attachments, GitHub issue images, Slack, Drive and every
+uploader built in the last decade put a dashed rectangle on the screen and read
+`e.dataTransfer.files`.
+
+**THE FAILURE WAS NOT "THE DROP WAS IGNORED" — THE HANDLER THREW.** With `DataTransfer` inert,
+`e.dataTransfer` was `undefined`, so the first line of every dropzone (`e.dataTransfer.files`) was a
+**TypeError inside the `drop` handler**. A page that throws there falls back to nothing: the dashed
+rectangle stays lit, the upload never starts, and a console error is the only trace. That is a
+different and worse failure than "nothing happened".
+
+**ALL THREE EVENTS, AND THE `dragover` IS NOT CEREMONY.** The HTML drag protocol makes a page **opt
+in** to being a drop target: a dropzone that does not `preventDefault()` its `dragover` never
+receives a `drop` at all. So the standard dropzone is a *pair* of handlers, and dispatching `drop`
+alone would exercise a path **no real browser can reach** — while also skipping the
+`dragenter`/`dragover` handlers that set the "drag active" styling, i.e. silently omitting the
+visible half of the interaction. One `DataTransfer` is shared across the sequence because a dropzone
+that stashes it on `dragenter` must find the same object carrying files on `drop`.
+
+`dispatch_drop` returns the page's `preventDefault()` verdict, and the gate asserts it is honoured:
+a browser that performed its default action after the dropzone accepted the drop would **navigate to
+the dropped file**, replacing the very page the user was uploading to. That is the classic "my app
+vanished when I missed the drop target" bug, and it is a real regression risk, not a hypothetical.
+
+**RED PROBES EXECUTED, NOT ASSERTED (process rule 3) — AND ONE PREDICTION WAS WRONG:**
+  · fire only `drop`, no `dragenter`/`dragover` → RED at `enter:`; files still arrive, the page
+    never got to say it wanted them
+  · build `types` as `[]` for a file drag → RED at **`enter:`, NOT at `types:` as predicted**.
+    Recorded because the prediction was wrong: `enter:` asserts the same `indexOf('Files')` token
+    and is simply the earlier claim to notice. Both are real falsifications, but **neither isolates**
+    the way tick 247's multipart probe did — the dropzone's handlers are sequential, so the first bad
+    read masks every later claim. Worth carrying: **a gate over a sequential handler chain has
+    coarser resolution than one over independent claims**, and saying so is more useful than
+    pretending the probe pinpointed something.
+
+Gate: `engine/page/tests/g_drop_upload.rs` (`G_DROP_UPLOAD`), 10 claims. Regression: full `manuk-page`
+**126 passed / 1 failed**, the 1 being the PRE-EXISTING `hard_wall_detection_and_honest_interstitial`
+documented at tick 239.
+
+Residue: this is the *programmatic* drop — there is no real pointer-driven drag (no `dragstart` from
+a draggable source, no drag image, no `effectAllowed` negotiation), so **drag-to-REORDER** (sortable
+lists, Trello columns, editor blocks) is still closed. Dropping a file on a page is the upload half,
+and it is the half that matters for uploads; reordering is its own tick. `getData` returns only what
+`setData` put there, so a text/URL drag between elements carries nothing yet.
+
+WIKI: docs/wiki/interaction-surface.md (+ INDEX.md)

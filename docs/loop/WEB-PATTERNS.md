@@ -1412,3 +1412,28 @@ body carries the file's actual *bytes*, and the RED probe flips that claim **alo
 **The class this unlocks** is every account-holding site an agent has to get a file into: profile
 photos, support-ticket attachments, résumé uploads, CSV imports, image posts. Drag-and-drop upload is
 still closed — `DataTransfer` remains inert — and that is the next door.
+
+## The dashed rectangle: "drag files here", and the handler that threw (tick 248)
+
+**Pattern:** a `<div>` with `ondragover="event.preventDefault()"` and an `ondrop` that reads
+`e.dataTransfer.files`. Gmail attachments, GitHub issue images, Slack, Drive, and essentially every
+uploader built in the last decade. On the modern web this is the *more* common upload path — the
+`<input type=file>` is often only the fallback behind a "browse" link.
+
+**The absence did not read as absence.** With `DataTransfer` inert, `e.dataTransfer` was `undefined`
+and `e.dataTransfer.files` was a **TypeError inside the drop handler**. The page did not ignore the
+drop and fall back — it threw, the dashed rectangle stayed lit, and the upload never started. **A
+handler that throws leaves the UI actively lying**, which is worse than a feature that plainly does
+nothing.
+
+**The opt-in is the part that looks like ceremony and is not.** A dropzone that does not
+`preventDefault()` its `dragover` **never receives a `drop`** — the page has to say it accepts drops.
+So the interaction is a *pair* of handlers, and any host that fires `drop` alone is exercising a path
+no real browser can reach.
+
+**And the default action matters.** If the host performs its default after the page accepted the
+drop, the browser **navigates to the dropped file** and replaces the app the user was uploading to —
+the classic "my app vanished when I missed the drop target" bug.
+
+**Still closed:** pointer-driven drag between elements (no `dragstart` from a draggable source, no
+drag image), so drag-to-REORDER — sortable lists, Trello columns, editor blocks — does not work yet.

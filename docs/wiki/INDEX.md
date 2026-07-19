@@ -311,6 +311,9 @@
   - L804 · The bytes were dropped one layer ABOVE the code that knew how to send them
   - L822 · Installing a getter with no Element binding to hang it on
   - L835 · The fourth dead-end wire in six ticks
+  - L843 · The dropzone: a handler that threw, and an opt-in that looks like ceremony (tick 248)
+  - L855 · Why the whole sequence, not just the interesting event
+  - L873 · A gate over a sequential handler chain has coarser resolution
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -550,4 +553,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-469 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+472 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
