@@ -11152,3 +11152,66 @@ missing, as is IndexedDB (confirmed absent, not stale). `mousedown`/`mouseup` ar
 the click sequence — a page that tracks press-then-release sees neither.
 
 WIKI: docs/wiki/interaction-surface.md
+
+## Tick 252 — the click is a sequence too, and the menu that opens on mousedown never opened
+
+TICK SHAPE: tick 251's own named residue. Having just learned that a double-click is a *sequence*
+rather than an event, the same question one layer down: **`mousedown` and `mouseup` are dispatched
+NOWHERE in the engine** (grep: zero hits, alongside `pointerdown`).
+
+HYPOTHESIS: this is a bigger hole than it sounds, because a large class of real UI does not listen
+for `click` at all. Dropdown menus, select-like comboboxes, drag handles, sliders, press-and-hold
+controls and most custom menus open on **`mousedown`** — deliberately, so the menu is up before the
+button is released. Every one of those is currently un-openable: `dispatch_click` fires `click`, the
+page's `mousedown` handler never runs, and nothing throws.
+
+THE CLAIM THE GATE MUST FALSIFY: the order is `mousedown` → `mouseup` → `click`, and `buttons`
+DIFFERS between them — it is a mask of buttons *currently held*, so it is 1 during `mousedown` and
+**0 during `mouseup`**, because by then the button has been released. A dispatcher that passes the
+same `buttons` to both is wrong in the direction that looks right.
+
+Also: a `preventDefault()` on `mousedown` must NOT cancel the click. It suppresses focus and text
+selection, and pages rely on exactly that (a toolbar button that prevents mousedown to keep the
+editor's selection alive still expects its click to fire).
+
+**THE CAPABILITY.** `dispatch_click` now fires the real pointer sequence — `mousedown` → `mouseup` →
+`click` — with a truthful `buttons` mask. `PageContext::dispatch_mouse_buttons` takes the mask
+explicitly; `dispatch_click_detail` fires the pair then delegates to a new `dispatch_click_inner`.
+
+**THE LABEL SPLIT IS THE STRUCTURAL POINT.** `<label>` forwarding re-enters `dispatch_click_inner`,
+NOT the outer function — a real browser presses the mouse down **once, on the element under the
+pointer**, and forwards only the *click* to the labelled control. Re-entering at the top would press
+a control the pointer never touched. This is why the tick is a two-function split rather than three
+lines added to one.
+
+**RED PROBES EXECUTED, NOT ASSERTED (process rule 3) — three, all predicted, all confirmed:**
+  · derive `buttons` from `button` for both events (the obvious refactor) → `upButtons=1`. A mouse
+    button that is still held after it was released.
+  · label forwarding re-enters the outer fn → `controlDowns=1`. The checkbox receives a phantom
+    press it was never given.
+  · honour the `mousedown` verdict → `seq=down>up` — **the click vanishes entirely.** The fixture's
+    handler calls `preventDefault()` on `mousedown` to preserve selection, which is what every
+    toolbar button in every editor does; obeying it as a click-cancel would silently break them all.
+
+**`buttons` vs `button` is the trap worth carrying.** One is an INDEX, the other a MASK of buttons
+*currently held*. They coincide often enough to hide the bug: for the primary button, `button:0` and
+`buttons:1`; for the right button, `button:2` and `buttons:4`. And on `mouseup` the mask is **0**
+regardless — the press is over. A single derived value is right for `click`/`contextmenu` and wrong
+for every release.
+
+Gate: `engine/page/tests/g_pointer_sequence.rs` (`G_POINTER_SEQUENCE`), 7 claims in one test
+(the per-process `PageContext` constraint from tick 251). Regression: full `manuk-page`
+**128 passed / 1 failed** (was 127/1; the +1 is this gate), the 1 being the PRE-EXISTING
+`hard_wall_detection_and_honest_interstitial` from tick 239.
+
+HARNESS NOTE (observer-owned, not acted on): a mid-build ramdisk flush wiped
+`/dev/shm/manuk-build/debug-incremental/...` under a running `cargo test`, failing the compile with
+`dep-graph.part.bin: No such file or directory`. Re-running succeeded. Reported, not fixed.
+
+Residue, named honestly: still no `pointerdown`/`pointerup`/`pointermove` (the Pointer Events
+surface), so a page written against pointer events rather than mouse events sees nothing — modern
+drag libraries increasingly use them. No `mousemove` between down and up, so drag *gestures* remain
+unreachable; this is the press, not the drag. Coordinates are not carried on the pointer pair
+(`clientX`/`clientY` come from the layout maps only for the coordinate dispatchers).
+
+WIKI: docs/wiki/interaction-surface.md

@@ -6943,11 +6943,39 @@ impl PageContext {
         unsafe {
             let _ = new_reflector(raw_cx, dom as *mut Dom, node);
         }
-        // `buttons` is a BITMASK of held buttons, not the same encoding as `button` (an index):
-        // right is button 2 but bit 2, i.e. `buttons: 2`. They coincide for the right button by
-        // arithmetic accident and differ for the middle one, so both are computed rather than
-        // aliased.
         let buttons = if button == 0 { 1u32 } else { 1u32 << button };
+        self.dispatch_mouse_buttons(
+            runtime, dom, node, ty, detail, button, buttons, layout, styles,
+        )
+    }
+
+    /// [`PageContext::dispatch_mouse`] with an explicit `buttons` mask.
+    ///
+    /// `buttons` is a BITMASK of the buttons **currently held**, and it is not derivable from
+    /// `button` (an index) for the whole sequence: it is `1` during `mousedown` and **`0` during
+    /// `mouseup`**, because by then the button has been released. The derived form is right for a
+    /// `click`/`contextmenu` and wrong for a release, so the release path passes its own.
+    #[allow(clippy::too_many_arguments)]
+    pub fn dispatch_mouse_buttons(
+        &self,
+        runtime: &mut Runtime,
+        dom: &mut Dom,
+        node: NodeId,
+        ty: &str,
+        detail: u32,
+        button: u32,
+        buttons: u32,
+        layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    ) -> Result<bool, String> {
+        set_view_maps(layout, styles);
+        set_current_dom(dom as *mut Dom);
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        unsafe {
+            let _ = new_reflector(raw_cx, dom as *mut Dom, node);
+        }
         let script = format!(
             "__dispatchEvent({}, {{type:{}, detail:{detail}, button:{button}, buttons:{buttons}, \
              bubbles:true, cancelable:true}})",

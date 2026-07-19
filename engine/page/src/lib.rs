@@ -2995,6 +2995,79 @@ impl Page {
         fonts: &FontContext,
         viewport_width: f32,
     ) -> bool {
+        // ── THE POINTER SEQUENCE, which a large class of real UI is the only listener for. ──────
+        //
+        // Dropdown menus, comboboxes, drag handles, sliders and press-and-hold controls listen on
+        // **`mousedown`**, not `click` — deliberately, so the menu is up before the button comes
+        // back up. Firing only `click` leaves every one of them inert, with nothing thrown to
+        // notice. `mousedown` -> `mouseup` -> `click` is the order a real browser produces.
+        //
+        // **`buttons` differs between the two, and that is not a detail.** It is a mask of the
+        // buttons *currently held*: 1 while the primary button is down, and **0 on `mouseup`,
+        // because by then it has been released.** Passing the same mask to both is the shape of
+        // wrong that reads as right.
+        //
+        // A `preventDefault()` on `mousedown` does **not** cancel the click — it suppresses focus
+        // and text selection. Pages depend on precisely that: a toolbar button that prevents
+        // `mousedown` to keep the editor's selection alive still expects its `click`. So the
+        // verdicts here are deliberately discarded.
+        self.dispatch_pointer_pair(node, detail, fonts, viewport_width);
+        self.dispatch_click_inner(node, detail, fonts, viewport_width)
+    }
+
+    /// `mousedown` then `mouseup` on `node`. Verdicts discarded — see the caller's note.
+    fn dispatch_pointer_pair(
+        &mut self,
+        node: manuk_dom::NodeId,
+        detail: u32,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) {
+        #[cfg(feature = "spidermonkey")]
+        {
+            let Some(ctx) = &self.js else { return };
+            let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+                .root_box
+                .node_rects(&self.dom)
+                .into_iter()
+                .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+                .collect();
+            let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+            // (type, buttons-held-during-this-event)
+            for (ty, buttons) in [("mousedown", 1u32), ("mouseup", 0u32)] {
+                if let Err(e) = manuk_js::dispatch_mouse_buttons(
+                    ctx,
+                    &mut self.dom,
+                    node,
+                    ty,
+                    detail,
+                    0,
+                    buttons,
+                    &rects,
+                    &self.styles,
+                ) {
+                    tracing::warn!("{ty} dispatch: {e}");
+                }
+            }
+        }
+        #[cfg(not(feature = "spidermonkey"))]
+        {
+            let _ = (node, detail, fonts, viewport_width);
+        }
+    }
+
+    /// The activation + `click` half, without the pointer sequence. The `<label>` forwarding path
+    /// re-enters HERE rather than at [`Page::dispatch_click_detail`]: a real browser fires
+    /// `mousedown`/`mouseup` **once, on the element actually under the pointer** (the label), and
+    /// forwards only the *click* to the labelled control. Re-entering at the outer function would
+    /// press the mouse down a second time, on a node the pointer never touched.
+    fn dispatch_click_inner(
+        &mut self,
+        node: manuk_dom::NodeId,
+        detail: u32,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
         // **Activation does NOT require a JS context.** A static form with no `<script>` still has
         // working checkboxes in every browser; gating the whole path on `self.js` meant a
         // script-free page's controls were inert. Event dispatch is what needs JS — the toggle is
@@ -3037,7 +3110,7 @@ impl Page {
                 },
             };
             if proceed {
-                return self.dispatch_click_detail(control, detail, fonts, viewport_width);
+                return self.dispatch_click_inner(control, detail, fonts, viewport_width);
             }
             return proceed;
         }

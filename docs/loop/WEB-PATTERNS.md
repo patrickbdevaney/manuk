@@ -1466,3 +1466,26 @@ one is an index, the other a bitmask, and they coincide often enough to hide a b
 **Still closed:** `mousedown`/`mouseup` are not part of the click sequence, so a page tracking
 press-then-release (drag handles, press-and-hold, custom sliders) sees neither. Native `<select>`
 option-choice (`selectedIndex`) has zero implementation and is genuinely missing, not stale.
+
+## The dropdown that opens on mousedown, not click (tick 252)
+
+**Pattern:** a menu, combobox, drag handle, slider or press-and-hold control whose handler is
+`mousedown` — used deliberately so the menu is up *before* the button comes back up. This is most
+custom menus, every `<select>`-like widget built in JS, and the opening move of every drag library.
+
+**The absence was total and silent.** `mousedown` and `mouseup` were dispatched nowhere in the
+engine, so a page with a `mousedown` menu and no `click` listener simply never opened its menu.
+Nothing threw. A host that fires only `click` looks like it is driving the page and is skipping the
+event half the interactive web actually listens for.
+
+**The truthful `buttons` mask is the subtle half.** `buttons` is a bitmask of the buttons *currently
+held*, so it is 1 during `mousedown` and **0 during `mouseup`** — the press is over by then. It is
+not derivable from `button` (an index) across the whole sequence, though the derived form is
+accidentally right for `click`.
+
+**And `preventDefault()` on `mousedown` does not cancel the click** — it suppresses focus and text
+selection. Every rich-editor toolbar button depends on that pairing: prevent the press so the
+document selection survives, then act on the click.
+
+**Still closed:** Pointer Events (`pointerdown`/`pointermove`/`pointerup`) and `mousemove`, so drag
+*gestures* — as opposed to the press that starts them — remain unreachable.

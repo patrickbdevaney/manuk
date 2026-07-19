@@ -1054,6 +1054,42 @@ pub fn dispatch_mouse(
     Ok(true)
 }
 
+/// [`dispatch_mouse`] with an explicit `buttons` mask — `1` on `mousedown`, `0` on `mouseup`.
+#[cfg(feature = "_sm")]
+#[allow(clippy::too_many_arguments)]
+pub fn dispatch_mouse_buttons(
+    ctx: &PageContext,
+    dom: &mut manuk_dom::Dom,
+    node: manuk_dom::NodeId,
+    ty: &str,
+    detail: u32,
+    button: u32,
+    buttons: u32,
+    layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<bool, JsError> {
+    with_runtime(|rt| {
+        ctx.dispatch_mouse_buttons(rt, dom, node, ty, detail, button, buttons, layout, styles)
+            .map_err(|message| JsError { message })
+    })
+}
+
+#[cfg(not(feature = "_sm"))]
+#[allow(clippy::too_many_arguments)]
+pub fn dispatch_mouse_buttons(
+    _ctx: &PageContext,
+    _dom: &mut manuk_dom::Dom,
+    _node: manuk_dom::NodeId,
+    _ty: &str,
+    _detail: u32,
+    _button: u32,
+    _buttons: u32,
+    _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<bool, JsError> {
+    Ok(true)
+}
+
 /// The JS-less build: `<script>`s are parsed into the DOM but not executed.
 #[cfg(not(feature = "_sm"))]
 pub fn run_document_scripts(

@@ -319,6 +319,10 @@
   - L902 · A double-click is a sequence, not an event
   - L919 · A right-click's return value IS the capability
   - L928 · A harness Bar-0 that was not an engine Bar-0
+  - L942 · The pointer sequence (tick 252): the menu that opens on mousedown
+  - L951 · buttons is a mask, button is an index, and they coincide enough to hide the bug
+  - L961 · A label presses down once, on the element under the pointer
+  - L968 · preventDefault() on mousedown is not a click-cancel
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -568,4 +572,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-487 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+491 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

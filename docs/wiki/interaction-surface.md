@@ -938,3 +938,40 @@ A related trap on the way: `eval_for_test` silently does nothing on a page with 
 because no JS context is created. Activation itself does not need JS (`dispatch_click` says so), so
 the checkbox assertions observe through the **a11y tree** instead — which is also how a real agent
 confirms its own action, and doubles as proof the `A11yState` row above is no longer a phantom.
+
+## The pointer sequence (tick 252): the menu that opens on mousedown
+
+Tick 251 established a double-click is a sequence. One layer down the same was true and worse:
+`mousedown`, `mouseup` and `pointerdown` were dispatched **nowhere in the engine**.
+
+A large class of real UI never listens for `click`. Dropdown menus, comboboxes, drag handles,
+sliders and press-and-hold controls open on `mousedown` — deliberately, so the menu is up before the
+button comes back up. All of it was inert, silently.
+
+### `buttons` is a mask, `button` is an index, and they coincide enough to hide the bug
+
+`button` is which button (primary 0, right 2). `buttons` is a bitmask of what is **currently held**
+(primary 1, right 4). Two consequences that a single derived value gets wrong:
+
+- On **`mouseup` the mask is 0** — the press is over. Deriving `buttons` from `button` reports a
+  button still held after release.
+- The derived form happens to be *correct* for `click` and `contextmenu`, which is exactly why the
+  refactor to "just compute it once" is tempting and wrong.
+
+### A label presses down once, on the element under the pointer
+
+`<label>` forwarding re-enters `dispatch_click_inner`, not the outer entry point. A real browser
+fires the pointer pair on the element the pointer is actually over and forwards only the *click* to
+the labelled control. Re-entering at the top gives the control a press it never received — confirmed
+by RED probe (`controlDowns=1`). This is why the change is a function split rather than three lines.
+
+### `preventDefault()` on mousedown is not a click-cancel
+
+It suppresses focus and text selection. Every toolbar button in every rich editor relies on this: it
+prevents `mousedown` to keep the document selection alive, and still expects its `click`. Honouring
+that verdict as a cancel made the click vanish (`seq=down>up`) — a breakage that would have looked
+like "the editor's buttons stopped working" with no error anywhere.
+
+Residue: no Pointer Events (`pointerdown`/`pointerup`/`pointermove`), which modern drag libraries
+increasingly prefer; no `mousemove`, so drag *gestures* are still unreachable. This is the press,
+not the drag.
