@@ -107,6 +107,14 @@ specific competitor build.
 
 ## PART 3 — THE SEVEN PHASES (0–6): what the product *is* at each
 
+> ⚠ **SUPERSEDED by `docs/ENGINEERING-SYNTHESIS.md`** (tick 232), which integrates the
+> `ENGINEERING.MD` competitive research. The table below is retained as the baseline; the
+> synthesis moves four things: the **`JsEngine` seam** into Phase 0–1, **taint + capability
+> tokens** from Phase 6 → 2, the **no-pixels pipeline + intent-aware scheduler** from Phase 5 → 2–3,
+> and replaces the Phase-0 exit criterion with the **oracle gate** (≥0.75 structural fidelity on
+> ≥95% of Tranco top-1000) rather than a checklist percentage. It also adds **Track R** (a Rust JS
+> engine, interpreter+baseline only, spanning all phases behind the seam).
+
 | phase | name | the product at the end of this phase |
 |---|---|---|
 | **0** | **Daily-driver capability** *(IN PROGRESS — 52%)* | **"The browser works."** Faithfully renders and drives almost every mainstream website: doc web, SPAs w/ hydration, social feeds, e-commerce, AI-chat, dev platforms, and YouTube-class media. Human-daily-drivable. Persistence (history/bookmarks/settings/cookies/tabs) already shipped. |
