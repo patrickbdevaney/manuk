@@ -10327,3 +10327,48 @@ matter because the inline fix touches the natural-sizing path.
 `play()`. This is one frame on demand: MEDIA.md tick 1, not tick 2. `isTypeSupported` is unchanged and
 still answers `false`, because a `<video>` that shows one frame is not a `<video>` that plays. And
 `g_video_frame` is not in the verify wall — see tick 239 and docs/loop/GATE-COVERAGE.md.
+
+## Tick 241 — measure-and-pin the unknowns, and one of them is a dead-end wire
+
+TICK SHAPE: probe the constellation's remaining UNKNOWNs and pin each with a measurement.
+
+Board lever (E), and process rule 2 says a cheap re-probe MUST precede any build tick aimed at an
+unknown. Six rows carried `unknown`; **four are now pinned by measurement, two remain and are honestly
+named as jobs rather than mysteries.** An `unknown` is not a neutral cell — it reads as *maybe fine*,
+which is the optimistic direction of the same failure tick 238 found in the pessimistic one.
+
+**THE FINDING WORTH THE TICK — quirks-mode is a DEAD-END WIRE, which is worse than absent.** html5ever
+detects quirks correctly and `engine/html/src/sink.rs:199` stores the verdict in `self.quirks` — a field
+that is **written and never read** (decl `:54`, init `:63`, setter `:200`, **zero readers**). Every
+Stylo call site then hard-codes `QuirksMode::NoQuirks` (`stylo_engine.rs:105/259/275/862/931`,
+`stylo_traits.rs:151`, `stylo_probe.rs:78/106/111`, `stylo_dom.rs:537`). So **the parser knows the
+document is quirks and the style system is never told.** `document.compatMode` (`dom_bindings.rs:5222`)
+is hard-coded `'CSS1Compat'` behind a comment asserting *"our documents are never quirks-mode"* — which
+the parser contradicts on every doctype-less page.
+
+**And the reason this is a finding rather than a tick: flipping `compatMode` ALONE would be a
+regression risk.** Reporting `BackCompat` while still rendering standards makes sites take quirks code
+paths we do not honour — a lie in the other direction. The wire is short (thread `sink.quirks` → `Dom`
+→ ~10 Stylo call sites; **Stylo already implements the quirks themselves**, so this is plumbing, not
+layout math), but rendering and reporting must land TOGETHER or neither. Scoped, not smuggled in here.
+
+**CSP (row 61) and WebTransport (row 95): zero hits, absent BY CONSTRUCTION.** A dependency/grep fact,
+which is stronger than a failed fixture — that cannot distinguish a missing feature from a bad case.
+CSP's consequence is two-sided and worth stating: the security property is absent, *and* we do not
+mis-enforce a policy we never parsed. WebTransport depends on HTTP/3, which V1-SCOPE.md explicitly
+skips, so it is a deliberate deferral; keep it honestly absent so feature detection fails cleanly.
+
+**Row 111 was stale about our own instruments.** It claimed "F1/F2 don't cover a big single DOM". They
+do: the `large` fixture is **357.2KB / 8808 nodes**, bracketing GitHub's 1k-5k-line blobs, at ~150ms
+(parse 6.6 / cascade 6.5 / layout 98 / dlist 6.4 / paint 30). **The shape is the result:** layout is
+65% of the pipeline and scales ~linearly (1208→8808 nodes is 7.3×; 13→98ms is 7.5×) — so there is no
+accidental O(n²) hiding there, which is the thing that would have made big blobs hopeless. The genuine
+remaining unknown is not throughput but **interactivity** on such a page (scroll, selection, re-layout
+after an edit), which F1/F2 do not model. That is a narrower and more useful question than the row asked.
+
+**The two left unpinned, named as work rather than left as `?`:** the 100-tab RSS benchmark (row 79 —
+defined, never run; this is MEM-HARNESS, and it can falsify our own memory positioning, which is the
+point) and test262 (row 100 — never run; a local suite exists at `v8/test/test262`, 296K, so the
+missing piece is a runner against our embedded SpiderMonkey, not the corpus).
+
+No capability was claimed that a gate does not hold; nothing in this tick changes engine behaviour.
