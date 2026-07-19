@@ -10427,3 +10427,41 @@ manuk-paint 17, manuk-css(stylo) 33.
 a real quirk, deliberately left rather than quietly claimed. `LimitedQuirks` folds to `false` (it does
 not enable the unitless-length quirk, which is the behaviour this currently drives). And
 `g_quirks_mode` is not in the verify wall — tick 239, `docs/loop/GATE-COVERAGE.md`.
+
+## Harness note (agent, tick 243) — the WALL is 436s again; tick 243 is PARKED, not lost
+
+`scripts/` is observer-owned and untouched. This is a report with measurements, not a diagnosis to act on.
+
+**State.** Tick 243 (quirks completed: case-insensitive id/class + the `RuleIndex` key fix) is finished
+and GREEN — full manuk-page suite 122 passed / 1 pre-existing failure, all modified crates green, both
+RED probes executed. It is parked on **`wip/tick243-quirks-caseinsensitive` (49ebe48)**. Do not redo it;
+cherry-pick it once the wall is under the ceiling. Main is clean at tick 242.
+
+**Why it did not land.** `ratchet.sh check` refuses on `WALL 255s > 93s`. That 255s is **tick 242's own
+receipt** (head 2f55933, 08:05) — the ratchet judges the previous receipt, so tick 242 slipped through on
+tick 241's fast one and tick 243 inherited the slow reading. A fresh warm verify then measured **436s
+(build 37s, gate 436s, all 65 gates GREEN, `prewarm_launch_seconds: 0`)**.
+
+**What it is NOT — ruled out by measurement, so nobody re-derives it:**
+- **Not an engine perf regression.** F1 cascade 6.32ms (was 6.50 before the quirks work); F2 6.18x. The
+  quirks wiring did not slow the cascade.
+- **Not the relink/stem-prune pathology from ticks 235-238.** Timed directly: first run of a gate 8.35s,
+  **second and third runs 0.59s / 0.60s**. And feature alternation does not evict — after building
+  `--features spidermonkey`, going back to `--features stylo,spidermonkey` was still **0.58s**. Artifacts
+  are staying put; the 12h age floor is holding.
+- **Not the build.** `build_seconds: 37`, and verify's own prewarm reported 0s (already warm).
+
+**What is left, as evidence rather than a claim.** Every sub-second unit gate is listed green in the log;
+the remaining time is in the gates that drive a real browser or the whole corpus — parity (72/72 probes
+across **30 pages**), fidelity, clickability (**484 links**), js conformance — plus section B's
+`--no-default-features` headless build, which `docs/wiki` already records as a feature-thrash hazard.
+Those same gates ran inside a 58-72s wall five times earlier today on this box, so the variable is
+environmental rather than a new cost in the gate set.
+
+**One more data point that may matter:** `/home` is at **91% (27G free)**, and `disk-hygiene.sh`'s safety
+valve fires below 25G — i.e. we are close to the threshold where the prune resumes mid-wall. Separately,
+a full page sweep died earlier with `failed to move dependency graph .../dev/shm/manuk-build/
+debug-incremental/...dep-graph.bin: No such file` — the ramdisk incremental cache being flushed under a
+running build (`disk-hygiene` calls `ramdisk.sh --flush`). A clean re-run was fine.
+
+Continuing with browser capability per scope; the loop is not blocked on this.
