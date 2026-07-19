@@ -19,37 +19,38 @@ R="${1:-.git/fidelity-sweep/results.tsv}"
 awk -F'\t' '
 NR==1 { next }
 {
-  cat=$1; st=$3; vis=$4; cov=$5; ids=$6
+  cat=$1; st=$3; vis=$4; cov=$5; pl=$6; ids=$7
   tot[cat]++; TOT++
   stat[cat"\t"st]++; STAT[st]++
   # A site only contributes to the flattering means if it produced a number at all.
   if (vis != "" && vis+0 == vis) { vs[cat]+=vis; vn[cat]++; VS+=vis; VN++ }
   # COVERAGE counts ONLY where the structural probe had a real sample (status OK).
-  if (st == "OK" && cov != "" && cov+0 == cov) { cs[cat]+=cov; cn[cat]++; CS+=cov; CN++; idt[cat]+=ids; IDT+=ids }
+  if ((st == "OK" || st == "OK_SLOW") && cov != "" && cov+0 == cov) { cs[cat]+=cov; cn[cat]++; CS+=cov; CN++; idt[cat]+=ids; IDT+=ids }
+  if ((st == "OK" || st == "OK_SLOW") && pl != "" && pl+0 == pl) { ps[cat]+=pl; pn[cat]++; PS+=pl; PN++ }
   # The honest denominator: every attempted site. A failure scores ZERO, it does not vanish.
   hv[cat] += (vis != "" && vis+0 == vis) ? vis : 0; HV += (vis != "" && vis+0 == vis) ? vis : 0
-  ok = (st=="OK")
+  ok = (st=="OK" || st=="OK_SLOW")
   hc[cat] += (ok && cov != "" && cov+0 == cov) ? cov : 0; HC += (ok && cov != "" && cov+0 == cov) ? cov : 0
 }
 END {
   printf "\n══ FID-SWEEP — REAL-SITE FIDELITY, CATEGORY-STRATIFIED ══\n\n"
   printf "%-14s %5s %5s %6s %6s  | %8s %8s | %8s %8s\n", \
-         "category","sites","ok","noids","fail","vis(ok)","VIS(all)","cov(ok)","COV(all)"
+         "category","sites","ok","noids","fail","vis(ok)","VIS(all)","cov(ok)","PLACE(ok)"
   printf "%s\n", "---------------------------------------------------------------------------------------------"
   for (c in tot) {
     nook = stat[c"\t"OK]
     noids = stat[c"\tNO_IDS"] + stat[c"\tLOW_SAMPLE"]
-    fail = tot[c] - (stat[c"\tOK"]+0) - noids
+    fail = tot[c] - ((stat[c"\tOK"]+stat[c"\tOK_SLOW"]+0)) - noids
     printf "%-14s %5d %5d %6d %6d  | %7.1f%% %7.1f%% | %7.1f%% %7.1f%%\n", \
-      c, tot[c], stat[c"\tOK"]+0, noids, fail, \
+      c, tot[c], (stat[c"\tOK"]+stat[c"\tOK_SLOW"]+0), noids, fail, \
       (vn[c]?vs[c]/vn[c]:0), (tot[c]?hv[c]/tot[c]:0), \
-      (cn[c]?cs[c]/cn[c]:0), (tot[c]?hc[c]/tot[c]:0)
+      (cn[c]?cs[c]/cn[c]:0), (pn[c]?ps[c]/pn[c]:0)
   }
   printf "%s\n", "---------------------------------------------------------------------------------------------"
   printf "%-14s %5d %5d %6d %6d  | %7.1f%% %7.1f%% | %7.1f%% %7.1f%%\n", \
-    "TOTAL", TOT, STAT["OK"]+0, STAT["NO_IDS"]+STAT["LOW_SAMPLE"]+0, \
-    TOT-(STAT["OK"]+0)-(STAT["NO_IDS"]+STAT["LOW_SAMPLE"]+0), \
-    (VN?VS/VN:0), (TOT?HV/TOT:0), (CN?CS/CN:0), (TOT?HC/TOT:0)
+    "TOTAL", TOT, (STAT["OK"]+STAT["OK_SLOW"]+0), STAT["NO_IDS"]+STAT["LOW_SAMPLE"]+0, \
+    TOT-((STAT["OK"]+STAT["OK_SLOW"]+0))-(STAT["NO_IDS"]+STAT["LOW_SAMPLE"]+0), \
+    (VN?VS/VN:0), (TOT?HV/TOT:0), (CN?CS/CN:0), (PN?PS/PN:0)
 
   printf "\n  vis(ok)/cov(ok) = mean over sites that PRODUCED a number  <- the flattering read\n"
   printf "  VIS(all)/COV(all) = every attempted site in the denominator, failures = 0  <- THE HONEST ONE\n"
@@ -62,13 +63,14 @@ END {
   printf "  They are excluded from cov(ok) and counted as zero in COV(all). Never scored as passes.\n"
   if (CN) printf "  Mean id sample size on scored sites: %.0f ids.\n", IDT/CN
 
+  printf "\n  PLACE(ok) = %% of elements within 8px of Chrome. COVERAGE SATURATES (we render the boxes);\n  PLACEMENT is what actually discriminates -- github scored 100%% coverage and 0.7%% visual.\n"
   printf "\n══ PHASE-0 EXIT GATE ══\n"
   printf "  rule: >=0.75 structural fidelity on >=95%% of the corpus, plus >=0.70 per category\n"
-  gate_all = (TOT?HC/TOT:0)
-  printf "  current honest COV(all): %.1f%%  ->  %s\n", gate_all, (gate_all>=75 ? "MEETS the 0.75 bar" : "BELOW the 0.75 bar")
+  gate_all = (PN?PS/PN:0)
+  printf "  gate on PLACEMENT (not saturated coverage): %.1f%%  ->  %s\n", gate_all, (gate_all>=75 ? "MEETS the 0.75 bar" : "BELOW the 0.75 bar")
 }
 ' "$R"
 
 echo
 echo "  full rows: $R    ·   worst scorers:"
-awk -F'\t' 'NR>1 && $3=="OK" && $5!="" {print $5"\t"$1"\t"$2}' "$R" | sort -n | head -8 | sed 's/^/    /'
+awk -F'\t' 'NR>1 && ($3=="OK"||$3=="OK_SLOW") && $5!="" {print $5"\t"$1"\t"$2}' "$R" | sort -n | head -8 | sed 's/^/    /'
