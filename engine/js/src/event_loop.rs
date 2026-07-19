@@ -1799,7 +1799,21 @@ const PRELUDE: &str = r#"
         ro('videoHeight', 0);
 
         // Writable, because scripts set them and expect them to stick. They just do not do anything.
-        el.currentTime = 0; el.volume = 1; el.muted = false; el.playbackRate = 1;
+        el.volume = 1; el.muted = false; el.playbackRate = 1;
+        // `currentTime` is NOT a plain data property, because it is the CLOCK the caption timeline
+        // runs on. Storing the number and telling nobody is what made `cuechange` unreachable: a
+        // page can only learn that the caption changed by being told, and the only thing that knows
+        // is the write that moved the clock past a cue boundary.
+        el.__currentTime = 0;
+        Object.defineProperty(el, 'currentTime', {
+          configurable: true,
+          get: function () { return el.__currentTime; },
+          set: function (v) {
+            var n = Number(v);
+            el.__currentTime = isFinite(n) ? n : 0;
+            if (el.__syncTextTracks) { el.__syncTextTracks(); }
+          }
+        });
         el.autoplay = el.autoplay || false; el.loop = el.loop || false;
         el.__ms = null;
 
@@ -1899,6 +1913,38 @@ const PRELUDE: &str = r#"
         }
 
         el.__textTracks = el.__textTracks || [];
+
+        // ── THE CAPTION TIMELINE — `cuechange`, which is the ONLY way a caption ever reaches a
+        //    screen.
+        //
+        // `activeCues` alone is a POLL-ONLY surface, and nothing polls it. Every caption renderer
+        // there is — the players' own overlays, and the `<track>` UI — is
+        // `track.addEventListener('cuechange', render)`. So a track that answers `activeCues`
+        // correctly and never fires is a track whose captions are computed and never shown: the
+        // same shape as the inert object tick 256 replaced, one layer further along.
+        //
+        // The event fires on CHANGE, not on every clock write. A player writes `currentTime` on
+        // every frame; a listener that re-renders its caption node each time is a DOM write per
+        // frame for a line of text that did not change.
+        var sameCues = function (a, b) {
+          if (a.length !== b.length) { return false; }
+          // Identity, position by position — NOT length. Seeking from one single-cue line straight
+          // to another is the common case (a click on the transcript), both sets are length 1, and
+          // a length comparison reports "no change" while the viewer sits on the previous line.
+          for (var i = 0; i < a.length; i++) { if (a[i] !== b[i]) { return false; } }
+          return true;
+        };
+        el.__syncTextTracks = function () {
+          var tracks = el.__textTracks || [];
+          for (var i = 0; i < tracks.length; i++) {
+            var tr = tracks[i];
+            var now = tr.activeCues;
+            if (sameCues(now, tr.__lastActive || [])) { continue; }
+            tr.__lastActive = now;
+            tr.__fire('cuechange');
+          }
+        };
+
         el.addTextTrack = function (kind, label, language) {
           var track = {
             kind: kind || 'subtitles',
@@ -1909,20 +1955,61 @@ const PRELUDE: &str = r#"
             // Every player sets `mode = 'showing'` as a deliberate separate step for exactly this
             // reason; a track that served cues regardless of mode would render subtitles the user
             // turned off.
-            mode: 'disabled',
+            __mode: 'disabled',
             cues: [],
+            __lastActive: [],
+            __listeners: [],
+            oncuechange: null,
             addCue: function (cue) {
               if (!cue) { return; }
               cue.track = this;
               this.cues.push(cue);
               // Start order, so the caption a viewer sees first is first.
               this.cues.sort(function (a, b) { return a.startTime - b.startTime; });
+              // A cue appended over the CURRENT time is on screen the moment it lands — this is the
+              // normal case for a live/segmented stream, where cues arrive while the clock runs.
+              el.__syncTextTracks();
             },
             removeCue: function (cue) {
               var i = this.cues.indexOf(cue);
-              if (i >= 0) { this.cues.splice(i, 1); }
+              if (i >= 0) { this.cues.splice(i, 1); el.__syncTextTracks(); }
+            },
+            addEventListener: function (type, fn) {
+              if (typeof fn === 'function') { this.__listeners.push({ type: String(type), fn: fn }); }
+            },
+            removeEventListener: function (type, fn) {
+              for (var i = 0; i < this.__listeners.length; i++) {
+                if (this.__listeners[i].type === String(type) && this.__listeners[i].fn === fn) {
+                  this.__listeners.splice(i, 1); return;
+                }
+              }
+            },
+            __fire: function (type) {
+              var ev = { type: type, target: this, currentTarget: this, bubbles: false, cancelable: false };
+              var on = this['on' + type];
+              if (typeof on === 'function') { on.call(this, ev); }
+              // A copy, because a listener that removes itself while we iterate must not make the
+              // loop skip its neighbour.
+              var ls = this.__listeners.slice();
+              for (var i = 0; i < ls.length; i++) {
+                if (ls[i].type === type) { ls[i].fn.call(this, ev); }
+              }
             }
           };
+          // `mode` is an accessor for the same reason `currentTime` is: turning captions ON is a
+          // state change the renderer must be told about. `mode = 'showing'` with a cue already
+          // under the playhead means a caption is now on screen, and the listener that draws it has
+          // no other moment to learn that.
+          Object.defineProperty(track, 'mode', {
+            configurable: true,
+            get: function () { return this.__mode; },
+            set: function (v) {
+              var m = String(v);
+              if (m !== 'disabled' && m !== 'hidden' && m !== 'showing') { return; }
+              this.__mode = m;
+              el.__syncTextTracks();
+            }
+          });
           Object.defineProperty(track, 'activeCues', {
             configurable: true,
             get: function () {

@@ -1581,3 +1581,30 @@ implementation that ignores mode shows subtitles to a user who turned them off.
 
 **Still closed:** no `cuechange` event, `<track src>` is not fetched, and the caption *parser* and
 the caption *API* are both built but not yet connected to each other.
+
+## The caption renderer that was never called (tick 257)
+
+**Pattern:** `track.addEventListener('cuechange', function () { render(this.activeCues); })` — the
+entire caption *display* loop, in hls.js, dash.js, video.js, Plyr and every hand-rolled player. None
+of them poll `activeCues`; they all wait to be told.
+
+**The class this unlocks:** any `<video>` whose captions are drawn by the page's own JavaScript —
+which is every adaptive-streaming site, because segmented streams carry captions inside the media
+segments and the player owns the overlay. Before this tick the cues were parsed correctly, held
+correctly, and reported correctly to a question nobody asked. The renderer was never invoked, so the
+caption area stayed empty for the whole video with nothing in the DOM or console to see.
+
+**`currentTime` is the clock, not a number.** A media element that stores the time and tells nobody
+cannot fire this event at all — the only thing that knows a cue boundary was crossed is the write
+that moved past it. Same for `mode`: turning captions on is a state change, and with a long cue
+already under the playhead there is no later moment for the renderer to learn about it.
+
+**Fire on CHANGE, never on every write.** Players write `currentTime` every frame. And compare the
+active sets by cue IDENTITY, not by length: seeking from one single-cue line straight to another (a
+transcript click — the common case) leaves both sets at length 1, and a length comparison reports
+no-change while the viewer sits on the previous caption.
+
+**Still closed:** `<track src>` is not fetched, so the caption *parser* and the caption *API* remain
+unconnected; cue positioning settings are inert; the UA paints no cue of its own (a page that relies
+on native caption rendering rather than its own overlay still shows nothing); no per-cue
+`enter`/`exit` events.

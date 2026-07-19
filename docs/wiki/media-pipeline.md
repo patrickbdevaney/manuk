@@ -568,3 +568,54 @@ Residue: **the two halves of captions are built and not connected.** Nothing fet
 and `TextTrack` does not reach the tick-255 parser — a page must bring its own cues today. No
 `cuechange` event, so a listener-based player sees nothing; cue settings are inert; no cue is
 painted.
+
+## M7c — the caption timeline fires (tick 257), and the poll nobody was making
+
+Tick 255 built the WebVTT parser; tick 256 built the `TextTrack` that holds cues and answers
+`activeCues`. Both were correct, and both were **poll-only**. Nothing polls.
+
+Every caption renderer that exists — the players' own overlays, and the `<track>` UI — is
+`track.addEventListener('cuechange', render)`. So a track that computes exactly the right active
+cues and never fires is a track whose captions are **computed and never shown**: the same failure
+shape as the inert object tick 256 replaced, one layer further along. This is the third time in this
+module the bug has been *"the value is right and nobody is told"*, and it is worth naming as a class:
+a correct getter is not a capability until something delivers it.
+
+### `currentTime` is not a number, it is the clock
+
+The tick's structural move is that `currentTime` stopped being a plain data property. Storing the
+number and telling nobody is precisely what made `cuechange` unreachable — the only thing that knows
+a caption boundary was crossed is the write that moved the clock past it. It is now an accessor whose
+setter recomputes every track's active set. `mode` became an accessor for the same reason: turning
+captions **on** is a state change, and with a long cue already under the playhead the renderer has no
+other moment to learn about it.
+
+### The comparison is by IDENTITY, and length is the trap
+
+`cuechange` must fire on *change*, not on every write — a player writes `currentTime` every frame,
+and a listener that redraws its caption node each time is a DOM write per frame for a line of text
+that did not change. So the sync diffs the new active set against the last one. The tempting diff is
+`a.length !== b.length`, and it is wrong in the **most common** case: seeking from one single-cue
+line straight to another (a click on the transcript) leaves both sets at length 1, scores as
+no-change, and the viewer sits on the previous caption. The diff is element identity, position by
+position.
+
+### Three RED probes, three distinct predicted bugs (process rule 3)
+
+The gate was green on the first run, so it was made to fail three ways:
+
+| probe | result | what it is in a real player |
+|---|---|---|
+| compare by length only | `seek=1:C` (expected `seek=2:A`) | seek lands, the caption never updates |
+| fire unconditionally from the setter | `off=3` and `same=7` | fires on a **disabled** track, i.e. renders subtitles the user turned off; and an event storm |
+| `mode` back to a data property | `on=0:-` and `offagain=3:A+LIVE` | captions turned on stay blank until the next boundary; captions turned off stay **burned on screen** |
+
+Gate: `engine/page/tests/g_cue_change.rs` (`G_CUE_CHANGE`).
+
+### Residue, named honestly
+
+`<track src>` is still not fetched, so `TextTrack` still does not reach the parser landed at tick 255
+— the two halves of captions remain unconnected, and connecting them needs the network path, not
+another prelude tick. Cue settings on `VTTCue` are still accepted and inert, so nothing *positions* a
+caption, and no cue is painted anywhere: `cuechange` now tells a page's own renderer what to draw,
+but the UA draws nothing itself. `enter`/`exit` events on individual cues are absent.

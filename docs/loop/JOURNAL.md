@@ -11422,3 +11422,49 @@ connected**, which is the next tick. Cue settings on `VTTCue` are accepted and i
 positions a caption, and no cue is painted anywhere.
 
 WIKI: docs/wiki/media-pipeline.md
+
+## Tick 257 — the captions were computed correctly and nobody was ever told
+
+TICK SHAPE: tick 256's residue, and the same failure class a third time. The parser (255) is right;
+the `TextTrack` (256) is right; `activeCues` returns exactly the right cues. It is a **poll-only
+surface, and nothing polls.** Every caption renderer that exists — the players' own overlays and the
+`<track>` UI — is `track.addEventListener('cuechange', render)`. A getter that is correct and
+unreachable is not a capability; it is the inert-object shape one layer further along.
+
+WHY THIS AND NOT `<track src>`: the other half of the residue needs the network path (fetch the VTT,
+parse it in Rust, land it as a track) and is a subsystem tick, not a prelude tick. `cuechange` needs
+no network, and it is the mechanism by which *any* caption reaches a screen — including, later, the
+`<track>` ones.
+
+**THE CAPABILITY.** `currentTime` stops being a data property and becomes the CLOCK: an accessor
+whose setter recomputes every track's active set and fires `cuechange` on the ones that changed.
+`mode` becomes an accessor for the same reason — turning captions ON is a state change with no other
+moment to observe it. `TextTrack` gains real `addEventListener`/`removeEventListener`/`oncuechange`,
+and `addCue`/`removeCue` sync (a cue appended over the playhead is on screen the instant it lands,
+which is the live/segmented-stream case).
+
+HYPOTHESIS, and it was the right one: the claim most likely to be got wrong is the DIFF. The
+tempting one is `a.length !== b.length`, and it fails in the MOST COMMON case — seeking from one
+single-cue line straight to another (a transcript click) leaves both sets at length 1, scores
+no-change, and the viewer sits on the previous caption. The diff is element identity, position by
+position.
+
+**RED PROBES EXECUTED (process rule 3) — the gate was GREEN first run, so it was made to fail three
+ways, each a distinct predicted bug, all three confirmed:**
+  · compare by length only → `seek=1:C`, expected `seek=2:A`. The seek lands and the caption never
+    updates.
+  · fire unconditionally from the setter → `off=3` and `same=7`. Fires 3x on a **disabled** track
+    (renders subtitles the user turned off) and storms 3 events for 3 clock writes inside one cue.
+  · `mode` back to a plain data property → `on=0:-` and `offagain=3:A+LIVE`. Captions turned on stay
+    blank until the next boundary; captions turned off stay **burned on screen**.
+
+Gate: `engine/page/tests/g_cue_change.rs` (`G_CUE_CHANGE`), one test, six timeline stages.
+No regression: tick 256's `g_text_tracks` still green on this tree.
+
+Residue, named honestly: `<track src>` is still not fetched, so the 255 parser still has no page-side
+consumer — the two halves of captions remain unconnected. `VTTCue` settings are still accepted and
+inert, so nothing POSITIONS a caption, and the UA still paints no cue itself: `cuechange` tells a
+page's own renderer what to draw, which is what the streaming players need, and is not the same as
+the browser rendering captions. Per-cue `enter`/`exit` events are absent.
+
+WIKI: docs/wiki/media-pipeline.md

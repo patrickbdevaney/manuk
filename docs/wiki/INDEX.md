@@ -435,6 +435,11 @@
   - L542 · M7b — the TextTrack API (tick 256), and the track nobody turned on
   - L552 · mode is how "captions off" is represented
   - L560 · The same plural lesson, one layer up
+  - L572 · M7c — the caption timeline fires (tick 257), and the poll nobody was making
+  - L584 · currentTime is not a number, it is the clock
+  - L593 · The comparison is by IDENTITY, and length is the trap
+  - L603 · Three RED probes, three distinct predicted bugs (process rule 3)
+  - L615 · Residue, named honestly
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -586,4 +591,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-505 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+510 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
