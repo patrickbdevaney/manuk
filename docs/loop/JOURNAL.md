@@ -11311,3 +11311,58 @@ it. Multi-select actuation (choosing several) still has no entry point; `select_
 index.
 
 WIKI: docs/wiki/interaction-surface.md
+
+## Tick 255 — captions: the cue list that is a LIST because two people talk at once
+
+TICK SHAPE: board CO-#1 (A) MEDIA, step M7. Measured first: `video.textTracks` is `[]` and
+`addTextTrack()` returns `{cues: [], activeCues: [], mode: 'disabled'}` — an inert object that
+reports success. There is no VTT parser anywhere in the engine.
+
+Captions are table stakes rather than polish: they are an accessibility requirement, they are how a
+large fraction of viewers watch video at all, and they are the one part of the media stack that needs
+**no decoder** — which is exactly why it is reachable now while M6b-element is not.
+
+HYPOTHESIS: the shape most likely to be got wrong is `active_at(t)`. **Cues OVERLAP.** Two speakers
+captioned simultaneously, a speaker label held across a line, a translation over a sign — all
+routinely produce two cues live at once, so the query must return a LIST. An `Option<&Cue>` compiles,
+reads as reasonable, and silently drops the second speaker for the entire time both are on screen.
+
+THE OTHER CLAIMS THE GATE MUST FALSIFY: hours are OPTIONAL in a timestamp (`00:01.000` is the common
+form, and a parser demanding `HH:MM:SS` rejects most real files); `NOTE` blocks are comments and must
+never render as a caption; cue SETTINGS (`align:start position:50%`) follow the timestamp on the same
+line and must not leak into the caption text.
+
+**THE CAPABILITY.** `manuk_media::vtt` — `VttTrack::parse` + `active_at(t)`. **Not feature-gated**:
+a caption file is text, so this needs no decoder, no C toolchain and no dependency, which is exactly
+why M7 is reachable while M6b-element is not.
+
+**RED PROBES EXECUTED (process rule 3) — AND ONE FAILED TO GO RED, WHICH IS THE TICK'S BEST FINDING:**
+  · `active_at` returns the FIRST match instead of all → **1 cue instead of 2** at t=4.0, and every
+    other assertion in the file stayed green. The plural question answered in the singular.
+  · require hours in `parse_timestamp` → the track comes out with **0 cues and NO error**. Predicted
+    "rejects the common form"; what it actually does is parse "successfully" into silence, because a
+    bad timestamp skips its cue rather than failing the file. **Captions simply absent, nothing
+    logged** — worse than the predicted failure.
+  · disable the `NOTE` branch → **STAYED GREEN.** The claim was VACUOUS. My fixture's NOTE was
+    ordinary prose, so with the comment branch gone it fell through to the generic "neither this
+    line nor the next is a timing line, skip it" path and produced the right answer for the wrong
+    reason. **Two code paths, one test, and the test could not tell them apart.** Fixed by making
+    the NOTE body *contain a timestamp line* — the only shape that distinguishes them. It now goes
+    red with **6 cues**, rendering the translator's private remark on screen as a caption.
+
+That third probe is the reason process rule 3 says EXECUTE, never assert. I had written the RED
+recipe in the module header confidently and it was wrong; a gate I would have shipped as covering
+`NOTE` handling covered nothing. **The probe did not verify the fix — it verified the TEST**, which
+is the more valuable direction and the one that only shows up if you actually run it.
+
+Gate: `engine/media/tests/vtt_captions.rs` (`G_VTT_CAPTIONS`), 2 tests / 17 claims.
+Regression: full `manuk-media` **23 passed / 0 failed** under `--features audio,video`.
+
+Residue, named honestly: this is the PARSER, not the pipeline. Nothing fetches a `<track src>`,
+`video.textTracks` is still the `[]` stub and `addTextTrack` still returns the inert object, and no
+cue is ever painted — wiring parse → `TextTrack` → the `Transport` clock → a rendered caption box is
+its own tick. Cue settings are discarded rather than honoured, so positioning/alignment is ignored;
+inline cue markup (`<v Alice>`, `<i>`, `<c.classname>`) is kept as literal text; and regions,
+`STYLE` blocks and chapter tracks are skipped rather than supported.
+
+WIKI: docs/wiki/media-pipeline.md

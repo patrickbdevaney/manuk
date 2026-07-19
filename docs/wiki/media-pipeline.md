@@ -497,3 +497,44 @@ every file whose tracks are not exactly equal in length — which is most of the
 Residue: still no device. `AudioClock` is fed by whoever owns the `cpal` stream, and nothing owns one
 yet — decoded PCM correctness is gateable headlessly, audible playback is not. And the `<video>`
 element's JS surface still answers the pre-decode era's honest NO (M6b-element, unbuilt).
+
+## M7 — captions (tick 255), and a probe that verified the TEST
+
+`VttTrack::parse` + `active_at(t)`, in `manuk_media::vtt`. **Not feature-gated** — a caption file is
+text, so this is the one part of the media stack needing no decoder, which is why it lands while the
+`<video>` element wiring does not.
+
+### `active_at` returns a LIST
+
+Cues overlap: two speakers captioned at once, a speaker label held across lines, a translation over
+an on-screen sign. So "what is showing at `t`" is a *set*. `Option<&Cue>` compiles, reads as
+reasonable, and silently drops the second speaker for the whole overlap — the same shape as tick
+254's `selectedOptions`, the plural question answered in the singular, where the wrong answer looks
+valid rather than erroring.
+
+### The failure mode of a strict parser is SILENCE, not rejection
+
+Hours are optional (`00:01.500 --> 00:04.000` is the common form). A parser demanding `HH:MM:SS` was
+predicted to "reject real files". What it actually does — measured — is return a track with **zero
+cues and no error**, because a malformed timestamp skips its own cue rather than failing the file.
+The video plays with no captions and nothing is logged. **Leniency is not sloppiness here: strictness
+converts a partial success into a silent total failure.**
+
+### The probe that stayed GREEN, and why it is the best result of the tick
+
+Disabling the `NOTE` comment branch **did not fail the gate**. The fixture's NOTE was ordinary prose,
+so without the branch it fell through to the generic "neither line is a timing line, skip it" path
+and produced the right answer for the wrong reason. Two code paths, one test, and the test could not
+distinguish them — the `NOTE` assertion was **vacuous**.
+
+The fix is a fixture whose NOTE body *contains a timestamp line*, the only shape that separates the
+paths. It now goes red with 6 cues, printing the translator's private remark over the video.
+
+**This is the argument for process rule 3 in its strongest form.** The RED recipe was written
+confidently in the module header and was simply wrong. Running it did not verify the fix — **it
+verified the test**, and that direction only ever shows up if you execute the probe instead of
+asserting it. A gate can be green, well-commented, and measuring nothing.
+
+Residue: the parser, not the pipeline. Nothing fetches `<track src>`, `textTracks` is still the `[]`
+stub, no cue is painted. Cue settings are discarded (no positioning), inline markup (`<v Alice>`,
+`<i>`) stays literal, and regions/STYLE/chapters are skipped.

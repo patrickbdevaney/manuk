@@ -59,6 +59,12 @@ pub use video::{
     VideoError,
 };
 
+/// WebVTT captions (M7). **Not feature-gated**: a caption file is text, so this needs no decoder,
+/// no C toolchain and no dependency — which is exactly why it is reachable while the `<video>`
+/// element wiring is not.
+pub mod vtt;
+pub use vtt::{Cue, VttError, VttTrack};
+
 /// The presentation clock (M6). Gated behind `video` because [`playback::FrameTimeline`] decodes
 /// through [`video::H264Decoder`] — the same isolation reason `video` itself is opt-in: openh264
 /// compiles C, and it must stay out of the ~25 gate binaries reached through `manuk-js`.

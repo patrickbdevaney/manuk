@@ -1539,3 +1539,25 @@ first address the wrong option.
 
 **Still closed:** these are snapshot arrays, not live `HTMLOptionsCollection`s — `options.item()`,
 `namedItem()`, `select.add()`/`remove()` are absent, and multi-select actuation has no entry point.
+
+## The captions two people are speaking over each other in (tick 255)
+
+**Pattern:** `<track kind="captions" src="...vtt">` — an accessibility requirement, a legal
+requirement in many contexts, and how a large fraction of viewers watch video at all.
+
+**Cues overlap, so "what is on screen now" is a LIST.** Two speakers captioned simultaneously, a
+speaker label held across lines, a translation over an on-screen sign. Answering in the singular
+drops the second speaker for the entire span where both are live — a wrong answer that looks like a
+valid one.
+
+**A strict parser fails SILENTLY, not loudly.** Hours are optional in a WebVTT timestamp
+(`00:01.500` is the common form), and a parser demanding `HH:MM:SS` does not reject the file — it
+skips every cue and returns an empty track. The video plays with no captions and nothing is logged.
+
+**`NOTE` blocks are comments shaped exactly like cues**, and rendering one puts a translator's
+private remark on screen. **Cue settings share the timestamp line** (`align:start position:50%`) and
+are not caption text.
+
+**Still closed:** nothing fetches `<track src>` yet and no cue is painted — this is the parser, not
+the pipeline. Positioning settings are discarded, and inline cue markup (`<v Alice>`, `<i>`) is kept
+as literal text.

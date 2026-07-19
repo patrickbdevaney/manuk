@@ -428,6 +428,10 @@
   - L466 · Sync SNAPS; it does not blend
   - L478 · 44100 and 30000 are incommensurate — an assertion written wrong first
   - L490 · One stream ends before the other
+  - L501 · M7 — captions (tick 255), and a probe that verified the TEST
+  - L507 · active_at returns a LIST
+  - L515 · The failure mode of a strict parser is SILENCE, not rejection
+  - L523 · The probe that stayed GREEN, and why it is the best result of the tick
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -579,4 +583,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-498 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+502 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
