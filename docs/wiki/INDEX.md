@@ -323,6 +323,10 @@
   - L951 · buttons is a mask, button is an index, and they coincide enough to hide the bug
   - L961 · A label presses down once, on the element under the pointer
   - L968 · preventDefault() on mousedown is not a click-cancel
+  - L979 · The select that submitted correctly and read as empty (tick 253)
+  - L989 · "Nothing selected" vs "nothing selected yet"
+  - L1000 · Two more traps, both confirmed by probe
+  - L1008 · input then change — and React only hears the first
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -572,4 +576,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-491 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+495 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

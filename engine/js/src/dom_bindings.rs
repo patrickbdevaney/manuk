@@ -1645,6 +1645,18 @@ unsafe fn define_members(
         // Control IDL reflections.
         prop_guarded!(prop, c"value", el_get_value, Some(el_set_value));
         prop_guarded!(prop, c"checked", el_get_checked, Some(el_set_checked));
+        prop_guarded!(
+            prop,
+            c"selectedIndex",
+            el_get_selected_index,
+            Some(el_set_selected_index)
+        );
+        prop_guarded!(
+            prop,
+            c"selected",
+            el_get_option_selected,
+            Some(el_set_option_selected)
+        );
         // Accessor properties (jQuery-core read/write surface).
         prop_guarded!(
             prop,
@@ -2889,24 +2901,250 @@ unsafe fn el_get_child_nodes(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) 
     true
 }
 
+/// Is this element a `<select>`?
+unsafe fn is_select(dom: *mut Dom, n: NodeId) -> bool {
+    (*dom)
+        .element(n)
+        .map(|e| e.name == "select")
+        .unwrap_or(false)
+}
+
+/// The `<option>` descendants of a `<select>`, in tree order.
+///
+/// Descendants rather than children, because `<optgroup>` is extremely common and its options are
+/// still the select's options — a children-only walk silently reports an empty grouped select.
+unsafe fn select_options(dom: *mut Dom, select: NodeId) -> Vec<NodeId> {
+    (*dom)
+        .flat_descendants(select)
+        .into_iter()
+        .filter(|n| {
+            (*dom)
+                .element(*n)
+                .map(|e| e.name == "option")
+                .unwrap_or(false)
+        })
+        .collect()
+}
+
+/// An `<option>`'s value: the `value` attribute, **falling back to its text**.
+///
+/// The fallback is not a nicety — `<option>Blue</option>` with no `value` submits and reports
+/// `"Blue"`, and a great many real selects are written exactly that way.
+unsafe fn option_value(dom: *mut Dom, opt: NodeId) -> String {
+    match (*dom).element(opt).and_then(|e| e.attr("value")) {
+        Some(v) => v.to_owned(),
+        None => (*dom).text_content(opt).trim().to_owned(),
+    }
+}
+
+/// Index of the selected option, or `-1`.
+///
+/// **A single-select with nothing explicitly selected selects its FIRST option**, which is what the
+/// browser shows and what the form submits. Reporting `-1` there would be the honest-looking answer
+/// and the wrong one.
+unsafe fn selected_index(dom: *mut Dom, select: NodeId) -> i32 {
+    let opts = select_options(dom, select);
+    for (i, o) in opts.iter().enumerate() {
+        if (*dom)
+            .element(*o)
+            .map(|e| e.attr("selected").is_some())
+            .unwrap_or(false)
+        {
+            return i as i32;
+        }
+    }
+    // ── "NOTHING SELECTED" AND "NOTHING SELECTED YET" ARE DIFFERENT STATES, and the `selected`
+    //    attributes alone cannot tell them apart — both are simply "no option is marked".
+    //
+    // The spec models this as a per-option *selectedness* bit that is distinct from the content
+    // attribute. `select.value = "no-such-value"` must land on index -1, while an untouched
+    // single-select shows and submits its FIRST option. Deriving both from the same absence gives
+    // one of the two answers and is silently wrong about the other.
+    //
+    // So an explicit clear records itself. `data-manuk-noselection` is that bit.
+    //
+    // **Named residue, exactly as with `data-manuk-files` in tick 247:** the marker is visible to
+    // `getAttribute` and `outerHTML`, where a real browser keeps selectedness off the tree
+    // entirely. Representing it properly needs per-element state the DOM arena does not carry yet.
+    if (*dom)
+        .element(select)
+        .map(|e| e.attr("data-manuk-noselection").is_some())
+        .unwrap_or(false)
+    {
+        return -1;
+    }
+    let multiple = (*dom)
+        .element(select)
+        .map(|e| e.attr("multiple").is_some())
+        .unwrap_or(false);
+    if !multiple && !opts.is_empty() {
+        0
+    } else {
+        -1
+    }
+}
+
+/// Select exactly option `idx` (or none, for `idx < 0`), clearing every other option.
+unsafe fn set_selected_index(dom: *mut Dom, select: NodeId, idx: i32) {
+    for (i, o) in select_options(dom, select).into_iter().enumerate() {
+        if i as i32 == idx {
+            (*dom).set_attr(o, "selected", "");
+        } else {
+            (*dom).remove_attr(o, "selected");
+        }
+    }
+    // Record which of the two "nothing is marked" states this is. See `selected_index`.
+    if idx < 0 {
+        (*dom).set_attr(select, "data-manuk-noselection", "");
+    } else {
+        (*dom).remove_attr(select, "data-manuk-noselection");
+    }
+}
+
 /// `element.value` getter (form controls) — the `value` attribute, else empty string.
+///
+/// **`<select>` is not attribute-reflected and never was.** A select's value is *its selected
+/// option's* value; reading its own `value` attribute returns `""` for every select on the web,
+/// which is what this did. The divergence was invisible because form SUBMISSION reads the DOM
+/// directly and was correct — so the field submitted the right thing while any script that branched
+/// on `select.value` saw an empty string.
 unsafe fn el_get_value(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
     let v = this_node(vp)
-        .and_then(|(dom, n)| {
+        .map(|(dom, n)| {
+            if is_select(dom, n) {
+                let idx = selected_index(dom, n);
+                let opts = select_options(dom, n);
+                return usize::try_from(idx)
+                    .ok()
+                    .and_then(|i| opts.get(i).copied())
+                    .map(|o| option_value(dom, o))
+                    .unwrap_or_default();
+            }
             (*dom)
                 .element(n)
                 .and_then(|e| e.attr("value"))
                 .map(str::to_owned)
+                .unwrap_or_default()
         })
         .unwrap_or_default();
     return_string(cx, vp, &v);
+    true
+}
+
+/// `select.selectedIndex` getter.
+unsafe fn el_get_selected_index(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let idx = this_node(vp)
+        .map(|(dom, n)| selected_index(dom, n))
+        .unwrap_or(-1);
+    *vp = Int32Value(idx);
+    true
+}
+
+/// `select.selectedIndex = i` setter.
+unsafe fn el_set_selected_index(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        // `selectedIndex` is a LONG, so it is signed: `-1` means "nothing selected" and is the
+        // idiomatic way a page clears a select. Routing it through `arg_u32` (ToUint32, modular)
+        // would turn -1 into 4294967295 and select nothing by accident rather than on purpose.
+        let idx = arg_u32(cx, vp, argc, 0).map(|u| u as i32).unwrap_or(-1);
+        set_selected_index(dom, node, idx);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `select.length` — how many options.
+unsafe fn el_get_select_length(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let n = this_node(vp)
+        .map(|(dom, n)| select_options(dom, n).len())
+        .unwrap_or(0);
+    *vp = Int32Value(n as i32);
+    true
+}
+
+/// `option.selected` getter — reflects the `selected` attribute, but ALSO reports the implicit
+/// first-option selection of a single-select, so it agrees with `select.selectedIndex`.
+unsafe fn el_get_option_selected(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let on = this_node(vp)
+        .map(|(dom, n)| {
+            if (*dom)
+                .element(n)
+                .map(|e| e.attr("selected").is_some())
+                .unwrap_or(false)
+            {
+                return true;
+            }
+            // Agree with `selectedIndex`: find the owning select and ask it.
+            let mut cur = (*dom).parent(n);
+            while let Some(p) = cur {
+                if is_select(dom, p) {
+                    let idx = selected_index(dom, p);
+                    return select_options(dom, p)
+                        .get(idx.max(0) as usize)
+                        .map(|o| *o == n && idx >= 0)
+                        .unwrap_or(false);
+                }
+                cur = (*dom).parent(p);
+            }
+            false
+        })
+        .unwrap_or(false);
+    *vp = BooleanValue(on);
+    true
+}
+
+/// `option.selected = b` setter. Selecting one option of a single-select DESELECTS the others —
+/// otherwise a script that sets a second option leaves two marked and the control has no defined
+/// value.
+unsafe fn el_set_option_selected(_cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let on = argc > 0 && (*vp.add(2)).is_boolean() && (*vp.add(2)).to_boolean();
+        if !on {
+            (*dom).remove_attr(node, "selected");
+        } else {
+            let mut owner = None;
+            let mut cur = (*dom).parent(node);
+            while let Some(p) = cur {
+                if is_select(dom, p) {
+                    owner = Some(p);
+                    break;
+                }
+                cur = (*dom).parent(p);
+            }
+            let multiple = owner
+                .and_then(|s| (*dom).element(s))
+                .map(|e| e.attr("multiple").is_some())
+                .unwrap_or(false);
+            match (owner, multiple) {
+                (Some(s), false) => {
+                    let idx = select_options(dom, s).iter().position(|o| *o == node);
+                    set_selected_index(dom, s, idx.map(|i| i as i32).unwrap_or(-1));
+                }
+                _ => (*dom).set_attr(node, "selected", ""),
+            }
+        }
+    }
+    *vp = UndefinedValue();
     true
 }
 /// `element.value = s` setter.
 unsafe fn el_set_value(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if let Some((dom, node)) = this_node(vp) {
         let v = arg_string(cx, vp, argc, 0).unwrap_or_default();
-        (*dom).set_attr(node, "value", v);
+        if is_select(dom, node) {
+            // `select.value = "x"` selects the option whose value is "x". A value matching no
+            // option selects NOTHING (index -1) — the spec's behaviour, and the one that lets a
+            // page detect that its own option list has changed under it.
+            let opts = select_options(dom, node);
+            let idx = opts
+                .iter()
+                .position(|o| option_value(dom, *o) == v)
+                .map(|i| i as i32)
+                .unwrap_or(-1);
+            set_selected_index(dom, node, idx);
+        } else {
+            (*dom).set_attr(node, "value", v);
+        }
     }
     *vp = UndefinedValue();
     true

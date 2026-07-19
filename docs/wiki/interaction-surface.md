@@ -975,3 +975,44 @@ like "the editor's buttons stopped working" with no error anywhere.
 Residue: no Pointer Events (`pointerdown`/`pointerup`/`pointermove`), which modern drag libraries
 increasingly prefer; no `mousemove`, so drag *gestures* are still unreachable. This is the press,
 not the drag.
+
+## The select that submitted correctly and read as empty (tick 253)
+
+`select.value` was `""`, `selectedIndex` `undefined`, `options` `undefined` — for every `<select>` on
+the web. `HTMLSelectElement` existed as an interface marker with nothing behind it.
+
+**Why nobody noticed: form submission was right.** Submission reads the DOM directly and had been
+correct since t163-167. So the field submitted the right value while any script branching on
+`select.value` got an empty string. **Two paths to the same question, one right, one silent — and
+pages only read the silent one.**
+
+### "Nothing selected" vs "nothing selected yet"
+
+The one assertion that failed on first run, and the real content of the tick. `select.value = "x"`
+where no option has value `x` must land on **index -1**. An untouched single-select must report
+**index 0** — that is what the browser shows and what the form submits. Both states have *no option
+marked*, so the `selected` content attributes cannot distinguish them.
+
+The spec models selectedness as a per-option bit **separate from** the content attribute, precisely
+for this. Deriving both from the same absence yields one of the two answers and is silently wrong
+about the other — and which one you get depends on which case you happened to test.
+
+### Two more traps, both confirmed by probe
+
+- **An option's value falls back to its TEXT.** `<option>Blue</option>` submits and reports `"Blue"`.
+  Dropping the fallback reports `""` for every unvalued option, and a great many real selects are
+  written that way.
+- **`<optgroup>` options still belong to the select.** A children-only walk reports a grouped select
+  as having *zero* options — it reads as entirely empty rather than merely wrong.
+
+### `input` then `change` — and React only hears the first
+
+`Page::select_option` fires both, in that order. **React's `onChange` is really the `input` event.**
+A host firing only `change` leaves every React select unchanged while vanilla pages keep working,
+which presents as "it works on some sites" and is miserable to diagnose. Firing only `input` fails
+the mirror image.
+
+Residue: `data-manuk-noselection` is visible to `getAttribute`/`outerHTML` (same shape as t247's
+`data-manuk-files`) — real selectedness needs per-element state the arena does not carry.
+`select.options`/`selectedOptions` are still absent, so `s.options[i]` throws; a live
+`HTMLOptionsCollection` is its own tick.

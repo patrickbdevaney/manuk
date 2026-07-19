@@ -11215,3 +11215,54 @@ unreachable; this is the press, not the drag. Coordinates are not carried on the
 (`clientX`/`clientY` come from the layout maps only for the coordinate dispatchers).
 
 WIKI: docs/wiki/interaction-surface.md
+
+## Tick 253 — the select submitted the right value and told JavaScript it was empty
+
+TICK SHAPE: tick 251's re-probe named `selectedIndex`/native `<select>` as GENUINELY missing (zero
+hits, not stale). Measured before building: `select.value` = `""`, `selectedIndex` = `undefined`,
+`options` = `undefined`, `length` = `0`, `option.selected` = `undefined`. `HTMLSelectElement` was an
+interface marker with nothing behind it.
+
+**THE DIVERGENCE THAT HID IT — the class this project keeps finding.** Form SUBMISSION reads the DOM
+directly and was always correct (multi-select serialization landed at t163-167). So a select
+**submitted the right value while every script that branched on `select.value` saw an empty
+string`**. Two code paths answering the same question, one right and one silently wrong, and only
+the silent one is what pages read. Country pickers, currency, quantity, sort order, shipping method
+— all branch on `select.value`.
+
+**THE CAPABILITY.** `select.value` (get/set by value), `selectedIndex` (get/set), `select.length`,
+`option.selected` (get/set, deselecting siblings), and `Page::select_option(node, index)` — the
+actuation the native dropdown performs, firing `input` THEN `change`.
+
+**THE MODELING PROBLEM THE GATE FORCED, and it is the real content of the tick.** Every other
+assertion passed on the first run; `select.value = "no-such-value"` did not. **"Nothing is selected"
+and "nothing has been selected YET" are different states that the `selected` attributes cannot tell
+apart** — both are simply "no option is marked". The spec models selectedness as a per-option bit
+*distinct from* the content attribute: an untouched single-select shows and submits its FIRST
+option, while an explicit unmatched assignment must land on **-1**. Deriving both from the same
+absence gives one answer and is silently wrong about the other. An explicit clear now records itself
+(`data-manuk-noselection`).
+
+**RED PROBES EXECUTED, NOT ASSERTED (process rule 3) — three, all predicted:**
+  · drop the option-text fallback → `groupedValue=` empty. `<option>Blue</option>` with no `value`
+    attribute must report its TEXT; a great many real selects are written exactly that way.
+  · walk children instead of descendants → `groupedIdx=-1`. A select using `<optgroup>` — very
+    common — reports **zero options**, i.e. reads as entirely empty.
+  · fire only `change`, not `input` → `events=change`. **React's `onChange` IS the `input` event**,
+    so this leaves every React select unchanged while vanilla pages keep working — a split that
+    presents as "it works on some sites" and is miserable to diagnose.
+
+Gate: `engine/page/tests/g_select_actuation.rs` (`G_SELECT_ACTUATION`), 11 claims in one test
+(the per-process `PageContext` constraint from tick 251). Regression: full `manuk-page`
+**129 passed / 1 failed** (was 128/1; the +1 is this gate), the 1 being the PRE-EXISTING
+`hard_wall_detection_and_honest_interstitial` from tick 239.
+
+Residue, named honestly: `data-manuk-noselection` is visible to `getAttribute`/`outerHTML`, where a
+real browser keeps selectedness off the tree — the same shape as t247's `data-manuk-files`, and it
+needs per-element state the DOM arena does not carry. `select.options` / `selectedOptions` /
+`HTMLOptionsCollection` are still absent (a live collection, not a property), so `s.options[i]` is a
+TypeError — pages reach options via `querySelectorAll` in this gate for that reason. `<select
+multiple>` reads correctly but has no multi-select actuation, and `option.index`/`select.add/remove`
+are unbuilt.
+
+WIKI: docs/wiki/interaction-surface.md

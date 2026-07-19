@@ -2300,6 +2300,79 @@ impl Page {
         }
     }
 
+    /// **Choose an option in a `<select>` — the actuation the native dropdown performs.** Returns
+    /// `false` if `node` is not a `<select>` or `index` is out of range.
+    ///
+    /// **This is the last common form control an agent could not drive.** Country pickers, currency,
+    /// quantity, sort order, shipping method, every settings page — all of them read `select.value`
+    /// and branch, and the native dropdown is an OS-drawn popup with no scriptable surface. Nothing
+    /// was broken; there was no door, exactly as with the file picker in tick 247.
+    ///
+    /// **`input` THEN `change`, and both are required.** React's `onChange` is really the `input`
+    /// event, so a host that fires only `change` leaves every React select unchanged — while a
+    /// vanilla page listening for `change` would work, which is the kind of split that reads as "it
+    /// works on some sites". Firing only `input` fails the mirror image. The order is the spec's.
+    pub fn select_option(
+        &mut self,
+        node: manuk_dom::NodeId,
+        index: usize,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
+        let is_select = self
+            .dom
+            .element(node)
+            .map(|e| e.name == "select")
+            .unwrap_or(false);
+        if !is_select {
+            return false;
+        }
+        let options: Vec<manuk_dom::NodeId> = self
+            .dom
+            .flat_descendants(node)
+            .into_iter()
+            .filter(|n| {
+                self.dom
+                    .element(*n)
+                    .map(|e| e.name == "option")
+                    .unwrap_or(false)
+            })
+            .collect();
+        let Some(&chosen) = options.get(index) else {
+            return false;
+        };
+        // Exactly one selected — a control with two marked options has no defined value.
+        for &o in &options {
+            if o == chosen {
+                self.dom.set_attr(o, "selected", "");
+            } else {
+                self.dom.remove_attr(o, "selected");
+            }
+        }
+
+        #[cfg(feature = "spidermonkey")]
+        {
+            if let Some(ctx) = &self.js {
+                let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+                    .root_box
+                    .node_rects(&self.dom)
+                    .into_iter()
+                    .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+                    .collect();
+                let _reflow = ReflowScope::install(&self.dom, fonts, viewport_width);
+                for ty in ["input", "change"] {
+                    if let Err(e) =
+                        manuk_js::dispatch_event(ctx, &mut self.dom, node, ty, &rects, &self.styles)
+                    {
+                        tracing::warn!("select {ty} dispatch: {e}");
+                    }
+                }
+            }
+        }
+        self.relayout(fonts, viewport_width);
+        true
+    }
+
     /// **Choose files on an `<input type=file>` — the actuation a file picker performs.** Returns
     /// `false` if `node` is not a file input.
     ///

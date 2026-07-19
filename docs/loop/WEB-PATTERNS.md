@@ -1489,3 +1489,30 @@ document selection survives, then act on the click.
 
 **Still closed:** Pointer Events (`pointerdown`/`pointermove`/`pointerup`) and `mousemove`, so drag
 *gestures* — as opposed to the press that starts them — remain unreachable.
+
+## The country picker that branched on an empty string (tick 253)
+
+**Pattern:** `<select>` — country, currency, quantity, sort order, shipping method, language, every
+settings page and every checkout. Pages read `select.value` and branch on it, and agents must be able
+to choose an option through what is otherwise an OS-drawn popup with no scriptable surface.
+
+**The failure was a DIVERGENCE, not an absence.** Form submission reads the DOM directly and was
+correct, so the select submitted the right value — while `select.value` in script returned `""`,
+`selectedIndex` returned `undefined`, and `options` did not exist. A page whose script branches on
+the selection took the empty-string path every time, on a form that would have submitted fine. Two
+paths to one question, and pages read the one that lied.
+
+**A select with nothing marked is NOT a select with nothing selected.** A single-select showing no
+`selected` attribute still shows and submits its **first** option; an explicit assignment of an
+unmatched value must land on **-1**. The two states look identical in the markup, which is why the
+spec carries a selectedness bit separate from the attribute.
+
+**An option's value falls back to its text** (`<option>Blue</option>` is `"Blue"`), and options
+inside `<optgroup>` still belong to the select — a children-only reading makes every grouped select
+look empty.
+
+**`input` before `change`, and both.** React's `onChange` is the `input` event, so firing only
+`change` leaves React selects unchanged while vanilla pages work.
+
+**Still closed:** `select.options`/`selectedOptions` (a live collection, so `s.options[i]` throws),
+multi-select actuation, and `select.add`/`remove`.
