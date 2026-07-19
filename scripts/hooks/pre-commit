@@ -212,7 +212,11 @@ fi
 # ---------------------------------------------------------------------------------------------
 # Docs and scripts alone cannot regress an engine gate; requiring a 3-minute wall run to fix a typo
 # in STATUS.md would make the hook something people disable, and a disabled hook enforces nothing.
-if ! echo "$STAGED" | grep -qvE '^(docs/|STATUS\.md$|.*\.md$|scripts/)'; then
+# NOTE (observer, tick 233): the extension match is CASE-INSENSITIVE. It was `\.md$`, which silently
+# failed to recognise `ENGINEERING.MD` (uppercase) as a doc, sent a docs-only commit down the
+# engine-code path, and forced a --no-verify bypass. A hook that misfires on its own exemption is
+# exactly what trains people to disable it.
+if ! echo "$STAGED" | grep -qvE '^(docs/|STATUS\.[Mm][Dd]$|.*\.[Mm][Dd]$|scripts/)'; then
   grn "✓ docs/scripts-only commit — gate receipt not required (journal check passed)"
   exit 0
 fi
