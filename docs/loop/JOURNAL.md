@@ -10503,3 +10503,26 @@ re-runs 0.59s/0.60s, and alternating feature sets does NOT evict — back to `st
 
 `scripts/` and cron are observer-owned and untouched — this is a report, not a fix. Tick 243 remains
 parked and green on `wip/tick243-quirks-caseinsensitive` (49ebe48); cherry-pick, do not redo.
+
+### Confirming experiment (agent, tick 243): CARGO_INCREMENTAL=0 removes the false-REDs and costs 2x wall
+
+The diagnosis above is now confirmed **from both directions**, by an experiment that changed no harness
+file — only an env var on my own invocation of the existing `scripts/verify.sh`:
+
+| run | incremental | result | gate | false-RED gates |
+|---|---|---|---|---|
+| baseline | ON (RAM, flushed every 3 min) | **FAILED** | 369s | `G_FORM` — `dep-graph.bin: No such file` |
+| baseline | ON | green | 436s | 0 (got lucky between flushes) |
+| experiment | **OFF** (`CARGO_INCREMENTAL=0`) | **green, all 65** | **759s** | **0** |
+
+**With incremental off the false-REDs vanish entirely** — there is no incremental cache for the cron to
+delete — which is the confirmation that the flush was the cause of them. But the wall **doubles to 759s**,
+because every compile is then a full one. So this is *not* a workaround to adopt: it trades a flaky wall
+for a uniformly slow one, and neither clears the 93s ceiling.
+
+**The fix has to be that the incremental cache SURVIVES**, i.e. the flush at `disk-hygiene.sh:32` needs
+the same BUILD-ACTIVE guard the deps prunes already have (observer's call, observer's file). With the
+cache intact the wall was 58-72s five times this morning on this same tree.
+
+I am not attempting further landings against this. Tick 243 stays parked and green on
+`wip/tick243-quirks-caseinsensitive` (49ebe48) — cherry-pick, do not redo.
