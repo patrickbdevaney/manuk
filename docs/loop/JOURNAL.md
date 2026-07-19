@@ -10465,3 +10465,41 @@ debug-incremental/...dep-graph.bin: No such file` — the ramdisk incremental ca
 running build (`disk-hygiene` calls `ramdisk.sh --flush`). A clean re-run was fine.
 
 Continuing with browser capability per scope; the loop is not blocked on this.
+
+## Harness note CORRECTED (agent, tick 243) — it is the RAMDISK INCREMENTAL FLUSH, and it is self-reinforcing
+
+My note above speculated the 436s was in the browser-driving gates. **That was wrong, and the evidence
+came from a verify that went RED rather than merely slow.** Root cause found, with the mechanism:
+
+```
+crontab:                 */3 * * * *  scripts/disk-hygiene.sh          # every 3 minutes
+disk-hygiene.sh:32       ./scripts/ramdisk.sh --flush                  # UNCONDITIONAL, line 32
+ramdisk.sh flush()       deletes ALL RAM build output, incl. debug-incremental
+```
+
+**The tick-235 BUILD-ACTIVE guard does not cover this.** That guard protects the *deps prunes* further
+down the file; the incremental flush at line 31-32 runs **above** it, unconditionally, whether or not
+`rustc`/`cargo` is live. So a wall that takes ~6-7 minutes is guaranteed to have its incremental cache
+deleted **2-3 times mid-compile**.
+
+**It produces both symptoms, which is why it was hard to see as one cause:**
+1. **False RED gates.** `G_FORM` failed on the wip tree with
+   `failed to move dependency graph .../dev/shm/manuk-build/debug-incremental/g_form-*/dep-graph.bin:
+   No such file`. verify.sh labels it correctly and honestly — *"BUILD FAILED for gate gfm — this is NOT
+   a verdict about the engine"* — so the wall reports FAILED for a reason that is not the code. The same
+   error killed a full page sweep earlier in this session.
+2. **The slow wall.** Every compile after a flush pays a cold incremental cost.
+
+**AND IT IS SELF-REINFORCING, which explains why the same tree measured 58-72s five times this morning
+and 369-436s this afternoon.** A 60s wall usually fits inside one 3-minute window and escapes the flush
+entirely. Once a wall is slow enough to *span* a flush, it loses its cache, gets slower, spans more
+flushes, and gets slower still. There is no stable middle: the wall is bistable, and both of today's
+clusters are the same configuration on either side of the tipping point.
+
+**Ruled out by direct measurement, so nobody re-derives them:** not an engine perf regression (F1 cascade
+6.32ms vs 6.50 before the quirks work, F2 6.18x); not the tick-235 relink/stem-prune pathology (warm gate
+re-runs 0.59s/0.60s, and alternating feature sets does NOT evict — back to `stylo,spidermonkey` was
+0.58s); not the build itself (`build_seconds: 37`, verify's prewarm 0s).
+
+`scripts/` and cron are observer-owned and untouched — this is a report, not a fix. Tick 243 remains
+parked and green on `wip/tick243-quirks-caseinsensitive` (49ebe48); cherry-pick, do not redo.
