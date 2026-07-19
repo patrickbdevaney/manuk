@@ -3450,25 +3450,45 @@ impl Page {
                 r.width.round().max(1.0) as u32,
                 r.height.round().max(1.0) as u32,
             );
-            let Some(child) = self.child_pages.get_mut(&node) else {
-                continue;
-            };
+            self.repaint_frame(node, w, h, fonts, false);
+        }
+    }
+
+    /// Re-paint one frame's bitmap. `force` skips the dirty check.
+    ///
+    /// **`force` is not an optimisation escape hatch — it is a correctness requirement.** When a
+    /// click is routed INTO a frame, the child runs its own script round, which re-cascades,
+    /// re-lays-out and then clears its own dirty bits. By the time the parent looks, the child is
+    /// already clean, so a dirty-guarded repaint skips exactly the frame that just changed. The
+    /// click itself is the signal; there is nothing left to detect.
+    fn repaint_frame(
+        &mut self,
+        node: manuk_dom::NodeId,
+        w: u32,
+        h: u32,
+        fonts: &FontContext,
+        force: bool,
+    ) {
+        let Some(child) = self.child_pages.get_mut(&node) else {
+            return;
+        };
+        if !force {
             let croot = child.dom.root();
             if !(child.dom.is_dirty(croot) || child.dom.has_dirty_descendants(croot)) {
-                continue;
+                return;
             }
-            // The child lays out at the FRAME's width, not the window's — that is what makes a
-            // responsive embed responsive, and it must stay true on every repaint.
-            child.relayout(fonts, w as f32);
-            child.dom.clear_all_dirty();
-            let canvas = child.paint(fonts, w, h);
-            let img = manuk_paint::DecodedImage {
-                width: canvas.width(),
-                height: canvas.height(),
-                rgba: canvas.rgba_bytes().to_vec(),
-            };
-            self.images.insert(node, std::rc::Rc::new(img));
         }
+        // The child lays out at the FRAME's width, not the window's — that is what makes a
+        // responsive embed responsive, and it must stay true on every repaint.
+        child.relayout(fonts, w as f32);
+        child.dom.clear_all_dirty();
+        let canvas = child.paint(fonts, w, h);
+        let img = manuk_paint::DecodedImage {
+            width: canvas.width(),
+            height: canvas.height(),
+            rgba: canvas.rgba_bytes().to_vec(),
+        };
+        self.images.insert(node, std::rc::Rc::new(img));
     }
 
     pub fn relayout(&mut self, fonts: &FontContext, viewport_width: f32) {
@@ -3625,6 +3645,56 @@ impl Page {
     /// §4a — the accessibility / semantic tree for this page, **with element geometry**
     /// taken from the current fragment tree. Shared by the agent's observation channel
     /// and (eventually) the `accesskit` screen-reader bridge.
+    /// The live document behind an `<iframe>`, if it has loaded. Lets a gate assert what the
+    /// FRAME's own document believes, which is a different question from what the parent shows.
+    pub fn child_page(&self, node: manuk_dom::NodeId) -> Option<&Page> {
+        self.child_pages.get(&node)
+    }
+
+    /// Click at a **document point**, routing INTO a frame when the point lands inside one.
+    ///
+    /// Returns `true` if the engine should still perform the hit element's default action (no
+    /// handler called `preventDefault`), matching [`Self::dispatch_click`].
+    ///
+    /// **Why coordinates and not a node.** The host hit-tests the parent and gets the `<iframe>`
+    /// ELEMENT — clicking that dispatches a click on the frame box itself, which is not what the
+    /// user did. The frame is a separate document painted into a bitmap, so the click has to be
+    /// translated into the child's own coordinate space and hit-tested there. Without this, tick
+    /// 232 left the frame able to change only when a SCRIPT reached into it: a 3-D Secure challenge
+    /// or an embedded OAuth consent screen would re-render correctly and still could not be
+    /// operated, because the user's press never reached the bank's button.
+    ///
+    /// Nested frames recurse, so a frame inside a frame is clickable at the depth the box tree says.
+    pub fn dispatch_click_at(
+        &mut self,
+        doc_x: f32,
+        doc_y: f32,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
+        let Some(hit) = self.a11y_tree().hit_test(doc_x, doc_y).map(|n| n.node) else {
+            return true;
+        };
+        // Does the hit land on a frame we hold a document for?
+        if self.child_pages.contains_key(&hit) {
+            let rect = self.root_box.node_rects(&self.dom).get(&hit).copied();
+            if let Some(r) = rect {
+                let (lx, ly) = (doc_x - r.x, doc_y - r.y);
+                let w = r.width.max(1.0);
+                if let Some(child) = self.child_pages.get_mut(&hit) {
+                    // The child lays out at the FRAME's width, so it must be clicked at it too.
+                    let proceed = child.dispatch_click_at(lx, ly, fonts, w);
+                    // FORCED: the child's own script round already cleared its dirty bits, so a
+                    // dirty-guarded repaint would skip the one frame that just changed.
+                    let (pw, ph) = (w.round().max(1.0) as u32, r.height.round().max(1.0) as u32);
+                    self.repaint_frame(hit, pw, ph, fonts, true);
+                    return proceed;
+                }
+            }
+        }
+        self.dispatch_click(hit, fonts, viewport_width)
+    }
+
     pub fn a11y_tree(&self) -> manuk_a11y::A11yNode {
         let rects: std::collections::HashMap<_, _> = self
             .root_box

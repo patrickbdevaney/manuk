@@ -1169,3 +1169,15 @@ Frames now re-render when a script round mutates them, gated by `g_iframe_rerend
 the frame's actual pixels change, since the DOM half already worked. Residue: a frame's own
 timers/fetches do not yet trigger a repaint, and clicks are not routed into a frame (script can drive
 the embedded form; a user cannot yet click it).
+
+## Operating an embedded form — 3-D Secure "approve", OAuth "allow" (tick 233)
+
+t232 made frames re-render; this makes them **usable**. Clicks are routed by document point into the
+frame's own document and hit-tested there, so a user can press the bank's button rather than only a
+script being able to change it. Nested frames recurse.
+
+Gated by `g_iframe_click`, which asserts the child's document reaches `approved`, that the frame's
+pixels changed, and — the negative — that a click *outside* the frame's box does not reach it.
+
+Residue: keyboard/typing is still not routed into frames, a frame's own timers/fetches do not drive a
+repaint, and a child's `body { background }` does not propagate to the frame's canvas.

@@ -47,7 +47,7 @@ platform	cookies (SameSite/Secure/HttpOnly)	no session, no login	partial	-	cooki
 platform	CORS + credentialed requests	every API call from an SPA	gated	engine/net cors	ticks 170-173; engine/net/src/cors.rs (7 tests)
 platform	OAuth redirect flow	YOU CANNOT LOG IN TO THE MODERN WEB	gated	G_OAUTH_REDIRECT	tick 226: full authorization-code login completes across two real origins
 platform	window.open + postMessage (popup auth)	OAuth popups; the other login path	gated	G_OAUTH_POPUP	tick 231: popup login e2e (opener->popup->postMessage->opener); fixed load-time window.opener and e.origin spoofing
-platform	REAL iframes (nested browsing context)	embeds, payments, OAuth frames, ads, players	gated	G_IFRAME + G_IFRAME_RERENDER	tick 84 cross-boundary readable; tick 232 frames now RE-RENDER on mutation (3-D Secure / interactive OAuth frames unblocked)
+platform	REAL iframes (nested browsing context)	embeds, payments, OAuth frames, ads, players	gated	G_IFRAME + G_IFRAME_RERENDER + G_IFRAME_CLICK	tick 84 cross-boundary readable; t232 frames RE-RENDER on mutation; t233 clicks ROUTE INTO frames (3-D Secure / embedded OAuth now operable)
 platform	postMessage across frames	every embed talks this way	partial	-	-
 platform	infinite scroll (IO + scrollTop + virtualisation)	every feed	gated	G_SCROLL + G_VIEWPORT	ticks 67, 59
 platform	WebSocket	live feeds, chat, presence	works	-	tokio-tungstenite transport(200) + page-facing JS(201) + live(202), g_websocket. Phase-0 lever LANDED

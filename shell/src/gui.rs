@@ -573,20 +573,18 @@ impl App {
     /// and unless a handler called `preventDefault`, perform the element's default action
     /// (follow a link, focus a field, submit, toggle).
     fn perform_page_click(&mut self, doc_x: f32, doc_y: f32) {
-        let hit = self
-            .page
-            .as_ref()
-            .and_then(|p| p.a11y_tree().hit_test(doc_x, doc_y).map(|n| n.node));
         let mut prevented = false;
-        if let Some(hit) = hit {
-            let width = self.viewport.width;
-            let (sy, focus) = (self.scroll_y, self.focused_input);
-            if let Some(page) = self.page.as_mut() {
-                // The handler is about to read `window.scrollY` and `document.activeElement`; give
-                // it the CURRENT ones, not the ones from page load.
-                page.publish_view_state(0.0, sy, focus);
-                prevented = !page.dispatch_click(hit, &self.fonts, width);
-            }
+        let width = self.viewport.width;
+        let (sy, focus) = (self.scroll_y, self.focused_input);
+        if let Some(page) = self.page.as_mut() {
+            // The handler is about to read `window.scrollY` and `document.activeElement`; give
+            // it the CURRENT ones, not the ones from page load.
+            page.publish_view_state(0.0, sy, focus);
+            // By POINT, not by node: a click landing inside an `<iframe>` must be translated into
+            // that frame's own document and hit-tested there. Dispatching on the hit node would
+            // fire a click on the frame BOX — which is not what the user pressed, and is why an
+            // embedded payment or consent form could be re-rendered but never operated.
+            prevented = !page.dispatch_click_at(doc_x, doc_y, &self.fonts, width);
         }
         // A handler may have scrolled the page (`scrollTo`, `scrollIntoView`) or moved focus.
         self.apply_view_requests();

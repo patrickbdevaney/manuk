@@ -758,3 +758,34 @@ before constructing the page); the identity is applied during prelude install, a
 
 `g_oauth_popup` is the first gate to drive two `Page`s at once and route messages between them the way
 `gui.rs` does. The shell has always held many pages; nothing had proven they could talk.
+
+## Clicking into a frame: by point, not by node (tick 233)
+
+The host hit-tests the parent document and gets the `<iframe>` **element**. Dispatching a click on
+that fires a click on the frame *box* — not on whatever the user pressed inside it. So a frame could
+render and re-render correctly (tick 232) and still be impossible to operate, which is the whole
+point of the content the web puts in frames: 3-D Secure "approve", embedded OAuth "allow", a payment
+form's "pay".
+
+`Page::dispatch_click_at(doc_x, doc_y, …)` clicks by **point**. When the point lands on a frame with a
+live document, it translates into the child's coordinate space and hit-tests there — at the
+**frame's** width, because that is the width the child laid out at; hit-testing at the window's width
+tests against a layout the child never had. It recurses for nested frames.
+
+### A dirty-bit guard cannot see a child's own script round
+
+This is the subtle half. `repaint_child_frames` skips frames whose DOM is clean — correct when the
+*parent's* script reached in and mutated the child. But a click routed INTO a frame makes the child
+run its own script round, and that round re-cascades, re-lays-out and **clears the child's dirty
+bits**. By the time the parent looks, the child is clean, so the guard skips precisely the frame that
+just changed: the handler ran, the child's DOM said `approved`, and the screen still said `pending`.
+
+Hence `repaint_frame(…, force: true)` on the click path. The click is the signal; there is nothing
+left to detect afterwards. `force` here is a correctness requirement, not a performance shortcut.
+
+### Body background does not reach the frame's canvas
+
+Recorded because it cost a debugging detour: mutating `document.body.style.background` in a child
+does **not** change the frame's bitmap. A box *inside* the frame's viewport does. The canvas-background
+propagation from the root/body element is unimplemented — an independent gap, and one that makes
+`body { background }` a poor thing to assert a repaint with.

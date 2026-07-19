@@ -9757,3 +9757,42 @@ yet drive a repaint, and clicks are not routed INTO a frame (so a user cannot pr
 — only script can). Those are the next steps on this row.
 
 **Mechanism captured:** `docs/wiki/architecture.md`.
+
+## Tick 233 — the user can press the button inside the frame (2026-07-18)
+
+**Selected:** the residue t232 left, and the other half of OAuth **O2**. t232 made a frame's pixels
+follow its document — but only a *script* could change it. The host hit-tests the parent, gets the
+`<iframe>` **element**, and dispatching a click on that fires a click on the frame **box**, not on
+whatever the user actually pressed. So an embedded form re-rendered correctly and still could not be
+operated. Rendering a 3-D Secure challenge is not the capability; pressing "approve" is.
+
+**Fix:** `Page::dispatch_click_at(doc_x, doc_y, …)` — click by **point**, not by node. When the point
+lands on a frame we hold a document for, translate into the child's coordinate space and hit-test
+*there*, at the **frame's** width (the child laid out at that width; hit-testing at the window's
+would test against a layout the child never had). Recurses, so a frame inside a frame is clickable.
+The shell now clicks by point.
+
+**The composition bug this exposed, which is the interesting part.** The forced repaint is not an
+optimisation escape hatch — it is required. `repaint_child_frames` guards on the child's dirty bits,
+but a click routed into a frame makes the child run its **own** script round, which re-cascades,
+re-lays-out and then **clears its own dirty bits**. By the time the parent looks, the child is
+already clean, so the dirty-guarded repaint skipped exactly the frame that had just changed: the
+button's handler ran, the child's DOM said `approved`, and the screen still showed `pending`. The
+click itself is the signal — there is nothing left to detect — so `repaint_frame(…, force: true)`.
+
+**Gate.** `g_iframe_click` asserts the child's own document reaches `approved` **and** that the
+frame's pixels changed, then the **negative**: a click below the frame must leave it `pending`, which
+is what proves the routing is positional rather than "any click goes to the frame". RED: disabling
+the routing leaves `pending` — the unpressable challenge exactly.
+
+**A false lead worth recording.** The gate first mutated `document.body.style.background` in the
+child and the ink did not move even with a forced repaint, which looked like the repaint failing. It
+was not: a body-background change does not propagate to the frame's canvas in this engine. Changing a
+**box inside the frame's viewport** (the button) moves the pixels. The repaint was right; the probe
+was measuring something the paint path does not do. Body-background propagation to the canvas is
+noted as a separate gap, not fixed here.
+
+**Residue:** a frame's own timers/fetches still do not drive a repaint; typing/keyboard is not routed
+into frames (only clicks); body-background → canvas propagation is unimplemented.
+
+**Mechanism captured:** `docs/wiki/interaction-surface.md`.

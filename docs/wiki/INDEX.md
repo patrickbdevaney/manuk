@@ -288,6 +288,9 @@
   - L729 · Cross-window messaging: e.origin is the security boundary (tick 231)
   - L745 · Window identity must be seeded BEFORE a document's scripts run
   - L757 · Two live pages in one process
+  - L762 · Clicking into a frame: by point, not by node (tick 233)
+  - L775 · A dirty-bit guard cannot see a child's own script round
+  - L786 · Body background does not reach the frame's canvas
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -506,4 +509,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-425 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+428 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
