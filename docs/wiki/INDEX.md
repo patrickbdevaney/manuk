@@ -378,6 +378,8 @@
   - L301 · What makes the gate a decode gate rather than a did-it-run gate
   - L316 · Isolation, proven in both directions
   - L325 · Fixture note, and the pin
+  - L339 · The frame reaches the screen by overwriting the poster's map entry (tick 240)
+  - L373 · The drift this exposed: two decode passes, one of them half-blind
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -529,4 +531,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-448 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+450 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -335,3 +335,51 @@ mentioning H.264. Unpin when the toolchain moves.
 
 **Residue:** High profile (VA-API/`cros-codecs`); a decode thread + wall clock for actual playback
 (M6); A/V sync against the M4 PCM; AV1 via `re_rav1d`; WebM containers.
+
+## The frame reaches the screen by overwriting the poster's map entry (tick 240)
+
+**There is no video path in the painter, and there must not be one.** The chain that displays a
+decoded frame is the chain that already displayed the poster:
+
+```
+manuk_media::decode_first_frame(track, &bytes) -> video::Frame { width, height, rgba, .. }
+                    │  (host-side; openh264 lives ONLY in manuk-media)
+                    ▼
+Page::set_video_frame(node, w, h, rgba)   ── overwrites Page::images[node]
+                    ▼
+CpuPainter::with_layers(.., &self.images, ..) -> manuk_paint::blit_image  ── scales into the content box
+```
+
+`Page::images` is `HashMap<NodeId, Rc<DecodedImage>>`, and `DecodedImage { width, height, rgba }` is
+`video::Frame` minus its presentation time. A `<video>` is a replaced element
+(`manuk_layout::is_replaced_element`), so its box already exists and already gets an image blitted
+into it — that is how `<video poster>` renders. **Playing a video is swapping the `Rc` in the map the
+poster already occupies**, exactly as MEDIA.md predicted, and it is why the whole media track is
+sized in days rather than months.
+
+**The seam takes RGBA, not a media type, and this is a load-bearing decision.** Naming
+`manuk_media::video::Frame` in `manuk-page`'s signature would pull `manuk-media`'s decoder features
+into `manuk-page`; `openh264` compiles C, and ~25 gate binaries link `manuk-page`. Tick 236 spent
+real effort proving that isolation both directions with `cargo tree`. Bytes keep the page
+decoder-agnostic — openh264 today, `re_rav1d` or a VA-API backend later, same signature. Same
+principle as tick 236's `trait VideoDecoder`: **the boundary is the deliverable, not the backend.**
+
+**A frame must never resize its box.** Unlike `<img>`, a `<video>` is sized by attributes/CSS. Deriving
+the box from the current frame reflows the page on frame one and again on every resolution switch — and
+switching resolution mid-stream is what adaptive streaming *is*. `set_video_frame` therefore does not
+call `apply_natural_size` and does not relayout; `g_video_frame` asserts a 5×-wider frame moves the box
+by less than half a pixel.
+
+### The drift this exposed: two decode passes, one of them half-blind
+
+`fetch_images_owned` (async) selected `<img src>` **and** `<video poster>`. `decode_inline_images`
+(synchronous, pre-first-layout) selected `<img>` only. So an inline `data:` poster never decoded on
+`Page::load`, in any gate, or in the WPT runner, while a network poster did — a divergence between two
+functions that exist to do the same job on different transports. The fix is for the inline pass to
+choose its source attribute exactly as the async pass does.
+
+**It was found by a gate asserting its own BASELINE.** `g_video_frame` checks the poster paints
+*before* handing over a frame, because "the poster's red is gone" is vacuous if nothing was ever
+painted. That assertion failed first, which is the argument for asserting the ground you are about to
+build on instead of assuming it — the same shape as tick 237's four-quadrant fix, where a weaker claim
+had passed on a completely broken draw.

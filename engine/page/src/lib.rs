@@ -543,10 +543,17 @@ fn decode_inline_images(
         Option<std::rc::Rc<manuk_paint::DecodedImage>>,
     > = std::collections::HashMap::new();
     for node in dom.descendants(dom.root()) {
-        if dom.tag_name(node) != Some("img") {
-            continue;
-        }
-        let Some(src) = dom.element(node).and_then(|e| e.attr("src")) else {
+        // **The source attribute is chosen exactly as the async pass chooses it** (`<img src>` /
+        // `<video poster>`), because the two passes decode the same elements for the same reason and
+        // had already drifted: this one matched `img` only, so a NETWORK poster rendered and an
+        // INLINE `data:` poster silently did not — on `Page::load`, every gate and the WPT runner.
+        // Found by G_VIDEO_FRAME's baseline assertion (tick 240), which is the whole argument for
+        // asserting the thing you are about to build on top of rather than assuming it.
+        let Some(src) = dom.element(node).and_then(|e| match dom.tag_name(node) {
+            Some("img") => e.attr("src"),
+            Some("video") => e.attr("poster"),
+            _ => None,
+        }) else {
             continue;
         };
         if !src.starts_with("data:") {
@@ -1791,6 +1798,52 @@ impl Page {
                 }),
             );
         }
+    }
+
+    /// **Hand a decoded video frame to the page** — the frame renders exactly where the poster was.
+    ///
+    /// This is the whole of "video paints", and it is deliberately three lines, because the structural
+    /// work was already done years of ticks ago and nobody had connected the two ends. A `<video>` is
+    /// **already** a replaced element in layout (`manuk_layout::is_replaced_element`), and a
+    /// `<video poster>` **already** fetches, decodes and paints through the identical route as `<img>` —
+    /// `self.images` keyed by the `<video>`'s own `NodeId`, blitted into the content box by
+    /// `manuk_paint::blit_image`. So a decoded frame does not need a video path in the painter, a new
+    /// display item, or a relayout. **It needs to overwrite one map entry.** MEDIA.md called this out as
+    /// the insight that makes the whole track small: *a video frame IS a `DecodedImage`, and playing a
+    /// video is swapping the `Rc` in the map the poster already occupies.*
+    ///
+    /// **It takes raw RGBA, not a `manuk_media::video::Frame`, and that is the important decision.**
+    /// Naming the media type here would drag `manuk-media`'s decoder features into `manuk-page`, and
+    /// `openh264` compiles C — which would put a C toolchain into all ~25 gate binaries that link
+    /// `manuk-page`, the exact isolation tick 236 went to lengths to establish. Taking bytes keeps the
+    /// page **decoder-agnostic**: openh264 today, `re_rav1d` or a VA-API backend later, and this
+    /// signature does not move. Same reasoning as tick 236's `trait VideoDecoder` — the boundary is the
+    /// deliverable, not the backend behind it.
+    ///
+    /// **No relayout, on purpose.** Unlike `<img>`, a `<video>`'s box is sized by its `width`/`height`
+    /// attributes or CSS, never by the frame that happens to be on screen — otherwise the page would
+    /// reflow on the first frame and again on any stream that changes resolution mid-playback, which is
+    /// what adaptive streaming does by design. The frame is scaled into the box that already exists.
+    pub fn set_video_frame(
+        &mut self,
+        node: manuk_dom::NodeId,
+        width: u32,
+        height: u32,
+        rgba: Vec<u8>,
+    ) {
+        debug_assert_eq!(
+            rgba.len(),
+            width as usize * height as usize * 4,
+            "a video frame must be tightly-packed RGBA"
+        );
+        self.images.insert(
+            node,
+            std::rc::Rc::new(manuk_paint::DecodedImage {
+                width,
+                height,
+                rgba,
+            }),
+        );
     }
 
     /// **The images this page still wants** — resolved URLs, distinct, none already resolved.

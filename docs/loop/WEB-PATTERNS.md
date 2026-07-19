@@ -1221,3 +1221,38 @@ declared duration to the sample.
 
 Residue: M5 video decode; `cpal` output + A/V sync; MP3/Opus/Vorbis/FLAC/AC-3 (refused by name, not
 silently accepted).
+
+## Tick 240 — a decoded video frame reaches the SCREEN (MEDIA.md tick 1)
+
+Ticks 234/235/236 built the media pipeline to within one step of the display — demux, AAC→PCM,
+H.264→RGBA — and every one of them stopped at a value in memory. `decode_first_frame` returned a
+correct picture that nothing could show. **A decoded frame that cannot be displayed is not video.**
+
+**What this unlocks is a CLASS, and it is not "YouTube".** It is the hero video, the background
+loop, the product demo, the GIF-replacement clip — `<video>` used as *moving decoration*, which is a
+large fraction of all `<video>` on the open web and none of which needs MSE, ABR, a codec
+negotiation or a clock. MEDIA.md ranks this the highest (web unlocked)/(effort) item in the whole
+media plan, and the reason is that the browser already had every piece but the connection.
+
+**The mechanism is deliberately three lines, and that is the finding.** A `<video>` was already a
+replaced element, and `<video poster>` already decoded and painted through the identical route as
+`<img>` — `Page::images` keyed by the video's own `NodeId`, blitted into the content box. So a frame
+needs **no video path in the painter, no new display item, and no relayout**: it overwrites one map
+entry. `Page::set_video_frame` takes raw RGBA rather than a `manuk_media::video::Frame`, which keeps
+`manuk-page` decoder-agnostic and keeps `openh264`'s C toolchain out of the ~25 gate binaries that
+link it.
+
+**No relayout is a correctness property, not an optimisation.** A `<video>`'s box comes from its
+attributes or CSS, never from the frame currently on screen — otherwise the page reflows on the first
+frame and again whenever an adaptive stream changes resolution mid-playback, which is what adaptive
+streaming does by design.
+
+**The gate's baseline assertion found a real bug before the feature was written.** `decode_inline_images`
+matched `<img>` only, while the async subresource pass matched `<img src>` *and* `<video poster>` — so
+a **network** poster rendered and an **inline `data:`** poster silently did not, on `Page::load`, every
+gate and the WPT runner. Two passes decoding the same elements for the same reason had drifted. Fixed
+by making the inline pass choose its source attribute exactly as the async pass does.
+
+Residue, stated rather than implied: nothing yet *drives* the frames — no decode thread, no clock, no
+`play()`. This is one frame on demand, which is MEDIA.md tick 1, not tick 2. `isTypeSupported` is
+unchanged and still answers `false`.

@@ -10274,3 +10274,56 @@ because `verify.sh` had already written a tree object containing them:
 `git checkout <verified-tree-sha> -- <paths>`. **The receipt's `tree:` line is a recovery point.** The
 correct move is to let `add -A` do what it is designed to do and never perform index surgery to dodge
 it.
+
+## Tick 240 — a decoded frame reaches the screen, and the gate's own baseline found the bug
+
+TICK SHAPE: connect the media pipeline's last step to the painter (MEDIA.md tick 1).
+
+**HYPOTHESIS:** ticks 234/235/236 built demux, AAC→PCM and H.264→RGBA and every one of them stopped at
+a value in memory. `decode_first_frame` returns a correct picture that nothing can display. If the
+structural claim in MEDIA.md is true — *a video frame IS a `DecodedImage`, and playing a video is
+swapping the `Rc` in the map the poster already occupies* — then displaying one needs no painter
+change at all, and the tick is three lines. It was.
+
+**`Page::set_video_frame(node, w, h, rgba)` overwrites one entry in `Page::images`.** No video path in
+the painter, no new display item, no relayout. It takes **raw RGBA, not `manuk_media::video::Frame`**,
+which is the decision worth keeping: naming the media type would drag `manuk-media`'s decoder features
+into `manuk-page`, and `openh264` compiles C into the ~25 gate binaries that link it — the isolation
+tick 236 proved both directions with `cargo tree`. Bytes keep the page decoder-agnostic; openh264
+today, `re_rav1d` or VA-API later, same signature. Same principle as tick 236's `trait VideoDecoder`.
+
+**No relayout is a correctness property, not an optimisation.** A `<video>`'s box comes from its
+attributes/CSS, never from the frame on screen — deriving it from the frame reflows the page on frame
+one and again on every mid-stream resolution switch, which is what adaptive streaming does by design.
+Asserted: a 5×-wider frame moves the box by <0.5px.
+
+**THE GATE'S BASELINE ASSERTION FOUND A REAL BUG BEFORE THE FEATURE EXISTED.** `g_video_frame` checks
+the poster paints *before* a frame is handed over, because "the poster's red is gone" is vacuous if
+nothing ever painted. That baseline failed — the box was white. Cause: `decode_inline_images` matched
+`<img>` only, while the async pass (`fetch_images_owned`) matched `<img src>` **and**
+`<video poster>`. So a **network** poster rendered and an **inline `data:`** poster silently did not,
+on `Page::load`, in every gate, and in the WPT runner. Two functions doing the same job on different
+transports had drifted. Fixed by making the inline pass select its source attribute exactly as the
+async pass does. *Assert the ground you are about to build on; do not assume it.*
+
+**A second self-inflicted trap, caught the same way:** after fixing that, the baseline STILL failed —
+my hand-written 8×8 red PNG had a valid header and a **truncated IDAT**. A corrupt fixture and a
+missing feature produce the identical symptom (a white box), which is exactly the "input bug wearing a
+wiring bug's clothes" the observer warned about for the H.264 fixtures at tick 235. Decoding the
+base64 in python named it in one command.
+
+**THREE RED PROBES EXECUTED, NOT ASSERTED (process rule 3):**
+  · `set_video_frame` made a no-op        -> left/right claims FAIL, and fail showing the POSTER's red,
+                                             which is the correct failure mode rather than blank
+  · frame made a uniform green field      -> the right-half claim FAILS (a flat field is what a mis-fed
+                                             decoder emits and it passes every size assertion)
+  · the inline-poster fix reverted        -> the BASELINE fails (this one ran for real before the fix,
+                                             which is how the bug was found in the first place)
+
+Neighbours green: g_inline_image_size, g_replaced_ratio, g_canvas_image, g_first_paint — the first two
+matter because the inline fix touches the natural-sizing path.
+
+**RESIDUE, stated rather than implied:** nothing *drives* frames yet — no decode thread, no clock, no
+`play()`. This is one frame on demand: MEDIA.md tick 1, not tick 2. `isTypeSupported` is unchanged and
+still answers `false`, because a `<video>` that shows one frame is not a `<video>` that plays. And
+`g_video_frame` is not in the verify wall — see tick 239 and docs/loop/GATE-COVERAGE.md.
