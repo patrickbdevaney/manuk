@@ -59,6 +59,14 @@ pub use video::{
     VideoError,
 };
 
+/// The presentation clock (M6). Gated behind `video` because [`playback::FrameTimeline`] decodes
+/// through [`video::H264Decoder`] — the same isolation reason `video` itself is opt-in: openh264
+/// compiles C, and it must stay out of the ~25 gate binaries reached through `manuk-js`.
+#[cfg(feature = "video")]
+pub mod playback;
+#[cfg(feature = "video")]
+pub use playback::{FrameTimeline, Transport};
+
 /// What a byte prefix looks like. Recognising a container we cannot read is worth doing: it turns
 /// "the segment is corrupt" into "this is WebM and we only demux MP4", which is the truth.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

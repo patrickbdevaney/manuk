@@ -1,0 +1,217 @@
+//! # The presentation clock — media step M6
+//!
+//! Decode (M5) turns samples into pictures. This decides **which picture is now**.
+//!
+//! **Nothing is borrowed here, and that is deliberate rather than an oversight.** Every other step
+//! in this track binds a crate — `re_mp4` demuxes, `symphonia` decodes AAC, `openh264` decodes
+//! H.264 — because a container parser and a codec are exactly the kind of large, adversarial,
+//! well-specified thing that must never be hand-written. A presentation clock is the opposite: it
+//! is small, it is entirely policy, and `docs/loop/MEDIA.md` (trap #9) records that no crate offers
+//! one. So this module is ~200 lines of arithmetic and no dependency.
+//!
+//! ## The one decision that makes this correct or wrong: HOLD, never ROUND
+//!
+//! A video **holds** each frame until the next one is due. So the frame at time `t` is the **last**
+//! frame whose presentation time is `<= t` — never the *nearest* one.
+//!
+//! This distinction is invisible at every frame boundary and wrong everywhere in between. At 30fps
+//! a frame is due every 33.3ms; a nearest-frame lookup switches to frame N+1 at 16.7ms, so for the
+//! entire second half of every frame interval it shows a picture the author has not reached yet.
+//! Both implementations pass any assertion that samples the timeline exactly on frame boundaries,
+//! which is the obvious way to write the test and the reason the gate deliberately samples
+//! **between** them.
+//!
+//! ## Presentation order is not decode order
+//!
+//! Frames are sorted by presentation time before they are ever indexed. `openh264` is Constrained
+//! Baseline and emits no B-frames today, so decode order and presentation order coincide and the
+//! sort is a no-op on everything currently decodable — which is precisely why it has to be written
+//! now rather than when it starts mattering. The moment a High-profile backend drops in behind
+//! `VideoDecoder` (the trait exists for that reason), decode order stops being presentation order
+//! and an index built in decode order silently plays the picture sequence scrambled. `Sample`
+//! already carries both timestamps and its doc comment already says which one a player seeks
+//! against; this is the consumer that honours it.
+//!
+//! ## The clock is separate from the frames, because the audio device owns time
+//!
+//! [`Transport`] holds a position and does not own the frames. MEDIA.md's A/V-sync rule is that the
+//! **audio device clock is master** — video is slaved to it, because a dropped video frame is
+//! invisible and a stretched audio sample is not. So the position must be settable from outside
+//! (`Transport::seek`, and a future `sync_to_audio`), and advancing it by a wall-clock delta is the
+//! *fallback* for a muted or video-only stream rather than the primary path. Keeping the position
+//! out of the frame store is what leaves room for that.
+
+use crate::video::{Frame, VideoDecoder, VideoError};
+use crate::Track;
+
+/// A decoded video track, indexed by presentation time.
+///
+/// Frames are held in presentation order. Decoding is eager: the fixtures and segments this runs on
+/// are one GOP or a few seconds, and a lazy decoder would need to keep the decoder, the buffer and
+/// the sample table alive together to answer a seek backwards — which is the design MSE's
+/// `SourceBuffer` already implements one layer up.
+#[derive(Debug, Clone)]
+pub struct FrameTimeline {
+    /// Sorted by `presentation_time`, ascending.
+    frames: Vec<Frame>,
+    duration: f64,
+}
+
+impl FrameTimeline {
+    /// Decode every sample of `track` out of `buffer` and index the result by presentation time.
+    ///
+    /// A sample that the decoder consumes without emitting a frame is normal (it is buffering
+    /// parameter sets or reference frames), not an error — the `None` case is skipped, exactly as
+    /// `decode_first_frame` does.
+    pub fn decode(track: &Track, buffer: &[u8]) -> Result<Self, VideoError> {
+        let mut decoder = crate::video::H264Decoder::new(track)?;
+        let mut frames: Vec<Frame> = Vec::new();
+
+        for s in &track.samples {
+            let range = s.byte_range();
+            if range.end > buffer.len() {
+                continue;
+            }
+            if let Some(frame) = decoder.decode_sample(&buffer[range], s.presentation_start())? {
+                frames.push(frame);
+            }
+        }
+
+        if frames.is_empty() {
+            return Err(VideoError::Failed(
+                "no sample in the track produced a frame".into(),
+            ));
+        }
+
+        // Presentation order, not decode order. See the module note.
+        frames.sort_by(|a, b| {
+            a.presentation_time
+                .partial_cmp(&b.presentation_time)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        // The track's own declared duration is authoritative when it has one: the last frame's
+        // presentation time is when that frame STARTS, and the video runs until it ends. Falling
+        // back to the last frame's timestamp would cut the final frame's display interval off the
+        // end of the timeline and report `ended` one frame early.
+        let declared = if track.duration > 0 {
+            track.duration as f64 / track.timescale.max(1) as f64
+        } else {
+            0.0
+        };
+        let last_start = frames.last().map(|f| f.presentation_time).unwrap_or(0.0);
+        let duration = declared.max(last_start);
+
+        Ok(Self { frames, duration })
+    }
+
+    /// The frame on screen at `t` seconds — the **last** frame due at or before `t`.
+    ///
+    /// `None` only when `t` precedes the first frame's presentation time, which is a real state: a
+    /// stream whose first sample starts at a non-zero offset has nothing to show before it, and
+    /// answering with the first frame instead would show the video's opening picture during a gap
+    /// the author left blank.
+    pub fn frame_at(&self, t: f64) -> Option<&Frame> {
+        // `partition_point` gives the count of frames due at or before `t`; the last of them is the
+        // one being held. Binary search rather than a scan because this is called once per painted
+        // frame, forever.
+        let due = self.frames.partition_point(|f| f.presentation_time <= t);
+        if due == 0 {
+            None
+        } else {
+            self.frames.get(due - 1)
+        }
+    }
+
+    /// Total presentation length, in seconds.
+    pub fn duration(&self) -> f64 {
+        self.duration
+    }
+
+    /// How many frames decoded.
+    pub fn len(&self) -> usize {
+        self.frames.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.frames.is_empty()
+    }
+
+    /// Every frame, in presentation order.
+    pub fn frames(&self) -> &[Frame] {
+        &self.frames
+    }
+}
+
+/// The transport state a `<video>` element exposes: position, playing, ended.
+///
+/// Deliberately holds no frames — see the module note on the audio clock being master.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Transport {
+    position: f64,
+    duration: f64,
+    playing: bool,
+}
+
+impl Transport {
+    pub fn new(duration: f64) -> Self {
+        Self {
+            position: 0.0,
+            duration: duration.max(0.0),
+            playing: false,
+        }
+    }
+
+    /// `HTMLMediaElement.currentTime`.
+    pub fn position(&self) -> f64 {
+        self.position
+    }
+
+    pub fn duration(&self) -> f64 {
+        self.duration
+    }
+
+    /// `!HTMLMediaElement.paused`.
+    pub fn is_playing(&self) -> bool {
+        self.playing
+    }
+
+    /// `HTMLMediaElement.ended` — the position has reached the end AND is not merely paused there.
+    pub fn ended(&self) -> bool {
+        self.position >= self.duration && self.duration > 0.0
+    }
+
+    /// `play()`. Playing from the end **rewinds first**, which is the spec's behaviour and the
+    /// reason pressing play on a finished video restarts it rather than sitting inert at the end.
+    pub fn play(&mut self) {
+        if self.ended() {
+            self.position = 0.0;
+        }
+        self.playing = true;
+    }
+
+    /// `pause()`. The position is kept: pausing is not stopping.
+    pub fn pause(&mut self) {
+        self.playing = false;
+    }
+
+    /// `currentTime = t`, clamped to the media. Seeking does not change whether it is playing —
+    /// scrubbing a playing video leaves it playing.
+    pub fn seek(&mut self, t: f64) {
+        self.position = t.clamp(0.0, self.duration);
+    }
+
+    /// Advance by a wall-clock delta. A no-op while paused — that is the whole of "paused".
+    ///
+    /// Clamps at the duration and stops, so `ended` latches instead of the position running past
+    /// the media forever.
+    pub fn advance(&mut self, dt: f64) {
+        if !self.playing || dt <= 0.0 {
+            return;
+        }
+        self.position = (self.position + dt).min(self.duration);
+        if self.position >= self.duration {
+            self.playing = false;
+        }
+    }
+}

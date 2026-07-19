@@ -402,6 +402,11 @@
   - L325 · Fixture note, and the pin
   - L339 · The frame reaches the screen by overwriting the poster's map entry (tick 240)
   - L373 · The drift this exposed: two decode passes, one of them half-blind
+  - L387 · M6 — the presentation clock (tick 249): a still is not playback
+  - L396 · HOLD, never ROUND — the whole correctness of the module
+  - L408 · Presentation order is written before it can matter
+  - L416 · The threshold that was guessed wrong, and what the real numbers were
+  - L431 · The clock does not own the frames
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -553,4 +558,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-472 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+477 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

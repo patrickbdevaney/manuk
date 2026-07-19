@@ -383,3 +383,60 @@ choose its source attribute exactly as the async pass does.
 painted. That assertion failed first, which is the argument for asserting the ground you are about to
 build on instead of assuming it — the same shape as tick 237's four-quadrant fix, where a weaker claim
 had passed on a completely broken draw.
+
+## M6 — the presentation clock (tick 249): a still is not playback
+
+M5 ends with `decode_first_frame` — **one picture**. What separates that from a video is an organ
+MEDIA.md's trap list (#9) says no crate provides: something that answers *which frame is now*.
+`manuk_media::playback` is that organ, and it is the one step in this track with **no dependency** —
+deliberately. A container parser and a codec are large, adversarial and specified, so they are always
+borrowed. A presentation clock is small and entirely policy, so hand-rolling ~200 lines is correct
+here and would be a mistake one layer down.
+
+### HOLD, never ROUND — the whole correctness of the module
+
+A video **holds** each frame until the next is due, so `frame_at(t)` is the **last** frame with
+`presentation_time <= t`, never the *nearest*. The distinction is invisible on every frame boundary
+and wrong everywhere between: at 30fps a nearest-frame lookup switches to frame N+1 at 16.7ms, so it
+shows a picture the author has not reached yet for **the entire back half of every frame interval**.
+
+This is a trap for the test, not just the implementation. Sampling the timeline at frame timestamps —
+the obvious way to write it — passes under *both* implementations. `g_playback_clock` therefore
+samples deliberately **between** frames (75% through interval 0), and the RED probe confirmed only
+that one assertion flips when `partition_point` is swapped for a nearest-by-distance scan.
+
+### Presentation order is written before it can matter
+
+Frames are sorted by presentation time even though openh264 is Constrained Baseline and emits no
+B-frames, so the sort is a **no-op on everything currently decodable**. That is the reason to write
+it now: the moment a High-profile backend drops in behind `VideoDecoder`, decode order stops being
+presentation order and an index built in decode order plays the picture sequence scrambled — a bug
+that would present as "the video is glitchy", far from the line that caused it.
+
+### The threshold that was guessed wrong, and what the real numbers were
+
+The load-bearing assertion is that consecutive frames are **different pictures** — a decoder
+re-emitting one frame yields a timeline of the right length that plays a still, and passes every
+count, duration, ordering and dimension check ever written.
+
+The first bar was invented — *"more than 1% of bytes must differ"* — and it **failed on real, correct
+video**. Measured on the fixture: pair 0→1 differs in **60.4%** of bytes, pair 1→2 in **0.86%**. 33ms
+apart in a slow-panning scene is genuinely a tiny delta. The failure mode actually being caught
+produces **exactly zero** differing bytes (confirmed by RED probe: `0 of 921600`), so the honest bar
+is a floor far above zero and far below real motion — 0.1%, which the tighter pair clears 8×.
+**A threshold picked from intuition about what "different" means was wrong by an order of magnitude
+in the direction that false-fails good work.** Calibrate against the data, then write the measurement
+into the gate so the next reader does not re-guess it.
+
+### The clock does not own the frames
+
+`Transport` (position/playing/ended) is separate from `FrameTimeline` because MEDIA.md's A/V-sync
+rule is that the **audio device clock is master** — a dropped video frame is invisible, a stretched
+audio sample is not. Advancing by a wall-clock delta is the *fallback* for muted/video-only; the
+position must remain settable from outside for audio to drive it. Keeping position out of the frame
+store is what leaves that door open.
+
+Residue: this is the clock, not the element. `<video>`'s JS surface still answers the **honest NO**
+from the pre-decode era — `play()` rejects and `canPlayType` returns `''` even for `avc1.42001E`,
+which we can now decode. That NO has become a lie in the other direction, and correcting it (element
+→ timeline → `set_video_frame`) is M6b. Audio and video are also not yet sync'd to one clock.

@@ -10951,3 +10951,65 @@ and it is the half that matters for uploads; reordering is its own tick. `getDat
 `setData` put there, so a text/URL drag between elements carries nothing yet.
 
 WIKI: docs/wiki/interaction-surface.md (+ INDEX.md)
+
+## Tick 249 — a still is not playback: the clock that decides which frame is now
+
+TICK SHAPE: M1-M5 are landed (MSE byte pipe, segment fetch, re_mp4 demux, symphonia AAC, openh264
+Baseline video). What exists at the end of M5 is `decode_first_frame` — **one picture**. The organ
+missing between "we can decode" and "it plays" is the one MEDIA.md names as hand-rolled and
+crate-less: **a presentation clock**, the thing that answers *which frame is on screen at time t*.
+
+HYPOTHESIS: the gap is not decode capacity, it is that nothing maps a time to a frame. Add
+`manuk_media::playback` — a presentation-ordered frame timeline plus a transport clock
+(play/pause/seek/ended) — and assert against a real fixture that advancing the clock yields
+DIFFERENT frames in presentation order.
+
+THE CLAIM THE GATE MUST BE ABLE TO FALSIFY: a video **holds** each frame until the next one is due.
+`frame_at(t)` is the LAST frame with `presentation_time <= t`, never the NEAREST one. A nearest-frame
+implementation looks correct on every frame boundary and is wrong everywhere in between — it shows
+the next frame early for the whole second half of every frame interval.
+
+**THE CAPABILITY.** `manuk_media::playback` — `FrameTimeline` (a decoded track indexed by
+presentation time) + `Transport` (position/playing/ended, i.e. `currentTime`/`paused`/`ended`).
+The one step in the media track with **no dependency**, deliberately: a demuxer and a codec are
+always borrowed, a presentation clock is small policy and MEDIA.md trap #9 records that no crate
+offers one.
+
+**HOLD, NOT ROUND — and the test trap that comes with it.** `frame_at(t)` is the LAST frame due at
+or before `t`. A nearest-frame lookup is invisible on every frame boundary and wrong everywhere
+between — at 30fps it shows the next picture from 16.7ms, i.e. for the back half of *every* frame
+interval. Sampling the timeline at frame timestamps (the obvious test) passes under BOTH
+implementations, so the gate samples deliberately **between** frames.
+
+**RED PROBES EXECUTED, NOT ASSERTED (process rule 3) — both predictions held exactly:**
+  · swap `partition_point` for a nearest-by-distance scan → RED at the hold assertion ONLY; the
+    count, duration, ordering and transport claims all stayed green. The discriminator discriminates.
+  · re-emit the first picture for every sample → RED at the distinct-pictures assertion, reporting
+    **0 of 921600 bytes differ**, while count/duration/ordering/hold ALL stayed green. That is the
+    precise shape of "a timeline of the right length that plays a still".
+
+**THE THRESHOLD I GUESSED WRONG, RECORDED BECAUSE THE ERROR IS THE LESSON.** The distinct-pictures
+bar was first written as "more than 1% of bytes differ" — an invented number — and it **FAILED on
+real, correct video**. Measured: pair 0→1 differs in **60.4%** of bytes, pair 1→2 in **0.86%**. 33ms
+apart in a slow-panning scene is genuinely a tiny delta. The failure mode being caught produces
+EXACTLY ZERO differing bytes, so the honest bar is a floor far above 0 and far below real motion
+(0.1%, cleared 8x). **An intuition about what "different pictures" should look like was wrong by an
+order of magnitude, in the direction that false-fails correct work** — the same class as the wall's
+lucky-fast re-baseline. The measured numbers are now written into the gate so nobody re-guesses.
+
+**Presentation-order sort is a NO-OP today and written anyway:** openh264 is Constrained Baseline
+and emits no B-frames, so decode order == presentation order on everything currently decodable. It
+is written now because the moment a High-profile backend drops in behind `VideoDecoder`, an index
+built in decode order plays the sequence scrambled — presenting as "glitchy video", far from its
+cause.
+
+Gate: `engine/media/tests/playback_clock.rs` (`G_PLAYBACK_CLOCK`), 3 tests. Regression: full
+`manuk-media` suite **17 passed / 0 failed** under `--features video,audio`.
+
+Residue, named honestly: this is the clock, **not the element**. `<video>`'s JS surface still gives
+the pre-decode era's honest NO — `play()` rejects and `canPlayType` returns `''` even for
+`avc1.42001E`, which we now decode. **That NO has become a lie in the other direction**, and
+correcting it (element → timeline → `set_video_frame`) is M6b, the next door. Audio and video are
+not yet slaved to one clock, and nothing drives the clock from a frame callback yet.
+
+WIKI: docs/wiki/media-pipeline.md
