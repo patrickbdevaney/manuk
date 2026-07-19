@@ -66,8 +66,14 @@ done
 # (ramdisk, flushed above), and banked builds + oracle snapshots are pruned below. Nuke the whole debug
 # tree only as an explicit LAST RESORT — `--aggressive`, or a critical >=95% where ENOSPC is imminent and
 # one cold rebuild beats a failed build.
+# ── STALE-PCT FIX (observer, tick 234). `pct` was read ONCE at the top, BEFORE the orphan-prune above
+# frees ~34G in 3.5s. So a transient >=95% linking spike still fired this destructive purge even when the
+# prune had already brought the disk back to ~75% — nuking the warm cache and forcing the ~35min cold
+# rebuild this script exists to PREVENT. Re-measure so the purge only fires if we are STILL critical after
+# reclaiming. This matters more now the cron runs every 3min (more chances to catch a transient spike).
+pct=$(df /home | awk 'NR==2 {gsub(/%/,""); print $5}')
 if [ "${1:-}" = "--aggressive" ] || [ "$pct" -ge 95 ]; then
-  echo "  · target/debug — CRITICAL ${pct}%: full purge to avert ENOSPC (a cold rebuild follows)"
+  echo "  · target/debug — CRITICAL ${pct}% AFTER prune: full purge to avert ENOSPC (a cold rebuild follows)"
   rm -rf target/debug 2>/dev/null
 else
   echo "  · target/debug preserved (warm cache kept; only regenerable churn reclaimed — incremental is in RAM)"
