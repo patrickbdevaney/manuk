@@ -10206,3 +10206,71 @@ stacked on the media pair, in landing order 235 → 236 → 237 → 238. `ratche
 WALL alone (426s vs a 93s ceiling) and recognised the advance it should: **GATES 103 → 104**, every
 other mark `(=)`. I did not lower the WALL mark — it is observer-managed, and buying a capability with
 the wall is the trade the ratchet exists to refuse.
+
+## Tick 239 — the gate that guards the ledger was itself red, and nothing was asking
+
+TICK SHAPE: measure gate coverage, fix the one real red it exposed, report the harness gap.
+
+**HYPOTHESIS (written before the work):** the four parked ticks land once the wall is genuinely fixed;
+then the next media step is MEDIA.md tick 1, "the video's first frame renders where the poster was."
+The first half held — 235-238 landed as `02bc4e5` with the wall at **58-72s**, down from 426-593s, so
+the observer's disk-hygiene stem-prune fix is real. The second half was pre-empted by what the probe
+for it turned up, and the probe was cheap: before wiring a new page gate I checked how page gates are
+invoked, and found that most of them are not.
+
+**THE MEASUREMENT.** `engine/page/tests/` holds **104** gate files; `scripts/verify.sh` names **19**.
+The only package-wide `manuk-page` invocation is a `--no-run` PRE-WARM (`verify.sh:96-104`) — it links
+the binaries and never runs them. **85 page gates do not execute in the wall.** Full sweep
+(`--no-fail-fast`): **98 passed, 2 failed** over 86 targets.
+
+**The important half of that result is the 98.** No capability had been silently lost — this is not a
+disaster, it is a blind spot. But `CONSTELLATION.tsv` marks rows `gated` naming gates inside the 85
+(`g_mse`, `g_media_buffered`, `g_canvas_text`, `g_canvas_image`, `g_hydration`, `g_crypto`,
+`g_a11y_state`, `g_capability`), and those rows were claiming a ratchet tooth nothing bites on.
+
+**THE ONE REAL RED, AND IT IS THE INSTRUMENT ITSELF.** `g_capability` — the gate built because the
+pattern ledger had been wrong six times — had gone stale in exactly the way it exists to catch. Its
+claim was that `createDocumentType('')` throws `InvalidCharacterError`. That is the **pre-2020 rule**,
+when the argument was validated against the XML QName production. The DOM spec now validates against
+"valid doctype name": reject ONLY ASCII whitespace, U+0000 and `>`.
+
+**Settled by WPT, not by reasoning** — I nearly "fixed" the engine before checking, and the engine was
+right. `dom/nodes/DOMImplementation-createDocumentType.html` lists ~70 cases: exactly TWO expect
+`INVALID_CHARACTER_ERR` (`edi:>` and `edi:a `), and `["", "", "", null]` expects **no throw**. `1foo`,
+`@foo`, `:foo`, `foo:` and `a.b:c` all expect a doctype back. So tick 135's relaxation was correct,
+and it left BOTH the claim and the code comment describing a spec that no longer exists — the file
+argued with itself for ~100 ticks while the gate that would have said so was never invoked.
+
+So **the claim moved, not the engine.** The engine diff is comment-only. The new claim asserts BOTH
+directions — the two names that must throw AND the empty name that must not — because a one-sided
+claim is precisely what let the stale version keep looking reasonable.
+
+**TWO RED PROBES EXECUTED, NOT ASSERTED (process rule 3):**
+  · drop `>` from the rejection set        -> `createDocumentType validates` FAILS (throw direction)
+  · add `name === ''` to the rejection set  -> FAILS (the no-throw direction is load-bearing, not decoration)
+A third was caught by the discipline rather than the gate: the first probe was a `perl -0pi` whose
+escaping silently matched nothing, and the `grep` assert on the replacement caught it and aborted —
+the "assert every scripted edit" rule paying for itself in the same tick it was being applied.
+
+**THE GENERALISATION, and it is lesson #1 wearing a new hat:** *a gate that is not INVOKED is
+indistinguishable from a gate that passes.* `falsify.sh` mutation-tests the gates that run; nothing
+tests whether a gate runs at all. The 85 were written, proven red at authoring time, committed — and
+never asked again. Full analysis, the named network-dependent exclusions, and the deny-list sweep
+shape that cannot go stale again: **`docs/loop/GATE-COVERAGE.md`**.
+
+**HARNESS NOTE (observer-owned, NOT touched):** `verify.sh` runs 19 of 104 page gates and zero of
+`manuk-media`'s two (`audio_decode`/`video_decode`, ticks 235/236 — watched by nothing at all). The
+recommendation is deliberately NOT "add 85 `_launch` lines": wall cost is unmeasured against a 93s
+ceiling, so the safer shape is an off-the-per-tick-path sweep banking into `RATCHET.tsv`, exactly the
+trade FID-SWEEP already made. Also still open and pre-existing: `manuk-page --lib
+hard_wall_detection_and_honest_interstitial` is RED and the wall misses it.
+
+**A process near-miss worth recording.** Landing 235-238 took four verify runs because the receipt
+tree kept disagreeing with the staged tree. `verify.sh` hashes the **WORKING TREE**, `tick.sh:143` does
+an unconditional `git add -A`, and I tried to keep the observer's live uncommitted `scripts/` edits out
+of my commit with `git restore --staged` + `--skip-worktree`. That made the mismatch permanent AND
+reverted the observer's in-flight `disk-hygiene.sh`/`lever-board.sh` edits on disk. Recovered only
+because `verify.sh` had already written a tree object containing them:
+`git checkout <verified-tree-sha> -- <paths>`. **The receipt's `tree:` line is a recovery point.** The
+correct move is to let `add -A` do what it is designed to do and never perform index surgery to dodge
+it.

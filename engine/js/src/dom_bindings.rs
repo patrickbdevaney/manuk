@@ -7817,10 +7817,19 @@ const WINDOW_PRELUDE: &str = r#"
             // `createDocumentType(qualifiedName, publicId, systemId)` returned a **plain object literal**.
             // Its prototype was `Object`, so `instanceof DocumentType` was false and
             // `Object.getPrototypeOf(dt) === DocumentType.prototype` — which is what WPT asserts — could
-            // never hold. And it **validated nothing**: `createDocumentType('', ...)` produced a
-            // doctype with an empty name, and `createDocumentType('<', ...)` one with a name that is not
-            // a name. The spec throws `InvalidCharacterError` for both, and `NamespaceError` for a
-            // qualified name with a bad prefix.
+            // never hold.
+            //
+            // ⚠ THE VALIDATION RULE BELOW IS DELIBERATELY LENIENT, AND THIS COMMENT USED TO CONTRADICT IT.
+            // It said the spec throws `InvalidCharacterError` for `''` and `'<'` and `NamespaceError` for a
+            // bad prefix — that was the PRE-2020 rule, when this argument was validated against the XML
+            // QName production. The DOM spec now validates against "valid doctype name", which rejects ONLY
+            // ASCII whitespace, U+0000 and U+003E (`>`) — no QName check, no prefix check, and an empty
+            // name is VALID. WPT settles it (dom/nodes/DOMImplementation-createDocumentType.html): of ~70
+            // cases exactly two expect INVALID_CHARACTER_ERR (`edi:>` and `edi:a `), while `''`, `1foo`,
+            // `@foo`, `:foo`, `foo:` and `a.b:c` all expect a doctype back. Tick 135 changed the code to
+            // match and left this comment describing the old rule, so the file argued with itself for ~100
+            // ticks — and `G_CAPABILITY` was red the whole time, unseen, because that gate is not in the
+            // verify wall (tick 239).
             createDocumentType: function (name, publicId, systemId) {
                 name = String(name);
                 if (/[\t\n\f\r \x00>]/.test(name)) {

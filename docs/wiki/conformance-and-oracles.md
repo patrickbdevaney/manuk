@@ -160,6 +160,38 @@ near-total Wikipedia layout failure* that only a screenshot revealed.
 
 Later amended: **gating without the JS engine charges the ENGINE for the absence of the SCRIPT engine.**
 
+## A gate that is never INVOKED is indistinguishable from a gate that passes (tick 239)
+
+The strongest form of the rule below, and the one that survived longest here undetected. Everything in
+this file assumes the gate *ran*. Measured at tick 239: `engine/page/tests/` held **104** gate files and
+`scripts/verify.sh` named **19**. The only package-wide `manuk-page` invocation was a **`--no-run`
+pre-warm** — it linked all 104 binaries and executed none of them, which is the cruellest possible shape,
+because a build failure in any of them still REDs the wall and so the gates *look* tended.
+
+**85 gates were therefore unwatched, and `CONSTELLATION.tsv` marked rows `gated` naming gates inside that
+85.** A ratchet tooth nothing bites on. The sweep found 98 passing and 2 red, so nothing had actually been
+lost — the finding is a blind spot, not a disaster. But one of the two reds was **`g_capability` itself**,
+the gate written because the pattern ledger had been wrong six times, and it had gone stale in precisely
+the way it exists to catch: it asserted the pre-2020 QName rule for `createDocumentType` while the engine
+had correctly moved to the spec's "valid doctype name" at tick 135.
+
+**Why the existing instruments could not see it.** `falsify.sh` mutation-tests the gates that run — it
+answers *"can this gate go red?"*, never *"is anyone asking it?"*. A gate is proven red at authoring time,
+committed, and then silently drops out of the conversation. The failure is in the **invocation list**, and
+nothing audits a list.
+
+**The mechanical fix is a shape, not a list:** a sweep with a NAMED deny-list, so a newly added gate is
+watched BY DEFAULT and excluding one is a deliberate act with a reason attached. Hard-coding 85 more
+`_launch` lines re-creates the same staleness one commit later. Where the wall budget cannot absorb the
+sweep, run it OFF the per-tick path and bank pass/fail into `RATCHET.tsv` — the trade FID-SWEEP already
+made. Full measurement and the exclusion set: `docs/loop/GATE-COVERAGE.md`.
+
+**And the corollary that cost the most time here: when a gate and the engine disagree, the gate is not
+automatically right.** I nearly "fixed" a spec-conformant engine to satisfy a stale claim. WPT settled it
+in one grep — `dom/nodes/DOMImplementation-createDocumentType.html` expects `InvalidCharacterError` for
+exactly two of ~70 names and a doctype back for `''`. **Check the spec's own test before you believe
+either side of your own instrument.**
+
 ## A gate that CANNOT FAIL is a decoration — and they go vacuous SILENTLY
 
 A coverage gate returned **1.0 when `probed == 0`**, and its own default URL list contained **`example.com`,

@@ -81,7 +81,17 @@ const CLAIMS: &[(&str, &str)] = &[
     // so `instanceof DocumentType` was false — and it validated nothing.
     ("DocumentType", "typeof DocumentType === 'function'"),
     ("createDocumentType is a DocumentType", "document.implementation.createDocumentType('html','','') instanceof DocumentType"),
-    ("createDocumentType validates", "(function(){try{document.implementation.createDocumentType('','','');return false}catch(e){return e.name==='InvalidCharacterError'}})()"),
+    // ⚠ THIS CLAIM WAS ITSELF STALE, and it went red for ~100 ticks without anyone seeing it (tick 239).
+    // It asserted `createDocumentType('')` throws InvalidCharacterError — the pre-2020 rule, when the
+    // argument was validated against the XML QName production. The DOM spec now validates against
+    // "valid doctype name", which rejects ONLY ASCII whitespace, U+0000 and U+003E (`>`). WPT is
+    // unambiguous (dom/nodes/DOMImplementation-createDocumentType.html): of ~70 cases, exactly TWO expect
+    // INVALID_CHARACTER_ERR — `edi:>` and `edi:a ` — and `["", "", "", null]` expects NO throw at all.
+    // So tick 135's relaxation was CORRECT and the engine is spec-conformant; the ledger was describing a
+    // spec that no longer exists. The claim is re-pointed at what the spec actually requires, and it now
+    // asserts BOTH directions — the two names that must throw, and the empty name that must NOT — because
+    // a one-sided claim is what let the stale version look reasonable for a hundred ticks.
+    ("createDocumentType validates", "(function(){function t(n){try{document.implementation.createDocumentType(n,'','');return false}catch(e){return e.name==='InvalidCharacterError'}}return t('edi:>')&&t('edi:a ')&&!t('')&&document.implementation.createDocumentType('','','').name===''})()"),
     ("document.doctype", "!!document.doctype && document.doctype.name === 'html'"),
 
     // MutationObserver (tick 77). It was an INERT STUB that said `function` — a check that only asks
