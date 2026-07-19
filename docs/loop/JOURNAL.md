@@ -10372,3 +10372,58 @@ point) and test262 (row 100 — never run; a local suite exists at `v8/test/test
 missing piece is a runner against our embedded SpiderMonkey, not the corpus).
 
 No capability was claimed that a gate does not hold; nothing in this tick changes engine behaviour.
+
+## Tick 242 — quirks mode: wiring a verdict the engine had already computed and thrown away
+
+TICK SHAPE: thread the parser's quirks verdict into Stylo and compatMode, together.
+
+**HYPOTHESIS (from tick 241's probe):** html5ever detects quirks and stores it in a field nobody reads;
+every Stylo call site hard-codes `NoQuirks`; `compatMode` is a constant. If Stylo already implements the
+quirks themselves, then this is *plumbing* — deliver the verdict and the behaviour appears. It was.
+
+**THE DESIGN DECISION THAT MADE IT A TICK RATHER THAN A REFACTOR: the verdict rides on `Dom`.** The
+obvious shape — return it from `parse()` and thread it as a parameter — would have touched
+`manuk_html::parse`/`parse_bytes`/`StreamParser`, `Page::from_dom`, the `Page` struct and **all 18
+`cascade_styles` call sites**. A `quirks: bool` field on `Dom` changes **no signature anywhere**,
+because every consumer already receives a `Dom`: `cascade_via_stylo(dom: &Dom, ..)` reads it,
+`StyloDocument` already holds `&'a Dom`, and `doc_get_compat_mode` reaches it through the existing
+`this_node(vp)`. *A value every consumer already has a handle to should ride on that handle.*
+
+**TWO PARSE PATHS, AND WIRING ONE WAS NOT ENOUGH — this is the bug the gate caught mid-tick.** After
+wiring `StyloStylesheet::from_str` (`<style>`/linked CSS) the gate still failed at `width=800`:
+`parse_style_attribute`, which handles the inline `style=` attribute, is a *separate* parse with its own
+`QuirksMode` argument. And **legacy markup — precisely the markup that lands in quirks mode — is
+overwhelmingly inline-styled**, so wiring only stylesheets would have shipped a quirks mode that did
+nothing on the documents it exists for. `el.dom` was already in scope; another field read, not another
+parameter.
+
+**REPORTING AND RENDERING LANDED TOGETHER, ON PURPOSE.** Flipping `compatMode` alone is a *worse* lie
+than the constant it replaces, because it is actionable by the page: a site branching on `compatMode`
+would take a quirks code path this engine does not honour. The gate asserts both directions of both
+halves, plus a fifth claim that the modes actually **differ** — each of the first four can be satisfied
+by a constant; that one cannot.
+
+**THREE RED PROBES EXECUTED, NOT ASSERTED (process rule 3):**
+  · sink writes `false` unconditionally     -> compatMode claim FAILS (the sink write is load-bearing)
+  · compatMode left as the constant         -> FAILED for real, mid-tick, before that half was wired
+  · inline `style=` left at `NoQuirks`      -> width claim FAILED at 800, for real, mid-tick
+
+**THE GATE'S OWN HARNESS WAS A BUG FIRST.** Written as three `#[test]`s, the binary **SIGSEGV'd** —
+each test calls `Page::load`, cargo runs them on separate threads, and SpiderMonkey is not
+shared-thread-safe. Before crashing it produced a subtler artifact: `compatMode` read back as the
+fixture's placeholder `"-"` on one test and the real value on another, i.e. a script that silently did
+not run. Diagnosed with `--test-threads=1` (clean failures, no crash) and a scratch probe. Consolidated
+to one sequential test. **A gate whose fixture races itself cannot tell a regression from its own
+harness** — and it would have been easy to read that SIGSEGV as a Bar 0 crash in the engine.
+
+**THE REGRESSION RISK WAS REAL AND WAS MEASURED, NOT ASSUMED.** This changes behaviour for every
+doctype-less fixture in the tree, and many gates use them. Full page suite re-run: **122 passed, 1
+failed** — the single failure is the pre-existing `hard_wall_detection_and_honest_interstitial` lib test
+documented at tick 239. Modified crates all green: manuk-dom 11, manuk-html 12, manuk-layout 77,
+manuk-paint 17, manuk-css(stylo) 33.
+
+**RESIDUE, NAMED RATHER THAN IMPLIED:** the ~9 `MatchingContext`/media-query `NoQuirks` sites in
+`stylo_engine.rs` still say standards, so **case-insensitive id/class matching is not yet enabled** —
+a real quirk, deliberately left rather than quietly claimed. `LimitedQuirks` folds to `false` (it does
+not enable the unitless-length quirk, which is the behaviour this currently drives). And
+`g_quirks_mode` is not in the verify wall — tick 239, `docs/loop/GATE-COVERAGE.md`.

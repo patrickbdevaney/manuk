@@ -1256,3 +1256,35 @@ by making the inline pass choose its source attribute exactly as the async pass 
 Residue, stated rather than implied: nothing yet *drives* the frames — no decode thread, no clock, no
 `play()`. This is one frame on demand, which is MEDIA.md tick 1, not tick 2. `isTypeSupported` is
 unchanged and still answers `false`.
+
+## Tick 242 — quirks mode is wired end-to-end (the long tail stops being mis-rendered)
+
+**The class this unlocks is the pre-standards web**, which is not a nostalgia category: it is the
+intranet app, the government form, the university department page, the vendor manual, the CMS template
+nobody has touched since 2008 — documents with no doctype, which browsers render in quirks mode and we
+were rendering in standards. Every unitless `width=`/`height=` in their inline styles was being
+**dropped as invalid**, so their layouts collapsed to auto widths.
+
+**It was a dead-end wire, not a missing feature, and that is the more dangerous shape.** html5ever
+detected quirks correctly and stored the verdict in a field that was **written and never read**; every
+Stylo call site hard-coded `NoQuirks`; and `document.compatMode` returned a constant `"CSS1Compat"`
+behind a comment asserting *"our documents are never quirks-mode"*. The engine had the answer and threw
+it away, which no capability probe would ever surface — the feature *appears* present at every layer
+you inspect.
+
+**The fix is a field on `Dom`, not a parameter.** Every consumer already receives a `Dom`, so the
+verdict reaches Stylo, layout and JS with **no signature change anywhere** — including all 18
+`cascade_styles` call sites. Threading it explicitly would have made the change too large to land in
+one tick, which is the trade worth remembering: *a value every consumer already has a handle to should
+ride on that handle.*
+
+**Stylo already implements the quirks** — unitless lengths, case-insensitive id/class matching, the
+`<font size>` table. `QuirksMode` is an input we were failing to supply, so this is plumbing rather
+than layout math.
+
+**Reporting and rendering shipped together, deliberately.** Flipping `compatMode` alone would have been
+a worse lie than the constant: a site branching on it would take a quirks path we do not honour.
+
+Residue: the ~9 `MatchingContext`/media-query `NoQuirks` sites in `stylo_engine.rs` still say standards,
+so **case-insensitive id/class matching is not yet enabled** — a real quirk, deliberately left for a
+follow-up rather than claimed. `LimitedQuirks` folds to `false` (it does not enable the unitless quirk).

@@ -99,10 +99,10 @@ impl FontMetricsProvider for StubFontMetrics {
     }
 }
 
-fn make_device(width: f32, height: f32) -> Device {
+fn make_device(width: f32, height: f32, quirks: QuirksMode) -> Device {
     Device::new(
         MediaType::screen(),
-        QuirksMode::NoQuirks,
+        quirks,
         Size2D::new(width, height),
         Size2D::new(width, height),
         Scale::new(1.0),
@@ -247,6 +247,15 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
     // feature), which makes it drop `display:grid` at parse time. Flip it on once so grid
     // containers cascade. Idempotent + cheap; safe to call every cascade.
     stylo_static_prefs::set_pref!("layout.grid.enabled", true);
+    // **The parser's verdict, read off the `Dom` it already handed us.** Everything below that used to
+    // say `QuirksMode::NoQuirks` unconditionally now says `qm`. Stylo already implements the quirks
+    // themselves (unitless lengths, case-insensitive id/class matching, the `<font size>` table) — this
+    // function was simply never telling it which mode the document was in.
+    let qm = if dom.quirks() {
+        QuirksMode::Quirks
+    } else {
+        QuirksMode::NoQuirks
+    };
     let lock = SharedRwLock::new();
     let Ok(url) = ::url::Url::parse("about:manuk") else {
         return MinimalCascade.cascade(dom, sheets);
@@ -256,7 +265,7 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
     // Parse each sheet's raw source with Stylo's own parser; keep the Arcs so we can
     // iterate their compiled rules for matching.
     let mut stylo_sheets: Vec<ServoArc<StyloStylesheet>> = Vec::new();
-    let mut stylist = Stylist::new(make_device(vw, vh), QuirksMode::NoQuirks);
+    let mut stylist = Stylist::new(make_device(vw, vh, qm), qm);
     // The UA sheet is matched first (lowest priority); author rules override it.
     let ua_sheet = Stylesheet::parse(UA_CSS);
     let all_sheets: Vec<&Stylesheet> = std::iter::once(&ua_sheet).chain(sheets.iter()).collect();
@@ -272,7 +281,10 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
                 lock.clone(),
                 None,
                 None,
-                QuirksMode::NoQuirks,
+                // THE load-bearing one for the unitless-length quirk: it reaches
+                // `ParserContext::quirks_mode`, which is what `AllowQuirks::allowed` consults when
+                // deciding whether `width: 100` is 100px or a parse error.
+                qm,
                 AllowImportRules::Yes,
             );
             let arc = ServoArc::new(parsed);
@@ -1158,11 +1170,21 @@ fn cascade_one_element(
     }
     // Inline `style=` wins over all matched rules — append its declarations last.
     if let Some(inline) = el.dom.element(node).and_then(|e| e.attr("style")) {
+        // **The inline `style=` attribute needs the quirks verdict as much as a stylesheet does**, and
+        // it is a SEPARATE parse: `StyloStylesheet::from_str` handles `<style>`/linked CSS, this
+        // handles the attribute. Wiring only the first left `style="width: 100"` still dropped on a
+        // quirks page while the same rule in a `<style>` block worked — and legacy markup, which is
+        // exactly the markup that lands in quirks mode, is overwhelmingly inline-styled. `el.dom` is
+        // already in scope, so this is a field read rather than another parameter.
         let block = parse_style_attribute(
             inline,
             url_data,
             None,
-            selectors::context::QuirksMode::NoQuirks,
+            if el.dom.quirks() {
+                selectors::context::QuirksMode::Quirks
+            } else {
+                selectors::context::QuirksMode::NoQuirks
+            },
             CssRuleType::Style,
         );
         for (decl, importance) in block.declaration_importance_iter() {

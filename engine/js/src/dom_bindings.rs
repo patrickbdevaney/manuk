@@ -5219,11 +5219,29 @@ unsafe fn doc_get_charset(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> 
     true
 }
 
-/// `document.compatMode` — always `"CSS1Compat"` (standards mode). Our documents are never quirks-mode:
-/// `createHTMLDocument` mints a `<!DOCTYPE html>` document, and the parser standards-modes real pages.
-/// `DOMImplementation-createHTMLDocument` asserts it; it was `undefined`.
+/// `document.compatMode` — `"BackCompat"` in quirks mode, `"CSS1Compat"` in standards.
+///
+/// **The old comment here claimed "our documents are never quirks-mode", and the parser had been
+/// contradicting it on every doctype-less page since the tree sink was written** (measured, tick 241).
+/// html5ever detected quirks, stored the verdict in a field nobody read, and this getter returned a
+/// constant.
+///
+/// It is fixed in the SAME tick as the layout wiring, deliberately. Reporting `BackCompat` while still
+/// rendering standards would be a worse lie than the constant it replaces: a site that branches on
+/// `compatMode` would take a quirks code path the engine does not honour. Reporting and rendering are
+/// one capability, and `g_quirks_mode` asserts they agree in both directions.
+///
+/// `createHTMLDocument` still reports `CSS1Compat` — it mints a `<!DOCTYPE html>` document, so its
+/// `Dom` carries the default `quirks: false`, which is what `DOMImplementation-createHTMLDocument`
+/// asserts.
 unsafe fn doc_get_compat_mode(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
-    return_string(cx, vp, "CSS1Compat");
+    let quirks = match this_node(vp) {
+        // A document reached through a node handle knows its own mode.
+        Some((dom, _)) => (*dom).quirks(),
+        // No handle (a detached/synthetic document): standards, matching the default `Dom`.
+        None => false,
+    };
+    return_string(cx, vp, if quirks { "BackCompat" } else { "CSS1Compat" });
     true
 }
 

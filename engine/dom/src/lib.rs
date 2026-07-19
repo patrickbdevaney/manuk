@@ -210,6 +210,20 @@ pub struct Dom {
     /// only when it differs, so repeated reads on an unchanged tree are free and the
     /// post-script batch relayout still sees exactly the bits it always saw.
     mutation_seq: u64,
+    /// **Did the parser put this document in quirks mode?** (i.e. no doctype, or an obsolete one.)
+    ///
+    /// It lives on `Dom` rather than being returned alongside it, and that is the whole reason this
+    /// wiring is cheap: `manuk_html::parse` already returns a `Dom`, `cascade_via_stylo` already takes
+    /// `&Dom`, and `StyloDocument` already holds `&Dom` — so the verdict reaches every consumer with
+    /// **no signature change anywhere**, including all 18 `cascade_styles` call sites in `engine/page`.
+    /// Threading it as a parameter instead would have touched every one of them.
+    ///
+    /// A `bool`, not html5ever's three-state `QuirksMode`, because `manuk-dom` must not depend on
+    /// html5ever or Stylo. `LimitedQuirks` ("almost standards" — the inline-image-baseline rule) folds
+    /// into `false` here: it does NOT enable the unitless-length quirk, which is the behaviour this
+    /// distinction currently drives. If a limited-quirks-only behaviour is ever needed, this becomes a
+    /// three-state enum of our own — but inventing one before anything reads it is speculation.
+    quirks: bool,
 }
 
 impl Default for Dom {
@@ -231,7 +245,21 @@ impl Dom {
             root: NodeId(0),
             structure_changed: false,
             mutation_seq: 0,
+            // Standards until the parser says otherwise: a `Dom` built programmatically (tests, the
+            // layout tree, `createDocument`) has no doctype to be missing, and treating those as
+            // quirks would enable the unitless-length quirk for documents no parser ever saw.
+            quirks: false,
         }
+    }
+
+    /// Whether the parser put this document in quirks mode. See the field's note for why it lives here.
+    pub fn quirks(&self) -> bool {
+        self.quirks
+    }
+
+    /// Record the parser's quirks verdict. Called once, by the HTML tree sink.
+    pub fn set_quirks(&mut self, quirks: bool) {
+        self.quirks = quirks;
     }
 
     /// Whether `id` still points at a live node of the generation it was minted at. A

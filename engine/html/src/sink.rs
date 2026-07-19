@@ -51,7 +51,6 @@ pub struct ArenaSink {
     /// Shared so a streaming parse can snapshot the partial tree while the parser still
     /// owns the sink (B-latency's `StreamParser`).
     dom: Rc<RefCell<Dom>>,
-    quirks: Cell<QuirksMode>,
     /// Parse errors, kept for diagnostics rather than discarded.
     errors: RefCell<Vec<String>>,
 }
@@ -60,7 +59,6 @@ impl Default for ArenaSink {
     fn default() -> Self {
         ArenaSink {
             dom: Rc::new(RefCell::new(Dom::new())),
-            quirks: Cell::new(QuirksMode::NoQuirks),
             errors: RefCell::new(Vec::new()),
         }
     }
@@ -197,7 +195,16 @@ impl TreeSink for ArenaSink {
     }
 
     fn set_quirks_mode(&self, mode: QuirksMode) {
-        self.quirks.set(mode);
+        // **This used to write to a field nobody read.** `self.quirks` was set here and never
+        // consulted anywhere, while every Stylo call site hard-coded `NoQuirks` — so the parser
+        // detected quirks correctly and the style system was never told (measured, tick 241).
+        // Writing straight into the `Dom` is what closes the loop: the `Dom` is what every consumer
+        // already receives, so no signature has to change to carry the verdict.
+        //
+        // `LimitedQuirks` maps to `false`. It is "almost standards" mode, which differs from full
+        // standards only in the inline-image baseline rule — it does NOT enable the unitless-length
+        // quirk, so folding it into `false` is correct for every behaviour currently gated on this.
+        self.dom.borrow_mut().set_quirks(mode == QuirksMode::Quirks);
     }
 
     fn append_before_sibling(&self, sibling: &NodeId, new_node: NodeOrText<NodeId>) {

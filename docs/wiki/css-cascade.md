@@ -258,3 +258,62 @@ attribute storage — **the same subsystem** as CharacterData surrogate splittin
 **MEASURED:** dom/nodes 3245 → 3285 (**+40**), before/after FAIL sets diffed → **zero regressions**;
 css/selectors held at its banked 784 (the cascade path is unaffected in behaviour). Bar 0 **0**. Test
 `selector_ident_escapes_decode_per_css_syntax`.
+
+## Quirks mode: the verdict travels ON the `Dom`, not through signatures (tick 242)
+
+**Why this was a three-line-per-file change instead of a refactor.** The parser's quirks verdict has to
+reach the style system, and the obvious shape — return it from `parse()` and thread it as a parameter —
+would have touched `manuk_html::parse`/`parse_bytes`/`StreamParser`, `Page::from_dom`, the `Page` struct,
+and **all 18 `cascade_styles` call sites** in `engine/page`. Putting a `quirks: bool` on `Dom` instead
+costs one field and changes **no signature anywhere**, because every consumer already receives a `Dom`:
+
+```
+html5ever  --set_quirks_mode-->  ArenaSink (holds Rc<RefCell<Dom>>)  -->  Dom::quirks
+                                                                            │
+        engine/page: cascade_styles(&Dom, ..) ──────────────────────────────┤ (unchanged signature)
+        engine/css:  cascade_via_stylo(dom: &Dom, ..) ──> let qm = dom.quirks()
+                     StyloDocument { dom: &'a Dom } ──> TDocument::quirks_mode()
+        engine/js:   doc_get_compat_mode ──> this_node(vp) ──> (*dom).quirks()
+```
+
+**The general rule: a value every consumer already has a handle to should ride on that handle.** The
+signature-threading version is the one that looks more explicit and is the one that makes the change
+too big to land in a tick.
+
+### Stylo already implements the quirks — we were only failing to tell it which mode we were in
+
+`QuirksMode` is an *input* to Stylo, not a feature request. Passing `QuirksMode::Quirks` enables, for
+free: unitless lengths (`values/specified/mod.rs` `AllowQuirks::allowed`), case-insensitive id/class
+matching (`selector_map.rs`), and the `<font size>` mapping table (`values/specified/font.rs`). That is
+why this is plumbing rather than layout math.
+
+**There are TWO parse paths and wiring one is not enough.** `StyloStylesheet::from_str` handles
+`<style>` and linked CSS; `parse_style_attribute` handles the inline `style=` attribute. After wiring
+only the first, `width: 100` still dropped on a quirks page while the identical rule inside a `<style>`
+block worked — and **legacy markup, which is precisely the markup that lands in quirks mode, is
+overwhelmingly inline-styled.** Both take a `QuirksMode`; both need the real one.
+
+### Reporting and rendering are ONE capability
+
+`document.compatMode` must flip in the same tick as the layout wiring. Reporting `BackCompat` while
+still rendering standards is a *worse* failure than the hard-coded constant it replaces, because it is
+**actionable by the page**: a site that branches on `compatMode` takes a quirks code path the engine
+does not honour. `g_quirks_mode` therefore asserts both directions of both halves, plus a fifth claim
+that the two modes actually *differ* — each of the first four can be satisfied by a constant; that one
+cannot.
+
+### `LimitedQuirks` folds to `false`, deliberately
+
+html5ever has three states; `Dom::quirks` is a `bool`. "Almost standards" mode differs from full
+standards only in the inline-image baseline rule and does **not** enable the unitless-length quirk, so
+`false` is correct for every behaviour currently gated on it. Inventing a three-state enum before
+anything reads the third state would be speculation; the note on the field says what to do if that
+changes.
+
+### Gate note
+
+One `#[test]` function, not five. Multiple `#[test]`s each calling `Page::load` run on separate threads
+and **SIGSEGV** — SpiderMonkey is not shared-thread-safe — and before crashing they produced a subtler
+artifact: `compatMode` read back as the fixture's placeholder on one test and the real value on
+another, i.e. a script that silently did not run. **A gate whose fixture races itself cannot tell a
+regression from its own harness.**

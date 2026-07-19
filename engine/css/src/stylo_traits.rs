@@ -148,7 +148,14 @@ impl<'a> TDocument for StyloDocument<'a> {
         true
     }
     fn quirks_mode(&self) -> QuirksMode {
-        QuirksMode::NoQuirks
+        // `StyloDocument` already holds `&Dom`, so the parser's verdict is a field read away — this
+        // hard-coded `NoQuirks` was the last consumer of a value that had been detected, stored and
+        // discarded since the tree sink was written (tick 241).
+        if self.dom.quirks() {
+            QuirksMode::Quirks
+        } else {
+            QuirksMode::NoQuirks
+        }
     }
     fn shared_lock(&self) -> &SharedRwLock {
         // Not carried on the handle; never reached on the `element = None` cascade path.
