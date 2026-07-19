@@ -11366,3 +11366,59 @@ inline cue markup (`<v Alice>`, `<i>`, `<c.classname>`) is kept as literal text;
 `STYLE` blocks and chapter tracks are skipped rather than supported.
 
 WIKI: docs/wiki/media-pipeline.md
+
+## Tick 256 — the caption API the adaptive players actually call, and the track nobody turned on
+
+TICK SHAPE: tick 255's residue. The parser exists; the API a page reaches it through does not.
+`video.textTracks` is `[]` and `addTextTrack()` returns `{cues: [], activeCues: [], mode:
+'disabled'}` — an inert object that reports success, which is the failure shape this project keeps
+naming.
+
+WHY THIS PARTICULAR SURFACE, rather than `<track src>` fetching: **hls.js and dash.js parse WebVTT
+themselves and call `addTextTrack` + `addCue`.** They ship their own parsers because segmented
+streams carry captions inside the media segments, not as a separate file. So this API — not
+`<track>` — is the path captions actually take on the streaming sites the media track is aimed at,
+and it needs no fetching, no decoder and no element wiring to be real.
+
+HYPOTHESIS: the claim most likely to be got wrong is `mode`. A `TextTrack` defaults to
+**`'disabled'`**, and a disabled track has **no `activeCues`** — that is how "captions off" is
+represented. An implementation that returns active cues regardless of mode renders subtitles the
+user explicitly turned off, and every player sets `mode = 'showing'` as a separate step precisely
+because the default is off.
+
+Carried forward from tick 255: `activeCues` is a LIST, for the same reason `active_at` was.
+
+**THE CAPABILITY.** A real `TextTrack` — `addTextTrack(kind,label,language)` returning an object
+that HOLDS cues, `addCue`/`removeCue`, a live `textTracks` list with `getTrackById`, `activeCues`
+driven by `currentTime`, and a real `VTTCue`/`TextTrackCue` constructor.
+
+**WHY THIS SURFACE AND NOT `<track src>`:** hls.js and dash.js ship their own WebVTT parsers and
+call `addTextTrack` + `addCue`, because a segmented stream carries captions **inside the media
+segments** rather than as a separate file. So this — not `<track>` — is the path captions actually
+take on the streaming sites the media track is aimed at, and it needs no fetching, no decoder and no
+element wiring.
+
+**RED PROBES EXECUTED (process rule 3), both predicted, both confirmed:**
+  · ignore `mode` in the `activeCues` getter → `mode=disabled active=2`. A track no player has
+    enabled yet serves cues, i.e. **subtitles render for a user who turned them off.** `disabled` is
+    the spec default precisely so captions are opt-in, and every player sets `mode='showing'` as a
+    deliberate separate step.
+  · singular + inclusive-end `activeCues` → `active=1`, BOB dropped for the whole overlap. The same
+    claim as tick 255's `active_at`, one layer up, failing the same way.
+
+Gate: `engine/page/tests/g_text_tracks.rs` (`G_TEXT_TRACKS`), 12 claims in one test.
+
+HARNESS NOTE (observer-owned, third occurrence today, NOT acted on): the ramdisk keeps being wiped
+mid-build (`/dev/shm/.../dep-graph.part.bin: No such file`), and a run routed to a private
+`CARGO_TARGET_DIR` instead hit `ld: final link failed: No space left on device` from the extra ~30G
+of duplicate target tree (scratch dir removed again immediately). The full `manuk-page` sweep
+therefore could not be completed for this tick; **the gate wall in `verify.sh` — which is the
+project's actual regression instrument — ran green on this exact tree.**
+
+Residue, named honestly: still no `cuechange` event, so a player that listens for it instead of
+polling `activeCues` sees nothing. `<track src>` is still not fetched and `TextTrack` still does not
+reach the VTT parser landed at tick 255 — the two halves of captions exist and are **not yet
+connected**, which is the next tick. Cue settings on `VTTCue` are accepted and inert, so nothing
+positions a caption, and no cue is painted anywhere.
+
+WIKI: docs/wiki/media-pipeline.md

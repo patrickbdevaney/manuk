@@ -538,3 +538,33 @@ asserting it. A gate can be green, well-commented, and measuring nothing.
 Residue: the parser, not the pipeline. Nothing fetches `<track src>`, `textTracks` is still the `[]`
 stub, no cue is painted. Cue settings are discarded (no positioning), inline markup (`<v Alice>`,
 `<i>`) stays literal, and regions/STYLE/chapters are skipped.
+
+## M7b — the TextTrack API (tick 256), and the track nobody turned on
+
+Tick 255 built the parser. This is the API a page reaches captions through, and it was an inert
+object: `addTextTrack()` returned `{cues: [], activeCues: [], mode: 'disabled'}`, accepting every
+call, reporting success and holding nothing. A player added 900 cues to it and rendered none.
+
+**Why this surface rather than `<track src>`:** hls.js and dash.js ship their own WebVTT parsers and
+call `addTextTrack` + `addCue`, because segmented streams carry captions *inside the media segments*.
+On the streaming sites the media track is aimed at, `<track>` is not the path captions take.
+
+### `mode` is how "captions off" is represented
+
+A `TextTrack` defaults to `'disabled'`, and a disabled track has **no `activeCues`**. Every player
+sets `mode = 'showing'` as a deliberate separate step for exactly this reason. Serving cues
+regardless of mode renders subtitles for a user who turned them off — confirmed by probe
+(`mode=disabled active=2`), which is a feature working *too hard* rather than failing, and therefore
+the kind of bug that gets reported as "why are there subtitles".
+
+### The same plural lesson, one layer up
+
+`activeCues` is a list for the reason `VttTrack::active_at` is: cues overlap. The singular probe drops
+the second speaker for the whole overlap, identically to tick 255. Two implementations of one idea,
+in two languages, with the same failure mode available in both — worth noticing that the shape
+travels rather than the code.
+
+Residue: **the two halves of captions are built and not connected.** Nothing fetches `<track src>`,
+and `TextTrack` does not reach the tick-255 parser — a page must bring its own cues today. No
+`cuechange` event, so a listener-based player sees nothing; cue settings are inert; no cue is
+painted.

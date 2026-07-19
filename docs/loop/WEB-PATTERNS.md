@@ -1561,3 +1561,23 @@ are not caption text.
 **Still closed:** nothing fetches `<track src>` yet and no cue is painted — this is the parser, not
 the pipeline. Positioning settings are discarded, and inline cue markup (`<v Alice>`, `<i>`) is kept
 as literal text.
+
+## The player that added 900 cues to an object that held none (tick 256)
+
+**Pattern:** `var t = video.addTextTrack('captions','English','en'); t.addCue(new VTTCue(...))` —
+what hls.js, dash.js and every custom HLS player do, because segmented streams carry captions inside
+the media segments rather than as a separate `.vtt` file.
+
+**The stub reported success.** `addTextTrack` returned a plain object with empty `cues` and
+`activeCues` arrays, so the player's caption pipeline ran to completion, added every cue, and
+rendered nothing — with no error to notice. And `VTTCue` did not exist at all, so on the players that
+construct cues first, the caption path died on a `ReferenceError` mid-initialisation.
+
+**`mode` is the on/off switch, and its default is OFF.** A `TextTrack` starts `disabled` and a
+disabled track has no active cues; players set `mode = 'showing'` as a separate deliberate step. An
+implementation that ignores mode shows subtitles to a user who turned them off.
+
+**`activeCues` is a LIST** — cues overlap whenever two people speak at once.
+
+**Still closed:** no `cuechange` event, `<track src>` is not fetched, and the caption *parser* and
+the caption *API* are both built but not yet connected to each other.

@@ -432,6 +432,9 @@
   - L507 · active_at returns a LIST
   - L515 · The failure mode of a strict parser is SILENCE, not rejection
   - L523 · The probe that stayed GREEN, and why it is the best result of the tick
+  - L542 · M7b — the TextTrack API (tick 256), and the track nobody turned on
+  - L552 · mode is how "captions off" is represented
+  - L560 · The same plural lesson, one layer up
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -583,4 +586,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-502 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+505 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

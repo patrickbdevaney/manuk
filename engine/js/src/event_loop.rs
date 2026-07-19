@@ -1786,7 +1786,15 @@ const PRELUDE: &str = r#"
         });
         ro('played',    { length: 0, start: function(){ return 0; }, end: function(){ return 0; } });
         ro('seekable',  { length: 0, start: function(){ return 0; }, end: function(){ return 0; } });
-        ro('textTracks', []);
+        // `textTracks` is the live list the player enumerates to find the language the user picked.
+        live('textTracks', function () {
+          var list = el.__textTracks || [];
+          list.getTrackById = function (id) {
+            for (var i = 0; i < this.length; i++) { if (this[i].id === id) { return this[i]; } }
+            return null;
+          };
+          return list;
+        });
         ro('videoWidth', 0);
         ro('videoHeight', 0);
 
@@ -1860,7 +1868,78 @@ const PRELUDE: &str = r#"
         };
         el.pause = function() {};
         el.load  = function() {};
-        el.addTextTrack = function() { return { cues: [], activeCues: [], mode: 'disabled' }; };
+        // ── TEXT TRACKS — a REAL TextTrack, because this is the API captions actually arrive
+        //    through on streaming sites.
+        //
+        // hls.js and dash.js ship their OWN WebVTT parsers and call `addTextTrack` + `addCue`,
+        // because a segmented stream carries captions inside the media segments rather than as a
+        // separate file. So `<track src>` is not the path that matters for the sites this track is
+        // aimed at — this is.
+        //
+        // The stub returned `{cues: [], activeCues: [], mode: 'disabled'}`: an object that accepts
+        // every call, reports success, and holds nothing. A player added 900 cues to it and
+        // rendered none.
+        // `VTTCue` — what hls.js/dash.js construct before calling `addCue`. Absent, it was a
+        // ReferenceError inside the player's own caption path, which is a throw rather than a
+        // missing feature: the player stops, and whatever it had not yet done stays undone.
+        if (typeof globalThis.VTTCue === 'undefined') {
+          globalThis.VTTCue = function (startTime, endTime, text) {
+            this.startTime = Number(startTime) || 0;
+            this.endTime = Number(endTime) || 0;
+            this.text = String(text === undefined ? '' : text);
+            this.id = '';
+            this.track = null;
+            // Cue settings are accepted and inert — see the residue note in the journal. Accepting
+            // them matters: a player that sets `cue.line = -3` must not throw.
+            this.line = 'auto'; this.position = 'auto'; this.size = 100;
+            this.align = 'center'; this.vertical = ''; this.snapToLines = true;
+          };
+          // Players feature-detect `TextTrackCue` before `VTTCue`.
+          globalThis.TextTrackCue = globalThis.TextTrackCue || globalThis.VTTCue;
+        }
+
+        el.__textTracks = el.__textTracks || [];
+        el.addTextTrack = function (kind, label, language) {
+          var track = {
+            kind: kind || 'subtitles',
+            label: label || '',
+            language: language || '',
+            id: '',
+            // **`disabled` is the spec default, and it is how "captions off" is represented.**
+            // Every player sets `mode = 'showing'` as a deliberate separate step for exactly this
+            // reason; a track that served cues regardless of mode would render subtitles the user
+            // turned off.
+            mode: 'disabled',
+            cues: [],
+            addCue: function (cue) {
+              if (!cue) { return; }
+              cue.track = this;
+              this.cues.push(cue);
+              // Start order, so the caption a viewer sees first is first.
+              this.cues.sort(function (a, b) { return a.startTime - b.startTime; });
+            },
+            removeCue: function (cue) {
+              var i = this.cues.indexOf(cue);
+              if (i >= 0) { this.cues.splice(i, 1); }
+            }
+          };
+          Object.defineProperty(track, 'activeCues', {
+            configurable: true,
+            get: function () {
+              // A disabled track has no active cues — that IS "off".
+              if (this.mode === 'disabled') { return []; }
+              var t = el.currentTime || 0;
+              // A LIST: cues overlap (two speakers at once, a label held across lines). Answering
+              // this plural question in the singular drops the second speaker for the whole
+              // overlap. Half-open [start, end) so back-to-back cues never both render.
+              return this.cues.filter(function (c) {
+                return t >= c.startTime && t < c.endTime;
+              });
+            }
+          });
+          el.__textTracks.push(track);
+          return track;
+        };
         el.requestPictureInPicture = function() {
           return Promise.reject(new DOMException('picture-in-picture is not supported', 'NotSupportedError'));
         };
