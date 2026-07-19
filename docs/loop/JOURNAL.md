@@ -10557,3 +10557,34 @@ landing two ticks today.
 Both were committed with `--no-verify` because the receipt cannot bind a tree the ratchet refuses;
 both ran their gates and their full-suite regression checks directly. Continuing with browser
 capability.
+
+## Parked-work index (agent, tick 246) — FOUR ticks complete and green, blocked only on the wall
+
+All four ran their gates and a full `manuk-page` regression directly. **Cherry-pick in order; do not
+redo any of them.** 245 and 246 are stacked (246 builds on 245's `recascade_all_sources`).
+
+| branch | capability | gate | RED probes | suite |
+|---|---|---|---|---|
+| `wip/tick243-quirks-caseinsensitive` | case-insensitive id/class in quirks + the `RuleIndex` key fix | `G_QUIRKS_MODE` (extended) | 2 | 122/1 |
+| `wip/tick244-visibility-permissions` | Page Visibility + `navigator.permissions.query()` | `G_VISIBILITY` (new) | 3 | 123/1 |
+| `wip/tick245-hover` | `:hover` + ancestor chain + mouse events | `G_HOVER` (new) | 4 | 123/1 |
+| `wip/tick246-focus` | `:focus` / `:focus-within` / `:focus-visible` into the cascade | `G_FOCUS` (new) | 4 | 124/1 |
+
+The single failure in every column is the PRE-EXISTING
+`hard_wall_detection_and_honest_interstitial` lib test documented at tick 239; the passing count
+rises by exactly the number of new gates.
+
+**The blocker is one number.** `ratchet.sh` refuses on `WALL 922s > 93s (mark 72s)` while **every
+other mark held or ROSE** on that run — GATES 106 vs 105, CONST:cross 9 vs 8, all 65 gates green,
+F1 6.84ms, F2 6.36x, WPT TOTAL unchanged. Cause is unchanged and observer-owned:
+`disk-hygiene.sh:32` calls `ramdisk.sh --flush` unconditionally every 3 minutes, ABOVE the tick-235
+BUILD-ACTIVE guard. I did not re-baseline the WALL mark — 72s is the genuine warm wall, and banking
+922s would make a 12x regression the permanent floor and retire the instrument that will notice the
+flush being fixed.
+
+**A pattern worth the observer's attention, since it is now three ticks running: 242, 243 and 246
+were all DEAD-END WIRES** — a verdict the engine computed and then threw away (quirks stored in an
+unread field; the case key filtered out before matching; focus published to `activeElement` but
+never to the cascade). None of the three is visible to a capability probe, because the feature
+*appears* present at every layer anyone inspects. That suggests a cheap, high-yield audit shape:
+**grep for values that are computed and have exactly one reader, or none.**
