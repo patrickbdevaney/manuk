@@ -10634,3 +10634,67 @@ A clean re-run was fine. Same family as the pruner/wall race, on the incremental
 
 Residue: `LimitedQuirks` still folds to `false`; the `<font size>` mapping-table quirk is available from
 Stylo but unexercised by any gate. `g_quirks_mode` remains outside the verify wall (tick 239).
+
+## Tick 244 — a missing property is not neutral: it votes, and `document.hidden` voted wrong
+
+TICK SHAPE: lever-board CO-#1 item (4), "completeness identity" — `document.visibilityState` /
+Page Visibility and `navigator.permissions.query()`. Both carried as `missing` in
+`CONSTELLATION.tsv` since the tick-193 edge sweep.
+
+**PROBED BEFORE BUILDING (process rule 2), and the probe mattered — three of the four levers I
+considered first were already built.** The board's headline lever (C) *"canvas fillText — wire the
+existing swash raster"* is **DONE**: `engine/page/tests/g_canvas_text.rs` gates it. (B)'s O1/O2/O3
+are done too — `g_oauth_redirect`, `g_iframe_rerender`, `g_oauth_popup` all exist. And media M1-M3
+have landed (`mse_js.rs`, `engine/media`). The board is stale on all four; only *these two* rows
+survived the probe as genuinely absent, confirmed by grep returning zero occurrences of
+`visibilityState` or `permissions` in `engine/js`.
+
+**THE FINDING, and it generalises past this property.** The web writes
+`if (document.hidden) return;` to skip work in a backgrounded tab. `undefined` **is falsy** — so the
+guard did not fail closed and did not throw; it evaluated cleanly to *"the tab is in front"*,
+forever. Every animation loop, poll, autoplay and heartbeat kept running in every hidden tab: the
+exact CPU and battery cost the API was added to prevent, caused by the API's absence, silently.
+**An absent boolean-ish property does not abstain from a branch — it votes `false`**, and whether
+that is safe is luck of how the spec spelled it. `document.visible` would have frozen every
+foreground tab and been fixed in a day; `hidden` is the spelling that fails quietly, which is how it
+survived 243 ticks.
+
+**THE PERMISSIONS HALF IS A CONSISTENCY CLAIM, NOT A COVERAGE ONE.** A caller asking
+`permissions.query({name:'notifications'})` usually already read `Notification.permission` — it is
+checking whether the two AGREE. Headless Chrome said `'prompt'` and `'denied'` respectively, and that
+contradiction, not either value, is what identified it. So the state is *read off*
+`Notification.permission` at query time rather than duplicated as a literal: two constants in two
+files agree only until someone edits one. Everything unimplemented answers `'denied'`, never
+`'prompt'` — `'prompt'` makes the page raise permission UI and wait for a decision nothing here can
+deliver, which is a hang dressed as a feature and strictly worse than the old `TypeError`.
+
+**Host-owned, like the lifecycle.** `Page::set_visibility(hidden)` pushes the state in exactly as
+`fire_lifecycle` pushes `load`, and for the same reason: *"this tab was backgrounded"* is a fact
+about the shell's window that no introspection inside the JS realm can discover. Idempotent by
+value, so a shell republishing per frame does not flood every listener.
+
+**THREE RED PROBES EXECUTED, NOT ASSERTED (process rule 3), each hitting its own claim:**
+  · drop the `visibilityState` `defineProperty`   -> `vis:true` FAILS (state and event both go)
+  · make `__setVisibility` unconditional          -> the idempotence assertion FAILS with count:2
+  · hard-code `'prompt'` for notifications        -> `agree:true` FAILS and NOTHING ELSE DOES —
+    the reproduction of the exact headless-Chrome divergence, and the one claim a plausible stub
+    cannot pass by accident.
+
+**REGRESSION MEASURED, NOT ASSUMED:** full `manuk-page` suite **123 passed, 1 failed** — the +1 is
+this tick's new gate and the failure is the PRE-EXISTING `hard_wall_detection_and_honest_interstitial`
+lib test documented at tick 239 (baseline was 122/1).
+
+**PARKED, NOT LOST — and the reason is the harness, not the engine.** `ratchet.sh` refuses on
+`WALL 922s > 93s`. Every other mark held or ROSE on the same run (GATES 106 vs mark 105, CONST:cross
+9 vs 8, all 65 gates green, F1 cascade 6.84ms, F2 6.36x). The 922s is the ramdisk-incremental-flush
+pathology already diagnosed and confirmed two entries above — `disk-hygiene.sh:32` calls
+`ramdisk.sh --flush` unconditionally every 3 minutes, outside the tick-235 BUILD-ACTIVE guard, so a
+multi-minute wall loses its incremental cache 2-3 times mid-compile. `scripts/` and cron are
+observer-owned and were not touched. Parked on **`wip/tick244-visibility-permissions`**; tick 243
+was re-parked on **`wip/tick243-quirks-caseinsensitive`** (rebased onto current main, journal entry
+included). **Cherry-pick both once the wall is under the ceiling — do not redo them.**
+
+Residue: `visibilitychange` is only driven by `Page::set_visibility`; no shell caller wires real
+tab-focus to it yet, so the capability is complete at the engine boundary and unexercised above it.
+`permissions.query` returns a `PermissionStatus` whose `change` event can never fire — honest, since
+none of these states can change without a permission UI, but it is a stub-shaped edge worth naming.

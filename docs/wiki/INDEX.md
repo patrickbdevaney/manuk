@@ -230,6 +230,9 @@
   - L935 · CharacterData offsets are unsigned long = ToUint32, not clamp-to-0 (tick 136)
   - L969 · <details>/<summary> — the disclosure widget is entirely the UA's job (tick 216)
   - L1001 · The bug underneath it — remove_attr never marked the tree dirty
+  - L1018 · A missing property is not neutral — it picks a side, and document.hidden picked the wrong one
+  - L1044 · Whose fact is it? The host owns visibility, the same way it owns the lifecycle
+  - L1056 · Two answers to the same question must agree — permissions.query vs Notification.permission
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -537,4 +540,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-456 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+459 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

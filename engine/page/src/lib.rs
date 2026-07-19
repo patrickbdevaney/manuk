@@ -2353,6 +2353,31 @@ impl Page {
     #[cfg(not(feature = "spidermonkey"))]
     pub fn fire_lifecycle(&mut self, _which: &str) {}
 
+    /// **Tell the page whether its tab is in front** — `document.visibilityState` / `document.hidden`,
+    /// and the `visibilitychange` event when it flips.
+    ///
+    /// Like the lifecycle above, this is a fact the host owns and JS cannot observe for itself:
+    /// *"this tab was backgrounded"* is a statement about the shell's window, not about the
+    /// document. Until this existed the property was `undefined`, which reads FALSY — so every
+    /// `if (document.hidden) return;` guard on the page failed open and a hidden tab kept
+    /// animating, polling and decoding.
+    ///
+    /// Idempotent by value on the JS side: setting the state we are already in fires no event, so a
+    /// shell that re-publishes on every frame does not deliver a storm of change events.
+    #[cfg(feature = "spidermonkey")]
+    pub fn set_visibility(&mut self, hidden: bool) {
+        let src = if hidden {
+            "globalThis.__setVisibility && __setVisibility('hidden')"
+        } else {
+            "globalThis.__setVisibility && __setVisibility('visible')"
+        };
+        self.eval_for_test(src);
+    }
+
+    /// Without SpiderMonkey nothing is listening, so there is no one to tell.
+    #[cfg(not(feature = "spidermonkey"))]
+    pub fn set_visibility(&mut self, _hidden: bool) {}
+
     /// Publish the viewport's scroll offset and the focused element into the JS world.
     ///
     /// A page reads `window.scrollY` to decide what to render, which header to stick, and when to

@@ -1014,3 +1014,70 @@ independent mechanisms**: the UA collapse rule (closed body renders), the summar
 does nothing), and `remove_attr`'s dirty marking (second click does not close). It also pins
 `details[open]` rendering its body — without that, "details never renders children" would pass the
 closed-case check while making the element useless.
+
+## A missing property is not neutral — it picks a side, and `document.hidden` picked the wrong one
+
+`document.visibilityState` and `document.hidden` did not exist (tick 244, `G_VISIBILITY`). The
+tempting reading is that the page simply "could not check", and would therefore be conservative.
+The opposite happened, and the mechanism generalises well beyond this property.
+
+The idiom on the real web is:
+
+```js
+function frame() { if (document.hidden) return; draw(); requestAnimationFrame(frame); }
+```
+
+**`undefined` is falsy.** So the guard did not fail closed and it did not throw — it evaluated,
+cleanly, to *"the tab is in front"*, forever. Every animation loop, poll, autoplay decision and
+analytics heartbeat on every page kept running in a backgrounded tab: the exact CPU and battery cost
+the API was added to prevent, arrived at by the API's own absence, with nothing in any log.
+
+**The general form: an absent boolean-ish property does not abstain from the branch, it votes.** It
+votes `false`, and whether that is the safe answer is pure luck of how the spec named the property.
+Had the platform named it `document.visible` instead of `document.hidden`, the identical absence
+would have paused every animation in every foreground tab — loudly, and fixed in a day. `hidden` is
+the spelling that fails *quietly*, which is why it survived two hundred ticks.
+
+So when adding a property whose consumers are `if (x)` guards, **ask which way `undefined` votes**
+before deciding the absence is harmless.
+
+### Whose fact is it? The host owns visibility, the same way it owns the lifecycle
+
+`Page::set_visibility(hidden)` pushes the state in, exactly as `fire_lifecycle` pushes
+`DOMContentLoaded` and `load`. The reason is identical and worth stating once: *"this tab was
+backgrounded"* is a fact about the **shell's window**, not about the document. No amount of
+introspection inside the JS realm can discover it, so a self-answering shim would necessarily be a
+constant — and a constant is an infinite loop for any code that waits for it to change (L80 above).
+
+It is **idempotent by value**: setting the state we are already in fires nothing, because
+`visibilitychange` asserts that it *changed*. A shell republishing its state each frame would
+otherwise flood every listener on the page with events that changed nothing.
+
+## Two answers to the same question must agree — `permissions.query` vs `Notification.permission`
+
+`navigator.permissions.query()` was absent (tick 244, same gate). Restoring it is not interesting;
+**what it must say is.**
+
+A permission state is a fact the platform already exposes twice. `Notification.permission` has read
+`'denied'` here for many ticks. A caller that asks `permissions.query({name:'notifications'})` is
+very often not trying to learn the answer — it already has it — but to check whether the two
+**agree**. Headless Chrome historically answered `'prompt'` to the first and `'denied'` to the
+second, and that internal contradiction, not either value alone, is what made it identifiable.
+
+The rule that follows is a correctness rule and not a defensive one: **a browser is allowed to be
+unusual and is not allowed to disagree with itself.** So the notifications state is *read off*
+`Notification.permission` at query time rather than duplicated as a literal — two constants in two
+files agree only until someone edits one of them, and the gate that would catch the drift is the
+gate nobody writes.
+
+The second half is the value itself. Everything unimplemented answers `'denied'`, never `'prompt'`:
+
+* `'denied'` makes the page take its no-permission path immediately — a real path, exercised on the
+  real web, that works.
+* `'prompt'` makes the page put up permission UI and **wait for a decision nothing here can
+  deliver**. That is a hang dressed as a feature, and it is worse than the `TypeError` the absent
+  property used to throw, because the `TypeError` at least said something.
+
+And an unrecognised name must **reject** with a `TypeError` rather than throw synchronously: the
+spec's shape is a Promise on every path, and a synchronous throw is visible to any caller that only
+wrote a `.catch`.

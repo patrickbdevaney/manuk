@@ -8010,6 +8010,56 @@ const WINDOW_PRELUDE: &str = r#"
             g.__timeBudget = Infinity;
         };
 
+        // ---- **PAGE VISIBILITY. `document.visibilityState` and `document.hidden` were ABSENT.** --
+        //
+        // This is a two-sided failure, and the second side is the one that is easy to miss.
+        //
+        // **Legitimately:** every animation loop, every poll, every autoplay and every analytics
+        // heartbeat on the modern web gates on `if (document.hidden) return;` before doing work.
+        // `undefined` reads FALSY, so a backgrounded tab keeps animating, keeps polling and keeps
+        // decoding — the exact battery and CPU drain this API was added to prevent, and it fails in
+        // the direction that costs the user, silently.
+        //
+        // **Defensively:** in every real browser `document.visibilityState` is a string on the first
+        // line of every page. A page that reads it and gets `undefined` is looking at a browser no
+        // human is driving. This is not a fingerprint we are matching — it is a fact about ourselves
+        // that we were failing to state.
+        //
+        // The state is a fact about the SHELL — *"is this tab in front?"* — not about JS, so the host
+        // owns it and pushes it in through `Page::set_visibility`, exactly the way `__fireLoad`
+        // works. The default is `'visible'`, which is true of the page the loader is rendering.
+        g.__visibility = 'visible';
+        try {
+            Object.defineProperty(document, 'visibilityState', {
+                get: function () { return g.__visibility; }, configurable: true
+            });
+            Object.defineProperty(document, 'hidden', {
+                get: function () { return g.__visibility === 'hidden'; }, configurable: true
+            });
+        } catch (e) {}
+        // Fired by the HOST when the tab is backgrounded or raised. **Idempotent by value:** a
+        // repeated set to the state we are already in fires nothing, because `visibilitychange`
+        // asserts that it *changed*. A shell that re-publishes its state on every frame would
+        // otherwise deliver a storm of change events that never changed anything.
+        g.__setVisibility = function (state) {
+            state = (String(state) === 'hidden') ? 'hidden' : 'visible';
+            if (state === g.__visibility) { return; }
+            g.__visibility = state;
+            var ev;
+            try { ev = new Event('visibilitychange', { bubbles: true }); }
+            catch (e) { ev = { type: 'visibilitychange', bubbles: true }; }
+            // It must reach BOTH registries — it bubbles document → window in a real browser, and
+            // page code listens on either. Same reasoning as `__fireDOMContentLoaded` above.
+            try { document.dispatchEvent(ev); } catch (e) { g.__reportError && g.__reportError(e); }
+            try { g.dispatchEvent(ev); } catch (e) {}
+            // `document.onvisibilitychange` is a property handler, and the document's dispatch path
+            // does not read `on*` off the document the way the window's does — the same gap
+            // `__setReadyState` works around for `onreadystatechange` a few lines up.
+            if (typeof document.onvisibilitychange === 'function') {
+                try { document.onvisibilitychange(ev); } catch (e) {}
+            }
+        };
+
         // ---- Web Storage -------------------------------------------------------------------
         // The web FEATURE-DETECTS this and grades the browser on it. MediaWiki's startup script
         // tests `'localStorage' in window` and, failing it, reverts the page to its no-script
@@ -8614,6 +8664,75 @@ const WINDOW_PRELUDE: &str = r#"
                     return Promise.resolve();
                 },
                 readText: function () { return Promise.resolve(g.__clipboardText || ''); }
+            };
+        }
+        // `navigator.permissions.query()` — ABSENT, and unlike most absences this one is *checkable
+        // against another answer we already give*. Ordinary feature-detecting code calls it and gets
+        // a TypeError on `undefined.query`; but the more demanding reader is a bot detector, which
+        // calls `permissions.query({name:'notifications'})` and **cross-checks the result against
+        // `Notification.permission`**. Headless Chrome historically answered `'prompt'` here while
+        // `Notification.permission` said `'denied'` — an INTERNAL INCONSISTENCY, and an
+        // inconsistency is a far stronger signal than an unfamiliar value, because a browser is
+        // allowed to be unusual and is not allowed to contradict itself.
+        //
+        // So the rule is **consistency with what we actually do**, never a flattering answer:
+        //   * we do not deliver notifications, so this says `'denied'` and reads the state off
+        //     `Notification.permission` rather than duplicating it, so the two cannot drift apart
+        //     in some later tick;
+        //   * everything we have no implementation for is `'denied'` as well — `'prompt'` would be
+        //     the lie that costs the user, because a page told `'prompt'` puts up a permission UI
+        //     and waits for a decision that nothing here can ever deliver.
+        if (!g.navigator.permissions) {
+            var PERM_STATE = {
+                // Genuinely done, with no user gate in front of it.
+                'clipboard-write': 'granted',
+                // Named and implemented as nothing. Being *named* is the point: an unknown name has
+                // to reject (below), and rejecting for something the platform obviously has would
+                // be its own tell.
+                'notifications': 'denied', 'push': 'denied', 'geolocation': 'denied',
+                'camera': 'denied', 'microphone': 'denied', 'clipboard-read': 'denied',
+                'midi': 'denied', 'background-sync': 'denied', 'persistent-storage': 'denied',
+                'accelerometer': 'denied', 'gyroscope': 'denied', 'magnetometer': 'denied',
+                'ambient-light-sensor': 'denied', 'screen-wake-lock': 'denied',
+                'payment-handler': 'denied', 'idle-detection': 'denied', 'local-fonts': 'denied',
+                'window-management': 'denied', 'storage-access': 'denied'
+            };
+            var PermissionStatus = function PermissionStatus(name, state) {
+                this.name = name; this.state = state; this.onchange = null;
+            };
+            // A real `PermissionStatus` is an `EventTarget`, and player/consent code does
+            // `status.addEventListener('change', …)` immediately. These exist so that call does not
+            // throw; they will never fire, because none of these states can change without a
+            // permission UI, and saying so is better than pretending to be live.
+            PermissionStatus.prototype.addEventListener = function () {};
+            PermissionStatus.prototype.removeEventListener = function () {};
+            PermissionStatus.prototype.dispatchEvent = function () { return true; };
+            g.PermissionStatus = g.PermissionStatus || PermissionStatus;
+            g.navigator.permissions = {
+                query: function (desc) {
+                    // The spec REJECTS rather than throws, including for a name it does not know.
+                    // Getting that shape wrong is itself detectable: `query()` must hand back a
+                    // Promise on every path, so a synchronous throw here would be a divergence
+                    // visible to any caller that only wrote a `.catch`.
+                    try {
+                        if (!desc || desc.name === undefined || desc.name === null) {
+                            return Promise.reject(new TypeError(
+                                "Failed to execute 'query' on 'Permissions': required member name is undefined."));
+                        }
+                        var name = String(desc.name);
+                        var state = PERM_STATE[name];
+                        if (state === undefined) {
+                            return Promise.reject(new TypeError(
+                                "Failed to execute 'query' on 'Permissions': '" + name +
+                                "' is not a valid enum value of type PermissionName."));
+                        }
+                        if (name === 'notifications' && g.Notification &&
+                            typeof g.Notification.permission === 'string') {
+                            state = g.Notification.permission;
+                        }
+                        return Promise.resolve(new PermissionStatus(name, state));
+                    } catch (e) { return Promise.reject(e); }
+                }
             };
         }
         // window.open → the host opens a real tab/window (OAuth-popup pattern). Returns a

@@ -1313,3 +1313,27 @@ pre-filters the very thing the matcher was just taught to accept.
 
 Residue: `LimitedQuirks` still folds to `false` (it does not enable either quirk implemented here), and
 the `<font size>` mapping table quirk is available from Stylo but unexercised by any gate.
+
+## The page asks what state the browser is in — and gets answers that agree (tick 244)
+
+**Pattern:** `if (document.hidden) return;` at the top of an animation loop, poll or heartbeat, and
+`navigator.permissions.query({name:…})` cross-checked against the permission value the platform
+already published elsewhere. Both are first-page-load code, both were absent, and both failed in the
+direction that is hardest to notice.
+
+**`document.hidden` was `undefined`, and `undefined` is falsy** — so the guard did not abstain, it
+voted *"the tab is in front"*, permanently. Backgrounded tabs kept animating, polling and decoding:
+the precise cost the Page Visibility API exists to prevent, produced by the API's own absence. Had
+the spec spelled the property `visible` rather than `hidden`, the same absence would have frozen
+every foreground tab and been fixed in a day. **The quiet direction is the one that survives.**
+
+**`permissions.query` is a consistency surface, not a coverage one.** A caller usually already knows
+the answer; it is asking whether our two answers match. The state for `notifications` is therefore
+*read off* `Notification.permission` rather than written as a second literal — two constants in two
+files agree only until someone edits one. Everything unimplemented answers `'denied'` and never
+`'prompt'`, because `'prompt'` makes the page raise permission UI and wait for a decision nothing
+here can deliver: a hang dressed as a feature.
+
+**The class this unlocks** is every page that budgets its own work — which is now most of them.
+Backgrounded-tab throttling, autoplay gating, poll suspension and reconnect-on-return all key off
+these two surfaces, and a browser that cannot answer them is a browser that never rests.
