@@ -327,6 +327,9 @@
   - L989 · "Nothing selected" vs "nothing selected yet"
   - L1000 · Two more traps, both confirmed by probe
   - L1008 · input then change — and React only hears the first
+  - L1020 · s.options[i] (tick 254): when the empty answer throws too
+  - L1030 · The divergence class, reproduced by me in a day
+  - L1039 · option.index counts across optgroups
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -576,4 +579,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-495 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+498 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

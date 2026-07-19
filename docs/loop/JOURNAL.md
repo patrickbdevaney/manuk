@@ -11266,3 +11266,48 @@ multiple>` reads correctly but has no multi-select actuation, and `option.index`
 are unbuilt.
 
 WIKI: docs/wiki/interaction-surface.md
+
+## Tick 254 — `s.options[i]` threw, and the empty answer would have thrown too
+
+TICK SHAPE: tick 253's named residue. `select.options` did not exist, so `s.options.length` and
+`s.options[i]` were **TypeErrors** — the worst shape a missing feature takes here, because a throw
+takes the whole script down. A page that merely *enumerates its own options* to relabel, filter or
+count them stopped executing at that line.
+
+**THE CAPABILITY.** `select.options`, `select.selectedOptions`, `option.index` — plus the fix below.
+
+**A BUG IN MY OWN FIRST CUT, caught by the gate, and it is the same divergence class as tick 253.**
+`option.value` read the raw `value` attribute while `select.value` used a helper that falls back to
+the option's TEXT. So for `<option>Blue</option>` the *same element* reported `"Blue"` through
+`s.value` and `""` through `s.options[2].value`. Two readers of one fact, disagreeing — exactly what
+tick 253 was about, reproduced by me one layer down within a day. Both now go through
+`option_value`.
+
+**RED PROBES EXECUTED — and PROBE A came out STRONGER than predicted:**
+  · filter `selectedOptions` on the `selected` attribute for single-selects too → predicted
+    "`length` is 0 on an untouched select". What actually happened: **the page THREW**, because the
+    fixture then evaluates `im.selectedOptions[0].value` on an empty collection and the whole report
+    died. The empty answer does not merely under-report — **it cascades straight back into the
+    TypeError class this tick exists to remove.** Recorded because the prediction was too mild.
+  · `option.index` as a child-index-within-parent → `gIdx=0,1,0`. The second `<optgroup>` restarts
+    at 0, so any code keying on `index` addresses the wrong option in every group but the first.
+
+Gate: `engine/page/tests/g_select_options.rs` (`G_SELECT_OPTIONS`), 9 claims in one test. Its FIRST
+assertion is that the report ran at all — with `options` throwing, there is no output to assert on,
+so a gate that only checked values would fail confusingly rather than say why.
+Regression: full `manuk-page` **130 passed / 1 failed** (was 129/1; the +1 is this gate), the 1 being
+the PRE-EXISTING `hard_wall_detection_and_honest_interstitial` from tick 239.
+
+HARNESS NOTE (observer-owned, not acted on — second occurrence today): the ramdisk was wiped
+**mid-build, repeatedly**, failing `cargo test` with `dep-graph.part.bin: No such file or directory`;
+`df /dev/shm` showed the whole 16G tmpfs empty. Two retries hit it again. I completed the regression
+by pointing **my own** run at `CARGO_TARGET_DIR=target/agentreg` (removed afterwards) rather than
+touching `scripts/`.
+
+Residue, named honestly: `options`/`selectedOptions` are **snapshot Arrays**, not live
+`HTMLOptionsCollection`s — `s.options.item(i)`, `namedItem()`, `s.options.add/remove` and
+`select.add/remove` do not exist, and a collection captured before a DOM mutation will not reflect
+it. Multi-select actuation (choosing several) still has no entry point; `select_option` takes one
+index.
+
+WIKI: docs/wiki/interaction-surface.md

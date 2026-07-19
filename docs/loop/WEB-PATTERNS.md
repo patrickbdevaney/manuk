@@ -1516,3 +1516,26 @@ look empty.
 
 **Still closed:** `select.options`/`selectedOptions` (a live collection, so `s.options[i]` throws),
 multi-select actuation, and `select.add`/`remove`.
+
+## The script that enumerated its own dropdown and died (tick 254)
+
+**Pattern:** `for (var i = 0; i < s.options.length; i++)` — relabelling, filtering, counting or
+syncing a `<select>`'s options. Dependent dropdowns (country → state), search-filtered pickers, any
+form that rebuilds one select from another.
+
+**It did not read as empty — it THREW.** `select.options` did not exist, so `s.options.length` was a
+TypeError and the whole script stopped at that line, taking with it everything the page had not yet
+initialised. And the empty answer would have thrown too, one line later, at `s.options[0]`: **for a
+collection, "reports nothing" and "throws" are usually the same bug a line apart**, because the
+caller's next move is to index it.
+
+**An untouched single-select still has a selected option**, so `selectedOptions` is not "the options
+carrying a `selected` attribute" — that reports an empty collection for a perfectly ordinary
+dropdown, and pages index straight into it.
+
+**`option.index` counts across `<optgroup>`s.** Grouped dropdowns are the common case for long lists
+(countries by continent, fonts by category), and a per-parent index makes every group after the
+first address the wrong option.
+
+**Still closed:** these are snapshot arrays, not live `HTMLOptionsCollection`s — `options.item()`,
+`namedItem()`, `select.add()`/`remove()` are absent, and multi-select actuation has no entry point.

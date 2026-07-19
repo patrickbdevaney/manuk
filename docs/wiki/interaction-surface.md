@@ -1016,3 +1016,32 @@ Residue: `data-manuk-noselection` is visible to `getAttribute`/`outerHTML` (same
 `data-manuk-files`) — real selectedness needs per-element state the arena does not carry.
 `select.options`/`selectedOptions` are still absent, so `s.options[i]` throws; a live
 `HTMLOptionsCollection` is its own tick.
+
+## `s.options[i]` (tick 254): when the empty answer throws too
+
+`select.options` did not exist, so `s.options.length` was a TypeError and the script died there. The
+usual consolation — "at least it reads as empty" — **does not apply here**, and the RED probe proved
+it: a `selectedOptions` that correctly reports 0 for an untouched select makes the page throw on
+`selectedOptions[0]`. The empty answer cascades into the same TypeError class.
+
+That is worth stating generally: **for a collection, "reports nothing" and "throws" are often the
+same bug one line apart**, because the caller's next move is to index it.
+
+### The divergence class, reproduced by me in a day
+
+`option.value` read the raw `value` attribute, while `select.value` used a helper that falls back to
+the option's text. So `<option>Blue</option>` reported `"Blue"` via `s.value` and `""` via
+`s.options[2].value` — **the same fact, two readers, disagreeing.** Tick 253's entire finding was
+that form-submission and `select.value` disagreed; one layer down I built the identical shape. The
+lesson is not "be careful" — it is that **any fact with a fallback rule needs exactly one function
+computing it**, and both callers must route through it.
+
+### `option.index` counts across optgroups
+
+It is the position within the **owning select**, not within the immediate parent. A
+child-index-within-parent answer makes the second `<optgroup>` restart at 0, so code keying on
+`index` addresses the wrong option in every group but the first — confirmed by probe (`gIdx=0,1,0`).
+
+Residue: these are **snapshot Arrays**, not live `HTMLOptionsCollection`s. Indexing and `length`
+work; `item()`, `namedItem()`, `add()`/`remove()` do not exist, and a collection captured before a
+mutation will not reflect it.

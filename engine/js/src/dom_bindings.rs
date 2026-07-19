@@ -1657,6 +1657,9 @@ unsafe fn define_members(
             el_get_option_selected,
             Some(el_set_option_selected)
         );
+        prop_guarded!(prop, c"options", el_get_options, None);
+        prop_guarded!(prop, c"selectedOptions", el_get_selected_options, None);
+        prop_guarded!(prop, c"index", el_get_option_index, None);
         // Accessor properties (jQuery-core read/write surface).
         prop_guarded!(
             prop,
@@ -3020,6 +3023,17 @@ unsafe fn el_get_value(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> boo
                     .map(|o| option_value(dom, o))
                     .unwrap_or_default();
             }
+            // An `<option>`'s value falls back to its TEXT, here as well as in `select.value`.
+            // Reading them from two places that disagree is how `s.value` reported "Blue" while
+            // `s.options[i].value` reported "" for the same element — the divergence class this
+            // whole area keeps producing.
+            if (*dom)
+                .element(n)
+                .map(|e| e.name == "option")
+                .unwrap_or(false)
+            {
+                return option_value(dom, n);
+            }
             (*dom)
                 .element(n)
                 .and_then(|e| e.attr("value"))
@@ -3028,6 +3042,82 @@ unsafe fn el_get_value(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> boo
         })
         .unwrap_or_default();
     return_string(cx, vp, &v);
+    true
+}
+
+/// `select.options` — the option list, as an indexable collection with a `length`.
+///
+/// **`s.options[i]` was a TypeError**, which is the worst shape a missing feature takes here: a
+/// throw takes the whole script down, so a page that merely *enumerates* its own options to relabel
+/// or filter them stopped executing at that line. Reading as empty would have been better; reading
+/// correctly is better still.
+///
+/// Descendants, not children — `<optgroup>` is common and its options are still the select's.
+unsafe fn el_get_options(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let opts = select_options(dom, node);
+        node_array(cx, vp, dom, &opts);
+    } else {
+        *vp = NullValue();
+    }
+    true
+}
+
+/// `select.selectedOptions` — the selected subset.
+///
+/// For a single-select this is one option (or none), and it must agree with `selectedIndex`
+/// including its **implicit first selection** — otherwise `s.selectedOptions.length` is 0 on a
+/// perfectly ordinary untouched select, and pages guard on exactly that.
+unsafe fn el_get_selected_options(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let opts = select_options(dom, node);
+        let multiple = (*dom)
+            .element(node)
+            .map(|e| e.attr("multiple").is_some())
+            .unwrap_or(false);
+        let chosen: Vec<NodeId> = if multiple {
+            opts.into_iter()
+                .filter(|o| {
+                    (*dom)
+                        .element(*o)
+                        .map(|e| e.attr("selected").is_some())
+                        .unwrap_or(false)
+                })
+                .collect()
+        } else {
+            let idx = selected_index(dom, node);
+            usize::try_from(idx)
+                .ok()
+                .and_then(|i| opts.get(i).copied())
+                .into_iter()
+                .collect()
+        };
+        node_array(cx, vp, dom, &chosen);
+    } else {
+        *vp = NullValue();
+    }
+    true
+}
+
+/// `option.index` — this option's position within its owning select.
+unsafe fn el_get_option_index(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let idx = this_node(vp)
+        .map(|(dom, n)| {
+            let mut cur = (*dom).parent(n);
+            while let Some(p) = cur {
+                if is_select(dom, p) {
+                    return select_options(dom, p)
+                        .iter()
+                        .position(|o| *o == n)
+                        .map(|i| i as i32)
+                        .unwrap_or(-1);
+                }
+                cur = (*dom).parent(p);
+            }
+            -1
+        })
+        .unwrap_or(-1);
+    *vp = Int32Value(idx);
     true
 }
 
