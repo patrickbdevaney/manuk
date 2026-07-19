@@ -107,7 +107,14 @@ specific competitor build.
 
 ## PART 3 — THE SEVEN PHASES (0–6): what the product *is* at each
 
-> ⚠ **SUPERSEDED by `docs/ENGINEERING-SYNTHESIS.md`** (tick 232), which integrates the
+> ⚠ **SUPERSEDED by `docs/ENGINEERING-SYNTHESIS.md`** — expanded at tick 234 into a COMPLETE
+> placement ledger: every insight from ENGINEERING.MD Domains A–H plus the fidelity finding,
+> placed by phase with rationale, plus an explicit deferred-past-Phase-6 bucket, the binding
+> process rules, and the **already-won** set (pure-Rust image decoders, swash, occlusion-truthful
+> hit-test, stable NodeIds, tree-diff) that should be *published rather than rebuilt*.
+> Read that document first. Original tick-232 note follows.
+>
+> ⚠ Integrates the
 > `ENGINEERING.MD` competitive research. The table below is retained as the baseline; the
 > synthesis moves four things: the **`JsEngine` seam** into Phase 0–1, **taint + capability
 > tokens** from Phase 6 → 2, the **no-pixels pipeline + intent-aware scheduler** from Phase 5 → 2–3,
