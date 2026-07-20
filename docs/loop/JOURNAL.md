@@ -11674,3 +11674,46 @@ rather than shaped, so `align:end` and `size:` clipping are approximate — the 
 problem as the ch/ex lever. No cue-box overlap avoidance. `damage_since` over-damages `Text`.
 
 WIKI: docs/wiki/media-pipeline.md
+
+## Tick 262 — the two ends of the media pipeline that had nobody on them
+
+TICK SHAPE: the board's CO-#1 (A) MEDIA, which is the lowest class on the Phase-0 board (18%
+working, 11 caps). Chosen over OAuth/fillText because media is the measured biggest hole, and chosen
+*within* media by looking for the caption-arc failure shape rather than the next feature: **built,
+gated, correct, and joined to nothing.** Two instances found, at opposite ends of the same chain.
+
+**THE FRONT: a `<video src>` was never fetched.** `pending_image_urls` reads `<img src>` and a
+`<video>`'s **poster** — that is all. So the movie behind the poster was not undecodable or
+unsupported, it was **unrequested**, and every media test in the tree feeds bytes from
+`include_bytes!` so nothing noticed. `Page::pending_media_urls` produces `(NodeId, url)` pairs. The
+pair, not a bare URL, because a bitmap is shareable and **a playing video is not** — it has a
+position, two `<video>`s on one URL are two independent playbacks, and that is why `set_video_frame`
+was keyed by NodeId already. Source selection walks `<source>` children spec-shaped, and
+`media_type_rejected` answers **"are we certain we cannot"**, never "do we support" — an unknown MIME
+is ATTEMPTED, because a wrong `no` is invisible and a wrong `yes` costs one loud fetch.
+
+**THE BACK: three clocks and no player.** `FrameTimeline`, `Transport` and `AudioClock` all existed
+and gated; nothing owned them together, so every gate drove the parts by hand and the tree could
+demonstrate playback without playing. `VideoPlayer::tick(dt, Option<&AudioClock>)` **picks the clock
+itself** — audio-is-master when there is a device, wall-clock when there is not, because most
+`<video>` on the open web is muted and a master clock that never ticks freezes frame one. `frame()`
+answers while paused, since a paused video shows a picture.
+
+**RED PROBES: SIX, ALL FIRED** (no repeat of tick 261's vacuous green). The one worth keeping:
+`advance` THEN `sync_to_audio` lands on audio's position for almost any input, so the obvious
+assertion passes — it only fails against a `dt` an order of magnitude larger than the audio advance
+(got 0.1001, wanted 0.1). **Asserting the wall clock is DISCARDED is a different claim from asserting
+the result looks right**, and only the first catches a video clock that stays *partly* authoritative.
+Probes were undone from a `cp` snapshot, per tick 261's `git checkout` self-inflicted wound.
+
+Gates: `G_MEDIA_URLS` (engine/page), `G_VIDEO_PLAYER` (engine/media). manuk-media 24/24,
+`g_video_frame` + `g_caption_paint` still green.
+
+RESIDUE, STATED PLAINLY BECAUSE THIS IS THE CAPTION TRAP AGAIN: **this does not yet play a video on
+screen.** Both ends exist and meet, but the **shell has zero media handling** — nothing fetches these
+URLs, ticks a frame, or calls `set_video_frame` outside its gate. That is the next tick, and it is a
+shell tick. Also: `MediaSource.isTypeSupported` still says false for everything though MP4+H.264
+Baseline+AAC genuinely decode — populating `__mseCodecs` before playback works would be the worse
+lie, so it lands with the shell tick, not before.
+
+WIKI: docs/wiki/media-pipeline.md

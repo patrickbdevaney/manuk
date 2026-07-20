@@ -454,6 +454,11 @@
   - L763 · Three things that are not details
   - L786 · RED probes — four, and one of them was VACUOUS
   - L808 · Residue
+  - L822 · Tick 262 — the browser finally asks for the movie, and something owns the clock
+  - L828 · The front of the chain: <video src> was never requested
+  - L855 · The back of the chain: three clocks and no player
+  - L874 · RED probes: five, all fired
+  - L894 · Residue — stated plainly, because this is the caption trap again
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -605,4 +610,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-524 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+529 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -177,6 +177,34 @@ fn extract_tag_attr(tag: &str, name: &str) -> Option<String> {
     }
 }
 
+/// **A `<source type>` this UA can say NO to with confidence** — used by [`Page::pending_media_urls`]
+/// to skip past a stream it cannot decode and reach one it can.
+///
+/// The asymmetry here is deliberate and is the whole design. The question is *not* "do we support
+/// this type" — it is "are we **certain** we do not", and only a certain no is acted on. Everything
+/// unrecognised is attempted, because the container sniffer and the decoder downstream are the real
+/// authorities and a string table that guesses `no` silently breaks streams that would have played.
+/// A wrong `no` here is invisible (the video just never loads); a wrong `yes` merely costs a fetch
+/// that fails honestly. So the table lists what is genuinely absent and nothing else.
+///
+/// Kept as string policy in `manuk-page` on purpose: naming `manuk-media`'s types would drag the
+/// decoder features — and `openh264`'s C toolchain — into all ~25 gate binaries that link this
+/// crate, the isolation tick 236 established and [`Page::set_video_frame`] documents.
+fn media_type_rejected(mime: &str) -> bool {
+    let t = mime.to_ascii_lowercase();
+    // Containers with no demuxer: `re_mp4` reads ISO-BMFF and nothing else.
+    if t.contains("webm") || t.contains("ogg") || t.contains("matroska") || t.contains("x-flv") {
+        return true;
+    }
+    // Codecs with no decoder behind the `VideoDecoder`/audio traits. `openh264` is Constrained
+    // Baseline H.264, `symphonia` is AAC — anything else in a `codecs=` parameter is a certain no.
+    [
+        "vp8", "vp9", "vp09", "av01", "theora", "vorbis", "opus", "hev1", "hvc1",
+    ]
+    .iter()
+    .any(|c| t.contains(c))
+}
+
 /// Resolve `href` against `base` to an absolute URL string (falling back to `href`).
 fn resolve_url(base: &str, href: &str) -> String {
     Url::parse(base)
@@ -1873,6 +1901,66 @@ impl Page {
                 continue;
             }
             out.push(url);
+        }
+        out
+    }
+
+    /// **The media this page wants, and the element each byte-stream belongs to.**
+    ///
+    /// The counterpart to [`Page::pending_image_urls`] for `<video>`/`<audio>`, and the missing
+    /// first link of the media chain. Until this existed a `<video src="movie.mp4">` was **never
+    /// fetched at all**: `pending_image_urls` reads `<video>`'s `poster` and nothing else, so the
+    /// still frame loaded and the movie behind it was not so much undecodable as *unrequested*.
+    /// Every step downstream — demux, decode, the presentation clock, [`Page::set_video_frame`] —
+    /// was already built and gated, waiting on a URL that no one ever produced.
+    ///
+    /// **It returns `(NodeId, url)` pairs, not bare URLs, and the pair is the point.** Images can be
+    /// answered by URL alone (`apply_images_by_url` re-walks the DOM and binds one decoded bitmap to
+    /// every node naming it) because a bitmap is immutable and shareable. A playing video is not: it
+    /// carries a position, and two `<video>` elements pointing at one file are two independent
+    /// playbacks that may sit at different times. `set_video_frame` is keyed by `NodeId` for exactly
+    /// that reason, so the host must be told which element it is fetching *for*, at request time.
+    ///
+    /// **Source selection follows the spec's shape, not "the first `<source>`".** HTML's resource
+    /// selection walks the `<source>` children in order and takes the first whose `type` the UA does
+    /// not reject — which is why sites list WebM before MP4 and expect an MP4-only UA to skip past
+    /// the WebM. Taking the first child unconditionally would fetch a file that cannot decode while
+    /// a playable one sat two lines below it, and the failure would look like a broken decoder.
+    /// A `type` we affirmatively reject is skipped; an absent or unrecognised `type` is *attempted*,
+    /// because the container sniffer downstream is the honest authority and refusing to try is how a
+    /// UA breaks a stream it could actually have played.
+    ///
+    /// Cheap and side-effect-free: a DOM walk, no network, no decode. Callers dedupe by `NodeId`.
+    pub fn pending_media_urls(&self) -> Vec<(manuk_dom::NodeId, String)> {
+        let mut out: Vec<(manuk_dom::NodeId, String)> = Vec::new();
+        for n in self.dom.flat_descendants(self.dom.root()) {
+            let Some(el) = self.dom.element(n) else {
+                continue;
+            };
+            match self.dom.tag_name(n) {
+                Some("video") | Some("audio") => {}
+                _ => continue,
+            }
+            // A `src` on the element itself wins outright — the spec never consults `<source>`
+            // children when the attribute is present.
+            let chosen = match el.attr("src").map(str::trim).filter(|s| !s.is_empty()) {
+                Some(src) => Some(src.to_string()),
+                None => self
+                    .dom
+                    .flat_descendants(n)
+                    .into_iter()
+                    .filter(|&c| self.dom.tag_name(c) == Some("source"))
+                    .find_map(|c| {
+                        let se = self.dom.element(c)?;
+                        let src = se.attr("src").map(str::trim).filter(|s| !s.is_empty())?;
+                        if se.attr("type").is_some_and(|t| media_type_rejected(t)) {
+                            return None;
+                        }
+                        Some(src.to_string())
+                    }),
+            };
+            let Some(src) = chosen else { continue };
+            out.push((n, resolve_url(&self.final_url, &src)));
         }
         out
     }

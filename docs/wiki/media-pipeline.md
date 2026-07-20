@@ -818,3 +818,90 @@ timed, placed and **drawn**. What remains is fidelity, not absence:
 - **No cue box overlap avoidance** — two simultaneous cues with explicit equal `line` values collide.
 - **`DisplayList::damage_since` over-damages `Text`** (a hardcoded 4096px-wide box), so a caption
   change repaints the row rather than the cue.
+
+## Tick 262 — the browser finally asks for the movie, and something owns the clock
+
+Six ticks of captions ended on a real join (261). This one closes the two that were still missing at
+the **opposite** ends of the same pipeline, and both are the same shape as the caption bug: work that
+was built, gated and correct, with nobody on either side of it.
+
+### The front of the chain: `<video src>` was never requested
+
+`Page::pending_image_urls` reads `<img src>` and — for a `<video>` — its **`poster`**. That is all.
+So a plain `<video src="movie.mp4">` on a real page was not undecodable, not unsupported, not stalled:
+it was **never fetched**. Every media test in the tree feeds bytes from `include_bytes!`, so demux,
+AAC, H.264, the frame timeline and A/V sync were all green against fixtures the loader could never
+have produced. `Page::pending_media_urls` is the missing producer.
+
+**It returns `(NodeId, url)` pairs and the pair is the whole design.** Images are legitimately
+answered by URL alone — `apply_images_by_url` re-walks the DOM and binds one decoded bitmap to every
+node naming it, because a bitmap is immutable and shareable. **A playing video is not.** It carries a
+position, so two `<video>` elements on one URL are two independent playbacks that may sit at
+different times, which is exactly why `set_video_frame` was keyed by `NodeId` in the first place. The
+host therefore has to be told which element it is fetching *for*, at request time, not at delivery.
+
+**Source selection follows the spec's shape, and the asymmetry in `media_type_rejected` is the
+point.** Sites list `<source type="video/webm">` before the MP4 and expect an MP4-only UA to walk
+past the first one. Taking the first `<source>` unconditionally fetches a file that cannot decode
+while a playable one sits two lines below — and the failure then surfaces as *a broken decoder*,
+which is the misattribution that costs a tick. But the question the table answers is deliberately
+**not** "do we support this type"; it is "are we **certain** we do not". Only a certain no is acted
+on; an unknown or absent MIME is **attempted**, because the container sniffer and the decoder
+downstream are the honest authorities. A wrong `no` is invisible (the video simply never loads); a
+wrong `yes` costs one fetch that fails loudly. The table is kept as string policy in `manuk-page`
+because naming `manuk-media`'s types would drag `openh264`'s C toolchain into all ~25 gate binaries
+that link this crate — the isolation tick 236 established.
+
+### The back of the chain: three clocks and no player
+
+`FrameTimeline` indexes frames by presentation time (249), `Transport` holds a position, `AudioClock`
+is master — and **nothing owned all three at once**. Every gate drove the parts by hand, so the tree
+could demonstrate each step of playback and could not play. `VideoPlayer` is the owner a host holds.
+
+Two decisions carry it. **The player picks its clock, not the caller.** MEDIA.md's rule is
+audio-is-master, but most `<video>` on the open web is muted or has no audio track, and for those a
+master clock that never ticks freezes the picture on frame one. So `tick(dt, Option<&AudioClock>)`
+routes to `sync_to_audio` when there is a device and `advance` when there is not — one call that
+cannot be got wrong by forgetting which case you are in, which is what happens when the choice is
+left at the call site of two similarly-named methods. **And `frame()` answers while paused**, because
+a paused video shows a picture; gating it on `is_playing` blanks the element on `pause()` and shows
+nothing at all before the first `play()`.
+
+The transport is armed from `FrameTimeline::duration()`, not the container's declared duration: a
+partially-buffered stream has fewer frames than the header promises, and a transport that believes
+the header runs the position off the end of what can be shown while `ended` never latches.
+
+### RED probes: five, all fired
+
+| probe | result |
+|---|---|
+| drop the `video`/`audio` arm from `pending_media_urls` | RED — "a `<video src>` must be requested" |
+| take the first `<source>` unconditionally | RED — WebM fetched, MP4 below it never seen |
+| invert `media_type_rejected` into an allow-list | RED — the unknown MIME silently stops loading |
+| `frame()` returns `frames()[0]`, ignoring the transport | RED — "must show a DIFFERENT picture" |
+| `tick` treats `None` as "no clock, do not move" | RED — the muted case freezes on frame one |
+| `tick` calls `advance` *then* `sync_to_audio` | RED — position 0.1001, not the device's 0.1 |
+
+The last one is the one worth keeping. Advance-then-sync ends up at audio's position on almost any
+input, so the obvious assertion passes; it only fails against a `dt` **deliberately an order of
+magnitude larger** than the audio advance. Asserting that the wall clock is *discarded* is a
+different claim from asserting the result looks right, and only the first one catches a video clock
+that stays partly authoritative — the state audio-is-master exists to forbid.
+
+Gates: `engine/page/tests/g_media_urls.rs` (`G_MEDIA_URLS`), `engine/media/tests/g_video_player.rs`
+(`G_VIDEO_PLAYER`). All of `manuk-media` (24 tests) and `g_video_frame`/`g_caption_paint` still green.
+
+### Residue — stated plainly, because this is the caption trap again
+
+**This does not yet play a video on screen.** Both ends now exist and meet in the middle, but the
+**shell has no media handling at all** — no fetch of the URLs this produces, no per-frame tick, no
+call into `set_video_frame` outside its own gate. That is the next tick and it is a shell tick, not
+an engine one. Saying so here rather than claiming M6 is done is the direct lesson of the caption arc,
+where six green gates shipped and the viewer saw nothing.
+
+Also open: `MediaSource.isTypeSupported` still answers **false for everything** (`__mseCodecs` is
+empty) even though MP4 + Constrained-Baseline H.264 + AAC now genuinely decode. That is honest *only*
+until the shell can play them — populating the registry before a real `<video>` plays would be the
+strictly worse lie the file's own comment warns about. Populate it in the same tick that lands
+playback, never before. And `<audio src>` URLs are produced but there is no audio output path
+(`cpal` is unbound), so audio elements resolve to a request nothing consumes yet.

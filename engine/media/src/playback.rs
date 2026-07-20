@@ -302,3 +302,81 @@ impl Transport {
         self.position - clock.position()
     }
 }
+
+/// **The join: demuxed bytes in, the picture that is on screen right now out.**
+///
+/// Every piece below this line already existed and was gated — [`FrameTimeline`] indexes frames by
+/// presentation time, [`Transport`] holds a position, [`AudioClock`] is master, and
+/// `Page::set_video_frame` paints RGBA into the box the poster occupied. What did not exist was
+/// **anything that owned all of them at once.** Each gate drove the parts by hand, so the tree could
+/// demonstrate every step of playback and could not play. This is the object a host actually holds.
+///
+/// ## It picks its own clock, and that choice is the reason it exists
+///
+/// MEDIA.md's rule is audio-is-master, but most `<video>` on the open web is muted or has no audio
+/// track at all — for those, a master clock that never ticks would freeze the picture on frame one.
+/// So [`VideoPlayer::tick`] takes a wall-clock delta *and* an optional device clock, and routes to
+/// [`Transport::sync_to_audio`] when there is one and [`Transport::advance`] when there is not. A
+/// caller cannot get this wrong by forgetting which case it is in, which is exactly what happens
+/// when the choice is left at the call site of two similarly-named methods.
+///
+/// ## `frame()` answers while paused, and that is not an oversight
+///
+/// A paused video shows a picture. Gating the frame on `is_playing` would blank the element on
+/// `pause()` and show nothing at all before `play()` — the first-frame-poster state every video on
+/// the web sits in until it is clicked.
+pub struct VideoPlayer {
+    timeline: FrameTimeline,
+    transport: Transport,
+}
+
+impl VideoPlayer {
+    /// Decode a track's frames and arm the transport against the real decoded duration.
+    ///
+    /// The transport is built from [`FrameTimeline::duration`] rather than the container's declared
+    /// duration: a partially-buffered stream has fewer frames than the header promises, and a
+    /// transport that believes the header runs the position off the end of what can be shown and
+    /// holds the last decoded frame while `ended` never latches.
+    pub fn decode(track: &Track, buffer: &[u8]) -> Result<Self, VideoError> {
+        let timeline = FrameTimeline::decode(track, buffer)?;
+        let transport = Transport::new(timeline.duration());
+        Ok(Self {
+            timeline,
+            transport,
+        })
+    }
+
+    /// Advance playback. Pass the device clock when the stream has audio; `None` slaves the position
+    /// to `dt` instead — see the type note on why this is one call and not two.
+    pub fn tick(&mut self, dt: f64, audio: Option<&AudioClock>) {
+        match audio {
+            Some(clock) if self.transport.is_playing() => self.transport.sync_to_audio(clock),
+            _ => self.transport.advance(dt),
+        }
+    }
+
+    /// The picture on screen now — `None` only before the first frame is due.
+    pub fn frame(&self) -> Option<&Frame> {
+        self.timeline.frame_at(self.transport.position())
+    }
+
+    pub fn play(&mut self) {
+        self.transport.play();
+    }
+
+    pub fn pause(&mut self) {
+        self.transport.pause();
+    }
+
+    pub fn seek(&mut self, t: f64) {
+        self.transport.seek(t);
+    }
+
+    pub fn transport(&self) -> &Transport {
+        &self.transport
+    }
+
+    pub fn timeline(&self) -> &FrameTimeline {
+        &self.timeline
+    }
+}
