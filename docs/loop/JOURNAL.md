@@ -13131,3 +13131,61 @@ runtime ~573-603s vs the 93s ceiling). The gate suite inflates to ~600s while th
 FID-SWEEP (60+ site renders + Chrome compares) contends for the box — 1-min load oscillated 0.37→3.29
 across the attempts. `build` was warm (30-43s), so this is gate runtime under load, not a cold
 rebuild. Parked for a quiet-box re-measure exactly like ticks 243-246; not fixed here. Reported.
+
+## Tick 285 — `navigator.sendBeacon`: the fire-and-forget POST on the way out (2026-07-20)
+
+TICK SHAPE: board re-read at tick start; no observer steer newer than t265. This tick is the product
+of a full re-probe of the board's remaining bounded rows, ALL of which turned out already built
+(`<details>`, IntersectionObserver/ResizeObserver, scroll-snap `snap_scroll`+`g_scroll_snap`,
+pushState/replaceState/popstate, EventSource, `navigator.onLine` — the board/pivot-list/constellation
+are pervasively STALE). Of the genuinely-missing-and-sure set, `sendBeacon` (grep: 0 refs) is the most
+substantive JS-layer capability; the high-value remainder (blob-`<img>`, container queries, AVIF) are
+subsystem-scope for a fresh context. Recorded the staleness in [[board-and-constellation-stale]].
+
+HYPOTHESIS: `navigator.sendBeacon` was absent, so an unguarded call threw on `undefined` and took the
+rest of the `pagehide`/`visibilitychange` handler with it — where every analytics/RUM/error-reporting
+library flushes its final payload. The subtlety: it returns a boolean, so the cheapest wrong
+implementation (`return true`) passes every shape check while sending nothing.
+
+PLAN: enqueue a REAL POST onto the same `__pendingFetches` channel `fetch` uses, fire-and-forget (no
+`__fetchCb`), content-type per payload kind, and refuse an oversized payload with `false`. Gate on the
+OUTGOING request, not the return value.
+
+### What landed
+
+`navigator.sendBeacon(url, data)` on the always-installed navigator object (guarded + try/caught for a
+frozen navigator, like `clipboard`/`serviceWorker`). String → `text/plain;charset=UTF-8`; typed Blob →
+its own type (typeless Blob → no content-type); FormData → `multipart/form-data` (reusing
+`__multipartBoundary`/`__multipart`); URLSearchParams → `application/x-www-form-urlencoded`. Pushes
+`id\x01f\x01POST\x01url\x01content-type\x02<ct>\x01body` with a fresh `__fetchId` and NO callback — the
+host sends it, `__deliverFetch` finds no cb and no-ops. A body over 65536 bytes returns `false` and is
+not queued.
+
+### The claim that carries it
+
+`G_SEND_BEACON` drains `take_fetches()` and asserts genuine POSTs — the string body verbatim with
+`text/plain`, the Blob's bytes with `application/json`, the bare ping with an empty body and NO
+content-type — and that the oversized beacon is ABSENT from the queue. The return-value claims and the
+queue claims are complements.
+
+PROVEN RED: a vacuous `return true` stub (no enqueue) → `over:true` (it returns true even for the
+oversized payload) and, had it passed that, the `take_fetches` queue is empty and every `posted:*`
+assertion fails. Deleting the impl → `present:false` and the first call throws. No constant satisfies
+both the boolean claims and the real-POST claims.
+
+NO REGRESSION: manuk-js 10/10; g_fetch_stream, g_capability (navigator surface), g_prototype all pass.
+Not a trade.
+
+HONEST LIMITS: `ArrayBuffer`/typed-array payloads are stringified rather than sent as raw bytes; the
+size cap is per-call, not a true running total of in-flight beacon payload; and there is no separate
+`keepalive` accounting beyond enqueuing onto the existing channel (which the host drains regardless).
+
+WIKI: docs/wiki/networking.md (navigator.sendBeacon section)
+
+HARNESS NOTE (observer-owned, not touched): capability-clean — `VERIFY: all gates green`, GATES→136,
+every other ratchet mark held; the ONLY refusal is WALL (gate ~651s vs 93s ceiling). The box is under
+EXTERNAL contention (a separate `appuser` playwright/chromium run, `snap` at 100%, a live desktop
+session) on top of the observer's FID-SWEEP — 1-min load 2.7-4.0 during the verify, vs the 0.47 window
+tick 284 landed in at 61s. `build` warm (29s), so this is gate runtime under load, not a rebuild.
+Parked for a quiet-window re-measure (verify.sh → status-update.sh → tick.sh when load<0.8), exactly
+like ticks 243-246. Reported, not fixed.

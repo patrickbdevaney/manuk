@@ -886,3 +886,37 @@ constant can satisfy: dropping the URL check → `GSX`; dropping the inline chec
 deny → `""` (the no-policy control page then goes blank). A `<meta http-equiv>` policy is enforced
 identically, and a no-policy control page must run everything — that control is what makes
 "block everything" fail the gate.
+
+## `navigator.sendBeacon` — the fire-and-forget POST on the way out (tick 285)
+
+Every analytics, RUM, and error-reporting library ends a session with
+`navigator.sendBeacon(url, payload)` from a `pagehide`/`visibilitychange` handler. That is the one
+moment a normal `fetch` cannot be relied on — the page is unloading and nothing is left alive to hold
+the request open — which is exactly what `sendBeacon` exists for: the user agent takes ownership of the
+POST and delivers it after the document is gone. It was absent, so an unguarded call threw on
+`undefined` and took the rest of the unload handler with it (where SPAs flush their final state).
+
+### It routes onto the same queue `fetch` uses, but fire-and-forget
+
+`sendBeacon` builds a `POST` and pushes it onto `__pendingFetches` — the same channel the host drains
+with `take_fetches` and delivers over the network — but with **no `__fetchCb` entry**. A beacon has no
+response the page can read; registering a callback would be a promise nothing ever awaits. The host
+sends it; the eventual `__deliverFetch` finds no callback and is a no-op. The content-type follows the
+payload's kind: a string is `text/plain;charset=UTF-8`, a typed `Blob` carries *its* type (a typeless
+Blob sends none), a `FormData` becomes `multipart/form-data` with a browser-minted boundary, a
+`URLSearchParams` is `application/x-www-form-urlencoded`.
+
+### Why it must return the honest boolean, and send for real
+
+Two failure shapes, both caught by `G_SEND_BEACON`. **The vacuous stub:** `sendBeacon` returns a
+boolean, so `return true` passes every "is it a function / did it return true" check while sending
+nothing — indistinguishable from a working beacon until the telemetry never arrives. The gate drains
+the queue and asserts a genuine POST with the right body and content-type, not the return value alone.
+**The silent drop:** the in-flight beacon payload is capped (65536 bytes here); an oversized beacon is
+**refused with `false` and not queued**, because a page that checks the return value falls back to a
+synchronous request, and swallowing the payload while returning `true` loses the data while telling the
+page it was sent.
+
+**Not implemented, and absent rather than wrong:** `ArrayBuffer`/typed-array payloads (stringified
+rather than sent as raw bytes), and the true cross-beacon in-flight accounting (the cap is per-call,
+not a running total).

@@ -2233,3 +2233,21 @@ you *actually* encoded (PNG), never the requested `type` you did not honour — 
 not two: `createObjectURL`, MSE attachment, Worker `sourceOf`, and `blob:` fetch must all read the same
 store, or a URL registered in one and looked up in another silently misses. **(4)** A revoked or
 unknown `blob:` URL is a network error, not an empty 200 — freed bytes must stop being readable.
+
+## The last request on the way out — `navigator.sendBeacon` (tick 285)
+
+**Pattern:** `addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden')
+navigator.sendBeacon('/collect', JSON.stringify(session)); })` — Google Analytics, every RUM agent,
+Sentry-style error reporters, and A/B frameworks all flush their final payload this way.
+
+**The class this unlocks:** unload-time telemetry without a thrown handler. Not a visible rendering
+change, but an unguarded `navigator.sendBeacon(...)` on `undefined` threw and took the rest of the
+`pagehide` handler with it — which is where SPAs flush state, so the failure surfaced as lost data on
+the *next* visit, not the current one.
+
+**The traps.** **(1)** It returns a boolean, so `return true` is the cheapest wrong answer — it passes
+every shape check while sending nothing. It must ACTUALLY enqueue a POST; gate on the outgoing request,
+not the return value. **(2)** Fire-and-forget: no response callback, because a beacon fires when
+nothing is left to await it. **(3)** The content-type follows the payload (string→text/plain,
+Blob→its type, FormData→multipart), never a fixed guess. **(4)** An oversized payload is refused with
+`false` and NOT queued — a silent drop that returns `true` loses the data while claiming success.

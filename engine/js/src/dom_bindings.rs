@@ -10454,6 +10454,51 @@ const WINDOW_PRELUDE: &str = r#"
                 readText: function () { return Promise.resolve(g.__clipboardText || ''); }
             };
         }
+        // `navigator.sendBeacon(url, data)` — the fire-and-forget POST every analytics, RUM and
+        // error-reporting library sends on `pagehide`/`visibilitychange`. It was ABSENT, so an
+        // unguarded `navigator.sendBeacon(...)` threw on `undefined` and took the rest of an unload
+        // handler with it — and unload handlers are where SPAs flush their final state. It must
+        // ACTUALLY send (a beacon that returns `true` and posts nothing is the vacuous-stub lie), so
+        // it enqueues a real POST onto the same `__pendingFetches` channel `fetch` uses — but
+        // FIRE-AND-FORGET: no `__fetchCb` entry, because a beacon has no response the page can read,
+        // which is the whole reason it can fire when nothing is left alive to await it.
+        if (typeof g.navigator.sendBeacon !== 'function') {
+          try {
+            g.navigator.sendBeacon = function (url, data) {
+                if (url === undefined) { throw new TypeError("Failed to execute 'sendBeacon': 1 argument required"); }
+                url = String(url);
+                var body = "", ctype = null;
+                if (data !== undefined && data !== null) {
+                    if (data.__isFormData && typeof data.__multipart === 'function') {
+                        var boundary = g.__multipartBoundary();
+                        body = data.__multipart(boundary);
+                        ctype = "multipart/form-data; boundary=" + boundary;
+                    } else if (typeof data.__blobText === 'string') {         // a Blob/File
+                        body = data.__blobText;
+                        ctype = data.type || null;                            // a typeless Blob sends no content-type
+                    } else if (g.URLSearchParams && data instanceof g.URLSearchParams) {
+                        body = data.toString();
+                        ctype = "application/x-www-form-urlencoded;charset=UTF-8";
+                    } else {
+                        body = String(data);
+                        ctype = "text/plain;charset=UTF-8";
+                    }
+                }
+                // The queue is bounded — the spec caps total in-flight beacon payload. An oversized
+                // beacon is REFUSED with `false`, never silently dropped: a page that checks the return
+                // value falls back to a synchronous request, and swallowing it would lose the data
+                // while telling the page it was sent.
+                if (body.length > 65536) { return false; }
+                if (typeof g.__pendingFetches === 'undefined' || typeof g.__fetchId === 'undefined') { return false; }
+                var id = ++g.__fetchId;
+                // Headers travel `\x02`-encoded as name/value pairs (see `__encHeaders`/`parse_headers`),
+                // not `name: value`.
+                var hdrs = ctype ? ("content-type\x02" + ctype) : "";
+                g.__pendingFetches.push(id + "\x01f\x01POST\x01" + url + "\x01" + hdrs + "\x01" + body);
+                return true;
+            };
+          } catch (e) { /* a page that froze `navigator` does not want us adding to it */ }
+        }
         // `navigator.permissions.query()` — ABSENT, and unlike most absences this one is *checkable
         // against another answer we already give*. Ordinary feature-detecting code calls it and gets
         // a TypeError on `undefined.query`; but the more demanding reader is a bot detector, which

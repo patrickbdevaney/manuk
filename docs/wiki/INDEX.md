@@ -563,6 +563,9 @@
   - L837 · One evaluator, in manuk-net
   - L853 · Four layers have to agree — the gate proves they do
   - L879 · The gate: G_CSP (engine/page/tests/g_csp.rs)
+  - L890 · navigator.sendBeacon — the fire-and-forget POST on the way out (tick 285)
+  - L899 · It routes onto the same queue fetch uses, but fire-and-forget
+  - L909 · Why it must return the honest boolean, and send for real
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -702,4 +705,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-617 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+620 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
