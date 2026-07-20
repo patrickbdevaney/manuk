@@ -2051,6 +2051,22 @@ impl Ctx<'_> {
         pch: Option<f32>,
         floats: &mut FloatContext,
     ) -> (BoxContent, f32) {
+        // An **anonymous flex/grid item** (see `taffy_tree::flex_items`): the item IS the text node,
+        // so every path that sizes or lays out an item — `measure_intrinsic`, `max_content_width`,
+        // `min_content_width`, `layout_block` — arrives here with a text node and must get an inline
+        // formatting context over that one run rather than the empty child list a text node has.
+        // Putting the branch HERE, rather than special-casing each caller, is what makes the item
+        // measure and paint identically to an element wrapping the same text.
+        if matches!(self.dom.data(node), NodeData::Text(_)) {
+            let items = self.collect_inline_group(&[node], cw, None);
+            if items.is_empty() {
+                return (BoxContent::Inline(vec![]), 0.0);
+            }
+            let align = self.style_of(node).text_align;
+            let (frags, _atomics, h) = self.layout_inline(items, cx, cy, cw, align, floats);
+            return (BoxContent::Inline(frags), h);
+        }
+
         let display = self.style_of(node).display;
 
         // Form controls render their *value*/label as synthetic text (an `<input>` has no
@@ -2582,10 +2598,18 @@ impl Ctx<'_> {
     }
 
     fn max_content_width_uncached(&self, node: NodeId) -> f32 {
-        if matches!(
-            self.style_of(node).display,
-            Display::Flex | Display::Grid | Display::InlineFlex | Display::InlineGrid
-        ) {
+        // An anonymous flex/grid item is a text run; it is never a flex container, whatever the
+        // cascade stored on the text node. Under the Stylo cascade a text node carries a CLONE of
+        // its parent's style, so a bare run inside `display:flex` reads back as `flex` here — and
+        // routing it into the taffy path would build a tree whose root measures via
+        // `measure_intrinsic`, which lands back in this function: unbounded recursion, not a wrong
+        // number. The element check is the base case.
+        if self.dom.is_element(node)
+            && matches!(
+                self.style_of(node).display,
+                Display::Flex | Display::Grid | Display::InlineFlex | Display::InlineGrid
+            )
+        {
             // A flex/grid container's preferred width is a question taffy can answer exactly; the
             // lay-out-at-1e6-and-measure trick cannot (see `taffy_tree::max_content_width`).
             return taffy_tree::max_content_width(
@@ -3630,10 +3654,16 @@ impl Ctx<'_> {
         cw: f32,
         kids: &[NodeId],
     ) -> (BoxContent, f32) {
+        // Mirrors `taffy_tree::flex_items`: a non-white-space text run is an ANONYMOUS item, so a
+        // container holding only text ("<div style=display:flex>Label</div>") is not empty and must
+        // not short-circuit to a zero box.
         let block_kids: Vec<NodeId> = kids
             .iter()
             .copied()
-            .filter(|&k| self.dom.is_element(k))
+            .filter(|&k| {
+                self.dom.is_element(k)
+                    || matches!(self.dom.data(k), NodeData::Text(t) if !t.trim().is_empty())
+            })
             .collect();
         if block_kids.is_empty() {
             return (BoxContent::Block(vec![]), 0.0);
@@ -3719,6 +3749,45 @@ impl Ctx<'_> {
                 content: BoxContent::Block(children),
             };
             (boxx, p.slot.y + p.slot.height)
+        } else if !self.dom.is_element(p.dom) {
+            // ANONYMOUS ITEM. It has no element, therefore no background, border, padding or
+            // outline of its own — only the text. Going through `layout_block` would read those off
+            // the text node's stored style, and under the Stylo cascade that style is a clone of the
+            // PARENT's: the container's background and border would paint a second time, inset by
+            // its own padding. Build the box directly instead.
+            let mut item_floats = FloatContext::new(abs_x, abs_x + p.slot.width);
+            let (content, h) =
+                self.layout_children(p.dom, abs_x, abs_y, p.slot.width, None, &mut item_floats);
+            let s = self.style_of(p.dom);
+            let height = p.slot.height.max(h);
+            let boxx = LayoutBox {
+                rect: Rect {
+                    x: abs_x,
+                    y: abs_y,
+                    width: p.slot.width,
+                    height,
+                },
+                background: None,
+                border: None,
+                radius: 0.0,
+                shadows: Vec::new(),
+                // `visibility` and `opacity`-as-folded ARE readable off a text node in both
+                // cascades, and they must be: a hidden container's text stays hidden.
+                hidden: s.visibility != manuk_css::Visibility::Visible,
+                mask_image: None,
+                background_images: Vec::new(),
+                background_size: manuk_css::BackgroundSize::Auto,
+                background_position: manuk_css::BackgroundPosition::default(),
+                object_fit: manuk_css::ObjectFit::Fill,
+                object_position: manuk_css::ObjectPosition::default(),
+                background_repeat: manuk_css::BackgroundRepeat::Repeat,
+                outline: None,
+                marker: None,
+                opacity: s.opacity,
+                node: Some(p.dom),
+                content,
+            };
+            (boxx, p.slot.y + height)
         } else {
             let mut item_floats = FloatContext::new(abs_x, abs_x + p.slot.width);
             // Record taffy's verdict BEFORE laying the item out, so `layout_block` uses it instead
@@ -6766,6 +6835,80 @@ mod tests {
         assert!(
             (kw - 200.0).abs() < 0.5,
             "overflow:auto that fits shows no scrollbar => width:100% child fills 200, got {kw}"
+        );
+    }
+
+    /// **Anonymous flex items** (Flexbox §4): text sitting directly inside a flex container is
+    /// wrapped in an anonymous block-level item, not discarded.
+    ///
+    /// This gate was written against the BROKEN engine first and it went red in the way that
+    /// matters: `<div style="display:flex">…text…</div>` produced a **2×2 px** box, because
+    /// `flex_items` filtered children to elements and the text never became an item at all. Every
+    /// assertion below fails on that code.
+    ///
+    /// The three shapes are not redundant — they are the three ways the bug reaches a real page:
+    ///   * `bare`   — the whole item is text (`<a style="display:flex">Recent changes</a>`, which is
+    ///                MediaWiki Vector's entire navigation);
+    ///   * `mixed`  — an icon element followed by a bare label, the standard icon+text button. The
+    ///                element item alone laid out, so the box existed and was merely far too narrow —
+    ///                the failure that is easy to mistake for a font-metrics problem;
+    ///   * `ws`     — the newline between two element children must NOT become a third item, which is
+    ///                the over-correction this fix could plausibly have introduced.
+    ///
+    /// The width assertions are the load-bearing ones. A container that drops its text collapses to
+    /// its longest WORD, and the visible symptom is not a missing label but a *wrapped* one — every
+    /// nav item silently doubling in height and pushing the page below it out of place.
+    #[test]
+    fn bare_text_becomes_an_anonymous_flex_item() {
+        let html = r#"<div id="bare">Recent changes</div>
+                      <div id="mixed"><i id="icon">*</i>Recent changes</div>
+                      <div id="ws"><span id="w1">A</span>
+                          <span id="w2">B</span></div>"#;
+        let css = "#bare,#mixed,#ws{display:flex;width:max-content} i{width:6px}";
+        let (dom, root) = layout_html(html, css, 800.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let w = |id: &str| rects[&by_id(id)].width;
+        let h = |id: &str| rects[&by_id(id)].height;
+
+        // A text-only flex container is as wide as its text on ONE line. The exact advance depends
+        // on the face, so assert the property that discriminates the bug rather than a pixel count:
+        // dropping the text yields a near-zero box, and wrapping it to the longest word yields
+        // something far under a full line. "Recent changes" cannot be narrower than ~60px in any
+        // sane face, and the broken engine returned 2.
+        let bare = w("bare");
+        assert!(
+            bare > 60.0,
+            "bare text inside display:flex must become an anonymous item and size the container; \
+             got width {bare} (a value near zero means the text was dropped entirely)"
+        );
+        assert!(
+            h("bare") > 8.0,
+            "the anonymous item must contribute a line box's height, got {}",
+            h("bare")
+        );
+
+        // Icon + bare label: the icon is 6px, so the container must be the icon PLUS the label. If
+        // the label is dropped the container is ~6px — present, plausible, and wrong.
+        let mixed = w("mixed");
+        assert!(
+            mixed >= bare + 5.0,
+            "icon(6px) + bare label must sum along the main axis: mixed={mixed} bare={bare} \
+             (mixed ≈ icon only means the trailing text run was skipped)"
+        );
+
+        // The over-correction guard: white-space between two element children is not an item. If it
+        // were, `ws` would carry a third slot and grow by a space's width.
+        let ws = w("ws");
+        let spans = w("w1") + w("w2");
+        assert!(
+            (ws - spans).abs() < 1.5,
+            "white-space-only runs must NOT become anonymous items: container={ws} but its two \
+             element items total {spans}"
         );
     }
 }

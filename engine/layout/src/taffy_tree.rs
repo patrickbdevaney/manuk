@@ -339,11 +339,30 @@ impl<'m> TaffyDom<'m> {
 
     fn add(&mut self, dom: &Dom, styles: &StyleMap, node: DomNodeId) -> TId {
         let cs = &styles[&node];
-        let style = to_taffy_style(cs, &mut self.calc);
-        let container = matches!(
+        let mut style = to_taffy_style(cs, &mut self.calc);
+        let mut container = matches!(
             cs.display,
             CssDisplay::Flex | CssDisplay::Grid | CssDisplay::InlineFlex | CssDisplay::InlineGrid
         );
+        // An ANONYMOUS flex/grid item (a bare text run — see `flex_items`) takes its inherited
+        // properties from the parent and every OTHER property at its initial value. We cannot read
+        // that off the stored style, because THE TWO CASCADES DISAGREE about what a text node
+        // holds: `MinimalCascade` stores `inherit_from(parent)` (non-inherited props already
+        // initial), while the Stylo path stores a full CLONE of the parent's computed style. Under
+        // Stylo the clone carries `display:flex` — so the anonymous item would be treated as a flex
+        // CONTAINER, recurse into a text node's (empty) child list, and collapse to a zero box,
+        // which is the original bug wearing a different hat. It would also inherit the parent's
+        // width, padding and margin and apply them a second time.
+        //
+        // So synthesise the contract here instead of trusting either cascade. Cheap, and it cannot
+        // drift when the two cascades next diverge.
+        if !dom.is_element(node) {
+            container = false;
+            style = Style {
+                display: Display::Block,
+                ..Style::DEFAULT
+            };
+        }
         let children: Vec<TId> = if container {
             // The FLAT tree, exactly as the block path does — a shadow host that is also a flex or
             // grid container must lay out its shadow content, not its light children.
@@ -457,6 +476,25 @@ fn flex_items(
     let mut out = Vec::new();
     for c in dom.flat_children(node) {
         if !dom.is_element(c) {
+            // **ANONYMOUS FLEX/GRID ITEMS** (Flexbox §4, Grid §6). Text sitting DIRECTLY inside a
+            // flex or grid container is not stray content to be skipped — each contiguous run of it
+            // is wrapped in an anonymous block-level item. Filtering to elements dropped that text
+            // out of layout entirely: `<a style="display:flex">Recent changes</a>` (Wikipedia's
+            // whole navigation, and every icon+label button on the modern web) measured 2×2 px, so
+            // the container collapsed to its longest WORD and every label wrapped.
+            //
+            // The text node itself is the item. That works because its computed style is
+            // `inherit_from(parent)` — every non-inherited property is already at its initial value,
+            // which is exactly the anonymous box's contract — and `map_display` sends `inline`
+            // through as a Manuk-measured block leaf.
+            //
+            // White-space-only runs are NOT wrapped (the spec says so explicitly); otherwise the
+            // newline between two flex children would become a third item and take up a slot.
+            if matches!(dom.data(c), manuk_dom::NodeData::Text(t) if !t.trim().is_empty())
+                && styles.contains_key(&c)
+            {
+                out.push(c);
+            }
             continue;
         }
         match styles.get(&c).map(|s| s.display) {

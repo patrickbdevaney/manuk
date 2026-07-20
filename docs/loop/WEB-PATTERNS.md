@@ -1854,3 +1854,25 @@ not 1.
 **The trap:** the rule is `round(ascent + descent + gap)`. Rounding each term separately is equally
 plausible, agrees with Chrome on DejaVu and Noto, and is wrong on Liberation — the face we ship. A
 gate built on the wrong face passes the broken implementation.
+
+## Icon-plus-label buttons and text-only flex boxes (tick 270)
+
+**Pattern:** `display:flex` on an element whose content is (or ends in) a bare text run —
+`<a class="nav-link" style="display:flex">Recent changes</a>`, `<button><svg/>Save</button>`,
+`<div class="chip">Draft</div>`. This is the default shape of every nav item, toolbar button, badge,
+menu row and tab in every component library shipped in the last decade; a flex box with an icon
+element and an unwrapped label beside it is the single most common small layout on the modern web.
+
+**The class this unlocks:** those labels existing at all. The text was not misplaced — it generated
+**no box**, so it never sized its container and never took part in layout.
+
+**Why it reads as a vertical bug.** The container shrink-to-fits to whatever content survives, which
+is the icon or the longest remaining word, so the visible symptom is not a missing label but a
+**wrapped** one: every row silently doubles in height and everything below it drifts down. The
+fidelity sweep reports that as `mdx=0 mdy=N` — "vertical drift" — and a median offset cannot say that
+the cause is a width. Per-element boxes could, and did.
+
+**The trap, and it cost half the tick:** the obvious fix (use the text node as the item, read its
+style) PASSED the unit gate while the live page was unchanged, because the two cascades store
+different things on a text node — `inherit_from(parent)` vs a full clone of the parent's style. A
+gate that exercises one cascade cannot see a divergence between two.

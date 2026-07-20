@@ -12090,3 +12090,57 @@ gate-proven against real Chrome and moved the tracked number by ZERO.** Both are
 fixes and I am not claiming otherwise — but if the instrument cannot see them, it cannot steer the
 phase either, which is the same concern the observer already raised in flagging the id-based probe
 re-key as "the gating fix FOR THE GATE ITSELF". `scripts/` is observer-owned; flagging, not touching.
+
+## Tick 270 — the text that was never laid out
+
+TICK SHAPE: board re-read at tick start. No new observer steer since 267, so the PLACEMENT mandate
+stands and population (1) NEAR-MISS is still the named priority. Took it by INSTRUMENTING rather
+than theorising: added a temporary env-gated per-element box dump to the fidelity tool
+(`MANUK_FID_DUMP=1`, reverted from a cp snapshot before landing — never `git checkout`, see
+[[probe-harness-git-checkout-wipes-tick]]) so I could read Chrome-vs-Manuk geometry per id instead of
+one median.
+
+**WHAT THE DUMP SHOWED, AND WHY THE MEDIAN HID IT.** On wikipedia mdx=0/mdy=45 reads as "vertical
+drift". Per element it is not: the sidebar nav CONTAINERS are ~half Chrome's width (93 vs 186), so
+every label wraps to two lines — `ch=28` becomes `mh=44` — and the accumulated +16px per item IS the
+vertical number. **A width bug presenting as a vertical-placement statistic.** mdx=0 is not evidence
+that horizontal sizing is fine; it is the median of mostly-fine elements.
+
+**THE BUG, FOUND BY BISECTING A LOCAL REPRO.** Wikipedia's dropdown is `width:max-content`. Chased
+that with four probes; `max-content`, `max-width` clamping, `overflow`, `height:0` and flex-row
+max-content all measured **Chrome-exact**, so each hypothesis died cheaply. The one that survived:
+**bare text directly inside a flex container is DROPPED FROM LAYOUT ENTIRELY.** `flex_items` filtered
+children to elements, so `<div style="display:flex">Recent changes</div>` measured **2×2 against
+Chrome's 154×21**, and `<i>*</i>Recent changes` measured **8 against 160** — the element item laid
+out, so a box existed and looked plausible with the label gone. Flexbox §4: each contiguous child
+text run is an anonymous block-level item. Now exact on all four shapes, 100% placement.
+
+**THE HALF OF THIS TICK THAT WAS NOT THE FIX.** The obvious implementation — use the text node as the
+item and read its style — passed the unit gate and CHANGED NOTHING on the real page, because
+**the two cascades store different things on a text node**: `MinimalCascade` stores
+`inherit_from(parent)`, Stylo stores a full CLONE of the parent's style. Under Stylo that clone says
+`display:flex`, so the anonymous item was treated as a flex CONTAINER, recursed into a text node's
+empty child list, and collapsed to zero — the same bug wearing a different hat. It would also have
+re-applied the parent's padding/background, and sent `max_content_width` into unbounded recursion via
+the taffy leaf measure. Fix: SYNTHESISE the anonymous-box contract at the three seams instead of
+trusting either cascade; take only genuinely-inherited properties (visibility, folded opacity, font,
+text-align) off the node, because those the cascades agree on. [[two-cascades-stale-source-of-truth]]
+predicted this exact shape. **The unit gate passed while the engine was still broken on the live
+path** — a gate built on one cascade cannot see a divergence between two.
+
+**THE HONEST RESULT: THIS DID NOT MOVE WIKIPEDIA.** Post-fix sweep row is unchanged (7.2% / mdy=45),
+and I checked why rather than filing it under sweep insensitivity again: **Vector wraps every nav
+label in a `<span>`**, so no anonymous item is involved and my diagnosis of THAT page was simply
+wrong. The 93-vs-186 sidebar narrowing is a separate, still-open cause. The fix is real, general and
+Chrome-verified; it is not the near-miss root cause I went looking for, and the two claims are
+recorded separately on purpose.
+
+Note for the observer: unlike ticks 268/269, this tick has a live-path measurement that DID move
+(the probe went from 2px to Chrome-exact on the Stylo path), so it is evidence the sweep re-renders
+and the earlier insensitivity is about what those two fixes touched, not a stale binary.
+
+GATE: `bare_text_becomes_an_anonymous_flex_item` (manuk-layout). Proven RED on the pre-fix code —
+"got width 0". Three shapes: bare / icon+label / white-space-only-must-NOT-become-an-item.
+NO REGRESSION: manuk-layout 78/78.
+
+WIKI: docs/wiki/box-layout.md

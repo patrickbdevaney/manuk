@@ -894,3 +894,45 @@ testing `overflowY`/`overflowX` for `auto|scroll`. Dropdowns, modals, virtualise
 scroll-into-view all do it. If the property reads `undefined` the walk silently matches nothing and
 falls through to the document — the popup anchors to the viewport instead of its container, and the
 DOM looks perfectly fine.
+
+## Bare text inside a flex/grid container is an ITEM, and filtering children to elements deletes it
+
+`flex_items` collected only elements, so a text run sitting directly inside `display:flex` never
+became a box. Not mispositioned — **absent**. Measured against Chrome:
+`<div style="display:flex;width:max-content">Recent changes</div>` is **154×21 in Chrome and was
+2×2 here**, and the icon+label form (`<i>*</i>Recent changes`) came back **8px wide against Chrome's
+160** — an element item laid out, so a box existed and looked plausible while the label was gone.
+
+Flexbox §4 / Grid §6: each contiguous run of child text is wrapped in an **anonymous block-level
+item**. White-space-only runs are not (otherwise the newline between two children takes a slot).
+
+**The visible symptom is not a missing label — it is a wrapped one.** A shrink-to-fit container
+whose text is dropped collapses to the widest remaining thing, so every sibling label re-wraps to two
+lines and each one silently doubles in height. The page below it drifts. That is why this reads as a
+vertical-placement bug and gets investigated as font metrics.
+
+### The item's style cannot be read off the text node — THE TWO CASCADES DISAGREE
+
+The text node itself serves as the item (no synthetic node needed), but its *stored* style is not
+usable, and which way it is wrong depends on which cascade ran:
+
+| cascade | what a text node holds |
+|---|---|
+| `MinimalCascade` | `inherit_from(parent)` — non-inherited props already at initial values |
+| Stylo (`cascade_via_stylo`) | a **full clone of the parent's computed style** |
+
+Under Stylo the clone carries `display:flex`, so the anonymous item is taken for a flex *container*,
+recurses into a text node's empty child list, and collapses to zero — the original bug wearing a
+different hat — besides re-applying the parent's width, padding and background. It also makes
+`max_content_width` route a text node into the taffy path, whose leaf measure lands back in
+`max_content_width`: **unbounded recursion, not a wrong number**.
+
+So the anonymous-box contract is *synthesised* at the three seams (taffy style, max-content, box
+extraction) rather than read from either cascade. Only genuinely inherited properties —
+`visibility`, folded `opacity`, font, `text-align` — are taken from the node, because those two
+cascades do agree there. Cf. [[two-cascades-stale-source-of-truth]]: the fix that trusts one
+cascade's representation is the fix that breaks when the other one runs.
+
+**Honest scope.** This is a real, Chrome-exact fix (100% placement on the probe, all four shapes),
+and it did **not** move Wikipedia — whose sidebar labels are wrapped in `<span>`s, so no anonymous
+item is involved. The sidebar's 93px-vs-186px narrowing is a separate, still-open cause.
