@@ -12473,3 +12473,69 @@ in-flow box is 139.6") and `abspos_intrinsic_height_with_inset_zero_sizes_to_con
 NO REGRESSION: manuk-layout 80/80.
 
 WIKI: docs/wiki/box-layout.md
+
+## Tick 275 — the browser was disagreeing with itself about media queries (2026-07-20)
+
+Selected: found while landing tick 273. Fixing the `@media` cascade meant reading how media queries
+are evaluated, and there turned out to be **a second, independent evaluator in the JS prelude** —
+its own feature table, no `not`, no `only`, no range syntax, and `default: return true` for anything
+it did not recognise.
+
+The CSS side answers `false` for an unknown feature, per CSS's own error handling. **The two
+defaults were exact opposites**, so every feature the prelude had not heard of was a *guaranteed*
+disagreement: `matchMedia('(hover: none)')` returned `true` while `@media (hover: none)` did not
+apply. `(width >= 640px)` — modern range syntax — failed the prelude's regex entirely and fell
+through to the same `true`.
+
+**Why that is worse than being wrong.** A browser is allowed to be unusual; it may legitimately
+report no hover or a coarse pointer, and a page can handle that. It is not allowed to disagree with
+itself, and there is nothing a page can do about it. The idiom on the real web is a component
+reading `matchMedia('(max-width: 700px)').matches` to decide whether to mount the mobile tree while
+the stylesheet decides the layout with the same breakpoint. When those disagree the page renders a
+combination no designer ever specified — the desktop grid holding the mobile component, a drawer
+open in JS and off-screen in CSS. Nothing throws, so nothing reports it.
+
+IMPLEMENTED: `manuk_css::media_matches` is now public and `matchMedia` is `__matchMedia`, a host
+binding onto that same function. The prelude's evaluator is deleted, not synchronised. **This is the
+third time a second source of truth for one question has bitten this repo** (`UA_CSS` vs
+`apply_ua_defaults`; the Stylo/MinimalCascade property split found in tick 273; now this), and every
+time it is the second copy that goes stale. Synchronising them is not the fix.
+
+GATE: `matchmedia_and_the_media_cascade_give_the_same_answer` (manuk-page,
+G_MATCH_MEDIA_AGREES) — a **consistency** gate. It does not assert `matchMedia` returns the right
+answer in isolation; it styles six elements with six queries, asks JS about the identical six, and
+asserts the two agree. Proven RED by restoring the prelude's evaluator: `agreeC` (`(hover: none)`)
+flips while every width claim stays green — which is exactly why a gate testing only widths could
+never have caught this. A hand-written second evaluator always gets the widths right.
+
+### The same disagreement, one layer up — and the two assertions that encoded it
+
+Wiring the cascade's evaluator in immediately turned the JS conformance suite RED, and the failure
+was the more interesting half of the tick. The prelude opened with a **hardcoded**
+`var VW = 1280, VH = 720;`, so `window.innerWidth` answered 1280 on a page laid out at any other
+width. A responsive SPA sizing a canvas, a virtualised list or a chart off `innerWidth` drew it for
+a viewport the user does not have.
+
+`__viewportSize()` now reads the same global the cascade resolves `vw`/`vh` and `@media` widths
+against, so `innerWidth`, `matchMedia` and `@media` are three answers from one number.
+
+**Two long-standing conformance assertions were asserting the disagreement**, and both said so in
+their own messages:
+
+* case (4) loaded the page at 800px and asserted `"1280x720x1:…"`.
+* case (12)'s message read *"…at 1280px wide"* while loading the page at **800**. That expectation
+  is only satisfiable if `matchMedia` ignores the real viewport — the exact bug.
+
+⚠ Changing a test that a fix turns red is the shape of retuning a gate to land your own tick, so
+neither was edited to the new constant. Case (4) now threads the load width **through** the
+assertion (`format!("{vw4}x720x1:…")` at a deliberately unusual 900px), which is a *stronger* claim
+than either constant and fails if the prelude is ever re-hardcoded. Case (12) was loaded at the
+1280px its own message always claimed, leaving its expected values untouched.
+
+NO REGRESSION: manuk-page (incl. the js_conformance suite) + manuk-js + manuk-css green.
+
+FOLLOW-ON, written down not done: `window.resizeTo`/host resize does not re-run the prelude, so
+`innerWidth` is correct at boot and stale after a resize; `matchMedia` is live (it calls the host
+each time) but has no `change` event. Both need the viewport to be a host-notified value.
+
+WIKI: docs/wiki/css-cascade.md

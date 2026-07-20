@@ -5800,18 +5800,25 @@ mod js_interactive_tests {
             "window.open recorded the URL for the host"
         );
 
-        // (4) Boot-time window/screen metrics exist (SPAs read these or throw at load).
+        // (4) Boot-time window/screen metrics exist (SPAs read these or throw at load) — and
+        //     report the width the page is ACTUALLY laid out at. This asserted a hardcoded
+        //     `1280x720` while the page was loaded at 800px, i.e. it asserted the disagreement:
+        //     an SPA sizing a canvas, a virtualised list or a chart off `innerWidth` drew it for a
+        //     viewport the user does not have. The width is threaded through the assertion now, so
+        //     re-hardcoding the prelude fails it.
         let html4 = r#"<!doctype html><html><body id="b"><script>
             document.getElementById('b').setAttribute('data-m',
                 window.innerWidth + 'x' + screen.height + 'x' + devicePixelRatio +
                 ':' + (typeof matchMedia) + ':' + (typeof requestAnimationFrame));
             </script></body></html>"#;
-        let page4 = Page::load(html4, "https://app.test/", &fonts, 800.0);
+        let vw4 = 900.0_f32;
+        let page4 = Page::load(html4, "https://app.test/", &fonts, vw4);
         let b = manuk_css::query_selector_all(page4.dom(), page4.dom().root(), "#b")[0];
         assert_eq!(
             page4.dom().element(b).and_then(|e| e.attr("data-m")),
-            Some("1280x720x1:function:function"),
-            "window/screen/devicePixelRatio/matchMedia/rAF present at load"
+            Some(format!("{vw4}x720x1:function:function").as_str()),
+            "window/screen/devicePixelRatio/matchMedia/rAF present at load, and innerWidth is the \
+             width the page was laid out at — not a constant"
         );
 
         // (5) fetch(): a load-time request is queued for the host, and resolving it runs the
@@ -6063,7 +6070,9 @@ mod js_interactive_tests {
               matchMedia('(min-width: 1000px)').matches + ',' +
               matchMedia('(min-width: 1000px) and (max-width: 1400px)').matches);
             </script></body></html>"#;
-        let page12 = Page::load(html12, "https://app.test/", &fonts, 800.0);
+        // Loaded at 1280 — this said "at 1280px wide" in its own message while loading at 800,
+        // which is only consistent if matchMedia ignores the real viewport. It must not.
+        let page12 = Page::load(html12, "https://app.test/", &fonts, 1280.0);
         let mm = manuk_css::query_selector_all(page12.dom(), page12.dom().root(), "#mm")[0];
         assert_eq!(
             page12.dom().element(mm).and_then(|e| e.attr("data-r")),

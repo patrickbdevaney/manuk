@@ -1981,3 +1981,23 @@ as vertical drift and sends the next tick after the wrong organ.
 100% Chrome-exact and proves the engine is fine. Keep a `position:static` sibling in the same file —
 the control is what localises the bug to what `position:absolute` does to `max-content`, rather than
 to `max-content` itself.
+
+## `matchMedia` + the stylesheet, deciding the same thing (tick 275)
+
+**Pattern:** a component reads `matchMedia('(max-width: 700px)').matches` to decide whether to mount
+the mobile tree, while the stylesheet decides the layout with the identical breakpoint. Every
+responsive framework ships this shape — it is how a drawer, a nav, a data table and a chart pick
+between two renderings.
+
+**The class this unlocks:** responsive JS branches that agree with the rendered layout. We had two
+media-query evaluators with opposite unknown-feature defaults (`true` in the JS prelude, `false` in
+the cascade), so every feature the prelude's table omitted was a guaranteed disagreement, and
+`not` / `only` / range syntax were unparseable on the JS side.
+
+**Why it hid:** nothing throws. The page renders a combination no designer specified — the desktop
+grid holding the mobile component, a drawer open in JS and off-screen in CSS — and both halves look
+individually reasonable.
+
+**The trap:** testing `matchMedia` for the *right answer* tests `min-width`/`max-width`, which is
+exactly the half a hand-written second evaluator gets right. Test that the two sides give the *same*
+answer, over features nobody thought to put in the second table.

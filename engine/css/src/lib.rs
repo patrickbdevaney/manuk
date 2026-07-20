@@ -1894,6 +1894,13 @@ fn parse_rules_into(
 
 /// Evaluate a `@media` prelude against the current viewport.
 ///
+/// **Public because `window.matchMedia` must give the same answer.** A page that branches in JS on
+/// `matchMedia('(max-width: 700px)')` and in CSS on the identical query and gets two different
+/// answers renders a layout no designer ever specified. There was a second, independent evaluator
+/// in the JS prelude with its own feature table and an `unknown → true` default, i.e. the exact
+/// opposite of this one's `unknown → false`; both are now this function.
+///
+///
 /// A pragmatic subset, and the subset is chosen by what the real web actually ships: a
 /// comma-separated list of ORed queries, each a chain of `and`-ed terms that are either a media
 /// **type** (`screen` / `all` / `print`) or a parenthesised **feature**, optionally negated by a
@@ -1901,7 +1908,7 @@ fn parse_rules_into(
 ///
 /// **An unknown feature evaluates FALSE**, per CSS's own error handling — the safe direction,
 /// because the alternative is applying a dark-scheme or print sheet to a light screen.
-fn media_matches(query: &str) -> bool {
+pub fn media_matches(query: &str) -> bool {
     query
         .split(',')
         .any(|q| !q.trim().is_empty() && media_query_matches(q.trim()))

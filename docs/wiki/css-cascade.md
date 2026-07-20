@@ -573,3 +573,31 @@ Both still drop their contents in the minimal cascade, so the same twelve proper
 inside them. `@supports` is the same defect with a different at-keyword and needs its own condition
 evaluator; `@layer` additionally changes cascade *order*, which is a larger change than descent.
 Written down rather than fixed, because the two need different work.
+
+## One evaluator for `@media` and `matchMedia` (tick 275)
+
+Media queries had **two** implementations: `manuk_css::media_matches` (the cascade) and a
+hand-written one in the JS prelude backing `window.matchMedia`. Their unknown-feature defaults were
+opposites — `false` in CSS, `true` in JS — so every feature the prelude's table omitted was a
+guaranteed disagreement, and the prelude also could not parse `not`, `only`, or range syntax
+(`(width >= 640px)`).
+
+`matchMedia` is now `__matchMedia`, a host binding onto the cascade's own function. The prelude's
+copy is deleted rather than synchronised, for the reason this file has now recorded three times:
+**a second source of truth for one question silently becomes the stale one.**
+
+The gate is a *consistency* gate and that shape is the reusable part: style N elements with N
+queries, ask JS about the identical N, assert the two agree. It cannot be satisfied by a plausible
+stub, it does not encode any particular answer (so it stays green if we later report a coarse
+pointer or a dark scheme), and it fails precisely where a second implementation drifts — on the
+features nobody thought to put in the second table. A gate that asserted specific values would have
+tested `min-width`/`max-width`, which is the half a hand-written evaluator always gets right.
+
+**And the same defect one layer up:** the JS prelude opened with a hardcoded
+`var VW = 1280, VH = 720;`, so `window.innerWidth` reported 1280 on a page laid out at any other
+width. `__viewportSize()` reads the cascade's own global, so `innerWidth`, `matchMedia` and `@media`
+are three answers derived from one number. Two conformance assertions had been encoding the
+disagreement — one loading at 800px and asserting 1280, the other saying "at 1280px wide" in its own
+message while loading at 800. Rather than edit them to the new constants (which is how you retune a
+gate to land your own tick), the load width is now threaded *through* the assertion, which is a
+stronger claim than either constant and fails if the prelude is re-hardcoded.

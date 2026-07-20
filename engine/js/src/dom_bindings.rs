@@ -6745,6 +6745,22 @@ pub unsafe fn install(
     JS_DefineFunction(
         &mut wrap_cx(cx),
         global.handle(),
+        c"__matchMedia".as_ptr(),
+        host_fn!(host_match_media),
+        1,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__viewportSize".as_ptr(),
+        host_fn!(host_viewport_size),
+        0,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
         c"__scrollState".as_ptr(),
         host_fn!(host_scroll_state),
         0,
@@ -9509,7 +9525,12 @@ const WINDOW_PRELUDE: &str = r#"
         // Viewport / screen metrics. Real sites (and every SPA framework) read these at boot and
         // throw a ReferenceError if absent. Honest, ordinary-human desktop values (not spoofed to
         // mimic a specific competitor); a follow-on threads the true window size through.
-        var VW = 1280, VH = 720;
+        // The REAL viewport, from the same global the cascade resolves `vw`/`vh` and `@media`
+        // widths against — not a hardcoded 1280x720. `innerWidth` disagreeing with the width the
+        // page was actually laid out at is the same defect as `matchMedia` disagreeing with
+        // `@media`, one layer up, and it breaks every canvas/virtual-list/chart sized off it.
+        var __vp = String(__viewportSize()).split(',');
+        var VW = parseFloat(__vp[0]) || 1280, VH = parseFloat(__vp[1]) || 720;
         if (typeof g.innerWidth === 'undefined') g.innerWidth = VW;
         if (typeof g.innerHeight === 'undefined') g.innerHeight = VH;
         if (typeof g.outerWidth === 'undefined') g.outerWidth = VW;
@@ -9522,41 +9543,11 @@ const WINDOW_PRELUDE: &str = r#"
             colorDepth: 24, pixelDepth: 24, orientation: { type: 'landscape-primary', angle: 0 }
         };
         if (typeof g.matchMedia === 'undefined') {
-            // Evaluate the common media features against the viewport (VW×VH), mirroring the CSS
-            // @media cascade, so JS responsive branches agree with the rendered layout. Commas =
-            // OR, ` and ` = AND; unknown features don't block (evaluate true).
-            g.__evalMediaFeature = function (f) {
-                f = String(f).trim();
-                var m = f.match(/^\(?\s*([a-z-]+)\s*(?::\s*([^)]+))?\)?$/);
-                if (!m) return f.indexOf('print') < 0;
-                var name = m[1], val = (m[2] || '').trim(), px = parseFloat(val);
-                switch (name) {
-                    case 'min-width': return VW >= px;
-                    case 'max-width': return VW <= px;
-                    case 'min-height': return VH >= px;
-                    case 'max-height': return VH <= px;
-                    case 'width': return VW === px;
-                    case 'height': return VH === px;
-                    case 'orientation': return (val === 'landscape') === (VW >= VH);
-                    case 'prefers-color-scheme': return val === 'light';
-                    case 'prefers-reduced-motion': return val !== 'reduce';
-                    case 'screen': case 'all': return true;
-                    case 'print': return false;
-                    default: return true;
-                }
-            };
-            g.__evalMedia = function (q) {
-                q = String(q).toLowerCase().trim();
-                var ors = q.split(',');
-                for (var i = 0; i < ors.length; i++) {
-                    var parts = ors[i].split(' and '), ok = true;
-                    for (var j = 0; j < parts.length; j++) {
-                        if (!g.__evalMediaFeature(parts[j])) { ok = false; break; }
-                    }
-                    if (ok) return true;
-                }
-                return false;
-            };
+            // ONE evaluator. `__matchMedia` is the host binding onto the SAME Rust function the
+            // @media cascade uses, so a page that branches in JS and styles in CSS on the identical
+            // query cannot get two different answers. The prelude used to carry its own feature
+            // table with `unknown -> true`, the opposite of the cascade's `unknown -> false`.
+            g.__evalMedia = function (q) { return !!__matchMedia(String(q)); };
             g.matchMedia = function (q) {
                 return { matches: g.__evalMedia(q), media: String(q), onchange: null,
                          addListener: function () {}, removeListener: function () {},
@@ -10002,6 +9993,35 @@ unsafe fn host_crypto_random_hex(cx: *mut RawJSContext, argc: u32, vp: *mut Valu
         }
         Err(_) => return_string(cx, vp, ""),
     }
+    true
+}
+
+/// `__viewportSize()` — the real viewport as `"W,H"` in CSS px, read from the same global the
+/// cascade resolves `vw`/`vh` and `@media` widths against.
+///
+/// The prelude used to open with `var VW = 1280, VH = 720;` — **hardcoded**, so `window.innerWidth`
+/// answered 1280 on a page laid out at any other width. A responsive SPA that sizes a canvas, a
+/// virtualised list or a chart off `innerWidth` drew it for a viewport the user does not have.
+unsafe fn host_viewport_size(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let _ = argc;
+    let (w, h) = manuk_css::values::viewport_size();
+    return_string(cx, vp, &format!("{w},{h}"));
+    true
+}
+
+/// `__matchMedia(query)` — evaluate a media query with **the CSS cascade's own evaluator**.
+///
+/// The prelude used to carry a second implementation: its own feature table, no `not`/`only`, no
+/// range syntax, and `default: return true` for anything it did not recognise — the opposite of the
+/// cascade's `unknown → false`. So `matchMedia('(hover: none)')` answered `true` while the identical
+/// `@media (hover: none)` block did not apply, and a page that branches on one and styles with the
+/// other rendered a layout no designer ever specified.
+///
+/// This is the [two-cascades] failure mode the repo has now hit three times: a second source of
+/// truth for the same question silently becomes the stale one. There is one evaluator.
+unsafe fn host_match_media(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let q = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    *vp = BooleanValue(manuk_css::media_matches(&q));
     true
 }
 
