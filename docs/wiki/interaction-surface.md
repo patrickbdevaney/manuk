@@ -1045,3 +1045,68 @@ child-index-within-parent answer makes the second `<optgroup>` restart at 0, so 
 Residue: these are **snapshot Arrays**, not live `HTMLOptionsCollection`s. Indexing and `length`
 work; `item()`, `namedItem()`, `add()`/`remove()` do not exist, and a collection captured before a
 mutation will not reflect it.
+
+## Scroll snap — the carousel stops on a slide (tick 266)
+
+`scroll-snap-type` on a scroll container plus `scroll-snap-align` on its children is what every paged
+feed, story tray, gallery and mobile card row is built from. Measured absent by
+`g_probe_capabilities` (`scrollsnap: no`); now gated by `G_SCROLL_SNAP` and pinned in that probe's
+ratchet list.
+
+### One transformation at one chokepoint
+
+`Page::set_element_scroll` was already the single place a container's offset is decided — it clamps
+the requested position to what there is to scroll and translates the subtree by the delta. Snapping
+is therefore not a scrolling subsystem, it is one function inserted at that point:
+
+```
+let clamped = (left.clamp(0.0, max_x), top.clamp(0.0, max_y));
+let new = self.snap_scroll(node, clamped, (max_x, max_y));
+```
+
+**The ordering against the clamp is the entire correctness question.** Snap first and a candidate
+beyond the scrollable range gets chosen, then clamped back to an unaligned offset — so the container
+**can never reach its own last slide.** That is the classic carousel bug: it is invisible unless a
+test scrolls all the way to the end, and it presents as a content problem rather than a scrolling one.
+
+### Three decisions
+
+**Candidates come from the container's own subtree.** `container.walk(...)` rather than a
+document-wide scan, so one carousel cannot snap to another carousel's slide.
+
+**An empty candidate set must leave the offset alone.** A container declaring `scroll-snap-type` with
+no aligned children has nothing to snap to, and "the nearest of nothing" degrades to pinning it at
+zero — a declared-but-unused property turning into a scroller that cannot scroll. This is carried by
+`nearest()` returning its own input when the candidate list is empty, and **that line is the feature**
+— an explicit `!is_empty()` guard in front of it was dead code (see below).
+
+**`mandatory` vs `proximity` is deliberately not modelled.** `proximity` lets the UA decide, and
+"snap to the nearest point" is conforming for both. Modelling the axis decides whether a carousel
+lands on a slide; modelling the strictness would only change *how often*, and picking a proximity
+threshold would be inventing behaviour rather than implementing it.
+
+### Property plumbing: recovered from MinimalCascade
+
+`scroll-snap-type`/`scroll-snap-align` parse in `MinimalCascade` and are copied into the Stylo path
+in `stylo_engine`, exactly as `text-overflow` and `overflow-wrap` already are — Stylo's servo build
+models them as typed values we do not consume, and the shipping path needs plain keywords. They also
+serialise back through `getComputedStyle` in both camelCase and `getPropertyValue` form, because a
+carousel library reads `scrollSnapType` to decide whether to run its own polyfill.
+
+### The probe that came back green
+
+Four RED probes were run and **one passed** — removing the `!ys.is_empty()` guard changed nothing,
+because `nearest()` already returns its input on an empty set. The guard was **dead code sitting in
+front of the line that actually does the work**, so the assertion aimed at it could not fail. It was
+deleted and the real failure shape probed instead (`unwrap_or(0.0)`, pinning the container at the
+top), which fires. Sixth vacuous-assertion catch in six ticks, and the generalisation past assertions
+is: **a redundant guard hides which line is load-bearing, so the probe aims at the wrong one.**
+
+### Residue — the bigger half is still open
+
+**Only the vertical axis works, and the gate says so by only testing that axis.** A horizontal one
+could not be gated: an inline-block row yields no horizontal scroll range in layout today (`max_x`
+comes back `0`), so `overflow-x: scroll` does not scroll at all. That is a pre-existing
+**scroll-geometry** gap rather than a snap gap — the snap code handles `x` symmetrically and is
+simply unexercised there — but the practical consequence is that **horizontal carousels, the
+commonest kind, still do not scroll.** Fixing `scrollWidth` for inline rows is the next lever here.

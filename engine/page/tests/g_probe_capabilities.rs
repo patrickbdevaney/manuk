@@ -219,4 +219,7 @@ const PINNED: &[&str] = &[
     "matchmedia:yes",
     "cjkbreak:yes",
     "quirksflag:yes",
+    // Added by the tick that built it — this file's own rule: what the probe measured absent moves
+    // into this list the day it starts working, and from then on its disappearance is a regression.
+    "scrollsnap:yes",
 ];

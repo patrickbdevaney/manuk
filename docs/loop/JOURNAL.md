@@ -11878,3 +11878,53 @@ supported configuration, not an afterthought — worth remembering before reachi
 from any non-test path.
 
 WIKI: docs/wiki/media-pipeline.md
+
+## Tick 266 — the carousel stops on a slide (and the FID-SWEEP is running)
+
+TICK SHAPE: **the observer PIVOTED me off media at tick 264** — media went 5%→45%, the class is
+essentially complete, and the new CO-#1 is (1) run FID-SWEEP for real, (2) IndexedDB, (3) Service
+Worker, (4) container queries, (5) AVIF, (6) Web Workers/scroll snap/CSP, (7) the unknowns.
+
+**(1) IS RUNNING.** `scripts/fidelity-sweep.sh --jobs 1 --out .git/fidelity-full` over all 265 corpus
+sites, launched OFF the tick path as instructed. It is slow by design (each site = a Manuk render +
+a live Chromium screenshot). Early rows already reproduce
+[[fidelity-coverage-saturated-placement-real]]: **github.com scores cov=100.0 with place=2.0** — the
+instrument saying, again, that coverage saturates on visibly broken pages and placement is the real
+signal. Results land in `.git/fidelity-full/results.tsv`.
+
+**PROBED BEFORE BUILDING (process rule 2), and two candidates were REJECTED on evidence.**
+*Container queries*: Stylo 0.19 fully implements them (`stylesheets/container_rule.rs`,
+`ContainerCondition`, `container_type` in matching/stylist) and our `stylo_engine` passes no
+`ContainerSizeQuery` at all — the tick-242 shape. But resolving one needs the container's USED inline
+size, i.e. a style↔layout feedback cycle, which is a subsystem and not a bounded tick; parked for a
+dedicated context. *AVIF*: `image` 0.25's AVIF decode is `avif-native` = **dav1d C FFI**, which would
+break the published "pure-Rust image decoders, ZERO C image FFI, the libwebp CVSS-10 class eliminated
+BY CONSTRUCTION" property (process rule 4). Pure-Rust AVIF means re_rav1d — the same lever as AV1
+video, and also not bounded. **Both rejected WITH evidence rather than skipped.**
+
+So: **scroll snap**, measured absent by `g_probe_capabilities` (`scrollsnap: no`).
+
+The implementation is ONE transformation at ONE chokepoint. `Page::set_element_scroll` already clamps
+and applies; snapping is inserted there, **AFTER the clamp** — snapping first picks a point past the
+scrollable range and clamps back to an unaligned offset, so the container can never reach its own
+LAST slide (the classic carousel bug). Candidates come from the CONTAINER's own subtree, so one
+carousel cannot snap to another's slide. Properties parse in MinimalCascade and are **recovered into
+the Stylo path** exactly as `text-overflow`/`overflow-wrap` already are. `mandatory` vs `proximity`
+is deliberately NOT modelled: both conform to "snap to the nearest point", and inventing a proximity
+threshold would be inventing behaviour.
+
+**RED PROBES: FOUR RUN, AND ONE CAME BACK GREEN — in MY OWN code.** Removing the `!ys.is_empty()`
+guard changed nothing, because `nearest()` already returns its input on an empty candidate set. The
+guard was **dead code sitting in front of the line that actually does the work**, and my
+"empty-candidate" assertion could not fail through it. Deleted it and probed the REAL failure shape
+(`unwrap_or(0.0)` — pin the container at the top), which fires. **Sixth vacuous-assertion catch in
+six ticks, and the first one in code I wrote this session.** The lesson generalises past assertions:
+a redundant guard hides which line is load-bearing, so the probe aimed at the wrong one.
+
+RESIDUE, and it is a real limit rather than polish: **only the VERTICAL axis is gated, because a
+horizontal one CANNOT be.** An inline-block row yields NO horizontal scroll range in layout today
+(`max_x` comes back 0), so `#rail { overflow-x: scroll }` does not scroll at all — a pre-existing
+scroll-GEOMETRY gap, not a snap gap. The snap code handles x symmetrically and is untested there.
+**Horizontal carousels — the commonest kind — still do not scroll**, and that is the next lever here.
+
+WIKI: docs/wiki/interaction-surface.md

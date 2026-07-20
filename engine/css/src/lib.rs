@@ -170,6 +170,40 @@ pub enum TextOverflow {
     Ellipsis,
 }
 
+/// `scroll-snap-type` — which axes a scroll container snaps on.
+///
+/// The `mandatory`/`proximity` strictness is deliberately NOT modelled: `proximity` lets the UA
+/// decide, and "snap to the nearest point" is a conforming choice for both. Modelling the axis is
+/// what decides whether a carousel lands on a slide; modelling the strictness would only change
+/// *how often*, and guessing a threshold would be inventing behaviour rather than implementing it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ScrollSnapAxis {
+    #[default]
+    None,
+    X,
+    Y,
+    Both,
+}
+
+impl ScrollSnapAxis {
+    pub fn snaps_x(self) -> bool {
+        matches!(self, ScrollSnapAxis::X | ScrollSnapAxis::Both)
+    }
+    pub fn snaps_y(self) -> bool {
+        matches!(self, ScrollSnapAxis::Y | ScrollSnapAxis::Both)
+    }
+}
+
+/// `scroll-snap-align` — where a child aligns inside the container's snapport when it is snapped to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ScrollSnapAlign {
+    #[default]
+    None,
+    Start,
+    Center,
+    End,
+}
+
 /// One colour stop of a gradient, at a position in `0.0..=1.0` along the gradient line.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ColorStop {
@@ -642,6 +676,9 @@ pub struct ComputedStyle {
     pub white_space: WhiteSpace,
     /// `text-overflow` — `ellipsis` truncates clipped single-line inline content with `…`.
     pub text_overflow: TextOverflow,
+    /// `scroll-snap-type` on a scroll container; `scroll-snap-align` on its children.
+    pub scroll_snap_type: ScrollSnapAxis,
+    pub scroll_snap_align: ScrollSnapAlign,
     /// `text-transform` — rendered casing (inherited); applied in layout, DOM text unchanged.
     pub text_transform: TextTransform,
     /// `overflow-wrap`/`word-wrap` — allow breaking a long word at an arbitrary char (inherited).
@@ -800,6 +837,8 @@ impl ComputedStyle {
             text_align: TextAlign::Left,
             white_space: WhiteSpace::Normal,
             text_overflow: TextOverflow::Clip,
+            scroll_snap_type: ScrollSnapAxis::None,
+            scroll_snap_align: ScrollSnapAlign::None,
             text_transform: TextTransform::None,
             overflow_wrap: OverflowWrap::Normal,
             word_break: WordBreak::Normal,
@@ -2960,6 +2999,31 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 TextOverflow::Ellipsis
             } else {
                 TextOverflow::Clip
+            }
+        }
+        "scroll-snap-type" => {
+            // `x mandatory` / `y proximity` / `both mandatory` / `none`. The axis is the first
+            // token; the strictness token is accepted and ignored (see `ScrollSnapAxis`).
+            let lower = v.trim().to_ascii_lowercase();
+            let axis = lower.split_whitespace().next().unwrap_or("none");
+            s.scroll_snap_type = match axis {
+                "x" | "inline" => ScrollSnapAxis::X,
+                "y" | "block" => ScrollSnapAxis::Y,
+                "both" => ScrollSnapAxis::Both,
+                _ => ScrollSnapAxis::None,
+            }
+        }
+        "scroll-snap-align" => {
+            // One value sets both axes; two set block then inline. We snap on whichever axis the
+            // CONTAINER declares, so a single alignment is all that is consulted — taking the first
+            // token is correct for `start`/`center`/`end` and for the doubled `start start`.
+            let lower = v.trim().to_ascii_lowercase();
+            let first = lower.split_whitespace().next().unwrap_or("none");
+            s.scroll_snap_align = match first {
+                "start" => ScrollSnapAlign::Start,
+                "center" => ScrollSnapAlign::Center,
+                "end" => ScrollSnapAlign::End,
+                _ => ScrollSnapAlign::None,
             }
         }
         "text-transform" => {

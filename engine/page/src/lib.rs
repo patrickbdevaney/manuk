@@ -1704,7 +1704,11 @@ impl Page {
         };
         let max_y = (g[2] - g[4]).max(0.0);
         let max_x = (g[3] - g[5]).max(0.0);
-        let new = (left.clamp(0.0, max_x), top.clamp(0.0, max_y));
+        let clamped = (left.clamp(0.0, max_x), top.clamp(0.0, max_y));
+        // **Snap AFTER clamping, never before.** A snap point past the scrollable range is not
+        // reachable, and snapping first would pick it and then clamp back to an unaligned position —
+        // the container would refuse to reach its own last slide, which is the classic carousel bug.
+        let new = self.snap_scroll(node, clamped, (max_x, max_y));
         let old = self
             .scroll_offsets
             .get(&node)
@@ -1726,6 +1730,104 @@ impl Page {
         }
         self.scroll_offsets.insert(node, new);
         new
+    }
+
+    /// **Land a scroll on the nearest snap point** — `scroll-snap-type` on the container,
+    /// `scroll-snap-align` on the children.
+    ///
+    /// This is the whole of "the carousel stops on a slide". Every paged feed, image gallery, story
+    /// tray and mobile card row on the web is a scroll container plus these two properties, and
+    /// without them a flick lands wherever momentum happened to stop — two half-slides on screen
+    /// and neither readable. The scroll path is a single chokepoint, so this is one transformation
+    /// inserted at it rather than a scrolling subsystem.
+    ///
+    /// **Only children carrying `scroll-snap-align` are candidates**, and a container with none
+    /// keeps the raw offset. That matters: `scroll-snap-type` alone must not pin the container to
+    /// 0, which is what "snap to the nearest of an empty candidate set" degrades to if the empty
+    /// case is not handled — a scroll container that cannot be scrolled at all.
+    fn snap_scroll(&self, node: manuk_dom::NodeId, at: (f32, f32), max: (f32, f32)) -> (f32, f32) {
+        let Some(cs) = self.styles.get(&node) else {
+            return at;
+        };
+        let axis = cs.scroll_snap_type;
+        if axis == manuk_css::ScrollSnapAxis::None {
+            return at;
+        }
+        let Some(container) = self.root_box.find(node) else {
+            return at;
+        };
+        let (cw, ch) = (container.rect.width, container.rect.height);
+        // The children's rects are in the CURRENT (already-scrolled) tree, so their positions are
+        // relative to where the container is scrolled to now. Adding the live offset recovers the
+        // content-space position each snap point actually sits at.
+        let cur = self
+            .scroll_offsets
+            .get(&node)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        let origin = (container.rect.x, container.rect.y);
+
+        let mut xs: Vec<f32> = Vec::new();
+        let mut ys: Vec<f32> = Vec::new();
+        // Walk the CONTAINER's own subtree, not the whole page: a snap point is a descendant of the
+        // scroller, and collecting them document-wide would let one carousel snap to another's slide.
+        let mut candidates: Vec<(manuk_dom::NodeId, manuk_layout::Rect)> = Vec::new();
+        container.walk(&mut |b: &manuk_layout::LayoutBox| {
+            if let Some(n) = b.node {
+                if n != node {
+                    candidates.push((n, b.rect));
+                }
+            }
+        });
+        for (kid, krect) in candidates {
+            let Some(ks) = self.styles.get(&kid) else {
+                continue;
+            };
+            let align = ks.scroll_snap_align;
+            if align == manuk_css::ScrollSnapAlign::None {
+                continue;
+            }
+            let (kx, ky) = (krect.x - origin.0 + cur.0, krect.y - origin.1 + cur.1);
+            let (kw, kh) = (krect.width, krect.height);
+            // The offset that puts this child where the alignment asks inside the snapport.
+            let (sx, sy) = match align {
+                manuk_css::ScrollSnapAlign::Start => (kx, ky),
+                manuk_css::ScrollSnapAlign::Center => (kx - (cw - kw) / 2.0, ky - (ch - kh) / 2.0),
+                manuk_css::ScrollSnapAlign::End => (kx - (cw - kw), ky - (ch - kh)),
+                manuk_css::ScrollSnapAlign::None => continue,
+            };
+            xs.push(sx.clamp(0.0, max.0));
+            ys.push(sy.clamp(0.0, max.1));
+        }
+
+        let nearest = |cands: &[f32], v: f32| -> f32 {
+            cands
+                .iter()
+                .copied()
+                .min_by(|a, b| {
+                    (a - v)
+                        .abs()
+                        .partial_cmp(&(b - v).abs())
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .unwrap_or(v)
+        };
+        // `nearest` returns the INPUT when there are no candidates — which is the whole of "a
+        // container that declares snapping but has no aligned children still scrolls freely". An
+        // `unwrap_or(0.0)` here instead would pin such a container at the top forever, and an
+        // explicit `!is_empty()` guard in front would be dead code hiding which line is load-bearing.
+        (
+            if axis.snaps_x() {
+                nearest(&xs, at.0)
+            } else {
+                at.0
+            },
+            if axis.snaps_y() {
+                nearest(&ys, at.1)
+            } else {
+                at.1
+            },
+        )
     }
 
     /// Apply the scroll offsets to a freshly laid-out tree.

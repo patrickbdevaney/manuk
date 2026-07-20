@@ -330,6 +330,12 @@
   - L1020 · s.options[i] (tick 254): when the empty answer throws too
   - L1030 · The divergence class, reproduced by me in a day
   - L1039 · option.index counts across optgroups
+  - L1049 · Scroll snap — the carousel stops on a slide (tick 266)
+  - L1056 · One transformation at one chokepoint
+  - L1072 · Three decisions
+  - L1088 · Property plumbing: recovered from MinimalCascade
+  - L1096 · The probe that came back green
+  - L1105 · Residue — the bigger half is still open
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -624,4 +630,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-543 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+549 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

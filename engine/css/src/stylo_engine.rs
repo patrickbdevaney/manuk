@@ -515,6 +515,12 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
             // of letting them overflow. Stylo's servo build models these as keyword enums we don't
             // consume directly.
             cs.overflow_wrap = m.overflow_wrap;
+            // `scroll-snap-type`/`scroll-snap-align` recovered from MinimalCascade for the same
+            // reason as the properties above: Stylo's servo build models them as typed values we do
+            // not consume, and the shipping path needs the axis and the alignment as plain keywords
+            // to decide where a scroll lands.
+            cs.scroll_snap_type = m.scroll_snap_type;
+            cs.scroll_snap_align = m.scroll_snap_align;
             cs.word_break = m.word_break;
             // `direction` likewise: the bidi base level decides ORDER, and Stylo's servo build
             // does not surface it in a form we consume, so the shipping path would otherwise

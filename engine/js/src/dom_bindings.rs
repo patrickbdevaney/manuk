@@ -621,6 +621,7 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
           justifyContent:{}, alignItems:{}, alignSelf:{}, flexDirection:{}, flexWrap:{}, \
           flexGrow:{}, flexShrink:{}, flexBasis:{}, rowGap:{}, columnGap:{}, \
           boxSizing:{}, minWidth:{}, maxWidth:{}, minHeight:{}, maxHeight:{}, \
+          scrollSnapType:{}, scrollSnapAlign:{}, \
           getPropertyValue:function(p){{\
           var m={{'background-color':'backgroundColor','font-size':'fontSize',\
           'font-weight':'fontWeight','font-style':'fontStyle','font-family':'fontFamily',\
@@ -634,7 +635,8 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
           'flex-shrink':'flexShrink','flex-basis':'flexBasis','row-gap':'rowGap',\
           'column-gap':'columnGap','box-sizing':'boxSizing','min-width':'minWidth',\
           'max-width':'maxWidth','min-height':'minHeight','max-height':'maxHeight',\
-          'overflow-x':'overflowX','overflow-y':'overflowY'}};\
+          'overflow-x':'overflowX','overflow-y':'overflowY',\
+          'scroll-snap-type':'scrollSnapType','scroll-snap-align':'scrollSnapAlign'}};\
           return this[m[p]||p];}}}})",
         q(&rgba_css(&cs.color)),
         q(&cs.background_color.map(|c| rgba_css(&c)).unwrap_or_else(|| "rgba(0, 0, 0, 0)".into())),
@@ -683,6 +685,21 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         q(&max_dim(&cs.max_width)),
         q(&dim_css(&cs.min_height)),
         q(&max_dim(&cs.max_height)),
+        // Serialised back to the CSS keywords a script wrote, because feature detection reads them
+        // back: a carousel library checks `scrollSnapType` to decide whether to run its own JS
+        // fallback, and an empty string sends it down the polyfill path over a working native snap.
+        q(match cs.scroll_snap_type {
+            manuk_css::ScrollSnapAxis::X => "x mandatory",
+            manuk_css::ScrollSnapAxis::Y => "y mandatory",
+            manuk_css::ScrollSnapAxis::Both => "both mandatory",
+            manuk_css::ScrollSnapAxis::None => "none",
+        }),
+        q(match cs.scroll_snap_align {
+            manuk_css::ScrollSnapAlign::Start => "start",
+            manuk_css::ScrollSnapAlign::Center => "center",
+            manuk_css::ScrollSnapAlign::End => "end",
+            manuk_css::ScrollSnapAlign::None => "none",
+        }),
     )
 }
 

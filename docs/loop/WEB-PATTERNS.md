@@ -1748,3 +1748,30 @@ from "still loading" — so a missing video file hangs the very fallback a missi
 answers for MSE, where appended segments feed no decoder, and a "yes" would wedge every adaptive
 player. `readyState` jumps to HAVE_ENOUGH_DATA rather than climbing through HAVE_METADATA, which is
 honest for a whole-file fetch and becomes wrong when ranged fetching lands.
+
+## The carousel stops on a slide (tick 266)
+
+**Pattern:** `<div style="overflow-y:scroll; scroll-snap-type: y mandatory">` with children carrying
+`scroll-snap-align: start` — plus the feature-detect `if (getComputedStyle(el).scrollSnapType)` that
+a carousel library runs before deciding to load its own JS fallback.
+
+**The class this unlocks:** paged feeds, story trays, image galleries, onboarding walkthroughs,
+full-page scroll-jacking marketing sites, and the card rows every mobile-first layout is built from.
+Without snapping a flick lands wherever momentum stopped — two half-slides on screen and neither
+readable — and the page looks broken in a way no capability count can see, because the scroll
+container itself "works" perfectly.
+
+**Where the bug would have been.** Snapping is one transformation at one chokepoint, and the ordering
+against the clamp is the whole correctness question: snap first and a point past the scrollable range
+gets chosen and then clamped back to an unaligned offset, so **the container can never reach its own
+last slide.** That is the classic carousel bug, it is invisible unless a test scrolls all the way to
+the end, and it looks like a content problem rather than a scrolling one.
+
+**A declared property must not break the undeclared case.** A container with `scroll-snap-type` but
+no aligned children has an empty candidate set, and "snap to the nearest of nothing" degrades to
+pinning it at zero — turning an unused declaration into a scroller that cannot scroll at all.
+
+**Still open, and it is the bigger half:** only the **vertical** axis actually works. An inline-block
+row yields no horizontal scroll range in layout today, so `overflow-x: scroll` does not scroll —
+which means **horizontal carousels, the commonest kind, do not scroll at all, let alone snap.** That
+is a scroll-geometry gap rather than a snap gap, and it is the next lever here.
