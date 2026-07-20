@@ -57,9 +57,33 @@ pub struct LineMetrics {
 }
 
 impl LineMetrics {
-    /// Total line box height (ascent + descent + gap).
+    /// Total line box height for `line-height: normal` — **`ascent + descent + gap`, ROUNDED TO A
+    /// WHOLE PIXEL**, because that is the number Chrome lays out with.
+    ///
+    /// A line box is not a place to be more precise than the engine you are being compared
+    /// against. Keeping the sum fractional made every line ~0.4px taller than Chrome's: invisible
+    /// on one line, and **cumulative down the document**, which is exactly the FID-SWEEP near-miss
+    /// signature (`mdx=0` with `mdy` growing with content density — wikipedia 45px over ~110 line
+    /// boxes).
+    ///
+    /// Verified against real Chrome on three faces. Three is the point: one face cannot distinguish
+    /// this rule from rounding the parts separately.
+    ///
+    /// ```text
+    ///                   ascent  descent    gap     sum    → us   Chrome
+    /// Liberation Sans   14.484    3.391  0.523  18.398      18     18
+    /// DejaVu Sans       14.854    3.773  0      18.627      19     19
+    /// Noto Sans         17.104    4.688  0      21.792      22     22
+    /// ```
+    ///
+    /// **Round the SUM, not the parts.** Rounding each term first gives 14+3=17 for Liberation
+    /// where Chrome says 18 — a rule that looks equally plausible written down and is wrong on the
+    /// very first face. That mistake was made here and caught only by re-measuring after the edit.
+    ///
+    /// Advance WIDTHS are never rounded: Chrome positions glyphs subpixel horizontally, and the
+    /// sweep already measures our horizontal placement as exact (`mdx=0`).
     pub fn height(&self) -> f32 {
-        self.ascent + self.descent + self.line_gap
+        (self.ascent + self.descent + self.line_gap).round()
     }
 }
 
@@ -601,6 +625,8 @@ impl FontContext {
 
     /// Vertical line metrics for `key` at `size` px. Falls back to a reasonable
     /// estimate when no font is available.
+    /// Raw, UNROUNDED face metrics. The rounding that matches Chrome belongs to the **line box**,
+    /// not to these values — see [`LineMetrics::height`] and `text_style` in layout.
     pub fn line_metrics(&self, key: FontKey, size: f32) -> LineMetrics {
         if let Some(font) = self.font(key) {
             if let Some(m) = font.horizontal_line_metrics(size) {

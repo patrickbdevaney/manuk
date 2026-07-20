@@ -1832,3 +1832,25 @@ the one that runs.
 **The trap in fixing it:** a nested list has NO vertical margin in Chrome. Adding `1em` to every list
 fixes the top-level case and newly over-spaces every nested menu and sidebar — including Wikipedia's,
 which is where the divergence was measured. The fix and the trade are one selector apart.
+
+## Every page with more than a screenful of text (tick 269)
+
+**Pattern:** prose. Any element positioned below a block of wrapped text — which is every article,
+every docs page, every feed, every sidebar that follows a paragraph.
+
+**The class this unlocks:** the placement half of the Phase-0 exit gate, on the sites where the
+error grows with content: wikipedia (`mdy=45`), usa.gov (82), airbnb (20), old.reddit (12).
+
+**Why no capability count could see it.** There is no feature here. Font selection was right (both
+engines resolve `sans-serif` to Liberation Sans), shaping was right, advance widths were right. The
+line box was 18.398px where Chrome's is 18 — **0.4px, on every line box on the page.** One line looks
+perfect; a hundred lines is 45px of accumulated drift landing on every element below the text.
+
+**The general shape, worth naming:** a per-instance sub-pixel error is invisible in every local test
+and unbounded in the aggregate. It cannot be found by looking at one element, only by measuring a
+STACK of them against the reference — which is why the 6-line paragraph in the gate is 6 lines and
+not 1.
+
+**The trap:** the rule is `round(ascent + descent + gap)`. Rounding each term separately is equally
+plausible, agrees with Chrome on DejaVu and Noto, and is wrong on Liberation — the face we ship. A
+gate built on the wrong face passes the broken implementation.

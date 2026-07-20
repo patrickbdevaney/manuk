@@ -612,6 +612,11 @@
   - L584 · tiny-skia applies the fill transform to the SHADER as well as the path
   - L599 · RED probes executed, not asserted (process rule 3)
   - L608 · Residue
+  - L614 · The line box is a whole number of pixels (tick 269)
+  - L619 · The measurement
+  - L634 · The rule
+  - L638 · The wrong rule that looks identical
+  - L657 · What is NOT rounded
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -639,4 +644,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-558 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+563 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

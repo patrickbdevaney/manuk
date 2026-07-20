@@ -1065,7 +1065,10 @@ fn text_style(cs: &ComputedStyle, fonts: &FontContext) -> TextStyle {
     // on every page the wrong height, and it is a first-order source of vertical drift.
     let line_height = if cs.line_height_normal {
         let lm = fonts.line_metrics(key, cs.font_size);
-        let h = lm.ascent + lm.descent + lm.line_gap;
+        // `height()` rounds the sum to a whole pixel, which is what Chrome lays out with. The
+        // fractional remainder rides on EVERY line box, so it compounds down the page instead of
+        // staying local — see `LineMetrics::height` for the three-face measurement.
+        let h = lm.height();
         if h > 0.0 {
             h
         } else {

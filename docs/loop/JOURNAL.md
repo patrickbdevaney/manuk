@@ -12019,3 +12019,47 @@ indent assertion fails. The gate was also confirmed RED **before** the fix, not 
 NO REGRESSION: manuk-css + manuk-layout 77/77 green.
 
 WIKI: docs/wiki/css-cascade.md
+
+## Tick 269 — 0.4 pixels, a hundred times
+
+TICK SHAPE: board re-read at tick start — no new observer steer, so the tick-267 PLACEMENT mandate
+stands and population (1) NEAR-MISS is still the named priority.
+
+**FIRST, THE HONEST RESULT FROM TICK 268: IT DID NOT MOVE THE SWEEP.** I re-ran FID-SWEEP on the
+reference category against the post-fix binary. **Wikipedia is unchanged: place 7.2 -> 7.2, mdy 45
+-> 45, same first_divergence.** I checked the obvious escape hatch first and closed it — manuk-wpt
+defaults to `["stylo","spidermonkey"]`, so the fix WAS in the measured path ([[page-gates-need-features]]
+did not apply). Tick 268 is a real, Chrome-verified UA correctness fix and it moved the placement
+number by zero. **That FALSIFIES the "missing margin constant" branch** of the observer's near-miss
+hypothesis, which is worth more than the tick was: it redirects the search rather than leaving the
+branch untested. Recording it here because a fix that did not do what it was aimed at is exactly the
+result the loop is most tempted not to write down.
+
+**THE BRANCH THAT WAS LOAD-BEARING.** One 600px 6-line paragraph at 16px sans-serif: **Chrome 108px,
+Manuk 110.39px.** Nothing was wrong with font SELECTION — our metrics are Liberation Sans to four
+decimals, and Chrome's `sans-serif` measures 18px/line where DejaVu is 19 and Noto 22, so both
+engines had already resolved the same face. Shaping fine, advances fine (mdx=0 said so all along).
+The line box was simply FRACTIONAL: 18.398 vs 18. **0.4px, riding on every line box on the page**,
+compounding downward — ~110 line boxes of a dense article = 45px = wikipedia's exact mdy. Fix:
+`line-height: normal` = round(ascent+descent+lineGap). The paragraph now measures 108.0 exactly.
+
+**I IMPLEMENTED THE WRONG RULE FIRST, AND THE PROBE CAUGHT IT.** My first edit rounded ascent and
+descent SEPARATELY, with a confident doc comment citing Skia's SkScalarRoundToScalar — and I wrote
+"round EACH, then sum, never round the sum" into the source. Re-running the probe after the edit
+showed ascent=14, not 15: `14.484.round()` is 14, and 14+3=17 where Chrome says 18. The reasoning was
+fluent and the arithmetic refuting it was one line. **Round-each agrees with Chrome on DejaVu and
+Noto and is wrong on Liberation — THE FACE WE SHIP** — so a gate built on either of the other two
+would have passed the broken implementation. Hence three faces in the doc table, hence the gate
+asserts `line_gap > 0` up front (a zero-gap face cannot discriminate the two rules AT ALL), and hence
+one assertion exists purely to fail under round-each.
+
+The generalisable shape, and it is why the gate's paragraph is 6 lines and not 1: **a per-instance
+sub-pixel error is invisible in every local test and unbounded in the aggregate.** It can only be
+found by measuring a STACK against the reference.
+
+NOT ROUNDED: advance widths. Chrome positions glyphs subpixel horizontally and our mdx is already 0 —
+rounding widths would trade a fixed vertical error for a new horizontal one.
+
+NO REGRESSION: manuk-text, manuk-css, manuk-layout 77/77 all green.
+
+WIKI: docs/wiki/text-layout.md

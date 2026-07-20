@@ -610,3 +610,52 @@ only asserting "something was painted".
 `putImageData` and `clip()` remain honest no-ops. `ImageBitmap`, `OffscreenCanvas` and `<video>` as
 sources return no `__nodeId` and draw nothing — the shim skips them explicitly rather than throwing.
 Canvas still keeps its own `FontContext`, so `@font-face` webfonts do not resolve inside a canvas.
+
+## The line box is a whole number of pixels (tick 269)
+
+The FID-SWEEP's NEAR-MISS population — `mdx=0`, `mdy` = 12/20/45/82, **growing with text density** —
+had one more branch to test after tick 268, and this is the one that was load-bearing.
+
+### The measurement
+
+One 600px-wide, 6-line paragraph at `font: 16px sans-serif`:
+
+```
+Chrome 108px      Manuk 110.39px      →  0.4px per line box
+```
+
+Nothing was wrong with font *selection*: our metrics are Liberation Sans to four decimals, and
+Chrome's `sans-serif` measures 18px per line where DejaVu gives 19 and Noto 22 — so both engines had
+already picked the same face. Shaping was right, advance widths were right (`mdx=0` said so all
+along). The line box was simply **fractional** — 18.398px against Chrome's 18 — and that remainder
+rides on *every line box on the page*, so it compounds downward instead of staying local. Over the
+~110 line boxes of a dense article it is 45px, and it displaces every element below the text.
+
+### The rule
+
+`line-height: normal` = **`round(ascent + descent + lineGap)`** — the sum rounded, not the parts.
+
+### The wrong rule that looks identical
+
+The first implementation rounded each term separately, with a confident comment citing Skia's
+`SkScalarRoundToScalar`. It is wrong, and one face cannot tell:
+
+```
+                  ascent  descent    gap     sum   round(sum)  Chrome   round-each
+Liberation Sans   14.484    3.391  0.523  18.398          18       18       17  ✗
+DejaVu Sans       14.854    3.773  0      18.627          19       19       19  =
+Noto Sans         17.104    4.688  0      21.792          22       22       22  =
+```
+
+It agrees on two faces of three and is wrong on **the one we actually ship**. It was caught only by
+re-running the probe *after* the edit — the reasoning that motivated it was fluent and the arithmetic
+that refuted it (`14.484.round() == 14`, not 15) took one line. Hence three faces in the table, hence
+the gate asserts on a face whose `line_gap` is non-zero, and hence one assertion exists purely to
+fail under the round-each rule. **A zero-gap face cannot discriminate between the two rules at all**,
+so a gate built on DejaVu or Noto would have passed the broken implementation.
+
+### What is NOT rounded
+
+Advance widths. Chrome positions glyphs subpixel horizontally, and the sweep already measured our
+horizontal placement as exact. Rounding widths would trade a fixed vertical error for a new
+horizontal one — the same shape of trade as the nested-list margin in tick 268.
