@@ -510,6 +510,17 @@ pub fn take_clipboard_writes() -> Vec<String> {
     Vec::new()
 }
 
+/// Seed the OS-clipboard text the page may READ via `navigator.clipboard.readText()`/`read()`. The
+/// host sets this to the real OS-clipboard contents (including text copied in another app) so paste
+/// works. No-op without the JS feature.
+#[cfg(feature = "_sm")]
+pub fn set_host_clipboard(text: String) {
+    dom_bindings::set_host_clipboard(text);
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn set_host_clipboard(_text: String) {}
+
 /// Allocate the next process-unique window id (for ordinary, non-`window.open` tabs), shared
 /// with the id space `window.open` draws from. `0` without the JS feature (unused there).
 #[cfg(feature = "_sm")]

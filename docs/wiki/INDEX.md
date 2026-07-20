@@ -312,57 +312,59 @@
   - L428 · Blur fires change then blur — field-level validation runs on commit (tick 176)
   - L450 · keydown fires with the real key, and preventDefault() suppresses the default (tick 178)
   - L474 · navigator.clipboard.writeText — the "copy" button actually copies (tick 179)
-  - L497 · keyup fires on key release — the settled-value half of the keyboard trio (tick 180)
-  - L517 · A11y node STATES — the agent can confirm its own action (tick 199)
-  - L571 · Click ACTIVATION behaviour — the checkbox actually ticks (tick 208)
-  - L603 · <label> forwards its click to the control (tick 209)
-  - L630 · A disabled control is inert — and a script-free form still works (tick 210)
-  - L665 · Clicking "Sign in" submits the form (tick 211)
-  - L697 · The submitter reaches the server — "Save" vs "Delete" (tick 212)
-  - L729 · Cross-window messaging: e.origin is the security boundary (tick 231)
-  - L745 · Window identity must be seeded BEFORE a document's scripts run
-  - L757 · Two live pages in one process
-  - L762 · Clicking into a frame: by point, not by node (tick 233)
-  - L775 · A dirty-bit guard cannot see a child's own script round
-  - L786 · Body background does not reach the frame's canvas
-  - L793 · File upload: the interaction with no door, and the encoder nobody fed (tick 247)
-  - L804 · The bytes were dropped one layer ABOVE the code that knew how to send them
-  - L822 · Installing a getter with no Element binding to hang it on
-  - L835 · The fourth dead-end wire in six ticks
-  - L843 · The dropzone: a handler that threw, and an opt-in that looks like ceremony (tick 248)
-  - L855 · Why the whole sequence, not just the interesting event
-  - L873 · A gate over a sequential handler chain has coarser resolution
-  - L881 · Mouse actuation (tick 251): the sequence, the verdict, and a ledger that was wrong about itself
-  - L886 · The ledger nominated a phantom as its own top priority
-  - L902 · A double-click is a sequence, not an event
-  - L919 · A right-click's return value IS the capability
-  - L928 · A harness Bar-0 that was not an engine Bar-0
-  - L942 · The pointer sequence (tick 252): the menu that opens on mousedown
-  - L951 · buttons is a mask, button is an index, and they coincide enough to hide the bug
-  - L961 · A label presses down once, on the element under the pointer
-  - L968 · preventDefault() on mousedown is not a click-cancel
-  - L979 · The select that submitted correctly and read as empty (tick 253)
-  - L989 · "Nothing selected" vs "nothing selected yet"
-  - L1000 · Two more traps, both confirmed by probe
-  - L1008 · input then change — and React only hears the first
-  - L1020 · s.options[i] (tick 254): when the empty answer throws too
-  - L1030 · The divergence class, reproduced by me in a day
-  - L1039 · option.index counts across optgroups
-  - L1049 · Scroll snap — the carousel stops on a slide (tick 266)
-  - L1056 · One transformation at one chokepoint
-  - L1072 · Three decisions
-  - L1088 · Property plumbing: recovered from MinimalCascade
-  - L1096 · The probe that came back green
-  - L1105 · Residue — the bigger half is still open
-  - L1114 · Horizontal rows: white-space: nowrap around atomic inlines (tick 267)
-  - L1130 · The mechanism
-  - L1149 · The failure was not "it doesn't scroll"
-  - L1158 · What this unblocked for free
-  - L1165 · The control is the load-bearing assertion
-  - L1174 · visibility:hidden must not be hit-testable (tick 272)
-  - L1187 · Why the a11y tree is the right place to fix it
-  - L1198 · visibility is the one hiding mechanism a descendant can UNDO
-  - L1212 · How it was found
+  - L496 · navigator.clipboard.read/readText — PASTE reads the real OS clipboard (tick 287)
+  - L511 · The teeth G_CLIPBOARD_READ uses
+  - L522 · keyup fires on key release — the settled-value half of the keyboard trio (tick 180)
+  - L542 · A11y node STATES — the agent can confirm its own action (tick 199)
+  - L596 · Click ACTIVATION behaviour — the checkbox actually ticks (tick 208)
+  - L628 · <label> forwards its click to the control (tick 209)
+  - L655 · A disabled control is inert — and a script-free form still works (tick 210)
+  - L690 · Clicking "Sign in" submits the form (tick 211)
+  - L722 · The submitter reaches the server — "Save" vs "Delete" (tick 212)
+  - L754 · Cross-window messaging: e.origin is the security boundary (tick 231)
+  - L770 · Window identity must be seeded BEFORE a document's scripts run
+  - L782 · Two live pages in one process
+  - L787 · Clicking into a frame: by point, not by node (tick 233)
+  - L800 · A dirty-bit guard cannot see a child's own script round
+  - L811 · Body background does not reach the frame's canvas
+  - L818 · File upload: the interaction with no door, and the encoder nobody fed (tick 247)
+  - L829 · The bytes were dropped one layer ABOVE the code that knew how to send them
+  - L847 · Installing a getter with no Element binding to hang it on
+  - L860 · The fourth dead-end wire in six ticks
+  - L868 · The dropzone: a handler that threw, and an opt-in that looks like ceremony (tick 248)
+  - L880 · Why the whole sequence, not just the interesting event
+  - L898 · A gate over a sequential handler chain has coarser resolution
+  - L906 · Mouse actuation (tick 251): the sequence, the verdict, and a ledger that was wrong about itself
+  - L911 · The ledger nominated a phantom as its own top priority
+  - L927 · A double-click is a sequence, not an event
+  - L944 · A right-click's return value IS the capability
+  - L953 · A harness Bar-0 that was not an engine Bar-0
+  - L967 · The pointer sequence (tick 252): the menu that opens on mousedown
+  - L976 · buttons is a mask, button is an index, and they coincide enough to hide the bug
+  - L986 · A label presses down once, on the element under the pointer
+  - L993 · preventDefault() on mousedown is not a click-cancel
+  - L1004 · The select that submitted correctly and read as empty (tick 253)
+  - L1014 · "Nothing selected" vs "nothing selected yet"
+  - L1025 · Two more traps, both confirmed by probe
+  - L1033 · input then change — and React only hears the first
+  - L1045 · s.options[i] (tick 254): when the empty answer throws too
+  - L1055 · The divergence class, reproduced by me in a day
+  - L1064 · option.index counts across optgroups
+  - L1074 · Scroll snap — the carousel stops on a slide (tick 266)
+  - L1081 · One transformation at one chokepoint
+  - L1097 · Three decisions
+  - L1113 · Property plumbing: recovered from MinimalCascade
+  - L1121 · The probe that came back green
+  - L1130 · Residue — the bigger half is still open
+  - L1139 · Horizontal rows: white-space: nowrap around atomic inlines (tick 267)
+  - L1155 · The mechanism
+  - L1174 · The failure was not "it doesn't scroll"
+  - L1183 · What this unblocked for free
+  - L1190 · The control is the load-bearing assertion
+  - L1199 · visibility:hidden must not be hit-testable (tick 272)
+  - L1212 · Why the a11y tree is the right place to fix it
+  - L1223 · visibility is the one hiding mechanism a descendant can UNDO
+  - L1237 · How it was found
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -707,4 +709,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-622 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+624 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

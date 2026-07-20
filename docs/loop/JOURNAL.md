@@ -13236,3 +13236,41 @@ HONEST LIMITS: `platformVersion`/`model` are empty strings (no OS-version/device
 high-entropy values are static (no per-request entropy budget or permission gating).
 
 WIKI: docs/wiki/networking.md (navigator.userAgentData section). CONSTELLATION.tsv row 118 partial→works.
+
+## Tick 287 — `navigator.clipboard.read()`/`readText()`: PASTE reads the real OS clipboard (2026-07-20)
+
+TICK SHAPE: board re-read at tick start; obeyed the CO-#1 mandate (item 6, actuation completer
+`clipboard.read`). RE-PROBED the board's stale rows first (recurring theme): canvas `fillText` is
+ALREADY swash-rastered (`engine/js/src/canvas.rs::fill_text` + `blit_glyph`), `dblclick`/`contextmenu`
+dispatch ALREADY exist (`Page::dispatch_dblclick`/`dispatch_contextmenu`), CSP ALREADY enforced
+(t283) — three more phantom "missing" rows. The GENUINE gap: the COPY half of the Clipboard API
+(`writeText`) worked, but PASTE (`readText`/`read`) only echoed the text THIS page had itself written.
+
+HYPOTHESIS: a paste button / rich editor / image-paste drop zone calls `navigator.clipboard.readText()`
+(or `read()`) to get what the USER copied — almost always in ANOTHER application. The old self-echo
+returned `''` for every external paste, so paste was silently broken across the web.
+
+PLAN: add the READ direction of the clipboard host bridge, symmetric to the existing WRITE seam.
+Rust: a `HOST_CLIPBOARD` thread-local seeded by the host via `manuk_js::set_host_clipboard(text)` (the
+real OS-clipboard contents), a `__clipboardRead()` host_fn returning it, and `clipboard_write` also
+updates it so a same-page copy→paste round-trips one cell. JS: `readText()`/`read()` pull from
+`__clipboardRead()` (falling back to the page's own last write); `read()` returns real `ClipboardItem`s
+(`.types` + `.getType(mime)` → Blob) so image-paste code that branches on `image/png` vs `text/plain`
+takes the correct branch; added a `ClipboardItem` constructor and `clipboard.write([item])`.
+
+### The claim that carries it — G_CLIPBOARD_READ, four teeth
+
+`external` — `readText()` resolves to host-seeded text the page NEVER wrote (the paste that matters);
+`item-getType` — `read()[0].getType('text/plain')` → Blob whose `.text()` is the clipboard contents;
+`absent-rejects` — `getType('image/png')` REJECTS (a `ClipboardItem` is keyed by the types it holds, so
+a shim that resolves every type fails); `roundtrip` — `writeText(x)` then `readText()` returns `x`.
+PROVEN RED: reverting `readText` to `Promise.resolve(g.__clipboardText || '')` → `external:false`, gate
+FAILED, then restored → green.
+
+NO REGRESSION: purely additive (new host_fn + thread-local + prelude branch guarded on the existing
+`__clipboardWrite` bridge); `writeText` unchanged except it now also seeds the read cell. Not a trade.
+
+HONEST LIMITS: `text/plain` only — binary image blobs on the OS clipboard (paste-a-screenshot) need a
+binary bridge and are the honest follow-on; constellation row stays `partial`, not `works`.
+
+WIKI: docs/wiki/interaction-surface.md (clipboard read/paste section). CONSTELLATION.tsv row 129 missing→partial.

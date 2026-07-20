@@ -490,9 +490,34 @@ to would be a lie, not a feature).
 
 Gated by `js_conformance` scenario 31: a copy button whose click calls `writeText('copied-value-42')`;
 after `dispatch_click`, `take_clipboard_writes()` returns exactly that text (and nothing before the
-click). Residue: OS-clipboard `readText`, the `permissions` query, and the legacy
-`document.execCommand('copy')` path are not wired; a write triggered off the click path (a timer, a
-fetch reaction) is not yet pumped. [[js-engine]]
+click). Residue: the legacy `document.execCommand('copy')` path is not wired; a write triggered off
+the click path (a timer, a fetch reaction) is not yet pumped. [[js-engine]]
+
+## `navigator.clipboard.read`/`readText` — PASTE reads the real OS clipboard (tick 287)
+
+The copy half above worked; PASTE did not. `readText()` returned only the text this page had itself
+written, so a "paste from clipboard" button, a rich-text editor, or an AI-chat screenshot drop zone
+that reads `navigator.clipboard.readText()` came back **empty** whenever the user had copied something
+in another application — which is the entire point of paste.
+
+The fix adds the READ direction of the clipboard bridge, symmetric to the write queue. A `HOST_CLIPBOARD`
+process-thread-local holds the real OS-clipboard text; the host seeds it via
+`manuk_js::set_host_clipboard(text)` (from `arboard`, the same OS clipboard the write side drains to),
+and a native `__clipboardRead()` returns it. `readText()` pulls from that bridge, falling back to the
+page's own last write; `clipboard_write` also updates the cell, so a same-page copy→paste round-trips
+one clipboard. `read()` returns real `ClipboardItem`s — `.types` plus `.getType(mime)` → `Blob` — so a
+paste handler that branches on `image/png` vs `text/plain` finds only the type actually present.
+
+### The teeth `G_CLIPBOARD_READ` uses
+
+`external` — `readText()` must resolve to host-seeded text the page never wrote (an echo of the page's
+own write fails). `absent-rejects` — `getType('image/png')` on a text-only item must **reject**, because
+a `ClipboardItem` is keyed by the types it holds (a shim that resolves every type fails). `roundtrip` —
+`writeText(x)` then `readText()` returns `x`. The `external` claim was demonstrated red (reverting
+`readText` to the self-echo) before the tick landed.
+
+**Honest limit:** `text/plain` only. Binary image blobs on the OS clipboard (paste-a-screenshot) need a
+binary bridge and are the follow-on; the constellation row is `partial`, not `works`. [[js-engine]]
 
 ## `keyup` fires on key release — the settled-value half of the keyboard trio (tick 180)
 

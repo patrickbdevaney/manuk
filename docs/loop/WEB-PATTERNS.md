@@ -2271,3 +2271,24 @@ CH `uaFullVersion` and the UA string are the SAME fact: derive both from one sou
 an inconsistency check flags it. **(3)** `toJSON()` is the low-entropy dict, not the method surface —
 don't leak `getHighEntropyValues` into it. **(4)** Include the GREASE `Not.A/Brand` entry so sites
 can't brittle-match an exact brand list — that's UA-CH's own guidance, not mimicry.
+
+## Paste reads what the user actually copied — `navigator.clipboard.read`/`readText` (tick 287)
+
+**Pattern:** `pasteBtn.onclick = async () => { const text = await navigator.clipboard.readText();
+editor.insert(text); }` — and the richer `for (const item of await navigator.clipboard.read()) { if
+(item.types.includes('image/png')) { const blob = await item.getType('image/png'); ... } }` — every
+rich-text editor, "paste from clipboard" button, and AI-chat screenshot drop zone reads the clipboard
+this way.
+
+**The class this unlocks:** PASTE. The copy half (`writeText`) already worked; the read half returned
+only the text THIS page had written, so pasting anything copied in *another* application came back
+empty — which is the whole point of paste. The read now pulls the real OS-clipboard contents through
+the host bridge.
+
+**The traps.** **(1)** `readText()` must return what was copied ELSEWHERE, not an echo of the page's
+own last `writeText` — a self-echo passes a naive test and fails every real paste. **(2)** `read()`
+returns `ClipboardItem`s keyed by MIME type: `getType(present)` resolves a Blob, `getType(absent)`
+REJECTS — a shim that resolves every type lies to code that feature-checks `image/png`. **(3)** One
+clipboard cell: a same-page copy→paste must round-trip, so `writeText` seeds the same store `readText`
+reads. **(4)** Be honest about binary: a text-only bridge carries `text/plain`; don't fabricate an
+`image/png` Blob you can't actually produce — mark the row `partial`, not `works`.

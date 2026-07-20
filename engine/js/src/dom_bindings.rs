@@ -7152,6 +7152,14 @@ pub unsafe fn install(
     JS_DefineFunction(
         &mut wrap_cx(cx),
         global.handle(),
+        c"__clipboardRead".as_ptr(),
+        host_fn!(clipboard_read),
+        0,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
         c"__historyPush".as_ptr(),
         host_fn!(history_push),
         3,
@@ -10511,15 +10519,53 @@ const WINDOW_PRELUDE: &str = r#"
             };
           } catch (e) {}
         }
-        // `navigator.clipboard.writeText` — the async Clipboard API every "copy" button uses (copy a
-        // code block, a share link, an API key). It was ABSENT, so `navigator.clipboard.writeText(...)`
-        // threw on `undefined` and the button did nothing. `writeText` queues the text for the host to
-        // put on the real OS clipboard and resolves (as the spec's Promise<void>); `readText` resolves
-        // with the last text this page wrote (the OS-clipboard READ is a host-permission follow-on, so
-        // it does not pretend to see what another app copied). Only define it when missing, and only
-        // when the host provided the `__clipboardWrite` bridge.
+        // `navigator.clipboard` — the async Clipboard API. The WRITE half (`writeText`) is what every
+        // "copy" button uses (copy a code block, a share link, an API key); the READ half (`readText`
+        // / `read`) is PASTE — a rich-text editor, a "paste from clipboard" button, an image-paste
+        // drop zone. `writeText` queues the text for the host to put on the real OS clipboard;
+        // `readText`/`read` pull the CURRENT OS-clipboard contents back through the `__clipboardRead`
+        // bridge, so a page pastes what the USER copied in ANOTHER app — not merely what this page
+        // itself last wrote (the old behaviour, which made every external paste come back empty).
+        // `read()` returns `ClipboardItem`s (the shape image-paste code checks: `item.types` +
+        // `item.getType(mime)` → Blob), so a paste handler that branches on `text/plain` vs an image
+        // type takes the right branch. Only define when missing and when the host bridge is present.
         if (!g.navigator.clipboard && typeof g.__clipboardWrite === 'function') {
             g.__clipboardText = '';
+            // The single OS-clipboard cell this page can see: whatever the host last put there
+            // (external copy) OR what this page itself just wrote, whichever is newer. Reading the
+            // host bridge means an external copy is visible; falling back to our own last write keeps
+            // a same-page copy→paste round-trip working even before the host round-trips the write.
+            var __clipRead = function () {
+                var host = '';
+                if (typeof g.__clipboardRead === 'function') {
+                    try { host = String(g.__clipboardRead() || ''); } catch (e) { host = ''; }
+                }
+                return host !== '' ? host : (g.__clipboardText || '');
+            };
+            // `ClipboardItem` — the paste-side container. A real one is keyed by MIME type and hands
+            // back a Blob per type; here every read is `text/plain` (binary image formats on the OS
+            // clipboard are an honest follow-on — see the wiki), but the SHAPE is real so paste code
+            // that does `item.types.includes('image/png')` correctly finds only `text/plain`.
+            if (typeof g.ClipboardItem === 'undefined') {
+                g.ClipboardItem = function ClipboardItem(items, opts) {
+                    this.__items = items || {};
+                    this.types = [];
+                    for (var k in this.__items) {
+                        if (Object.prototype.hasOwnProperty.call(this.__items, k)) { this.types.push(k); }
+                    }
+                    this.presentationStyle = (opts && opts.presentationStyle) || 'unspecified';
+                };
+                g.ClipboardItem.prototype.getType = function (type) {
+                    var v = this.__items[type];
+                    if (v === undefined) {
+                        return Promise.reject(new Error(
+                            "The type '" + type + "' was not found in the ClipboardItem"));
+                    }
+                    // A stored Blob is handed back as-is; a bare string is wrapped as a text/plain Blob.
+                    if (v && v.__blobText !== undefined) { return Promise.resolve(v); }
+                    return Promise.resolve(new g.Blob([String(v)], { type: type }));
+                };
+            }
             g.navigator.clipboard = {
                 writeText: function (t) {
                     t = String(t == null ? '' : t);
@@ -10527,7 +10573,26 @@ const WINDOW_PRELUDE: &str = r#"
                     try { g.__clipboardWrite(t); } catch (e) {}
                     return Promise.resolve();
                 },
-                readText: function () { return Promise.resolve(g.__clipboardText || ''); }
+                readText: function () { return Promise.resolve(__clipRead()); },
+                read: function () {
+                    var text = __clipRead();
+                    var item = new g.ClipboardItem({ 'text/plain': new g.Blob([text], { type: 'text/plain' }) });
+                    return Promise.resolve([item]);
+                },
+                write: function (items) {
+                    // `write([ClipboardItem])` — the rich-write path. We honour the text/plain part
+                    // (all a text OS-clipboard bridge can carry) and resolve; non-text parts are
+                    // accepted without error, matching a browser that simply holds no listener for them.
+                    var self = this;
+                    if (!items || !items.length) { return Promise.resolve(); }
+                    var it = items[0];
+                    if (it && it.types && it.types.indexOf('text/plain') >= 0) {
+                        return it.getType('text/plain').then(function (b) {
+                            return self.writeText(b && b.__blobText !== undefined ? b.__blobText : '');
+                        });
+                    }
+                    return Promise.resolve();
+                }
             };
         }
         // `navigator.sendBeacon(url, data)` — the fire-and-forget POST every analytics, RUM and
@@ -11264,6 +11329,11 @@ thread_local! {
     /// through the host exactly like `window.open`.
     static PENDING_CLIPBOARD: std::cell::RefCell<Vec<String>> =
         const { std::cell::RefCell::new(Vec::new()) };
+    /// The current OS-clipboard text as the page is allowed to SEE it, seeded by the host via
+    /// [`set_host_clipboard`]. This is the READ direction of the clipboard bridge: `readText()` /
+    /// `read()` pull from here, so a page can paste what the user copied in another application.
+    static HOST_CLIPBOARD: std::cell::RefCell<String> =
+        const { std::cell::RefCell::new(String::new()) };
 }
 
 /// Allocate the next process-unique window id (host side, for ordinary tabs).
@@ -11284,6 +11354,13 @@ pub fn take_pending_window_opens() -> Vec<(u64, String)> {
 /// each to the OS clipboard; the last one wins, as a real clipboard holds a single value.
 pub fn take_pending_clipboard_writes() -> Vec<String> {
     PENDING_CLIPBOARD.with(|q| std::mem::take(&mut *q.borrow_mut()))
+}
+
+/// Seed the OS-clipboard text the page is allowed to READ (`navigator.clipboard.readText()`/`read()`).
+/// The host calls this with whatever is currently on the real OS clipboard — including text the user
+/// copied in another application — so paste works. Empty string means an empty clipboard.
+pub fn set_host_clipboard(text: String) {
+    HOST_CLIPBOARD.with(|c| *c.borrow_mut() = text);
 }
 
 /// `postMessage` sends since the last drain, each `(target_win, json, origin, source_win)`.
@@ -11311,8 +11388,19 @@ unsafe fn window_open(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool 
 /// real OS clipboard (a page cannot reach the clipboard directly).
 unsafe fn clipboard_write(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let text = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    // A same-page write is also immediately visible to a same-page read (before the host round-trips
+    // it), matching a real single-cell clipboard: copy then paste in the same page must round-trip.
+    HOST_CLIPBOARD.with(|c| *c.borrow_mut() = text.clone());
     PENDING_CLIPBOARD.with(|q| q.borrow_mut().push(text));
     *vp = UndefinedValue();
+    true
+}
+
+/// `__clipboardRead()` — return the OS-clipboard text the page is allowed to see (seeded by the host
+/// via [`set_host_clipboard`], or the page's own last write). The READ direction of the bridge.
+unsafe fn clipboard_read(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let text = HOST_CLIPBOARD.with(|c| c.borrow().clone());
+    return_string(cx, vp, &text);
     true
 }
 
