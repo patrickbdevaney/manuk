@@ -490,3 +490,86 @@ deleting the rule fails only that assertion; the top-level ones stay green.
 `blockquote` is the horizontal half of the same bug and worth stating precisely: ours said
 `margin: 1em 0`, which does not *omit* the 40px indent — it **zeroes** it. A missing rule and a rule
 that asserts the wrong value look identical in a diff and are not the same defect.
+
+---
+
+## `@media` was skipped, and it took a dozen properties with it (tick 273)
+
+The minimal cascade's parser handled at-rules with one branch: capture `@font-face`, `skip_at_rule`
+everything else. So **every rule inside every `@media` block was deleted at parse time.**
+
+That should have been caught years of ticks ago, and the reason it wasn't is the interesting part.
+
+### The bug and the test that covered it were about disjoint property sets
+
+Under `--features stylo` — the shipping cascade — Stylo re-parses the sheet's own source with its
+own parser and evaluates media queries correctly. So `display`, `width`, `color` and the rest of the
+mainstream properties were **fine inside `@media`**, and `stylo_engine.rs` has a passing
+`media_query_applies_by_viewport_width` test, written against `display` and `width`, that proves it.
+
+But `cascade_via_stylo` ends with a second pass:
+
+```rust
+let minimal = MinimalCascade.cascade(dom, sheets);
+for (node, cs) in map.iter_mut() {
+    cs.visibility        = m.visibility;        // not exposed by Stylo's servo build
+    cs.background_images = m.background_images.clone();
+    cs.mask_image        = m.mask_image.clone();
+    cs.border_style      = m.border_style;
+    cs.text_shadow       = m.text_shadow;
+    cs.object_fit        = m.object_fit;
+    …
+}
+```
+
+Twelve properties Stylo's *servo* build does not expose are recovered from the minimal cascade —
+**the one that had just thrown the `@media` rules away.** The set of properties that failed and the
+set a `@media` test naturally reaches for do not intersect. A green `@media` test sat in the same
+repository as a total `@media` failure, and both were honest.
+
+> **A property recovered from a second engine inherits that engine's bugs, silently and only for
+> that property.** The recovery block is a list of twelve; it should be read as twelve places where
+> the minimal cascade's correctness is load-bearing on the shipping path.
+
+### What it cost
+
+`.vector-dropdown .vector-dropdown-content { visibility: hidden }` — Wikipedia's closed-menu rule,
+and the shape of every dropdown, popover, tooltip and autocomplete panel on the web, because
+`visibility` is how you hide something that must stay animatable — lives inside an `@media` block.
+So every one of those panels computed `visible`, stayed laid out at full size, painted over the page
+and **swallowed clicks on the content underneath**. Tick 272 taught the a11y tree to prune
+`visibility:hidden` boxes; it had nothing to prune, because nothing was ever marked hidden.
+
+It is broader than one property. `Page`'s `wrap_media` deliberately wraps a conditional
+`<link media="(prefers-color-scheme: dark)">` sheet in `@media … { }` so that *the cascade* decides
+whether it applies, rather than that decision being reimplemented in a second place. With `@media`
+skipped, every such sheet lost all twelve properties wholesale — every background image, gradient
+and icon mask it defined.
+
+### The fix, and why it evaluates at cascade time
+
+`parse_rules_into` descends into `@media`, tagging each rule with the stack of enclosing conditions;
+`Rule::media_applies` evaluates them during the cascade. Parse time would have been wrong: sheets
+are parsed before `set_viewport_width` runs, and a resize must re-decide the query without
+reparsing.
+
+The conditions are a `Vec<String>`, not one stitched string, because nesting is conjunction and
+there is no CSS syntax for the conjunction of a media *type* with a feature — `(screen) and
+(min-width: 0)` is not a valid query, a media type cannot be parenthesised.
+
+**Unknown media features evaluate FALSE.** The plausible wrong fix is "descend into `@media` and
+apply what's inside", and it is not less wrong than skipping: it renders a print sheet on screen and
+a dark-scheme sheet on a light display. The gate asserts both directions for exactly that reason —
+`@media print`, `@media (max-width: 100px)` and `prefers-color-scheme: dark` must still not apply,
+and a nested block whose inner query fails must not apply either.
+
+The feature answers (`prefers-color-scheme: light`, `hover`, `pointer: fine`, `scripting: enabled`)
+must agree with what `window.matchMedia` tells the page. A browser is allowed to be unusual; it is
+not allowed to disagree with itself.
+
+### Still skipped: `@supports` and `@layer`
+
+Both still drop their contents in the minimal cascade, so the same twelve properties are still lost
+inside them. `@supports` is the same defect with a different at-keyword and needs its own condition
+evaluator; `@layer` additionally changes cascade *order*, which is a larger change than descent.
+Written down rather than fixed, because the two need different work.

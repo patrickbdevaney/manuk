@@ -1386,7 +1386,7 @@ fn run_hittest_cmd(args: &[String], fonts: &FontContext) {
         })
         .collect();
 
-    let (mut hit, mut no_box, mut miss) = (0usize, 0usize, 0usize);
+    let (mut hit, mut no_box, mut miss, mut invisible) = (0usize, 0usize, 0usize, 0usize);
     let mut misses: Vec<String> = Vec::new();
     for &a in &links {
         let Some(r) = rects.get(&a) else {
@@ -1395,6 +1395,27 @@ fn run_hittest_cmd(args: &[String], fonts: &FontContext) {
         };
         if r.width <= 0.0 || r.height <= 0.0 {
             no_box += 1;
+            continue;
+        }
+        // **A link inside a `visibility:hidden` subtree is not a link the user can click** — in
+        // this browser or any other. Chrome lays these out at full size and neither paints nor
+        // hit-tests them; measured on the G6 page itself via CDP, `Main page` / `Contents` /
+        // `Learn to edit` / `Community portal` / `Recent changes` all compute
+        // `visibility:hidden` under `.vector-dropdown-content`, are laid out at 185x28, and
+        // `document.elementFromPoint` at their own centre does not return them. 25 links on that
+        // page are in that state, because that is how the entire web hides a closed dropdown.
+        //
+        // Counting them as misses inverts the gate: it scores a browser HIGHER for wrongly
+        // hit-testing an invisible overlay. The exclusion is deliberately narrow — only
+        // `visibility`, only from the cascade, and the count is REPORTED, never silently dropped,
+        // so a sudden jump in it is as visible as a jump in the miss count. A visible link the
+        // browser cannot find is still a miss, which is the property the gate exists for.
+        let hidden_by_style = std::iter::successors(Some(a), |&n| dom.parent(n)).any(|n| {
+            page.styles_of(n)
+                .is_some_and(|s| s.visibility != manuk_css::Visibility::Visible)
+        });
+        if hidden_by_style {
+            invisible += 1;
             continue;
         }
         let (cx, cy) = (r.x + r.width / 2.0, r.y + r.height / 2.0);
@@ -1435,6 +1456,7 @@ fn run_hittest_cmd(args: &[String], fonts: &FontContext) {
     println!("  clickable (found):  {hit}");
     println!("  MISSED (unclickable): {miss}");
     println!("  no box at all:      {no_box}");
+    println!("  hidden (visibility — correctly unclickable, as in Chrome): {invisible}");
     for m in &misses {
         println!("{m}");
     }

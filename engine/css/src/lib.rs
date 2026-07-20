@@ -1582,6 +1582,21 @@ struct Declaration {
 struct Rule {
     selectors: Vec<Selector>,
     declarations: Vec<Declaration>,
+    /// The `@media` conditions this rule is nested inside, outermost first — evaluated at
+    /// **cascade** time, not parse time, so a resize re-decides them. Empty = unconditional.
+    ///
+    /// A list rather than one string because nesting is *conjunction*, and stitching two
+    /// preludes into one string would have to invent a syntax CSS does not have (a media type
+    /// cannot be parenthesised, so `(screen) and (min-width:0)` is not a valid query).
+    media: Vec<String>,
+}
+
+impl Rule {
+    /// Do every enclosing `@media` condition hold right now? Evaluated per cascade, so a
+    /// viewport change re-decides it without reparsing.
+    fn media_applies(&self) -> bool {
+        self.media.iter().all(|q| media_matches(q))
+    }
 }
 
 /// An `@font-face` rule: the family name it defines and its candidate source URLs.
@@ -1691,6 +1706,9 @@ impl Stylesheet {
     ) -> usize {
         let mut winners: Vec<(u32, usize, &Declaration)> = Vec::new();
         for (order, rule) in self.rules.iter().enumerate() {
+            if !rule.media_applies() {
+                continue;
+            }
             for sel in &rule.selectors {
                 if !sel.has_relative() {
                     continue;
@@ -1778,30 +1796,67 @@ impl Stylesheet {
         let src = strip_comments(src);
         let mut rules = Vec::new();
         let mut font_faces = Vec::new();
-        let bytes = src.as_bytes();
-        let mut i = 0;
-        while i < bytes.len() {
-            while i < bytes.len() && bytes[i].is_ascii_whitespace() {
-                i += 1;
-            }
-            if i >= bytes.len() {
-                break;
-            }
-            // @-rules: capture @font-face (for web fonts); skip the rest of the subset.
-            if bytes[i] == b'@' {
-                let end = skip_at_rule(&src, i);
-                let rest = &src[i..];
-                if rest.len() >= 10 && rest[..10].eq_ignore_ascii_case("@font-face") {
-                    if let Some(open) = rest.find('{') {
-                        let block = &src[i + open + 1..end.saturating_sub(1)];
-                        if let Some(ff) = parse_font_face_block(block) {
-                            font_faces.push(ff);
-                        }
+        parse_rules_into(&src, &[], &mut rules, &mut font_faces);
+        Stylesheet {
+            rules,
+            source: src,
+            font_faces,
+        }
+    }
+}
+
+/// Parse `src` into `rules`, tagging every rule with `media` (the enclosing `@media`
+/// condition, if any).
+///
+/// **`@media` is DESCENDED INTO, not skipped.** It used to be skipped along with every other
+/// at-rule, which silently deleted every rule inside it. Under the Stylo cascade that was
+/// invisible for most properties — Stylo re-parses the source itself — but a dozen properties
+/// (`visibility`, `background-image`/`-size`/`-position`, `mask-image`, `border-style`,
+/// `text-shadow`, `object-fit`/`-position`, `vertical-align`, …) are recovered from *this*
+/// cascade because Stylo's servo build does not expose them. So `@media (max-width: 700px) {
+/// .panel { visibility: hidden } }` computed `visible`, and every conditional `<link
+/// media="…">` sheet — which the page pipeline wraps in `@media` precisely so the cascade
+/// decides — lost the same dozen properties wholesale.
+fn parse_rules_into(
+    src: &str,
+    media: &[String],
+    rules: &mut Vec<Rule>,
+    font_faces: &mut Vec<FontFace>,
+) {
+    let bytes = src.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if i >= bytes.len() {
+            break;
+        }
+        // @-rules: capture @font-face (for web fonts), DESCEND into @media, skip the rest.
+        if bytes[i] == b'@' {
+            let end = skip_at_rule(src, i);
+            let rest = &src[i..];
+            if rest.len() >= 10 && rest[..10].eq_ignore_ascii_case("@font-face") {
+                if let Some(open) = rest.find('{') {
+                    let block = &src[i + open + 1..end.saturating_sub(1)];
+                    if let Some(ff) = parse_font_face_block(block) {
+                        font_faces.push(ff);
                     }
                 }
-                i = end;
-                continue;
+            } else if rest.len() >= 6 && rest[..6].eq_ignore_ascii_case("@media") {
+                if let Some(open) = rest.find('{') {
+                    let prelude = rest[6..open].trim();
+                    let body = &src[i + open + 1..end.saturating_sub(1)];
+                    // Nesting is conjunction: an inner block applies only when both hold.
+                    let mut inner = media.to_vec();
+                    inner.push(prelude.to_string());
+                    parse_rules_into(body, &inner, rules, font_faces);
+                }
             }
+            i = end;
+            continue;
+        }
+        {
             // Read up to the opening brace: the selector list.
             let sel_start = i;
             while i < bytes.len() && bytes[i] != b'{' {
@@ -1830,14 +1885,127 @@ impl Stylesheet {
                 rules.push(Rule {
                     selectors,
                     declarations,
+                    media: media.to_vec(),
                 });
             }
         }
-        Stylesheet {
-            rules,
-            source: src,
-            font_faces,
+    }
+}
+
+/// Evaluate a `@media` prelude against the current viewport.
+///
+/// A pragmatic subset, and the subset is chosen by what the real web actually ships: a
+/// comma-separated list of ORed queries, each a chain of `and`-ed terms that are either a media
+/// **type** (`screen` / `all` / `print`) or a parenthesised **feature**, optionally negated by a
+/// leading `not`.
+///
+/// **An unknown feature evaluates FALSE**, per CSS's own error handling — the safe direction,
+/// because the alternative is applying a dark-scheme or print sheet to a light screen.
+fn media_matches(query: &str) -> bool {
+    query
+        .split(',')
+        .any(|q| !q.trim().is_empty() && media_query_matches(q.trim()))
+}
+
+fn media_query_matches(q: &str) -> bool {
+    let lower = q.trim().to_ascii_lowercase();
+    let (negate, rest) = match lower.strip_prefix("not ") {
+        Some(r) => (true, r.trim().to_string()),
+        None => (false, lower),
+    };
+    // `only screen` is a legacy cloaking prefix for CSS2 UAs; it has no effect on the result.
+    let rest = rest.strip_prefix("only ").map(str::trim).unwrap_or(&rest);
+    let mut result = true;
+    for term in split_media_terms(rest) {
+        let t = term.trim();
+        if t.is_empty() {
+            continue;
         }
+        let ok = if let Some(inner) = t.strip_prefix('(').and_then(|s| s.strip_suffix(')')) {
+            media_feature_matches(inner.trim())
+        } else {
+            // A bare media type.
+            matches!(t, "all" | "screen")
+        };
+        result &= ok;
+    }
+    result != negate
+}
+
+/// Split on top-level ` and ` — parens may contain the word in a value, so track depth.
+fn split_media_terms(q: &str) -> Vec<&str> {
+    let b = q.as_bytes();
+    let (mut out, mut depth, mut start, mut i) = (Vec::new(), 0i32, 0usize, 0usize);
+    while i < b.len() {
+        match b[i] {
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            _ => {}
+        }
+        if depth == 0 && q[i..].starts_with(" and ") {
+            out.push(&q[start..i]);
+            i += 5;
+            start = i;
+            continue;
+        }
+        i += 1;
+    }
+    out.push(&q[start..]);
+    out
+}
+
+fn media_feature_matches(feature: &str) -> bool {
+    let (vw, vh) = crate::values::viewport_size();
+    // Range syntax (`width >= 600px`) is normalised to the `min-`/`max-` prefix form, which is
+    // the one the rest of this function speaks. `<`/`>` map to the same comparison here: the
+    // half-pixel difference between `<` and `<=` never decides a real breakpoint.
+    let (name, value) = if let Some((n, v)) = feature.split_once(">=").or(feature.split_once('>')) {
+        (format!("min-{}", n.trim()), v.trim().to_string())
+    } else if let Some((n, v)) = feature.split_once("<=").or(feature.split_once('<')) {
+        (format!("max-{}", n.trim()), v.trim().to_string())
+    } else if let Some((n, v)) = feature.split_once(':') {
+        (n.trim().to_string(), v.trim().to_string())
+    } else {
+        // A boolean feature: `(hover)`, `(color)` — true when the feature is non-zero for us.
+        (feature.trim().to_string(), String::new())
+    };
+    // Media-query lengths resolve `em`/`rem` against the INITIAL font size, never the element's.
+    let px = |v: &str| -> Option<f32> {
+        let v = v.trim();
+        if let Some(n) = v.strip_suffix("px") {
+            n.trim().parse::<f32>().ok()
+        } else if let Some(n) = v.strip_suffix("rem").or(v.strip_suffix("em")) {
+            n.trim().parse::<f32>().ok().map(|n| n * 16.0)
+        } else {
+            v.parse::<f32>().ok()
+        }
+    };
+    match name.as_str() {
+        "min-width" => px(&value).is_some_and(|v| vw >= v),
+        "max-width" => px(&value).is_some_and(|v| vw <= v),
+        "width" => px(&value).is_some_and(|v| (vw - v).abs() < 0.5),
+        "min-height" => px(&value).is_some_and(|v| vh >= v),
+        "max-height" => px(&value).is_some_and(|v| vh <= v),
+        "height" => px(&value).is_some_and(|v| (vh - v).abs() < 0.5),
+        "orientation" => value == if vw >= vh { "landscape" } else { "portrait" },
+        // We are a real, light-scheme, non-reduced-motion desktop browser with a fine pointer
+        // and hover. These answers must agree with what `window.matchMedia` tells the page —
+        // a browser is allowed to be unusual, it is not allowed to disagree with itself.
+        "prefers-color-scheme" => value == "light",
+        "prefers-reduced-motion" => value.is_empty() || value == "no-preference",
+        "prefers-reduced-transparency"
+        | "prefers-contrast"
+        | "forced-colors"
+        | "inverted-colors" => {
+            value == "no-preference" || value == "none" || value == "no-inverted-colors"
+        }
+        "hover" | "any-hover" => value.is_empty() || value == "hover",
+        "pointer" | "any-pointer" => value.is_empty() || value == "fine",
+        "color" | "any-color" => value.is_empty() || px(&value).is_some_and(|v| v == 8.0),
+        "display-mode" => value == "browser",
+        "scripting" => value == "enabled",
+        // Unknown feature → false. Never guess in the direction of applying a sheet.
+        _ => false,
     }
 }
 
@@ -2474,6 +2642,9 @@ impl MinimalCascade {
         let mut order = 0usize;
         for scoped in sheets {
             for rule in &scoped.sheet.rules {
+                if !rule.media_applies() {
+                    continue;
+                }
                 for sel in &rule.selectors {
                     let entry = IndexedRule {
                         scope: scoped.scope,

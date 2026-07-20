@@ -1954,3 +1954,8 @@ the same repository, both honest.
 renders `@media print` on screen and a dark-scheme sheet on a light display. Descent is only half of
 the fix; the query still has to be evaluated, and an unknown media feature has to evaluate FALSE.
 Gate both directions or the fix is a different bug.
+
+**Measured on landing:** the live Wikipedia Terrier page, `.vector-dropdown-content`, 0/8 panels
+hidden before and 8/8 after — matching Chrome and matching the un-`@media`-wrapped control exactly.
+23 links on that page are inside a `visibility:hidden` subtree once the rule applies; Chrome, asked
+directly over CDP, counts 25 in the same state and cannot hit-test any of them either.
