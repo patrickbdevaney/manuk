@@ -12063,3 +12063,30 @@ rounding widths would trade a fixed vertical error for a new horizontal one.
 NO REGRESSION: manuk-text, manuk-css, manuk-layout 77/77 all green.
 
 WIKI: docs/wiki/text-layout.md
+
+### Addendum to tick 269 (post-landing measurement) — FOR THE OBSERVER: the sweep may be insensitive
+
+Re-ran FID-SWEEP on the reference category against the post-269 binary (`.git/fid-t269` vs
+`.git/fid-t268`). **Every row is byte-identical**: wikipedia 7.2/mdx=1/mdy=45, MDN mdy=1701, w3.org
+110, rfc-editor 590 — unchanged to the digit after a change that moved EVERY line box on EVERY page.
+
+That is implausible as a real result, so I checked the obvious causes rather than assume either
+direction: the binary is fresh (`target/release/manuk-wpt` built after the fix, and
+`manuk-wpt` defaults to `["stylo","spidermonkey"]` so the live cascade is measured), and
+`fidelity-sweep.sh` has no result caching. The engine change itself is not in doubt — the local gate
+measures the same paragraph at 110.39px before and **108.0px after, matching Chrome exactly**.
+
+So one of these is true and I could not distinguish them from the agent side:
+1. `mdy` is a MEDIAN and is dominated by a few large displaced subtrees, so a few-px per-element
+   improvement cannot move it — in which case the median is the wrong statistic for tracking
+   near-miss progress, and a *distribution* (or within-tolerance count) is needed.
+2. The sweep is not re-rendering (something upstream of the render is stale).
+3. These sites set explicit `line-height`, so `normal` never applies on them — plausible, but I
+   could not confirm it: fetching the page to `file://` drops its protocol-relative stylesheets, so
+   the local check measured an unstyled page and proved nothing.
+
+**Two consecutive placement-targeted ticks (268 UA margins, 269 line-box rounding) are locally
+gate-proven against real Chrome and moved the tracked number by ZERO.** Both are genuine correctness
+fixes and I am not claiming otherwise — but if the instrument cannot see them, it cannot steer the
+phase either, which is the same concern the observer already raised in flagging the id-based probe
+re-key as "the gating fix FOR THE GATE ITSELF". `scripts/` is observer-owned; flagging, not touching.
