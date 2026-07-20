@@ -850,3 +850,63 @@ was **split** into `Web Workers (dedicated)` (gated) and `SharedWorker + worker 
 rather than flipped to a green that would have overstated it. `SharedWorker` is left as the honest
 load-failure stub, but one carrying a real `port` object: a shim that fires `error` and *then* TypeErrors
 on `sw.port.postMessage` fails in the wrong place, before the page's own error path can run.
+
+---
+
+## Service Workers — the third side of a capability built over three ticks (tick 281)
+
+Tick 279 built the service worker's **store** (the Cache API). Tick 280 built the **scope** a worker
+script runs in. This is registration, the lifecycle, and `fetch` interception — the side that makes
+the other two do anything on their own.
+
+What a page loses without `navigator.serviceWorker` is not "offline mode". It is the whole PWA
+branch, and on a growing number of sites it is **first render**, because the page awaits
+`navigator.serviceWorker.ready` before it paints. Nothing throws; the page never arrives.
+
+### The lifecycle IS the capability
+
+`register()` → evaluate → `install` → **await every promise passed to `waitUntil`** → `activate` →
+controlling. That await is not ceremony. `install` extending its own lifetime until the cache is
+filled is the entire contract of an offline install step, and an implementation that skips it passes
+every API-shaped assertion — registration resolves, both events fire, in the right order — while
+serving from a cache it has not finished writing. The failure never appears at registration. It
+appears as a **miss on the first offline load**, and it looks like a bug in the site.
+
+`G_SERVICE_WORKER` makes that observable rather than assumed: the worker's install does its cache
+write asynchronously inside `waitUntil`, and records *at activate time* whether the write had
+finished. Dropping the await flips `waituntil` **alone** — `installed`, `activated`, `order`,
+`controller`, `ready` and `intercepted` all still pass. That is the whole reason the claim exists.
+
+### Interception, and the recursion that hangs
+
+The page's `fetch` is wrapped. Every call passes through the active worker's `fetch` handlers first;
+if one calls `respondWith`, that is the response and the network is never touched.
+
+**`networkFetch` is captured before the wrapper is installed.** A service worker calling `fetch`
+inside its own handler — which the cache-first pattern does on every miss — must reach the network,
+not re-enter the wrapper. That is unbounded recursion whose symptom is a hang rather than an error,
+and it is the easiest way to get interception wrong.
+
+Two smaller rules that are load-bearing:
+
+- **`respondWith` is recorded synchronously during dispatch.** A handler that calls it after an
+  `await` has already lost the race in a real browser, so deferring the check here would make us
+  accept code that is broken everywhere else.
+- **A handler that responds with `undefined` throws rather than falling back.** Falling back would
+  hide the page's bug and make a broken cache look like it worked.
+
+A declined request falls through. Proving that offline cannot mean waiting for a response, so the
+gate has the worker record every URL it is asked about and serve the list back on a third URL: the
+assertion is that the handler *ran* for the declined URL and *did not respond*, observed from the
+only side that can see it.
+
+### Why the worker internals are published on one object
+
+`G.__manukWorkerInternals` exposes the dedicated worker's `sourceOf`, `evaluate` and — the reason it
+exists — its **DOM deny-list**. A service worker is a worker scope plus a lifecycle plus
+interception; had it grown its own copy, the deny-list would end up enforced in one place and not the
+other, and the drift would show up as a service worker that can see `document`. The two scopes share
+one array on purpose.
+
+**Not implemented, and absent rather than wrong:** navigation interception, the update/redundant
+lifecycle, `clients` beyond a stub, push, background sync, and scope matching past a path prefix.

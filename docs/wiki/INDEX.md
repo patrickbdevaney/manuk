@@ -413,6 +413,10 @@
   - L796 · The scope is a deny-list over a with, not an allow-list
   - L825 · The clone is taken at POST time
   - L838 · Loading, and what is honestly out of reach
+  - L856 · Service Workers — the third side of a capability built over three ticks (tick 281)
+  - L866 · The lifecycle IS the capability
+  - L880 · Interception, and the recursion that hangs
+  - L903 · Why the worker internals are published on one object
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -688,4 +692,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-603 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+607 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -12838,3 +12838,75 @@ no module workers (`type: 'module'`), no `SharedWorker`. `importScripts` with a 
 `NetworkError` rather than silently no-op'ing.
 
 WIKI: docs/wiki/js-engine.md (Web Workers section)
+
+## Tick 281 — the third side of the service worker, and the two ticks that were inert without it (2026-07-20)
+
+HYPOTHESIS: `navigator.serviceWorker` is the platform-class top hole, and it is now cheap because
+tick 279 built its STORE (the Cache API) and tick 280 built the SCOPE a worker script runs in.
+Neither did anything observable on its own. What a page loses to the absence is not "offline mode"
+but, increasingly, **first render** — a page that awaits `navigator.serviceWorker.ready` before it
+paints never arrives, and nothing throws.
+
+PLAN: registration, `install` -> `activate` with `waitUntil` awaited between them, `controller`,
+`ready`, and `fetch` interception via `respondWith`. Explicitly NOT: navigation interception, the
+update lifecycle, `clients`, push, background sync.
+
+### What landed
+
+`navigator.serviceWorker` with `register`/`getRegistration(s)`/`ready`/`controller`, a
+`ServiceWorkerRegistration` carrying `installing`/`waiting`/`active` + `update`/`unregister`, a
+`ServiceWorkerGlobalScope` (with `skipWaiting` and a `clients` stub), and a wrapper on `fetch` that
+routes every page request through the active worker's handlers first.
+
+### The claim that carries the tick
+
+`waituntil`. `install` extending its own lifetime until the cache is filled is the ENTIRE contract
+of an offline install step, and skipping the await passes every API-shaped assertion — registration
+resolves, both events fire, in the right order — while serving from a half-written cache. So the
+gate's worker does its cache write asynchronously inside `waitUntil` and records, **at activate
+time**, whether it had finished. RED PROBE CONFIRMS IT FLIPS ALONE:
+`waituntil:false` with `registered/activated/controller/ready/installed/order/swnodoc/intercepted/
+passthrough/unregistered` ALL still true. That is the failure this gate exists for, isolated.
+
+### The recursion that hangs rather than errors
+
+`networkFetch` is captured BEFORE the wrapper is installed. The cache-first handler calls `fetch` on
+every miss, so a service worker re-entering its own wrapper recurses without bound — and the symptom
+is a **hang**, not an exception. Easiest way to get interception wrong; avoided by construction.
+
+### Proving pass-through without a network
+
+A declined request must reach the network, but proving that offline cannot mean waiting for a
+response. So the worker records every URL it is asked about and serves the list back on a third URL:
+the assertion is that the handler RAN for `/other.txt` and DID NOT respond to it — the fall-through,
+observed from the only side that can see it.
+
+GATE: `a_service_worker_registers_activates_and_intercepts_fetch` (manuk-page, G_SERVICE_WORKER),
+11 claims.
+
+PROVEN RED THREE WAYS, each isolating a different claim:
+  * `waitUntil` not awaited → `waituntil:false` ALONE, ten claims still green
+  * `respondWith` ignored, always go to network → `intercepted` gone, and the chain DIES there
+    (`passthrough`/`unregistered` never recorded) — which is exactly what an offline page does
+  * `controller` never set → `controller:false` alone; the half-working state where a page's own
+    `if (navigator.serviceWorker.controller)` sends it down the uncontrolled path forever
+
+NO REGRESSION: manuk-page 150 passed / 1 failed — the same
+`tests::hard_wall_detection_and_honest_interstitial` proven pre-existing under tick 280 this session
+(stash the diff, it fails identically on HEAD). Not a trade.
+
+ONE SEAM, NOT TWO COPIES: `G.__manukWorkerInternals` publishes the dedicated worker's `sourceOf`,
+`evaluate` and — the reason it exists — its **DOM deny-list**. Had the service worker grown its own
+copy, the deny-list would end up enforced in one place and not the other, and the drift would show
+as a service worker that can see `document`. This project's dominant bug class is second sources of
+truth; this is one refused up front.
+
+HARNESS NOTE (observer-owned, not touched): one `cargo test` run died with `failed to move dependency
+graph ... /dev/shm/manuk-build/... No such file or directory` — the ramdisk incremental flush landing
+mid-build. A plain retry succeeded. Reported, not fixed.
+
+HONEST LIMITS: no navigation interception (only `fetch()` from page script), no update/redundant
+lifecycle, `clients` is a stub, no push, no background sync, scope matching does not go beyond a path
+prefix, and `skipWaiting` resolves without actually shortening a wait there is no queue for.
+
+WIKI: docs/wiki/js-engine.md (Service Workers section)

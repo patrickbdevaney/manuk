@@ -1861,6 +1861,15 @@ const PRELUDE: &str = r#"
 
           G.Worker = Worker;
 
+          // The internals a Service Worker needs, published on ONE object rather than copied. A
+          // service worker is a worker scope plus a lifecycle plus fetch interception; if it grew
+          // its own `sourceOf`/`evaluate`/deny-list, the two would drift and the DOM deny-list —
+          // the load-bearing half of both — would end up enforced in one place and not the other.
+          G.__manukWorkerInternals = {
+            source: sourceOf, evaluate: evaluateIn, denied: DENIED, clone: clone,
+            fire: fire, listenerAdd: listenerAdd, listenerRemove: listenerRemove
+          };
+
           // `SharedWorker` is NOT this, and must not pretend to be. It is deliberately left as the
           // honest load-failure stub — but one that carries a real `port` object, because a shim
           // that fires `error` and then TypeErrors on `sw.port.postMessage` fails in the wrong
@@ -1881,6 +1890,191 @@ const PRELUDE: &str = r#"
             G.SharedWorker.prototype.addEventListener = listenerAdd;
             G.SharedWorker.prototype.removeEventListener = listenerRemove;
           }
+        })();
+      }
+
+      // **`navigator.serviceWorker`** — registration, the install/activate lifecycle, and `fetch`
+      // interception. Tick 279 built the service worker's STORE (the Cache API) and tick 280 built
+      // the scope a worker script runs in; this is the third side, and it is the one that makes the
+      // other two do anything on their own.
+      //
+      // What a page loses without it is not "offline mode". It is that `navigator.serviceWorker`
+      // being absent takes the *whole* PWA branch off the table — no offline shell, no instant
+      // repeat visit, and on a growing number of sites no first render at all, because the page
+      // waits on `.ready` before it will paint. That wait is the failure shape: nothing throws.
+      //
+      // The bounded slice: registration, `install` -> `activate` with `waitUntil` **awaited between
+      // them**, `controller`, `ready`, and interception of `fetch()` from the page via
+      // `respondWith`. NOT here: navigation interception, update/redundant lifecycle, `clients`,
+      // push, background sync, or scope matching beyond a path prefix.
+      if (typeof globalThis.navigator === 'object' && globalThis.navigator &&
+          typeof globalThis.navigator.serviceWorker === 'undefined' &&
+          globalThis.__manukWorkerInternals) {
+        (function () {
+          var G = globalThis;
+          var W = G.__manukWorkerInternals;
+
+          // Captured BEFORE the wrapper is installed. A service worker that calls `fetch` must
+          // reach the network, not re-enter its own handler — that is an infinite recursion whose
+          // symptom is a hang, and it is the single easiest way to get interception wrong.
+          var networkFetch = G.fetch;
+
+          var active = null;      // the scope of the activated worker, or null
+          var registration = null;
+          var readyResolve = null;
+          var readyPromise = new Promise(function (res) { readyResolve = res; });
+
+          function buildSwScope(url, scopePath) {
+            var scope = Object.create(null);
+            scope.self = scope;
+            scope.globalThis = scope;
+            scope.__ls = {};
+            scope.oninstall = null; scope.onactivate = null; scope.onfetch = null; scope.onmessage = null;
+            // The same deny-list the dedicated worker uses, from the same array — a service worker
+            // is even more emphatically not on the main thread than a dedicated one is.
+            for (var i = 0; i < W.denied.length; i++) { scope[W.denied[i]] = undefined; }
+            scope.addEventListener = W.listenerAdd;
+            scope.removeEventListener = W.listenerRemove;
+            scope.dispatchEvent = function (ev) { W.fire(scope, ev && ev.type, ev || {}); return true; };
+            scope.location = { href: String(url), toString: function () { return String(url); } };
+            scope.fetch = networkFetch;   // see above: NOT the wrapper
+            scope.skipWaiting = function () { return Promise.resolve(); };
+            scope.clients = {
+              claim: function () { return Promise.resolve(); },
+              matchAll: function () { return Promise.resolve([]); },
+              get: function () { return Promise.resolve(undefined); }
+            };
+            return scope;
+          }
+
+          // Dispatch a lifecycle event and return a promise for everything its handlers passed to
+          // `waitUntil`. This is the part that must not be faked: `install` extending its own
+          // lifetime until the cache is filled is the ENTIRE contract of an offline install step.
+          // Fire `activate` without awaiting it and the worker starts serving from a cache it has
+          // not finished writing — which fails as a miss on the first offline load, long after.
+          function dispatchLifecycle(scope, type) {
+            var waits = [];
+            var ev = {
+              type: type, target: scope,
+              waitUntil: function (p) { waits.push(Promise.resolve(p)); }
+            };
+            W.fire(scope, type, ev);
+            return Promise.all(waits);
+          }
+
+          function ServiceWorkerRegistration(scope, url, scopePath) {
+            this.scope = scopePath;
+            this.installing = null;
+            this.waiting = null;
+            this.active = null;
+            this.__scope = scope;
+            this.__url = url;
+          }
+          ServiceWorkerRegistration.prototype.update = function () { return Promise.resolve(this); };
+          ServiceWorkerRegistration.prototype.unregister = function () {
+            if (active === this.__scope) { active = null; sw.controller = null; }
+            this.active = null;
+            return Promise.resolve(true);
+          };
+
+          function register(url, opts) {
+            var u = String(url == null ? '' : url);
+            var scopePath = (opts && opts.scope) ? String(opts.scope) : '/';
+
+            return new Promise(function (resolve, reject) {
+              var boot = function (src) {
+                var scope = buildSwScope(u, scopePath);
+                try {
+                  W.evaluate(scope, src);
+                } catch (e) {
+                  reject(e);
+                  return;
+                }
+                var reg = new ServiceWorkerRegistration(scope, u, scopePath);
+                registration = reg;
+                var worker = { scriptURL: u, state: 'installing', postMessage: function () {} };
+                reg.installing = worker;
+
+                // install -> (await every waitUntil) -> activate -> controlling. The ordering IS
+                // the capability; anything that collapses it passes an API-shaped test and serves
+                // an empty cache in production.
+                dispatchLifecycle(scope, 'install').then(function () {
+                  worker.state = 'installed';
+                  reg.installing = null; reg.waiting = worker;
+                  return dispatchLifecycle(scope, 'activate');
+                }).then(function () {
+                  worker.state = 'activated';
+                  reg.waiting = null; reg.active = worker;
+                  active = scope;
+                  sw.controller = worker;
+                  if (readyResolve) { readyResolve(reg); readyResolve = null; }
+                  resolve(reg);
+                }, reject);
+              };
+
+              var src = W.source(u);
+              if (src != null) { boot(src); return; }
+              if (typeof networkFetch === 'function' && u) {
+                networkFetch(u).then(function (r) {
+                  if (!r || (r.status && r.status >= 400)) { throw new Error('HTTP ' + (r && r.status)); }
+                  return r.text();
+                }).then(boot, reject);
+              } else {
+                reject(new TypeError('could not load service worker script ' + u));
+              }
+            });
+          }
+
+          var sw = {
+            controller: null,
+            register: register,
+            getRegistration: function () { return Promise.resolve(registration || undefined); },
+            getRegistrations: function () { return Promise.resolve(registration ? [registration] : []); },
+            addEventListener: function () {}, removeEventListener: function () {},
+            oncontrollerchange: null, onmessage: null,
+            startMessages: function () {}
+          };
+          Object.defineProperty(sw, 'ready', { get: function () { return readyPromise; } });
+
+          try { G.navigator.serviceWorker = sw; } catch (e) { /* frozen navigator */ }
+
+          // ── Interception. Every `fetch()` from the page passes through the active worker's
+          // `fetch` handlers first; if one calls `respondWith`, that is the response and the
+          // network is never touched.
+          G.fetch = function (url, opts) {
+            if (!active) { return networkFetch.apply(this, arguments); }
+            var ls = (active.__ls && active.__ls['fetch']) || [];
+            var hasHandler = ls.length > 0 || typeof active.onfetch === 'function';
+            if (!hasHandler) { return networkFetch.apply(this, arguments); }
+
+            var responded = null;
+            var request;
+            try {
+              request = (typeof G.Request === 'function' && !(url && url.__isRequest))
+                ? new G.Request(String(url), opts || {})
+                : url;
+            } catch (e) { request = { url: String(url), method: (opts && opts.method) || 'GET' }; }
+
+            var ev = {
+              type: 'fetch', request: request, target: active,
+              // `respondWith` must be recorded SYNCHRONOUSLY during dispatch. A handler that calls
+              // it after an await has already lost the race in a real browser too, so deferring the
+              // check would make us pass code that is broken everywhere else.
+              respondWith: function (r) { responded = Promise.resolve(r); }
+            };
+            W.fire(active, 'fetch', ev);
+
+            if (responded === null) { return networkFetch.apply(this, arguments); }
+            // A handler that responds with `undefined` is a bug in the page, not a reason to
+            // silently fall back — falling back would hide it and make the cache look like it
+            // worked. Surface it the way a browser does.
+            return responded.then(function (r) {
+              if (r === undefined || r === null) {
+                throw new TypeError('ServiceWorker responded with an invalid response');
+              }
+              return r;
+            });
+          };
         })();
       }
 

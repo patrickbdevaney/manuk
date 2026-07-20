@@ -2115,3 +2115,36 @@ on the very next line is the normal shape, not an author error.
 it reported exactly what a browser reports when a worker script cannot load — and it left an entire
 class of the web unusable. "We report this accurately" is not a resting place; it is a description
 of a hole, and the hole is what the checklist should count.
+
+## The offline shell — Service Workers (tick 281)
+
+**Pattern:** `navigator.serviceWorker.register('/sw.js')`, then in the worker
+`self.addEventListener('install', e => e.waitUntil(caches.open(V).then(c => c.addAll(SHELL))))` and
+`self.addEventListener('fetch', e => e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))))`.
+Every PWA, every docs site with an offline mode, every "instant on repeat visit" app, and most
+production React/Vue/Next deployments ship exactly this file.
+
+**The class this unlocks:** the installable web — and, more often than "offline", **first render**.
+A growing number of sites await `navigator.serviceWorker.ready` before painting, so the absence of
+the API did not degrade them to an online-only experience; it stopped them at a blank page.
+
+**Why it hid:** `'serviceWorker' in navigator` is a feature test that does not report a bug when it
+fails. It silently selects a different path — and when the page's chosen path is "wait for ready",
+the different path is *no path at all*. Nothing throws.
+
+**The traps, three of them.** **(1)** `activate` must not run until every promise passed to install's
+`waitUntil` has settled. Skip the await and registration still resolves, both events still fire in
+the right order, and the worker serves from a cache it has not finished writing — a failure that
+surfaces as a miss on the **first offline load**, long afterwards, and reads as a bug in the site.
+**(2)** The network `fetch` must be captured **before** the interception wrapper is installed. The
+cache-first handler calls `fetch` on every miss, and a worker that re-enters its own wrapper recurses
+without bound; the symptom is a hang, not an error. **(3)** `respondWith` must be recorded
+synchronously during dispatch — a handler calling it after an `await` has already lost the race in
+every real browser, so accepting it here would greenlight code that is broken everywhere else.
+
+**And the one that generalises:** this capability took three ticks — the store (279), the scope
+(280), and the lifecycle (281) — and **none of the first two did anything observable on its own**. A
+capability whose pieces are individually inert is not a reason to land them separately without
+saying so; it is a reason for the board to carry a row that says which third is missing. Tick 279
+split its row rather than flipping it for exactly this reason, and that split is what made this tick
+obviously next instead of obviously done.
