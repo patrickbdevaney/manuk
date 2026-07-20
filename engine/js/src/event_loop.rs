@@ -1580,27 +1580,308 @@ const PRELUDE: &str = r#"
         globalThis.BroadcastChannel.prototype.removeEventListener = function () {};
       }
 
-      // **`Worker`** — constructs, then fires `error`, which is what a browser does when the worker
-      // script fails to load. A page that offloads work to a worker takes its main-thread fallback; a
-      // page that gets a `ReferenceError` takes nothing.
-      if (typeof globalThis.Worker === 'undefined') {
-        globalThis.Worker = function Worker(url) {
-          this.__url = String(url || '');
-          this.onmessage = null; this.onerror = null; this.__ls = {};
-          var self = this;
-          setTimeout(function () {
-            var ev = { type: 'error', message: 'workers are not supported', target: self };
-            if (typeof self.onerror === 'function') { try { self.onerror(ev); } catch (e) {} }
-            (self.__ls['error'] || []).forEach(function (f) { try { f.call(self, ev); } catch (e) {} });
-          }, 0);
-        };
-        globalThis.Worker.prototype.postMessage = function () {};
-        globalThis.Worker.prototype.terminate = function () {};
-        globalThis.Worker.prototype.addEventListener = function (t, fn) {
-          (this.__ls[t] = this.__ls[t] || []).push(fn);
-        };
-        globalThis.Worker.prototype.removeEventListener = function () {};
-        globalThis.SharedWorker = globalThis.Worker;
+      // **`Worker`** — the worker script actually RUNS, and messages actually round-trip.
+      //
+      // It used to construct and then immediately fire `error`, which is what a browser does when
+      // the worker script 404s. That was honest, and it was also the end of the road for every page
+      // that does its real work in a worker: the parse never happens, the search index never
+      // builds, the diff never comes back, and the page sits on a spinner forever because its
+      // fallback path is usually "show the error" rather than "do it on the main thread".
+      //
+      // What runs here is a **dedicated worker in its own scope, on this thread**. The script is
+      // evaluated inside a `with (scope)` whose scope object has a NULL PROTOTYPE — so no
+      // `Object.prototype` name (`constructor`, `toString`, `valueOf`) silently shadows a global —
+      // and messages cross in both directions as macrotasks carrying a structured clone. The
+      // honest divergence, written down rather than discovered: there is no second thread, so a
+      // worker that spins does not keep the UI responsive. What it buys is that the work COMPLETES
+      // and the answer ARRIVES, which is the difference between a page that loads and one that
+      // does not.
+      //
+      // The scope shadows the DOM-only globals with `undefined` rather than leaving them to fall
+      // through the `with` to the real page globals. That is not tidiness: `typeof document ===
+      // 'undefined'` is the single most common way a shared module decides whether it is running in
+      // a worker, and a worker that can see `document` takes the main-thread branch and then
+      // touches a DOM that must not exist there. Everything NOT on that list falls through on
+      // purpose — `fetch`, `Promise`, `TextDecoder`, `crypto`, even a nested `Worker` — so the
+      // scope stays a deny-list of what a worker must not have, not an ever-stale allow-list of
+      // what it may.
+      if (typeof globalThis.Worker === 'undefined' || globalThis.Worker.__manukErrorStub) {
+        (function () {
+          var G = globalThis;
+
+          // A worker script's source, when we can get it without touching the network. Blob URLs
+          // are how every bundler ships a worker (`new Worker(URL.createObjectURL(new Blob([src])))`)
+          // and `data:` is how small inline ones travel; both resolve synchronously, so the worker
+          // starts in the same turn it was constructed.
+          function sourceOf(url) {
+            var u = String(url);
+            if (u.indexOf('blob:') === 0 && typeof G.__mseLookup === 'function') {
+              var o = G.__mseLookup(u);
+              if (o && typeof o.__blobText === 'string') { return o.__blobText; }
+              if (o && typeof o.__blobText !== 'undefined') { return String(o.__blobText); }
+            }
+            if (u.indexOf('data:') === 0) {
+              var c = u.indexOf(',');
+              if (c >= 0) {
+                var head = u.slice(0, c), body = u.slice(c + 1);
+                if (/;base64/i.test(head)) { return typeof G.atob === 'function' ? G.atob(body) : null; }
+                try { return decodeURIComponent(body); } catch (e) { return body; }
+              }
+            }
+            return null;
+          }
+
+          function clone(v) {
+            if (typeof G.structuredClone === 'function') {
+              try { return G.structuredClone(v); } catch (e) { /* fall through */ }
+            }
+            try { return JSON.parse(JSON.stringify(v)); } catch (e) { return v; }
+          }
+
+          function messageEvent(data) {
+            return { type: 'message', data: data, origin: '', lastEventId: '', source: null, ports: [] };
+          }
+
+          // Fire a DOM-ish event at an object carrying `on<type>` plus an `__ls` listener map.
+          // A listener that throws must not stop the ones after it, exactly as in a real dispatch.
+          function fire(target, type, ev) {
+            ev.target = ev.currentTarget = target;
+            var on = target['on' + type];
+            if (typeof on === 'function') { try { on.call(target, ev); } catch (e) { reportError(target, e); } }
+            var ls = (target.__ls && target.__ls[type]) || [];
+            for (var i = 0; i < ls.length; i++) {
+              try { ls[i].call(target, ev); } catch (e) { reportError(target, e); }
+            }
+          }
+
+          // An uncaught error inside the worker surfaces on the WORKER OBJECT as `error`, because
+          // that is the only place the page can see it. Swallowing it is how a page waits forever.
+          function reportError(target, e) {
+            var w = target.__worker || target;
+            if (!w || !w.__isWorker) { return; }
+            setTimeout(function () {
+              fire(w, 'error', {
+                type: 'error', message: (e && e.message) ? String(e.message) : String(e),
+                filename: w.__url, lineno: 0, colno: 0, error: e
+              });
+            }, 0);
+          }
+
+          function listenerAdd(t, fn) {
+            if (typeof fn !== 'function') { return; }
+            (this.__ls[t] = this.__ls[t] || []).push(fn);
+          }
+          function listenerRemove(t, fn) {
+            var ls = this.__ls[t]; if (!ls) { return; }
+            var i = ls.indexOf(fn); if (i >= 0) { ls.splice(i, 1); }
+          }
+
+          // The globals a worker MUST NOT see. Each one is something a library feature-detects on
+          // to decide "am I on the main thread"; leaving any of them visible makes the answer wrong.
+          var DENIED = [
+            'document', 'window', 'parent', 'top', 'opener', 'frames', 'frameElement',
+            'localStorage', 'sessionStorage', 'history', 'screen', 'alert', 'confirm', 'prompt',
+            'matchMedia', 'getComputedStyle', 'requestAnimationFrame', 'cancelAnimationFrame',
+            'getSelection', 'print', 'scrollTo', 'scrollBy', 'moveTo', 'resizeTo',
+            'HTMLElement', 'Element', 'Node', 'Document', 'Image', 'DOMParser', 'CSS'
+          ];
+
+          function buildScope(worker, url, name) {
+            // Null prototype: a `with` over a plain object resolves `constructor`, `toString` and
+            // every other Object.prototype name to the object, shadowing the real globals inside
+            // the worker script. That is a bug you would find weeks later inside someone's library.
+            var scope = Object.create(null);
+
+            scope.self = scope;
+            scope.globalThis = scope;
+            scope.name = String(name || '');
+            scope.__ls = {};
+            scope.__worker = worker;
+            scope.onmessage = null;
+            scope.onmessageerror = null;
+            scope.onerror = null;
+            scope.location = {
+              href: String(url), origin: (G.location && G.location.origin) || 'null',
+              protocol: (G.location && G.location.protocol) || '', host: (G.location && G.location.host) || '',
+              hostname: (G.location && G.location.hostname) || '', port: '', pathname: String(url),
+              search: '', hash: '', toString: function () { return String(url); }
+            };
+
+            for (var i = 0; i < DENIED.length; i++) { scope[DENIED[i]] = undefined; }
+
+            scope.addEventListener = listenerAdd;
+            scope.removeEventListener = listenerRemove;
+            scope.dispatchEvent = function (ev) { fire(scope, ev && ev.type, ev || {}); return true; };
+
+            // Worker -> page. The clone happens at POST time, not at delivery: mutating the object
+            // after posting must not change what the other side receives, which is the whole
+            // observable point of structured cloning rather than passing the reference.
+            scope.postMessage = function (data) {
+              if (worker.__dead) { return; }
+              var copy = clone(data);
+              setTimeout(function () {
+                if (worker.__dead) { return; }
+                fire(worker, 'message', messageEvent(copy));
+              }, 0);
+            };
+
+            scope.close = function () { worker.__dead = true; };
+
+            // `importScripts` is synchronous by spec and we have no synchronous network. Sources
+            // that resolve without one (blob:, data:, and anything already pulled in by the
+            // pre-scan below) run; anything else throws a NetworkError, which is what a real worker
+            // throws when the import fails — not a silent no-op that leaves the symbol undefined.
+            scope.importScripts = function () {
+              for (var i = 0; i < arguments.length; i++) {
+                var u = String(arguments[i]);
+                var src = (worker.__imports && worker.__imports[u] != null)
+                  ? worker.__imports[u] : sourceOf(u);
+                if (src == null) {
+                  var err = new Error("importScripts: could not load '" + u + "' synchronously");
+                  err.name = 'NetworkError';
+                  throw err;
+                }
+                evaluateIn(scope, src, worker);
+              }
+            };
+
+            return scope;
+          }
+
+          // The one place worker code is evaluated. `with` needs sloppy mode, and a Function body
+          // gets it as long as the body itself does not open with a directive — a `"use strict"` at
+          // the top of the worker script lands INSIDE the with-block, where it is an expression
+          // statement rather than a directive, so a strict worker script does not break the scope.
+          function evaluateIn(scope, src, worker) {
+            var f = Function('__scope', 'with (__scope) {\n' + src + '\n}');
+            f.call(undefined, scope);
+          }
+
+          function Worker(url, options) {
+            if (!(this instanceof Worker)) { throw new TypeError("Failed to construct 'Worker': please use the 'new' operator"); }
+            var worker = this;
+            this.__isWorker = true;
+            this.__url = String(url == null ? '' : url);
+            this.__ls = {};
+            this.__dead = false;
+            this.__ready = false;
+            this.__pending = [];
+            this.__imports = Object.create(null);
+            this.onmessage = null;
+            this.onmessageerror = null;
+            this.onerror = null;
+
+            var name = (options && options.name) || '';
+
+            var boot = function (src) {
+              if (worker.__dead) { return; }
+              var scope = buildScope(worker, worker.__url, name);
+              worker.__scope = scope;
+
+              // Pre-scan for `importScripts('...')` with literal URLs and resolve what we can
+              // BEFORE the script runs, because by the time the call happens it is too late to go
+              // to the network. The common shape — a literal list at the top of the file — works;
+              // a computed URL does not, and says so.
+              var re = /importScripts\s*\(([^)]*)\)/g, m;
+              while ((m = re.exec(src)) !== null) {
+                var lits = m[1].match(/'[^']*'|"[^"]*"/g) || [];
+                for (var i = 0; i < lits.length; i++) {
+                  var u = lits[i].slice(1, -1);
+                  var s = sourceOf(u);
+                  if (s != null) { worker.__imports[u] = s; }
+                }
+              }
+
+              try {
+                evaluateIn(scope, src, worker);
+              } catch (e) {
+                worker.__dead = true;
+                setTimeout(function () {
+                  fire(worker, 'error', {
+                    type: 'error', message: (e && e.message) ? String(e.message) : String(e),
+                    filename: worker.__url, lineno: 0, colno: 0, error: e
+                  });
+                }, 0);
+                return;
+              }
+
+              // Messages posted between `new Worker(...)` and the script finishing evaluation are
+              // not lost — a page that posts its job on the very next line is the normal case, not
+              // a race the author got wrong.
+              worker.__ready = true;
+              var q = worker.__pending; worker.__pending = [];
+              for (var j = 0; j < q.length; j++) { deliverIn(worker, q[j]); }
+            };
+
+            var fail = function (e) {
+              worker.__dead = true;
+              setTimeout(function () {
+                fire(worker, 'error', {
+                  type: 'error', message: 'could not load worker script ' + worker.__url,
+                  filename: worker.__url, lineno: 0, colno: 0, error: e || null
+                });
+              }, 0);
+            };
+
+            var src = sourceOf(this.__url);
+            if (src != null) {
+              boot(src);
+            } else if (typeof G.fetch === 'function' && this.__url) {
+              // A same-origin `new Worker('/w.js')` goes over the network like any subresource.
+              G.fetch(this.__url).then(function (r) {
+                if (!r || (r.status && r.status >= 400)) { throw new Error('HTTP ' + (r && r.status)); }
+                return r.text();
+              }).then(boot, fail);
+            } else {
+              fail(new Error('no loader'));
+            }
+          }
+
+          function deliverIn(worker, copy) {
+            setTimeout(function () {
+              if (worker.__dead || !worker.__scope) { return; }
+              fire(worker.__scope, 'message', messageEvent(copy));
+            }, 0);
+          }
+
+          // Page -> worker.
+          Worker.prototype.postMessage = function (data) {
+            if (this.__dead) { return; }
+            var copy = clone(data);
+            if (!this.__ready) { this.__pending.push(copy); return; }
+            deliverIn(this, copy);
+          };
+          // `terminate()` is immediate and final: nothing queued in either direction is delivered
+          // after it. A terminate that let one more message through would resurrect exactly the
+          // work the page just cancelled.
+          Worker.prototype.terminate = function () { this.__dead = true; this.__pending.length = 0; };
+          Worker.prototype.addEventListener = listenerAdd;
+          Worker.prototype.removeEventListener = listenerRemove;
+          Worker.prototype.dispatchEvent = function (ev) { fire(this, ev && ev.type, ev || {}); return true; };
+
+          G.Worker = Worker;
+
+          // `SharedWorker` is NOT this, and must not pretend to be. It is deliberately left as the
+          // honest load-failure stub — but one that carries a real `port` object, because a shim
+          // that fires `error` and then TypeErrors on `sw.port.postMessage` fails in the wrong
+          // place, before the page's own error path ever gets to run.
+          if (typeof G.SharedWorker === 'undefined' || G.SharedWorker === Worker) {
+            G.SharedWorker = function SharedWorker(url) {
+              this.__url = String(url || ''); this.onerror = null; this.__ls = {};
+              this.port = {
+                onmessage: null, onmessageerror: null, __ls: {},
+                postMessage: function () {}, start: function () {}, close: function () {},
+                addEventListener: listenerAdd, removeEventListener: listenerRemove
+              };
+              var sw = this;
+              setTimeout(function () {
+                fire(sw, 'error', { type: 'error', message: 'SharedWorker is not supported', filename: sw.__url, lineno: 0, colno: 0 });
+              }, 0);
+            };
+            G.SharedWorker.prototype.addEventListener = listenerAdd;
+            G.SharedWorker.prototype.removeEventListener = listenerRemove;
+          }
+        })();
       }
 
       // `window.getSelection()` — editors and "copy link" widgets call it unconditionally.

@@ -12771,3 +12771,70 @@ modelled. The Service Worker itself (registration, lifecycle, fetch interception
 tick built its store.
 
 WIKI: docs/wiki/storage.md (Cache API section)
+
+## Tick 280 — the worker script now runs, and the answer comes back (2026-07-20)
+
+HYPOTHESIS: the board's app-class top hole is Web Workers, and the failure it causes is worse than
+"no parallelism". `new Worker(url)` constructed and then fired `error` — the shape of a script that
+404s. Honest, and a dead end: a page whose real work happens off the main thread has no inline
+fallback, because its `onerror` path surfaces the failure rather than redoing the job. The
+observable symptom is not an error, it is **a spinner that never resolves** — the markdown never
+renders, the search index never builds, the diff never returns.
+
+PLAN: a real dedicated worker — the script evaluated in its own DOM-less scope, messages
+structured-cloned both ways as macrotasks. No second thread; the scope is the capability.
+
+### What landed
+
+`Worker` runs its script inside `with (scope)` where `scope` is built per worker. `blob:`/`data:`
+URLs resolve synchronously (the bundler shape starts in the turn it was constructed); `http(s)` goes
+through `fetch`. `postMessage` both ways, queued-before-ready, `terminate()`, `close()`,
+`importScripts` (literal URLs pre-scanned), error propagation onto the worker object.
+
+### The scope is a DENY-list, and that is the whole tick
+
+What the scope does not define falls through the `with` to the real global on purpose — `fetch`,
+`Promise`, `TextDecoder`, `crypto`, even a nested `Worker`. So the scope is a deny-list of what a
+worker must **not** have, not an allow-list of what it may; an allow-list is what goes stale every
+time the platform grows a name. The denied set (`document`, `window`, `localStorage`, `parent`, …)
+is set to `undefined` explicitly because **`typeof document === 'undefined'` is how nearly every
+isomorphic module picks which half of itself to run**. A leaky scope does not fail loudly — it makes
+that choice *wrong* and then lets the main-thread branch touch a DOM that must not be there.
+
+GATE: `a_web_worker_runs_its_script_in_its_own_scope_and_messages_round_trip` (manuk-page,
+G_WEB_WORKER), 13 claims.
+
+PROVEN RED FOUR WAYS, each on a load-bearing claim rather than on the gate as a whole:
+  * deny-list removed → `nodoc:false nowin:false nols:false` **while `sum:true` still passes** — the
+    exact half-working state that is invisible from the API surface
+  * clone taken at delivery instead of at post time → `echo:false mutated:false` (the page's
+    next-line mutation reaches the worker; the two sides share state the spec says they do not)
+  * `terminate()` a no-op → `afterterminate:false` (the cancelled work is resurrected)
+  * the script never evaluated → `got: -`, the whole chain dies with nothing thrown
+
+A CLAIM WRITTEN AND THEN DELETED, which is the more interesting find. The scope is
+`Object.create(null)` so no `Object.prototype` name can shadow a real global inside someone's
+library. Two probes were written to assert it — `constructor === Object` and `__proto__ ===
+Object.prototype` — and **both returned identical answers under a plain-object scope and a
+null-prototype one**, because the page's own global inherits from `Object.prototype` too, so the
+`with` fall-through resolves those names to the very same members. The null prototype stays (right,
+and free); the assertion was deleted. An assertion that cannot go red is not evidence — it is
+decoration that later reads as coverage. This is the [[vacuous-assertion]] class caught *before*
+landing rather than a session later.
+
+NO REGRESSION: manuk-page 149 passed / 1 failed, and that one —
+`tests::hard_wall_detection_and_honest_interstitial` — was **proven pre-existing** by stashing this
+tick's diff and watching it fail identically on HEAD. Not a trade.
+
+BOOKKEEPING: the constellation row was **split**, not flipped —
+`Web Workers (dedicated)` → gated, and a new `SharedWorker + worker parallelism` → missing. One row
+cannot say "half of this works". `SharedWorker` stays the honest load-failure stub, but now carries
+a real `port` object, because a shim that fires `error` and *then* TypeErrors on
+`sw.port.postMessage` fails in the wrong place, before the page's own error path can run.
+
+HONEST LIMITS: **there is no second thread** — a worker that spins does not keep the UI responsive.
+No `MessageChannel`/`MessagePort` transfer, no transferables (an `ArrayBuffer` is cloned, not moved),
+no module workers (`type: 'module'`), no `SharedWorker`. `importScripts` with a computed URL throws
+`NetworkError` rather than silently no-op'ing.
+
+WIKI: docs/wiki/js-engine.md (Web Workers section)

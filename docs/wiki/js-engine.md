@@ -783,3 +783,70 @@ geometry, which is the blank-virtualized-list bug exactly.
 ⚠ **One `#[test]` fn per JS gate binary** (see `g_canvas.rs`). A test fn that dispatches a click leaves a
 live `PageContext` parked on its thread; a second test fn loading a page on another thread faults two
 SpiderMonkey runtimes against each other. Sequential `Page::load`s inside ONE fn are fine.
+
+---
+
+## Web Workers — running a script in a scope that must NOT be the page's (tick 280)
+
+`new Worker(url)` used to construct and then fire `error` on the next turn: the shape of a worker
+script that 404s. That was honest and it was still a dead end, because a page whose real work happens
+off the main thread has no inline fallback. Its `onerror` path surfaces the failure; it does not redo
+the job. The observable symptom is not an error message, it is a **spinner that never resolves**.
+
+### The scope is a deny-list over a `with`, not an allow-list
+
+The worker script is evaluated as `Function('__scope', 'with (__scope) { ' + src + ' }')`. Two
+consequences worth stating outright:
+
+- **A `"use strict"` at the top of the worker script does not break it.** The directive lands *inside*
+  the with-block, where it is an expression statement rather than a prologue directive. Strict worker
+  scripts — which is most of them — run unmodified.
+- **What the scope does NOT define falls through to the real global on purpose.** `fetch`, `Promise`,
+  `TextDecoder`, `crypto`, `WebAssembly`, even a nested `Worker` all resolve without being enumerated.
+  The scope is therefore a **deny-list of what a worker must not have** rather than an allow-list of
+  what it may, and an allow-list is the thing that goes stale every time the platform grows a name.
+
+The deny-list is the load-bearing half. Each entry (`document`, `window`, `localStorage`, `parent`,
+`getComputedStyle`, …) is set to `undefined` **explicitly**, because `typeof document === 'undefined'`
+is how essentially every isomorphic module decides which half of itself to run. A worker scope that
+leaks the page's globals does not fail loudly — it makes that decision *wrong*, and then lets the
+main-thread branch touch a DOM that must not exist there. `G_WEB_WORKER` proves this is the real
+failure mode: with the deny-list removed, `sum:true` still passes while `nodoc`/`nowin`/`nols` all
+flip together. The compute works and the scope is a lie, which is exactly the half-working state that
+is invisible from the API surface.
+
+The scope object is `Object.create(null)`. **This is defensive, and the gate does not assert it** — two
+probes were written (`constructor === Object`, `__proto__ === Object.prototype`) and both returned the
+same answer under a plain-object scope and a null-prototype one, because the page's own global inherits
+from `Object.prototype` too, so the `with` fall-through finds the very same members. The null prototype
+stays because it costs nothing and is right; the assertion was deleted, because an assertion that
+cannot go red is not evidence, it is decoration that later reads as coverage.
+
+### The clone is taken at POST time
+
+`worker.postMessage(v)` structured-clones `v` *immediately* and schedules delivery of the copy as a
+macrotask. Cloning at delivery instead would pass the same round-trip assertions and still be wrong:
+the page mutating its payload on the line after the post would change what the worker receives, and the
+two sides would share state the spec says they do not. `G_WEB_WORKER` mutates deliberately on the next
+line; cloning late flips `echo` and `mutated` together.
+
+Messages posted between `new Worker(...)` and the end of script evaluation are **queued, not dropped** —
+posting the job on the very next line is the normal shape, not an author error. `terminate()` is
+immediate and final in both directions; letting one more queued message through resurrects the exact
+work the page just cancelled.
+
+### Loading, and what is honestly out of reach
+
+`blob:` and `data:` URLs resolve **synchronously**, so the bundler shape
+(`new Worker(URL.createObjectURL(new Blob([src])))`) starts in the turn it was constructed. A plain
+`new Worker('/w.js')` goes over the network through `fetch`. `importScripts` is synchronous by spec and
+there is no synchronous network here, so a pre-scan resolves literal-URL imports before evaluation;
+a computed URL throws `NetworkError` rather than no-op'ing and leaving the symbol undefined.
+
+**The divergence, stated rather than discovered: there is no second thread.** A worker that spins does
+not keep the UI responsive. What this buys is that the work *completes* and the answer *arrives*, which
+is the difference between a page that loads and one that does not — and it is why the constellation row
+was **split** into `Web Workers (dedicated)` (gated) and `SharedWorker + worker parallelism` (missing)
+rather than flipped to a green that would have overstated it. `SharedWorker` is left as the honest
+load-failure stub, but one carrying a real `port` object: a shim that fires `error` and *then* TypeErrors
+on `sw.port.postMessage` fails in the wrong place, before the page's own error path can run.

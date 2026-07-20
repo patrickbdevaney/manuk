@@ -409,6 +409,10 @@
   - L688 · HTML Constraint Validation, on the shared prototype (tick 161)
   - L713 · crypto.subtle.digest — async surface over a sync host hash (tick 162)
   - L738 · Forced synchronous reflow — the read path lays out before it answers (tick 213)
+  - L789 · Web Workers — running a script in a scope that must NOT be the page's (tick 280)
+  - L796 · The scope is a deny-list over a with, not an allow-list
+  - L825 · The clone is taken at POST time
+  - L838 · Loading, and what is honestly out of reach
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -684,4 +688,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-599 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+603 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -2082,3 +2082,36 @@ forever*, which looks like a caching bug in the site rather than in the browser.
 **And the one that generalises:** `typeof Response === 'function'` was **true** while `new
 Response('x')` produced an object with no `status` and no `clone()`. An inert name on an
 interface-surface list satisfies feature detection and fails at first use, somewhere else entirely.
+
+## Work that happens off the main thread — Web Workers (tick 280)
+
+**Pattern:** `const w = new Worker(URL.createObjectURL(new Blob([src])))` — or a bundler's
+`new Worker(new URL('./w.js', import.meta.url))` — then `w.postMessage(job)` and
+`w.onmessage = e => render(e.data)`. Markdown renderers, syntax highlighters, diff views, search
+indexers, spreadsheet recalc, image decode, PDF rendering and every "parse this 40MB file" widget
+are this shape.
+
+**The class this unlocks:** the app web that does its real work in a worker. Not "the UI stays
+smooth" — **the result arrives at all**. Previously the constructor fired `error` on the next turn,
+which is the honest shape of a 404'd worker script, and a page's `onerror` path almost always
+surfaces the failure rather than redoing the job inline. So the observable symptom was never an
+error message: it was a **spinner that never resolves**.
+
+**Why it hid:** `typeof Worker === 'function'` was true, and the constructor did not throw. Feature
+detection passed cleanly and the failure arrived one turn later, on a path the page treats as fatal.
+
+**The traps, three of them.** **(1)** The worker scope must **deny** the DOM explicitly, not merely
+fail to provide it. `typeof document === 'undefined'` is how nearly every isomorphic module picks
+which half of itself to run, so a scope that lets `document` fall through does not fail loudly — it
+makes that choice *wrong*, then lets the main-thread branch touch a DOM that must not be there. This
+is measurable: with the deny-list removed the compute still returns the right answer while all three
+scope claims flip. **(2)** The structured clone is taken at **post** time, not at delivery. Cloning
+late passes every round-trip assertion and still lets a page's next-line mutation reach the worker,
+so the two sides share state the spec says they do not. **(3)** Messages posted between
+`new Worker(...)` and the end of script evaluation must be **queued**, not dropped — posting the job
+on the very next line is the normal shape, not an author error.
+
+**And the one that generalises:** an honest failure is still a failure. The old stub was *correct* —
+it reported exactly what a browser reports when a worker script cannot load — and it left an entire
+class of the web unusable. "We report this accurately" is not a resting place; it is a description
+of a hole, and the hole is what the checklist should count.
