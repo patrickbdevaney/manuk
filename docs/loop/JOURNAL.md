@@ -11974,3 +11974,48 @@ infinite line. Probe file removed after use; snapshots via `cp`, never `git chec
 NO REGRESSION: manuk-layout 77/77, g_scroll_snap + g_client_rects green.
 
 WIKI: docs/wiki/interaction-surface.md
+
+## Tick 268 — the near-miss population: two cascades, and the live one was stale
+
+TICK SHAPE: board re-read at tick start, and it had CHANGED mid-invocation — the observer posted a
+new tick-267 steer with the FIRST REAL FID-SWEEP DATA, which supersedes the pivot list. **cov(ok)
+85.9% vs PLACE(ok) 4.5%** against a >=75% exit bar. Its (1) NEAR-MISS group is flagged "most
+tractable, do FIRST... highest yield per tick in the whole project right now". Taken.
+
+**THE SIGNATURE PICKED THE LEVER.** old.reddit mdy=12, airbnb mdy=20, wikipedia mdy=45, usa.gov
+mdy=82 — and **mdx=0 on every one of them**. Horizontal exact, vertical drifting, error growing with
+content density. Layout math errs on BOTH axes; missing per-block vertical METRICS err on one and
+accumulate. That reading is what turned a 4.5% aggregate into a bounded tick.
+
+**PROBED TWO WRONG SUSPECTS FIRST, both cheap, both rejected on evidence** ([[parity-methodology]]):
+`line-height: normal` already derives from the face's real ascent+descent+lineGap (that lever is
+DONE, `text_style` does it); and stub font metrics were not in play. Then the actual find.
+
+**TWO CASCADES, AND THE LIVE ONE WAS STALE.** `apply_ua_defaults` (MinimalCascade) already carried
+`ul|ol` at 1em and `body` at 8px. The Stylo `UA_CSS` sheet — **the path every real page takes** —
+carried NEITHER: `ul, ol` had a padding-left and no margin, and `dl`/`dd`/`pre`/`hr`/`figure`/`body`
+had no rule at all. Third time this file's own comments have had to say "keep in lockstep with
+apply_ua_defaults" (the `<source>` display bug and the `<dialog>`/`<details>` pair were the first
+two). **A second cascade is a second source of truth and it silently becomes the stale one** — and
+here the stale one is the one that runs.
+
+**MEASURED, NOT RECALLED.** Every expected value read out of real headless Chrome via createElement
++ getComputedStyle, and recorded IN the gate with its provenance. That is what made the next point
+findable rather than a coin flip.
+
+**THE RULE THAT MAKES IT A FIX AND NOT A TRADE: a NESTED list has ZERO vertical margin.** Giving
+every `ul` 1em unconditionally passes the top-level assertions and newly over-spaces every nested
+menu, sidebar and TOC on the web — and Wikipedia's captured first divergence (`after #p-tb, element
+#n-randompage is off by dy=-61`) is a sidebar of NESTED lists, i.e. precisely the case that would
+have been traded away while the headline number improved. It carries its own assertion. Also caught:
+`blockquote` said `margin: 1em 0`, which does not OMIT the 40px indent, it **zeroes** it — a missing
+rule and a rule asserting the wrong value look identical in a diff and are not the same defect.
+
+**THREE RED PROBES, THREE DIFFERENT ASSERTIONS**: delete the nested-list rule -> ONLY #inner fails
+(top-level stays green, which is why it needs its own assertion); margin on the wrong axis -> the
+vertical assertions fail while the element still "has a margin"; restore `blockquote: 1em 0` -> the
+indent assertion fails. The gate was also confirmed RED **before** the fix, not just after.
+
+NO REGRESSION: manuk-css + manuk-layout 77/77 green.
+
+WIKI: docs/wiki/css-cascade.md

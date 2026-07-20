@@ -432,3 +432,61 @@ guessing. `Dom::set_focused` marks **both** chains dirty for the same reason `se
 
 `recascade_all_sources` (added for `:hover` one tick earlier) is reused unchanged, which is the
 whole reason it was extracted rather than inlined.
+
+## The two cascades drifted again — UA block margins (tick 268)
+
+The first broad FID-SWEEP (observer, tick 267) put a number on the Phase-0 gap: **coverage 85.9%,
+placement 4.5%** against a ≥75% exit bar. We render nearly every element Chrome does and place almost
+none of them within 8px. Capability% (62%) cannot see this at all — every one of those features is
+present and gated.
+
+Its most tractable population is the **near-miss** group, and its signature is unmistakable:
+
+| site | mdx | mdy |
+|---|---|---|
+| old.reddit.com | 0 | 12 |
+| airbnb.com | 0 | 20 |
+| en.wikipedia.org | 0 | 45 |
+| usa.gov | 0 | 82 |
+
+**Horizontal placement is exact. Only vertical drifts, and it grows with content density.** That is
+not layout math — layout math errs on both axes. It is missing vertical *metrics*, applied per block,
+accumulating down the document.
+
+### Where it was
+
+`apply_ua_defaults` (css/src/lib.rs, the `MinimalCascade` path) already set `ul`/`ol` to `1em 0` and
+`body` to `8px`. The Stylo `UA_CSS` sheet — **the live path for every real page** — set neither. It
+had `p`, `blockquote` and `h1`–`h6`, gave `ul, ol` a `padding-left` and no margin at all, and had no
+rule whatsoever for `dl`, `dd`, `pre`, `hr`, `figure` or `body`.
+
+So the two cascades had drifted apart on the property that decides where everything below a list
+lands, and the one that was wrong was the one that runs. This is the third time this file's own
+comments have had to say *keep in lockstep with `apply_ua_defaults`* — the `<source>` display bug and
+the `<dialog>`/`<details>` pair were the earlier two. **A second cascade is a second source of truth,
+and it silently becomes the stale one.**
+
+### The numbers were measured, not recalled
+
+Every value was read out of real Chrome (`createElement` + `getComputedStyle` per tag, headless) and
+recorded in the gate:
+
+```
+body 8px all round   ul/ol/menu 1em 0 + pl 40px   dl 1em 0   dd ml 40px
+pre 1em 0 (=13px, 1em of its OWN monospace font)  hr 0.5em 0
+figure / blockquote  1em 40px                     NESTED ul   0
+```
+
+### The rule that makes it a fix rather than a trade
+
+**A nested list gets NO vertical margin.** `ul ul, ul ol, ol ul, ol ol { margin-block: 0 }` is the
+rule a from-memory implementation always misses, and it is load-bearing: giving every list `1em`
+unconditionally fixes the top-level case and newly over-spaces every nested menu, sidebar and table
+of contents on the web. Wikipedia's captured first divergence — `after #p-tb, element #n-randompage
+is off by dy=-61` — is a *sidebar of nested lists*, i.e. exactly the shape that would have been
+traded for a different error while the headline number improved. It carries its own assertion, and
+deleting the rule fails only that assertion; the top-level ones stay green.
+
+`blockquote` is the horizontal half of the same bug and worth stating precisely: ours said
+`margin: 1em 0`, which does not *omit* the 40px indent — it **zeroes** it. A missing rule and a rule
+that asserts the wrong value look identical in a diff and are not the same defect.

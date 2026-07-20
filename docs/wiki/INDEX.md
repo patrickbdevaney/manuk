@@ -166,6 +166,10 @@
   - L387 · The general form, worth carrying past this pseudo-class
   - L398 · Focus was a DEAD-END WIRE, and :focus / :focus-within / :focus-visible are three questions
   - L417 · They are not one feature with three names
+  - L436 · The two cascades drifted again — UA block margins (tick 268)
+  - L456 · Where it was
+  - L469 · The numbers were measured, not recalled
+  - L480 · The rule that makes it a fix rather than a trade
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -635,4 +639,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-554 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+558 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

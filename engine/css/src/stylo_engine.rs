@@ -144,7 +144,7 @@ fn make_device(width: f32, height: f32, quirks: QuirksMode) -> Device {
 const UA_CSS: &str = r#"
 html, body, div, section, article, header, footer, nav, main, aside, figure,
 figcaption, address, p, blockquote, ul, ol, li, dd, dt, pre, hr, h1, h2, h3, h4, h5, h6,
-form, fieldset, table, caption, center { display: block; }
+form, fieldset, table, caption, center, menu, dl { display: block; }
 center { text-align: center; }
 /* The elements that are never rendered. Ours was missing the *media* half of the list, and
    `<source>` is the one that matters: `<picture><source>` is how the entire modern web serves
@@ -222,7 +222,33 @@ dialog[open] {
   color: #000000;
   padding: 0.25em;
 }
-p, blockquote { margin: 1em 0; }
+/* ── Vertical block metrics. Measured out of real Chrome (`createElement` + `getComputedStyle`),
+   not recalled from the spec. This sheet had `p`/`blockquote`/`h1-h6` and NOTHING else, while
+   `apply_ua_defaults` in css/src/lib.rs — the OTHER cascade — already carried `ul`/`ol` at 1em and
+   `body` at 8px. The two had drifted apart on the property that decides where everything below a
+   list lands, and since Stylo is the live path for every real page, the live path was the wrong one.
+   The FID-SWEEP's near-miss population (mdx=0, mdy=12..82, growing with content density) is this. */
+body { margin: 8px; }
+p { margin: 1em 0; }
+/* Chrome indents a blockquote 40px on BOTH sides. `margin: 1em 0` does not merely omit that, it
+   explicitly ZEROES it — a quote sat flush with the body text it is quoted from. */
+blockquote, figure { margin: 1em 40px; }
+ul, ol, menu { margin: 1em 0; }
+/* A NESTED list gets NO vertical margin. Chrome's html.css says so, and it is the rule a
+   from-memory implementation always misses: giving every list 1em unconditionally fixes the
+   top-level case and newly over-spaces every nested menu, sidebar and table of contents on the
+   web — which is precisely the shape (Wikipedia's `#p-tb` → `#n-randompage`, dy=-61) that sent
+   us looking here. */
+ul ul, ul ol, ol ul, ol ol, menu menu, ul menu, menu ul, ol menu, menu ol {
+  margin-top: 0; margin-bottom: 0;
+}
+dl { margin: 1em 0; }
+/* `dd` is indented from its `dt`, and `dt` is NOT — the pair is the whole visual grammar of a
+   definition list. Indent both and it collapses back to a flat run of alternating lines. */
+dd { margin-left: 40px; }
+/* 1em of `pre`'s OWN 13px monospace font, so 13px — not 16px. */
+pre { margin: 1em 0; }
+hr { margin: 0.5em 0; }
 h1 { font-size: 2em; font-weight: bold; margin: 0.67em 0; }
 h2 { font-size: 1.5em; font-weight: bold; margin: 0.75em 0; }
 h3 { font-size: 1.17em; font-weight: bold; margin: 0.83em 0; }

@@ -1808,3 +1808,27 @@ pointed at the scroll container and why capability coverage could not see it.
 **The control is the real assertion.** The same row *without* `nowrap` must still wrap. That is what
 separates "honours `white-space`" from "never breaks inline-blocks" — a blanket disable makes the
 headline assertion greener while turning every ordinary inline-block gallery into one infinite line.
+
+## The article that sits 45px too high (tick 268)
+
+**Pattern:** any document that uses the block elements HTML has had since 1995 — `<ul>`/`<ol>` menus
+and bullet lists, `<dl>` definition lists, `<pre>` code blocks, `<hr>` rules, `<figure>` images,
+`<blockquote>` quotes — and relies on the browser's own margins to space them.
+
+**The class this unlocks:** every content page on the web, and the placement half of the Phase-0 exit
+gate specifically. Wikipedia, usa.gov, old.reddit, airbnb — the FID-SWEEP's whole NEAR-MISS
+population, where `mdx=0` and `mdy` is 12–82px.
+
+**Why no capability count could see it.** Coverage was 85.9%: we were rendering these elements, all
+of them, with correct `display`, correct text and correct horizontal placement. Only their *vertical
+spacing* was absent, so every element existed and every one of them was in the wrong place — and each
+missing 32px pushed everything below it up by 32px, so the error accumulated with content density.
+A feature checklist marks this page as fully working.
+
+**Where the bug was:** two cascades. `apply_ua_defaults` had `ul { margin: 1em 0 }`; the Stylo
+`UA_CSS` sheet, which is the live path for every real page, did not. The stale source of truth was
+the one that runs.
+
+**The trap in fixing it:** a nested list has NO vertical margin in Chrome. Adding `1em` to every list
+fixes the top-level case and newly over-spaces every nested menu and sidebar — including Wikipedia's,
+which is where the divergence was measured. The fix and the trade are one selector apart.
