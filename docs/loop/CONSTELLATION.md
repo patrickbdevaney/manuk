@@ -132,3 +132,23 @@ The pattern ledger drifted six times because it was **prose that nobody executed
 
 **The tick is chosen by whichever is further behind**: the WPT mechanism with the most failing subtests,
 or the constellation class with the largest hole. Not by whichever is more interesting.
+
+## test262 — feasibility PROBED (tick 269 session, 2026-07-20): a subsystem, not a cheap `?`
+
+The `?` on test262 has been carrying an implicit "maybe this is cheap". It is not, and pinning that
+is itself worth a probe under the `? outranks ✗` rule.
+
+**Measured:** there is no test262 checkout on this box (WPT lives at `$HOME/wpt` via
+`scripts/wpt-setup.sh`; nothing equivalent exists for test262). Running it needs a real **runner**,
+not a path: test262 cases carry YAML frontmatter (`negative`, `includes`, `features`, `flags`), a
+required harness prelude (`assert.js` + `sta.js`, plus per-case `includes`), and each case must be
+run in **up to three variants** (sloppy / `onlyStrict` / `module`), with negative cases asserted to
+throw a *specific* error at a *specific* phase (parse vs runtime).
+
+**Scoped estimate: a dedicated multi-tick subsystem (fresh context), not a bounded tick.** Same
+shape as IndexedDB — a half-built runner reports a conformance number that is wrong in an unknown
+direction, which is worse than the honest `?` we have now.
+
+**Still worth doing, and the reason is unchanged:** Ladybird tracks 97.8% of 53,207 subtests and we
+have no idea what mozjs-under-Manuk scores. It is the only large unmeasured surface in the JS layer.
+Kept as `?`, now with a cost attached rather than an unknown one.
