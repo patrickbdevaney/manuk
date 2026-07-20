@@ -12539,3 +12539,57 @@ FOLLOW-ON, written down not done: `window.resizeTo`/host resize does not re-run 
 each time) but has no `change` event. Both need the viewport to be a host-notified value.
 
 WIKI: docs/wiki/css-cascade.md
+
+## Tick 276 — `@supports` and `@layer`, the two at-rules tick 273 wrote down (2026-07-20)
+
+Selected: the follow-on tick 273 recorded rather than fixed. Same defect, different at-keyword —
+`skip_at_rule` deleted every rule inside `@supports` and `@layer`, so the twelve properties
+`cascade_via_stylo` recovers from this cascade were exempt from both. `@supports (display: grid)` is
+how the modern web ships a layout with a fallback; `@layer` is how design systems order their
+cascade; a theme's gradients, icon masks and dividers commonly live inside both.
+
+### The condition is answered by TRYING the declaration
+
+The tempting implementation is a list of supported property names. **That is a second source of
+truth — the failure mode this repo has now hit four times in four ticks — and it goes stale the
+moment a property is implemented.** So `declaration_is_supported` parses the declaration, applies it
+to `ComputedStyle::initial()`, and asks whether anything moved. A property this cascade does not
+implement, or a value it does not recognise, leaves the style untouched. It maintains itself.
+
+**The probe is conservative by construction, and that is the safe direction.** A declaration whose
+value equals the initial value (`@supports (display: block)`) reads as unsupported and its block
+does not apply — which is exactly what happened before the function existed. It can be as wrong as
+the old behaviour, never newly wrong.
+
+Also implemented: `not` / `and` / `or` / nested parens / `selector(…)` (answered by whether our own
+selector parser accepts it), and an unparseable condition is **false**, matching `media_matches`.
+
+### `@supports` must be able to say NO, and `@layer` is knowingly approximate
+
+An `@supports` block the browser cannot satisfy is not decoration — the author wrote a fallback for
+exactly that case, and applying both is worse than applying neither. The gate carries that as
+`notSupported` and `negation`, which is what a "descend into everything" implementation fails.
+
+`@layer` descends unconditionally. Layered rules should **lose** to unlayered ones at equal
+specificity and this cascade cannot express that yet, so this is approximate — but deleting the
+contents outright was not approximate, it was absent. Written down as still-open.
+
+### A bug the gate found immediately, and a faulty RED probe I caught
+
+`@layer a, b;` is a **statement** at-rule: `skip_at_rule` returns at the `;`, so `rest.find('{')`
+found the brace of a *later* rule and sliced past the block end — a panic on the first run. All four
+at-rule arms now share one `block_open` that is `None` unless the brace falls before `end`.
+
+And my first `@layer` RED probe reported green. The mutation was `rest.len() >= 6` → `>= 99`, which
+does not disable the arm — it disables it only for at-rules within 99 bytes of the end of the sheet.
+**A position-dependent mutation is not a disable**, and it produced a confident false "this gate
+cannot go red". Re-run with `false &&`, it went red on exactly the intended claim.
+
+GATE: `supports_and_layer_blocks_apply_and_supports_can_say_no` (manuk-page, G_SUPPORTS_LAYER).
+Three RED probes, each on a different claim: skipping `@supports` flips `both`; skipping `@layer`
+flips `layered`; making the condition unconditionally true flips `notSupported`.
+NO REGRESSION: manuk-page + manuk-css + manuk-layout + manuk-a11y green.
+
+STILL OPEN: `@layer` cascade *order*; `@container` (not parsed at all).
+
+WIKI: docs/wiki/css-cascade.md

@@ -2001,3 +2001,23 @@ individually reasonable.
 **The trap:** testing `matchMedia` for the *right answer* tests `min-width`/`max-width`, which is
 exactly the half a hand-written second evaluator gets right. Test that the two sides give the *same*
 answer, over features nobody thought to put in the second table.
+
+## Feature-detected CSS — `@supports` and `@layer` (tick 276)
+
+**Pattern:** `@supports (display: grid) { … }` shipping an enhancement beside a fallback, and
+`@layer base, components, utilities` ordering a design system's cascade. Between them they wrap a
+large share of every modern stylesheet — and a theme's gradients, icon masks, dividers and shadows
+usually live inside one of them.
+
+**The class this unlocks:** feature-detected and layered CSS, for the twelve properties this cascade
+owns on the shipping path. Both at-rules were deleted wholesale at parse time.
+
+**Why it hid:** the same reason `@media` hid — Stylo evaluates both correctly for every property it
+exposes, so `display`, `width` and `color` were fine inside them, and only the twelve recovered
+properties were exempt.
+
+**The trap:** answering `@supports` from a hand-maintained list of property names. That list is a
+second source of truth and goes stale the moment a property is implemented. Answer it by *trying*
+the declaration — apply it to an initial style and see whether anything moved. And `@supports` must
+be able to say **no**: the author wrote the fallback for exactly that case, so a "descend into
+everything" implementation applies both branches, which is worse than applying neither.

@@ -1836,15 +1836,40 @@ fn parse_rules_into(
         if bytes[i] == b'@' {
             let end = skip_at_rule(src, i);
             let rest = &src[i..];
+            // The block's own `{`, if it has one. A STATEMENT at-rule (`@layer a, b;`,
+            // `@import …;`) ends at the `;`, so a bare `rest.find('{')` would find the brace of
+            // some LATER rule and slice past `end`. Anything at or after `end` is not ours.
+            let block_open = rest.find('{').filter(|o| i + o < end);
             if rest.len() >= 10 && rest[..10].eq_ignore_ascii_case("@font-face") {
-                if let Some(open) = rest.find('{') {
+                if let Some(open) = block_open {
                     let block = &src[i + open + 1..end.saturating_sub(1)];
                     if let Some(ff) = parse_font_face_block(block) {
                         font_faces.push(ff);
                     }
                 }
+            } else if rest.len() >= 9 && rest[..9].eq_ignore_ascii_case("@supports") {
+                // `@supports` is the same defect as `@media` with a different at-keyword: the
+                // block was skipped, so the twelve properties recovered from this cascade were
+                // exempt from it. The condition is evaluated, never assumed — a false `@supports`
+                // is a fallback the author wrote for browsers that do not support the thing.
+                if let Some(open) = block_open {
+                    if supports_condition_matches(rest[9..open].trim()) {
+                        let body = &src[i + open + 1..end.saturating_sub(1)];
+                        parse_rules_into(body, media, rules, font_faces);
+                    }
+                }
+            } else if rest.len() >= 6 && rest[..6].eq_ignore_ascii_case("@layer") {
+                // `@layer name { … }` — descend. Layered rules should LOSE to unlayered ones at
+                // equal specificity, which this cascade cannot yet express, so this is knowingly
+                // approximate. It is still strictly closer than the previous behaviour, which was
+                // to delete the contents outright. `@layer a, b;` (the statement form, no block)
+                // has no rules to descend into and is skipped by the same code.
+                if let Some(open) = block_open {
+                    let body = &src[i + open + 1..end.saturating_sub(1)];
+                    parse_rules_into(body, media, rules, font_faces);
+                }
             } else if rest.len() >= 6 && rest[..6].eq_ignore_ascii_case("@media") {
-                if let Some(open) = rest.find('{') {
+                if let Some(open) = block_open {
                     let prelude = rest[6..open].trim();
                     let body = &src[i + open + 1..end.saturating_sub(1)];
                     // Nesting is conjunction: an inner block applies only when both hold.
@@ -1890,6 +1915,98 @@ fn parse_rules_into(
             }
         }
     }
+}
+
+/// Evaluate an `@supports` condition — **by actually trying the declaration**.
+///
+/// The honest way to answer "do you support `display: grid`?" is not a hand-maintained list of
+/// property names, which is a second source of truth that goes stale the moment a property is
+/// implemented or removed. It is to parse the declaration, apply it to a default
+/// [`ComputedStyle`], and see whether anything changed. A property this cascade does not implement,
+/// or a value it does not recognise, leaves the style untouched.
+///
+/// **The probe is conservative by construction, and that is the safe direction.** A declaration
+/// whose value happens to equal the initial value (`@supports (display: block)`) reads as
+/// unsupported, so the block does not apply — which is exactly what happened before this function
+/// existed. It can only ever be as wrong as the old behaviour, never newly wrong.
+///
+/// Supports `not`, `and`, `or`, nested parens, and `selector(…)` (answered by whether our own
+/// selector parser accepts it). An unparseable condition is **false**, matching `media_matches`
+/// and CSS's own error handling: never guess in the direction of applying a stylesheet.
+fn supports_condition_matches(cond: &str) -> bool {
+    let c = cond.trim();
+    if c.is_empty() {
+        return false;
+    }
+    if let Some(rest) = c.strip_prefix("not ").or_else(|| c.strip_prefix("not(")) {
+        let inner = if c.starts_with("not(") { &c[3..] } else { rest };
+        return !supports_condition_matches(inner);
+    }
+    // Top-level `and` / `or`, split at paren depth 0. CSS forbids mixing them without parens, so
+    // whichever appears first decides how the whole level combines.
+    let b = c.as_bytes();
+    let (mut depth, mut i) = (0i32, 0usize);
+    let mut parts: Vec<&str> = Vec::new();
+    let mut op: Option<bool> = None; // Some(true) = and, Some(false) = or
+    let mut start = 0usize;
+    while i < b.len() {
+        match b[i] {
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            _ => {}
+        }
+        if depth == 0 {
+            let and = c[i..].starts_with(" and ");
+            let or = c[i..].starts_with(" or ");
+            if (and && op != Some(false)) || (or && op != Some(true)) {
+                op.get_or_insert(and);
+                parts.push(&c[start..i]);
+                i += if and { 5 } else { 4 };
+                start = i;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    if let Some(is_and) = op {
+        parts.push(&c[start..]);
+        return if is_and {
+            parts.iter().all(|p| supports_condition_matches(p))
+        } else {
+            parts.iter().any(|p| supports_condition_matches(p))
+        };
+    }
+    // A single term: `selector(…)`, a parenthesised group, or a bare `prop: value`.
+    if let Some(sel) = c
+        .strip_prefix("selector(")
+        .and_then(|s| s.strip_suffix(')'))
+    {
+        return !parse_selector_list(sel).is_empty();
+    }
+    if let Some(inner) = c.strip_prefix('(').and_then(|s| s.strip_suffix(')')) {
+        // A nested group, or the declaration itself. Try it as a group first only if it still
+        // looks like a condition; otherwise fall through to the declaration probe.
+        if inner.contains(" and ") || inner.contains(" or ") || inner.starts_with("not ") {
+            return supports_condition_matches(inner);
+        }
+        return declaration_is_supported(inner);
+    }
+    declaration_is_supported(c)
+}
+
+/// Does this cascade actually implement `prop: value`? Applies it to a default style and checks
+/// whether anything moved. See [`supports_condition_matches`] for why this beats a name list.
+fn declaration_is_supported(decl: &str) -> bool {
+    let decls = parse_declarations(decl);
+    if decls.is_empty() {
+        return false;
+    }
+    let base = ComputedStyle::initial();
+    let mut probe = base.clone();
+    for d in &decls {
+        apply_declaration(&mut probe, d, 16.0);
+    }
+    probe != base
 }
 
 /// Evaluate a `@media` prelude against the current viewport.

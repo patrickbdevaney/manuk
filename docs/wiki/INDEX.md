@@ -179,6 +179,7 @@
   - L549 · The fix, and why it evaluates at cascade time
   - L570 · Still skipped: @supports and @layer
   - L577 · One evaluator for @media and matchMedia (tick 275)
+  - L605 · @supports / @layer, and answering a capability question honestly (tick 276)
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -664,4 +665,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-583 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+584 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

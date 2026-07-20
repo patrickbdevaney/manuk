@@ -601,3 +601,24 @@ disagreement — one loading at 800px and asserting 1280, the other saying "at 1
 message while loading at 800. Rather than edit them to the new constants (which is how you retune a
 gate to land your own tick), the load width is now threaded *through* the assertion, which is a
 stronger claim than either constant and fails if the prelude is re-hardcoded.
+
+## `@supports` / `@layer`, and answering a capability question honestly (tick 276)
+
+The same skip as `@media`, with two more at-keywords. The interesting part is how `@supports` is
+evaluated: **not** against a list of supported property names — that is a second source of truth
+that goes stale the moment a property lands — but by parsing the declaration, applying it to
+`ComputedStyle::initial()` and checking whether anything moved. The engine answers "do I support
+this?" by trying it, so the answer maintains itself.
+
+The probe is conservative by construction: a value that happens to equal the initial value reads as
+unsupported and its block does not apply, which is exactly the pre-existing behaviour. It can be as
+wrong as before, never newly wrong. An unparseable condition is `false`, matching `media_matches`.
+
+`@supports` must be able to answer **no**: the author wrote the fallback for that case, and applying
+both branches is worse than applying neither. `@layer` descends unconditionally and is knowingly
+approximate — layered rules should lose to unlayered ones at equal specificity, which this cascade
+cannot express — but deleting the contents was not approximate, it was absent.
+
+**A statement at-rule has no block.** `@layer a, b;` ends at the `;`, so `rest.find('{')` finds a
+*later* rule's brace and slices past the end. All four at-rule arms share one `block_open` that is
+`None` unless the brace falls before the rule's end.
