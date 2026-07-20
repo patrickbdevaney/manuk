@@ -1679,3 +1679,39 @@ player — the sites most likely to be tested.
 **Still open, and it is fidelity rather than absence:** vertical (`rl`/`lr`) cues paint horizontally;
 text width is estimated rather than shaped, so `align:end` and `size:` clipping are approximate; two
 simultaneous cues at the same explicit `line` overlap.
+
+## The video actually plays — and the browser stops denying it (ticks 262-264)
+
+**Pattern:** `<video src="clip.mp4">`, and the feature-detect that guards it:
+`if (v.canPlayType('video/mp4; codecs="avc1.42E01E"')) { showPlayer(); } else { showFallback(); }`
+
+**The class this unlocks:** the same non-YouTube long tail the caption work served, but the *picture*
+rather than the text — course and lecture recordings, conference talks, archive and museum clips,
+product demos, support videos, government and public-health media, news embeds. Anywhere a page ships
+a file and expects the browser to play it. Three ticks in sequence: the browser had to **ask** for the
+movie (262 — `<video src>` was never fetched at all, only `poster` was), **drive** it (263 — the
+shell had no media handling, so decoded frames reached nothing), and then **admit** it (264).
+
+**The failure this closes, and it is a distinct one from the previous three.** 261/262/263 each closed
+a variant of *built, correct, connected to nothing*. This one is different and worth naming
+separately: **the capability worked and the browser was still announcing that it did not.**
+`canPlayType` answered `''` for everything and `play()` returned a rejected promise — both scrupulously
+honest while nothing could decode, and both lies the instant playback landed. A site that politely
+feature-detects was told no about something that works, hid its player, and showed
+"your browser cannot play this" over a video that would have run.
+
+**An honest answer is not a fixed answer.** A capability stub hard-coding "no" is correct exactly as
+long as the capability is absent, and it is the only place in the tree that knows when that stops
+being true. Nothing fails when it goes stale — no test reddens, the browser simply under-reports
+itself forever. The gate that asserted `canPlayType === ''` was *pinning the limitation in place*.
+
+**Two questions that look alike and have different answers.** `canPlayType` asks about `<video src>`,
+which now works. `MediaSource.isTypeSupported` asks about MSE, where `appendBuffer` accepts segments
+that nothing drives into a decoder — so it still answers `false`, correctly, because an adaptive
+player told "yes" would append forever against a stall. That is strictly worse than being told no.
+
+**Still open:** whole-file buffering (no `Range` requests, so a feature-length file is an OOM);
+autoplay is unconditional until controls land; no audio device (`cpal` unbound); High-profile H.264
+and VP9/AV1 do not decode, and are refused up front rather than failed mid-stream; and `el.error`
+still reports `MEDIA_ERR_SRC_NOT_SUPPORTED` eagerly, which the next tick fixes with a shell→JS bridge
+carrying the real decode outcome.

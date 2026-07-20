@@ -1761,7 +1761,16 @@ const PRELUDE: &str = r#"
         };
         ro('error', err);
         ro('readyState', 0);        // HAVE_NOTHING — and it stays 0 until a frame is genuinely decoded
-        ro('paused', true);
+        // `paused` was a getter-only `true`, which was correct while `play()` could only reject.
+        // Now that it resolves, an assignment to a getter-only property is a SILENT no-op in sloppy
+        // mode (and a TypeError in strict), so `play()` would have flipped nothing and every player
+        // would paint a play button over a running video. Backed by a real flag, spec-initial `true`.
+        var paused = true;
+        Object.defineProperty(el, 'paused', {
+          configurable: true,
+          get: function(){ return paused; },
+          set: function(v){ paused = !!v; }
+        });
         ro('ended', false);
         ro('seeking', false);
 
@@ -1873,14 +1882,48 @@ const PRELUDE: &str = r#"
         el.HAVE_FUTURE_DATA = 3; el.HAVE_ENOUGH_DATA = 4;
         el.NETWORK_EMPTY = 0; el.NETWORK_IDLE = 1; el.NETWORK_LOADING = 2; el.NETWORK_NO_SOURCE = 3;
 
-        // `''` is the spec's "no". `'probably'` / `'maybe'` are the only other answers, and both
-        // would be lies.
-        el.canPlayType = function() { return ''; };
-
-        el.play = function() {
-          return Promise.reject(new DOMException('media playback is not supported by this browser', 'NotSupportedError'));
+        // ── `canPlayType` — and as of tick 263, `''` for everything became the LIE.
+        //
+        // This answered `''` unconditionally, which was exactly right when nothing could decode.
+        // Tick 263 wired the shell's media drive, so a plain `<video src="movie.mp4">` carrying
+        // Constrained-Baseline H.264 now fetches, decodes and PLAYS on screen. Keeping the blanket
+        // `''` means every site that politely feature-detects is told no about something that
+        // works, hides its `<video>`, and shows the "your browser cannot play this" fallback over a
+        // player that would have run. **An honest no becomes a lie the moment the answer changes,
+        // and this file is the only place that knows.**
+        //
+        // The three answers are the spec's own, and the distinction is real rather than decorative:
+        // `'probably'` means the codecs were NAMED and we have them; `'maybe'` means the container
+        // is one we read but the codec string was absent, so it cannot be promised; `''` is no.
+        // Answering `'probably'` to a bare `video/mp4` would be the same class of lie in reverse —
+        // that container carries HEVC and High-profile H.264 too, and neither decodes here.
+        el.canPlayType = function(type) {
+          if (typeof type !== 'string' || type === '') { return ''; }
+          var t = type.toLowerCase().replace(/\s+/g, '');
+          // Anything we can name and cannot decode is refused UP FRONT, before the container is
+          // even considered — an mp4 carrying HEVC is still an mp4.
+          if (/vp8|vp9|vp09|av01|hev1|hvc1|theora|vorbis|opus|mp3|flac|ac-3/.test(t)) { return ''; }
+          if (/webm|ogg|matroska|x-flv/.test(t)) { return ''; }
+          if (!/^(video|audio)\/mp4/.test(t)) { return ''; }
+          if (t.indexOf('codecs=') === -1) { return 'maybe'; }
+          // `avc1.42xxxx` is Constrained Baseline — the ONLY profile openh264 decodes here. The
+          // profile lives in the two hex digits after the dot, and 42 is the one that plays;
+          // `avc1.4d`/`avc1.64` (Main/High) are most of the real web and are refused.
+          var ok = true;
+          if (/avc1\./.test(t) && !/avc1\.42/.test(t)) { ok = false; }
+          if (/mp4a\./.test(t) && !/mp4a\.40/.test(t)) { ok = false; }
+          return ok ? 'probably' : '';
         };
-        el.pause = function() {};
+
+        // `play()` returned a REJECTED promise, which was honest for the same window and is now
+        // the same lie: the shell autoplays a decoded `<video>`, so a page whose play button
+        // awaits this promise lands in its own catch branch while the video plays behind it.
+        // Resolves, and flips `paused` — the property every player reads back to paint its button.
+        el.play = function() {
+          el.paused = false;
+          return Promise.resolve();
+        };
+        el.pause = function() { el.paused = true; };
         el.load  = function() {};
         // ── TEXT TRACKS — a REAL TextTrack, because this is the API captions actually arrive
         //    through on streaming sites.

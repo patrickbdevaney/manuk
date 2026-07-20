@@ -465,6 +465,10 @@
   - L934 · Three decisions that are not details
   - L959 · RED probes: three, all fired
   - L973 · Residue
+  - L990 · Tick 264 — the honest "no" that became a lie
+  - L1009 · The three answers, and why the distinction is real
+  - L1026 · RED probes: three, all fired
+  - L1039 · Residue — one incoherence, deliberately not fixed here
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -616,4 +620,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-535 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+539 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

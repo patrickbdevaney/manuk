@@ -986,3 +986,71 @@ on exactly that belief while the viewer saw nothing.
   playback now genuinely working for MP4 + Constrained-Baseline H.264, populating it is finally
   honest — and it is the next media tick rather than this one, because a registry claim should land
   with the gate that proves the claim.
+
+## Tick 264 — the honest "no" that became a lie
+
+`canPlayType` returned `''` for every type and `play()` returned a **rejected** promise. Both were
+scrupulously correct when they were written — the prelude's own comment says so: *"`''` is the
+spec's 'no'. `'probably'`/`'maybe'` are the only other answers, and both would be lies."*
+
+Tick 263 made them lies in the other direction. A plain `<video src="movie.mp4">` carrying
+Constrained-Baseline H.264 now fetches, decodes and plays on screen — and the browser was still
+telling every page that asked that it could not. **A site that politely feature-detects was hiding a
+player that would have worked** and showing its "your browser cannot play this" fallback instead.
+That is the failure mode the original stub existed to prevent, arrived at from the opposite side.
+
+**An honest answer is not a fixed answer.** This is the general lesson and it is worth naming: a
+capability stub that hard-codes "no" is honest exactly as long as the capability is absent, and it
+is the *only place in the tree that knows the answer changed*. Nothing fails when it goes stale —
+no test breaks, no gate reddens, the browser simply under-reports itself forever. The three ticks
+before this one all closed a variant of the same shape (built, correct, joined to nothing); this is
+its fourth: **built, correct, joined — and still announcing the old state of the world.**
+
+### The three answers, and why the distinction is real
+
+| type | answer | why |
+|---|---|---|
+| `video/mp4; codecs="avc1.42E01E, mp4a.40.2"` | `probably` | codecs NAMED and we have them |
+| `video/mp4` | `maybe` | container we read, codec unstated — cannot be promised |
+| `video/mp4; codecs="avc1.640028"` | `''` | High profile; openh264 is Constrained Baseline only |
+| `video/webm; codecs="vp9"` | `''` | no demuxer, no decoder |
+
+`'probably'` for a bare `video/mp4` would be the same lie in reverse: that container carries HEVC
+and High-profile H.264 too, and neither decodes here. The profile lives in the two hex digits after
+`avc1.` — `42` plays, `4d` (Main) and `64` (High) do not, and that is most of the real web.
+
+`play()` now resolves and flips `paused`. Which surfaced a second bug: `paused` was defined with
+`ro()` — **getter-only** — so `el.paused = false` is a silent no-op in sloppy mode. Every player
+would have painted a play button over a running video. It is now backed by a real flag.
+
+### RED probes: three, all fired
+
+| probe | result |
+|---|---|
+| answer `probably` for a bare container | RED — `bare:false` |
+| drop the `avc1.42` profile check | RED — `nohigh:false` (High profile claimed as playable) |
+| restore `ro('paused', true)` | RED — `playing:false` |
+
+Probe 3 is worth keeping. Under the broken getter-only property **`repaused:true` stayed GREEN**,
+because a getter that always returns `true` satisfies "pause() left it paused" perfectly. Only the
+`playing` assertion catches it. An assertion that a value is what it already was is not an
+assertion — the fifth appearance of the vacuous-assertion class in five ticks.
+
+### Residue — one incoherence, deliberately not fixed here
+
+`el.error` is still eagerly `MediaError(4)` (`MEDIA_ERR_SRC_NOT_SUPPORTED`). For a Baseline MP4 that
+now plays, that is inconsistent with `canPlayType` saying `probably`, and a player that checks
+`error` before anything else will still give up. **It was left alone on purpose, because fixing it
+naively trades one honesty for another:** setting `error` to the spec-initial `null` would mean a
+bare `<video src="x.webm">` with no `type` attribute reports no error at all and simply hangs, where
+today it reports 4 immediately and the site shows its fallback. That is a regression on the
+honest-failure axis, and the ratchet does not trade. The real fix is a **shell→JS bridge that reports
+the actual decode outcome** — the shell already knows (`MediaSet` records a known-failed decode);
+nothing tells the page. That is the next tick, and it makes `error` truthful in both directions
+instead of picking which half to be wrong about.
+
+`MediaSource.isTypeSupported` also still answers `false` for everything, and that one is **still
+correct**: MSE's `appendBuffer` accepts segments that nothing drives into the decoder, so claiming
+support would make every adaptive player append forever against a stall. The distinction is exact —
+`canPlayType` answers for `<video src>`, which works; `isTypeSupported` answers for MSE, which does
+not yet. Two questions, two different truths, and conflating them is how a player ends up wedged.

@@ -5907,16 +5907,19 @@ mod js_interactive_tests {
             "matchMedia: not-narrow, is-wide, and in-range at 1280px wide"
         );
 
-        // (15) **Media: graceful degradation means answering honestly, not staying silent.**
+        // (15) **Media: the honest answer, and it CHANGED when playback landed.**
         //
-        // We cannot decode video or audio, and that is fine — a browser is allowed to lack a codec.
-        // What is not fine is the shape the limit took: `video.play` was `undefined`, so a site calling
-        // it threw a TypeError and took the whole page down, and a site that *politely feature-detected*
-        // with `canPlayType` read `undefined` and could not even be told no.
+        // This block used to assert that `canPlayType` returns `''` for everything and `play()`
+        // REJECTS. Both were exactly right while nothing could decode. Tick 263 wired the shell's
+        // media drive, so Constrained-Baseline H.264 in MP4 now genuinely fetches, decodes and
+        // plays — and at that moment the old assertions started pinning a LIE in place. A site that
+        // politely feature-detects was being told no about something that works, and would hide its
+        // `<video>` behind a "your browser cannot play this" fallback.
         //
-        // Every assertion below is the spec's own vocabulary for a browser that cannot play a thing.
-        // `play()` rejecting is the best-tested failure path on the web — autoplay policies make
-        // rejection routine in real browsers, so every player library already handles it.
+        // So the vocabulary is the same and the answers moved: `'probably'` when the codecs are
+        // NAMED and we have them, `'maybe'` for a container we read with no codec string (it cannot
+        // be promised — mp4 carries HEVC and High-profile H.264 too, and neither decodes here),
+        // `''` for everything we can name and cannot play. `play()` resolves and flips `paused`.
         let html15 = r#"<!doctype html><html><body>
             <video id="v" width="640" height="360" poster="p.png" controls>
               <source src="m.mp4" type="video/mp4">
@@ -5924,35 +5927,47 @@ mod js_interactive_tests {
             <div id="out">-</div>
             <script>
               var v = document.getElementById('v'), r = [];
-              // '' is the spec's "no". 'probably'/'maybe' are the only other answers and both are lies.
-              r.push('cannot:' + (v.canPlayType('video/mp4') === ''));
+              // The three answers, and the distinction between them is the whole point.
+              r.push('named:' + (v.canPlayType('video/mp4; codecs="avc1.42E01E, mp4a.40.2"') === 'probably'));
+              r.push('bare:' + (v.canPlayType('video/mp4') === 'maybe'));
+              r.push('nowebm:' + (v.canPlayType('video/webm; codecs="vp9"') === ''));
+              r.push('nohigh:' + (v.canPlayType('video/mp4; codecs="avc1.640028"') === ''));
               r.push('state:' + (v.paused === true && v.readyState === 0 && v.networkState === 3));
               r.push('err:' + (v.error && v.error.code === 4));      // MEDIA_ERR_SRC_NOT_SUPPORTED
               r.push('iface:' + (v instanceof HTMLMediaElement));
               // Setters must not throw. Scripts assign these unconditionally.
               v.pause(); v.currentTime = 5; v.volume = 0.5; v.load();
               r.push('setters:' + (v.currentTime === 5));
-              // play() must return a REJECTED promise, never throw and never resolve.
+              // play() must RESOLVE and flip `paused` — a rejection now sends every player into
+              // its own catch branch while the video plays behind it.
               var p = v.play();
               r.push('promise:' + (p && typeof p.then === 'function'));
-              p.then(function(){ document.getElementById('out').textContent = 'PLAY RESOLVED (a lie)'; })
-               .catch(function(e){
-                 r.push('rejected:' + (e.name === 'NotSupportedError'));
+              p.then(function(){
+                 r.push('resolved:true');
+                 r.push('playing:' + (v.paused === false));
+                 v.pause();
+                 r.push('repaused:' + (v.paused === true));
                  document.getElementById('out').textContent = r.join(' ');
-               });
+               })
+               .catch(function(e){ document.getElementById('out').textContent = 'PLAY REJECTED (a lie now)'; });
             </script></body></html>"#;
         let page15 = Page::load(html15, "https://app.test/", &fonts, 800.0);
         let root15 = page15.dom().root();
         let out15 = manuk_css::query_selector_all(page15.dom(), root15, "#out")[0];
         let got15 = page15.dom().text_content(out15);
         for claim in [
-            "cannot:true",   // canPlayType() === '' — an honest no
+            "named:true",    // named Baseline codecs => 'probably' — what we genuinely decode
+            "bare:true",     // bare container => 'maybe' — readable, but cannot be promised
+            "nowebm:true",   // a codec we do not have => '' , even in a container we read
+            "nohigh:true",   // High-profile H.264 => '' — openh264 is Constrained Baseline only
             "state:true",    // paused / HAVE_NOTHING / NETWORK_NO_SOURCE
             "err:true",      // MediaError code 4
             "iface:true",    // instanceof HTMLMediaElement
             "setters:true",  // currentTime/volume/pause/load do not throw
             "promise:true",  // play() returns a thenable
-            "rejected:true", // ...and it REJECTS with NotSupportedError
+            "resolved:true", // ...and it RESOLVES, because playback now happens
+            "playing:true",  // ...and flips `paused` (a getter-only prop would silently not)
+            "repaused:true", // pause() flips it back
         ] {
             assert!(
                 got15.contains(claim),

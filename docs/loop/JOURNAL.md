@@ -11773,3 +11773,58 @@ populating `__mseCodecs` is finally honest, and it is the NEXT tick because a re
 land with the gate that proves it.
 
 WIKI: docs/wiki/media-pipeline.md
+
+## Tick 264 — the honest "no" that became a lie
+
+TICK SHAPE: the residue tick 263 named, and board CO-#1 (A) MEDIA. `canPlayType` returned `''` for
+everything and `play()` returned a REJECTED promise — both scrupulously correct when written (the
+prelude's own comment: *"'probably'/'maybe' would be lies"*), and both turned into lies the moment
+tick 263 made `<video src>` genuinely play. A site that politely feature-detects was hiding a player
+that would have worked.
+
+**THE GENERAL LESSON, NAMED: an honest answer is not a fixed answer.** A capability stub hard-coding
+"no" is honest exactly as long as the capability is absent, and it is THE ONLY PLACE IN THE TREE THAT
+KNOWS the answer changed. Nothing fails when it goes stale — no test breaks, no gate reddens, the
+browser just under-reports itself forever. This is the fourth variant in four ticks of the same
+shape: 261 built-and-never-drawn, 262 built-and-never-requested, 263 built-and-never-driven, 264
+**built, joined, and still announcing the old world.**
+
+Answers now: `probably` for named Baseline codecs, `maybe` for a bare container we read (mp4 also
+carries HEVC and High-profile H.264 — promising it would be the same lie in reverse), `''` for
+High profile (`avc1.4d`/`avc1.64` — most of the real web) and for everything WebM/VP9/AV1/Opus.
+`play()` resolves and flips `paused` — which surfaced a second bug: `paused` was `ro()`, GETTER-ONLY,
+so the assignment was a SILENT no-op and every player would paint a play button over a running video.
+
+**RED PROBES: THREE, ALL FIRED.** Probe 3 is the one worth keeping: with `paused` reverted to
+getter-only, **`repaused:true` stayed GREEN** — a getter that always returns `true` satisfies
+"pause() left it paused" perfectly. Only `playing:false` catches it. An assertion that a value is
+what it already was is not an assertion; fifth appearance of the vacuous class in five ticks.
+
+Also updated the G2/15 assertion block in the js_conformance suite, which had PINNED the old truth in
+place — it asserted `canPlayType === ''` and `play()` REJECTS. A gate that encodes a limitation
+keeps the limitation after it stops being true.
+
+RESIDUE, one incoherence DELIBERATELY not fixed: `el.error` is still eagerly `MediaError(4)`, which
+contradicts `canPlayType` saying `probably`. Fixing it naively TRADES one honesty for another —
+spec-initial `null` means a bare `<video src="x.webm">` with no `type` reports no error and just
+hangs, where today it reports 4 and the site shows its fallback. **The ratchet does not trade**, so
+it waits for the real fix: a shell→JS bridge reporting the ACTUAL decode outcome (the shell already
+knows; `MediaSet` records a known-failed decode). That is the next tick. `isTypeSupported` stays
+false and that is STILL correct — it answers for MSE, which nothing drives; `canPlayType` answers for
+`<video src>`, which works. Two questions, two truths.
+
+WIKI: docs/wiki/media-pipeline.md
+
+FLAKY-GATE NOTE (observer — I deliberately did NOT touch it): `tab::g_interact::
+tab_operations_stay_far_under_one_frame` (shell/src/tab.rs:729) false-RED'd once during this tick's
+verify and once standalone, then went GREEN 3/3 on re-run. It is the SCALING assertion, not the
+frame budget: `last 5 closes <= first 5 closes * 4 + 300us`, compared at MICROSECOND sums (it tripped
+on 928us vs 107us — both ~1000x under the 16ms frame). At those magnitudes one scheduler hiccup in
+one of five samples blows the ratio, so the gate is scale-blind rather than wrong in intent. My tick
+touches only the JS media prelude and the conformance block; nothing in the tab path. I did not
+retune it, because quietly widening a ratchet threshold to make my own tick land is trading
+instrument fidelity for a landing, and that is the one trade the ratchet forbids. Flagging it as a
+candidate for an absolute noise floor (bind the ratio only once the sums are large enough to mean
+something) — the observer's call, not mine.
+
+WIKI: docs/wiki/media-pipeline.md
