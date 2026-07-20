@@ -9,13 +9,43 @@ The fix is right and it moves the number: local repro 28.6% → 100.0% placement
 **wikipedia 7.2% → 10.1%, `mdy` 45 → 30** — the first movement on the sweep's highest-sample site in
 four placement-targeted ticks.
 
-It also takes **G6 clickability from 98.9% to 97.9% (4 misses → 8)**, over the ≤5 threshold. The
-cause is not the fix: correctly-widened panels now overlap body text that Chrome does not overlap,
-because our page-tools panel is *also at the wrong x* (`dx=45` in the tick-271 per-element dump).
-The widening turned an existing horizontal-placement defect from invisible into load-bearing.
+It also takes **G6 clickability from 98.9% to 97.9% (4 misses → 8)**, over the ≤5 threshold. Per THE
+RATCHET a capability is never traded for a regression, so it waits.
 
-Per THE RATCHET a capability is never traded for a regression. So: **fix the panel-x defect first,
-then apply this patch and re-run G6.** Both halves should then be green together.
+### The blocker is NOT a separate x defect — that was my first reading and it was wrong
+
+The tick-271 dump reads `vector-page-tools cx=778 cw=150 · mx=823 mw=105 · dx=45 dw=-45`, and I
+first filed that as "the panel is also 45px to the right". Check the arithmetic: `778 + 150 = 928`
+and `823 + 105 = 928`. **The right edges agree exactly.** The panel is right-anchored, so `dx` is
+not an independent error at all — it is `-dw` wearing a different sign. This patch fixes both at
+once, and there is no panel-x tick to do first.
+
+`dx = -dw` on a right-anchored box is worth recognising on sight: two columns of a placement dump
+that look like two bugs and are one.
+
+### What the blocker actually is (re-measured after applying the patch)
+
+With the patch applied, the four new G6 misses are all *inside or beneath panels Chrome renders as
+`visibility:hidden`* — verified by asking Chrome directly: `.vector-dropdown-content` computes
+`visibility:hidden` on the Terrier page, laid out at 232×32, and `#vector-main-menu` inside it
+likewise. Tick 272 taught the a11y tree to skip those. So two things are still true and they need
+separating:
+
+1. **"Main page" being unclickable is CORRECT.** It sits inside a closed, `visibility:hidden` menu.
+   Chrome cannot click it either. G6 counts every `<a href>` with a box and calls this a miss —
+   the metric does not know about hidden containers. ⚠ This is exactly the shape of "retune the gate
+   to land your own tick", so it must NOT be fixed by editing the harness as part of landing this
+   patch. If the metric is wrong it is wrong on its own merits, on its own tick, argued separately.
+2. **"vermin" / "type" being unclickable is a REAL bug**, and it is the one to chase: they sit under
+   the page-tools panel, which Chrome computes hidden and we apparently do not. An isolated repro of
+   Wikipedia's exact dropdown CSS (`.vector-dropdown .vector-dropdown-checkbox:checked ~
+   .vector-dropdown-content`) computes hidden correctly in our engine, so the divergence is
+   something the real 206KB stylesheet does that the repro does not — a cascade question, not a
+   layout one.
+
+**NEXT STEP:** find why `.vector-dropdown-content` computes visible for us on the live page when it
+computes hidden in the repro and in Chrome. That is a bounded cascade probe. When it is fixed, this
+patch should land green.
 
 ## What is in the patch
 
