@@ -445,6 +445,10 @@
   - L647 · The limit this tick MEASURED and did not remove
   - L657 · Two RED probes came back GREEN, and the claim was narrowed rather than the probe discarded
   - L673 · Residue
+  - L681 · M7e — cue placement is not decoration (tick 260)
+  - L698 · auto is not 0, and a bare number is not a percentage
+  - L711 · Probes
+  - L726 · Residue
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -596,4 +600,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-515 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+519 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

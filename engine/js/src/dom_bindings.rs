@@ -2589,11 +2589,20 @@ unsafe fn parse_vtt(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
                 .iter()
                 .map(|c| {
                     format!(
-                        r#"{{"id":{},"start":{},"end":{},"text":{}}}"#,
+                        r#"{{"id":{},"start":{},"end":{},"text":{},"vertical":{},"line":{},"linePct":{},"position":{},"size":{},"align":{}}}"#,
                         js_string_literal(c.id.as_deref().unwrap_or("")),
                         fin(c.start),
                         fin(c.end),
-                        js_string_literal(&c.text)
+                        js_string_literal(&c.text),
+                        js_string_literal(&c.settings.vertical),
+                        // `null` is `auto`, and it must survive as `auto` rather than collapsing to
+                        // 0 — `line:0` is the TOP of the frame and `auto` is the bottom, so the two
+                        // are opposite ends of the picture.
+                        c.settings.line.map(fin).unwrap_or_else(|| "null".into()),
+                        c.settings.line_is_percent,
+                        c.settings.position.map(fin).unwrap_or_else(|| "null".into()),
+                        fin(c.settings.size),
+                        js_string_literal(&c.settings.align)
                     )
                 })
                 .collect::<Vec<_>>()

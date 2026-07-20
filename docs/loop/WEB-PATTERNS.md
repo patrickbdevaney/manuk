@@ -1632,3 +1632,22 @@ touches the video; these pages never touch it.
 context, so its `<track>` never loads — measured, not assumed. And nothing paints a cue: the track is
 loaded, `showing`, holding the right cues at the right times, and a viewer of a plain `<video>` still
 sees no text, because the UA has no caption overlay of its own.
+
+## The caption placed exactly where the author said not to (tick 260)
+
+**Pattern:** `00:00:06.000 --> 00:00:08.000 line:0 align:start position:10%` — the settings run on a
+cue's timestamp line, which every real caption file uses and tick 255 discarded.
+
+**The class this unlocks:** any video whose frame is already busy at the bottom — sports with a
+scoreboard, news with a lower third, foreign films with burned-in subtitles, interviews where the
+speaker's mouth is where the text would go. Authors write `line:0` precisely to move the caption
+away, so dropping the setting puts every cue in the one position they were avoiding.
+
+**`auto` is not `0`.** `line:0` is the top of the frame; `auto` is the bottom. A parser that collapses
+auto to 0 moves every default caption in every file to the top.
+
+**A bare `line` number is a line COUNT, not a percentage.** `line:0` reads correctly either way — which
+is what lets the bug through — but `line:-1` means the last line, i.e. the bottom.
+
+**Still closed:** nothing paints a cue. The placement is now correct and complete for a page's own
+overlay to consume; the UA still has no caption renderer of its own.

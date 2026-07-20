@@ -677,3 +677,54 @@ has one — but a plain `<video>` with `<track default>` now holds the right cue
 and still shows the viewer nothing, because the UA has no caption overlay of its own. That, plus cue
 positioning settings (still parsed and inert), is what stands between this and captions a user can
 actually read.
+
+## M7e — cue placement is not decoration (tick 260)
+
+Tick 255 parsed cue timings and text and **discarded the settings** on the timestamp line; ticks 256
+and 257 accepted them on `VTTCue` and kept them inert. So every cue in every file arrived at its
+renderer bottom-centre, regardless of what the author wrote.
+
+That is not a cosmetic loss. Caption authors use these settings to keep text **off** something:
+`line:0` lifts a caption to the top because the bottom of the frame is already occupied — burned-in
+subtitles, a scoreboard, a lower-third name card, the speaker's own mouth. `align:start
+position:10%` pins a speaker's line to the side of the frame they stand on. Painting everything
+bottom-centre lands each cue in the one place the author specifically avoided.
+
+`CueSettings` now carries `vertical` / `line` / `line_is_percent` / `position` / `size` / `align`,
+kept in **the spec's own vocabulary rather than resolved to pixels**, because the thing that resolves
+them is a renderer that knows the video box — and there are two (the page's own overlay via `VTTCue`,
+and eventually ours).
+
+### `auto` is not `0`, and a bare number is not a percentage
+
+Two claims that read as pedantry and are the whole correctness of the module:
+
+- **`None` (auto) must survive as `auto`.** `line:0` is the TOP of the frame; `auto` is the bottom.
+  Collapsing auto to 0 moves *every default caption in every file* to the top of the video.
+- **A bare `line` number is a LINE COUNT.** Reading `line:0` as "0% down the frame" happens to look
+  right, which is what makes the bug survive review — but `line:-1` means the LAST line, i.e. the
+  bottom, and as a percentage it is nonsense.
+
+Leniency is preserved: `align:middle` (superseded by `center`) and any unknown setting are skipped
+rather than failing the cue, for the same reason a malformed timestamp does not fail the file.
+
+### Probes
+
+RED as predicted: discarding settings (the pre-tick behaviour) → `align/position/size` gone; reading
+a bare `line` as a percentage → `line:0` becomes `0%`; emitting `0` for auto → every default cue
+moves to the top.
+
+**One probe was a silent no-op and one assertion was vacuous — both caught, both recorded.** The
+first `line`-as-percentage probe set the flag at the top of a branch that assigns `false` two lines
+later, so it changed nothing and the gate stayed green. The assertion it was aimed at read
+`got.contains("line3=0")`, which **also matches `line3=0%`** — the very bug it was meant to catch. It
+now asserts `"line3=0 align3=center"`, spanning the field boundary. Substring assertions on a
+flat report string are a standing hazard in these gates: assert the delimiter too.
+
+Gate: `engine/page/tests/g_track_src.rs` (`G_TRACK_SRC`), extended with four real-world cue shapes.
+
+### Residue
+
+Unchanged and now the only thing left in the caption arc: **nothing paints a cue.** The placement
+data is correct, complete and available to a page's own renderer; a plain `<video>` with
+`<track default>` still shows the viewer nothing, because the UA has no caption overlay.

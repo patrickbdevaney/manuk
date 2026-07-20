@@ -119,4 +119,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 125	e91fdd1	1784200863	2026-07-16T07:21:03-04:00	1826	pattern-class	62	9	278	34	56	81	3053	6524	0	220	0	`getElementsByTagNameNS`: the namespace-aware query (+44 dom)
 126	5134345	1784202937	2026-07-16T07:55:37-04:00	2074	Bar-0	51	4	71	4	56	81	3053	6524	0	220	0	Bar-0 diagnosis: the css-values/calc-size interpolate-size SIGSEGV (tracked, not a regression)
 127	7accf37	1784205239	2026-07-16T08:33:59-04:00	2302	pattern-class	48	12	222	59	57	81	3053	6524	0	222	0	DOM validation throws are REAL `DOMException`s, not decorated `Error`s (+420 dom)
-128	2d1466a	1784504075	2026-07-19T19:34:35-04:00	298836	pattern-class	60	10	599	33	118	81	3896	6960	0	315	0	`Node.lookupPrefix` + the DocumentType namespace-lookup surface (+20 dom)
+128	74c3420	1784505924	2026-07-19T20:05:24-04:00	300685	pattern-class	59	11	325	44	118	81	3896	6960	0	315	0	`Node.lookupPrefix` + the DocumentType namespace-lookup surface (+20 dom)

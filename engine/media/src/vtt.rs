@@ -41,6 +41,104 @@ pub struct Cue {
     pub end: f64,
     /// The caption text, newlines preserved. Cue settings are NOT part of this.
     pub text: String,
+    /// **Where on the video this caption goes.** Parsed at tick 260; discarded before that.
+    pub settings: CueSettings,
+}
+
+/// The placement half of a cue, which is not decoration.
+///
+/// A caption file uses these to keep text OFF something: `line:0` lifts a caption to the top because
+/// the bottom of the frame is already occupied — by burned-in subtitles, a scoreboard, a lower-third
+/// name card, or the speaker's own mouth. `align:start` with `position:10%` pins a speaker's line to
+/// the side of the frame they are standing on. Dropping all of it and painting every cue
+/// bottom-centre is not a cosmetic loss; it is the one placement the author specifically avoided.
+///
+/// Values are kept in the spec's own vocabulary rather than resolved to pixels, because the thing
+/// that resolves them is a renderer that knows the video box, and there are two different ones (the
+/// page's own overlay, via `VTTCue`, and eventually ours).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CueSettings {
+    /// `""` (horizontal), `"rl"` or `"lr"` — vertical writing, used by Japanese captions.
+    pub vertical: String,
+    /// `None` is `auto`. With `line_is_percent`, a percentage down the frame; otherwise a LINE
+    /// COUNT, where negative counts up from the bottom (`line:-1` is the last line).
+    pub line: Option<f64>,
+    pub line_is_percent: bool,
+    /// `None` is `auto`. A percentage across the frame.
+    pub position: Option<f64>,
+    /// Width of the cue box as a percentage of the frame. `100` is the default and the common case.
+    pub size: f64,
+    /// `start` / `center` / `end` / `left` / `right`. `center` is the default.
+    pub align: String,
+}
+
+impl Default for CueSettings {
+    fn default() -> Self {
+        Self {
+            vertical: String::new(),
+            line: None,
+            line_is_percent: false,
+            position: None,
+            size: 100.0,
+            align: "center".to_string(),
+        }
+    }
+}
+
+impl CueSettings {
+    /// Parse the `key:value` run that follows the end timestamp.
+    ///
+    /// **An unknown or malformed setting is skipped, not fatal** — the same leniency the cue parser
+    /// applies one level up, and for the same reason: `align:middle` (a real thing in old files,
+    /// superseded by `center`) must not cost the viewer the cue's text.
+    fn parse(rest: &str) -> Self {
+        let mut s = Self::default();
+        for tok in rest.split_whitespace() {
+            let Some((k, v)) = tok.split_once(':') else {
+                continue;
+            };
+            match k {
+                "vertical" if v == "rl" || v == "lr" => s.vertical = v.to_string(),
+                "align" => {
+                    if matches!(v, "start" | "center" | "end" | "left" | "right") {
+                        s.align = v.to_string()
+                    }
+                }
+                "size" => {
+                    if let Some(n) = pct(v) {
+                        s.size = n
+                    }
+                }
+                "position" => {
+                    // `position:50%,line-left` — the alignment suffix is accepted and dropped.
+                    let head = v.split(',').next().unwrap_or(v);
+                    if let Some(n) = pct(head) {
+                        s.position = Some(n)
+                    }
+                }
+                "line" => {
+                    let head = v.split(',').next().unwrap_or(v);
+                    if let Some(n) = pct(head) {
+                        s.line = Some(n);
+                        s.line_is_percent = true;
+                    } else if let Ok(n) = head.parse::<f64>() {
+                        // A bare number is a LINE COUNT, not a percentage. Reading `line:0` as
+                        // "0% down the frame" happens to look right; reading `line:-1` as "-1%"
+                        // does not — it is the LAST line, i.e. the bottom.
+                        s.line = Some(n);
+                        s.line_is_percent = false;
+                    }
+                }
+                _ => {}
+            }
+        }
+        s
+    }
+}
+
+/// `"50%"` → `Some(50.0)`. Anything without the sign is not a percentage.
+fn pct(v: &str) -> Option<f64> {
+    v.strip_suffix('%')?.parse::<f64>().ok()
 }
 
 impl Cue {
@@ -135,7 +233,7 @@ impl VttTrack {
                 continue;
             };
 
-            let Some((start, end)) = parse_timing(rest[timing_idx]) else {
+            let Some((start, end, settings)) = parse_timing(rest[timing_idx]) else {
                 i = timing_idx + 1;
                 continue;
             };
@@ -152,6 +250,7 @@ impl VttTrack {
                 start,
                 end,
                 text: payload.join("\n").trim_end().to_string(),
+                settings,
             });
             i = j;
         }
@@ -190,13 +289,16 @@ impl VttTrack {
 ///
 /// Everything after the end timestamp is cue SETTINGS and is discarded here — keeping it would
 /// print `align:start position:50%` to the viewer.
-fn parse_timing(line: &str) -> Option<(f64, f64)> {
+fn parse_timing(line: &str) -> Option<(f64, f64, CueSettings)> {
     let (lhs, rhs) = line.split_once("-->")?;
     let start = parse_timestamp(lhs.trim())?;
-    // The end timestamp is the FIRST token after the arrow; the rest is settings.
-    let end_tok = rhs.trim().split_whitespace().next()?;
+    // The end timestamp is the FIRST token after the arrow; the rest is settings — which, until
+    // tick 260, this function read and threw away.
+    let rhs = rhs.trim();
+    let end_tok = rhs.split_whitespace().next()?;
     let end = parse_timestamp(end_tok)?;
-    Some((start, end))
+    let settings = CueSettings::parse(&rhs[end_tok.len()..]);
+    Some((start, end, settings))
 }
 
 /// `HH:MM:SS.mmm` or `MM:SS.mmm` — **hours are optional**, which is the common form.

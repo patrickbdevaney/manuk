@@ -2077,6 +2077,17 @@ const PRELUDE: &str = r#"
                     for (var c = 0; c < res.cues.length; c++) {
                       var cue = new globalThis.VTTCue(res.cues[c].start, res.cues[c].end, res.cues[c].text);
                       cue.id = res.cues[c].id || '';
+                      // The PLACEMENT half. A player's overlay reads exactly these to position the
+                      // caption; leaving them at their defaults puts every cue bottom-centre, which
+                      // is the one place an author who set `line:0` was deliberately avoiding.
+                      // `null` means `auto` and must stay the string 'auto', not become 0 — `line:0`
+                      // is the TOP of the frame and `auto` is the bottom.
+                      var sp = res.cues[c];
+                      cue.vertical = sp.vertical || '';
+                      cue.line = (sp.line === null) ? 'auto' : (sp.linePct ? sp.line + '%' : sp.line);
+                      cue.position = (sp.position === null) ? 'auto' : sp.position;
+                      cue.size = sp.size;
+                      cue.align = sp.align;
                       track.addCue(cue);
                     }
                     te.readyState = 2;

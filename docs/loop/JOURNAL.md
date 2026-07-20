@@ -11569,3 +11569,53 @@ this and captions a user can actually read. The constellation's `WebVTT subtitle
 `partial` for exactly that reason.
 
 WIKI: docs/wiki/media-pipeline.md
+
+## Tick 260 — the caption placed exactly where the author said not to
+
+TICK SHAPE: tick 259's residue, minus the part that needs the paint path. Tick 255 parsed cue timings
+and text and **threw the settings away**; 256/257 accepted them on `VTTCue` and kept them inert. So
+every cue in every file reached its renderer bottom-centre no matter what the author wrote.
+
+**WHY THIS IS NOT COSMETIC.** Caption authors use these settings to keep text OFF something: `line:0`
+lifts a caption to the top because the bottom of the frame is already occupied — burned-in subtitles,
+a scoreboard, a lower-third name card, the speaker's own mouth. `align:start position:10%` pins a
+speaker's line to the side of the frame they stand on. Painting everything bottom-centre puts each
+cue in the one place the author specifically avoided.
+
+**THE CAPABILITY.** `CueSettings` (vertical / line / line_is_percent / position / size / align) parsed
+off the timestamp line, carried through `__parseVtt`'s JSON, and set on the `VTTCue` objects a
+player's overlay reads. Values stay in the SPEC'S OWN VOCABULARY rather than resolved to pixels,
+because what resolves them is a renderer that knows the video box — and there are two (the page's
+overlay via `VTTCue`, and eventually ours).
+
+HYPOTHESIS, and both halves held: the claims most likely to be got wrong are the two that read as
+pedantry. **`auto` is not `0`** — `line:0` is the TOP of the frame and `auto` is the bottom, so
+collapsing auto to 0 moves every default caption in every file to the top. **A bare `line` number is
+a LINE COUNT, not a percentage** — `line:0` reads correctly either way, which is exactly what lets
+the bug survive, but `line:-1` means the LAST line and as a percentage is nonsense.
+
+Leniency preserved: `align:middle` (superseded by `center`) and unknown settings are skipped rather
+than failing the cue, same as a malformed timestamp does not fail the file.
+
+**RED PROBES (process rule 3), three, all confirmed:** discard settings (the pre-tick behaviour) →
+align/position/size gone; bare `line` read as a percentage → `line:0` becomes `0%`; emit `0` for auto
+→ every default cue moves to the top.
+
+**ONE PROBE WAS A SILENT NO-OP AND ONE ASSERTION WAS VACUOUS — both caught, both recorded.** The
+first `line`-as-percentage probe set the flag at the top of a branch that assigns `false` two lines
+later: it changed nothing and the gate stayed green, which I nearly read as "the claim is unfalsifiable"
+rather than "the probe did not apply" ([[scripted-edit-silent-noop]] is exactly this). Worse, the
+assertion it aimed at read `got.contains("line3=0")` — which **also matches `line3=0%`**, the very bug
+it was meant to catch. It now asserts `"line3=0 align3=center"`, spanning the field boundary.
+**Substring assertions on a flat report string are a standing hazard in these gates: assert the
+delimiter too.**
+
+Gate: `engine/page/tests/g_track_src.rs` extended with four real-world cue shapes. `g_cue_change`,
+`g_text_tracks` and `manuk-media`'s `vtt_captions` all still green.
+
+Residue, and it is now the ONLY thing left in the caption arc: **nothing paints a cue.** The
+placement data is correct, complete and available to a page's own renderer; a plain `<video>` with
+`<track default>` still shows the viewer nothing, because the UA has no caption overlay of its own.
+That tick is scoped in the wiki and touches the paint path.
+
+WIKI: docs/wiki/media-pipeline.md

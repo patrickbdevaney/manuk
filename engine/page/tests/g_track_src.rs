@@ -67,8 +67,14 @@ const VTT: &str = "WEBVTT - Example captions\n\
                    ALICE: the clock reads 00:00:09.000 here\n\
                    and this line belongs to the same cue\n\
                    \n\
-                   00:00:03.500 --> 00:00:06.000\n\
-                   BOB: talking over her\n";
+                   00:00:03.500 --> 00:00:06.000 align:start position:10% size:40%\n\
+                   BOB: talking over her\n\
+                   \n\
+                   00:00:06.000 --> 00:00:08.000 line:0 align:middle\n\
+                   SIGN: the bottom of the frame is already busy\n\
+                   \n\
+                   00:00:08.000 --> 00:00:10.000 line:-1 vertical:rl\n\
+                   the last line, written vertically\n";
 
 const HTML: &str = r##"<!doctype html>
 <html><body>
@@ -112,6 +118,10 @@ const REPORT: &str = r##"
     ' multiline=' + (texts[1] || '').split('\n').length +
     ' keptstamp=' + ((texts[1] || '').indexOf('00:00:09.000') >= 0) +
     ' fires=' + fires + ' drawn=' + drawn +
+    ' align2=' + t.cues[2].align + ' pos2=' + t.cues[2].position + ' size2=' + t.cues[2].size +
+    ' line0=' + t.cues[0].line + ' align0=' + t.cues[0].align +
+    ' line3=' + t.cues[3].line + ' align3=' + t.cues[3].align +
+    ' line4=' + t.cues[4].line + ' vert4=' + t.cues[4].vertical +
     ' badready=' + badTrack.readyState +
     ' badcues=' + (bad.textTracks[0] ? bad.textTracks[0].cues.length : -1);
 "##;
@@ -211,8 +221,8 @@ fn a_track_element_fetches_parses_and_becomes_a_live_caption_track() {
 
     // ── 2. Parsed by the REAL parser, and the track carries the element's attributes. ────────
     assert!(
-        got.contains("tracks=1") && got.contains("cues=3"),
-        "all three cues arrive as a single track; got: {got}"
+        got.contains("tracks=1") && got.contains("cues=5"),
+        "all five cues arrive as a single track; got: {got}"
     );
     assert!(
         got.contains("label=English") && got.contains("lang=en") && got.contains("kind=captions"),
@@ -249,7 +259,31 @@ fn a_track_element_fetches_parses_and_becomes_a_live_caption_track() {
         "the second speaker is present in the active set; got: {got}"
     );
 
-    // ── 5. A body that is not WebVTT fails the TRACK, loudly and locally. ────────────────────
+    // ── 5. CUE PLACEMENT — the settings are not decoration. ─────────────────────────────────
+    assert!(
+        got.contains("align2=start") && got.contains("pos2=10") && got.contains("size2=40"),
+        "align/position/size come off the timestamp line — a speaker's line pinned to the side of \
+         the frame they stand on. Dropped, every cue lands bottom-centre. got: {got}"
+    );
+    assert!(
+        got.contains("line0=auto") && got.contains("align0=center"),
+        "a cue with NO settings keeps the spec defaults, and `auto` must stay the string `auto`: \
+         `line:0` is the TOP of the frame and `auto` is the bottom, so collapsing auto to 0 puts \
+         every default caption at the top of the video. got: {got}"
+    );
+    assert!(
+        got.contains("line3=0 align3=center"),
+        "`line:0` is a LINE COUNT, not a percentage, and it lifts the caption to the top because \
+         the bottom of the frame is already busy. `align:middle` is a superseded value that must \
+         be skipped without costing the cue its text — leniency, not rejection. got: {got}"
+    );
+    assert!(
+        got.contains("line4=-1 vert4=rl"),
+        "`line:-1` counts UP from the bottom — read as a percentage it is nonsense, and read as \
+         `auto` it silently moves. `vertical:rl` is how Japanese captions are written. got: {got}"
+    );
+
+    // ── 6. A body that is not WebVTT fails the TRACK, loudly and locally. ────────────────────
     assert!(
         got.contains("badready=3") && got.contains("badcues=0"),
         "an HTML error page served with a 200 must leave the track in ERROR(3) holding no cues — \
