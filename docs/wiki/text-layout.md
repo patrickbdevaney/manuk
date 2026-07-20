@@ -659,3 +659,104 @@ so a gate built on DejaVu or Noto would have passed the broken implementation.
 Advance widths. Chrome positions glyphs subpixel horizontally, and the sweep already measured our
 horizontal placement as exact. Rounding widths would trade a fixed vertical error for a new
 horizontal one — the same shape of trade as the nested-list margin in tick 268.
+
+---
+
+## The inline box is the CONTENT AREA, not the line box (tick 271)
+
+The largest single systematic placement error the engine has had, and the one hardest to see
+locally: **`getBoundingClientRect()` on an inline element returned the line box.**
+
+```
+<p style="font: 16px/1.6 sans-serif">before <a>link</a></p>
+
+Chrome      <a>  y = line_top + 4    height = 17     ← the font's content area
+Manuk       <a>  y = line_top        height = 25.6   ← the line box
+```
+
+Wrong in **both** coordinates, on **every `<a>`, `<span>`, `<em>`, `<strong>` and `<code>` on every
+page that sets `line-height`** — which is essentially the whole web. FID-SWEEP had been showing the
+signature for three ticks without it being read correctly: on wikipedia, `dw=0` (widths exact) with
+`dh=+7` repeated across dozens of elements, and a median `dh=4` for the page.
+
+### The rule (CSS 2.1 §10.6.1)
+
+```
+content_height = round(ascent) + round(descent)        ← no line gap, no line-height
+half_leading   = floor((line_box_height - content_height) / 2)     ← may be NEGATIVE
+content_top    = line_top + half_leading
+line_box       = line-height                           ← content may OVERFLOW it
+```
+
+### The two rounding rules are opposite, and that is not a typo
+
+`line-height: normal` rounds the **sum** (tick 269, above). The content area rounds the **parts**.
+Measured against real Chrome, 2 faces × 8 sizes, no exception:
+
+```
+                 size   ascent  descent   round+round   round(sum)   Chrome
+Liberation Sans  14px   12.672    2.966      13+3 = 16          16       16
+Liberation Sans  16px   14.484    3.391      14+3 = 17          18   ✗   17
+Liberation Sans  32px   28.969    6.781      29+7 = 36          36       36
+DejaVu Sans      16px   14.852    3.773      15+4 = 19          19       19
+DejaVu Sans      32px   29.703    7.547      30+8 = 38          37   ✗   38
+```
+
+The **14px→16 / 16px→17** pair is the discriminator: no single ratio and no rounded sum can grow a
+box by 1px across a 2px size step. Only per-part rounding does. Tick 269 rejected per-part rounding
+for the *line box* and was right to; applying that conclusion to the *content area* would have been
+the natural mistake, and the sweep across sizes is what forecloses it.
+
+### Half-leading is signed
+
+`line-height: 1` on a 16px Liberation face is a **16px line box containing a 17px content area**.
+Chrome floors the half-leading to `-1` and lets the inline overflow upward. The old code clamped it
+at zero *and* took `max(line_height, ascent + descent)` for the line box — so a tight line came out
+16px where Chrome says 14, and every tight paragraph on the page grew.
+
+### Where it is stored, and why relative to the baseline
+
+`TextFragment` carries `content_ascent` and `content_height`, and `rect()` derives
+`y = baseline - content_ascent`. Storing an absolute top would have to be re-shifted by `translate`,
+sticky positioning and scroll — three places that already move `baseline`, and one of them would
+eventually be missed. Anchoring to the baseline makes the content area translation-invariant by
+construction.
+
+Per-**fragment**, not per-line: `<p>14px <em style="font-size:32px">x</em></p>` puts two runs on one
+shared baseline with two different content areas, and Chrome reports each element its own.
+
+### Measured effect
+
+```
+site            placement (within 8px)     median dy      median dh
+old.reddit.com     17.6%  →  26.5%          60  →  12       0  →  0
+en.wikipedia.org    7.2%  →   7.2%          45  →  45       4  →  0
+G1 wiki snapshot   15.5%  →  15.5%          23  →  23       1  →  0
+local probe        85.7%  →  100.0%          3  →   0       6  →  0
+```
+
+old.reddit's placement score moved half again — the first movement on the sweep's own metric in four
+placement-targeted ticks — and the median `dh` went to **0 on every real page measured**, which is
+the direct read of the fix. Wikipedia's *height* median went exact while its `dy` did not move, which
+correctly separates this cause from the still-open sidebar-width narrowing (93px against Chrome's
+186px) that dominates that page.
+
+### The synthetic fragments that were riding on `line_height`
+
+`rect()` reading `style.line_height` was load-bearing for something else entirely. Inline
+padding/border **spacers** — and the empty fragment a bare `<br>` leaves — have no text and no font
+(`ascent == descent == 0`) and exist only to carry an element's geometry, so they encoded their
+height in `style.line_height` because that was the field `rect()` read. The content-area change made
+every one of them report height 0; they fell out of `node_rects`' `width > 0 || height > 0` filter
+and **vanished**, dropping G1 coverage from 100% to 67.8% (29 elements on news.ycombinator, 13 on
+wikipedia).
+
+A *placement* change caused a *coverage* regression in a gate that was not the target. The fix is a
+named field — `LineFrag::report_h: Option<f32>` — rather than a font field doing double duty, so the
+next change to `rect()` cannot silently delete these boxes again.
+
+**Gate:** `inline_box_is_the_font_content_area_not_the_line_box` (manuk-layout). Proven RED on the
+pre-fix code twice, on two different mechanisms independently: reverting `rect()` fails assertion 1
+("got 25.6"), and reverting only the line-box `max` fails assertion 3 ("got 17, want 16"). The test
+opens by asserting the installed face's content area is distinguishable from its 1.6 line box —
+without that guard, a face where they coincide would make every later assertion vacuous.

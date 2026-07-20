@@ -85,6 +85,35 @@ impl LineMetrics {
     pub fn height(&self) -> f32 {
         (self.ascent + self.descent + self.line_gap).round()
     }
+
+    /// The CSS **content area** of an inline box (CSS 2.1 §10.6.1) — `round(ascent) + round(descent)`,
+    /// with **no line gap and no dependence on `line-height` whatsoever**.
+    ///
+    /// This is what `getBoundingClientRect()` reports for a non-replaced inline element, and it is a
+    /// *different number and a different rounding rule* from [`height`] above. Getting the two
+    /// confused is the whole bug this exists to fix: we were reporting every `<a>`, `<span>` and
+    /// `<em>` as `line_height` tall, anchored at the line-box top — so on a `line-height: 1.6` page
+    /// every inline element came out ~6px too tall and ~3px too high, on every line, everywhere.
+    ///
+    /// **The two rules are genuinely opposite, and that is not a typo.** `line-height: normal`
+    /// rounds the SUM (tick 269, measured: Liberation 14.484+3.391+0.523 → 18, and rounding the
+    /// parts gives 17, which is wrong). The content area rounds the PARTS. Verified against real
+    /// Chrome across 2 faces × 8 sizes = 16 points, with no exception:
+    ///
+    /// ```text
+    ///                  size   ascent  descent   round+round   Chrome
+    /// Liberation Sans   14px  12.672    2.966      13+3 = 16      16
+    /// Liberation Sans   16px  14.484    3.391      14+3 = 17      17   ← +2px size, +1px box
+    /// Liberation Sans   32px  28.969    6.781      29+7 = 36      36
+    /// DejaVu Sans       16px  14.852    3.773      15+4 = 19      19
+    /// DejaVu Sans       32px  29.703    7.547      30+8 = 38      38
+    /// ```
+    ///
+    /// The 14px→16 / 16px→17 pair is the discriminator: a single ratio (or rounding the sum) cannot
+    /// produce a 1px growth across a 2px size step. Only per-part rounding does.
+    pub fn content_height(&self) -> f32 {
+        self.ascent.round() + self.descent.round()
+    }
 }
 
 /// An index into the [`FontContext`] face registry (a resolved face: a `FontKey`'s primary

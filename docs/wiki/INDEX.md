@@ -619,6 +619,13 @@
   - L634 · The rule
   - L638 · The wrong rule that looks identical
   - L657 · What is NOT rounded
+  - L665 · The inline box is the CONTENT AREA, not the line box (tick 271)
+  - L682 · The rule (CSS 2.1 §10.6.1)
+  - L691 · The two rounding rules are opposite, and that is not a typo
+  - L710 · Half-leading is signed
+  - L717 · Where it is stored, and why relative to the baseline
+  - L728 · Measured effect
+  - L744 · The synthetic fragments that were riding on line_height
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -646,4 +653,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-565 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+572 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

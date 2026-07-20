@@ -1876,3 +1876,34 @@ the cause is a width. Per-element boxes could, and did.
 style) PASSED the unit gate while the live page was unchanged, because the two cascades store
 different things on a text node — `inherit_from(parent)` vs a full clone of the parent's style. A
 gate that exercises one cascade cannot see a divergence between two.
+
+## Inline text elements — links, emphasis, code, badges (tick 271)
+
+**Pattern:** any non-replaced inline element inside flowing text — `<a>`, `<span>`, `<em>`,
+`<strong>`, `<code>`, `<label>` — on a page that sets `line-height`. Which is essentially every page:
+`line-height: 1.5`/`1.6` is the default in Tailwind, Bootstrap, every CSS reset and every design
+system shipped this decade.
+
+**The class this unlocks:** the *geometry* of inline content — everything that asks an inline element
+where it is. `getBoundingClientRect()` on a link, hit-testing a click near a link's edge, the a11y
+tree's bounding boxes, tooltip and popover anchoring, a sticky highlight, an underline overlay, and
+the fidelity probe itself. We reported the **line box** for all of them: on a 16px/1.6 paragraph an
+`<a>` came back 25.6px tall starting at the line top, where Chrome says 17px tall starting 4px lower.
+Wrong in both coordinates, on every inline element on the page.
+
+**Why it hid for 270 ticks.** Nothing *looks* wrong: the glyphs paint from the baseline, which was
+right, so the page renders correctly and only the reported box is off. It is invisible to any test
+that renders one element and looks at it, and invisible to a median — it shows up only as a small
+constant `dh` repeated across hundreds of elements, which is exactly what the sweep had been printing
+(`dw=0 dh=+7` on dozens of wikipedia rows) and what three consecutive ticks read as "vertical drift".
+
+**The trap:** the content area's rounding rule is `round(ascent) + round(descent)` — the *opposite*
+of tick 269's line-box rule, which rounds the sum. Inheriting 269's conclusion here is the natural
+mistake and it is wrong by 1px at most sizes. Only a sweep across sizes forecloses it: Liberation Sans
+is 16px tall at font-size 14 and 17px at font-size 16, and no ratio can do that.
+
+**The second trap, which broke a different gate:** inline padding/border spacers are textless,
+fontless synthetic fragments that carried their height in `style.line_height` *because that is what
+`rect()` read*. Changing what `rect()` means deleted them from the layout's element-geometry map
+entirely — a **coverage** regression caused by a **placement** fix, caught only because the wall runs
+a gate the tick was not aiming at.

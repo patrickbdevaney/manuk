@@ -151,16 +151,39 @@ pub struct TextFragment {
     /// `<p>text <a>link</a></p>`). Inline elements produce no `LayoutBox`, so this is
     /// the only way to recover their geometry.
     pub node: Option<NodeId>,
+    /// Distance from `baseline` **up** to the top of this run's CSS content area —
+    /// `round(ascent)` for *this run's own* face and size, which on a mixed-font line is not the
+    /// line's ascent. Stored relative to the baseline on purpose: every vertical shift in this
+    /// engine (`translate`, sticky, scroll) already moves `baseline`, so the content area follows
+    /// for free and cannot drift out of sync with it.
+    pub content_ascent: f32,
+    /// Height of this run's content area — `round(ascent) + round(descent)`, independent of
+    /// `line-height`. See [`manuk_text::LineMetrics::content_height`].
+    pub content_height: f32,
 }
 
 impl TextFragment {
-    /// This run's box: `line_height` tall, anchored at the line top.
+    /// This run's box, as `getBoundingClientRect()` reports it: the **content area** (CSS 2.1
+    /// §10.6.1) — the font's ascent+descent, centred on the line box by half-leading — **not** the
+    /// line box.
+    ///
+    /// It used to be `(line_top, line_height)`, which is the line box, and that is a different box
+    /// on every page that sets `line-height`. On a 14px/1.6 paragraph Chrome reports an `<a>` as
+    /// 16px tall starting 3px below the line top; we reported 22px tall starting at the line top —
+    /// off in **both** coordinates, on **every inline element on the page**. That is a systematic
+    /// near-miss, not a rounding artefact: FID-SWEEP saw it as `dh=+7` repeated across dozens of
+    /// wikipedia elements while `dw=0` (widths were already exact), which is precisely the
+    /// "one shared root cause, many elements just past tolerance" signature.
+    ///
+    /// The content area can be **taller than its line box** (`line-height: 1` on most faces), so
+    /// half-leading is legitimately negative and this rect legitimately overflows upward. Chrome
+    /// does the same; clamping it to zero was the other half of the bug.
     pub fn rect(&self) -> Rect {
         Rect {
             x: self.x,
-            y: self.line_top,
+            y: self.baseline - self.content_ascent,
             width: self.width,
-            height: self.style.line_height,
+            height: self.content_height,
         }
     }
 }
@@ -1006,6 +1029,8 @@ fn apply_text_overflow_ellipsis(
     // The ellipsis anchor: position, and the vertical/style/owner it inherits from the last kept run.
     let mut ell_x = cx;
     let mut ell_style = base_style;
+    let mut ell_ca = frags[0].content_ascent;
+    let mut ell_ch = frags[0].content_height;
     let mut line_top = frags[0].line_top;
     let mut baseline = frags[0].baseline;
     let mut node = frags[0].node;
@@ -1016,6 +1041,8 @@ fn apply_text_overflow_ellipsis(
             // Fits entirely before the cutoff: keep it, and move the ellipsis anchor to its end.
             ell_x = f.x + f.width;
             ell_style = f.style;
+            ell_ca = f.content_ascent;
+            ell_ch = f.content_height;
             node = f.node;
             out.push(f);
         } else if f.x < cutoff {
@@ -1024,6 +1051,8 @@ fn apply_text_overflow_ellipsis(
             let (prefix, pw) = truncate_to_width(&f.text, &f.style, budget, fonts);
             ell_x = f.x + pw;
             ell_style = f.style;
+            ell_ca = f.content_ascent;
+            ell_ch = f.content_height;
             node = f.node;
             if !prefix.is_empty() {
                 out.push(TextFragment {
@@ -1034,6 +1063,8 @@ fn apply_text_overflow_ellipsis(
                     text: prefix,
                     style: f.style,
                     node: f.node,
+                    content_ascent: f.content_ascent,
+                    content_height: f.content_height,
                 });
             }
             break; // everything after this is clipped away
@@ -1050,6 +1081,8 @@ fn apply_text_overflow_ellipsis(
         text: ell.to_string(),
         style: ell_style,
         node,
+        content_ascent: ell_ca,
+        content_height: ell_ch,
     });
     *frags = out;
 }
@@ -2494,6 +2527,8 @@ impl Ctx<'_> {
             text,
             style,
             node: Some(node),
+            content_ascent: lm.ascent.round(),
+            content_height: lm.content_height(),
         })
     }
 
@@ -4255,6 +4290,7 @@ impl Ctx<'_> {
                         ascent: 0.0,
                         descent: 0.0,
                         node,
+                        report_h: Some(height),
                         atomic: None,
                         atomic_h: 0.0,
                         valign: VerticalAlign::Baseline,
@@ -4320,6 +4356,7 @@ impl Ctx<'_> {
                             ascent: lm.ascent,
                             descent: lm.descent,
                             node,
+                            report_h: None,
                             atomic: None,
                             atomic_h: 0.0,
                             valign: VerticalAlign::Baseline,
@@ -4370,6 +4407,7 @@ impl Ctx<'_> {
                             ascent: height,
                             descent: 0.0,
                             node: None,
+                            report_h: None,
                             atomic: Some(box_),
                             atomic_h: height,
                             valign,
@@ -4422,6 +4460,7 @@ impl Ctx<'_> {
                             ascent: 0.0,
                             descent: 0.0,
                             node,
+                            report_h: Some(report_height),
                             atomic: None,
                             atomic_h: 0.0,
                             valign: VerticalAlign::Baseline,
@@ -4490,6 +4529,15 @@ struct LineFrag {
     ascent: f32,
     descent: f32,
     node: Option<NodeId>,
+    /// **A synthetic fragment that reports a fixed box** — an inline padding/border spacer, or the
+    /// empty fragment a bare `<br>` leaves behind. These carry an element's geometry while having
+    /// no text and no font, so they have `ascent == descent == 0` and their height cannot be
+    /// derived from metrics. It used to ride on `style.line_height` because `rect()` read that
+    /// field; once `rect()` became the content area, every one of them silently reported height 0
+    /// and **vanished from `node_rects` entirely** — 29 spans on news.ycombinator, 13 on wikipedia,
+    /// as a coverage regression rather than a placement one. Made explicit so the next change to
+    /// `rect()` cannot repeat it.
+    report_h: Option<f32>,
     /// `Some` for an `inline-block`: the box to place, and its margin-box height.
     atomic: Option<Box<LayoutBox>>,
     atomic_h: f32,
@@ -4509,14 +4557,26 @@ fn close_line(
     align: TextAlign,
     _fonts: &FontContext,
 ) -> f32 {
-    let ascent = line.iter().map(|f| f.ascent).fold(0.0, f32::max);
-    let descent = line.iter().map(|f| f.descent).fold(0.0, f32::max);
+    // ROUNDED per-part, because that is the content area's rule and it is NOT the line box's rule
+    // (`LineMetrics::content_height` documents the measurement that separates them). The max is
+    // taken over the *rounded* values so a mixed-font line agrees with the per-fragment boxes below.
+    let ascent = line.iter().map(|f| f.ascent.round()).fold(0.0, f32::max);
+    let descent = line.iter().map(|f| f.descent.round()).fold(0.0, f32::max);
     let pref = line.iter().map(|f| f.style.line_height).fold(0.0, f32::max);
     // An inline-block's margin-box height participates in the line height.
     let tallest_atomic = line.iter().map(|f| f.atomic_h).fold(0.0, f32::max);
-    let content_h = (ascent + descent).max(tallest_atomic);
-    let line_h = pref.max(content_h);
-    let leading = ((line_h - (ascent + descent)) / 2.0).max(0.0);
+    let content_h = ascent + descent;
+    // **A tall content area does NOT push the line box open.** `line-height` is the line box, full
+    // stop (CSS 2.1 §10.8): with `line-height: 1` on a 16px Liberation face the content area is
+    // 17px inside a 16px line box and simply overflows. We used to take `max(line_height,
+    // ascent+descent)`, which silently inflated every tight line — measured against Chrome, a
+    // `line-height:1` paragraph came out 16px where Chrome says 14. An *atomic* inline (an
+    // inline-block's margin box) genuinely does raise the line box, and still does.
+    let line_h = pref.max(tallest_atomic);
+    // NOT clamped at zero: half-leading is negative exactly when the content area is taller than
+    // the line box, and Chrome floors it (verified across 2 faces × 5 sizes × 4 line-heights — 40
+    // points, no exception, including every negative case).
+    let leading = ((line_h - content_h) / 2.0).floor();
     let baseline = y + leading + ascent;
 
     // `f.width` already carries any `letter-spacing` (it equals `measure(text)` when spacing is 0),
@@ -4550,6 +4610,16 @@ fn close_line(
             b.translate(fx, box_top);
             atomic_boxes.push(*b);
         } else {
+            // Per-fragment, from its OWN face: on `<p>14px <big style="font-size:32px">x</big></p>`
+            // the two runs share a baseline but have different content areas, and Chrome reports
+            // each element's own.
+            // A synthetic reporter keeps the box it was built to report — anchored at the LINE TOP,
+            // which is where it sat before the content area existed and where its owning element's
+            // padding/border actually paints.
+            let (fa, fd) = match f.report_h {
+                Some(h) => (baseline - y, h - (baseline - y)),
+                None => (f.ascent.round(), f.descent.round()),
+            };
             frags.push(TextFragment {
                 x: fx,
                 line_top: y,
@@ -4558,6 +4628,8 @@ fn close_line(
                 text: f.text,
                 style: f.style,
                 node: f.node,
+                content_ascent: fa,
+                content_height: fa + fd,
             });
         }
     }
@@ -6909,6 +6981,94 @@ mod tests {
             (ws - spans).abs() < 1.5,
             "white-space-only runs must NOT become anonymous items: container={ws} but its two \
              element items total {spans}"
+        );
+    }
+
+    /// **An inline element's box is the CONTENT AREA, not the line box** (CSS 2.1 §10.6.1) — the
+    /// font's `round(ascent) + round(descent)`, centred on the line box by half-leading, and
+    /// *independent of `line-height`*.
+    ///
+    /// This was the largest systematic placement error in the engine and it was invisible locally:
+    /// every `<a>`, `<span>` and `<em>` reported the line box, so on the web's near-universal
+    /// `line-height: 1.6` each one came out ~6px too tall AND ~3px too high — both coordinates
+    /// wrong, on every inline element on every page. FID-SWEEP saw exactly that shape on wikipedia:
+    /// `dw=0` (widths already exact) with `dh=+7` repeated across dozens of elements.
+    ///
+    /// Three properties, and each fails on a *different* half of the old code:
+    ///   1. height is the content area → old code returned `line_height` (22 vs 16)
+    ///   2. height does not move when `line-height` does → old code tracked it exactly
+    ///   3. a `line-height:1` line box stays at 1em and the content area OVERFLOWS it → old code
+    ///      did `max(line_height, ascent+descent)` and inflated the paragraph, and clamped
+    ///      half-leading at zero so the overflow never went negative
+    ///
+    /// Asserted against the face's OWN metrics rather than pixel constants, so it holds on whatever
+    /// sans-serif the box has installed. The guard on the first line matters: a face whose content
+    /// area happens to equal its line box cannot discriminate rule from bug at all.
+    #[test]
+    fn inline_box_is_the_font_content_area_not_the_line_box() {
+        let fonts = FontContext::new();
+        let lm = fonts.line_metrics(FontKey::default(), 16.0);
+        let content = lm.content_height();
+        assert!(
+            content > 0.0 && (content - 16.0 * 1.6).abs() > 2.0,
+            "test is vacuous on this face: content area {content} is indistinguishable from the \
+             1.6 line box {}",
+            16.0 * 1.6
+        );
+
+        let html = r#"<p id="p">before <a id="a">link</a></p>
+                      <p id="q">before <a id="b">link</a></p>
+                      <p id="t">tight <a id="c">link</a></p>"#;
+        let css = "html,body,p{margin:0;padding:0;font-size:16px} \
+                   #p{line-height:1.6} #q{line-height:3} #t{line-height:1}";
+        let (dom, root) = layout_html(html, css, 800.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let r = |id: &str| rects[&by_id(id)];
+
+        // 1 — the content area, to the pixel.
+        assert!(
+            (r("a").height - content).abs() < 0.51,
+            "inline <a> must be the font content area ({content}px), got {} — a value equal to the \
+             line box ({}) means the line box is being reported instead",
+            r("a").height,
+            16.0 * 1.6
+        );
+
+        // 2 — and it must not follow `line-height`. Same face, same size, 1.6 vs 3.
+        assert!(
+            (r("a").height - r("b").height).abs() < 0.51,
+            "inline height must not depend on line-height: 1.6 gave {} but 3 gave {}",
+            r("a").height,
+            r("b").height
+        );
+
+        // Half-leading centres it: the content area sits below the line top by (line_h-content)/2.
+        let expect_dy = ((16.0 * 1.6 - content) / 2.0).floor();
+        assert!(
+            (r("a").y - r("p").y - expect_dy).abs() < 0.51,
+            "half-leading: <a> should sit {expect_dy}px below the line top, got {}",
+            r("a").y - r("p").y
+        );
+
+        // 3 — `line-height: 1` is a 16px line box even though the content area is taller, and the
+        // inline OVERFLOWS it upward (negative half-leading). Chrome does exactly this.
+        assert!(
+            (r("t").height - 16.0).abs() < 0.51,
+            "line-height:1 must give a 16px line box, got {} — taking max(line_height, ascent+\
+             descent) inflates every tight line on the page",
+            r("t").height
+        );
+        assert!(
+            r("c").y < r("t").y + 0.01,
+            "with a content area ({content}) taller than its 16px line box, the inline must \
+             overflow upward: line top {} but inline top {}",
+            r("t").y,
+            r("c").y
         );
     }
 }

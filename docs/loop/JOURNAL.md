@@ -12144,3 +12144,82 @@ GATE: `bare_text_becomes_an_anonymous_flex_item` (manuk-layout). Proven RED on t
 NO REGRESSION: manuk-layout 78/78.
 
 WIKI: docs/wiki/box-layout.md
+
+## Tick 271 — every inline element on the web was the wrong box
+
+TICK SHAPE: board re-read at tick start; no observer steer newer than 267, so the PLACEMENT mandate
+stands and population (1) NEAR-MISS is still the named priority. Ticks 268/269/270 all took that
+population and all moved the sweep by ZERO, so this tick's first commitment was **not to theorise
+about a root cause at all** — re-add the temporary per-element box dump (`MANUK_FID_DUMP`, cp-snapshot
+revert, never `git checkout` — [[probe-harness-git-checkout-wipes-tick]]) and read the columns.
+
+**THE SIGNATURE WAS ALREADY IN THE DATA AND HAD BEEN MISREAD FOR THREE TICKS.** On wikipedia the
+dump shows dozens of rows of the same shape: `dw=0 dh=+7`, `dw=0 dh=+8`, on `a`, `span`, `li`.
+Widths exact, heights uniformly ~7px too big. The page's median `dh` was 4 and I had been reading
+`mdy=45` as "vertical drift" and hunting a displaced container. It is not drift — it is **every
+inline element being 7px too tall**, which is a different bug with a different fix.
+
+**THE BUG.** `TextFragment::rect()` returned `(line_top, line_height)` — the LINE BOX. Chrome
+returns the CSS **content area** (2.1 §10.6.1): the font's ascent+descent, centred on the line box by
+half-leading, and *independent of line-height*. On a 16px/1.6 paragraph Chrome says an `<a>` is 17px
+tall starting 4px below the line top; we said 25.6px tall starting at the line top. Wrong in BOTH
+coordinates, on every `<a>`/`<span>`/`<em>`/`<code>` on every page that sets `line-height` — which is
+the whole web. Two more mechanisms fell out of the same measurement: the line box was
+`max(line_height, ascent+descent)` (so `line-height:1` came out 16px where Chrome says 14 — a tall
+content area does NOT push the line box open, it overflows it), and half-leading was clamped at zero
+(it is legitimately negative, and Chrome floors it).
+
+**THE ROUNDING RULE IS THE OPPOSITE OF TICK 269'S, AND I NEARLY INHERITED THE WRONG ONE.** 269
+established `line-height:normal = round(ascent+descent+gap)` — round the SUM — and explicitly
+recorded round-each as the plausible-looking wrong answer. The content area rounds the PARTS. The
+only reason I did not carry 269's conclusion across is that I swept Chrome across 8 sizes × 2 faces
+before writing any code: Liberation Sans gives 16px at font-size 14 and **17px at font-size 16**, and
+no single ratio or rounded sum can grow a box by 1px across a 2px size step. 40 measured points,
+zero exceptions, including every negative-half-leading case. **A rule verified at one size is not
+verified.**
+
+**MEASURED EFFECT — and this one moved the tracked number.**
+
+```
+                    placement(8px)      mdy         mdh
+old.reddit.com    17.6% →  26.5%     60 →  12     0 → 0
+en.wikipedia.org   7.2% →   7.2%     45 →  45     4 → 0
+G1 hn snapshot     0.0% →   0.0%     63 →  63     1 → 0
+G1 wiki snapshot  15.5% →  15.5%     23 →  23     1 → 0
+local Chrome probe 85.7% → 100.0%     3 →   0     6 → 0
+```
+
+old.reddit moved half again — the first movement on FID-SWEEP's own metric in four
+placement-targeted ticks, which also answers the tick-269 addendum: the sweep is NOT insensitive, 268
+and 269 simply did not touch what those pages are made of. The median `dh` went to **0 on all four
+real pages**, which is the direct read of the fix. Wikipedia's height median went exact while its
+`dy` did not move at all, correctly separating this cause from the still-open sidebar narrowing (93px
+vs Chrome's 186px) that dominates that page. I am recording the wikipedia non-move as prominently as
+the reddit move. (reddit is a live front page and only 36 ids — an intermediate build measured 32.4%
+on a different set of posts, so treat the exact figure as ±6, not the direction.)
+
+**THE TICK BROKE A GATE BEFORE IT PASSED ONE, AND THAT IS THE PART WORTH KEEPING.** The first version
+was locally perfect — 100% on the Chrome probe, 79/79 unit tests — and dropped **G1 coverage from
+100.0% to 67.8%**, losing 29 elements on news.ycombinator and 13 on wikipedia. Cause: inline
+padding/border **spacers** are synthetic fragments with no text and no font (`ascent == descent ==
+0`) whose entire job is to carry an element's geometry, and they smuggled their height through
+`style.line_height` *because that is what `rect()` used to read*. The moment `rect()` became the
+content area they reported height 0, fell out of `node_rects`' `width>0 || height>0` filter, and
+disappeared — a **coverage** regression from a **placement** change, in a completely different gate
+from the one I was aiming at. Fixed by making the contract explicit (`LineFrag::report_h:
+Option<f32>`) instead of overloading a font field, so the next change to `rect()` cannot repeat it.
+The ratchet held only because the wall runs a gate I was not thinking about.
+
+STORED RELATIVE TO THE BASELINE on purpose: `content_ascent`/`content_height` on the fragment, with
+`rect()` deriving `y = baseline - content_ascent`. An absolute top would need re-shifting in
+`translate`, sticky and scroll — three sites that already move `baseline`, one of which would
+eventually be missed. Per-FRAGMENT, not per-line: two font sizes on one baseline have two content
+areas and Chrome reports each element its own.
+
+GATE: `inline_box_is_the_font_content_area_not_the_line_box` (manuk-layout). Proven RED TWICE on two
+independent mechanisms — reverting `rect()` fails assertion 1 (got 25.6, want 17); reverting only the
+line-box `max` fails assertion 3 (got 17, want 16). Opens with a vacuity guard: if the installed
+face's content area is not distinguishable from its 1.6 line box, every later assertion is theatre.
+NO REGRESSION: manuk-layout 79/79, manuk-text, manuk-css all green.
+
+WIKI: docs/wiki/text-layout.md
