@@ -910,3 +910,50 @@ one array on purpose.
 
 **Not implemented, and absent rather than wrong:** navigation interception, the update/redundant
 lifecycle, `clients` beyond a stub, push, background sync, and scope matching past a path prefix.
+
+## Blob object-URLs carry real bytes — `canvas.toBlob` + `blob:` fetch (tick 284)
+
+`URL.createObjectURL(blob)` is how a page moves bytes it generated itself back into the loading
+machinery: an image editor's "save", a chart library's PNG download, an upload preview
+(`URL.createObjectURL(file)` → `img.src`), and every `canvas.toBlob(b => fd.append('file', b))`. Two
+halves have to both work, and before this tick neither did for a real content Blob.
+
+### `canvas.toBlob` decodes the one raster `toDataURL` already produced
+
+The old `el.toBlob` called `cb(null)`. That is not a harmless stub — `null` is exactly what a real
+browser returns for a **tainted** cross-origin canvas, so a page testing for that took the
+"cannot-export" branch and silently refused to save a canvas it fully owned, with no error thrown.
+The bytes already existed: `__cvToDataURL` rasterises what was drawn to a real
+`data:image/png;base64,…`. `toBlob` decodes **that one representation** (`atob` → a Blob) rather than
+minting a second raster path that could drift from `toDataURL`. It reports the type it actually
+encoded — always `image/png` — and **ignores the requested `type` argument** rather than label PNG
+bytes `image/jpeg`. It fires the callback on a microtask, never inline, because the spec is async and
+a page that reads a variable the callback sets would otherwise find it undefined.
+
+### `blob:` resolves in `fetch` against the one object-URL registry
+
+A `blob:` URL names an in-process Blob, not a network resource, so `globalThis.fetch` short-circuits
+it before the host round-trip: it looks the URL up through `__mseLookup` — the **same** registry the
+MSE attachment handshake and the Worker `sourceOf` already read — and, when it finds a Blob, resolves
+a `__makeResponse` from the Blob's byte-string. The byte-string is passed as both `text` and `raw`;
+`raw` is the binary channel (`__bodyBytes` copies each code unit as a byte, no encoder), so a PNG
+survives `.arrayBuffer()`/`.bytes()`/`.blob()` unmangled. A `blob:` URL that was revoked, never
+registered, or names a non-Blob (a MediaSource) is a `TypeError('Failed to fetch')` — a stale object
+URL is a network error in a real browser, not an empty 200.
+
+There is exactly **one** object-URL store. Minting a second in `dom_bindings` (where `URL` lives)
+would have been the tidier place, but `mse_js` already owns the registry and is installed
+unconditionally; a second store is the drift bug (a URL registered in one, looked up in the other)
+this project keeps refusing. `createObjectURL` there already stored arbitrary objects — the tick only
+taught the readers to accept a Blob, not just a MediaSource.
+
+GATE: `blob_object_urls_carry_real_bytes_through_fetch` (manuk-page, G_BLOB_URL). PROVEN RED two ways:
+the `cb(null)` stub drops `toblob`/`type`/`sig`/`roundtrip`; deleting the `blob:` fetch branch leaves
+every upstream claim green and fails only `sig`/`roundtrip` (the fetch hits the network and rejects).
+`revoked:true` (the second fetch, after `revokeObjectURL`, rejects while the first succeeded) makes
+the two halves exact complements, so no constant satisfies it.
+
+**Not implemented, and absent rather than wrong:** `<img src="blob:…">` / `<a href="blob:…">` visual
+rendering (the Rust image-fetch path does not yet consult the JS registry — the next slice); `blob:`
+resolution in `XMLHttpRequest` (the modern `fetch` path is wired, legacy XHR is not); and `toBlob`
+encoding any format other than PNG.

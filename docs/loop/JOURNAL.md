@@ -13061,3 +13061,73 @@ correctly suppresses `'unsafe-inline'`, but inline-script hashes are not compute
 hash-pinned inline script is blocked rather than matched.
 
 WIKI: docs/wiki/networking.md (Content-Security-Policy section)
+
+## Tick 284 — Blob object-URLs carry real bytes: `canvas.toBlob` → `createObjectURL` → `fetch` (2026-07-20)
+
+TICK SHAPE: board re-read at tick start. The observer pivot list (t264) reads "IndexedDB (done),
+Service Worker + Cache API (done), container queries, AVIF" — but re-probing every bounded row on it
+found the docs pervasively STALE: `<details>`/`<summary>` (gated, `g_details.rs`), IntersectionObserver
+and ResizeObserver (fully built, rootMargin+thresholds), `visibilityState`/`permissions.query`
+(measured present t282) are all DONE and still listed missing. Container queries are a real hole but a
+layout-interleaved subsystem (t282 confirmed the pref alone is a lie), and AVIF needs an AV1 decoder
+the media crate deliberately left off to protect the wall. So this tick took a GENUINELY-missing,
+bounded, single-crate (engine/js) capability with clear daily-driver value that survives re-probe:
+Blob object-URLs.
+
+HYPOTHESIS: `canvas.toBlob` returned `cb(null)` and `blob:` URLs resolved only for MediaSource/Worker
+— so the whole `canvas → toBlob → createObjectURL → fetch/upload` idiom was decoration. `null` is not
+a harmless stub: it is exactly what a real browser hands a *tainted* cross-origin canvas, so a page
+feature-testing for taint took the "cannot export" branch and silently produced nothing, no error.
+
+PLAN: make `toBlob` decode the PNG `__cvToDataURL` already produces into a real Blob, and resolve
+`blob:` URLs in `fetch` against the ONE existing object-URL registry (`__mseLookup`) — no second store.
+
+### What landed
+
+`el.toBlob(cb, type)` decodes `__cvToDataURL()`'s `data:image/png;base64,…` via `atob` into a
+`new Blob([bytes], {type:'image/png'})`, fires the callback on a microtask (async by spec), and
+reports the format it ACTUALLY encoded — it ignores the requested `type` rather than mislabel PNG
+bytes. `globalThis.fetch` short-circuits a `blob:` URL before the host round-trip: it looks it up
+through `__mseLookup` (the same registry MSE attachment and Worker `sourceOf` read), and resolves a
+`__makeResponse` from the Blob's byte-string passed as both `text` and `raw` — `raw` is the binary
+channel (`__bodyBytes` copies each code unit as a byte, no encoder), so a PNG survives `.arrayBuffer()`
+unmangled. A revoked/unknown/non-Blob `blob:` URL is a `TypeError('Failed to fetch')`.
+
+### One registry, not two
+
+The tempting place for a general object-URL store is `dom_bindings`, where `URL` is installed. But
+`mse_js` already owns one, is installed unconditionally, and already stored arbitrary objects — the
+tick only taught the readers to accept a Blob, not just a MediaSource. A second store is the drift bug
+(register in one, look up in the other) this project keeps refusing; the Worker `sourceOf` path
+already proves the single registry works for content Blobs.
+
+GATE: `blob_object_urls_carry_real_bytes_through_fetch` (manuk-page, G_BLOB_URL). The carrying claim
+is `sig`+`roundtrip`: the 8-byte PNG signature survives `toBlob → createObjectURL → fetch →
+arrayBuffer` and the recovered length equals the Blob's `.size`.
+
+PROVEN RED TWO WAYS, each isolating a half (no constant satisfies it):
+  * restore `el.toBlob = cb => cb(null)` → `toblob:null` and `async:false`, every downstream claim
+    absent (the run recorded only `async:false toblob:null inline:false`)
+  * disable the `blob:` fetch branch → `inline/async/toblob/type/sizepos/objurl` all green, and only
+    `sig`/`roundtrip` fail (the fetch hits the network and rejects)
+  * `revoked:true` (the SECOND fetch, after `revokeObjectURL`, rejects while the first succeeded) makes
+    the two halves exact complements
+
+NO REGRESSION: manuk-js 10/10; g_canvas, g_canvas_image, g_fetch_stream, g_web_worker,
+g_media_segment_fetch, g_cache_api all pass (the paths that share `fetch`, `Blob`, `__makeResponse`
+and the object-URL registry). Not a trade.
+
+HONEST LIMITS: `<img src="blob:…">` / `<a href="blob:…">` visual rendering is NOT wired — the Rust
+image-fetch path (`fetch_image_bytes`) handles `data:`/`http(s)`/`file:` and does not yet consult the
+JS registry, so an object-URL for an `<img>` still shows nothing. That cross-boundary plumbing is the
+next slice and is the more common use of `createObjectURL` than the fetch roundtrip this tick lands.
+`blob:` in `XMLHttpRequest` is also unwired (modern `fetch` only). `toBlob` only ever encodes PNG.
+
+WIKI: docs/wiki/js-engine.md (Blob object-URLs section)
+
+HARNESS NOTE (observer-owned, not touched): the tick is capability-clean — `VERIFY: all gates green`,
+GATES 133→135, every WPT/CLAIMS/CONST/MEASURED mark held; the ONLY ratchet refusal is WALL (gate
+runtime ~573-603s vs the 93s ceiling). The gate suite inflates to ~600s while the observer's
+FID-SWEEP (60+ site renders + Chrome compares) contends for the box — 1-min load oscillated 0.37→3.29
+across the attempts. `build` was warm (30-43s), so this is gate runtime under load, not a cold
+rebuild. Parked for a quiet-box re-measure exactly like ticks 243-246; not fixed here. Reported.

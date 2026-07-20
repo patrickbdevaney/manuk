@@ -2208,3 +2208,28 @@ caller is in. **(3)** Fail *closed* on what a present policy forbids, but fail *
 cannot parse — an absent `script-src` allows, an unrecognised source expression matches nothing.
 **(4)** A repeated directive keeps the *first*, not the last: last-wins would let an injected trailing
 directive loosen the very policy it was meant to be constrained by.
+
+## Bytes the page made itself — Blob object-URLs (tick 284)
+
+**Pattern:** `canvas.toBlob(b => { const u = URL.createObjectURL(b); img.src = u; /* or */ fd.append('file', b); })`,
+and its reader `fetch(URL.createObjectURL(blob)).then(r => r.arrayBuffer())`. Image editors' "save",
+every chart library's PNG-download button, upload previews, and PDF/worker bundlers that ship code as
+a Blob all run this shape.
+
+**The class this unlocks:** exporting and re-reading content the page generated locally — canvas to a
+downloadable/uploadable file, and the `createObjectURL → fetch → arrayBuffer` roundtrip libraries use
+to move a Blob's bytes without a server.
+
+**Why it hid:** `canvas.toBlob` returned `cb(null)`, which is *exactly* what a real browser hands a
+tainted cross-origin canvas — so a page feature-testing for taint took the "cannot export" branch and
+silently produced nothing, no error thrown. And `blob:` URLs resolved only for MediaSource attachment
+and Worker source, so `fetch('blob:…')` for real content went to the network and rejected. Both are
+invisible from the page's side until an export button does nothing.
+
+**The traps.** **(1)** `toBlob` is async by spec — fire the callback on a microtask, never inline, or
+a page reading a variable the callback sets finds it undefined. **(2)** Label the Blob with the format
+you *actually* encoded (PNG), never the requested `type` you did not honour — PNG bytes labelled
+`image/jpeg` is a lie that surfaces the moment something decodes them. **(3)** One object-URL registry,
+not two: `createObjectURL`, MSE attachment, Worker `sourceOf`, and `blob:` fetch must all read the same
+store, or a URL registered in one and looked up in another silently misses. **(4)** A revoked or
+unknown `blob:` URL is a network error, not an empty 200 — freed bytes must stop being readable.

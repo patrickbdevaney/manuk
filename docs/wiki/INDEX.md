@@ -420,6 +420,9 @@
   - L866 · The lifecycle IS the capability
   - L880 · Interception, and the recursion that hangs
   - L903 · Why the worker internals are published on one object
+  - L914 · Blob object-URLs carry real bytes — canvas.toBlob + blob: fetch (tick 284)
+  - L921 · canvas.toBlob decodes the one raster toDataURL already produced
+  - L933 · blob: resolves in fetch against the one object-URL registry
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -699,4 +702,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-614 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+617 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

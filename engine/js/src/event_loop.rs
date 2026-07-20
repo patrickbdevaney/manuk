@@ -581,6 +581,25 @@ const PRELUDE: &str = r#"
             return Promise.reject(signal.reason !== undefined ? signal.reason
                 : new DOMException('signal is aborted without reason', 'AbortError'));
         }
+        // A `blob:` URL is not a network resource — it names an in-process Blob minted by
+        // `URL.createObjectURL`, and it resolves ENTIRELY here without a host round-trip. This is the
+        // second half of `canvas.toBlob`/file-upload preview: `fetch(URL.createObjectURL(blob))` reads
+        // the bytes back. It consults the SAME registry the MSE attachment and the Worker `sourceOf`
+        // already read (`__mseLookup`) — one object-URL store, never a second that could drift.
+        if (typeof url === 'string' && url.indexOf('blob:') === 0) {
+            var _bo = (typeof globalThis.__mseLookup === 'function') ? globalThis.__mseLookup(url) : undefined;
+            if (_bo && typeof _bo.__blobText === 'string') {
+                var _ct = _bo.type || 'application/octet-stream';
+                // Pass the byte-string as BOTH `text` and `raw`: `raw` is the binary channel
+                // (`__bodyBytes` copies each code unit as a byte, no encoder), so a PNG survives the
+                // round-trip unmangled through `.arrayBuffer()`/`.bytes()`/`.blob()`.
+                return Promise.resolve(globalThis.__makeResponse(200, _bo.__blobText,
+                    'content-type: ' + _ct, _bo.__blobText));
+            }
+            // Revoked, never registered, or naming a non-Blob (a MediaSource) — a stale object URL is
+            // a network error in a real browser, not an empty 200.
+            return Promise.reject(new TypeError('Failed to fetch'));
+        }
         var id = ++__fetchId;
         var method = (opts && opts.method) || "GET";
         var hdrs = (opts && opts.headers) ? __encHeaders(opts.headers) : "";
@@ -1251,7 +1270,35 @@ const PRELUDE: &str = r#"
         };
 
         el.toDataURL = function(){ return el.__cvToDataURL(); };
-        el.toBlob = function(cb){ if (typeof cb === 'function') { cb(null); } };
+        // `toBlob` is the export half of the canvas: chart-download buttons, image editors' "save",
+        // and every "upload this canvas" flow do `canvas.toBlob(b => fd.append('file', b))`. The old
+        // stub handed back `null`, which is what a real browser gives a *tainted* canvas — so a page
+        // testing for that took the cross-origin-taint branch and silently refused to export a canvas
+        // it had every right to. The bytes already exist: `__cvToDataURL` rasterises what was drawn to
+        // a real `data:image/png;base64,…`. Decode that ONE representation into a Blob rather than mint
+        // a second raster path that could disagree with `toDataURL`.
+        el.toBlob = function(cb, type){
+            if (typeof cb !== 'function') { return; }
+            var out = null;
+            try {
+                var url = el.__cvToDataURL();               // data:image/png;base64,....
+                var comma = url.indexOf(',');
+                if (comma >= 0 && url.slice(0, 5) === 'data:') {
+                    var meta = url.slice(5, comma);          // e.g. "image/png;base64"
+                    // We only ever encode PNG (that is what `toDataURL` produces). Report the type we
+                    // ACTUALLY made, not the `type` argument — a Blob labelled image/jpeg whose bytes
+                    // are a PNG is the exact lie this project refuses. `type` is accepted and ignored.
+                    var mt = (meta.split(';')[0]) || 'image/png';
+                    var bin = (typeof globalThis.atob === 'function') ? globalThis.atob(url.slice(comma + 1)) : '';
+                    out = new globalThis.Blob([bin], { type: mt });
+                }
+            } catch (e) { out = null; }
+            // Asynchronous by spec — the callback must land on a later turn, never inline, or a page
+            // that reads a variable the callback sets finds it still undefined.
+            var run = function(){ cb(out); };
+            if (typeof globalThis.queueMicrotask === 'function') { globalThis.queueMicrotask(run); }
+            else { setTimeout(run, 0); }
+        };
         return el;
       };
 
