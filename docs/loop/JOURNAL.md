@@ -12419,3 +12419,57 @@ argued on its own tick on a clean HEAD. Attempting that showed the rule cannot b
 — so it has no demonstrable effect and could not be honestly gated. The change is only provable in
 the tree that makes it necessary. It ships here, with the Chrome measurement as its justification
 and the two surviving misses as the proof it did not simply lower the bar.
+
+## Tick 274 — the anchored panel that sized itself to its 20px trigger (2026-07-20)
+
+Selected: the patch parked at tick 272. It was correct, gated and proven RED then, and it waited on
+one thing — a G6 clickability regression that tick 273 has now shown was never a regression at all.
+Per the park document's own instruction: **cherry-pick, do not redo.**
+
+`layout_abspos` resolved width through arms for `stretch`, both-insets and aspect-ratio transfer,
+then fell through to shrink-to-fit. It had **no arm for `s.width_keyword`** — the field carrying
+`min-content` / `max-content` / `fit-content` — which the in-flow block path has had all along.
+Shrink-to-fit sizes against the containing block, and an anchored panel's containing block is the
+small trigger it hangs off:
+
+```css
+.trigger        { position: relative; width: 20px }
+.trigger .panel { position: absolute; width: max-content }   /* 114px, Chrome says 180px */
+```
+
+That is the structure of nearly every dropdown, popover, menu, tooltip, autocomplete panel and
+context menu on the web — Wikipedia's sidebar verbatim
+(`.vector-dropdown-content { position:absolute; width:max-content; max-width:200px }`, 93px against
+Chrome's 186px).
+
+**Why the diagnosis was expensive and is worth keeping:** the panel is not missing and not empty. It
+renders at about half width, every label inside wraps to two lines, each wrap adds ~16px, and the
+accumulated height is what a fidelity sweep reports — `mdx=0, mdy=45`. **A width bug presenting as a
+vertical-placement statistic.** The first repro reproduced the sizing CSS faithfully, omitted
+`position:absolute`, and scored 100% Chrome-exact, proving nothing. Adding that one property dropped
+it to 28.6%. A `position:static` sibling kept in the same file is what turns "our `max-content` is
+broken" into "`position:absolute` changes what `max-content` means":
+
+```
+                   Chrome    before    after
+abspos max-content   180       114       180
+static max-content   180       180       180   ← the control, correct throughout
+```
+
+Also worth recognising on sight: the tick-271 dump read `cx=778 cw=150 · mx=823 mw=105 · dx=45
+dw=-45` and was first filed as a second, independent panel-x defect. `778+150 = 823+105`. **The
+right edges agree exactly** — the panel is right-anchored, so `dx` is `-dw` wearing a different
+sign. Two columns of a placement dump that look like two bugs and are one.
+
+MEASURED: local repro 28.6% → 100.0%; **wikipedia placement 7.2% → 10.1%, `mdy` 45 → 30** — the
+first movement on the sweep's highest-sample site (138 ids) in four placement-targeted ticks. G6
+clickability holds at 99.4% / 2 misses, unchanged from HEAD: the four extra misses this patch caused
+at tick 272 were links inside panels that Chrome renders `visibility:hidden`, and tick 273 both made
+us mark them hidden and stopped the instrument counting them.
+
+GATES (from the parked patch, both proven RED at tick 272):
+`abspos_intrinsic_width_keyword_sizes_to_content_not_the_anchor` ("abspos=44.5 but the identical
+in-flow box is 139.6") and `abspos_intrinsic_height_with_inset_zero_sizes_to_content_not_stretch`.
+NO REGRESSION: manuk-layout 80/80.
+
+WIKI: docs/wiki/box-layout.md

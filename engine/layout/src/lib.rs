@@ -3434,6 +3434,25 @@ impl Ctx<'_> {
         // them; else a definite height + `aspect-ratio` transfers through the ratio (CSS Sizing 4 —
         // the media/card/placeholder pattern), else shrink-to-fit.
         let content_w = match s.width {
+            // **An intrinsic sizing keyword sizes to the CONTENT, never to the containing block** —
+            // and an abspos box is exactly where that distinction bites, because its containing
+            // block is usually a tiny `position:relative` anchor. This arm existed on the in-flow
+            // block path and was missing here, so `position:absolute; width:max-content` fell all
+            // the way through to shrink-to-fit against a 20px anchor: the box came out 114px where
+            // Chrome says 180px, and every label inside it wrapped.
+            //
+            // That is the shape of nearly every dropdown, popover, menu, tooltip and autocomplete
+            // panel on the web — anchored to a small trigger and sized by its own content — and it
+            // is Wikipedia's sidebar verbatim (`.vector-dropdown-content { position:absolute;
+            // width:max-content; max-width:200px }`, 93px against Chrome's 186px).
+            //
+            // Same measure functions as the block path; they return content-box widths, so the
+            // `bs_extra_w` border-box subtraction correctly does not apply.
+            Dim::Auto if s.width_keyword.is_some() => match s.width_keyword.unwrap() {
+                IntrinsicSize::MinContent => self.min_content_width(node),
+                IntrinsicSize::MaxContent => self.max_content_width(node),
+                IntrinsicSize::FitContent => self.shrink_to_fit(node, (cw - frame).max(0.0)),
+            },
             // `stretch` on an abspos box fills its containing block exactly as `left:0; right:0`
             // would — it is the same constraint, said in one property instead of two, and without
             // it the box shrink-to-fits and a `width:stretch` overlay collapses onto its content.
@@ -6981,6 +7000,66 @@ mod tests {
             (ws - spans).abs() < 1.5,
             "white-space-only runs must NOT become anonymous items: container={ws} but its two \
              element items total {spans}"
+        );
+    }
+
+    /// **An intrinsic width keyword on an absolutely-positioned box sizes to its CONTENT, not to
+    /// its containing block.** `position:absolute; width:max-content` anchored to a small
+    /// `position:relative` trigger is the structure of essentially every dropdown, popover, menu,
+    /// tooltip and autocomplete panel on the web — and the abspos path had no arm for
+    /// `width_keyword` at all, so it fell through to shrink-to-fit against the anchor.
+    ///
+    /// The failure is not a missing box, which is why no gate saw it: the panel renders, at roughly
+    /// half its width, and every label inside wraps to two lines. Downstream that reads as *vertical*
+    /// drift — which is how it survived four placement-targeted ticks (wikipedia's sidebar, 93px
+    /// against Chrome's 186px, showing up in FID-SWEEP only as `mdy=45`).
+    ///
+    /// The static sibling is the control: it was already correct, so a test that only checked
+    /// `max-content` in flow would pass while the abspos case stayed broken.
+    #[test]
+    fn abspos_intrinsic_width_keyword_sizes_to_content_not_the_anchor() {
+        let html = r#"<div class="host"><div id="drop"><span id="label">a much longer label</span></div></div>
+                      <div class="host"><div id="stat"><span>a much longer label</span></div></div>
+                      <div class="host"><div id="mini"><span>a much longer label</span></div></div>"#;
+        let css = "html,body{margin:0;padding:0} \
+                   .host{position:relative;width:20px;height:20px} \
+                   #drop{position:absolute;top:100%;left:0;width:max-content} \
+                   #stat{width:max-content} \
+                   #mini{position:absolute;top:100%;left:0;width:min-content}";
+        let (dom, root) = layout_html(html, css, 800.0);
+        let rects = root.node_rects(&dom);
+        let by_id = |id: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(id))
+                .expect("id")
+        };
+        let w = |id: &str| rects[&by_id(id)].width;
+
+        // The in-flow control. If THIS is wrong the test is measuring the wrong mechanism.
+        assert!(
+            w("stat") > 60.0,
+            "precondition: in-flow width:max-content already worked, got {}",
+            w("stat")
+        );
+
+        // The bug: the abspos panel took its 20px anchor's width instead of its content's.
+        assert!(
+            (w("drop") - w("stat")).abs() < 1.5,
+            "position:absolute must not change what width:max-content MEANS: abspos={} but the \
+             identical in-flow box is {} (a value near the 20px anchor means the containing block \
+             was used instead of the content)",
+            w("drop"),
+            w("stat")
+        );
+
+        // `min-content` is the other keyword through the same arm, and it must stay DIFFERENT —
+        // otherwise a fix that simply routed every keyword to `max_content_width` would pass.
+        assert!(
+            w("mini") > 20.0 && w("mini") < w("drop") - 5.0,
+            "min-content must hug the longest word — narrower than max-content but not the 20px \
+             anchor: min={} max={}",
+            w("mini"),
+            w("drop")
         );
     }
 

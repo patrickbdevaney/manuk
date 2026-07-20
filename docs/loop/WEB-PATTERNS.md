@@ -1959,3 +1959,25 @@ Gate both directions or the fix is a different bug.
 hidden before and 8/8 after — matching Chrome and matching the un-`@media`-wrapped control exactly.
 23 links on that page are inside a `visibility:hidden` subtree once the rule applies; Chrome, asked
 directly over CDP, counts 25 in the same state and cannot hit-test any of them either.
+
+## Anchored panels — dropdowns, popovers, menus, tooltips (tick 274)
+
+**Pattern:** `position:absolute; width:max-content` on a panel anchored to a small
+`position:relative` trigger. Every dropdown menu, every popover, every tooltip, every autocomplete
+list, every context menu — the panel must be as wide as its own longest row, and must not be
+constrained by the 20px icon button it hangs off.
+
+**The class this unlocks:** anchored panels being the right width. We sized them to the *anchor*,
+because the absolutely-positioned width path had no arm for intrinsic sizing keywords and fell
+through to shrink-to-fit against the containing block. A panel came out at roughly half width with
+every row wrapped to two lines.
+
+**Why it hid:** the panel is present, styled and full of the right content — it is just narrow. No
+coverage gate can see it, nothing is missing, no crash, no error. And because wrapped rows are
+taller, the visible consequence is *vertical*: a fidelity sweep reports `mdx=0, mdy=45`, which reads
+as vertical drift and sends the next tick after the wrong organ.
+
+**The trap:** a repro that reproduces the sizing CSS faithfully but omits `position:absolute` scores
+100% Chrome-exact and proves the engine is fine. Keep a `position:static` sibling in the same file —
+the control is what localises the bug to what `position:absolute` does to `max-content`, rather than
+to `max-content` itself.

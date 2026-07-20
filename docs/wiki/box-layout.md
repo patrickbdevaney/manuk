@@ -936,3 +936,33 @@ cascade's representation is the fix that breaks when the other one runs.
 **Honest scope.** This is a real, Chrome-exact fix (100% placement on the probe, all four shapes),
 and it did **not** move Wikipedia — whose sidebar labels are wrapped in `<span>`s, so no anonymous
 item is involved. The sidebar's 93px-vs-186px narrowing is a separate, still-open cause.
+
+---
+
+## `position:absolute` + intrinsic width keywords (tick 274)
+
+`layout_abspos` resolved width through arms for `stretch`, both-insets and aspect-ratio transfer,
+then fell through to shrink-to-fit — with **no arm for `s.width_keyword`**, the field carrying
+`min-content` / `max-content` / `fit-content`. The in-flow block path had had one all along, so the
+two paths disagreed about what an intrinsic keyword means.
+
+Shrink-to-fit sizes against the **containing block**, and for an absolutely-positioned panel that is
+the nearest positioned ancestor — the trigger it hangs off, which for a dropdown is an icon button
+about 20px wide. So `width:max-content` on an anchored panel resolved to roughly half the content
+width instead of the content width.
+
+```
+                   Chrome    before    after
+abspos max-content   180       114       180
+static max-content   180       180       180   ← control
+```
+
+**The diagnostic shape to remember:** the failure presents as *vertical* drift. The panel renders,
+at about half width, so every row wraps to two lines, each wrap adds a line box, and the accumulated
+height pushes everything below down. A fidelity sweep reports `mdx=0, mdy=45` and the next tick goes
+looking for a margin or a line-height. A median offset cannot say the cause is a width; per-element
+boxes plus a `position:static` control in the same file can.
+
+**And on a right-anchored box, `dx = -dw`.** A dump reading `cx=778 cw=150 · mx=823 mw=105 · dx=45
+dw=-45` looks like an x error *and* a width error. `778+150 = 823+105`: the right edges agree
+exactly, there is one bug, and fixing the width fixes both columns.
