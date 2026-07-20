@@ -6082,6 +6082,101 @@ unsafe fn host_idb(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     true
 }
 
+/// `__caches(opJson)` → result JSON — the single native seam behind `caches`.
+///
+/// Same shape and same reason as `__idb`: one string-in / string-out function, so there is exactly
+/// one place a `*mut JSObject` could outlive a GC. The shim owns the promise plumbing and the
+/// matching rules; this side owns the origin partition and the bytes.
+unsafe fn host_caches(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    use manuk_net::cachestorage as cs;
+
+    let req = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    let Ok(op) = serde_json::from_str::<serde_json::Value>(&req) else {
+        *vp = NullValue();
+        return true;
+    };
+    let s = |k: &str| op.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let b = |k: &str| op.get(k).and_then(|v| v.as_bool()).unwrap_or(false);
+    let url = DOC_URL.with(|u| u.borrow().clone());
+    let Some(origin) = manuk_net::webstorage::origin_of(&url) else {
+        // An opaque origin gets no storage, exactly as with IndexedDB. The shim turns this null
+        // into a SecurityError.
+        *vp = NullValue();
+        return true;
+    };
+    let name = s("name");
+
+    let entry_json = |e: &cs::Entry| {
+        serde_json::json!({
+            "url": e.url, "method": e.method, "status": e.status, "statusText": e.status_text,
+            "headers": e.headers, "vary": e.vary, "body": e.body, "bodyB64": e.body_b64,
+        })
+    };
+
+    let out: serde_json::Value = match s("op").as_str() {
+        "open" => {
+            cs::open(&origin, &name);
+            serde_json::json!({ "ok": true })
+        }
+        "has" => serde_json::json!({ "has": cs::has(&origin, &name) }),
+        "names" => serde_json::json!(cs::cache_names(&origin)),
+        "deleteCache" => serde_json::json!({ "deleted": cs::delete_cache(&origin, &name) }),
+        "entries" => serde_json::json!(cs::entries(&origin, &name)
+            .iter()
+            .map(entry_json)
+            .collect::<Vec<_>>()),
+        "put" => {
+            let pairs = |k: &str| -> Vec<(String, String)> {
+                op.get(k)
+                    .and_then(|v| v.as_array())
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|p| {
+                                let p = p.as_array()?;
+                                Some((
+                                    p.first()?.as_str()?.to_string(),
+                                    p.get(1)?.as_str()?.to_string(),
+                                ))
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            };
+            let entry = cs::Entry {
+                url: s("url"),
+                method: s("method"),
+                status: op.get("status").and_then(|v| v.as_u64()).unwrap_or(200) as u16,
+                status_text: s("statusText"),
+                headers: pairs("headers"),
+                vary: pairs("vary"),
+                body: s("body"),
+                body_b64: b("bodyB64"),
+            };
+            match cs::put(&origin, &name, entry) {
+                cs::PutResult::Stored => serde_json::json!({ "ok": true }),
+                cs::PutResult::QuotaExceeded => {
+                    serde_json::json!({ "error": "QuotaExceededError" })
+                }
+                cs::PutResult::NoSuchCache => serde_json::json!({ "error": "NoSuchCache" }),
+            }
+        }
+        "deleteEntry" => serde_json::json!({
+            "deleted": cs::delete_entry(&origin, &name, &s("url"), b("ignoreSearch")),
+        }),
+        // Durability on the same principle as IndexedDB's: a `save()` per entry turns an
+        // `addAll()` of an app shell into a quadratic write. The shim flushes once per operation
+        // batch instead.
+        "flush" => {
+            cs::save();
+            serde_json::json!({ "ok": true })
+        }
+        _ => serde_json::Value::Null,
+    };
+    let text = serde_json::to_string(&out).unwrap_or_else(|_| "null".into());
+    return_string(cx, vp, &text);
+    true
+}
+
 /// Shape a record list for the JS side: encoded key (for cursor position), original key JSON, value.
 fn idb_records_json(rs: Vec<(String, manuk_net::idb::Record)>) -> Vec<serde_json::Value> {
     rs.into_iter()
@@ -6864,6 +6959,14 @@ pub unsafe fn install(
         global.handle(),
         c"__idb".as_ptr(),
         host_fn!(host_idb),
+        1,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__caches".as_ptr(),
+        host_fn!(host_caches),
         1,
         0,
     );
@@ -9342,6 +9445,217 @@ const WINDOW_PRELUDE: &str = r#"
                     return ea < eb ? -1 : (ea > eb ? 1 : 0);
                 }
             };
+        }
+
+        // ---- The Cache API ------------------------------------------------------------------
+        // The only storage in the platform whose unit is a REQUEST/RESPONSE pair, which is why it —
+        // not IndexedDB — is what a PWA's install step fills and what a Service Worker's `fetch`
+        // handler reads. Same grading shape as every storage API before it: `if ('caches' in
+        // window)` does not report a bug, it silently selects the network-only path.
+        //
+        // BODIES ARE STORED AS A LATIN-1 BYTE STRING, NOT AS TEXT, and that is the whole care in
+        // this block. A cache holds fonts, images and wasm as readily as it holds HTML; round-
+        // tripping those through a UTF-8 `text()` inflates every byte above 0x7F into two and
+        // hands back a corrupt asset. One char per byte is lossless for both, and it is the same
+        // `raw` channel `__makeResponse` already takes for exactly this reason.
+        if (typeof g.caches === 'undefined' && typeof g.__caches === 'function') {
+            var cacheCall = function (o) {
+                var r = g.__caches(JSON.stringify(o));
+                if (r === null || r === undefined) return null;
+                try { return JSON.parse(r); } catch (e) { return null; }
+            };
+            var cacheErr = function (name, msg) {
+                try { return new g.DOMException(msg, name); }
+                catch (e) { var x = new Error(msg); x.name = name; return x; }
+            };
+            var latin1 = function (bytes) {
+                var s = '';
+                for (var i = 0; i < bytes.length; i++) { s += String.fromCharCode(bytes[i] & 0xff); }
+                return s;
+            };
+            // A Request, a URL string, or anything with a `.url`. The URL is RESOLVED, because a
+            // page that caches `'/app.js'` and later matches `new Request('/app.js')` must hit —
+            // and the Request form has already absolutised itself.
+            var reqOf = function (input) {
+                var url, method = 'GET';
+                if (input && typeof input === 'object' && typeof input.url === 'string') {
+                    url = String(input.url);
+                    if (input.method) method = String(input.method).toUpperCase();
+                } else {
+                    url = String(input);
+                }
+                try { url = new g.URL(url, (g.location && g.location.href) || undefined).href; }
+                catch (e) { /* a relative URL with no base stays as written */ }
+                return { url: url, method: method };
+            };
+            var varyKeyOf = function (res, reqHeaders) {
+                // `Vary` names the REQUEST headers that select this response. Storing the request's
+                // values for exactly those names is what lets a later match compare without
+                // re-fetching — and what keeps the gzip and brotli copies of one URL apart.
+                var out = [];
+                var v = null;
+                try { v = res.headers && res.headers.get ? res.headers.get('vary') : null; } catch (e) { v = null; }
+                if (!v || v === '*') return out;
+                var names = String(v).split(',');
+                for (var i = 0; i < names.length; i++) {
+                    var n = names[i].trim().toLowerCase();
+                    if (!n) continue;
+                    var hv = null;
+                    try { hv = reqHeaders && reqHeaders.get ? reqHeaders.get(n) : null; } catch (e) { hv = null; }
+                    out.push([n, hv === null ? '' : String(hv)]);
+                }
+                return out;
+            };
+            var headerPairs = function (res) {
+                var out = [];
+                try {
+                    if (res.headers && typeof res.headers.forEach === 'function') {
+                        res.headers.forEach(function (val, key) { out.push([String(key), String(val)]); });
+                    }
+                } catch (e) { /* a response with no usable headers caches with none */ }
+                return out;
+            };
+            var responseOf = function (e) {
+                var raw = String(e.body || '');
+                var text = raw;
+                try { text = new g.TextDecoder().decode(g.__bytesFromLatin1(raw)); } catch (x) { /* keep raw */ }
+                var res = g.__makeResponse(e.status, text, e.headers || [], raw);
+                res.statusText = String(e.statusText || '');
+                res.url = String(e.url || '');
+                return res;
+            };
+
+            var mkCache = function (name) {
+                var flush = function () { cacheCall({ op: 'flush' }); };
+                var listEntries = function () { return cacheCall({ op: 'entries', name: name }) || []; };
+                var matchEntries = function (request, options) {
+                    options = options || {};
+                    var r = reqOf(request);
+                    var all = listEntries();
+                    var hits = [];
+                    for (var i = 0; i < all.length; i++) {
+                        var e = all[i];
+                        if (!options.ignoreMethod && e.method !== r.method) continue;
+                        var same = options.ignoreSearch
+                            ? String(e.url).split('?')[0] === r.url.split('?')[0]
+                            : String(e.url) === r.url;
+                        if (same) hits.push(e);
+                    }
+                    return hits;
+                };
+                var cache = {
+                    match: function (request, options) {
+                        var hits = matchEntries(request, options);
+                        // `match` resolves with UNDEFINED on a miss, never rejects. A shim that
+                        // rejects here turns every cache-first handler into an unhandled rejection.
+                        return Promise.resolve(hits.length ? responseOf(hits[0]) : undefined);
+                    },
+                    matchAll: function (request, options) {
+                        if (request === undefined) {
+                            return Promise.resolve(listEntries().map(responseOf));
+                        }
+                        return Promise.resolve(matchEntries(request, options).map(responseOf));
+                    },
+                    keys: function (request, options) {
+                        var es = (request === undefined) ? listEntries() : matchEntries(request, options);
+                        return Promise.resolve(es.map(function (e) {
+                            return { url: e.url, method: e.method, headers: g.__makeHeaders([]) };
+                        }));
+                    },
+                    put: function (request, response) {
+                        var r = reqOf(request);
+                        if (r.method !== 'GET') {
+                            return Promise.reject(new TypeError('Cache.put only accepts GET requests'));
+                        }
+                        if (!response || typeof response.clone !== 'function') {
+                            return Promise.reject(new TypeError('Cache.put requires a Response'));
+                        }
+                        if (response.bodyUsed) {
+                            return Promise.reject(new TypeError('Response body is already used'));
+                        }
+                        var copy = response.clone();
+                        return copy.arrayBuffer().then(function (buf) {
+                            var res = cacheCall({
+                                op: 'put', name: name, url: r.url, method: r.method,
+                                status: response.status, statusText: String(response.statusText || ''),
+                                headers: headerPairs(response),
+                                vary: varyKeyOf(response, request && request.headers),
+                                body: latin1(new Uint8Array(buf)), bodyB64: false
+                            });
+                            if (res === null) { throw cacheErr('SecurityError', 'this origin has no storage'); }
+                            if (res.error === 'QuotaExceededError') {
+                                throw cacheErr('QuotaExceededError', 'the cache is full');
+                            }
+                            if (res.error) { throw cacheErr('InvalidStateError', String(res.error)); }
+                            flush();
+                        });
+                    },
+                    add: function (request) { return cache.addAll([request]); },
+                    addAll: function (requests) {
+                        var list = Array.prototype.slice.call(requests || []);
+                        return Promise.all(list.map(function (req) {
+                            return g.fetch(req).then(function (res) {
+                                // The spec REFUSES to cache a non-ok response here, and that
+                                // matters: caching a 404 during install is how a PWA ships an
+                                // install that "succeeded" and serves an error page forever.
+                                if (!res.ok) {
+                                    throw new TypeError('Request failed with status ' + res.status);
+                                }
+                                return cache.put(req, res);
+                            });
+                        })).then(function () { return undefined; });
+                    },
+                    'delete': function (request, options) {
+                        options = options || {};
+                        var r = reqOf(request);
+                        var res = cacheCall({
+                            op: 'deleteEntry', name: name, url: r.url,
+                            ignoreSearch: !!options.ignoreSearch
+                        });
+                        if (res && res.deleted) { flush(); }
+                        return Promise.resolve(!!(res && res.deleted));
+                    }
+                };
+                return cache;
+            };
+
+            g.caches = {
+                open: function (name) {
+                    var res = cacheCall({ op: 'open', name: String(name) });
+                    if (res === null) {
+                        return Promise.reject(cacheErr('SecurityError', 'this origin has no storage'));
+                    }
+                    cacheCall({ op: 'flush' });
+                    return Promise.resolve(mkCache(String(name)));
+                },
+                has: function (name) {
+                    var res = cacheCall({ op: 'has', name: String(name) });
+                    return Promise.resolve(!!(res && res.has));
+                },
+                keys: function () {
+                    return Promise.resolve(cacheCall({ op: 'names' }) || []);
+                },
+                'delete': function (name) {
+                    var res = cacheCall({ op: 'deleteCache', name: String(name) });
+                    if (res && res.deleted) { cacheCall({ op: 'flush' }); }
+                    return Promise.resolve(!!(res && res.deleted));
+                },
+                // `caches.match` searches EVERY cache, in creation order. A cache-first handler
+                // that calls this instead of opening one by name is common enough that omitting it
+                // silently breaks them.
+                match: function (request, options) {
+                    var names = cacheCall({ op: 'names' }) || [];
+                    var step = function (i) {
+                        if (i >= names.length) return Promise.resolve(undefined);
+                        return mkCache(names[i]).match(request, options).then(function (hit) {
+                            return hit !== undefined ? hit : step(i + 1);
+                        });
+                    };
+                    return step(0);
+                }
+            };
+            g.CacheStorage = function CacheStorage() {};
+            g.Cache = function Cache() {};
         }
 
         // ---- Event constructors -------------------------------------------------------------

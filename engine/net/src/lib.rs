@@ -42,6 +42,9 @@ pub mod webstorage;
 /// IndexedDB — the structured, origin-partitioned store the app web assumes exists.
 pub mod idb;
 
+/// The Cache API — `caches`, the request/response store the offline web is built on.
+pub mod cachestorage;
+
 pub mod downloads;
 
 pub mod multipart;

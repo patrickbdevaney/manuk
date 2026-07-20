@@ -592,6 +592,12 @@
   - L72 · Async shape is a CORRECTNESS property, not politeness (tick 278)
   - L92 · abort() must roll back, and a vacuous rollback test will tell you it does (tick 278)
   - L109 · A quota that is never enforced is not a quota
+  - L119 · The Cache API — caches (tick 279)
+  - L130 · Bodies are stored as bytes, not as text
+  - L142 · Entries are a list, not a map
+  - L153 · Response and Request became constructible
+  - L162 · A miss resolves undefined — it does not reject
+  - L169 · Honest limits
 
 ## TEXT AND LAYOUT — fonts, shaping, measurement
 `docs/wiki/text-layout.md`
@@ -678,4 +684,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-593 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+599 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -2057,3 +2057,28 @@ ordered read is wrong. **(2)** A rollback claim asserted against a *failed* `add
 nothing: the rejected write never wrote, so there is nothing to roll back and the assertion passes
 with the undo log deleted. Assert rollback against a write that **succeeds** and is aborted from
 inside its own success handler. The unit that needs a proven RED is the CLAIM, not the gate.
+
+## The offline asset store — the Cache API (tick 279)
+
+**Pattern:** `caches.open('shell-v1')` → `cache.put(url, response)` at install, then
+`caches.match(request).then(r => r || fetch(request))` on every navigation after. Every PWA, every
+"works on a plane" app, and every Service Worker's `fetch` handler is this shape.
+
+**The class this unlocks:** the offline asset web — pages that keep their own shell, fonts and
+scripts rather than refetching them. It was absent entirely, and `Response` was not constructible,
+so nothing could have been put into a cache even if it had existed.
+
+**Why it hid:** the same grading shape as `localStorage` and IndexedDB before it. `if ('caches' in
+window)` does not report a bug; it silently selects the network-only path. Nothing throws.
+
+**The traps, three of them.** **(1)** Bodies are not text. A cache holds fonts and wasm, and storing
+them through a UTF-8 `text()` inflates every byte above `0x7F` into two — six bytes came back as
+nine. Store one char per byte. **(2)** A miss must resolve `undefined`, never reject: the universal
+handler is `r => r || fetch(...)`, so a rejecting `match` converts the whole offline path into an
+unhandled rejection. **(3)** `put` replaces on (url, method, `Vary`) rather than appending — with
+append semantics a PWA's re-install grows the cache without bound *and serves the stale first copy
+forever*, which looks like a caching bug in the site rather than in the browser.
+
+**And the one that generalises:** `typeof Response === 'function'` was **true** while `new
+Response('x')` produced an object with no `status` and no `clone()`. An inert name on an
+interface-surface list satisfies feature detection and fails at first use, somewhere else entirely.

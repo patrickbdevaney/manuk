@@ -327,6 +327,91 @@ const PRELUDE: &str = r#"
         return new globalThis.TextEncoder().encode(String(text));
     };
 
+    // ── **`new Response(...)` and `new Request(...)` — CONSTRUCTIBLE, not merely nameable.** ────
+    //
+    // Both were on the inert interface-surface list, which made `typeof Response === 'function'`
+    // true while `new Response('x')` produced an object with no `status`, no `headers` and no
+    // `clone()`. That is the worst shape a failure takes: the feature detection passes and the
+    // first real use fails somewhere else entirely.
+    //
+    // A page constructs responses for real reasons — it is how a Service Worker synthesises an
+    // offline page, how a test double stands in for the network, and how anything gets INTO the
+    // Cache API without a fetch. Building them on `__makeResponse` means a constructed response and
+    // a fetched one are the same object shape, so nothing downstream has to care which it got.
+    globalThis.Response = function Response(body, init) {
+        init = init || {};
+        var text = '', raw;
+        if (body === undefined || body === null) {
+            text = '';
+        } else if (typeof body === 'string') {
+            // A text body has no byte channel — `__bodyBytes` encodes it as UTF-8, which is right.
+            text = body;
+        } else {
+            // A binary body keeps ONE CHAR PER BYTE. Decoding it to text here and re-encoding on
+            // read is what corrupts every byte above 0x7F.
+            var bytes = (body instanceof Uint8Array) ? body
+                      : (body && body.buffer instanceof ArrayBuffer) ? new Uint8Array(body.buffer)
+                      : (body instanceof ArrayBuffer) ? new Uint8Array(body)
+                      : null;
+            if (bytes) {
+                raw = '';
+                for (var i = 0; i < bytes.length; i++) { raw += String.fromCharCode(bytes[i] & 0xff); }
+                try { text = new globalThis.TextDecoder().decode(bytes); } catch (e) { text = raw; }
+            } else {
+                text = String(body);
+            }
+        }
+        var pairs = [];
+        var h = init.headers;
+        if (h) {
+            if (Array.isArray(h)) {
+                for (var j = 0; j < h.length; j++) {
+                    if (h[j] && h[j].length >= 2) pairs.push([String(h[j][0]), String(h[j][1])]);
+                }
+            } else if (typeof h.forEach === 'function') {
+                h.forEach(function (v, k) { pairs.push([String(k), String(v)]); });
+            } else {
+                for (var k in h) { if (Object.prototype.hasOwnProperty.call(h, k)) pairs.push([k, String(h[k])]); }
+            }
+        }
+        var status = (init.status === undefined) ? 200 : Number(init.status);
+        var res = globalThis.__makeResponse(status, text, pairs, raw);
+        res.statusText = (init.statusText === undefined) ? '' : String(init.statusText);
+        if (init.url) res.url = String(init.url);
+        return res;
+    };
+
+    globalThis.Request = function Request(input, init) {
+        init = init || {};
+        var url = (input && typeof input === 'object' && typeof input.url === 'string')
+            ? String(input.url) : String(input);
+        try { url = new globalThis.URL(url, (globalThis.location && globalThis.location.href) || undefined).href; }
+        catch (e) { /* a relative URL with no base stays as written */ }
+        var method = String(init.method
+            || (input && typeof input === 'object' && input.method) || 'GET').toUpperCase();
+        var pairs = [];
+        var h = init.headers;
+        if (h) {
+            if (Array.isArray(h)) {
+                for (var j = 0; j < h.length; j++) {
+                    if (h[j] && h[j].length >= 2) pairs.push([String(h[j][0]), String(h[j][1])]);
+                }
+            } else if (typeof h.forEach === 'function') {
+                h.forEach(function (v, k) { pairs.push([String(k), String(v)]); });
+            } else {
+                for (var k in h) { if (Object.prototype.hasOwnProperty.call(h, k)) pairs.push([k, String(h[k])]); }
+            }
+        }
+        var req = {
+            url: url, method: method, headers: globalThis.__makeHeaders(pairs),
+            credentials: init.credentials || 'same-origin',
+            mode: init.mode || 'cors', cache: init.cache || 'default',
+            redirect: init.redirect || 'follow', body: init.body,
+            clone: function () { return new globalThis.Request(url, init); }
+        };
+        return req;
+    };
+
     // ── INCREMENTAL delivery — the response arrives in pieces, as it does on the wire. ──────────
     // `__deliverFetch` settles a request with its WHOLE body at once, which is all the buffered host
     // path can do. The streaming path instead settles the promise at the HEADERS (which is when the

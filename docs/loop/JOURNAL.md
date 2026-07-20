@@ -12701,3 +12701,73 @@ redb was declined on scope, not principle — the `idb` API is written so the ba
 of its contract.
 
 WIKI: docs/wiki/storage.md (new)
+
+## Tick 279 — the Cache API, and the `Response` that was a name rather than a constructor (2026-07-20)
+
+HYPOTHESIS: `caches` is the third storage API and the only one whose unit is a **response**.
+`localStorage` holds strings, IndexedDB (tick 278) holds structured values, and neither
+can hold what a PWA's install step actually stores. Its absence has the same grading
+shape both of those had: `if ('caches' in window)` takes the network-only path silently.
+The board ranks *Service Worker + Cache API* as the platform-class hole; the **store**
+half is bounded and reuses the seam pattern tick 278 just built, while registration,
+lifecycle and fetch interception are a subsystem. Build the half that is a tick.
+
+PLAN: the host-native + prelude-shim pattern for the third time — one native seam
+(`__caches(opJson) -> json`) over an origin-partitioned store in `manuk_net::cachestorage`,
+with the promise plumbing and the matching rules (method, `ignoreSearch`, `Vary`,
+insertion order) in the boot shim.
+
+### What landed
+
+`manuk_net::cachestorage` + `__caches` + the `caches` interface: `CacheStorage`
+(`open`/`has`/`keys`/`delete`/`match`-across-every-cache) and `Cache`
+(`match`/`matchAll`/`keys`/`put`/`add`/`addAll`/`delete`), persisted per origin and surviving a
+reload.
+
+### The blocker that was the more interesting find
+
+The gate failed its first run at `THREW:TypeError` — because **`Response` was an inert name**, on
+the interface-surface list that exists so a bundle referencing a symbol gets `false` rather than a
+`ReferenceError`. So `typeof Response === 'function'` was true while `new Response('CODE')` produced
+an object with no `status`, no `headers` and no `clone()`. Nothing can be put *into* a cache without
+a constructed response, so `Response` and `Request` are now real constructors built on the existing
+`__makeResponse` — which means a constructed response and a fetched one are the same shape and
+nothing downstream has to know which it got. **An inert name satisfies feature detection and fails
+at first use, somewhere else entirely**; this is the [[honest-answer-is-not-a-fixed-answer]] class
+seen from the other side.
+
+### Bodies are bytes, and that is the whole care in this tick
+
+A cache holds fonts, images and wasm as readily as HTML. Storing bodies through a UTF-8 `text()`
+inflates every byte above `0x7F` into two — the identical defect that once made a 260-byte media
+segment arrive as 407. Bodies persist as a **latin-1 byte string**, one char per byte, lossless both
+ways, reusing the `raw` channel `__makeResponse` already takes for exactly this reason. The recurring
+lossy-UTF-8-storage trap, avoided by construction this time rather than found later.
+
+GATE: `the_cache_api_is_a_real_persistent_request_response_store` (manuk-page, G_CACHE_API), 19
+claims, plus 7 store-level unit tests in `manuk-net`.
+
+PROVEN RED FIVE WAYS, each on a load-bearing claim rather than on the gate as a whole — tick 278's
+lesson applied deliberately:
+  * bodies stored as text → `bytes:false/9` (six bytes became nine, exactly as predicted)
+  * `put` appends instead of replacing → `keycount:3` **and `replaced:CODE`** — the stale first
+    response is served forever after a re-cache, which is the real-world harm
+  * `match` rejects on a miss → `THREW:NotFoundError`, and the whole remaining chain dies with it,
+    exactly as a real cache-first handler would
+  * the shim disabled → the probe never completes at all
+  * `put` ignoring `Vary` → the gzip and brotli copies of one URL collapse into one (unit test)
+
+NO REGRESSION: manuk-net 71/71 (7 new), manuk-page gate sweep green, full wall green.
+
+BOOKKEEPING, because a stale row is a bug this project keeps paying for: the constellation still
+read `IndexedDB ✗` after tick 278 landed it — flipped to gated. And the `Service Worker + Cache API`
+row was **split** rather than flipped: the Cache API half is gated, the Service Worker half is
+honestly still missing. One row cannot say "half of this works", and a row that overstates is how
+the board goes stale in the first place.
+
+HONEST LIMITS: `add()`/`addAll()` are implemented but NOT gated — a gate needing a live server
+false-REDs on a quiet box. No `ignoreVary`, and `Vary: *` declines to match rather than being
+modelled. The Service Worker itself (registration, lifecycle, fetch interception) is untouched; this
+tick built its store.
+
+WIKI: docs/wiki/storage.md (Cache API section)

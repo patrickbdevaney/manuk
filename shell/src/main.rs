@@ -78,6 +78,7 @@ fn main() -> Result<()> {
     // A backstop only: IndexedDB flushes per TRANSACTION, which is its own durability unit. This
     // catches state from a transaction that never completed before quit.
     manuk_net::idb::save();
+    manuk_net::cachestorage::save();
     manuk_js::shutdown();
 
     result
