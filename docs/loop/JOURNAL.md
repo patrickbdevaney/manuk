@@ -11828,3 +11828,53 @@ candidate for an absolute noise floor (bind the ratio only once the sums are lar
 something) — the observer's call, not mine.
 
 WIKI: docs/wiki/media-pipeline.md
+
+## Tick 265 — the outcome bridge: `video.error` stops guessing
+
+TICK SHAPE: the incoherence tick 264 named and deliberately did NOT fix. Board re-read first, no new
+observer steer; media stays CO-#1.
+
+**WHY IT NEEDED ITS OWN TICK: neither fixed value is honest.** Eager `MediaError(4)` gets undecodable
+media right (the site shows a fallback) and abandons video that works. Spec-initial `null` gets
+playable video right and leaves undecodable media as a DEAD PLAYER forever. Picking either is
+choosing which half to be wrong about, and swapping one for the other is a capability bought with an
+honesty regression — **the exact trade the ratchet refuses.** So the fix was never a default; it was
+getting the REAL answer from the only layer that has it. The shell fetched the bytes and knows
+whether they decoded — `MediaSet` was already recording it — and nothing told the page.
+
+`Page::set_media_outcome(node, ok)` → `el.__setOutcome(ok)`. Default is now spec-initial `null`
+(correct: no load ATTEMPTED), and it stops being a guess the moment the host reports. Success:
+null / HAVE_ENOUGH_DATA / NETWORK_IDLE + loadedmetadata+loadeddata+canplay. Failure: MediaError(4) /
+HAVE_NOTHING / NETWORK_NO_SOURCE + error. Events fire because a state change no event announces is a
+state change no player notices.
+
+**A FAILED FETCH REPORTS TOO.** The obvious `continue` on a 404 leaves `error === null` forever,
+which every player reads as *still loading* — so a missing video file HANGS the fallback it is
+supposed to trigger. It now travels as empty bytes that fail to decode.
+
+**RED PROBES: THREE, ALL FIRED.** Probe 1 (make the bridge a no-op) is the one the gate exists for:
+the JS half is gated in the conformance suite and the Rust half in `g_media_outcome_bridge`, and
+**without a gate that CROSSES the boundary both stay green while no real page hears a word** — the
+built-and-never-joined family again, in its fifth variant.
+
+PROCESS: I wrote the bridge assertion into the shell gate FIRST and moved it. `shell/src/media.rs`'s
+test is a unit test in a bin crate co-running with 58 others, and mozjs's teardown crashes on a
+co-run leaked runtime (the reason `js_conformance_suite` is `#[ignore]`d) — a JS-evaluating assertion
+there would have SIGSEGV'd at process exit and taken the whole shell suite AND the wall with it. Per
+[[session-248-252-actuation-media]]'s one-#[test]-per-JS-gate rule. The shell gate stays pure Rust.
+
+RESIDUE: `isTypeSupported` still false and still correct (it answers for MSE, which nothing drives).
+Whole-file buffering / unconditional autoplay / no audio device unchanged. `readyState` jumps
+straight to HAVE_ENOUGH_DATA rather than climbing through HAVE_METADATA — honest for a whole-file
+fetch, wrong the moment ranged fetching lands.
+
+BUILD-CONFIG BUG THE WALL CAUGHT (mine, fixed in-tick): `set_media_outcome` called `eval_for_test`,
+which is `#[cfg(feature = "spidermonkey")]` — so `manuk-agent`, which links `manuk-page` WITHOUT the
+JS feature, stopped compiling and verify reported `manuk-agent: INSTRUMENT FAULT — no verdict on two
+runs`. **"Unmeasurable is not passing" is the right verdict and it found a real break**, not a flake.
+Fixed by gating both the method and the shell call site (`gui` and `spidermonkey` are INDEPENDENT
+features, so `--features gui` with no JS engine is a real configuration). The JS-less build is a
+supported configuration, not an afterthought — worth remembering before reaching for `eval_for_test`
+from any non-test path.
+
+WIKI: docs/wiki/media-pipeline.md

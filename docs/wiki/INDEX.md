@@ -469,6 +469,10 @@
   - L1009 · The three answers, and why the distinction is real
   - L1026 · RED probes: three, all fired
   - L1039 · Residue — one incoherence, deliberately not fixed here
+  - L1058 · Tick 265 — the outcome bridge: video.error stops guessing
+  - L1089 · RED probes: three, all fired
+  - L1102 · Note: the bridge assertion does NOT live in the shell gate
+  - L1111 · Residue
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -620,4 +624,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-539 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+543 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

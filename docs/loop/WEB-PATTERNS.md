@@ -1715,3 +1715,36 @@ autoplay is unconditional until controls land; no audio device (`cpal` unbound);
 and VP9/AV1 do not decode, and are refused up front rather than failed mid-stream; and `el.error`
 still reports `MEDIA_ERR_SRC_NOT_SUPPORTED` eagerly, which the next tick fixes with a shell→JS bridge
 carrying the real decode outcome.
+
+## The video that cannot play says so — and the one that can stops saying it (tick 265)
+
+**Pattern:** `<video src="clip.mp4" onerror="showFallback()">`, and its polling twin
+`if (v.error) { showFallback(); } else { showPlayer(); }` — the cheapest capability test on the web,
+and the one nearly every player runs before anything else.
+
+**The class this unlocks:** both halves of the same long tail. Sites serving a codec we genuinely
+cannot decode (WebM/VP9, High-profile H.264, a 404 on the media file) get their fallback back — the
+"download the file" link, the "your browser cannot play this" notice, the alternate `<source>`. Sites
+serving Constrained-Baseline MP4 stop being told to show one over a video that plays.
+
+**The failure this closes, and why it took its own tick.** `el.error` was eagerly
+`MEDIA_ERR_SRC_NOT_SUPPORTED` on every media element. That was the right signal while nothing could
+decode and became a contradiction the moment tick 264 had `canPlayType` answer `'probably'`. But the
+obvious fix — default it to the spec-initial `null` — is *also* wrong, just in the other direction: a
+`<video src="x.webm">` we truly cannot play would report no error at all, and every player reads that
+as **still loading**, so the fallback never fires and the user gets a dead rectangle forever.
+
+**Neither fixed value is honest, and that is the general shape.** When a capability becomes *partial*
+— some inputs work, some do not — no constant is a truthful answer any more. The default has to stop
+being a guess and start being a **report**, which means finding the layer that actually knows. Here
+that is the shell: it fetched the bytes and it knows whether they decoded. It was already recording
+exactly that and simply never told the page.
+
+**A 404 is a failure, not a silence.** A media fetch that fails now reports as a failed decode rather
+than being dropped. Dropping it leaves the element at `error === null`, which is indistinguishable
+from "still loading" — so a missing video file hangs the very fallback a missing file should trigger.
+
+**Still open:** `MediaSource.isTypeSupported` remains `false` for everything and remains correct — it
+answers for MSE, where appended segments feed no decoder, and a "yes" would wedge every adaptive
+player. `readyState` jumps to HAVE_ENOUGH_DATA rather than climbing through HAVE_METADATA, which is
+honest for a whole-file fetch and becomes wrong when ranged fetching lands.

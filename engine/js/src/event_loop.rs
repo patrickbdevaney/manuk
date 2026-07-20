@@ -1755,12 +1755,56 @@ const PRELUDE: &str = r#"
         if (!el || el.__mediaReady) { return el; }
         Object.defineProperty(el, '__mediaReady', { value: true, enumerable: false });
 
-        var err = new globalThis.MediaError(4);   // MEDIA_ERR_SRC_NOT_SUPPORTED — and it is the truth
         var ro = function(name, value) {
           Object.defineProperty(el, name, { get: function(){ return value; }, configurable: true });
         };
-        ro('error', err);
-        ro('readyState', 0);        // HAVE_NOTHING — and it stays 0 until a frame is genuinely decoded
+
+        // ── `error` / `readyState` — REPORTED BY THE HOST, not guessed here.
+        //
+        // `error` was eagerly `MediaError(4)` (MEDIA_ERR_SRC_NOT_SUPPORTED) on every media element
+        // the moment it was reflected. That was the honest signal while nothing could decode: a
+        // player read it, gave up immediately, and showed its fallback. Once tick 263 made
+        // Constrained-Baseline MP4 genuinely play, it became a lie that CONTRADICTS `canPlayType`
+        // saying `'probably'` — and a player that checks `error` first (most do) still gave up on a
+        // video that was about to work.
+        //
+        // **The fix could not be "default it to null" alone, and that is the whole point of this
+        // bridge.** Spec-initial `null` is right for a fresh element, but on its own it means a
+        // `<video src="x.webm">` we genuinely cannot decode reports NO error and simply hangs —
+        // trading a false negative for a false positive, which is worse: a site that would have
+        // shown a fallback now shows a dead player. So neither fixed value is honest. **The only
+        // honest answer is the real one**, and the host is the only layer that has it — the shell
+        // fetches the bytes and knows whether they decoded (`MediaSet` already records exactly
+        // this). `__setOutcome` is that report arriving.
+        //
+        // Until it arrives, `null` is correct in the spec's own terms: no load has been ATTEMPTED,
+        // so there is no error to report yet.
+        var err = null;
+        var readyState = 0;         // HAVE_NOTHING until a frame is genuinely decoded
+        var netState = null;        // null = defer to the MediaSource-aware getter below
+        Object.defineProperty(el, 'error', { configurable: true, get: function(){ return err; } });
+        Object.defineProperty(el, 'readyState', { configurable: true, get: function(){ return readyState; } });
+
+        // **The host's verdict on this element's media.** `ok === true` means bytes arrived and
+        // decoded; `false` means they arrived and did not, or could not be fetched at all.
+        //
+        // Fires the events too, because a state change no event announces is a state change no
+        // player notices — every one of them binds `onerror`/`oncanplay` rather than polling.
+        Object.defineProperty(el, '__setOutcome', {
+          configurable: true,
+          value: function(ok) {
+            if (ok) {
+              err = null; readyState = 4; netState = 1;   // HAVE_ENOUGH_DATA / NETWORK_IDLE
+              el.dispatchEvent && el.dispatchEvent(new globalThis.Event('loadedmetadata'));
+              el.dispatchEvent && el.dispatchEvent(new globalThis.Event('loadeddata'));
+              el.dispatchEvent && el.dispatchEvent(new globalThis.Event('canplay'));
+            } else {
+              err = new globalThis.MediaError(4);         // MEDIA_ERR_SRC_NOT_SUPPORTED
+              readyState = 0; netState = 3;              // HAVE_NOTHING / NETWORK_NO_SOURCE
+              el.dispatchEvent && el.dispatchEvent(new globalThis.Event('error'));
+            }
+          }
+        });
         // `paused` was a getter-only `true`, which was correct while `play()` could only reject.
         // Now that it resolves, an assignment to a getter-only property is a SILENT no-op in sloppy
         // mode (and a TypeError in strict), so `play()` would have flipped nothing and every player
@@ -1784,7 +1828,9 @@ const PRELUDE: &str = r#"
           Object.defineProperty(el, name, { get: get, configurable: true });
         };
         // NETWORK_LOADING once a MediaSource is attached: the element genuinely is being fed.
-        live('networkState', function(){ return el.__ms ? 2 : 3; });
+        // The host's report wins when it has one; otherwise NETWORK_LOADING while a MediaSource is
+        // attached (the element genuinely is being fed) and NETWORK_NO_SOURCE when it is not.
+        live('networkState', function(){ return netState !== null ? netState : (el.__ms ? 2 : 3); });
         live('duration',     function(){ return el.__ms ? el.__ms.duration : NaN; });
         // The union of the source buffers' ranges — empty today, because nothing is demuxed, and
         // reporting an empty range is the honest answer rather than a fabricated one.

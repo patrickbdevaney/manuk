@@ -1054,3 +1054,64 @@ correct**: MSE's `appendBuffer` accepts segments that nothing drives into the de
 support would make every adaptive player append forever against a stall. The distinction is exact —
 `canPlayType` answers for `<video src>`, which works; `isTypeSupported` answers for MSE, which does
 not yet. Two questions, two different truths, and conflating them is how a player ends up wedged.
+
+## Tick 265 — the outcome bridge: `video.error` stops guessing
+
+Tick 264 closed with a stated incoherence: `canPlayType` answered `'probably'` for Baseline MP4 while
+`el.error` was still eagerly `MediaError(4)` on every media element. A player that checks `error`
+first — and most do, because it is the cheapest test — gave up on video that was about to play.
+
+**The reason it was left for its own tick is the interesting part: neither fixed value is honest.**
+
+| default | what it gets right | what it breaks |
+|---|---|---|
+| eager `MediaError(4)` | undecodable media shows a fallback | abandons video that works |
+| spec-initial `null` | playable video proceeds | undecodable media shows a **dead player**, forever |
+
+Picking either is choosing which half to be wrong about, and swapping one for the other would have
+been a capability bought with an honesty regression — the trade the ratchet refuses. **The only
+honest answer is the real one, and the host is the only layer that has it.** The shell fetches the
+bytes and knows whether they decoded; `MediaSet` was already recording exactly that. Nothing told
+the page. `Page::set_media_outcome(node, ok)` → `el.__setOutcome(ok)` is that report arriving.
+
+So the default *is* now spec-initial `null` — correct in the spec's own terms, because no load has
+been **attempted** — and it stops being a guess the moment the host reports. On success: `error`
+null, `readyState` HAVE_ENOUGH_DATA, `networkState` IDLE. On failure: `MediaError(4)`, HAVE_NOTHING,
+NETWORK_NO_SOURCE. Both fire their events (`loadedmetadata`/`loadeddata`/`canplay`, or `error`),
+because a state change no event announces is a state change no player notices — they bind
+`onerror`/`oncanplay` rather than polling.
+
+**A failed fetch reports too, and that is not a detail.** The obvious `continue` on a 404 leaves the
+element at `error === null` forever, which reads to every player as *still loading* — so a missing
+video file hangs the fallback it is supposed to trigger. The fetch failure now travels as empty
+bytes, which fail to decode and arrive as a real error.
+
+### RED probes: three, all fired
+
+| probe | result |
+|---|---|
+| make `set_media_outcome` a no-op | RED — `null` where `4` was owed (the two halves never joined) |
+| success path does not clear `err` | RED — a recovered element stays permanently errored |
+| restore the eager `MediaError(4)` | RED — `4` before any load was attempted |
+
+Probe 1 is the one the gate exists for. The JS half is gated in the conformance suite and the Rust
+half in `g_media_outcome_bridge`; **without a gate that crosses the boundary, both stay green while
+no real page ever hears a word** — which is precisely the built-and-never-joined family that ticks
+261-264 each closed one variant of.
+
+### Note: the bridge assertion does NOT live in the shell gate
+
+It was written there first and moved. `shell/src/media.rs`'s test is a unit test in a bin crate,
+co-running with 58 others in one process, and mozjs's teardown crashes when a leaked runtime is
+co-run — the reason `js_conformance_suite` is `#[ignore]`d and launched in isolation. A JS-evaluating
+assertion there would have been a SIGSEGV at process exit, taking the whole shell suite (and the
+wall) with it. The shell gate stays pure Rust; the JS crossing is gated in
+`engine/page/tests/g_media_urls.rs`, which is its own test binary.
+
+### Residue
+
+`isTypeSupported` still answers `false` for everything, still correctly — it answers for MSE, where
+`appendBuffer` accepts segments nothing drives into a decoder. Whole-file buffering, unconditional
+autoplay and the absent audio device are unchanged from tick 263. `readyState` jumps straight to
+HAVE_ENOUGH_DATA rather than climbing through HAVE_METADATA as bytes arrive, which is honest for a
+whole-file fetch and becomes wrong the moment ranged fetching lands.

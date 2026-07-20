@@ -1920,6 +1920,41 @@ impl Page {
         out
     }
 
+    /// **Report the host's real verdict on one element's media** — decoded, or did not.
+    ///
+    /// The other half of [`Page::pending_media_urls`], and the piece that makes `video.error` tell
+    /// the truth. The JS surface used to answer `MediaError(4)` eagerly on every media element,
+    /// which was honest while nothing could decode and became a lie contradicting `canPlayType` the
+    /// moment playback landed. **Neither fixed value is honest** — an eager error gives up on video
+    /// that works, and a permanent `null` hangs on video that does not, showing a dead player where
+    /// a fallback belonged. Only the actual outcome is honest, and the host is the one layer that
+    /// has it: the shell fetched the bytes and knows whether they decoded.
+    ///
+    /// A no-op without a JS context, which is the correct shape rather than a guard bolted on: the
+    /// media state is a property of the *script-visible* element, and a page with no scripts has
+    /// nobody to tell.
+    ///
+    /// Feature-gated on `spidermonkey` for the same reason it is a no-op without a JS context, one
+    /// step further out: with no engine linked there is no `error` property for anyone to read, so
+    /// there is nothing to report to. Building the body unconditionally is what broke `manuk-agent`,
+    /// which links `manuk-page` WITHOUT the JS feature — the JS-less build is a supported
+    /// configuration, not an afterthought.
+    #[cfg(feature = "spidermonkey")]
+    pub fn set_media_outcome(&mut self, node: manuk_dom::NodeId, ok: bool) {
+        if self.js.is_none() {
+            return;
+        }
+        // `__nodes[id]` resolves only for an element that has been reflected; `__manukMedia` is what
+        // installs `__setOutcome`, and it runs at reflection time. Guarding on both means a report
+        // for an element no script has ever touched is dropped rather than throwing.
+        let src = format!(
+            "(function(){{var e=globalThis.__nodes&&__nodes[{}];\
+               if(e&&e.__setOutcome){{e.__setOutcome({});}}}})()",
+            node.0, ok
+        );
+        self.eval_for_test(&src);
+    }
+
     /// **The media this page wants, and the element each byte-stream belongs to.**
     ///
     /// The counterpart to [`Page::pending_image_urls`] for `<video>`/`<audio>`, and the missing
@@ -5933,7 +5968,15 @@ mod js_interactive_tests {
               r.push('nowebm:' + (v.canPlayType('video/webm; codecs="vp9"') === ''));
               r.push('nohigh:' + (v.canPlayType('video/mp4; codecs="avc1.640028"') === ''));
               r.push('state:' + (v.paused === true && v.readyState === 0 && v.networkState === 3));
-              r.push('err:' + (v.error && v.error.code === 4));      // MEDIA_ERR_SRC_NOT_SUPPORTED
+              // `error` is spec-initial NULL: no load has been ATTEMPTED here, so there is nothing
+              // to report. It used to be an eager MediaError(4), which contradicted canPlayType
+              // saying 'probably' and made every player give up on video that works.
+              r.push('noerr:' + (v.error === null));
+              // ...and the HOST's verdict is what fills it in, in BOTH directions.
+              v.__setOutcome(false);
+              r.push('failed:' + (v.error !== null && v.error.code === 4 && v.readyState === 0));
+              v.__setOutcome(true);
+              r.push('ok:' + (v.error === null && v.readyState === 4 && v.networkState === 1));
               r.push('iface:' + (v instanceof HTMLMediaElement));
               // Setters must not throw. Scripts assign these unconditionally.
               v.pause(); v.currentTime = 5; v.volume = 0.5; v.load();
@@ -5961,7 +6004,9 @@ mod js_interactive_tests {
             "nowebm:true",   // a codec we do not have => '' , even in a container we read
             "nohigh:true",   // High-profile H.264 => '' — openh264 is Constrained Baseline only
             "state:true",    // paused / HAVE_NOTHING / NETWORK_NO_SOURCE
-            "err:true",      // MediaError code 4
+            "noerr:true",    // spec-initial null — no load attempted, nothing to report
+            "failed:true",   // the host reports a failed decode => MediaError code 4
+            "ok:true",       // ...and a successful one clears it => HAVE_ENOUGH_DATA / IDLE
             "iface:true",    // instanceof HTMLMediaElement
             "setters:true",  // currentTime/volume/pause/load do not throw
             "promise:true",  // play() returns a thenable

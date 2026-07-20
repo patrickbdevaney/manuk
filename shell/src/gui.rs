@@ -1377,9 +1377,14 @@ impl App {
         let proxy = self.proxy.clone();
         self.rt.spawn(async move {
             for (node, url) in wanted {
-                let Some(bytes) = manuk_page::fetch_media_bytes(&url).await else {
-                    continue;
-                };
+                // A fetch that fails still reports — as empty bytes, which decode to a failure and
+                // reach the page as `error = MEDIA_ERR_SRC_NOT_SUPPORTED`. Dropping it silently
+                // (the obvious `continue`) leaves the element in its spec-initial `error === null`
+                // forever, which reads to every player as "still loading" and hangs the fallback
+                // that a 404 on a video file is supposed to trigger.
+                let bytes = manuk_page::fetch_media_bytes(&url)
+                    .await
+                    .unwrap_or_default();
                 let _ = proxy.send_event(NavEvent::MediaReady {
                     gen,
                     tab,
@@ -1403,7 +1408,17 @@ impl App {
         if gen != self.nav_gen || tab != self.tab_id {
             return;
         }
-        if !self.media.load(node, &bytes) {
+        let ok = self.media.load(node, &bytes);
+        // Tell the PAGE either way. A failure is the more important report of the two: it is what
+        // lets a site show its fallback instead of a dead player, and it is the half a driver that
+        // only reports success silently drops.
+        // `gui` and `spidermonkey` are independent features, so a `--features gui` build with no JS
+        // engine is a real configuration — and one with no `error` property for anyone to read.
+        #[cfg(feature = "_sm")]
+        if let Some(page) = self.page.as_mut() {
+            page.set_media_outcome(node, ok);
+        }
+        if !ok {
             return; // recorded as a known failure inside `load`; never re-requested
         }
         self.advance_media();

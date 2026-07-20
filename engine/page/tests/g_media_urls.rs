@@ -111,3 +111,67 @@ fn g_media_urls() {
         .expect("at least one media request");
     p2.set_video_frame(node, 2, 2, vec![7u8; 2 * 2 * 4]);
 }
+
+/// **The outcome bridge, through the RUST entry point the shell actually calls.**
+///
+/// `video.error` used to be an eager `MediaError(4)` on every media element. That was the honest
+/// signal while nothing could decode, and it became a lie contradicting `canPlayType` the moment
+/// tick 263 made Baseline MP4 play — a player that checks `error` first (most do) gave up on a
+/// video that was about to work. **Neither fixed value is honest:** an eager error abandons video
+/// that works, and a permanent `null` hangs on video that does not, showing a dead player where a
+/// fallback belonged. Only the real outcome is, and the host is the only layer that has it.
+///
+/// ## How each assertion here can go RED
+///
+/// - **Spec-initial `null`.** RED, run: restore the eager `MediaError(4)`. Every player gives up
+///   before the shell has even fetched the file.
+/// - **A failed decode REACHES the element.** RED, run: make `set_media_outcome` a no-op, or have
+///   it eval against `node` instead of `node.0`. The JS half stays green in the conformance suite
+///   and no real page ever hears a word — the two halves gated separately and never joined.
+/// - **A success CLEARS it.** RED, run: report only failures. Every element that recovered stays
+///   permanently errored, which is the half a "report the error" bridge silently drops.
+#[test]
+fn g_media_outcome_bridge() {
+    let fonts = FontContext::new();
+    let mut p = manuk_page::Page::load(
+        r#"<!doctype html><html><body>
+             <video id="v" src="movie.mp4"></video><div id="out">-</div>
+             <script>window.__ready = 1;</script>
+           </body></html>"#,
+        "https://video.test/",
+        &fonts,
+        800.0,
+    );
+    let (node, _) = p
+        .pending_media_urls()
+        .into_iter()
+        .next()
+        .expect("the <video src> is requested");
+
+    let read = |p: &mut manuk_page::Page| -> String {
+        p.eval_for_test(
+            "(function(){var v=document.getElementById('v');               document.getElementById('out').textContent =                  v.error === null ? 'null' : String(v.error.code);})()",
+        );
+        let root = p.dom().root();
+        let out = manuk_css::query_selector_all(p.dom(), root, "#out")[0];
+        p.dom().text_content(out)
+    };
+
+    assert_eq!(
+        read(&mut p),
+        "null",
+        "spec-initial: no load has been ATTEMPTED, so there is nothing to report"
+    );
+    p.set_media_outcome(node, false);
+    assert_eq!(
+        read(&mut p),
+        "4",
+        "a host-reported FAILED decode must reach the element as MEDIA_ERR_SRC_NOT_SUPPORTED —          this is what lets a site show its fallback instead of a dead player"
+    );
+    p.set_media_outcome(node, true);
+    assert_eq!(
+        read(&mut p),
+        "null",
+        "...and a successful outcome must CLEAR it; a bridge that only reports failure leaves          every recovered element permanently errored"
+    );
+}

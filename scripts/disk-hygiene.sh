@@ -81,8 +81,18 @@ FREE_G=$(df --output=avail -BG /home 2>/dev/null | tail -1 | tr -dc '0-9')
 # never delete a stem-duplicate younger than STEM_MIN_AGE, regardless of build state. Genuine orphans
 # from older builds still age out (that is the bloat this exists to reclaim); everything the current
 # gate suite actually links is minutes old and now survives.
-STEM_MIN_AGE="${MANUK_STEM_MIN_AGE:-12 hours ago}"
-STEM_FLOOR="@$(date -d "$STEM_MIN_AGE" +%s 2>/dev/null || echo 0)"
+# ── COUNT FLOOR, NOT AGE FLOOR (observer, tick 264). The 12h age floor fixed the variant-eating bug
+# but replaced it with a disk leak: after 30 ticks landed overnight, EVERY test binary was <12h old,
+# so nothing was prunable and /home hit 93% (78.3G across 290 bins). Measured: 290 bins / 146 stems
+# = 2.0 — those ARE the two live feature variants (spidermonkey / stylo,spidermonkey), so there was
+# no orphan mass to reclaim at all; the age floor was protecting the entire working set.
+#
+# The right invariant is a COUNT, not an age: keep the newest KEEP_PER_STEM per stem — enough to
+# cover every live feature variant — and prune older GENERATIONS immediately. A variant rebuilt this
+# tick is always among the newest; a binary that is 3rd-oldest for its stem is a superseded
+# generation by construction, whatever its age.
+KEEP_PER_STEM="${MANUK_KEEP_PER_STEM:-3}"
+STEM_FLOOR="@$(date -d "${MANUK_STEM_MIN_AGE:-45 minutes ago}" +%s 2>/dev/null || echo 0)"
 STEM_CUTOFF=""
 if [ "$BUILD_ACTIVE" = 1 ]; then
   _oldest=$(ps -eo lstart=,comm= 2>/dev/null | awk '$NF=="rustc"||$NF=="cargo"' | head -1 | sed 's/[a-z]*$//')
@@ -121,7 +131,7 @@ for _d in target/debug/deps target/release/deps; do
     # Rank ALL duplicates newest-first and always keep the newest (that IS the bin the next verify links),
     # then, if a build is live, drop from the delete-list anything newer than the build cutoff.
     find "$_d" -maxdepth 1 -type f -executable -name "${_stem}-*" ! -name '*.*' -printf '%T@ %p\n' 2>/dev/null \
-      | sort -rn | tail -n +2 | cut -d' ' -f2- \
+      | sort -rn | tail -n +$((KEEP_PER_STEM + 1)) | cut -d' ' -f2- \
       | while IFS= read -r _f; do
           # never delete a live sibling variant: honour the build cutoff AND the age floor
           [ -n "$STEM_CUTOFF" ] && [ -n "$(find "$_f" -newermt "$STEM_CUTOFF" 2>/dev/null)" ] && continue

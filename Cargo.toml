@@ -142,3 +142,16 @@ strip = true
 # A dev profile that still builds the heavy dependency graph quickly.
 [profile.dev]
 opt-level = 0
+
+# ── DEBUGINFO IS THE DISK (observer, tick 264). /home hit 93% with 78.3G in 290 test binaries.
+# Measured on a 552MB gate binary: .debug_info 166MB + .debug_abbrev 2.3MB + .debug_aranges 6.9MB
+# = ~175MB of pure DWARF per binary. And it is NOT prunable orphan mass — 290 bins across 146 stems
+# is 2.0 per stem, i.e. exactly the two live feature variants (spidermonkey / stylo,spidermonkey)
+# that verify.sh builds. There is nothing stale to reclaim; the working set is simply that big.
+#
+# `debug = 1` emits LINE TABLES ONLY: `.debug_line` (42MB) is kept, so panics and Bar-0 backtraces
+# still report file:line — which is the debug information this project actually uses, given every
+# crash is triaged from a backtrace and a repro page. Full `.debug_info` (types, locals, expressions)
+# only pays off under an interactive debugger, which is not how this loop works.
+# Costs one full rebuild; buys ~25G back permanently and keeps the wall out of ENOSPC territory.
+debug = 1
