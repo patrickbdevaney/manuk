@@ -2178,3 +2178,33 @@ the right answer and was giving it correctly on the CSS side while the JS side m
 building a capability, check whether some other surface of the same engine already has it — this tick
 was found by probing a board row that turned out to be mostly done, and the probe cost one test run
 where building would have cost a tick.
+
+## The site's own restriction on what may run — Content-Security-Policy (tick 283)
+
+**Pattern:** `Content-Security-Policy: script-src 'self' 'nonce-r4nd0m'` on the document response,
+and inline `<script nonce="r4nd0m">` paired to it. Every security-conscious site — GitHub, Google,
+every bank, every framework's production build — ships one, and the whole point of it is that the
+browser, not the site, is the enforcing party: the header is the site saying *"even if an injection
+lands in my HTML, do not run it."*
+
+**The class this unlocks:** honest security posture on the sites that depend on it. Not a rendering
+change a user sees, but the difference between a browser that *honours* a page's `script-src` and one
+that merely receives it — indistinguishable from the page's side until the day an XSS lands and runs
+anyway.
+
+**Why it hid:** a browser that parses the policy and runs the script regardless behaves *identically*
+to one that ignores the header entirely. There is no visible symptom, no thrown error, no failed
+load — the un-nonced injected script runs exactly as the site's own scripts do. The only observable
+difference is an attack that should have been blocked, succeeding. So "we have a CSP module" proves
+nothing; the capability is only real if a script that would have run does not.
+
+**The traps.** **(1)** Four layers must all consult the evaluator — net must not drop the header at
+the document boundary, the page must seed the policy *before the first script runs*, the external
+fetch must check *before issuing the request*, and inline collection must read each element's nonce.
+Any one silently failing gives a browser that "supports CSP" and enforces nothing. **(2)** A directive
+that parses but never blocks is the exact lie this project keeps catching — `style-src`/`img-src`/etc.
+are left honestly absent rather than stubbed, and `restricts_scripts()` reports which of the two a
+caller is in. **(3)** Fail *closed* on what a present policy forbids, but fail *open* on a policy you
+cannot parse — an absent `script-src` allows, an unrecognised source expression matches nothing.
+**(4)** A repeated directive keeps the *first*, not the last: last-wins would let an injected trailing
+directive loosen the very policy it was meant to be constrained by.

@@ -331,6 +331,25 @@ pub fn set_supports_hook(f: SupportsFn) {
 #[cfg(not(feature = "_sm"))]
 pub fn set_supports_hook(_f: SupportsFn) {}
 
+/// A host callback answering "may an inline `<script>` with this nonce run under the document's
+/// Content-Security-Policy?".
+pub type CspInlineFn = Box<dyn Fn(manuk_dom::NodeId, Option<&str>) -> bool>;
+
+/// Install (or clear, with `None`) the document's inline-script CSP check.
+///
+/// The evaluator lives in `manuk-net` alongside the rest of CSP; this crate holds no copy of the
+/// matching rules, for the same reason it holds no CSS parser. Callers **must** call this on every
+/// page construction — passing `None` when the document sent no policy — because the hook is a
+/// thread-local and a policy left over from the previous navigation would be enforced against a
+/// document that never sent one.
+#[cfg(feature = "_sm")]
+pub fn set_csp_inline_hook(f: Option<CspInlineFn>) {
+    dom_bindings::set_csp_inline_hook(f)
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn set_csp_inline_hook(_f: Option<CspInlineFn>) {}
+
 /// Remove the forced-reflow callback. Paired with [`set_reflow_hook`] on every path out, including
 /// the early returns — a stale `ctx` pointer outliving its owner is a use-after-free.
 #[cfg(feature = "_sm")]

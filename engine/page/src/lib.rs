@@ -33,6 +33,7 @@ use manuk_css::{
 };
 use manuk_dom::{Dom, NodeId};
 use manuk_layout::{layout_document, BoxContent, LayoutBox};
+use manuk_net::csp::Csp;
 use manuk_paint::{Canvas, CpuPainter, Painter};
 use manuk_text::FontContext;
 use url::Url;
@@ -923,6 +924,11 @@ pub struct Page {
     /// tree. If neither has changed, re-cascading produces byte-identical output, and on a large
     /// document that is not a small waste: see `apply_stylesheets`.
     last_cascade: Option<u64>,
+    /// The document's Content-Security-Policy, retained for the loads that happen **after**
+    /// construction — a script injected by a later script, fetched by `fetch_and_run_dynamic_scripts`.
+    /// Those are exactly the loads an XSS payload makes, so a policy that only covered the initial
+    /// parse would be enforcing on the half that matters least.
+    csp: manuk_net::csp::Csp,
 }
 
 /// E1 full-page zoom bounds (matching what mainstream browsers offer).
@@ -1057,6 +1063,68 @@ fn install_supports_hook() {
     manuk_js::set_supports_hook(|_| false);
 }
 
+thread_local! {
+    /// The Content-Security-Policy the **next** page built on this thread is born under.
+    ///
+    /// `Page::from_dom` takes no headers — it is handed an already-parsed DOM — but CSP arrives in
+    /// the response headers and must be in force *before* the document's first script runs, which
+    /// happens inside `from_dom`. That is the same shape as `window.opener` (a popup's login script
+    /// reads it at load time, so it cannot be assigned afterwards), and it is solved the same way
+    /// here: seed it, then construct. See [`set_pending_identity`].
+    static PENDING_CSP: std::cell::RefCell<Option<(manuk_net::csp::Csp, Vec<NodeId>)>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Seed the Content-Security-Policy the next page built on this thread will enforce.
+///
+/// Call this **before** constructing the page. Every construction path consumes it exactly once, so
+/// a policy seeded here can never leak into the navigation after it.
+pub fn set_pending_csp(csp: manuk_net::csp::Csp) {
+    set_pending_csp_with_authorized(csp, Vec::new());
+}
+
+/// As [`set_pending_csp`], plus the `<script>` nodes whose source was **already authorized by URL**
+/// when it was fetched.
+///
+/// Those nodes need the exemption because of how external scripts are run here: the fetched text is
+/// inlined into the element and the `src` dropped, so at execution time an external script looks
+/// exactly like an author-written inline one. Without this it would be judged a second time, by the
+/// *inline* rules — and a script served from an allowed origin would be blocked for the crime of not
+/// carrying a nonce it was never required to have. One load, one decision, made where the URL is
+/// still known.
+pub fn set_pending_csp_with_authorized(csp: manuk_net::csp::Csp, authorized: Vec<NodeId>) {
+    PENDING_CSP.with(|p| *p.borrow_mut() = Some((csp, authorized)));
+}
+
+/// Take the seeded policy and install its inline-script check into the JS host, **unconditionally**
+/// — including installing "no policy" when nothing was seeded. Clearing is the load-bearing half:
+/// the hook is a thread-local, so a policy left installed by the previous navigation would be
+/// enforced against a document that never sent one, blocking scripts on an innocent page.
+fn install_csp_for_next_page(dom: &Dom, final_url: &str) -> manuk_net::csp::Csp {
+    let (mut csp, authorized) = PENDING_CSP
+        .with(|p| p.borrow_mut().take())
+        .unwrap_or_else(|| (manuk_net::csp::Csp::none(), Vec::new()));
+    // The `<meta>` fold happens here as well as at the fetch sites, and that redundancy is
+    // deliberate: the fetch sites need the policy BEFORE construction (to not issue a request), and
+    // this is the one place EVERY construction path passes through — including the synchronous
+    // `Page::load`, which has no fetch site at all. Re-adding an identical policy is a no-op,
+    // because policies compose by conjunction and a policy ANDed with itself decides the same way.
+    csp.set_document_url(Url::parse(final_url).ok().as_ref());
+    for content in collect_meta_csp(dom) {
+        csp.add_meta(&content);
+    }
+    if csp.restricts_scripts() {
+        let policy = csp.clone();
+        let exempt: std::collections::HashSet<NodeId> = authorized.into_iter().collect();
+        manuk_js::set_csp_inline_hook(Some(Box::new(move |node, nonce| {
+            exempt.contains(&node) || policy.allows_inline_script(nonce)
+        })));
+    } else {
+        manuk_js::set_csp_inline_hook(None);
+    }
+    csp
+}
+
 impl Page {
     /// Parse + style + lay out `html` for a viewport of `viewport_width` px.
     /// As [`load`](Self::load), but the document is born knowing its window id and opener, so its
@@ -1124,8 +1192,25 @@ impl Page {
         }
         #[allow(unused_mut)]
         let mut dom = manuk_html::parse(html);
-        #[cfg(feature = "spidermonkey")]
-        fetch_external_scripts(&mut dom, final_url).await;
+        // Fold this document's `<meta>` policy into whatever the caller seeded from the response
+        // headers, and leave the result seeded for `from_dom` — the script FETCH below needs it
+        // now, and the inline-script check needs it a few lines later.
+        {
+            // Peek, do not take: `from_dom` below consumes the seed. Only the POLICY is needed
+            // here — the authorized set is what this block is about to produce.
+            let mut csp = PENDING_CSP
+                .with(|p| p.borrow().as_ref().map(|(c, _)| c.clone()))
+                .unwrap_or_else(Csp::none);
+            csp.set_document_url(Url::parse(final_url).ok().as_ref());
+            for content in collect_meta_csp(&dom) {
+                csp.add_meta(&content);
+            }
+            #[cfg(feature = "spidermonkey")]
+            let authorized = fetch_external_scripts(&mut dom, final_url, &csp).await;
+            #[cfg(not(feature = "spidermonkey"))]
+            let authorized: Vec<NodeId> = Vec::new();
+            set_pending_csp_with_authorized(csp, authorized);
+        }
         let mut page = Page::from_dom(dom, final_url, fonts, viewport_width);
         // **Both passes, back to back** — see `load`. `from_dom` runs only the scripts that block first
         // paint; the deferred ones (`defer`, `async`, `type=module`) run here.
@@ -2226,6 +2311,7 @@ impl Page {
     ) -> usize {
         let mut ran = 0usize;
         for _ in 0..max_rounds {
+            let csp = &self.csp;
             let pending: Vec<(manuk_dom::NodeId, String)> = self
                 .dom
                 .descendants(self.dom.root())
@@ -2233,6 +2319,20 @@ impl Page {
                 .filter_map(|n| {
                     let src = self.dom.element(n)?.attr("src")?.trim().to_string();
                     (!src.is_empty()).then(|| (n, resolve_url(&self.final_url, &src)))
+                })
+                // **This is the path an injected `<script src>` takes**, so it is the one CSP was
+                // written for: the initial parse is authored markup, but a script appended at
+                // runtime is what an XSS payload does. Enforcing on the first pass only would have
+                // been enforcement on the half that matters least.
+                .filter(|(_, url)| match Url::parse(url) {
+                    Ok(u) => {
+                        let ok = csp.allows_script_url(&u);
+                        if !ok {
+                            tracing::info!(%url, "CSP blocked a dynamically added <script src>");
+                        }
+                        ok
+                    }
+                    Err(_) => true,
                 })
                 .collect();
             if pending.is_empty() {
@@ -3128,10 +3228,15 @@ impl Page {
         let Prefetched {
             dom,
             final_url,
+            csp,
+            csp_authorized_scripts,
             css,
             images,
             masks,
         } = pre;
+        // Seeded before construction, because `from_dom` runs the document's blocking scripts and
+        // the policy has to be in force by then — not after.
+        set_pending_csp_with_authorized(csp, csp_authorized_scripts);
         let mut page = Page::from_dom(dom, &final_url, fonts, viewport_width);
         if !css.is_empty() {
             page.apply_stylesheets(&css, fonts, viewport_width);
@@ -3200,6 +3305,9 @@ impl Page {
         // against that layout snapshot (so `getBoundingClientRect` works), letting them mutate
         // the DOM and register event listeners. If they mutated it, re-style + re-lay-out so
         // script-built content renders. All a no-op unless the `spidermonkey` feature is on.
+        // The document's CSP must be in force before its first script runs, and any policy from the
+        // PREVIOUS navigation must be gone. Both happen here, on every construction path.
+        let csp = install_csp_for_next_page(&dom, final_url);
         let mut dom = Box::new(dom);
         let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&dom);
         let mut styles = cascade_styles(&dom, &sheets, viewport_width);
@@ -3295,6 +3403,7 @@ impl Page {
             iframes: std::collections::HashMap::new(),
             child_pages: std::collections::HashMap::new(),
             last_cascade: None,
+            csp,
         }
     }
 
@@ -5340,16 +5449,54 @@ pub async fn fetch_streaming_page(
 /// Fetch a document's HTML. Supports `http(s)://` (via `manuk-net`, with WHATWG
 /// charset decoding), `data:` URLs (RFC 2397), `file://`, and bare local paths.
 /// Returns `(html, final_url_after_redirects)`.
+/// Every `<meta http-equiv="Content-Security-Policy" content="…">` in the document, in order.
+///
+/// A DOM walk rather than the charset prescan's raw-byte scan, because a CSP meta is not bounded to
+/// the first 1024 bytes the way `<meta charset>` is, and because by this point the document is
+/// already parsed — reading it out of the tree cannot disagree with what the tree says.
+fn collect_meta_csp(dom: &Dom) -> Vec<String> {
+    let mut out = Vec::new();
+    for n in dom.descendants(dom.root()) {
+        if dom.tag_name(n) != Some("meta") {
+            continue;
+        }
+        let Some(el) = dom.element(n) else { continue };
+        if !el
+            .attr("http-equiv")
+            .is_some_and(|v| v.trim().eq_ignore_ascii_case("content-security-policy"))
+        {
+            continue;
+        }
+        if let Some(c) = el.attr("content") {
+            out.push(c.to_string());
+        }
+    }
+    out
+}
+
 /// Fetch every external `<script src>` in `dom` (resolved against `base`) and inline its
 /// content as the script node's text, dropping the `src`, so the from_dom script pass runs it.
 /// External scripts fetch sequentially in document order (the classic-script model).
 #[cfg(feature = "spidermonkey")]
-async fn fetch_external_scripts(dom: &mut Dom, base: &str) {
+async fn fetch_external_scripts(
+    dom: &mut Dom,
+    base: &str,
+    csp: &manuk_net::csp::Csp,
+) -> Vec<NodeId> {
     let mut targets = Vec::new();
     for n in dom.descendants(dom.root()) {
         if dom.tag_name(n) == Some("script") {
             if let Some(src) = dom.element(n).and_then(|e| e.attr("src")) {
                 if let Ok(u) = Url::parse(base).and_then(|b| b.join(src)) {
+                    // **CSP is checked before the request is issued, not after it lands.** A blocked
+                    // script that is fetched anyway still tells the attacker's server that this user
+                    // visited this page with this session — half of what the policy was written to
+                    // prevent. The `src` is left in place, so `collect_inline_scripts` skips the node
+                    // for the same reason it skips a failed fetch: there is nothing to run.
+                    if !csp.allows_script_url(&u) {
+                        tracing::info!(url = %u, "CSP blocked a <script src> — not fetched");
+                        continue;
+                    }
                     targets.push((n, u.to_string()));
                 }
             }
@@ -5388,6 +5535,7 @@ async fn fetch_external_scripts(dom: &mut Dom, base: &str) {
             Vec::new()
         }
     };
+    let mut authorized = Vec::new();
     for (node, resp) in fetched {
         match resp {
             Some(r) => {
@@ -5395,10 +5543,15 @@ async fn fetch_external_scripts(dom: &mut Dom, base: &str) {
                 dom.remove_attr(node, "src");
                 let text = dom.create_text(js);
                 dom.append_child(node, text);
+                // CSP already said yes to this URL, above. Record the node so the inline check does
+                // not ask a second, different question about the same script — see
+                // `set_pending_csp_with_authorized`.
+                authorized.push(node);
             }
             None => tracing::warn!("external script fetch failed"),
         }
     }
+    authorized
 }
 
 /// **DEBT-1 (RELIABILITY).** Everything a page needs from the network, fetched **off the UI
@@ -5416,6 +5569,15 @@ pub struct Prefetched {
     /// Parsed, with any external `<script src>` already fetched and inlined.
     pub dom: Dom,
     pub final_url: String,
+    /// The document's Content-Security-Policy — response headers plus any `<meta http-equiv>`,
+    /// already combined. It rides along with the DOM because it was needed to *produce* that DOM
+    /// (a blocked `<script src>` was never fetched), and is needed again on the UI thread to decide
+    /// which inline scripts may run.
+    pub csp: Csp,
+    /// The `<script>` nodes whose external source was authorized by URL during the prefetch above.
+    /// See [`set_pending_csp_with_authorized`] for why the decision has to travel rather than be
+    /// re-made.
+    pub csp_authorized_scripts: Vec<NodeId>,
     /// External stylesheet URL → CSS text.
     pub css: HashMap<String, String>,
     /// resolved image URL → decoded bitmap. **Keyed by URL, not node** — for the same reason `masks`
@@ -5441,7 +5603,11 @@ pub async fn prefetch_document(url: &str) -> Result<Loaded> {
             path,
             bytes,
         }),
-        Loaded::Document { html, final_url } => prepare_prefetched(html, final_url).await,
+        Loaded::Document {
+            html,
+            final_url,
+            csp,
+        } => prepare_prefetched(html, final_url, csp).await,
         other => Ok(other),
     }
 }
@@ -5469,20 +5635,32 @@ pub async fn prefetch_document_post(
         // rendered rather than turned into an error — matching a real browser, which shows the page.
         tracing::info!(status = resp.status, %url, "form POST returned an error status — showing its body");
     }
-    prepare_prefetched(resp.decoded_text(), resp.final_url.to_string()).await
+    let csp = Csp::from_headers(&resp.headers, Some(&resp.final_url));
+    prepare_prefetched(resp.decoded_text(), resp.final_url.to_string(), csp).await
 }
 
 /// Turn a fetched document (`html` at `final_url`) into a [`Loaded::Prefetched`] with its external
 /// scripts inlined and its stylesheets + mask icons fetched — all off the UI thread. Shared by
 /// [`prefetch_document`] (GET) and [`prefetch_document_post`] (form POST) so the two navigation
 /// kinds build identical pages.
-async fn prepare_prefetched(html: String, final_url: String) -> Result<Loaded> {
+async fn prepare_prefetched(html: String, final_url: String, mut csp: Csp) -> Result<Loaded> {
     #[allow(unused_mut)]
     let mut dom = manuk_html::parse(&html);
+    // `<meta http-equiv="Content-Security-Policy">` — read AFTER the parse and BEFORE any script
+    // fetch, which is the only ordering that works: the policy is in the markup, so it cannot be
+    // known before parsing, and it must be in force before the first subresource decision.
+    // A meta policy can only ever TIGHTEN the header one (policies are conjunctive), which is what
+    // makes it safe to honour a policy that arrived in content the page itself authored.
+    csp.set_document_url(Url::parse(&final_url).ok().as_ref());
+    for content in collect_meta_csp(&dom) {
+        csp.add_meta(&content);
+    }
     // External <script src> — fetched and inlined here, off-thread. (Execution still
     // happens on the UI thread inside `from_dom`; only the *fetch* moves.)
     #[cfg(feature = "spidermonkey")]
-    fetch_external_scripts(&mut dom, &final_url).await;
+    let csp_authorized_scripts = fetch_external_scripts(&mut dom, &final_url, &csp).await;
+    #[cfg(not(feature = "spidermonkey"))]
+    let csp_authorized_scripts: Vec<NodeId> = Vec::new();
 
     // External stylesheets, concurrently.
     let mut seen = std::collections::HashSet::new();
@@ -5546,6 +5724,8 @@ async fn prepare_prefetched(html: String, final_url: String) -> Result<Loaded> {
     Ok(Loaded::Prefetched(Box::new(Prefetched {
         dom,
         final_url,
+        csp,
+        csp_authorized_scripts,
         css,
         images,
         masks,
@@ -5558,6 +5738,11 @@ pub enum Loaded {
     Document {
         html: String,
         final_url: String,
+        /// The policy from the response's `Content-Security-Policy` headers. A caller that builds a
+        /// page from this must seed it with [`set_pending_csp`] first, or the document's scripts
+        /// run unrestricted. (The [`Prefetched`] path — the one the shell actually navigates with —
+        /// carries the policy through automatically and cannot forget.)
+        csp: Csp,
     },
     /// A file that was **streamed straight to disk** (never buffered whole in RAM, never subject to
     /// the document deadline while its body transferred). `path` is where it landed; `bytes` its size.
@@ -5607,13 +5792,20 @@ pub async fn fetch_document(url: &str) -> Result<Loaded> {
                 bytes,
             }),
             manuk_net::DocOrDownload::Document(resp) => Ok(Loaded::Document {
+                csp: Csp::from_headers(&resp.headers, Some(&resp.final_url)),
                 html: resp.decoded_text(),
                 final_url: resp.final_url.to_string(),
             }),
         }
     } else {
+        // `data:`/`file:`/local paths carry no headers, so no policy — and `'self'` would name
+        // nothing anyway, since those origins are opaque.
         let (html, final_url) = fetch_html(url).await?;
-        Ok(Loaded::Document { html, final_url })
+        Ok(Loaded::Document {
+            html,
+            final_url,
+            csp: Csp::none(),
+        })
     }
 }
 

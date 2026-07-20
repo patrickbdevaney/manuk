@@ -102,9 +102,9 @@ fn first_paint_does_not_wait_for_images() {
         manuk_page::Loaded::Prefetched(pre) => {
             manuk_page::Page::from_prefetched(*pre, &fonts, 800.0)
         }
-        manuk_page::Loaded::Document { html, final_url } => {
-            manuk_page::Page::load(&html, &final_url, &fonts, 800.0)
-        }
+        manuk_page::Loaded::Document {
+            html, final_url, ..
+        } => manuk_page::Page::load(&html, &final_url, &fonts, 800.0),
         _ => panic!("expected a document"),
     };
     let elapsed = started.elapsed();

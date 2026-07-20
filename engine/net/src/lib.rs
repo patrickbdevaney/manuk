@@ -59,6 +59,10 @@ pub mod proxy;
 /// `tokio-tungstenite`, with our own ring-pinned TLS. See [`websocket::WebSocketConn`].
 pub mod websocket;
 
+/// Content-Security-Policy enforcement — `script-src`, the directive that carries CSP's whole
+/// security argument. See [`csp::Csp`].
+pub mod csp;
+
 /// E5 native content-blocking (feature `adblock`).
 #[cfg(feature = "adblock")]
 pub mod blocker;

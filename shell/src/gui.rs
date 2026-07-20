@@ -1704,10 +1704,17 @@ impl App {
                 }
                 tracing::info!(%url, "prerender: page built into bfcache (next click is instant)");
             }
-            Ok(manuk_page::Loaded::Document { html, final_url }) => {
+            Ok(manuk_page::Loaded::Document {
+                html,
+                final_url,
+                csp,
+            }) => {
                 if url == self.url || self.bfcache.iter().any(|(u, _)| u == &url) {
                     return; // navigated there already, or a duplicate — nothing to cache
                 }
+                // A prerendered page runs its scripts like any other, so it enforces its own CSP
+                // like any other. Seeded immediately before construction — see `set_pending_csp`.
+                manuk_page::set_pending_csp(csp);
                 let page = self.build_page(&html, &final_url, w);
                 self.bfcache
                     .push((url.clone(), BfEntry { page, scroll: 0.0 }));
@@ -3952,7 +3959,12 @@ impl ApplicationHandler<NavEvent> for App {
                 self.loading = false;
                 match result {
                     Ok(manuk_page::Loaded::Prefetched(pre)) => self.finish_load_prefetched(*pre),
-                    Ok(manuk_page::Loaded::Document { html, final_url }) => {
+                    Ok(manuk_page::Loaded::Document {
+                        html,
+                        final_url,
+                        csp,
+                    }) => {
+                        manuk_page::set_pending_csp(csp);
                         self.finish_load(html, final_url)
                     }
                     Ok(manuk_page::Loaded::Download {

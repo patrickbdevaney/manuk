@@ -826,3 +826,63 @@ and only a wire assertion catches it.
 use and written back after any `Set-Cookie`. A net gate must set `MANUK_STATE` to a temp dir **before
 its first net call**, or it reads and rewrites the developer's real cookie file. (The implicit sharing
 is also what makes a session span the provider and the app for free — there is no jar to thread.)
+
+## Content-Security-Policy — `script-src` enforcement (tick 283)
+
+CSP is the mechanism by which a site tells the browser *"even if an injection lands in my HTML, do
+not run it."* Until this tick we **received** the header and ignored it — which is indistinguishable,
+from the page's side, from having no policy at all, right up until the day an XSS lands. Every real
+site that ships a CSP (GitHub, Google, every bank) relies on the browser to be the enforcing party.
+
+### One evaluator, in `manuk-net`
+
+The matching rules live in `engine/net/src/csp.rs` as pure functions over `(policy, request)` —
+`Csp::allows_script_url(&Url)` and `Csp::allows_inline_script(nonce)` — with 19 unit tests. This is
+the same shape as `cors.rs`: `manuk-js` and `manuk-page` decide *at the call site*, but neither holds
+a second copy of the rules. `manuk-js` in particular has no network dependency and does not grow one;
+the host installs the inline check through a `CspInlineFn` hook, exactly as it installs the
+`CSS.supports` and forced-reflow hooks.
+
+Scope is **`script-src`** (with `default-src` fallback) — the directive that carries CSP's whole
+security argument. `style-src`/`img-src`/`connect-src`/`frame-ancestors`/reporting are deliberately
+**absent, not stubbed**: a directive that parses but never blocks reads to the page exactly like an
+enforced one, which is the class of lie this project keeps catching. `Csp::restricts_scripts()` is
+how a caller tells *"CSP allowed this"* from *"there was no CSP."* `Content-Security-Policy-Report-Only`
+is skipped (it is defined to observe, not enforce).
+
+### Four layers have to agree — the gate proves they do
+
+Enforcement is real only if every one of these holds, and each was a place it silently did not:
+
+1. **headers survive** — `manuk_net::Response.headers` is read into `Csp::from_headers` at
+   `Loaded::Document`/`Prefetched` construction, instead of being dropped at the document boundary.
+2. **the policy is in force before the first script runs** — seeded via `set_pending_csp` into a
+   thread-local that `Page::from_dom` consumes, the same `PENDING_IDENTITY` idiom `window.opener`
+   uses. Cleared unconditionally on every construction, so a policy never leaks onto the next
+   navigation (which would break an innocent page — a worse failure than not enforcing).
+3. **the request is checked before it is issued** — `fetch_external_scripts` consults
+   `allows_script_url` *before* fetching, and `fetch_and_run_dynamic_scripts` (the path an injected
+   `<script src>` actually takes) does the same. A blocked script that is fetched anyway still leaks
+   the visit to the attacker's origin; CSP is a check on the request, not only on execution.
+4. **inline execution is checked** — `collect_inline_scripts` (the one choke point for both the
+   blocking and deferred passes) reads each element's `nonce` and asks the hook. `'unsafe-inline'` is
+   correctly *ignored* when a nonce/hash source is present — without that, every nonce-based policy on
+   the web silently downgrades to no policy, because sites ship `'unsafe-inline'` as a legacy fallback.
+
+The one subtlety the gate caught on its first run: `fetch_external_scripts` inlines a fetched script's
+text and drops its `src`, so at execution time an already-URL-authorized external script is textually
+identical to an author-written inline one — and would be re-judged by the *inline* nonce rule it was
+never subject to. The fix is `set_pending_csp_with_authorized`: the fetch records the node it
+authorized by URL, and the inline check exempts it. One load, one decision, made where the URL is
+still known.
+
+### The gate: `G_CSP` (`engine/page/tests/g_csp.rs`)
+
+Every script appends one letter to `#out`, so the result string names exactly which scripts ran.
+Under `script-src 'self' 'nonce-goodnonce'` the page must render `GS` (the nonced inline + the
+same-origin external) and the third-party server's request log must be **empty** — a request that
+never appears is only observable from the server side. Proven RED three ways, none of which a
+constant can satisfy: dropping the URL check → `GSX`; dropping the inline check → `NGWS`; constant
+deny → `""` (the no-policy control page then goes blank). A `<meta http-equiv>` policy is enforced
+identically, and a no-policy control page must run everything — that control is what makes
+"block everything" fail the gate.

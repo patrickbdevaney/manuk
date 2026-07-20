@@ -12994,3 +12994,70 @@ report true. `container-type` is not that case — Stylo declines it, so the ans
 but the gap is real and this is where it would appear.
 
 WIKI: docs/wiki/css-cascade.md (CSS.supports section)
+
+## Tick 283 — Content-Security-Policy, the header we were receiving and not honouring (2026-07-20)
+
+TICK SHAPE: board re-read at tick start — the tick-264 PLACEMENT/FID pivot is still the top steer,
+but this tick RECOVERS a complete-but-uncommitted CSP tick found in the working tree at session
+start (net/src/csp.rs + G_CSP + four-layer page/js integration, a verify receipt already stamped
+into RATCHET.tsv at 15:22:20). Rather than `git checkout -- .` and discard a fully-worked,
+gate-passing security capability, the tick was VERIFIED FRESH and landed. CSP is board-endorsed —
+CO-#1 item (6) "CSP enforcement" and the full-tier T0.5 row — so this is on-mandate, not a detour.
+
+HYPOTHESIS: a browser that *receives* `Content-Security-Policy: script-src 'self'` and runs the
+injected `<script>` anyway is, from the page's side, indistinguishable from one that ignores the
+header entirely. Every bank, GitHub, Google ships a policy and relies on the browser to be the
+enforcing party. We were not one. The capability is only real if a script that would have run does
+not — so it cannot be gated by "we have a CSP module."
+
+PLAN: implement the `script-src` evaluator (with `default-src` fallback) as pure functions over
+`(policy, request)`, and wire it through the FOUR layers that must all agree, then gate on
+enforcement in both directions.
+
+### What landed
+
+`manuk_net::csp` — `Policy::parse` (first-directive-wins per spec; names lowercased, sources kept
+case-exact for byte-compared nonces), and `Csp` with `from_headers`/`add_meta`/`allows_inline_script(nonce)`/
+`allows_script_url(&Url)`/`restricts_scripts()`. 19 unit tests on the matching rules. The four call
+sites: (1) `manuk-net` surfaces `Response.headers` instead of dropping them at the document boundary;
+(2) `manuk-page` carries the parsed policy across the off-thread prefetch and seeds it via
+`set_pending_csp` *before* the page is constructed — the policy is in force before the first script;
+(3) `fetch_external_scripts` consults `allows_script_url` **before issuing the request**, not after;
+(4) `manuk-js` reads each element's `nonce` and consults `allows_inline_script` when collecting inline
+scripts, via a `CspInlineFn` host hook (the same seam pattern as `ReflowFn`/`SupportsFn` — manuk-js
+grows no net dependency).
+
+### The claim that carries the tick
+
+Enforcement is invisible until an injection lands, so the gate is built so no constant satisfies it:
+the assertions on what MUST run (the nonced inline script, the same-origin external script, the whole
+no-policy control page) are exact complements of those on what MUST NOT (the un-nonced inline script,
+the cross-origin script — proven by the `evil` server's request log staying empty). Deleting the
+URL filter runs the cross-origin script; deleting the inline check runs the un-nonced ones; making
+either return a constant `false` blanks the pages that should work. **PROVEN RED, run.**
+
+### Fail closed on what is forbidden, fail open on what cannot be parsed
+
+An *absent* `script-src`/`default-src` allows (no policy was expressed); a *present* one allows only
+what it names; an unrecognised source expression matches nothing (neither grants nor revokes). Only
+`script-src` is implemented — `style-src`/`img-src`/`connect-src`/`frame-ancestors`/reporting are
+**honestly absent, not stubbed**, because a directive that parses but never blocks is the exact class
+of lie this project keeps catching. `restricts_scripts()` lets a caller tell "CSP allowed this" from
+"there was no CSP."
+
+GATE: `csp_script_src_blocks_what_it_forbids_and_only_what_it_forbids` (manuk-page, G_CSP), plus 19
+unit tests in manuk-net. GATES 132 → 133.
+
+NO REGRESSION: manuk-net 90 passed / 0 failed (incl. the 19 CSP unit tests); manuk-page G_CSP passes
+standalone; the single manuk-page lib failure is `tests::hard_wall_detection_and_honest_interstitial`,
+proven pre-existing across ticks 280–282 this session (fails identically on HEAD). Not a trade.
+
+HONEST LIMITS: `script-src` + `default-src` fallback only; no `style-src`/`img-src`/`connect-src`/
+`frame-ancestors`, no `report-uri`/`Report-Only`, no `'strict-dynamic'`, no worker-src. URL source
+matching is real — `'self'` (origin, with https-upgrade), `'none'`, `*` (network schemes only, never
+`data:`/`blob:`), scheme-sources (`https:`), and host-sources with wildcard host, port and path. For
+INLINE scripts only `'nonce-…'` equality and `'unsafe-inline'` authorize: a hash source is parsed and
+correctly suppresses `'unsafe-inline'`, but inline-script hashes are not computed, so a purely
+hash-pinned inline script is blocked rather than matched.
+
+WIKI: docs/wiki/networking.md (Content-Security-Policy section)

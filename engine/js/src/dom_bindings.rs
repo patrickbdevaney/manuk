@@ -296,6 +296,46 @@ pub fn set_supports_hook(f: SupportsFn) {
     SUPPORTS_HOOK.with(|c| c.set(Some(f)));
 }
 
+/// May an inline `<script>` carrying this `nonce` attribute execute under the document's
+/// Content-Security-Policy?
+///
+/// A **closure**, not a `fn` pointer like [`SupportsFn`], because the answer depends on per-document
+/// state (the parsed policy) rather than on a global evaluator. It is installed for the same reason
+/// the supports hook is: the policy evaluator lives in `manuk-net`, and `manuk-js` has no network
+/// dependency and must not grow a second copy of the matching rules.
+///
+/// The `node` argument is what makes the answer correct for a script whose text arrived over the
+/// network. `fetch_external_scripts` inlines a fetched `<script src>` into the element and drops the
+/// `src`, so by the time execution is decided an external script is textually indistinguishable
+/// from an author-written inline one — and would be re-judged against the *inline* rules it was
+/// never subject to, failing the nonce check it has no reason to carry. The host authorized that
+/// script by URL at fetch time; the node identity is how that decision is carried forward instead
+/// of being made twice, differently.
+pub type CspInlineFn = Box<dyn Fn(NodeId, Option<&str>) -> bool>;
+
+thread_local! {
+    /// **Per-document, and cleared on every page construction.** A policy left installed from the
+    /// previous navigation would silently apply to the next document — enforcing a policy the new
+    /// site never sent, which is a worse failure than not enforcing at all. `Page::from_dom` sets
+    /// this unconditionally (to `None` when there is no CSP), so a stale policy cannot survive.
+    static CSP_INLINE_HOOK: std::cell::RefCell<Option<CspInlineFn>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Install (or, with `None`, clear) the document's inline-script CSP check.
+pub fn set_csp_inline_hook(f: Option<CspInlineFn>) {
+    CSP_INLINE_HOOK.with(|c| *c.borrow_mut() = f);
+}
+
+/// Ask the installed policy. **No hook means no policy means allow** — the only default that cannot
+/// break a page that was already working.
+fn csp_allows_inline(node: NodeId, nonce: Option<&str>) -> bool {
+    CSP_INLINE_HOOK.with(|c| match &*c.borrow() {
+        Some(f) => f(node, nonce),
+        None => true,
+    })
+}
+
 /// Evaluate a `<supports-condition>`.
 ///
 /// **With no hook installed the answer is `false`, and that direction is deliberate.** A build
@@ -8261,6 +8301,18 @@ fn collect_inline_scripts(dom: &Dom) -> Vec<(NodeId, String, bool, bool)> {
                 || ty.eq_ignore_ascii_case("application/javascript")
                 || is_module;
             if !is_js {
+                continue;
+            }
+            // **Content-Security-Policy.** A blocked script is dropped from the executable set and
+            // NOTHING ELSE: the element stays in the DOM, keeps its text, and is still visible to
+            // `document.scripts` and `querySelector` — exactly as in Chromium, which refuses to run
+            // the script without rewriting the document. Removing the node would be the easier
+            // implementation and a structural divergence from every other engine.
+            if !csp_allows_inline(n, el.attr("nonce")) {
+                tracing::info!(
+                    node = n.0,
+                    "CSP blocked an inline <script> (no matching nonce, and inline is not allowed)"
+                );
                 continue;
             }
             // A module is deferred by DEFAULT. `defer` and `async` both mean "do not block me".

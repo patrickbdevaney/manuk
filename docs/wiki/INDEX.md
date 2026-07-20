@@ -556,6 +556,10 @@
   - L794 · The OAuth redirect flow is six features agreeing, and it works (tick 226)
   - L815 · Assert the wire, not just the DOM
   - L823 · Test hygiene: the cookie jar is process-global
+  - L830 · Content-Security-Policy — script-src enforcement (tick 283)
+  - L837 · One evaluator, in manuk-net
+  - L853 · Four layers have to agree — the gate proves they do
+  - L879 · The gate: G_CSP (engine/page/tests/g_csp.rs)
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -695,4 +699,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-610 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+614 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

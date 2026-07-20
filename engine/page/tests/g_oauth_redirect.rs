@@ -195,7 +195,9 @@ fn a_full_authorization_code_login_completes_across_two_origins() {
         .block_on(manuk_page::fetch_document(&authorize))
         .expect("the authorize navigation must complete");
     let (html, final_url) = match loaded {
-        manuk_page::Loaded::Document { html, final_url } => (html, final_url),
+        manuk_page::Loaded::Document {
+            html, final_url, ..
+        } => (html, final_url),
         manuk_page::Loaded::Download { filename, .. } => {
             panic!("the authorize redirect produced a DOWNLOAD ({filename}), not a document")
         }

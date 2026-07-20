@@ -158,9 +158,10 @@ fn run() {
             manuk_page::Loaded::Prefetched(pre) => {
                 manuk_page::Page::from_prefetched_blocking_only(*pre, &fonts, 1200.0)
             }
-            manuk_page::Loaded::Document { html, final_url } => {
-                manuk_page::Page::load(&html, &final_url, &fonts, 1200.0)
-            }
+            // WPT runs from local files, which carry no response headers and so no CSP.
+            manuk_page::Loaded::Document {
+                html, final_url, ..
+            } => manuk_page::Page::load(&html, &final_url, &fonts, 1200.0),
             _ => panic!("not a document"),
         };
         let t_paint = t0.elapsed().as_secs_f64() * 1000.0;
