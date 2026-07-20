@@ -1907,3 +1907,24 @@ fontless synthetic fragments that carried their height in `style.line_height` *b
 `rect()` read*. Changing what `rect()` means deleted them from the layout's element-geometry map
 entirely — a **coverage** regression caused by a **placement** fix, caught only because the wall runs
 a gate the tick was not aiming at.
+
+## Closed menus, popovers and tooltips — `visibility:hidden` overlays (tick 272)
+
+**Pattern:** `position:absolute; visibility:hidden` on a panel that is laid out at full size and
+revealed by toggling `visibility` — the standard way every dropdown, popover, menu, tooltip and
+autocomplete list is hidden, because unlike `display:none` it keeps the box and reveals without a
+reflow.
+
+**The class this unlocks:** clicking anything a closed menu happens to sit over. We hit-tested
+invisible panels, so a link the user can see and aim at resolved to the menu on top of it — and
+because those panels are permanently laid out, this was not a transient state but the page's normal
+condition.
+
+**Why it hid:** the panel is invisible, so nothing looks wrong, and the failure only manifests as a
+click landing on the wrong element. The engine had two separate notions of "hidden" — the `hidden` /
+`aria-hidden` *attributes* (which the a11y builder checked) and CSS `visibility` (which it never
+saw, because it was given the DOM and not the cascade).
+
+**The trap:** `visibility` is the one hiding mechanism a descendant can undo — `visibility:visible`
+inside a hidden ancestor is shown, and is in Chrome's accessibility tree. Pruning the subtree is the
+obvious implementation and silently deletes those nodes. Drop the node, keep walking.

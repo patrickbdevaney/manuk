@@ -1168,3 +1168,50 @@ back to 0), and `x=9999` reaches the last tab rather than clamping to an unalign
 `white-space`" from "never breaks inline-blocks", and passing `no_wrap: true` unconditionally is a
 real RED probe that only this assertion catches. A blanket disable would have turned every ordinary
 `inline-block` gallery on the web into one infinite line while making the headline assertion greener.
+
+---
+
+## `visibility:hidden` must not be hit-testable (tick 272)
+
+A closed dropdown was **swallowing clicks on the article underneath it**.
+
+```css
+.dropdown-content { position:absolute; visibility:hidden; width:max-content }
+```
+
+The modern web hides every dropdown, popover, menu and tooltip this way — `visibility:hidden` rather
+than `display:none`, so the panel keeps its box and can be revealed without a reflow. It is
+therefore **laid out at full size, permanently, on top of real content**. Chrome lays it out and
+neither paints nor hit-tests it. We hit-tested it.
+
+### Why the a11y tree is the right place to fix it
+
+`A11yNode::hit_test` consults only the box, and `is_hidden` reads the `hidden` / `aria-hidden`
+**attributes** — `visibility` is a *style*, and the a11y builder never saw the cascade at all. Per
+WAI-ARIA a `visibility:hidden` element is **not exposed in the accessibility tree**, so pruning it
+there is both spec-correct and fixes hit-testing for free, with no new concept in the hit-test path.
+
+`visibility` is a *style*, so it cannot be derived from the DOM: the page, which holds the computed
+styles, passes a `HashSet<NodeId>` of hidden nodes into `build_tree_with_visibility` — the same
+shape the z-index map already uses for occlusion awareness.
+
+### `visibility` is the one hiding mechanism a descendant can UNDO
+
+```html
+<div style="visibility:hidden">          <!-- dropped from the tree -->
+  <button>Menu item</button>             <!-- dropped -->
+  <button style="visibility:visible">    <!-- SHOWN by Chrome — must survive -->
+</div>
+```
+
+So the hidden node is dropped and **the walk continues into its children**. Writing `continue` (which
+prunes the subtree) is the natural first implementation and it deletes the re-shown descendant; the
+gate asserts this case explicitly so that implementation cannot pass. `display:none`,
+`hidden` and `aria-hidden` are *not* undoable and still prune.
+
+### How it was found
+
+Not by looking for it. Tick 272's other change widened absolutely-positioned panels to their correct
+`max-content` width, and G6 clickability fell from 98.9% to 97.9% — four more links with a hidden
+Wikipedia menu on top of them. **The occlusion was always wrong; the panels had merely been too small
+to cover much.** A gate on a metric nobody was aiming at is what surfaced it.

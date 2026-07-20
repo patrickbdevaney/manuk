@@ -12223,3 +12223,76 @@ face's content area is not distinguishable from its 1.6 line box, every later as
 NO REGRESSION: manuk-layout 79/79, manuk-text, manuk-css all green.
 
 WIKI: docs/wiki/text-layout.md
+
+## Tick 272 — the closed menu that was eating clicks
+
+TICK SHAPE: board re-read at tick start; no observer steer newer than 267, so the PLACEMENT mandate
+and population (1) NEAR-MISS still stand. Took the lead tick 271 left explicitly open: wikipedia's
+sidebar measures 93px against Chrome's 186px, and tick 270's diagnosis of that gap (bare text in a
+flex container) was wrong because Vector wraps every label in a `<span>`.
+
+**THE DIAGNOSIS LANDED. THE FIX DID NOT — AND THE RATCHET IS WHY.** Read below for both, in that
+order, because the shipped capability is the SECOND thing I found, not the first.
+
+### What the sidebar gap actually is (diagnosed, gated, PARKED — not landed)
+
+Asked Chrome for the *computed* style of `#vector-main-menu` and walked its ancestor chain until the
+width stopped changing; that named `.vector-dropdown-content`. Then fetched Wikipedia's real
+`load.php` stylesheet and read the rule: `position:absolute; width:max-content; max-width:200px`.
+
+**The first repro was 100% Chrome-exact and proved nothing** — I built the structure from that CSS
+and left out the one property that mattered, `position:absolute`. Adding it dropped the repro to
+28.6% placement with `dw=-66`, while a `position:static` sibling in the same file stayed exact.
+**That static control is the diagnosis**: the bug is not in `max-content`, it is in what
+`position:absolute` does to it. `layout_abspos` has arms for `stretch`, both-insets and
+aspect-ratio transfer and then falls through to shrink-to-fit — it has **no arm for
+`s.width_keyword`**, which the in-flow block path has had all along. So an anchored panel
+shrink-to-fits against its 20px trigger: 114px where Chrome says 180.
+
+Repro 28.6% → 100.0%, and **wikipedia 7.2% → 10.1% placement, mdy 45 → 30** — the first movement on
+the sweep's highest-sample site (138 ids) in four ticks. Gate written and proven RED
+(`abspos_intrinsic_width_keyword_sizes_to_content_not_the_anchor`, "abspos=44.5 but the identical
+in-flow box is 139.6").
+
+**AND IT REGRESSED G6: clickability 98.9% → 97.9%, 4 misses → 8, over the ≤5 threshold.** Correctly
+widened panels now overlap body text that Chrome does not overlap, because our page-tools panel is
+also at the wrong *x* (dx=45 in the tick-271 dump) — a second, separate placement defect that the
+widening turned from invisible into load-bearing. **A capability is not traded for a regression, so
+this is PARKED, not landed**: `docs/loop/parked/tick272-abspos-maxcontent.patch` holds the fix and
+its gate, ready to apply on top of the panel-x fix. It is diagnosed, measured and proven; it is not
+green, so it does not ship.
+
+### What DID land, and it is the better find
+
+Chasing the G6 misses turned up a real, Chrome-divergent defect underneath: **a `visibility:hidden`
+panel swallows clicks on the content beneath it.** I checked rather than assumed — asked Chrome for
+`.vector-dropdown-content`'s computed visibility on the Terrier page: `hidden`, laid out at 232×32.
+Chrome lays these out and neither paints nor hit-tests them. We hit-tested them, because
+`A11yNode::hit_test` consults only the box, and `is_hidden` reads the `hidden`/`aria-hidden`
+*attributes* — `visibility` is a style and the a11y builder never saw the cascade.
+
+The modern web hides every dropdown, popover, menu and tooltip this way while leaving it laid out at
+full size, so an anchored panel sits over real content **permanently**. Per WAI-ARIA a
+`visibility:hidden` element is not exposed in the accessibility tree at all, so pruning it there
+fixes hit-testing for free and is the spec-correct place to do it.
+
+**`visibility` is the one hiding mechanism a descendant can UNDO**, and I got this wrong on the first
+pass: I wrote `continue`, which prunes the subtree, and a doc comment claiming re-shown descendants
+survive. They would not have. `visibility:visible` inside a hidden ancestor is shown by Chrome and is
+in its tree, so the node is dropped and the walk CONTINUES. `display:none` and `hidden`/`aria-hidden`
+are not undoable and still prune.
+
+**MEASURED:** G6 clickability unchanged at 98.9% / 4 misses — identical to baseline, which is the
+point: this fix is free of the regression the parked one carries. On an isolated repro of
+Wikipedia's exact dropdown CSS, a link under a closed menu goes from unreachable to reachable, and a
+link *inside* the closed menu correctly becomes unclickable (as it is in Chrome).
+
+GATE: `visibility_hidden_boxes_are_not_exposed_and_do_not_swallow_clicks` (manuk-a11y). Proven RED
+("a visibility:hidden node must not be exposed, got [..., \"Menu item\", ...]"). Opens with a
+precondition that the panel really does win the click when NOT hidden — otherwise the assertion is
+an accident of geometry — and asserts the re-shown descendant survives, so a subtree-prune
+implementation fails it.
+NO REGRESSION: manuk-a11y 15/15, manuk-layout 79/79. (`hard_wall_detection_and_honest_interstitial`
+in manuk-page fails on HEAD too — pre-existing, verify.sh does not gate it.)
+
+WIKI: docs/wiki/interaction-surface.md

@@ -347,6 +347,10 @@
   - L1149 · The failure was not "it doesn't scroll"
   - L1158 · What this unblocked for free
   - L1165 · The control is the load-bearing assertion
+  - L1174 · visibility:hidden must not be hit-testable (tick 272)
+  - L1187 · Why the a11y tree is the right place to fix it
+  - L1198 · visibility is the one hiding mechanism a descendant can UNDO
+  - L1212 · How it was found
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -653,4 +657,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-572 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+576 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

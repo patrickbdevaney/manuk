@@ -4648,7 +4648,12 @@ impl Page {
             .collect();
         // Pass the effective z-index per node so hit-testing is occlusion-aware (a
         // high-`z` overlay wins a click over content beneath it).
-        manuk_a11y::build_tree_with_geometry(&self.dom, &rects, &self.z_index_map())
+        manuk_a11y::build_tree_with_visibility(
+            &self.dom,
+            &rects,
+            &self.z_index_map(),
+            &self.invisible_nodes(),
+        )
     }
 
     /// The accessibility tree with `state.focused` filled in for `focused`.
@@ -4674,7 +4679,13 @@ impl Page {
                 )
             })
             .collect();
-        manuk_a11y::build_tree_with_focus(&self.dom, &rects, &self.z_index_map(), focused)
+        manuk_a11y::build_tree_with_focus_and_visibility(
+            &self.dom,
+            &rects,
+            &self.z_index_map(),
+            focused,
+            &self.invisible_nodes(),
+        )
     }
 
     /// Mutable access to the DOM (so a caller/JS binding can mutate the tree, then
@@ -4910,6 +4921,22 @@ impl Page {
     ///
     /// The **top layer** (modal `<dialog>`) sits above every author z-index by construction —
     /// see [`TOP_LAYER_Z`].
+    /// Nodes whose computed `visibility` is `hidden`/`collapse` — laid out, occupying space, but
+    /// not perceivable and therefore neither exposed to accessibility nor hit-testable.
+    ///
+    /// `visibility` INHERITS, and the computed style already carries the inherited value, so a
+    /// per-node read is sufficient and a subtree walk would be redundant. A descendant may set
+    /// `visibility: visible` back on inside a hidden ancestor — which is exactly why this is a
+    /// per-node test rather than a subtree prune; the tree builder skips the hidden node and keeps
+    /// walking, so the re-shown descendant survives.
+    fn invisible_nodes(&self) -> std::collections::HashSet<manuk_dom::NodeId> {
+        self.styles
+            .iter()
+            .filter(|(_, s)| s.visibility != manuk_css::Visibility::Visible)
+            .map(|(n, _)| *n)
+            .collect()
+    }
+
     fn z_index_map(&self) -> HashMap<manuk_dom::NodeId, i32> {
         use manuk_css::Position;
         let mut map = HashMap::new();

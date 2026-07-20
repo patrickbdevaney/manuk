@@ -26,7 +26,7 @@
 //! picks the smallest containing box, which is not the same as the topmost painted
 //! box under a `z-index` stack.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use manuk_dom::{Dom, NodeId};
 
@@ -899,9 +899,33 @@ pub fn build_tree_with_geometry(
     rects: &HashMap<NodeId, Rect>,
     z_index: &ZIndex,
 ) -> A11yNode {
+    build_tree_with_visibility(dom, rects, z_index, &HashSet::new())
+}
+
+/// As [`build_tree_with_geometry`], plus the set of nodes whose computed `visibility` is
+/// `hidden`/`collapse`.
+///
+/// **A `visibility:hidden` element is not exposed in the accessibility tree** (WAI-ARIA: it is not
+/// perceivable, so it is not represented), and the consequence that matters here is that it cannot
+/// be hit-tested either. `visibility` is a *style*, so this cannot be derived from the DOM the way
+/// `hidden`/`aria-hidden` can — the caller, which holds the computed styles, has to supply it.
+///
+/// Without this, a **closed dropdown swallows clicks on the article underneath it**. That is not
+/// hypothetical: the modern web hides menus, popovers and tooltips with `visibility:hidden` while
+/// leaving them laid out at full size, so an anchored panel sits over real content permanently. It
+/// surfaced when tick 272 fixed `position:absolute; width:max-content` — the panels grew to their
+/// correct width, and G6 clickability went 98.9% → 97.9% because four more links had a hidden
+/// Wikipedia menu on top of them. The occlusion was always wrong; the panels were previously just
+/// too small to cover much.
+pub fn build_tree_with_visibility(
+    dom: &Dom,
+    rects: &HashMap<NodeId, Rect>,
+    z_index: &ZIndex,
+    invisible: &HashSet<NodeId>,
+) -> A11yNode {
     let index = id_index(dom);
     let root = dom.root();
-    let children = build_children(dom, root, &index, rects, z_index);
+    let children = build_children(dom, root, &index, rects, z_index, invisible);
     A11yNode {
         node: root,
         role: Role::Document,
@@ -923,7 +947,18 @@ pub fn build_tree_with_focus(
     z_index: &ZIndex,
     focused: Option<NodeId>,
 ) -> A11yNode {
-    let mut tree = build_tree_with_geometry(dom, rects, z_index);
+    build_tree_with_focus_and_visibility(dom, rects, z_index, focused, &HashSet::new())
+}
+
+/// [`build_tree_with_focus`] + [`build_tree_with_visibility`] — what a live page uses.
+pub fn build_tree_with_focus_and_visibility(
+    dom: &Dom,
+    rects: &HashMap<NodeId, Rect>,
+    z_index: &ZIndex,
+    focused: Option<NodeId>,
+    invisible: &HashSet<NodeId>,
+) -> A11yNode {
+    let mut tree = build_tree_with_visibility(dom, rects, z_index, invisible);
     if let Some(f) = focused {
         mark_focused(&mut tree, f);
     }
@@ -945,6 +980,7 @@ fn build_children(
     index: &HashMap<String, NodeId>,
     rects: &HashMap<NodeId, Rect>,
     z_index: &ZIndex,
+    invisible: &HashSet<NodeId>,
 ) -> Vec<A11yNode> {
     let mut out = Vec::new();
     // N3/N4 — the FLAT tree: a shadow host exposes its shadow content, and a `<slot>`
@@ -956,10 +992,18 @@ fn build_children(
         if is_hidden(dom, child) {
             continue;
         }
+        // `visibility:hidden` drops the NODE but **keeps walking**, because `visibility` is the one
+        // hiding mechanism a descendant can undo: `visibility:visible` inside a hidden ancestor is
+        // shown, and is in Chrome's accessibility tree. Pruning the subtree here would delete it.
+        // (`display:none` and `hidden`/`aria-hidden` above are not undoable, so those do prune.)
+        if invisible.contains(&child) {
+            out.extend(build_children(dom, child, index, rects, z_index, invisible));
+            continue;
+        }
         // The tree root already *is* the document; `<html>` must not nest a second
         // `document` node inside it. Reparent its children instead.
         if dom.element(child).is_some_and(|e| e.name == "html") {
-            out.extend(build_children(dom, child, index, rects, z_index));
+            out.extend(build_children(dom, child, index, rects, z_index, invisible));
             continue;
         }
         match role_of(dom, child) {
@@ -973,11 +1017,11 @@ fn build_children(
                     bbox: rects.get(&child).copied(),
                     z: z_index.get(&child).copied().unwrap_or(0),
                     state,
-                    children: build_children(dom, child, index, rects, z_index),
+                    children: build_children(dom, child, index, rects, z_index, invisible),
                 });
             }
             // presentational: drop the node, keep (reparent) its children
-            None => out.extend(build_children(dom, child, index, rects, z_index)),
+            None => out.extend(build_children(dom, child, index, rects, z_index, invisible)),
         }
     }
     out
@@ -1165,6 +1209,111 @@ mod tests {
         assert_eq!(
             roles,
             vec![Role::Button, Role::Navigation, Role::Heading { level: 1 }]
+        );
+    }
+
+    /// **A `visibility:hidden` panel must not swallow clicks on the content underneath it.**
+    ///
+    /// The modern web hides every dropdown, popover, menu and tooltip with `visibility:hidden`
+    /// while leaving it **laid out at full size**, so an anchored panel sits permanently over real
+    /// content. Hit-testing consulted only the box, so the click landed on the invisible menu — a
+    /// link the user can see, aim at, and not click. Caught by G6 when tick 272 corrected
+    /// `position:absolute; width:max-content` and the panels grew to their true width: clickability
+    /// went 98.9% → 97.9%. The occlusion was always wrong; the panels had merely been too small to
+    /// cover much.
+    ///
+    /// `visibility` is the one hiding mechanism a descendant can UNDO, so the second half of this
+    /// matters as much as the first: `visibility:visible` inside a hidden ancestor is shown by
+    /// Chrome and is in its accessibility tree. Pruning the subtree would delete it.
+    #[test]
+    fn visibility_hidden_boxes_are_not_exposed_and_do_not_swallow_clicks() {
+        let mut shown_id = NodeId(0);
+        let mut panel_id = NodeId(0);
+        let dom = dom_with(|d, body| {
+            let link = d.create_element("a");
+            d.set_attr(link, "href", "/article");
+            let t = d.create_text("Read the article");
+            d.append_child(link, t);
+            d.append_child(body, link);
+
+            // A closed dropdown, laid out on top of the link.
+            let panel = d.create_element("div");
+            let hidden_btn = d.create_element("button");
+            let ht = d.create_text("Menu item");
+            d.append_child(hidden_btn, ht);
+            d.append_child(panel, hidden_btn);
+            // ...containing one descendant that turns visibility back ON.
+            let shown = d.create_element("button");
+            let st = d.create_text("Still visible");
+            d.append_child(shown, st);
+            d.append_child(panel, shown);
+            d.append_child(body, panel);
+            panel_id = panel;
+            shown_id = shown;
+        });
+
+        let r = |x: f32, y: f32, w: f32, h: f32| Rect {
+            x,
+            y,
+            width: w,
+            height: h,
+        };
+        let mut rects: HashMap<NodeId, Rect> = HashMap::new();
+        for (i, n) in dom.descendants(dom.root()).enumerate() {
+            let _ = i;
+            if let Some(el) = dom.element(n) {
+                match el.name.as_str() {
+                    "a" => {
+                        rects.insert(n, r(0.0, 0.0, 200.0, 40.0));
+                    }
+                    "div" => {
+                        rects.insert(n, r(0.0, 0.0, 200.0, 40.0));
+                    }
+                    "button" => {
+                        rects.insert(n, r(0.0, 0.0, 200.0, 40.0));
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let z = ZIndex::new();
+
+        // Precondition: with NOTHING marked invisible the panel really does win the click, so the
+        // assertion below is testing the visibility rule and not an accident of geometry.
+        let visible_tree = build_tree_with_visibility(&dom, &rects, &z, &HashSet::new());
+        let occluder = visible_tree
+            .hit_test(100.0, 20.0)
+            .expect("something is hit");
+        assert_ne!(
+            occluder.role,
+            Role::Link,
+            "precondition: the panel must be on top when it is NOT hidden, else this test proves \
+             nothing about visibility"
+        );
+
+        // The panel and its ordinary child are hidden; the re-shown descendant is not.
+        let invisible: HashSet<NodeId> = dom
+            .descendants(dom.root())
+            .filter(|&n| {
+                n == panel_id
+                    || (dom.parent(n) == Some(panel_id) && n != shown_id)
+                    || dom.parent(n).and_then(|p| dom.parent(p)) == Some(panel_id) && n != shown_id
+            })
+            .filter(|&n| n != shown_id)
+            .collect();
+        let tree = build_tree_with_visibility(&dom, &rects, &z, &invisible);
+
+        // 1 — the re-shown descendant SURVIVES a hidden ancestor.
+        let names: Vec<&str> = tree.iter().map(|n| n.name.as_str()).collect();
+        assert!(
+            names.iter().any(|n| n.contains("Still visible")),
+            "visibility:visible inside a visibility:hidden ancestor must stay in the tree, got {names:?}"
+        );
+
+        // 2 — the hidden panel's own hidden child is gone.
+        assert!(
+            !names.iter().any(|n| n.contains("Menu item")),
+            "a visibility:hidden node must not be exposed, got {names:?}"
         );
     }
 
