@@ -316,6 +316,21 @@ pub unsafe fn set_reflow_hook(f: ReflowFn, ctx: *mut std::ffi::c_void) {
 #[cfg(not(feature = "_sm"))]
 pub unsafe fn set_reflow_hook(_f: ReflowFn, _ctx: *mut std::ffi::c_void) {}
 
+/// A host callback answering "does this engine actually honour this CSS condition?".
+pub type SupportsFn = fn(condition: &str) -> bool;
+
+/// Install the CSS feature-query evaluator used by `CSS.supports()`.
+///
+/// The host passes its real one — Stylo, the same evaluator the cascade consults for `@supports` —
+/// so the JS and CSS halves of one question cannot answer it differently.
+#[cfg(feature = "_sm")]
+pub fn set_supports_hook(f: SupportsFn) {
+    dom_bindings::set_supports_hook(f)
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn set_supports_hook(_f: SupportsFn) {}
+
 /// Remove the forced-reflow callback. Paired with [`set_reflow_hook`] on every path out, including
 /// the early returns — a stale `ctx` pointer outliving its owner is a use-after-free.
 #[cfg(feature = "_sm")]

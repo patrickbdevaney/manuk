@@ -622,3 +622,59 @@ cannot express — but deleting the contents was not approximate, it was absent.
 **A statement at-rule has no block.** `@layer a, b;` ends at the `;`, so `rest.find('{')` finds a
 *later* rule's brace and slices past the end. All four at-rule arms share one `block_open` that is
 `None` unless the brace falls before the rule's end.
+
+---
+
+## `CSS.supports()` — one question must not have two answers (tick 282)
+
+`@supports` has been honest since tick 276: the cascade hands the condition to Stylo, and Stylo
+really parses it. `CSS.supports()` — the JS half of the *identical* question — was
+`function () { return true; }`. Measured on the same declarations before the fix:
+
+| condition | `@supports` (Stylo) | `CSS.supports` (JS) |
+|---|---|---|
+| `display: grid` | applies | `true` |
+| `notaproperty: 1` | does not apply | **`true`** |
+| `container-type: inline-size` | does not apply | **`true`** |
+
+Two sources of truth for one question, and the JS one wrong in the expensive direction. Progressive
+enhancement is built on this call: a page asks whether a property works and, on yes, **hides its
+fallback** and commits to the modern path. Told yes about `container-type`, a page throws away the
+layout its author shipped and tested and renders the enhanced branch against a property the engine
+ignores. A "no" would have left it looking right. `return true` is not a permissive default — it is
+the answer that breaks pages, because it is only ever consulted by code preparing to act on it.
+
+### The fix is a different door to the same evaluator
+
+`stylo_engine::supports_condition` builds `@supports <condition> { … }`, parses it with the **same
+`StyloStylesheet::from_str` the cascade uses**, and reads back the `enabled` flag Stylo itself
+computed.
+
+The obvious alternative — a list of supported properties — is a second source of truth by
+construction. It is correct the day it is written, wrong the first time the engine gains or loses a
+property, and silent when it drifts. This project's dominant bug class is exactly that drift (see the
+UA_CSS / `apply_ua_defaults` pair), and the cheapest way to not have it is to not have the second
+copy.
+
+`manuk-js` has no CSS dependency and must not grow one, so the host installs the evaluator through a
+`SupportsFn` hook — the same upward-call shape as `ReflowFn`. **With no hook installed the answer is
+`false`**, deliberately: a build without a CSS engine cannot honour anything, and a conservative no
+costs a page an enhancement while a wrong yes costs it its layout.
+
+`and` / `or` / `not` were never implemented here and work anyway. That is the evidence the real
+evaluator is being *reached* rather than imitated — a lookup table would have needed its own
+boolean-expression parser and still would not have been the cascade's evaluator.
+
+### Two things measured and pinned
+
+**`display: grid` is pref-gated.** `Page::load` enables a Stylo runtime pref that a bare unit test
+does not, so `supports_condition("display: grid")` is `false` standalone and `true` from a loaded
+page — the same function, two configurations. They agree in every context where `CSS.supports`
+exists, because JS only runs inside a page. Hence `G_CSS_SUPPORTS` asserts the agreement from inside
+a real `Page::load`, and the unit tests stay off pref-gated properties rather than pinning a
+configuration the browser never runs in.
+
+**The limit of the proxy.** `CSS.supports` now mirrors what Stylo will *parse*, which stands in for
+what the engine will *honour*. A property Stylo parses but layout ignores would still report true.
+`container-type` is not that case today — Stylo declines it — but that is where the next gap of this
+shape would appear.

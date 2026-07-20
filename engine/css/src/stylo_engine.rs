@@ -1257,9 +1257,120 @@ fn cascade_one_element(
     stylist.compute_for_declarations::<StyloElement>(guards, parent_style, merged_arc)
 }
 
+/// Does this engine actually honour `condition`? — the ONE answer, for both `@supports` and
+/// `CSS.supports()`.
+///
+/// **The bug this exists to delete.** `@supports` has been honest since tick 276, because the
+/// cascade asks Stylo and Stylo really parses the condition: `@supports (notaproperty: 1)` and
+/// `@supports (container-type: inline-size)` both correctly fail to apply. `CSS.supports()` — the
+/// JS half of the identical question — was a literal `return true`. So the two disagreed about the
+/// same declaration, and the JS one was wrong in the direction that hurts: a page asking
+/// `CSS.supports('container-type: inline-size')` was told **yes**, took its modern-layout branch,
+/// and rendered it against a property this engine ignores. A "no" would have kept the fallback and
+/// the page would have looked right.
+///
+/// **Why it is answered by PARSING A STYLESHEET rather than by a lookup table.** The temptation is a
+/// list of supported properties. A list is a second source of truth: it is right the day it is
+/// written and wrong the first time the engine gains or loses a property, and nothing makes it fail
+/// loudly when it drifts. Instead this builds `@supports <condition> { ... }`, hands it to the same
+/// `StyloStylesheet::from_str` the cascade uses, and reads back the `enabled` flag Stylo itself
+/// computed. There is no second evaluator to keep in step — it is the *same* one, reached by a
+/// different door.
+///
+/// **A measured caveat, pinned here so nobody re-derives it.** Some properties sit behind Stylo
+/// runtime prefs that `Page::load` turns on — `display: grid` is one. Called from a bare unit test
+/// with those prefs unset this returns `false` for grid; called from a loaded page it returns
+/// `true`, and so does the cascade. The two agree *in every context where `CSS.supports` actually
+/// exists*, because JS only runs inside a page — which is why `G_CSS_SUPPORTS` asserts the
+/// agreement from inside a real `Page::load`, and why the unit tests below stay off pref-gated
+/// properties rather than pinning a configuration the browser never runs in.
+pub fn supports_condition(condition: &str) -> bool {
+    // A condition containing a block delimiter could otherwise close the `@supports` block and
+    // inject rules, which would make the probe answer a question nobody asked.
+    if condition.is_empty() || condition.contains('{') || condition.contains('}') {
+        return false;
+    }
+
+    // `CSS.supports(cond)` takes a <supports-condition>, but every browser also accepts a bare
+    // declaration (`CSS.supports('display: flex')`). Wrap only when the caller did not, and leave
+    // compound conditions (`(a) and (b)`, `not (a)`) alone.
+    let trimmed = condition.trim();
+    let wrapped = if trimmed.starts_with('(') || trimmed.starts_with("not ") {
+        trimmed.to_string()
+    } else {
+        format!("({trimmed})")
+    };
+
+    let source = format!("@supports {wrapped} {{ manukprobe {{ color: red; }} }}");
+
+    let lock = SharedRwLock::new();
+    let Ok(url) = ::url::Url::parse("about:manuk") else {
+        return false;
+    };
+    let url_data = UrlExtraData(ServoArc::new(url));
+    let media = ServoArc::new(lock.wrap(MediaList::empty()));
+    let parsed = StyloStylesheet::from_str(
+        &source,
+        url_data,
+        Origin::Author,
+        media,
+        lock.clone(),
+        None,
+        None,
+        QuirksMode::NoQuirks,
+        AllowImportRules::No,
+    );
+
+    let guard = lock.read();
+    // A condition Stylo could not parse produces no `@supports` rule at all — which is a "no", not
+    // an error, exactly as the spec's "return false" for an unparseable condition.
+    parsed
+        .contents
+        .read_with(&guard)
+        .rules(&guard)
+        .iter()
+        .any(|rule| matches!(rule, CssRule::Supports(s) if s.enabled))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `supports_condition` is the ONE evaluator behind both `@supports` and `CSS.supports()`.
+    /// These assert it at the Rust boundary, so a JS-side regression and an engine-side one fail
+    /// in different places.
+    #[test]
+    fn supports_condition_answers_from_the_real_parser() {
+        // Implemented.
+        assert!(supports_condition("display: flex"));
+        assert!(supports_condition("(display: flex)"));
+        assert!(supports_condition("position: sticky"));
+        assert!(supports_condition("color: red"));
+        // Real properties this engine does not implement — the ones whose false "yes" made pages
+        // discard a working fallback.
+        assert!(!supports_condition("container-type: inline-size"));
+        assert!(!supports_condition("view-transition-name: foo"));
+        // Nonsense.
+        assert!(!supports_condition("notaproperty: 1"));
+        assert!(!supports_condition("color: notacolor"));
+        assert!(!supports_condition("color"));
+        assert!(!supports_condition(""));
+        // Compound conditions come free from Stylo — a lookup table would need its own parser.
+        assert!(supports_condition("(display: flex) and (color: red)"));
+        assert!(!supports_condition("(display: flex) and (notaprop: 1)"));
+        assert!(supports_condition("not (notaprop: 1)"));
+        assert!(!supports_condition("not (display: flex)"));
+    }
+
+    /// A condition carrying a block delimiter must not be able to close the probe stylesheet and
+    /// have its own rules parsed — that would answer a question nobody asked.
+    #[test]
+    fn supports_condition_cannot_be_escaped_with_a_brace() {
+        assert!(!supports_condition(
+            "(display:flex) { } @supports (display:flex)"
+        ));
+        assert!(!supports_condition("}"));
+    }
     use crate::Rgba;
 
     /// End-to-end: Stylo parses + matches + cascades a real author sheet over the arena

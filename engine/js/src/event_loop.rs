@@ -3468,10 +3468,34 @@ const PRELUDE: &str = r#"
       }
 
       // `CSS.escape` / `CSS.supports` — feature detection, and the correct way to build a selector.
+      //
+      // `supports` used to be `return true`, which is the worst available answer. Progressive
+      // enhancement is built on this call: a page asks whether a property works, and on "yes" it
+      // hides its fallback and commits to the modern path. Answering yes to everything meant the
+      // fallback was thrown away for properties this engine ignores — `container-type`,
+      // `view-transition-name`, `animation-timeline` — so the page rendered its enhanced layout
+      // with none of the enhancement. A "no" would have kept the layout the author already shipped
+      // and tested.
+      //
+      // It now asks the CSS engine, which is the same Stylo evaluation the cascade already runs for
+      // `@supports`. The two were disagreeing about the identical declaration; now there is one
+      // answer, reached through one evaluator.
       if (typeof globalThis.CSS === 'undefined') {
         globalThis.CSS = {
           escape: function(v) { return String(v).replace(/([^\w-])/g, '\\$1'); },
-          supports: function() { return true; }
+          // Both spec forms: `supports(conditionText)` and `supports(property, value)`.
+          supports: function (a, b) {
+            if (typeof __cssSupports !== 'function') { return false; }
+            if (arguments.length >= 2) {
+              var prop = String(a), val = String(b);
+              // The 2-argument form takes a property and a value, NOT a condition — so a value
+              // carrying its own parens/braces must not be able to close the probe and turn a
+              // question into an injection.
+              if (prop.indexOf('(') >= 0 || prop.indexOf(':') >= 0 || val === '') { return false; }
+              return __cssSupports('(' + prop + ':' + val + ')');
+            }
+            return __cssSupports(String(a));
+          }
         };
       }
 

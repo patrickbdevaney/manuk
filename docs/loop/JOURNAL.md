@@ -12910,3 +12910,87 @@ lifecycle, `clients` is a stub, no push, no background sync, scope matching does
 prefix, and `skipWaiting` resolves without actually shortening a wait there is no queue for.
 
 WIKI: docs/wiki/js-engine.md (Service Workers section)
+
+## Tick 282 — CSS.supports told the truth, and the engine already knew it (2026-07-20)
+
+HYPOTHESIS: none, at first — this tick began as a PROBE, and the probe is the tick. The board's
+"completeness identity" row (visibilityState, permissions.query, userAgentData) was measured before
+building: `visibilityState=visible`, `permissions.query=function`, `Notification=function`,
+`clipboard=object`, `languages/onLine/cookieEnabled` all real. **Most of that row was already done** —
+another stale board entry, and the probe cost one test run instead of a tick.
+
+Probing container queries next (doc-class top hole, on the tick-273 hypothesis that `@container`
+might be deleted at parse time the way `@media` was) turned up something better.
+
+### The find
+
+`CSS.supports` was `function () { return true; }`. Measured: **21 of 21 probe cases YES**, including
+`notaproperty: 1`, `color: notacolor`, `width: 10zz`, the bare word `color`, and the string `": "`.
+
+That is the worst available answer, and worse than not having the API. Progressive enhancement is
+built on this call: a page asks whether a property works and, on yes, **hides its fallback** and
+commits to the modern path. So a page asking `CSS.supports('container-type: inline-size')` was told
+yes, discarded the layout its author shipped and tested, and rendered the enhanced branch against a
+property this engine ignores. A "no" would have left it looking right.
+
+### What made it a BUG and not a gap: the engine already knew
+
+`@supports` has been honest since tick 276 — the cascade asks Stylo, and Stylo really parses the
+condition. Measured on the identical declarations, BEFORE this tick:
+
+    condition                        @supports (Stylo)     CSS.supports (JS)
+    display: grid                    applies               true
+    notaproperty: 1                  does NOT apply        TRUE   <-- disagree
+    container-type: inline-size      does NOT apply        TRUE   <-- disagree
+
+Two sources of truth for one question — this project's dominant bug class — and the JS one wrong in
+the direction that costs a page its layout.
+
+### The fix is a door, not a second evaluator
+
+`manuk_css::stylo_engine::supports_condition` builds `@supports <cond> { ... }`, hands it to the
+**same `StyloStylesheet::from_str` the cascade uses**, and reads back the `enabled` flag Stylo itself
+computed. The tempting alternative — a list of supported properties — is a second source of truth by
+construction: right the day it is written, wrong the first time the engine gains or loses a property,
+and silent when it drifts. `manuk-js` has no CSS dependency and does not grow one; the host installs
+the evaluator through a `SupportsFn` hook, exactly as it does `ReflowFn`.
+
+Compound conditions (`and`/`or`/`not`) were never implemented here and work anyway. That is the
+evidence the real evaluator is being reached rather than imitated — a lookup table would have needed
+its own boolean-expression parser and still would not be the cascade's evaluator.
+
+GATE: `css_supports_answers_from_the_css_engine_and_agrees_with_at_supports` (manuk-page,
+G_CSS_SUPPORTS), 14 claims, plus 2 unit tests in manuk-css.
+
+PROVEN RED IN BOTH DIRECTIONS, which is the point — the two probes are near-exact complements, so no
+constant can satisfy the gate:
+  * `return true` (the original bug) → unimpl/nonsense/notadecl/compound_false/twoarg_bogus/
+    twoarg_badval/agree_bogus/agree_unimpl all false, every positive claim still green
+  * `return false` → the exact mirror: every positive claim false, every negative one green
+And `agree_nontrivial` guards the degenerate case where both halves agree by both being constant.
+
+MEASURED CAVEAT, pinned rather than smoothed over: `display: grid` sits behind a Stylo runtime pref
+that `Page::load` enables. `supports_condition("display: grid")` is FALSE from a bare unit test and
+TRUE from a loaded page — the same function, two configurations. They agree in every context where
+`CSS.supports` exists at all, because JS only runs inside a page, which is why the agreement is
+asserted from inside a real `Page::load` and the unit tests stay off pref-gated properties instead of
+pinning a configuration the browser never runs in.
+
+ALSO MEASURED, not fixed (recorded so the next tick starts from data): `document.styleSheets` is
+UNDEFINED — the CSSOM `.sheet` bridge is still the hole memory says it is. `container-type` is not
+retained in computed style and `@container` does not apply, so container queries are genuinely
+absent, not merely unwired — the tick-273 parse-time-deletion hypothesis does NOT hold for
+`@container`. `navigator.userAgentData`, `mediaDevices`, `geolocation`, `wakeLock`,
+`storage.estimate`, `deviceMemory`, `pdfViewerEnabled` are absent; WebGL `getContext('webgl')`
+returns null.
+
+NO REGRESSION: manuk-page 151 passed / 1 failed (the same
+`tests::hard_wall_detection_and_honest_interstitial` proven pre-existing under tick 280 this
+session); manuk-css 37/37.
+
+HONEST LIMITS: `CSS.supports` now mirrors exactly what Stylo will parse, which is a proxy for what
+the engine will HONOUR, not a proof of it. A property Stylo parses but the layout ignores would still
+report true. `container-type` is not that case — Stylo declines it, so the answer is right today —
+but the gap is real and this is where it would appear.
+
+WIKI: docs/wiki/css-cascade.md (CSS.supports section)

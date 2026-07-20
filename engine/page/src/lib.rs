@@ -1044,6 +1044,19 @@ fn scroll_geometry_of(
     m
 }
 
+/// Point `CSS.supports()` at the real feature-query evaluator.
+///
+/// Without the `stylo` feature there is no evaluator, and the answer is a flat `false`. That is the
+/// conservative direction on purpose: a build that cannot honour a property must not claim it, or
+/// every page throws away the fallback it already shipped in favour of a branch this configuration
+/// cannot render.
+fn install_supports_hook() {
+    #[cfg(feature = "stylo")]
+    manuk_js::set_supports_hook(manuk_css::stylo_engine::supports_condition);
+    #[cfg(not(feature = "stylo"))]
+    manuk_js::set_supports_hook(|_| false);
+}
+
 impl Page {
     /// Parse + style + lay out `html` for a viewport of `viewport_width` px.
     /// As [`load`](Self::load), but the document is born knowing its window id and opener, so its
@@ -1066,6 +1079,10 @@ impl Page {
     }
 
     pub fn load(html: &str, final_url: &str, fonts: &FontContext, viewport_width: f32) -> Page {
+        // `CSS.supports()` must answer from the CSS engine, not from JS. Installed here rather than
+        // at binding-registration time because this is the layer that HAS a CSS engine — `manuk-js`
+        // deliberately has no CSS dependency, exactly as with the forced-reflow hook.
+        install_supports_hook();
         let mut page = Page::from_dom(manuk_html::parse(html), final_url, fonts, viewport_width);
         // **Both passes, back to back.** `from_dom` runs only the scripts that block first paint; the
         // deferred ones (`defer`, `async`, `type=module`) run here. So this function behaves exactly as

@@ -181,6 +181,9 @@
   - L570 · Still skipped: @supports and @layer
   - L577 · One evaluator for @media and matchMedia (tick 275)
   - L605 · @supports / @layer, and answering a capability question honestly (tick 276)
+  - L628 · CSS.supports() — one question must not have two answers (tick 282)
+  - L647 · The fix is a different door to the same evaluator
+  - L668 · Two things measured and pinned
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -692,4 +695,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-607 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+610 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

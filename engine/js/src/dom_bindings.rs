@@ -278,6 +278,37 @@ pub unsafe fn restore_view_maps(v: ViewMaps) {
 /// like the view maps.
 pub type ReflowFn = unsafe fn(ctx: *mut std::ffi::c_void, dom: *mut Dom);
 
+/// Answers "does this engine actually honour this CSS condition?" for `CSS.supports()`.
+///
+/// A hook rather than a call, for the same reason `ReflowFn` is one: the answer lives in the CSS
+/// engine, `manuk-js` has no CSS dependency, and it must not grow one. The host installs the real
+/// evaluator — which is Stylo, the very same one the cascade consults for `@supports` — so the two
+/// halves of one question cannot drift apart. That drift is precisely the bug being deleted here.
+pub type SupportsFn = fn(condition: &str) -> bool;
+
+thread_local! {
+    static SUPPORTS_HOOK: std::cell::Cell<Option<SupportsFn>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Install the CSS feature-query evaluator.
+pub fn set_supports_hook(f: SupportsFn) {
+    SUPPORTS_HOOK.with(|c| c.set(Some(f)));
+}
+
+/// Evaluate a `<supports-condition>`.
+///
+/// **With no hook installed the answer is `false`, and that direction is deliberate.** A build
+/// without the CSS engine cannot honour anything, so claiming support would send every page down a
+/// modern branch this configuration definitely cannot render. Guessing "yes" is the failure mode
+/// this whole tick exists to remove; a conservative "no" costs a page its enhancement and keeps its
+/// fallback, which is the outcome the author already wrote and tested.
+pub fn eval_supports(condition: &str) -> bool {
+    SUPPORTS_HOOK
+        .with(|c| c.get())
+        .is_some_and(|f| f(condition))
+}
+
 thread_local! {
     /// A **stack**, not a slot: script rounds nest — a click on a `<label>` dispatches a click at
     /// the control it labels, which is a second round inside the first. With a slot, the inner
@@ -6082,6 +6113,18 @@ unsafe fn host_idb(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     true
 }
 
+/// `__cssSupports(conditionText)` → bool — the seam behind `CSS.supports()`.
+///
+/// It resolves to the SAME Stylo evaluation the cascade runs for `@supports`, which is the entire
+/// point: before this, `@supports (container-type: inline-size)` correctly declined to apply while
+/// `CSS.supports('container-type: inline-size')` answered `true`, and a page that asked the JS
+/// question took a modern-layout branch the engine could not render.
+unsafe fn host_css_supports(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let cond = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    *vp = BooleanValue(eval_supports(&cond));
+    true
+}
+
 /// `__caches(opJson)` → result JSON — the single native seam behind `caches`.
 ///
 /// Same shape and same reason as `__idb`: one string-in / string-out function, so there is exactly
@@ -6967,6 +7010,14 @@ pub unsafe fn install(
         global.handle(),
         c"__caches".as_ptr(),
         host_fn!(host_caches),
+        1,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__cssSupports".as_ptr(),
+        host_fn!(host_css_supports),
         1,
         0,
     );

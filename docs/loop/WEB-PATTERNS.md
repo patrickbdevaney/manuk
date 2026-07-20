@@ -2148,3 +2148,33 @@ capability whose pieces are individually inert is not a reason to land them sepa
 saying so; it is a reason for the board to carry a row that says which third is missing. Tick 279
 split its row rather than flipping it for exactly this reason, and that split is what made this tick
 obviously next instead of obviously done.
+
+## Progressive enhancement — `CSS.supports()` (tick 282)
+
+**Pattern:** `if (CSS.supports('container-type: inline-size')) { root.classList.add('cq'); }`, or the
+CSS twin `@supports (display: grid) { … }` guarding a modern layout while the legacy one is hidden.
+Every design system, every CSS framework's feature-detect bundle, and most sites that shipped a
+layout change in the last five years contain this shape.
+
+**The class this unlocks:** correct fallback selection — which is to say, *the layout the author
+actually tested*. Not a new capability so much as the removal of a wrong answer.
+
+**Why it hid:** `CSS.supports` returned `true` for everything, including `notaproperty: 1` and the
+bare string `": "`. Feature detection cannot fail loudly; its entire job is to return a boolean and
+be believed. So the browser was not reported as broken — the *site* was, one layout at a time, on
+exactly the properties it had been careful enough to check for first.
+
+**The traps, three of them.** **(1)** `return true` is not a permissive default. This API is only
+ever consulted by code that is about to act on the answer, and acting on a false yes means discarding
+a working fallback. Where a stub must guess, it should guess **no**. **(2)** A lookup table of
+supported properties is a second source of truth — right when written, wrong the first time the
+engine changes, silent when it drifts. Ask the real parser instead; there is one, and it was already
+answering this question for `@supports`. **(3)** Test both directions. A gate that only asserts
+"unsupported things are false" is satisfied by a flat `false`, which breaks every enhancement on the
+web just as thoroughly as `true` broke every fallback.
+
+**And the one that generalises:** the fix was not implementing anything. The engine **already knew**
+the right answer and was giving it correctly on the CSS side while the JS side made one up. Before
+building a capability, check whether some other surface of the same engine already has it — this tick
+was found by probing a board row that turned out to be mostly done, and the probe cost one test run
+where building would have cost a tick.
