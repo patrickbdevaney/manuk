@@ -1775,3 +1775,36 @@ pinning it at zero — turning an unused declaration into a scroller that cannot
 row yields no horizontal scroll range in layout today, so `overflow-x: scroll` does not scroll —
 which means **horizontal carousels, the commonest kind, do not scroll at all, let alone snap.** That
 is a scroll-geometry gap rather than a snap gap, and it is the next lever here.
+
+## The nav bar that is one line, not three (tick 267)
+
+**Pattern:** `<nav style="white-space:nowrap; overflow-x:auto">` wrapping a row of
+`display:inline-block` children — tabs, chips, breadcrumbs, toolbar buttons, carousel slides. The
+declaration says "this row is ONE line; let the container scroll it".
+
+**The class this unlocks:** nav bars, tab strips, filter/chip rows, breadcrumb trails, toolbars and
+horizontal image carousels — the entire pre-flexbox idiom for a horizontal row, still load-bearing on
+a large slice of the current web (and the fallback markup most frameworks still emit).
+
+**The bug was NOT the one tick 266 wrote down.** That entry above blames *scroll geometry* ("an
+inline-block row yields no horizontal scroll range"). Measuring four container shapes instead of
+theorising from one: `display:flex` rows and wide block children **already** reported `scrollWidth`
+correctly, and `nowrap` **already** worked for plain text. Horizontal scroll geometry was fine.
+`white-space: nowrap` was broken for **exactly one token type** — the atomic inline box.
+
+**Where the bug was.** An inline formatting context is a run of tokens, and an `inline-block` is a
+token in it exactly like a word. The line breaker suppresses a break only when both sides are nowrap
+(the break opportunity belongs to both). The word path read `white-space` off the inherited style;
+the atomic path passed a hardcoded `false`, so an inline-block permanently advertised itself as a
+legal break point.
+
+**What it looked like on the page — and why no metric saw it.** Not "the carousel doesn't scroll".
+The row **silently wrapped into a stack**: five 100px tabs in a 200px bar became three rows, the bar
+grew to 3× its declared height and shoved the rest of the page down, and only *then* did
+`scrollWidth == clientWidth` — so nothing scrolled, correctly, given the wrapped layout. Every number
+the engine reported was self-consistent with a layout that was wrong, which is why the symptom
+pointed at the scroll container and why capability coverage could not see it.
+
+**The control is the real assertion.** The same row *without* `nowrap` must still wrap. That is what
+separates "honours `white-space`" from "never breaks inline-blocks" — a blanket disable makes the
+headline assertion greener while turning every ordinary inline-block gallery into one infinite line.

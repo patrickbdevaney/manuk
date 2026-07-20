@@ -3979,6 +3979,10 @@ impl Ctx<'_> {
                         height,
                         space_before: *pending_space && !*first,
                         valign: s.vertical_align,
+                        // `white-space` is INHERITED, so the atomic's own computed style already
+                        // carries the containing block's `nowrap` — same source the text path at
+                        // `collect_inline_node` reads for a Word.
+                        no_wrap: matches!(s.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre),
                     });
                     *first = false;
                     *pending_space = false;
@@ -4256,6 +4260,7 @@ impl Ctx<'_> {
                     height,
                     space_before,
                     valign,
+                    no_wrap,
                 } => {
                     // Whitespace around an atomic uses the default text space width.
                     let key = FontKey {
@@ -4272,7 +4277,7 @@ impl Ctx<'_> {
                         advance,
                         space_w,
                         height,
-                        false,
+                        no_wrap,
                         Box::new(move |x: f32| LineFrag {
                             x,
                             width: advance,
@@ -4511,6 +4516,10 @@ enum InlineItem {
         height: f32,
         space_before: bool,
         valign: VerticalAlign,
+        /// `white-space:nowrap` — an atomic inline is a *token in the run*, exactly like a word,
+        /// so it must carry the same break flag. Hardcoding `false` here made every `nowrap` row
+        /// of `inline-block`s (nav bars, tab strips, chip rows, carousels) wrap anyway.
+        no_wrap: bool,
     },
     /// Horizontal padding/border of an inline element (`<span style="padding:0 15px">`):
     /// occupies `width` in the flow and extends the owning element's geometry, but paints

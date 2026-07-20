@@ -11928,3 +11928,49 @@ scroll-GEOMETRY gap, not a snap gap. The snap code handles x symmetrically and i
 **Horizontal carousels — the commonest kind — still do not scroll**, and that is the next lever here.
 
 WIKI: docs/wiki/interaction-surface.md
+
+## Tick 267 — the residue named the wrong organ (a one-literal line-break bug)
+
+TICK SHAPE: board re-read at tick start. Observer's CO-#1 (t264/265) is FID-SWEEP (observer is
+running it themselves — explicitly "you do NOT need to"), then IndexedDB, Service Worker, container
+queries and AVIF (both **rejected with evidence** at t266 as subsystems/C-FFI), then scroll snap /
+Web Workers / CSP. Tick 266 closed snap and left ONE named residue: horizontal carousels do not
+scroll. Bounded, falsifiable, finishes the arc — taken.
+
+**THE PROBE FALSIFIED THE DIAGNOSIS, WHICH IS THE WHOLE TICK.** t266 recorded a *scroll-geometry*
+gap ("an inline-block row yields NO horizontal scroll range; `max_x` comes back 0"). I built the
+probe first ([[parity-methodology]]) and measured five container shapes instead of one. `display:flex`
+rows and wide block children **already** reported `scrollWidth=500` correctly, and `nowrap` **already**
+worked for plain text (490 vs 200). Horizontal scroll geometry was never broken. `white-space:nowrap`
+was broken for **exactly one token type**.
+
+**ONE LITERAL.** An IFC is a run of tokens; `InlineItem::Word` and `InlineItem::Atomic` (inline-block/
+-flex/-grid) are both tokens, and the breaker's rule `breakable = !(no_wrap && prev_no_wrap)` suppresses
+a break only when both sides are nowrap (the opportunity belongs to both). The `Word` arm read
+`white-space` off the inherited style; the `Atomic` arm passed a **hardcoded `false`**, so every atomic
+inline permanently advertised itself as a legal break point and the conjunction could never hold across
+a row. Fixed by carrying `no_wrap` on `InlineItem::Atomic` from the atomic's OWN computed style —
+`white-space` is inherited, so the container's `nowrap` is already on the child; same source as Word.
+
+**THE FAILURE WAS NOT "IT DOESN'T SCROLL"** — it was that the row silently **wrapped into a stack**:
+five 100px tabs in a 200px bar become three rows, the bar grows to 3x its declared height and shoves
+the page down, and *then* `scrollWidth == clientWidth` so nothing scrolls, correctly, given the wrapped
+layout. **Self-consistent and wrong** — which is exactly why the symptom pointed at scroll geometry and
+why no capability count could see it. This is nav bars, tab strips, chip/filter rows, breadcrumbs,
+toolbars and carousels — the pre-flexbox web and a large slice of the current one.
+
+**FREED FOR NOTHING: the x-axis of snapping.** t266 wrote it and could never run it — no horizontal
+range existed to run it against, so it was correct by symmetry alone. Now gated: x=120 lands on 100,
+x=270 snaps to the NEAREST point (300, not back to 0), x=9999 reaches the last tab.
+
+**THREE RED PROBES, ALL FIRE, ON THREE DIFFERENT ASSERTIONS** (no vacuous green this tick): restore the
+`false` -> scrollHeight 240 (wrapped); pass `no_wrap: true` unconditionally -> the `#wrap` CONTROL
+fails; stub `snap_scroll` -> the landing assertion fails. The control is the load-bearing one: it is
+what separates "honours white-space" from "never breaks inline-blocks", and a blanket disable would
+have made the headline assertion GREENER while turning every ordinary inline-block gallery into one
+infinite line. Probe file removed after use; snapshots via `cp`, never `git checkout`
+([[probe-harness-git-checkout-wipes-tick]]).
+
+NO REGRESSION: manuk-layout 77/77, g_scroll_snap + g_client_rects green.
+
+WIKI: docs/wiki/interaction-surface.md

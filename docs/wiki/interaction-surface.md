@@ -1110,3 +1110,61 @@ comes back `0`), so `overflow-x: scroll` does not scroll at all. That is a pre-e
 **scroll-geometry** gap rather than a snap gap — the snap code handles `x` symmetrically and is
 simply unexercised there — but the practical consequence is that **horizontal carousels, the
 commonest kind, still do not scroll.** Fixing `scrollWidth` for inline rows is the next lever here.
+
+## Horizontal rows: `white-space: nowrap` around atomic inlines (tick 267)
+
+The residue above named the wrong organ, and a probe said so before a line was written. The claim was
+a **scroll-geometry** gap — "an inline-block row yields no horizontal scroll range". Measuring four
+container shapes instead of theorising from one failing case:
+
+| shape | scrollWidth | verdict |
+|---|---|---|
+| `display:flex` row, `flex-shrink:0` | 500 | **already correct** |
+| single wide block child (`width:500px`) | 500 | **already correct** |
+| `inline-block` row, no `nowrap` | 200 | correct — it *should* wrap |
+| `inline-block` row + `white-space:nowrap` | 200 | **the bug** |
+| plain text + `nowrap` (control) | 490 | `nowrap` already worked for text |
+
+So horizontal scroll geometry was never broken. `nowrap` was broken **for exactly one token type**.
+
+### The mechanism
+
+An inline formatting context is a run of tokens; `InlineItem::Word` and `InlineItem::Atomic` (an
+`inline-block` / `inline-flex` / `inline-grid`) are both tokens in it, and the line breaker's rule is
+
+```rust
+let breakable = !(no_wrap && prev_no_wrap);
+```
+
+— a break opportunity belongs to *both* sides, so it is suppressed only when both are `nowrap`. The
+`Word` arm read `white-space` off the text node's inherited style. The `Atomic` arm passed a
+**hardcoded `false`**. One literal, and every atomic inline permanently advertised itself as a legal
+break point, so `no_wrap && prev_no_wrap` could never hold across a row of them.
+
+The fix carries `no_wrap` on `InlineItem::Atomic`, read from the atomic's own computed style at
+collection time — `white-space` is *inherited*, so the container's `nowrap` is already sitting on the
+child, the same source the `Word` path uses. Nav bars, tab strips, chip rows, breadcrumbs, toolbars
+and carousels are all this shape.
+
+### The failure was not "it doesn't scroll"
+
+It was that the row **silently wrapped into a stack** — five 100px tabs in a 200px bar became three
+rows, the bar grew to 3× its declared height and shoved the page down, and then `scrollWidth ==
+clientWidth` so nothing scrolled *because, given the wrapped layout, there was correctly nothing to
+scroll*. The engine was **self-consistent and wrong**, which is why no capability count could see it
+and why the symptom pointed at scroll geometry rather than at line breaking. Same lesson as
+[[symptom-names-wrong-organ]]: measure the boxes before theorising from the visible end of the chain.
+
+### What this unblocked for free
+
+Tick 266 wrote the x-axis of `snap_scroll` and **could never run it** — there was no horizontal
+scroll range in the engine to run it against, so it was asserted correct by symmetry alone. With the
+range present it is now gated: `x=120` lands on 100, `x=270` snaps to the nearest point (300, not
+back to 0), and `x=9999` reaches the last tab rather than clamping to an unaligned offset.
+
+### The control is the load-bearing assertion
+
+`#wrap` — the identical row *without* `nowrap` — must **still wrap**. That is what separates "honours
+`white-space`" from "never breaks inline-blocks", and passing `no_wrap: true` unconditionally is a
+real RED probe that only this assertion catches. A blanket disable would have turned every ordinary
+`inline-block` gallery on the web into one infinite line while making the headline assertion greener.

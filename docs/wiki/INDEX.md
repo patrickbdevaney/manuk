@@ -336,6 +336,11 @@
   - L1088 · Property plumbing: recovered from MinimalCascade
   - L1096 · The probe that came back green
   - L1105 · Residue — the bigger half is still open
+  - L1114 · Horizontal rows: white-space: nowrap around atomic inlines (tick 267)
+  - L1130 · The mechanism
+  - L1149 · The failure was not "it doesn't scroll"
+  - L1158 · What this unblocked for free
+  - L1165 · The control is the load-bearing assertion
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -630,4 +635,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-549 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+554 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
