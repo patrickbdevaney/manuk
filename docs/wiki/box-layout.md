@@ -966,3 +966,23 @@ boxes plus a `position:static` control in the same file can.
 **And on a right-anchored box, `dx = -dw`.** A dump reading `cx=778 cw=150 · mx=823 mw=105 · dx=45
 dw=-45` looks like an x error *and* a width error. `778+150 = 823+105`: the right edges agree
 exactly, there is one bug, and fixing the width fixes both columns.
+
+## Horizontal rails — measured against Chrome, and one of them is not a bug (tick 277)
+
+Both real carousel shapes report the right scroll range, and have for a while:
+
+```
+                                  Chrome     here
+  flex, items may shrink         300/300   300/300
+  flex, flex-shrink: 0          1000/300  1000/300
+  inline-block + nowrap         1000/300  1000/300
+```
+
+The first row is the trap. `display:flex` with default shrink reports **no scrollable width in both
+engines, and that is correct** — a flex item defaults to `flex-shrink: 1`, and `min-width: auto`
+floors it only at its *min-content* size, so short cards genuinely fit. A carousel that works is one
+whose author wrote `flex-shrink: 0`. Reading 300/300 as "rails don't scroll" is how this was filed
+as an open defect while it worked.
+
+Gated with **Chrome-measured constants** rather than our own output, because a gate built from your
+own numbers is a screenshot of today, not a regression test.

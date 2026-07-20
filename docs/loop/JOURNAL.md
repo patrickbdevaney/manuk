@@ -12593,3 +12593,43 @@ NO REGRESSION: manuk-page + manuk-css + manuk-layout + manuk-a11y green.
 STILL OPEN: `@layer` cascade *order*; `@container` (not parsed at all).
 
 WIKI: docs/wiki/css-cascade.md
+
+## Tick 277 — the carousel bug that wasn't, pinned so nobody re-diagnoses it (2026-07-20)
+
+Selected: a carried defect note — *"horizontal carousels still do not scroll at all: an inline-block
+row yields no horizontal scroll range (`max_x` = 0)"* — flagged as pre-existing and bounded, and
+sitting in the way of the horizontal-scroll class.
+
+**It is fixed, and has been for some time.** Measured across five shapes: `overflow-x:auto` +
+`white-space:nowrap`, `overflow:auto` + nowrap, `overflow-x:scroll`, `display:flex` with
+`flex-shrink:0`, with `min-width`, and with `flex:0 0 200px` — every one reports
+`scrollWidth 1000 / clientWidth 300`. Then read the same markup out of headless Chrome 145 at
+1280×720: **`a:300/300 b:1000/300 c:1000/300`, agreeing with us exactly, including the case that
+looks like the bug.**
+
+`display:flex` with default shrink reports 300/300 in *both* engines and that is correct: a flex
+item defaults to `flex-shrink: 1` and `min-width: auto` floors it only at min-content, so five
+200px one-digit cards genuinely fit in 300px. A carousel that works is one whose author wrote
+`flex-shrink: 0`. Reading 300/300 as the defect is what the original note did.
+
+### The tick is the pin, not a fix
+
+An unpinned fix is indistinguishable from an open bug: the note stayed on the board, and the next
+reader spends a tick re-diagnosing something that works. This is the fourth time this loop has been
+told a capability was missing and found it present (WebAssembly, CJK line-breaking, media queries,
+the OAuth redirect flow — and now this). **The board goes stale from our own landed ticks.**
+
+So the behaviour is now gated with **Chrome-measured constants**, not with our own output played
+back — which is the difference between a regression gate and a screenshot of today.
+
+GATE: `horizontal_rails_report_the_scroll_range_chrome_reports` (manuk-page, G_HSCROLL_CAROUSEL).
+Proven RED by clamping `content_extent`'s width to the container's client width — the shape of the
+originally-reported defect: `flexShrink0` and `inlineNowrap` collapse to 300 while `flexDefault`
+stays green, which is exactly the signature the note described.
+
+The `flexDefault` claim is the load-bearing one: without it the gate would accept an engine that
+never shrinks flex items at all, and a future "make rails scroll" fix would pass.
+
+NO REGRESSION: manuk-page + manuk-layout green.
+
+WIKI: docs/wiki/box-layout.md

@@ -2021,3 +2021,17 @@ second source of truth and goes stale the moment a property is implemented. Answ
 the declaration — apply it to an initial style and see whether anything moved. And `@supports` must
 be able to say **no**: the author wrote the fallback for exactly that case, so a "descend into
 everything" implementation applies both branches, which is worse than applying neither.
+
+## Horizontal rails — carousels, poster rows, tab strips (tick 277)
+
+**Pattern:** a fixed-width container holding a row that is wider than it is —
+`white-space: nowrap` over `inline-block`s, or `display: flex` with `flex-shrink: 0` on the items.
+Product carousels, poster rows, chip bars and scrollable tab strips are all this shape.
+
+**The class this unlocks:** nothing — it already worked. This entry exists because the *board* said
+otherwise, and the measurement is the deliverable: verified against headless Chrome across five
+shapes, we agree exactly, and the behaviour is now gated with Chrome's numbers.
+
+**The trap:** `display: flex` with default shrink reports no scroll range, and that is the correct
+answer, not the bug. Flex items shrink by default and `min-width: auto` floors them only at
+min-content. Filing that as "rails don't scroll" is what kept a working capability on the hole list.

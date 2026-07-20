@@ -63,6 +63,7 @@
   - L898 · Bare text inside a flex/grid container is an ITEM, and filtering children to elements deletes it
   - L914 · The item's style cannot be read off the text node — THE TWO CASCADES DISAGREE
   - L942 · position:absolute + intrinsic width keywords (tick 274)
+  - L970 · Horizontal rails — measured against Chrome, and one of them is not a bug (tick 277)
 
 ## BUILD AND DEPENDENCIES — what is actually compiled, and what only looks like it is
 `docs/wiki/build-and-dependencies.md`
@@ -665,4 +666,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-584 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+585 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
