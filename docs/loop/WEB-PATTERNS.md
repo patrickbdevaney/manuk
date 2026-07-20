@@ -2035,3 +2035,25 @@ shapes, we agree exactly, and the behaviour is now gated with Chrome's numbers.
 **The trap:** `display: flex` with default shrink reports no scroll range, and that is the correct
 answer, not the bug. Flex items shrink by default and `min-width: auto` floors them only at
 min-content. Filing that as "rails don't scroll" is what kept a working capability on the hole list.
+
+## Client-side structured storage — IndexedDB (tick 278)
+
+**Pattern:** `indexedDB.open(name, version)` → `onupgradeneeded` → `createObjectStore` →
+`transaction(…, 'readwrite')` → `put`/`get`/`getAll`/cursor. Offline-capable apps, big client-side
+caches and every wrapper library (idb, Dexie, localForage) are this shape. The AWS and GCP consoles
+hard-fail without it.
+
+**The class this unlocks:** the offline/cached app web — apps that keep structured state across
+reloads rather than refetching it, and the wrapper libraries that sit on top. It was absent
+entirely.
+
+**Why it hid:** absence of `indexedDB` is a *boot* condition, not a runtime error. Apps
+feature-detect it and take a degraded or dead path silently — the same shape as the MediaWiki
+`localStorage` grading. Nothing throws, so nothing points at the cause.
+
+**The trap:** two of them, and both were caught by probing rather than by reasoning. **(1)** Keys
+must sort, so numeric keys need padding — unpadded, `2 < 9 < 10` comes back as `10, 2, 9` and every
+ordered read is wrong. **(2)** A rollback claim asserted against a *failed* `add()` measures
+nothing: the rejected write never wrote, so there is nothing to roll back and the assertion passes
+with the undo log deleted. Assert rollback against a write that **succeeds** and is aborted from
+inside its own success handler. The unit that needs a proven RED is the CLAIM, not the gate.

@@ -39,6 +39,9 @@ pub mod cors;
 /// E7 storage layer — RFC 6265 cookie jar.
 pub mod webstorage;
 
+/// IndexedDB — the structured, origin-partitioned store the app web assumes exists.
+pub mod idb;
+
 pub mod downloads;
 
 pub mod multipart;

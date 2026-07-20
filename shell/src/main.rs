@@ -75,6 +75,9 @@ fn main() -> Result<()> {
     // flushed explicitly first, in the order that matters.
     manuk_net::save_cookies();
     manuk_net::webstorage::save();
+    // A backstop only: IndexedDB flushes per TRANSACTION, which is its own durability unit. This
+    // catches state from a transaction that never completed before quit.
+    manuk_net::idb::save();
     manuk_js::shutdown();
 
     result

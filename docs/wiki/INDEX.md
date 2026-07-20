@@ -581,6 +581,18 @@
   - L27 · DON'T use it for
   - L31 · HOW
 
+## STORAGE — the persistence layers a page can reach, and what each one really guarantees
+`docs/wiki/storage.md`
+
+  - L6 · The absence of a storage API is a GRADING signal, not a reported failure (ticks ~60, 278)
+  - L27 · The host-native + prelude-shim pattern, and where the line falls (tick 278)
+  - L40 · Why idb is a serde envelope and not redb
+  - L50 · Key encoding carries the spec's TYPE ORDER, or getAll lies (tick 278)
+  - L61 · IndexedDB stores STRUCTURED CLONES — JSON.stringify is a silent type change
+  - L72 · Async shape is a CORRECTNESS property, not politeness (tick 278)
+  - L92 · abort() must roll back, and a vacuous rollback test will tell you it does (tick 278)
+  - L109 · A quota that is never enforced is not a quota
+
 ## TEXT AND LAYOUT — fonts, shaping, measurement
 `docs/wiki/text-layout.md`
 
@@ -666,4 +678,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-585 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+593 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -5956,6 +5956,139 @@ unsafe fn host_storage(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool
     true
 }
 
+/// `__idb(opJson)` → result JSON — the single native seam behind `indexedDB`.
+///
+/// One string-in / string-out function, exactly like `__storage`, for the same reason: every extra
+/// native entry point is another place a `*mut JSObject` can outlive a GC. The shim above turns
+/// this into the asynchronous IDB interface (requests, transactions, upgrades, cursors); this side
+/// owns only the origin partition and the bytes.
+unsafe fn host_idb(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    use manuk_net::idb;
+
+    let req = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    let Ok(op) = serde_json::from_str::<serde_json::Value>(&req) else {
+        *vp = NullValue();
+        return true;
+    };
+    let s = |k: &str| op.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let url = DOC_URL.with(|u| u.borrow().clone());
+    let Some(origin) = manuk_net::webstorage::origin_of(&url) else {
+        // An opaque origin (about:blank, a data: URL) gets no storage — as in every browser. The
+        // shim turns a null here into a SecurityError on `open`, which is what Chrome does.
+        *vp = NullValue();
+        return true;
+    };
+    let (db, store) = (s("db"), s("store"));
+
+    let out: serde_json::Value = match s("op").as_str() {
+        "open" => {
+            let d = idb::open(&origin, &db);
+            serde_json::json!({
+                "version": d.version,
+                "stores": d.stores.iter().map(|(n, st)| serde_json::json!({
+                    "name": n, "keyPath": st.key_path, "autoIncrement": st.auto_increment,
+                })).collect::<Vec<_>>(),
+            })
+        }
+        "databases" => serde_json::json!(idb::database_names(&origin)
+            .into_iter()
+            .map(|(name, version)| serde_json::json!({ "name": name, "version": version }))
+            .collect::<Vec<_>>()),
+        "upgrade" => {
+            let stores = op
+                .get("stores")
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .map(|st| {
+                            (
+                                st.get("name")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("")
+                                    .to_string(),
+                                st.get("keyPath")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("")
+                                    .to_string(),
+                                st.get("autoIncrement")
+                                    .and_then(|v| v.as_bool())
+                                    .unwrap_or(false),
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            let version = op.get("version").and_then(|v| v.as_u64()).unwrap_or(1);
+            idb::commit_upgrade(&origin, &db, version, stores);
+            idb::save();
+            serde_json::json!({ "ok": true })
+        }
+        "deleteDatabase" => {
+            idb::delete_database(&origin, &db);
+            idb::save();
+            serde_json::json!({ "ok": true })
+        }
+        "nextKey" => serde_json::json!({ "key": idb::next_auto_key(&origin, &db, &store) }),
+        "get" => match idb::get(&origin, &db, &store, &s("key")) {
+            Some(r) => serde_json::json!({ "found": true, "key": r.key, "value": r.value }),
+            None => serde_json::json!({ "found": false }),
+        },
+        "put" => {
+            let r = idb::put(
+                &origin,
+                &db,
+                &store,
+                &s("key"),
+                &s("keyJson"),
+                &s("value"),
+                op.get("add").and_then(|v| v.as_bool()).unwrap_or(false),
+            );
+            match r {
+                idb::PutResult::Ok => serde_json::json!({ "ok": true }),
+                idb::PutResult::ConstraintError => {
+                    serde_json::json!({ "ok": false, "error": "ConstraintError" })
+                }
+                idb::PutResult::QuotaExceeded => {
+                    serde_json::json!({ "ok": false, "error": "QuotaExceededError" })
+                }
+                idb::PutResult::NotFound => {
+                    serde_json::json!({ "ok": false, "error": "NotFoundError" })
+                }
+            }
+        }
+        "delete" => {
+            let prev = idb::delete(&origin, &db, &store, &s("key"));
+            match prev {
+                Some(r) => serde_json::json!({ "ok": true, "key": r.key, "value": r.value }),
+                None => serde_json::json!({ "ok": true }),
+            }
+        }
+        "clear" => {
+            let prev = idb::clear(&origin, &db, &store);
+            serde_json::json!({ "ok": true, "records": idb_records_json(prev) })
+        }
+        "records" => serde_json::json!(idb_records_json(idb::records(&origin, &db, &store))),
+        // Durability is per-TRANSACTION, which is IndexedDB's own unit of it. Flushing on every
+        // `put` re-serialised the whole envelope per record — O(n^2) on the bulk writes that are
+        // exactly what a page reaches for IndexedDB to do.
+        "flush" => {
+            idb::save();
+            serde_json::json!({ "ok": true })
+        }
+        _ => serde_json::Value::Null,
+    };
+    let text = serde_json::to_string(&out).unwrap_or_else(|_| "null".into());
+    return_string(cx, vp, &text);
+    true
+}
+
+/// Shape a record list for the JS side: encoded key (for cursor position), original key JSON, value.
+fn idb_records_json(rs: Vec<(String, manuk_net::idb::Record)>) -> Vec<serde_json::Value> {
+    rs.into_iter()
+        .map(|(enc, r)| serde_json::json!({ "enc": enc, "key": r.key, "value": r.value }))
+        .collect()
+}
+
 /// Generate a **reflected content attribute** property: `el.rel`, `el.alt`, `el.title` … Each is
 /// just a view of the underlying attribute, in both directions.
 ///
@@ -6724,6 +6857,14 @@ pub unsafe fn install(
         c"__storage".as_ptr(),
         host_fn!(host_storage),
         4,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__idb".as_ptr(),
+        host_fn!(host_idb),
+        1,
         0,
     );
     JS_DefineFunction(
@@ -8752,6 +8893,456 @@ const WINDOW_PRELUDE: &str = r#"
         };
         if (typeof g.localStorage === 'undefined') g.localStorage = mkStorage('local');
         if (typeof g.sessionStorage === 'undefined') g.sessionStorage = mkStorage('session');
+
+        // ---- IndexedDB ---------------------------------------------------------------------
+        // Web Storage is a string map with a 5 MiB ceiling. Everything past a preferences blob —
+        // offline caches, draft documents, the session layer of the AWS and GCP consoles, every
+        // PWA that claims to work on a plane — is IndexedDB, and like `localStorage` before it its
+        // absence is a GRADING signal, not a missing feature: `if (!window.indexedDB)` takes a
+        // degraded path silently and reports nothing.
+        //
+        // The store lives in `manuk_net::idb` behind ONE native seam. Everything hard is here: the
+        // request objects, the transaction lifetime, the upgrade dance, cursors. The store is
+        // deliberately synchronous underneath and the ASYNC SHAPE IS REAL rather than faked — every
+        // callback is delivered on a microtask, never inline, because a page that gets `onsuccess`
+        // before `open()` has returned has its request variable still `undefined`, and that is the
+        // single most common way a "compatible" IDB shim breaks real code.
+        var micro = function (fn) {
+            if (typeof queueMicrotask === 'function') { queueMicrotask(fn); return; }
+            Promise.resolve().then(fn);
+        };
+        var idbCall = function (o) {
+            var r = g.__idb(JSON.stringify(o));
+            return (r === null || r === undefined) ? null : JSON.parse(r);
+        };
+        var idbErr = function (name, msg) {
+            try { return new DOMException(msg || name, name); }
+            catch (e) { var x = new Error(msg || name); x.name = name; return x; }
+        };
+
+        // KEY ENCODING. The store sorts by this string and never interprets it, so the ordering of
+        // IndexedDB's key types has to be built into the PREFIX: number < date < string < array
+        // (the spec's own order). Numbers are offset and zero-padded so lexicographic comparison
+        // agrees with numeric comparison — without that, key 10 sorts before key 9 and every
+        // `getAll` comes back in an order the page did not ask for.
+        var padNum = function (n) {
+            var s = (Number(n) + 1e15).toFixed(6);
+            while (s.length < 24) { s = '0' + s; }
+            return s;
+        };
+        var encKey = function (k) {
+            if (typeof k === 'number') { return isNaN(k) ? null : '1' + padNum(k); }
+            if (k instanceof Date) { return isNaN(k.getTime()) ? null : '2' + padNum(k.getTime()); }
+            if (typeof k === 'string') { return '3' + k; }
+            if (Array.isArray(k)) {
+                var parts = [];
+                for (var i = 0; i < k.length; i++) {
+                    var p = encKey(k[i]);
+                    if (p === null) { return null; }
+                    parts.push(p);
+                }
+                return '4' + parts.join(' ');
+            }
+            return null; // not a valid key — the caller raises DataError
+        };
+
+        // VALUE ENCODING. IndexedDB stores STRUCTURED CLONES, not JSON. Plain `JSON.stringify`
+        // would turn a Date into a string and a Uint8Array into an object with numeric keys — the
+        // page writes one type and reads back another, silently. So Date and binary views are
+        // tagged. A plain object that itself carries a `__t` key is wrapped too, or decoding would
+        // mistake the page's own data for a tag.
+        var TAG = '__manukType';
+        var encVal = function (v) {
+            if (v instanceof Date) { return { t: TAG, k: 'Date', v: v.getTime() }; }
+            if (typeof ArrayBuffer !== 'undefined' && v instanceof ArrayBuffer) {
+                return { t: TAG, k: 'ArrayBuffer', v: Array.prototype.slice.call(new Uint8Array(v)) };
+            }
+            if (typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView && ArrayBuffer.isView(v)) {
+                var bytes = new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
+                return { t: TAG, k: v.constructor.name, v: Array.prototype.slice.call(bytes) };
+            }
+            if (Array.isArray(v)) { return v.map(encVal); }
+            if (typeof v === 'function') { throw idbErr('DataCloneError', 'function is not cloneable'); }
+            if (v && typeof v === 'object') {
+                var o = {}, wrapped = Object.prototype.hasOwnProperty.call(v, 't') && v.t === TAG;
+                for (var k in v) { if (Object.prototype.hasOwnProperty.call(v, k)) { o[k] = encVal(v[k]); } }
+                return wrapped ? { t: TAG, k: 'Object', v: o } : o;
+            }
+            return v;
+        };
+        var decVal = function (v) {
+            if (Array.isArray(v)) { return v.map(decVal); }
+            if (v && typeof v === 'object') {
+                if (v.t === TAG) {
+                    if (v.k === 'Date') { return new Date(v.v); }
+                    if (v.k === 'Object') { return decVal(v.v); }
+                    var buf = new Uint8Array(v.v).buffer;
+                    if (v.k === 'ArrayBuffer') { return buf; }
+                    var Ctor = g[v.k];
+                    return typeof Ctor === 'function' ? new Ctor(buf) : new Uint8Array(buf);
+                }
+                var o = {};
+                for (var k in v) { if (Object.prototype.hasOwnProperty.call(v, k)) { o[k] = decVal(v[k]); } }
+                return o;
+            }
+            return v;
+        };
+
+        // A minimal EventTarget for requests/transactions: `on*` properties AND addEventListener,
+        // because half the web uses one and half the other, and a shim that only serves `on*`
+        // breaks every wrapper library (idb, Dexie, localForage) on its first listener.
+        var mkTarget = function (obj) {
+            var ls = {};
+            obj.addEventListener = function (type, fn) { (ls[type] = ls[type] || []).push(fn); };
+            obj.removeEventListener = function (type, fn) {
+                var a = ls[type] || [];
+                for (var i = 0; i < a.length; i++) { if (a[i] === fn) { a.splice(i, 1); return; } }
+            };
+            obj.__fire = function (type, ev) {
+                ev = ev || {};
+                ev.type = type; ev.target = obj; ev.currentTarget = obj;
+                var h = obj['on' + type];
+                if (typeof h === 'function') { try { h.call(obj, ev); } catch (e) { g.__reportError && g.__reportError(e); } }
+                var a = (ls[type] || []).slice();
+                for (var i = 0; i < a.length; i++) {
+                    try { a[i].call(obj, ev); } catch (e) { g.__reportError && g.__reportError(e); }
+                }
+            };
+            return obj;
+        };
+
+        var mkNames = function (arr) {
+            var o = arr.slice();
+            o.contains = function (n) { return arr.indexOf(String(n)) !== -1; };
+            o.item = function (i) { return (i >= 0 && i < arr.length) ? arr[i] : null; };
+            return o;
+        };
+
+        var pathGet = function (obj, path) {
+            var parts = String(path).split('.'), cur = obj;
+            for (var i = 0; i < parts.length; i++) {
+                if (cur === null || cur === undefined) { return undefined; }
+                cur = cur[parts[i]];
+            }
+            return cur;
+        };
+        var pathSet = function (obj, path, val) {
+            var parts = String(path).split('.'), cur = obj;
+            for (var i = 0; i < parts.length - 1; i++) {
+                if (typeof cur[parts[i]] !== 'object' || cur[parts[i]] === null) { cur[parts[i]] = {}; }
+                cur = cur[parts[i]];
+            }
+            cur[parts[parts.length - 1]] = val;
+        };
+
+        // A TRANSACTION owns request scheduling, `complete`/`error`/`abort`, and an UNDO LOG.
+        // `abort()` really rolls back — the writes are applied eagerly underneath, so the undo log
+        // is what makes the rollback honest instead of an event that fires while the data stays
+        // changed. That distinction is the whole reason a page uses a transaction.
+        var mkTx = function (db, names, mode) {
+            var tx = mkTarget({
+                db: db, mode: mode || 'readonly', objectStoreNames: mkNames(names),
+                error: null, __undo: [], __pending: 0, __done: false, __aborted: false
+            });
+            tx.abort = function () {
+                if (tx.__done) { return; }
+                tx.__aborted = true; tx.__done = true;
+                for (var i = tx.__undo.length - 1; i >= 0; i--) { tx.__undo[i](); }
+                tx.__undo = [];
+                idbCall({ op: 'flush' });
+                micro(function () { tx.__fire('abort'); });
+            };
+            tx.objectStore = function (name) {
+                if (tx.__done) { throw idbErr('InvalidStateError', 'transaction is finished'); }
+                if (names.indexOf(String(name)) === -1) {
+                    throw idbErr('NotFoundError', 'store ' + name + ' is not in this transaction');
+                }
+                return db.__store(String(name), tx);
+            };
+            // Settle a request on a MICROTASK, then check for completion on ANOTHER one — because
+            // the overwhelmingly common pattern is issuing the next request from inside
+            // `onsuccess`, and a transaction that completed the instant its queue hit zero would
+            // finish before that follow-up was ever queued.
+            tx.__enqueue = function (work) {
+                var req = mkTarget({ readyState: 'pending', result: undefined, error: null, source: null, transaction: tx });
+                tx.__pending++;
+                micro(function () {
+                    if (tx.__aborted) { tx.__pending--; return; }
+                    try {
+                        req.result = work(req);
+                        req.readyState = 'done';
+                        req.__fire('success');
+                    } catch (e) {
+                        req.readyState = 'done';
+                        req.error = e;
+                        tx.error = e;
+                        req.__fire('error');
+                        tx.abort();
+                    }
+                    tx.__pending--;
+                    micro(function () {
+                        if (tx.__pending === 0 && !tx.__done) {
+                            tx.__done = true;
+                            idbCall({ op: 'flush' });
+                            tx.__fire('complete');
+                        }
+                    });
+                });
+                return req;
+            };
+            // A transaction with no requests at all must still complete, or a page that opens one
+            // and only listens for `oncomplete` hangs forever.
+            micro(function () {
+                micro(function () {
+                    if (tx.__pending === 0 && !tx.__done) {
+                        tx.__done = true;
+                        idbCall({ op: 'flush' });
+                        tx.__fire('complete');
+                    }
+                });
+            });
+            return tx;
+        };
+
+        var mkDatabase = function (name, version, storeMeta) {
+            var db = mkTarget({ name: name, version: version, __meta: storeMeta, __closed: false });
+            var refreshNames = function () {
+                var ns = [];
+                for (var k in db.__meta) { if (Object.prototype.hasOwnProperty.call(db.__meta, k)) { ns.push(k); } }
+                ns.sort();
+                db.objectStoreNames = mkNames(ns);
+            };
+            refreshNames();
+            db.__refreshNames = refreshNames;
+            db.close = function () { db.__closed = true; };
+
+            db.__store = function (storeName, tx) {
+                var meta = db.__meta[storeName] || { keyPath: '', autoIncrement: false };
+                var call = function (o) { o.db = name; o.store = storeName; return idbCall(o); };
+                var writable = function () {
+                    if (tx.mode === 'readonly') { throw idbErr('ReadOnlyError', 'transaction is readonly'); }
+                };
+                var restore = function (enc, prev) {
+                    tx.__undo.push(function () {
+                        if (prev && prev.found) { call({ op: 'put', key: enc, keyJson: prev.key, value: prev.value, add: false }); }
+                        else { call({ op: 'delete', key: enc }); }
+                    });
+                };
+                var doPut = function (value, key, isAdd) {
+                    writable();
+                    var k = key;
+                    if (meta.keyPath) {
+                        if (key !== undefined && key !== null) {
+                            throw idbErr('DataError', 'store uses in-line keys; an explicit key is not allowed');
+                        }
+                        k = pathGet(value, meta.keyPath);
+                    }
+                    if (k === undefined || k === null) {
+                        if (!meta.autoIncrement) { throw idbErr('DataError', 'no key and the store does not generate one'); }
+                        k = call({ op: 'nextKey' }).key;
+                        if (meta.keyPath) { pathSet(value, meta.keyPath, k); }
+                    }
+                    var enc = encKey(k);
+                    if (enc === null) { throw idbErr('DataError', 'invalid key'); }
+                    var prev = call({ op: 'get', key: enc });
+                    var res = call({ op: 'put', key: enc, keyJson: JSON.stringify(k), value: JSON.stringify(encVal(value)), add: !!isAdd });
+                    if (!res || !res.ok) { throw idbErr((res && res.error) || 'UnknownError', 'put failed'); }
+                    restore(enc, prev);
+                    return k;
+                };
+                var readAll = function () {
+                    var rs = call({ op: 'records' }) || [];
+                    return rs.map(function (r) { return { enc: r.enc, key: JSON.parse(r.key), value: decVal(JSON.parse(r.value)) }; });
+                };
+
+                var store = {
+                    name: storeName, keyPath: meta.keyPath || null,
+                    autoIncrement: !!meta.autoIncrement, transaction: tx, indexNames: mkNames([]),
+                    put: function (v, k) { return tx.__enqueue(function () { return doPut(v, k, false); }); },
+                    add: function (v, k) { return tx.__enqueue(function () { return doPut(v, k, true); }); },
+                    get: function (k) {
+                        return tx.__enqueue(function () {
+                            var enc = encKey(k);
+                            if (enc === null) { throw idbErr('DataError', 'invalid key'); }
+                            var r = call({ op: 'get', key: enc });
+                            // A MISSING key is `undefined`, never an error. Pages branch on
+                            // `req.result === undefined` to mean "not cached yet"; raising here
+                            // would turn a cache miss into a failed transaction.
+                            return (r && r.found) ? decVal(JSON.parse(r.value)) : undefined;
+                        });
+                    },
+                    'delete': function (k) {
+                        return tx.__enqueue(function () {
+                            writable();
+                            var enc = encKey(k);
+                            if (enc === null) { throw idbErr('DataError', 'invalid key'); }
+                            var prev = call({ op: 'get', key: enc });
+                            call({ op: 'delete', key: enc });
+                            restore(enc, prev);
+                            return undefined;
+                        });
+                    },
+                    clear: function () {
+                        return tx.__enqueue(function () {
+                            writable();
+                            var gone = (call({ op: 'clear' }) || {}).records || [];
+                            tx.__undo.push(function () {
+                                for (var i = 0; i < gone.length; i++) {
+                                    call({ op: 'put', key: gone[i].enc, keyJson: gone[i].key, value: gone[i].value, add: false });
+                                }
+                            });
+                            return undefined;
+                        });
+                    },
+                    getAll: function () { return tx.__enqueue(function () { return readAll().map(function (r) { return r.value; }); }); },
+                    getAllKeys: function () { return tx.__enqueue(function () { return readAll().map(function (r) { return r.key; }); }); },
+                    count: function () { return tx.__enqueue(function () { return readAll().length; }); },
+                    openCursor: function (range, dir) {
+                        // The cursor's walk runs through `tx.__enqueue` on EVERY step, including
+                        // `continue()`. That is not ceremony: the transaction's pending count is
+                        // what keeps it from completing mid-iteration, and a cursor that stepped
+                        // outside the accounting would see `oncomplete` fire while it was still
+                        // walking — the transaction closes under the page's feet.
+                        var rows = null, i = 0, req = null;
+                        var nextCursor = function () {
+                            if (rows === null) {
+                                rows = readAll();
+                                if (dir === 'prev') { rows.reverse(); }
+                            }
+                            if (i >= rows.length) { return null; } // exhausted: result is null
+                            var row = rows[i++];
+                            var advanceBy = function (n) {
+                                i += Math.max(0, Number(n) - 1);
+                                tx.__enqueue(nextCursor).addEventListener('success', function (e) {
+                                    req.result = e.target.result;
+                                    req.__fire('success');
+                                });
+                            };
+                            return {
+                                key: row.key, primaryKey: row.key, value: row.value,
+                                source: store, direction: dir || 'next',
+                                'continue': function () { advanceBy(1); },
+                                advance: advanceBy,
+                                update: function (v) { return store.put(v, meta.keyPath ? undefined : row.key); },
+                                'delete': function () { return store['delete'](row.key); }
+                            };
+                        };
+                        req = tx.__enqueue(nextCursor);
+                        return req;
+                    }
+                };
+                return store;
+            };
+
+            db.transaction = function (storeNames, mode) {
+                if (db.__closed) { throw idbErr('InvalidStateError', 'database is closed'); }
+                var ns = (typeof storeNames === 'string') ? [storeNames] : Array.prototype.slice.call(storeNames);
+                for (var i = 0; i < ns.length; i++) {
+                    if (!db.__meta[ns[i]]) { throw idbErr('NotFoundError', 'no object store named ' + ns[i]); }
+                }
+                return mkTx(db, ns, mode || 'readonly');
+            };
+            return db;
+        };
+
+        var storesPayload = function (meta) {
+            var out = [];
+            for (var k in meta) {
+                if (Object.prototype.hasOwnProperty.call(meta, k)) {
+                    out.push({ name: k, keyPath: meta[k].keyPath || '', autoIncrement: !!meta[k].autoIncrement });
+                }
+            }
+            return out;
+        };
+
+        if (typeof g.indexedDB === 'undefined') {
+            g.indexedDB = {
+                open: function (name, version) {
+                    var req = mkTarget({ readyState: 'pending', result: undefined, error: null, transaction: null, source: null });
+                    micro(function () {
+                        var info = idbCall({ op: 'open', db: String(name) });
+                        if (info === null) {
+                            req.readyState = 'done';
+                            req.error = idbErr('SecurityError', 'this origin has no storage');
+                            req.__fire('error');
+                            return;
+                        }
+                        var meta = {};
+                        for (var i = 0; i < info.stores.length; i++) {
+                            meta[info.stores[i].name] = { keyPath: info.stores[i].keyPath, autoIncrement: info.stores[i].autoIncrement };
+                        }
+                        var oldVersion = info.version || 0;
+                        var want = (version === undefined || version === null) ? Math.max(oldVersion, 1) : Number(version);
+                        if (want < oldVersion) {
+                            req.readyState = 'done';
+                            req.error = idbErr('VersionError', 'requested version is older than the stored one');
+                            req.__fire('error');
+                            return;
+                        }
+                        var db = mkDatabase(String(name), want, meta);
+                        if (want > oldVersion) {
+                            // The UPGRADE transaction. `createObjectStore` commits eagerly, so a
+                            // handler that seeds rows inside `onupgradeneeded` — which is what
+                            // every real app does — writes into a store that already exists.
+                            var utx = mkTx(db, [], 'versionchange');
+                            utx.objectStoreNames = mkNames([]);
+                            db.createObjectStore = function (sn, opts) {
+                                opts = opts || {};
+                                var kp = opts.keyPath;
+                                db.__meta[String(sn)] = {
+                                    keyPath: (kp === undefined || kp === null) ? '' : String(kp),
+                                    autoIncrement: !!opts.autoIncrement
+                                };
+                                db.__refreshNames();
+                                idbCall({ op: 'upgrade', db: db.name, version: want, stores: storesPayload(db.__meta) });
+                                utx.objectStoreNames = mkNames(db.objectStoreNames.slice());
+                                return db.__store(String(sn), utx);
+                            };
+                            db.deleteObjectStore = function (sn) {
+                                delete db.__meta[String(sn)];
+                                db.__refreshNames();
+                                idbCall({ op: 'upgrade', db: db.name, version: want, stores: storesPayload(db.__meta) });
+                            };
+                            var uReq = req;
+                            uReq.result = db;
+                            uReq.transaction = utx;
+                            uReq.__fire('upgradeneeded', { oldVersion: oldVersion, newVersion: want });
+                            idbCall({ op: 'upgrade', db: db.name, version: want, stores: storesPayload(db.__meta) });
+                        }
+                        // `createObjectStore` outside an upgrade is an error, not a no-op — a page
+                        // that calls it there has a bug, and a silent success hides it.
+                        var outsideUpgrade = function () {
+                            throw idbErr('InvalidStateError', 'createObjectStore is only valid during a versionchange transaction');
+                        };
+                        micro(function () {
+                            db.createObjectStore = outsideUpgrade;
+                            db.deleteObjectStore = outsideUpgrade;
+                            req.readyState = 'done';
+                            req.result = db;
+                            req.__fire('success');
+                        });
+                    });
+                    return req;
+                },
+                deleteDatabase: function (name) {
+                    var req = mkTarget({ readyState: 'pending', result: undefined, error: null });
+                    micro(function () {
+                        idbCall({ op: 'deleteDatabase', db: String(name) });
+                        req.readyState = 'done';
+                        req.__fire('success');
+                    });
+                    return req;
+                },
+                databases: function () {
+                    return Promise.resolve(idbCall({ op: 'databases' }) || []);
+                },
+                cmp: function (a, b) {
+                    var ea = encKey(a), eb = encKey(b);
+                    if (ea === null || eb === null) { throw idbErr('DataError', 'invalid key'); }
+                    return ea < eb ? -1 : (ea > eb ? 1 : 0);
+                }
+            };
+        }
 
         // ---- Event constructors -------------------------------------------------------------
         // A page cannot merely *listen*; it constructs and dispatches events of its own. Component

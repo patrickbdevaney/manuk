@@ -12633,3 +12633,71 @@ never shrinks flex items at all, and a future "make rails scroll" fix would pass
 NO REGRESSION: manuk-page + manuk-layout green.
 
 WIKI: docs/wiki/box-layout.md
+
+## Tick 278 — IndexedDB: the storage API the app web assumes exists (2026-07-20)
+
+Selected: board CO-#1 item (2) from the tick-264/265 observer pivot — **IndexedDB (borrow
+redb/heed — AWS/GCP consoles hard-fail without it)**. Probed first per PROCESS RULE 2
+(re-probe stale unknowns before building): `grep -ril indexeddb engine/ shell/ --include=*.rs`
+returns **nothing**. It is genuinely absent, not stale-listed.
+
+HYPOTHESIS: `window.indexedDB` is not merely a missing feature — it is a *boot* feature. Apps
+feature-detect it and take a degraded or dead path (the same shape as the MediaWiki
+`localStorage` grading that cost an hour at the webstorage tick). The bounded tick is the
+core round-trip every app actually runs: `open(name, version)` → `onupgradeneeded` →
+`createObjectStore({keyPath, autoIncrement})` → `transaction(...,'readwrite')` →
+`put/add/get/delete/getAll/count` → `onsuccess`/`oncomplete`, **persisted per origin and
+surviving a reload**.
+
+PLAN: the host-native + prelude-shim pattern that already backs Web Storage — one native seam
+(`__idb(opJson) -> json`) over a real origin-partitioned store in `manuk_net::idb`, and the
+async IDB interface built on it in the boot shim, delivered on `queueMicrotask`.
+
+### What landed
+
+`manuk_net::idb` (origin-partitioned, versioned-envelope, quota-enforcing store) + one native seam
+`__idb(opJson)` + the asynchronous IDB interface in the boot shim: `open`/`deleteDatabase`/
+`databases`/`cmp`, `onupgradeneeded` with `createObjectStore({keyPath, autoIncrement})`,
+transactions with `complete`/`error`/`abort`, `put`/`add`/`get`/`delete`/`clear`/`getAll`/
+`getAllKeys`/`count`, and cursors with `continue`/`advance`/`update`/`delete`. Both `on*` handlers
+and `addEventListener` — half the web uses each, and the wrapper libraries (idb, Dexie, localForage)
+use the latter.
+
+### The vacuous claim I caught by probing it
+
+The gate passed on its FIRST run, which this loop has learned to distrust. Four RED probes, and the
+fourth is the one that mattered: **disabling the undo log entirely left the gate GREEN.** The
+`rollback:` claim read record 2 after a *failed* `add()` — and a rejected `add()` never wrote
+anything, so there was nothing to roll back and the claim measured nothing. Rewritten against a
+`put` that SUCCEEDS, aborted from inside its own success handler; the same probe now yields exactly
+`rollback:OVERWRITTEN`.
+
+**Eleven load-bearing claims and one vacuous one still reports green.** The unit that needs a proven
+RED is THE CLAIM, not the gate.
+
+### A performance defect I introduced and caught before landing
+
+`save()` fired on every `put`, re-serialising the whole envelope per record — O(n²) on exactly the
+bulk writes a page reaches for IndexedDB to do. Moved to a `flush` op fired on transaction
+completion/abort, which is IndexedDB's own durability unit. THE RATCHET has a performance face; a
+capability bought with a quadratic write path is a trade, and trades are refused.
+
+GATE: `indexeddb_is_a_real_transactional_persistent_store` (manuk-page, G_INDEXEDDB). 13 claims.
+Proven RED four ways: shim disabled (`present:false`); `micro()` made synchronous (takes the whole
+script down — which is what it does to real page code); unpadded numeric keys (`order:10,2,9`, the
+lexicographic failure exactly as predicted); undo log disabled (`rollback:OVERWRITTEN`).
+
+BAR 0: the `manuk-js --lib` exit-time SIGSEGV is PRE-EXISTING — reproduced on the committed tree
+with this tick's edits stashed out (10/10 tests pass; the fault is in multi-context teardown). Not
+a trade.
+
+NO REGRESSION: full `manuk-page` gate sweep green (exit 0); manuk-net 64/64; manuk-shell checks.
+Disk durability verified by hand against the real profile envelope (tagged `Date`, sortable keys
+ordering 2 < 9 < 10).
+
+HONEST LIMITS, written down rather than discovered later: no indexes (`createIndex`), no key
+ranges (`IDBKeyRange`), and `Map`/`Set`/`RegExp`/`Blob` degrade to plain objects in the clone.
+redb was declined on scope, not principle — the `idb` API is written so the backing map is not part
+of its contract.
+
+WIKI: docs/wiki/storage.md (new)
