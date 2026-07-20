@@ -905,3 +905,84 @@ until the shell can play them — populating the registry before a real `<video>
 strictly worse lie the file's own comment warns about. Populate it in the same tick that lands
 playback, never before. And `<audio src>` URLs are produced but there is no audio output path
 (`cpal` is unbound), so audio elements resolve to a request nothing consumes yet.
+
+## Tick 263 — the last link: a `<video>` on a real page now shows moving pictures
+
+Tick 262 ended by stating its own residue plainly: *"this does not yet play a video on screen — the
+shell has zero media handling."* This closes it. `shell/src/media.rs` is the driver, and with it the
+chain runs end to end for the first time: `pending_media_urls` → `fetch_media_bytes` → `demux` →
+`VideoPlayer` → `set_video_frame` → the painter's existing `blit_image`. Nothing new was invented in
+the middle; the whole tick is the *joining*, which is what the previous eight media ticks kept
+leaving out.
+
+### The decoder lives in the shell, and only in the shell
+
+`manuk-media` with `features = ["video"]` is a dependency of `manuk-shell` alone. That is the
+deliberate consequence of tick 236's isolation and of `set_video_frame` taking raw RGBA rather than a
+`manuk_media::video::Frame`: naming the media type in `manuk-page` would compile openh264's C into
+all ~25 gate binaries that link that crate. The shell is one binary and the one place a real decode
+has to happen. **Measured cost: 13.6s, once, then cached** — no warm-wall tax, which is the only
+thing that would have made this trade refusable.
+
+### Why a module and not ten lines in the event loop
+
+Every interesting mistake here is in the joining — which element got which bytes, what happens when a
+decode fails, whether the first frame is allowed through. Inline in the winit loop none of it is
+reachable by a test, because a test cannot run winit. So the loop keeps only what needs a window (the
+wall-clock delta, the repaint) and `MediaSet` holds everything that can be got wrong.
+
+### Three decisions that are not details
+
+**1. `Entry::published` is the frame the PAGE was given, not the player's position — and the gate
+caught the bug that proves it matters.** The first implementation compared the player's frame before
+and after the tick. That suppresses the **very first publish**: at that moment the player has not
+moved (nothing has advanced yet) while the page holds no picture at all, so the driver reported "no
+change" and the element stayed blank forever. The question is never *did the player move*; it is
+*does the screen differ from what the decoder now says it should be*, and only a record of what was
+**sent** answers that. It is also what keeps the driver correct across a re-layout that dropped the
+image map, where the player is mid-stream and the screen is blank.
+
+**2. A failed decode is REMEMBERED.** `players` stores `Option<Entry>`, and a `None` means *tried and
+failed*, distinct from *never tried*. Leaving the map empty on failure means the fetch side sees no
+entry, re-requests the file, fails again, and the browser busy-loops for as long as the page is open
+— which from outside is indistinguishable from a slow network. Exactly the storm `image_by_url`'s
+own `Option` exists to stop.
+
+**3. `advance_media()` runs BEFORE `needs_paint` is read.** A playing video is what decides whether
+the frame owes a paint, so publishing after that check would show every frame one redraw late and
+drop the last frame of every video entirely.
+
+Navigation clears the set at both `nav_gen += 1` sites: the players are keyed by `NodeId` into the
+outgoing DOM, and kept across a navigation they would hand the next page's nodes the previous page's
+video.
+
+### RED probes: three, all fired
+
+| probe | result |
+|---|---|
+| drop the `set_video_frame` call, keep everything else | RED — "a decoded frame must change what is PAINTED" |
+| remove the `published` guard, always report a repaint | RED — a zero delta reported a repaint it did not owe |
+| forget failed decodes instead of recording them | RED — `has()` stays false, the fetch side re-asks forever |
+
+**The gate asserts through the PAINT PATH, not the driver's own state.** `painted()` renders the page
+and compares canvas bytes, and every claim is *the picture changed* against a `blank` baseline taken
+before any frame exists — never *a picture exists*, which is unfalsifiable. Reading the frame back off
+the player would assert that the code believes it published something. Six caption ticks were green
+on exactly that belief while the viewer saw nothing.
+
+### Residue
+
+- **Whole-file buffering.** `fetch_media_bytes` downloads the entire resource before one frame
+  decodes — correct for the short files this can play, an OOM on a feature-length one. Real delivery
+  is `Range` requests against a progressive buffer, which is the machinery MSE's `SourceBuffer`
+  exists to feed. The demuxer already reports `DemuxError::Incomplete`, so the seam is open.
+- **Autoplay, unconditionally.** Nothing routes a click to `play()` yet, so a player that waited
+  would be a video that can never start. This becomes conditional on the `autoplay` attribute the
+  moment controls (M7) land — one line in `MediaSet::load`.
+- **No audio.** `cpal` is unbound, so `advance` passes `None` as the clock and the wall-clock
+  fallback is correct rather than a shortcut. `<audio src>` URLs are produced and fetched but nothing
+  consumes them.
+- **`MediaSource.isTypeSupported` still answers false for everything.** `__mseCodecs` is empty. With
+  playback now genuinely working for MP4 + Constrained-Baseline H.264, populating it is finally
+  honest — and it is the next media tick rather than this one, because a registry claim should land
+  with the gate that proves the claim.

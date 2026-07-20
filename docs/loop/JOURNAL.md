@@ -11717,3 +11717,59 @@ Baseline+AAC genuinely decode — populating `__mseCodecs` before playback works
 lie, so it lands with the shell tick, not before.
 
 WIKI: docs/wiki/media-pipeline.md
+
+## Tick 263 — the last link: a `<video>` on a real page now shows moving pictures
+
+TICK SHAPE: the residue tick 262 named in its own commit message, and the board's CO-#1 (A) MEDIA.
+Re-ran the board first; (C) canvas fillText was RE-PROBED before building and is ALREADY LANDED and
+gated (`g_canvas_text`) — the board is stale there, as [[board-and-constellation-stale]] recorded.
+So media stayed the lever, and this is the join that makes it visible: `pending_media_urls` →
+`fetch_media_bytes` → `demux` → `VideoPlayer` → `set_video_frame` → the painter's existing blit.
+Nothing new in the middle. The whole tick is the joining, which is what eight media ticks kept
+leaving out.
+
+**THE DECODER LIVES IN THE SHELL AND ONLY THERE.** `manuk-media/video` is a dep of `manuk-shell`
+alone — the consequence of tick 236's isolation and of `set_video_frame` taking raw RGBA. MEASURED
+the one thing that could have made this refusable: openh264 costs **13.6s once, then cached**, so
+there is no warm-wall tax.
+
+**THE GATE CAUGHT A REAL BUG, and it is the reason `Entry::published` exists.** The first version
+compared the player's frame before and after the tick — which suppresses the **very first publish**,
+because at that moment the player has not moved while the page holds no picture at all. The element
+stayed blank forever and every assertion about the player stayed green. The question is never *did
+the player move*; it is *does the screen differ from what the decoder says it should be*, and only a
+record of what was SENT answers it.
+
+Two more decisions that are not details: a **failed decode is REMEMBERED** (`Option<Entry>`; forget
+it and the fetch side re-requests every frame — a busy-loop that reads as a slow network, the same
+storm `image_by_url`'s Option stops), and **`advance_media()` runs BEFORE `needs_paint` is read** (a
+playing video decides whether the frame owes a paint; publishing after shows every frame one redraw
+late and drops the last frame of every video).
+
+**RED PROBES: THREE, ALL FIRED.** And the gate asserts **through the paint path** — `painted()`
+renders and compares canvas bytes against a `blank` baseline taken before any frame exists, so every
+claim is "the picture CHANGED", never "a picture exists", which is unfalsifiable. Reading the frame
+back off the player would assert only that the code believes it published something; six caption
+ticks were green on exactly that belief.
+
+Wired for real, not just gated: `spawn_media_load` (after first paint, like images/iframes),
+`NavEvent::MediaReady` carrying the NodeId, `finish_media`, `advance_media` in `RedrawRequested`, and
+`media.clear()` at both navigation points. Shell suite 59/59.
+
+HARNESS NOTE (observer-owned, no action taken by me): the ramdisk incremental flush landed
+mid-compile TWICE this tick — once on my own build, and once INSIDE verify, where it took out gate
+`gfm` with `failed to move dependency graph ... /dev/shm/manuk-build/debug-incremental/... No such
+file or directory` and false-RED'd G_FORM. verify.sh prints "BUILD FAILED for gate gfm — this is NOT
+a verdict about the engine", which is exactly right and is the harness diagnosing itself correctly.
+Per [[wall-ramdisk-incremental-flush]] and the harness-is-observer-owned rule I changed nothing in
+scripts/ and simply re-ran; it went green. Recording the frequency because twice in one tick is
+higher than this has been.
+
+RESIDUE: whole-file buffering (no Range requests — fine for short files, an OOM on a feature-length
+one; the demuxer's `Incomplete` leaves the seam open); unconditional autoplay until controls (M7)
+land; no audio (`cpal` unbound, so the `None` clock is honest not a shortcut). And
+`MediaSource.isTypeSupported` still says false for everything — with playback now genuinely working,
+populating `__mseCodecs` is finally honest, and it is the NEXT tick because a registry claim should
+land with the gate that proves it.
+
+WIKI: docs/wiki/media-pipeline.md

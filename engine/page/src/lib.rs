@@ -623,6 +623,21 @@ async fn fetch_image_bytes(url: &str) -> Option<Vec<u8>> {
     std::fs::read(path).ok()
 }
 
+/// **Fetch one media resource whole**, for a `<video>`/`<audio>` named by
+/// [`Page::pending_media_urls`]. Same transport handling as every other subresource
+/// (`data:`/`http(s):`/`file:`), which is why it delegates rather than reimplementing.
+///
+/// **Whole, not ranged, and that is a stated limitation rather than an oversight.** Real video
+/// delivery is `Range` requests against a progressively-buffered file — that is what makes a
+/// two-hour film start in a second and is the machinery MSE's `SourceBuffer` exists to feed. This
+/// buffers the entire resource before a single frame decodes, which is correct for the short files
+/// the pipeline can currently play and would be an OOM on a feature-length one. The demuxer already
+/// reports `DemuxError::Incomplete` for a partial buffer, so the seam for ranged fetching is open;
+/// nothing here needs to change shape when it lands.
+pub async fn fetch_media_bytes(url: &str) -> Option<Vec<u8>> {
+    fetch_image_bytes(url).await
+}
+
 /// Fetch a web-font URL and return OpenType/TrueType bytes fontdb can load. Raw TTF/OTF
 /// (and TrueType collections) pass through; WOFF2 (`wOF2`) and legacy WOFF1 (`wOFF`) are
 /// decoded to sfnt via the pure-Rust reconstructor in `manuk_text::woff2` (A3) — most real

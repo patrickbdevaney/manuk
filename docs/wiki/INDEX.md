@@ -459,6 +459,12 @@
   - L855 · The back of the chain: three clocks and no player
   - L874 · RED probes: five, all fired
   - L894 · Residue — stated plainly, because this is the caption trap again
+  - L909 · Tick 263 — the last link: a <video> on a real page now shows moving pictures
+  - L918 · The decoder lives in the shell, and only in the shell
+  - L927 · Why a module and not ten lines in the event loop
+  - L934 · Three decisions that are not details
+  - L959 · RED probes: three, all fired
+  - L973 · Residue
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -610,4 +616,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-529 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+535 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

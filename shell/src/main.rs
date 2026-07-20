@@ -14,6 +14,7 @@
 
 mod chrome;
 mod find;
+mod media;
 mod panel;
 mod prerender;
 mod session;

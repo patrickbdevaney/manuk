@@ -160,6 +160,15 @@ enum NavEvent {
         tab: manuk_compositor::TabId,
         images: std::collections::HashMap<String, manuk_paint::DecodedImage>,
     },
+    /// A `<video>`/`<audio>`'s media arrived. Carries the **`NodeId`**, not just the URL, because
+    /// the decoded frames belong to one element rather than to every node naming that file — a
+    /// bitmap can be shared, a playback position cannot. See `shell::media`.
+    MediaReady {
+        gen: u64,
+        tab: manuk_compositor::TabId,
+        node: manuk_dom::NodeId,
+        bytes: Vec<u8>,
+    },
 }
 
 /// How a native `<form>` submission navigates: a **GET** query URL, or an **urlencoded POST** body.
@@ -252,6 +261,13 @@ struct App {
     /// R1 — the current navigation generation. Incremented per navigation; a `NavEvent` with
     /// a stale `gen` (the user navigated again first) is discarded, giving free cancellation.
     nav_gen: u64,
+    /// Every `<video>` on the current page that has been handed bytes. Cleared on navigation: the
+    /// players are keyed by `NodeId` into a DOM that no longer exists after one.
+    media: crate::media::MediaSet,
+    /// When `advance_media` last ran, so the delta it advances players by is real wall-clock time
+    /// rather than a fixed guess at the frame interval. A hardcoded 1/60 makes every video play at
+    /// exactly the wrong speed on any machine that misses vsync.
+    media_last_tick: std::time::Instant,
     /// Open page WebSockets, by socket id. The value is the SEND half — the UI thread queues a
     /// frame onto it and the connection's own task writes it to the wire. A WebSocket is
     /// bidirectional, unlike a fetch, so it needs this channel as well as the `NavEvent` path back.
@@ -463,6 +479,8 @@ impl App {
             bfcache: Vec::new(),
             proxy,
             nav_gen: 0,
+            media: crate::media::MediaSet::new(),
+            media_last_tick: std::time::Instant::now(),
             ws_send: std::collections::HashMap::new(),
             loading: false,
             bookmarks,
@@ -1147,6 +1165,9 @@ impl App {
             return;
         }
         self.nav_gen += 1;
+        // The players are keyed by NodeId into the OUTGOING DOM. Kept across a navigation they
+        // would hand the next page's nodes the previous page's video.
+        self.media.clear();
         // Dropping every sender closes the old page's sockets: a live-chat socket must not keep
         // streaming into a document the user has navigated away from.
         self.ws_send.clear();
@@ -1172,6 +1193,9 @@ impl App {
     /// The caller has already stashed the outgoing page, set `self.url`, and recorded history.
     fn start_post_nav(&mut self, content_type: String, body: String, initiator: String) {
         self.nav_gen += 1;
+        // The players are keyed by NodeId into the OUTGOING DOM. Kept across a navigation they
+        // would hand the next page's nodes the previous page's video.
+        self.media.clear();
         // Dropping every sender closes the old page's sockets: a live-chat socket must not keep
         // streaming into a document the user has navigated away from.
         self.ws_send.clear();
@@ -1324,7 +1348,85 @@ impl App {
         // The document is on screen NOW. Only then do the deferred scripts run and the images load.
         self.run_deferred_scripts();
         self.spawn_image_load();
+        self.spawn_media_load();
         self.spawn_iframe_load();
+    }
+
+    /// Fetch each `<video>`/`<audio>`'s media on a background task. **After first paint**, for the
+    /// same reason images and iframes are: a video file is the largest thing on the page by an
+    /// order of magnitude, and an article must never wait on one.
+    ///
+    /// Mirrors [`Self::spawn_image_load`] deliberately, with one difference that is the whole point
+    /// of `pending_media_urls` returning pairs: the **`NodeId` travels with the request**, because
+    /// the frames that come back belong to one specific element rather than to every node naming
+    /// the URL. See `shell::media` for why a player cannot be shared the way a bitmap can.
+    fn spawn_media_load(&mut self) {
+        let Some(page) = self.page.as_ref() else {
+            return;
+        };
+        let wanted: Vec<(manuk_dom::NodeId, String)> = page
+            .pending_media_urls()
+            .into_iter()
+            .filter(|(node, _)| !self.media.has(*node))
+            .collect();
+        if wanted.is_empty() {
+            return;
+        }
+        let gen = self.nav_gen;
+        let tab = self.tab_id;
+        let proxy = self.proxy.clone();
+        self.rt.spawn(async move {
+            for (node, url) in wanted {
+                let Some(bytes) = manuk_page::fetch_media_bytes(&url).await else {
+                    continue;
+                };
+                let _ = proxy.send_event(NavEvent::MediaReady {
+                    gen,
+                    tab,
+                    node,
+                    bytes,
+                });
+            }
+        });
+    }
+
+    /// A media resource arrived. Decode it, bind it to its element, and paint the first frame.
+    fn finish_media(
+        &mut self,
+        gen: u64,
+        tab: manuk_compositor::TabId,
+        node: manuk_dom::NodeId,
+        bytes: Vec<u8>,
+    ) {
+        // A stale response must not land in a page the user has since navigated away from — the
+        // `NodeId` would be resolved against a DOM that no longer exists.
+        if gen != self.nav_gen || tab != self.tab_id {
+            return;
+        }
+        if !self.media.load(node, &bytes) {
+            return; // recorded as a known failure inside `load`; never re-requested
+        }
+        self.advance_media();
+    }
+
+    /// Push the current frame of every playing video into the page, and repaint only if the
+    /// picture actually changed. Called once per frame from the redraw path.
+    ///
+    /// The delta is wall-clock because nothing plays audio yet, so there is no device clock to be
+    /// master — `shell::media` documents the hand-off point for when `cpal` lands.
+    fn advance_media(&mut self) {
+        if self.media.is_empty() {
+            return;
+        }
+        let now = std::time::Instant::now();
+        let dt = now.duration_since(self.media_last_tick).as_secs_f64();
+        self.media_last_tick = now;
+        let Some(page) = self.page.as_mut() else {
+            return;
+        };
+        if self.media.advance(dt, page) {
+            self.needs_paint = true;
+        }
     }
 
     /// Fetch each `<iframe>`'s document on a background task. **After first paint**, always: an iframe is
@@ -3851,6 +3953,12 @@ impl ApplicationHandler<NavEvent> for App {
             }
             NavEvent::Prewarmed { url, result } => self.finish_prewarm(url, result),
             NavEvent::ImagesReady { gen, tab, images } => self.finish_images(gen, tab, images),
+            NavEvent::MediaReady {
+                gen,
+                tab,
+                node,
+                bytes,
+            } => self.finish_media(gen, tab, node, bytes),
             NavEvent::IframeReady {
                 gen,
                 tab,
@@ -4082,6 +4190,10 @@ impl ApplicationHandler<NavEvent> for App {
                 }
             }
             WindowEvent::RedrawRequested => {
+                // Video first: a playing video decides whether this frame owes a paint at all, so
+                // it has to publish BEFORE `needs_paint` is read. Publishing after would show every
+                // frame exactly one redraw late and drop the last frame of every video entirely.
+                self.advance_media();
                 // Coalesced paint: input bursts only set `needs_paint`; do the one CPU paint
                 // + texture upload here, then present.
                 if self.needs_paint {

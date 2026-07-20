@@ -40,6 +40,11 @@ manuk-paint.workspace = true
 manuk-compositor.workspace = true
 manuk-page.workspace = true
 manuk-agent.workspace = true
+# The decoder lives HERE and nowhere else in the tree. `manuk-page` deliberately takes raw RGBA
+# rather than naming a media type, so the ~25 gate binaries that link it never compile openh264's
+# C — the isolation tick 236 established. The shell is a single binary and the one place a real
+# decode has to happen, so it is the correct and only place to pay that cost.
+manuk-media = { workspace = true, features = ["video"] }
 
 anyhow.workspace = true
 tracing.workspace = true

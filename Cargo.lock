@@ -3194,6 +3194,7 @@ dependencies = [
  "manuk-html",
  "manuk-js",
  "manuk-layout",
+ "manuk-media",
  "manuk-net",
  "manuk-page",
  "manuk-paint",
