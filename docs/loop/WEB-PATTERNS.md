@@ -1928,3 +1928,29 @@ saw, because it was given the DOM and not the cascade).
 **The trap:** `visibility` is the one hiding mechanism a descendant can undo — `visibility:visible`
 inside a hidden ancestor is shown, and is in Chrome's accessibility tree. Pruning the subtree is the
 obvious implementation and silently deletes those nodes. Drop the node, keep walking.
+
+## Responsive blocks — anything inside `@media` (tick 273)
+
+**Pattern:** a declaration inside `@media`. Not a niche one: the breakpoint block is how the entire
+web ships layout, and `@media (prefers-color-scheme: dark)` / `@media print` are how it ships themes
+and print styles. The page pipeline itself wraps every conditional `<link media="…">` sheet in
+`@media … { }` so the cascade decides whether it applies.
+
+**The class this unlocks:** every responsive site, correctly, for a dozen properties that were
+silently exempt. `visibility` inside a breakpoint block is how the web hides closed dropdowns,
+popovers, tooltips and autocomplete panels — so tick 272's fix for those had nothing to act on,
+because nothing was ever marked hidden. Alongside it: responsive `background-image` swaps, gradient
+heroes, icon masks, `border-style` dividers, `object-fit` thumbnails and dark-theme sheets.
+
+**Why it hid:** the shipping cascade is Stylo, and Stylo re-parses the sheet source with its own
+parser and evaluates `@media` correctly. `display`, `width`, `color` — everything a `@media` test
+naturally reaches for — worked. Only the twelve properties `cascade_via_stylo` recovers from a
+second `MinimalCascade` pass (because Stylo's servo build does not expose them) inherited that
+parser's at-rule skip. **A property recovered from a second engine inherits that engine's bugs,
+silently and only for that property**, so a green `@media` test and a total `@media` failure sat in
+the same repository, both honest.
+
+**The trap:** "descend into `@media` and apply what's inside" is not less wrong than skipping it. It
+renders `@media print` on screen and a dark-scheme sheet on a light display. Descent is only half of
+the fix; the query still has to be evaluated, and an unknown media feature has to evaluate FALSE.
+Gate both directions or the fix is a different bug.

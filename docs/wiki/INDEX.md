@@ -172,6 +172,11 @@
   - L456 · Where it was
   - L469 · The numbers were measured, not recalled
   - L480 · The rule that makes it a fix rather than a trade
+  - L496 · @media was skipped, and it took a dozen properties with it (tick 273)
+  - L503 · The bug and the test that covered it were about disjoint property sets
+  - L534 · What it cost
+  - L549 · The fix, and why it evaluates at cascade time
+  - L570 · Still skipped: @supports and @layer
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -657,4 +662,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-576 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+581 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
