@@ -7190,6 +7190,20 @@ pub unsafe fn install(
         0,
     );
     let platform = format!("{} {}", std::env::consts::OS, std::env::consts::ARCH);
+    // Honest, self-consistent inputs for `navigator.userAgentData` (the User-Agent Client Hints
+    // surface). Same Axis-F posture as `honest_user_agent`: report what we ACTUALLY are, never a
+    // competitor's brand. The full version is our own package version; the major is what the
+    // low-entropy `brands` list carries.
+    let ua_full_ver = env!("CARGO_PKG_VERSION");
+    let ua_major_ver = ua_full_ver.split('.').next().unwrap_or("0");
+    // The UA-CH `platform` token is the OS family in the spec's capitalised form, NOT the raw
+    // `OS ARCH` string used for legacy `navigator.platform`.
+    let ua_ch_platform = match std::env::consts::OS {
+        "linux" => "Linux",
+        "macos" => "macOS",
+        "windows" => "Windows",
+        other => other,
+    };
     // JS string-literal-escape the document URL so it can't break out of the "%URL%" slot.
     let url_lit = {
         let esc = js_string_literal(doc_url); // yields a quoted literal
@@ -7198,6 +7212,10 @@ pub unsafe fn install(
     let prelude = WINDOW_PRELUDE
         .replace("%UA%", &honest_user_agent())
         .replace("%PLATFORM%", &platform)
+        .replace("%UAVER%", ua_major_ver)
+        .replace("%UAFULLVER%", ua_full_ver)
+        .replace("%UACHPLATFORM%", ua_ch_platform)
+        .replace("%UAARCH%", std::env::consts::ARCH)
         .replace("%URL%", &url_lit);
     let _ = eval_in_current_global(cx, &prelude);
 }
@@ -10435,6 +10453,64 @@ const WINDOW_PRELUDE: &str = r#"
             // `cookieEnabled` is now TRUE, because it IS: we have a real per-origin cookie jar. Saying
             // `false` invites a page to take its no-cookie path, which is a different site.
         };
+        // `navigator.userAgentData` — the User-Agent Client Hints surface (`NavigatorUAData`).
+        // Modern sites feature-detect through it instead of parsing the UA string:
+        // `navigator.userAgentData.getHighEntropyValues(['platform', ...])`, and its ABSENCE both
+        // breaks that code path (a call on `undefined` throws) and is itself the loudest "this is not
+        // a real browser" tell a headless detector has. It reports the SAME honest facts the UA string
+        // does (Axis F: what we are, never a competitor's brand) — a Manuk brand plus the spec's
+        // GREASE "Not.A/Brand" entry (which the UA-CH guidance recommends so sites do not brittle-match
+        // an exact brand list, NOT mimicry). `mobile` is false and `platform` is the OS family.
+        if (!g.navigator.userAgentData) {
+          try {
+            var __uaLow = {
+                brands: [
+                    { brand: "Manuk", version: "%UAVER%" },
+                    { brand: "Not.A/Brand", version: "24" }
+                ],
+                mobile: false,
+                platform: "%UACHPLATFORM%"
+            };
+            // The high-entropy hints a page may ASK for (getHighEntropyValues). Only the requested
+            // keys are returned, always folded onto the low-entropy set — exactly as the spec resolves
+            // the promise. Every value is honest: our real version, arch and OS.
+            var __uaHigh = {
+                architecture: "%UAARCH%",
+                bitness: "64",
+                model: "",
+                platformVersion: "",
+                uaFullVersion: "%UAFULLVER%",
+                fullVersionList: [
+                    { brand: "Manuk", version: "%UAFULLVER%" },
+                    { brand: "Not.A/Brand", version: "24.0.0.0" }
+                ],
+                wow64: false,
+                formFactors: ["Desktop"]
+            };
+            g.navigator.userAgentData = {
+                brands: __uaLow.brands,
+                mobile: __uaLow.mobile,
+                platform: __uaLow.platform,
+                getHighEntropyValues: function (hints) {
+                    var out = {
+                        brands: __uaLow.brands,
+                        mobile: __uaLow.mobile,
+                        platform: __uaLow.platform
+                    };
+                    if (hints && typeof hints.length === 'number') {
+                        for (var i = 0; i < hints.length; i++) {
+                            var k = hints[i];
+                            if (Object.prototype.hasOwnProperty.call(__uaHigh, k)) { out[k] = __uaHigh[k]; }
+                        }
+                    }
+                    return Promise.resolve(out);
+                },
+                toJSON: function () {
+                    return { brands: __uaLow.brands, mobile: __uaLow.mobile, platform: __uaLow.platform };
+                }
+            };
+          } catch (e) {}
+        }
         // `navigator.clipboard.writeText` — the async Clipboard API every "copy" button uses (copy a
         // code block, a share link, an API key). It was ABSENT, so `navigator.clipboard.writeText(...)`
         // threw on `undefined` and the button did nothing. `writeText` queues the text for the host to

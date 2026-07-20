@@ -2251,3 +2251,23 @@ not the return value. **(2)** Fire-and-forget: no response callback, because a b
 nothing is left to await it. **(3)** The content-type follows the payload (string→text/plain,
 Blob→its type, FormData→multipart), never a fixed guess. **(4)** An oversized payload is refused with
 `false` and NOT queued — a silent drop that returns `true` loses the data while claiming success.
+
+## The browser that answers when asked what it is — `navigator.userAgentData` (tick 286)
+
+**Pattern:** `const ua = await navigator.userAgentData.getHighEntropyValues(['platform',
+'architecture', 'uaFullVersion']); if (ua.platform === 'Windows') showWindowsDownload();` — modern
+sites stopped parsing the UA string and read the structured UA Client Hints surface instead: download
+pages pick the right binary, analytics segment by platform, and login flows gate on it.
+
+**The class this unlocks:** structured client-hints feature-detection. Its absence was a double
+failure — `navigator.userAgentData.getHighEntropyValues(...)` threw on `undefined` and took the
+surrounding detection block with it, and the missing object is itself the loudest "not a real browser"
+tell a headless detector has. We report the SAME honest facts the UA string carries (a Manuk brand,
+our real version/arch/OS), never a competitor's number: completeness, not evasion.
+
+**The traps.** **(1)** `getHighEntropyValues` returns ONLY the hints the page asked for, folded onto
+the always-present low-entropy set — a shim that dumps every field is detectable and wrong. **(2)** The
+CH `uaFullVersion` and the UA string are the SAME fact: derive both from one source or they drift and
+an inconsistency check flags it. **(3)** `toJSON()` is the low-entropy dict, not the method surface —
+don't leak `getHighEntropyValues` into it. **(4)** Include the GREASE `Not.A/Brand` entry so sites
+can't brittle-match an exact brand list — that's UA-CH's own guidance, not mimicry.

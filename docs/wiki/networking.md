@@ -920,3 +920,33 @@ page it was sent.
 **Not implemented, and absent rather than wrong:** `ArrayBuffer`/typed-array payloads (stringified
 rather than sent as raw bytes), and the true cross-beacon in-flight accounting (the cap is per-call,
 not a running total).
+
+## `navigator.userAgentData` — the Client Hints surface, honest and self-consistent (tick 286)
+
+Modern sites stopped parsing the UA string and read `navigator.userAgentData` instead — the low-entropy
+`{brands, mobile, platform}` synchronously, and everything else through
+`getHighEntropyValues(['architecture', 'uaFullVersion', ...])`, which returns a `Promise`. When the
+object is `undefined`, that call throws on `undefined` and takes the surrounding feature-detection with
+it, and a headless detector reads the absence as the single loudest "not a real browser" tell there is.
+So the surface is installed on the always-present `navigator` object (guarded + `try/catch`, exactly
+like `clipboard`/`sendBeacon`), reporting the **same honest facts the UA string carries** — Axis F:
+what we are, never a competitor's brand.
+
+The low-entropy `brands` list is `[{brand:"Manuk", version:<major>}, {brand:"Not.A/Brand", version:"24"}]`.
+The GREASE `Not.A/Brand` entry is not mimicry — it is the UA-CH guidance's own recommendation so sites do
+not brittle-match an exact brand list. `platform` is the OS family (`Linux`/`macOS`/`Windows`), `mobile`
+is `false`, and all of it is substituted from the same Rust facts as `honest_user_agent()`
+(`%UAVER%`/`%UAFULLVER%`/`%UACHPLATFORM%`/`%UAARCH%`), so the CH surface and the UA string can never
+drift apart.
+
+### The two teeth `G_USERAGENTDATA` uses, that a stub cannot grow
+
+`getHighEntropyValues(hints)` returns **only the hints that were asked for**, folded onto the always-present
+low-entropy set — *not* a dump of every field. A shim that returns everything unconditionally fails the
+`unasked-absent` claim (a hint that was not requested must be absent). And the `uaFullVersion` it reports
+must actually appear inside `navigator.userAgent`, so a stub that hard-codes a Chrome version string fails
+the `consistent` claim. Both were demonstrated to go red before the tick landed.
+
+**Absent rather than wrong:** `platformVersion`/`model` are empty strings (we do not model an OS version
+or device model), and the high-entropy values are static (no per-request entropy budget or user-permission
+gating — every hint resolves).

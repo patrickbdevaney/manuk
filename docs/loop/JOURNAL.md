@@ -13189,3 +13189,50 @@ session) on top of the observer's FID-SWEEP — 1-min load 2.7-4.0 during the ve
 tick 284 landed in at 61s. `build` warm (29s), so this is gate runtime under load, not a rebuild.
 Parked for a quiet-window re-measure (verify.sh → status-update.sh → tick.sh when load<0.8), exactly
 like ticks 243-246. Reported, not fixed.
+
+## Tick 286 — `navigator.userAgentData`: the Client Hints surface, honest and self-consistent (2026-07-20)
+
+TICK SHAPE: board re-read at tick start (no observer steer newer than t267). The board's most recent
+open CO-#1 rows (t264-267) were IndexedDB/SW+Cache/CSP/Workers — ALL already landed by ticks 278-285,
+so I RE-PROBED the honest state instead of trusting the stale board. Ran `g_probe_capabilities` and a
+throwaway behavioural probe of the "completeness-identity" trio the board's lever-4 names
+(visibilityState / permissions.query / userAgentData). MEASURED: `visibilityState:visible`,
+`hidden:false`, `permissions.query:function`, `Notification.permission:denied` — all ALREADY WORK
+(DAILY-DRIVER-EDGES.md carried them as "missing (verified)"; another stale row). The ONLY genuine gap
+was `navigator.userAgentData` → `undefined`. `? outranks ✗`: the cheap probe flipped four phantom
+holes and found the one real one.
+
+HYPOTHESIS: modern sites stopped parsing the UA string and read `navigator.userAgentData` +
+`getHighEntropyValues([...])` instead. Absent, the call throws on `undefined` and takes the surrounding
+feature-detection with it, and a headless detector reads the absence as the loudest "not a real
+browser" tell. COMPLETENESS, not evasion (DAILY-DRIVER-EDGES §1b; scope memory: genuine headful
+browser, no fingerprint spoofing).
+
+PLAN: install `userAgentData` on the always-present navigator (guarded + try/caught, like
+clipboard/sendBeacon), reporting the SAME honest facts the UA string carries (Axis F). Substitute the
+values from the same Rust source as `honest_user_agent()` via new `%UAVER%`/`%UAFULLVER%`/
+`%UACHPLATFORM%`/`%UAARCH%` placeholders so the CH surface and UA string can never drift.
+
+### What landed
+
+`navigator.userAgentData` with low-entropy `brands` (`[{Manuk,<major>},{Not.A/Brand,24}]` — the GREASE
+entry is UA-CH's own anti-brittle-match guidance, not mimicry), `mobile:false`, `platform` = OS family
+(Linux/macOS/Windows), plus `getHighEntropyValues(hints)` (returns a Promise resolving ONLY the asked-for
+hints folded onto the low-entropy set — architecture/bitness/uaFullVersion/fullVersionList/model/
+platformVersion/wow64/formFactors) and `toJSON()`.
+
+### The claim that carries it — two teeth a stub cannot grow
+
+`G_USERAGENTDATA` asserts 11 behavioural claims, two of them non-trivial: **`unasked-absent`** — a hint
+NOT requested must be ABSENT from the getHEV result (a shim that dumps every field fails it); and
+**`consistent`** — the `uaFullVersion` must actually appear inside `navigator.userAgent` (a stub that
+hard-codes a Chrome version fails it). PROVEN RED: dumping all hints → `unasked-absent:false`, and a
+foreign `138.0.7204.0` version → `consistent:false`; the gate FAILED on both. Reverted.
+
+NO REGRESSION: `g_capability` (ALL-CLAIMS-HOLD), `g_probe_capabilities`, `g_useragentdata` all green;
+the change is 76 additive lines in the window prelude, no existing navigator field touched. Not a trade.
+
+HONEST LIMITS: `platformVersion`/`model` are empty strings (no OS-version/device-model modelling); the
+high-entropy values are static (no per-request entropy budget or permission gating).
+
+WIKI: docs/wiki/networking.md (navigator.userAgentData section). CONSTELLATION.tsv row 118 partial→works.
