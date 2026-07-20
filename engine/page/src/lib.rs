@@ -4749,7 +4749,41 @@ impl Page {
     /// re-rasterizing / re-uploading an idle frame, or to repaint only the damaged region.
     pub fn display_list(&self) -> manuk_paint::DisplayList {
         let z = self.z_index_map();
-        manuk_paint::DisplayList::build_layered(&self.root_box, &self.images, &z)
+        manuk_paint::DisplayList::build_captioned(
+            &self.root_box,
+            &self.images,
+            &z,
+            &self.caption_map(),
+        )
+    }
+
+    /// The cues the UA must paint over each media box right now.
+    ///
+    /// Read fresh on every paint rather than cached, because the thing that changes it is the page
+    /// moving its own `currentTime` — there is no host-side event to invalidate a cache on, and a
+    /// stale caption is the failure this whole arc is about.
+    ///
+    /// A cue whose element is no longer in the tree simply never matches a layout box, so a removed
+    /// `<video>` cannot leave a caption floating over the page.
+    pub fn caption_map(&self) -> manuk_paint::CaptionMap {
+        manuk_js::active_cues()
+            .into_iter()
+            .map(|(node, cues)| {
+                let cues = cues
+                    .into_iter()
+                    .map(|c| manuk_paint::CaptionCue {
+                        text: c.text,
+                        line: c.line,
+                        line_is_percent: c.line_is_percent,
+                        position: c.position,
+                        size: c.size,
+                        align: c.align,
+                        vertical: c.vertical,
+                    })
+                    .collect();
+                (manuk_dom::NodeId(node), cues)
+            })
+            .collect()
     }
 
     /// Rasterize the whole page to a canvas of the given pixel size (CPU tier).
@@ -4795,12 +4829,10 @@ impl Page {
     pub fn paint(&self, fonts: &FontContext, width: u32, height: u32) -> Canvas {
         let z = self.z_index_map();
         let clip = self.clip_map();
-        CpuPainter::with_layers(fonts, &self.images, &z, &clip).render(
-            &self.root_box,
-            width,
-            height,
-            self.canvas_background(),
-        )
+        let caps = self.caption_map();
+        CpuPainter::with_layers(fonts, &self.images, &z, &clip)
+            .with_captions(&caps)
+            .render(&self.root_box, width, height, self.canvas_background())
     }
 
     /// Rasterize the visible viewport with the content scrolled up by `scroll_y`.
@@ -4825,13 +4857,10 @@ impl Page {
         } else {
             &self.root_box
         };
-        CpuPainter::with_layers(fonts, &self.images, &z, &clip).render_scrolled(
-            boxes,
-            width,
-            height,
-            self.canvas_background(),
-            scroll_y,
-        )
+        let caps = self.caption_map();
+        CpuPainter::with_layers(fonts, &self.images, &z, &clip)
+            .with_captions(&caps)
+            .render_scrolled(boxes, width, height, self.canvas_background(), scroll_y)
     }
 
     /// All `<a href>` links, in document order, with hrefs resolved absolute.

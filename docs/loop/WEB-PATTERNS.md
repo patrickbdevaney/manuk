@@ -1651,3 +1651,31 @@ is what lets the bug through — but `line:-1` means the last line, i.e. the bot
 
 **Still closed:** nothing paints a cue. The placement is now correct and complete for a page's own
 overlay to consume; the UA still has no caption renderer of its own.
+
+## The caption the browser draws itself (tick 261)
+
+**Pattern:** `<video src="..."><track kind="subtitles" src="cc.vtt" default></video>` — and no player
+library anywhere on the page.
+
+**The class this unlocks:** every video that is just a `<video>` tag. Course and lecture pages, museum
+and archive collections, government and public-health videos, conference talk recordings, product
+demos and support clips, news embeds, university department pages — the whole non-YouTube long tail
+that ships a file and a caption track and lets the browser handle it. Also every accessibility and
+compliance context where captions are the *point*: a deaf or hard-of-hearing viewer, a muted autoplay
+feed, a noisy room, a second-language viewer. For those users a video with no visible captions is not
+degraded, it is unusable.
+
+**The failure this closes is the one every layer passes.** Six ticks each parsed, held, timed, fetched
+and placed cues correctly, and each handed them to *a page's own renderer*. Every gate was green. The
+last handoff was to nobody, because a page with no player library has no renderer — and the browser
+is the one that is supposed to draw it. Correct data delivered to an absent consumer looks identical,
+from every layer above, to a working feature.
+
+**`hidden` is not `disabled`, and it is what stops double captions.** A player that draws its own
+overlay sets `mode='hidden'`: the cues stay live and `cuechange` keeps firing so its renderer works,
+but the UA must not paint. A UA that paints hidden tracks double-captions every site that has a
+player — the sites most likely to be tested.
+
+**Still open, and it is fidelity rather than absence:** vertical (`rl`/`lr`) cues paint horizontally;
+text width is estimated rather than shaped, so `align:end` and `size:` clipping are approximate; two
+simultaneous cues at the same explicit `line` overlap.

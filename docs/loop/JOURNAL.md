@@ -11619,3 +11619,58 @@ placement data is correct, complete and available to a page's own renderer; a pl
 That tick is scoped in the wiki and touches the paint path.
 
 WIKI: docs/wiki/media-pipeline.md
+
+## Tick 261 — six ticks of correct captions, finally drawn
+
+TICK SHAPE: the residue ticks 258/259/260 each ended on, and the only thing left in the caption arc.
+Ticks 255-260 parse cues, hold them in a `TextTrack`, time them, fire `cuechange`, fetch `<track src>`
+and preserve placement — and every one of those hands cues to **a page's own renderer**. A plain
+`<video>` with `<track default>` has none, because a document with no player library never draws a
+caption itself. **The browser is supposed to.** Six green gates, and the viewer saw nothing.
+
+**THE JOIN IS ACROSS THREE CRATES, and neither end can see the other.** The painter is in Rust and
+never sees the DOM (`LayoutBox.node` is its only link; no builder takes a `&Dom`). The caption state
+is in JavaScript, because that is where the `TextTrack` API is. So: `el.__publishCues()` →
+`__setActiveCues(nodeId, json)` → a thread-local `ACTIVE_CUES` → `Page::caption_map()` →
+`manuk_paint::CaptionMap` → `caption_items(video_rect, cues)` → `Rect` + `Text` items emitted right
+after the element's own blit. The last hop is the channel `images` and `z_index` already use — a
+**NodeId-keyed side map**, resolved by the page layer, the one layer that can see both sides.
+`CueSettings` (tick 260) deferred pixel resolution to "a renderer that knows the video box";
+`caption_items` is that renderer, and it is where `auto` finally has to mean something.
+
+**THREE CLAIMS THAT ARE NOT DETAILS.** (1) `ACTIVE_CUES` is **state, not a queue** — every other host
+bridge here is drained by the host, but a caption is on screen until it isn't, and a paint that
+*consumed* the set would show each caption for one frame and then blank the picture. (2) An **empty
+array must be sent**; it is how a cue leaves the screen, and a bridge that only ever added cues would
+burn the last caption of every video permanently into the frame. (3) **`hidden` is not `disabled`** —
+`activeCues` answers for a hidden track (cues live, `cuechange` still firing, a page's own renderer
+still working), but `hidden` means exactly "do not display this" and is the mode a player sets **when
+it draws captions itself**. So publishing filters on `mode === 'showing'`, and the `mode` setter
+publishes UNCONDITIONALLY: `showing`→`hidden` leaves `activeCues` identical, the cue-diff correctly
+sees no change and fires nothing, and the overlay would keep painting a caption the user turned off.
+
+**RED PROBES: FOUR, AND ONE CAME BACK GREEN.** Dropping the emit, collapsing `auto` to line 0, and
+publishing `hidden` tracks all went RED. Painting cues *behind* the video **stayed green** — the
+check was written against `DisplayItem::Image`, and a `<video>` with no poster decodes no bitmap, so
+`if let Some(img_idx)` skipped the assertion entirely and it passed while every caption painted behind
+the frame. Third distinct disguise of the vacuous-assertion class in three ticks (tick 260's was a
+substring that matched its own bug). **The fix is the same every time: make the thing you assert
+about exist unconditionally** — the video now carries `background:#123456` and the item is found by
+that exact colour, because "the first Rect" would be wrong too now that captions emit Rects.
+
+**PROCESS FAILURE, RECORDED: my probe harness ran `git checkout -- <file>` to undo each probe, and
+that reverts to HEAD — destroying the tick's own UNCOMMITTED work.** Two files were wiped mid-tick
+and rebuilt from context. [[session-151-margin-collapse]] already says never `git checkout` a file
+holding unlanded work; the trap is that a *probe harness* is exactly where you write it without
+thinking. **Snapshot with `cp` before the probe and restore from the snapshot.**
+
+Gate: `engine/page/tests/g_caption_paint.rs` (`G_CAPTION_PAINT`), asserting the display list (which
+carries plain strings — shaping is deferred to raster). `g_track_src`, `g_cue_change`, `g_text_tracks`,
+`manuk-media` `vtt_captions` and all 17 `manuk-paint` tests still green.
+
+Residue: the arc is closed end-to-end; what is left is fidelity, not absence. `vertical: rl/lr` paints
+horizontally (recorded on `CaptionCue`, not dropped). Text width is ESTIMATED (`chars × size × 0.5`)
+rather than shaped, so `align:end` and `size:` clipping are approximate — the same stub-metrics
+problem as the ch/ex lever. No cue-box overlap avoidance. `damage_since` over-damages `Text`.
+
+WIKI: docs/wiki/media-pipeline.md

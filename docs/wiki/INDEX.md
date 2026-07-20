@@ -449,6 +449,11 @@
   - L698 · auto is not 0, and a bare number is not a percentage
   - L711 · Probes
   - L726 · Residue
+  - L732 · M7f — the UA paints the caption (tick 261)
+  - L741 · The three-crate join
+  - L763 · Three things that are not details
+  - L786 · RED probes — four, and one of them was VACUOUS
+  - L808 · Residue
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -600,4 +605,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-519 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+524 sections across 19 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

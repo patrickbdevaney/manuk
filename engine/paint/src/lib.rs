@@ -108,6 +108,162 @@ pub struct DecodedImage {
     pub rgba: Vec<u8>,
 }
 
+/// A cue the **UA itself** must paint over a media element's box.
+///
+/// Ticks 255-260 built the whole caption pipeline — parse, hold, time, fire `cuechange`, preserve
+/// placement — and stopped one step short: every one of those steps hands cues to *a renderer*, and
+/// on a plain `<video>` with `<track default>` there is no renderer, because a page without a player
+/// library never draws a caption itself. The browser is supposed to. Until this item existed, a
+/// correctly parsed, correctly timed, correctly placed cue reached the viewer as nothing at all.
+///
+/// The settings arrive in **the spec's own vocabulary**, exactly as tick 260 left them, and are
+/// resolved to pixels here — this is the code the `CueSettings` doc comment was deferring to, the
+/// renderer that finally knows the video box. `line`/`position` are `None` for `auto`, and `auto` is
+/// not `0`: `line: 0` is the TOP of the frame and `auto` is the bottom.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CaptionCue {
+    /// Cue text. Newlines are hard breaks the author wrote, and each becomes its own painted line.
+    pub text: String,
+    /// `line` — `None` is `auto` (stack up from the bottom).
+    pub line: Option<f64>,
+    /// Whether `line` is a percentage of the box height rather than a **line count**. A bare
+    /// `line:-1` means the LAST line, which as a percentage would be nonsense.
+    pub line_is_percent: bool,
+    /// `position` — `None` is `auto` (centred in the writing direction).
+    pub position: Option<f64>,
+    /// `size` — the cue box width, as a percentage of the video box. Default 100.
+    pub size: f64,
+    /// `align` — `start` | `center` | `end` | `left` | `right`.
+    pub align: String,
+    /// `vertical` — `""` (horizontal) | `"rl"` | `"lr"`. **Vertical writing is not painted
+    /// vertically yet**; a vertical cue is laid out horizontally, which is wrong but legible.
+    /// Recorded rather than dropped so the gap stays visible.
+    pub vertical: String,
+}
+
+/// Cues to paint over each media element's box, keyed by node — the same NodeId-keyed side-map
+/// channel `images` and `z_index` use, because the painter never sees the DOM.
+pub type CaptionMap = std::collections::HashMap<manuk_dom::NodeId, Vec<CaptionCue>>;
+
+/// The UA caption stylesheet, in one place: white text on a translucent black box, sized relative
+/// to the video (browsers scale captions with the picture — a fixed px size is unreadable on a
+/// thumbnail and comical full-screen).
+const CAPTION_FONT_FRACTION: f32 = 0.06;
+const CAPTION_FONT_MIN: f32 = 10.0;
+const CAPTION_FONT_MAX: f32 = 48.0;
+const CAPTION_LINE_HEIGHT: f32 = 1.25;
+/// Breathing room between the bottom-most caption line and the bottom edge of the video.
+const CAPTION_BOTTOM_PAD: f32 = 0.04;
+
+/// Resolve `cues` against the video box `r` into paint items: a translucent backing rect per line,
+/// then the line's text.
+///
+/// Returns items in back-to-front order, ready to append after the video's own blit.
+pub fn caption_items(r: Rect, cues: &[CaptionCue]) -> Vec<DisplayItem> {
+    if r.width <= 0.0 || r.height <= 0.0 {
+        return Vec::new();
+    }
+    let font_size = (r.height * CAPTION_FONT_FRACTION).clamp(CAPTION_FONT_MIN, CAPTION_FONT_MAX);
+    let line_height = font_size * CAPTION_LINE_HEIGHT;
+    let style = manuk_layout::TextStyle {
+        font_key: manuk_text::FontKey::default(),
+        font_size,
+        color: Rgba {
+            r: 255,
+            g: 255,
+            b: 255,
+            a: 255,
+        },
+        line_height,
+        decoration: manuk_css::TextDecoration::default(),
+        letter_spacing: 0.0,
+        word_spacing: 0.0,
+        shadow: None,
+        rtl: false,
+    };
+
+    // Every hard-wrapped line of every cue, tagged with the cue it came from. A two-line cue
+    // occupies two lines of the frame, so `auto` stacking has to count LINES, not cues — otherwise
+    // a multi-line cue overlaps whatever sits above it.
+    let mut lines: Vec<(&CaptionCue, &str)> = Vec::new();
+    for c in cues {
+        for l in c.text.split('\n') {
+            lines.push((c, l));
+        }
+    }
+
+    // `auto`-line cues stack UP from the bottom, oldest at the top of the stack — the browser
+    // behaviour a viewer reads as "the new line pushes the old one up".
+    let auto_total = lines
+        .iter()
+        .filter(|(c, _)| c.line.is_none())
+        .count()
+        .max(1);
+    let mut auto_seen = 0usize;
+    let bottom = r.y + r.height - r.height * CAPTION_BOTTOM_PAD;
+
+    let mut items = Vec::new();
+    for (cue, text) in &lines {
+        // --- vertical placement -------------------------------------------------------------
+        let top = match cue.line {
+            None => {
+                let from_end = auto_total - auto_seen - 1;
+                auto_seen += 1;
+                bottom - line_height * (from_end as f32 + 1.0)
+            }
+            Some(v) if cue.line_is_percent => r.y + r.height * (v as f32 / 100.0),
+            // A LINE COUNT: non-negative counts down from the top, negative counts back from the
+            // bottom with `-1` naming the last line.
+            Some(v) if v >= 0.0 => r.y + line_height * v as f32,
+            Some(v) => bottom + line_height * v as f32,
+        };
+        // --- horizontal placement -----------------------------------------------------------
+        let box_w = r.width * (cue.size as f32 / 100.0).clamp(0.0, 1.0);
+        // `align` decides which edge of the cue box `position` names, so `auto` position lands the
+        // box where the alignment implies rather than always centring it.
+        let anchor = match cue.align.as_str() {
+            "start" | "left" => 0.0,
+            "end" | "right" => 1.0,
+            _ => 0.5,
+        };
+        let pos_frac = match cue.position {
+            Some(p) => (p as f32 / 100.0).clamp(0.0, 1.0),
+            None => anchor,
+        };
+        let box_x = r.x + r.width * pos_frac - box_w * anchor;
+
+        // The text is placed inside the cue box by the same alignment. Width is estimated from the
+        // font size rather than shaped here — shaping happens at raster time (`CpuPainter`), and
+        // the display list deliberately carries plain strings.
+        let est_w = (text.chars().count() as f32 * font_size * 0.5).min(box_w);
+        let text_x = box_x + (box_w - est_w) * anchor;
+
+        let backing = Rect {
+            x: text_x,
+            y: top,
+            width: est_w,
+            height: line_height,
+        };
+        items.push(DisplayItem::Rect {
+            rect: backing,
+            color: Rgba {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: 204,
+            },
+        });
+        items.push(DisplayItem::Text {
+            x: text_x,
+            // Sit the baseline inside the line box, leaving room for descenders.
+            baseline: top + font_size,
+            text: (*text).to_string(),
+            style,
+        });
+    }
+    items
+}
+
 /// One paint operation.
 #[derive(Clone, Debug, PartialEq)]
 pub enum DisplayItem {
@@ -213,7 +369,26 @@ impl DisplayList {
         images: &std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<DecodedImage>>,
         z_index: &std::collections::HashMap<manuk_dom::NodeId, i32>,
     ) -> DisplayList {
-        let groups = Self::layered_groups(root, images, z_index, &std::collections::HashMap::new());
+        Self::build_captioned(root, images, z_index, &CaptionMap::new())
+    }
+
+    /// Like [`build_layered`], but also paints the UA's own caption overlay over any media box that
+    /// has active cues. Split from `build_layered` rather than added to it so the four existing
+    /// callers keep compiling unchanged — the overlay is opt-in at the one call site that can know
+    /// whether a `<track>` is showing.
+    pub fn build_captioned(
+        root: &LayoutBox,
+        images: &std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<DecodedImage>>,
+        z_index: &std::collections::HashMap<manuk_dom::NodeId, i32>,
+        captions: &CaptionMap,
+    ) -> DisplayList {
+        let groups = Self::layered_groups(
+            root,
+            images,
+            z_index,
+            &std::collections::HashMap::new(),
+            captions,
+        );
         DisplayList {
             items: groups.into_iter().flat_map(|(_, _, it)| it).collect(),
         }
@@ -228,6 +403,7 @@ impl DisplayList {
         images: &std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<DecodedImage>>,
         z_index: &std::collections::HashMap<manuk_dom::NodeId, i32>,
         clip_map: &std::collections::HashMap<manuk_dom::NodeId, Rect>,
+        captions: &CaptionMap,
     ) -> Vec<(i32, Option<Rect>, Vec<DisplayItem>)> {
         // One group of paint items per box, tagged with its layer (effective z).
         //
@@ -506,6 +682,13 @@ impl DisplayList {
                     });
                 }
             }
+            // Captions paint OVER the video's own bitmap, and therefore after it — a cue behind the
+            // frame is a cue nobody can read, which is the state this whole arc was stuck in.
+            if let Some(node) = b.node {
+                if let Some(cues) = captions.get(&node) {
+                    items.extend(caption_items(b.rect, cues));
+                }
+            }
             // The list marker — generated content, so it rides on the box, not the tree.
             if let Some(m) = &b.marker {
                 items.push(DisplayItem::Text {
@@ -740,6 +923,7 @@ pub struct CpuPainter<'a> {
     images: Option<&'a NodeImages<'a>>,
     z_index: Option<&'a ZIndexMap<'a>>,
     clip: Option<&'a ClipMap<'a>>,
+    captions: Option<&'a CaptionMap>,
 }
 
 impl<'a> CpuPainter<'a> {
@@ -749,7 +933,18 @@ impl<'a> CpuPainter<'a> {
             images: None,
             z_index: None,
             clip: None,
+            captions: None,
         }
+    }
+
+    /// Paint the UA's own caption overlay over media boxes with active cues.
+    ///
+    /// A builder method rather than another `with_*` constructor argument: the existing painter
+    /// call sites (shell, demo, the WPT runner) have no captions to supply and should not have to
+    /// pass an empty map to say so.
+    pub fn with_captions(mut self, captions: &'a CaptionMap) -> Self {
+        self.captions = Some(captions);
+        self
     }
 
     /// A painter that also blits decoded images for replaced `<img>` nodes.
@@ -759,6 +954,7 @@ impl<'a> CpuPainter<'a> {
             images: Some(images),
             z_index: None,
             clip: None,
+            captions: None,
         }
     }
 
@@ -775,6 +971,7 @@ impl<'a> CpuPainter<'a> {
             images: Some(images),
             z_index: Some(z_index),
             clip: Some(clip),
+            captions: None,
         }
     }
 }
@@ -809,11 +1006,13 @@ impl CpuPainter<'_> {
         let empty = std::collections::HashMap::new();
         let empty_z = std::collections::HashMap::new();
         let empty_c = std::collections::HashMap::new();
+        let empty_cap = CaptionMap::new();
         let groups = DisplayList::layered_groups(
             root,
             self.images.unwrap_or(&empty),
             self.z_index.unwrap_or(&empty_z),
             self.clip.unwrap_or(&empty_c),
+            self.captions.unwrap_or(&empty_cap),
         );
         for (_z, clip, items) in &groups {
             // A group's clip is an `overflow` ancestor's box; shift it by the scroll.
@@ -1506,6 +1705,7 @@ mod bg_tests {
             &std::collections::HashMap::new(),
             &z,
             &std::collections::HashMap::new(),
+            &CaptionMap::new(),
         );
         // Find the layer of the group that actually carries the text.
         let text_layer = groups

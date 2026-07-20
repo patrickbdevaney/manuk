@@ -738,6 +738,39 @@ pub fn deliver_ws_event(
     Ok(())
 }
 
+/// One cue currently on screen for one media element, in the spec's own vocabulary.
+///
+/// The mirror of the JS-side active-cue set into Rust. Everything about captions — the cues, their
+/// timing, the `showing` mode, the clock — lives in JavaScript (`el.__textTracks`,
+/// `el.__currentTime`), because that is where the `TextTrack` API is. The painter is in Rust and
+/// never sees the DOM at all. So for the UA to draw a caption, the one thing that knows a cue is
+/// active has to say so, and this is the wire.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ActiveCue {
+    pub text: String,
+    /// `None` is `auto` — and `auto` is NOT `0`; see `manuk_media::vtt::CueSettings`.
+    pub line: Option<f64>,
+    pub line_is_percent: bool,
+    pub position: Option<f64>,
+    pub size: f64,
+    pub align: String,
+    pub vertical: String,
+}
+
+/// The WebVTT cues currently on screen, per media element node id — the input to the UA's own
+/// caption overlay. A **snapshot, not a drain**: a caption stays up until it comes down, so the
+/// host reads this on every paint without consuming it. Empty without the JS feature (a build with
+/// no JS has no `TextTrack` to be showing anything).
+#[cfg(feature = "_sm")]
+pub fn active_cues() -> std::collections::HashMap<u64, Vec<ActiveCue>> {
+    dom_bindings::active_cues()
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn active_cues() -> std::collections::HashMap<u64, Vec<ActiveCue>> {
+    std::collections::HashMap::new()
+}
+
 /// `history` ops (`pushState`/`replaceState`/`back`/`forward`/`go`) the page performed since the
 /// last call, each `(kind, state_json, url)`. The host reflects them in the omnibox +
 /// back/forward stack without a network navigation. Empty without the JS feature.

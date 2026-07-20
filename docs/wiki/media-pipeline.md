@@ -728,3 +728,93 @@ Gate: `engine/page/tests/g_track_src.rs` (`G_TRACK_SRC`), extended with four rea
 Unchanged and now the only thing left in the caption arc: **nothing paints a cue.** The placement
 data is correct, complete and available to a page's own renderer; a plain `<video>` with
 `<track default>` still shows the viewer nothing, because the UA has no caption overlay.
+
+## M7f — the UA paints the caption (tick 261)
+
+Six ticks of caption work (255-260) all ended the same way: *correct data, handed to a renderer that
+does not exist.* Parse, hold, time, fire `cuechange`, fetch `<track src>`, preserve placement — each
+one hands cues to **a page's own overlay**, and a plain `<video>` with `<track default>` has no page
+overlay, because a document with no player library never draws a caption itself. **The browser is
+supposed to.** Until this tick a cue that was parsed correctly, timed correctly and placed correctly
+reached the viewer as nothing at all, and every one of those six gates was green while it happened.
+
+### The three-crate join
+
+The painter is in Rust and **never sees the DOM** — `LayoutBox.node` is its only link, and no builder
+signature takes a `&Dom`. The caption state is in **JavaScript** — `el.__textTracks`,
+`el.__currentTime`, `track.mode` — because that is where the `TextTrack` API is. So the wire runs:
+
+```
+JS  el.__publishCues()          — the showing tracks' active cues
+ ↓  __setActiveCues(nodeId, json)
+Rust ACTIVE_CUES  (dom_bindings) — a thread-local, keyed by node
+ ↓  manuk_js::active_cues()
+     Page::caption_map()        — → manuk_paint::CaptionMap
+ ↓
+     caption_items(video_rect, cues) → Rect + Text display items
+```
+
+The last hop is the sanctioned channel the painter already uses for `images` and `z_index`: **a
+NodeId-keyed side map**, resolved by the page layer, which is the layer that can see both sides.
+
+`CueSettings`'s doc comment (tick 260) deferred pixel resolution to "a renderer that knows the video
+box". `caption_items` **is** that renderer, and it is where `auto` finally has to mean something.
+
+### Three things that are not details
+
+**`ACTIVE_CUES` is STATE, not a queue.** Every other host bridge here (`PENDING_HISTORY`,
+`PENDING_OPENS`) is drained by the host. A caption is on screen until it isn't; a paint that
+*consumed* the cue set would show each caption for exactly one frame and then blank the picture.
+The page overwrites a node's entry; the host reads without taking.
+
+**An empty array must be sent.** It is how a cue leaves the screen. A bridge that only ever added
+cues would burn the last caption of every video permanently into the frame.
+
+**`hidden` is not `disabled`, and this is where it finally bites.** `activeCues` answers for a hidden
+track — its cues are live, its `cuechange` still fires, so a page's own renderer keeps working — but
+`hidden` means *exactly* "do not display this", and it is the mode a player sets **when it draws
+captions itself**. So `__publishCues` filters on `mode === 'showing'`, and the `mode` setter publishes
+**unconditionally**: flipping `showing`→`hidden` leaves `activeCues` identical, so the cue-diff
+correctly sees no change and fires nothing — and the overlay would keep painting a caption the user
+just turned off.
+
+`VTTCue.line` also carries three things in one property — `'auto'`, a bare number (a **line count**,
+possibly negative), or a `'%'`-suffixed string. `Number('10%')` is `NaN`; `parseFloat` on a line count
+loses the distinction. Neither alone will do, and `line:0` reads correctly under both, which is what
+lets the bug survive.
+
+### RED probes — four, and one of them was VACUOUS
+
+| probe | result |
+|---|---|
+| drop the caption emit from `push_group` | RED — "the active auto-line cue was not painted at all" |
+| collapse `auto` to line 0 | RED — auto (21.6) not below `line:0` (21.6) |
+| publish `hidden` tracks too | RED — "a `hidden` track still painted" |
+| paint cues *before* the video | **GREEN — the assertion could not fail** |
+
+The paint-order check was written against `DisplayItem::Image`, and **a `<video>` with no poster
+decodes no bitmap**, so there was no Image item, the `if let Some(img_idx)` skipped the assertion
+entirely, and it passed under a probe that painted every caption behind the frame. This is the
+[[scripted-edit-silent-noop]] / vacuous-assertion class again, in its third distinct disguise across
+three ticks: tick 260 caught a substring assertion that matched the bug it was hunting, and here a
+conditional assertion whose condition was never true. **The fix is the same each time: make the thing
+you are asserting about exist unconditionally.** The video now carries `background:#123456`, the item
+is found by that exact colour (the captions emit `Rect`s too, so "the first Rect" would be wrong
+again), and the reversal probe goes RED at "the caption paints at 1, BEHIND the video at 4".
+
+Gate: `engine/page/tests/g_caption_paint.rs` (`G_CAPTION_PAINT`). `g_track_src`, `g_cue_change`,
+`g_text_tracks` and `manuk-media`'s `vtt_captions` all still green.
+
+### Residue
+
+The caption arc is closed end-to-end: a `<track default>` on a plain `<video>` is fetched, parsed,
+timed, placed and **drawn**. What remains is fidelity, not absence:
+
+- **`vertical: rl/lr` is painted horizontally.** Recorded on `CaptionCue` rather than dropped, so the
+  gap is visible; Japanese vertical subtitles are legible but wrongly laid out.
+- **Text width is estimated, not shaped** (`chars × font_size × 0.5`) — the display list carries plain
+  strings by design and shaping happens at raster time, so `align: end` and `size:` clipping are
+  approximate. This is the same stub-metrics problem as [[ch-ex-unit-fontmetrics-lever]].
+- **No cue box overlap avoidance** — two simultaneous cues with explicit equal `line` values collide.
+- **`DisplayList::damage_since` over-damages `Text`** (a hardcoded 4096px-wide box), so a caption
+  change repaints the row rather than the cue.

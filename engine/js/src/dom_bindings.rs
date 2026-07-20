@@ -6813,6 +6813,14 @@ pub unsafe fn install(
         1,
         0,
     );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__setActiveCues".as_ptr(),
+        host_fn!(set_active_cues),
+        2,
+        0,
+    );
     let platform = format!("{} {}", std::env::consts::OS, std::env::consts::ARCH);
     // JS string-literal-escape the document URL so it can't break out of the "%URL%" slot.
     let url_lit = {
@@ -10157,6 +10165,70 @@ unsafe fn post_message(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool
         PENDING_MESSAGES.with(|q| q.borrow_mut().push((target, json, origin, source)));
     }
     *vp = UndefinedValue();
+    true
+}
+
+use crate::ActiveCue;
+
+thread_local! {
+    /// The cues currently showing, per media element node id.
+    ///
+    /// **State, not a queue** — unlike `PENDING_HISTORY` and friends this is *not* drained by the
+    /// host. A caption is on screen until it isn't; a paint that consumed the set would show each
+    /// cue for exactly one frame and then blank the picture. The page overwrites a node's entry
+    /// every time its active set changes, and the host reads without taking.
+    static ACTIVE_CUES: std::cell::RefCell<
+        std::collections::HashMap<u64, Vec<ActiveCue>>
+    > = std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// The cues currently showing, per media element node id (host side, read-only snapshot).
+pub fn active_cues() -> std::collections::HashMap<u64, Vec<ActiveCue>> {
+    ACTIVE_CUES.with(|m| m.borrow().clone())
+}
+
+/// `__setActiveCues(nodeId, cuesJson)` — publish a media element's on-screen cue set to the host.
+///
+/// Called from `__syncTextTracks()`, which is already the single point where the active set can
+/// change (a `currentTime` write, a `mode` flip, an `addCue`/`removeCue`). Hooking anywhere else
+/// would mean re-deriving "did the active set change", which that function exists to answer.
+///
+/// An empty array is a meaningful value and must be sent: it is how a cue leaves the screen. A
+/// binding that only ever added cues would burn the last caption of every video permanently into
+/// the frame.
+unsafe fn set_active_cues(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let node: u64 = arg_string(cx, vp, argc, 0)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    let json = arg_string(cx, vp, argc, 1).unwrap_or_else(|| "[]".to_string());
+    *vp = UndefinedValue();
+    if node == 0 {
+        return true;
+    }
+    let parsed: Vec<ActiveCue> = match serde_json::from_str::<serde_json::Value>(&json) {
+        Ok(serde_json::Value::Array(a)) => a
+            .iter()
+            .map(|c| {
+                let num = |k: &str| c.get(k).and_then(|v| v.as_f64());
+                let s =
+                    |k: &str, d: &str| c.get(k).and_then(|v| v.as_str()).unwrap_or(d).to_string();
+                ActiveCue {
+                    text: s("text", ""),
+                    line: num("line"),
+                    line_is_percent: c.get("linePct").and_then(|v| v.as_bool()).unwrap_or(false),
+                    position: num("position"),
+                    size: num("size").unwrap_or(100.0),
+                    align: s("align", "center"),
+                    vertical: s("vertical", ""),
+                }
+            })
+            .collect(),
+        // Malformed input blanks the overlay rather than freezing the previous caption on screen.
+        _ => Vec::new(),
+    };
+    ACTIVE_CUES.with(|m| {
+        m.borrow_mut().insert(node, parsed);
+    });
     true
 }
 

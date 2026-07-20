@@ -1936,13 +1936,65 @@ const PRELUDE: &str = r#"
         };
         el.__syncTextTracks = function () {
           var tracks = el.__textTracks || [];
+          var changed = false;
           for (var i = 0; i < tracks.length; i++) {
             var tr = tracks[i];
             var now = tr.activeCues;
             if (sameCues(now, tr.__lastActive || [])) { continue; }
             tr.__lastActive = now;
+            changed = true;
             tr.__fire('cuechange');
           }
+          if (changed) { el.__publishCues(); }
+        };
+
+        // Hand the on-screen cue set to the UA's own caption overlay (the painter, in Rust).
+        //
+        // Only 'showing' tracks paint. `activeCues` deliberately answers for 'hidden' tracks too —
+        // a hidden track is one whose cues are live and whose `cuechange` still fires, so a page's
+        // own renderer keeps working — but 'hidden' means EXACTLY "do not display this", and it is
+        // the mode a player sets when it draws captions itself. Painting them would double every
+        // caption on every site that has a player.
+        el.__publishCues = function () {
+          if (el.__nodeId == null || !globalThis.__setActiveCues) { return; }
+          var out = [];
+          var tracks = el.__textTracks || [];
+          for (var i = 0; i < tracks.length; i++) {
+            var tr = tracks[i];
+            if (tr.mode !== 'showing') { continue; }
+            var act = tr.activeCues;
+            for (var j = 0; j < act.length; j++) {
+              var c = act[j];
+              // `VTTCue.line` carries THREE distinct things in one property, and each has to come
+              // apart correctly: 'auto', a bare number (a LINE COUNT, possibly negative), or a
+              // '%'-suffixed string (a percentage of the box). `Number('10%')` is NaN and
+              // `parseFloat` on a line count silently loses the distinction, so neither alone will
+              // do. Getting this wrong is invisible for `line:0` — which reads the same either way
+              // — and wrong for every other value.
+              var ln = c.line, lnPct = false, lnVal = null;
+              if (ln !== 'auto' && ln != null) {
+                if (typeof ln === 'string' && ln.charAt(ln.length - 1) === '%') {
+                  lnPct = true; lnVal = parseFloat(ln);
+                } else {
+                  lnVal = Number(ln);
+                }
+                if (!isFinite(lnVal)) { lnVal = null; lnPct = false; }
+              }
+              out.push({
+                text: String(c.text == null ? '' : c.text),
+                // 'auto' is the string the VTTCue API uses for what the parser calls null, and it
+                // must reach the renderer as null — `line: 0` is the top of the frame, `auto` is
+                // the bottom, so collapsing one into the other inverts the picture.
+                line: lnVal,
+                linePct: lnPct,
+                position: c.position === 'auto' || c.position == null ? null : Number(c.position),
+                size: c.size == null ? 100 : Number(c.size),
+                align: String(c.align || 'center'),
+                vertical: String(c.vertical || '')
+              });
+            }
+          }
+          try { globalThis.__setActiveCues(String(el.__nodeId), JSON.stringify(out)); } catch (e) {}
         };
 
         el.addTextTrack = function (kind, label, language) {
@@ -2008,6 +2060,11 @@ const PRELUDE: &str = r#"
               if (m !== 'disabled' && m !== 'hidden' && m !== 'showing') { return; }
               this.__mode = m;
               el.__syncTextTracks();
+              // ...and publish REGARDLESS of whether the active set changed. Flipping 'showing' to
+              // 'hidden' leaves `activeCues` identical — a hidden track's cues are still live — so
+              // `__syncTextTracks` correctly sees no change and fires nothing, and the overlay
+              // would keep painting a caption the user just turned off.
+              if (el.__publishCues) { el.__publishCues(); }
             }
           });
           Object.defineProperty(track, 'activeCues', {
