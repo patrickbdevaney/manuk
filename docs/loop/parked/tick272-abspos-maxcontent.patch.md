@@ -132,3 +132,77 @@ drift.
 scores 100% Chrome-exact and proves the engine is fine. Keep a `position:static` sibling in the same
 file — the control is what localises the bug to what `position:absolute` does to `max-content`,
 rather than to `max-content` itself.
+
+---
+
+## The cascade probe, run (tick 273) — narrowed to a reproducible repro, NOT yet fixed
+
+The step this document asked for is done. The divergence is real, it is reproducible in one command,
+and it is **not** where three plausible guesses said it was. Written down at the point it reached
+before a fix, because the eliminations are most of the work.
+
+### The measurement
+
+With **every `<link rel=stylesheet>` stripped** from the saved Terrier page, so the injected chunk is
+the only source of these rules, and reading our own computed `visibility` per element:
+
+```
+no CSS at all (control)                    Visible=8  Hidden=0     ← as expected
+.vector-dropdown .vector-dropdown-content{...visibility:hidden...}
+                                           Visible=0  Hidden=8     ← correct
+@media screen{ ...the identical rule... }  Visible=8  Hidden=0     ← WRONG
+```
+
+Same page, same rule, same engine. The only difference is the `@media screen { }` wrapper, and it
+loses the rule. Chrome computes `hidden` for all eight. This is why the parked patch regresses G6:
+those panels are supposed to be non-hit-testable, tick 272 taught the a11y tree to skip them, and
+they never get marked hidden in the first place.
+
+### What it is NOT — four eliminations, each measured
+
+- **Not `@media screen` in general.** A synthetic page with `@media screen`, `@media all`,
+  `@media (min-width)`, `@media screen and (min-width)` and `@media print` scores **100% against
+  Chrome**, print correctly excluded.
+- **Not descendant selectors inside `@media`.** `.p .c`, `.p > .c`, `div .c` and a bare class inside
+  `@media screen` are all 100% Chrome-exact on a synthetic page.
+- **Not the `:checked ~` sibling rule wrongly matching.** Tested with the live markup, including the
+  intervening `<label>` and the trailing space in `class="vector-dropdown-checkbox "`. Correct.
+- **Not a rule-count or stylesheet-size cap.** 8,000 synthetic rules (147KB) prepended: the rule
+  still applies.
+
+It needs the **live page**. A minimal reproduction on a synthetic document does not exist yet, and
+finding one is the next step.
+
+### ⚠ The harness bug that produced two false answers first
+
+My first two bisections both reported confident "minimal breaking regions" and **both were
+artifacts.** Two separate mistakes, worth naming because each is easy to repeat:
+
+1. **Injected CSS was ADDITIVE, not a replacement.** The page's own `<link rel=stylesheet>` elements
+   still loaded, so every chunk under test was appended to the full 206KB sheet. Chunks appeared to
+   "fix" the bug by adding a later equal-specificity rule that won on document order. Every
+   conclusion drawn before the links were stripped is void.
+2. **Cutting the stylesheet at any `}` splits `@media` blocks in half.** An unclosed brace changes
+   parsing arbitrarily, so the bisection was measuring its own truncation. The fix is a
+   brace-depth-aware, string-aware splitter that only cuts at depth 0 — and it is what finally
+   showed the rule was *inside* an `@media` block at all.
+
+**Every number has a harness, and the harness is part of the number.** Two independent harness
+defects in one probe, each producing a specific and plausible wrong answer.
+
+### The repro, for the next tick
+
+```
+python3 - <<'PY'
+import re
+h = open('/tmp/manuk-g6.html').read()                 # curl of en.wikipedia.org/wiki/Terrier
+open('/tmp/x.html','w').write(
+    re.sub(r'<link[^>]*rel="stylesheet"[^>]*>', '', h).replace(
+        '</head>',
+        '<style>@media screen{.vector-dropdown .vector-dropdown-content{visibility:hidden}}</style></head>'))
+PY
+```
+
+Then compare the computed `visibility` of `.vector-dropdown-content` with and without the `@media`
+wrapper. Removing the wrapper must be the only change that matters — if it still is, bisect the live
+page's **markup** (not its CSS: that ground is now covered), since the wrapper only fails there.
