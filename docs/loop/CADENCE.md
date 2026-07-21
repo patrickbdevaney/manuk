@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **121** | ticks 1–128 |
-| median tick cycle | **20m** | 120 intervals |
+| ticks landed | **122** | ticks 1–326 |
+| median tick cycle | **20m** | 121 intervals |
 | median, last 10 | **30m** | 10 intervals |
 | fastest / slowest | 3m / 5.4d | |
-| **ticks per hour** | **0.47** | 253.1h elapsed |
-| median verify wall | **56s** | 60 ticks |
-| wall trend | 39s → 51s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.48** | 253.9h elapsed |
+| median verify wall | **57s** | 61 ticks |
+| wall trend | 39s → 65s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**66 of 121 ticks** (55%) moved a
+**66 of 122 ticks** (54%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **66** capability ticks, median cycle **20m**
-* median diff per tick: **+254 / −24** lines across 8 files
+* median diff per tick: **+252 / −24** lines across 8 files
 
 ## Every tick
 
@@ -218,5 +218,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **126** | 2026-07-16 07:55 | 35m | Bar-0 | 51s | +71/−4 | 56 | 81 | 46.8% · | Bar-0 diagnosis: the css-values/calc-size interpolate-size SIGSEGV (tracked, not a regress |
 | **127** | 2026-07-16 08:33 | 38m | pattern-class | 48s | +222/−59 | 57 | 81 | 46.8% · | DOM validation throws are REAL `DOMException`s, not decorated `Error`s (+420 dom) |
 | **128** | 2026-07-21 18:07 | 5.4d | pattern-class | 68s | +431/−5 | 176 | 81 | 56.0% · | `Node.lookupPrefix` + the DocumentType namespace-lookup surface (+20 dom) |
+| **326** | 2026-07-21 18:54 | 47m | measurement | 65s | +1/−1 | 176 | 81 | 56.0% · | re-pin four stale "partial" constellation cells to gated (2026-07-21) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
