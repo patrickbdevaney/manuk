@@ -442,6 +442,11 @@
   - L1872 · Additive role plumbing, no new state path
   - L1889 · The teeth G_A11Y_ROLES uses
   - L1899 · Re-pin (tick 326): four "partial" cells were stale — the capability shipped, the record lagged
+  - L1927 · Selection API — a real, persistent, directional window.getSelection() (tick 328)
+  - L1935 · Backed by the real Range, not a second model
+  - L1946 · Direction is the one thing a Range wrapper gets wrong
+  - L1955 · Honest limit
+  - L1961 · The teeth G_SELECTION uses
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -815,4 +820,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-730 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+735 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

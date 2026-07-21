@@ -14644,3 +14644,49 @@ re-attempts hit all day. Work banked; lands with the parked batch on a warm re-r
 frees disk. Did not edit scripts/ or re-baseline the mark. UPDATE (landing invocation): the wall was
 CONTENTION, not disk — re-running verify.sh twice (cold-parity ~261s → warm 65s) lands the batch, exactly
 as the observer's 989a0db steer states.
+
+## Tick 328 — window.getSelection() is a real, persistent, directional Selection (2026-07-21)
+
+SELECTED: after tick 327's re-probe found every bounded lever already built, I hunted the "partial"
+cells for a GENUINE gap that is bounded + buildable + not layout-bound. `window.getSelection()` was a
+confirmed stub (event_loop.rs:2382 returned a FRESH inert object every call — rangeCount 0 forever,
+mutators no-ops, getSelection()!==getSelection()), while Range (range_js.rs) is fully real. So the
+programmatic Selection surface is buildable as pure delegation to an existing live Range — no new model,
+no hit-testing.
+
+WHAT LANDED: a single persistent Selection per window (globalThis.__selection), a real `Selection`
+constructor (removed from the inert-names list so it isn't shadowed — the AbortSignal lesson), built in
+an IIFE alongside the getSelection install; document.getSelection() returns the same object. It holds ONE
+live Range and delegates the whole programmatic surface: selectAllChildren / addRange / getRangeAt /
+collapse / collapseToStart|End / extend / setBaseAndExtent / removeAllRanges / deleteFromDocument /
+toString, plus getters anchorNode/anchorOffset/focusNode/focusOffset/rangeCount/isCollapsed/type.
+DIRECTION is the one thing a Range wrapper gets wrong: a Range normalises start<=end, a Selection is
+directional. __set(anchor,focus) picks order with a collapsed probe range's comparePoint, stores _dir
+fwd/bwd, and maps anchor/focus onto start/end — so extend() BEFORE the anchor is an honest backwards
+selection (anchor fixed, anchorOffset>focusOffset, toString still the text between).
+
+G_SELECTION (engine/page/tests/g_selection.rs): same (persistent singleton) / inst (instanceof Selection)
+/ none (empty state) / throws (getRangeAt(0) empty → IndexSizeError) / copyall (selectAllChildren+toString
+== 'line1\nline2', THE load-bearing copy-code-block claim) / range / allanchor / fwd / caret / fwdextend /
+backextend (anchor fixed while focus moves before it) / cleared / added / oneonly (second addRange ignored,
+Chrome one-range model). RED-PROVEN by cp-snapshot: restoring the fresh-inert stub → FAILED at "same:true"
+(and the whole surface collapses) while typeof getSelection stays a function; restored → GREEN.
+
+HONEST LIMIT: this is the SCRIPTING surface. User mouse-drag selection GEOMETRY (hit-testing a sweep
+across laid-out glyphs) is layout-bound and NOT modelled. Stated in the wiki, the pattern ledger and the
+constellation cell.
+
+NO REGRESSION: additive — only the getSelection stub is replaced and 'Selection' moved off the inert list.
+g_globals (Selection typeof/name) / g_range / g_text_selection all still GREEN; g_selection GREEN; fmt
+clean; manuk-js + manuk-page compile.
+
+TICK SHAPE: capability (agentic surface — the reading/copy-selection primitive). GATES +1 (g_selection).
+CONSTELLATION: doc 'find-in-page / selection' cell — Selection stub replaced by a real directional model.
+
+WIKI: docs/wiki/interaction-surface.md (Selection API section) + INDEX.md; docs/loop/WEB-PATTERNS.md
+(Selection API pattern). CONSTELLATION.tsv line 18 re-pinned ('Selection is a stub' was stale).
+
+HARNESS (one line, observer-owned — not touched): disk /home still ~94% (20G free < 25G hygiene floor),
+so the verify wall reads false-slow via the mid-wall prune race — same as tick 325/326/327. Work banked;
+lands with the parked batch on a warm re-run once the observer frees disk. UPDATE (landing invocation):
+the wall was CONTENTION not disk — verify.sh twice (cold-parity → warm ~65-70s) lands it (observer 989a0db).

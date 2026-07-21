@@ -2829,3 +2829,25 @@ the truth — a drag reads it back. **(2)** Fire `got`/`lostpointercapture` — 
 those hooks. **(3)** The host owns the live pointer pipeline, so a prelude shim cannot yet re-route
 stray moves outside the element — state that limit; retaining state + not throwing is the load-bearing
 part. **(4)** Gate by driving the false→true→false capture cycle and the got event, not `typeof`.
+
+## Selection API — programmatic getSelection (tick 328)
+
+**Pattern:** `var s = window.getSelection(); s.selectAllChildren(pre);
+navigator.clipboard.writeText(s.toString())` — copy-a-code-block / share-selection widgets; and
+editors that read `s.anchorNode`/`s.getRangeAt(0)` or drive `s.collapse`/`s.extend`/`s.setBaseAndExtent`.
+
+**The class this unlocks:** any script that reads or sets the document selection — "copy code" buttons,
+"copy link to highlight", rich-text editors tracking the caret/selection, `Notion`/docs-lite selection
+state. The calls are UNGUARDED, so the old stub's `toString()===''` made them fail SILENTLY (button
+copies nothing, nothing thrown).
+
+**The traps.** **(1)** ONE persistent object per window (`getSelection()===getSelection()`), not a fresh
+inert object per call — state must survive between two lines of a caller. **(2)** Back it with the real
+`Range` (`document.createRange`), don't build a second boundary-point model. **(3)** A Selection is
+DIRECTIONAL where a Range is normalised: track `_dir` so `extend()` before the anchor keeps the anchor
+fixed (`anchorOffset > focusOffset`) instead of silently swapping ends. **(4)** Real `Selection`
+constructor + remove it from the inert-names list so `instanceof` works and the stub doesn't shadow it
+(the AbortSignal lesson). **(5)** One-range model (a second `addRange` is ignored); `getRangeAt(0)` on
+empty THROWS `IndexSizeError`. **(6)** Honest limit: user mouse-drag selection GEOMETRY is layout/hit-
+test, not modelled — this is the scripting surface. **(7)** Gate by driving selectAllChildren→toString,
+the forward/backward extend, and addRange, not `typeof`.

@@ -1923,3 +1923,47 @@ record — no engine change, an instrument-fidelity tick, one of the ratchet's t
 is gated via `G_DROP_UPLOAD`; the editor half — `dragstart`/`setData`/`effectAllowed`/drag images for
 list-reordering — is genuinely unbuilt). A re-pin sweep that flips *everything* is how a stale record
 becomes a lying one; each flip here is backed by a gate that documents its own way to go red.
+
+## Selection API — a real, persistent, directional `window.getSelection()` (tick 328)
+
+`window.getSelection()` was a stub that returned a **fresh inert object on every call**: `rangeCount`
+0 forever, every mutator a no-op, `getSelection() !== getSelection()`. It passed a "does the method
+exist" check and failed every "did the method do anything" one. The canonical victim is a *copy-this-
+code-block* button — `sel.selectAllChildren(pre); clipboard.writeText(sel.toString())` — where
+`toString()` answered `''`, so the button copied nothing and threw nothing.
+
+### Backed by the real Range, not a second model
+
+The Selection is now a **single persistent object per window** (`globalThis.__selection`), built in an
+IIFE in `event_loop.rs` alongside the `getSelection` install, and `document.getSelection()` returns the
+same object. It holds one live `Range` (`range_js.rs` is real), so the whole programmatic surface —
+`selectAllChildren` / `addRange` / `getRangeAt` / `collapse` / `collapseToStart|End` / `extend` /
+`setBaseAndExtent` / `removeAllRanges` / `deleteFromDocument` / `toString` and the derived getters
+`anchorNode` / `anchorOffset` / `focusNode` / `focusOffset` / `rangeCount` / `isCollapsed` / `type` —
+is delegation to that Range plus a direction bit. `Selection` is a real constructor (removed from the
+inert-names list so it is not shadowed, the AbortSignal lesson), so `x instanceof Selection` is true.
+
+### Direction is the one thing a Range wrapper gets wrong
+
+A `Range` is normalised (`start <= end`); a `Selection` is directional — the **anchor** is the fixed
+end and the **focus** is the one `extend()` moves, and a user can drag left. `__set(anchor, focus)`
+decides order with a collapsed probe range's `comparePoint`, stores a `_dir` of `'fwd'`/`'bwd'`, and
+maps `anchorNode`/`focusNode` onto the range's start/end accordingly. So `extend()` *before* the anchor
+is an honest backwards selection: the anchor stays put, `anchorOffset > focusOffset`, and `toString()`
+is still the text between the points — where a naive `setEnd` would silently swap the ends.
+
+### Honest limit
+
+This is the **scripting** surface. The geometry of a **user mouse-drag** selection (hit-testing a
+sweep across laid-out glyphs) is a layout concern and is not modelled here — `getSelection()` reflects
+what scripts set, which is what editors, share widgets and "copy link/code" buttons drive.
+
+### The teeth `G_SELECTION` uses
+
+`same` (one persistent object, not a fresh stub per call), `inst` (real `Selection` instance),
+`copyall` (`selectAllChildren` + `toString` yields the element's text — the load-bearing claim),
+`fwd`/`caret`/`fwdextend` (offsets and collapse), `backextend` (anchor fixed while focus moves before
+it — the direction property a Range wrapper fails), `added`/`oneonly` (`addRange` adopts a range and a
+second is ignored, Chrome's one-range model), `throws` (`getRangeAt(0)` on an empty selection throws
+`IndexSizeError`). RED: restoring the fresh-inert stub drops `same`/`copyall`/`fwd`/`backextend`/
+`added`/`inst` together while `typeof getSelection === 'function'` stays green.

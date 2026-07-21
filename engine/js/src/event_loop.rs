@@ -2379,16 +2379,104 @@ const PRELUDE: &str = r#"
       }
 
       // `window.getSelection()` — editors and "copy link" widgets call it unconditionally.
+      //
+      // The old stub returned a FRESH inert object on every call: `rangeCount` was 0 forever, every
+      // mutator a no-op, and `getSelection() !== getSelection()`. The silent-failure shape is a "copy
+      // this code block" button that runs `sel.selectAllChildren(pre); navigator.clipboard.writeText(
+      // sel.toString())` — `toString()` answered `''`, so the button copied nothing and threw nothing.
+      //
+      // Now it is a SINGLE persistent Selection per window, backed by `document.createRange()`
+      // (range_js.rs is a real Range). The programmatic surface every editor and share widget drives —
+      // `selectAllChildren` / `addRange` / `collapse` / `extend` / `setBaseAndExtent` / `toString` —
+      // reflects and mutates a live range. What is NOT modelled: the geometry of a USER mouse-drag
+      // selection, which is a layout/hit-test concern, not a scripting one. A Selection is directional
+      // (anchor is the fixed end, focus the moving one) where a Range is not, so the direction is
+      // tracked here and `extend()` to the left of the anchor is an honest backwards selection.
+      (function () {
+        if (typeof globalThis.Selection !== 'undefined') { return; }
+        var Selection = function Selection() { this._r = null; this._dir = 'fwd'; };
+
+        // Rebuild the backing range from an anchor point and a focus point, deciding order HERE (a
+        // Range auto-normalises start<=end and would silently swap a backwards selection's ends).
+        Selection.prototype.__set = function (an, ao, fn, fo) {
+          if (an == null || fn == null) { this._r = null; return; }
+          var probe = document.createRange();
+          probe.setStart(an, ao || 0);
+          var fwd = true;
+          try { fwd = probe.comparePoint(fn, fo || 0) >= 0; } catch (e) { fwd = true; }
+          var r = document.createRange();
+          if (fwd) { r.setStart(an, ao || 0); r.setEnd(fn, fo || 0); this._dir = 'fwd'; }
+          else     { r.setStart(fn, fo || 0); r.setEnd(an, ao || 0); this._dir = 'bwd'; }
+          this._r = r;
+        };
+        var anchor = function (s) { return s._dir === 'fwd'
+          ? { n: s._r.startContainer, o: s._r.startOffset }
+          : { n: s._r.endContainer,   o: s._r.endOffset }; };
+        var focus = function (s) { return s._dir === 'fwd'
+          ? { n: s._r.endContainer,   o: s._r.endOffset }
+          : { n: s._r.startContainer, o: s._r.startOffset }; };
+
+        var sdef = function (name, get) {
+          Object.defineProperty(Selection.prototype, name, { get: get, configurable: true });
+        };
+        sdef('rangeCount',   function () { return this._r ? 1 : 0; });
+        sdef('isCollapsed',  function () { return !this._r || this._r.collapsed; });
+        sdef('type',         function () { return !this._r ? 'None' : (this._r.collapsed ? 'Caret' : 'Range'); });
+        sdef('anchorNode',   function () { return this._r ? anchor(this).n : null; });
+        sdef('anchorOffset', function () { return this._r ? anchor(this).o : 0; });
+        sdef('focusNode',    function () { return this._r ? focus(this).n : null; });
+        sdef('focusOffset',  function () { return this._r ? focus(this).o : 0; });
+
+        Selection.prototype.getRangeAt = function (i) {
+          if (i !== 0 || !this._r) { throw new DOMException('index out of range', 'IndexSizeError'); }
+          return this._r;
+        };
+        // Chrome keeps at most one range; a second addRange is ignored rather than throwing.
+        Selection.prototype.addRange = function (range) {
+          if (this._r || !range) { return; }
+          this._r = range.cloneRange ? range.cloneRange() : range;
+          this._dir = 'fwd';
+        };
+        Selection.prototype.removeAllRanges = function () { this._r = null; };
+        Selection.prototype.empty = function () { this._r = null; };
+        Selection.prototype.removeRange = function (range) { if (range === this._r) { this._r = null; } };
+        Selection.prototype.collapse = function (node, offset) {
+          if (node == null) { this._r = null; return; }
+          this.__set(node, offset || 0, node, offset || 0);
+        };
+        Selection.prototype.setPosition = Selection.prototype.collapse;
+        Selection.prototype.collapseToStart = function () {
+          if (!this._r) { throw new DOMException('no range to collapse', 'InvalidStateError'); }
+          this.__set(this._r.startContainer, this._r.startOffset, this._r.startContainer, this._r.startOffset);
+        };
+        Selection.prototype.collapseToEnd = function () {
+          if (!this._r) { throw new DOMException('no range to collapse', 'InvalidStateError'); }
+          this.__set(this._r.endContainer, this._r.endOffset, this._r.endContainer, this._r.endOffset);
+        };
+        Selection.prototype.extend = function (node, offset) {
+          var a = this._r ? anchor(this) : { n: node, o: offset || 0 };
+          this.__set(a.n, a.o, node, offset || 0);
+        };
+        Selection.prototype.setBaseAndExtent = function (an, ao, fn, fo) { this.__set(an, ao, fn, fo); };
+        Selection.prototype.selectAllChildren = function (node) {
+          var r = document.createRange();
+          r.selectNodeContents(node);
+          this._r = r; this._dir = 'fwd';
+        };
+        Selection.prototype.deleteFromDocument = function () { if (this._r) { this._r.deleteContents(); } };
+        Selection.prototype.toString = function () { return this._r ? this._r.toString() : ''; };
+
+        globalThis.Selection = Selection;
+      })();
+
       if (typeof globalThis.getSelection === 'undefined') {
         globalThis.getSelection = function () {
-          return {
-            rangeCount: 0, isCollapsed: true, type: 'None', anchorNode: null, focusNode: null,
-            toString: function () { return ''; },
-            removeAllRanges: function () {}, addRange: function () {}, getRangeAt: function () { return null; },
-            collapse: function () {}, selectAllChildren: function () {}
-          };
+          if (!globalThis.__selection) { globalThis.__selection = new globalThis.Selection(); }
+          return globalThis.__selection;
         };
       }
+      // `document.getSelection()` is the same object as `window.getSelection()` per spec.
+      if (typeof document.getSelection !== 'function') { document.getSelection = globalThis.getSelection; }
 
       // ── **The interface surface.** Every name here is one a bundle may *reference* — in an
       //    `instanceof`, a `typeof`, a prototype patch — and **a referenced name that does not exist is a
@@ -2441,7 +2529,7 @@ const PRELUDE: &str = r#"
         'HTMLSourceElement', 'HTMLPictureElement', 'HTMLTemplateElement', 'HTMLSlotElement',
         'SVGSVGElement', 'SVGGraphicsElement',
         // Misc platform objects
-        'MessagePort', 'Range', 'Selection', 'DOMTokenList', 'NamedNodeMap', 'Attr',
+        'MessagePort', 'Range', 'DOMTokenList', 'NamedNodeMap', 'Attr',
         'CSSRule', 'CSSStyleRule', 'MediaQueryList', 'PerformanceEntry', 'IdleDeadline',
         'Screen', 'History', 'Location', 'VisualViewport'
       ].forEach(function (n) { __inertNames.push(n); });

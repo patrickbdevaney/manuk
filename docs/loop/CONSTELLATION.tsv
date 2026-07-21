@@ -15,7 +15,7 @@ doc	images: AVIF	modern sites serve it first	missing	-	MEASURED t237 (was NEVER 
 doc	srcset / <picture>	2x displays get 1x images	works	-	capability-probe.html
 doc	SVG (inline + <img>)	icons everywhere	partial	-	renders; namespaces not modelled
 doc	lazy loading (loading=lazy + IO)	feeds load the whole timeline	gated	G_VIEWPORT	tick ~59
-doc	find-in-page / selection	reading is not passive	partial	G_RANGE	Range works; Selection is a stub
+doc	find-in-page / selection	reading is not passive	partial	G_RANGE, G_SELECTION	tick 328: 'Selection is a stub' is now FALSE — window.getSelection() is a real persistent directional Selection over a live Range (selectAllChildren/toString/collapse/extend/setBaseAndExtent/addRange, anchor≠focus direction, one-range model); the copy-code-block path works. STILL partial: find-in-page UI and USER mouse-drag selection GEOMETRY (layout hit-test across glyphs) are unmodelled — this is the scripting surface only.
 doc	print / media queries	every 'print this page'	gated	G_PROBE_CAPABILITIES	tick 225 probe: @media screen applies, @media print does not; matchMedia agrees
 doc	multicol	academic + news layout	missing	-	tick 225 probe: column-count produces no column boxes
 doc	accessibility / semantic tree	screen readers, agent observation, our own hit-testing	partial	-	manuk-a11y (1.3k LOC): role+accessible-name+geometry+hit-test, feeds the agent. NO AccessKit platform bridge yet. Constitution I3 — the moat, already load-bearing

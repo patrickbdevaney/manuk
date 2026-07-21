@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **123** | ticks 1–327 |
-| median tick cycle | **20m** | 122 intervals |
+| ticks landed | **124** | ticks 1–328 |
+| median tick cycle | **20m** | 123 intervals |
 | median, last 10 | **29m** | 10 intervals |
 | fastest / slowest | 3m / 5.4d | |
-| **ticks per hour** | **0.48** | 253.9h elapsed |
-| median verify wall | **58s** | 62 ticks |
-| wall trend | 39s → 68s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.48** | 254.2h elapsed |
+| median verify wall | **58s** | 63 ticks |
+| wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **176**
+* **live gates**: 27 → **177**
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**66 of 123 ticks** (54%) moved a
+**67 of 124 ticks** (54%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **66** capability ticks, median cycle **20m**
-* median diff per tick: **+251 / −23** lines across 8 files
+* **67** capability ticks, median cycle **20m**
+* median diff per tick: **+252 / −23** lines across 8 files
 
 ## Every tick
 
@@ -220,5 +220,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **128** | 2026-07-21 18:07 | 5.4d | pattern-class | 68s | +431/−5 | 176 | 81 | 56.0% · | `Node.lookupPrefix` + the DocumentType namespace-lookup surface (+20 dom) |
 | **326** | 2026-07-21 18:54 | 47m | measurement | 65s | +1/−1 | 176 | 81 | 56.0% · | re-pin four stale "partial" constellation cells to gated (2026-07-21) |
 | **327** | 2026-07-21 18:57 | 3m | measurement | 70s | +56/−6 | 176 | 81 | 56.0% · | re-probe: the map was stale in FIVE places; re-pin 3 verified cells (2026-07-21) |
+| **328** | 2026-07-21 19:17 | 19m | capability | 67s | +350/−12 | 177 | 81 | 56.0% · | window.getSelection() is a real, persistent, directional Selection (2026-07-21) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
