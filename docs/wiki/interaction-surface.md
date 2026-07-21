@@ -1413,3 +1413,40 @@ method defined on it is inherited by every element that exists now or is created
 it), `finishedresolved` (recorded from inside `.then`, so it proves the microtask fast-forward ran),
 `endstate` (`fill:forwards` lands the final keyframe in `getComputedStyle().opacity`), `cancelrejected`
 (`cancel()` → `finished` rejects `AbortError`). RED: disabling the shim drops them together.
+
+## `navigator.geolocation` — honest denial, not a `TypeError` (tick 311)
+
+The Geolocation API — `navigator.geolocation.getCurrentPosition(success, error)` — is called directly
+from a load or click handler by weather sites, store locators, delivery/ride apps and "near me" search.
+It was absent.
+
+### The failure without it is a dead handler
+
+In a real browser `navigator.geolocation` is ALWAYS present, so this code does not feature-detect the
+object. Its absence therefore does not degrade gracefully: `navigator.geolocation` is `undefined`,
+`undefined.getCurrentPosition` throws a `TypeError`, and the throw takes the rest of that handler — and
+often the page's boot — with it. The same silent-handler failure as a missing `element.animate`.
+
+### No location provider, so it denies — self-consistently
+
+We have no way to determine location, and we already model the geolocation PERMISSION as `'denied'`
+(the `PERM_STATE` table behind `navigator.permissions.query`). The honest answer is therefore the one a
+user who declines the prompt gives, delivered in the shape the API promises: fail ASYNCHRONOUSLY with a
+`GeolocationPositionError` whose `code` is `PERMISSION_DENIED` (1). This is not a stub that pretends —
+inventing coordinates would be the dishonest path — and it cannot contradict `permissions.query`, which
+answers `'denied'` for the same feature one layer up. The site's error branch runs and it shows its
+manual "enter your location" fallback instead of dying on an unguarded property access.
+
+The shim (in `WINDOW_PRELUDE`, right after the permissions block) provides `getCurrentPosition`,
+`watchPosition` (returns a numeric id for `clearWatch`, and reports the denial once), `clearWatch`, the
+`GeolocationPositionError` constructor with its constants on both the instance and the constructor, and
+named `GeolocationPosition`/`GeolocationCoordinates` interfaces so `instanceof` checks do not throw.
+
+### The teeth `G_GEOLOCATION` uses
+
+`defined` (object + the three methods, and the call does not throw synchronously), `denied` (the error
+callback fires with `code === 1 === err.PERMISSION_DENIED`, constants readable), `asyncorder` (the line
+after `getCurrentPosition()` runs before the callback — delivery is asynchronous), `watchid`
+(`watchPosition` returns a number), `permconsistent` (matches `permissions.query({name:'geolocation'})`
+→ `'denied'`). RED: flipping the install guard to `false` throws `undefined.getCurrentPosition` and
+drops `defined`/`denied`/`asyncorder` together.

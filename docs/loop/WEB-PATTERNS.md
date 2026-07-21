@@ -2662,3 +2662,26 @@ with an `AbortError`; animation-racing code unwinds on it. **(4)** Install eleme
 (absent early in the prelude) or `g.HTMLElement.prototype` (a disconnected fresh constructor) — both miss
 every instance. **(5)** `typeof el.animate === 'function'` is what a stub passes; gate by driving it and
 reading the resulting computed style.
+
+## Location — `navigator.geolocation`, and the honest denial (tick 311)
+
+**Pattern:** `navigator.geolocation.getCurrentPosition(pos => useIt(pos.coords), err => fallback())` —
+called straight from a load or click handler by weather sites, store locators, delivery/ride apps and
+"near me" search. Also `id = navigator.geolocation.watchPosition(...)` / `clearWatch(id)`.
+
+**The class this unlocks:** location-aware sites. Real code does NOT feature-detect the object (in a
+real browser it is always present), so a missing `navigator.geolocation` is `undefined` and
+`undefined.getCurrentPosition` throws a TypeError out of the handler — the whole interaction (and often
+boot) dies.
+
+**The traps.** **(1)** There is no location provider, so DO NOT invent coordinates — that is the
+dishonest path. Fail instead, and fail with the answer the permission layer already gives: we model the
+geolocation permission as `'denied'`, so the error `code` is `PERMISSION_DENIED` (1), self-consistent
+with `navigator.permissions.query({name:'geolocation'})`. A browser is allowed to be unusual; it is not
+allowed to contradict itself. **(2)** Delivery is ASYNCHRONOUS — invoke the error callback on a later
+turn (microtask), never synchronously inside `getCurrentPosition()`, or code relying on the ordering
+breaks. **(3)** Put the interface constants (`PERMISSION_DENIED`/`POSITION_UNAVAILABLE`/`TIMEOUT`) on
+BOTH the error instance and the constructor — real code branches on `err.code === err.PERMISSION_DENIED`.
+**(4)** `watchPosition` still returns a numeric id so `clearWatch(id)` and the store-the-id pattern work.
+**(5)** `typeof navigator.geolocation === 'object'` is what an inert stub passes; gate by DRIVING
+`getCurrentPosition` and asserting the async error branch runs with the right code.

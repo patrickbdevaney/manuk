@@ -386,6 +386,10 @@
   - L1382 · No compositor timeline, so it fast-forwards — honestly
   - L1400 · The install-site gotcha (the one that cost three probes)
   - L1410 · The teeth G_WEB_ANIMATIONS uses
+  - L1417 · navigator.geolocation — honest denial, not a TypeError (tick 311)
+  - L1423 · The failure without it is a dead handler
+  - L1430 · No location provider, so it denies — self-consistently
+  - L1445 · The teeth G_GEOLOCATION uses
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -759,4 +763,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-674 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+678 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

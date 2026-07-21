@@ -11575,6 +11575,61 @@ const WINDOW_PRELUDE: &str = r#"
                 }
             };
         }
+        // `navigator.geolocation` — the Geolocation API. Weather sites, store locators, delivery and
+        // ride apps, and "near me" search all call `navigator.geolocation.getCurrentPosition(...)`
+        // straight out of a load or click handler, and — unlike most capabilities — they do NOT guard
+        // the object first, because in a real browser it is ALWAYS present. So its absence is not a
+        // quiet no-op: `navigator.geolocation` is `undefined`, `undefined.getCurrentPosition` throws a
+        // TypeError, and the throw takes the rest of that handler (and often the page's boot) with it.
+        //
+        // We have no location provider, and we already model the geolocation PERMISSION as `'denied'`
+        // (see `PERM_STATE` above). The honest, self-consistent answer is therefore the same one a
+        // user who declines the prompt gives: fail ASYNCHRONOUSLY with a `GeolocationPositionError`
+        // whose `code` is `PERMISSION_DENIED` (1). That is not a stub that pretends — it is exactly
+        // what the permission layer says one line up, delivered in the shape the API promises, so a
+        // site's error branch runs and it shows its manual "enter your location" fallback instead of
+        // dying on an unguarded property access. Inventing coordinates would be the dishonest path.
+        if (g.navigator && !g.navigator.geolocation) {
+            // The error object carries the interface's numeric constants both as instance properties
+            // and on the constructor — real code branches on `err.code === err.PERMISSION_DENIED`.
+            var GeolocationPositionError = function GeolocationPositionError(code, message) {
+                this.code = code; this.message = message || '';
+            };
+            GeolocationPositionError.prototype.PERMISSION_DENIED = 1;
+            GeolocationPositionError.prototype.POSITION_UNAVAILABLE = 2;
+            GeolocationPositionError.prototype.TIMEOUT = 3;
+            GeolocationPositionError.PERMISSION_DENIED = 1;
+            GeolocationPositionError.POSITION_UNAVAILABLE = 2;
+            GeolocationPositionError.TIMEOUT = 3;
+            g.GeolocationPositionError = g.GeolocationPositionError || GeolocationPositionError;
+            // Named, empty position interfaces so `instanceof`/feature checks against them do not throw
+            // (nothing ever constructs one, because we never succeed).
+            g.GeolocationPosition = g.GeolocationPosition || function GeolocationPosition() {};
+            g.GeolocationCoordinates = g.GeolocationCoordinates || function GeolocationCoordinates() {};
+            var __geoDeny = function (errorCb) {
+                // Async, exactly like the real API — the caller's success/error branch must run on a
+                // later turn, never synchronously inside getCurrentPosition().
+                if (typeof errorCb === 'function') {
+                    Promise.resolve().then(function () {
+                        try {
+                            errorCb(new GeolocationPositionError(
+                                1, 'User denied Geolocation'));
+                        } catch (e) {}
+                    });
+                }
+            };
+            var __geoWatchSeq = 0;
+            g.navigator.geolocation = {
+                getCurrentPosition: function (success, error) { __geoDeny(error); },
+                // A watch would deliver repeated updates; with no provider it can only report the same
+                // denial once and then stay silent. It still returns a numeric id so `clearWatch(id)`
+                // and the "store the watch id" pattern work.
+                watchPosition: function (success, error) {
+                    var id = ++__geoWatchSeq; __geoDeny(error); return id;
+                },
+                clearWatch: function () {}
+            };
+        }
         // window.open → the host opens a real tab/window (OAuth-popup pattern). Returns a
         // stub window handle so `var w = window.open(...)` and `w.close()` work.
         if (typeof g.open !== 'function') {

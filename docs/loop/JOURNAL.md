@@ -13973,3 +13973,43 @@ WIKI: docs/wiki/interaction-surface.md (Web Animations API section).
   wall, then `./scripts/tick.sh .git/tick310-ready.msg`. Also PROBED mandate item (C) canvas fillText: it is
   ALREADY DONE — fully wired swash raster -> tiny_skia Pixmap, gated by G_CANVAS_TEXT (engine/js/src/canvas.rs
   fill_text:591, engine/page/tests/g_canvas_text.rs). Stale board row; no tick needed.
+
+## Tick 311 — navigator.geolocation: honest denial, not a TypeError (2026-07-21)
+
+SELECTED: re-probed the board CO-#1 (4) "completeness identity" cluster FIRST (process rule #2) and
+found it ALREADY DONE — navigator.permissions.query, document.visibilityState/hidden,
+navigator.userAgentData, Notification, navigator.clipboard.read all present (stale board, [[board-and-constellation-stale]]).
+A JS-surface probe of the genuinely-missing set found navigator.geolocation absent (also
+mediaDevices/geolocation/connection/storage.estimate/deviceMemory). CSS levers (container queries,
+@scope — both confirmed dropped in the cascade by probe) live in Stylo (crates.io, can't fork), so the
+controllable high-value pick is geolocation.
+
+WHY IT MATTERS: weather sites, store locators, delivery/ride apps and "near me" search call
+`navigator.geolocation.getCurrentPosition(success, error)` DIRECTLY from a load/click handler — they do
+NOT guard the object, because in a real browser it is always present. So its absence is not a quiet
+no-op: `undefined.getCurrentPosition` throws a TypeError that takes the handler (and often boot) down.
+
+WHAT LANDED (dom_bindings.rs WINDOW_PRELUDE, right after the permissions block): navigator.geolocation
+with getCurrentPosition / watchPosition / clearWatch, plus GeolocationPositionError (with the
+PERMISSION_DENIED/POSITION_UNAVAILABLE/TIMEOUT constants on both instance and constructor) and named
+GeolocationPosition/GeolocationCoordinates. We have no location provider AND already model the
+geolocation permission as 'denied' (PERM_STATE), so the honest, self-consistent behavior is to fail
+ASYNCHRONOUSLY with code PERMISSION_DENIED(1) — the same answer the permission layer gives, in the
+shape the API promises. Not a stub that pretends: inventing coordinates would be the dishonest path.
+watchPosition returns a numeric id (for clearWatch) and reports the denial once.
+
+G_GEOLOCATION: defined (object + 3 methods, no sync throw) / denied (error cb fires with code 1 ===
+err.PERMISSION_DENIED, constants readable) / asyncorder (the line after getCurrentPosition runs before
+the callback) / watchid (numeric) / permconsistent (matches permissions.query({name:'geolocation'}) ===
+'denied') / ready. RED-proven: flipping the install guard to `false` → `THREW:TypeError: can't access
+property "getCurrentPosition", geo is undefined` and defined/denied/asyncorder all drop.
+
+NO REGRESSION: additive JS prelude; all prior gates green. New CONSTELLATION platform-class row gated.
+
+HARNESS NOTE (observer-owned, not debugged): the wall receipt was stale-banked at 384s unattributed
+from 08:16 (box busy then); tick.sh's pre-flight ratchet reads that receipt and dies BEFORE its own
+internal verify, so re-running tick.sh alone kept refusing. Fix per [[wall-warm-rerun-lands-ticks]]:
+run scripts/verify.sh DIRECTLY first (re-measured 64s on the quiet box, re-banked green), THEN tick.sh.
+Landed both t310 and t311 this way. No harness files touched.
+
+WIKI: docs/wiki/interaction-surface.md (Geolocation section).
