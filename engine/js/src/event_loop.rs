@@ -1514,7 +1514,20 @@ const PRELUDE: &str = r#"
           for (var i = 0; i < s.length; i++) { v[i] = s.charCodeAt(i) & 0xff; }
           return Promise.resolve(buf);
         };
-        globalThis.Blob.prototype.stream = function () { return null; };
+        // `blob.stream()` — a real ReadableStream of the blob's BYTES (a `Uint8Array` chunk), not the
+        // `null` it used to return. This is what lets `blob.stream().pipeThrough(new TextDecoderStream())`
+        // read a File/Blob incrementally, and it composes with the streams made real in ticks 298/299.
+        globalThis.Blob.prototype.stream = function () {
+          var s = String(this.__blobText);
+          return new globalThis.ReadableStream({
+            start: function (c) {
+              var buf = new Uint8Array(s.length);
+              for (var i = 0; i < s.length; i++) { buf[i] = s.charCodeAt(i) & 0xff; }
+              c.enqueue(buf);
+              c.close();
+            }
+          });
+        };
       }
       if (typeof globalThis.File === 'undefined') {
         globalThis.File = function File(parts, name, opts) {

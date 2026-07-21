@@ -13634,3 +13634,26 @@ NO REGRESSION: additive globals. Not a trade. HONEST LIMIT: inherits the simplif
 underlying streams.
 
 WIKI: docs/wiki/networking.md (TextDecoderStream/TextEncoderStream section). No constellation row.
+
+## Tick 300 — Blob.stream(): a real byte stream, not null (2026-07-21)
+
+TICK SHAPE: probe-first surfaced that `Blob.prototype.stream` returned `null` (inert) — the last inert
+piece of the streams story, now fixable because ticks 298/299 made ReadableStream/TransformStream/
+TextDecoderStream real. A capstone that ties the streams work to Blob/File.
+
+HYPOTHESIS: `file.stream()` / `blob.stream().pipeThrough(new TextDecoderStream())` read a File/Blob
+incrementally. The `null` return threw `can't access property 'getReader' of null`.
+
+WHAT LANDED (event_loop.rs): `blob.stream()` returns a real ReadableStream whose single chunk is a
+Uint8Array of the blob's bytes (from `__blobText`, one code unit per byte).
+
+### The claim — G_BLOB_STREAM, three teeth
+
+is-stream (real ReadableStream, not null) / bytes ('hello' → 104,101,108,108,111) / pipe-decode
+(blob.stream().pipeThrough(new TextDecoderStream()) → the text). PROVEN RED: restoring the `null` return
+→ `is-stream:false`, read throws. g_blob_url stayed green.
+
+NO REGRESSION: replaces an inert `return null` with a real stream. Not a trade. Tick 300 milestone —
+14 completeness ticks this session (286-300), streams family complete.
+
+WIKI: docs/wiki/networking.md (Blob.stream section). No constellation row (JS-surface completeness).

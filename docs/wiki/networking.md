@@ -1102,3 +1102,16 @@ remainder on close; `TextEncoderStream` encodes each string chunk to UTF-8 bytes
 mojibake halves (the streaming boundary is honoured, not decoded chunk-independently) — and `encode` —
 a string chunk becomes the right UTF-8 bytes. Deleting the block was demonstrated to make the pipe throw
 `TextDecoderStream is not defined`. [[js-engine]]
+
+## `Blob.stream()` — a real byte stream, not null (tick 300)
+
+`blob.stream()` used to return `null` — inert. It now returns a real `ReadableStream` whose single chunk
+is a `Uint8Array` of the blob's bytes, so `blob.stream().getReader()` reads the contents incrementally
+and `blob.stream().pipeThrough(new TextDecoderStream())` reads a File/Blob as decoded text. This composes
+with the stream pipeline made real in ticks 298/299 — the whole point of the `stream()` method.
+
+### The teeth `G_BLOB_STREAM` uses
+
+`is-stream` (returns a real ReadableStream with `getReader`, not `null`), `bytes` (`'hello'` yields the
+bytes `104,101,108,108,111`), `pipe-decode` (`blob.stream().pipeThrough(new TextDecoderStream())`
+decodes back to the text). Restoring the `null` return was demonstrated to make the read throw. [[js-engine]]

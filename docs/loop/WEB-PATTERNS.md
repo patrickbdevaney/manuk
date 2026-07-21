@@ -2487,3 +2487,17 @@ split across a chunk boundary constantly, and decoding each chunk independently 
 halves; hold the partial sequence back and prepend it to the next chunk. **(2)** Flush on close — the
 last held bytes must still emit. **(3)** It is a real `TransformStream` — `pipeThrough` returns its
 readable, so the decoded stream composes with the rest of the pipeline.
+
+## Reading a File/Blob as a stream — `Blob.stream()` (tick 300)
+
+**Pattern:** `for await (const chunk of file.stream()) hash.update(chunk)` and
+`blob.stream().pipeThrough(new TextDecoderStream())` — a file upload or a downloaded blob is processed
+incrementally without loading it all into memory at once.
+
+**The class this unlocks:** blob/file streaming. `blob.stream()` returned `null`, so any code that read
+or piped it threw `can't access property 'getReader' of null`.
+
+**The traps.** **(1)** Return a real `ReadableStream`, not `null` and not an inert look-alike — the chunk
+must be the blob's actual `Uint8Array` bytes. **(2)** It must compose: `pipeThrough`/`pipeTo` on the
+returned stream have to work, since streaming a blob into a decoder or a hash is the whole use. **(3)**
+Bytes, not code units — a binary blob's stream carries `0..255` byte values, not UTF-16 units.
