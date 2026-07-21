@@ -41,6 +41,24 @@ pub struct ObjectStore {
     pub next_key: i64,
     /// encoded-sortable-key → (original key JSON, value JSON)
     pub records: BTreeMap<String, Record>,
+    /// This store's indexes, by name. `#[serde(default)]` so a database written before indexes
+    /// existed loads with none rather than failing to parse (ADR-009 — migrate, never discard).
+    #[serde(default)]
+    pub indexes: BTreeMap<String, Index>,
+}
+
+/// One index over an object store: which value property it keys on, and its constraints. Persisted
+/// WITH the store so `store.index(name)` resolves on a reopened database — where no `versionchange`
+/// fires and `createIndex` therefore never re-runs. A compound (array) key path round-trips through
+/// `key_path` as its JSON text; the shim parses a leading `[` back to an array.
+#[derive(Clone, Default, Serialize, Deserialize)]
+pub struct Index {
+    /// The value property the index keys on (`"email"`, `"a.b"`, or `"[\"a\",\"b\"]"` for compound).
+    pub key_path: String,
+    /// Reject two records that resolve to the same index key.
+    pub unique: bool,
+    /// An array index-key value expands to one index entry per element.
+    pub multi_entry: bool,
 }
 
 /// A stored record. The key is kept in its original JSON form so `IDBRequest.result` and
@@ -135,10 +153,14 @@ pub fn open(origin: &str, db: &str) -> Database {
         .clone()
 }
 
+/// One store as it stands after `onupgradeneeded`: name, keyPath, autoIncrement, and its full index
+/// set. The shim sends the store's CURRENT indexes on every upgrade call, so this set is authoritative.
+pub type StoreDef = (String, String, bool, BTreeMap<String, Index>);
+
 /// Commit an upgrade transaction: the new version plus the stores as they stand after the page's
 /// `onupgradeneeded` handler ran. Stores absent from `keep` were deleted by the handler and their
 /// records go with them.
-pub fn commit_upgrade(origin: &str, db: &str, version: u64, stores: Vec<(String, String, bool)>) {
+pub fn commit_upgrade(origin: &str, db: &str, version: u64, stores: Vec<StoreDef>) {
     let Ok(mut s) = state().lock() else {
         return;
     };
@@ -150,9 +172,9 @@ pub fn commit_upgrade(origin: &str, db: &str, version: u64, stores: Vec<(String,
         .entry(db.to_string())
         .or_default();
     entry.version = version;
-    let keep: Vec<&String> = stores.iter().map(|(n, _, _)| n).collect();
+    let keep: Vec<&String> = stores.iter().map(|(n, _, _, _)| n).collect();
     entry.stores.retain(|name, _| keep.contains(&name));
-    for (name, key_path, auto_increment) in &stores {
+    for (name, key_path, auto_increment, indexes) in &stores {
         let st = entry.stores.entry(name.clone()).or_default();
         // A store that already existed keeps its records and its counter; only a NEW store takes
         // its options from this call. Re-applying options to a live store would silently rewrite
@@ -162,6 +184,10 @@ pub fn commit_upgrade(origin: &str, db: &str, version: u64, stores: Vec<(String,
             st.auto_increment = *auto_increment;
             st.next_key = 1;
         }
+        // Indexes, unlike the keyPath, CAN be added to or dropped from a store that already holds
+        // records (a later `versionchange` calling `createIndex`/`deleteIndex`), so the full set is
+        // re-applied every upgrade. The shim always sends the current set, so this is add+remove both.
+        st.indexes = indexes.clone();
     }
     s.dirty = true;
 }
@@ -371,7 +397,12 @@ mod tests {
     #[test]
     fn upgrade_creates_stores_and_records_survive_a_later_upgrade() {
         let o = "https://idb-one.test";
-        commit_upgrade(o, "app", 1, vec![("notes".into(), "id".into(), true)]);
+        commit_upgrade(
+            o,
+            "app",
+            1,
+            vec![("notes".into(), "id".into(), true, Default::default())],
+        );
         assert_eq!(open(o, "app").version, 1);
 
         assert_eq!(
@@ -394,8 +425,8 @@ mod tests {
             "app",
             2,
             vec![
-                ("notes".into(), "id".into(), true),
-                ("tags".into(), String::new(), false),
+                ("notes".into(), "id".into(), true, Default::default()),
+                ("tags".into(), String::new(), false, Default::default()),
             ],
         );
         assert_eq!(open(o, "app").version, 2);
@@ -403,7 +434,12 @@ mod tests {
         assert!(next_auto_key(o, "app", "notes") > k, "counter must advance");
 
         // A store dropped from the upgrade is really gone.
-        commit_upgrade(o, "app", 3, vec![("tags".into(), String::new(), false)]);
+        commit_upgrade(
+            o,
+            "app",
+            3,
+            vec![("tags".into(), String::new(), false, Default::default())],
+        );
         assert!(open(o, "app").stores.get("notes").is_none());
     }
 
@@ -411,8 +447,18 @@ mod tests {
     fn add_refuses_an_existing_key_and_origins_cannot_see_each_other() {
         let a = "https://idb-a.test";
         let b = "https://idb-b.test";
-        commit_upgrade(a, "d", 1, vec![("s".into(), String::new(), false)]);
-        commit_upgrade(b, "d", 1, vec![("s".into(), String::new(), false)]);
+        commit_upgrade(
+            a,
+            "d",
+            1,
+            vec![("s".into(), String::new(), false, Default::default())],
+        );
+        commit_upgrade(
+            b,
+            "d",
+            1,
+            vec![("s".into(), String::new(), false, Default::default())],
+        );
         assert_eq!(put(a, "d", "s", "sk", "\"k\"", "1", true), PutResult::Ok);
         assert_eq!(
             put(a, "d", "s", "sk", "\"k\"", "2", true),
@@ -429,7 +475,12 @@ mod tests {
     #[test]
     fn records_come_back_in_encoded_key_order() {
         let o = "https://idb-order.test";
-        commit_upgrade(o, "d", 1, vec![("s".into(), String::new(), false)]);
+        commit_upgrade(
+            o,
+            "d",
+            1,
+            vec![("s".into(), String::new(), false, Default::default())],
+        );
         for k in ["n003", "n001", "n002"] {
             put(o, "d", "s", k, "0", "v", false);
         }
@@ -438,9 +489,52 @@ mod tests {
     }
 
     #[test]
+    fn indexes_persist_across_a_reopen_and_are_re_applied_by_a_later_upgrade() {
+        let o = "https://idb-index.test";
+        let mut ix = BTreeMap::new();
+        ix.insert(
+            "by_email".to_string(),
+            Index {
+                key_path: "email".into(),
+                unique: true,
+                multi_entry: false,
+            },
+        );
+        commit_upgrade(o, "d", 1, vec![("users".into(), "id".into(), false, ix)]);
+        // A reopen (no upgrade fires) still sees the index — this is the case `store.index()` on a
+        // returning visit depends on, and the reason the metadata is persisted rather than held in JS.
+        let st = open(o, "d").stores.remove("users").unwrap();
+        assert!(st.indexes.contains_key("by_email"));
+        assert!(st.indexes["by_email"].unique);
+        assert_eq!(st.indexes["by_email"].key_path, "email");
+
+        // A later upgrade re-declaring the store with a DIFFERENT set replaces it: add+remove both.
+        let mut ix2 = BTreeMap::new();
+        ix2.insert(
+            "by_age".to_string(),
+            Index {
+                key_path: "age".into(),
+                unique: false,
+                multi_entry: false,
+            },
+        );
+        commit_upgrade(o, "d", 2, vec![("users".into(), "id".into(), false, ix2)]);
+        let st2 = open(o, "d").stores.remove("users").unwrap();
+        assert!(
+            !st2.indexes.contains_key("by_email") && st2.indexes.contains_key("by_age"),
+            "the full index set is authoritative on each upgrade — a dropped index must really go"
+        );
+    }
+
+    #[test]
     fn a_write_over_quota_is_refused_and_leaves_nothing_behind() {
         let o = "https://idb-quota.test";
-        commit_upgrade(o, "d", 1, vec![("s".into(), String::new(), false)]);
+        commit_upgrade(
+            o,
+            "d",
+            1,
+            vec![("s".into(), String::new(), false, Default::default())],
+        );
         let big = "x".repeat(QUOTA_BYTES + 1);
         assert_eq!(
             put(o, "d", "s", "k", "0", &big, false),

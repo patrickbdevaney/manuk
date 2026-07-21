@@ -14690,3 +14690,54 @@ HARNESS (one line, observer-owned — not touched): disk /home still ~94% (20G f
 so the verify wall reads false-slow via the mid-wall prune race — same as tick 325/326/327. Work banked;
 lands with the parked batch on a warm re-run once the observer frees disk. UPDATE (landing invocation):
 the wall was CONTENTION not disk — verify.sh twice (cold-parity → warm ~65-70s) lands it (observer 989a0db).
+
+## Tick 329 — IndexedDB indexes: createIndex / store.index() / IDBKeyRange, persisted (2026-07-21)
+
+TICK SHAPE: capability. New CONSTELLATION row gated → G_INDEXEDDB_INDEX. Builds the secondary-key
+surface on the tick-278 IndexedDB store. Tier-1 item #5 in docs/loop/PHASE0-BOUNDED-REMAINDER.md.
+
+SELECTED: `store.index` was `undefined` and `store.indexNames` permanently empty — the tick-278 store
+keys only by primary key. The Firebase/Cognito auth SDKs, Dexie and `idb` all `createIndex` at boot
+and query by a value property; without it `undefined.get(...)` throws inside the SDK's own promise and
+the app silently fails to load. The base store's own gate row named this exact gap as an HONEST LIMIT.
+
+WHY IT MATTERS: the logged-in app web. An app that can only look up by primary key cannot answer "the
+user whose email is X" or "everything tagged Y" — so the auth/session SDKs require the index and do
+not degrade without it. This is the read half of the messaging/social/banking classes.
+
+WHAT LANDED:
+- JS shim (engine/js/src/dom_bindings.rs, the IndexedDB block): `IDBKeyRange` (only/lowerBound/
+  upperBound/bound with an encoded-space `includes`), a `keyMatches(range-or-key, k)` funnel; per-store
+  `store.index(name)`, `store.createIndex(name,keyPath,{unique,multiEntry})` and `deleteIndex`
+  (versionchange-only, like createObjectStore); an `IDBIndex` with get/getKey/getAll/getAllKeys/count/
+  openCursor/openKeyCursor over an ordered view (encoded index-key then primary key; multiEntry expands
+  an array key); `indexNames` now real; unique-index enforcement on `put` (a ConstraintError before the
+  write lands, so nothing is left behind); the store cursor now honours a passed `IDBKeyRange`.
+- Rust (engine/net/src/idb.rs): `ObjectStore.indexes: BTreeMap<String, Index>` + `Index{key_path,
+  unique,multi_entry}`, `#[serde(default)]` so old databases still load; `commit_upgrade` re-applies
+  the full index set each upgrade (add+remove); `host_idb` serializes indexes on `open` and parses
+  them on `upgrade`. THE POINT: indexes persist, so `store.index()` resolves on a reopen at the same
+  version where no upgrade fires and `createIndex` never re-runs.
+
+G_INDEXEDDB_INDEX (engine/page/tests/g_indexeddb_index.rs): idxnames / get by email / getKey / range
+via IDBKeyRange.bound / index order (age 20,30,40 → ids 2,1,3, neither primary nor insertion order) /
+count / multiEntry / index cursor order / unique ConstraintError / reopen-no-upgrade + index still
+resolves (persistence). RED-proven: renaming `store.index` → the page throws → every claim drops.
+Plus a Rust unit test (idb.rs) that indexes survive a reopen and a later upgrade re-applies the set.
+
+HONEST LIMITS: a compound (array) keyPath round-trips through the store's single `key_path` string as
+JSON text (no separate compound column); no locale collation (encoded-key order); index `get`/cursor
+rebuild the view per call (fine at app scale, not a million-row analytics store — same trade as the
+base store's readAll cursors).
+
+NO REGRESSION: additive. Base G_INDEXEDDB, G_CACHE_API, G_STORAGE_MANAGER all still green; manuk-net
+idb tests 5/5. The store-cursor range filter defaults to match-all when no range is passed, so plain
+`openCursor()` is unchanged. fmt clean.
+
+PARKED: wall harness-blocked (disk 94%/20G < the 25G hygiene floor → mid-wall prune race; verify.sh
+FAILED at 566s unattributed on a 10m41s run, gate wall sabotaged mid-build — observer-owned, not an
+engine fault). Built + RED-proven via warm single-gate runs (cargo test -p manuk-page ... 13s). Lands
+via `./scripts/tick.sh .git/tick329-ready.msg` on a warm re-run once the observer frees disk, per the
+[[three-ticks-parked-wall-blocked]] pattern. On wip/tick329-indexeddb-index.
+
+WIKI: docs/wiki/storage.md (Indexes must PERSIST across a reopen section)

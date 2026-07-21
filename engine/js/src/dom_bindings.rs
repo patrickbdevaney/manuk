@@ -6462,6 +6462,10 @@ unsafe fn host_idb(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
                 "version": d.version,
                 "stores": d.stores.iter().map(|(n, st)| serde_json::json!({
                     "name": n, "keyPath": st.key_path, "autoIncrement": st.auto_increment,
+                    "indexes": st.indexes.iter().map(|(iname, ix)| serde_json::json!({
+                        "name": iname, "keyPath": ix.key_path,
+                        "unique": ix.unique, "multiEntry": ix.multi_entry,
+                    })).collect::<Vec<_>>(),
                 })).collect::<Vec<_>>(),
             })
         }
@@ -6476,6 +6480,37 @@ unsafe fn host_idb(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
                 .map(|a| {
                     a.iter()
                         .map(|st| {
+                            let indexes = st
+                                .get("indexes")
+                                .and_then(|v| v.as_array())
+                                .map(|ixs| {
+                                    ixs.iter()
+                                        .map(|ix| {
+                                            (
+                                                ix.get("name")
+                                                    .and_then(|v| v.as_str())
+                                                    .unwrap_or("")
+                                                    .to_string(),
+                                                idb::Index {
+                                                    key_path: ix
+                                                        .get("keyPath")
+                                                        .and_then(|v| v.as_str())
+                                                        .unwrap_or("")
+                                                        .to_string(),
+                                                    unique: ix
+                                                        .get("unique")
+                                                        .and_then(|v| v.as_bool())
+                                                        .unwrap_or(false),
+                                                    multi_entry: ix
+                                                        .get("multiEntry")
+                                                        .and_then(|v| v.as_bool())
+                                                        .unwrap_or(false),
+                                                },
+                                            )
+                                        })
+                                        .collect::<std::collections::BTreeMap<String, idb::Index>>()
+                                })
+                                .unwrap_or_default();
                             (
                                 st.get("name")
                                     .and_then(|v| v.as_str())
@@ -6488,6 +6523,7 @@ unsafe fn host_idb(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
                                 st.get("autoIncrement")
                                     .and_then(|v| v.as_bool())
                                     .unwrap_or(false),
+                                indexes,
                             )
                         })
                         .collect::<Vec<_>>()
@@ -9582,6 +9618,46 @@ const WINDOW_PRELUDE: &str = r#"
             return null; // not a valid key — the caller raises DataError
         };
 
+        // IDBKeyRange — the continuous key span that `get`, `getAll`, `count` and every cursor take
+        // instead of a single key. It is compared in the SAME encoded space the store sorts by, so a
+        // range's notion of "between" and the store's notion of "in order" can never disagree — the
+        // bug a hand-rolled numeric compare introduces the moment a string or Date key appears.
+        var mkRange = function (lower, upper, lowerOpen, upperOpen) {
+            return {
+                lower: lower, upper: upper, lowerOpen: !!lowerOpen, upperOpen: !!upperOpen,
+                __isKeyRange: true,
+                includes: function (k) {
+                    var ek = encKey(k);
+                    if (ek === null) { return false; }
+                    if (lower !== undefined && lower !== null) {
+                        var el = encKey(lower);
+                        if (ek < el || (lowerOpen && ek === el)) { return false; }
+                    }
+                    if (upper !== undefined && upper !== null) {
+                        var eu = encKey(upper);
+                        if (ek > eu || (upperOpen && ek === eu)) { return false; }
+                    }
+                    return true;
+                }
+            };
+        };
+        if (typeof g.IDBKeyRange === 'undefined') {
+            g.IDBKeyRange = {
+                only: function (v) { return mkRange(v, v, false, false); },
+                lowerBound: function (v, open) { return mkRange(v, undefined, open, false); },
+                upperBound: function (v, open) { return mkRange(undefined, v, false, open); },
+                bound: function (l, u, lo, uo) { return mkRange(l, u, lo, uo); }
+            };
+        }
+        // A query argument is EITHER a bare key (exact match) or an IDBKeyRange (span). Every index
+        // and store read funnels through this so both forms are honoured identically everywhere.
+        var keyMatches = function (q, k) {
+            if (q === undefined || q === null) { return true; }
+            if (q && q.__isKeyRange) { return q.includes(k); }
+            var a = encKey(q);
+            return a !== null && a === encKey(k);
+        };
+
         // VALUE ENCODING. IndexedDB stores STRUCTURED CLONES, not JSON. Plain `JSON.stringify`
         // would turn a Date into a string and a Uint8Array into an object with numeric keys — the
         // page writes one type and reads back another, silently. So Date and binary views are
@@ -9780,6 +9856,24 @@ const WINDOW_PRELUDE: &str = r#"
                     }
                     var enc = encKey(k);
                     if (enc === null) { throw idbErr('DataError', 'invalid key'); }
+                    // A UNIQUE index rejects a write whose index key already belongs to ANOTHER
+                    // record — the difference between "email must be unique" enforced and merely
+                    // documented. Checked before the write lands so a violation leaves nothing behind.
+                    var ims = meta.indexes || {};
+                    for (var iname in ims) {
+                        if (!Object.prototype.hasOwnProperty.call(ims, iname) || !ims[iname].unique) { continue; }
+                        var mine = idxKeyOf(ims[iname], value);
+                        if (mine === undefined) { continue; }
+                        var emine = encKey(mine);
+                        var recs = readAll();
+                        for (var z = 0; z < recs.length; z++) {
+                            if (recs[z].enc === enc) { continue; } // the record we are replacing
+                            var theirs = idxKeyOf(ims[iname], recs[z].value);
+                            if (theirs !== undefined && encKey(theirs) === emine) {
+                                throw idbErr('ConstraintError', 'unique index ' + iname + ' violated');
+                            }
+                        }
+                    }
                     var prev = call({ op: 'get', key: enc });
                     var res = call({ op: 'put', key: enc, keyJson: JSON.stringify(k), value: JSON.stringify(encVal(value)), add: !!isAdd });
                     if (!res || !res.ok) { throw idbErr((res && res.error) || 'UnknownError', 'put failed'); }
@@ -9790,10 +9884,27 @@ const WINDOW_PRELUDE: &str = r#"
                     var rs = call({ op: 'records' }) || [];
                     return rs.map(function (r) { return { enc: r.enc, key: JSON.parse(r.key), value: decVal(JSON.parse(r.value)) }; });
                 };
+                // The index key an index draws from a record's value: a single keyPath yields a
+                // scalar; a compound (array) keyPath yields an array, and if ANY component is absent
+                // the record is simply not in that index (undefined), never keyed on a partial tuple.
+                var idxKeyOf = function (im, value) {
+                    var kp = im.keyPath;
+                    if (Array.isArray(kp)) {
+                        var parts = [];
+                        for (var j = 0; j < kp.length; j++) {
+                            var pv = pathGet(value, kp[j]);
+                            if (pv === undefined) { return undefined; }
+                            parts.push(pv);
+                        }
+                        return parts;
+                    }
+                    return pathGet(value, kp);
+                };
 
                 var store = {
                     name: storeName, keyPath: meta.keyPath || null,
-                    autoIncrement: !!meta.autoIncrement, transaction: tx, indexNames: mkNames([]),
+                    autoIncrement: !!meta.autoIncrement, transaction: tx,
+                    indexNames: mkNames(Object.keys(meta.indexes || {}).sort()),
                     put: function (v, k) { return tx.__enqueue(function () { return doPut(v, k, false); }); },
                     add: function (v, k) { return tx.__enqueue(function () { return doPut(v, k, true); }); },
                     get: function (k) {
@@ -9842,7 +9953,7 @@ const WINDOW_PRELUDE: &str = r#"
                         var rows = null, i = 0, req = null;
                         var nextCursor = function () {
                             if (rows === null) {
-                                rows = readAll();
+                                rows = readAll().filter(function (r) { return keyMatches(range, r.key); });
                                 if (dir === 'prev') { rows.reverse(); }
                             }
                             if (i >= rows.length) { return null; } // exhausted: result is null
@@ -9867,6 +9978,113 @@ const WINDOW_PRELUDE: &str = r#"
                         return req;
                     }
                 };
+
+                // AN INDEX is a second way into the same records: keyed by a value PROPERTY instead
+                // of the primary key. `store.index('by_email').get('a@b')` is the query Firebase,
+                // Cognito, Dexie and idb all build on, and its absence is the silent-degrade shape —
+                // `store.index` is `undefined`, the SDK throws inside its own promise, and the app
+                // "just doesn't load" with nothing in the console the page surfaces.
+                var mkIndex = function (indexName, im) {
+                    // The index's ordered view over the store: one row per indexed record (multiEntry
+                    // expands an array key to several), sorted by encoded index key then primary key,
+                    // rebuilt on demand so it always reflects the live store.
+                    var view = function () {
+                        var out = [];
+                        var all = readAll();
+                        for (var j = 0; j < all.length; j++) {
+                            var ik = idxKeyOf(im, all[j].value);
+                            if (ik === undefined) { continue; } // absent index key ⇒ not in the index
+                            if (im.multiEntry && Array.isArray(ik)) {
+                                for (var m = 0; m < ik.length; m++) {
+                                    if (encKey(ik[m]) !== null) { out.push({ ikey: ik[m], key: all[j].key, value: all[j].value }); }
+                                }
+                            } else if (encKey(ik) !== null) {
+                                out.push({ ikey: ik, key: all[j].key, value: all[j].value });
+                            }
+                        }
+                        out.sort(function (a, b) {
+                            var ea = encKey(a.ikey), eb = encKey(b.ikey);
+                            if (ea < eb) { return -1; }
+                            if (ea > eb) { return 1; }
+                            var pa = encKey(a.key), pb = encKey(b.key);
+                            return pa < pb ? -1 : (pa > pb ? 1 : 0);
+                        });
+                        return out;
+                    };
+                    var matching = function (q) { return view().filter(function (r) { return keyMatches(q, r.ikey); }); };
+                    var idx = {
+                        name: indexName, objectStore: store, keyPath: im.keyPath,
+                        unique: !!im.unique, multiEntry: !!im.multiEntry,
+                        get: function (q) { return tx.__enqueue(function () { var v = matching(q); return v.length ? v[0].value : undefined; }); },
+                        getKey: function (q) { return tx.__enqueue(function () { var v = matching(q); return v.length ? v[0].key : undefined; }); },
+                        getAll: function (q) { return tx.__enqueue(function () { return matching(q).map(function (r) { return r.value; }); }); },
+                        getAllKeys: function (q) { return tx.__enqueue(function () { return matching(q).map(function (r) { return r.key; }); }); },
+                        count: function (q) { return tx.__enqueue(function () { return matching(q).length; }); },
+                        openCursor: function (range, dir) { return idxCursor(range, dir, true); },
+                        openKeyCursor: function (range, dir) { return idxCursor(range, dir, false); }
+                    };
+                    // Cursors walk the index view. `key` is the INDEX key, `primaryKey` the store key,
+                    // and — as with the store cursor — every step goes through `tx.__enqueue` so the
+                    // transaction cannot complete out from under an in-flight walk.
+                    var idxCursor = function (range, dir, withValue) {
+                        var rows = null, i = 0, req = null;
+                        var nextCursor = function () {
+                            if (rows === null) {
+                                rows = matching(range);
+                                if (dir === 'prev' || dir === 'prevunique') { rows.reverse(); }
+                            }
+                            if (i >= rows.length) { return null; }
+                            var row = rows[i++];
+                            var advanceBy = function (n) {
+                                i += Math.max(0, Number(n) - 1);
+                                tx.__enqueue(nextCursor).addEventListener('success', function (e) {
+                                    req.result = e.target.result;
+                                    req.__fire('success');
+                                });
+                            };
+                            var c = {
+                                key: row.ikey, primaryKey: row.key, source: idx, direction: dir || 'next',
+                                'continue': function () { advanceBy(1); },
+                                advance: advanceBy,
+                                update: function (v) { return store.put(v, meta.keyPath ? undefined : row.key); },
+                                'delete': function () { return store['delete'](row.key); }
+                            };
+                            if (withValue) { c.value = row.value; }
+                            return c;
+                        };
+                        req = tx.__enqueue(nextCursor);
+                        return req;
+                    };
+                    return idx;
+                };
+
+                store.index = function (iname) {
+                    var im = (meta.indexes || {})[String(iname)];
+                    if (!im) { throw idbErr('NotFoundError', 'no index named ' + iname); }
+                    return mkIndex(String(iname), im);
+                };
+                // `createIndex`/`deleteIndex` mutate the schema, so they are valid ONLY inside a
+                // versionchange transaction — a page that calls them elsewhere has a bug, and a
+                // silent success would hide it (the same contract `createObjectStore` keeps).
+                store.createIndex = function (iname, keyPath, opts) {
+                    if (tx.mode !== 'versionchange') { throw idbErr('InvalidStateError', 'createIndex is only valid during a versionchange transaction'); }
+                    opts = opts || {};
+                    if (!meta.indexes) { meta.indexes = {}; }
+                    if (meta.indexes[String(iname)]) { throw idbErr('ConstraintError', 'an index named ' + iname + ' already exists'); }
+                    var kp = Array.isArray(keyPath) ? keyPath.slice() : String(keyPath);
+                    meta.indexes[String(iname)] = { keyPath: kp, unique: !!opts.unique, multiEntry: !!opts.multiEntry };
+                    db.__meta[storeName] = meta;
+                    store.indexNames = mkNames(Object.keys(meta.indexes).sort());
+                    idbCall({ op: 'upgrade', db: db.name, version: db.version, stores: storesPayload(db.__meta) });
+                    return mkIndex(String(iname), meta.indexes[String(iname)]);
+                };
+                store.deleteIndex = function (iname) {
+                    if (tx.mode !== 'versionchange') { throw idbErr('InvalidStateError', 'deleteIndex is only valid during a versionchange transaction'); }
+                    if (!meta.indexes || !meta.indexes[String(iname)]) { throw idbErr('NotFoundError', 'no index named ' + iname); }
+                    delete meta.indexes[String(iname)];
+                    store.indexNames = mkNames(Object.keys(meta.indexes).sort());
+                    idbCall({ op: 'upgrade', db: db.name, version: db.version, stores: storesPayload(db.__meta) });
+                };
                 return store;
             };
 
@@ -9881,11 +10099,31 @@ const WINDOW_PRELUDE: &str = r#"
             return db;
         };
 
+        // A compound (array) index keyPath is persisted as its JSON text, because the store side
+        // keeps one string per index. Its leading `[` is the flag the reader parses it back on.
+        var kpToWire = function (kp) { return Array.isArray(kp) ? JSON.stringify(kp) : String(kp); };
+        var kpFromWire = function (s) {
+            if (typeof s === 'string' && s.charAt(0) === '[') { try { return JSON.parse(s); } catch (e) { } }
+            return s;
+        };
         var storesPayload = function (meta) {
             var out = [];
             for (var k in meta) {
                 if (Object.prototype.hasOwnProperty.call(meta, k)) {
-                    out.push({ name: k, keyPath: meta[k].keyPath || '', autoIncrement: !!meta[k].autoIncrement });
+                    var ixOut = [];
+                    var im = meta[k].indexes || {};
+                    for (var iname in im) {
+                        if (Object.prototype.hasOwnProperty.call(im, iname)) {
+                            ixOut.push({
+                                name: iname, keyPath: kpToWire(im[iname].keyPath),
+                                unique: !!im[iname].unique, multiEntry: !!im[iname].multiEntry
+                            });
+                        }
+                    }
+                    out.push({
+                        name: k, keyPath: meta[k].keyPath || '',
+                        autoIncrement: !!meta[k].autoIncrement, indexes: ixOut
+                    });
                 }
             }
             return out;
@@ -9905,7 +10143,15 @@ const WINDOW_PRELUDE: &str = r#"
                         }
                         var meta = {};
                         for (var i = 0; i < info.stores.length; i++) {
-                            meta[info.stores[i].name] = { keyPath: info.stores[i].keyPath, autoIncrement: info.stores[i].autoIncrement };
+                            var ixMeta = {};
+                            var wireIx = info.stores[i].indexes || [];
+                            for (var j = 0; j < wireIx.length; j++) {
+                                ixMeta[wireIx[j].name] = {
+                                    keyPath: kpFromWire(wireIx[j].keyPath),
+                                    unique: !!wireIx[j].unique, multiEntry: !!wireIx[j].multiEntry
+                                };
+                            }
+                            meta[info.stores[i].name] = { keyPath: info.stores[i].keyPath, autoIncrement: info.stores[i].autoIncrement, indexes: ixMeta };
                         }
                         var oldVersion = info.version || 0;
                         var want = (version === undefined || version === null) ? Math.max(oldVersion, 1) : Number(version);

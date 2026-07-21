@@ -123,3 +123,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 326	28eb4ae	1784674462	2026-07-21T18:54:22-04:00	2838	measurement	65	1	1	1	176	81	3896	6960	0	320	0	re-pin four stale "partial" constellation cells to gated (2026-07-21)
 327	512d091	1784674662	2026-07-21T18:57:42-04:00	200	measurement	70	3	56	6	176	81	3896	6960	0	320	0	re-probe: the map was stale in FIVE places; re-pin 3 verified cells (2026-07-21)
 328	f40949b	1784675825	2026-07-21T19:17:05-04:00	1163	capability	67	8	350	12	177	81	3896	6960	0	320	0	window.getSelection() is a real, persistent, directional Selection (2026-07-21)
+329	c9ad67d	1784677138	2026-07-21T19:38:58-04:00	1313	capability	66	9	618	30	178	81	3896	6960	0	320	0	IndexedDB indexes: createIndex / store.index() / IDBKeyRange, persisted (2026-07-21)

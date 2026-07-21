@@ -2063,6 +2063,33 @@ nothing: the rejected write never wrote, so there is nothing to roll back and th
 with the undo log deleted. Assert rollback against a write that **succeeds** and is aborted from
 inside its own success handler. The unit that needs a proven RED is the CLAIM, not the gate.
 
+## Query by a value property — IndexedDB indexes (tick 329)
+
+**Pattern:** `store.createIndex('by_email', 'email', {unique:true})` in `onupgradeneeded`, then
+`store.index('by_email').get(addr)` / `.getAll(IDBKeyRange.bound(lo,hi))` / `.openCursor()` on every
+read after. This is how you look a record up by a field that is NOT its primary key, and it is the
+foundation the auth SDKs stand on: the Firebase and Cognito session layers, Dexie, and the `idb`
+wrapper all `createIndex` at boot and query by it. Compound and `multiEntry` indexes back tag/facet
+lookups.
+
+**The class this unlocks:** the *logged-in* app web on top of the base store (tick 278). An app that
+can only fetch by primary key cannot answer "the user whose email is X" or "everything tagged Y"
+without scanning — so the SDKs simply require the index and do not degrade gracefully without it.
+
+**Why it hid:** `store.index` was `undefined` and `store.indexNames` permanently empty, so the SDK's
+own call `undefined.get(...)` throws **inside its promise chain**, the app "just doesn't load", and
+nothing the page surfaces names the cause — the same boot-grading shape as `indexedDB` itself before
+tick 278. `if (!store.index)` is not a check any app writes; it assumes the index exists.
+
+**The trap, and it decides where the code lives:** an index must survive a **reopen at the same
+version**, where no `versionchange` fires and `createIndex` therefore never re-runs. So the index
+metadata cannot live only in the JS shim — it is persisted with the store in `manuk_net::idb`
+(`ObjectStore.indexes`), serialized out on `open` and re-applied on every `upgrade`. A shim that held
+indexes in a JS map would pass a single-session gate and break every returning visit. The gate proves
+this the hard way: it opens, indexes, closes the connection, reopens **without an upgrade**, and
+requires `store.index(...)` to still resolve records. Sort order is the store's own encoded-key order,
+so an index's "between" and the store's "in order" can never disagree.
+
 ## The offline asset store — the Cache API (tick 279)
 
 **Pattern:** `caches.open('shell-v1')` → `cache.put(url, response)` at install, then

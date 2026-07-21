@@ -58,6 +58,29 @@ every cursor walk simply return rows in an order the page never asked for, which
 list rendered wrong or a "latest record" that is not the latest. The gate pins this with
 `order:2,9,10`, and the unpadded RED probe produces exactly `order:10,2,9`.
 
+## Indexes must PERSIST across a reopen, so their metadata cannot live in the shim (tick 329)
+
+`store.index('by_email').get(addr)` — look a record up by a value property, not its primary key — is
+the query the Firebase/Cognito/Dexie/`idb` auth layers are built on. `createIndex`, `store.index()`,
+`IDBKeyRange` and `multiEntry`/`unique` landed at tick 329 (`G_INDEXEDDB_INDEX`).
+
+The decision that matters is **where the index metadata lives.** An index is declared once, in
+`onupgradeneeded`, and on a returning visit the page opens the database at the *same* version — so no
+`versionchange` fires and `createIndex` never runs again. Yet `store.index('by_email')` must still
+resolve. Therefore the index set is persisted **with the store** in `manuk_net::idb`
+(`ObjectStore.indexes`), serialized out on `open` and re-applied (add *and* remove) on every
+`upgrade`. A shim that kept indexes in a JS map would pass a single-session gate and silently break
+every second visit — so the gate opens, indexes, closes the connection, reopens with **no upgrade**,
+and requires the index to still resolve records.
+
+Everything else follows from the store's existing encoded-key order: an index builds its ordered view
+by drawing `pathGet(value, keyPath)` from each record (an array key with `multiEntry` expands to one
+entry per element), sorts by *encoded index key then primary key*, and `IDBKeyRange` compares in that
+same encoded space — so an index's "between" and the store's "in order" can never disagree. A `unique`
+index enforces on `put` by scanning for another record with the same index key before the write lands,
+so a violation leaves nothing behind. **Honest limit:** a compound (array) keyPath round-trips as its
+JSON text through the store's single `key_path` string; there is no locale collation.
+
 ## IndexedDB stores STRUCTURED CLONES — `JSON.stringify` is a silent type change
 
 `JSON.stringify` turns a `Date` into a string and a `Uint8Array` into an object with numeric keys. The

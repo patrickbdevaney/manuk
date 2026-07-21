@@ -33,7 +33,8 @@ app	ES modules + dynamic import()	every modern bundle	works	-	G_DEFER; module_re
 app	fetch / XHR / AbortController	no data	works	-	G_CAPABILITY
 app	History API (pushState/popstate)	SPA routing dead	works	-	history_bindings.rs
 app	localStorage / sessionStorage	sessions lost	works	-	manuk_net::webstorage
-app	IndexedDB	offline apps, big client caches	gated	G_INDEXEDDB	tick 278 — manuk_net::idb + __idb seam + async shim; open/upgrade/transactions/cursors. HONEST LIMITS: no createIndex, no IDBKeyRange
+app	IndexedDB	offline apps, big client caches	gated	G_INDEXEDDB	tick 278 — manuk_net::idb + __idb seam + async shim; open/upgrade/transactions/cursors. Indexes added tick 329 (see next row)
+app	IndexedDB indexes (createIndex/store.index/IDBKeyRange)	Firebase/Cognito/Dexie/idb query by a value property, not the primary key; store.index undefined = auth SDK throws inside its own promise, app silently fails to boot	gated	G_INDEXEDDB_INDEX	tick 329 — createIndex/deleteIndex (versionchange only), store.index().get/getKey/getAll/getAllKeys/count/openCursor/openKeyCursor, IDBKeyRange only/bound/lower/upperBound, multiEntry expansion, unique-put ConstraintError, index order = index-key order. PERSISTED in manuk_net::idb (ObjectStore.indexes) so store.index() resolves on a reopen with no upgrade. HONEST LIMIT: compound (array) keyPath round-trips through JSON; no locale collation (encoded-key order)
 app	custom elements + shadow DOM	every design system	works	-	flat tree in cascade
 app	adoptedStyleSheets / constructable CSS	Lit ships styles this way	works	-	tick ~55
 app	<template> + slots	web components	works	-	-
