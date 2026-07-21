@@ -10692,6 +10692,25 @@ const WINDOW_PRELUDE: &str = r#"
                 }
             };
         }
+        // `URL.canParse(url [, base])` / `URL.parse(url [, base])` — the static URL methods that
+        // answer "is this a valid URL?" WITHOUT the `try { new URL(x) } catch {}` dance. Form
+        // validation, router libraries and input sanitizers increasingly call them on the hot path,
+        // and their absence is a hard `TypeError: URL.canParse is not a function`. The `URL`
+        // constructor is native (mozjs), so this just adds the two static helpers it was missing;
+        // both are pure functions of their arguments — no state, so nothing to go stale.
+        if (typeof g.URL === 'function' && typeof g.URL.canParse !== 'function') {
+            g.URL.canParse = function (url, base) {
+                try {
+                    if (base === undefined) { new g.URL(url); } else { new g.URL(url, base); }
+                    return true;
+                } catch (e) { return false; }
+            };
+            g.URL.parse = function (url, base) {
+                try {
+                    return base === undefined ? new g.URL(url) : new g.URL(url, base);
+                } catch (e) { return null; }
+            };
+        }
         // `navigator.sendBeacon(url, data)` — the fire-and-forget POST every analytics, RUM and
         // error-reporting library sends on `pagehide`/`visibilitychange`. It was ABSENT, so an
         // unguarded `navigator.sendBeacon(...)` threw on `undefined` and took the rest of an unload

@@ -572,6 +572,8 @@
   - L909 · Why it must return the honest boolean, and send for real
   - L924 · navigator.userAgentData — the Client Hints surface, honest and self-consistent (tick 286)
   - L942 · The two teeth G_USERAGENTDATA uses, that a stub cannot grow
+  - L954 · URL.canParse / URL.parse — validate a URL without try/catch (tick 289)
+  - L969 · The teeth G_URL_STATIC uses
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -711,4 +713,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-626 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+628 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

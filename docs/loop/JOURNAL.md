@@ -13312,3 +13312,40 @@ lists, `Sanitizer` config objects, `Document.parseHTMLUnsafe`) is the follow-on;
 parsing is not modelled, so `setHTMLUnsafe` == innerHTML for now. Constellation row `partial`, not `works`.
 
 WIKI: docs/wiki/dom-semantics.md (Sanitizer API section). CONSTELLATION.tsv row 109 missing→partial.
+
+## Tick 289 — `URL.canParse` / `URL.parse`: validate a URL without the try/catch dance (2026-07-20)
+
+TICK SHAPE: board re-read; obeyed the "RE-PROBE before building" rule HARD this time (the whole session
+has been stale-row after stale-row). Confirmed-built-and-thus-skipped: canvas fillText, dblclick/
+contextmenu, CSP, scroll-snap (Page::snap_scroll) — all listed as gaps, all already done. Then ran a
+throwaway runtime probe of small JS-surface APIs: structuredClone/requestIdleCallback/reportError
+PRESENT; `URL.canParse`/`URL.parse`/`scheduler.postTask`/`window.navigation` ABSENT. Picked the URL
+statics — pure, stateless, honest, no inert-stub risk (Navigation API would need real history wiring or
+it lies the moment the SPA navigates; scheduler.postTask's priority semantics are semi-inert).
+
+HYPOTHESIS: the modern replacement for `try { new URL(x) } catch {}`. Form validation / routers /
+sanitizers call `URL.canParse(url,base)` (boolean) and `URL.parse(url,base)` (URL|null) directly;
+absent, the call is a hard `TypeError` that takes the validation branch with it.
+
+PLAN: attach the two statics to the existing native `g.URL`, each delegating to the constructor so
+they can never disagree with `new URL` — `canParse` catches the throw → boolean; `parse` catches →
+`null`. base passed only when defined (so a one-arg call is a true one-arg `new URL`).
+
+### The gate — G_URL_STATIC, and a gate-logic bug I caught
+
+Nine claims: has-*, good/bad-canParse, rel-nobase/withbase, good/bad-parse, parse-withbase. PROVEN RED:
+`if (false && …)` around the shim → `has-canParse:false` and the first call throws.
+
+A METHODOLOGY NOTE worth keeping: the gate first "failed" on `bad-canParse` and I nearly mis-diagnosed
+it as a lenient URL parser (the constructor accepting garbage). Direct instrumentation showed the
+CONSTRUCTOR was correct (throws on garbage) and canParse was correct (returns false) — the bug was in
+the GATE: I wrote `push('bad:'+(canParse(x)===false))`, so a CORRECT false printed `bad:true`, and my
+expected-list wanted `bad:false`. A double-negative claim string. Fixed by pushing the RAW boolean
+(`push('bad:'+canParse(x))` → `bad:false` when correct). The lesson: when a probe "fails", instrument
+the sub-expressions before theorizing about the engine — the instrument lied, not the engine
+([[fidelity-coverage-saturated-placement-real]] again, at JS scale).
+
+NO REGRESSION: additive; `new URL` untouched. Not a trade. HONEST LIMIT: none of note — these are the
+complete WHATWG static surface (there is no third static method).
+
+WIKI: docs/wiki/networking.md (URL.canParse/parse section). No constellation row (below its granularity).

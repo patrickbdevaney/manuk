@@ -950,3 +950,26 @@ the `consistent` claim. Both were demonstrated to go red before the tick landed.
 **Absent rather than wrong:** `platformVersion`/`model` are empty strings (we do not model an OS version
 or device model), and the high-entropy values are static (no per-request entropy budget or user-permission
 gating — every hint resolves).
+
+## `URL.canParse` / `URL.parse` — validate a URL without try/catch (tick 289)
+
+The `URL` constructor throws on an invalid input, so the old way to *test* a URL was
+`try { new URL(x); ok = true } catch { ok = false }`. The two static methods replace that dance:
+`URL.canParse(url [, base])` returns a boolean, and `URL.parse(url [, base])` returns a `URL` object
+or `null` — never a throw. Form validation, router libraries and input sanitizers call them directly,
+and their absence is a hard `TypeError: URL.canParse is not a function` that takes the surrounding
+validation with it.
+
+The `URL` constructor is already native here, so this is purely the two missing static helpers, each a
+**pure function of its arguments** — no state, so nothing to go stale. Both delegate to the constructor
+(`canParse` catches the throw and returns the boolean; `parse` catches it and returns `null`), which
+keeps them in exact agreement with what `new URL` would do — including that a relative URL with no base
+is *not* parseable, but is once a base is supplied.
+
+### The teeth `G_URL_STATIC` uses
+
+`canParse` must AGREE with the constructor: `true` for a valid absolute URL, `false` (not a throw) for
+garbage, `false` for a bare relative path, `true` for that path with a base. `parse` must return a real
+`URL` (with the right resolved `href`) on success and `null` on failure. A stub that returns `true`/an
+object unconditionally fails the negative cases; removing the shim was demonstrated to make the first
+call throw `URL.canParse is not a function` before the tick landed. [[js-engine]]

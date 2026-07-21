@@ -2312,3 +2312,20 @@ method wearing two names. **(4)** Only ever REMOVE, never rewrite — a sanitize
 introduce a value the page never authored. **(5)** Be honest about scope: the safe baseline (script /
 handlers / `javascript:`) is real; the configurable allow/block lists are a follow-on — mark the row
 `partial`, not `works`.
+
+## Validating a URL without a try/catch — `URL.canParse` / `URL.parse` (tick 289)
+
+**Pattern:** `if (!URL.canParse(userInput)) return showError('bad url')` and
+`const u = URL.parse(href, base); if (u) route(u.pathname)` — form validation, router libraries and
+input sanitizers reach for the static URL validators instead of wrapping `new URL(x)` in a try/catch.
+
+**The class this unlocks:** URL validation on the hot path. Absent, `URL.canParse` was `undefined` and
+the call threw `is not a function`, taking the surrounding validation branch with it.
+
+**The traps.** **(1)** `canParse` must return a real BOOLEAN that AGREES with the constructor — `true`
+where `new URL` succeeds, `false` where it throws — a stub that returns `true` unconditionally is a
+validator that validates nothing. **(2)** `parse` returns `null` on failure, never a throw — that is
+the whole reason it exists over the constructor. **(3)** Relative-URL semantics must match: `/path`
+with no base is NOT parseable, but is once a base is passed — get this wrong and a router mis-resolves
+every relative link. **(4)** Keep them delegating to the one native constructor, so the validator and
+the thing it validates can never disagree.
