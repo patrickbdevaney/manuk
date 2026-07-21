@@ -11280,6 +11280,38 @@ const WINDOW_PRELUDE: &str = r#"
                 dispatchEvent: function () { return true; }
             };
         }
+        // `navigator.storage` — the StorageManager API. Offline-first apps and PWAs (Google Docs/Photos
+        // offline, editors, note apps) call `navigator.storage.estimate()` before caching to check they
+        // have room, and `navigator.storage.persist()` to ask that their IndexedDB/Cache data not be
+        // evicted under storage pressure. Both return Promises the app AWAITS in its boot path, so an
+        // absent `navigator.storage` is `undefined` and `undefined.estimate()` throws out of startup.
+        //
+        // Unlike geolocation, this is a capability we HAVE, so the answers are truthful, not a denial:
+        // there is a real per-origin IndexedDB + Cache backend behind this ([[session-278-279-storage-apis]]),
+        // and on a single-user desktop it is durable and not evicted — so `persist()`/`persisted()`
+        // honestly return `true`. `estimate()` reports a real, generous quota with a conservative usage
+        // floor; the honest limit is that the prelude cannot cheaply sum live per-store bytes, so
+        // `usage` is a floor (apps use it to check headroom against `quota`, which is the load-bearing
+        // number). `getDirectory()` (OPFS) is deliberately NOT stubbed — we do not back it, and a
+        // present-but-broken handle is worse than an honest absence a feature check can see.
+        if (g.navigator && !g.navigator.storage) {
+            g.navigator.storage = {
+                estimate: function () {
+                    // Quota browsers grant is a large fraction of free disk; a generous fixed budget is
+                    // an honest "you have plenty of room" for the headroom check apps actually make.
+                    return Promise.resolve({
+                        quota: 10 * 1024 * 1024 * 1024,
+                        usage: 0,
+                        usageDetails: {}
+                    });
+                },
+                // Durable on a single-user desktop: we do not evict under pressure, so persistence is
+                // granted and reported as already persisted — not a flattering guess, a true property of
+                // the backend.
+                persist: function () { return Promise.resolve(true); },
+                persisted: function () { return Promise.resolve(true); }
+            };
+        }
         // `navigator.clipboard` — the async Clipboard API. The WRITE half (`writeText`) is what every
         // "copy" button uses (copy a code block, a share link, an API key); the READ half (`readText`
         // / `read`) is PASTE — a rich-text editor, a "paste from clipboard" button, an image-paste

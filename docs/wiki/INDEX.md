@@ -402,6 +402,9 @@
   - L1530 · The failure without it is a dead loader
   - L1536 · Honest defaults, not a fabrication that costs the user
   - L1545 · The teeth G_NETWORK_INFO uses
+  - L1552 · navigator.storage — truthful quota and durable persistence (tick 315)
+  - L1559 · A capability we HAVE, so the answers are truthful
+  - L1574 · The teeth G_STORAGE_MANAGER uses
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -775,4 +778,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-690 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+693 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

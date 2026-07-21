@@ -14100,3 +14100,31 @@ NO REGRESSION: additive JS prelude; all prior gates green; fmt clean. New CONSTE
 row gated. Landed via the verify.sh-direct-then-tick.sh dance ([[wall-warm-rerun-lands-ticks]]).
 
 WIKI: docs/wiki/interaction-surface.md (Network Information section).
+
+## Tick 315 — StorageManager: navigator.storage.estimate/persist/persisted (2026-07-21)
+
+SELECTED: continued re-probe-then-build. navigator.storage genuinely absent (probe1). Unlike most
+stubs this is a capability we HAVE (real IndexedDB + Cache backend, [[session-278-279-storage-apis]]),
+so the answers are truthful, not a denial.
+
+WHY IT MATTERS: offline-first apps and PWAs (offline editors, note apps, Google Docs/Photos offline)
+call navigator.storage.estimate() before caching to check headroom and navigator.storage.persist() to
+ask their data not be evicted. Both are awaited in the boot path, so an absent navigator.storage is
+undefined and undefined.estimate() throws out of startup.
+
+WHAT LANDED (dom_bindings.rs WINDOW_PRELUDE, after navigator.connection): navigator.storage with
+estimate() -> Promise<{quota: 10GiB, usage: 0, usageDetails: {}}>, persist() -> Promise<true>,
+persisted() -> Promise<true>. Truthful: there is a real durable per-origin backend and a single-user
+desktop does not evict, so persistence is genuinely granted. Honest limits stated: usage is a floor (the
+prelude cannot cheaply sum live per-store bytes; apps use it against quota, the load-bearing number),
+and OPFS getDirectory() is deliberately NOT stubbed — a present-but-broken handle is worse than an
+honest absence a feature check can see.
+
+G_STORAGE_MANAGER: defined / estimated (quota>0, usage<=quota) / persisted (persist & persisted both
+true) / ready. RED-proven (guard → false → THREW TypeError: can't access property "estimate", st is
+undefined; defined/estimated drop).
+
+NO REGRESSION: additive JS prelude; all prior gates green; fmt clean. New CONSTELLATION platform-class
+row gated. Landed via the verify.sh-direct-then-tick.sh dance ([[wall-warm-rerun-lands-ticks]]).
+
+WIKI: docs/wiki/interaction-surface.md (StorageManager section).

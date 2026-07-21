@@ -2743,3 +2743,20 @@ non-harmful, whereas a slow fabrication costs the user. **(3)** Provide the `cha
 unguarded `addEventListener` does not throw (it never fires — state the limit). **(4)** Gate on the
 VALUES (saveData false, a valid ECT token), not just `typeof` — a stub returning a slow/metered guess
 passes `typeof` and silently downgrades the page.
+
+## Storage headroom — `navigator.storage` (StorageManager) (tick 315)
+
+**Pattern:** `const {quota, usage} = await navigator.storage.estimate(); if (quota - usage < needed)
+warnUser(); await navigator.storage.persist();` — offline apps check headroom and request durable
+storage before caching data into IndexedDB/Cache.
+
+**The class this unlocks:** offline-first / PWA storage. The methods are AWAITED in boot, so an absent
+`navigator.storage` throws `undefined.estimate()` out of startup.
+
+**The traps.** **(1)** This is a capability you HAVE (a real IndexedDB/Cache backend) — so answer
+TRUTHFULLY, not with a denial: `persist()`/`persisted()` are genuinely true on a durable single-user
+desktop that does not evict. **(2)** `estimate()` returns `{quota, usage}` — report a generous real
+quota; `usage` may be a floor if you cannot cheaply sum live bytes, but `quota` is the number apps check
+against, so it must be honest and large. **(3)** Do NOT stub OPFS `getDirectory()` unless you back it —
+a present-but-broken `FileSystemDirectoryHandle` is worse than an honest absence a feature check sees.
+**(4)** Gate on the VALUES (quota>0, usage<=quota, persistence true), not `typeof`.

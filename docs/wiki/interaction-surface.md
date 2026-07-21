@@ -1548,3 +1548,31 @@ be a fabricated SLOW link, which would needlessly degrade every page.
 `downlink > 0`, `rtt >= 0` — proving adaptive code takes the full-quality path), `events` (unguarded
 `change` add/remove does not throw, retained). RED: disabling the shim throws
 `TypeError: … c is undefined` and drops `defined`/`signals` together.
+
+## `navigator.storage` — truthful quota and durable persistence (tick 315)
+
+Offline-first apps and PWAs call `navigator.storage.estimate()` before caching to check headroom and
+`navigator.storage.persist()` to keep their IndexedDB/Cache data from being evicted. Both are awaited in
+the boot path, so an absent `navigator.storage` is `undefined` and `undefined.estimate()` throws out of
+startup.
+
+### A capability we HAVE, so the answers are truthful
+
+Unlike geolocation (an honest denial), this is backed by a real per-origin IndexedDB + Cache store that,
+on a single-user desktop, is durable and not evicted. So the shim (in `WINDOW_PRELUDE`, after
+`navigator.connection`) answers truthfully:
+
+- `estimate()` → `{quota: 10 GiB, usage: 0, usageDetails: {}}` — a generous, real quota;
+- `persist()` → `true` and `persisted()` → `true` — persistence is genuinely granted, a true property
+  of the backend, not a flattering guess.
+
+Honest limits: `usage` is a FLOOR (the prelude cannot cheaply sum live per-store bytes; apps use it
+against `quota`, which is the load-bearing number), and OPFS `getDirectory()` is deliberately NOT
+stubbed — a present-but-broken `FileSystemDirectoryHandle` is worse than an honest absence a feature
+check can see.
+
+### The teeth `G_STORAGE_MANAGER` uses
+
+`defined` (estimate/persist/persisted callable, no throw), `estimated` (`estimate()` resolves
+`{quota>0, usage<=quota}`), `persisted` (`persist()` and `persisted()` both resolve `true`). RED:
+disabling the shim throws `TypeError: … st is undefined` and drops `defined`/`estimated` together.
