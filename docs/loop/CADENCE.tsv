@@ -121,3 +121,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 127	7accf37	1784205239	2026-07-16T08:33:59-04:00	2302	pattern-class	48	12	222	59	57	81	3053	6524	0	222	0	DOM validation throws are REAL `DOMException`s, not decorated `Error`s (+420 dom)
 128	673afda	1784671624	2026-07-21T18:07:04-04:00	466385	pattern-class	68	11	431	5	176	81	3896	6960	0	320	0	`Node.lookupPrefix` + the DocumentType namespace-lookup surface (+20 dom)
 326	28eb4ae	1784674462	2026-07-21T18:54:22-04:00	2838	measurement	65	1	1	1	176	81	3896	6960	0	320	0	re-pin four stale "partial" constellation cells to gated (2026-07-21)
+327	512d091	1784674662	2026-07-21T18:57:42-04:00	200	measurement	70	3	56	6	176	81	3896	6960	0	320	0	re-probe: the map was stale in FIVE places; re-pin 3 verified cells (2026-07-21)

@@ -14594,3 +14594,53 @@ and lands with the batch (alongside wip/tick325-a11y-roles) once the observer tr
 the 72s mark. Did NOT touch scripts/ or the mark.
 
 WIKI: docs/wiki/interaction-surface.md (Re-pin (tick 326) section)
+
+## Tick 327 — re-probe: the map was stale in FIVE places; re-pin 3 verified cells (2026-07-21)
+
+SELECTED: mandate priority (D) — RE-PROBE the constellation before building (lever-board rule 2:
+"the checklist goes stale FROM OUR OWN LANDED TICKS; a cheap re-probe MUST precede any build tick").
+This tick is the re-probe made concrete: measure the suspects, then pin the ones already true.
+
+THE FINDING (why this outranks a build this invocation): I went to build the lever-board's own top
+"remaining" items and every one was ALREADY DONE. Probed by reading source, not guessing:
+  * canvas fillText (board lever C, "one fix unlocks Google Docs text") — DONE: canvas.rs:764 fill_text
+    wires the swash glyph raster with blit_glyph coverage-composite + measure_text + textAlign/baseline;
+    g_canvas_text gates it in pixels.
+  * fetch POST body + Authorization/headers (board U-1, "silent-fail, DROPPED") — DONE: event_loop.rs:716
+    encodes method+headers (Authorization/Content-Type/Accept/X-*) + body into the request string.
+  * completeness-identity cluster (board #4: permissions.query / visibilityState / userAgentData /
+    Notification) — ALL DONE, with cross-consistency (permissions.query reads Notification.permission so
+    the two can't drift); g_visibility / g_useragentdata gate them.
+  * MSE MediaSource/SourceBuffer byte-pipe (media, marked 'partial 5%') — DONE: mse_js.rs builds the whole
+    state machine (readyState/duration/sourceopen, appendBuffer+updating, SourceBufferList, TimeRanges).
+    The ONLY real gap is __mseCodecs being empty (the XL M4/M5 codec integration, already parked on
+    wip branches per memory) — not the surface.
+  * CSP (marked 'missing, ZERO hits, unimplemented BY CONSTRUCTION' at tick 241) — DONE since then:
+    engine/net/src/csp.rs is a real script-src/default-src evaluator with nonce+hash+source-list match.
+
+RE-PINNED (3 cells, each backed by a REAL red-provable gate, non-overlapping with the parked tick-326
+re-pin batch which took file-upload/dialog/hover/select):
+  * postMessage across frames: partial -> gated G_OAUTH_POPUP, G_IFRAME_RERENDER (window.open handle +
+    popup->opener token postMessage; child-frame mutation re-paints — 3-D Secure / OAuth consent).
+  * CSP enforcement: missing -> gated G_CSP (net/csp.rs; g_csp proves 4 layers agree — header survives
+    the document boundary, inline w/o matching nonce does NOT run, off-list external src NOT fetched).
+  * notifications / permissions: missing -> gated G_VISIBILITY (the consistency claim
+    permissions.query({name:'notifications'}).state === Notification.permission; unknown name REJECTS).
+Tally: gated 71->74, missing 30->28, partial 22->21.
+
+RED: each cited gate is an integration gate with a demonstrated way to go red (g_csp: allow-all the
+evaluator; g_visibility: hard-code 'prompt'; g_oauth_popup/g_iframe_rerender: drop the postMessage /
+re-paint). This tick changes NO code, so it cannot regress anything — it corrects the MAP the observer
+steers by, so future ticks stop trying to build already-landed capability (the exact cost I paid here).
+
+NO REGRESSION: doc-only (CONSTELLATION.tsv + this entry). Ratchet-safe by construction.
+
+TICK SHAPE: measurement (instrument fidelity). CONSTELLATION: +3 gated (postMessage-across-frames,
+CSP enforcement, notifications/permissions), all re-probed green against live integration gates.
+
+HARNESS (one line, observer-owned — not touched): disk /home 94% (19G free < the 25G hygiene floor), so
+disk-hygiene prunes mid-wall and the verify wall reads false-slow — same signature the tick-325/326
+re-attempts hit all day. Work banked; lands with the parked batch on a warm re-run once the observer
+frees disk. Did not edit scripts/ or re-baseline the mark. UPDATE (landing invocation): the wall was
+CONTENTION, not disk — re-running verify.sh twice (cold-parity ~261s → warm 65s) lands the batch, exactly
+as the observer's 989a0db steer states.
