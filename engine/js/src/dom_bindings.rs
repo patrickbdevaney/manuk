@@ -11369,6 +11369,54 @@ const WINDOW_PRELUDE: &str = r#"
             };
             g.SpeechSynthesisVoice = g.SpeechSynthesisVoice || function SpeechSynthesisVoice() {};
         }
+        // `navigator.wakeLock` — the Screen Wake Lock API. Video players (YouTube and friends),
+        // presentation/slides apps, recipe and reading UIs, kiosks and dashboards call
+        // `await navigator.wakeLock.request('screen')` to keep the display from sleeping while media
+        // plays or the user reads without touching the screen, and hold the returned sentinel for the
+        // session. The request is AWAITED in the play/present handler, so an absent `navigator.wakeLock`
+        // is `undefined` and `undefined.request(...)` throws out of that handler.
+        //
+        // The display's sleep behaviour is owned by the host/OS, not this engine, so — like
+        // `mediaSession` — the honest posture is to GRANT and retain a real sentinel (so the player
+        // holds a working handle it can `release()`, and a future host binding can enforce the actual
+        // OS inhibit) while stating the limit: we do not yet drive the OS sleep timer. Granting is the
+        // capability the code needs to proceed; the OS wiring is the follow-on. Rejecting instead would
+        // needlessly send every video into its "could not keep screen awake" branch.
+        if (g.navigator && !g.navigator.wakeLock) {
+            var WakeLockSentinel = function WakeLockSentinel(type) {
+                this.type = type || 'screen';
+                this.released = false;
+                this.onrelease = null;
+                this.__listeners = {};
+            };
+            WakeLockSentinel.prototype.release = function () {
+                var self = this;
+                return new Promise(function (res) {
+                    if (!self.released) {
+                        self.released = true;
+                        var ev = { type: 'release', target: self };
+                        if (typeof self.onrelease === 'function') { try { self.onrelease(ev); } catch (e) {} }
+                        var l = self.__listeners['release'];
+                        if (l) { for (var i = 0; i < l.length; i++) { try { l[i](ev); } catch (e) {} } }
+                    }
+                    res();
+                });
+            };
+            WakeLockSentinel.prototype.addEventListener = function (t, fn) {
+                if (typeof fn === 'function') { (this.__listeners[t] = this.__listeners[t] || []).push(fn); }
+            };
+            WakeLockSentinel.prototype.removeEventListener = function (t, fn) {
+                var l = this.__listeners[t]; if (!l) { return; }
+                var i = l.indexOf(fn); if (i >= 0) { l.splice(i, 1); }
+            };
+            WakeLockSentinel.prototype.dispatchEvent = function () { return true; };
+            g.WakeLockSentinel = g.WakeLockSentinel || WakeLockSentinel;
+            g.navigator.wakeLock = {
+                request: function (type) {
+                    return Promise.resolve(new WakeLockSentinel(type === 'screen' ? 'screen' : (type || 'screen')));
+                }
+            };
+        }
         // `navigator.clipboard` — the async Clipboard API. The WRITE half (`writeText`) is what every
         // "copy" button uses (copy a code block, a share link, an API key); the READ half (`readText`
         // / `read`) is PASTE — a rich-text editor, a "paste from clipboard" button, an image-paste

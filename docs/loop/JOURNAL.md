@@ -14157,3 +14157,32 @@ gated. Landed via the verify.sh-direct-then-tick.sh dance under box contention (
 load-induced shell false-FAIL are transient; recover with a single warm verify at load<1.5).
 
 WIKI: docs/wiki/interaction-surface.md (Web Speech synthesis section).
+
+## Tick 317 — Screen Wake Lock API: navigator.wakeLock (2026-07-21)
+
+SELECTED: continued re-probe-then-build. navigator.wakeLock genuinely absent (probe1). Media/
+presentation-adjacent (video keep-awake is a Phase-0 media focus).
+
+WHY IT MATTERS: video players (YouTube et al.), presentation/slides apps, recipe and reading UIs,
+kiosks and dashboards await navigator.wakeLock.request('screen') to keep the display awake while media
+plays or the user reads, and hold the sentinel for the session. The request is awaited in the play/
+present handler, so an absent navigator.wakeLock is undefined and undefined.request(...) throws out of
+that handler.
+
+WHAT LANDED (dom_bindings.rs WINDOW_PRELUDE, after speechSynthesis): navigator.wakeLock.request(type) ->
+Promise<WakeLockSentinel> + a WakeLockSentinel class (type/released, release() -> Promise that flips
+released + fires the 'release' event, addEventListener/removeEventListener). The display's sleep
+behaviour is host/OS-owned, so — like mediaSession — the honest posture is to GRANT and retain a real
+sentinel the player holds and can release(), while stating the limit that the OS sleep timer is not yet
+driven (a future host binding enforces the actual inhibit). Granting is the capability the code needs to
+proceed; rejecting would needlessly send every video into its "could not keep screen awake" branch.
+
+G_WAKE_LOCK: defined / promise / granted (sentinel type 'screen', released false, release() present) /
+released (release() resolves, flips released true, fires 'release') / ready. RED-proven (guard → false →
+THREW TypeError: can't access property "request", navigator.wakeLock is undefined; defined/granted drop).
+
+NO REGRESSION: additive JS prelude; all prior gates green; fmt clean. New CONSTELLATION media-class row
+gated. Landed via the verify.sh-direct-then-tick.sh dance under heavy box contention (pass-A/B build
+race + load-induced shell false-FAIL both transient; recover with a single warm verify at load<1.5).
+
+WIKI: docs/wiki/interaction-surface.md (Screen Wake Lock section).

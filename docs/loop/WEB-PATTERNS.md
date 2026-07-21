@@ -2775,3 +2775,18 @@ geolocation pattern; code that handles `onerror` degrades correctly. **(2)** `ge
 — true, no voices installed — not a fabricated voice list. **(3)** Deliver the error ASYNCHRONOUSLY (a
 microtask), never inside `speak()`. **(4)** Gate on the honest result (error fired, `end` NOT fired),
 not on `typeof` — a stub that fires `end` passes `typeof` and silently swallows every read-aloud.
+
+## Keep-awake — `navigator.wakeLock` (Screen Wake Lock) (tick 317)
+
+**Pattern:** `const sentinel = await navigator.wakeLock.request('screen'); …; await sentinel.release()`
+— video players, presentations, kiosks and reading UIs keep the display awake while active.
+
+**The class this unlocks:** display keep-awake for media/presentation. The request is awaited in the
+play/present handler, so an absent `navigator.wakeLock` throws `undefined.request` out of it.
+
+**The traps.** **(1)** The OS sleep timer is host-owned, so — like mediaSession — GRANT and retain a
+real sentinel (a handle the player holds and can `release()`, a seam a host can later enforce) rather
+than rejecting; state the limit. Rejecting sends every video into its "could not keep awake" branch.
+**(2)** `release()` must resolve a Promise, flip `released` to true and fire the `release` event — the
+player's cleanup path depends on it. **(3)** Gate by driving request → sentinel shape → release
+round-trip, not `typeof`.

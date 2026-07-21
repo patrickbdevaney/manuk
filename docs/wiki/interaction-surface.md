@@ -1604,3 +1604,27 @@ We ship no text-to-speech engine, so — like geolocation — the shim (in `WIND
 (`getVoices()` → empty array), `erroredhonest` (`speak()` fires `error` 'synthesis-unavailable' and NOT
 `end`). RED: disabling the shim throws `ReferenceError: speechSynthesis is not defined` and drops
 `defined`/`erroredhonest` together.
+
+## `navigator.wakeLock` — grant a real sentinel, OS enforcement is the follow-on (tick 317)
+
+Video players (YouTube et al.), presentation/slides apps, recipe and reading UIs, kiosks and dashboards
+`await navigator.wakeLock.request('screen')` to keep the display awake, and hold the returned sentinel.
+The request is awaited in the play/present handler, so an absent `navigator.wakeLock` is `undefined` and
+`undefined.request(...)` throws out of that handler.
+
+### Host owns the sleep timer, so grant and retain — do not reject
+
+The display's sleep behaviour is host/OS-owned, so — like `mediaSession` — the shim (in `WINDOW_PRELUDE`,
+after `speechSynthesis`) GRANTS and retains a real `WakeLockSentinel` (`type`, `released`, a `release()`
+that resolves, flips `released` and fires the `release` event, plus `add`/`removeEventListener`) rather
+than rejecting. Granting is the capability the player needs to proceed and hold a working handle; a
+future host binding can enforce the actual OS inhibit. The honest limit: the OS sleep timer is not yet
+driven. Rejecting instead would needlessly send every video into its "could not keep screen awake"
+branch.
+
+### The teeth `G_WAKE_LOCK` uses
+
+`defined` (`request` callable, no sync throw), `promise` (`request` returns a thenable), `granted`
+(resolves a sentinel with `type:'screen'`, `released:false`, a `release()` method), `released`
+(`release()` resolves, flips `released` true, fires `release`). RED: disabling the shim throws
+`TypeError: … navigator.wakeLock is undefined` and drops `defined`/`granted` together.

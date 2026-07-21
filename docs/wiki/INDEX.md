@@ -408,6 +408,9 @@
   - L1580 · speechSynthesis — present, but honestly mute (tick 316)
   - L1587 · No TTS engine, so it reports "cannot speak" — it does not pretend
   - L1601 · The teeth G_SPEECH_SYNTHESIS uses
+  - L1608 · navigator.wakeLock — grant a real sentinel, OS enforcement is the follow-on (tick 317)
+  - L1615 · Host owns the sleep timer, so grant and retain — do not reject
+  - L1625 · The teeth G_WAKE_LOCK uses
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -781,4 +784,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-696 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+699 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
