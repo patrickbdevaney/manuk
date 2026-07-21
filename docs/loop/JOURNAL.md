@@ -14073,3 +14073,30 @@ NO REGRESSION: additive JS prelude; all prior gates green; fmt clean. New CONSTE
 gated. Landed via the verify.sh-direct-then-tick.sh dance ([[wall-warm-rerun-lands-ticks]]).
 
 WIKI: docs/wiki/interaction-surface.md (VisualViewport section).
+
+## Tick 314 — Network Information API: navigator.connection (2026-07-21)
+
+SELECTED: continued re-probe-then-build. navigator.connection genuinely absent (probe2). Adaptive-
+loading code reads it; honest defaults are defensible (no user-costing fabrication).
+
+WHY IT MATTERS: Next.js <Image>, media players, PWAs and react-adaptive-hooks read
+navigator.connection.effectiveType / .saveData to choose image quality, autoplay and prefetch. Some
+wire navigator.connection.addEventListener('change', …) UNGUARDED — on undefined that throws out of the
+loader's setup.
+
+WHAT LANDED (dom_bindings.rs WINDOW_PRELUDE, after userAgentData): navigator.connection with
+effectiveType('4g'), type('unknown'), downlink(10), downlinkMax(Infinity), rtt(50), saveData(false) and
+a change EventTarget (add/removeEventListener retain+remove). We do not continuously measure the link,
+so the honest posture is the one a real browser gives on a fast desktop connection: a good un-metered
+default, and saveData:false is not a guess but the TRUE state (no data-saver enabled). A page told this
+loads full-quality assets, which is correct here — nothing costs the user, unlike a fabricated SLOW link
+that would needlessly degrade the page.
+
+G_NETWORK_INFO: defined / signals (saveData false, effectiveType a valid ECT token, downlink>0, rtt>=0)
+/ events (unguarded change add/remove does not throw, retained) / ready. RED-proven (guard → false →
+THREW TypeError: can't access property "effectiveType", c is undefined; defined/signals drop).
+
+NO REGRESSION: additive JS prelude; all prior gates green; fmt clean. New CONSTELLATION platform-class
+row gated. Landed via the verify.sh-direct-then-tick.sh dance ([[wall-warm-rerun-lands-ticks]]).
+
+WIKI: docs/wiki/interaction-surface.md (Network Information section).

@@ -2724,3 +2724,22 @@ disagreeing with `@media`. **(2)** Retain the `resize`/`scroll` listeners even t
 yet (no live pinch-zoom / OSK) — the unguarded `addEventListener` must not throw, and a future host can
 drive them; state the limit. **(3)** Gate by asserting the metrics MIRROR `innerWidth`/`innerHeight`,
 not just that they are numbers — a stub returning a constant passes `typeof` and lies about the layout.
+
+## Adaptive loading — `navigator.connection` (Network Information API) (tick 314)
+
+**Pattern:** `if (navigator.connection.saveData) loadLowRes(); else loadHiRes();` and
+`navigator.connection.addEventListener('change', reevaluate)` — adaptive-loading code tunes image
+quality, autoplay and prefetch to the link.
+
+**The class this unlocks:** adaptive/data-aware loading. Some of this code reaches for
+`navigator.connection.*` unguarded, so its absence throws `undefined.effectiveType` /
+`undefined.addEventListener` out of the loader.
+
+**The traps.** **(1)** We do not measure the link continuously, so report the HONEST default a real
+browser gives on a fast desktop connection — `effectiveType:'4g'`, plausible downlink/rtt — and
+`saveData:false`, which is not a guess but the true state (no data-saver). **(2)** Do NOT fabricate a
+SLOW link — that would needlessly degrade every page; the un-metered default is both honest and
+non-harmful, whereas a slow fabrication costs the user. **(3)** Provide the `change` EventTarget so the
+unguarded `addEventListener` does not throw (it never fires — state the limit). **(4)** Gate on the
+VALUES (saveData false, a valid ECT token), not just `typeof` — a stub returning a slow/metered guess
+passes `typeof` and silently downgrades the page.

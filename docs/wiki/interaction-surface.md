@@ -1520,3 +1520,31 @@ future host binding can drive them — the same posture as `matchMedia`'s listen
 `innerWidth`/`innerHeight`, `scale` 1, offsets 0 — proving it tracks the real viewport, not a constant),
 `events` (unguarded `add`/`removeEventListener` does not throw and retains the listener). RED: disabling
 the shim throws `TypeError: … vv is undefined` and drops `defined`/`mirrors` together.
+
+## `navigator.connection` — honest adaptive-loading signals (tick 314)
+
+The Network Information API is read by adaptive-loading code — Next.js `<Image>`, media players, PWAs,
+`react-adaptive-hooks` — to choose image quality, autoplay and prefetch from
+`navigator.connection.effectiveType` / `.saveData`. It was absent.
+
+### The failure without it is a dead loader
+
+Some adaptive code reaches for `navigator.connection.addEventListener('change', …)` (or
+`.effectiveType`) unguarded, so its absence throws `undefined.addEventListener` out of the loader's
+setup and the image/prefetch logic dies.
+
+### Honest defaults, not a fabrication that costs the user
+
+The shim (in `WINDOW_PRELUDE`, after `userAgentData`) reports the posture a real browser gives on a fast
+desktop connection: `effectiveType:'4g'`, `downlink:10`, `rtt:50`, `saveData:false` (plus `type` and a
+`change` EventTarget). We do not continuously measure the link — but `saveData:false` is not a guess,
+it is the TRUE state (no data-saver is enabled), and a good un-metered default is both honest and
+non-harmful: a page told this loads full-quality assets, which is correct here. The dishonest path would
+be a fabricated SLOW link, which would needlessly degrade every page.
+
+### The teeth `G_NETWORK_INFO` uses
+
+`defined` (the metrics + EventTarget, no throw), `signals` (`saveData` false, a valid ECT token,
+`downlink > 0`, `rtt >= 0` — proving adaptive code takes the full-quality path), `events` (unguarded
+`change` add/remove does not throw, retained). RED: disabling the shim throws
+`TypeError: … c is undefined` and drops `defined`/`signals` together.

@@ -398,6 +398,10 @@
   - L1499 · The failure without it is a dead layout
   - L1505 · No zoom, so it mirrors the layout viewport
   - L1517 · The teeth G_VISUAL_VIEWPORT uses
+  - L1524 · navigator.connection — honest adaptive-loading signals (tick 314)
+  - L1530 · The failure without it is a dead loader
+  - L1536 · Honest defaults, not a fabrication that costs the user
+  - L1545 · The teeth G_NETWORK_INFO uses
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -771,4 +775,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-686 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+690 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

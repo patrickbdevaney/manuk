@@ -11250,6 +11250,36 @@ const WINDOW_PRELUDE: &str = r#"
             };
           } catch (e) {}
         }
+        // `navigator.connection` — the Network Information API. Adaptive-loading code reads
+        // `navigator.connection.effectiveType` and `.saveData` to choose image quality, whether to
+        // autoplay, and whether to prefetch — Next.js `<Image>`, media players, PWAs and the
+        // `react-adaptive-hooks` family all do. Some of it is guarded, but a fair amount reaches for
+        // `navigator.connection.addEventListener('change', …)` unguarded, and on `undefined` that
+        // throws out of the loader's setup. We do not continuously measure the link, so the honest
+        // posture — the same one a real browser gives on a fast desktop connection — is a good,
+        // un-metered default: `effectiveType:'4g'`, a plausible downlink/rtt, and `saveData:false`,
+        // which is not a guess but the TRUE state (the user has not turned on a data-saver). A page
+        // told this loads full-quality assets, which is the correct behaviour here; nothing about it
+        // costs the user, unlike a fabricated *slow* link that would needlessly degrade the page.
+        if (g.navigator && !g.navigator.connection) {
+            var __connListeners = [];
+            g.navigator.connection = {
+                effectiveType: '4g',
+                type: 'unknown',
+                downlink: 10,
+                downlinkMax: Infinity,
+                rtt: 50,
+                saveData: false,
+                onchange: null,
+                addEventListener: function (type, fn) {
+                    if (type === 'change' && typeof fn === 'function') { __connListeners.push(fn); }
+                },
+                removeEventListener: function (type, fn) {
+                    var i = __connListeners.indexOf(fn); if (i >= 0) { __connListeners.splice(i, 1); }
+                },
+                dispatchEvent: function () { return true; }
+            };
+        }
         // `navigator.clipboard` — the async Clipboard API. The WRITE half (`writeText`) is what every
         // "copy" button uses (copy a code block, a share link, an API key); the READ half (`readText`
         // / `read`) is PASTE — a rich-text editor, a "paste from clipboard" button, an image-paste
