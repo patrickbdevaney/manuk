@@ -27,7 +27,13 @@ LAST_AUDIT=$(grep -oP '^LAST_AUDIT_TICK:\s*\K[0-9]+' STATUS.md 2>/dev/null || ec
 # case that exposed it: a verify aborted at 3s on a half-written manifest and wrote `seconds: 3`.
 # On a non-green receipt, KEEP the previous value rather than inventing a flattering one.
 _RES=$(grep -oP '^result:\s*\K\w+' .git/manuk-verify-receipt 2>/dev/null || echo "")
-if [ "$_RES" = "green" ]; then
+# ── AND ONLY FROM A RUN MEASURED ON A HEALTHY BOX (observer, tick 329). A GREEN receipt measured
+# at disk >=93% is real capability but a POISONED wall number: below the 25G hygiene floor the
+# deps prunes force-run mid-wall and inflate gate time (the 566s/694s runs). Banking it makes the
+# ratchet refuse every later tick against a number the box, not the code, produced. The receipt
+# stamps disk_pct at measure time; absent stamp (old receipts) → 0 → banks as before.
+_DISK=$(grep -oP '^disk_pct:\s*\K[0-9]+' .git/manuk-verify-receipt 2>/dev/null || echo 0)
+if [ "$_RES" = "green" ] && [ "${_DISK:-0}" -lt 93 ]; then
   WALL=$(grep -oP '^seconds:\s*\K[0-9]+' .git/manuk-verify-receipt 2>/dev/null || echo "?")
 else
   WALL=$(grep -oP '^LAST_WALL_TIME:\s*\K[0-9]+' STATUS.md 2>/dev/null || echo "?")

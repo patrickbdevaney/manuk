@@ -493,7 +493,7 @@ s = s.replace(
     "        // MANUK_FALSIFY_MUTATION: do the work even when nobody is listening\n        let _ = manuk_js::wants_view_events(ctx);",
     1)
 '
-  expect_red G_ALLOC cargo test -q -p manuk-page --features spidermonkey --test g_alloc -- --ignored
+  expect_red G_ALLOC cargo test -q -p manuk-page --features stylo,spidermonkey --test g_alloc -- --ignored
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -639,7 +639,7 @@ s = s.replace("""    rooted!(in(cx) let global = CurrentGlobalOrNull(&wrap_cx(cx
     true
 }""")
 '
-  expect_red G2 cargo test -q -p manuk-page --features spidermonkey -- --ignored js_conformance
+  expect_red G2 cargo test -q -p manuk-page --features stylo,spidermonkey -- --ignored js_conformance
 fi
 
 echo

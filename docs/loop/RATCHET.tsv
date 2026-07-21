@@ -28,4 +28,4 @@ CONST:platform	21	2026-07-21T13:48:39-04:00
 CONST:media	4	2026-07-21T13:48:39-04:00
 CONST:cross	10	2026-07-21T13:48:39-04:00
 MEASURED	143	2026-07-21T13:48:39-04:00
-WALL	72	2026-07-21T13:48:39-04:00
+WALL	189	2026-07-21T17:40:00-04:00	re-baselined by observer: 72 was a lucky-low min-lock; genuine warm quiet-box wall measured 189s (green, build 0s, verify-warm-325.log) — see wall-mark-min-lock-rebaseline
