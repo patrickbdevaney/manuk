@@ -425,6 +425,11 @@
   - L1731 · What it produces
   - L1742 · The honest limit
   - L1748 · The teeth G_CREATE_IMAGE_BITMAP uses
+  - L1756 · Canvas gradients — real linear/radial shaders, not a flat last-stop approximation (tick 322)
+  - L1764 · The split, following the canvas division of labour
+  - L1773 · The Rust side (canvas.rs), and the transform subtlety
+  - L1782 · The honest limits
+  - L1788 · The teeth G_CANVAS_GRADIENT uses
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -798,4 +803,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-713 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+718 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

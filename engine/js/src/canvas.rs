@@ -31,7 +31,10 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, Rect, Stroke, Transform};
+use tiny_skia::{
+    Color, FillRule, GradientStop, LinearGradient, Paint, PathBuilder, Pixmap, Point,
+    RadialGradient, Rect, Shader, SpreadMode, Stroke, Transform,
+};
 
 /// One canvas's backing store, keyed by the `<canvas>` element's `NodeId`.
 thread_local! {
@@ -149,32 +152,32 @@ pub fn clear_rect(node: u64, x: f32, y: f32, w: f32, h: f32, m: &[f32]) {
     mark_dirty(node);
 }
 
-/// A path, encoded as a flat command stream from JS.
+/// Decode the flat `[op, args…]` command stream from JS into a tiny-skia `Path`.
 ///
 /// The encoding is deliberately dumb — `[op, args…]` repeated — because the alternative is a native call
-/// per `lineTo`, and a chart with 10,000 points would then pay 10,000 FFI crossings.
+/// per `lineTo`, and a chart with 10,000 points would then pay 10,000 FFI crossings. ops:
+/// `0 moveTo x y` · `1 lineTo x y` · `2 quadTo cx cy x y` · `3 cubicTo c1x c1y c2x c2y x y` ·
+/// `4 close` · `5 rect x y w h`.
 ///
-/// ops: `0 moveTo x y` · `1 lineTo x y` · `2 quadTo cx cy x y` · `3 cubicTo c1x c1y c2x c2y x y` ·
-/// `4 close` · `5 rect x y w h`
-pub fn path(node: u64, cmds: &[f32], fill: bool, col: (u8, u8, u8, f32), sw: f32, m: &[f32]) {
+/// Every slice read is bounds-checked: a truncated stream (a JS bug or a hostile page) must never index
+/// off the end, which is a panic, and a panic inside a JSNative is `nounwind` — it aborts the whole
+/// browser rather than throwing.
+fn build_path(cmds: &[f32]) -> Option<tiny_skia::Path> {
     let mut pb = PathBuilder::new();
     let mut i = 0usize;
     while i < cmds.len() {
         let op = cmds[i] as i32;
         i += 1;
-        // Bounds-check EVERY read. A truncated command stream (a JS bug, or a hostile page) must not
-        // index off the end of the slice — that is a panic, and a panic inside a JSNative is `nounwind`,
-        // which means it aborts the whole browser rather than throwing.
         let need = match op {
             0 | 1 => 2,
             2 => 4,
             3 => 6,
             4 => 0,
             5 => 4,
-            _ => return,
+            _ => return None,
         };
         if i + need > cmds.len() {
-            return;
+            return None;
         }
         match op {
             0 => pb.move_to(cmds[i], cmds[i + 1]),
@@ -194,17 +197,114 @@ pub fn path(node: u64, cmds: &[f32], fill: bool, col: (u8, u8, u8, f32), sw: f32
                     pb.push_rect(r);
                 }
             }
-            _ => return,
+            _ => return None,
         }
         i += need;
     }
-    let Some(p) = pb.finish() else {
+    pb.finish()
+}
+
+pub fn path(node: u64, cmds: &[f32], fill: bool, col: (u8, u8, u8, f32), sw: f32, m: &[f32]) {
+    let Some(p) = build_path(cmds) else {
         return; // an empty or degenerate path is a no-op, exactly as in a real browser
     };
 
     CANVASES.with(|c| {
         if let Some(px) = c.borrow_mut().get_mut(&node) {
             let paint = paint_for(col.0, col.1, col.2, col.3);
+            let t = xform(m);
+            if fill {
+                px.fill_path(&p, &paint, FillRule::Winding, t, None);
+            } else {
+                let mut stroke = Stroke::default();
+                stroke.width = if sw > 0.0 { sw } else { 1.0 };
+                px.stroke_path(&p, &paint, &stroke, t, None);
+            }
+        }
+    });
+    mark_dirty(node);
+}
+
+/// Build a tiny-skia gradient `Shader` from the flat spec JS hands across:
+/// `[kind, x0, y0, r0, x1, y1, r1, off, r, g, b, a, off, r, g, b, a, …]`
+/// where `kind` 0 = linear (uses the two points), 1 = radial (focal `(x0,y0)` → outer circle
+/// `(x1,y1)` radius `r1`). Stops are 5-tuples: offset 0..1, then r/g/b 0..255 and a 0..1.
+///
+/// The gradient is authored in canvas USER space, the same space the path coordinates live in, so it
+/// is built at IDENTITY: `fill_path`/`stroke_path` apply the context transform `m` to the shader (see
+/// `paint.shader.transform(transform)` in tiny-skia's painter) exactly as they do to the path, keeping
+/// the gradient locked to the shape under `translate`/`scale`/`rotate`. Giving it `m` here too would
+/// transform it twice.
+fn gradient_shader(grad: &[f32]) -> Option<Shader<'static>> {
+    if grad.len() < 7 {
+        return None;
+    }
+    let kind = grad[0] as i32;
+    let (x0, y0, r0, x1, y1, r1) = (grad[1], grad[2], grad[3], grad[4], grad[5], grad[6]);
+    let mut stops: Vec<GradientStop> = Vec::new();
+    let mut i = 7usize;
+    while i + 5 <= grad.len() {
+        let a = (grad[i + 4].clamp(0.0, 1.0) * 255.0).round() as u8;
+        stops.push(GradientStop::new(
+            grad[i],
+            Color::from_rgba8(
+                grad[i + 1].clamp(0.0, 255.0) as u8,
+                grad[i + 2].clamp(0.0, 255.0) as u8,
+                grad[i + 3].clamp(0.0, 255.0) as u8,
+                a,
+            ),
+        ));
+        i += 5;
+    }
+    if stops.is_empty() {
+        return None;
+    }
+    // `Pad` clamps to the first/last stop past the ends — the CSS/canvas default. `new` returns a
+    // solid-colour shader for a single stop and `None` for a degenerate geometry, both of which are
+    // the honest outcomes a real 2D context produces.
+    if kind == 1 {
+        // Two-point conical: canvas's inner circle (x0,y0,r0) → outer circle (x1,y1,r1). The concentric
+        // r0=0 case (the overwhelmingly common one) is an ordinary radial gradient.
+        RadialGradient::new(
+            Point::from_xy(x0, y0),
+            r0,
+            Point::from_xy(x1, y1),
+            r1,
+            stops,
+            SpreadMode::Pad,
+            Transform::identity(),
+        )
+    } else {
+        LinearGradient::new(
+            Point::from_xy(x0, y0),
+            Point::from_xy(x1, y1),
+            stops,
+            SpreadMode::Pad,
+            Transform::identity(),
+        )
+    }
+}
+
+/// `fill`/`stroke` a path with a gradient paint instead of a flat colour — the same command stream as
+/// [`path`], but the fill is a real tiny-skia gradient shader. Charts (Chart.js area/bar fills), button
+/// glosses and progress bars are drawn this way, and until now the context flattened them to their last
+/// stop's colour.
+pub fn path_gradient(node: u64, cmds: &[f32], fill: bool, grad: &[f32], sw: f32, m: &[f32]) {
+    let Some(p) = build_path(cmds) else {
+        return;
+    };
+    let Some(shader) = gradient_shader(grad) else {
+        return;
+    };
+    CANVASES.with(|c| {
+        if let Some(px) = c.borrow_mut().get_mut(&node) {
+            let mut paint = Paint {
+                anti_alias: true,
+                ..Default::default()
+            };
+            paint.shader = shader;
+            // `fill_path` applies `t` to BOTH the path and the (identity-built) shader, so the gradient
+            // stays locked to the user-space geometry under the context transform.
             let t = xform(m);
             if fill {
                 px.fill_path(&p, &paint, FillRule::Winding, t, None);

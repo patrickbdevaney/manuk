@@ -1752,3 +1752,44 @@ bitmap — the worse shape of failure. That decode path is the documented follow
 (the crop overload sizes to 10×20), `cropdraw` (bitmapping the red right-half `(10,0,10,20)` then
 blitting at the origin shows RED — proving the crop offset is applied). RED: removing the shim throws
 out of the call, the whole script aborts and the output stays `-`.
+
+## Canvas gradients — real linear/radial shaders, not a flat last-stop approximation (tick 322)
+
+A `CanvasGradient` used to be an honest flat approximation: `ctx.fillStyle = grad` painted the whole
+shape in the gradient's LAST stop's colour ("a bar drawn in the end colour beats a bar not drawn"). That
+is the worst shape of "working" — a chart's area fill, a button's gloss, a progress bar all render as a
+solid block, no error. Now `createLinearGradient`/`createRadialGradient` rasterize a REAL tiny-skia
+gradient shader.
+
+### The split, following the canvas division of labour
+
+The gradient object stays in JS (`makeGrad` in `engine/js/src/event_loop.rs`): it carries its geometry
+(`__geo = [x0,y0,r0, x1,y1,r1]`, `__kind` 0 linear / 1 radial) and `[offset, r, g, b, a]` stops. When
+`fillStyle`/`strokeStyle` is a real gradient (`isGrad`: ≥2 stops, not conic), `fill()`, `fillRect()`,
+`stroke()`, `strokeRect()` flatten it to a spec `[kind, x0,y0,r0, x1,y1,r1, off,r,g,b,a, …]` and cross
+into Rust through the new `__cvPathGradient` native. `globalAlpha` folds into each stop's alpha there,
+matching how it modulates a flat fill.
+
+### The Rust side (`canvas.rs`), and the transform subtlety
+
+`gradient_shader` builds a `tiny_skia::LinearGradient` or `RadialGradient` (the two-point-conical form,
+mapping canvas's inner circle `(x0,y0,r0)` → outer `(x1,y1,r1)` exactly), with `SpreadMode::Pad` — the
+CSS/canvas default that clamps past the ends. The shader is built at **identity transform**, not the
+context matrix: tiny-skia's painter applies the fill transform to the shader (`paint.shader.transform`)
+as well as the path, so giving it `m` here would transform it twice. Building at identity and filling
+with `m` keeps the gradient locked to the user-space geometry under `translate`/`scale`/`rotate`.
+
+### The honest limits
+
+Conic gradients keep the flat last-stop fallback (this tiny-skia build's `SweepGradient` is not wired),
+flagged `__conic` so `isGrad` excludes them. `createPattern` still returns `null`. A single-stop or
+empty gradient also falls back to a flat colour, exactly as a real 2D context degrades.
+
+### The teeth `G_CANVAS_GRADIENT` uses
+
+`lin_red`/`lin_blue`/`lin_varies` (a red→blue linear fill reads RED at the left, BLUE at the right, and
+red falls while blue rises across — a real ramp, where a flat fill would be blue everywhere),
+`path_grad` (a gradient fills a `Path` via `ctx.fill`, not only `fillRect`), `rad_center_green`/
+`rad_edge_red` (a radial gradient is green at its centre and red past its radius — proving it is radial
+and centred where asked). RED: forcing `isGrad` false falls back to the flat last stop and drops
+`lin_red`/`lin_varies`/`path_grad`/`rad_center_green` at once.

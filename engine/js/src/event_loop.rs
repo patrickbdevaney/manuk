@@ -1164,7 +1164,10 @@ const PRELUDE: &str = r#"
 
         // ── COLOUR. Everything the spec calls a "CSS color" that a chart library actually emits.
         function color(v) {
-          if (v && v.__grad) { return v.__stops.length ? v.__stops[v.__stops.length-1] : [0,0,0,1]; }
+          // A gradient used where a flat colour is required (conic, or a gradient with <2 stops) falls
+          // back to its last stop. `__stops` are `[offset, r, g, b, a]` tuples (see `makeGrad`).
+          if (v && v.__grad) { var st = v.__stops.length ? v.__stops[v.__stops.length-1] : null;
+                               return st ? [st[1], st[2], st[3], st[4]] : [0,0,0,1]; }
           var s = String(v == null ? '#000' : v).trim().toLowerCase();
           var NAMED = { black:[0,0,0], white:[255,255,255], red:[255,0,0], green:[0,128,0],
                         blue:[0,0,255], gray:[128,128,128], grey:[128,128,128], silver:[192,192,192],
@@ -1224,6 +1227,24 @@ const PRELUDE: &str = r#"
             return [c[0], c[1], c[2], (c.length > 3 ? c[3] : 1) * (ctx.globalAlpha == null ? 1 : ctx.globalAlpha)];
           }
 
+          // A real (linear/radial) gradient with >=2 stops rasterizes through the native shader. Conic
+          // gradients (no tiny-skia SweepGradient in this build) and single-stop gradients fall back to
+          // the flat last-stop colour via `color()`, so they are excluded here.
+          function isGrad(style) {
+            return !!(style && style.__grad && !style.__conic && style.__stops && style.__stops.length >= 2);
+          }
+          // Flatten a gradient to the spec Rust reads: [kind, x0,y0,r0, x1,y1,r1, off,r,g,b,a, …].
+          // globalAlpha folds into each stop's alpha, matching how it modulates a flat fill.
+          function gradSpec(g) {
+            var ga = (ctx.globalAlpha == null ? 1 : ctx.globalAlpha);
+            var spec = [g.__kind, g.__geo[0], g.__geo[1], g.__geo[2], g.__geo[3], g.__geo[4], g.__geo[5]];
+            for (var i = 0; i < g.__stops.length; i++) {
+              var s = g.__stops[i];
+              spec.push(s[0], s[1], s[2], s[3], s[4] * ga);
+            }
+            return spec;
+          }
+
           // ── State
           ctx.save = function(){ STACK.push({ m: M.slice(), fs: ctx.fillStyle, ss: ctx.strokeStyle,
                                               lw: ctx.lineWidth, ga: ctx.globalAlpha }); };
@@ -1245,13 +1266,21 @@ const PRELUDE: &str = r#"
 
           // ── Rects
           ctx.fillRect = function(x, y, w, h){
+            if (isGrad(ctx.fillStyle)) {
+              el.__cvPathGradient([5, +x||0, +y||0, +w||0, +h||0], true, gradSpec(ctx.fillStyle), 0, M);
+              return;
+            }
             var c = rgba(ctx.fillStyle);
             el.__cvRect(+x||0, +y||0, +w||0, +h||0, c[0], c[1], c[2], c[3], 0, M);
           };
           ctx.strokeRect = function(x, y, w, h){
+            var lw = Math.max(+ctx.lineWidth || 1, 0.01);
+            if (isGrad(ctx.strokeStyle)) {
+              el.__cvPathGradient([5, +x||0, +y||0, +w||0, +h||0], false, gradSpec(ctx.strokeStyle), lw, M);
+              return;
+            }
             var c = rgba(ctx.strokeStyle);
-            el.__cvRect(+x||0, +y||0, +w||0, +h||0, c[0], c[1], c[2], c[3],
-                        Math.max(+ctx.lineWidth || 1, 0.01), M);
+            el.__cvRect(+x||0, +y||0, +w||0, +h||0, c[0], c[1], c[2], c[3], lw, M);
           };
           ctx.clearRect = function(x, y, w, h){ el.__cvClear(+x||0, +y||0, +w||0, +h||0, M); };
 
@@ -1285,13 +1314,16 @@ const PRELUDE: &str = r#"
           // Duck-typed on `__cmds` so a bare fill-rule string (`ctx.fill('evenodd')`) still falls to `P`.
           ctx.fill = function(arg){
             var cmds = (arg && arg.__cmds) ? arg.__cmds : P;
+            if (isGrad(ctx.fillStyle)) { el.__cvPathGradient(cmds, true, gradSpec(ctx.fillStyle), 0, M); return; }
             var c = rgba(ctx.fillStyle);
             el.__cvPath(cmds, true, c[0], c[1], c[2], c[3], 0, M);
           };
           ctx.stroke = function(arg){
             var cmds = (arg && arg.__cmds) ? arg.__cmds : P;
+            var lw = Math.max(+ctx.lineWidth || 1, 0.01);
+            if (isGrad(ctx.strokeStyle)) { el.__cvPathGradient(cmds, false, gradSpec(ctx.strokeStyle), lw, M); return; }
             var c = rgba(ctx.strokeStyle);
-            el.__cvPath(cmds, false, c[0], c[1], c[2], c[3], Math.max(+ctx.lineWidth || 1, 0.01), M);
+            el.__cvPath(cmds, false, c[0], c[1], c[2], c[3], lw, M);
           };
           ctx.clip = function(){};                      // honest no-op: clipping is not wired yet
           ctx.isPointInPath = function(){ return false; };
@@ -1439,16 +1471,23 @@ const PRELUDE: &str = r#"
                              ctx.globalAlpha == null ? 1 : ctx.globalAlpha, M);
           };
 
-          // ── Gradients: a real object, and the last stop's colour is used as a flat approximation.
-          // A bar drawn in the gradient's end colour beats a bar that is not drawn.
-          function grad() {
-            var g = { __grad: true, __stops: [] };
-            g.addColorStop = function(_o, c){ g.__stops.push(color(c)); };
+          // ── Gradients. A gradient carries its geometry and `[offset, r, g, b, a]` stops, and
+          // `ctx.fill`/`fillRect`/`stroke` rasterize linear/radial ones through a real tiny-skia shader
+          // (`__cvPathGradient`). `kind` 0 = linear `(x0,y0)→(x1,y1)`; 1 = radial focal `(x0,y0,r0)` →
+          // outer circle `(x1,y1,r1)`. Conic has no shader in this tiny-skia build, so it keeps the
+          // honest flat last-stop fallback (`__conic` flag → excluded from `isGrad`).
+          function makeGrad(kind, x0, y0, r0, x1, y1, r1) {
+            var g = { __grad: true, __kind: kind,
+                      __geo: [+x0||0, +y0||0, +r0||0, +x1||0, +y1||0, +r1||0], __stops: [] };
+            g.addColorStop = function(off, c){
+              var col = color(c);
+              g.__stops.push([+off||0, col[0], col[1], col[2], (col.length > 3 ? col[3] : 1)]);
+            };
             return g;
           }
-          ctx.createLinearGradient = grad;
-          ctx.createRadialGradient = grad;
-          ctx.createConicGradient = grad;
+          ctx.createLinearGradient = function(x0, y0, x1, y1){ return makeGrad(0, x0, y0, 0, x1, y1, 0); };
+          ctx.createRadialGradient = function(x0, y0, r0, x1, y1, r1){ return makeGrad(1, x0, y0, r0, x1, y1, r1); };
+          ctx.createConicGradient = function(a, x, y){ var g = makeGrad(0, x, y, 0, x, y, 0); g.__conic = true; return g; };
           ctx.createPattern = function(){ return null; };
           ctx.setLineDash = function(){};
           ctx.getLineDash = function(){ return []; };

@@ -1694,6 +1694,7 @@ unsafe fn define_members(
         def_guarded!(def, c"__cvRect", cv_rect, 10);
         def_guarded!(def, c"__cvClear", cv_clear, 5);
         def_guarded!(def, c"__cvPath", cv_path, 8);
+        def_guarded!(def, c"__cvPathGradient", cv_path_gradient, 5);
         def_guarded!(def, c"__cvText", cv_text, 14);
         def_guarded!(def, c"__cvMeasureText", cv_measure_text, 5);
         def_guarded!(def, c"__cvGetImageData", cv_get_image_data, 4);
@@ -2418,6 +2419,22 @@ unsafe fn cv_path(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
         );
         let m = arg_f32_array(cx, vp, argc, 7);
         crate::canvas::path(node.0, &cmds, fill, col, f(cx, vp, argc, 6), &m);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `__cvPathGradient(cmds, fill, gradSpec, lineWidth, matrix)` — fill/stroke a path with a real
+/// gradient shader instead of a flat colour. `gradSpec` is `[kind, x0,y0,r0, x1,y1,r1, off,r,g,b,a, …]`
+/// (kind 0 linear / 1 radial); the context builds it when `fillStyle`/`strokeStyle` is a gradient.
+unsafe fn cv_path_gradient(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((_, node)) = this_node(vp) {
+        let cmds = arg_f32_array(cx, vp, argc, 0);
+        let args = mozjs::jsapi::CallArgs::from_vp(vp, argc);
+        let fill = argc > 1 && args.get(1).get().is_boolean() && args.get(1).get().to_boolean();
+        let grad = arg_f32_array(cx, vp, argc, 2);
+        let m = arg_f32_array(cx, vp, argc, 4);
+        crate::canvas::path_gradient(node.0, &cmds, fill, &grad, f(cx, vp, argc, 3), &m);
     }
     *vp = UndefinedValue();
     true

@@ -14324,3 +14324,44 @@ bitmaps set it), so <img>/<canvas> drawImage is unchanged. g_canvas / g_canvas_i
 still green; fmt clean. WEB-PATTERNS.md + docs/wiki/interaction-surface.md updated.
 
 WIKI: docs/wiki/interaction-surface.md (createImageBitmap section)
+
+## Tick 322 — Canvas gradients: real linear/radial shaders, not a flat last-stop fill (2026-07-21)
+
+TICK SHAPE: capability. New CONSTELLATION platform-class row gated → G_CANVAS_GRADIENT. Third
+canvas-subsystem step (t320 Path2D, t321 createImageBitmap, now gradients) — the productive vein per
+[[prelude-capability-vein-mined]].
+
+SELECTED: canvas gradients were an honest FLAT approximation — fillStyle=grad painted the whole shape in
+the last stop's colour. Highest daily-driver value left in the canvas vein (charts).
+
+WHY IT MATTERS: Chart.js area/bar fills, button glosses, progress bars and sparklines all set
+fillStyle=createLinearGradient/createRadialGradient. A flat last-stop fill renders every one as a solid
+block — the worst shape of "working" (told yes, draws, looks wrong, no error).
+
+WHAT LANDED: the gradient object stays in JS (makeGrad, event_loop.rs) carrying geometry
+(__geo=[x0,y0,r0,x1,y1,r1], __kind 0 linear/1 radial) + [offset,r,g,b,a] stops. When fillStyle/
+strokeStyle isGrad (>=2 stops, non-conic), fill()/fillRect()/stroke()/strokeRect() flatten to a spec
+[kind, x0,y0,r0, x1,y1,r1, off,r,g,b,a, …] and cross via a new __cvPathGradient native (dom_bindings.rs)
+into canvas.rs path_gradient. gradient_shader builds a real tiny_skia LinearGradient / RadialGradient
+(two-point-conical: inner circle (x0,y0,r0) → outer (x1,y1,r1)), SpreadMode::Pad. KEY SUBTLETY: the
+shader is built at IDENTITY, not the ctx matrix — tiny-skia's painter applies the fill transform to the
+shader too (paint.shader.transform), so passing m here would double-transform; building at identity and
+filling with m locks the gradient to the user-space geometry. globalAlpha folds into each stop's alpha.
+Refactored the path decoder into a shared build_path() used by both path() and path_gradient().
+
+G_CANVAS_GRADIENT: lin_red/lin_blue/lin_varies (red→blue linear reads RED left, BLUE right, red falls +
+blue rises across — a real ramp; a flat fill is blue everywhere) / path_grad (gradient fills a Path via
+ctx.fill, not only fillRect) / rad_center_green/rad_edge_red (radial is green at centre, red past the
+radius). RED-proven (force isGrad false → flat last-stop → lin_red:false lin_varies:false path_grad:false
+rad_center_green:false, exactly the flat-fill symptom).
+
+HONEST LIMITS: conic gradients keep the flat last-stop fallback (no SweepGradient wired; __conic flag
+excludes them from isGrad); createPattern still null; single/empty-stop gradients degrade to flat, as a
+real ctx does.
+
+NO REGRESSION: additive; the gradient branch only fires when the style is a real gradient (isGrad), so
+solid-colour fill/stroke/rect are byte-identical. g_canvas / g_canvas_text / g_canvas_image / g_path2d /
+g_create_image_bitmap all still green; fmt clean. WEB-PATTERNS.md + docs/wiki/interaction-surface.md
+updated.
+
+WIKI: docs/wiki/interaction-surface.md (Canvas gradients section)
