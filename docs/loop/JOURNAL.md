@@ -13274,3 +13274,41 @@ HONEST LIMITS: `text/plain` only — binary image blobs on the OS clipboard (pas
 binary bridge and are the honest follow-on; constellation row stays `partial`, not `works`.
 
 WIKI: docs/wiki/interaction-surface.md (clipboard read/paste section). CONSTELLATION.tsv row 129 missing→partial.
+
+## Tick 288 — the Sanitizer API: `Element.setHTML` strips the XSS, `setHTMLUnsafe` is the opt-out (2026-07-20)
+
+TICK SHAPE: board re-read at tick start. The freshest steering (tick 264/267) lists container queries /
+scroll snap / AVIF / unknowns, but IndexedDB, Service Worker + Cache, CSP, Workers, Blob and sendBeacon
+have ALL landed since (t278-287), and AVIF was rejected-with-evidence. Grepped the constellation
+`missing` rows for a genuine, BOUNDED, hard-gateable capability: `setHTML`/`setHTMLUnsafe` was truly
+absent (no `setHTML` anywhere in engine/), builds on the existing `manuk_html::set_inner_html` parse
+seam, and gates deterministically (no scroll/interaction). scroll-snap was the alternative but "actually
+snaps" needs scroll simulation — harder to make a falsifiable gate; parked.
+
+HYPOTHESIS: `el.setHTML(untrusted)` is the platform replacement for DOMPurify — comment bodies, CMS
+fields, pasted rich text. Absent, a page got `el.setHTML is not a function` and either crashed the
+injection path or fell back to the `innerHTML` XSS hole.
+
+PLAN: install `setHTML`/`setHTMLUnsafe` as NATIVE per-reflector methods beside `insertAdjacentHTML`
+(NOT via `Element.prototype` — that is ignored here, the `.sheet` lesson). `setHTMLUnsafe` = the
+innerHTML setter (no shadow-root parsing yet, the only other thing it adds). `setHTML` = parse, then a
+Rust `sanitize_subtree` walk that REMOVES the three things that turn markup into code: `<script>`
+elements, `on*` event-handler attributes, and `javascript:` URLs in href/src/action/formaction/
+xlink:href/srcdoc/background. Conservative: it only ever removes, never rewrites.
+
+### The claim that carries it — G_SANITIZER, five teeth
+
+`script-gone` (a `<script>` in the string does not survive), `handler-gone` (`onerror=` stripped off
+`<img>`), `jsurl-gone` (`javascript:` href removed), `safe-kept` (`<b>` + a normal `/safe/path` href
+PRESERVED — sanitizing is not delete-everything), and `unsafe-keeps-script` (`setHTMLUnsafe` genuinely
+keeps the `<script>`, proving the two paths differ). PROVEN RED: commenting out `sanitize_subtree` →
+`script-gone:false handler-gone:false jsurl-gone:false`, gate FAILED; restored → green.
+
+NO REGRESSION: purely additive (two new methods + one helper); `innerHTML`/`insertAdjacentHTML`
+untouched. Not a trade.
+
+HONEST LIMITS: the SAFE BASELINE only — the full configurable Sanitizer (`options` allow/block/drop
+lists, `Sanitizer` config objects, `Document.parseHTMLUnsafe`) is the follow-on; declarative shadow-root
+parsing is not modelled, so `setHTMLUnsafe` == innerHTML for now. Constellation row `partial`, not `works`.
+
+WIKI: docs/wiki/dom-semantics.md (Sanitizer API section). CONSTELLATION.tsv row 109 missing→partial.

@@ -1597,6 +1597,11 @@ unsafe fn define_members(
         def_guarded!(def, c"replaceWith", el_replace_with, 1);
         def_guarded!(def, c"replaceChildren", el_replace_children, 0);
         def_guarded!(def, c"insertAdjacentHTML", el_insert_adjacent_html, 2);
+        // The Sanitizer API — the safe (`setHTML`) and explicit-opt-out (`setHTMLUnsafe`) ways to set
+        // markup from an untrusted source. `setHTML` strips scripts / event handlers / `javascript:`
+        // URLs before layout sees the nodes; `setHTMLUnsafe` is `innerHTML` with a name that says so.
+        def_guarded!(def, c"setHTML", el_set_html, 1);
+        def_guarded!(def, c"setHTMLUnsafe", el_set_html_unsafe, 1);
         def_guarded!(def, c"insertAdjacentElement", el_insert_adjacent_element, 2);
         def_guarded!(def, c"insertAdjacentText", el_insert_adjacent_text, 2);
         def_guarded!(def, c"click", el_click, 0);
@@ -4483,6 +4488,98 @@ unsafe fn el_set_inner_html(cx: *mut RawJSContext, argc: u32, vp: *mut Value) ->
         let value = arg_string(cx, vp, argc, 0).unwrap_or_default();
         let old_kids: Vec<NodeId> = (*dom).children(node).collect();
         manuk_html::set_inner_html(&mut *dom, node, &value);
+        let new_kids: Vec<NodeId> = (*dom).children(node).collect();
+        record_mutation(cx, dom, "childList", node, None, None, &new_kids, &old_kids);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// **The Sanitizer API — remove the script-executing content from a freshly-parsed subtree.**
+///
+/// This is the safe baseline every `Element.setHTML()` / `Document.parseHTML()` call relies on to
+/// inject untrusted markup (a comment body, a CMS field, pasted rich text) WITHOUT handing the page
+/// to an attacker: after `set_inner_html` has parsed the string, walk the result and strip the three
+/// things that turn markup into code —
+///   * `<script>` elements — removed entirely (their text never runs, since a sanitized fragment is
+///     the whole point of `setHTML` over `innerHTML`);
+///   * event-handler content attributes (`onclick`, `onerror`, … — any `on*`) — removed from every
+///     element, because `<img src=x onerror=alert(1)>` is the canonical XSS payload;
+///   * `javascript:` URLs in the navigational/loading attributes (`href`/`src`/`action`/`formaction`/
+///     `xlink:href`) — removed, because a `javascript:` href executes on activation.
+///
+/// This is the *baseline* the spec calls the default (unsafe) config minus scripting; the full
+/// configurable allow/block lists are an honest follow-on. It is deliberately conservative: it only
+/// ever REMOVES, never rewrites, so it cannot itself introduce a value a page did not author.
+fn sanitize_subtree(dom: &mut Dom, root: NodeId) {
+    // Gather the plan under an immutable borrow, then mutate — a node cannot be removed while the
+    // descendant iterator holds the tree.
+    let mut to_remove: Vec<NodeId> = Vec::new();
+    let mut strip_attrs: Vec<(NodeId, Vec<String>)> = Vec::new();
+    for id in dom.descendants(root).collect::<Vec<_>>() {
+        let Some(el) = dom.element(id) else { continue };
+        if el.name == "script" {
+            to_remove.push(id);
+            continue;
+        }
+        let mut drop: Vec<String> = Vec::new();
+        for a in &el.attrs {
+            let lname = a.name.to_ascii_lowercase();
+            let is_handler = lname.starts_with("on");
+            let is_url_attr = matches!(
+                lname.as_str(),
+                "href" | "src" | "action" | "formaction" | "xlink:href" | "srcdoc" | "background"
+            );
+            let is_js_url = is_url_attr
+                && a.value
+                    .trim_start()
+                    .to_ascii_lowercase()
+                    .starts_with("javascript:");
+            if is_handler || is_js_url {
+                drop.push(a.name.clone());
+            }
+        }
+        if !drop.is_empty() {
+            strip_attrs.push((id, drop));
+        }
+    }
+    for (id, names) in strip_attrs {
+        for name in names {
+            dom.remove_attr(id, &name);
+        }
+    }
+    for id in to_remove {
+        if let Some(parent) = dom.parent(id) {
+            dom.remove_child(parent, id);
+        }
+    }
+}
+
+/// `element.setHTMLUnsafe(html)` — parse `html` into the element with NO sanitization (the explicit
+/// opt-out; identical to the `innerHTML` setter here, since we do not yet parse declarative shadow
+/// roots, which is the only other thing it adds). The `Unsafe` in the name is the contract: the caller
+/// is asserting the markup is trusted.
+unsafe fn el_set_html_unsafe(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let value = arg_string(cx, vp, argc, 0).unwrap_or_default();
+        let old_kids: Vec<NodeId> = (*dom).children(node).collect();
+        manuk_html::set_inner_html(&mut *dom, node, &value);
+        let new_kids: Vec<NodeId> = (*dom).children(node).collect();
+        record_mutation(cx, dom, "childList", node, None, None, &new_kids, &old_kids);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `element.setHTML(html [, options])` — parse `html`, then SANITIZE it (see [`sanitize_subtree`]).
+/// This is the safe way to set markup from an untrusted source; a `<script>` in the string never runs
+/// and an `onerror=` payload is gone before layout ever sees the node.
+unsafe fn el_set_html(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let value = arg_string(cx, vp, argc, 0).unwrap_or_default();
+        let old_kids: Vec<NodeId> = (*dom).children(node).collect();
+        manuk_html::set_inner_html(&mut *dom, node, &value);
+        sanitize_subtree(&mut *dom, node);
         let new_kids: Vec<NodeId> = (*dom).children(node).collect();
         record_mutation(cx, dom, "childList", node, None, None, &new_kids, &old_kids);
     }

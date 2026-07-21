@@ -257,6 +257,8 @@
   - L1018 · A missing property is not neutral — it picks a side, and document.hidden picked the wrong one
   - L1044 · Whose fact is it? The host owns visibility, the same way it owns the lifecycle
   - L1056 · Two answers to the same question must agree — permissions.query vs Notification.permission
+  - L1085 · The Sanitizer API — Element.setHTML / setHTMLUnsafe (tick 288)
+  - L1109 · The teeth G_SANITIZER uses
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -709,4 +711,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-624 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+626 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

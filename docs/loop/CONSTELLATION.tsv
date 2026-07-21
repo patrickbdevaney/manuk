@@ -106,7 +106,7 @@ doc	subgrid	nested grids that must align to the parent grid track lines	missing	
 doc	@scope / scoped styles	component-scoped CSS without leakage	missing	-	tick 230 probe: @scope rule does not apply
 doc	text-wrap: balance / pretty	headings and paragraphs wrap raggedly; a visible typographic gap	missing	-	tick 225 probe: text-wrap does not round-trip the cascade
 app	WebCodecs (VideoDecoder/AudioDecoder/VideoFrame)	low-level media apps, in-browser video editors, custom players	missing	-	tick 225 probe: VideoDecoder absent
-platform	Sanitizer API (Element.setHTML / setHTMLUnsafe)	XSS-safe HTML injection; the platform replacement for DOMPurify	missing	-	tick 225 probe: Element.prototype.setHTML absent
+platform	Sanitizer API (Element.setHTML / setHTMLUnsafe)	XSS-safe HTML injection; the platform replacement for DOMPurify	partial	g_sanitizer	t288: setHTML parses+strips scripts/on*-handlers/javascript:-URLs (safe baseline), setHTMLUnsafe is the opt-out; full configurable allow/block lists are the follow-on
 platform	scroll anchoring (overflow-anchor)	feeds JUMP on load-more; a re-layout un-scrolls the container	works	-	feed stops jumping (203) + live gate (204), g_scroll_anchor_live. Phase-0 lever LANDED
 app	forced reflow (getBoundingClientRect after mid-tick mutation)	react-window/virtuoso read stale/zero geometry -> blank/overlapping rows	works	-	read path lays out before it answers (tick 213, g_forced_reflow) — relayout_incremental wired into getBoundingClientRect. Phase-0 lever LANDED
 app	URL.createObjectURL / blob: URLs	MSE video setup + blob image previews TypeError	gated	G_MSE	tick 223; engine/page/tests/g_mse.rs

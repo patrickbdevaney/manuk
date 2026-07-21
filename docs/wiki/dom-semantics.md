@@ -1081,3 +1081,39 @@ The second half is the value itself. Everything unimplemented answers `'denied'`
 And an unrecognised name must **reject** with a `TypeError` rather than throw synchronously: the
 spec's shape is a Promise on every path, and a synchronous throw is visible to any caller that only
 wrote a `.catch`.
+
+## The Sanitizer API — `Element.setHTML` / `setHTMLUnsafe` (tick 288)
+
+`el.innerHTML = untrusted` is an XSS hole; `el.setHTML(untrusted)` is the platform's own replacement
+for DOMPurify — the safe way to inject a comment body, a CMS-authored field, or pasted rich text. It
+parses the string like `innerHTML` **and then removes the parts that turn markup into code**. It was
+absent, so a page that reached for it got `el.setHTML is not a function`.
+
+Two methods, installed as **native per-reflector methods** beside `insertAdjacentHTML` — *not* on
+`Element.prototype`, which the reflector does not consult (the same lesson the CSSOM `.sheet` shim
+taught). `setHTMLUnsafe(html)` is the explicit opt-out: identical to the `innerHTML` setter here (the
+only other thing it adds is declarative-shadow-root parsing, which we do not model yet), and the
+`Unsafe` in the name is the contract. `setHTML(html)` runs `sanitize_subtree` over the freshly-parsed
+children and strips exactly three things:
+
+- **`<script>` elements** — removed entirely; a sanitized fragment whose script still ran would defeat
+  the point of choosing `setHTML` over `innerHTML`.
+- **event-handler content attributes** — any `on*` (`onclick`, `onerror`, …), because
+  `<img src=x onerror=alert(1)>` is the canonical payload.
+- **`javascript:` URLs** in the navigational/loading attributes (`href`/`src`/`action`/`formaction`/
+  `xlink:href`/`srcdoc`/`background`).
+
+It is deliberately conservative — it only ever REMOVES, never rewrites, so it cannot introduce a value
+the page did not author, and ordinary markup (`<b>`, text, a normal `href`) is preserved untouched.
+
+### The teeth `G_SANITIZER` uses
+
+`script-gone` / `handler-gone` / `jsurl-gone` prove the strip actually happens (a stub that aliases
+`setHTML` to `innerHTML` fails all three); `safe-kept` proves it is not delete-everything; and
+`unsafe-keeps-script` proves `setHTMLUnsafe` genuinely keeps the `<script>` — the two paths differ.
+Commenting out the `sanitize_subtree` call was demonstrated to flip the three `*-gone` claims red
+before the tick landed.
+
+**Honest limit:** the safe baseline only. The full configurable Sanitizer (`options` allow/block/drop
+lists, a `Sanitizer` config object, `Document.parseHTMLUnsafe`) is the follow-on, and declarative
+shadow roots are not parsed — so the constellation row stays `partial`, not `works`. [[js-engine]]

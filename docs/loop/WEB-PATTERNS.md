@@ -2292,3 +2292,23 @@ REJECTS — a shim that resolves every type lies to code that feature-checks `im
 clipboard cell: a same-page copy→paste must round-trip, so `writeText` seeds the same store `readText`
 reads. **(4)** Be honest about binary: a text-only bridge carries `text/plain`; don't fabricate an
 `image/png` Blob you can't actually produce — mark the row `partial`, not `works`.
+
+## Injecting untrusted markup without an XSS hole — `Element.setHTML` (tick 288)
+
+**Pattern:** `commentBody.setHTML(userMarkdownRenderedToHtml)` — a comment system, a CMS field, a
+"paste as rich text" editor, any place that takes markup from an untrusted source and puts it in the
+page. `setHTML` is the platform's own DOMPurify: it parses like `innerHTML` and strips the scriptable
+parts. The escape hatch is `setHTMLUnsafe(trustedHtml)`, which is `innerHTML` with a name that says so.
+
+**The class this unlocks:** XSS-safe HTML injection. Absent, `el.setHTML` was `undefined` and the
+injection path either threw `is not a function` or fell back to the raw `innerHTML` hole.
+
+**The traps.** **(1)** `setHTML` is NOT an alias for `innerHTML` — a stub that forwards to it passes a
+"does it render markup" test and ships the exact vulnerability the API exists to close. Gate on the
+`<script>` being GONE, the `onerror=` attribute being GONE, the `javascript:` href being GONE. **(2)**
+Sanitizing is not deleting — `<b>`, text, and a normal `href` must survive, or the feature is useless.
+**(3)** `setHTMLUnsafe` must genuinely keep the script (it is the opt-out); if both strip, you have one
+method wearing two names. **(4)** Only ever REMOVE, never rewrite — a sanitizer that "fixes" a URL can
+introduce a value the page never authored. **(5)** Be honest about scope: the safe baseline (script /
+handlers / `javascript:`) is real; the configurable allow/block lists are a follow-on — mark the row
+`partial`, not `works`.
