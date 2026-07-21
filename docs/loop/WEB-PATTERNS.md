@@ -2364,3 +2364,19 @@ default checks only rendering: `visibility:hidden` and `opacity:0` are STILL vis
 passes the option — fold them in unconditionally and you disagree with every other browser. **(3)** A
 disconnected element is not visible. **(4)** Back it with the REAL computed cascade, not `offsetParent`
 alone (which is also null for `position:fixed` and the body) — a guess here silently mis-guards.
+
+## Serialising access to a shared resource — `navigator.locks` (tick 292)
+
+**Pattern:** `navigator.locks.request('token-refresh', async () => { await refresh() })` — auth SDKs
+and any code with a critical section wrap it so two concurrent callers can't both run it. The second
+`request` for the same name waits for the first to finish.
+
+**The class this unlocks:** in-page mutual exclusion. Absent, `navigator.locks.request` threw on
+`undefined`, and the SDK either crashed or raced (two token refreshes clobbering each other).
+
+**The traps.** **(1)** The whole point is SERIALISATION — a stub that runs both callbacks at once passes
+a "does it call my function" test and ships the exact race the API exists to prevent; gate on ordering
+(`b` starts only after `a` ends). **(2)** The lock is held until the callback's returned promise
+SETTLES, not until it returns — an async callback holds across its awaits. **(3)** `ifAvailable` must
+NOT queue: on a held lock it invokes with a `null` grant so the caller can take its "busy" path. **(4)**
+`request` resolves with the callback's value, so `await navigator.locks.request(...)` returns it.

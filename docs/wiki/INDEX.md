@@ -578,6 +578,8 @@
   - L969 · The teeth G_URL_STATIC uses
   - L977 · AbortSignal.any — compound cancellation, and the timeout that actually fires (tick 290)
   - L997 · The teeth G_ABORTSIGNAL_ANY uses
+  - L1005 · navigator.locks — the Web Locks API, real serialisation (tick 292)
+  - L1029 · The teeth G_WEB_LOCKS uses
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -717,4 +719,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-632 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+634 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

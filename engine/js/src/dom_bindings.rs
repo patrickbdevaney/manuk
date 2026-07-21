@@ -10779,6 +10779,59 @@ const WINDOW_PRELUDE: &str = r#"
                 } catch (e) { return null; }
             };
         }
+        // `navigator.locks` — the Web Locks API. A page coordinates EXCLUSIVE access to a named
+        // resource: `navigator.locks.request('auth-token-refresh', async () => { … })` runs its
+        // callback only while it holds the lock, and a second request for the same name WAITS until the
+        // first callback settles. Auth SDKs (AWS/GCP/Firebase) use exactly this to stop two concurrent
+        // requests from both refreshing a token. Absent, `navigator.locks.request(...)` threw on
+        // `undefined`. This is REAL mutual exclusion within the page (a per-name queue), not an inert
+        // stub that runs everything at once — the whole point is serialisation. (Cross-tab coordination
+        // needs a shared broker and is the honest follow-on; a single page is the common case.)
+        if (g.navigator && !g.navigator.locks) {
+            var __lockHeld = {};   // name -> currently held?
+            var __lockQ = {};      // name -> queue of granted-callbacks waiting their turn
+            var __grant = function (name, mode, cb, resolve, reject) {
+                __lockHeld[name] = true;
+                var lock = { name: name, mode: mode };
+                var released;
+                try { released = Promise.resolve(cb(lock)); }
+                catch (e) { released = Promise.reject(e); }
+                var done = function () {
+                    __lockHeld[name] = false;
+                    var q = __lockQ[name];
+                    if (q && q.length) { (q.shift())(); }   // hand the lock to the next waiter
+                };
+                released.then(function (v) { done(); resolve(v); },
+                              function (e) { done(); reject(e); });
+            };
+            g.navigator.locks = {
+                request: function (name, optsOrCb, maybeCb) {
+                    name = String(name);
+                    var opts = (typeof optsOrCb === 'function') ? {} : (optsOrCb || {});
+                    var cb = (typeof optsOrCb === 'function') ? optsOrCb : maybeCb;
+                    var mode = opts.mode || 'exclusive';
+                    return new Promise(function (resolve, reject) {
+                        if (typeof cb !== 'function') { reject(new TypeError('callback required')); return; }
+                        // `ifAvailable`: if the lock is taken, do NOT queue — invoke with a null grant.
+                        if (opts.ifAvailable && __lockHeld[name]) {
+                            try { resolve(Promise.resolve(cb(null))); } catch (e) { reject(e); }
+                            return;
+                        }
+                        var start = function () { __grant(name, mode, cb, resolve, reject); };
+                        if (__lockHeld[name]) { (__lockQ[name] = __lockQ[name] || []).push(start); }
+                        else { start(); }
+                    });
+                },
+                query: function () {
+                    var held = [], pending = [];
+                    for (var k in __lockHeld) { if (__lockHeld[k]) { held.push({ name: k, mode: 'exclusive' }); } }
+                    for (var q in __lockQ) {
+                        for (var i = 0; i < (__lockQ[q] || []).length; i++) { pending.push({ name: q, mode: 'exclusive' }); }
+                    }
+                    return Promise.resolve({ held: held, pending: pending });
+                }
+            };
+        }
         // `navigator.sendBeacon(url, data)` — the fire-and-forget POST every analytics, RUM and
         // error-reporting library sends on `pagehide`/`visibilitychange`. It was ABSENT, so an
         // unguarded `navigator.sendBeacon(...)` threw on `undefined` and took the rest of an unload

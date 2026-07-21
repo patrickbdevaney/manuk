@@ -1001,3 +1001,34 @@ fires its event), `reason` (carries the source reason), `already` (an already-ab
 result immediately), and `timeout-prop` (a `AbortSignal.timeout(0)` source propagates through `any` with
 a `TimeoutError` — the claim that proves the timeout fix, not just the combinator). Gating out the shim
 was demonstrated to make the first call throw before the tick landed. [[js-engine]]
+
+## `navigator.locks` — the Web Locks API, real serialisation (tick 292)
+
+A page coordinates EXCLUSIVE access to a named resource:
+
+```js
+navigator.locks.request('auth-token-refresh', async () => { await refreshToken(); })
+```
+
+The callback runs only while it holds the lock; a second `request` for the same name WAITS until the
+first callback settles. This is how AWS/GCP/Firebase auth SDKs stop two concurrent requests from both
+refreshing a token (and blowing away each other's result). It was absent, so `navigator.locks.request`
+threw on `undefined`.
+
+The implementation is REAL mutual exclusion — a per-name queue. Acquiring a held lock pushes the
+granted-callback onto that name's queue; when the holder's callback promise settles, the lock is handed
+to the next waiter. `request` resolves with the callback's return value. `{ ifAvailable: true }` on a
+held lock does NOT wait — it invokes the callback with a `null` grant, the documented "try, don't
+block" path. `query()` reports the held and pending lock names.
+
+The point is serialisation: an inert stub that runs both callbacks at once would defeat the entire
+reason the API exists. **Honest limit:** single-page only. Cross-TAB coordination (the same lock name
+held across two tabs of the same origin) needs a shared broker and is the follow-on; shared (read) mode
+is treated as exclusive. [[js-engine]]
+
+### The teeth `G_WEB_LOCKS` uses
+
+`serialised` (order is exactly `a-start, a-end, b-start` — the second holder never starts until the
+first ends), `value` (request resolves with the callback's return), `if-available` (a held lock +
+`ifAvailable` yields a `null` grant, no wait). Deleting the block was demonstrated to make the first
+call throw before the tick landed.

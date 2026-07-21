@@ -13420,3 +13420,32 @@ NO REGRESSION: additive native method. Not a trade. HONEST LIMIT: `contentVisibi
 (no content-visibility containment in the engine).
 
 WIKI: docs/wiki/dom-semantics.md (checkVisibility section). No constellation row (JS-surface completeness).
+
+## Tick 292 — `navigator.locks`: the Web Locks API, real serialisation (2026-07-20)
+
+TICK SHAPE: board re-read; probe-first. From the session's confirmed genuinely-absent list
+(navigator.locks / scheduler.postTask), picked navigator.locks — genuinely useful (AWS/GCP/Firebase auth
+SDKs coordinate token-refresh with it) and implementable as HONEST mutual exclusion, not an inert stub
+(scheduler.postTask's priority ordering is easy to fake and hard to honor). navigator is available in the
+WINDOW_PRELUDE (no ordering wall, unlike AbortSignal/Element last two ticks).
+
+HYPOTHESIS: `navigator.locks.request('token-refresh', async () => {…})` — the second request for the
+same name waits for the first. Absent → threw on `undefined`, and the SDK raced two token refreshes.
+
+WHAT LANDED: a per-name lock queue. `request(name, [opts,] cb)` runs `cb` while holding the lock and
+resolves with its return value once the callback's promise SETTLES; a second request for a held name is
+queued and handed the lock when the holder finishes; `{ifAvailable:true}` on a held lock invokes `cb`
+with a `null` grant instead of waiting; `query()` reports held/pending names.
+
+### The claim — G_WEB_LOCKS, five teeth (deterministic via Promise.withResolvers)
+
+`present`, `if-available`, `queued` (only the first holder ran while the lock was held), `serialised`
+(order is exactly `a-start, a-end, b-start` — the second never interleaves), `value` (request resolves
+the callback's return). The first holder hangs onto the lock via a `Promise.withResolvers` deferred so
+the ordering is deterministic under microtask draining. PROVEN RED: `if (false && …)` around the block →
+`present:false`, first call throws.
+
+NO REGRESSION: additive on navigator. Not a trade. HONEST LIMIT: single-PAGE only — cross-tab
+coordination needs a shared broker (follow-on); shared/read mode is treated as exclusive.
+
+WIKI: docs/wiki/networking.md (navigator.locks section). No constellation row (JS-surface completeness).
