@@ -3686,15 +3686,43 @@ const PRELUDE: &str = r#"
             // holding the raw secret. Only raw HMAC keys are supported (asymmetric/derive stay absent).
             importKey: function(format, keyData, algorithm, extractable, keyUsages) {
               var name = String((algorithm && algorithm.name) || algorithm || '').toUpperCase();
-              if (name !== 'HMAC') { return Promise.reject(__mkCryptoErr('NotSupportedError', 'Only HMAC importKey is supported: ' + name)); }
+              if (name !== 'HMAC' && name !== 'HKDF') { return Promise.reject(__mkCryptoErr('NotSupportedError', 'Only HMAC/HKDF importKey is supported: ' + name)); }
               if (String(format) !== 'raw') { return Promise.reject(__mkCryptoErr('NotSupportedError', "Only 'raw' key format is supported")); }
               var kb;
               try { kb = __asBytes(keyData); } catch (e) { return Promise.reject(new TypeError('keyData is not a BufferSource')); }
+              var alg = (name === 'HKDF') ? { name: 'HKDF' } : { name: 'HMAC', hash: { name: __hashName(algorithm) } };
               return Promise.resolve({
-                type: 'secret', extractable: !!extractable,
-                algorithm: { name: 'HMAC', hash: { name: __hashName(algorithm) } },
+                type: 'secret', extractable: !!extractable, algorithm: alg,
                 usages: (keyUsages || []).slice(), __raw: kb
               });
+            },
+            // `deriveBits({name:'HKDF', hash, salt, info}, key, lengthBits)` — HKDF (RFC 5869), the key
+            // derivation modern protocols and token schemes use to expand one secret into keying
+            // material. It is Extract-then-Expand, both built on the HMAC above — so, like HMAC, a pure
+            // composition of the existing hash, gate-verified against the RFC 5869 known-answer vectors.
+            deriveBits: function(algorithm, key, length) {
+              var name = String((algorithm && algorithm.name) || '').toUpperCase();
+              if (name !== 'HKDF') { return Promise.reject(__mkCryptoErr('NotSupportedError', 'Only HKDF deriveBits is supported: ' + name)); }
+              try {
+                var hash = __hashName(algorithm);
+                var hlen = ({ 'SHA-1': 20, 'SHA-256': 32, 'SHA-384': 48, 'SHA-512': 64 })[hash] || 32;
+                var salt = algorithm.salt ? __asBytes(algorithm.salt) : new Uint8Array(hlen);
+                var info = algorithm.info ? __asBytes(algorithm.info) : new Uint8Array(0);
+                var L = (length || 0) / 8;
+                var prk = __hmac(hash, salt, key.__raw);        // Extract
+                var okm = new Uint8Array(L), t = new Uint8Array(0), pos = 0, i = 1;
+                while (pos < L) {                               // Expand
+                  var input = new Uint8Array(t.length + info.length + 1);
+                  input.set(t); input.set(info, t.length); input[t.length + info.length] = i;
+                  t = __hmac(hash, prk, input);
+                  var take = Math.min(t.length, L - pos);
+                  okm.set(t.subarray(0, take), pos);
+                  pos += take; i++;
+                }
+                var out = new ArrayBuffer(L);
+                new Uint8Array(out).set(okm);
+                return Promise.resolve(out);
+              } catch (e) { return Promise.reject(e); }
             },
             // `sign('HMAC', key, data)` → the MAC as an ArrayBuffer. Composes the host SHA (RustCrypto)
             // into HMAC — provably correct against the RFC 4231 test vectors the gate checks.

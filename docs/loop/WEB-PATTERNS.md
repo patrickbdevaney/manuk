@@ -2587,3 +2587,18 @@ plausible-but-wrong MAC. **(2)** Gate against a KNOWN-ANSWER vector (RFC 4231), 
 sign/verify pair can agree with each other while both being wrong. **(3)** `verify` must compare in
 constant time; a short-circuit `===` leaks the signature byte by byte. **(4)** Be honest about scope —
 HMAC is a composition of an existing hash; asymmetric crypto is a different, absent capability.
+
+## Deriving keys from a secret — `crypto.subtle.deriveBits` (HKDF) (tick 307)
+
+**Pattern:** `const bits = await crypto.subtle.deriveBits({name:'HKDF', hash:'SHA-256', salt, info},
+ikmKey, 256)` — expand a shared secret / master key into per-purpose keying material for a token scheme
+or an encrypted channel.
+
+**The class this unlocks:** HKDF key derivation. `deriveBits` threw `is not a function`, so any
+derivation step failed.
+
+**The traps.** **(1)** Extract-then-Expand — `PRK = HMAC(salt, IKM)` first, then expand; skipping Extract
+(using IKM directly as the PRK) is a common wrong shortcut. **(2)** Empty salt defaults to a zero block
+of hash length, not the empty string. **(3)** The expand counter is a single byte appended AFTER `info`,
+starting at 1. **(4)** Gate against RFC 5869 known-answers — a self-consistent but wrong derivation
+produces stable garbage.

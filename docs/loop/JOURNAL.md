@@ -13816,3 +13816,25 @@ NO REGRESSION: additive on crypto.subtle. Not a trade. HONEST LIMIT: HMAC only �
 deriveKey stay absent (the `if (crypto.subtle.encrypt)` guard still falls back).
 
 WIKI: docs/wiki/networking.md (crypto.subtle HMAC section). No constellation row.
+
+## Tick 307 — crypto.subtle.deriveBits (HKDF, RFC 5869) (2026-07-21)
+
+TICK SHAPE: second crypto-subsystem step, following the 306 template (compose on the existing hash +
+gate on a published known-answer). HKDF is Extract-then-Expand, both built on the tick-306 __hmac — so,
+like HMAC, a pure composition, provably correct against RFC 5869 vectors. Genuinely used for key
+derivation in modern protocols/token schemes.
+
+WHAT LANDED (event_loop.rs crypto.subtle): importKey now also accepts {name:'HKDF'} (carries the IKM);
+deriveBits({name:'HKDF', hash, salt, info}, key, lengthBits) — Extract (PRK=HMAC(salt,IKM), zero-block
+salt default) then Expand (T(i)=HMAC(PRK, T(i-1)||info||i)), truncated to length.
+
+### The claim — G_CRYPTO_HKDF, three teeth (KNOWN-ANSWER)
+
+okm-vector — output EQUALS RFC 5869 TC1 (3cb25f25…, 42 bytes) which a wrong Extract/Expand cannot fake;
+length (42 bytes). PROVEN RED: renaming deriveBits → `crypto.subtle.deriveBits is not a function`. All
+crypto gates (hmac/digest/crypto) stayed green.
+
+NO REGRESSION: additive on crypto.subtle. Not a trade. HONEST LIMIT: HKDF deriveBits only; PBKDF2 +
+deriveKey (wrap bits into a CryptoKey) are the follow-ons.
+
+WIKI: docs/wiki/networking.md (crypto.subtle deriveBits/HKDF section). No constellation row.

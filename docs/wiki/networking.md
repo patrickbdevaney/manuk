@@ -1180,3 +1180,21 @@ compares in **constant time** (a timing-variable compare is a classic signature-
 `sign-vector` — the output matches RFC 4231 Test Case 2 EXACTLY (`5bdcc146…` for key `Jefe`, message
 `what do ya want for nothing?`), a known-answer that a wrong construction cannot fake; `verify-good`
 (accepts the real signature); `verify-bad` (rejects a tampered one). [[js-engine]]
+
+## `crypto.subtle.deriveBits` — HKDF key derivation (tick 307)
+
+HKDF (RFC 5869) expands one secret into keying material — the derivation modern protocols and token
+schemes use. It was absent (`deriveBits is not a function`). Like HMAC (tick 306), it is a pure
+composition of the existing hash: **Extract** (`PRK = HMAC(salt, IKM)`, salt defaulting to a zero block)
+then **Expand** (`T(i) = HMAC(PRK, T(i-1) || info || i)`, concatenated and truncated to the requested
+length). `importKey('raw', ikm, {name:'HKDF'}, …)` carries the input keying material; `deriveBits({name:
+'HKDF', hash, salt, info}, key, lengthBits)` returns the derived bytes.
+
+**Honest limit:** HKDF `deriveBits` only; PBKDF2 and `deriveKey` (which would wrap the bits into a
+`CryptoKey`) are the follow-ons.
+
+### The teeth `G_CRYPTO_HKDF` uses
+
+`okm-vector` — the output matches RFC 5869 Test Case 1 EXACTLY (`3cb25f25…`, 42 bytes from the
+0x0b-repeated IKM with the given salt/info), a known-answer a wrong Extract/Expand cannot fake; `length`
+(42 bytes derived). [[js-engine]]
