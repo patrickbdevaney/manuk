@@ -14128,3 +14128,32 @@ NO REGRESSION: additive JS prelude; all prior gates green; fmt clean. New CONSTE
 row gated. Landed via the verify.sh-direct-then-tick.sh dance ([[wall-warm-rerun-lands-ticks]]).
 
 WIKI: docs/wiki/interaction-surface.md (StorageManager section).
+
+## Tick 316 — Web Speech synthesis: speechSynthesis + SpeechSynthesisUtterance (2026-07-21)
+
+SELECTED: continued re-probe-then-build. speechSynthesis/SpeechSynthesisUtterance genuinely absent
+(probe2). Accessibility class.
+
+WHY IT MATTERS: screen readers, "read aloud" buttons, language-learning apps (Duolingo et al.) and
+reader-mode UIs construct new SpeechSynthesisUtterance(text) and call speechSynthesis.speak/getVoices/
+cancel, often UNGUARDED — so absent, `SpeechSynthesisUtterance is not defined` (or undefined.getVoices())
+throws out of the a11y handler.
+
+WHAT LANDED (dom_bindings.rs WINDOW_PRELUDE, after navigator.storage): window.speechSynthesis
+(speak/getVoices/cancel/pause/resume, pending/speaking/paused, onvoiceschanged) + SpeechSynthesisUtterance
+(text/lang/voice/volume/rate/pitch + full event surface) + SpeechSynthesisVoice ctor. We ship NO TTS
+engine, so — like geolocation — the honest posture is the API present with a truthful "cannot speak":
+getVoices() returns [] (true, no voices installed), and speak() reports failure ASYNCHRONOUSLY via the
+utterance's error event (error: 'synthesis-unavailable') and NEVER fires end — a fired end would tell the
+app it spoke when the user heard nothing, a lie the code cannot see. Code that handles onerror degrades
+correctly (shows text / offers a download); the API being present stops the unguarded throw.
+
+G_SPEECH_SYNTHESIS: defined / novoices (getVoices() [] ) / erroredhonest (speak fires error
+synthesis-unavailable, NOT end) / ready. RED-proven (guard → false → THREW ReferenceError:
+speechSynthesis is not defined; defined/erroredhonest drop).
+
+NO REGRESSION: additive JS prelude; all prior gates green; fmt clean. New CONSTELLATION doc-class row
+gated. Landed via the verify.sh-direct-then-tick.sh dance under box contention (pass-A/B build race +
+load-induced shell false-FAIL are transient; recover with a single warm verify at load<1.5).
+
+WIKI: docs/wiki/interaction-surface.md (Web Speech synthesis section).

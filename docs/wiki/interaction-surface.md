@@ -1576,3 +1576,31 @@ check can see.
 `defined` (estimate/persist/persisted callable, no throw), `estimated` (`estimate()` resolves
 `{quota>0, usage<=quota}`), `persisted` (`persist()` and `persisted()` both resolve `true`). RED:
 disabling the shim throws `TypeError: … st is undefined` and drops `defined`/`estimated` together.
+
+## `speechSynthesis` — present, but honestly mute (tick 316)
+
+Screen readers, accessibility "read aloud" buttons, language-learning apps and reader-mode UIs construct
+`new SpeechSynthesisUtterance(text)` and call `speechSynthesis.speak/getVoices/cancel`, often UNGUARDED.
+Absent, `SpeechSynthesisUtterance is not defined` (or `undefined.getVoices()`) throws out of the a11y
+handler.
+
+### No TTS engine, so it reports "cannot speak" — it does not pretend
+
+We ship no text-to-speech engine, so — like geolocation — the shim (in `WINDOW_PRELUDE`, after
+`navigator.storage`) makes the API PRESENT with a truthful failure rather than a pretense:
+
+- `getVoices()` → `[]` (true: no voices are installed);
+- `speak(utterance)` reports failure ASYNCHRONOUSLY through the utterance's `error` event
+  (`error: 'synthesis-unavailable'`) and NEVER fires `end`. A fired `end` would tell the app it spoke
+  when the user heard nothing — a lie the code cannot see. Code that handles `onerror` degrades
+  correctly (shows the text, offers a download); the API being present is what stops the unguarded throw.
+
+`SpeechSynthesisUtterance` carries the full author surface (`text`/`lang`/`voice`/`volume`/`rate`/
+`pitch` + an EventTarget), so setup code runs unchanged.
+
+### The teeth `G_SPEECH_SYNTHESIS` uses
+
+`defined` (`speechSynthesis` + `SpeechSynthesisUtterance`, methods callable, no throw), `novoices`
+(`getVoices()` → empty array), `erroredhonest` (`speak()` fires `error` 'synthesis-unavailable' and NOT
+`end`). RED: disabling the shim throws `ReferenceError: speechSynthesis is not defined` and drops
+`defined`/`erroredhonest` together.

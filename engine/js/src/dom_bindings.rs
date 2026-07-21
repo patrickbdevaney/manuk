@@ -11312,6 +11312,63 @@ const WINDOW_PRELUDE: &str = r#"
                 persisted: function () { return Promise.resolve(true); }
             };
         }
+        // `window.speechSynthesis` + `SpeechSynthesisUtterance` — the Web Speech (synthesis) API. Screen
+        // readers, accessibility "read aloud" buttons, language-learning apps (Duolingo et al.) and
+        // reader-mode UIs construct `new SpeechSynthesisUtterance(text)` and call `speechSynthesis.speak`
+        // / `.getVoices()` / `.cancel()`, often UNGUARDED — so absent, `SpeechSynthesisUtterance is not
+        // defined` (or `undefined.getVoices()`) throws out of the a11y handler.
+        //
+        // We ship NO text-to-speech engine, so — like geolocation — the honest posture is availability
+        // of the API with a truthful "cannot speak" result, never a pretense that it spoke. `getVoices()`
+        // returns `[]` (true: no voices are installed), and `speak()` reports failure ASYNCHRONOUSLY via
+        // the utterance's `error` event (`error: 'synthesis-unavailable'`) rather than firing `end` — a
+        // fired `end` would tell the app it spoke when the user heard nothing, a lie the code cannot see.
+        // Code that handles `onerror` degrades correctly (shows text, offers a download); the API being
+        // present is what stops the unguarded throw.
+        if (typeof g.SpeechSynthesisUtterance === 'undefined') {
+            var SpeechSynthesisUtterance = function SpeechSynthesisUtterance(text) {
+                this.text = text == null ? '' : String(text);
+                this.lang = ''; this.voice = null;
+                this.volume = 1; this.rate = 1; this.pitch = 1;
+                this.onstart = null; this.onend = null; this.onerror = null;
+                this.onpause = null; this.onresume = null; this.onmark = null; this.onboundary = null;
+                this.__listeners = {};
+            };
+            SpeechSynthesisUtterance.prototype.addEventListener = function (t, fn) {
+                if (typeof fn === 'function') { (this.__listeners[t] = this.__listeners[t] || []).push(fn); }
+            };
+            SpeechSynthesisUtterance.prototype.removeEventListener = function (t, fn) {
+                var l = this.__listeners[t]; if (!l) { return; }
+                var i = l.indexOf(fn); if (i >= 0) { l.splice(i, 1); }
+            };
+            SpeechSynthesisUtterance.prototype.dispatchEvent = function () { return true; };
+            g.SpeechSynthesisUtterance = SpeechSynthesisUtterance;
+            var __fireUtter = function (utt, type, ev) {
+                ev = ev || { type: type, target: utt };
+                var on = utt['on' + type];
+                if (typeof on === 'function') { try { on(ev); } catch (e) {} }
+                var l = utt.__listeners && utt.__listeners[type];
+                if (l) { for (var i = 0; i < l.length; i++) { try { l[i](ev); } catch (e) {} } }
+            };
+            g.speechSynthesis = {
+                pending: false, speaking: false, paused: false,
+                getVoices: function () { return []; },
+                speak: function (utt) {
+                    // No engine → report the failure honestly and asynchronously; never fire `end`,
+                    // which would claim it spoke.
+                    if (!utt) { return; }
+                    Promise.resolve().then(function () {
+                        __fireUtter(utt, 'error',
+                            { type: 'error', target: utt, error: 'synthesis-unavailable' });
+                    });
+                },
+                cancel: function () {}, pause: function () {}, resume: function () {},
+                onvoiceschanged: null,
+                addEventListener: function () {}, removeEventListener: function () {},
+                dispatchEvent: function () { return true; }
+            };
+            g.SpeechSynthesisVoice = g.SpeechSynthesisVoice || function SpeechSynthesisVoice() {};
+        }
         // `navigator.clipboard` — the async Clipboard API. The WRITE half (`writeText`) is what every
         // "copy" button uses (copy a code block, a share link, an API key); the READ half (`readText`
         // / `read`) is PASTE — a rich-text editor, a "paste from clipboard" button, an image-paste

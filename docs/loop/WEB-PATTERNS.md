@@ -2760,3 +2760,18 @@ quota; `usage` may be a floor if you cannot cheaply sum live bytes, but `quota` 
 against, so it must be honest and large. **(3)** Do NOT stub OPFS `getDirectory()` unless you back it —
 a present-but-broken `FileSystemDirectoryHandle` is worse than an honest absence a feature check sees.
 **(4)** Gate on the VALUES (quota>0, usage<=quota, persistence true), not `typeof`.
+
+## Read-aloud — `speechSynthesis` present but honestly mute (tick 316)
+
+**Pattern:** `const u = new SpeechSynthesisUtterance(text); u.onend = next; speechSynthesis.speak(u)` —
+screen readers, "read aloud" buttons and language-learning apps voice text.
+
+**The class this unlocks:** accessibility read-aloud / TTS. The constructor and `speechSynthesis` are
+used UNGUARDED, so absence throws `SpeechSynthesisUtterance is not defined` out of the a11y handler.
+
+**The traps.** **(1)** With no TTS engine, do NOT fire `end` — that claims it spoke when the user heard
+nothing, a lie the code cannot see. Report the honest failure via `error` ('synthesis-unavailable'), the
+geolocation pattern; code that handles `onerror` degrades correctly. **(2)** `getVoices()` returns `[]`
+— true, no voices installed — not a fabricated voice list. **(3)** Deliver the error ASYNCHRONOUSLY (a
+microtask), never inside `speak()`. **(4)** Gate on the honest result (error fired, `end` NOT fired),
+not on `typeof` — a stub that fires `end` passes `typeof` and silently swallows every read-aloud.

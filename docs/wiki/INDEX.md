@@ -405,6 +405,9 @@
   - L1552 · navigator.storage — truthful quota and durable persistence (tick 315)
   - L1559 · A capability we HAVE, so the answers are truthful
   - L1574 · The teeth G_STORAGE_MANAGER uses
+  - L1580 · speechSynthesis — present, but honestly mute (tick 316)
+  - L1587 · No TTS engine, so it reports "cannot speak" — it does not pretend
+  - L1601 · The teeth G_SPEECH_SYNTHESIS uses
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -778,4 +781,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-693 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+696 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
