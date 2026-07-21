@@ -92,6 +92,22 @@ pub enum Role {
     Radio,
     ComboBox,
 
+    // Interactive widget roles (ARIA). These are the custom controls modern web apps build out
+    // of `<div>`s and `role="…"`, and the ones an agent most needs to *ground and act on*: a
+    // switch to toggle, a tab to select, a slider to set, a menu item to choose. Before this they
+    // all collapsed to `Generic`, so the agent saw an anonymous box where a togglable switch was —
+    // it could click it but never name it, and never read the switch/tab state `state_of` already
+    // computes from `aria-checked`/`aria-selected`. Their interaction state is unchanged: `state_of`
+    // reads the `aria-*` attributes irrespective of role, so a `role="switch" aria-checked` already
+    // reports `checked` — it was only missing a role to hang it on.
+    Switch,
+    Slider,
+    SpinButton,
+    Tab,
+    MenuItem,
+    Option,
+    TreeItem,
+
     Image,
     List,
     ListItem,
@@ -100,6 +116,25 @@ pub enum Role {
     Cell,
     ColumnHeader,
     RowHeader,
+
+    // Container / grouping widget roles — the structures those interactive widgets live in. An
+    // agent that finds a `tab` needs the enclosing `tablist` to know the set; a `dialog` tells it
+    // a modal is up and the page behind it is inert.
+    Menu,
+    MenuBar,
+    TabList,
+    TabPanel,
+    ListBox,
+    Toolbar,
+    Tree,
+    Group,
+    RadioGroup,
+    Dialog,
+    AlertDialog,
+    Tooltip,
+    Alert,
+    Status,
+    ProgressBar,
 
     Generic,
 }
@@ -116,6 +151,13 @@ impl Role {
                 | Role::CheckBox
                 | Role::Radio
                 | Role::ComboBox
+                | Role::Switch
+                | Role::Slider
+                | Role::SpinButton
+                | Role::Tab
+                | Role::MenuItem
+                | Role::Option
+                | Role::TreeItem
         )
     }
 
@@ -133,6 +175,12 @@ impl Role {
                 | Role::ColumnHeader
                 | Role::RowHeader
                 | Role::Row
+                | Role::Tab
+                | Role::MenuItem
+                | Role::Option
+                | Role::Switch
+                | Role::TreeItem
+                | Role::Tooltip
         )
     }
 
@@ -158,6 +206,28 @@ impl Role {
             Role::CheckBox => "checkbox",
             Role::Radio => "radio",
             Role::ComboBox => "combobox",
+            Role::Switch => "switch",
+            Role::Slider => "slider",
+            Role::SpinButton => "spinbutton",
+            Role::ProgressBar => "progressbar",
+            Role::Tab => "tab",
+            Role::MenuItem => "menuitem",
+            Role::Option => "option",
+            Role::TreeItem => "treeitem",
+            Role::Menu => "menu",
+            Role::MenuBar => "menubar",
+            Role::TabList => "tablist",
+            Role::TabPanel => "tabpanel",
+            Role::ListBox => "listbox",
+            Role::Toolbar => "toolbar",
+            Role::Tree => "tree",
+            Role::Group => "group",
+            Role::RadioGroup => "radiogroup",
+            Role::Dialog => "dialog",
+            Role::AlertDialog => "alertdialog",
+            Role::Tooltip => "tooltip",
+            Role::Alert => "alert",
+            Role::Status => "status",
             Role::Image => "image",
             Role::List => "list",
             Role::ListItem => "listitem",
@@ -210,6 +280,30 @@ impl Role {
             "checkbox" => Role::CheckBox,
             "radio" => Role::Radio,
             "combobox" => Role::ComboBox,
+            "switch" => Role::Switch,
+            "slider" => Role::Slider,
+            "spinbutton" => Role::SpinButton,
+            "progressbar" => Role::ProgressBar,
+            "tab" => Role::Tab,
+            // `menuitemcheckbox`/`menuitemradio` are checkable menu items; ground them as menu
+            // items (their checked/selected state still flows from `aria-checked` via `state_of`).
+            "menuitem" | "menuitemcheckbox" | "menuitemradio" => Role::MenuItem,
+            "option" => Role::Option,
+            "treeitem" => Role::TreeItem,
+            "menu" => Role::Menu,
+            "menubar" => Role::MenuBar,
+            "tablist" => Role::TabList,
+            "tabpanel" => Role::TabPanel,
+            "listbox" => Role::ListBox,
+            "toolbar" => Role::Toolbar,
+            "tree" => Role::Tree,
+            "group" => Role::Group,
+            "radiogroup" => Role::RadioGroup,
+            "dialog" => Role::Dialog,
+            "alertdialog" => Role::AlertDialog,
+            "tooltip" => Role::Tooltip,
+            "alert" => Role::Alert,
+            "status" => Role::Status,
             "img" | "image" => Role::Image,
             "list" => Role::List,
             "listitem" => Role::ListItem,
@@ -660,11 +754,20 @@ pub fn role_of(dom: &Dom, node: NodeId) -> Option<Role> {
             "checkbox" => Role::CheckBox,
             "radio" => Role::Radio,
             "button" | "submit" | "reset" | "image" => Role::Button,
+            // HTML-AAM: `<input type=range>` is a `slider`, `type=number` a `spinbutton`.
+            "range" => Role::Slider,
+            "number" => Role::SpinButton,
             // `hidden` is filtered by `is_hidden` before we get here.
             _ => Role::TextBox,
         },
         "textarea" => Role::TextBox,
         "select" => Role::ComboBox,
+        // HTML-AAM implicit roles for the native widgets.
+        "dialog" => Role::Dialog,
+        "progress" => Role::ProgressBar,
+        "option" => Role::Option,
+        // A `<menu>` is a list per HTML-AAM (the `type=context` menu role never shipped).
+        "menu" => Role::List,
         "h1" => Role::Heading { level: 1 },
         "h2" => Role::Heading { level: 2 },
         "h3" => Role::Heading { level: 3 },

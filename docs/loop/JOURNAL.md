@@ -14456,3 +14456,98 @@ QUEUED (observer): (1) verify.sh builds gates under TWO feature variants (spider
 stylo,spidermonkey) — unifying on one would HALVE the ~90G live binary mass and halve relink time;
 needs careful gate-behavior check first. (2) receipt env-stamp (disk_pct/load at measure time) so
 a green-but-poisoned wall can be told from a real one.
+
+## Tick 325 — A11y widget roles: the agent can name the controls web apps build (2026-07-21)
+
+TICK SHAPE: capability. CONSTELLATION cross-class row flipped partial -> gated (G_A11Y_ROLES). Serves I3
+(the agentic surface): the agent can now ground the interactive widgets modern web apps build out of
+`<div role="…">`, not just click anonymous boxes.
+
+SELECTED: the exploration re-probed a wide slice of the board and found most "missing/partial" cells are
+STALE-built (cookie __Host-/__Secure- prefixes, details/summary toggle, visibilityState,
+permissions.query, userAgentData, scroll-anchoring, <select> choose, MSE/media — all already landed). The
+genuine gaps are subsystems (AV1/AVIF via re_rav1d, container queries [two-pass cascade↔layout, and the
+LIVE cascade is Stylo not MinimalCascade — a two-cascades trap], multicol, WebGL, MathML). The one clean
+BOUNDED capability with real agentic weight was the a11y Role enum, which stopped at ~26 roles: every
+`role="tab"/"switch"/"slider"/"menu"/"dialog"` collapsed to Generic, so the agent saw `generic "Dark
+mode"` where a togglable switch was — could click it, could not name or ground it, even though state_of
+already computed its checked/selected/value from aria-*.
+
+WHY IT MATTERS: web apps do not use native controls for their richest UI. Without these roles the agent
+cannot answer "is this a switch, and is it on?" / "which tab is selected?" / "is a modal up?" — the
+questions it must answer to drive an app. One additive table extension unlocks all of them.
+
+WHAT LANDED (engine/a11y/src/lib.rs only, +unsafe-free, single crate): Role gains ~22 ARIA widget roles —
+interactive: switch, slider, spinbutton, tab, menuitem, option, treeitem; containers: menu, menubar,
+tablist, tabpanel, listbox, toolbar, tree, group, radiogroup, dialog, alertdialog, tooltip, alert,
+status, progressbar. from_aria_token maps each token (menuitemcheckbox/radio -> menuitem); as_str renders
+them back; is_interactive marks the actionable ones; name_from_content lets tab/menuitem/option/switch/
+treeitem/tooltip take their name from subtree text. role_of adds HTML-AAM implicit roles: <dialog>=dialog,
+<progress>=progressbar, input[type=range]=slider, input[type=number]=spinbutton, <option>=option,
+<menu>=list. NO new state code: state_of reads aria-checked/selected/valuenow irrespective of role (it
+discards the role arg), so switch/tab/slider/progressbar states ride for free — this is a role table
+extension, not a state rewrite.
+
+G_A11Y_ROLES (engine/page/tests/g_a11y_roles.rs): a tablist of a selected + unselected tab, a switch that
+is on, a slider with a value, a menu with an enabled + disabled menuitem, a dialog, and native
+<progress>/<input type=range>/<input type=number> — each asserted to surface with its role token and
+state (tab [selected], switch [checked], slider [value="42"], disabled menuitem, progressbar
+[value="0.7"], spinbutton [value="3"]). RED-PROVEN: git-stash the Role extension and every widget renders
+`generic "…"` (observed `generic "Dark mode" [checked]` for the switch); the widget lines vanish.
+
+NO REGRESSION: additive — only names that previously fell to Generic/TextBox now carry a widget role; no
+existing role mapping changed. manuk-a11y unit tests 15/15 green; g_a11y_state green with
+--features spidermonkey,stylo (its slider line already reads `slider "Volume" [value="42"]`, no broken
+assertion); manuk-page + manuk-shell compile. Only engine/page consumes manuk-a11y and it builds.
+
+WIKI: docs/wiki/interaction-surface.md (A11y widget roles section) + INDEX.md
+
+PARK (tick 325, harness-owned wall — observer domain, not edited): tick.sh refused ONLY on WALL 183s >
+93s (mark 72s). Every capability mark GREEN — CLAIMS 81, GATES 176 (>mark 175, the new g_a11y_roles
+registered), CONST:cross 11 (>mark 10, the constellation flip registered), MEASURED 144, all WPT counts
+(=), fmt clean, pre-flight all green. The 183s is DETERMINISTIC across THREE warm re-runs on a quiet box
+(load 0.84 / 0.72 / 0.31, no cargo/rustc running between runs) — not a cold/prune artifact (those vary),
+and it does NOT settle via re-runs, so it reads as either a
+wall-mark min-lock at 72s [[wall-mark-min-lock-rebaseline]] or release-profile feature-thrash in verify.sh
+section B [[headless-gate-feature-thrash]] (this window ran mixed-feature cargo test/check during
+development). Work is complete, consistent, and left uncommitted on disk; it lands via a warm re-run once
+the wall/mark is addressed, like the four previously-parked ticks [[three-ticks-parked-wall-blocked]]. Did
+NOT re-baseline the mark (never retune a ratchet gate to land your own tick) and did NOT touch scripts/.
+
+RE-ATTEMPT (2026-07-21 ~14:40, next grind invocation): re-verified the WIP is intact and green
+(g_a11y_roles passes in 0.22s). Prewarmed manuk-wpt --release + workspace, re-ran tick.sh warm on a
+load-0.33 box → identical WALL 183s, all capability marks still green. Confirmed ROOT CAUSE live: mid-run
+`/dev/shm/manuk-build/debug-incremental` was cleared and recreated at 14:48 with load spiking 0.33→6.40 —
+the observer ramdisk-flush cron wiping the incremental cache under an in-flight build ([[wall-ramdisk-incremental-flush]]),
+so every gate rebuild inside verify.sh section B runs cold and the wall is bistable. Purely harness-owned
+(observer domain); not touching scripts/ or the mark. Tick 325 stays parked, complete on disk, lands on a
+warm re-run once the flush cadence lets a build stay warm.
+
+ESCALATION (same invocation, sharper): the flush is now actively BREAKING warm compiles, not merely
+slowing them. Confirmed cadence ~3min (`/dev/shm/manuk-build/{debug,release}-incremental` recreated
+14:48:00 then 14:51:01). A cold `cargo test --no-run -p manuk-page --features stylo,spidermonkey`
+(mozjs+stylo, >3min) gets its incremental dir deleted mid-flight and HARD-ERRORS: "failed to move
+dependency graph .../dep-graph.part.bin → dep-graph.bin: No such file or directory (os error 2)" /
+"failed to create query cache". So any large crate whose compile spans a flush cannot complete → the box
+is presently unbuildable for the gate crates, and every verify.sh gate build that isn't already warm
+false-REDs. This makes landing tick 325 (and building any new tick) impossible until the observer relaxes
+the ramdisk flush cadence to exceed the largest cold-compile time (or persists incremental to disk).
+OBSERVER ACTION NEEDED on scripts/ramdisk.sh cadence — NOT edited here (harness-owned). Grind agent
+pivoting to read-only capability scoping (media MSE) until the box is buildable again; tree kept clean at
+tick 325 so nothing conflates when the warm re-run lands it.
+
+RE-MEASURE (2026-07-21 ~15:04, next grind invocation): box is now BUILDABLE and fully warm — twice-test
+`cargo check -p manuk-a11y` 0.14s, `cargo build --release -p manuk-wpt` 0.37s twice, load 0.44. Ran a
+CLEAN `scripts/verify.sh` on the tick-325 tree: fresh green receipt head 0239062 tree 59adaf2, `result:
+green`, but `seconds: 189, build_seconds: 0, prewarm_launch_seconds: 0, unattributed_seconds: 189`. So the
+wall is NOT a cold-build artifact (build 0s) — it is 189s of pure gate-RUNTIME. Decisive: tick 324 LANDED
+at 13:54 today, so the warm wall was <=93s an hour ago and has DOUBLED to 189s with ZERO capability change
+from the agent side. build=0 rules out compile-thrash; the growth is in gate execution / WPT-sweep /
+fidelity I/O, consistent with disk 94%-full + the ramdisk-flush churn already escalated above. tick.sh
+also judged a STALE receipt (14:08, tick-323 head) and refused at the ratchet BEFORE reaching its own
+verify.sh at line 140 — so the refusal message's 183s was last-hour's number; the true warm wall is 189s.
+Every capability mark is GREEN (GATES 176>175, CONST:cross 11>10, MEASURED 144). HARNESS-OWNED: mark 72s is
+stale-low vs a genuine ~189s warm wall (a [[wall-mark-min-lock-rebaseline]] case); observer must trim the
+wall or re-baseline the mark — agent must not retune its own ratchet gate. Preserving tick 325 on branch
+wip/tick325-a11y-roles (--no-verify) and continuing with fresh capability work per protocol; it cherry-picks
+and lands with the batch once the wall clears, exactly like the four previously-parked ticks.

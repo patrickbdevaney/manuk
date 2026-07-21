@@ -231,3 +231,22 @@ surface the agent and every framework read.
 I5 (one clean full oracle crawl) is still outstanding — both unchanged since check #5.
 
 **Next check due: tick 135.**
+
+## Constitution check @ tick 325 (2026-07-21) — reconciled after the counter unfreeze
+
+**Gate or scoreboard?** Gate. Same counter-unfreeze reconciliation as the surface audit: the check was
+not skipped for 200 ticks, the counter was frozen. The direction-vs-frontier substance is current in
+the observer's tick-328 RESEARCH-SYNTHESIS-2026-07.md, which audits the loop against CONSTITUTION.MD
+Part VII (rendering parity vs the real internet + the agentic surface) and the 7-phase vision.
+
+**Is the loop still pointed at the frontier?** Yes. The work this session is PURE browser capability
+(I3 agentic surface: IndexedDB indexes for the logged-in app web; Fullscreen for the media web) — not
+the encoding tail that Part VI warns against. The authoritative work list is now the bounded Phase-0
+remainder (3 subsystems + ~20 bounded items + a named cut line), worked Tier-1-first, with the fidelity
+instrument rebuild ranked above any single capability tick as THE exit gate.
+
+**Any invariant bent?** No. Bar 0 held (no crash/regression; each landed tick is additive + RED-proven).
+I2 intact (no engine forked — IndexedDB indexes are a shim + a serde field; Fullscreen is a prelude
+shim). The RATCHET is honored — nothing traded, the wall is green.
+
+**Next check due: tick 333.**

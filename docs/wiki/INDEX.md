@@ -438,6 +438,9 @@
   - L1833 · Canvas conic gradients — createConicGradient sweeps colour by angle (tick 324)
   - L1839 · One branch in the existing plumbing
   - L1853 · The teeth G_CANVAS_CONIC uses
+  - L1862 · A11y widget roles — the agent can name the controls web apps build (tick 325)
+  - L1872 · Additive role plumbing, no new state path
+  - L1889 · The teeth G_A11Y_ROLES uses
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -811,4 +814,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-726 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+729 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

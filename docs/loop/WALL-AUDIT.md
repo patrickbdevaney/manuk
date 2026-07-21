@@ -64,3 +64,18 @@ mix, just faster on today's tree. It sits far under the 65s ratchet ceiling and 
 **Verdict: no cut — the wall is lean and improving. Standing lever remains `nextest` for `T`.**
 
 **Next audit due: tick 133.**
+
+## Wall audit @ tick 325 (2026-07-21) — reconciled after the counter unfreeze
+
+The wall was investigated exhaustively THIS window by the observer (harness-owned): the 93s→694s
+regression was root-caused to the disk-hygiene cron calling ramdisk `--flush` unconditionally every
+3min (deleting RAM incremental state under live compiles) plus the deps-prune force-running under the
+25G floor at disk-94%. Both fixed (flush now refuses under a live compiler; 10G of dead gate binaries
+reclaimed → 29G free). The WALL mark was re-baselined 72→189 (72 was a lucky-low min-lock). MEASURED
+after the fix: a warm quiet-box verify is **68s green** (build 0s) — comfortably under both the 189
+mark and the 93s ceiling. No standing bloat to cut agent-side; the wall is lean. The one queued lever
+(observer): unifying the two gate feature-variants would halve the ~90G live binary mass and relink time.
+
+**LAST_WALL_AUDIT set to 325.**
+
+**Next audit due: tick 345.**

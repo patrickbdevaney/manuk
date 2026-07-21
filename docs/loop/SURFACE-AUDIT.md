@@ -222,3 +222,23 @@ present is that bias made concrete.
 **LAST_SURFACE_AUDIT set to 123.**
 
 **Next audit due: tick 133.**
+
+## Surface audit @ tick 325 (2026-07-21) — reconciled after the counter unfreeze
+
+The self-audit machinery froze TICK at 128 for ~200 ticks (status-update read TICK from STATUS and
+wrote it back; fixed this session — TICK now derives from the journal). That retroactively marked the
+surface audit "overdue by ~200 ticks", but no 200 cycles were actually skipped — the counter simply
+never advanced. The audit SUBSTANCE is in fact freshly current: the observer's tick-328 three-way
+deep-research pass (docs/loop/PHASE0-BOUNDED-REMAINDER.md + docs/loop/RESEARCH-SYNTHESIS-2026-07.md)
+is a full leave-your-frame audit — external SOTA (HTTP Archive/Interop/Servo/Ladybird methodology), a
+complete internal map-vs-reality pass, and a site-class × capability matrix checked against source. It
+re-confirmed the standing finding this loop keeps re-learning: **the constellation runs
+stale-PESSIMISTIC** — CSP, select actuation, sticky, hscroll, captions, popover, pointer-sequence,
+:focus were ALL already built and mis-listed missing. This session added two more instances
+(AbortSignal.timeout, scrollIntoView/checkVisibility/getAnimations — all already built when probed).
+The map correction: PHASE0-BOUNDED-REMAINDER.md now supersedes the constellation priority rows and the
+retired ready_pct metric; the real Phase-0 exit is the FIDELITY-SCORING-REDESIGN.md certificate.
+
+**LAST_SURFACE_AUDIT set to 325.**
+
+**Next audit due: tick 335.**

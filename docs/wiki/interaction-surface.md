@@ -1858,3 +1858,40 @@ changes with angle), `sweep_tb` (top and bottom, same radius and opposite angles
 radial would be identical there and a horizontal linear would match top-to-bottom; only a sweep varies
 this way). RED: excluding `kind == 2` from `isGrad` drops back to the flat last stop and fails
 `right_red`/`left_mix`/`sweep_tb` at once.
+
+## A11y widget roles — the agent can name the controls web apps build (tick 325)
+
+Modern web apps do not use native `<select>`/`<input>` for their richest controls — they build them out
+of `<div role="tab">`, `<div role="switch">`, `<div role="slider">`, `role="menu"`/`menuitem`,
+`role="dialog"`. The accessibility tree's `Role` enum stopped at ~26 roles, so every one of those
+collapsed to `Generic`. The observation an agent read was an anonymous box (`generic "Dark mode"`) — it
+could click it but could not *ground* it: could not answer "is this a switch, and is it on?" even though
+`state_of` already computed `checked`/`selected`/`value` from the `aria-*` attributes. The role was the
+missing hook.
+
+### Additive role plumbing, no new state path
+
+`Role` gains ~22 ARIA widget roles: the interactive ones — `switch`, `slider`, `spinbutton`, `tab`,
+`menuitem`, `option`, `treeitem` — plus their containers — `menu`, `menubar`, `tablist`, `tabpanel`,
+`listbox`, `toolbar`, `tree`, `group`, `radiogroup`, `dialog`, `alertdialog`, `tooltip`, `alert`,
+`status`, `progressbar`. `from_aria_token` maps each token (with `menuitemcheckbox`/`menuitemradio` →
+`menuitem`), `as_str` renders it back, `is_interactive` marks the actionable ones, and
+`name_from_content` lets a `tab`/`menuitem`/`option`/`switch`/`treeitem`/`tooltip` take its name from its
+subtree text. `role_of` also fills in the HTML-AAM implicit roles for the native widgets: `<dialog>` →
+`dialog`, `<progress>` → `progressbar`, `<input type=range>` → `slider`, `<input type=number>` →
+`spinbutton`, `<option>` → `option`, `<menu>` → `list`.
+
+The interaction state needed no new code: `state_of` reads `aria-checked`/`aria-selected`/`aria-valuenow`
+irrespective of role (it discards the role argument), so a `role="switch" aria-checked="true"` already
+reported `[checked]` and a `role="slider" aria-valuenow="42"` already reported `[value="42"]` — they were
+only missing a role to hang on. This is why the change is a role table extension, not a state rewrite.
+
+### The teeth `G_A11Y_ROLES` uses
+
+A `role="tablist"` of two tabs (one `aria-selected`, one not), a `role="switch"` that is on, a
+`role="slider"` with a value, a `role="menu"` with an enabled and a disabled `menuitem`, a `role="dialog"`,
+and the native `<progress>`/`<input type=range>`/`<input type=number>` — each asserted to surface with its
+role token and, where applicable, its state (`tab … [selected]`, `switch … [checked]`,
+`slider … [value="42"]`, disabled `menuitem`, `progressbar … [value="0.7"]`, `spinbutton … [value="3"]`).
+RED: stashing the `Role` table extension renders every one as `generic "…"` (verified — `generic "Dark
+mode" [checked]` for the switch), so the widget lines vanish.
