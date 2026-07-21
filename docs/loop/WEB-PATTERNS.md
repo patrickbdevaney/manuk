@@ -2622,3 +2622,23 @@ callback and settle the promises), so running the callback and resolving is hone
 a false success — while each branch absorbs its own rejection so a site awaiting only one does not trip
 an unhandled-rejection. **(4)** `typeof document.startViewTransition === 'function'` is exactly what an
 inert stub passes; the gate drives a real click and reads the resulting DOM.
+
+## Client-side routing via the Navigation API — `window.navigation` (tick 309)
+
+**Pattern:** `navigation.addEventListener('navigate', e => { if (e.canIntercept) e.intercept({ handler:
+() => renderRoute(e.destination.url) }); })` — a single hook that takes over every same-document
+navigation, replacing the pushState + popstate + link-click-interception dance routers used to hand-roll.
+
+**The class this unlocks:** Navigation-API SPA routers. `window.navigation` was absent, so a router that
+feature-detected it and bound a `navigate` listener silently bound nothing — every in-app link did a
+full document load or nothing, with no visible error (the "dead router").
+
+**The traps.** **(1)** Do not create a second URL source of truth — commit through the existing
+`history.pushState`/`replaceState` so `location`, the omnibox and the back-stack stay consistent.
+**(2)** The `navigate` event fires for same-document navigations and must expose `destination.url` +
+`canIntercept`; the router reads those to decide whether to take over. **(3)** `intercept({handler})`
+handlers are async per spec — they run in a microtask, and their DOM writes are what actually change the
+view, so the capability is the handler RUNNING, not the event firing. **(4)** `preventDefault()` must
+truly veto (route guards, unsaved-changes) — a veto that still commits is worse than no API. **(5)**
+`typeof navigation === 'object'` is what an inert stub passes; gate by driving `navigate()` and reading
+the resulting DOM + URL.

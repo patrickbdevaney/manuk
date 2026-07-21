@@ -377,6 +377,10 @@
   - L1291 · The failure without it is silent and total
   - L1299 · The honest implementation is the spec's own skip path
   - L1317 · The teeth G_VIEW_TRANSITION uses
+  - L1325 · window.navigation — the Navigation API intercepts SPA routing (tick 309)
+  - L1333 · The failure without it is a silent dead router
+  - L1342 · Implemented as a shim OVER the proven History/Location plumbing
+  - L1360 · The teeth G_NAVIGATION_API uses
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -750,4 +754,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-665 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+669 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

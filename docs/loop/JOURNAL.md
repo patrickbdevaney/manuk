@@ -13875,3 +13875,40 @@ NO REGRESSION: additive JS prelude + probe re-run green. HONEST LIMIT: no compos
 animation (skip path); Navigation API + scroll-driven animations remain the sibling app-class holes.
 
 WIKI: docs/wiki/interaction-surface.md (View Transitions section).
+
+## Tick 309 — Navigation API: window.navigation + interceptable routing (2026-07-21)
+
+SELECTED: board CO-#1 (2) "probe/measure the unknowns" + a genuinely-missing app-class edge, sibling
+to tick-308 View Transitions. g_probe_capabilities measured navigationapi:no; only reference in engine/
+was history_bindings.rs calling it "out of scope". The modern successor to the pushState+popstate+click-
+interception dance every SPA router hand-rolls.
+
+WHY IT MATTERS (silent dead-router): a router doing
+navigation.addEventListener('navigate', e => e.intercept({handler:()=>render(e.destination.url)}))
+finds navigation undefined → throws or binds nothing → every in-app link does a full document load or
+nothing, with no visible error. Newer frameworks feature-detect window.navigation and prefer it.
+
+WHAT LANDED (dom_bindings.rs prelude, next to startViewTransition): window.navigation as a JS shim OVER
+the proven History/Location plumbing. navigate(url,opts) → fires a real NavigateEvent {destination.url,
+canIntercept, navigationType, intercept({handler}), preventDefault, transitionWhile alias}, then commits
+via history.pushState/replaceState (so omnibox/back-stack/popstate stay consistent) and runs the
+intercept handlers (client-side routing; microtasks drain at end of load so DOM writes land). Also:
+currentEntry/entries(), canGoBack/Forward, back/forward/traverseTo/reload/updateCurrentEntry,
+currententrychange/navigatesuccess/navigateerror events. g.history/g.location read at CALL time (no
+prelude-order dependency). HONEST LIMIT: signal/abort + cross-document navigations not modelled;
+same-document routing (the point) is.
+
+### The claim — G_NAVIGATION_API, ten teeth + a microtask-drained DOM assertion
+
+exists/entryurl (present + knows the URL); fired/dest/canintercept/navtype (navigate event fires with a
+correct destination); result (returns {committed,finished} thenables); committed (location.pathname +
+currentEntry advanced together via shared plumbing); vetoed (preventDefault aborts, URL does not move);
+ready. PLUS: the intercept({handler}) HANDLER RAN and applied the route change (#view → 'Profile:/profile
+…', observed after the microtask drain). PROVEN RED: disabling the shim drops every claim.
+
+PINNED: g_probe_capabilities += navigationapi:yes. CONSTELLATION.tsv row 88 Navigation API missing→gated.
+
+NO REGRESSION: additive JS prelude; probe + view-transition + navigation gates all green. WEB-PATTERNS +
+wiki updated.
+
+WIKI: docs/wiki/interaction-surface.md (Navigation API section).

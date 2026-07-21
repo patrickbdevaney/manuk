@@ -10310,6 +10310,175 @@ const WINDOW_PRELUDE: &str = r#"
             };
         }
 
+        // `window.navigation` — the Navigation API. This is the modern successor to
+        // history.pushState + the popstate/click-interception dance that every SPA router hand-rolls:
+        // a single `navigate` event fires for *every* same-document navigation, and the router calls
+        // `event.intercept({ handler })` to take it over — no link-click monkey-patching, no
+        // History-API bookkeeping. Newer frameworks (and hand-rolled routers) feature-detect
+        // `window.navigation` and use it in preference; the fallback path is increasingly untested.
+        //
+        // The SILENT failure without it: a router that does
+        //   `navigation.addEventListener('navigate', e => e.intercept({ handler: () => render(e.destination.url) }))`
+        // sees `navigation` undefined, either throws (dead router) or — worse — silently binds
+        // nothing, so every in-app link performs a full document load or does nothing at all.
+        //
+        // Implemented as a JS shim OVER the existing, proven History/Location plumbing (so the
+        // omnibox URL, the back/forward stack and popstate all stay consistent): `navigate()` reuses
+        // `history.pushState/replaceState`, then dispatches a real NavigateEvent and runs any
+        // `intercept()` handlers. `g.history`/`g.location` are read at CALL time, so this does not
+        // depend on prelude ordering. Honest limit: `signal`/abort and cross-document navigations are
+        // not modelled — same-document routing, which is the whole point of the API, is.
+        if (typeof g.navigation === 'undefined') {
+            (function () {
+                var abs = function (url) {
+                    try { return new URL(String(url), g.location.href).href; }
+                    catch (e) { return String(url); }
+                };
+                var makeEntry = function (url, index, state) {
+                    return {
+                        url: url, key: 'k' + index, id: 'e' + index, index: index,
+                        sameDocument: true, getState: function () { return state; }
+                    };
+                };
+                var entries = null, current = 0;
+                var ensure = function () {
+                    if (entries === null) { entries = [makeEntry(abs(g.location.href), 0, null)]; current = 0; }
+                };
+                var listeners = { navigate: [], currententrychange: [], navigatesuccess: [], navigateerror: [] };
+                var fire = function (type, ev) {
+                    var a = listeners[type]; if (!a) { return; }
+                    for (var i = 0; i < a.length; i++) { try { a[i].call(nav, ev); } catch (e) {} }
+                };
+
+                var nav = {
+                    get currentEntry() { ensure(); return entries[current]; },
+                    entries: function () { ensure(); return entries.slice(); },
+                    get canGoBack() { ensure(); return current > 0; },
+                    get canGoForward() { ensure(); return current < entries.length - 1; },
+                    addEventListener: function (type, cb) { if (listeners[type] && typeof cb === 'function') { listeners[type].push(cb); } },
+                    removeEventListener: function (type, cb) {
+                        var a = listeners[type]; if (!a) { return; }
+                        var i = a.indexOf(cb); if (i >= 0) { a.splice(i, 1); }
+                    },
+                    dispatchEvent: function () { return true; },
+
+                    navigate: function (url, options) {
+                        ensure();
+                        options = options || {};
+                        var target = abs(url);
+                        var state = ('state' in options) ? options.state : null;
+                        var replace = options.history === 'replace';
+
+                        var commitRes, commitRej, finRes, finRej;
+                        var committed = new Promise(function (res, rej) { commitRes = res; commitRej = rej; });
+                        var finished = new Promise(function (res, rej) { finRes = res; finRej = rej; });
+                        // A NAVIGATION result the caller may await either half of without the other's
+                        // rejection surfacing as unhandled.
+                        committed.then(function () {}, function () {});
+                        finished.then(function () {}, function () {});
+
+                        var intercepted = false, prevented = false, handlers = [];
+                        var hashChange = false;
+                        try {
+                            var d = new URL(target), c = new URL(abs(g.location.href));
+                            hashChange = (d.pathname === c.pathname && d.search === c.search && d.hash !== c.hash);
+                        } catch (e) {}
+
+                        var ev = {
+                            type: 'navigate',
+                            navigationType: replace ? 'replace' : 'push',
+                            canIntercept: true,
+                            userInitiated: false,
+                            hashChange: hashChange,
+                            downloadRequest: null,
+                            info: options.info,
+                            signal: null,
+                            destination: {
+                                url: target, key: '', id: '', index: -1, sameDocument: true,
+                                getState: function () { return state; }
+                            },
+                            intercept: function (opts) {
+                                intercepted = true;
+                                if (opts && typeof opts.handler === 'function') { handlers.push(opts.handler); }
+                            },
+                            // Legacy Chromium alias the earliest adopters used.
+                            transitionWhile: function (p) { intercepted = true; if (p) { handlers.push(function () { return p; }); } },
+                            preventDefault: function () { prevented = true; },
+                            scroll: function () {},
+                            commit: function () {}
+                        };
+
+                        fire('navigate', ev);
+
+                        if (prevented) {
+                            var err = new Error('Navigation aborted');
+                            try { err.name = 'AbortError'; } catch (e) {}
+                            commitRej(err); finRej(err);
+                            fire('navigateerror', { type: 'navigateerror', error: err });
+                            return { committed: committed, finished: finished };
+                        }
+
+                        // Commit against the real History plumbing so the URL, stack and popstate stay
+                        // in lockstep with everything else that reads them.
+                        try {
+                            if (replace) {
+                                if (g.history && g.history.replaceState) { g.history.replaceState(state, '', target); }
+                                entries[current] = makeEntry(target, current, state);
+                            } else {
+                                if (g.history && g.history.pushState) { g.history.pushState(state, '', target); }
+                                entries = entries.slice(0, current + 1);
+                                entries.push(makeEntry(target, entries.length, state));
+                                current = entries.length - 1;
+                            }
+                        } catch (e) {}
+                        commitRes(entries[current]);
+                        fire('currententrychange', { type: 'currententrychange', navigationType: ev.navigationType });
+
+                        // Run the router's interception handlers. Per spec these are async; the engine
+                        // drains microtasks at end of load, so a handler's DOM writes land and are
+                        // observable.
+                        var run = Promise.resolve();
+                        if (intercepted && handlers.length) {
+                            run = Promise.all(handlers.map(function (h) {
+                                try { return Promise.resolve(h()); } catch (e) { return Promise.reject(e); }
+                            }));
+                        }
+                        run.then(
+                            function () { finRes(entries[current]); fire('navigatesuccess', { type: 'navigatesuccess' }); },
+                            function (e) { finRej(e); fire('navigateerror', { type: 'navigateerror', error: e }); }
+                        );
+                        return { committed: committed, finished: finished };
+                    },
+
+                    reload: function () {
+                        return { committed: Promise.resolve(this.currentEntry), finished: Promise.resolve(this.currentEntry) };
+                    },
+                    back: function () {
+                        ensure();
+                        if (current > 0) { current -= 1; if (g.history && g.history.back) { g.history.back(); } }
+                        return { committed: Promise.resolve(entries[current]), finished: Promise.resolve(entries[current]) };
+                    },
+                    forward: function () {
+                        ensure();
+                        if (current < entries.length - 1) { current += 1; if (g.history && g.history.forward) { g.history.forward(); } }
+                        return { committed: Promise.resolve(entries[current]), finished: Promise.resolve(entries[current]) };
+                    },
+                    traverseTo: function (key) {
+                        ensure();
+                        for (var i = 0; i < entries.length; i++) { if (entries[i].key === key) { current = i; break; } }
+                        return { committed: Promise.resolve(entries[current]), finished: Promise.resolve(entries[current]) };
+                    },
+                    updateCurrentEntry: function (opts) {
+                        ensure();
+                        if (opts && 'state' in opts) { entries[current] = makeEntry(entries[current].url, current, opts.state); }
+                    }
+                };
+
+                try { Object.defineProperty(g, 'navigation', { value: nav, configurable: true, enumerable: false }); }
+                catch (e) { g.navigation = nav; }
+            })();
+        }
+
         defEvent('MouseEvent', {
             clientX: 0, clientY: 0, screenX: 0, screenY: 0, pageX: 0, pageY: 0,
             button: 0, buttons: 0, relatedTarget: null,

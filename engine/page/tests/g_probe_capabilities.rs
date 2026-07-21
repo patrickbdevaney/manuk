@@ -225,4 +225,7 @@ const PINNED: &[&str] = &[
     // tick 308 — document.startViewTransition now runs the update callback and settles its promises
     // (the skip-animation path), so SPA route/state changes wrapped in a transition no longer vanish.
     "viewtransitions:yes",
+    // tick 309 — window.navigation (Navigation API): navigate() fires an interceptable navigate event
+    // and intercept({handler}) runs client-side routing over the shared History/Location plumbing.
+    "navigationapi:yes",
 ];

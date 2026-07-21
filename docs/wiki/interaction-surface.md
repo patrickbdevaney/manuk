@@ -1321,3 +1321,47 @@ that there is no cross-fade animation.
 `updateCallbackDone` rejecting), plus a **real engine-dispatched click** whose handler wraps its update
 in a transition and must still change the view — the frozen-page half a load-time script cannot
 self-report. RED: deleting the shim drops `defined`/`applied`/`shape`/click together.
+
+## `window.navigation` — the Navigation API intercepts SPA routing (tick 309)
+
+The Navigation API is the modern successor to the `history.pushState` + `popstate` + link-click
+interception dance every SPA router used to hand-roll. Instead of monkey-patching clicks and
+reconstructing state from the History API, the router listens for one `navigate` event — which fires
+for every same-document navigation — and calls `event.intercept({ handler })` to take it over. Newer
+frameworks feature-detect `window.navigation` and prefer it.
+
+### The failure without it is a silent dead router
+
+`window.navigation` was absent (`g_probe_capabilities` measured `navigationapi:no`; `history_bindings.rs`
+called it out of scope). A router doing
+`navigation.addEventListener('navigate', e => e.intercept({ handler: () => render(e.destination.url) }))`
+found `navigation` undefined and either threw or bound nothing — so every in-app link performed a full
+document load or did nothing, with no error the user could see. The app simply stopped behaving like an
+app.
+
+### Implemented as a shim OVER the proven History/Location plumbing
+
+The shim (in the `dom_bindings.rs` prelude, beside `startViewTransition`) does not introduce a second
+source of URL truth. `navigate(url, opts)`:
+
+- dispatches a real `NavigateEvent` — `destination.url`, `canIntercept`, `navigationType`,
+  `intercept({ handler })`, `preventDefault()`, plus the legacy `transitionWhile` alias;
+- if not vetoed, **commits through `history.pushState` / `replaceState`**, so `location`, the omnibox,
+  the back/forward stack and `popstate` all stay in lockstep with the app's idea of the URL;
+- runs the router's `intercept()` handlers — the client-side route change. They execute in a microtask
+  (per spec async); the engine drains microtasks at end of load, so a handler's DOM writes land.
+
+`g.history` / `g.location` are read at CALL time, so the shim does not depend on prelude ordering. Also
+provided: `currentEntry` / `entries()` / `canGoBack` / `canGoForward`, `back` / `forward` / `traverseTo`
+/ `reload` / `updateCurrentEntry`, and the `currententrychange` / `navigatesuccess` / `navigateerror`
+events. The honest limit: `signal`/abort and cross-document navigations are not modelled — same-document
+routing, which is the whole point of the API, is.
+
+### The teeth `G_NAVIGATION_API` uses
+
+`exists` / `entryurl`, `fired` / `dest` / `canintercept` / `navtype` (the navigate event fires with a
+correct destination), `result` (the `{committed, finished}` thenables), `committed` (`location` and
+`currentEntry` advanced together through the shared plumbing), `vetoed` (`preventDefault()` aborts and
+the URL does not move), and — the load-bearing one a synchronous script cannot self-report — the
+`intercept({handler})` handler RAN and applied the route change, observed as a DOM mutation after the
+microtask drain. RED: disabling the shim drops every claim at once.
