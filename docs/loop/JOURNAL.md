@@ -14252,3 +14252,41 @@ high-value tier is subsystem-scope (canvas Path2D/OffscreenCanvas/createImageBit
 actuation T6.1) or Stylo-boundary (container queries/@scope), best taken with a fresh context.
 
 WIKI: docs/wiki/interaction-surface.md (Pointer capture section).
+
+## Tick 320 — Path2D: reusable + SVG path-data canvas paths (2026-07-21)
+
+TICK SHAPE: capability. New CONSTELLATION platform-class row gated → G_PATH2D. Closes the
+[[prelude-capability-vein-mined]] run of pure-prelude ticks with the first canvas-subsystem step.
+
+SELECTED: the prelude vein is mined (t310-319); the journal's own next-tier recommendation was canvas
+subsystem work. Path2D was ABSENT — `new Path2D(...)` threw `Path2D is not defined`.
+
+WHY IT MATTERS: every icon system (Lucide/Feather/Material), Chart.js/D3 shape generator and
+glyph-on-canvas helper hands a PRE-BUILT path to `ctx.fill(path)` / `ctx.stroke(path)` rather than
+re-issuing every segment each frame — and the most-used form is `new Path2D("M… L… A… Z")`, an SVG
+path-data string. It is used UNGUARDED, so its absence threw out of the constructor and the entire draw
+routine died (blank canvas, no error).
+
+WHAT LANDED: the 2D context already accumulates its current path as a flat command stream
+([op,args…]: 0 moveTo · 1 lineTo · 2 quadTo · 3 cubicTo · 4 close · 5 rect) rasterized in ONE native
+`__cvPath` call. Added a global `Path2D` (event_loop.rs, after DOMQuad) that produces that SAME stream
+three ways: imperatively (moveTo/lineTo/arc/bezierCurveTo/quadraticCurveTo/rect/ellipse/arcTo/
+closePath, mirroring ctx); by copy (`new Path2D(other)`); and by parsing an SVG path-data string
+(`__parseSvgPath` handles M/L/H/V/C/S/Q/T/A/Z abs+rel, implicit command repetition, S/T control-point
+reflection; `A` goes through the SVG-spec endpoint→center conversion F.6.5 flattened to segments at the
+same π/8 granularity as ctx.arc). `ctx.fill`/`ctx.stroke` now take an optional first arg, duck-typed on
+`__cmds` so a Path2D rasterizes ITS stream while `ctx.fill('evenodd')` still falls to the current path.
+`addPath(path, transform?)` appends, applying a DOMMatrix when given (a rect op under a non-identity
+transform expands to a closed 4-line polygon). Honest limit: fill-rule accepted but not distinguished
+in the rasterizer, matching existing ctx behaviour.
+
+G_PATH2D: type (typeof Path2D === 'function') / imperative (a built triangle handed to ctx.fill(path)
+paints RED pixels inside it, read back via getImageData) / untouched (outside stays transparent) / svg
+(`new Path2D("M14 14 h12 v12 h-12 Z")` parses rel h/v+Z and fills the box) / copy (`new Path2D(p)`
+repaints the same geometry green). RED-proven (guard → false → `new Path2D` undefined → whole script
+THREW → output stayed `-`; every claim drops).
+
+NO REGRESSION: additive. g_canvas / g_canvas_text / g_canvas_image all still green after the
+ctx.fill/stroke change; fmt clean. WEB-PATTERNS.md + docs/wiki/interaction-surface.md updated.
+
+WIKI: docs/wiki/interaction-surface.md (Path2D section)

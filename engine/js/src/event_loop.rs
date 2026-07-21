@@ -1279,13 +1279,19 @@ const PRELUDE: &str = r#"
           };
           ctx.arcTo = function(x1, y1, x2, y2){ ctx.lineTo(x1, y1); ctx.lineTo(x2, y2); };
           ctx.ellipse = function(cx, cy, rx, ry, rot, a0, a1, ccw){ ctx.arc(cx, cy, Math.max(+rx||0, +ry||0), a0, a1, ccw); };
-          ctx.fill = function(){
+          // `fill(path?, rule?)` / `stroke(path?)` — a `Path2D` first argument rasterizes ITS command
+          // stream instead of the context's current path, which is how charting/graphics libraries
+          // reuse a pre-built shape (`ctx.fill(new Path2D(iconD))`) without re-issuing every segment.
+          // Duck-typed on `__cmds` so a bare fill-rule string (`ctx.fill('evenodd')`) still falls to `P`.
+          ctx.fill = function(arg){
+            var cmds = (arg && arg.__cmds) ? arg.__cmds : P;
             var c = rgba(ctx.fillStyle);
-            el.__cvPath(P, true, c[0], c[1], c[2], c[3], 0, M);
+            el.__cvPath(cmds, true, c[0], c[1], c[2], c[3], 0, M);
           };
-          ctx.stroke = function(){
+          ctx.stroke = function(arg){
+            var cmds = (arg && arg.__cmds) ? arg.__cmds : P;
             var c = rgba(ctx.strokeStyle);
-            el.__cvPath(P, false, c[0], c[1], c[2], c[3], Math.max(+ctx.lineWidth || 1, 0.01), M);
+            el.__cvPath(cmds, false, c[0], c[1], c[2], c[3], Math.max(+ctx.lineWidth || 1, 0.01), M);
           };
           ctx.clip = function(){};                      // honest no-op: clipping is not wired yet
           ctx.isPointInPath = function(){ return false; };
@@ -3389,6 +3395,158 @@ const PRELUDE: &str = r#"
         globalThis.DOMQuad.fromQuad = function (q) {
           q = q || {};
           return new globalThis.DOMQuad(q.p1, q.p2, q.p3, q.p4);
+        };
+      }
+
+      // `Path2D` — a reusable, declared-once path object. `new Path2D()` builds one imperatively
+      // (moveTo/lineTo/arc/bezierCurveTo/…), `new Path2D(other)` copies another, and — the form that
+      // matters most — `new Path2D("M10 10 L20 20 …")` parses an SVG path-data string. Icon systems
+      // (Lucide, Feather, Material), Chart.js/D3 shape generators and every "draw this glyph on a
+      // canvas" helper hand a pre-built path to `ctx.fill(path)` / `ctx.stroke(path)` rather than
+      // re-issuing segments each frame. It was ABSENT, so `new Path2D(...)` threw `Path2D is not
+      // defined` and the whole draw routine died. The command stream produced here is the SAME flat
+      // `[op, args…]` format the 2D context accumulates (0 moveTo · 1 lineTo · 2 quadTo · 3 cubicTo ·
+      // 4 close · 5 rect), so `ctx.fill(path)` rasterizes it through the existing single native call.
+      if (typeof globalThis.Path2D === 'undefined') {
+        // Flatten a circular arc into lineTo segments — same granularity (π/8) the context's own
+        // `ctx.arc` uses, so a Path2D arc and a context arc land on the same pixels.
+        var __arcCmds = function (cmds, cx, cy, r, a0, a1, ccw) {
+          cx = +cx || 0; cy = +cy || 0; r = +r || 0; a0 = +a0 || 0; a1 = +a1 || 0;
+          var span = a1 - a0;
+          if (ccw) { if (span > 0) { span -= 2 * Math.PI; } } else { if (span < 0) { span += 2 * Math.PI; } }
+          var n = Math.max(2, Math.ceil(Math.abs(span) / (Math.PI / 8)));
+          for (var i = 0; i <= n; i++) {
+            var t = a0 + span * (i / n);
+            cmds.push(i === 0 ? 0 : 1, cx + r * Math.cos(t), cy + r * Math.sin(t));
+          }
+        };
+        // SVG elliptical-arc (`A`/`a`) → line segments, via the endpoint-to-center conversion in the
+        // SVG spec's implementation notes (F.6.5). This is what makes real icon paths — which lean on
+        // `A` for every rounded corner and circle — render instead of collapsing to a straight chord.
+        var __svgArc = function (cmds, x1, y1, rx, ry, phiDeg, laf, sf, x2, y2) {
+          rx = Math.abs(rx); ry = Math.abs(ry);
+          if (rx === 0 || ry === 0 || (x1 === x2 && y1 === y2)) { cmds.push(1, x2, y2); return; }
+          var phi = phiDeg * Math.PI / 180, cp = Math.cos(phi), sp = Math.sin(phi);
+          var dx = (x1 - x2) / 2, dy = (y1 - y2) / 2;
+          var x1p = cp * dx + sp * dy, y1p = -sp * dx + cp * dy;
+          var lam = (x1p * x1p) / (rx * rx) + (y1p * y1p) / (ry * ry);
+          if (lam > 1) { var sc = Math.sqrt(lam); rx *= sc; ry *= sc; }
+          var sign = (laf !== sf) ? 1 : -1;
+          var num = rx * rx * ry * ry - rx * rx * y1p * y1p - ry * ry * x1p * x1p;
+          var den = rx * rx * y1p * y1p + ry * ry * x1p * x1p;
+          var co = sign * Math.sqrt(Math.max(0, num / den));
+          var cxp = co * rx * y1p / ry, cyp = -co * ry * x1p / rx;
+          var cx = cp * cxp - sp * cyp + (x1 + x2) / 2, cy = sp * cxp + cp * cyp + (y1 + y2) / 2;
+          var ang = function (ux, uy, vx, vy) {
+            var dot = ux * vx + uy * vy, len = Math.sqrt((ux * ux + uy * uy) * (vx * vx + vy * vy));
+            var a = Math.acos(Math.max(-1, Math.min(1, len === 0 ? 1 : dot / len)));
+            return (ux * vy - uy * vx < 0) ? -a : a;
+          };
+          var ux = (x1p - cxp) / rx, uy = (y1p - cyp) / ry, vx = (-x1p - cxp) / rx, vy = (-y1p - cyp) / ry;
+          var theta1 = ang(1, 0, ux, uy), dtheta = ang(ux, uy, vx, vy);
+          if (!sf && dtheta > 0) { dtheta -= 2 * Math.PI; }
+          else if (sf && dtheta < 0) { dtheta += 2 * Math.PI; }
+          var n = Math.max(2, Math.ceil(Math.abs(dtheta) / (Math.PI / 8)));
+          for (var k = 1; k <= n; k++) {
+            var th = theta1 + dtheta * (k / n);
+            cmds.push(1,
+              cx + rx * Math.cos(th) * cp - ry * Math.sin(th) * sp,
+              cy + rx * Math.cos(th) * sp + ry * Math.sin(th) * cp);
+          }
+        };
+        // Tokenize + walk an SVG path-data string. Handles M/L/H/V/C/S/Q/T/A/Z in both cases (absolute
+        // and relative), implicit command repetition, and S/T control-point reflection.
+        var __parseSvgPath = function (cmds, d) {
+          var re = /([MmLlHhVvCcSsQqTtAaZz])|(-?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?)/g;
+          var toks = [], mm;
+          while ((mm = re.exec(String(d)))) { toks.push(mm[1] != null ? mm[1] : parseFloat(mm[2])); }
+          var i = 0, cmd = '', px = 0, py = 0, sx = 0, sy = 0, rcx = 0, rcy = 0, prev = '';
+          var num = function () { return +toks[i++] || 0; };
+          while (i < toks.length) {
+            if (typeof toks[i] === 'string') { cmd = toks[i]; i++; }
+            else if (cmd === 'M') { cmd = 'L'; } else if (cmd === 'm') { cmd = 'l'; }
+            var rel = (cmd >= 'a'), C = cmd.toUpperCase();
+            if (C === 'Z') { cmds.push(4); px = sx; py = sy; prev = C; continue; }
+            if (i >= toks.length || typeof toks[i] === 'string') { if (!cmd) { break; } continue; }
+            if (C === 'M') {
+              var x = num() + (rel ? px : 0), y = num() + (rel ? py : 0);
+              cmds.push(0, x, y); px = x; py = y; sx = x; sy = y;
+            } else if (C === 'L') {
+              var lx = num() + (rel ? px : 0), ly = num() + (rel ? py : 0);
+              cmds.push(1, lx, ly); px = lx; py = ly;
+            } else if (C === 'H') {
+              var hx = num() + (rel ? px : 0); cmds.push(1, hx, py); px = hx;
+            } else if (C === 'V') {
+              var vy2 = num() + (rel ? py : 0); cmds.push(1, px, vy2); py = vy2;
+            } else if (C === 'C') {
+              var c1x = num() + (rel ? px : 0), c1y = num() + (rel ? py : 0);
+              var c2x = num() + (rel ? px : 0), c2y = num() + (rel ? py : 0);
+              var ex = num() + (rel ? px : 0), ey = num() + (rel ? py : 0);
+              cmds.push(3, c1x, c1y, c2x, c2y, ex, ey); rcx = c2x; rcy = c2y; px = ex; py = ey;
+            } else if (C === 'S') {
+              var r1x = (prev === 'C' || prev === 'S') ? 2 * px - rcx : px;
+              var r1y = (prev === 'C' || prev === 'S') ? 2 * py - rcy : py;
+              var s2x = num() + (rel ? px : 0), s2y = num() + (rel ? py : 0);
+              var sex = num() + (rel ? px : 0), sey = num() + (rel ? py : 0);
+              cmds.push(3, r1x, r1y, s2x, s2y, sex, sey); rcx = s2x; rcy = s2y; px = sex; py = sey;
+            } else if (C === 'Q') {
+              var qcx = num() + (rel ? px : 0), qcy = num() + (rel ? py : 0);
+              var qex = num() + (rel ? px : 0), qey = num() + (rel ? py : 0);
+              cmds.push(2, qcx, qcy, qex, qey); rcx = qcx; rcy = qcy; px = qex; py = qey;
+            } else if (C === 'T') {
+              var tcx = (prev === 'Q' || prev === 'T') ? 2 * px - rcx : px;
+              var tcy = (prev === 'Q' || prev === 'T') ? 2 * py - rcy : py;
+              var tex = num() + (rel ? px : 0), tey = num() + (rel ? py : 0);
+              cmds.push(2, tcx, tcy, tex, tey); rcx = tcx; rcy = tcy; px = tex; py = tey;
+            } else if (C === 'A') {
+              var arx = num(), ary = num(), rot = num(), laf = num(), sf = num();
+              var aex = num() + (rel ? px : 0), aey = num() + (rel ? py : 0);
+              __svgArc(cmds, px, py, arx, ary, rot, laf, sf, aex, aey); px = aex; py = aey;
+            } else { break; }
+            prev = C;
+          }
+        };
+        globalThis.Path2D = function Path2D(init) {
+          this.__cmds = [];
+          if (init && init.__cmds) { this.__cmds = init.__cmds.slice(); }
+          else if (typeof init === 'string') { __parseSvgPath(this.__cmds, init); }
+        };
+        var PP = globalThis.Path2D.prototype;
+        PP.moveTo = function (x, y) { this.__cmds.push(0, +x || 0, +y || 0); };
+        PP.lineTo = function (x, y) { this.__cmds.push(1, +x || 0, +y || 0); };
+        PP.quadraticCurveTo = function (cx, cy, x, y) { this.__cmds.push(2, +cx || 0, +cy || 0, +x || 0, +y || 0); };
+        PP.bezierCurveTo = function (a, b, c, d, e, f) { this.__cmds.push(3, +a || 0, +b || 0, +c || 0, +d || 0, +e || 0, +f || 0); };
+        PP.rect = function (x, y, w, h) { this.__cmds.push(5, +x || 0, +y || 0, +w || 0, +h || 0); };
+        PP.roundRect = function (x, y, w, h) { this.__cmds.push(5, +x || 0, +y || 0, +w || 0, +h || 0); };
+        PP.closePath = function () { this.__cmds.push(4); };
+        PP.arc = function (cx, cy, r, a0, a1, ccw) { __arcCmds(this.__cmds, cx, cy, r, a0, a1, ccw); };
+        PP.ellipse = function (cx, cy, rx, ry, rot, a0, a1, ccw) {
+          __arcCmds(this.__cmds, cx, cy, Math.max(+rx || 0, +ry || 0), a0, a1, ccw);
+        };
+        PP.arcTo = function (x1, y1, x2, y2) { this.lineTo(x1, y1); this.lineTo(x2, y2); };
+        // `addPath(path, transform?)` — append another path, optionally through a DOMMatrix. Under a
+        // transform each coordinate pair is mapped; a `rect` op becomes a closed 4-line polygon because
+        // a rotated/skewed rectangle is no longer axis-aligned.
+        PP.addPath = function (path, tf) {
+          if (!path || !path.__cmds) { return; }
+          var src = path.__cmds;
+          if (!tf) { for (var j = 0; j < src.length; j++) { this.__cmds.push(src[j]); } return; }
+          var a = tf.a, b = tf.b, c = tf.c, d = tf.d, e = tf.e, f = tf.f;
+          var self = this;
+          var tx = function (x, y) { return [a * x + c * y + e, b * x + d * y + f]; };
+          var k = 0;
+          while (k < src.length) {
+            var op = src[k++];
+            if (op === 0 || op === 1) { var p = tx(src[k], src[k + 1]); self.__cmds.push(op, p[0], p[1]); k += 2; }
+            else if (op === 2) { var p1 = tx(src[k], src[k + 1]), p2 = tx(src[k + 2], src[k + 3]); self.__cmds.push(2, p1[0], p1[1], p2[0], p2[1]); k += 4; }
+            else if (op === 3) { var q1 = tx(src[k], src[k + 1]), q2 = tx(src[k + 2], src[k + 3]), q3 = tx(src[k + 4], src[k + 5]); self.__cmds.push(3, q1[0], q1[1], q2[0], q2[1], q3[0], q3[1]); k += 6; }
+            else if (op === 4) { self.__cmds.push(4); }
+            else if (op === 5) {
+              var rx = src[k], ry = src[k + 1], rw = src[k + 2], rh = src[k + 3]; k += 4;
+              var c0 = tx(rx, ry), c1 = tx(rx + rw, ry), c2 = tx(rx + rw, ry + rh), c3 = tx(rx, ry + rh);
+              self.__cmds.push(0, c0[0], c0[1], 1, c1[0], c1[1], 1, c2[0], c2[1], 1, c3[0], c3[1], 4);
+            }
+          }
         };
       }
 

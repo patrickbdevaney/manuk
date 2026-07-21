@@ -1682,3 +1682,38 @@ the throw and lets the drag set up and tear down correctly.
 `setPointerCapture` → false after `releasePointerCapture`), `gotevent` (`setPointerCapture` fires
 `gotpointercapture`). RED: disabling the shim throws `TypeError: el.hasPointerCapture is not a function`
 and drops `defined`/`tracks`.
+
+## `Path2D` — a reusable, declared-once path (incl. SVG path-data strings) (tick 320)
+
+`Path2D` was ABSENT, so `new Path2D(...)` threw `Path2D is not defined` and every icon system
+(Lucide/Feather/Material), Chart.js/D3 shape generator and glyph-on-canvas helper died in its
+constructor. The engine already accumulates the 2D context's current path as a flat command stream
+(`[op, args…]`: `0 moveTo · 1 lineTo · 2 quadTo · 3 cubicTo · 4 close · 5 rect`) and rasterizes it in
+ONE native `__cvPath` call, so `Path2D` is that same stream given an object identity.
+
+### Three ways to build one, all producing the same op stream
+
+`new Path2D()` builds imperatively (`moveTo`/`lineTo`/`arc`/`bezierCurveTo`/`quadraticCurveTo`/`rect`/
+`ellipse`/`arcTo`/`closePath`, mirroring `ctx`); `new Path2D(other)` copies another path's commands;
+`new Path2D("M… L… A… Z")` parses an SVG path-data string — the form icon libraries actually ship.
+The parser handles `M L H V C S Q T A Z` in both cases (absolute and relative), implicit command
+repetition, and `S`/`T` control-point reflection. `A` (elliptical arc) goes through the SVG spec's
+endpoint-to-center conversion (F.6.5) and is flattened to line segments at the same π/8 granularity as
+`ctx.arc`, so a real icon's rounded corners render instead of collapsing to a chord.
+
+### The consumer side: `ctx.fill(path)` / `ctx.stroke(path)`
+
+Both now take an optional first argument. It is duck-typed on `__cmds`, so a `Path2D` rasterizes ITS
+stream while a bare fill-rule string (`ctx.fill('evenodd')`) still falls through to the context's
+current path. `addPath(path, transform?)` appends another path, applying a `DOMMatrix` when given (a
+`rect` op under a non-identity transform is expanded to a closed 4-line polygon, since a
+rotated/skewed rectangle is no longer axis-aligned). Honest limit: fill-rule (`nonzero`/`evenodd`) is
+accepted but not yet distinguished in the rasterizer, matching the existing context behaviour.
+
+### The teeth `G_PATH2D` uses
+
+`type` (`typeof Path2D === 'function'`), `imperative` (a built triangle handed to `ctx.fill(path)`
+paints RED pixels inside it), `untouched` (outside the shape stays transparent), `svg`
+(`new Path2D("M14 14 h12 v12 h-12 Z")` parses and fills the box it describes), `copy`
+(`new Path2D(otherPath)` repaints the same geometry). RED: removing the shim throws `Path2D is not
+defined` out of the constructor, the whole script aborts and the output stays `-`.

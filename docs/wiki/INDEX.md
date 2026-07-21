@@ -417,6 +417,10 @@
   - L1663 · Pointer capture — setPointerCapture keeps a drag tracking (tick 319)
   - L1670 · Retain the capture, fire the events; live re-routing is the follow-on
   - L1679 · The teeth G_POINTER_CAPTURE uses
+  - L1686 · Path2D — a reusable, declared-once path (incl. SVG path-data strings) (tick 320)
+  - L1694 · Three ways to build one, all producing the same op stream
+  - L1704 · The consumer side: ctx.fill(path) / ctx.stroke(path)
+  - L1713 · The teeth G_PATH2D uses
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -790,4 +794,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-705 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+709 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
