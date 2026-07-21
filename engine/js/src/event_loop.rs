@@ -2985,9 +2985,13 @@ const PRELUDE: &str = r#"
           return s;
         };
         globalThis.AbortSignal.timeout = function(ms) {
-          var s = new AbortSignal();
-          setTimeout(function(){ s.aborted = true; }, ms);
-          return s;
+          // Go through a controller so the timeout FIRES the abort event (not just flips `aborted`) —
+          // a `fetch()` given a timeout signal is cancelled by the event, and `AbortSignal.any` below
+          // only sees a timeout expire because this dispatches. The reason is a `TimeoutError`
+          // DOMException, which is how callers tell a timeout apart from a user abort.
+          var c = new globalThis.AbortController();
+          setTimeout(function(){ c.abort(new DOMException('signal timed out', 'TimeoutError')); }, ms);
+          return c.signal;
         };
       }
       if (typeof globalThis.AbortController === 'undefined') {
@@ -3004,6 +3008,39 @@ const PRELUDE: &str = r#"
           var e = { type: 'abort', target: s };
           if (typeof s.onabort === 'function') { try { s.onabort(e); } catch (x) {} }
           s.__ls.slice().forEach(function(f){ try { f(e); } catch (x) {} });
+        };
+      }
+      // `AbortSignal.any(signals)` — the combinator that returns a signal aborting as soon as ANY of
+      // its inputs aborts, forwarding that input's reason. The canonical use is one request that must
+      // cancel on EITHER a user action OR a timeout: `fetch(url, { signal: AbortSignal.any([
+      // userController.signal, AbortSignal.timeout(5000)]) })`. `timeout` was already here but `any`
+      // was missing, so that pattern threw `AbortSignal.any is not a function`. Built on the real
+      // AbortController, so the returned signal is a REAL AbortSignal — its `abort` event fires and
+      // `aborted`/`reason` are live — not an inert look-alike.
+      if (typeof globalThis.AbortSignal === 'function' && typeof globalThis.AbortSignal.any !== 'function') {
+        globalThis.AbortSignal.any = function(signals) {
+          var ctrl = new globalThis.AbortController();
+          var arr = Array.from(signals || []);
+          // An already-aborted input → the result is aborted right now, with that input's reason.
+          for (var i = 0; i < arr.length; i++) {
+            if (arr[i] && arr[i].aborted) { ctrl.abort(arr[i].reason); return ctrl.signal; }
+          }
+          var registered = [];
+          var cleanup = function() {
+            for (var j = 0; j < registered.length; j++) {
+              try { registered[j].s.removeEventListener('abort', registered[j].f); } catch (e) {}
+            }
+            registered = [];
+          };
+          for (var k = 0; k < arr.length; k++) {
+            (function(s) {
+              if (!s || typeof s.addEventListener !== 'function') { return; }
+              var f = function() { ctrl.abort(s.reason); cleanup(); };
+              s.addEventListener('abort', f);
+              registered.push({ s: s, f: f });
+            })(arr[k]);
+          }
+          return ctrl.signal;
         };
       }
 

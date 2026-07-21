@@ -13349,3 +13349,40 @@ NO REGRESSION: additive; `new URL` untouched. Not a trade. HONEST LIMIT: none of
 complete WHATWG static surface (there is no third static method).
 
 WIKI: docs/wiki/networking.md (URL.canParse/parse section). No constellation row (below its granularity).
+
+## Tick 290 — `AbortSignal.any`: compound cancel, and the timeout that finally fires (2026-07-20)
+
+TICK SHAPE: board re-read; RE-PROBED small JS-surface APIs (the session's dominant pattern). Batch
+probe found PRESENT (mozjs): randomUUID, Promise.withResolvers, Object.groupBy, Array.fromAsync,
+structuredClone, AbortSignal.timeout, replaceAll, Array.at; ABSENT: element.checkVisibility,
+navigator.locks, scheduler.postTask, AbortSignal.any. Picked AbortSignal.any — pure, honest, completes
+the AbortSignal family, no inert-stub risk (checkVisibility needs careful layout reads; navigator.locks
++ scheduler.postTask carry state/priority semantics that are easy to fake and hard to honor).
+
+HYPOTHESIS: `fetch(url, { signal: AbortSignal.any([userCtrl.signal, AbortSignal.timeout(5000)]) })` —
+cancel on EITHER user action OR timeout. Absent, the compose threw `AbortSignal.any is not a function`.
+
+FIRST ATTEMPT WRONG PLACE: added the block to the WINDOW_PRELUDE (dom_bindings) beside URL.canParse —
+`present:false`, because AbortSignal/AbortController are shimmed in event_loop.rs, which runs AFTER the
+window prelude, so `g.AbortSignal` was undefined at that point. Moved it to event_loop.rs right after
+the AbortController shim. (Ordering lesson: a prelude augmenting X must run AFTER X is installed;
+URL.canParse worked in dom_bindings only because URL is shimmed earlier in that SAME prelude.)
+
+LATENT BUG FOUND + FIXED: `AbortSignal.timeout` flipped `aborted = true` on a timer but NEVER dispatched
+the `abort` event — so a `fetch()` given a timeout signal was never actually cancelled (fetch listens
+for the event), and `any([timeout])` could not see it expire. Routed timeout through a controller so it
+fires the event with a `TimeoutError` DOMException reason. No gate asserted the old (non-firing)
+behavior; g_fetch_stream/incremental still green.
+
+### The claim — G_ABORTSIGNAL_ANY, six teeth
+
+`present`, `none` (not aborted until an input is), `propagates` (input abort → combined abort + event),
+`reason` (source reason forwarded), `already` (already-aborted input aborts result immediately),
+`timeout-prop` (a `timeout(0)` source propagates through any with a TimeoutError — proves the timeout
+fix, verified by pumping the 0ms timer which DOES fire during Page::load). PROVEN RED: `if (false && …)`
+around the any shim → `present:false`, first call throws.
+
+NO REGRESSION: any() is additive; the timeout change is strictly more correct (fires an event it should
+always have fired). Not a trade.
+
+WIKI: docs/wiki/networking.md (AbortSignal.any section). No constellation row (JS-surface completeness).

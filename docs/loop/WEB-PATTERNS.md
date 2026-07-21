@@ -2329,3 +2329,21 @@ the whole reason it exists over the constructor. **(3)** Relative-URL semantics 
 with no base is NOT parseable, but is once a base is passed — get this wrong and a router mis-resolves
 every relative link. **(4)** Keep them delegating to the one native constructor, so the validator and
 the thing it validates can never disagree.
+
+## Compound request cancellation — `AbortSignal.any` (tick 290)
+
+**Pattern:** `fetch(url, { signal: AbortSignal.any([userController.signal, AbortSignal.timeout(5000)]) })`
+— one request that cancels on EITHER a user action OR a timeout. Request libraries and data-fetching
+hooks compose cancellation this way.
+
+**The class this unlocks:** compound cancellation. `AbortSignal.timeout` existed but `any` was missing,
+so the compose threw `AbortSignal.any is not a function`. Wiring it also fixed a latent bug: the timeout
+flipped `aborted` without firing its `abort` event, so a fetch given a timeout signal was never actually
+cancelled.
+
+**The traps.** **(1)** The result must be a REAL `AbortSignal` — its `abort` event fires, `aborted`/
+`reason` are live — not an inert object that only looks like one, or a fetch keyed off the event never
+cancels. **(2)** An already-aborted input aborts the result IMMEDIATELY (synchronously), not on the next
+turn. **(3)** Forward the SOURCE reason, so a caller can tell a `TimeoutError` from a user `AbortError`.
+**(4)** If you add a combinator over signals, check the signals it combines actually DISPATCH — a
+"timeout" that sets a flag without an event is a cancel that never happens.

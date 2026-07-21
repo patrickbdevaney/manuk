@@ -973,3 +973,31 @@ garbage, `false` for a bare relative path, `true` for that path with a base. `pa
 `URL` (with the right resolved `href`) on success and `null` on failure. A stub that returns `true`/an
 object unconditionally fails the negative cases; removing the shim was demonstrated to make the first
 call throw `URL.canParse is not a function` before the tick landed. [[js-engine]]
+
+## `AbortSignal.any` — compound cancellation, and the timeout that actually fires (tick 290)
+
+The canonical shape is one request that must cancel on EITHER a user action OR a timeout:
+
+```js
+fetch(url, { signal: AbortSignal.any([userController.signal, AbortSignal.timeout(5000)]) })
+```
+
+`AbortSignal.timeout` was already present but `any` was missing, so that pattern threw
+`AbortSignal.any is not a function` and a request could not be given a compound cancel. `any(signals)`
+now returns a **real** `AbortSignal` (built on the native `AbortController`, so its `abort` event fires
+and `aborted`/`reason` are live) that aborts as soon as ANY input does, forwarding that input's reason —
+and immediately if one input is already aborted.
+
+Wiring `any` surfaced a latent bug in `AbortSignal.timeout`: it flipped `aborted = true` on a timer but
+**never dispatched the `abort` event**, so a `fetch()` given a timeout signal was never actually
+cancelled (fetch listens for the event) and `any([timeout])` could not see it expire. `timeout` now
+goes through a controller, so it fires the event with a `TimeoutError` DOMException reason — which is
+also how a caller tells a timeout apart from a user abort.
+
+### The teeth `G_ABORTSIGNAL_ANY` uses
+
+`none` (not aborted until an input is), `propagates` (an input aborting aborts the combined signal AND
+fires its event), `reason` (carries the source reason), `already` (an already-aborted input aborts the
+result immediately), and `timeout-prop` (a `AbortSignal.timeout(0)` source propagates through `any` with
+a `TimeoutError` — the claim that proves the timeout fix, not just the combinator). Gating out the shim
+was demonstrated to make the first call throw before the tick landed. [[js-engine]]
