@@ -14186,3 +14186,38 @@ gated. Landed via the verify.sh-direct-then-tick.sh dance under heavy box conten
 race + load-induced shell false-FAIL both transient; recover with a single warm verify at load<1.5).
 
 WIKI: docs/wiki/interaction-surface.md (Screen Wake Lock section).
+
+## Tick 318 — Form-associated custom elements: ElementInternals / attachInternals (2026-07-21)
+
+SELECTED: probe3 (event/pointer/form/DOM surface) showed that surface is remarkably complete
+(PointerEvent, CustomEvent, AbortController, FormData, DragEvent, requestSubmit, checkValidity,
+IntersectionObserver, ResizeObserver, DOMMatrix, crypto.randomUUID all present). Genuinely absent +
+high-value: ElementInternals / attachInternals (also absent: setPointerCapture, ToggleEvent, Path2D,
+OffscreenCanvas, createImageBitmap, CompressionStream — Path2D/OffscreenCanvas/createImageBitmap need
+canvas-engine work, not a prelude stub).
+
+WHY IT MATTERS: web-component design systems (Lit/Shoelace-style controls, GitHub's own components,
+Salesforce Lightning, any `static formAssociated = true` custom input) call this.attachInternals() in
+their CONSTRUCTOR to get the object that submits their value, reports validity, exposes :state() custom
+states and reflects ARIA. It is NOT feature-detected, so its absence throws
+`attachInternals is not a function` out of the constructor and the ENTIRE component fails to upgrade
+(renders as an empty, dead custom tag).
+
+WHAT LANDED (dom_bindings.rs WINDOW_PRELUDE, after the element.animate block, on the live __elProto
+chain link): __elProto.attachInternals() -> ElementInternals with setFormValue, setValidity/checkValidity/
+reportValidity/validity/validationMessage/willValidate, form/labels/shadowRoot, a states CustomStateSet
+(real Set → :state() styling), and ARIA reflection props. Enforces once-per-element (2nd attachInternals
+throws NotSupportedError via a WeakSet). We do not yet wire internals into the real form-submission/
+constraint pipeline (the follow-on), but the object RETAINS the form value, validity flags+message and
+custom states, so the constructor completes, the component upgrades and renders, and the state is
+queryable (checkValidity reflects the flags set; states.has drives :state()).
+
+G_ELEMENT_INTERNALS: defined / validity (clean=valid, valueMissing+message=invalid with that message) /
+states (add/has) / once (2nd attachInternals throws) / ready. RED-proven (guard → false → THREW
+TypeError: host.attachInternals is not a function; defined/validity/once drop).
+
+NO REGRESSION: additive JS prelude; all prior gates green; fmt clean. New CONSTELLATION app-class row
+gated. Landed via the verify.sh-direct-then-tick.sh dance under heavy box contention (recover with a
+single warm verify at load<1.5).
+
+WIKI: docs/wiki/interaction-surface.md (ElementInternals section).

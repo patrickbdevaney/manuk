@@ -1628,3 +1628,34 @@ branch.
 (resolves a sentinel with `type:'screen'`, `released:false`, a `release()` method), `released`
 (`release()` resolves, flips `released` true, fires `release`). RED: disabling the shim throws
 `TypeError: … navigator.wakeLock is undefined` and drops `defined`/`granted` together.
+
+## `attachInternals()` — form-associated custom elements upgrade (tick 318)
+
+Web-component design systems (Lit/Shoelace-style controls, GitHub's own components, Salesforce
+Lightning, any `static formAssociated = true` custom input) call `this.attachInternals()` in their
+CONSTRUCTOR to get the `ElementInternals` that submits their value, reports validity, exposes `:state()`
+and reflects ARIA. It is not feature-detected, so its absence throws `attachInternals is not a function`
+out of the constructor and the entire component fails to upgrade — it renders as an empty, dead tag.
+
+### A real internals that retains state, on the live element prototype
+
+The shim (in `WINDOW_PRELUDE`, right after the `element.animate` block, on the same live `__elProto`
+chain link so custom elements inherit it) returns an `ElementInternals` that RETAINS:
+
+- the form value (`setFormValue(value, state)`);
+- validity — `setValidity(flags, message)` drives `checkValidity()`/`reportValidity()`/`validity`/
+  `validationMessage`/`willValidate`;
+- a `states` CustomStateSet (a real Set) that drives `:state(name)` styling;
+- ARIA reflection props (`role`, `ariaLabel`, `ariaChecked`, …) and `form`/`labels`/`shadowRoot`.
+
+It enforces once-per-element (a second `attachInternals()` throws `NotSupportedError` via a WeakSet).
+We do not yet wire internals into the real form-submission/constraint pipeline — the follow-on — but
+retaining the state is what lets the constructor complete, the component upgrade and render, and the
+component read its own validity/states back.
+
+### The teeth `G_ELEMENT_INTERNALS` uses
+
+`defined` (internals with the methods + a working `states`), `validity` (clean flags valid; a raised
+`valueMissing` with a message invalid with that message), `states` (`add`/`has`), `once` (a second
+`attachInternals()` throws). RED: disabling the shim throws `TypeError: … attachInternals is not a
+function` and drops `defined`/`validity`/`once`.

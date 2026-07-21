@@ -2790,3 +2790,21 @@ than rejecting; state the limit. Rejecting sends every video into its "could not
 **(2)** `release()` must resolve a Promise, flip `released` to true and fire the `release` event — the
 player's cleanup path depends on it. **(3)** Gate by driving request → sentinel shape → release
 round-trip, not `typeof`.
+
+## Custom form controls — `ElementInternals` / `attachInternals` (tick 318)
+
+**Pattern:** `class MyInput extends HTMLElement { static formAssociated = true; constructor(){ super();
+this._internals = this.attachInternals(); } set value(v){ this._internals.setFormValue(v); } }` — a
+form-associated web component wires its value/validity/ARIA through internals.
+
+**The class this unlocks:** web-component design systems (form controls). `attachInternals()` is called
+UNGUARDED in the constructor, so its absence throws `attachInternals is not a function` and the whole
+component fails to upgrade — it renders as an empty dead tag.
+
+**The traps.** **(1)** Return a REAL internals that RETAINS state (form value, validity flags+message,
+custom states), not an inert stub — `checkValidity()` must reflect the flags the component set, and
+`states.has()` must drive `:state()`. **(2)** `states` is a CustomStateSet — back it with a real Set.
+**(3)** Enforce once-per-element (a second `attachInternals()` throws NotSupportedError) via a WeakSet —
+components rely on that being an error. **(4)** Install on the live element-prototype chain link
+(`Object.getPrototypeOf(createElement(...))`), so custom elements (which extend HTMLElement) inherit it.
+**(5)** Gate by driving setValidity → checkValidity and the once-throw, not `typeof`.

@@ -411,6 +411,9 @@
   - L1608 · navigator.wakeLock — grant a real sentinel, OS enforcement is the follow-on (tick 317)
   - L1615 · Host owns the sleep timer, so grant and retain — do not reject
   - L1625 · The teeth G_WAKE_LOCK uses
+  - L1632 · attachInternals() — form-associated custom elements upgrade (tick 318)
+  - L1640 · A real internals that retains state, on the live element prototype
+  - L1656 · The teeth G_ELEMENT_INTERNALS uses
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -784,4 +787,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-699 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+702 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

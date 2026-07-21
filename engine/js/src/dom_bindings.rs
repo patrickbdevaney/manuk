@@ -10629,6 +10629,102 @@ const WINDOW_PRELUDE: &str = r#"
             }
         }
 
+        // ---- Form-associated custom elements — `ElementInternals` / `attachInternals` -------
+        // Web-component design systems (Lit/Shoelace-style controls, GitHub's own components,
+        // Salesforce Lightning, and any `static formAssociated = true` custom input) call
+        // `this.attachInternals()` in their CONSTRUCTOR to get an `ElementInternals` — the object that
+        // submits the control's value with the form (`setFormValue`), reports validity
+        // (`setValidity`/`checkValidity`), exposes `:state()` custom states, and reflects ARIA. It is
+        // NOT feature-detected — a form-associated component assumes it — so its absence throws
+        // `attachInternals is not a function` out of the constructor and the ENTIRE component fails to
+        // upgrade (it renders as an empty, dead custom tag).
+        //
+        // We do not yet wire the internals into the real form-submission/constraint pipeline (that is
+        // the follow-on), but the object is REAL, not inert: it retains the form value, the validity
+        // flags + message, and the custom state set, so (1) the constructor completes and the component
+        // upgrades and renders, and (2) the retained state is queryable — `checkValidity()` reflects the
+        // flags the component set, and `states.has(...)` drives `:state()` styling the component reads
+        // back. Retaining is the capability; the submission wiring is the follow-on.
+        if (__elProto && typeof __elProto.attachInternals !== 'function') {
+            var __internalsAttached = (typeof WeakSet === 'function') ? new WeakSet() : null;
+            var makeDOMException = function (message, name) {
+                var e;
+                try { e = new DOMException(message, name); }
+                catch (x) { e = new Error(message); try { e.name = name; } catch (y) {} }
+                return e;
+            };
+            var ElementInternals = function ElementInternals(host) {
+                this.__host = host;
+                this.__formValue = null;
+                this.__formState = null;
+                this.__validityFlags = {};
+                this.__validationMessage = '';
+                // `states` is a CustomStateSet — a real Set drives `el.attachInternals().states` and the
+                // `:state(name)` styling components read back.
+                this.states = (typeof Set === 'function') ? new Set() : {
+                    __a: [], add: function (v) { if (this.__a.indexOf(v) < 0) this.__a.push(v); },
+                    delete: function (v) { var i = this.__a.indexOf(v); if (i >= 0) this.__a.splice(i, 1); },
+                    has: function (v) { return this.__a.indexOf(v) >= 0; }, clear: function () { this.__a = []; }
+                };
+                // ARIA reflection surface — components set these to expose semantics to the a11y tree.
+                this.role = null;
+                this.ariaLabel = null; this.ariaChecked = null; this.ariaSelected = null;
+                this.ariaExpanded = null; this.ariaDisabled = null; this.ariaPressed = null;
+                this.ariaValueNow = null; this.ariaValueMin = null; this.ariaValueMax = null;
+                this.shadowRoot = null;
+            };
+            var VALIDITY_KEYS = ['valueMissing', 'typeMismatch', 'patternMismatch', 'tooLong',
+                'tooShort', 'rangeUnderflow', 'rangeOverflow', 'stepMismatch', 'badInput',
+                'customError'];
+            ElementInternals.prototype.setFormValue = function (value, state) {
+                this.__formValue = value; this.__formState = (state === undefined ? null : state);
+            };
+            ElementInternals.prototype.setValidity = function (flags, message) {
+                this.__validityFlags = flags || {};
+                this.__validationMessage = message == null ? '' : String(message);
+            };
+            ElementInternals.prototype.__isValid = function () {
+                var f = this.__validityFlags;
+                for (var i = 0; i < VALIDITY_KEYS.length; i++) { if (f[VALIDITY_KEYS[i]]) { return false; } }
+                return true;
+            };
+            ElementInternals.prototype.checkValidity = function () { return this.__isValid(); };
+            ElementInternals.prototype.reportValidity = function () { return this.__isValid(); };
+            Object.defineProperty(ElementInternals.prototype, 'validity', {
+                get: function () {
+                    var f = this.__validityFlags, out = { valid: this.__isValid() };
+                    for (var i = 0; i < VALIDITY_KEYS.length; i++) { out[VALIDITY_KEYS[i]] = !!f[VALIDITY_KEYS[i]]; }
+                    return out;
+                }, configurable: true
+            });
+            Object.defineProperty(ElementInternals.prototype, 'validationMessage', {
+                get: function () { return this.__validationMessage; }, configurable: true
+            });
+            Object.defineProperty(ElementInternals.prototype, 'willValidate', {
+                get: function () { return true; }, configurable: true
+            });
+            Object.defineProperty(ElementInternals.prototype, 'form', {
+                get: function () { try { return this.__host && this.__host.form ? this.__host.form : null; } catch (e) { return null; } },
+                configurable: true
+            });
+            Object.defineProperty(ElementInternals.prototype, 'labels', {
+                get: function () { return []; }, configurable: true
+            });
+            g.ElementInternals = g.ElementInternals || ElementInternals;
+            __elProto.attachInternals = function () {
+                // Per spec `attachInternals()` may be called at most once per element.
+                if (__internalsAttached) {
+                    if (__internalsAttached.has(this)) {
+                        throw makeDOMException(
+                            "Failed to execute 'attachInternals' on 'HTMLElement': ElementInternals for the specified element was already attached.",
+                            'NotSupportedError');
+                    }
+                    __internalsAttached.add(this);
+                }
+                return new ElementInternals(this);
+            };
+        }
+
         // ---- Scrolling ----------------------------------------------------------------------
         // Reading the scroll offset is how virtualized feeds, sticky headers, infinite scroll and
         // "back to top" buttons all work. The host owns the viewport, so a scroll is a REQUEST.
