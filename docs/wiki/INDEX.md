@@ -394,6 +394,10 @@
   - L1460 · The failure without it is a dead player
   - L1467 · Retain everything; the OS wiring is the follow-on
   - L1485 · The teeth G_MEDIA_SESSION uses
+  - L1493 · window.visualViewport — the visual viewport equals the layout viewport (tick 313)
+  - L1499 · The failure without it is a dead layout
+  - L1505 · No zoom, so it mirrors the layout viewport
+  - L1517 · The teeth G_VISUAL_VIEWPORT uses
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -767,4 +771,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-682 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+686 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

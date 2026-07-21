@@ -14047,3 +14047,29 @@ NO REGRESSION: additive JS prelude; all prior gates green; fmt clean. New CONSTE
 gated. Landed via the verify.sh-direct-then-tick.sh dance ([[wall-warm-rerun-lands-ticks]]).
 
 WIKI: docs/wiki/interaction-surface.md (Media Session API section).
+
+## Tick 313 — VisualViewport API: window.visualViewport (2026-07-21)
+
+SELECTED: re-probe found visualViewport genuinely absent (probe2). It is high-value and has REAL,
+honest values (no fabrication): the visual viewport equals the layout viewport when nothing is zoomed.
+
+WHY IT MATTERS: keyboard-aware layouts, pinch-zoom handlers, sticky / position:fixed correction and
+mobile-responsive frameworks read visualViewport.width/height/scale/offsetTop and listen for
+resize/scroll on it — routinely UNGUARDED (`visualViewport.addEventListener('resize', …)`). Absent, it
+is undefined and undefined.addEventListener / undefined.width throw out of the layout setup.
+
+WHAT LANDED (dom_bindings.rs WINDOW_PRELUDE, after the screen block): window.visualViewport with
+width/height (getters onto the real innerWidth/innerHeight — the SAME viewport the cascade lays out
+against, never hardcoded), scale (1), offsetLeft/Top (0), pageLeft/Top (scroll offset), and an
+EventTarget surface (add/removeEventListener retain+remove listeners; onresize/onscroll). Honest limit:
+with no live pinch-zoom or on-screen keyboard, scale stays 1 and resize/scroll do not fire — listeners
+are retained (call does not throw, a future host can drive them), the same posture as matchMedia.
+
+G_VISUAL_VIEWPORT: defined / mirrors (width/height === innerWidth/innerHeight, scale 1, offsets 0) /
+events (unguarded add/remove does not throw, listener retained) / ready. RED-proven (guard → false →
+THREW TypeError: can't access property "width", vv is undefined; defined/mirrors drop).
+
+NO REGRESSION: additive JS prelude; all prior gates green; fmt clean. New CONSTELLATION app-class row
+gated. Landed via the verify.sh-direct-then-tick.sh dance ([[wall-warm-rerun-lands-ticks]]).
+
+WIKI: docs/wiki/interaction-surface.md (VisualViewport section).

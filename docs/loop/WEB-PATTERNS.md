@@ -2706,3 +2706,21 @@ hides the bug. `null` unsets. **(4)** There is no OS media-key surface to invoke
 the limit — but expose a non-standard seam so a host/agent CAN invoke a stored handler (read "now
 playing", trigger play/pause). That turns an honest-limit shim into an agentic-actuation win.
 **(5)** Gate by DRIVING it (metadata round-trip + invoking a stored handler), never by `typeof`.
+
+## Environment — `window.visualViewport` mirrors the layout viewport (tick 313)
+
+**Pattern:** `visualViewport.addEventListener('resize', () => fixKeyboardInset());
+el.style.height = visualViewport.height + 'px'` — keyboard-aware and pinch-zoom layouts size off the
+VISUAL viewport (what is actually visible) rather than the layout viewport.
+
+**The class this unlocks:** responsive/keyboard-aware layout. The API is used UNGUARDED, so its absence
+throws `undefined.addEventListener` (or `undefined.width`) out of the layout setup and the responsive
+code dies.
+
+**The traps.** **(1)** With nothing zoomed, the visual viewport EQUALS the layout viewport — so read
+`width`/`height` from the SAME real `innerWidth`/`innerHeight` the cascade lays out against (a getter,
+so it tracks a later resize), `scale` 1, offsets 0. A hardcoded size is the same bug as `innerWidth`
+disagreeing with `@media`. **(2)** Retain the `resize`/`scroll` listeners even though nothing fires them
+yet (no live pinch-zoom / OSK) — the unguarded `addEventListener` must not throw, and a future host can
+drive them; state the limit. **(3)** Gate by asserting the metrics MIRROR `innerWidth`/`innerHeight`,
+not just that they are numbers — a stub returning a constant passes `typeof` and lies about the layout.

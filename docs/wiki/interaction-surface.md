@@ -1489,3 +1489,34 @@ and `artwork[0].src` normalized), `playbackstate` (round-trips `'playing'`), `en
 action throws a `TypeError`), `handlerran` (a stored `play` handler runs via `__invoke`, proving it is
 retained, not dropped), `handlerunset` (`null` removes it). RED: disabling the shim throws
 `ReferenceError: MediaMetadata is not defined` and drops them together.
+
+## `window.visualViewport` — the visual viewport equals the layout viewport (tick 313)
+
+The VisualViewport API is read by keyboard-aware layouts, pinch-zoom handlers, sticky / `position:fixed`
+correction and mobile-responsive frameworks: `visualViewport.width/height/scale/offsetTop` and
+`visualViewport.addEventListener('resize'|'scroll', …)`. It was absent.
+
+### The failure without it is a dead layout
+
+The API is used UNGUARDED (`visualViewport.addEventListener('resize', …)`), so its absence is a
+silent-handler failure: `visualViewport` is `undefined`, `undefined.addEventListener` (or
+`undefined.width`) throws out of the layout setup, and the responsive/keyboard code dies.
+
+### No zoom, so it mirrors the layout viewport
+
+The shim (in `WINDOW_PRELUDE`, after the `screen` block) exposes `width`/`height` as getters onto the
+real `innerWidth`/`innerHeight` — the SAME viewport the cascade lays out against, so a later resize is
+tracked and JS never disagrees with `@media` one layer up — with `scale` 1, `offsetLeft/Top` 0 and
+`pageLeft/Top` from the scroll offset. It is a full EventTarget (`add`/`removeEventListener` retain and
+remove listeners, `onresize`/`onscroll`).
+
+Honest limit: with no live pinch-zoom or on-screen keyboard, `scale` stays 1 and the `resize`/`scroll`
+events do not fire. The listeners are retained anyway — the unguarded wiring must not throw, and a
+future host binding can drive them — the same posture as `matchMedia`'s listeners.
+
+### The teeth `G_VISUAL_VIEWPORT` uses
+
+`defined` (numeric metrics + EventTarget, no throw), `mirrors` (`width`/`height` EQUAL
+`innerWidth`/`innerHeight`, `scale` 1, offsets 0 — proving it tracks the real viewport, not a constant),
+`events` (unguarded `add`/`removeEventListener` does not throw and retains the listener). RED: disabling
+the shim throws `TypeError: … vv is undefined` and drops `defined`/`mirrors` together.

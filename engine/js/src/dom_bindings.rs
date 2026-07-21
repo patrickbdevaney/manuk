@@ -11734,6 +11734,39 @@ const WINDOW_PRELUDE: &str = r#"
             width: VW, height: VH, availWidth: VW, availHeight: VH,
             colorDepth: 24, pixelDepth: 24, orientation: { type: 'landscape-primary', angle: 0 }
         };
+        // `window.visualViewport` — the VisualViewport API. Keyboard-aware layouts, pinch-zoom handlers,
+        // sticky/`position:fixed` correction and mobile-responsive frameworks read
+        // `visualViewport.width/height/scale/offsetTop` and listen for `resize`/`scroll` on it. It is
+        // routinely used UNGUARDED (`visualViewport.addEventListener('resize', …)`), so its absence is
+        // the familiar silent-handler failure — `undefined.addEventListener` throws out of the layout
+        // setup. We do not zoom, so the visual viewport EQUALS the layout viewport: `scale` is `1` and
+        // the offsets are `0`, read from the same real `VW`/`VH` the cascade lays out against (never a
+        // hardcoded size). Honest limit: with no live pinch-zoom or on-screen keyboard, `scale` stays
+        // `1` and the `resize`/`scroll` events do not fire — the listeners are retained (so the call
+        // does not throw and a future host can drive them), the same posture as `matchMedia`'s listeners.
+        if (typeof g.visualViewport === 'undefined') {
+            var __vvListeners = {};
+            g.visualViewport = {
+                get width() { return g.innerWidth; },
+                get height() { return g.innerHeight; },
+                get scale() { return 1; },
+                get offsetLeft() { return 0; },
+                get offsetTop() { return 0; },
+                get pageLeft() { return g.scrollX || g.pageXOffset || 0; },
+                get pageTop() { return g.scrollY || g.pageYOffset || 0; },
+                onresize: null, onscroll: null,
+                addEventListener: function (type, fn) {
+                    if (typeof fn === 'function') {
+                        (__vvListeners[type] = __vvListeners[type] || []).push(fn);
+                    }
+                },
+                removeEventListener: function (type, fn) {
+                    var l = __vvListeners[type]; if (!l) { return; }
+                    var i = l.indexOf(fn); if (i >= 0) { l.splice(i, 1); }
+                },
+                dispatchEvent: function () { return true; }
+            };
+        }
         if (typeof g.matchMedia === 'undefined') {
             // ONE evaluator. `__matchMedia` is the host binding onto the SAME Rust function the
             // @media cascade uses, so a page that branches in JS and styles in CSS on the identical
