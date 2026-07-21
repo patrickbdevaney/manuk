@@ -1084,3 +1084,21 @@ built-in `TextDecoderStream` on top is the natural follow-on.
 readable), `pipe` (the full `pipeThrough().pipeTo()` delivers both). Gating out the `WritableStream`
 block drops back to the inert stub and `getWriter is not a function` — demonstrated before landing.
 [[js-engine]]
+
+## `TextDecoderStream` / `TextEncoderStream` — streaming text codecs (tick 299)
+
+The codecs that ride a fetch pipeline: `for await (const s of
+res.body.pipeThrough(new TextDecoderStream())) …` turns a stream of byte chunks into a stream of decoded
+strings without buffering the whole body — and correctly across a multi-byte character split over a
+chunk boundary (the `{stream:true}` contract). They were absent. Now real wrappers over the real
+`TransformStream` (tick 298) and the existing `TextDecoder`/`TextEncoder`: `TextDecoderStream` decodes
+each `Uint8Array` chunk with `{stream:true}` (holding a partial trailing sequence back) and flushes the
+remainder on close; `TextEncoderStream` encodes each string chunk to UTF-8 bytes. Both expose the
+`readable`/`writable` pair and `encoding`.
+
+### The teeth `G_TEXT_CODEC_STREAMS` uses
+
+`decode-split` — a UTF-8 `é` (`0xC3 0xA9`) split across two chunks decodes to one `café`, not two
+mojibake halves (the streaming boundary is honoured, not decoded chunk-independently) — and `encode` —
+a string chunk becomes the right UTF-8 bytes. Deleting the block was demonstrated to make the pipe throw
+`TextDecoderStream is not defined`. [[js-engine]]

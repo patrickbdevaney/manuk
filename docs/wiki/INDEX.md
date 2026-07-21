@@ -589,6 +589,8 @@
   - L1055 · The teeth G_URLPATTERN uses
   - L1062 · WritableStream + TransformStream — the streams that were inert names (tick 298)
   - L1081 · The teeth G_WRITABLE_TRANSFORM_STREAMS uses
+  - L1088 · TextDecoderStream / TextEncoderStream — streaming text codecs (tick 299)
+  - L1099 · The teeth G_TEXT_CODEC_STREAMS uses
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -728,4 +730,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-643 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+645 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

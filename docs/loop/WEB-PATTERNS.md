@@ -2472,3 +2472,18 @@ fails the moment you call a method; gate on data actually flowing (a chunk reach
 from the input. **(3)** `pipeThrough` returns the transform's READABLE (not the source); `pipeTo`
 returns a promise that resolves when the source closes. **(4)** Be honest about backpressure — if
 `ready` is always resolved, say so; don't imply a slow sink throttles the source when it doesn't.
+
+## Decoding a streaming response as text — `TextDecoderStream` (tick 299)
+
+**Pattern:** `for await (const chunk of res.body.pipeThrough(new TextDecoderStream())) append(chunk)` —
+an LLM token stream, an SSE-ish feed, or any large text download is read incrementally as decoded
+strings without buffering the whole body.
+
+**The class this unlocks:** streaming text decode. Absent, `new TextDecoderStream()` threw and the pipe
+fell apart.
+
+**The traps.** **(1)** Decode with the STREAMING flag — a multi-byte character (`é` = `0xC3 0xA9`) lands
+split across a chunk boundary constantly, and decoding each chunk independently turns it into two U+FFFD
+halves; hold the partial sequence back and prepend it to the next chunk. **(2)** Flush on close — the
+last held bytes must still emit. **(3)** It is a real `TransformStream` — `pipeThrough` returns its
+readable, so the decoded stream composes with the rest of the pipeline.

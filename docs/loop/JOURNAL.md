@@ -13611,3 +13611,26 @@ when my real ones are absent. Not a trade. HONEST LIMIT: backpressure simplified
 always ready); TextDecoderStream on top is the follow-on.
 
 WIKI: docs/wiki/networking.md (WritableStream/TransformStream section). No constellation row.
+
+## Tick 299 — TextDecoderStream / TextEncoderStream: streaming text codecs (2026-07-21)
+
+TICK SHAPE: direct follow-on to 298 (which made TransformStream real). These are the streaming text
+codecs `res.body.pipeThrough(new TextDecoderStream())` uses; absent before. Now honest thin wrappers over
+the real TransformStream + existing TextDecoder/TextEncoder — non-inert because 298 made the substrate
+real.
+
+WHAT LANDED (event_loop.rs, after TransformStream): TextDecoderStream (decode each chunk with
+{stream:true}, flush the held partial on close) and TextEncoderStream (encode string chunks to UTF-8),
+each exposing readable/writable + encoding.
+
+### The claim — G_TEXT_CODEC_STREAMS, three teeth
+
+present / decode-split (a UTF-8 é = 0xC3 0xA9 split across two chunks decodes to ONE 'café', proving the
+{stream:true} boundary is honoured — decoding chunks independently would give mojibake) / encode (string
+→ UTF-8 bytes). PROVEN RED: `if (false && …)` → `TextDecoderStream is not defined` (genuinely undefined,
+not even in __inertNames). g_writable_transform_streams stayed green.
+
+NO REGRESSION: additive globals. Not a trade. HONEST LIMIT: inherits the simplified backpressure of the
+underlying streams.
+
+WIKI: docs/wiki/networking.md (TextDecoderStream/TextEncoderStream section). No constellation row.

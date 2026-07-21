@@ -379,6 +379,43 @@ const PRELUDE: &str = r#"
         globalThis.TransformStream = TS;
     }
 
+    // `TextDecoderStream` / `TextEncoderStream` — the streaming text codecs that ride a fetch pipeline:
+    // `for await (const s of res.body.pipeThrough(new TextDecoderStream())) …` turns a stream of byte
+    // chunks into a stream of decoded strings WITHOUT buffering the whole body, and correctly across a
+    // multi-byte character split over a chunk boundary (the `{stream:true}` contract). They were absent.
+    // Real wrappers over the now-real TransformStream + the existing TextDecoder/TextEncoder.
+    if (typeof globalThis.TextDecoderStream === 'undefined') {
+        globalThis.TextDecoderStream = function TextDecoderStream(label, options) {
+            var dec = new globalThis.TextDecoder(label, options);
+            var ts = new globalThis.TransformStream({
+                transform: function (chunk, ctrl) {
+                    var text = dec.decode(chunk, { stream: true });
+                    if (text) { ctrl.enqueue(text); }
+                },
+                flush: function (ctrl) {
+                    var tail = dec.decode();   // flush any held partial sequence
+                    if (tail) { ctrl.enqueue(tail); }
+                }
+            });
+            this.readable = ts.readable;
+            this.writable = ts.writable;
+            this.encoding = dec.encoding;
+            this.fatal = !!(options && options.fatal);
+            this.ignoreBOM = !!(options && options.ignoreBOM);
+        };
+    }
+    if (typeof globalThis.TextEncoderStream === 'undefined') {
+        globalThis.TextEncoderStream = function TextEncoderStream() {
+            var enc = new globalThis.TextEncoder();
+            var ts = new globalThis.TransformStream({
+                transform: function (chunk, ctrl) { ctrl.enqueue(enc.encode(String(chunk))); }
+            });
+            this.readable = ts.readable;
+            this.writable = ts.writable;
+            this.encoding = 'utf-8';
+        };
+    }
+
     // `raw` is the response body as a BINARY STRING — one code unit per byte, values 0..255 — and
     // it is what `arrayBuffer()`/`bytes()`/`body` read. `text` remains the host's charset-decoded
     // string and is what `text()`/`json()` read, unchanged.
