@@ -2347,3 +2347,20 @@ cancels. **(2)** An already-aborted input aborts the result IMMEDIATELY (synchro
 turn. **(3)** Forward the SOURCE reason, so a caller can tell a `TimeoutError` from a user `AbortError`.
 **(4)** If you add a combinator over signals, check the signals it combines actually DISPATCH — a
 "timeout" that sets a flag without an event is a cancel that never happens.
+
+## Is this element actually on screen? — `Element.checkVisibility` (tick 291)
+
+**Pattern:** `if (el.checkVisibility()) el.scrollIntoView()` and `if
+(!row.checkVisibility({ visibilityProperty: true })) skipAnimation(row)` — UI libraries guard
+scroll-into-view, lazy mounting, and a11y "is it on screen" with it instead of hand-rolling a
+`getComputedStyle` + `offsetParent` + ancestor-walk check.
+
+**The class this unlocks:** rendered-visibility testing. Absent, `el.checkVisibility` was `undefined`
+and the call threw `is not a function`, taking the guard's branch with it.
+
+**The traps.** **(1)** `display:none` must be checked up the WHOLE ancestor chain — a descendant of a
+hidden element keeps its own computed `display`, so reading self returns a false positive. **(2)** The
+default checks only rendering: `visibility:hidden` and `opacity:0` are STILL visible unless the caller
+passes the option — fold them in unconditionally and you disagree with every other browser. **(3)** A
+disconnected element is not visible. **(4)** Back it with the REAL computed cascade, not `offsetParent`
+alone (which is also null for `position:fixed` and the body) — a guess here silently mis-guards.

@@ -1602,6 +1602,9 @@ unsafe fn define_members(
         // URLs before layout sees the nodes; `setHTMLUnsafe` is `innerHTML` with a name that says so.
         def_guarded!(def, c"setHTML", el_set_html, 1);
         def_guarded!(def, c"setHTMLUnsafe", el_set_html_unsafe, 1);
+        // `checkVisibility([options])` — is the element actually rendered? (display:none / disconnected
+        // → false; visibility/opacity fold in only when the option asks).
+        def_guarded!(def, c"checkVisibility", el_check_visibility, 0);
         def_guarded!(def, c"insertAdjacentElement", el_insert_adjacent_element, 2);
         def_guarded!(def, c"insertAdjacentText", el_insert_adjacent_text, 2);
         def_guarded!(def, c"click", el_click, 0);
@@ -4584,6 +4587,71 @@ unsafe fn el_set_html(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool 
         record_mutation(cx, dom, "childList", node, None, None, &new_kids, &old_kids);
     }
     *vp = UndefinedValue();
+    true
+}
+
+/// Read a boolean property off a JS options object (missing / non-boolean → `false`). Used to parse
+/// `checkVisibility({ visibilityProperty: true, ... })`-style option bags.
+unsafe fn obj_bool_prop(cx: *mut RawJSContext, obj: *mut JSObject, name: &std::ffi::CStr) -> bool {
+    rooted!(in(cx) let o = obj);
+    rooted!(in(cx) let mut v = UndefinedValue());
+    if JS_GetProperty(&mut wrap_cx(cx), o.handle(), name.as_ptr(), v.handle_mut()) {
+        v.is_boolean() && v.to_boolean()
+    } else {
+        false
+    }
+}
+
+/// `element.checkVisibility([options])` — "is this element actually rendered?" without the manual
+/// `getComputedStyle` + `offsetParent` + ancestor-walk dance every UI library reinvents (scroll-into-
+/// view guards, lazy-mount checks, a11y "is it on screen"). Default returns `false` only when the
+/// element (or an ancestor) is `display:none`, or the element is disconnected — i.e. not in the box
+/// tree. The `visibilityProperty` / `opacityProperty` option flags additionally fold in `visibility:
+/// hidden|collapse` and `opacity:0`. Backed by the REAL computed styles (`with_style`), so it reflects
+/// the actual cascade. `contentVisibilityAuto` is not modelled (no content-visibility containment).
+unsafe fn el_check_visibility(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, node)) = this_node(vp) else {
+        *vp = BooleanValue(false);
+        return true;
+    };
+    let mut check_opacity = false;
+    let mut check_vis = false;
+    if let Some(obj) = arg_object(vp, argc, 0) {
+        check_opacity =
+            obj_bool_prop(cx, obj, c"opacityProperty") || obj_bool_prop(cx, obj, c"checkOpacity");
+        check_vis = obj_bool_prop(cx, obj, c"visibilityProperty")
+            || obj_bool_prop(cx, obj, c"checkVisibilityCSS");
+    }
+    // A disconnected element renders nowhere.
+    if !is_connected(dom, node) {
+        *vp = BooleanValue(false);
+        return true;
+    }
+    // `display:none` ANYWHERE up the ancestor chain removes the subtree from rendering — a descendant's
+    // own computed `display` is unaffected, so this must WALK, not read self.
+    let mut cur = Some(node);
+    while let Some(n) = cur {
+        if with_style(n, |cs| cs.display) == Some(manuk_css::Display::None) {
+            *vp = BooleanValue(false);
+            return true;
+        }
+        cur = (*dom).parent(n);
+    }
+    // `visibility` (inherited) and `opacity` (resolved down the chain) are read off the element itself.
+    if check_vis
+        && matches!(
+            with_style(node, |cs| cs.visibility),
+            Some(manuk_css::Visibility::Hidden) | Some(manuk_css::Visibility::Collapse)
+        )
+    {
+        *vp = BooleanValue(false);
+        return true;
+    }
+    if check_opacity && with_style(node, |cs| cs.opacity).is_some_and(|o| o <= 0.0) {
+        *vp = BooleanValue(false);
+        return true;
+    }
+    *vp = BooleanValue(true);
     true
 }
 

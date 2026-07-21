@@ -259,6 +259,8 @@
   - L1056 · Two answers to the same question must agree — permissions.query vs Notification.permission
   - L1085 · The Sanitizer API — Element.setHTML / setHTMLUnsafe (tick 288)
   - L1109 · The teeth G_SANITIZER uses
+  - L1121 · Element.checkVisibility() — is it actually rendered? (tick 291)
+  - L1138 · The teeth G_CHECK_VISIBILITY uses
 
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
@@ -715,4 +717,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-630 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+632 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

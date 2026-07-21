@@ -1117,3 +1117,30 @@ before the tick landed.
 **Honest limit:** the safe baseline only. The full configurable Sanitizer (`options` allow/block/drop
 lists, a `Sanitizer` config object, `Document.parseHTMLUnsafe`) is the follow-on, and declarative
 shadow roots are not parsed — so the constellation row stays `partial`, not `works`. [[js-engine]]
+
+## `Element.checkVisibility()` — is it actually rendered? (tick 291)
+
+Every UI library reinvents the same guard before it scrolls an element into view, lazily mounts it, or
+reports it to an a11y layer: "is this thing actually on screen?" The manual version is a tangle of
+`getComputedStyle`, `offsetParent` and an ancestor walk. `element.checkVisibility([options])` is the one
+call that answers it — and it was absent, so the call threw `checkVisibility is not a function`.
+
+Installed as a **native per-reflector method** (like `setHTML`) — NOT on `Element.prototype` in a
+prelude, because `Element` is created lazily on the first element reflector and does not yet exist when
+the window prelude runs (`AbortSignal.any` hit the same ordering wall from the other direction). The
+default returns `false` only when the element is disconnected or `display:none` anywhere up the ancestor
+chain — the two ways an element leaves the box tree. The walk is essential: a descendant of a
+`display:none` element keeps its own computed `display`, so reading self is not enough. The option flags
+`visibilityProperty` / `opacityProperty` (and their `checkVisibilityCSS` / `checkOpacity` aliases)
+additionally fold in `visibility:hidden|collapse` and `opacity:0`, read off the element itself since
+`visibility` is inherited and `opacity` resolves down the chain.
+
+### The teeth `G_CHECK_VISIBILITY` uses
+
+`shown`/`none`/`child-of-none` (display:none, self OR ancestor), `vis-default` + `vis-opt`
+(visibility:hidden is visible by DEFAULT, hidden only with the option), `op-default` + `op-opt` (same
+for opacity:0). A stub returning a constant fails several at once. Un-registering the method was
+demonstrated to make the first call throw before the tick landed.
+
+**Honest limit:** `contentVisibilityAuto` is not modelled (no `content-visibility` layout containment
+in the engine). [[js-engine]]

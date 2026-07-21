@@ -13386,3 +13386,37 @@ NO REGRESSION: any() is additive; the timeout change is strictly more correct (f
 always have fired). Not a trade.
 
 WIKI: docs/wiki/networking.md (AbortSignal.any section). No constellation row (JS-surface completeness).
+
+## Tick 291 — `Element.checkVisibility()`: is it actually rendered? (2026-07-20)
+
+TICK SHAPE: board re-read; continued the session's probe-first discipline. Batch probe found ABSENT:
+element.checkVisibility, navigator.locks, scheduler.postTask. Picked checkVisibility — genuinely useful
+(every UI library's scroll-into-view / lazy-mount / a11y guard) and backed by REAL layout state, not an
+inert stub (navigator.locks + scheduler.postTask carry cross-tab/priority state that is easy to fake and
+hard to honor honestly).
+
+HYPOTHESIS: `if (el.checkVisibility()) el.scrollIntoView()`. Absent → `checkVisibility is not a
+function` takes the guard with it.
+
+TWO ORDERING LESSONS (both cost a probe): (1) `Element.prototype` methods DO dispatch here — the
+`.sheet` memory was specific to attribute ACCESSORS, not methods (probe: `Element.prototype.__x`
+worked). (2) BUT installing on `Element.prototype` in the WINDOW_PRELUDE fails — `Element` is created
+LAZILY on the first element reflector and does not exist when the prelude runs (`present:false`). So
+checkVisibility went in as a NATIVE per-reflector method (like setHTML), implemented in Rust over
+`with_style` (the same computed styles `getComputedStyle` reads).
+
+WHAT LANDED: default returns false for disconnected or `display:none` (self OR any ancestor — a WALK,
+since a descendant of display:none keeps its own computed display); option flags `visibilityProperty`/
+`opacityProperty` (+`checkVisibilityCSS`/`checkOpacity` aliases) fold in `visibility:hidden|collapse`
+and `opacity:0`, read off the element (visibility is inherited, opacity resolves down the chain). Added
+an `obj_bool_prop` FFI helper to read the option bag.
+
+### The claim — G_CHECK_VISIBILITY, eight teeth
+
+present/shown/none/child-of-none/vis-default/vis-opt/op-default/op-opt. PROVEN RED: commenting out the
+`def_guarded!(…checkVisibility…)` registration → `present:false`, first call throws.
+
+NO REGRESSION: additive native method. Not a trade. HONEST LIMIT: `contentVisibilityAuto` not modelled
+(no content-visibility containment in the engine).
+
+WIKI: docs/wiki/dom-semantics.md (checkVisibility section). No constellation row (JS-surface completeness).
