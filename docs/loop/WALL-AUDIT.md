@@ -79,3 +79,25 @@ mark and the 93s ceiling. No standing bloat to cut agent-side; the wall is lean.
 **LAST_WALL_AUDIT set to 325.**
 
 **Next audit due: tick 345.**
+
+## Audit #3 — tick 326 (wall 189s warm / 706s audit-run cold)
+
+Counter-unfreeze artifact: LAST_WALL_AUDIT stuck at 113 because TICK was frozen at 128 for ~200 ticks;
+no 20-tick cadence was actually skipped. First wall audit since the counter was fixed.
+
+**Where the seconds go (wall-audit.sh histogram, this run):** P (parity/prewarm) 172s ≈ the whole cost,
+then T 30s, B 30s, D 11s, gates ≤6s each. The 706s total here is a COLD audit-run number; the banked
+warm wall is 189s (RATCHET.tsv, re-baselined by the observer from a green build-0s receipt — the earlier
+72s mark was a lucky-low min-lock, see wall-mark-min-lock-rebaseline).
+
+**Rigor-preserving findings:** the dominant cost (P — the parity/oracle prewarm + release relink) is
+HARNESS-OWNED (scripts/verify.sh, scripts/ramdisk.sh) and the observer is already actively managing it
+(feature-variant unification in c059370, ramdisk incremental-flush guard, disk-hygiene stem-prune age
+floor). There is nothing agent-actionable here that trims seconds without touching scripts/ — and the
+agent must not edit the harness. No gate is redundant, over-scoped, or serialised in a way an
+engine-side change could fix. **The wall is as lean as the agent can make it; the remaining bloat is
+harness territory, deliberately left to the observer.** No gate cut, no floor widened.
+
+**LAST_WALL_AUDIT set to 326.**
+
+**Next audit due: tick 346.**

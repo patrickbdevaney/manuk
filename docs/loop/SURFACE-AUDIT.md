@@ -242,3 +242,31 @@ retired ready_pct metric; the real Phase-0 exit is the FIDELITY-SCORING-REDESIGN
 **LAST_SURFACE_AUDIT set to 325.**
 
 **Next audit due: tick 335.**
+
+## Audit #6 — tick 326 (2026-07-21)
+
+**This entry is the canonical-header formalization of the tick-325 audit above** (which used a
+non-matching `## Surface audit @ tick 325` header, so `status-update.sh`'s
+`^## Audit #N — tick M` derivation never registered it and the cadence field stayed stuck at 123).
+No cadence was actually skipped: the TICK counter was frozen at 128 for ~200 ticks and the audit
+SUBSTANCE was done fresh at 325 — the observer's tick-328 three-way deep-research pass
+(`docs/loop/PHASE0-BOUNDED-REMAINDER.md` + `docs/loop/RESEARCH-SYNTHESIS-2026-07.md`) is a full
+leave-your-frame audit: external SOTA (HTTP Archive / Interop / Servo / Ladybird methodology), a
+complete internal map-vs-reality pass, and a site-class × capability matrix checked against source.
+
+**Reconciled (this pass):** re-swept the constellation status histogram — 76 gated / 21 works /
+17 partial / 30 missing / 2 unknown across 146 rows. The standing finding held again: the map runs
+**stale-PESSIMISTIC**, not optimistic — tick 326 itself re-pinned four `partial` cells (file upload,
+`<dialog>`+popover, hover/dblclick/contextmenu, native `<select>`) that were all already gated and
+green. The novelty-bias steer from Audit #5 (sweep Baseline-STABLE, not just current-year Interop
+headlines) remains the correct lens; the CSS-nesting/subgrid/`@scope`/WebCodecs/Sanitizer rows added
+at 325 stay `unknown`, awaiting cheap probes.
+
+**What we had been wrong about:** the cadence machinery itself — a non-canonical header silently voided
+the 325 audit's counter update. Corrected here. The map priority is superseded by
+PHASE0-BOUNDED-REMAINDER.md; the real Phase-0 exit is the FIDELITY-SCORING-REDESIGN.md certificate,
+not `ready_pct` (retired).
+
+**LAST_SURFACE_AUDIT set to 326.**
+
+**Next audit due: tick 336.**

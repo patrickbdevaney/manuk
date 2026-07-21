@@ -1895,3 +1895,31 @@ role token and, where applicable, its state (`tab … [selected]`, `switch … [
 `slider … [value="42"]`, disabled `menuitem`, `progressbar … [value="0.7"]`, `spinbutton … [value="3"]`).
 RED: stashing the `Role` table extension renders every one as `generic "…"` (verified — `generic "Dark
 mode" [checked]` for the switch), so the widget lines vanish.
+
+## Re-pin (tick 326): four "partial" cells were stale — the capability shipped, the record lagged
+
+A capability lands as a gated tick, but the constellation cell that *names* the capability is edited by
+hand and drifts. Four cells still read `partial` with notes that a later tick had already falsified.
+This tick re-probed each against its live gate (all green on a warm box, 2026-07-21) and corrected the
+record — no engine change, an instrument-fidelity tick, one of the ratchet's three faces.
+
+- **file upload** (`partial -` → `gated G_FILE_INPUT`). The note said "input[file] unmeasured". It is
+  measured: `g_file_input` asserts `input.files` length/names/**bytes**, `files===null` on a non-file
+  control (pages branch on that to tell a text field from a file field), and that the **multipart body
+  carries the file contents** — not the deliberately-useless `C:\fakepath\…` string.
+- **`<dialog>` + popover** (`partial -` → `gated G_DIALOG+G_POPOVER`). The note said "popover still
+  missing". Popover shipped: `g_popover` covers detect / reflect (`auto|manual|null`) / `showPopover` /
+  `beforetoggle`+`toggle`, and `g_popover_render` paints it; `g_dialog` covers `showModal`.
+- **hover/dblclick/contextmenu** (`partial G_HOVER` → `gated G_HOVER+G_MOUSE_ACTUATION`). The note said
+  "dblclick/contextmenu still absent". `g_mouse_actuation` asserts the full double-click **sequence**
+  (`click`,`click`,`dblclick` with detail 1/2/2, the `dblclick` reachable **without** a dblclick
+  listener) and a cancelable `contextmenu` via `dispatch_contextmenu`.
+- **native `<select>`** (`partial -` → `gated G_SELECT_ACTUATION`). The note said "synthetic
+  option-choice + change firing unbuilt". `g_select_actuation` asserts value/`selectedIndex` reads, the
+  implicit-first-selection rule, and actuation: `select_option` fires `input` **then** `change` (the
+  order React's `onChange` depends on).
+
+**drag-and-drop was left `partial` on purpose** — its note honestly scopes the gap (the file-drop half
+is gated via `G_DROP_UPLOAD`; the editor half — `dragstart`/`setData`/`effectAllowed`/drag images for
+list-reordering — is genuinely unbuilt). A re-pin sweep that flips *everything* is how a stale record
+becomes a lying one; each flip here is backed by a gate that documents its own way to go red.

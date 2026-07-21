@@ -14551,3 +14551,46 @@ stale-low vs a genuine ~189s warm wall (a [[wall-mark-min-lock-rebaseline]] case
 wall or re-baseline the mark — agent must not retune its own ratchet gate. Preserving tick 325 on branch
 wip/tick325-a11y-roles (--no-verify) and continuing with fresh capability work per protocol; it cherry-picks
 and lands with the batch once the wall clears, exactly like the four previously-parked ticks.
+
+## Tick 326 — re-pin four stale "partial" constellation cells to gated (2026-07-21)
+
+SELECTED: with the big CO-#1 levers either done (media/OAuth/canvas/fillText) or genuine-subsystem-sized
+(container queries, WebGL, subgrid, MathML — too large for one atomic tick) and the harness WALL blocking
+every land (189s warm gate-runtime vs a stale 72s mark — see the tick-325 RE-MEASURE note above; observer
+domain, not touched), took the board's explicitly-sanctioned highest-ROI fallback: PROBE/RE-PIN the stale
+checklist. Process rule (2): RE-PROBE STALE UNKNOWNS BEFORE BUILDING — the checklist goes stale FROM OUR
+OWN LANDED TICKS, and a "partial" whose gap-note a later tick already falsified is an instrument-fidelity
+regression (one of the ratchet's three faces), not a missing capability.
+
+WHAT LANDED (docs/loop/CONSTELLATION.tsv — record only, ZERO engine change): four cells verified GREEN
+against their live gates on a warm box and flipped partial→gated. gated 71→75, partial 22→18.
+ - file upload  partial → gated G_FILE_INPUT  (note "input[file] unmeasured" was stale: the gate asserts
+   input.files length/names/BYTES, files===null on non-file controls, and the multipart body carries the
+   file CONTENTS, not the C:\fakepath placeholder).
+ - <dialog> + popover  partial → gated G_DIALOG+G_POPOVER  (note "popover still missing" was stale:
+   g_popover covers detect/reflect/showPopover/beforetoggle+toggle, g_popover_render paints it).
+ - hover/dblclick/contextmenu  partial → gated G_HOVER+G_MOUSE_ACTUATION  (note "dblclick/contextmenu
+   still absent" was stale: g_mouse_actuation asserts the full click,click,dblclick sequence — dblclick
+   reachable without a dblclick listener — and cancelable contextmenu).
+ - native <select>  partial → gated G_SELECT_ACTUATION  (note "option-choice + change unbuilt" was stale:
+   the gate asserts value/selectedIndex reads, implicit-first-selection, and select_option firing
+   input THEN change in React's order).
+
+HELD HONEST: drag-and-drop LEFT partial on purpose — its note correctly scopes a real gap (file-drop half
+gated via G_DROP_UPLOAD; editor half dragstart/setData/effectAllowed for list-reordering genuinely
+unbuilt). A re-pin sweep that flips everything is how a stale record becomes a lying one.
+
+RED-PROVEN: each flipped cell points at a gate that documents its OWN way to go red (dropping the second
+dispatch_click, returning an empty FileList, firing only `change`, excluding popover reflect) — verified
+all nine candidate gates pass under --features spidermonkey,stylo (g_hover/g_mouse_actuation/
+g_select_actuation/g_select_options/g_dialog/g_popover/g_sanitizer/g_file_input/g_drop_upload, each <0.5s).
+
+NO REGRESSION: no code touched; TSV integrity checked (all rows 6 fields); constellation.sh clean.
+
+TICK SHAPE: measurement (instrument fidelity). CONSTELLATION: +4 gated (app +2, platform +1, cross +1).
+
+PARK: harness WALL (observer domain) blocks landing — staged on wip/tick326-repin-stale-cells; cherry-picks
+and lands with the batch (alongside wip/tick325-a11y-roles) once the observer trims the wall or re-baselines
+the 72s mark. Did NOT touch scripts/ or the mark.
+
+WIKI: docs/wiki/interaction-surface.md (Re-pin (tick 326) section)

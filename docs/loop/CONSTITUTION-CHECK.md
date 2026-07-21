@@ -250,3 +250,35 @@ I2 intact (no engine forked — IndexedDB indexes are a shim + a serde field; Fu
 shim). The RATCHET is honored — nothing traded, the wall is green.
 
 **Next check due: tick 333.**
+
+## Check #7 — tick 326
+
+**Canonical-header formalization** of the tick-325 check above (which used a non-matching
+`## Constitution check @ tick 325` header, so `status-update.sh`'s `^## Check #N — tick M`
+derivation never registered it and LAST_CONSTITUTION_CHECK stayed at 127). No check was skipped for
+~200 ticks — the TICK counter was frozen at 128; the substance was done fresh at 325.
+
+**Horizon:** Phase 0 — the FULL daily-driver checklist ("runs almost every website" across
+doc/app+hydration/social/platform/MEDIA), not the retired 5-lever milestone. **Gate:** the
+FIDELITY-SCORING-REDESIGN.md certificate (≥0.75 structural/placement fidelity on ≥95% of the corpus +
+≥0.70 per top-20 category), NOT capability% and NOT the retired `ready_pct`. Authoritative work list:
+docs/loop/PHASE0-BOUNDED-REMAINDER.md (3 subsystems + ~20 bounded items + a named cut line).
+
+**Gate or scoreboard?** Gate. This tick (326) is an instrument-fidelity re-pin — it corrects the map
+(one of the ratchet's three faces), not the scoreboard. It flips zero WPT and adds zero capability%;
+its whole value is making the constellation stop lying about four already-gated cells. That is exactly
+the discipline Part VI asks for: reconcile ground truth before climbing.
+
+**Is `orient`'s usage-weighted ranking still the north star?** Yes. The batch being landed (326 re-pin,
+327 re-pin, 328 Selection API, 329 IndexedDB indexes, 330 Fullscreen) is daily-driver capability +
+map fidelity, not the encoding/CSS-layout tail Part VI warns against.
+
+**Any invariant bent?** No. Bar 0 held (326 touches zero engine code; the capability ticks in the batch
+are additive + RED-proven). I2 intact (no dep forked). I3 served (the re-pinned cells are the agentic
+surface the map advertises). The RATCHET is honored — nothing traded, wall green, WALL mark re-baselined
+to 189s by the observer (agent did not retune its own gate).
+
+**PART VI correction.** None beyond what 325 already recorded: PHASE0-BOUNDED-REMAINDER.md supersedes the
+constellation priority rows; ready_pct retired; fidelity certificate is the exit.
+
+**Next check due: tick 334.**

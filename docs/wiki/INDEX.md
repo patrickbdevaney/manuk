@@ -441,6 +441,7 @@
   - L1862 · A11y widget roles — the agent can name the controls web apps build (tick 325)
   - L1872 · Additive role plumbing, no new state path
   - L1889 · The teeth G_A11Y_ROLES uses
+  - L1899 · Re-pin (tick 326): four "partial" cells were stale — the capability shipped, the record lagged
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -814,4 +815,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-729 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+730 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
