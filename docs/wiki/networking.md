@@ -1058,3 +1058,29 @@ overwhelmingly keys on. [[js-engine]]
 `group` (`exec` extracts `groups.id === '42'`), `null-on-miss`, `wildcard` (`*` captures the rest),
 `shorthand`. A stub that always matches or never captures fails. Deleting the block was demonstrated to
 make the first call throw.
+
+## `WritableStream` + `TransformStream` — the streams that were inert names (tick 298)
+
+`ReadableStream` was real, but its two companions were INERT NAMES: `typeof WritableStream === 'function'`
+yet `new WritableStream(...).getWriter` was `undefined`, and `new TransformStream(...).readable` was
+`undefined` — the "typeof lies" trap. A streaming pipeline (`body.pipeThrough(t).pipeTo(sink)`) needs
+both to actually MOVE and reshape data.
+
+`WritableStream` now implements the underlying-sink protocol: `getWriter()` returns a writer whose
+`write(chunk)` delivers the chunk to `sink.write`, `close()`→`sink.close`, `abort()`→`sink.abort`.
+`TransformStream` is built on the real `ReadableStream` + `WritableStream`: a chunk written to
+`.writable` is passed to `transform(chunk, controller)`, which `controller.enqueue()`s onto `.readable`
+(a transformer with no `transform` is the identity stream). `ReadableStream` gained `pipeTo(writable)`
+(drain into a sink, chunk by chunk) and `pipeThrough(transform)` (feed `.writable`, return `.readable`),
+so `src.pipeThrough(t).pipeTo(sink)` composes.
+
+**Honest limit:** backpressure is simplified — `writer.ready`/`desiredSize` are always ready, so a slow
+sink is not signalled upstream. The DELIVERY and reshaping of chunks, which is the point, is real; a
+built-in `TextDecoderStream` on top is the natural follow-on.
+
+### The teeth `G_WRITABLE_TRANSFORM_STREAMS` uses
+
+`writable` (chunks reach the sink in order), `transform` (`pipeThrough` doubles each chunk onto the
+readable), `pipe` (the full `pipeThrough().pipeTo()` delivers both). Gating out the `WritableStream`
+block drops back to the inert stub and `getWriter is not a function` — demonstrated before landing.
+[[js-engine]]

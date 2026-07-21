@@ -13580,3 +13580,34 @@ search/hash are not individually matched (multi-component init is the follow-on)
 routing overwhelmingly keys on.
 
 WIKI: docs/wiki/networking.md (URLPattern section). No constellation row (JS-surface completeness).
+
+## Tick 298 — WritableStream + TransformStream: the streams that were inert names (2026-07-21)
+
+TICK SHAPE: fifth probe batch (streams/fetch). Found `TransformStream` and `WritableStream` present by
+`typeof` but INERT — `new WritableStream(...).getWriter` / `new TransformStream(...).readable` were
+undefined (the __inertNames stub list installs bare constructors so `instanceof`/`typeof` checks don't
+throw). ReadableStream was already REAL (probe: enqueue+getReader+read works). So this is the
+"typeof lies" class again ([[session-278-279-storage-apis]]) — a genuine capability gap hidden behind a
+name. NOT an inert stub I'd be adding; I'm REPLACING inert stubs with working ones.
+
+HYPOTHESIS: `body.pipeThrough(transform).pipeTo(sink)` — streaming pipelines. The inert names threw on
+first method call.
+
+WHAT LANDED (event_loop.rs, after the real ReadableStream): a real WritableStream +
+WritableStreamDefaultWriter over the underlying-sink protocol (write→sink.write, close, abort); a real
+TransformStream built on ReadableStream+WritableStream (transform(chunk,ctrl)→enqueue onto readable,
+identity if no transform); and ReadableStream.pipeTo(writable) + pipeThrough(transform). Installed BEFORE
+the __inertNames pass so it skips them (the same ordering trick ReadableStream uses).
+
+### The claim — G_WRITABLE_TRANSFORM_STREAMS, five teeth (DATA FLOW, not presence)
+
+has-writer / has-readable / writable (chunks reach the sink in order) / transform (pipeThrough doubles
+each chunk) / pipe (src.pipeThrough(t).pipeTo(sink) delivers both). PROVEN RED: `if (false && …)` around
+the WritableStream block → falls back to the inert stub → `getWriter is not a function`. g_fetch_stream
++ g_fetch_stream_incremental stayed green (ReadableStream prototype additions are additive).
+
+NO REGRESSION: additive (new writers) + two new ReadableStream methods; the inert stubs are only reached
+when my real ones are absent. Not a trade. HONEST LIMIT: backpressure simplified (ready/desiredSize
+always ready); TextDecoderStream on top is the follow-on.
+
+WIKI: docs/wiki/networking.md (WritableStream/TransformStream section). No constellation row.

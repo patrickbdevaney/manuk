@@ -233,6 +233,29 @@ const PRELUDE: &str = r#"
         Object.defineProperty(RS.prototype, 'locked', {
             get: function() { return this.__locked; }, enumerable: true, configurable: true
         });
+        // `pipeTo(writable)` — drain this stream into a WritableStream, chunk by chunk, resolving when
+        // the source closes (and the destination is closed). This is how `response.body.pipeTo(sink)`
+        // and the tail of every `pipeThrough` chain actually move bytes.
+        RS.prototype.pipeTo = function(dest) {
+            var reader = this.getReader();
+            var writer = dest.getWriter();
+            var pump = function() {
+                return reader.read().then(function(step) {
+                    if (step.done) { return writer.close(); }
+                    return Promise.resolve(writer.write(step.value)).then(pump);
+                });
+            };
+            return pump().then(null, function(e) {
+                try { writer.abort(e); } catch (x) {}
+                throw e;
+            });
+        };
+        // `pipeThrough(transform)` — feed this stream into `transform.writable` and hand back
+        // `transform.readable`, so `body.pipeThrough(new TextDecoderStream())` returns a decoded stream.
+        RS.prototype.pipeThrough = function(transform) {
+            this.pipeTo(transform.writable);
+            return transform.readable;
+        };
         // `for await (const chunk of res.body)` — the shorter spelling of the same pump loop.
         if (typeof Symbol !== 'undefined' && Symbol.asyncIterator) {
             RS.prototype[Symbol.asyncIterator] = function() {
@@ -261,6 +284,99 @@ const PRELUDE: &str = r#"
             get: function() { return Promise.resolve(undefined); }, enumerable: true, configurable: true
         });
         globalThis.ReadableStreamDefaultReader = RSDR;
+    }
+
+    // `WritableStream` — the write half of the streams API, and it was an INERT NAME (`typeof` said
+    // 'function' but `new WritableStream(...).getWriter` was undefined, so any real use threw). A
+    // `fetch` upload body, a `pipeTo` destination, a file/socket sink all need a working one. This is
+    // a real implementation over the underlying-sink protocol: `getWriter()` hands back a writer whose
+    // `write(chunk)` actually delivers the chunk to `sink.write`, `close()` to `sink.close`, `abort()`
+    // to `sink.abort`. (Backpressure is simplified — `ready`/`desiredSize` are always ready; the honest
+    // limit noted in the wiki. The DELIVERY of chunks, which is the point, is real.)
+    if (typeof globalThis.WritableStream === 'undefined') {
+        var WS = function WritableStream(sink) {
+            this.__sink = sink || {};
+            this.__locked = false;
+            this.__state = 'writable';   // 'writable' | 'closed' | 'errored'
+            this.__err = null;
+            var self = this;
+            this.__controller = { error: function(e) { self.__state = 'errored'; self.__err = e; }, signal: undefined };
+            if (typeof this.__sink.start === 'function') {
+                try { this.__sink.start(this.__controller); }
+                catch (e) { this.__state = 'errored'; this.__err = e; }
+            }
+        };
+        WS.prototype.getWriter = function() {
+            if (this.__locked) { throw new TypeError('WritableStream is locked to a writer'); }
+            this.__locked = true;
+            return new globalThis.WritableStreamDefaultWriter(this);
+        };
+        WS.prototype.abort = function(reason) {
+            this.__state = 'errored'; this.__err = reason;
+            if (typeof this.__sink.abort === 'function') { try { return Promise.resolve(this.__sink.abort(reason)); } catch (e) { return Promise.reject(e); } }
+            return Promise.resolve(undefined);
+        };
+        WS.prototype.close = function() {
+            this.__state = 'closed';
+            if (typeof this.__sink.close === 'function') { try { return Promise.resolve(this.__sink.close()); } catch (e) { return Promise.reject(e); } }
+            return Promise.resolve(undefined);
+        };
+        Object.defineProperty(WS.prototype, 'locked', {
+            get: function() { return this.__locked; }, enumerable: true, configurable: true
+        });
+        globalThis.WritableStream = WS;
+
+        var WSW = function WritableStreamDefaultWriter(stream) { this.__s = stream; };
+        WSW.prototype.write = function(chunk) {
+            var s = this.__s;
+            if (!s) { return Promise.reject(new TypeError('writer has been released')); }
+            if (s.__state === 'errored') { return Promise.reject(s.__err); }
+            try {
+                var p = (typeof s.__sink.write === 'function') ? s.__sink.write(chunk, s.__controller) : undefined;
+                return Promise.resolve(p);
+            } catch (e) { s.__state = 'errored'; s.__err = e; return Promise.reject(e); }
+        };
+        WSW.prototype.close = function() { return this.__s ? this.__s.close() : Promise.reject(new TypeError('released')); };
+        WSW.prototype.abort = function(reason) { return this.__s ? this.__s.abort(reason) : Promise.resolve(undefined); };
+        WSW.prototype.releaseLock = function() { if (this.__s) { this.__s.__locked = false; this.__s = null; } };
+        Object.defineProperty(WSW.prototype, 'ready', { get: function() { return Promise.resolve(undefined); }, enumerable: true, configurable: true });
+        Object.defineProperty(WSW.prototype, 'closed', { get: function() { return Promise.resolve(undefined); }, enumerable: true, configurable: true });
+        Object.defineProperty(WSW.prototype, 'desiredSize', { get: function() { return 1; }, enumerable: true, configurable: true });
+        globalThis.WritableStreamDefaultWriter = WSW;
+    }
+
+    // `TransformStream` — the middle of a stream pipeline (`body.pipeThrough(ts)`), and it too was an
+    // INERT NAME (`new TransformStream(...).readable` was undefined). Now a real one over the real
+    // ReadableStream + WritableStream above: a chunk written to `.writable` is passed to the
+    // transformer's `transform(chunk, controller)`, which `controller.enqueue()`s onto `.readable`; a
+    // transformer with no `transform` is the identity stream. This is what makes `TextDecoderStream`-
+    // style wrappers and `pipeThrough` chains actually move (and reshape) data.
+    if (typeof globalThis.TransformStream === 'undefined') {
+        var TS = function TransformStream(transformer) {
+            transformer = transformer || {};
+            var rsCtl = null;
+            var readable = new globalThis.ReadableStream({ start: function(c) { rsCtl = c; } });
+            var tctl = {
+                enqueue: function(chunk) { rsCtl.enqueue(chunk); },
+                terminate: function() { rsCtl.close(); },
+                error: function(e) { rsCtl.error(e); }
+            };
+            var writable = new globalThis.WritableStream({
+                write: function(chunk) {
+                    if (typeof transformer.transform === 'function') { return transformer.transform(chunk, tctl); }
+                    tctl.enqueue(chunk);   // identity transform
+                },
+                close: function() {
+                    var p = (typeof transformer.flush === 'function') ? transformer.flush(tctl) : undefined;
+                    return Promise.resolve(p).then(function() { rsCtl.close(); });
+                },
+                abort: function(e) { rsCtl.error(e); }
+            });
+            if (typeof transformer.start === 'function') { try { transformer.start(tctl); } catch (e) { tctl.error(e); } }
+            this.readable = readable;
+            this.writable = writable;
+        };
+        globalThis.TransformStream = TS;
     }
 
     // `raw` is the response body as a BINARY STRING — one code unit per byte, values 0..255 — and

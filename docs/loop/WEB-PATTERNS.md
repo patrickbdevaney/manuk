@@ -2455,3 +2455,20 @@ without a trailing `$` silently over-matches every deeper path. **(2)** `:name` 
 (`[^/]+`), `*` captures across segments (`.*`) — mixing them up mis-routes. **(3)** `exec` returns
 `null` on a miss, not an empty match — routers branch on it. **(4)** Accept a full URL string, a bare
 pathname, and an object — a router passes whichever it has.
+
+## Stream pipelines that actually move data — `WritableStream` / `TransformStream` (tick 298)
+
+**Pattern:** `await response.body.pipeThrough(new TextDecoderStream()).pipeTo(sink)` — streaming fetch
+pipelines transform bytes→text and drain them into a consumer, chunk by chunk, without buffering the
+whole body.
+
+**The class this unlocks:** composable stream pipelines. `ReadableStream` was real but `WritableStream`
+and `TransformStream` were INERT NAMES (`typeof` said function, `getWriter`/`readable` were undefined),
+so any pipeline threw.
+
+**The traps.** **(1)** `typeof X === 'function'` proves NOTHING — an inert constructor passes it and
+fails the moment you call a method; gate on data actually flowing (a chunk reaching the sink). **(2)** A
+`TransformStream` must reshape via `controller.enqueue`, not pass through — test that the output differs
+from the input. **(3)** `pipeThrough` returns the transform's READABLE (not the source); `pipeTo`
+returns a promise that resolves when the source closes. **(4)** Be honest about backpressure — if
+`ready` is always resolved, say so; don't imply a slow sink throttles the source when it doesn't.
