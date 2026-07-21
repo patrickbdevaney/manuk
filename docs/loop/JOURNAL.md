@@ -13912,3 +13912,64 @@ NO REGRESSION: additive JS prelude; probe + view-transition + navigation gates a
 wiki updated.
 
 WIKI: docs/wiki/interaction-surface.md (Navigation API section).
+
+## Tick 310 — Web Animations API: element.animate (2026-07-21)
+
+SELECTED: board CO-#1 (probe/measure + genuinely-missing app-class capability). element.animate was
+absent everywhere (0 hits engine-wide). WAAPI is FAR more widely used than View Transitions (t308) —
+imperative fade/slide/scale on interaction, list reordering, toasts, focus rings. Same silent-handler
+failure: `element.animate is not a function` throws out of a click/mount callback and kills the
+interaction.
+
+WHAT LANDED (dom_bindings.rs WINDOW_PRELUDE): element.animate(keyframes, options) + getAnimations() +
+Animation constructor + document.getAnimations(). No compositor timeline, so it FAST-FORWARDS to the
+end state honestly: normalizes array/object keyframes, runs to completion in a microtask, applies the
+final frame to inline style when fill is forwards/both (lands in computed style), settles finished.
+Animation surface: play/pause/reverse/finish/cancel/commitStyles/persist/updatePlaybackRate,
+playState/currentTime/effect/finished/ready, onfinish/oncancel + addEventListener. cancel() rejects
+finished with AbortError. HONEST LIMIT stated: no intermediate frames — snaps to end, no tween.
+
+INSTALL-SITE GOTCHA (cost 3 probes): the first placement guarded on `g.Element`, which is UNDEFINED
+this early in WINDOW_PRELUDE (the Element global/proto chain is built later in Rust; g.HTMLElement at
+11789 is a DISCONNECTED fresh ctor). Fix = the same idiom the `files` getter uses:
+`Object.getPrototypeOf(document.createElement('div'))` is the live chain link, inherited by every
+element now/later. Patching g.Element.prototype or g.HTMLElement.prototype misses instances.
+
+### The claim — G_WEB_ANIMATIONS, six teeth
+
+defined (animate callable, returns Animation w/ finished thenable + play/pause/cancel/finish); tracked
+(getAnimations reports it); finishedresolved (finished settles — recorded from INSIDE .then so it
+proves the microtask fast-forward ran); endstate (fill:forwards final keyframe lands in
+getComputedStyle().opacity); cancelrejected (cancel → finished rejects AbortError); ready. PROVEN RED:
+disabling the guard drops defined/finishedresolved/endstate/tracked together.
+
+CONSTELLATION.tsv: NEW app-class row "Web Animations API (element.animate)" gated → G_WEB_ANIMATIONS.
+
+NO REGRESSION: additive prelude; view-transition + navigation + probe gates still green. WEB-PATTERNS +
+wiki updated.
+
+WIKI: docs/wiki/interaction-surface.md (Web Animations API section).
+
+## Tick 310 — WALL-BLOCKED (harness feature-thrash poison), work STAGED (2026-07-21)
+- Tick 310 (element.animate / Web Animations API) is COMPLETE + CORRECT: G_WEB_ANIMATIONS passes,
+  RED-proven, no regression (verify result:green, GATES 161 mark 160). It does NOT land because
+  scripts/verify.sh's own wall measures 182-384s — the documented `--no-default-features`/manuk_wpt
+  feature-thrash rebuild (~325s UNATTRIBUTED, build_seconds:1-29, deterministic across warm back-to-back
+  runs on a quiet box). This is HARNESS-OWNED per [[headless-gate-feature-thrash]] / [[wall-vs-hygiene-cron-race]]
+  ("report don't fix"); browser-side warming (release + targeted debug gate binaries) does not move it.
+- STAGED in the working tree (do NOT `git checkout` it — it completes cleanly): engine/js/src/dom_bindings.rs
+  (WAAPI shim), engine/page/tests/g_web_animations.rs (gate), docs/loop/CONSTELLATION.tsv (new app row),
+  WEB-PATTERNS.md + docs/wiki/interaction-surface.md. Commit message saved at .git/tick310-ready.msg.
+- TO LAND (once the observer recovers the wall to <93s): `./scripts/tick.sh .git/tick310-ready.msg`.
+- One-line harness note (per scope): verify.sh section-B `--no-default-features` build rebuilds cold every
+  run and is charged as unattributed wall; observer owns it. Continued agent capability work is
+  itself wall-gated, so the loop is parked until the wall recovers.
+- 2026-07-21 (later): re-attempted the landing 3x on a QUIET box (load 0.44) with a full feature-consistent
+  prewarm (release manuk-wpt default + all debug gate combos). All three walls were IDENTICAL 384s; the
+  `.git/manuk-wall-sections` breakdown pins the cost at section **P (parity) = 168s** — UNCHANGED even after
+  I freshly `cargo build --release -p manuk-wpt` immediately before, so P is NOT a warm/rebuild miss the
+  browser side can fix (confirms the original tick-310 finding). All capability faces PASS (GATES 161>160,
+  CONST:app 19>18, MEASURED 130>129); only WALL regresses. Harness-owned per scope — observer to recover the
+  wall, then `./scripts/tick.sh .git/tick310-ready.msg`. Also PROBED mandate item (C) canvas fillText: it is
+  ALREADY DONE — fully wired swash raster -> tiny_skia Pixmap, gated by G_CANVAS_TEXT (engine/js/src/canvas.rs
+  fill_text:591, engine/page/tests/g_canvas_text.rs). Stale board row; no tick needed.

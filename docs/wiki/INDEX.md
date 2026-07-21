@@ -381,6 +381,11 @@
   - L1333 · The failure without it is a silent dead router
   - L1342 · Implemented as a shim OVER the proven History/Location plumbing
   - L1360 · The teeth G_NAVIGATION_API uses
+  - L1369 · element.animate — the Web Animations API fast-forwards to its end state (tick 310)
+  - L1376 · The failure without it is a dead interaction
+  - L1382 · No compositor timeline, so it fast-forwards — honestly
+  - L1400 · The install-site gotcha (the one that cost three probes)
+  - L1410 · The teeth G_WEB_ANIMATIONS uses
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -754,4 +759,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-669 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+674 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -1365,3 +1365,51 @@ correct destination), `result` (the `{committed, finished}` thenables), `committ
 the URL does not move), and — the load-bearing one a synchronous script cannot self-report — the
 `intercept({handler})` handler RAN and applied the route change, observed as a DOM mutation after the
 microtask drain. RED: disabling the shim drops every claim at once.
+
+## `element.animate` — the Web Animations API fast-forwards to its end state (tick 310)
+
+The Web Animations API — `element.animate(keyframes, options)` — is the imperative animation primitive
+the web uses constantly: fade/slide/scale on interaction, list reordering, toast in and out, focus
+transitions. It is far more common than the declarative View Transitions API (tick 308), and it was
+absent everywhere (0 references in the engine).
+
+### The failure without it is a dead interaction
+
+`element.animate is not a function` throws out of a click or mount callback and takes the whole
+interaction with it — the same silent-handler failure as a missing `startViewTransition`. And the
+`await el.animate(...).finished` sequencing pattern hangs forever on a promise that never exists.
+
+### No compositor timeline, so it fast-forwards — honestly
+
+This engine has no compositor timeline and cannot render the in-between frames, and it does not pretend
+to. The shim (in `WINDOW_PRELUDE`) runs the animation to its END STATE:
+
+- normalizes both keyframe forms — the array `[{opacity:0},{opacity:1}]` and the object
+  `{opacity:[0,1], transform:['none','scale(2)']}`;
+- in a microtask, settles the `Animation` to `finished` — so `await el.animate(...).finished` resolves;
+- when the fill mode persists the end state (`forwards`/`both`), applies the final keyframe's styles to
+  inline style, where they flow into the computed style — the outcome most imperative animations exist
+  to produce;
+- exposes the surface libraries drive: `play`/`pause`/`reverse`/`finish`/`cancel`/`commitStyles`/
+  `persist`/`updatePlaybackRate`, `playState`/`currentTime`/`effect`/`finished`/`ready`, `onfinish`/
+  `oncancel`, and `Element.getAnimations()`. `cancel()` rejects `finished` with an `AbortError`.
+
+The honest limit, stated plainly: no intermediate frames — the animation snaps to its end rather than
+tweening.
+
+### The install-site gotcha (the one that cost three probes)
+
+The natural placement — guard on `g.Element.prototype` — silently no-ops: **there is no `Element`
+binding this early in `WINDOW_PRELUDE`** (the `Element`/`HTMLElement` global constructors and the real
+prototype chain are built later in Rust; the `g.HTMLElement` defined at prelude end is a *disconnected*
+fresh constructor whose `.prototype` no instance inherits). The live chain link is
+`Object.getPrototypeOf(document.createElement('div'))` — the exact idiom the `files` getter uses — and a
+method defined on it is inherited by every element that exists now or is created later. Patching
+`g.Element.prototype` (undefined here) or `g.HTMLElement.prototype` (disconnected) reaches nothing.
+
+### The teeth `G_WEB_ANIMATIONS` uses
+
+`defined` (callable, returns an Animation with the driven surface), `tracked` (`getAnimations` reports
+it), `finishedresolved` (recorded from inside `.then`, so it proves the microtask fast-forward ran),
+`endstate` (`fill:forwards` lands the final keyframe in `getComputedStyle().opacity`), `cancelrejected`
+(`cancel()` → `finished` rejects `AbortError`). RED: disabling the shim drops them together.

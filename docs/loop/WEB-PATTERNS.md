@@ -2642,3 +2642,23 @@ view, so the capability is the handler RUNNING, not the event firing. **(4)** `p
 truly veto (route guards, unsaved-changes) — a veto that still commits is worse than no API. **(5)**
 `typeof navigation === 'object'` is what an inert stub passes; gate by driving `navigate()` and reading
 the resulting DOM + URL.
+
+## Imperative animation — `element.animate` (Web Animations API) (tick 310)
+
+**Pattern:** `await el.animate([{opacity:0},{opacity:1}], {duration:300, fill:'forwards'}).finished;
+next();` — a fade/slide/scale run imperatively, often awaited to sequence the next step. Also the object
+form `el.animate({transform:['none','scale(1.1)']}, 200)` and `el.getAnimations().forEach(a=>a.cancel())`.
+
+**The class this unlocks:** imperative animations. `element.animate` was absent, so the call threw
+`is not a function` out of the interaction handler (dead interaction), and `await …​.finished` hung on a
+promise that never existed.
+
+**The traps.** **(1)** With no compositor timeline the honest move is to FAST-FORWARD to the end state,
+not to fake a tween — run the keyframes to completion, apply the final frame when `fill` is
+`forwards`/`both`, settle `finished`. State the "no intermediate frames" limit. **(2)** Normalize BOTH
+keyframe forms — the array of frames and the object-of-arrays. **(3)** `cancel()` must reject `finished`
+with an `AbortError`; animation-racing code unwinds on it. **(4)** Install element-prototype methods on
+`Object.getPrototypeOf(document.createElement(...))` (the live chain link), never on `g.Element.prototype`
+(absent early in the prelude) or `g.HTMLElement.prototype` (a disconnected fresh constructor) — both miss
+every instance. **(5)** `typeof el.animate === 'function'` is what a stub passes; gate by driving it and
+reading the resulting computed style.

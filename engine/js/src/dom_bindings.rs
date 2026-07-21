@@ -10494,6 +10494,141 @@ const WINDOW_PRELUDE: &str = r#"
         defEvent('InputEvent', { data: null, inputType: '' }, 'UIEvent');
         defEvent('FocusEvent', { relatedTarget: null }, 'UIEvent');
 
+        // ---- Web Animations API (`element.animate`) -----------------------------------------
+        // `element.animate(keyframes, options)` is the imperative animation API the web reaches for
+        // constantly — fade/slide/scale on interaction, list reordering, toast in/out, focus rings.
+        // It is FAR more widely used than the declarative View Transitions API, and its absence is the
+        // same silent-handler failure: `element.animate is not a function` throws out of a click or
+        // mount callback, and the interaction it was part of dies with it.
+        //
+        // This engine has no compositor timeline, so it cannot render the in-between frames — and it
+        // does not pretend to. What it CAN do honestly is fast-forward the animation to its end state:
+        // run the keyframes to completion, apply the final frame's styles when the fill mode persists
+        // them (`forwards`/`both`), and settle `finished`. That delivers the two things code actually
+        // depends on — the call not throwing, and `await el.animate(...).finished` resolving so the
+        // next step runs — plus the correct END-STATE styling. The honest limit, stated plainly: no
+        // intermediate frames; the animation snaps to its end rather than tweening.
+        // The element prototype is fetched from a probe element, NOT `g.Element`: there is no `Element`
+        // binding this early in the prelude, but the real chain link
+        // (instance → HTMLElement.prototype → …) is `Object.getPrototypeOf(createElement(...))`, and a
+        // method defined on it is inherited by every element that exists now or later (same idiom the
+        // `files` getter below uses).
+        var __elProto = null;
+        try { __elProto = Object.getPrototypeOf(g.document.createElement('div')); } catch (e) {}
+        if (__elProto && typeof __elProto.animate !== 'function') {
+            var __waapiAnims = (typeof WeakMap === 'function') ? new WeakMap() : null;
+
+            var normKeyframes = function (kf) {
+                if (Array.isArray(kf)) { return kf.slice(); }
+                if (!kf || typeof kf !== 'object') { return []; }
+                // Object form: { opacity: [0, 1], transform: ['none', 'scale(2)'] }.
+                var keys = [], maxLen = 0;
+                for (var k in kf) {
+                    if (k === 'easing' || k === 'offset' || k === 'composite') { continue; }
+                    var v = kf[k];
+                    if (Array.isArray(v)) { keys.push(k); if (v.length > maxLen) { maxLen = v.length; } }
+                    else { keys.push(k); if (maxLen < 1) { maxLen = 1; } }
+                }
+                var out = [];
+                for (var i = 0; i < maxLen; i++) {
+                    var frame = {};
+                    for (var j = 0; j < keys.length; j++) {
+                        var arr = kf[keys[j]];
+                        frame[keys[j]] = Array.isArray(arr) ? arr[Math.min(i, arr.length - 1)] : arr;
+                    }
+                    out.push(frame);
+                }
+                return out;
+            };
+            var applyFrame = function (el, frame) {
+                if (!frame || !el.style) { return; }
+                for (var prop in frame) {
+                    if (prop === 'offset' || prop === 'easing' || prop === 'composite') { continue; }
+                    try { el.style[prop] = frame[prop]; } catch (e) {}
+                }
+            };
+
+            var Animation = function (el, frames, options) {
+                var opts = (typeof options === 'number') ? { duration: options } : (options || {});
+                var fill = opts.fill || 'none';
+                var self = this;
+                this.effect = { target: el, getComputedTiming: function () { return opts; },
+                                getTiming: function () { return opts; } };
+                this.timeline = null;
+                this.playbackRate = 1;
+                this.playState = 'running';
+                this.currentTime = 0;
+                this.startTime = 0;
+                this.id = opts.id || '';
+                this.pending = false;
+                this.replaceState = 'active';
+                this.onfinish = null;
+                this.oncancel = null;
+                var finRes, finRej;
+                this.finished = new Promise(function (res, rej) { finRes = res; finRej = rej; });
+                this.finished.then(function () {}, function () {});
+                this.ready = Promise.resolve(this);
+
+                this._settle = function () {
+                    if (self.playState === 'finished') { return; }
+                    if ((fill === 'forwards' || fill === 'both') && frames.length) {
+                        applyFrame(el, frames[frames.length - 1]);
+                    }
+                    self.playState = 'finished';
+                    self.currentTime = (typeof opts.duration === 'number') ? opts.duration : 0;
+                    finRes(self);
+                    if (typeof self.onfinish === 'function') {
+                        try { self.onfinish({ type: 'finish', target: self }); } catch (e) {}
+                    }
+                };
+                this.play = function () { if (self.playState !== 'finished') { self.playState = 'running'; } return self; };
+                this.pause = function () { self.playState = 'paused'; };
+                this.reverse = function () { return self; };
+                this.finish = function () { self._settle(); };
+                this.cancel = function () {
+                    self.playState = 'idle'; self.currentTime = 0;
+                    var e = new Error('The animation was cancelled.');
+                    try { e.name = 'AbortError'; } catch (x) {}
+                    finRej(e);
+                    if (typeof self.oncancel === 'function') { try { self.oncancel({ type: 'cancel', target: self }); } catch (x) {} }
+                };
+                this.commitStyles = function () { if (frames.length) { applyFrame(el, frames[frames.length - 1]); } };
+                this.persist = function () {};
+                this.updatePlaybackRate = function (r) { self.playbackRate = r; };
+                this.addEventListener = function (t, cb) {
+                    if (t === 'finish') { self.onfinish = cb; } else if (t === 'cancel') { self.oncancel = cb; }
+                };
+                this.removeEventListener = function (t) {
+                    if (t === 'finish') { self.onfinish = null; } else if (t === 'cancel') { self.oncancel = null; }
+                };
+                this.dispatchEvent = function () { return true; };
+            };
+
+            __elProto.animate = function (keyframes, options) {
+                var frames = normKeyframes(keyframes);
+                var anim = new Animation(this, frames, options);
+                if (__waapiAnims) {
+                    var list = __waapiAnims.get(this) || [];
+                    list.push(anim);
+                    __waapiAnims.set(this, list);
+                }
+                // No compositor timeline → fast-forward to the end state in a microtask, so
+                // `await el.animate(...).finished` resolves and any fill:forwards styling lands.
+                Promise.resolve().then(function () { anim._settle(); });
+                return anim;
+            };
+            __elProto.getAnimations = function () {
+                return (__waapiAnims && __waapiAnims.get(this)) ? __waapiAnims.get(this).slice() : [];
+            };
+            if (typeof g.Animation === 'undefined') {
+                try { Object.defineProperty(g, 'Animation', { value: Animation, configurable: true, writable: true }); }
+                catch (e) { g.Animation = Animation; }
+            }
+            if (g.document && typeof g.document.getAnimations !== 'function') {
+                g.document.getAnimations = function () { return []; };
+            }
+        }
+
         // ---- Scrolling ----------------------------------------------------------------------
         // Reading the scroll offset is how virtualized feeds, sticky headers, infinite scroll and
         // "back to top" buttons all work. The host owns the viewport, so a scroll is a REQUEST.
