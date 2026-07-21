@@ -1279,3 +1279,45 @@ keep the old selection, shifted by the length delta).
 `replace-selection` (`setSelectionRange(0,5); setRangeText('HI')` → `HI world`), `range` (explicit span),
 `select-mode` (`'select'` selects the inserted text), `insert` (empty-range insert at the caret). A stub
 cannot fake the resulting value. Unregistering the method made the call throw. [[js-engine]]
+
+## `document.startViewTransition` — the transition-wrapped update must run (tick 308)
+
+View Transitions are how a growing share of SPAs (and MPAs, via the CSS half) apply a route/state
+change: rather than mutate the DOM directly, the app hands the mutation to the browser inside a
+callback — `document.startViewTransition(() => this.render(next))` — so the browser can snapshot
+before/after and cross-fade. It is interoperable now, so Next.js/SvelteKit/Astro and hand-rolled apps
+reach for it.
+
+### The failure without it is silent and total
+
+The method was absent (`g_probe_capabilities` measured `viewtransitions:no`). A call therefore threw
+`startViewTransition is not a function`, the TypeError propagated out of the click handler, and **the
+DOM update wrapped in the callback never ran** — the page froze on the previous view with no error the
+user could see. A capability check that renders the page cannot tell a working transition from a dead
+one; only driving the click and reading the resulting DOM can.
+
+### The honest implementation is the spec's own skip path
+
+This engine does not composite snapshot pseudo-elements, so there is no cross-fade to play. That is
+precisely the spec's skip path: a document that cannot animate (reduced-motion, not visible) still
+*invokes the callback, lands its mutations, and settles the promises* — it just omits the animation.
+So the shim (in the `dom_bindings.rs` prelude, beside `createEvent`):
+
+- runs the update callback **synchronously**, so its writes are in the DOM by the time the call
+  returns (skipped, not deferred — which matches the visible outcome);
+- returns a real `ViewTransition`: `ready`, `finished`, `updateCallbackDone` (thenables) and a
+  `skipTransition()` method, `types` as a `Set` — the shape sites `await`;
+- **propagates a callback error** to all three promises (a throwing update rejects, it is not
+  swallowed into a false success), while each branch quietly absorbs its own rejection so a site that
+  awaits only one does not surface an unhandled rejection from the others.
+
+This is not a stub — the load-bearing behaviour (the update applies) is delivered. The honest limit is
+that there is no cross-fade animation.
+
+### The teeth `G_VIEW_TRANSITION` uses
+
+`defined` (feature detect succeeds), `applied` (the callback ran and `#view` text changed), `shape`
+(the three thenables + `skipTransition`), `errorpath` (a throwing callback surfaces via
+`updateCallbackDone` rejecting), plus a **real engine-dispatched click** whose handler wraps its update
+in a transition and must still change the view — the frozen-page half a load-time script cannot
+self-report. RED: deleting the shim drops `defined`/`applied`/`shape`/click together.

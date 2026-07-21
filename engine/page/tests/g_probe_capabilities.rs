@@ -222,4 +222,7 @@ const PINNED: &[&str] = &[
     // Added by the tick that built it — this file's own rule: what the probe measured absent moves
     // into this list the day it starts working, and from then on its disappearance is a regression.
     "scrollsnap:yes",
+    // tick 308 — document.startViewTransition now runs the update callback and settles its promises
+    // (the skip-animation path), so SPA route/state changes wrapped in a transition no longer vanish.
+    "viewtransitions:yes",
 ];

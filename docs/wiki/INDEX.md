@@ -373,6 +373,10 @@
   - L1257 · The teeth G_TEXT_SELECTION uses
   - L1267 · setRangeText — replace text through the selection (tick 303)
   - L1277 · The teeth G_SET_RANGE_TEXT uses
+  - L1283 · document.startViewTransition — the transition-wrapped update must run (tick 308)
+  - L1291 · The failure without it is silent and total
+  - L1299 · The honest implementation is the spec's own skip path
+  - L1317 · The teeth G_VIEW_TRANSITION uses
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -746,4 +750,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-661 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+665 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

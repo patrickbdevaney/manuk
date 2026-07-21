@@ -10265,6 +10265,51 @@ const WINDOW_PRELUDE: &str = r#"
                 return e;
             };
         }
+
+        // `document.startViewTransition(updateCallback)` — the View Transitions API. This is now the
+        // idiomatic way SPAs (and MPAs, via the CSS side) apply a route/state change: instead of
+        // mutating the DOM directly, the app hands the mutation to the browser wrapped in a callback,
+        // so the browser can snapshot before/after and cross-fade between them.
+        //
+        // The SILENT failure without it is severe and specific: a site doing
+        //   `document.startViewTransition(() => this.render(newRoute))`
+        // hits `startViewTransition is not a function`, the TypeError takes down the click handler,
+        // and **the DOM update never happens** — the page is frozen on the old view with no error the
+        // user can see. The load-bearing behaviour is therefore not the animation, it is that the
+        // update callback RUNS and its mutations land.
+        //
+        // This engine does not composite snapshot pseudo-elements, so there is no cross-fade to play —
+        // which is exactly the spec's own skip path (a document that cannot animate, e.g. under
+        // `prefers-reduced-motion` or when not visible, still invokes the callback and settles the
+        // promises; it just omits the animation). So the honest implementation is: run the callback,
+        // let its DOM writes land, and resolve `ready`/`updateCallbackDone`/`finished` — and propagate
+        // a callback error to all three, as the spec requires. Not a stub: the update actually applies.
+        if (typeof g.document !== 'undefined' && typeof g.document.startViewTransition !== 'function') {
+            g.document.startViewTransition = function (updateCallback) {
+                // Run the update synchronously so its mutations are in the DOM by the time control
+                // returns — the transition is "skipped", not deferred, which is the visible outcome.
+                var settled, threw = false, err;
+                try {
+                    var r = (typeof updateCallback === 'function') ? updateCallback()
+                          : (updateCallback && typeof updateCallback.update === 'function') ? updateCallback.update()
+                          : undefined;
+                    settled = Promise.resolve(r);
+                } catch (e) { threw = true; err = e; settled = Promise.reject(e); }
+
+                // Each branch swallows its own rejection so a site that awaits only one of the three
+                // does not surface an unhandled rejection from the ones it ignored.
+                var quiet = function (p) { p.then(function () {}, function () {}); return p; };
+                var vt = {
+                    updateCallbackDone: quiet(settled.then(function () { return undefined; })),
+                    ready: quiet(settled.then(function () { return undefined; })),
+                    finished: quiet(settled.then(function () { return undefined; })),
+                    skipTransition: function () {},
+                    types: (typeof Set === 'function') ? new Set() : null
+                };
+                return vt;
+            };
+        }
+
         defEvent('MouseEvent', {
             clientX: 0, clientY: 0, screenX: 0, screenY: 0, pageX: 0, pageY: 0,
             button: 0, buttons: 0, relatedTarget: null,

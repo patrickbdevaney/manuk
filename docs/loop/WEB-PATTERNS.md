@@ -2602,3 +2602,23 @@ derivation step failed.
 of hash length, not the empty string. **(3)** The expand counter is a single byte appended AFTER `info`,
 starting at 1. **(4)** Gate against RFC 5869 known-answers — a self-consistent but wrong derivation
 produces stable garbage.
+
+## Animated route/state change — `document.startViewTransition` (tick 308)
+
+**Pattern:** `document.startViewTransition(() => { this.render(nextRoute); })` — an SPA (or an MPA via
+the CSS half) wraps a route/state DOM mutation in a transition so the browser can snapshot before/after
+and cross-fade. Interoperable now, so Next.js/SvelteKit/Astro and hand-rolled routers all reach for it.
+
+**The class this unlocks:** View-Transition-driven SPAs. The method was absent, so the call threw `is
+not a function`, the TypeError took down the click handler, and **the wrapped DOM update never ran** —
+the page froze on the previous view with no visible error. That silent-freeze is the app-class failure
+this closes.
+
+**The traps.** **(1)** The load-bearing behaviour is that the update callback RUNS and its mutations
+land — not the animation. **(2)** This engine composites no snapshot pseudo-elements, so there is no
+cross-fade; that is the spec's own SKIP path (reduced-motion / not-visible documents still run the
+callback and settle the promises), so running the callback and resolving is honest, not a stub.
+**(3)** A throwing callback must reject `ready`/`finished`/`updateCallbackDone` — do not swallow it into
+a false success — while each branch absorbs its own rejection so a site awaiting only one does not trip
+an unhandled-rejection. **(4)** `typeof document.startViewTransition === 'function'` is exactly what an
+inert stub passes; the gate drives a real click and reads the resulting DOM.

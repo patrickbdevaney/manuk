@@ -13838,3 +13838,40 @@ NO REGRESSION: additive on crypto.subtle. Not a trade. HONEST LIMIT: HKDF derive
 deriveKey (wrap bits into a CryptoKey) are the follow-ons.
 
 WIKI: docs/wiki/networking.md (crypto.subtle deriveBits/HKDF section). No constellation row.
+
+## Tick 308 — View Transitions: document.startViewTransition (2026-07-21)
+
+SELECTED: board CO-#1 priority (2) "PROBE the unknowns / ? outranks ✗" crossed with a genuinely-
+missing constellation edge. Re-ran lever-board + phase0-progress: much of the "missing" list is STALE
+(hydration, fillText, permissions.query, Notification all already built+gated). g_probe_capabilities
+measured `viewtransitions:no` for real — document.startViewTransition was absent (0 hits in engine/,
+only the probe referenced it). App-class hole, shipping in SPAs now.
+
+WHY IT MATTERS (silent-failure shape): a site doing `document.startViewTransition(() => this.render(next))`
+hits `startViewTransition is not a function`; the TypeError takes down the click handler and THE DOM
+UPDATE NEVER RUNS — page frozen on the old view, no visible error. The load-bearing behaviour is not
+the animation, it is that the update callback runs and its mutations land.
+
+WHAT LANDED (dom_bindings.rs prelude, next to createEvent): document.startViewTransition(cb) runs the
+update callback synchronously (mutations land immediately = the spec's own SKIP path for a document
+that cannot animate — reduced-motion/not-visible), returns a real ViewTransition {ready, finished,
+updateCallbackDone (thenables), skipTransition(), types:Set}. A throwing callback rejects all three
+(spec-faithful error propagation); each branch swallows its own rejection to avoid unhandled-rejection
+noise when a site awaits only one. NOT a stub: the DOM update actually applies. No compositor snapshot
+pseudo-elements (honest limit — no cross-fade; that is exactly the skip path, not a lie).
+
+### The claim — G_VIEW_TRANSITION, five teeth + a click-driven assertion
+
+defined (feature detect succeeds); applied (callback ran → #view text became 'Profile'); shape (ready/
+finished/updateCallbackDone thenable + skipTransition fn); errorpath (throwing callback surfaces via
+updateCallbackDone rejecting); ready (no throw). PLUS a real engine-dispatched click whose handler wraps
+its update in a transition must still change #view → 'Clicked' (the frozen-page half a load script cannot
+self-report). PROVEN RED: renaming the shim drops defined/applied/shape/click together.
+
+PINNED: g_probe_capabilities PINNED += viewtransitions:yes (ratchet — cannot silently regress).
+CONSTELLATION.tsv row 87 View Transitions missing → gated (g_view_transition).
+
+NO REGRESSION: additive JS prelude + probe re-run green. HONEST LIMIT: no compositor cross-fade
+animation (skip path); Navigation API + scroll-driven animations remain the sibling app-class holes.
+
+WIKI: docs/wiki/interaction-surface.md (View Transitions section).
