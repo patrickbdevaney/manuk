@@ -533,6 +533,31 @@ const PRELUDE: &str = r#"
         if (init.url) res.url = String(init.url);
         return res;
     };
+    // `Response.json(data, init)` — the static that builds a JSON Response in one call:
+    // `return Response.json({ ok: true })` in a Service Worker `fetch` handler or an app route. It
+    // JSON-serialises `data`, defaults the `Content-Type` to `application/json` (unless the caller set
+    // one), and is the read-symmetric of `res.json()`. It was missing, so that idiom threw
+    // `Response.json is not a function`.
+    globalThis.Response.json = function (data, init) {
+        init = init || {};
+        var body = JSON.stringify(data);
+        if (body === undefined) { throw new TypeError('The data is not JSON-serializable'); }
+        // Copy caller headers into a plain object, then default the content-type.
+        var hdrs = {}, ih = init.headers, k;
+        if (ih) {
+            if (typeof ih.forEach === 'function') { ih.forEach(function (v, key) { hdrs[key] = v; }); }
+            else if (Array.isArray(ih)) { for (var i = 0; i < ih.length; i++) { if (ih[i]) hdrs[ih[i][0]] = ih[i][1]; } }
+            else { for (k in ih) { if (Object.prototype.hasOwnProperty.call(ih, k)) hdrs[k] = ih[k]; } }
+        }
+        var hasCT = false;
+        for (k in hdrs) { if (String(k).toLowerCase() === 'content-type') { hasCT = true; } }
+        if (!hasCT) { hdrs['content-type'] = 'application/json'; }
+        return new globalThis.Response(body, {
+            status: (init.status === undefined) ? 200 : init.status,
+            statusText: init.statusText,
+            headers: hdrs
+        });
+    };
 
     globalThis.Request = function Request(input, init) {
         init = init || {};

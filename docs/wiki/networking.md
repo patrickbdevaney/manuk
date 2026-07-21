@@ -1115,3 +1115,17 @@ with the stream pipeline made real in ticks 298/299 — the whole point of the `
 `is-stream` (returns a real ReadableStream with `getReader`, not `null`), `bytes` (`'hello'` yields the
 bytes `104,101,108,108,111`), `pipe-decode` (`blob.stream().pipeThrough(new TextDecoderStream())`
 decodes back to the text). Restoring the `null` return was demonstrated to make the read throw. [[js-engine]]
+
+## `Response.json()` — the one-call JSON response (tick 301)
+
+`return Response.json({ ok: true })` in a Service Worker `fetch` handler or an app route — the static
+that builds a JSON `Response` in one call. It was missing (`Response.json is not a function`) even though
+`Response` itself and the instance `res.json()` were real. It JSON-serialises `data`, defaults the
+`Content-Type` to `application/json` (unless the caller sets one), honours `init.status`/`statusText`,
+and is the read-symmetric of `res.json()` — a value built with it round-trips through it.
+
+### The teeth `G_RESPONSE_JSON` uses
+
+`status` (defaults to 200), `content-type` (application/json by default), `custom-status` (honours
+`init.status` = 201), `round-trip` (`res.json()` parses the serialised data back). Deleting the static
+was demonstrated to make the call throw. [[js-engine]]

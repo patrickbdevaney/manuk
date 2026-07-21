@@ -2501,3 +2501,17 @@ or piped it threw `can't access property 'getReader' of null`.
 must be the blob's actual `Uint8Array` bytes. **(2)** It must compose: `pipeThrough`/`pipeTo` on the
 returned stream have to work, since streaming a blob into a decoder or a hash is the whole use. **(3)**
 Bytes, not code units — a binary blob's stream carries `0..255` byte values, not UTF-16 units.
+
+## Returning JSON in one call — `Response.json()` (tick 301)
+
+**Pattern:** `return Response.json({ user, token })` — a Service Worker `fetch` handler or an
+edge/app route replies with JSON without hand-building the body and `Content-Type`.
+
+**The class this unlocks:** one-call JSON responses. `Response` and `res.json()` were real, but the
+static `Response.json` was missing, so the idiom threw `is not a function`.
+
+**The traps.** **(1)** Default the `Content-Type` to `application/json` — but only if the caller did not
+set one, or you clobber an explicit override. **(2)** It is read-symmetric — a value built with
+`Response.json(x)` must parse back via `res.json()`. **(3)** Honour `init.status`/`statusText` — a `201`
+or `404` JSON response is common. **(4)** Non-serialisable data (a value whose `JSON.stringify` is
+`undefined`) is a `TypeError`, not an empty body.

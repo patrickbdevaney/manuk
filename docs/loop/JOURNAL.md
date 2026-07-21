@@ -13657,3 +13657,28 @@ NO REGRESSION: replaces an inert `return null` with a real stream. Not a trade. 
 14 completeness ticks this session (286-300), streams family complete.
 
 WIKI: docs/wiki/networking.md (Blob.stream section). No constellation row (JS-surface completeness).
+
+## Tick 301 — Response.json(): the one-call JSON response (2026-07-21)
+
+TICK SHAPE: sixth probe batch, RE-PROBING THE CLAIM (not typeof) on the __inertNames candidates.
+MEASURED REAL (do not rebuild): Headers, Request, Response, FormData, MessageChannel (port1.postMessage
+genuinely DELIVERS to port2.onmessage — verified). GENUINELY ABSENT: the static `Response.json`
+(instance `res.json()` was already real). Clean, honest, bounded — Response is real, just missing the
+static helper.
+
+HYPOTHESIS: `return Response.json({ ok: true })` in a SW fetch handler / app route. Absent → threw
+`Response.json is not a function`.
+
+WHAT LANDED (event_loop.rs, after the Response constructor): `Response.json(data, init)` — JSON.stringify
+the data (TypeError if not serialisable), default Content-Type application/json unless the caller set one,
+honour init.status/statusText, build on the real Response constructor.
+
+### The claim — G_RESPONSE_JSON, five teeth
+
+present / status (200 default) / content-type (application/json) / custom-status (201 honoured) /
+round-trip (res.json() parses the data back — read-symmetric). PROVEN RED: renaming the static → 
+`Response.json is not a function`.
+
+NO REGRESSION: additive static. Not a trade. HONEST LIMIT: none of note.
+
+WIKI: docs/wiki/networking.md (Response.json section). No constellation row (JS-surface completeness).

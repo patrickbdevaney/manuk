@@ -593,6 +593,8 @@
   - L1099 · The teeth G_TEXT_CODEC_STREAMS uses
   - L1106 · Blob.stream() — a real byte stream, not null (tick 300)
   - L1113 · The teeth G_BLOB_STREAM uses
+  - L1119 · Response.json() — the one-call JSON response (tick 301)
+  - L1127 · The teeth G_RESPONSE_JSON uses
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -732,4 +734,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-647 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+649 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
