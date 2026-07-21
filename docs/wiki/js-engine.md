@@ -978,3 +978,20 @@ a task whose `AbortSignal` fires before its turn, and returns a Promise of the c
 fails), `value` (resolves the callback's return), `abort` (an already-aborted signal rejects the task
 and it never runs). Deleting the block was demonstrated to make the first call throw before landing.
 [[js-engine]]
+
+## `DOMMatrix` — 2D affine transform math (tick 294)
+
+`canvas.getContext('2d').getTransform()` returns one, charting and graphics libraries build transforms
+with it, CSS Typed OM hands it back. It was absent, so `new DOMMatrix(...)` threw `DOMMatrix is not
+defined`. This is a real, honest 2D implementation — not an inert stub, so the gate asserts computed
+RESULTS (a wrong multiply or inverse is caught, not just the presence of the method).
+
+Constructs from nothing (identity), a 6- or 16-element array, or a `matrix(a,b,c,d,e,f)` string.
+Exposes `a`–`f` plus the `m11`/`m12`/`m21`/`m22`/`m41`/`m42` aliases, `is2D`, `isIdentity`. The
+transform methods — `multiply`, `translate`, `scale`, `rotate`, `inverse` — are NON-mutating (they
+return a new matrix, matching the spec's `*Self`-less forms), `transformPoint({x,y})` applies the affine
+map (`x' = a·x + c·y + e`, `y' = b·x + d·y + f`), and `toString` / `toFloat32Array` / `toFloat64Array`
+serialise. `DOMMatrixReadOnly` aliases it and `DOMMatrix.fromMatrix` is the copy constructor.
+
+**Honest limit:** 2D only. The 3D components (`m13`–`m44`, `is2D:false`, `rotateAxisAngle`, perspective)
+are not modelled — the overwhelmingly common case on the web is the 2D affine matrix. [[js-engine]]

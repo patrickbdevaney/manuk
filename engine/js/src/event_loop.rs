@@ -3044,6 +3044,92 @@ const PRELUDE: &str = r#"
         };
       }
 
+      // `DOMMatrix` — the 2D affine transform math class. `canvas.getContext('2d').getTransform()`
+      // returns one, charting/graphics libraries build transforms with it, and CSS Typed OM hands it
+      // back. It was ABSENT, so `new DOMMatrix(...)` threw `DOMMatrix is not defined`. This is a real
+      // (pure, honest) 2D implementation — identity, array/`matrix(...)`-string construction, the
+      // a-f + m11..m42 accessors, multiply/translate/scale/rotate (non-mutating, returning a new
+      // matrix, as the spec's `*Self`-less methods do), inverse, transformPoint and the serialisers.
+      // 3D (`m13..m44`, `is2D:false`) is not modelled — the honest limit noted in the wiki.
+      if (typeof globalThis.DOMMatrix === 'undefined') {
+        var __mkMatrix = function (a, b, c, d, e, f) {
+          var m = Object.create(globalThis.DOMMatrix.prototype);
+          m.a = m.m11 = a; m.b = m.m12 = b; m.c = m.m21 = c; m.d = m.m22 = d; m.e = m.m41 = e; m.f = m.m42 = f;
+          m.is2D = true;
+          m.isIdentity = (a === 1 && b === 0 && c === 0 && d === 1 && e === 0 && f === 0);
+          return m;
+        };
+        globalThis.DOMMatrix = function DOMMatrix(init) {
+          var a = 1, b = 0, c = 0, d = 1, e = 0, f = 0;
+          if (Array.isArray(init) || (init && typeof init.length === 'number' && typeof init !== 'string')) {
+            if (init.length === 6) { a = init[0]; b = init[1]; c = init[2]; d = init[3]; e = init[4]; f = init[5]; }
+            else if (init.length === 16) { a = init[0]; b = init[1]; c = init[4]; d = init[5]; e = init[12]; f = init[13]; }
+          } else if (typeof init === 'string') {
+            var s = init.trim();
+            if (s === '' || s === 'none') { /* identity */ }
+            else {
+              var mm = s.match(/matrix\(\s*([^)]+)\)/);
+              if (mm) {
+                var n = mm[1].split(',').map(function (x) { return parseFloat(x); });
+                if (n.length === 6) { a = n[0]; b = n[1]; c = n[2]; d = n[3]; e = n[4]; f = n[5]; }
+              } else { throw new SyntaxError('Failed to parse DOMMatrix from string'); }
+            }
+          }
+          this.a = this.m11 = a; this.b = this.m12 = b; this.c = this.m21 = c; this.d = this.m22 = d;
+          this.e = this.m41 = e; this.f = this.m42 = f;
+          this.is2D = true;
+          this.isIdentity = (a === 1 && b === 0 && c === 0 && d === 1 && e === 0 && f === 0);
+        };
+        var P = globalThis.DOMMatrix.prototype;
+        // this * other  (both 2D affine): compose `other` AFTER `this`, per the spec.
+        P.multiply = function (o) {
+          return __mkMatrix(
+            this.a * o.a + this.c * o.b,
+            this.b * o.a + this.d * o.b,
+            this.a * o.c + this.c * o.d,
+            this.b * o.c + this.d * o.d,
+            this.a * o.e + this.c * o.f + this.e,
+            this.b * o.e + this.d * o.f + this.f
+          );
+        };
+        P.translate = function (tx, ty) {
+          return this.multiply(__mkMatrix(1, 0, 0, 1, tx || 0, ty || 0));
+        };
+        P.scale = function (sx, sy) {
+          if (sy === undefined) { sy = sx; }
+          return this.multiply(__mkMatrix(sx, 0, 0, sy, 0, 0));
+        };
+        P.rotate = function (deg) {
+          var rad = (deg || 0) * Math.PI / 180, cs = Math.cos(rad), sn = Math.sin(rad);
+          return this.multiply(__mkMatrix(cs, sn, -sn, cs, 0, 0));
+        };
+        P.inverse = function () {
+          var det = this.a * this.d - this.b * this.c;
+          if (det === 0) { return __mkMatrix(NaN, NaN, NaN, NaN, NaN, NaN); }
+          var ia = this.d / det, ib = -this.b / det, ic = -this.c / det, id = this.a / det;
+          return __mkMatrix(ia, ib, ic, id,
+            -(this.e * ia + this.f * ic), -(this.e * ib + this.f * id));
+        };
+        P.transformPoint = function (pt) {
+          pt = pt || {};
+          var x = pt.x || 0, y = pt.y || 0;
+          return { x: this.a * x + this.c * y + this.e, y: this.b * x + this.d * y + this.f, z: 0, w: 1 };
+        };
+        P.toFloat64Array = function () {
+          return new Float64Array([this.a, this.b, 0, 0, this.c, this.d, 0, 0, 0, 0, 1, 0, this.e, this.f, 0, 1]);
+        };
+        P.toFloat32Array = function () { return new Float32Array(this.toFloat64Array()); };
+        P.toString = function () {
+          return 'matrix(' + this.a + ', ' + this.b + ', ' + this.c + ', ' + this.d + ', ' + this.e + ', ' + this.f + ')';
+        };
+        // `DOMMatrixReadOnly` shares the surface; `DOMMatrix.fromMatrix` is the spec's copy constructor.
+        globalThis.DOMMatrixReadOnly = globalThis.DOMMatrix;
+        globalThis.DOMMatrix.fromMatrix = function (o) {
+          o = o || {};
+          return __mkMatrix(o.a != null ? o.a : 1, o.b || 0, o.c || 0, o.d != null ? o.d : 1, o.e || 0, o.f || 0);
+        };
+      }
+
       // `TextEncoder`/`TextDecoder` — UTF-8 only, which is what the web is.
       if (typeof globalThis.TextEncoder === 'undefined') {
         globalThis.TextEncoder = function TextEncoder(){ this.encoding = 'utf-8'; };

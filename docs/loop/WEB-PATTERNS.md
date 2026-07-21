@@ -2396,3 +2396,19 @@ callback runs. **(2)** Same-turn posts must collect before any runs (a macrotask
 post always wins regardless of priority. **(3)** An `AbortSignal` that fires before the task runs must
 REMOVE it and reject — a scheduler that runs an aborted task wasted the cancel. **(4)** `postTask`
 returns a Promise of the callback's value, so `await scheduler.postTask(cb)` yields it.
+
+## Transform math off the main geometry path — `DOMMatrix` (tick 294)
+
+**Pattern:** `const m = ctx.getTransform().inverse(); const p = m.transformPoint({x, y})` — canvas apps
+map screen coordinates back into world space, and charting/graphics libraries compose
+`new DOMMatrix().translate(x, y).scale(k)` to place things.
+
+**The class this unlocks:** client-side 2D transform math. Absent, `new DOMMatrix(...)` threw
+`DOMMatrix is not defined` and took the graphics path with it.
+
+**The traps.** **(1)** It is MATH, not a bag of setters — the gate must assert computed coordinates
+(`rotate(90)` maps `(1,0)→(0,1)`, `inverse()` actually inverts), or a wrong-convention stub ships silent
+mis-transforms. **(2)** `multiply`/`translate`/`scale`/`rotate` return a NEW matrix (the non-`*Self`
+forms don't mutate) — mutating in place breaks `a.multiply(b)` used as a pure expression. **(3)** Watch
+the composition order: `m.translate(t).scale(s)` applies scale to the point FIRST, then translate. **(4)**
+Be honest about 2D vs 3D — a 2D-only matrix must say `is2D:true` and not pretend to carry `m13..m44`.

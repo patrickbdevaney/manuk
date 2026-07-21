@@ -13476,3 +13476,33 @@ NO REGRESSION: additive global. Not a trade. HONEST LIMIT: no `TaskController`/d
 event, no continuation-priority inheritance — the common `postTask({priority})` + `yield()` surface.
 
 WIKI: docs/wiki/js-engine.md (scheduler.postTask section). No constellation row (JS-surface completeness).
+
+## Tick 294 — `DOMMatrix`: real 2D affine transform math (2026-07-20)
+
+TICK SHAPE: board re-read; the 286-293 JS-surface batch was exhausted, so I ran a FRESH probe batch
+(observers/CSS/graphics APIs). PRESENT (skip): ResizeObserver, IntersectionObserver, MutationObserver,
+PerformanceObserver, requestAnimationFrame, CustomEvent, CSS.escape, CSSStyleSheet ctor,
+adoptedStyleSheets, closest/matches, queueMicrotask. ABSENT: DOMMatrix, createImageBitmap,
+CSS.registerProperty, attachInternals, el.animate/getAnimations. Picked DOMMatrix — the cleanest pure
+capability (no state, no inertness risk; createImageBitmap is async-decode, animate/attachInternals are
+subsystems, registerProperty ties into Stylo cascade).
+
+HYPOTHESIS: `ctx.getTransform().inverse().transformPoint(...)` and `new DOMMatrix().translate().scale()`
+in canvas/charting code. Absent → `DOMMatrix is not defined`.
+
+WHAT LANDED (event_loop.rs, beside Blob/AbortSignal): a real 2D affine DOMMatrix — identity / array /
+`matrix(...)`-string construction; a-f + m11..m42 accessors; is2D/isIdentity; NON-mutating multiply/
+translate/scale/rotate; inverse; transformPoint; toString/toFloat32Array/toFloat64Array;
+DOMMatrixReadOnly alias + fromMatrix.
+
+### The claim — G_DOMMATRIX, nine teeth (COMPUTED results, not presence)
+
+present/identity/translate/scale/rotate(90 maps (1,0)->(0,1))/compose(translate then scale)/inverse
+(scale(2,4) inverted maps (2,4)->(1,1))/fromString/toString. Because the teeth are computed coordinates,
+a wrong multiply/inverse/rotate convention FAILS — not just a missing method. PROVEN RED: `if (false &&
+…)` around the block → `present:false`, `new DOMMatrix()` throws.
+
+NO REGRESSION: additive global class. Not a trade. HONEST LIMIT: 2D only — m13..m44 / is2D:false / 3D
+rotate / perspective not modelled (the 2D affine matrix is the common web case).
+
+WIKI: docs/wiki/js-engine.md (DOMMatrix section). No constellation row (JS-surface completeness).
