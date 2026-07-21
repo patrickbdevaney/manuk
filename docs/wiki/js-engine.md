@@ -1007,3 +1007,13 @@ The point half of the geometry pair: canvas / graphics code maps a coordinate th
 Adding it closed a small honesty gap in `DOMMatrix.transformPoint` (tick 294): it returned a bare object
 literal; it now returns a REAL `DOMPoint`, so a caller can chain `.matrixTransform(...)` or read `.w`.
 [[js-engine]]
+
+## `DOMQuad` — four points, the enclosing box (tick 296)
+
+The shape `element.getBoxQuads()` and transform code produce when a rectangle has been rotated or skewed
+into a general quadrilateral — its corners are no longer axis-aligned. It completes the geometry family
+(`DOMMatrix`/`DOMPoint`/`DOMRect` were already here). It was absent, so `DOMQuad.fromRect(...)` threw.
+
+Four `DOMPoint`s (`p1`–`p4`), `DOMQuad.fromRect({x,y,width,height})` (corners clockwise from top-left),
+`fromQuad`, `toJSON`, and `getBounds()` — the axis-aligned `DOMRect` bounding box (min/max over the four
+points), which is the useful reduction after a transform has skewed the corners. [[js-engine]]

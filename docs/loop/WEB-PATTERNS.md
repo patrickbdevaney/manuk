@@ -2426,3 +2426,17 @@ homogeneous math silently breaks. **(2)** `matrixTransform` must apply the SAME 
 matrix, or a point and its matrix disagree. **(3)** `DOMMatrix.transformPoint` should return a real
 `DOMPoint` (chainable, carrying `w`), not a bare `{x,y}` — a caller that chains `.matrixTransform` on the
 result breaks otherwise.
+
+## The transformed rectangle — `DOMQuad` (tick 296)
+
+**Pattern:** `const box = el.getBoxQuads()[0].getBounds()` — after CSS transforms have rotated/skewed an
+element, its screen footprint is a quadrilateral, and code reduces it to an axis-aligned box.
+
+**The class this unlocks:** the general (non-axis-aligned) rectangle. Absent, `DOMQuad.fromRect(...)` /
+`new DOMQuad(...)` threw.
+
+**The traps.** **(1)** `getBounds` is min/max over ALL four points — a skewed quad's box is larger than
+any one edge; compute it, don't assume the corners are ordered. **(2)** `fromRect` corners go clockwise
+from the top-left, and each is a real `DOMPoint` (so `.matrixTransform` chains). **(3)** It completes a
+family — a `DOMQuad` whose `getBounds` returns something other than a `DOMRect` breaks callers that read
+`.width`/`.height`.

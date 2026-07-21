@@ -3163,6 +3163,44 @@ const PRELUDE: &str = r#"
         };
       }
 
+      // `DOMQuad` — four `DOMPoint`s, the shape `element.getBoxQuads()` and transform code produce when
+      // a rectangle has been rotated/skewed into a general quadrilateral (its corners are no longer
+      // axis-aligned). It completes the geometry family (DOMMatrix/DOMPoint/DOMRect already here). It
+      // was absent, so `DOMQuad.fromRect(...)` / `new DOMQuad(...)` threw. `getBounds()` returns the
+      // axis-aligned `DOMRect` bounding box — the useful reduction after a transform.
+      if (typeof globalThis.DOMQuad === 'undefined') {
+        var __toPoint = function (p) {
+          return (p instanceof globalThis.DOMPoint) ? p : new globalThis.DOMPoint(p && p.x, p && p.y, p && p.z, p && p.w);
+        };
+        globalThis.DOMQuad = function DOMQuad(p1, p2, p3, p4) {
+          this.p1 = __toPoint(p1 || {}); this.p2 = __toPoint(p2 || {});
+          this.p3 = __toPoint(p3 || {}); this.p4 = __toPoint(p4 || {});
+        };
+        globalThis.DOMQuad.prototype.getBounds = function () {
+          var xs = [this.p1.x, this.p2.x, this.p3.x, this.p4.x];
+          var ys = [this.p1.y, this.p2.y, this.p3.y, this.p4.y];
+          var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
+          var minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
+          return new globalThis.DOMRect(minX, minY, maxX - minX, maxY - minY);
+        };
+        globalThis.DOMQuad.prototype.toJSON = function () {
+          return { p1: this.p1.toJSON(), p2: this.p2.toJSON(), p3: this.p3.toJSON(), p4: this.p4.toJSON() };
+        };
+        // `fromRect({x,y,width,height})` — the four corners, clockwise from the top-left.
+        globalThis.DOMQuad.fromRect = function (r) {
+          r = r || {};
+          var x = r.x || 0, y = r.y || 0, w = r.width || 0, h = r.height || 0;
+          return new globalThis.DOMQuad(
+            new globalThis.DOMPoint(x, y), new globalThis.DOMPoint(x + w, y),
+            new globalThis.DOMPoint(x + w, y + h), new globalThis.DOMPoint(x, y + h)
+          );
+        };
+        globalThis.DOMQuad.fromQuad = function (q) {
+          q = q || {};
+          return new globalThis.DOMQuad(q.p1, q.p2, q.p3, q.p4);
+        };
+      }
+
       // `TextEncoder`/`TextDecoder` — UTF-8 only, which is what the web is.
       if (typeof globalThis.TextEncoder === 'undefined') {
         globalThis.TextEncoder = function TextEncoder(){ this.encoding = 'utf-8'; };

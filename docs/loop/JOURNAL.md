@@ -13531,3 +13531,26 @@ NO REGRESSION: additive; the transformPoint change returns a MORE correct type (
 trade. HONEST LIMIT: same 2D scope as DOMMatrix.
 
 WIKI: docs/wiki/js-engine.md (DOMPoint section). No constellation row (JS-surface completeness).
+
+## Tick 296 — `DOMQuad`: four points and the enclosing box (2026-07-21)
+
+TICK SHAPE: continued the geometry-family completion from 294/295. DOMQuad was the last pure-geometry
+class absent (DOMMatrix/DOMPoint/DOMRect present). Pure, honest, bounded — no inertness risk.
+
+HYPOTHESIS: `el.getBoxQuads()[0].getBounds()` after transforms skew an element's footprint. Absent →
+`DOMQuad.fromRect(...)` threw.
+
+WHAT LANDED (event_loop.rs, after DOMMatrix): four DOMPoints p1-p4, `fromRect` (corners clockwise from
+top-left), `fromQuad`, `toJSON`, and `getBounds()` → the axis-aligned DOMRect (min/max over the four
+points).
+
+### The claim — G_DOMQUAD, six teeth (computed)
+
+present / corners (fromRect places them) / points-are-dompoints / bounds-rect (axis-aligned quad's
+bounds is the rect) / skew-bounds (a SKEWED quad's bounds is the min/max enclosing box) / toJSON. The
+skew-bounds tooth is the one a stub can't fake. PROVEN RED: `if (false && …)` → `present:false`,
+`new DOMQuad()` throws. Full geometry family (DOMMatrix/DOMPoint/DOMQuad) green together.
+
+NO REGRESSION: additive global class. Not a trade. HONEST LIMIT: 2D (uses the 2D DOMPoint/DOMRect).
+
+WIKI: docs/wiki/js-engine.md (DOMQuad section). No constellation row (JS-surface completeness).

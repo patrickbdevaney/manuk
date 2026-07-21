@@ -433,6 +433,7 @@
   - L975 · The teeth G_SCHEDULER_POSTTASK uses
   - L982 · DOMMatrix — 2D affine transform math (tick 294)
   - L999 · DOMPoint — the geometry point that pairs with DOMMatrix (tick 295)
+  - L1011 · DOMQuad — four points, the enclosing box (tick 296)
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -723,4 +724,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-638 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+639 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
