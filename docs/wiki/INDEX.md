@@ -429,6 +429,8 @@
   - L914 · Blob object-URLs carry real bytes — canvas.toBlob + blob: fetch (tick 284)
   - L921 · canvas.toBlob decodes the one raster toDataURL already produced
   - L933 · blob: resolves in fetch against the one object-URL registry
+  - L961 · scheduler.postTask — priority-ordered main-thread work (tick 293)
+  - L975 · The teeth G_SCHEDULER_POSTTASK uses
 
 ## Manuk Daily-Driver Usability Roadmap (synthesized, tick 138)
 `docs/wiki/lever-map.md`
@@ -719,4 +721,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-634 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+636 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

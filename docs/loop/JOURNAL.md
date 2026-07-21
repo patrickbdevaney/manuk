@@ -13449,3 +13449,30 @@ NO REGRESSION: additive on navigator. Not a trade. HONEST LIMIT: single-PAGE onl
 coordination needs a shared broker (follow-on); shared/read mode is treated as exclusive.
 
 WIKI: docs/wiki/networking.md (navigator.locks section). No constellation row (JS-surface completeness).
+
+## Tick 293 — `scheduler.postTask`: priority-ordered main-thread scheduling (2026-07-20)
+
+TICK SHAPE: board re-read; probe-first. Took the last clean genuinely-absent JS-surface item from the
+session's list (scheduler.postTask). Implemented HONESTLY — the trap here is the inert `setTimeout`
+alias that runs tasks but ignores priority; the gate is built to catch exactly that.
+
+HYPOTHESIS: React's scheduler / cooperative-yield loops call `scheduler.postTask(cb,{priority})` to keep
+the UI responsive. Absent → threw on `undefined`.
+
+WHAT LANDED (WINDOW_PRELUDE, `g.scheduler`): three priority buckets (user-blocking>user-visible>
+background); same-turn posts collect on ONE macrotask turn (`setTimeout(drain,0)`), then the drain runs
+the highest-priority bucket first — so posts of `background,user-blocking,user-visible` run
+`user-blocking,user-visible,background`. Honours `delay`, rejects+removes a task whose `AbortSignal`
+fires before its turn, returns a Promise of the callback's value. Added `scheduler.yield()`.
+
+### The claim — G_SCHEDULER_POSTTASK, four teeth
+
+`present`, `priority-order` (the reorder above — a setTimeout alias fails it), `value`, `abort` (an
+already-aborted signal rejects and the task never runs). Verified deterministically by chaining the
+value/abort promises so all priority tasks have drained before asserting order. PROVEN RED:
+`if (false && …)` around the block → `present:false`, first call throws.
+
+NO REGRESSION: additive global. Not a trade. HONEST LIMIT: no `TaskController`/dynamic priority-change
+event, no continuation-priority inheritance — the common `postTask({priority})` + `yield()` surface.
+
+WIKI: docs/wiki/js-engine.md (scheduler.postTask section). No constellation row (JS-surface completeness).

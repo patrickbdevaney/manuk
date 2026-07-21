@@ -957,3 +957,24 @@ the two halves exact complements, so no constant satisfies it.
 rendering (the Rust image-fetch path does not yet consult the JS registry — the next slice); `blob:`
 resolution in `XMLHttpRequest` (the modern `fetch` path is wired, legacy XHR is not); and `toBlob`
 encoding any format other than PNG.
+
+## `scheduler.postTask` — priority-ordered main-thread work (tick 293)
+
+The scheduler modern frameworks use to keep the UI responsive: `scheduler.postTask(cb, { priority })`
+runs work at `user-blocking` > `user-visible` > `background`, so a click handler pre-empts a background
+prefetch. React's scheduler, cooperative-yielding loops and `scheduler.yield()` feature-detect it;
+absent, `scheduler.postTask(...)` threw on `undefined`.
+
+It is NOT an inert `setTimeout` alias — that is the failure mode the gate is built to catch. It honours
+priority ORDER: same-turn posts collect (on one macrotask turn) and the drain runs the highest-priority
+bucket first, so three tasks posted `background, user-blocking, user-visible` execute
+`user-blocking, user-visible, background`. It also honours the `delay` option, rejects (and never runs)
+a task whose `AbortSignal` fires before its turn, and returns a Promise of the callback's return value.
+`scheduler.yield()` resolves after a macrotask turn.
+
+### The teeth `G_SCHEDULER_POSTTASK` uses
+
+`priority-order` (the order above — a setTimeout alias that ignores priority runs in post order and
+fails), `value` (resolves the callback's return), `abort` (an already-aborted signal rejects the task
+and it never runs). Deleting the block was demonstrated to make the first call throw before landing.
+[[js-engine]]

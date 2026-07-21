@@ -2380,3 +2380,19 @@ a "does it call my function" test and ships the exact race the API exists to pre
 SETTLES, not until it returns — an async callback holds across its awaits. **(3)** `ifAvailable` must
 NOT queue: on a held lock it invokes with a `null` grant so the caller can take its "busy" path. **(4)**
 `request` resolves with the callback's value, so `await navigator.locks.request(...)` returns it.
+
+## Keeping the main thread responsive — `scheduler.postTask` (tick 293)
+
+**Pattern:** `scheduler.postTask(() => renderExpensiveList(), { priority: 'background' })` alongside
+`scheduler.postTask(handleClick, { priority: 'user-blocking' })` — frameworks split work by priority so
+interaction pre-empts background rendering.
+
+**The class this unlocks:** priority-aware main-thread scheduling. Absent, `scheduler.postTask` threw on
+`undefined`, and the framework fell back (or crashed on a hard reference).
+
+**The traps.** **(1)** It is NOT `setTimeout` — priority must actually ORDER execution (user-blocking
+before user-visible before background), or the whole point is lost; gate on run order, not just that the
+callback runs. **(2)** Same-turn posts must collect before any runs (a macrotask turn), or the first
+post always wins regardless of priority. **(3)** An `AbortSignal` that fires before the task runs must
+REMOVE it and reject — a scheduler that runs an aborted task wasted the cancel. **(4)** `postTask`
+returns a Promise of the callback's value, so `await scheduler.postTask(cb)` yields it.

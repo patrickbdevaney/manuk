@@ -10832,6 +10832,69 @@ const WINDOW_PRELUDE: &str = r#"
                 }
             };
         }
+        // `scheduler.postTask(cb, options)` — the main-thread scheduler modern frameworks use to keep
+        // the UI responsive: run work at a stated PRIORITY (`user-blocking` > `user-visible` >
+        // `background`) so a click handler pre-empts a background prefetch. React's scheduler,
+        // cooperative-yielding libraries and `scheduler.yield()` loops feature-detect it; absent,
+        // `scheduler.postTask(...)` threw on `undefined`. This is NOT an inert `setTimeout` alias — it
+        // honours priority ORDER (higher priority drains first), the `delay` option, and an
+        // `AbortSignal` that removes a still-queued task. It returns a Promise of the callback's value.
+        if (typeof g.scheduler === 'undefined') {
+            var __PRIO = { 'user-blocking': 0, 'user-visible': 1, 'background': 2 };
+            var __sq = [[], [], []];       // ready tasks, bucketed by priority
+            var __draining = false;
+            var __drain = function () {
+                __draining = false;
+                // Collect every ready task in priority order, then run — higher priority first.
+                var batch = [];
+                for (var pr = 0; pr < 3; pr++) { while (__sq[pr].length) { batch.push(__sq[pr].shift()); } }
+                for (var i = 0; i < batch.length; i++) { batch[i](); }
+            };
+            var __schedule = function () {
+                if (__draining) { return; }
+                __draining = true;
+                // postTask tasks are event-loop TASKS, not microtasks — a macrotask turn lets same-turn
+                // posts of different priorities collect before any runs, so ordering is by priority.
+                setTimeout(__drain, 0);
+            };
+            g.scheduler = {
+                postTask: function (cb, options) {
+                    options = options || {};
+                    var priority = options.priority;
+                    if (!(priority in __PRIO)) { priority = 'user-visible'; }
+                    var delay = (typeof options.delay === 'number' && options.delay > 0) ? options.delay : 0;
+                    var signal = options.signal;
+                    return new Promise(function (resolve, reject) {
+                        if (typeof cb !== 'function') { reject(new TypeError('callback required')); return; }
+                        if (signal && signal.aborted) { reject(signal.reason); return; }
+                        var ran = false;
+                        var task = function () {
+                            if (ran) { return; }
+                            ran = true;
+                            if (signal && signal.aborted) { reject(signal.reason); return; }
+                            try { resolve(cb()); } catch (e) { reject(e); }
+                        };
+                        var enqueue = function () { __sq[__PRIO[priority]].push(task); __schedule(); };
+                        if (delay > 0) { setTimeout(enqueue, delay); } else { enqueue(); }
+                        // Aborting a task that has NOT yet run removes it and rejects with the reason.
+                        if (signal && typeof signal.addEventListener === 'function') {
+                            signal.addEventListener('abort', function () {
+                                if (ran) { return; }
+                                var q = __sq[__PRIO[priority]];
+                                var idx = q.indexOf(task);
+                                if (idx >= 0) { q.splice(idx, 1); }
+                                ran = true;
+                                reject(signal.reason);
+                            });
+                        }
+                    });
+                },
+                // `scheduler.yield()` — hand control back to the event loop, resume after pending work.
+                yield: function () {
+                    return new Promise(function (resolve) { setTimeout(resolve, 0); });
+                }
+            };
+        }
         // `navigator.sendBeacon(url, data)` — the fire-and-forget POST every analytics, RUM and
         // error-reporting library sends on `pagehide`/`visibilitychange`. It was ABSENT, so an
         // unguarded `navigator.sendBeacon(...)` threw on `undefined` and took the rest of an unload
