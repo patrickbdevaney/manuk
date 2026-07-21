@@ -2412,3 +2412,17 @@ mis-transforms. **(2)** `multiply`/`translate`/`scale`/`rotate` return a NEW mat
 forms don't mutate) — mutating in place breaks `a.multiply(b)` used as a pure expression. **(3)** Watch
 the composition order: `m.translate(t).scale(s)` applies scale to the point FIRST, then translate. **(4)**
 Be honest about 2D vs 3D — a 2D-only matrix must say `is2D:true` and not pretend to carry `m13..m44`.
+
+## The point half of the transform pair — `DOMPoint` (tick 295)
+
+**Pattern:** `const world = new DOMPoint(sx, sy).matrixTransform(ctx.getTransform().inverse())` — map a
+screen coordinate into world space, or read back `matrix.transformPoint(p)` from a transform.
+
+**The class this unlocks:** coordinate transforms alongside `DOMMatrix`. Absent, `new DOMPoint(...)`
+threw `is not defined`.
+
+**The traps.** **(1)** `w` defaults to `1` (a position), not `0` — get this wrong and perspective/
+homogeneous math silently breaks. **(2)** `matrixTransform` must apply the SAME affine convention as the
+matrix, or a point and its matrix disagree. **(3)** `DOMMatrix.transformPoint` should return a real
+`DOMPoint` (chainable, carrying `w`), not a bare `{x,y}` — a caller that chains `.matrixTransform` on the
+result breaks otherwise.

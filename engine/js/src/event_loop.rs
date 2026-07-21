@@ -3044,6 +3044,34 @@ const PRELUDE: &str = r#"
         };
       }
 
+      // `DOMPoint` / `DOMPointReadOnly` — the geometry point that pairs with `DOMMatrix`: a canvas or
+      // graphics library maps a coordinate through a transform with `point.matrixTransform(matrix)`, and
+      // `matrix.transformPoint(point)` returns one. Absent, `new DOMPoint(...)` threw. `{x,y,z,w}` with
+      // `w` defaulting to 1 (a position, not a direction); `matrixTransform` applies the 2D affine map,
+      // `fromPoint` copies, `toJSON` serialises.
+      if (typeof globalThis.DOMPoint === 'undefined') {
+        globalThis.DOMPoint = function DOMPoint(x, y, z, w) {
+          this.x = x || 0; this.y = y || 0; this.z = z || 0; this.w = (w === undefined) ? 1 : w;
+        };
+        globalThis.DOMPoint.prototype.matrixTransform = function (m) {
+          // 2D affine: x' = a·x + c·y + e, y' = b·x + d·y + f (the w/z pass through for the 2D case).
+          if (!m) { return new globalThis.DOMPoint(this.x, this.y, this.z, this.w); }
+          return new globalThis.DOMPoint(
+            m.a * this.x + m.c * this.y + m.e,
+            m.b * this.x + m.d * this.y + m.f,
+            this.z, this.w
+          );
+        };
+        globalThis.DOMPoint.prototype.toJSON = function () {
+          return { x: this.x, y: this.y, z: this.z, w: this.w };
+        };
+        globalThis.DOMPoint.fromPoint = function (p) {
+          p = p || {};
+          return new globalThis.DOMPoint(p.x, p.y, p.z, p.w);
+        };
+        globalThis.DOMPointReadOnly = globalThis.DOMPoint;
+      }
+
       // `DOMMatrix` — the 2D affine transform math class. `canvas.getContext('2d').getTransform()`
       // returns one, charting/graphics libraries build transforms with it, and CSS Typed OM hands it
       // back. It was ABSENT, so `new DOMMatrix(...)` threw `DOMMatrix is not defined`. This is a real
@@ -3113,7 +3141,12 @@ const PRELUDE: &str = r#"
         P.transformPoint = function (pt) {
           pt = pt || {};
           var x = pt.x || 0, y = pt.y || 0;
-          return { x: this.a * x + this.c * y + this.e, y: this.b * x + this.d * y + this.f, z: 0, w: 1 };
+          // Return a real DOMPoint (added just above), matching the spec, so a caller can chain
+          // `.matrixTransform(...)` or read `.w` — not a bare object literal.
+          return new globalThis.DOMPoint(
+            this.a * x + this.c * y + this.e, this.b * x + this.d * y + this.f,
+            pt.z || 0, (pt.w === undefined) ? 1 : pt.w
+          );
         };
         P.toFloat64Array = function () {
           return new Float64Array([this.a, this.b, 0, 0, this.c, this.d, 0, 0, 0, 0, 1, 0, this.e, this.f, 0, 1]);

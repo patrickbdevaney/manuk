@@ -13506,3 +13506,28 @@ NO REGRESSION: additive global class. Not a trade. HONEST LIMIT: 2D only — m13
 rotate / perspective not modelled (the 2D affine matrix is the common web case).
 
 WIKI: docs/wiki/js-engine.md (DOMMatrix section). No constellation row (JS-surface completeness).
+
+## Tick 295 — `DOMPoint`: the geometry point that pairs with DOMMatrix (2026-07-20)
+
+TICK SHAPE: board re-read; third fresh probe batch (geometry/Intl/streams). ABSENT: DOMPoint, DOMQuad,
+CompressionStream, TextEncoderStream. PRESENT (skip): DOMRect/ReadOnly, all Intl.* (Segmenter/
+RelativeTimeFormat/ListFormat/DisplayNames/NumberFormat), structuredClone, DOMException, BroadcastChannel,
+MessageChannel, crypto.getRandomValues. Picked DOMPoint — pure geometry, pairs with the DOMMatrix from
+294, and lets me close a small honesty gap there.
+
+WHAT LANDED (event_loop.rs, just BEFORE DOMMatrix so transformPoint can construct one): `DOMPoint`/
+`DOMPointReadOnly` with {x,y,z,w} (w defaults to 1), `matrixTransform(m)` (2D affine), `fromPoint`,
+`toJSON`. AND upgraded `DOMMatrix.transformPoint` (from 294) to return a REAL DOMPoint instead of a bare
+object literal — so a caller can chain `.matrixTransform` or read `.w`.
+
+### The claim — G_DOMPOINT, five teeth (computed + interop)
+
+present / fields (w defaults to 1) / matrixTransform (3,4 through translate(10,20) → 13,24) /
+mtx-returns-point (`transformPoint(...) instanceof DOMPoint` with correct coords) / fromPoint-toJSON.
+PROVEN RED: `if (false && …)` around the block → `present:false`, `new DOMPoint()` throws. g_dommatrix
+stayed green through the transformPoint upgrade.
+
+NO REGRESSION: additive; the transformPoint change returns a MORE correct type (still has .x/.y). Not a
+trade. HONEST LIMIT: same 2D scope as DOMMatrix.
+
+WIKI: docs/wiki/js-engine.md (DOMPoint section). No constellation row (JS-surface completeness).

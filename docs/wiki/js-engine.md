@@ -995,3 +995,15 @@ serialise. `DOMMatrixReadOnly` aliases it and `DOMMatrix.fromMatrix` is the copy
 
 **Honest limit:** 2D only. The 3D components (`m13`–`m44`, `is2D:false`, `rotateAxisAngle`, perspective)
 are not modelled — the overwhelmingly common case on the web is the 2D affine matrix. [[js-engine]]
+
+## `DOMPoint` — the geometry point that pairs with DOMMatrix (tick 295)
+
+The point half of the geometry pair: canvas / graphics code maps a coordinate through a transform with
+`point.matrixTransform(matrix)`, and `matrix.transformPoint(point)` returns one. It was absent, so
+`new DOMPoint(...)` threw. `{x, y, z, w}` with `w` defaulting to `1` (a position, not a direction);
+`matrixTransform(m)` applies the 2D affine map, `fromPoint` copies, `toJSON` serialises.
+`DOMPointReadOnly` aliases it.
+
+Adding it closed a small honesty gap in `DOMMatrix.transformPoint` (tick 294): it returned a bare object
+literal; it now returns a REAL `DOMPoint`, so a caller can chain `.matrixTransform(...)` or read `.w`.
+[[js-engine]]
