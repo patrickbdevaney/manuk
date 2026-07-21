@@ -95,7 +95,6 @@ BLD=$'\033[1m'; YEL=$'\033[33m'; OFF=$'\033[0m'
 # runs are a no-op. No gate semantics change — same binaries, same tests, built once instead of raced. A real
 # build failure is NOT masked: `|| true` only skips the warm-up; the gate (or the workspace build) still REDs.
 for _pw in \
-  "manuk-page --features spidermonkey" \
   "manuk-page --features stylo,spidermonkey" \
   "manuk-shell" \
   "manuk-dom"; do
@@ -104,8 +103,8 @@ for _pw in \
 done
 
 # Launch every independent gate NOW; each block below simply collects its result.
-_launch js cargo test -q -p manuk-page --features spidermonkey -- --ignored js_conformance
-_launch ga cargo test -q -p manuk-page --features spidermonkey --test g_alloc -- --ignored
+_launch js cargo test -q -p manuk-page --features stylo,spidermonkey -- --ignored js_conformance
+_launch ga cargo test -q -p manuk-page --features stylo,spidermonkey --test g_alloc -- --ignored
 # ── SHELL GATES AS ONE INVOCATION (observer, tick 118). The manuk-shell gates — affordance, teardown,
 # runtime-count, tab-interact — used to run as FOUR concurrent `cargo test -p manuk-shell` processes. Under
 # contention those four shells fought over the process/runtime accounting and G_RUNTIME_COUNT false-RED'd
@@ -680,6 +679,11 @@ rm -f "$TMPIDX"
   echo "seconds: $(( SECONDS - _BUILD_SECONDS ))"
   echo "total_seconds: ${SECONDS}"
   echo "build_seconds: ${_BUILD_SECONDS}"
+  # Environment at measure time — a green wall on a starved box is a poisoned number (the 566s/694s
+  # class). Measured against THE REPO'S OWN MOUNT (df / vs df /home cost a wrong-mount misdiagnosis).
+  echo "disk_pct: $(df --output=pcent . 2>/dev/null | tail -1 | tr -dc '0-9')"
+  echo "disk_free_gb: $(df -BG --output=avail . 2>/dev/null | tail -1 | tr -dc '0-9')"
+  echo "load1: $(cut -d' ' -f1 /proc/loadavg 2>/dev/null)"
   echo "prewarm_launch_seconds: ${_PREWARM_END:-0}"
   echo "unattributed_seconds: $(( SECONDS - _BUILD_SECONDS - _PREWARM_END ))"
   if [ "$FAIL" -eq 0 ]; then echo "result: green"; else echo "result: FAILED"; fi
