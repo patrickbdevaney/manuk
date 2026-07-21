@@ -2515,3 +2515,17 @@ set one, or you clobber an explicit override. **(2)** It is read-symmetric — a
 `Response.json(x)` must parse back via `res.json()`. **(3)** Honour `init.status`/`statusText` — a `201`
 or `404` JSON response is common. **(4)** Non-serialisable data (a value whose `JSON.stringify` is
 `undefined`) is a `TypeError`, not an empty body.
+
+## Cursor and selection in text fields — `setSelectionRange` / `select` (tick 302)
+
+**Pattern:** `input.addEventListener('focus', () => input.select())` (select-all on focus),
+`input.setSelectionRange(pos, pos)` (place the caret after formatting), and reading
+`input.selectionStart` in an input mask to know where the user is typing.
+
+**The class this unlocks:** programmatic text selection. The whole surface was `undefined`, so a copy
+button, an input mask, or an editor got `setSelectionRange is not a function` or `undefined` offsets.
+
+**The traps.** **(1)** Clamp to the value length — `setSelectionRange(50, 99)` on an 11-char value must
+land at `11/11`, not `50/99`. **(2)** `selectionStart`/`End` are readable AND writable, and setting one
+must keep the other consistent (`start ≤ end`). **(3)** Count in UTF-16 code units, the unit the value's
+`length` uses. **(4)** `select()` is the whole value (`0..length`), not just a cursor move.

@@ -1741,6 +1741,27 @@ unsafe fn define_members(
         // Control IDL reflections.
         prop_guarded!(prop, c"value", el_get_value, Some(el_set_value));
         prop_guarded!(prop, c"checked", el_get_checked, Some(el_set_checked));
+        // Text-control selection — cursor read/set, select-all, range selection.
+        prop_guarded!(
+            prop,
+            c"selectionStart",
+            el_get_selection_start,
+            Some(el_set_selection_start)
+        );
+        prop_guarded!(
+            prop,
+            c"selectionEnd",
+            el_get_selection_end,
+            Some(el_set_selection_end)
+        );
+        prop_guarded!(
+            prop,
+            c"selectionDirection",
+            el_get_selection_direction,
+            None
+        );
+        def_guarded!(def, c"setSelectionRange", el_set_selection_range, 2);
+        def_guarded!(def, c"select", el_select, 0);
         prop_guarded!(
             prop,
             c"selectedIndex",
@@ -3397,6 +3418,115 @@ unsafe fn el_set_value(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool
         } else {
             (*dom).set_attr(node, "value", v);
         }
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// The text-control value length in UTF-16 code units (what the selection API counts in).
+unsafe fn text_value_len(dom: *mut Dom, node: NodeId) -> u32 {
+    (*dom)
+        .element(node)
+        .and_then(|e| e.attr("value"))
+        .map(|v| v.encode_utf16().count() as u32)
+        .unwrap_or(0)
+}
+
+/// `input.selectionStart` / `input.selectionEnd` getter — the stored selection offset, or the end of
+/// the value (the cursor-at-end default) when nothing has set a selection yet.
+unsafe fn el_get_selection_start(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let v = this_node(vp)
+        .map(|(dom, n)| {
+            TEXT_SELECTION
+                .with(|s| s.borrow().get(&n).map(|t| t.0))
+                .unwrap_or_else(|| text_value_len(dom, n))
+        })
+        .unwrap_or(0);
+    *vp = Int32Value(v as i32);
+    true
+}
+unsafe fn el_get_selection_end(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let v = this_node(vp)
+        .map(|(dom, n)| {
+            TEXT_SELECTION
+                .with(|s| s.borrow().get(&n).map(|t| t.1))
+                .unwrap_or_else(|| text_value_len(dom, n))
+        })
+        .unwrap_or(0);
+    *vp = Int32Value(v as i32);
+    true
+}
+/// `input.selectionDirection` getter — `"none"` | `"forward"` | `"backward"`.
+unsafe fn el_get_selection_direction(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let dir = this_node(vp)
+        .and_then(|(_, n)| TEXT_SELECTION.with(|s| s.borrow().get(&n).map(|t| t.2)))
+        .unwrap_or(0);
+    let s = match dir {
+        1 => "forward",
+        2 => "backward",
+        _ => "none",
+    };
+    return_string(cx, vp, s);
+    true
+}
+
+/// Store a clamped selection `(start, end, dir)` for `node` (both offsets ≤ value length, start ≤ end).
+unsafe fn store_selection(dom: *mut Dom, node: NodeId, start: u32, end: u32, dir: u8) {
+    let len = text_value_len(dom, node);
+    let s = start.min(len);
+    let e = end.min(len).max(s);
+    TEXT_SELECTION.with(|m| {
+        m.borrow_mut().insert(node, (s, e, dir));
+    });
+}
+
+/// `input.selectionStart = n` / `input.selectionEnd = n` setters — set one edge, keep the other
+/// (clamping start ≤ end, both ≤ value length), as the spec requires.
+unsafe fn el_set_selection_start(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let n = arg_u32(cx, vp, argc, 0).unwrap_or(0);
+        let (_, end, dir) = TEXT_SELECTION
+            .with(|s| s.borrow().get(&node).copied())
+            .unwrap_or((0, text_value_len(dom, node), 0));
+        store_selection(dom, node, n, end.max(n), dir);
+    }
+    *vp = UndefinedValue();
+    true
+}
+unsafe fn el_set_selection_end(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let n = arg_u32(cx, vp, argc, 0).unwrap_or(0);
+        let (start, _, dir) = TEXT_SELECTION
+            .with(|s| s.borrow().get(&node).copied())
+            .unwrap_or((0, 0, 0));
+        store_selection(dom, node, start, n, dir);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `input.setSelectionRange(start, end [, direction])` — the primary way a page positions the cursor
+/// or selects a range (place the caret, select-a-word, highlight found text).
+unsafe fn el_set_selection_range(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let start = arg_u32(cx, vp, argc, 0).unwrap_or(0);
+        let end = arg_u32(cx, vp, argc, 1).unwrap_or(0);
+        let dir = match arg_string(cx, vp, argc, 2).as_deref() {
+            Some("forward") => 1,
+            Some("backward") => 2,
+            _ => 0,
+        };
+        store_selection(dom, node, start, end, dir);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `input.select()` — select the ENTIRE value (what "select all on focus" and copy-buttons do).
+unsafe fn el_select(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let len = text_value_len(dom, node);
+        store_selection(dom, node, 0, len, 0);
     }
     *vp = UndefinedValue();
     true
@@ -11634,6 +11764,12 @@ thread_local! {
     /// `read()` pull from here, so a page can paste what the user copied in another application.
     static HOST_CLIPBOARD: std::cell::RefCell<String> =
         const { std::cell::RefCell::new(String::new()) };
+    /// Text-control selection state per `<input>`/`<textarea>`: `(start, end, direction)` in UTF-16
+    /// code units, `direction` 0=none 1=forward 2=backward. `setSelectionRange`/`select` write it,
+    /// `selectionStart`/`selectionEnd`/`selectionDirection` read it. A form/editor reads these to know
+    /// where the cursor is (input masks, "select all on focus", replace-selected-text).
+    static TEXT_SELECTION: std::cell::RefCell<std::collections::HashMap<NodeId, (u32, u32, u8)>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
 /// Allocate the next process-unique window id (host side, for ordinary tabs).

@@ -1240,3 +1240,26 @@ Not by looking for it. Tick 272's other change widened absolutely-positioned pan
 `max-content` width, and G6 clickability fell from 98.9% to 97.9% — four more links with a hidden
 Wikipedia menu on top of them. **The occlusion was always wrong; the panels had merely been too small
 to cover much.** A gate on a metric nobody was aiming at is what surfaced it.
+
+## `<input>`/`<textarea>` text selection — `setSelectionRange` / `select` (tick 302)
+
+How a page positions the caret, selects a range, or "selects all on focus": `selectionStart` /
+`selectionEnd` / `selectionDirection`, `setSelectionRange(start, end [, direction])`, and `select()`.
+The whole surface was absent (`undefined` / `is not a function`), so an input mask, a copy-button that
+`select()`s its field, or an editor that reads the caret position all broke.
+
+The selection is stored per element in UTF-16 code units (a thread-local `NodeId → (start, end,
+direction)` map): `setSelectionRange`/`select` write it (clamped so `start ≤ end ≤ value length`),
+`selectionStart`/`selectionEnd` read it (defaulting to the end of the value when nothing has set a
+selection), and `selectionDirection` reports `none`/`forward`/`backward`. `select()` covers the whole
+value.
+
+### The teeth `G_TEXT_SELECTION` uses
+
+`select-all` (`select()` → `0..length`), `range` (`setSelectionRange(2,5)` reads back `2`/`5`),
+`direction` (`'backward'` round-trips), `clamp` (offsets past the length clamp to it). A stub with
+constant offsets fails; unregistering the accessors made the calls throw before landing.
+
+**Honest limit:** this is the JS/IDL contract (a page can read and set the selection); the visual
+highlight of the selected text is a rendering follow-on, and `setRangeText` (mutating the value through
+the selection) is not yet wired. [[js-engine]]

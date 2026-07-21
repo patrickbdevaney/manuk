@@ -13682,3 +13682,33 @@ round-trip (res.json() parses the data back — read-symmetric). PROVEN RED: ren
 NO REGRESSION: additive static. Not a trade. HONEST LIMIT: none of note.
 
 WIKI: docs/wiki/networking.md (Response.json section). No constellation row (JS-surface completeness).
+
+## Tick 302 — <input>/<textarea> text selection API (2026-07-21)
+
+TICK SHAPE: seventh probe batch (DOM/form methods). Found the ENTIRE text-selection surface absent —
+selectionStart/selectionEnd/selectionDirection/setSelectionRange/select/setRangeText all undefined —
+while `value` was real (DOM-attribute-backed). Also RE-CONFIRMED (do not rebuild): IntersectionObserver/
+ResizeObserver are REAL but HOST-DRIVEN (fire when the engine calls __runObservers after layout/scroll;
+a bare Page::load doesn't, so they looked absent — driving __runObservers manually fired IO with
+isIntersecting=true). MutationObserver fires on its own.
+
+HYPOTHESIS: select-on-focus, cursor positioning, input masks reading the caret. Absent → 
+`setSelectionRange is not a function`.
+
+WHAT LANDED (dom_bindings.rs, native reflector accessors + a thread-local NodeId→(start,end,dir) map in
+UTF-16 units): selectionStart/End (get+set, default to value length), selectionDirection (get),
+setSelectionRange(start,end[,dir]) and select() (both clamp start≤end≤len). Reuses the value attr for
+length; no attribute leak (side-table, not attrs).
+
+### The claim — G_TEXT_SELECTION, five teeth (read-back values)
+
+present / select-all (0..11 for "hello world") / range (setSelectionRange(2,5)→2/5) / direction
+('backward' round-trips) / clamp (50,99 → 11/11). PROVEN RED: unregistering the accessors →
+`i.select is not a function`. All 9 form/input gates stayed green (accessors on all reflectors return
+value-based defaults for non-inputs — harmless).
+
+NO REGRESSION: additive reflector accessors + a new thread-local. Not a trade. HONEST LIMIT: JS/IDL
+contract only — the visual highlight is a rendering follow-on, and setRangeText (value mutation via the
+selection) is not yet wired.
+
+WIKI: docs/wiki/interaction-surface.md (text selection section). No constellation row.

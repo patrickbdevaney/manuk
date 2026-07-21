@@ -369,6 +369,8 @@
   - L1212 · Why the a11y tree is the right place to fix it
   - L1223 · visibility is the one hiding mechanism a descendant can UNDO
   - L1237 · How it was found
+  - L1244 · <input>/<textarea> text selection — setSelectionRange / select (tick 302)
+  - L1257 · The teeth G_TEXT_SELECTION uses
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -734,4 +736,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-649 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+651 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
