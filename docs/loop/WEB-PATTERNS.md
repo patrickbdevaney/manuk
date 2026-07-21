@@ -2529,3 +2529,18 @@ button, an input mask, or an editor got `setSelectionRange is not a function` or
 land at `11/11`, not `50/99`. **(2)** `selectionStart`/`End` are readable AND writable, and setting one
 must keep the other consistent (`start ≤ end`). **(3)** Count in UTF-16 code units, the unit the value's
 `length` uses. **(4)** `select()` is the whole value (`0..length`), not just a cursor move.
+
+## Insert/replace at the cursor — `setRangeText` (tick 303)
+
+**Pattern:** `input.setRangeText(completion, input.selectionStart, input.selectionEnd, 'end')` —
+autocomplete drops the chosen text in at the caret; an editor toolbar wraps the selection; a formatter
+rewrites a span. It edits the value THROUGH the selection.
+
+**The class this unlocks:** programmatic text editing of a field. Absent, `setRangeText` threw `is not a
+function` and the insert/replace fell back to clobbering the whole `value` (losing the caret).
+
+**The traps.** **(1)** Splice in UTF-16 units (the unit `value.length` and the selection use), or a
+multi-byte character mis-offsets the cut. **(2)** No range means the CURRENT selection, not the whole
+value. **(3)** `selectMode` matters: `'end'` puts the caret after the insert (so typing continues),
+`'select'` highlights it — defaulting everything to one behaviour breaks the next keystroke. **(4)** An
+empty range is an INSERT (delete nothing), not a no-op.

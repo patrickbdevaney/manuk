@@ -371,6 +371,8 @@
   - L1237 · How it was found
   - L1244 · <input>/<textarea> text selection — setSelectionRange / select (tick 302)
   - L1257 · The teeth G_TEXT_SELECTION uses
+  - L1267 · setRangeText — replace text through the selection (tick 303)
+  - L1277 · The teeth G_SET_RANGE_TEXT uses
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -736,4 +738,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-651 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+653 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

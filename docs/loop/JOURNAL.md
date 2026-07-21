@@ -13712,3 +13712,25 @@ contract only — the visual highlight is a rendering follow-on, and setRangeTex
 selection) is not yet wired.
 
 WIKI: docs/wiki/interaction-surface.md (text selection section). No constellation row.
+
+## Tick 303 — setRangeText: replace text through the selection (2026-07-21)
+
+TICK SHAPE: direct low-risk follow-on to 302 — the write half of the text-field selection API, reusing
+the exact TEXT_SELECTION store + value attr from that tick. setRangeText was one of the offsets probed
+absent in 302.
+
+WHAT LANDED (dom_bindings.rs): `setRangeText(replacement [, start, end, selectMode])` — splice the
+replacement into value[start..end] (UTF-16 units; default range = current selection), write value back
+via set_attr, land the selection per selectMode (select/start/end/preserve, preserve shifts the old
+selection by the length delta).
+
+### The claim — G_SET_RANGE_TEXT, five teeth (resulting value + selection)
+
+present / replace-selection (setSelectionRange(0,5);setRangeText('HI')→'HI world') / range (explicit
+span) / select-mode ('select' selects the inserted text) / insert (empty-range insert at caret). PROVEN
+RED: unregistering → `setRangeText is not a function`. g_text_selection + g_form stayed green.
+
+NO REGRESSION: additive reflector method reusing the 302 store. Not a trade. HONEST LIMIT: the visual
+highlight is still a rendering follow-on (as in 302).
+
+WIKI: docs/wiki/interaction-surface.md (setRangeText section). No constellation row.

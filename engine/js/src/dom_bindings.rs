@@ -1762,6 +1762,7 @@ unsafe fn define_members(
         );
         def_guarded!(def, c"setSelectionRange", el_set_selection_range, 2);
         def_guarded!(def, c"select", el_select, 0);
+        def_guarded!(def, c"setRangeText", el_set_range_text, 1);
         prop_guarded!(
             prop,
             c"selectedIndex",
@@ -3527,6 +3528,64 @@ unsafe fn el_select(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool 
     if let Some((dom, node)) = this_node(vp) {
         let len = text_value_len(dom, node);
         store_selection(dom, node, 0, len, 0);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `input.setRangeText(replacement [, start, end, selectMode])` — replace text IN the value through the
+/// selection. Autocomplete/insert-at-cursor/editors reach for it: with no start/end it replaces the
+/// current selection; with them, a specific range. `selectMode` (`select`/`start`/`end`/`preserve`,
+/// default `preserve`) decides where the selection lands after. Reuses the tick-302 selection store.
+unsafe fn el_set_range_text(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, node)) = this_node(vp) {
+        let repl = arg_string(cx, vp, argc, 0).unwrap_or_default();
+        let value = (*dom)
+            .element(node)
+            .and_then(|e| e.attr("value"))
+            .map(str::to_owned)
+            .unwrap_or_default();
+        let units: Vec<u16> = value.encode_utf16().collect();
+        let len = units.len() as u32;
+        // Default range is the current selection (or the caret at end if none set).
+        let (sel_s, sel_e) = TEXT_SELECTION
+            .with(|m| m.borrow().get(&node).map(|t| (t.0, t.1)))
+            .unwrap_or((len, len));
+        let start = arg_u32(cx, vp, argc, 1).unwrap_or(sel_s).min(len);
+        let end = arg_u32(cx, vp, argc, 2)
+            .unwrap_or(sel_e)
+            .min(len)
+            .max(start);
+        let mode = arg_string(cx, vp, argc, 3);
+        let repl_units: Vec<u16> = repl.encode_utf16().collect();
+        // Splice replacement into value[start..end] (UTF-16 units).
+        let mut out: Vec<u16> = Vec::with_capacity(units.len());
+        out.extend_from_slice(&units[..start as usize]);
+        out.extend_from_slice(&repl_units);
+        out.extend_from_slice(&units[end as usize..]);
+        (*dom).set_attr(node, "value", String::from_utf16_lossy(&out));
+        // Where the selection lands after the edit.
+        let new_end = start + repl_units.len() as u32;
+        let (ns, ne) = match mode.as_deref() {
+            Some("select") => (start, new_end),
+            Some("start") => (start, start),
+            Some("end") => (new_end, new_end),
+            _ => {
+                // `preserve`: keep the old selection, shifted by the length delta.
+                let delta = repl_units.len() as i64 - (end as i64 - start as i64);
+                let adj = |x: u32| -> u32 {
+                    if x <= start {
+                        x
+                    } else if x >= end {
+                        (x as i64 + delta).max(0) as u32
+                    } else {
+                        start
+                    }
+                };
+                (adj(sel_s), adj(sel_e))
+            }
+        };
+        store_selection(dom, node, ns, ne, 0);
     }
     *vp = UndefinedValue();
     true

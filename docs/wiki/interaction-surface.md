@@ -1263,3 +1263,19 @@ constant offsets fails; unregistering the accessors made the calls throw before 
 **Honest limit:** this is the JS/IDL contract (a page can read and set the selection); the visual
 highlight of the selected text is a rendering follow-on, and `setRangeText` (mutating the value through
 the selection) is not yet wired. [[js-engine]]
+
+## `setRangeText` — replace text through the selection (tick 303)
+
+The write half of the tick-302 selection API: `input.setRangeText(replacement [, start, end,
+selectMode])` splices text INTO the value — what autocomplete, "insert at cursor", and text editors
+reach for. With no range it replaces the current selection; with `start`/`end`, a specific span. It was
+absent (`is not a function`). It reuses the tick-302 selection store: read the value, splice the
+replacement into `value[start..end]` (UTF-16 units), write it back, then land the selection per
+`selectMode` — `select` (over the inserted text), `start`/`end` (collapse), or `preserve` (default —
+keep the old selection, shifted by the length delta).
+
+### The teeth `G_SET_RANGE_TEXT` uses
+
+`replace-selection` (`setSelectionRange(0,5); setRangeText('HI')` → `HI world`), `range` (explicit span),
+`select-mode` (`'select'` selects the inserted text), `insert` (empty-range insert at the caret). A stub
+cannot fake the resulting value. Unregistering the method made the call throw. [[js-engine]]
