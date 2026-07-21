@@ -10577,6 +10577,11 @@ const WINDOW_PRELUDE: &str = r#"
                 };
                 this.forEach = function (fn, t) { pairs.forEach(function (p) { fn.call(t, p[1], p[0], self); }); };
                 this.entries = function () { return pairs.map(function (p) { return [p[0], p[1]]; })[Symbol.iterator](); };
+                // `keys()` / `values()` — the field-name and field-value iterators. `for (const name of
+                // formData.keys())` is how a page walks a form's fields; they were absent while
+                // `entries()` was present, an asymmetry that broke exactly that loop.
+                this.keys = function () { return pairs.map(function (p) { return p[0]; })[Symbol.iterator](); };
+                this.values = function () { return pairs.map(function (p) { return p[1]; })[Symbol.iterator](); };
                 this[Symbol.iterator] = this.entries;
                 // `new FormData(form)` harvests the form's named controls — how a page submits a
                 // form it built itself.

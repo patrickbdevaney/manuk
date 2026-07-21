@@ -2559,3 +2559,15 @@ round-tripping a query string reorders duplicates. **(2)** Compare keys by code 
 **(3)** The 2-arg `has`/`delete` must actually check the value — matching by name alone is the exact bug
 that makes a router accept the wrong tab. **(4)** Keep the 1-arg forms working (value `undefined` =
 name-only).
+
+## Walking a form's fields — `FormData.keys()` / `values()` (tick 305)
+
+**Pattern:** `for (const name of formData.keys()) validate(name)` and `[...formData.values()]` — a page
+iterates the fields it is about to submit.
+
+**The class this unlocks:** the FormData field iterators. `entries()`/`forEach()` worked but
+`keys()`/`values()` threw `is not a function`, breaking the name-only / value-only loops.
+
+**The traps.** **(1)** Preserve insertion order AND duplicates — a form with two `a` fields yields `a`
+twice from `keys()`. **(2)** Return real iterators (`[Symbol.iterator]`), so `for...of` and spread both
+work. **(3)** Keep them consistent with `entries()`/`forEach()` — three views of the same ordered list.

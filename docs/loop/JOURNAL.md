@@ -13757,3 +13757,36 @@ NO REGRESSION: sort additive; has/delete 1-arg behaviour unchanged (value undefi
 trade.
 
 WIKI: docs/wiki/networking.md (URLSearchParams sort/has/delete section). No constellation row.
+
+## Tick 305 — FormData.keys()/values() iterators (2026-07-21)
+
+TICK SHAPE: probe-first (FormData completeness). MEASURED present: getAll/has/delete/set/entries/forEach,
+and `new FormData(form)` harvests the form. GENUINELY ABSENT: keys()/values() — the field-name/value
+iterators (entries existed, an asymmetry). Also confirmed inert-and-thus-skipped: window.getSelection is
+a SHAPE STUB (no-op methods, no real selection tracking — the Selection/Range API is a subsystem, not a
+bounded win; won't expand an inert surface).
+
+WHAT LANDED (dom_bindings.rs FormData): keys()/values() mirroring entries() — insertion order,
+duplicates preserved.
+
+### The claim — G_FORMDATA_ITERATORS, three teeth
+
+present / keys (append a=1,b=2,a=3 → keys 'a,b,a', duplicate kept) / values ('1,2,3'). PROVEN RED:
+renaming keys → `fd.keys is not a function`. g_form stayed green.
+
+NO REGRESSION: additive iterators. Not a trade.
+
+WIKI: docs/wiki/networking.md (FormData keys/values section). No constellation row.
+
+---
+
+### Session note (ticks 286-305)
+
+20 completeness ticks landed this session, all honest + RED-proven + zero regressions (GATES 137→156):
+userAgentData, clipboard-paste, Sanitizer setHTML, URL.canParse/parse, AbortSignal.any, checkVisibility,
+navigator.locks, scheduler.postTask, DOMMatrix/Point/Quad, WritableStream+TransformStream, Text{De,En}
+coderStream, Blob.stream, Response.json, URLPattern, text-selection + setRangeText, URLSearchParams
+sort/has/delete, FormData keys/values. The clean bounded JS-surface completeness well is now DEEPLY mined
+— see the session memory. Remaining genuine work is SUBSYSTEM-scale (Selection/Range, crypto sign/verify
+via a borrowed crate, Web Animations, View Transitions, createImageBitmap, CSS Typed OM) and warrants a
+fresh context; I will not ship inert stubs to pad the count (the ratchet refuses trades).

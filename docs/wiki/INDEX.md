@@ -601,6 +601,8 @@
   - L1127 · The teeth G_RESPONSE_JSON uses
   - L1133 · URLSearchParams — sort() and value-aware has/delete (tick 304)
   - L1144 · The teeth G_URLSEARCHPARAMS_COMPLETE uses
+  - L1150 · FormData.keys() / values() — the field iterators (tick 305)
+  - L1157 · The teeth G_FORMDATA_ITERATORS uses
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -740,4 +742,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-655 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+657 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

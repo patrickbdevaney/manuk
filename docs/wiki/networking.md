@@ -1146,3 +1146,15 @@ the same name in place.
 `sorted` (`c=3&a=1&b=2&a=0` → `a=1&a=0&b=2&c=3` — sorted, and stable across the two `a`s),
 `has-value-yes`/`has-value-no` (the value check discriminates), `delete-value` (`k=1&k=2&k=3` minus
 `('k','2')` → `k=1&k=3`). Removing `sort` made the call throw. [[js-engine]]
+
+## `FormData.keys()` / `values()` — the field iterators (tick 305)
+
+`for (const name of formData.keys())` / `for (const v of formData.values())` — how a page walks a form's
+fields. `entries()` and `forEach()` were present, but `keys()`/`values()` were absent — an asymmetry
+that broke exactly those loops (`formData.keys is not a function`). Added both, mirroring `entries()`:
+insertion order, duplicates preserved. [[js-engine]]
+
+### The teeth `G_FORMDATA_ITERATORS` uses
+
+`keys` (`a,b,a` for appends `a=1,b=2,a=3` — the duplicate `a` is kept), `values` (`1,2,3`). Removing
+`keys` made the `for...of` loop throw.
