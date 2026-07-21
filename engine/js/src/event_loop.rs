@@ -1417,17 +1417,21 @@ const PRELUDE: &str = r#"
             // A source is identified by NODE, not by its pixels: an image is megabytes and a sprite
             // blitted every animation frame would otherwise copy it 60 times a second.
             var id = src.__nodeId;
-            if (id == null) return;   // ImageBitmap / OffscreenCanvas / <video>: no pixels of ours yet
+            if (id == null) return;   // OffscreenCanvas / <video>: no pixels of ours yet
             var sz = el.__cvSourceSize(id);
             // Not decoded yet. Per spec drawing an unloaded image is a silent no-op, and a chart that
             // draws on every frame will simply land it once the bytes arrive.
             if (!sz) return;
-            var iw = sz[0], ih = sz[1];
+            // A `createImageBitmap` result carries a crop rect into the underlying node's pixels; its
+            // intrinsic size is the crop, and any explicit source rect is relative to that crop.
+            var iw = sz[0], ih = sz[1], cropX = 0, cropY = 0;
+            if (src.__crop) { cropX = src.__crop[0]; cropY = src.__crop[1]; iw = src.__crop[2]; ih = src.__crop[3]; }
             var n = arguments.length;
             var sx, sy, sw, sh, dx, dy, dw, dh;
             if (n >= 9)      { sx=+a; sy=+b; sw=+c; sh=+d; dx=+e; dy=+f; dw=+g; dh=+h; }
             else if (n >= 5) { sx=0; sy=0; sw=iw; sh=ih; dx=+a; dy=+b; dw=+c; dh=+d; }
             else             { sx=0; sy=0; sw=iw; sh=ih; dx=+a; dy=+b; dw=iw; dh=ih; }
+            sx += cropX; sy += cropY;   // shift the source rect into the crop's origin
             // `M`, the closure's live transform — NOT `ctx.M`, which does not exist. Reading the
             // wrong one hands the native `undefined`, the matrix decodes as identity, and every
             // transformed draw silently lands at the untransformed origin.
@@ -3547,6 +3551,58 @@ const PRELUDE: &str = r#"
               self.__cmds.push(0, c0[0], c0[1], 1, c1[0], c1[1], 1, c2[0], c2[1], 1, c3[0], c3[1], 4);
             }
           }
+        };
+      }
+
+      // `createImageBitmap` — decode/snapshot a drawable into an `ImageBitmap` you hand back to
+      // `ctx.drawImage(bmp, …)`. Games/texture uploaders (Pixi/Three), image editors and tile
+      // renderers call `createImageBitmap(imgOrCanvas).then(b => ctx.drawImage(b, …))` to get a
+      // ready-to-blit source without an intermediate element. It was ABSENT, so the call threw
+      // `createImageBitmap is not a function`. Our image-source registry is keyed by NODE, and both
+      // `<img>` (decoded bytes) and `<canvas>` (live bitmap) already publish pixels under their node
+      // id — so a bitmap of one of those sources is just that node id plus an optional crop rect, with
+      // ZERO new decode path. `ctx.drawImage` already accepts anything carrying `__nodeId`.
+      if (typeof globalThis.ImageBitmap === 'undefined') {
+        globalThis.ImageBitmap = function ImageBitmap() { throw new TypeError('Illegal constructor'); };
+      }
+      if (typeof globalThis.createImageBitmap === 'undefined') {
+        globalThis.createImageBitmap = function (source, sx, sy, sw, sh) {
+          var args = arguments;
+          return new Promise(function (resolve, reject) {
+            if (!source) { reject(new TypeError('createImageBitmap: the source is null')); return; }
+            var id = source.__nodeId;
+            // Blob / ImageData / SVG-image sources need a real decode-to-pixels path we do not have
+            // yet — reject LOUDLY (an unhandled rejection or a caught error) rather than hand back a
+            // silently-blank bitmap, which is the worse shape of failure. The honest follow-on.
+            if (id == null) {
+              var msg = 'createImageBitmap: Blob/ImageData sources are not decodable yet';
+              reject(typeof DOMException !== 'undefined' ? new DOMException(msg, 'InvalidStateError') : new Error(msg));
+              return;
+            }
+            // The source's own base rect: a source that is ITSELF a cropped ImageBitmap composes.
+            var baseX = 0, baseY = 0, fullW = 0, fullH = 0;
+            if (source.__crop) { baseX = source.__crop[0]; baseY = source.__crop[1]; fullW = source.__crop[2]; fullH = source.__crop[3]; }
+            else if (typeof source.__cvSourceSize === 'function') {
+              var sz = source.__cvSourceSize(id);
+              if (sz) { fullW = sz[0]; fullH = sz[1]; }
+            }
+            if (!fullW) { fullW = source.naturalWidth || source.width || 0; fullH = source.naturalHeight || source.height || 0; }
+            var bmp = Object.create(globalThis.ImageBitmap.prototype);
+            bmp.__nodeId = id;
+            // The crop overload: `createImageBitmap(source, sx, sy, sw, sh)`. The rect is relative to
+            // the source's own base, so offset by (baseX, baseY) into the underlying node's pixels.
+            if (args.length >= 5 && typeof args[1] === 'number') {
+              var cx = baseX + (+sx || 0), cy = baseY + (+sy || 0), cw = +sw || 0, ch = +sh || 0;
+              bmp.__crop = [cx, cy, cw, ch];
+              bmp.width = Math.abs(cw); bmp.height = Math.abs(ch);
+            } else {
+              if (source.__crop) { bmp.__crop = source.__crop.slice(); }
+              bmp.width = fullW; bmp.height = fullH;
+            }
+            // `close()` releases the handle — after it, the bitmap draws nothing (spec: detached).
+            bmp.close = function () { this.__nodeId = null; this.width = 0; this.height = 0; };
+            resolve(bmp);
+          });
         };
       }
 

@@ -421,6 +421,10 @@
   - L1694 · Three ways to build one, all producing the same op stream
   - L1704 · The consumer side: ctx.fill(path) / ctx.stroke(path)
   - L1713 · The teeth G_PATH2D uses
+  - L1721 · createImageBitmap — a drawable bitmap from an element/canvas, no new decode path (tick 321)
+  - L1731 · What it produces
+  - L1742 · The honest limit
+  - L1748 · The teeth G_CREATE_IMAGE_BITMAP uses
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -794,4 +798,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-709 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+713 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

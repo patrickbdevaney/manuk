@@ -14290,3 +14290,37 @@ NO REGRESSION: additive. g_canvas / g_canvas_text / g_canvas_image all still gre
 ctx.fill/stroke change; fmt clean. WEB-PATTERNS.md + docs/wiki/interaction-surface.md updated.
 
 WIKI: docs/wiki/interaction-surface.md (Path2D section)
+
+## Tick 321 — createImageBitmap: a drawable ImageBitmap from element/canvas sources (2026-07-21)
+
+TICK SHAPE: capability. New CONSTELLATION platform-class row gated → G_CREATE_IMAGE_BITMAP. Second
+canvas-subsystem step, composing on tick 320 (Path2D) and the existing node-keyed image-source registry.
+
+SELECTED: continuing the canvas subsystem off the mined prelude vein. createImageBitmap was ABSENT.
+
+WHY IT MATTERS: texture uploaders (Pixi/Three), image editors and tile renderers call
+`createImageBitmap(imgOrCanvas).then(b => ctx.drawImage(b, …))` to get a ready-to-blit source. Used
+UNGUARDED → its absence threw `createImageBitmap is not a function` and the draw flow died.
+
+WHAT LANDED: the image-source registry is keyed by NODE, and both <img> (decoded bytes) and <canvas>
+(live backing store) already publish pixels under their node id; ctx.drawImage already accepts anything
+carrying __nodeId. So a global createImageBitmap (event_loop.rs, after Path2D) returns a
+Promise<ImageBitmap> for <img>/<canvas>/ImageBitmap sources with ZERO new decode FFI — the bitmap is
+that node id + real width/height (from __cvSourceSize) + an optional crop rect + close(). The crop
+overload (sx,sy,sw,sh) offsets into the underlying pixels and composes on an already-cropped bitmap. A
+named `ImageBitmap` global backs instanceof (its constructor throws, per spec). ctx.drawImage now honors
+a source bitmap's crop (intrinsic size = crop; explicit source rect shifted into the crop origin).
+Blob/ImageData sources REJECT loudly (InvalidStateError) rather than blit blank — the honest follow-on
+(no decode-to-pixels path yet).
+
+G_CREATE_IMAGE_BITMAP: type/ctor (both globals) / promise (resolves for a canvas source) / size (real
+20x20) / draw+drawblue (blitting paints both halves of a left-blue/right-red source, read back via
+getImageData) / cropsize (10x20) / cropdraw (bitmapping the red right-half (10,0,10,20) then blitting at
+0,0 shows RED → crop offset applied). RED-proven (guard → false → createImageBitmap undefined → whole
+script THREW → output stayed `-`; every claim drops).
+
+NO REGRESSION: additive; the drawImage crop branch only activates when src.__crop is set (only our
+bitmaps set it), so <img>/<canvas> drawImage is unchanged. g_canvas / g_canvas_image / g_path2d all
+still green; fmt clean. WEB-PATTERNS.md + docs/wiki/interaction-surface.md updated.
+
+WIKI: docs/wiki/interaction-surface.md (createImageBitmap section)

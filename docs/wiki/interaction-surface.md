@@ -1717,3 +1717,38 @@ paints RED pixels inside it), `untouched` (outside the shape stays transparent),
 (`new Path2D("M14 14 h12 v12 h-12 Z")` parses and fills the box it describes), `copy`
 (`new Path2D(otherPath)` repaints the same geometry). RED: removing the shim throws `Path2D is not
 defined` out of the constructor, the whole script aborts and the output stays `-`.
+
+## `createImageBitmap` — a drawable bitmap from an element/canvas, no new decode path (tick 321)
+
+`createImageBitmap(...)` was ABSENT, so the call threw `createImageBitmap is not a function` and every
+texture uploader (Pixi/Three), image editor and tile renderer that does
+`createImageBitmap(imgOrCanvas).then(b => ctx.drawImage(b, …))` died. The engine's image-source
+registry is keyed by NODE, and both `<img>` (decoded bytes) and `<canvas>` (live backing store) already
+publish pixels under their node id — and `ctx.drawImage` already accepts anything carrying `__nodeId`.
+So a bitmap of one of those sources is just that node id plus an optional crop rect, with ZERO new
+decode FFI.
+
+### What it produces
+
+A global `createImageBitmap` returning a `Promise<ImageBitmap>`, and a named `ImageBitmap` global (so
+`instanceof ImageBitmap` resolves; the constructor itself throws `Illegal constructor`, per spec). The
+resolved bitmap carries `__nodeId`, real `width`/`height` (read from the source's decoded size via
+`__cvSourceSize`), and `close()` (detaches → draws nothing after). The crop overload
+`createImageBitmap(source, sx, sy, sw, sh)` stores a crop rect offset into the underlying node's pixels
+and composes when the source is itself an already-cropped bitmap. `ctx.drawImage` now reads a source
+bitmap's crop: its intrinsic size becomes the crop, and any explicit source rect is shifted into the
+crop's origin.
+
+### The honest limit
+
+`Blob` / `ImageData` / SVG-image sources have no `__nodeId` and need a real decode-to-pixels path we do
+not have yet, so they REJECT loudly (`InvalidStateError`) rather than resolve to a silently-blank
+bitmap — the worse shape of failure. That decode path is the documented follow-on.
+
+### The teeth `G_CREATE_IMAGE_BITMAP` uses
+
+`type`/`ctor` (both globals present), `promise` (resolves for a canvas source), `size` (real 20×20),
+`draw`/`drawblue` (blitting the bitmap paints BOTH halves of a left-blue/right-red source), `cropsize`
+(the crop overload sizes to 10×20), `cropdraw` (bitmapping the red right-half `(10,0,10,20)` then
+blitting at the origin shows RED — proving the crop offset is applied). RED: removing the shim throws
+out of the call, the whole script aborts and the output stays `-`.
