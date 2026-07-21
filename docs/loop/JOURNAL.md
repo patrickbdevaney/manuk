@@ -14400,3 +14400,34 @@ g_path2d / g_create_image_bitmap / g_canvas_gradient) still green; fmt clean. WE
 docs/wiki/interaction-surface.md (+ index) updated.
 
 WIKI: docs/wiki/interaction-surface.md (Canvas patterns section)
+
+## Tick 324 — Canvas conic gradients: createConicGradient sweeps colour by angle (2026-07-21)
+
+TICK SHAPE: capability. New CONSTELLATION platform-class row gated → G_CANVAS_CONIC. Fifth
+canvas-subsystem step; COMPLETES the gradient family (linear/radial t322, conic now — all real shaders).
+
+SELECTED: conic gradients still fell back to a flat last-stop block (no sweep shader). tiny-skia 0.12's
+SweepGradient supplies it, and the gradient object from t322 already carries everything needed — a
+one-branch, low-risk completion.
+
+WHY IT MATTERS: conic-gradient pie/donut chart fills, colour wheels, loading spinners and angular
+progress rings set fillStyle=ctx.createConicGradient(a,x,y); a flat block is the wrong-but-no-error shape.
+
+WHAT LANDED: createConicGradient(startAngle,cx,cy) now builds a kind-2 gradient (centre in the (x0,y0)
+slot, start angle in the r0 slot). gradient_shader (canvas.rs) adds a kind==2 arm building a
+tiny_skia SweepGradient(centre, startDeg, startDeg+360, stops, Pad, identity). The spec's start angle is
+radians clockwise from +x; skia's is degrees, same origin+direction, so radians→degrees is the whole
+mapping (confirmed by the gate: the red stop lands at +x). fill/fillRect/stroke/strokeRect route conic
+through the SAME __cvPathGradient native as linear/radial (isGrad now accepts kind 2; the __conic
+flat-fallback flag is removed). Single/empty-stop conic still degrades to flat via color().
+
+G_CANVAS_CONIC: right_red (offset 0 at +x — start-angle placement; a flat fallback paints the LAST stop
+here) / left_mix (a half-turn away → ~offset 0.5, carries blue) / sweep_tb (top≠bottom in blue at equal
+radius → sweeps by angle, unlike a radial or horizontal linear). RED-proven (exclude kind==2 from isGrad
+→ flat last stop → right_red:false left_mix:false sweep_tb:false).
+
+NO REGRESSION: additive — only conic (kind 2) is newly real; linear/radial/pattern/solid unchanged.
+g_canvas_gradient / g_canvas / g_canvas_pattern / g_path2d still green; fmt clean. WEB-PATTERNS.md +
+docs/wiki/interaction-surface.md (+ index) updated.
+
+WIKI: docs/wiki/interaction-surface.md (Canvas conic gradients section)

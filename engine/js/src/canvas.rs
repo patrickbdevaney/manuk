@@ -33,7 +33,7 @@ use std::collections::HashMap;
 
 use tiny_skia::{
     Color, FillRule, GradientStop, LinearGradient, Paint, PathBuilder, Pixmap, Point,
-    RadialGradient, Rect, Shader, SpreadMode, Stroke, Transform,
+    RadialGradient, Rect, Shader, SpreadMode, Stroke, SweepGradient, Transform,
 };
 
 /// One canvas's backing store, keyed by the `<canvas>` element's `NodeId`.
@@ -262,7 +262,20 @@ fn gradient_shader(grad: &[f32]) -> Option<Shader<'static>> {
     // `Pad` clamps to the first/last stop past the ends — the CSS/canvas default. `new` returns a
     // solid-colour shader for a single stop and `None` for a degenerate geometry, both of which are
     // the honest outcomes a real 2D context produces.
-    if kind == 1 {
+    if kind == 2 {
+        // Conic (sweep): `createConicGradient(startAngle, cx, cy)` — centre `(x0,y0)`, angle swept a full
+        // 360° from `startAngle`. The spec's angle is radians, clockwise from the positive x-axis; skia's
+        // is degrees, same origin and direction, so the conversion is the whole mapping.
+        let start_deg = r0 * 180.0 / std::f32::consts::PI;
+        SweepGradient::new(
+            Point::from_xy(x0, y0),
+            start_deg,
+            start_deg + 360.0,
+            stops,
+            SpreadMode::Pad,
+            Transform::identity(),
+        )
+    } else if kind == 1 {
         // Two-point conical: canvas's inner circle (x0,y0,r0) → outer circle (x1,y1,r1). The concentric
         // r0=0 case (the overwhelmingly common one) is an ordinary radial gradient.
         RadialGradient::new(

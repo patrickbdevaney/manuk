@@ -435,6 +435,9 @@
   - L1813 · Repetition and the transform
   - L1819 · Honest limits
   - L1825 · The teeth G_CANVAS_PATTERN uses
+  - L1833 · Canvas conic gradients — createConicGradient sweeps colour by angle (tick 324)
+  - L1839 · One branch in the existing plumbing
+  - L1853 · The teeth G_CANVAS_CONIC uses
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -808,4 +811,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-723 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+726 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

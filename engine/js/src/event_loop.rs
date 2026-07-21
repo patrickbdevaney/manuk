@@ -1231,7 +1231,7 @@ const PRELUDE: &str = r#"
           // gradients (no tiny-skia SweepGradient in this build) and single-stop gradients fall back to
           // the flat last-stop colour via `color()`, so they are excluded here.
           function isGrad(style) {
-            return !!(style && style.__grad && !style.__conic && style.__stops && style.__stops.length >= 2);
+            return !!(style && style.__grad && style.__stops && style.__stops.length >= 2);
           }
           function isPat(style) { return !!(style && style.__pattern); }
           function curAlpha() { return ctx.globalAlpha == null ? 1 : ctx.globalAlpha; }
@@ -1476,10 +1476,9 @@ const PRELUDE: &str = r#"
           };
 
           // ── Gradients. A gradient carries its geometry and `[offset, r, g, b, a]` stops, and
-          // `ctx.fill`/`fillRect`/`stroke` rasterize linear/radial ones through a real tiny-skia shader
+          // `ctx.fill`/`fillRect`/`stroke` rasterize them through a real tiny-skia shader
           // (`__cvPathGradient`). `kind` 0 = linear `(x0,y0)→(x1,y1)`; 1 = radial focal `(x0,y0,r0)` →
-          // outer circle `(x1,y1,r1)`. Conic has no shader in this tiny-skia build, so it keeps the
-          // honest flat last-stop fallback (`__conic` flag → excluded from `isGrad`).
+          // outer circle `(x1,y1,r1)`; 2 = conic/sweep, centre `(x0,y0)`, start angle in the `r0` slot.
           function makeGrad(kind, x0, y0, r0, x1, y1, r1) {
             var g = { __grad: true, __kind: kind,
                       __geo: [+x0||0, +y0||0, +r0||0, +x1||0, +y1||0, +r1||0], __stops: [] };
@@ -1491,7 +1490,8 @@ const PRELUDE: &str = r#"
           }
           ctx.createLinearGradient = function(x0, y0, x1, y1){ return makeGrad(0, x0, y0, 0, x1, y1, 0); };
           ctx.createRadialGradient = function(x0, y0, r0, x1, y1, r1){ return makeGrad(1, x0, y0, r0, x1, y1, r1); };
-          ctx.createConicGradient = function(a, x, y){ var g = makeGrad(0, x, y, 0, x, y, 0); g.__conic = true; return g; };
+          // Conic (sweep): kind 2, centre (x,y), r0 slot carries the start angle (radians).
+          ctx.createConicGradient = function(startAngle, x, y){ return makeGrad(2, x, y, +startAngle||0, x, y, 0); };
           // A pattern tiles a source image (an `<img>` or `<canvas>` — anything with published pixels)
           // across the filled shape. It is identified by NODE, the same handle `drawImage` uses, so no
           // pixels cross here. `null` when the source is not a usable image yet (spec behaviour).

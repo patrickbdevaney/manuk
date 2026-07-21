@@ -1829,3 +1829,32 @@ BLUE halves — a null pattern fills black, the exact old-stub symptom), `rep`/`
 source-width further along, red then blue RECUR — proving the source repeats, not stretched or drawn
 once). RED: forcing `createPattern` back to `null` fills black and drops every claim
 (`type:null t0:0,0,0,255`).
+
+## Canvas conic gradients — `createConicGradient` sweeps colour by angle (tick 324)
+
+Conic gradients used to fall back to a flat last-stop fill — there was no sweep shader, so a pie/donut
+fill, colour wheel or angular progress ring painted a solid block. tiny-skia 0.12's `SweepGradient`
+supplies the missing piece, and the gradient object built in tick 322 already carries everything needed.
+
+### One branch in the existing plumbing
+
+`createConicGradient(startAngle, cx, cy)` now builds a `kind: 2` gradient with the centre in the
+`(x0,y0)` slot and the start angle in the `r0` slot (`makeGrad(2, x, y, startAngle, x, y, 0)`).
+`gradient_shader` (in `canvas.rs`) adds a `kind == 2` arm that constructs a
+`tiny_skia::SweepGradient::new(centre, startDeg, startDeg + 360, stops, Pad, identity)`. The spec's
+start angle is radians clockwise from the +x axis; skia's is degrees, same origin and direction, so the
+radians→degrees conversion is the entire mapping — confirmed by the gate, whose red stop lands at +x.
+`fill`/`fillRect`/`stroke`/`strokeRect` route conic gradients through the same `__cvPathGradient` native
+as linear/radial (they are `isGrad` now that the `__conic` flat-fallback flag is gone). A single-stop or
+empty conic still degrades to a flat colour via `color()`, as a real context does.
+
+This completes the canvas gradient family: **linear, radial and conic are all real shaders.**
+
+### The teeth `G_CANVAS_CONIC` uses
+
+`right_red` (offset 0 lands at +x — the start-angle placement, where a flat fallback would paint the
+LAST stop), `left_mix` (a half-turn away the sweep has reached ~offset 0.5 and carries blue — colour
+changes with angle), `sweep_tb` (top and bottom, same radius and opposite angles, differ in blue — a
+radial would be identical there and a horizontal linear would match top-to-bottom; only a sweep varies
+this way). RED: excluding `kind == 2` from `isGrad` drops back to the flat last stop and fails
+`right_red`/`left_mix`/`sweep_tb` at once.
