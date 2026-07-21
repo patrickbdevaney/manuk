@@ -10345,9 +10345,32 @@ const WINDOW_PRELUDE: &str = r#"
                 this.getAll = function (k) {
                     return this._p.filter(function (p) { return p[0] === String(k); }).map(function (p) { return p[1]; });
                 };
-                this.has = function (k) { return this.get(k) !== null; };
-                this['delete'] = function (k) {
-                    this._p = this._p.filter(function (p) { return p[0] !== String(k); });
+                // `has(name)` / `has(name, value)` — the 2-arg form checks a pair with BOTH the name
+                // AND that exact value exists (a router matching `?tab=x` must not match `?tab=y`).
+                this.has = function (k, v) {
+                    k = String(k);
+                    for (var i = 0; i < this._p.length; i++) {
+                        if (this._p[i][0] === k && (v === undefined || this._p[i][1] === String(v))) { return true; }
+                    }
+                    return false;
+                };
+                // `delete(name)` / `delete(name, value)` — the 2-arg form removes only pairs matching
+                // both, leaving other values of the same name in place.
+                this['delete'] = function (k, v) {
+                    k = String(k);
+                    this._p = this._p.filter(function (p) {
+                        return !(p[0] === k && (v === undefined || p[1] === String(v)));
+                    });
+                };
+                // `sort()` — stable sort by key (name), compared by code units, as the spec says.
+                // Decorate with the original index so equal keys keep their relative order.
+                this.sort = function () {
+                    this._p = this._p
+                        .map(function (p, i) { return [p, i]; })
+                        .sort(function (a, b) {
+                            return a[0][0] < b[0][0] ? -1 : a[0][0] > b[0][0] ? 1 : a[1] - b[1];
+                        })
+                        .map(function (x) { return x[0]; });
                 };
                 this.forEach = function (fn, t) { this._p.forEach(function (p) { fn.call(t, p[1], p[0], this); }, this); };
                 this.keys = function () { return this._p.map(function (p) { return p[0]; })[Symbol.iterator](); };

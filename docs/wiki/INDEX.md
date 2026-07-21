@@ -599,6 +599,8 @@
   - L1113 · The teeth G_BLOB_STREAM uses
   - L1119 · Response.json() — the one-call JSON response (tick 301)
   - L1127 · The teeth G_RESPONSE_JSON uses
+  - L1133 · URLSearchParams — sort() and value-aware has/delete (tick 304)
+  - L1144 · The teeth G_URLSEARCHPARAMS_COMPLETE uses
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -738,4 +740,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-653 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+655 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

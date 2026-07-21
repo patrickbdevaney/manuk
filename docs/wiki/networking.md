@@ -1129,3 +1129,20 @@ and is the read-symmetric of `res.json()` — a value built with it round-trips 
 `status` (defaults to 200), `content-type` (application/json by default), `custom-status` (honours
 `init.status` = 201), `round-trip` (`res.json()` parses the serialised data back). Deleting the static
 was demonstrated to make the call throw. [[js-engine]]
+
+## `URLSearchParams` — `sort()` and value-aware `has`/`delete` (tick 304)
+
+Three spec holes in the query-param helper: `sort()` was absent, and `has(name, value)` /
+`delete(name, value)` ignored their value argument (so `has('tab','x')` returned true even for
+`?tab=y`, and `delete('k','2')` removed every `k`). Routers and query-normalisers rely on exactly these.
+
+`sort()` stably sorts the pairs by key (name), compared by code units — equal keys keep their relative
+order (decorate-with-index sort). `has(name, value)` returns true only when a pair matches BOTH; the
+1-arg form is unchanged. `delete(name, value)` removes only pairs matching both, leaving other values of
+the same name in place.
+
+### The teeth `G_URLSEARCHPARAMS_COMPLETE` uses
+
+`sorted` (`c=3&a=1&b=2&a=0` → `a=1&a=0&b=2&c=3` — sorted, and stable across the two `a`s),
+`has-value-yes`/`has-value-no` (the value check discriminates), `delete-value` (`k=1&k=2&k=3` minus
+`('k','2')` → `k=1&k=3`). Removing `sort` made the call throw. [[js-engine]]

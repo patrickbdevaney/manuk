@@ -2544,3 +2544,18 @@ multi-byte character mis-offsets the cut. **(2)** No range means the CURRENT sel
 value. **(3)** `selectMode` matters: `'end'` puts the caret after the insert (so typing continues),
 `'select'` highlights it — defaulting everything to one behaviour breaks the next keystroke. **(4)** An
 empty range is an INSERT (delete nothing), not a no-op.
+
+## Normalising a query string — `URLSearchParams.sort()` + value-aware `has`/`delete` (tick 304)
+
+**Pattern:** `p.sort(); const canonical = p.toString()` (a stable cache key / canonical URL), and
+`if (params.has('mode', 'edit'))` / `params.delete('filter', staleValue)` — routers and query handlers
+match and prune specific name=value pairs.
+
+**The class this unlocks:** precise query-param manipulation. `sort()` was missing; `has`/`delete`
+silently ignored the value, so they matched/removed by name alone.
+
+**The traps.** **(1)** `sort()` is STABLE — two entries with the same name must keep their order, or
+round-tripping a query string reorders duplicates. **(2)** Compare keys by code units, not locale.
+**(3)** The 2-arg `has`/`delete` must actually check the value — matching by name alone is the exact bug
+that makes a router accept the wrong tab. **(4)** Keep the 1-arg forms working (value `undefined` =
+name-only).

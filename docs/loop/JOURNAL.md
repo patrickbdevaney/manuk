@@ -13734,3 +13734,26 @@ NO REGRESSION: additive reflector method reusing the 302 store. Not a trade. HON
 highlight is still a rendering follow-on (as in 302).
 
 WIKI: docs/wiki/interaction-surface.md (setRangeText section). No constellation row.
+
+## Tick 304 — URLSearchParams: sort() + value-aware has/delete (2026-07-21)
+
+TICK SHAPE: eighth probe batch (performance/crypto/URLSearchParams/selection). MEASURED: performance.*
+all present, crypto.subtle PARTIAL (digest only; sign/verify/importKey absent — a real-crypto
+subsystem, parked), window.getSelection present. GENUINELY ABSENT/PARTIAL: URLSearchParams.sort()
+(absent) and has(name,value)/delete(name,value) (ignored the value arg — a latent partial). Filled all
+three as a coherent URLSearchParams spec-completeness tick.
+
+WHAT LANDED (dom_bindings.rs URLSearchParams): sort() (stable by key, code-unit compare, decorate-with-
+index for stability); has(name[,value]) and delete(name[,value]) now honour the value (1-arg forms
+unchanged).
+
+### The claim — G_URLSEARCHPARAMS_COMPLETE, six teeth
+
+sort-present / sorted (c=3&a=1&b=2&a=0 → a=1&a=0&b=2&c=3, stable) / has-value-yes / has-value-no (the
+value check discriminates — a stub matching by name fails) / has-name / delete-value (delete('k','2')
+leaves k=1&k=3). PROVEN RED: renaming sort → `u.sort is not a function`. g_url_static stayed green.
+
+NO REGRESSION: sort additive; has/delete 1-arg behaviour unchanged (value undefined = name-only). Not a
+trade.
+
+WIKI: docs/wiki/networking.md (URLSearchParams sort/has/delete section). No constellation row.
