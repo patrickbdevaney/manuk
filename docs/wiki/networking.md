@@ -1158,3 +1158,25 @@ insertion order, duplicates preserved. [[js-engine]]
 
 `keys` (`a,b,a` for appends `a=1,b=2,a=3` — the duplicate `a` is kept), `values` (`1,2,3`). Removing
 `keys` made the `for...of` loop throw.
+
+## `crypto.subtle` HMAC — sign/verify webhook signatures & HS256 JWTs (tick 306)
+
+`crypto.subtle.digest` was already real (RustCrypto); the HMAC path — `importKey` / `sign` / `verify` —
+was absent, so a webhook-signature check (`sign` the payload, compare to the `X-Signature` header) or an
+HS256 JWT verifier threw `crypto.subtle.sign is not a function`.
+
+HMAC is a standard COMPOSITION of the existing correct hash (RFC 2104: `H((k⊕opad) || H((k⊕ipad) ||
+msg))`, key hashed/zero-padded to the block size) — not a hand-rolled primitive. `importKey('raw',
+keyBytes, {name:'HMAC', hash:'SHA-256'}, ...)` returns a `CryptoKey` holding the secret; `sign('HMAC',
+key, data)` returns the MAC as an `ArrayBuffer`; `verify('HMAC', key, signature, data)` recomputes it and
+compares in **constant time** (a timing-variable compare is a classic signature-check flaw). SHA-1/256/
+384/512 hashes are supported (block size 64 or 128).
+
+**Honest limit:** HMAC only — asymmetric signing (RSA/ECDSA), encrypt/decrypt, and deriveKey stay absent
+(so a page's `if (crypto.subtle.encrypt)` guard still takes its fallback).
+
+### The teeth `G_CRYPTO_HMAC` uses
+
+`sign-vector` — the output matches RFC 4231 Test Case 2 EXACTLY (`5bdcc146…` for key `Jefe`, message
+`what do ya want for nothing?`), a known-answer that a wrong construction cannot fake; `verify-good`
+(accepts the real signature); `verify-bad` (rejects a tampered one). [[js-engine]]

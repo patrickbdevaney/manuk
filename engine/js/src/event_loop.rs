@@ -3573,6 +3573,42 @@ const PRELUDE: &str = r#"
           Int16Array: 1, Uint16Array: 1, Int32Array: 1, Uint32Array: 1,
           BigInt64Array: 1, BigUint64Array: 1
         };
+        // Hash `bytes` with the host's pure-Rust digest, returning a Uint8Array. The building block for
+        // HMAC below (which is just SHA over key-padded blocks — a standard composition of the existing
+        // correct hash, NOT a hand-rolled primitive).
+        var __digestBytes = function(algo, bytes) {
+          var ih = '';
+          for (var i = 0; i < bytes.length; i++) { ih += ('0' + bytes[i].toString(16)).slice(-2); }
+          var oh = __subtleDigestHex(algo, ih);
+          var out = new Uint8Array(oh.length / 2);
+          for (var j = 0; j < out.length; j++) { out[j] = parseInt(oh.slice(j * 2, j * 2 + 2), 16); }
+          return out;
+        };
+        // HMAC (RFC 2104): H((k⊕opad) || H((k⊕ipad) || msg)), key hashed/zero-padded to the block size.
+        var __hmac = function(algo, keyBytes, msgBytes) {
+          var B = (algo === 'SHA-384' || algo === 'SHA-512') ? 128 : 64;
+          var key = keyBytes;
+          if (key.length > B) { key = __digestBytes(algo, key); }
+          var k = new Uint8Array(B);
+          k.set(key);
+          var inner = new Uint8Array(B + msgBytes.length);
+          for (var i = 0; i < B; i++) { inner[i] = k[i] ^ 0x36; }
+          inner.set(msgBytes, B);
+          var innerHash = __digestBytes(algo, inner);
+          var outer = new Uint8Array(B + innerHash.length);
+          for (var j = 0; j < B; j++) { outer[j] = k[j] ^ 0x5c; }
+          outer.set(innerHash, B);
+          return __digestBytes(algo, outer);
+        };
+        var __asBytes = function(v) {
+          if (v instanceof ArrayBuffer) { return new Uint8Array(v); }
+          if (v && v.buffer instanceof ArrayBuffer) { return new Uint8Array(v.buffer, v.byteOffset, v.byteLength); }
+          throw new TypeError('not a BufferSource');
+        };
+        var __hashName = function(algorithm) {
+          var h = algorithm && (algorithm.hash || algorithm);
+          return String((h && h.name) || h || 'SHA-256').toUpperCase();
+        };
         globalThis.crypto = {
           getRandomValues: function(a) {
             var ctor = (a && a.constructor && a.constructor.name) || '';
@@ -3644,6 +3680,45 @@ const PRELUDE: &str = r#"
               var out = new ArrayBuffer(oh.length / 2), ov = new Uint8Array(out);
               for (var j = 0; j < ov.length; j++) { ov[j] = parseInt(oh.slice(j * 2, j * 2 + 2), 16); }
               return Promise.resolve(out);
+            },
+            // `importKey('raw', keyBytes, {name:'HMAC', hash:'SHA-256'}, ...)` — the key half of the
+            // HMAC path every webhook-signature check and HS256 JWT verifier uses. Returns a CryptoKey
+            // holding the raw secret. Only raw HMAC keys are supported (asymmetric/derive stay absent).
+            importKey: function(format, keyData, algorithm, extractable, keyUsages) {
+              var name = String((algorithm && algorithm.name) || algorithm || '').toUpperCase();
+              if (name !== 'HMAC') { return Promise.reject(__mkCryptoErr('NotSupportedError', 'Only HMAC importKey is supported: ' + name)); }
+              if (String(format) !== 'raw') { return Promise.reject(__mkCryptoErr('NotSupportedError', "Only 'raw' key format is supported")); }
+              var kb;
+              try { kb = __asBytes(keyData); } catch (e) { return Promise.reject(new TypeError('keyData is not a BufferSource')); }
+              return Promise.resolve({
+                type: 'secret', extractable: !!extractable,
+                algorithm: { name: 'HMAC', hash: { name: __hashName(algorithm) } },
+                usages: (keyUsages || []).slice(), __raw: kb
+              });
+            },
+            // `sign('HMAC', key, data)` → the MAC as an ArrayBuffer. Composes the host SHA (RustCrypto)
+            // into HMAC — provably correct against the RFC 4231 test vectors the gate checks.
+            sign: function(algorithm, key, data) {
+              var name = String((algorithm && algorithm.name) || algorithm || '').toUpperCase();
+              if (name !== 'HMAC') { return Promise.reject(__mkCryptoErr('NotSupportedError', 'Only HMAC sign is supported: ' + name)); }
+              try {
+                var mac = __hmac(__hashName(key.algorithm), key.__raw, __asBytes(data));
+                var out = new ArrayBuffer(mac.length);
+                new Uint8Array(out).set(mac);
+                return Promise.resolve(out);
+              } catch (e) { return Promise.reject(e); }
+            },
+            // `verify('HMAC', key, signature, data)` → boolean. Recomputes the MAC and compares in
+            // constant time (a timing-variable compare is a classic signature-check flaw).
+            verify: function(algorithm, key, signature, data) {
+              return this.sign(algorithm, key, data).then(function(expected) {
+                var a = new Uint8Array(expected), b;
+                try { b = __asBytes(signature); } catch (e) { return false; }
+                if (a.length !== b.length) { return false; }
+                var diff = 0;
+                for (var i = 0; i < a.length; i++) { diff |= a[i] ^ b[i]; }
+                return diff === 0;
+              });
             }
           }
         };

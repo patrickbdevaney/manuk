@@ -2571,3 +2571,19 @@ iterates the fields it is about to submit.
 **The traps.** **(1)** Preserve insertion order AND duplicates — a form with two `a` fields yields `a`
 twice from `keys()`. **(2)** Return real iterators (`[Symbol.iterator]`), so `for...of` and spread both
 work. **(3)** Keep them consistent with `entries()`/`forEach()` — three views of the same ordered list.
+
+## Verifying a webhook signature / HS256 JWT — `crypto.subtle` HMAC (tick 306)
+
+**Pattern:** `const mac = await crypto.subtle.sign('HMAC', key, payload); if (!timingSafeEqual(mac,
+headerSig)) reject()` — a webhook handler (Stripe/GitHub/Slack) authenticates the request, and an HS256
+JWT verifier checks the token signature.
+
+**The class this unlocks:** HMAC signing/verification. `digest` worked but `importKey`/`sign`/`verify`
+threw `is not a function`, so signature validation couldn't run in the page/worker.
+
+**The traps.** **(1)** HMAC is `H((k⊕opad)||H((k⊕ipad)||m))` with the key hashed-if-long / zero-padded to
+the BLOCK size (64 for SHA-256, not the digest size) — get the padding wrong and it silently produces a
+plausible-but-wrong MAC. **(2)** Gate against a KNOWN-ANSWER vector (RFC 4231), not self-consistency — a
+sign/verify pair can agree with each other while both being wrong. **(3)** `verify` must compare in
+constant time; a short-circuit `===` leaks the signature byte by byte. **(4)** Be honest about scope —
+HMAC is a composition of an existing hash; asymmetric crypto is a different, absent capability.

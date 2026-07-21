@@ -13790,3 +13790,29 @@ sort/has/delete, FormData keys/values. The clean bounded JS-surface completeness
 — see the session memory. Remaining genuine work is SUBSYSTEM-scale (Selection/Range, crypto sign/verify
 via a borrowed crate, Web Animations, View Transitions, createImageBitmap, CSS Typed OM) and warrants a
 fresh context; I will not ship inert stubs to pad the count (the ratchet refuses trades).
+
+## Tick 306 — crypto.subtle HMAC (importKey/sign/verify) (2026-07-21)
+
+TICK SHAPE: first SUBSYSTEM step after the clean bounded well ran dry (286-305). crypto.subtle was
+PARTIAL (digest only, real RustCrypto). HMAC is the natural next piece — genuinely high-value (webhook
+signature verification, HS256 JWT) AND uniquely safe to add because it is a standard COMPOSITION of the
+existing correct SHA (RFC 2104), provably correct against RFC 4231 known-answer vectors. Not hand-rolled
+crypto (the hash is the borrowed RustCrypto primitive); the composition is gate-verified.
+
+WHAT LANDED (event_loop.rs crypto.subtle): importKey('raw',…,{name:'HMAC',hash}) → CryptoKey;
+sign('HMAC',key,data) → MAC ArrayBuffer (via __hmac over __subtleDigestHex); verify('HMAC',…) → boolean,
+constant-time compare. SHA-1/256/384/512, block size 64/128.
+
+### The claim — G_CRYPTO_HMAC, four teeth (KNOWN-ANSWER, not self-consistency)
+
+sign-vector — output EQUALS RFC 4231 TC2 (5bdcc146… for key 'Jefe', msg 'what do ya want for nothing?'),
+which a wrong padding/construction cannot fake; verify-good; verify-bad (tampered sig rejected). CAUGHT
+MY OWN BUG: first run sign-vector:false — but the IMPLEMENTATION was right; my gate's expected constant
+was a misremembered value. Printed the actual output (5bdcc146…), confirmed it against the RFC, fixed the
+gate. (Instrument before blaming the engine — again.) PROVEN RED: renaming sign → `crypto.subtle.sign is
+not a function`. g_crypto + g_subtle_digest stayed green.
+
+NO REGRESSION: additive on crypto.subtle. Not a trade. HONEST LIMIT: HMAC only — asymmetric/encrypt/
+deriveKey stay absent (the `if (crypto.subtle.encrypt)` guard still falls back).
+
+WIKI: docs/wiki/networking.md (crypto.subtle HMAC section). No constellation row.

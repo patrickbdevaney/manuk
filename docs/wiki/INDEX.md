@@ -603,6 +603,8 @@
   - L1144 · The teeth G_URLSEARCHPARAMS_COMPLETE uses
   - L1150 · FormData.keys() / values() — the field iterators (tick 305)
   - L1157 · The teeth G_FORMDATA_ITERATORS uses
+  - L1162 · crypto.subtle HMAC — sign/verify webhook signatures & HS256 JWTs (tick 306)
+  - L1178 · The teeth G_CRYPTO_HMAC uses
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -742,4 +744,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-657 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+659 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
