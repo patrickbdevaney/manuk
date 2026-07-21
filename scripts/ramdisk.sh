@@ -91,6 +91,20 @@ reseat() { mkdir -p "$RAM_ROOT/debug-incremental" "$RAM_ROOT/release-incremental
 flush() {
   local used
   used=$(dir_mb "$RAM_ROOT")
+  # NEVER delete *-incremental under a live compile: rustc hard-errors mid-flight ("failed to move
+  # dependency graph … os error 2") and every in-flight crate loses its incremental state. This exact
+  # call, cron-fired every 3min via disk-hygiene, was the 93s→189s→694s wall regression (journal,
+  # tick-325 escalation). These fragments live in RAM — flushing frees RAM, not disk — so the only
+  # reason to proceed mid-compile is imminent OOM.
+  if pgrep -x rustc >/dev/null 2>&1 || pgrep -x cargo >/dev/null 2>&1; then
+    local avail_kb
+    avail_kb=$(awk '/MemAvailable/{print $2}' /proc/meminfo 2>/dev/null)
+    if [ "${avail_kb:-99999999}" -gt 4194304 ]; then
+      echo "  · flush SKIPPED — compiler live (${used}MB in RAM; mid-compile deletion hard-errors builds)"
+      return
+    fi
+    echo "  · compiler live BUT MemAvailable <4G — flushing anyway (OOM beats one broken compile)"
+  fi
   if [ "${1:-}" = "--force" ]; then
     echo "  · flushing all RAM build output (${used}MB)"
     rm -rf "${RAM_ROOT:?}"/* 2>/dev/null
