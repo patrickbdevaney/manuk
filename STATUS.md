@@ -9,7 +9,7 @@
 
 ```
 TICK:              128
-LAST_AUDIT_TICK:   121          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
+LAST_AUDIT_TICK:   325          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
 LAST_SURFACE_AUDIT: 123         (surface audit due every 10 ticks — from docs/loop/SURFACE-AUDIT.md)
 LAST_CONSTITUTION_CHECK: 127     (constitution re-read due every 8 ticks — from docs/loop/CONSTITUTION-CHECK.md; anchors the loop to CONSTITUTION.MD)
 LOOP_BUDGET:       960 ticks remaining (target tick 1088) — from docs/loop/AUTOLOOP; the loop STOPS and reports at 0

@@ -13,7 +13,12 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-TICK=$(grep -oP '^TICK:\s*\K[0-9]+' STATUS.md 2>/dev/null || echo 0)
+# TICK was read from STATUS.md itself and written back — circular, so it froze at 128 for ~200 ticks
+# while the journal (append-only, honest) carried the real counter. Derive from the journal, with the
+# old STATUS value as a floor in case the journal is mid-edit.
+TICK=$(grep -oP '^## Tick \K[0-9]+' docs/loop/JOURNAL.md 2>/dev/null | sort -n | tail -1)
+_TICK_OLD=$(grep -oP '^TICK:\s*\K[0-9]+' STATUS.md 2>/dev/null || echo 0)
+if [ -z "${TICK:-}" ] || [ "${TICK:-0}" -lt "$_TICK_OLD" ]; then TICK=$_TICK_OLD; fi
 LAST_AUDIT=$(grep -oP '^LAST_AUDIT_TICK:\s*\K[0-9]+' STATUS.md 2>/dev/null || echo 0)
 # ── ONLY BANK A WALL FROM A GREEN RUN (observer, tick 235). This read the receipt's `seconds:`
 # unconditionally, so a verify that DIED EARLY banked its short runtime as the wall — and since the

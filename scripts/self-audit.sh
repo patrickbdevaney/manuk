@@ -74,12 +74,16 @@ gate() {
   if grep -rqE "$pattern" $where 2>/dev/null; then ok "$name"; else bad "$name — PRESCRIBED BUT NOT BUILT"; fi
 }
 gate "G_ALLOC"           "g_alloc"            scripts/verify.sh
-gate "G_TEARDOWN"        "g_teardown"         scripts/verify.sh
+# tick 118 consolidated the four shell gates into ONE `_launch shell` invocation, so the old
+# per-test patterns (g_teardown / tab_operations / runtime_instantiations) vanished from verify.sh
+# while the gates themselves kept running — the audit then reported live gates as NOT BUILT.
+# Detect the gate's verdict line, which must exist for the wall to judge it at all.
+gate "G_TEARDOWN"        "G_TEARDOWN failed"  scripts/verify.sh
 gate "G_LOAD"            "g_load_budget"      scripts/verify.sh
-gate "G_INTERACT"        "tab_operations"     scripts/verify.sh
+gate "G_INTERACT"        "G_INTERACT failed"  scripts/verify.sh
 gate "F1/F2 perf floors" "F1 cascade"         scripts/verify.sh
 gate "G_CONTAIN (Bar 0)" "g_contain"         scripts/verify.sh
-gate "G_RUNTIME_COUNT"  "runtime_instantiations" scripts/verify.sh
+gate "G_RUNTIME_COUNT"  "G_RUNTIME_COUNT failed" scripts/verify.sh
 gate "G_SILENT_FAIL"     "g_silent_fail"      scripts/verify.sh
 # G_HANG lives in the CRAWL, not the wall — a watchdog only means anything across many sites.
 if grep -q "HANG" scripts/oracle-crawl.sh 2>/dev/null; then

@@ -14431,3 +14431,18 @@ g_canvas_gradient / g_canvas / g_canvas_pattern / g_path2d still green; fmt clea
 docs/wiki/interaction-surface.md (+ index) updated.
 
 WIKI: docs/wiki/interaction-surface.md (Canvas conic gradients section)
+
+## Observer audit @ tick 325 (2026-07-21) — self-audit run after 200 ticks of silence
+The self-audit machinery had been DEAD since ~tick 121: status-update.sh read TICK from STATUS.md
+and wrote it back (circular), freezing it at 128, so the every-10-ticks audit hook believed it was
+never due. Fixed (TICK now derives from this journal). Audit run at real tick 325:
+- FIXED: three "PRESCRIBED BUT NOT BUILT" gates (G_TEARDOWN/G_INTERACT/G_RUNTIME_COUNT) were audit
+  false-negatives — tick 118 consolidated them into one `_launch shell` invocation and the audit's
+  grep patterns went stale. Patterns now match the verdict lines.
+- FIXED: G_DOC_COLLECTIONS had no falsifier — added to falsify.sh (mutates the `a[href], area[href]`
+  selector to `a, area`; the gate's href-less anchor fixture catches the lie).
+- ACCEPTED (mechanism named): verify wall 566s > 300s target. Root cause found TODAY and fixed:
+  the disk-hygiene cron called `ramdisk.sh --flush` unconditionally every 3min, deleting RAM
+  incremental state under live compiles (rustc "failed to move dependency graph" hard errors) —
+  the 93s→189s→694s regression. flush() now refuses under a live compiler unless MemAvailable <4G.
+  The wall re-measures on the agent's next warm verify; do NOT retune the mark.

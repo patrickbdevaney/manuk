@@ -723,6 +723,20 @@ s = s.replace(old, "{ if (t.__f === undefined) { t.__f = compute().length; } ret
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+if want G_DOC_COLLECTIONS; then
+  # Drop the `href` requirement from `document.links` — the exact spec subtlety the gate encodes
+  # (a bare `<a name>` anchor is NOT a link; `links` is a/area WITH href). The mutated engine still
+  # returns a healthy-looking Array, nothing throws, and every naive implementation would ship it —
+  # but the gate's fixture contains an href-less anchor precisely so this lie changes the count.
+  mutate engine/js/src/dom_bindings.rs '
+old = "doc_collection(cx, vp, \"a[href], area[href]\");"
+assert old in s, "MUTATION DID NOT APPLY - a falsifier that changes nothing certifies nothing (PROCESS #15)"
+s = s.replace(old, "doc_collection(cx, vp, \"a, area\");", 1)
+'
+  expect_red G_DOC_COLLECTIONS cargo test -q -p manuk-page --features stylo,spidermonkey --test g_doc_collections
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 if want G_TRAVERSAL; then
   # Make FILTER_REJECT behave as FILTER_SKIP in TreeWalker — the classic implementation slip, and a
   # SECURITY bug wearing a traversal bug's clothes: a sanitizer that rejects <script> then walks straight
