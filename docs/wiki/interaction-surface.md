@@ -1967,3 +1967,33 @@ it — the direction property a Range wrapper fails), `added`/`oneonly` (`addRan
 second is ignored, Chrome's one-range model), `throws` (`getRangeAt(0)` on an empty selection throws
 `IndexSizeError`). RED: restoring the fresh-inert stub drops `same`/`copyall`/`fwd`/`backextend`/
 `added`/`inst` together while `typeof getSelection === 'function'` stays green.
+
+## Fullscreen API — `element.requestFullscreen()` as a DOM state machine (tick 330)
+
+Every video player, slide deck, browser game and image lightbox toggles fullscreen with
+`el.requestFullscreen()` from a click. Missing, it is the silent-handler failure: `requestFullscreen`
+is `undefined`, `undefined()` throws out of the click handler, the fullscreen button is dead, and the
+throw can take the rest of the handler with it. Pages do not feature-detect it — they assume it.
+
+### What is modelled, and why that is the honest whole
+
+The page-observable surface is a small state machine, and it is modelled completely: `requestFullscreen()`
+returns a resolved `Promise`, sets `document.fullscreenElement` to the element, and fires
+`fullscreenchange` on the document **asynchronously** (on a microtask — a synchronous shim would fire
+the event before the caller's own line after `requestFullscreen()` ran). `exitFullscreen()` clears the
+element and fires a second `fullscreenchange`. `fullscreenEnabled` is `true`, and the
+webkit/moz/ms-prefixed aliases (`webkitRequestFullscreen`, `webkitFullscreenElement`,
+`webkitExitFullscreen`, …) resolve to the same state, because players feature-detect those first.
+
+### Why this is NOT the canvas-stub shape
+
+The reflex worry is "told yes, does nothing" — the canvas-stub failure where a page draws and the
+pixels silently vanish. This is not that. The OS window going fullscreen is the **shell's** job, not
+the page's, and it is the one thing this API does **not** let a page observe — `fullscreenElement`,
+the event, and the promise are the entire script-visible contract, and all three are truthful. The
+player's own content *does* enter its fullscreen view off this state (its controls swap, its container
+restyles). Only the browser window itself is unchanged, which no page can see through this API. When
+the shell wires a `__requestFullscreen` host hook, `requestFullscreen` dispatches to it; absent the
+hook the DOM state IS the API. **Honest limit written down, not discovered:** no window resize, and
+`:fullscreen` CSS matching is a separate cascade concern this does not claim. Installed on `__elProto`
+beside `animate`/`setPointerCapture`; `G_FULLSCREEN` RED-proves by disabling the install guard.

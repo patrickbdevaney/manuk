@@ -11069,6 +11069,75 @@ const WINDOW_PRELUDE: &str = r#"
             };
         }
 
+        // ---- Fullscreen API -----------------------------------------------------------------
+        // Video players, slide decks, games and image lightboxes all call `el.requestFullscreen()`
+        // from a click. Its absence is the silent-handler failure this project keeps naming:
+        // `requestFullscreen` is `undefined`, `undefined()` throws out of the click handler, the
+        // fullscreen button is dead, and the throw can take the rest of that handler with it.
+        //
+        // The page-OBSERVABLE contract is modelled fully: a resolved promise, `document.
+        // fullscreenElement`, `fullscreenEnabled`, and the `fullscreenchange` event that players
+        // listen for to swap in their fullscreen controls. HONEST LIMIT: the OS window is the
+        // SHELL's to resize — this owns the DOM fullscreen *state* (which is the entire surface this
+        // API lets a page read), not the compositor. That is not the canvas-stub shape ("told yes,
+        // renders blank"): the player's own content DOES enter its fullscreen view off this state;
+        // only the browser window itself is unchanged, and a page cannot observe that through this
+        // API. When the shell wires a `__requestFullscreen` host hook, the call dispatches to it.
+        // `:fullscreen` CSS matching is a separate cascade concern and is not claimed here.
+        if (__elProto && typeof __elProto.requestFullscreen !== 'function') {
+            var __fsElement = null;
+            var __fsDefer = function (fn) {
+                if (typeof queueMicrotask === 'function') { queueMicrotask(fn); }
+                else { Promise.resolve().then(fn); }
+            };
+            var __fireFsChange = function () {
+                try {
+                    var ev = (typeof g.Event === 'function')
+                        ? new Event('fullscreenchange', { bubbles: true })
+                        : { type: 'fullscreenchange' };
+                    if (g.document && typeof g.document.dispatchEvent === 'function') { g.document.dispatchEvent(ev); }
+                    if (g.document && typeof g.document.onfullscreenchange === 'function') { g.document.onfullscreenchange.call(g.document, ev); }
+                } catch (e) { g.__reportError && g.__reportError(e); }
+            };
+            var __setFs = function (el) {
+                __fsElement = el;
+                // A shell that owns a window can actually go fullscreen; absent the hook the DOM
+                // state IS the API. Guarded so its absence is a no-op, not a throw.
+                try { if (typeof g.__requestFullscreen === 'function') { g.__requestFullscreen(el !== null); } } catch (e) {}
+                __fsDefer(__fireFsChange);
+            };
+            __elProto.requestFullscreen = function (options) {
+                var el = this;
+                return new Promise(function (resolve) { __setFs(el); resolve(undefined); });
+            };
+            // Legacy prefixes — YouTube and older players feature-detect these FIRST.
+            __elProto.webkitRequestFullscreen = __elProto.requestFullscreen;
+            __elProto.webkitRequestFullScreen = __elProto.requestFullscreen;
+            __elProto.mozRequestFullScreen = __elProto.requestFullscreen;
+            __elProto.msRequestFullscreen = __elProto.requestFullscreen;
+            var __exitFs = function () {
+                return new Promise(function (resolve) {
+                    if (__fsElement !== null) { __setFs(null); }
+                    resolve(undefined);
+                });
+            };
+            if (g.document) {
+                g.document.exitFullscreen = __exitFs;
+                g.document.webkitExitFullscreen = __exitFs;
+                g.document.webkitCancelFullScreen = __exitFs;
+                g.document.mozCancelFullScreen = __exitFs;
+                if (typeof g.document.onfullscreenchange === 'undefined') { g.document.onfullscreenchange = null; }
+                if (typeof g.document.onfullscreenerror === 'undefined') { g.document.onfullscreenerror = null; }
+                var defFsProp = function (name, getter) {
+                    try { Object.defineProperty(g.document, name, { get: getter, configurable: true }); } catch (e) {}
+                };
+                defFsProp('fullscreenElement', function () { return __fsElement; });
+                defFsProp('webkitFullscreenElement', function () { return __fsElement; });
+                defFsProp('fullscreenEnabled', function () { return true; });
+                defFsProp('webkitFullscreenEnabled', function () { return true; });
+            }
+        }
+
         // ---- Scrolling ----------------------------------------------------------------------
         // Reading the scroll offset is how virtualized feeds, sticky headers, infinite scroll and
         // "back to top" buttons all work. The host owns the viewport, so a scroll is a REQUEST.

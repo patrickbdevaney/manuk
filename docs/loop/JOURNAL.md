@@ -14741,3 +14741,48 @@ via `./scripts/tick.sh .git/tick329-ready.msg` on a warm re-run once the observe
 [[three-ticks-parked-wall-blocked]] pattern. On wip/tick329-indexeddb-index.
 
 WIKI: docs/wiki/storage.md (Indexes must PERSIST across a reopen section)
+
+## Tick 330 — Fullscreen API: element.requestFullscreen() as a real DOM state machine (2026-07-21)
+
+TICK SHAPE: capability. New CONSTELLATION row gated → G_FULLSCREEN. Pure element-proto shim (no engine
+recompile beyond manuk-js), confirmed genuinely absent by grep (0 hits) after re-probe. Tier-2 #15 in
+docs/loop/PHASE0-BOUNDED-REMAINDER.md; media-marquee-adjacent.
+
+SELECTED: requestFullscreen was undefined — every video player/slide deck/game/lightbox fullscreen
+button calls el.requestFullscreen() from a click, and undefined() throws out of the handler (dead
+button + the throw aborts the rest of the handler). The re-probe discipline paid off this session: my
+first candidate (AbortSignal.timeout) turned out ALREADY BUILT (event_loop.rs:3240) — the board/probe
+was stale-pessimistic again — so I verified against source before building and switched to a truly
+absent target.
+
+WHY IT MATTERS: the fullscreen-video/media-viewer web — the most-used player affordance after
+play/pause. A YouTube-class player's fullscreen button now functions instead of throwing.
+
+WHAT LANDED (engine/js/src/dom_bindings.rs, on __elProto beside animate/setPointerCapture):
+requestFullscreen()->resolved Promise setting a module-level __fsElement + firing fullscreenchange on
+document (async, via queueMicrotask); document.exitFullscreen()->clears + second fullscreenchange;
+document.fullscreenElement/fullscreenEnabled getters; onfullscreenchange/onfullscreenerror props;
+webkit/moz/ms prefixed aliases (players feature-detect those first). Dispatches to a __requestFullscreen
+shell hook if one exists; guarded so its absence is a no-op, not a throw.
+
+G_FULLSCREEN (engine/page/tests/g_fullscreen.rs): has / enabled / initial-null / async (change fires on
+a microtask, not inline) / promise / entered (fullscreenElement === el) / webkit alias sees same state /
+exited (cleared + 2nd change). RED-proven: `if (false && …)` on the install guard → requestFullscreen
+undefined → the page throws → every claim drops.
+
+HONEST LIMIT (documented, not the canvas-stub "told yes renders blank" shape): the OS window resize is
+the SHELL's job and is the ONE thing this API does not let a page observe — fullscreenElement, the
+event and the promise are the entire script-visible contract and all are truthful. The player's own
+content enters its fullscreen view off this state; only the window is unchanged. `:fullscreen` CSS
+matching is a separate cascade concern, not claimed here.
+
+NO REGRESSION: additive element-proto install, guarded by `typeof … !== 'function'`. g_fullscreen /
+g_web_animations / g_globals green; fmt clean.
+
+PARKED: same wall/cadence situation as tick 329 — the observer just unfroze the TICK counter so
+tick.sh pre-flight trips overdue surface/constitution/wall audits (observer-owned bookkeeping
+reconciliation in progress). Built + RED-proven via warm single-gate runs (~13s). On
+wip/tick330-fullscreen; lands via `./scripts/tick.sh .git/tick330-ready.msg` once the observer clears
+the audit cadences (or as part of the 325-330 batch land). See [[session-329-indexeddb-indexes-parked]].
+
+WIKI: docs/wiki/interaction-surface.md (Fullscreen API section)

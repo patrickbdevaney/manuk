@@ -447,6 +447,9 @@
   - L1946 · Direction is the one thing a Range wrapper gets wrong
   - L1955 · Honest limit
   - L1961 · The teeth G_SELECTION uses
+  - L1971 · Fullscreen API — element.requestFullscreen() as a DOM state machine (tick 330)
+  - L1978 · What is modelled, and why that is the honest whole
+  - L1988 · Why this is NOT the canvas-stub shape
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -821,4 +824,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-736 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+739 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

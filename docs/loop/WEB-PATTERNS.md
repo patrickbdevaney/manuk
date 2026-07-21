@@ -2878,3 +2878,26 @@ constructor + remove it from the inert-names list so `instanceof` works and the 
 empty THROWS `IndexSizeError`. **(6)** Honest limit: user mouse-drag selection GEOMETRY is layout/hit-
 test, not modelled — this is the scripting surface. **(7)** Gate by driving selectAllChildren→toString,
 the forward/backward extend, and addRange, not `typeof`.
+
+## Fullscreen toggle — `element.requestFullscreen()` (tick 330)
+
+**Pattern:** a fullscreen button calls `videoEl.requestFullscreen()` (or the container's) from a click,
+listens for `document.onfullscreenchange` to swap its controls, and calls `document.exitFullscreen()`
+to leave. Every video player, slide deck, browser game and image lightbox is this shape, and many
+feature-detect the `webkit`-prefixed names first.
+
+**The class this unlocks:** the fullscreen-video/media-viewer web — the single most-used player
+affordance after play/pause. Aligned with the media marquee: a YouTube-class player's fullscreen
+button now functions instead of throwing.
+
+**Why it hid:** `requestFullscreen` was `undefined`, and pages do not guard a method they assume
+exists. `undefined()` throws out of the click handler, so the button does nothing AND the throw can
+abort the rest of that handler — a compound silent failure.
+
+**The trap, and where the honesty line falls:** the reflex is to call a state-only fullscreen shim the
+"told yes, renders blank" anti-pattern. It is not. The OS window resize is the *shell's* job and is the
+one thing this API does not expose to script — `fullscreenElement`, the `fullscreenchange` event and
+the promise are the whole page-observable contract, and all are truthful. The player's own content
+enters its fullscreen view off this state; only the window is unchanged, which no page can observe here.
+Model the DOM state machine completely and honestly, document the window/`:fullscreen`-CSS limits, and
+dispatch to a shell hook when one exists.
