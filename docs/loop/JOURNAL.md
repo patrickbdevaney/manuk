@@ -13554,3 +13554,29 @@ skew-bounds tooth is the one a stub can't fake. PROVEN RED: `if (false && …)` 
 NO REGRESSION: additive global class. Not a trade. HONEST LIMIT: 2D (uses the 2D DOMPoint/DOMRect).
 
 WIKI: docs/wiki/js-engine.md (DOMQuad section). No constellation row (JS-surface completeness).
+
+## Tick 297 — `URLPattern`: matching URLs by shape (2026-07-21)
+
+TICK SHAPE: fourth fresh probe batch. ABSENT: URLPattern, CSS Typed OM (CSS.px/CSSUnitValue/
+computedStyleMap), Element.getHTML, requestFullscreen, PushManager. PRESENT (skip): scrollIntoView,
+sendBeacon, Notification, customElements, structuredClone (incl. cycles), findLast, Object.hasOwn,
+String.at. Picked URLPattern — the highest-value clean one (SPA routers + SW routing key on it) and
+honest (real pattern matching, not an inert stub). CSS Typed OM was the alternative (lower value, ties
+into CSS); getHTML would be ~inert (== innerHTML, no shadow DOM); requestFullscreen/PushManager are
+host/subsystem.
+
+WHAT LANDED (event_loop.rs, after the geometry classes): a real PATHNAME matcher — `:name` → named
+capture, `*` → greedy wildcard, `.test()`/`.exec()` (groups or null), input as a URL string / bare
+pathname / object, string-shorthand constructor.
+
+### The claim — G_URLPATTERN, seven teeth (real match results)
+
+match / no-match (the `$` anchor — `/users/:id` rejects `/users/42/extra`) / group (exec extracts
+`groups.id`) / null-on-miss / wildcard (`*` captures the rest) / shorthand. PROVEN RED: `if (false &&
+…)` → `present:false`, first call throws.
+
+NO REGRESSION: additive global class. Not a trade. HONEST LIMIT: pathname only — protocol/hostname/
+search/hash are not individually matched (multi-component init is the follow-on); pathname is what
+routing overwhelmingly keys on.
+
+WIKI: docs/wiki/networking.md (URLPattern section). No constellation row (JS-surface completeness).

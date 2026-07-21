@@ -3201,6 +3201,56 @@ const PRELUDE: &str = r#"
         };
       }
 
+      // `URLPattern` — the URL matcher SPA routers and Service Worker routing use to dispatch a request
+      // by shape: `new URLPattern({ pathname: '/users/:id' }).exec(url).pathname.groups.id`. It was
+      // absent, so `new URLPattern(...)` threw. This is a real (honest) matcher for the PATHNAME
+      // component — the one routers actually key on — compiling `:name` to a named capture and `*` to a
+      // greedy wildcard, with `.test()` and `.exec()`. Other components (protocol/hostname/search) are
+      // matched permissively; full multi-component matching is the honest follow-on noted in the wiki.
+      if (typeof globalThis.URLPattern === 'undefined') {
+        var __compilePattern = function (pattern) {
+          var names = [], rx = '', wild = 0, i = 0;
+          while (i < pattern.length) {
+            var ch = pattern.charAt(i);
+            if (ch === ':') {
+              var j = i + 1, name = '';
+              while (j < pattern.length && /[A-Za-z0-9_]/.test(pattern.charAt(j))) { name += pattern.charAt(j); j++; }
+              names.push(name); rx += '([^/]+)'; i = j;
+            } else if (ch === '*') {
+              names.push(String(wild++)); rx += '(.*)'; i++;
+            } else {
+              rx += ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); i++;
+            }
+          }
+          return { regex: new RegExp('^' + rx + '$'), names: names };
+        };
+        var __pathnameOf = function (input) {
+          if (input == null) { return '/'; }
+          if (typeof input === 'string') {
+            try { return new globalThis.URL(input, 'https://x.invalid/').pathname; }
+            catch (e) { return input; }   // a bare pathname like '/a/b'
+          }
+          return (input.pathname != null) ? input.pathname : '/';
+        };
+        globalThis.URLPattern = function URLPattern(init) {
+          if (typeof init === 'string') { init = { pathname: init }; }
+          init = init || {};
+          this.pathname = (init.pathname != null) ? init.pathname : '*';
+          this.__c = __compilePattern(this.pathname);
+        };
+        globalThis.URLPattern.prototype.test = function (input) {
+          return this.__c.regex.test(__pathnameOf(input));
+        };
+        globalThis.URLPattern.prototype.exec = function (input) {
+          var path = __pathnameOf(input);
+          var m = this.__c.regex.exec(path);
+          if (!m) { return null; }
+          var groups = {};
+          for (var k = 0; k < this.__c.names.length; k++) { groups[this.__c.names[k]] = m[k + 1]; }
+          return { pathname: { input: path, groups: groups } };
+        };
+      }
+
       // `TextEncoder`/`TextDecoder` — UTF-8 only, which is what the web is.
       if (typeof globalThis.TextEncoder === 'undefined') {
         globalThis.TextEncoder = function TextEncoder(){ this.encoding = 'utf-8'; };

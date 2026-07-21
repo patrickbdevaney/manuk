@@ -1032,3 +1032,29 @@ is treated as exclusive. [[js-engine]]
 first ends), `value` (request resolves with the callback's return), `if-available` (a held lock +
 `ifAvailable` yields a `null` grant, no wait). Deleting the block was demonstrated to make the first
 call throw before the tick landed.
+
+## `URLPattern` — matching URLs by shape (tick 297)
+
+SPA routers and Service Worker routing dispatch a request by its shape:
+
+```js
+const p = new URLPattern({ pathname: '/users/:id' });
+if (p.test(url)) route(p.exec(url).pathname.groups.id);
+```
+
+It was absent, so `new URLPattern(...)` threw. This is a real matcher for the PATHNAME component — the
+one routers key on — compiling `:name` to a named capture group and `*` to a greedy wildcard, exposing
+`.test(input)` (boolean) and `.exec(input)` (a match result with `pathname.groups`, or `null` on a
+miss). The input may be a full URL string (its pathname is extracted), a bare pathname, or an object
+with a `pathname`. The string-shorthand constructor (`new URLPattern('/x/:y')`) is a pathname pattern.
+
+**Honest limit:** pathname only. The other URL components (protocol / hostname / search / hash) are not
+individually matched — multi-component `URLPattern` init is the follow-on. The pathname is what routing
+overwhelmingly keys on. [[js-engine]]
+
+### The teeth `G_URLPATTERN` uses
+
+`match` (`/users/:id` matches `/users/42`), `no-match` (not `/users/42/extra` — the `$` anchor holds),
+`group` (`exec` extracts `groups.id === '42'`), `null-on-miss`, `wildcard` (`*` captures the rest),
+`shorthand`. A stub that always matches or never captures fails. Deleting the block was demonstrated to
+make the first call throw.

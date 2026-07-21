@@ -585,6 +585,8 @@
   - L997 · The teeth G_ABORTSIGNAL_ANY uses
   - L1005 · navigator.locks — the Web Locks API, real serialisation (tick 292)
   - L1029 · The teeth G_WEB_LOCKS uses
+  - L1036 · URLPattern — matching URLs by shape (tick 297)
+  - L1055 · The teeth G_URLPATTERN uses
 
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
@@ -724,4 +726,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-639 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+641 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -2440,3 +2440,18 @@ any one edge; compute it, don't assume the corners are ordered. **(2)** `fromRec
 from the top-left, and each is a real `DOMPoint` (so `.matrixTransform` chains). **(3)** It completes a
 family — a `DOMQuad` whose `getBounds` returns something other than a `DOMRect` breaks callers that read
 `.width`/`.height`.
+
+## Routing by URL shape — `URLPattern` (tick 297)
+
+**Pattern:** `new URLPattern({ pathname: '/api/:resource/:id' }).exec(request.url)` — SPA routers and
+Service Worker `fetch` handlers dispatch by matching the URL against a pattern and reading the named
+groups.
+
+**The class this unlocks:** declarative URL routing. Absent, `new URLPattern(...)` threw `is not
+defined` and took the router's registration with it.
+
+**The traps.** **(1)** Anchor the match — `/users/:id` must NOT match `/users/42/extra`; a pattern
+without a trailing `$` silently over-matches every deeper path. **(2)** `:name` captures one segment
+(`[^/]+`), `*` captures across segments (`.*`) — mixing them up mis-routes. **(3)** `exec` returns
+`null` on a miss, not an empty match — routers branch on it. **(4)** Accept a full URL string, a bare
+pathname, and an object — a router passes whichever it has.
