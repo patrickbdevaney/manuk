@@ -390,6 +390,10 @@
   - L1423 · The failure without it is a dead handler
   - L1430 · No location provider, so it denies — self-consistently
   - L1445 · The teeth G_GEOLOCATION uses
+  - L1454 · navigator.mediaSession — retained media control state, not an inert stub (tick 312)
+  - L1460 · The failure without it is a dead player
+  - L1467 · Retain everything; the OS wiring is the follow-on
+  - L1485 · The teeth G_MEDIA_SESSION uses
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -763,4 +767,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-678 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+682 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

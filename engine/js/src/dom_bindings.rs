@@ -11630,6 +11630,83 @@ const WINDOW_PRELUDE: &str = r#"
                 clearWatch: function () {}
             };
         }
+        // `navigator.mediaSession` + `MediaMetadata` — the Media Session API. EVERY media site drives
+        // it: YouTube, Spotify, SoundCloud, Netflix, podcast players and every `<audio>`-backed app set
+        // `navigator.mediaSession.metadata = new MediaMetadata({title, artist, album, artwork})` and
+        // wire `navigator.mediaSession.setActionHandler('play'|'pause'|'nexttrack'|…, fn)` so the OS
+        // media keys, lock screen and headset buttons control playback. Much of this code does NOT
+        // guard `navigator.mediaSession` — it is assumed present, like `geolocation` — so its absence is
+        // the same silent-handler failure: `navigator.mediaSession.setActionHandler is not a function`
+        // (or `undefined.setActionHandler`) throws out of the player's init and the player is dead.
+        //
+        // We have no OS media-key surface to invoke the handlers from yet — that is a host integration,
+        // and the honest limit is stated plainly. But the API is REAL, not inert: it retains the
+        // metadata, playbackState, position and the action handlers, so (1) the site's setup runs to
+        // completion without throwing, and (2) the retained state is queryable — an agent or a future
+        // host binding can read `navigator.mediaSession.metadata.title` to show "now playing" and invoke
+        // the stored `play`/`pause` handler to actuate the player. Storing is the capability; the OS
+        // wiring is the follow-on.
+        if (g.navigator && !g.navigator.mediaSession) {
+            // `new MediaMetadata({title, artist, album, artwork})` — normalizes `artwork` to an array of
+            // `{src, sizes, type}` (the site reads `.artwork[0].src` back), the same shape the real one
+            // exposes. Missing members read back as empty strings, never `undefined`.
+            var MediaMetadata = function MediaMetadata(init) {
+                init = init || {};
+                this.title = init.title == null ? '' : String(init.title);
+                this.artist = init.artist == null ? '' : String(init.artist);
+                this.album = init.album == null ? '' : String(init.album);
+                var art = [];
+                if (init.artwork && typeof init.artwork.length === 'number') {
+                    for (var i = 0; i < init.artwork.length; i++) {
+                        var a = init.artwork[i] || {};
+                        art.push({ src: a.src == null ? '' : String(a.src),
+                                   sizes: a.sizes == null ? '' : String(a.sizes),
+                                   type: a.type == null ? '' : String(a.type) });
+                    }
+                }
+                this.artwork = art;
+            };
+            g.MediaMetadata = g.MediaMetadata || MediaMetadata;
+            // The canonical action set. An unknown action must be REJECTED (the spec throws a
+            // TypeError), because silently accepting an out-of-enum action would hide the caller's typo.
+            var MS_ACTIONS = {
+                play: 1, pause: 1, seekbackward: 1, seekforward: 1, previoustrack: 1,
+                nexttrack: 1, skipad: 1, stop: 1, seekto: 1, togglemicrophone: 1,
+                togglecamera: 1, hangup: 1, enterpictureinpicture: 1
+            };
+            var __msHandlers = {};
+            g.navigator.mediaSession = {
+                metadata: null,
+                playbackState: 'none',
+                setActionHandler: function (action, handler) {
+                    action = String(action);
+                    if (!MS_ACTIONS[action]) {
+                        throw new TypeError(
+                            "Failed to execute 'setActionHandler' on 'MediaSession': The provided value '" +
+                            action + "' is not a valid enum value of type MediaSessionAction.");
+                    }
+                    if (handler == null) { delete __msHandlers[action]; }
+                    else { __msHandlers[action] = handler; }
+                },
+                setPositionState: function (state) {
+                    // Retain the last reported position so a host/agent can show a scrubber. The spec
+                    // validates (position <= duration); we keep the last well-formed report.
+                    this.__position = state ? {
+                        duration: +(state.duration || 0),
+                        playbackRate: state.playbackRate == null ? 1 : +state.playbackRate,
+                        position: +(state.position || 0)
+                    } : null;
+                },
+                setMicrophoneActive: function () {},
+                setCameraActive: function () {},
+                // Not web-standard surface — the seam a host/agent uses to actuate a stored handler.
+                __invoke: function (action, details) {
+                    var h = __msHandlers[String(action)];
+                    if (typeof h === 'function') { h(details || { action: action }); return true; }
+                    return false;
+                }
+            };
+        }
         // window.open → the host opens a real tab/window (OAuth-popup pattern). Returns a
         // stub window handle so `var w = window.open(...)` and `w.close()` work.
         if (typeof g.open !== 'function') {

@@ -14013,3 +14013,37 @@ run scripts/verify.sh DIRECTLY first (re-measured 64s on the quiet box, re-banke
 Landed both t310 and t311 this way. No harness files touched.
 
 WIKI: docs/wiki/interaction-surface.md (Geolocation section).
+
+## Tick 312 — Media Session API: navigator.mediaSession + MediaMetadata (2026-07-21)
+
+SELECTED: continued the re-probe-then-build loop. A JS-surface probe found mediaSession, MediaMetadata,
+connection, CSS.highlights, speechSynthesis, visualViewport, navigator.share/vibrate all genuinely
+absent. mediaSession is the highest-value: it is the media class (a Phase-0 focus) and every media site
+drives it.
+
+WHY IT MATTERS: YouTube, Spotify, SoundCloud, Netflix, podcast players and every <audio>-backed app set
+`navigator.mediaSession.metadata = new MediaMetadata({title, artist, artwork})` and wire
+`navigator.mediaSession.setActionHandler('play'|'pause'|'nexttrack'|…, fn)` for OS media keys / lock
+screen / headset buttons. Much of this code does NOT guard navigator.mediaSession (assumed present, like
+geolocation), so its absence is a silent-handler failure: undefined.setActionHandler throws out of the
+player's init and the player is dead.
+
+WHAT LANDED (dom_bindings.rs WINDOW_PRELUDE, after the geolocation block): navigator.mediaSession with
+metadata (round-trips a MediaMetadata), playbackState, setActionHandler (validated action enum — an
+out-of-enum action throws TypeError; null unsets), setPositionState (retains duration/position/rate),
+setMicrophoneActive/setCameraActive, plus a MediaMetadata constructor that normalizes artwork to an
+array of {src,sizes,type}. There is no OS media-key surface to invoke handlers from yet (honest limit,
+a host integration) — but the API RETAINS everything, so the player's setup runs AND the state is
+queryable/actuable: an internal `__invoke(action)` seam (not web-standard) lets a host/agent read
+"now playing" and trigger the stored play/pause handler. Storing is the capability; OS wiring is the
+follow-on. That agentic-actuation angle is a bonus: an agent can now see + drive media playback.
+
+G_MEDIA_SESSION: defined / metadata (title/artist round-trip + artwork[0].src normalized) / playbackstate
+/ enumrejected (bad action → TypeError) / handlerran (stored play handler runs via __invoke, proving it
+is not an inert typeof-stub) / handlerunset / ready. RED-proven (guard → false → THREW ReferenceError:
+MediaMetadata is not defined, defined/metadata/handlerran drop).
+
+NO REGRESSION: additive JS prelude; all prior gates green; fmt clean. New CONSTELLATION media-class row
+gated. Landed via the verify.sh-direct-then-tick.sh dance ([[wall-warm-rerun-lands-ticks]]).
+
+WIKI: docs/wiki/interaction-surface.md (Media Session API section).

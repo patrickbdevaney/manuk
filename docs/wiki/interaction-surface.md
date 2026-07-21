@@ -1450,3 +1450,42 @@ after `getCurrentPosition()` runs before the callback — delivery is asynchrono
 (`watchPosition` returns a number), `permconsistent` (matches `permissions.query({name:'geolocation'})`
 → `'denied'`). RED: flipping the install guard to `false` throws `undefined.getCurrentPosition` and
 drops `defined`/`denied`/`asyncorder` together.
+
+## `navigator.mediaSession` — retained media control state, not an inert stub (tick 312)
+
+The Media Session API is what every media site drives — YouTube, Spotify, SoundCloud, Netflix, podcast
+players and every `<audio>`-backed app — to expose track metadata and playback controls to the OS media
+keys, the lock screen and headset buttons. It was absent.
+
+### The failure without it is a dead player
+
+Real player code assumes `navigator.mediaSession` is present and does NOT feature-detect it, so its
+absence is a silent-handler failure: `navigator.mediaSession.setActionHandler is not a function` (or
+`undefined.setActionHandler`) throws out of the player's `init`, and the player is dead — the same
+shape as a missing `element.animate` or `navigator.geolocation`.
+
+### Retain everything; the OS wiring is the follow-on
+
+The shim (in `WINDOW_PRELUDE`, after the geolocation block) is REAL, not inert. It retains:
+
+- `metadata` — set from `new MediaMetadata({title, artist, album, artwork})`; the constructor normalizes
+  `artwork` to an array of `{src, sizes, type}` (sites read `.artwork[0].src` back), missing members are
+  empty strings, never `undefined`;
+- `playbackState` — `'none'|'paused'|'playing'`, round-tripped;
+- `setPositionState({duration, position, playbackRate})` — retained for a scrubber;
+- `setActionHandler(action, handler)` — validates the action enum (an out-of-enum action THROWS a
+  TypeError; `null` unsets) and stores the handler.
+
+We have no OS media-key surface to invoke those handlers from yet — that is a host integration, and it
+is the honest limit. But because the state is retained and queryable, a host or agent can read
+`navigator.mediaSession.metadata.title` to show "now playing" and actuate the player through a
+non-standard `__invoke(action)` seam that runs the stored handler. Storing is the capability; the OS
+wiring is the follow-on. That makes the shim an agentic-actuation win, not merely a no-throw stub.
+
+### The teeth `G_MEDIA_SESSION` uses
+
+`defined` (object + `MediaMetadata`, methods callable, no throw), `metadata` (title/artist round-trip
+and `artwork[0].src` normalized), `playbackstate` (round-trips `'playing'`), `enumrejected` (a bad
+action throws a `TypeError`), `handlerran` (a stored `play` handler runs via `__invoke`, proving it is
+retained, not dropped), `handlerunset` (`null` removes it). RED: disabling the shim throws
+`ReferenceError: MediaMetadata is not defined` and drops them together.

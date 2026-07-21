@@ -2685,3 +2685,24 @@ BOTH the error instance and the constructor — real code branches on `err.code 
 **(4)** `watchPosition` still returns a numeric id so `clearWatch(id)` and the store-the-id pattern work.
 **(5)** `typeof navigator.geolocation === 'object'` is what an inert stub passes; gate by DRIVING
 `getCurrentPosition` and asserting the async error branch runs with the right code.
+
+## Media control — `navigator.mediaSession` + `MediaMetadata` (tick 312)
+
+**Pattern:** `navigator.mediaSession.metadata = new MediaMetadata({title, artist, artwork:[{src}]});
+navigator.mediaSession.setActionHandler('play', onPlay); ...setActionHandler('nexttrack', onNext)` —
+every media player wires this at startup so OS media keys, the lock screen and headset buttons control
+playback, and the lock screen shows the track.
+
+**The class this unlocks:** media playback UX. Real player code assumes `navigator.mediaSession` is
+present (does NOT guard it), so its absence throws `undefined.setActionHandler` out of the init and the
+player dies.
+
+**The traps.** **(1)** RETAIN state, do not no-op it — `metadata`, `playbackState`, position and the
+action handlers must round-trip, because the site (and a host/agent) read them back to render and
+actuate. An inert stub that accepts and drops them passes `typeof` and fails the moment anything reads.
+**(2)** Normalize `MediaMetadata.artwork` to an array of `{src,sizes,type}` — sites read `.artwork[0].src`.
+**(3)** `setActionHandler` must THROW a TypeError on an out-of-enum action; silently accepting a typo
+hides the bug. `null` unsets. **(4)** There is no OS media-key surface to invoke handlers from — state
+the limit — but expose a non-standard seam so a host/agent CAN invoke a stored handler (read "now
+playing", trigger play/pause). That turns an honest-limit shim into an agentic-actuation win.
+**(5)** Gate by DRIVING it (metadata round-trip + invoking a stored handler), never by `typeof`.
