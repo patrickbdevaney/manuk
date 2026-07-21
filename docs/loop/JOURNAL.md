@@ -14446,3 +14446,13 @@ never due. Fixed (TICK now derives from this journal). Audit run at real tick 32
   incremental state under live compiles (rustc "failed to move dependency graph" hard errors) —
   the 93s→189s→694s regression. flush() now refuses under a live compiler unless MemAvailable <4G.
   The wall re-measures on the agent's next warm verify; do NOT retune the mark.
+
+## Observer note (2026-07-21 ~17:15) — disk truth + reclaim
+Agent's 94%/20G disk reading was CORRECT; observer's "57% cured" was a wrong-mount error (df / vs
+df /home). Reclaimed 10G of provably-dead gate binaries (46 stems, no source in tree or any wip
+branch) → /home 90%, 29G free, above the 25G hygiene floor. Flush guard live (ramdisk.sh refuses
+under live compiler). Board STEP 1 corrected — warm verify is worth re-attempting NOW.
+QUEUED (observer): (1) verify.sh builds gates under TWO feature variants (spidermonkey AND
+stylo,spidermonkey) — unifying on one would HALVE the ~90G live binary mass and halve relink time;
+needs careful gate-behavior check first. (2) receipt env-stamp (disk_pct/load at measure time) so
+a green-but-poisoned wall can be told from a real one.
