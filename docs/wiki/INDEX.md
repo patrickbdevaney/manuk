@@ -414,6 +414,9 @@
   - L1632 · attachInternals() — form-associated custom elements upgrade (tick 318)
   - L1640 · A real internals that retains state, on the live element prototype
   - L1656 · The teeth G_ELEMENT_INTERNALS uses
+  - L1663 · Pointer capture — setPointerCapture keeps a drag tracking (tick 319)
+  - L1670 · Retain the capture, fire the events; live re-routing is the follow-on
+  - L1679 · The teeth G_POINTER_CAPTURE uses
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -787,4 +790,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-702 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+705 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

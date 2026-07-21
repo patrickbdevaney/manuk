@@ -2808,3 +2808,19 @@ custom states), not an inert stub — `checkValidity()` must reflect the flags t
 components rely on that being an error. **(4)** Install on the live element-prototype chain link
 (`Object.getPrototypeOf(createElement(...))`), so custom elements (which extend HTMLElement) inherit it.
 **(5)** Gate by driving setValidity → checkValidity and the once-throw, not `typeof`.
+
+## Drag tracking — pointer capture (tick 319)
+
+**Pattern:** `el.addEventListener('pointerdown', e => { el.setPointerCapture(e.pointerId); }); ...
+el.releasePointerCapture(e.pointerId)` — a slider/drag keeps receiving moves after the pointer leaves
+the element.
+
+**The class this unlocks:** drag interactions (sliders, drag-reorder, canvas draw, croppers). The call
+is UNGUARDED in pointerdown, so its absence throws `setPointerCapture is not a function` and the drag
+dies on the first press.
+
+**The traps.** **(1)** Retain the captured pointer id per element so `hasPointerCapture(id)` reflects
+the truth — a drag reads it back. **(2)** Fire `got`/`lostpointercapture` — capture-based drags wire
+those hooks. **(3)** The host owns the live pointer pipeline, so a prelude shim cannot yet re-route
+stray moves outside the element — state that limit; retaining state + not throwing is the load-bearing
+part. **(4)** Gate by driving the false→true→false capture cycle and the got event, not `typeof`.

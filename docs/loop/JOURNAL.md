@@ -14221,3 +14221,34 @@ gated. Landed via the verify.sh-direct-then-tick.sh dance under heavy box conten
 single warm verify at load<1.5).
 
 WIKI: docs/wiki/interaction-surface.md (ElementInternals section).
+
+## Tick 319 — Pointer capture: setPointerCapture / releasePointerCapture / hasPointerCapture (2026-07-21)
+
+SELECTED: probe3 found pointer capture absent (setPointerCapture=undefined). Interactive/drag class.
+
+WHY IT MATTERS: custom sliders, drag-to-reorder lists, canvas drawing/painting, image croppers, color
+pickers and resizable panels call el.setPointerCapture(e.pointerId) in their pointerdown handler so a
+drag keeps tracking when the pointer leaves the element's box. It is used UNGUARDED (pointer capture is
+assumed present wherever Pointer Events are), so its absence throws `setPointerCapture is not a function`
+mid-pointerdown and the whole drag interaction dies on the first press.
+
+WHAT LANDED (dom_bindings.rs WINDOW_PRELUDE, on __elProto after attachInternals):
+setPointerCapture/releasePointerCapture/hasPointerCapture. Retains the captured pointer id per element
+(WeakMap) so hasPointerCapture(id) reflects the truth, and fires got/lostpointercapture events. Honest
+limit: the host owns the live pointer-event pipeline, so this cannot yet RE-ROUTE stray moves outside
+the element to it — but retaining the capture state + firing the events is what stops the throw and lets
+the drag handler set up and tear down correctly.
+
+G_POINTER_CAPTURE: defined / tracks (hasPointerCapture false→true→false across set/release) / gotevent
+(setPointerCapture fires gotpointercapture) / ready. RED-proven (guard → false → THREW TypeError:
+el.hasPointerCapture is not a function; defined/tracks drop).
+
+NO REGRESSION: additive JS prelude; all prior gates green; fmt clean. New CONSTELLATION app-class row
+gated. Landed via the verify.sh-direct-then-tick.sh dance under heavy box contention.
+
+NOTE: this closes a long run of pure-prelude capability ticks (310-319). Per
+[[prelude-capability-vein-mined]], the cheap high-value prelude vein is now largely mined — the next
+high-value tier is subsystem-scope (canvas Path2D/OffscreenCanvas/createImageBitmap, or agentic
+actuation T6.1) or Stylo-boundary (container queries/@scope), best taken with a fresh context.
+
+WIKI: docs/wiki/interaction-surface.md (Pointer capture section).

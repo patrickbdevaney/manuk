@@ -1659,3 +1659,26 @@ component read its own validity/states back.
 `valueMissing` with a message invalid with that message), `states` (`add`/`has`), `once` (a second
 `attachInternals()` throws). RED: disabling the shim throws `TypeError: … attachInternals is not a
 function` and drops `defined`/`validity`/`once`.
+
+## Pointer capture — `setPointerCapture` keeps a drag tracking (tick 319)
+
+Custom sliders, drag-to-reorder lists, canvas drawing, image croppers, color pickers and resizable
+panels call `el.setPointerCapture(e.pointerId)` in their `pointerdown` handler so a drag keeps tracking
+after the pointer leaves the element's box. It is used UNGUARDED, so its absence throws
+`setPointerCapture is not a function` mid-`pointerdown` and the drag dies on the first press.
+
+### Retain the capture, fire the events; live re-routing is the follow-on
+
+The shim (in `WINDOW_PRELUDE`, on `__elProto` after `attachInternals`) provides `setPointerCapture`,
+`releasePointerCapture` and `hasPointerCapture`. It retains the captured pointer id per element (a
+WeakMap) so `hasPointerCapture(id)` reflects the truth, and fires `gotpointercapture`/`lostpointercapture`.
+The host owns the live pointer-event pipeline, so this cannot yet RE-ROUTE stray moves outside the
+element to it — the honest limit — but retaining the capture state and firing the events is what stops
+the throw and lets the drag set up and tear down correctly.
+
+### The teeth `G_POINTER_CAPTURE` uses
+
+`defined` (the three methods, no throw), `tracks` (`hasPointerCapture(id)` false → true after
+`setPointerCapture` → false after `releasePointerCapture`), `gotevent` (`setPointerCapture` fires
+`gotpointercapture`). RED: disabling the shim throws `TypeError: el.hasPointerCapture is not a function`
+and drops `defined`/`tracks`.

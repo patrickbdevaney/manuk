@@ -10725,6 +10725,54 @@ const WINDOW_PRELUDE: &str = r#"
             };
         }
 
+        // ---- Pointer capture — `setPointerCapture` / `releasePointerCapture` -----------------
+        // Custom sliders, drag-to-reorder lists, canvas drawing/painting, image croppers, color
+        // pickers and resizable panels all do `el.setPointerCapture(e.pointerId)` in their `pointerdown`
+        // handler so the drag keeps tracking even when the pointer leaves the element's box. It is
+        // called UNGUARDED — pointer capture is assumed present wherever Pointer Events are — so its
+        // absence throws `setPointerCapture is not a function` mid-`pointerdown` and the whole drag
+        // interaction dies on the first press.
+        //
+        // The host owns the live pointer-event pipeline, so this cannot yet RE-ROUTE stray moves to the
+        // element (the honest limit). What it does honestly is retain the captured pointer id per
+        // element — so `hasPointerCapture(id)` reflects the truth and `got`/`lostpointercapture` fire —
+        // which is what stops the throw and lets the drag handler set up and tear down correctly.
+        if (__elProto && typeof __elProto.setPointerCapture !== 'function') {
+            var __ptrCaptures = (typeof WeakMap === 'function') ? new WeakMap() : null;
+            var __firePointerEvt = function (el, type, pointerId) {
+                try {
+                    var ev;
+                    if (typeof g.PointerEvent === 'function') {
+                        ev = new PointerEvent(type, { pointerId: pointerId, bubbles: true });
+                    } else if (typeof g.Event === 'function') {
+                        ev = new Event(type, { bubbles: true });
+                        try { ev.pointerId = pointerId; } catch (e) {}
+                    } else { return; }
+                    if (typeof el.dispatchEvent === 'function') { el.dispatchEvent(ev); }
+                } catch (e) {}
+            };
+            __elProto.setPointerCapture = function (pointerId) {
+                if (__ptrCaptures) {
+                    var s = __ptrCaptures.get(this);
+                    if (!s) { s = {}; __ptrCaptures.set(this, s); }
+                    s[pointerId] = true;
+                }
+                __firePointerEvt(this, 'gotpointercapture', pointerId);
+            };
+            __elProto.releasePointerCapture = function (pointerId) {
+                if (__ptrCaptures) {
+                    var s = __ptrCaptures.get(this);
+                    if (s && s[pointerId]) { delete s[pointerId]; }
+                }
+                __firePointerEvt(this, 'lostpointercapture', pointerId);
+            };
+            __elProto.hasPointerCapture = function (pointerId) {
+                if (!__ptrCaptures) { return false; }
+                var s = __ptrCaptures.get(this);
+                return !!(s && s[pointerId]);
+            };
+        }
+
         // ---- Scrolling ----------------------------------------------------------------------
         // Reading the scroll offset is how virtualized feeds, sticky headers, infinite scroll and
         // "back to top" buttons all work. The host owns the viewport, so a scroll is a REQUEST.
