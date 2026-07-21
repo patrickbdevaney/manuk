@@ -1233,6 +1233,8 @@ const PRELUDE: &str = r#"
           function isGrad(style) {
             return !!(style && style.__grad && !style.__conic && style.__stops && style.__stops.length >= 2);
           }
+          function isPat(style) { return !!(style && style.__pattern); }
+          function curAlpha() { return ctx.globalAlpha == null ? 1 : ctx.globalAlpha; }
           // Flatten a gradient to the spec Rust reads: [kind, x0,y0,r0, x1,y1,r1, off,r,g,b,a, …].
           // globalAlpha folds into each stop's alpha, matching how it modulates a flat fill.
           function gradSpec(g) {
@@ -1266,20 +1268,18 @@ const PRELUDE: &str = r#"
 
           // ── Rects
           ctx.fillRect = function(x, y, w, h){
-            if (isGrad(ctx.fillStyle)) {
-              el.__cvPathGradient([5, +x||0, +y||0, +w||0, +h||0], true, gradSpec(ctx.fillStyle), 0, M);
-              return;
-            }
-            var c = rgba(ctx.fillStyle);
+            var fs = ctx.fillStyle, rc = [5, +x||0, +y||0, +w||0, +h||0];
+            if (isPat(fs)) { el.__cvPathPattern(rc, true, fs.__nodeId, fs.__rep, curAlpha(), 0, M); return; }
+            if (isGrad(fs)) { el.__cvPathGradient(rc, true, gradSpec(fs), 0, M); return; }
+            var c = rgba(fs);
             el.__cvRect(+x||0, +y||0, +w||0, +h||0, c[0], c[1], c[2], c[3], 0, M);
           };
           ctx.strokeRect = function(x, y, w, h){
             var lw = Math.max(+ctx.lineWidth || 1, 0.01);
-            if (isGrad(ctx.strokeStyle)) {
-              el.__cvPathGradient([5, +x||0, +y||0, +w||0, +h||0], false, gradSpec(ctx.strokeStyle), lw, M);
-              return;
-            }
-            var c = rgba(ctx.strokeStyle);
+            var ss = ctx.strokeStyle, rc = [5, +x||0, +y||0, +w||0, +h||0];
+            if (isPat(ss)) { el.__cvPathPattern(rc, false, ss.__nodeId, ss.__rep, curAlpha(), lw, M); return; }
+            if (isGrad(ss)) { el.__cvPathGradient(rc, false, gradSpec(ss), lw, M); return; }
+            var c = rgba(ss);
             el.__cvRect(+x||0, +y||0, +w||0, +h||0, c[0], c[1], c[2], c[3], lw, M);
           };
           ctx.clearRect = function(x, y, w, h){ el.__cvClear(+x||0, +y||0, +w||0, +h||0, M); };
@@ -1314,15 +1314,19 @@ const PRELUDE: &str = r#"
           // Duck-typed on `__cmds` so a bare fill-rule string (`ctx.fill('evenodd')`) still falls to `P`.
           ctx.fill = function(arg){
             var cmds = (arg && arg.__cmds) ? arg.__cmds : P;
-            if (isGrad(ctx.fillStyle)) { el.__cvPathGradient(cmds, true, gradSpec(ctx.fillStyle), 0, M); return; }
-            var c = rgba(ctx.fillStyle);
+            var fs = ctx.fillStyle;
+            if (isPat(fs)) { el.__cvPathPattern(cmds, true, fs.__nodeId, fs.__rep, curAlpha(), 0, M); return; }
+            if (isGrad(fs)) { el.__cvPathGradient(cmds, true, gradSpec(fs), 0, M); return; }
+            var c = rgba(fs);
             el.__cvPath(cmds, true, c[0], c[1], c[2], c[3], 0, M);
           };
           ctx.stroke = function(arg){
             var cmds = (arg && arg.__cmds) ? arg.__cmds : P;
             var lw = Math.max(+ctx.lineWidth || 1, 0.01);
-            if (isGrad(ctx.strokeStyle)) { el.__cvPathGradient(cmds, false, gradSpec(ctx.strokeStyle), lw, M); return; }
-            var c = rgba(ctx.strokeStyle);
+            var ss = ctx.strokeStyle;
+            if (isPat(ss)) { el.__cvPathPattern(cmds, false, ss.__nodeId, ss.__rep, curAlpha(), lw, M); return; }
+            if (isGrad(ss)) { el.__cvPathGradient(cmds, false, gradSpec(ss), lw, M); return; }
+            var c = rgba(ss);
             el.__cvPath(cmds, false, c[0], c[1], c[2], c[3], lw, M);
           };
           ctx.clip = function(){};                      // honest no-op: clipping is not wired yet
@@ -1488,7 +1492,16 @@ const PRELUDE: &str = r#"
           ctx.createLinearGradient = function(x0, y0, x1, y1){ return makeGrad(0, x0, y0, 0, x1, y1, 0); };
           ctx.createRadialGradient = function(x0, y0, r0, x1, y1, r1){ return makeGrad(1, x0, y0, r0, x1, y1, r1); };
           ctx.createConicGradient = function(a, x, y){ var g = makeGrad(0, x, y, 0, x, y, 0); g.__conic = true; return g; };
-          ctx.createPattern = function(){ return null; };
+          // A pattern tiles a source image (an `<img>` or `<canvas>` — anything with published pixels)
+          // across the filled shape. It is identified by NODE, the same handle `drawImage` uses, so no
+          // pixels cross here. `null` when the source is not a usable image yet (spec behaviour).
+          ctx.createPattern = function(image, repetition){
+            if (!image || image.__nodeId == null) { return null; }
+            var rep = ({ 'repeat': 0, '': 0, 'repeat-x': 1, 'repeat-y': 2, 'no-repeat': 3 })[
+                       repetition == null ? 'repeat' : String(repetition)];
+            if (rep == null) { rep = 0; }
+            return { __pattern: true, __nodeId: image.__nodeId, __rep: rep };
+          };
           ctx.setLineDash = function(){};
           ctx.getLineDash = function(){ return []; };
 

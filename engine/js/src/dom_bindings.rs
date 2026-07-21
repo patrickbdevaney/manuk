@@ -1695,6 +1695,7 @@ unsafe fn define_members(
         def_guarded!(def, c"__cvClear", cv_clear, 5);
         def_guarded!(def, c"__cvPath", cv_path, 8);
         def_guarded!(def, c"__cvPathGradient", cv_path_gradient, 5);
+        def_guarded!(def, c"__cvPathPattern", cv_path_pattern, 7);
         def_guarded!(def, c"__cvText", cv_text, 14);
         def_guarded!(def, c"__cvMeasureText", cv_measure_text, 5);
         def_guarded!(def, c"__cvGetImageData", cv_get_image_data, 4);
@@ -2435,6 +2436,38 @@ unsafe fn cv_path_gradient(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> 
         let grad = arg_f32_array(cx, vp, argc, 2);
         let m = arg_f32_array(cx, vp, argc, 4);
         crate::canvas::path_gradient(node.0, &cmds, fill, &grad, f(cx, vp, argc, 3), &m);
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `__cvPathPattern(cmds, fill, srcNodeId, repeat, alpha, lineWidth, matrix)` — fill/stroke a path with
+/// a tiled image pattern. `repeat` 0 repeat / 1 repeat-x / 2 repeat-y / 3 no-repeat; the context builds
+/// it when `fillStyle`/`strokeStyle` is a `CanvasPattern`.
+unsafe fn cv_path_pattern(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((_, node)) = this_node(vp) {
+        let cmds = arg_f32_array(cx, vp, argc, 0);
+        let args = mozjs::jsapi::CallArgs::from_vp(vp, argc);
+        let fill = argc > 1 && args.get(1).get().is_boolean() && args.get(1).get().to_boolean();
+        let src = f(cx, vp, argc, 2);
+        // A NaN or negative id is not a node; `as u64` on NaN is 0 in Rust, which would alias node 0.
+        if !src.is_finite() || src < 0.0 {
+            *vp = UndefinedValue();
+            return true;
+        }
+        let repeat = f(cx, vp, argc, 3) as i32;
+        let alpha = f(cx, vp, argc, 4);
+        let m = arg_f32_array(cx, vp, argc, 6);
+        crate::canvas::path_pattern(
+            node.0,
+            &cmds,
+            fill,
+            src as u64,
+            repeat,
+            alpha,
+            f(cx, vp, argc, 5),
+            &m,
+        );
     }
     *vp = UndefinedValue();
     true

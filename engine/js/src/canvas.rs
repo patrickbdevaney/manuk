@@ -318,6 +318,66 @@ pub fn path_gradient(node: u64, cmds: &[f32], fill: bool, grad: &[f32], sw: f32,
     mark_dirty(node);
 }
 
+/// `fill`/`stroke` a path with a **pattern** paint — a source image tiled across the shape. This is how
+/// hatch fills, textured backgrounds and repeating sprites are drawn (`ctx.fillStyle =
+/// ctx.createPattern(img, 'repeat')`). The source pixels come from the SAME node-keyed registry
+/// `drawImage` reads (a `<canvas>` backing store or a decoded `<img>`), so there is no new decode path.
+///
+/// `repeat` 0 = `repeat` · 1 = `repeat-x` · 2 = `repeat-y` · 3 = `no-repeat`. tiny-skia's `SpreadMode`
+/// is not per-axis, so the tiling modes all use `Repeat` and `no-repeat` uses `Pad` (its edge clamps
+/// rather than going transparent — the honest limit). The pattern is anchored at the canvas origin at
+/// the image's natural size; `fill_path` applies the context transform to both path and pattern.
+pub fn path_pattern(
+    node: u64,
+    cmds: &[f32],
+    fill: bool,
+    src: u64,
+    repeat: i32,
+    alpha: f32,
+    sw: f32,
+    m: &[f32],
+) {
+    let Some(p) = build_path(cmds) else {
+        return;
+    };
+    // Copy the source pixmap out before borrowing CANVASES mutably (a canvas can pattern-fill itself).
+    let src_px: Option<Pixmap> = CANVASES
+        .with(|c| c.borrow().get(&src).cloned())
+        .or_else(|| SOURCES.with(|s| s.borrow().get(&src).cloned()));
+    let Some(src_px) = src_px else {
+        return; // the source image has not decoded yet — draw nothing, as a real browser does
+    };
+    let spread = if repeat == 3 {
+        tiny_skia::SpreadMode::Pad
+    } else {
+        tiny_skia::SpreadMode::Repeat
+    };
+    let mut paint = Paint {
+        anti_alias: true,
+        ..Default::default()
+    };
+    paint.shader = tiny_skia::Pattern::new(
+        src_px.as_ref(),
+        spread,
+        tiny_skia::FilterQuality::Bilinear,
+        alpha.clamp(0.0, 1.0),
+        Transform::identity(),
+    );
+    CANVASES.with(|c| {
+        if let Some(px) = c.borrow_mut().get_mut(&node) {
+            let t = xform(m);
+            if fill {
+                px.fill_path(&p, &paint, FillRule::Winding, t, None);
+            } else {
+                let mut stroke = Stroke::default();
+                stroke.width = if sw > 0.0 { sw } else { 1.0 };
+                px.stroke_path(&p, &paint, &stroke, t, None);
+            }
+        }
+    });
+    mark_dirty(node);
+}
+
 /// `getImageData` — **non-premultiplied RGBA8**, which is what the spec hands JavaScript.
 ///
 /// tiny-skia stores premultiplied. Handing back the raw bytes would give a page subtly wrong colours

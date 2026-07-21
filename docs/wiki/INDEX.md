@@ -430,6 +430,11 @@
   - L1773 · The Rust side (canvas.rs), and the transform subtlety
   - L1782 · The honest limits
   - L1788 · The teeth G_CANVAS_GRADIENT uses
+  - L1797 · Canvas patterns — createPattern tiles a source image across the fill (tick 323)
+  - L1803 · Reusing the drawImage registry — no new decode
+  - L1813 · Repetition and the transform
+  - L1819 · Honest limits
+  - L1825 · The teeth G_CANVAS_PATTERN uses
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -803,4 +808,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-718 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+723 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

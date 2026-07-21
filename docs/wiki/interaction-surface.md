@@ -1793,3 +1793,39 @@ red falls while blue rises across — a real ramp, where a flat fill would be bl
 `rad_edge_red` (a radial gradient is green at its centre and red past its radius — proving it is radial
 and centred where asked). RED: forcing `isGrad` false falls back to the flat last stop and drops
 `lin_red`/`lin_varies`/`path_grad`/`rad_center_green` at once.
+
+## Canvas patterns — `createPattern` tiles a source image across the fill (tick 323)
+
+`ctx.createPattern` returned `null` for its whole life, so `fillStyle = ctx.createPattern(img,
+'repeat')` set the fill to `null` (→ black) and every hatch fill, textured background and repeating
+sprite painted a black block. Now it returns a real `CanvasPattern` that tiles the source.
+
+### Reusing the drawImage registry — no new decode
+
+A pattern is identified by NODE, the same handle `drawImage` uses: `createPattern` (in
+`engine/js/src/event_loop.rs`) returns `{ __pattern, __nodeId, __rep }` for any source with published
+pixels (an `<img>` or `<canvas>`), or `null` if the source has not decoded yet. When `fillStyle`/
+`strokeStyle` is a pattern (`isPat`), `fill()`, `fillRect()`, `stroke()`, `strokeRect()` cross into Rust
+via the new `__cvPathPattern` native. `canvas.rs::path_pattern` reads the source pixmap out of the same
+`CANVASES`/`SOURCES` registries `draw_image` reads and builds a `tiny_skia::Pattern` shader — the exact
+shader `drawImage` already uses, so there is no new pixel path.
+
+### Repetition and the transform
+
+`repeat` maps 0 `repeat` / 1 `repeat-x` / 2 `repeat-y` / 3 `no-repeat`. The pattern is built at identity
+and `fill_path` applies the context transform to both path and shader, so the tiling is anchored in
+user space at the image's natural size. `globalAlpha` folds into the shader's opacity.
+
+### Honest limits
+
+tiny-skia's `SpreadMode` is not per-axis, so `repeat-x`/`repeat-y` both tile (using `Repeat`) and
+`no-repeat` uses `Pad` — its edges clamp rather than going transparent. `pattern.setTransform(matrix)`
+is not wired. These are the documented follow-ons; the common `'repeat'` tiling case is exact.
+
+### The teeth `G_CANVAS_PATTERN` uses
+
+`type` (createPattern returns an object, not null), `t0`/`t1` (a red/blue 4px source fills its RED and
+BLUE halves — a null pattern fills black, the exact old-stub symptom), `rep`/`rep2` (a full
+source-width further along, red then blue RECUR — proving the source repeats, not stretched or drawn
+once). RED: forcing `createPattern` back to `null` fills black and drops every claim
+(`type:null t0:0,0,0,255`).

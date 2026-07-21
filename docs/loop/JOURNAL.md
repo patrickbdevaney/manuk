@@ -14365,3 +14365,38 @@ g_create_image_bitmap all still green; fmt clean. WEB-PATTERNS.md + docs/wiki/in
 updated.
 
 WIKI: docs/wiki/interaction-surface.md (Canvas gradients section)
+
+## Tick 323 — Canvas patterns: createPattern tiles a source image (2026-07-21)
+
+TICK SHAPE: capability. New CONSTELLATION platform-class row gated → G_CANVAS_PATTERN. Fourth
+canvas-subsystem step, completing the fill-style story: solid / gradient (t322) / pattern all real now.
+
+SELECTED: createPattern returned null forever → fillStyle=pattern became null→black. Rounds out the
+canvas fill-style capability and reuses the exact Pattern-shader plumbing drawImage already has.
+
+WHY IT MATTERS: hatch fills, textured/repeating backgrounds and tiled sprites set
+fillStyle=ctx.createPattern(img,'repeat'). A null pattern painted a black block, silently.
+
+WHAT LANDED: createPattern (event_loop.rs) returns {__pattern,__nodeId,__rep} for any source with
+published pixels (<img>/<canvas>), null if not decoded. When fillStyle/strokeStyle isPat, fill()/
+fillRect()/stroke()/strokeRect() cross via a new __cvPathPattern native (dom_bindings.rs, node-id guarded
+like cv_draw_image) into canvas.rs path_pattern, which reads the source pixmap from the SAME
+CANVASES/SOURCES registries draw_image reads and builds a tiny_skia Pattern shader (the exact shader
+drawImage uses — no new pixel path). repeat 0/1/2/3; built at identity so fill_path tiles it in user
+space; globalAlpha folds into shader opacity.
+
+G_CANVAS_PATTERN: type (object not null) / t0+t1 (a red/blue 4px source fills its RED and BLUE halves) /
+rep+rep2 (a full source-width further along, red then blue RECUR → the source repeats, not stretched or
+drawn once). RED-proven (force createPattern→null → black fill → type:null t0:0,0,0,255, every claim
+drops).
+
+HONEST LIMITS: tiny-skia SpreadMode is not per-axis, so repeat-x/repeat-y both tile and no-repeat pads
+its edges (not transparent); pattern.setTransform not wired. Documented follow-ons; the common 'repeat'
+case is exact.
+
+NO REGRESSION: additive; the pattern branch fires only when the style isPat, so solid/gradient
+fill/stroke/rect are unchanged. All 6 prior canvas gates (g_canvas / g_canvas_text / g_canvas_image /
+g_path2d / g_create_image_bitmap / g_canvas_gradient) still green; fmt clean. WEB-PATTERNS.md +
+docs/wiki/interaction-surface.md (+ index) updated.
+
+WIKI: docs/wiki/interaction-surface.md (Canvas patterns section)
