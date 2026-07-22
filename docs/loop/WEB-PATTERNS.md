@@ -3364,3 +3364,16 @@ a partial map plus "return the lookup" is a contract violation wearing a working
 **The trap:** the FALLBACK object is part of the surface too — a no-style `({})` fallback
 throws "not a function" on the same line the main path merely returns undefined from; both
 spellings of the same missing contract.
+
+## Chunk loaders find themselves via document.currentScript (tick 404)
+
+**The class of the web this unlocks:** every webpack/Rollup/parcel chunk loader that resolves
+its own <script> tag for nonce, data-config and base URL (publicPath:"auto" is literally a
+currentScript read) — the load-time bootstrap of most code-split SPAs (okta's stubScriptElement
+stash, verbatim).
+**(1)** currentScript is a LIFETIME property, not a lookup: the executing element during a
+classic evaluation, null outside it and inside modules — a thread-local set/cleared around
+evaluation is the honest shape.
+**The trap:** a hardcoded null LOOKS spec-shaped (it is the right answer for modules and
+callbacks) and passes every after-the-fact probe — the lie is only visible DURING execution,
+which is exactly when chunk loaders read it.

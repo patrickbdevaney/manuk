@@ -176,6 +176,19 @@ pub(crate) fn set_current_dom(dom: *mut Dom) {
 }
 
 thread_local! {
+    /// The `<script>` element whose CLASSIC script is executing right now — what
+    /// `document.currentScript` reports. `-1` outside script execution and during module
+    /// evaluation (the spec's `null` cases: modules, async callbacks, event handlers).
+    /// Same lifetime discipline as `CURRENT_DOM`: set immediately before each evaluation,
+    /// cleared immediately after, never held across a pump.
+    static CURRENT_SCRIPT: std::cell::Cell<i64> = const { std::cell::Cell::new(-1) };
+}
+
+pub(crate) fn set_current_script(node: Option<NodeId>) {
+    CURRENT_SCRIPT.with(|c| c.set(node.map(|n| n.0 as i64).unwrap_or(-1)));
+}
+
+thread_local! {
     /// **Every arena a reflector may legally point at.**
     ///
     /// Until now a reflector's node id was resolved against `CURRENT_DOM` — the *one* document the engine
@@ -6188,13 +6201,23 @@ unsafe fn doc_get_content_type(cx: *mut RawJSContext, _argc: u32, vp: *mut Value
     true
 }
 
-/// `document.currentScript` — **`null`**, not `undefined`.
+/// `document.currentScript` — the EXECUTING classic `<script>` element, else **`null`** (never
+/// `undefined`).
 ///
-/// The difference is the whole point. `null` is the spec's answer for a module or an async script, so
-/// every library on the web already branches on it (`document.currentScript?.src`). `undefined` is not
-/// an answer to anything, and code that has correctly guarded against `null` still throws on it.
-unsafe fn doc_get_current_script(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
-    *vp = NullValue();
+/// Both halves matter. During classic script execution this is the element whose script is
+/// running — every bundler's chunk loader stashes it to find its own tag, `nonce`, `data-*`
+/// config and base URL (webpack's `publicPath: "auto"` is literally this; okta's chunk loader
+/// died calling `.hasAttribute` on the stash). Outside execution — modules, async callbacks,
+/// event handlers — the answer is `null`, which every library already branches on
+/// (`document.currentScript?.src`); `undefined` is not an answer to anything.
+unsafe fn doc_get_current_script(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    let id = CURRENT_SCRIPT.with(|c| c.get());
+    let dom = CURRENT_DOM.with(|c| c.get());
+    if id < 0 || dom.is_null() {
+        *vp = NullValue();
+        return true;
+    }
+    return_node_or_null(cx, vp, dom, Some(NodeId(id as u64)));
     true
 }
 
@@ -7795,14 +7818,16 @@ pub fn run_scripts(
     }
 
     let mut ran = 0usize;
-    for (_node, src, is_module, _blocks) in &scripts {
+    for (node, src, is_module, _blocks) in &scripts {
         if *is_module {
             // `<script type=module>`: compile + link + evaluate as an ES module, so
-            // import/export syntax is valid and self-contained modules run.
+            // import/export syntax is valid and self-contained modules run. Modules are
+            // never `document.currentScript`, per spec.
             if !unsafe { run_module(raw_cx, src) } {
                 tracing::warn!(error = %pending_exception(raw_cx), "a page module failed");
             }
         } else {
+            set_current_script(Some(*node));
             rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
             let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"inline.js".to_owned(), 1);
             match evaluate_script(runtime.cx(), global.handle(), src, rval.handle_mut(), opts) {
@@ -7811,6 +7836,7 @@ pub fn run_scripts(
                     tracing::warn!(error = %pending_exception(raw_cx), "a page <script> threw")
                 }
             }
+            set_current_script(None);
         }
         ran += 1;
     }
@@ -7943,7 +7969,7 @@ impl PageContext {
             if !blocks_paint {
                 continue;
             }
-            run_one_script(runtime, raw_cx, global.handle(), &src, is_module);
+            run_one_script(runtime, raw_cx, global.handle(), node, &src, is_module);
             ctx.ran.borrow_mut().insert(node);
             ran += 1;
         }
@@ -7984,7 +8010,7 @@ impl PageContext {
 
         let mut ran = 0usize;
         for (node, src, is_module) in pending {
-            run_one_script(runtime, raw_cx, global.handle(), &src, is_module);
+            run_one_script(runtime, raw_cx, global.handle(), node, &src, is_module);
             self.ran.borrow_mut().insert(node);
             ran += 1;
         }
@@ -8941,19 +8967,23 @@ fn run_one_script(
     runtime: &mut Runtime,
     raw_cx: *mut mozjs::jsapi::JSContext,
     global: mozjs::rust::HandleObject,
+    node: NodeId,
     src: &str,
     is_module: bool,
 ) {
     if is_module {
+        // Modules are never `document.currentScript`, per spec — the thread-local stays -1.
         if !unsafe { run_module(raw_cx, src) } {
             tracing::warn!(error = %pending_exception(raw_cx), "a page module failed");
         }
     } else {
+        set_current_script(Some(node));
         rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
         let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"inline.js".to_owned(), 1);
         if evaluate_script(runtime.cx(), global, src, rval.handle_mut(), opts).is_err() {
             tracing::warn!(error = %pending_exception(raw_cx), "a page <script> threw");
         }
+        set_current_script(None);
     }
 }
 

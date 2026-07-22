@@ -1056,3 +1056,14 @@ accessor at all. CSSOM's contract is total: the serialized value for supported p
 a generic kebab→camel fallback (the hand map stays, for the irregular names), and the empty
 fallback now carries `getPropertyValue(){return ''}`. Found as the t401 oracle's second named
 error (okta: `.getPropertyValue(x).trim()` threw in an async frame). G_GET_PROPERTY_VALUE.
+
+## document.currentScript — a thread-local, set per classic evaluation (tick 404)
+
+Was hardcoded null (the doc comment argued null-beats-undefined — right about the idle case,
+silent about the executing case). Now: CURRENT_SCRIPT thread-local (the CURRENT_DOM lifetime
+discipline — set immediately before each classic evaluation, cleared after, never held across
+a pump), read by doc_get_current_script via return_node_or_null. Modules never set it (spec).
+run_one_script carries the NodeId; all three execution loops (blocking, deferred/inserted,
+run_scripts) participate. G_CURRENT_SCRIPT asserts per-script identity (each of two scripts
+sees ITSELF), attribute readability (okta's .hasAttribute call), and module-null. Third named
+error from the t401 instrument converted to a capability.

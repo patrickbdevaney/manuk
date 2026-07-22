@@ -67,7 +67,11 @@ const HTML: &str = r#"<!doctype html><html><body><div id="out">-</div><script>
     r.push('title:' + (document.title === 'set by script'));
     r.push('referrer:' + (typeof document.referrer === 'string'));
     r.push('charset:' + (document.characterSet === 'UTF-8'));
-    r.push('currentScript:' + (document.currentScript === null));   // null, NOT undefined
+    // DURING classic execution currentScript is the executing <script> ELEMENT (tick 404 —
+    // the original pin asserted the stub's null here, which is the answer for modules and
+    // callbacks, not for this very line). The intent stands: never undefined.
+    r.push('currentScript:' + (document.currentScript !== undefined &&
+        document.currentScript !== null && document.currentScript.tagName === 'SCRIPT'));
     r.push('vendor:' + (typeof navigator.vendor === 'string'));
 
     // ── Honesty. These must NOT pretend to work.
@@ -106,7 +110,7 @@ fn every_global_a_real_bundle_references_exists_and_answers_honestly() {
         "title:true",        // document.title is readable AND writable
         "referrer:true",
         "charset:true",
-        "currentScript:true", // null, not undefined — libraries guard against null, not undefined
+        "currentScript:true", // the executing <script> element during execution; never undefined
         "vendor:true",
         "wsConstructs:true", // it constructs
         "wsNotOpen:true",    // ...and does NOT claim to be connected

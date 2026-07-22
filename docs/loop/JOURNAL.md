@@ -16850,3 +16850,36 @@ TICK SHAPE: capability (t401 named-error harvest #2 — CSSOM contract totality;
 CSSOM accessors are total functions — the unknown answer is '', and the FALLBACK object is
 part of the surface]). GATES +1 (G_GET_PROPERTY_VALUE, IN the wall). CONSTELLATION: none —
 gate is the record. WIKI: docs/wiki/js-engine.md — getPropertyValue totality (tick 403).
+
+## Tick 404 — document.currentScript: the executing script element, not a hardcoded null (2026-07-22)
+
+HYPOTHESIS: the t401 instrument's third named okta error — `can't access property
+"hasAttribute", l.stubScriptElement is null` — is a chunk-loader stashing
+document.currentScript at load time (the universal webpack/bundler pattern for finding its own
+<script> tag, nonce, and base URL). Ours is hardcoded null with a doc comment celebrating that
+null beats undefined — true, but null is only the right answer OUTSIDE classic script
+execution; DURING it the spec says it IS the executing <script> element. Fix: a CURRENT_SCRIPT
+thread-local (the CURRENT_DOM pattern), set per classic script around evaluation (modules
+stay null per spec), read by doc_get_current_script via return_node_or_null. Gate:
+G_CURRENT_SCRIPT — each script sees ITSELF (two scripts, each checks identity against its own
+getElementById), attributes readable (the okta .hasAttribute call), module sees null. RED
+first.
+
+RESULTS: RED first (s1-self:false / s1-tag:null — the stash is null, okta's exact shape),
+then CURRENT_SCRIPT thread-local + run_one_script(NodeId) through all three execution loops;
+modules stay -1. Gate green 6/6 including per-script identity (s2 sees s2, not a stale s1)
+and module-null. The three named okta errors from the t401 instrument are now three landed
+capabilities (t402 document.location, t403 getPropertyValue totality, t404 currentScript) —
+the named-error harvest pipeline works end-to-end.
+
+TICK SHAPE: capability (t401 harvest #3 — the bundler bootstrap read; [pattern: lifetime
+properties (currentScript) need set/clear around evaluation, not a value — a hardcoded
+spec-correct-when-idle answer is invisible to after-the-fact probes]). GATES +1
+(G_CURRENT_SCRIPT, IN the wall). CONSTELLATION: none — gate is the record.
+WIKI: docs/wiki/js-engine.md — currentScript thread-local (tick 404).
+
+ADDENDUM (the wall spoke): G_GLOBALS pinned the STUB's answer — it asserted currentScript===
+null from INSIDE a running inline script, exactly where the spec (and Chrome) say it is the
+executing element. Re-pinned to the truthful claim (element with tagName SCRIPT, never
+undefined — the original intent), per the t391 wrong-pin precedent. Not a gate retune to land
+a tick: the old claim asserted the bug this tick fixes.
