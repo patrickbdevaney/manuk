@@ -34,3 +34,9 @@ All three are from the Chromium `media/test/data` corpus, which is BSD-licensed 
   timeline. **Its two tracks deliberately have different durations** (video 0.1001s, audio 0.0929s):
   one stream ending before the other is the realistic case, not a defect, and `av_sync.rs` depends
   on it.
+
+- `four-colors-av1.mp4` — AV1 in MP4 (`av01.*`), the rerun/Chromium four-quadrant test pattern
+  (yellow / red / blue / green), copied from `chromium/media/test/data/four-colors-av1.mp4`
+  (Chromium, BSD-3 — provenance per the tick-235 observer steer: Chromium test DATA may be copied
+  in with attribution; Chromium CODE never). The quadrant colors make a channel swap or a
+  scrambled plane read visibly assertable, which is what the av1_decode gate keys on.

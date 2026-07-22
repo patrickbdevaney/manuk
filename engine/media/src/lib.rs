@@ -59,6 +59,13 @@ pub use video::{
     VideoError,
 };
 
+/// AV1 decode (MEDIA.md tick 6). Requires `video` too in practice — the playback ladder is what
+/// reaches it — but the gate is its own so `av1` alone can prove the decoder.
+#[cfg(feature = "av1")]
+pub mod av1;
+#[cfg(feature = "av1")]
+pub use av1::Av1Decoder;
+
 /// WebVTT captions (M7). **Not feature-gated**: a caption file is text, so this needs no decoder,
 /// no C toolchain and no dependency — which is exactly why it is reachable while the `<video>`
 /// element wiring is not.

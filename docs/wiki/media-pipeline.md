@@ -1278,3 +1278,35 @@ pre-fouled buffer catches the leak).
 
 Residue, honestly: `volume` and the live `.muted` IDL property have NO content attribute — they
 need a JS live-property channel to the host (follow-on, not smuggled in half-built).
+
+## Tick 353 — AV1 decode: re_rav1d behind the M5 trait
+
+The codec the web is moving to, decoded in memory-safe Rust: `re_rav1d` 0.1.3 through its own
+safe `dav1d` module (a fork of dav1d-rs; upstream `rav1d` is a C-ABI drop-in with no Rust API —
+MEDIA.md trap #3). `default-features = false` keeps nasm out of the build; `bitdepth_8` only
+(what the web serves). The `av1` feature implies `video` and stays out of every js/page gate
+lane — the honest-registry rule is enforced at compile time: `can_decode_video` answers yes to
+`av01.*` ONLY under the feature, so a lane without the decoder keeps saying no.
+
+Structure: `Av1Decoder` behind `VideoDecoder`; `decoder_for` ladder in playback.rs picks by
+codec string (fall-through keeps H264's refusal wording for unknown codecs); the trait gained a
+defaulted `finish()` because dav1d is a QUEUE — pictures can arrive after their sample, and the
+timestamp rides THROUGH the decoder (microseconds in `send_data`, back out on the picture) so
+pts-by-call-order conflation is impossible. Conversion is BT.601 limited I420/I422/I444/I400 →
+RGBA.
+
+**The archaeology, one variable at a time** (the first version failed 'no sample produced a
+frame' and the obvious fix — rerun's `max_frame_delay(1)` — was NOT the cause): under DEFAULT
+settings dav1d delays the picture past the last `decode_sample` drain, and the original
+`finish()` called `flush()` first — **dav1d's flush is a seek-reset that DISCARDS pending
+pictures**, so the tail (here: the whole 1-frame stream) silently vanished. Reproduced exactly:
+default+flush FAILS, default+drain-only PASSES, delay=1 makes pictures synchronous either way.
+Shipped: delay=1 (browser latency + the MSE grow cycle wants same-call pictures) AND drain-only
+finish — doubly safe, each on its own merits.
+
+RED ledger: U/V swap → yellow decodes as cyan `[47,255,255]`, quadrant assert fails; the
+flush-discard pair above; av1C config-send is NOT RED-provable with this fixture (its keyframe
+carries its own sequence header) — noted in the module, kept per AV1-ISOBMFF §2.3.
+
+Fixture: `four-colors-av1.mp4` from Chromium test data (BSD-3, provenance in tests/data/README
+per the t235 steer: test DATA with attribution, CODE never).

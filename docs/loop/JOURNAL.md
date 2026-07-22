@@ -15582,3 +15582,48 @@ NO REGRESSION: full manuk-shell 64/64 (+1) + g_teardown 2/2, run TWICE, EXIT 0 b
 TICK SHAPE: capability (the muted attribute reaches the device — the autoplay-muted class of the web is now quiet here as it is everywhere else; mute preserves the sync master and unmute lands in-sync; [host-native pattern: DOM attribute the engine already had, feed the shell already had]). GATES +1 (G_MUTED_OUT, shell suite = IN the verify wall); constellation row 72 note updated (volume/live-.muted IDL channel + mixing + non-AAC remain).
 CONSTELLATION: media / audio output device → muted plumbed (G_MUTED_OUT).
 WIKI: docs/wiki/media-pipeline.md — Tick 352 muted (silent-consumption design, RED ledger, residue).
+
+## Tick 353 — AV1 decode: the codec the web is moving to, behind the trait built for it (2026-07-22)
+
+CO-#1 order (2) MEDIA CODECS, the board's named ladder step ("re_rav1d AV1 per docs/loop/MEDIA.md" —
+MEDIA.md tick 6, ~1 day, BSD-2 pure Rust). Today the ONLY decodable video is H.264 Constrained
+Baseline (openh264, M5) — the profile YouTube's no-MSE 360p fallback uses and almost nothing else.
+AV1 is the codec the open web is moving to (YouTube serves it FIRST where supported), re_rav1d is the
+dav1d port with an actual Rust API (rav1d upstream is a C-ABI drop-in — MEDIA.md trap #3), and the
+`trait VideoDecoder` was defined at M5 precisely so a second backend drops in without touching a
+caller. Fixtures are already local with provenance: chromium/media/test/data/four-colors-av1.mp4
+(Chromium, BSD-3 — the observer's t235 steer pre-cleared copying them in WITH provenance).
+
+HYPOTHESIS: an `av1` feature on manuk-media (opt-in like `audio`/`video` — feature unification is why;
+nothing in the js/page gate lanes may acquire a decoder) + `Av1Decoder` behind `VideoDecoder` +
+FrameTimeline::decode selecting the backend by codec string (avc1.* → openh264, av01.* → re_rav1d)
+makes the four-colors fixture demux (re_mp4 already reads av01 sample entries) and decode to correct
+non-uniform RGBA. can_decode_video answers av01 truthfully UNDER THE FEATURE ONLY — the honest-registry
+discipline: a lane without the decoder must keep saying no. Gate av1_decode (required-features av1,
+same shape as video_decode). Registry/shell steering (isTypeSupported, MediaSet) is the NEXT tick —
+the organ first, the advertisement only after the organ provably works.
+RESULT — LANDED. engine/media: `av1` feature (implies video; re_rav1d 0.1.3 default-features=false +
+bitdepth_8 — pure Rust, no nasm, 12s compile), src/av1.rs (Av1Decoder behind VideoDecoder; pts rides
+through the decoder as microsecond timestamps; BT.601 I420/I422/I444/I400→RGBA), decoder_for ladder in
+playback.rs, VideoDecoder::finish() defaulted no-op (H264 unchanged), can_decode av01 under the feature
+ONLY (a lane without the decoder keeps saying no — the isTypeSupported honesty rule at compile time).
+Fixture four-colors-av1.mp4 copied from Chromium test data with provenance (README).
+
+THE INSTRUCTIVE BUG (probed one variable at a time after changing two at once): first version failed
+"no sample produced a frame". NOT the frame delay — under default settings dav1d delays the picture
+past the last drain and the original finish() called flush() first, and dav1d's flush is a seek-reset
+that DISCARDS pending pictures. Reproduced exactly: default+flush FAILS, default+drain-only PASSES,
+delay=1 synchronous either way. Shipped delay=1 AND drain-only finish, each on its own merits.
+
+RED-PROVEN: (1) U/V swap → "top-left must be YELLOW, got [47,255,255]" (cyan — the flag the fixture
+exists to fly); (2) the flush-discard pair above, watched fail and separated. HONESTY: the av1C
+config-send cannot go red with this fixture (keyframe carries its own sequence header) — noted in the
+module comment, kept per AV1-ISOBMFF §2.3, unverified until a config-only stream lands.
+
+NO REGRESSION: manuk-media full suite (audio,video,av1) all green; manuk-shell 64/64 + teardown 2/2
+EXIT 0; manuk-js lane checks clean (no decoder acquired — feature unification verified). fmt clean.
+Nothing enables av1 outside the gate yet, so no wall lane pays the compile.
+
+TICK SHAPE: capability (AV1 decode — the codec the web is moving to, in memory-safe Rust behind the trait built for it at M5; the AVIF unlock is now reachable; [BORROW pattern: re_rav1d safe module, no C, no nasm]). GATES +1 (av1_decode, required-features av1 — same lane as video_decode, observer-owned wall-wiring caveat applies); constellation row 70 partial note updated (AV1 landed; shell/MSE steering next).
+CONSTELLATION: media / video decode → AV1 landed (av1_decode).
+WIKI: docs/wiki/media-pipeline.md — Tick 353 AV1 (safe-module borrow, flush-discard archaeology, honest registry, fixture provenance).

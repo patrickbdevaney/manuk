@@ -103,6 +103,15 @@ pub trait VideoDecoder {
         sample: &[u8],
         presentation_time: f64,
     ) -> Result<Option<Frame>, VideoError>;
+
+    /// The samples have run out: surface anything still inside the decoder.
+    ///
+    /// A defaulted no-op because openh264 answers synchronously and holds nothing back. dav1d is
+    /// a queue — pictures it delayed are only reachable through an explicit flush, and skipping
+    /// this call silently truncates the tail of every AV1 stream (`av1::Av1Decoder` overrides).
+    fn finish(&mut self) -> Result<Vec<Frame>, VideoError> {
+        Ok(Vec::new())
+    }
 }
 
 /// Can this track's video be decoded here? The honest answer to `isTypeSupported`, for video.
@@ -119,6 +128,13 @@ pub fn can_decode(track: &Track) -> bool {
     let Some(codec) = track.codec.as_deref() else {
         return false;
     };
+    // AV1 — but ONLY where the decoder is actually compiled in. A lane built without the `av1`
+    // feature must keep answering no: advertising a codec this build cannot decode is the
+    // isTypeSupported lie MEDIA.md's MSE warning exists to prevent.
+    #[cfg(feature = "av1")]
+    if crate::av1::can_decode(track) {
+        return true;
+    }
     // `avc1.PPCCLL` — PP is the profile_idc as two hex digits.
     let Some(rest) = codec.strip_prefix("avc1.") else {
         return false;

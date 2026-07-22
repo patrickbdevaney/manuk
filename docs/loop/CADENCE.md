@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **145** | ticks 1–352 |
-| median tick cycle | **20m** | 144 intervals |
+| ticks landed | **146** | ticks 1–353 |
+| median tick cycle | **21m** | 145 intervals |
 | median, last 10 | **25m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.55** | 262.6h elapsed |
-| median verify wall | **66s** | 84 ticks |
+| **ticks per hour** | **0.55** | 263.0h elapsed |
+| median verify wall | **66s** | 85 ticks |
 | wall trend | 39s → 69s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**78 of 145 ticks** (54%) moved a
+**79 of 146 ticks** (54%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **78** capability ticks, median cycle **20m**
-* median diff per tick: **+246 / −29** lines across 8 files
+* **79** capability ticks, median cycle **21m**
+* median diff per tick: **+248 / −29** lines across 8 files
 
 ## Every tick
 
@@ -242,5 +242,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **349** | 2026-07-22 02:52 | 82s | capability | 67s | +31/−30 | 183 | 81 | 56.0% · | MSE playback join: appended bytes reach the decoder, and the registry tells the truth (202 |
 | **350** | 2026-07-22 03:17 | 25m | capability | 69s | +1073/−84 | 183 | 81 | 56.0% · | audio output device: decoded PCM reaches the device boundary (2026-07-22) |
 | **352** | 2026-07-22 03:40 | 22m | capability | 71s | +193/−9 | 183 | 81 | 56.0% · | the `muted` attribute reaches the device: silent consumption, not pause (2026-07-22) |
+| **353** | 2026-07-22 04:05 | 25m | capability | 66s | +612/−42 | 183 | 81 | 56.0% · | AV1 decode: the codec the web is moving to, behind the trait built for it (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

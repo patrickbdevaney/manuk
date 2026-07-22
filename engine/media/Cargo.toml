@@ -28,6 +28,9 @@ audio = ["dep:symphonia"]
 # `video` is opt-in for the same reason `audio` is, and one more: openh264 compiles C. Leaving it
 # on by default would put a `cc` invocation into every configuration that builds this crate.
 video = ["dep:openh264"]
+# AV1 decode (MEDIA.md tick 6). Same opt-in isolation as `video`: rav1d is a large compile that
+# must never ride into the js/page gate lanes via feature unification.
+av1 = ["video", "dep:re_rav1d"]
 
 [dependencies]
 re_mp4 = "0.4"
@@ -62,6 +65,14 @@ symphonia = { version = "0.6", default-features = false, features = ["aac"], opt
 # MSRV error that names two SIMD crates and never mentions H.264 — a confusing failure a caret range
 # would re-introduce on the next unrelated `cargo update`. Unpin when the toolchain moves past 1.89.
 openh264 = { version = "=0.9.0", optional = true }
+
+# AV1 decode. `re_rav1d` is the dav1d port WITH a Rust API (rav1d upstream is a C-ABI drop-in for
+# libdav1d and exposes no Rust surface — MEDIA.md trap #3). BSD-2, pure Rust. Chosen per the
+# observer's tick-235 provenance steer and MEDIA.md's ladder; also the eventual AVIF unlock.
+# `default-features = false`: the default `asm` feature shells out to nasm at build time (not
+# installed here, and a build-tool dependency the wall must not acquire). Pure-Rust paths only;
+# 8-bit depth is what the web serves (10-bit AV1 exists but is not worth a 2x compile today).
+re_rav1d = { version = "0.1.3", optional = true, default-features = false, features = ["bitdepth_8"] }
 tracing.workspace = true
 
 # The decode gate needs the decoder. `required-features` is what keeps `cargo test -p manuk-media`
@@ -73,6 +84,10 @@ required-features = ["audio"]
 [[test]]
 name = "video_decode"
 required-features = ["video"]
+
+[[test]]
+name = "av1_decode"
+required-features = ["av1"]
 
 [[test]]
 name = "playback_clock"

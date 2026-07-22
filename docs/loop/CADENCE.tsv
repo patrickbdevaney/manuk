@@ -144,3 +144,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 349	e18030d	1784703172	2026-07-22T02:52:52-04:00	82	capability	67	2	31	30	183	81	3896	6960	0	320	0	MSE playback join: appended bytes reach the decoder, and the registry tells the truth (2026-07-22)
 350	8db5344	1784704668	2026-07-22T03:17:48-04:00	1496	capability	69	15	1073	84	183	81	3896	6960	0	320	0	audio output device: decoded PCM reaches the device boundary (2026-07-22)
 352	4e228d2	1784706011	2026-07-22T03:40:11-04:00	1343	capability	71	7	193	9	183	81	3896	6960	0	320	0	the `muted` attribute reaches the device: silent consumption, not pause (2026-07-22)
+353	37146ca	1784707529	2026-07-22T04:05:29-04:00	1518	capability	66	16	612	42	183	81	3896	6960	0	320	0	AV1 decode: the codec the web is moving to, behind the trait built for it (2026-07-22)

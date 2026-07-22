@@ -44,6 +44,18 @@
 use crate::video::{Frame, VideoDecoder, VideoError};
 use crate::Track;
 
+/// The codec ladder: which decoder reads this track. `avc1.*` (Baseline) is openh264; `av01.*`
+/// is re_rav1d when the `av1` feature is compiled in. Everything else falls through to
+/// [`crate::video::H264Decoder::new`], whose honesty guard names the codec in its refusal —
+/// so a build without `av1` refuses AV1 with the same words it always did.
+fn decoder_for(track: &Track) -> Result<Box<dyn VideoDecoder>, VideoError> {
+    #[cfg(feature = "av1")]
+    if crate::av1::can_decode(track) {
+        return Ok(Box::new(crate::av1::Av1Decoder::new(track)?));
+    }
+    Ok(Box::new(crate::video::H264Decoder::new(track)?))
+}
+
 /// A decoded video track, indexed by presentation time.
 ///
 /// Frames are held in presentation order. Decoding is eager: the fixtures and segments this runs on
@@ -64,7 +76,7 @@ impl FrameTimeline {
     /// parameter sets or reference frames), not an error — the `None` case is skipped, exactly as
     /// `decode_first_frame` does.
     pub fn decode(track: &Track, buffer: &[u8]) -> Result<Self, VideoError> {
-        let mut decoder = crate::video::H264Decoder::new(track)?;
+        let mut decoder = decoder_for(track)?;
         let mut frames: Vec<Frame> = Vec::new();
 
         for s in &track.samples {
@@ -76,6 +88,9 @@ impl FrameTimeline {
                 frames.push(frame);
             }
         }
+        // The delayed tail — a queueing decoder (AV1) holds frames past the last sample, and
+        // dropping them here truncates the end of every stream it decodes.
+        frames.extend(decoder.finish()?);
 
         if frames.is_empty() {
             return Err(VideoError::Failed(
