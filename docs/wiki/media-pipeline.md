@@ -1174,3 +1174,52 @@ High/Main-profile H.264 (the codec ladder's M5+ rung: cros-codecs/VAAPI or the f
 feature-gate), audio OUTPUT (decoded PCM exists, `cpal` unbound — gate on PCM, never on a sound
 card), and background-tab drains (the harvest rides `advance_media`, which only the foreground
 redraw path calls).
+
+## Tick 350 — audio OUTPUT: the device end, and why the gate never listens
+
+The last dead organ in the A/V-file pipeline. AAC decoded to sample-exact PCM since M4 (tick 235)
+and the tick-349 join put appended streams through the decoder — but nothing on the box ever
+consumed the PCM, so every video played mute. `cpal` (BORROWED, 0.17) is now the device;
+`shell/src/audio.rs` is the split that keeps it gateable.
+
+### The pump/device split IS the gate design
+
+`AudioFeed` (the pump) is pure arithmetic: decoded interleaved PCM + a cursor, filled into
+whatever chunk sizes the caller asks for. `AudioOut` (the device) is a `cpal` output stream whose
+real-time callback locks the shared `Arc<Mutex<AudioFeed>>` and calls `fill`. Everything that can
+be got wrong — a sample dropped at a chunk boundary, a cursor that creeps while paused, a restart
+on an MSE re-decode — lives in the pump, where `G_AUDIO_PUMP` drives it against the real fixture's
+decode with NO device. The observer's standing rule (tick 264) is load-bearing here: **gate on
+decoded-PCM correctness, never audible playback** — a gate that needs a working sound card
+false-REDs on every headless box. `AudioOut::open` returning `None` (no hardware) is the normal
+headless case, probed once per page, and is a silently-playing video rather than an error.
+
+### Three contracts the gates pin
+
+- **Silence is written, not assumed.** Every non-delivering path (paused / exhausted / poisoned
+  lock) must `fill(0.0)` the WHOLE buffer — the device plays whatever is in it, and an untouched
+  buffer replays the previous callback as a stutter-loop. The gate pre-fouls buffers with NaN and
+  asserts they come back zeroed.
+- **The cursor lands EXACTLY.** First run of the gate caught its own hole: advancing by
+  `out.len()` instead of the copied count corrupts nothing mid-stream (full chunks are equal) and
+  only overshoots at the tail — invisible to the byte-exact concatenation check, caught only by
+  `cursor == samples.len()` after the drain. A green that could not go red measured nothing.
+- **The Arc survives the MSE grow.** The device captured its feed clone at open time. `load_mse`
+  therefore mutates the carried feed in place (`replace_pcm`: new PCM, cursor kept, clamped if
+  shorter) — a fresh Arc would leave the stream pulling from an orphan and the audio dies on the
+  first append. Only `Arc::ptr_eq` can see this; `G_AUDIO_JOIN` asserts it.
+
+### Feature-lane discipline (the wall cares)
+
+`dep:cpal` rides the shell's `gui` feature — the `--no-default-features` headless check never
+compiles ALSA bindings. `manuk-media` gains `audio` in the SHELL's dep only (joining `video`
+there): the ~25 manuk-page gate binaries build `manuk-media` through `manuk-js` with
+`default-features = false`, so symphonia stays out of their link exactly as the M4 isolation
+established.
+
+### Residue, honestly
+
+A/V sync is still wall-clock: `AudioFeed::position_seconds()` is the master clock the sync rule
+says video must slave to, and `MediaSet::advance` still passes `None` — the hand-off point is
+documented there. No volume/`muted` plumbing into the feed; one output stream binds the FIRST
+audio-carrying element (mixing is a mixer's job); non-AAC audio still refused by name.

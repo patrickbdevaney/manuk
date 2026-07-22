@@ -360,3 +360,46 @@ certifying component #1 honestly is the precondition for declaring Phase 0 done.
 intact and unbent.
 
 **Next check due: tick 350.**
+
+## Check #10 — tick 350
+
+**Horizon:** Phase 0 — the FULL daily-driver checklist ("runs almost every website"), the v1 north star
+of CONSTITUTION.MD **Part VII**. **Gate:** the FIDELITY-SCORING-REDESIGN.md certificate (≥0.75
+structural/placement fidelity on ≥95% of the corpus + ≥0.70 per top-20 category), NOT a WPT percentage.
+Authoritative work list: PHASE0-BOUNDED-REMAINDER.md.
+
+**Gate or scoreboard?** Gate. The window since Check #9 (343–350) closed two named arcs from the ranked
+orders. First the instrument roll-up (**343**, corpus jarring tally — the last architecturally-bounded
+oracle piece; the instrument then deliberately PIVOTED per its own assessment rather than being mined
+past its value). Then the bounded daily-driver vein: **344** `:muted`, **345/347/348** the HTTP
+cache-correctness arc (conditional revalidation → Expires → Age; the cache now behaves like a real
+browser cache against real CDNs), **346** drag-and-drop editor half. Then the board's CO-#1 order (2)
+head-on: **349** the MSE playback JOIN (the appended-bytes class — YouTube-shaped players — decodes and
+paints, with `isTypeSupported` honestly steering) and **350** the audio output device (cpal borrowed;
+decoded PCM reaches the device boundary sample-exact; the last dead organ in the A/V file pipeline).
+Zero WPT-chasing, zero encoding tail; VII.1's TEST held every tick — each moved component #1 (rendering
+the real internet, media class) or #2.
+
+**Is the loop still pointed at the frontier?** Yes. The board's marquee target is "YOUTUBE PLAYS"; the
+window built exactly the two organs that target lacked (the SourceBuffer→decoder join, the sound
+device). Remainder on that path is codec breadth (High-profile H.264 / AV1 per MEDIA.md), A/V
+master-slave sync, and ABR — named in the constellation row, not over-claimed.
+
+**Is the agentic surface (component #2) being served?** Yes — **346** `Page::dispatch_drag` is a native
+driving-surface entry point (the sortable-list/kanban reorder handoff), the same seam as
+dispatch_click/key/composition. The semantic model rode every media tick (frames land in the page's
+own image map, queryable state).
+
+**Any invariant bent?** No. Bar 0 held — every tick additive, suites green twice, EXIT 0. THE RATCHET
+honored — nothing traded, wall marks not retuned (349/350 landed off honest warm receipts). **I2/I8:**
+one new dependency, `cpal` 0.17 — BORROWED per the standing rule (the board's explicit order), pure
+adoption, not forked or patched, and confined to the shell's `gui` feature lane so no headless or gate
+binary links sound hardware. **Process rule 3 enforced against ourselves:** tick 350's first RED probe
+PASSED — the gate had a hole (a cursor overshoot invisible to byte-exact concatenation); the hole was
+closed with an exact-landing assertion and the same edit now fires. A green that cannot go red measures
+nothing, including ours.
+
+**PART VI / VII correction.** None. The four-component v1 scope is intact; media work stays scoped to
+"the representative real internet plays" (DRM/EME remains a stated permanent wall per I7).
+
+**Next check due: tick 358.**

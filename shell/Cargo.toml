@@ -15,7 +15,7 @@ path = "src/main.rs"
 # (`--no-default-features`) to build just the headless `render` pipeline, which
 # needs no display/GPU — useful for CI and this environment.
 default = ["gui", "stylo", "spidermonkey"]
-gui = ["dep:winit", "dep:wgpu", "dep:pollster", "dep:bytemuck", "dep:raw-window-handle", "dep:arboard"]
+gui = ["dep:winit", "dep:wgpu", "dep:pollster", "dep:bytemuck", "dep:raw-window-handle", "dep:arboard", "dep:cpal"]
 # Route the cascade through the real Stylo engine (full selectors/@media/var/cascade;
 # 72/72 parity). Default-on for real-world CSS fidelity, with a per-page panic fallback
 # to MinimalCascade. Heavy to build; drop with --no-default-features for the lean path.
@@ -44,7 +44,7 @@ manuk-agent.workspace = true
 # rather than naming a media type, so the ~25 gate binaries that link it never compile openh264's
 # C — the isolation tick 236 established. The shell is a single binary and the one place a real
 # decode has to happen, so it is the correct and only place to pay that cost.
-manuk-media = { workspace = true, features = ["video"] }
+manuk-media = { workspace = true, features = ["video", "audio"] }
 
 anyhow.workspace = true
 tracing.workspace = true
@@ -63,3 +63,4 @@ wgpu = { workspace = true, optional = true }
 pollster = { workspace = true, optional = true }
 bytemuck = { workspace = true, optional = true }
 raw-window-handle = { workspace = true, optional = true }
+cpal = { version = "0.17.3", optional = true }

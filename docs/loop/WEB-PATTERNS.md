@@ -3064,3 +3064,21 @@ here kills every session at its first append. **The trap:** `isTypeSupported` st
 what genuinely plays end-to-end (here: MP4 + Baseline H.264 + AAC; VP9/webm stay false) — a `true` not
 backed by a decoder steers the player OFF its working fallback and onto a `buffered` range whose media
 never decodes, turning a degraded-but-working player into a hung one.
+
+## Audio output — the gate must never need the sound card (tick 350)
+
+**The class of the web this unlocks:** everything with sound — the video the tick-349 join made
+visible was still MUTE, and to a user a silent video is a broken site, not a degraded one.
+**(1)** Split pump from device: the pump (decoded PCM + cursor, chunk-size-agnostic `fill`) is
+pure arithmetic a headless test drives sample-exact against the real decode; the device (`cpal`)
+is a best-effort wrapper whose absence is the *normal* headless case. A gate that opens hardware
+false-REDs on every CI box — gate on decoded-PCM delivery, never audible playback. **(2)** Silence
+is a WRITTEN contract: every non-delivering path must zero the whole buffer, because the device
+plays whatever is in it and an untouched buffer replays the last callback as a stutter-loop.
+**(3)** The device holds an Arc clone from open time, so an MSE re-decode must mutate the feed in
+place — a fresh Arc kills the audio on the first append and only `Arc::ptr_eq` can see it.
+**The trap:** a RED probe that cannot fire. The obvious cursor bug (advance by chunk size, not
+copied count) does NOT corrupt the sample stream — full chunks are equal, it only overshoots at
+the tail — so the byte-exact assertion alone was a green that could not go red for that bug; the
+exact-landing assertion (`cursor == len` after drain) is what makes it falsifiable. Run the RED
+edit and WATCH it fail before trusting any green.

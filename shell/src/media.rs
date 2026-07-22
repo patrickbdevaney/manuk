@@ -26,9 +26,12 @@
 //! is why the decode result is stored as an `Option<VideoPlayer>` and not merely inserted on success.
 
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use manuk_dom::NodeId;
 use manuk_media::{demux, TrackKind, VideoPlayer};
+
+use crate::audio::AudioFeed;
 
 /// Every `<video>` on the current page that has been handed bytes.
 ///
@@ -57,6 +60,13 @@ struct Entry {
     player: VideoPlayer,
     /// Presentation time of the frame currently handed to the page. `None` = nothing sent yet.
     published: Option<f64>,
+    /// The element's decoded audio, shared with the device callback (tick 350). `None` when the
+    /// file has no audio track or its codec is not decodable — video plays silently, honestly.
+    ///
+    /// The **Arc identity is load-bearing**: `AudioOut` captured its clone when the stream
+    /// opened, so an MSE re-decode mutates this feed in place (`replace_pcm`) rather than
+    /// swapping in a new Arc the device would never see.
+    audio: Option<Arc<Mutex<AudioFeed>>>,
 }
 
 impl MediaSet {
@@ -91,11 +101,14 @@ impl MediaSet {
         let ok = player.is_some();
         if let Some(mut p) = player {
             p.play();
+            let audio =
+                Self::decode_audio(bytes).map(|pcm| Arc::new(Mutex::new(AudioFeed::new(pcm))));
             self.players.insert(
                 node,
                 Some(Entry {
                     player: p,
                     published: None,
+                    audio,
                 }),
             );
         } else {
@@ -126,11 +139,16 @@ impl MediaSet {
             )),
             _ => None,
         };
+        // Carried across the re-decode so the device keeps its Arc — see the note on `Entry`.
+        let prev_audio = match self.players.get(&node) {
+            Some(Some(e)) => e.audio.clone(),
+            _ => None,
+        };
         let Some(mut p) = Self::decode(bytes) else {
             self.players.insert(node, None);
             return false;
         };
-        match resume {
+        let playing = match resume {
             Some((pos, playing)) => {
                 p.seek(pos);
                 if playing {
@@ -138,9 +156,31 @@ impl MediaSet {
                 } else {
                     p.pause();
                 }
+                playing
             }
-            None => p.play(), // same autoplay rationale as `load`
-        }
+            None => {
+                p.play(); // same autoplay rationale as `load`
+                true
+            }
+        };
+        // The audio side of the resume rule: a grown stream REPLACES the PCM in the existing
+        // feed (cursor survives); a new stream gets a fresh feed; a grow whose audio no longer
+        // decodes keeps what it had rather than going silent mid-session.
+        let audio = match (prev_audio, Self::decode_audio(bytes)) {
+            (Some(feed), Some(pcm)) => {
+                if let Ok(mut f) = feed.lock() {
+                    f.replace_pcm(pcm);
+                    f.set_playing(playing);
+                }
+                Some(feed)
+            }
+            (None, Some(pcm)) => {
+                let mut f = AudioFeed::new(pcm);
+                f.set_playing(playing);
+                Some(Arc::new(Mutex::new(f)))
+            }
+            (prev, None) => prev,
+        };
         // `published: None` so the current frame is re-pushed even if its presentation time
         // matches — the page's image map may never have seen this player's pixels.
         self.players.insert(
@@ -148,15 +188,44 @@ impl MediaSet {
             Some(Entry {
                 player: p,
                 published: None,
+                audio,
             }),
         );
         true
+    }
+
+    /// The element's audio feed, if its stream decoded one. The GUI hands this to [`AudioOut`]
+    /// once; navigation clears the set and the device with it.
+    ///
+    /// [`AudioOut`]: crate::audio::AudioOut
+    pub fn audio_feed(&self, node: NodeId) -> Option<Arc<Mutex<AudioFeed>>> {
+        self.players.get(&node)?.as_ref()?.audio.clone()
+    }
+
+    /// Some element's audio feed — the one the single output stream binds to.
+    ///
+    /// One device stream, first feed found: mixing multiple simultaneously-playing videos is a
+    /// mixer's job and deliberately out of this tick; the overwhelmingly common page has one
+    /// playing video.
+    pub fn any_audio_feed(&self) -> Option<Arc<Mutex<AudioFeed>>> {
+        self.players
+            .values()
+            .flatten()
+            .find_map(|e| e.audio.clone())
     }
 
     fn decode(bytes: &[u8]) -> Option<VideoPlayer> {
         let movie = demux(bytes).ok()?;
         let track = movie.tracks.iter().find(|t| t.kind == TrackKind::Video)?;
         VideoPlayer::decode(track, bytes).ok()
+    }
+
+    /// The audio half of a decode. `None` — no track, undecodable codec, damaged stream — is a
+    /// silently-playing video, never a failed load: audio must not veto a picture that decoded.
+    fn decode_audio(bytes: &[u8]) -> Option<manuk_media::Pcm> {
+        let movie = demux(bytes).ok()?;
+        let track = movie.tracks.iter().find(|t| t.kind == TrackKind::Audio)?;
+        manuk_media::decode_track(track, bytes).ok()
     }
 
     /// Advance every player by a wall-clock delta and push the current picture into the page.
@@ -474,6 +543,60 @@ mod tests {
             "the grown stream MUST be retried — remembering the prefix as dead kills every \
              real MSE session at its first append"
         );
+    }
+
+    /// # G_AUDIO_JOIN — a loaded stream exposes its audio to the device, and a re-decode resumes
+    ///
+    /// The [`crate::audio`] gate proves the pump is sample-exact; this proves [`MediaSet`]
+    /// actually *builds* one from a real load and keeps the device's handle valid across the MSE
+    /// grow cycle. The claims and their RED edits:
+    ///
+    /// - **an A/V load exposes a feed** — drop the `decode_audio` call in `load`: every video
+    ///   plays silently forever while the video-side assertions stay green (the exact dead-organ
+    ///   failure the MSE join gate exists for, one organ over).
+    /// - **the Arc survives a re-decode** — build a fresh `AudioFeed` in `load_mse` instead of
+    ///   `replace_pcm` on the carried one: the device stream keeps pulling from the orphaned old
+    ///   feed, and every append silences the audio from that moment on. `Arc::ptr_eq` is the only
+    ///   observer that can see this.
+    /// - **the cursor survives a re-decode** — reset it: every appendBuffer restarts the sound.
+    #[test]
+    fn g_audio_join() {
+        let node = manuk_dom::NodeId(1);
+        let mut set = MediaSet::new();
+        assert!(set.load(node, AV), "the A/V fixture must decode");
+        let feed = set
+            .audio_feed(node)
+            .expect("an A/V file must expose its audio feed — silent video is the dead organ");
+        {
+            let mut f = feed.lock().unwrap();
+            assert!(f.is_playing(), "autoplay parity with the video side");
+            assert!(f.sample_rate() > 0 && f.channels() > 0);
+            // Consume some audio so the resume below has a position to lose.
+            let mut buf = vec![0f32; 1024];
+            assert_eq!(f.fill(&mut buf), 1024, "the feed delivers real samples");
+        }
+        let pos = feed.lock().unwrap().position_seconds();
+        assert!(pos > 0.0);
+
+        // ── The MSE grow cycle: same Arc, position kept.
+        assert!(set.load_mse(node, AV), "the re-published stream re-decodes");
+        let feed2 = set
+            .audio_feed(node)
+            .expect("the grown stream still has audio");
+        assert!(
+            Arc::ptr_eq(&feed, &feed2),
+            "a re-decode must mutate the feed the device already holds — a fresh Arc leaves the \
+             output stream pulling from an orphan and the audio dies on the first append"
+        );
+        assert!(
+            (feed2.lock().unwrap().position_seconds() - pos).abs() < 1e-9,
+            "audio must RESUME across a re-decode, not restart"
+        );
+
+        // ── A stream with no decodable audio yields no feed, and does not veto the picture.
+        let mut silent = MediaSet::new();
+        assert!(!silent.load(node, b"not a movie"), "garbage still fails");
+        assert!(silent.audio_feed(node).is_none());
     }
 
     /// **What the viewer would actually see** — the page is painted and the rendered canvas is

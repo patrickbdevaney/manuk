@@ -268,6 +268,14 @@ struct App {
     /// rather than a fixed guess at the frame interval. A hardcoded 1/60 makes every video play at
     /// exactly the wrong speed on any machine that misses vsync.
     media_last_tick: std::time::Instant,
+    /// The one live output stream (tick 350), bound to some playing element's [`AudioFeed`].
+    /// `None` + `audio_tried` = the device probe failed (headless box) — degraded, silent, honest.
+    ///
+    /// [`AudioFeed`]: crate::audio::AudioFeed
+    audio_out: Option<crate::audio::AudioOut>,
+    /// Whether a device open was already attempted for the current page's media, so a box with no
+    /// sound hardware is probed once per page rather than once per frame.
+    audio_tried: bool,
     /// Open page WebSockets, by socket id. The value is the SEND half — the UI thread queues a
     /// frame onto it and the connection's own task writes it to the wire. A WebSocket is
     /// bidirectional, unlike a fetch, so it needs this channel as well as the `NavEvent` path back.
@@ -481,6 +489,8 @@ impl App {
             nav_gen: 0,
             media: crate::media::MediaSet::new(),
             media_last_tick: std::time::Instant::now(),
+            audio_out: None,
+            audio_tried: false,
             ws_send: std::collections::HashMap::new(),
             loading: false,
             bookmarks,
@@ -1176,6 +1186,9 @@ impl App {
         // The players are keyed by NodeId into the OUTGOING DOM. Kept across a navigation they
         // would hand the next page's nodes the previous page's video.
         self.media.clear();
+        // Dropping the stream stops the device; the next page's media re-probes it.
+        self.audio_out = None;
+        self.audio_tried = false;
         // Dropping every sender closes the old page's sockets: a live-chat socket must not keep
         // streaming into a document the user has navigated away from.
         self.ws_send.clear();
@@ -1204,6 +1217,9 @@ impl App {
         // The players are keyed by NodeId into the OUTGOING DOM. Kept across a navigation they
         // would hand the next page's nodes the previous page's video.
         self.media.clear();
+        // Dropping the stream stops the device; the next page's media re-probes it.
+        self.audio_out = None;
+        self.audio_tried = false;
         // Dropping every sender closes the old page's sockets: a live-chat socket must not keep
         // streaming into a document the user has navigated away from.
         self.ws_send.clear();
@@ -1456,6 +1472,15 @@ impl App {
         }
         if self.media.is_empty() {
             return;
+        }
+        // Bind the output device to the first audio-carrying stream, once per page (tick 350).
+        // A failed probe (no sound hardware) is remembered: video plays silently, and the
+        // browser does not interrogate the hardware again every frame.
+        if self.audio_out.is_none() && !self.audio_tried {
+            if let Some(feed) = self.media.any_audio_feed() {
+                self.audio_out = crate::audio::AudioOut::open(feed);
+                self.audio_tried = true;
+            }
         }
         let now = std::time::Instant::now();
         let dt = now.duration_since(self.media_last_tick).as_secs_f64();

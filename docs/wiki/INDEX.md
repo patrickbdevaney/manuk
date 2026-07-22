@@ -621,6 +621,11 @@
   - L1148 · The registry now tells the truth (and only the truth)
   - L1156 · G_MSE_JOIN (shell suite — which IS in the verify wall, unlike the older media gates)
   - L1170 · Residue, honestly
+  - L1178 · Tick 350 — audio OUTPUT: the device end, and why the gate never listens
+  - L1185 · The pump/device split IS the gate design
+  - L1197 · Three contracts the gates pin
+  - L1212 · Feature-lane discipline (the wall cares)
+  - L1220 · Residue, honestly
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -839,4 +844,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-754 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+759 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

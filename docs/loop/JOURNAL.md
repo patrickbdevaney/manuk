@@ -15460,3 +15460,49 @@ crates.
 TICK SHAPE: capability (MSE playback join — the appended-bytes class of the web (adaptive players) can now decode and paint; isTypeSupported honestly steers to Baseline+AAC MP4; [host-native pattern: publish channel in the engine we own, decode in the shell driver that already drives progressive]). GATES +1 (G_MSE_JOIN, in the shell suite = IN the verify wall); constellation row 73 partial→gated.
 CONSTELLATION: media / MSE → gated (G_MSE, G_MEDIA_BUFFERED, G_MSE_JOIN).
 WIKI: docs/wiki/media-pipeline.md — the MSE playback JOIN (channel, load_mse's two inverted assumptions, honest registry, residue).
+
+## Tick 350 — audio output device: decoded PCM reaches the device boundary (2026-07-22)
+
+CO-#1 order (2) MEDIA JOIN + CODECS, the step the board names after the t349 join: "cpal audio
+out". Constellation row 72 was the last dead organ in the A/V pipeline — AAC has decoded to
+sample-exact PCM since M4 (t235) and t349 put appended MSE streams through the decoder, but
+nothing consumed the PCM: every video on every page played MUTE, which to a user is a broken
+site.
+
+THE BUILD (BORROW, per the standing rule): cpal 0.17 in shell/src/audio.rs, split so the gate
+never needs hardware. `AudioFeed` = the pump: decoded interleaved PCM + cursor behind
+Arc<Mutex>, chunk-size-agnostic `fill` with a written silence contract (paused/exhausted/
+poisoned-lock paths zero the WHOLE buffer — the device replays an untouched one as a
+stutter-loop). `AudioOut` = the device: default output at the BITSTREAM's rate/channels,
+best-effort Option (None on a headless box = silent video, probed once per page). MediaSet
+decodes the AAC track beside video (audio never vetoes a picture); `load_mse` mutates the
+carried feed IN PLACE (`replace_pcm`: cursor survives, clamps if shorter) because the device
+holds its Arc clone from open time. gui binds the stream to the first audio-carrying element.
+Feature lanes hold: `dep:cpal` rides `gui` (headless check compiles no ALSA); manuk-media
+`audio` joins `video` in the SHELL dep only, so the ~25 manuk-page gate binaries still build
+symphonia-free via default-features=false.
+
+GATES (observer rule t264: decoded-PCM correctness, NEVER audible playback): G_AUDIO_PUMP —
+sample-exact delivery across odd 313-sample chunks vs the fixture's own decode, NaN-fouled
+buffers come back zeroed, pause holds position and resumes at the exact sample, seek lands
+frame-aligned, MSE grow keeps the cursor, shorter replacement clamps. G_AUDIO_JOIN — an A/V
+load exposes a feed, `Arc::ptr_eq` across load_mse, position resumes, garbage yields no feed.
+Both in the shell suite = IN the verify wall.
+
+RED-PROVEN three ways (each edit run, watched fail, restored; suite re-green): (1) cursor +=
+out.len() → the FIRST run PASSED — the gate had a hole: full chunks are equal so the stream
+never corrupts, only the tail overshoots; added the exact-landing assertion (cursor == len
+after drain) and the same edit now fails it. A green that cannot go red measured nothing —
+logged in the gate doc and WEB-PATTERNS. (2) cursor += n+1 (skip-per-chunk) → byte-exact
+concatenation fails. (3) fresh Arc in load_mse instead of replace_pcm → ptr_eq fails ("the
+audio dies on the first append").
+
+NO REGRESSION: full manuk-shell 62/62 (+2) + g_teardown 2/2, run twice, EXIT 0 both.
+`--no-default-features` headless check compiles clean (target/headless lane, as verify runs
+it). fmt clean. New dep compiles once into the shell lane only.
+
+Constitution Check #10 carried this tick (due 342+8) — logged in CONSTITUTION-CHECK.md.
+
+TICK SHAPE: capability (audio output device — the silent-video organ; sound reaches the device boundary sample-exact, device itself best-effort per headless honesty; [BORROW pattern: cpal, pump/device split keeps the gate hardware-free]). GATES +2 (G_AUDIO_PUMP, G_AUDIO_JOIN, shell suite = IN the wall); constellation row 72 missing→gated.
+CONSTELLATION: media / audio output device → gated (G_AUDIO_PUMP, G_AUDIO_JOIN).
+WIKI: docs/wiki/media-pipeline.md — Tick 350 audio OUTPUT (pump/device split, three contracts, feature-lane discipline, residue).
