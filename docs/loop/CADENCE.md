@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **188** | ticks 1–395 |
-| median tick cycle | **19m** | 187 intervals |
+| ticks landed | **189** | ticks 1–396 |
+| median tick cycle | **19m** | 188 intervals |
 | median, last 10 | **14m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.68** | 273.6h elapsed |
-| median verify wall | **59s** | 127 ticks |
+| **ticks per hour** | **0.69** | 273.7h elapsed |
+| median verify wall | **59s** | 128 ticks |
 | wall trend | 39s → 56s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**102 of 188 ticks** (54%) moved a
+**102 of 189 ticks** (54%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -285,5 +285,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **393** | 2026-07-22 14:09 | 6m | spec | 57s | +90/−33 | 183 | 81 | 56.0% · | the SVG-internals build spec: borrow usvg; and the nih.gov segfault evidence (2026-07-22) |
 | **394** | 2026-07-22 14:26 | 17m | capability | 56s | +181/−37 | 183 | 81 | 56.0% · | inline SVG paints: the spec's paint half landed same-day (2026-07-22) |
 | **395** | 2026-07-22 14:39 | 13m | probe | 56s | +83/−33 | 183 | 81 | 56.0% · | the none→block family is path-misattribution: tree drift wearing style drift's face (2026- |
+| **396** | 2026-07-22 14:42 | 3m | self-audit | 58s | +51/−34 | 183 | 81 | 56.0% · | self-audit: clean through the instrument arc (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

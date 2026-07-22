@@ -16687,3 +16687,19 @@ the arc — t383 starved fetches, t392 discard-coverage price, t395 path pairing
 same-tag index paths are fragile to single-node tree drift — pair by content signature, not
 position alone]). GATES +0. CONSTELLATION: cross/real-world-QUIRKS row current.
 WIKI: docs/wiki/conformance-and-oracles.md — same-tag index paths misattribute tree drift.
+
+## Tick 396 — self-audit: clean through the instrument arc (2026-07-22)
+
+CADENCE OBLIGATION (386+10). Ran ./scripts/self-audit.sh: CLEAN — "methodology and reality
+agree", zero ✗. Window 387-395 review: two cadence checks (surface #12 t387, constitution #15
+t390), one Baseline capability (field-sizing t388), two measured-model layout fixes (t389/391 —
+including correcting our own wrong pin against measured Chrome), one measurement re-crawl
+(t392), one spec + same-day paint landing (t393/394 — inline SVG visible), and one probe (t395)
+that traced a ledger family to the instrument's path-pairing. Three instrument-honesty finds in
+one arc (starved fetches, coverage price, path pairing) — the audit's own confirmation that the
+gate outranks the scoreboard. Zero WPT-chasing; SINGLE_SITE_TICKS 0; every engine change
+RED-proven. LAST_AUDIT_TICK 386→396; next due 406 (with the wall audit).
+
+TICK SHAPE: self-audit (governance checkpoint). GATES +0. [no-pattern]
+CONSTELLATION: none.
+WIKI: none.
