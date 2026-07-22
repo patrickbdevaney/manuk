@@ -154,3 +154,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 360	79c559d	1784712487	2026-07-22T05:28:07-04:00	1185	capability	55	15	432	42	183	81	3896	6960	0	320	0	the live media-IDL channel: .muted and .volume reach the device (2026-07-22)
 361	638883a	1784713446	2026-07-22T05:44:06-04:00	959	capability	59	11	239	48	183	81	3896	6960	0	320	0	playbackRate applies: scaled time, and the honest mute instead of the chipmunk (2026-07-22)
 362	0401200	1784714565	2026-07-22T06:02:45-04:00	1119	capability	61	15	245	37	183	81	3896	6960	0	320	0	MP3 stream decode: the podcast class's organ (2026-07-22)
+363	676f276	1784715507	2026-07-22T06:18:27-04:00	942	capability	58	10	242	62	183	81	3896	6960	0	320	0	the MP3 join: <audio> plays, and canPlayType stops refusing it (2026-07-22)

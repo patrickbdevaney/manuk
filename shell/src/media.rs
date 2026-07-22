@@ -66,7 +66,10 @@ pub struct MediaSet {
 /// record of what was *sent* can answer that. It also makes the driver correct across a re-layout
 /// or a page that dropped its image map, where the player is mid-stream and the screen is blank.
 struct Entry {
-    player: VideoPlayer,
+    /// `None` is an AUDIO-ONLY stream (tick 363: `<audio src="x.mp3">`) — no frames, no
+    /// transport; the feed itself is the playhead (the device consumes it, `position_seconds`
+    /// reports it, `exhausted` is `ended`).
+    player: Option<VideoPlayer>,
     /// Presentation time of the frame currently handed to the page. `None` = nothing sent yet.
     published: Option<f64>,
     /// The element's decoded audio, shared with the device callback (tick 350). `None` when the
@@ -109,9 +112,7 @@ impl MediaSet {
     ///
     /// Returns whether a picture is now available — the caller repaints on `true`.
     pub fn load(&mut self, node: NodeId, bytes: &[u8]) -> bool {
-        let player = Self::decode(bytes);
-        let ok = player.is_some();
-        if let Some(mut p) = player {
+        if let Some(mut p) = Self::decode(bytes) {
             p.play();
             if let Some(&r) = self.idl_rate.get(&node) {
                 p.set_rate(r);
@@ -121,16 +122,31 @@ impl MediaSet {
             self.players.insert(
                 node,
                 Some(Entry {
-                    player: p,
+                    player: Some(p),
                     published: None,
                     audio,
                 }),
             );
-        } else {
-            // Remembered as a known failure. See the module note.
-            self.players.insert(node, None);
+            return true;
         }
-        ok
+        // Not an MP4 with video — a raw AUDIO stream? (tick 363: `<audio src="x.mp3">`.) The
+        // sniff keeps the probe off every genuinely-broken fetch.
+        if manuk_media::sniff_mpeg_audio(bytes) {
+            if let Ok(pcm) = manuk_media::decode_audio_stream(bytes) {
+                self.players.insert(
+                    node,
+                    Some(Entry {
+                        player: None,
+                        published: None,
+                        audio: Some(Arc::new(Mutex::new(AudioFeed::new(pcm)))),
+                    }),
+                );
+                return true;
+            }
+        }
+        // Remembered as a known failure. See the module note.
+        self.players.insert(node, None);
+        false
     }
 
     /// Decode an **MSE stream** for one element — the join's landing point, and deliberately not
@@ -148,10 +164,10 @@ impl MediaSet {
     ///   host drains), never poll-driven.
     pub fn load_mse(&mut self, node: NodeId, bytes: &[u8]) -> bool {
         let resume = match self.players.get(&node) {
-            Some(Some(e)) => Some((
-                e.player.transport().position(),
-                e.player.transport().is_playing(),
-            )),
+            Some(Some(e)) => e
+                .player
+                .as_ref()
+                .map(|p| (p.transport().position(), p.transport().is_playing())),
             _ => None,
         };
         // Carried across the re-decode so the device keeps its Arc — see the note on `Entry`.
@@ -201,7 +217,7 @@ impl MediaSet {
         self.players.insert(
             node,
             Some(Entry {
-                player: p,
+                player: Some(p),
                 published: None,
                 audio,
             }),
@@ -241,7 +257,9 @@ impl MediaSet {
             "playbackRate" => {
                 self.idl_rate.insert(node, value);
                 if let Some(Some(e)) = self.players.get_mut(&node) {
-                    e.player.set_rate(value);
+                    if let Some(p) = e.player.as_mut() {
+                        p.set_rate(value);
+                    }
                 }
             }
             _ => {}
@@ -326,9 +344,18 @@ impl MediaSet {
             // quiet everywhere else. The feed consumes silently rather than pausing (see the
             // `AudioFeed::muted` field note), which is what keeps it a valid sync master.
             // The playback rate (tick 361), re-applied per frame like every live property.
-            let rate = self.idl_rate.get(&node).copied().unwrap_or(1.0);
-            entry.player.set_rate(rate);
-            let rate_scaled = entry.player.transport().rate() != 1.0;
+            // `rate_scaled` derives from the requested rate (clamped as the transport clamps)
+            // so the chipmunk rule covers AUDIO-ONLY entries too — no transport to consult.
+            let rate = self
+                .idl_rate
+                .get(&node)
+                .copied()
+                .unwrap_or(1.0)
+                .clamp(0.0, 16.0);
+            if let Some(p) = entry.player.as_mut() {
+                p.set_rate(rate);
+            }
+            let rate_scaled = rate != 1.0;
             if let Some(a) = entry.audio.as_ref() {
                 // The IDL property, once set, IS the live state (tick 360); the attribute is
                 // the default it falls back to. Both re-derived per frame so either side's
@@ -366,8 +393,13 @@ impl MediaSet {
                 },
                 _ => None,
             };
-            entry.player.tick(dt, clock.as_ref());
-            let Some(frame) = entry.player.frame() else {
+            // Everything below is the VIDEO half; an audio-only entry has no frames and no
+            // transport — the device consumes its feed and that IS its playback.
+            let Some(player) = entry.player.as_mut() else {
+                continue;
+            };
+            player.tick(dt, clock.as_ref());
+            let Some(frame) = player.frame() else {
                 continue;
             };
             // Against what was PUBLISHED, never against where the player was a moment ago — see
@@ -584,6 +616,7 @@ mod tests {
       R.push('mse-av1:' + MediaSource.isTypeSupported('video/mp4; codecs="av01.0.00M.08"'));
       R.push('cpt-av1:' + (document.getElementById('v').canPlayType('video/mp4; codecs="av01.0.00M.08"') === 'probably'));
       R.push('cpt-webm:' + (document.getElementById('v').canPlayType('video/webm; codecs="av01.0.00M.08"') === ''));
+      R.push('cpt-mpeg:' + (document.getElementById('v').canPlayType('audio/mpeg') === 'probably'));
       // Live media-IDL channel (tick 360): the writes a mute button / volume slider perform.
       // Two writes to volume so the host-side coalescing (last per prop) is observable.
       var vv = document.getElementById('v');
@@ -630,6 +663,9 @@ mod tests {
             "mse-av1:true",
             "cpt-av1:true",
             "cpt-webm:true",
+            // tick 363: raw MPEG audio plays end-to-end, so canPlayType says so. RED: put mp3
+            // back in the refuse regex / delete the audio-mpeg arm.
+            "cpt-mpeg:true",
             "idl-muted:true",
             "idl-vol:true",
             "open:true",
@@ -834,6 +870,8 @@ mod tests {
             .as_ref()
             .unwrap()
             .player
+            .as_ref()
+            .unwrap()
             .transport()
             .duration();
         let movie = manuk_media::demux(AV).unwrap();
@@ -855,6 +893,8 @@ mod tests {
                 .as_ref()
                 .unwrap()
                 .player
+                .as_ref()
+                .unwrap()
                 .transport()
                 .position()
         };
@@ -1226,6 +1266,8 @@ mod tests {
             .as_ref()
             .unwrap()
             .player
+            .as_ref()
+            .unwrap()
             .transport()
             .duration();
         let position = |set: &MediaSet| {
@@ -1233,6 +1275,8 @@ mod tests {
                 .as_ref()
                 .unwrap()
                 .player
+                .as_ref()
+                .unwrap()
                 .transport()
                 .position()
         };
@@ -1278,6 +1322,80 @@ mod tests {
         assert!(
             !feed.lock().unwrap().is_muted(),
             "rate 1 lifts the chipmunk mute (nothing else asked for silence)"
+        );
+    }
+
+    /// # G_MP3_DRIVE — an `<audio src="x.mp3">` becomes a playing audio-only entry (t363)
+    ///
+    /// The t362 organ's join. The page already REQUESTS the stream (`pending_media_urls` walks
+    /// audio elements); this proves the bytes become a device-consumable feed with the live
+    /// property machinery attached — and that no frame is ever published for it (an `<audio>`
+    /// must not paint).
+    ///
+    /// ## How each claim goes RED
+    ///
+    /// - **the fallback** — delete the sniff/stream branch in `load`: the MP3 fails MP4 demux,
+    ///   is recorded dead, and every podcast page is silent with a green suite.
+    /// - **sample fidelity** — the feed must deliver `decode_audio_stream`'s exact samples; any
+    ///   re-decode or format detour shows here.
+    /// - **the mute plumbing reaches audio-only entries** — asserted by running it.
+    #[test]
+    fn g_mp3_drive() {
+        const MP3: &[u8] =
+            include_bytes!("../../engine/media/tests/data/bear-audio-10s-CBR-no-TOC.mp3");
+        const HTML: &str = r#"<!doctype html><html><body>
+            <audio id="a" src="pod.mp3"></audio>
+          </body></html>"#;
+        let fonts = manuk_text::FontContext::new();
+        let mut page = manuk_page::Page::load(HTML, "https://pod.test/", &fonts, 800.0);
+        let wanted = page.pending_media_urls();
+        assert_eq!(wanted.len(), 1, "the <audio src> must be requested");
+        let (node, url) = wanted[0].clone();
+        assert_eq!(url, "https://pod.test/pod.mp3");
+
+        let mut set = MediaSet::new();
+        assert!(
+            set.load(node, MP3),
+            "an MPEG stream must load as an AUDIO-ONLY entry — failing MP4 demux and giving up \
+             is the silent-podcast state this gate exists to catch"
+        );
+        let feed = set.audio_feed(node).expect("the entry exposes its feed");
+
+        // ── The feed delivers the decoder's exact samples.
+        let want = manuk_media::decode_audio_stream(MP3).unwrap().samples;
+        {
+            let mut f = feed.lock().unwrap();
+            assert!(f.is_playing(), "autoplay parity with the video side");
+            let mut buf = vec![0f32; 2048];
+            assert_eq!(f.fill(&mut buf), 2048);
+            assert_eq!(
+                &buf[..],
+                &want[..2048],
+                "the device boundary must see the stream decoder's samples exactly"
+            );
+        }
+
+        // ── No frame is ever published: an <audio> element must not paint.
+        let before = painted(&page);
+        assert!(
+            !set.advance(0.5, &mut page, None),
+            "an audio-only entry publishes no picture"
+        );
+        assert_eq!(painted(&page), before);
+
+        // ── The live-property machinery reaches audio-only entries.
+        set.apply_prop(node, "muted", 1.0);
+        set.advance(0.0, &mut page, None);
+        assert!(
+            feed.lock().unwrap().is_muted(),
+            "IDL mute must land on an audio-only feed"
+        );
+        set.apply_prop(node, "muted", 0.0);
+        set.apply_prop(node, "playbackRate", 1.5);
+        set.advance(0.0, &mut page, None);
+        assert!(
+            feed.lock().unwrap().is_muted(),
+            "the chipmunk rule covers audio-only entries: rate != 1 with no time-stretch mutes"
         );
     }
 

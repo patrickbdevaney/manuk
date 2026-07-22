@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **155** | ticks 1–362 |
-| median tick cycle | **20m** | 154 intervals |
-| median, last 10 | **17m** | 10 intervals |
+| ticks landed | **156** | ticks 1–363 |
+| median tick cycle | **20m** | 155 intervals |
+| median, last 10 | **16m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.58** | 265.0h elapsed |
-| median verify wall | **62s** | 94 ticks |
+| **ticks per hour** | **0.58** | 265.3h elapsed |
+| median verify wall | **61s** | 95 ticks |
 | wall trend | 39s → 59s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**84 of 155 ticks** (54%) moved a
+**85 of 156 ticks** (54%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **84** capability ticks, median cycle **20m**
-* median diff per tick: **+245 / −30** lines across 8 files
+* **85** capability ticks, median cycle **20m**
+* median diff per tick: **+244 / −30** lines across 8 files
 
 ## Every tick
 
@@ -252,5 +252,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **360** | 2026-07-22 05:28 | 20m | capability | 55s | +432/−42 | 183 | 81 | 56.0% · | the live media-IDL channel: .muted and .volume reach the device (2026-07-22) |
 | **361** | 2026-07-22 05:44 | 16m | capability | 59s | +239/−48 | 183 | 81 | 56.0% · | playbackRate applies: scaled time, and the honest mute instead of the chipmunk (2026-07-22 |
 | **362** | 2026-07-22 06:02 | 19m | capability | 61s | +245/−37 | 183 | 81 | 56.0% · | MP3 stream decode: the podcast class's organ (2026-07-22) |
+| **363** | 2026-07-22 06:18 | 16m | capability | 58s | +242/−62 | 183 | 81 | 56.0% · | the MP3 join: <audio> plays, and canPlayType stops refusing it (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

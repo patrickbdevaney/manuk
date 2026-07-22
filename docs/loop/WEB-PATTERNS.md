@@ -3145,3 +3145,17 @@ pitch-shifted audio is the defect users hear instantly; silent scaled video is d
 The audible rung (WSOLA-class stretch) is named residue, not smuggled.
 **The trap:** applying rate by scaling the AUDIO clock's position — the device consumes real
 seconds; only the transport's wall path may scale, or sync arithmetic silently corrupts.
+
+## Raw-stream audio — the podcast class end-to-end (ticks 362-363)
+
+**The class of the web this unlocks:** `<audio src="episode.mp3">` — podcasts, previews, legacy
+audio everywhere. A raw MPEG stream is NOT an MP4 track: it needs a format PROBE (symphonia's, one
+seam that will serve FLAC/Ogg), not a box parser. **(1)** Gate the CLOCK, not activity: a 10s file
+must decode to ~10s of frames — a decoder dropping packets passes every produced-samples check.
+**(2)** An audio-only playback entry has no transport: the FEED is the playhead (device consumes,
+position reports, exhausted is ended), no frame is ever published, and policy that consulted the
+transport (the chipmunk rule) must derive from the requested value instead. **(3)** Organ, then
+join+registry, never registry first: canPlayType said '' until the shell could actually route the
+stream, then flipped in the same tick as the join.
+**The trap:** metadata tags (ID3v2 with an embedded PNG) sit BEFORE the sync word — a prober that
+treats tag bytes as sync kills the stream; assert the tagged fixture decodes.

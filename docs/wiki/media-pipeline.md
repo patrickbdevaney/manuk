@@ -1407,7 +1407,20 @@ Gate `mp3_decode` asserts the CLOCK, not activity: the 10-second Chromium fixtur
 ~10s of frames (RED: truncating at 40 packets → 1.07s, caught), the ID3v2-with-embedded-PNG
 fixture is probed PAST (the tag must never parse as sync), garbage is a named refusal.
 
-AV1-style decomposition applies: this is the ORGAN; the shell join (audio-only MediaSet entries —
-today's entries are video-shaped) + the `canPlayType('audio/mpeg')` registry flip land together
-in the next tick. Until then the registry keeps refusing mp3 — the honest direction while the
-shell cannot route it.
+~~AV1-style decomposition applies: this is the ORGAN; the shell join + registry flip land next.~~
+Joined by tick 363 (below).
+
+## Tick 363 — the MP3 join: `<audio>` plays, audio-only entries exist
+
+`Entry.player` became `Option<VideoPlayer>`: `None` is an AUDIO-ONLY stream, where the feed
+itself is the playhead — the device consumes it, `position_seconds` reports it, `exhausted` is
+`ended`; there is no transport to slave and no frame to publish (an `<audio>` must not paint —
+asserted). `load` falls back `sniff_mpeg_audio` → `decode_audio_stream` when MP4 demux fails.
+The entire live-property machinery applies unchanged — IDL mute/volume land on audio-only feeds,
+and the chipmunk rule derives from the requested rate (no transport to consult), so 1.5x podcast
+without time-stretch mutes honestly. `canPlayType('audio/mpeg'|'audio/mp3')` → 'probably' in the
+same tick (mp3 left the refuse regex); MSE's registry stays false for mpeg audio — not an MSE
+container claim.
+
+RED ledger: stream fallback deleted (the silent-podcast state — MP4 demux fails, recorded dead,
+suite green), canPlayType arm deleted (cpt-mpeg:false).

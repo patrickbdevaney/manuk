@@ -15908,3 +15908,34 @@ flip is the named next tick.
 TICK SHAPE: capability (MP3 stream decode — the podcast class's organ, behind the stream seam that will serve FLAC/Ogg too; [BORROW pattern: symphonia probe, two features, zero new codec code]). GATES +1 (mp3_decode, required-features lane — same wall caveat as audio_decode); constellation row 71 updated (organ landed, join+registry named next).
 CONSTELLATION: media / audio decode → MP3 organ landed (mp3_decode).
 WIKI: docs/wiki/media-pipeline.md — Tick 362 MP3 stream decode (stream seam, clock-not-activity gate, organ-then-join).
+
+## Tick 363 — the MP3 join: <audio> plays, and canPlayType stops refusing it (2026-07-22)
+
+The t362 organ's join, per the organ-then-registry rule. `pending_media_urls` already requests
+<audio src> (t262's walk covers audio elements) — the bytes arrive at MediaSet::load, fail MP4 demux,
+and are recorded dead. The join: load falls back to sniff_mpeg_audio → decode_audio_stream → an
+AUDIO-ONLY entry (Entry.player becomes Option<VideoPlayer>; the feed itself is the playhead — the
+device consumes it, position_seconds reports it, exhausted() is ended). The live-property machinery
+(muted/volume IDL, the chipmunk rule at rate≠1) applies unchanged; the mastery/frame code is
+video-only and skips. Registry flips in the same tick: canPlayType('audio/mpeg'|'audio/mp3') →
+'probably' (mp3 leaves the refuse regex); MSE's canDecode stays false for mpeg audio (not an MSE
+container claim). Gate G_MP3_DRIVE (shell suite): the fixture loads as an audio-only entry whose feed
+delivers the decoder's exact samples; muted IDL lands on it; advance publishes NO frame (an <audio>
+must not paint). cpt-mpeg claims ride g_mse_join (one JS test per binary).
+RESULT — LANDED. shell/src/media.rs: Entry.player → Option<VideoPlayer> (None = audio-only; feed is
+the playhead), load's stream fallback (sniff → decode_audio_stream → audio-only entry), rate_scaled
+derives from the requested rate so the chipmunk rule covers transport-less entries, advance's
+video half skips cleanly (no frame, no mastery). engine/js canPlayType: audio/mpeg|audio/mp3 →
+'probably'; mp3 out of the refuse regex. MSE registry unchanged (mpeg audio is not an MSE claim).
+
+RED-PROVEN: (1) stream fallback deleted → "an MPEG stream must load as an AUDIO-ONLY entry" FAILS
+(the silent-podcast state with a green suite); (2) canPlayType arm deleted → cpt-mpeg:false in
+g_mse_join. Both restored byte-for-byte, cmp-verified. Sample fidelity asserted (the feed delivers
+decode_audio_stream's exact samples); no-paint asserted; IDL mute + chipmunk on audio-only asserted.
+
+NO REGRESSION: manuk-shell 69/69 (+1) + teardown TWICE EXIT 0; headless lane clean; fmt clean; all
+prior media gates (drive/mse/av-master/muted/idl/rate/av1/avif) green through the Entry refactor.
+
+TICK SHAPE: capability (the podcast class plays end-to-end — <audio src=mp3> fetch→decode→device with live controls, and canPlayType tells the new truth the same tick; [host-native pattern: Option on the entry the shell owns + the organ-then-registry rule]). GATES +1 (G_MP3_DRIVE + cpt-mpeg claim, shell suite = IN the wall); constellation row 71 join closed.
+CONSTELLATION: media / audio decode → MP3 joined (G_MP3_DRIVE).
+WIKI: docs/wiki/media-pipeline.md — Tick 363 MP3 join (audio-only entries, feed-as-playhead, registry flip).
