@@ -1375,3 +1375,21 @@ stored-inert exactly as before, no new claim.
 RED ledger: attribute-always-wins (unmute impossible), gain-multiply dropped (slider moves,
 loudness doesn't), publish deleted (`got []` — the stored-but-silent dead property, the exact
 pre-tick state).
+
+## Tick 361 — playbackRate applies: scaled time, honest mute, and who owns the clock at 2x
+
+Rung 1 of the surface-audit-#9 ladder. `Transport` carries `rate` (clamped 0..16 — 0 is the
+spec's playing-but-frozen, negatives refused, 16x bounds hostile fast-forward); `advance` scales
+`dt * rate` on the WALL path only. The t360 channel applies it live per frame.
+
+The two consequences are the tick's substance, both gated in G_RATE:
+- **Mastery refusal at rate≠1.** The device consumes at 1x, so slaving would pin the picture to
+  1x while claiming 2x. The scaled wall governs; on rate→1 the snap back to the device position
+  is CORRECT — the audio is where the sound is.
+- **The chipmunk rule.** No time-stretch exists yet, so rate≠1 MUTES regardless of IDL/attribute
+  state — pitch-shifted audio is the defect a user hears instantly; silent scaled video is
+  degraded and honest. Rung 2 (WSOLA-class time-stretch, the actual audible-podcast case) is the
+  named residue.
+
+RED ledger: scaling dropped (2x plays at 1x), chipmunk rule dropped (1x-pitch audio under a 2x
+picture), mastery refusal dropped (the device pins a 2x transport to 1x).

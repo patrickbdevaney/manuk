@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **153** | ticks 1–360 |
-| median tick cycle | **20m** | 152 intervals |
-| median, last 10 | **20m** | 10 intervals |
+| ticks landed | **154** | ticks 1–361 |
+| median tick cycle | **20m** | 153 intervals |
+| median, last 10 | **18m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.57** | 264.4h elapsed |
-| median verify wall | **64s** | 92 ticks |
+| **ticks per hour** | **0.58** | 264.7h elapsed |
+| median verify wall | **62s** | 93 ticks |
 | wall trend | 39s → 59s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**82 of 153 ticks** (54%) moved a
+**83 of 154 ticks** (54%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **82** capability ticks, median cycle **20m**
-* median diff per tick: **+245 / −29** lines across 8 files
+* **83** capability ticks, median cycle **20m**
+* median diff per tick: **+242 / −30** lines across 8 files
 
 ## Every tick
 
@@ -250,5 +250,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **358** | 2026-07-22 05:02 | 3m | constitution-check | 59s | +92/−34 | 183 | 81 | 56.0% · | Constitution Check #11 (2026-07-22) |
 | **359** | 2026-07-22 05:08 | 6m | capability-probe | 60s | +89/−34 | 183 | 81 | 56.0% · | WasmGC probe: measure-and-pin the Kotlin/Flutter-web cell (2026-07-22) |
 | **360** | 2026-07-22 05:28 | 20m | capability | 55s | +432/−42 | 183 | 81 | 56.0% · | the live media-IDL channel: .muted and .volume reach the device (2026-07-22) |
+| **361** | 2026-07-22 05:44 | 16m | capability | 59s | +239/−48 | 183 | 81 | 56.0% · | playbackRate applies: scaled time, and the honest mute instead of the chipmunk (2026-07-22 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

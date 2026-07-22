@@ -224,6 +224,10 @@ pub struct Transport {
     position: f64,
     duration: f64,
     playing: bool,
+    /// `HTMLMediaElement.playbackRate` (tick 361). Scales the WALL path only — a slaved
+    /// transport follows the device clock, and a device consuming at 1x is why the mastery
+    /// rule refuses to slave at rate != 1 (see `MediaSet::advance`).
+    rate: f64,
 }
 
 impl Transport {
@@ -232,6 +236,7 @@ impl Transport {
             position: 0.0,
             duration: duration.max(0.0),
             playing: false,
+            rate: 1.0,
         }
     }
 
@@ -274,7 +279,21 @@ impl Transport {
         self.position = t.clamp(0.0, self.duration);
     }
 
-    /// Advance by a wall-clock delta. A no-op while paused — that is the whole of "paused".
+    /// `playbackRate`, clamped to a sane positive range: 0 is legal (a playing-but-frozen
+    /// transport, what the spec's rate 0 means), negatives are refused as most engines do, and
+    /// the 16x cap bounds a hostile page's fast-forward to something finite.
+    pub fn set_rate(&mut self, rate: f64) {
+        if rate.is_finite() {
+            self.rate = rate.clamp(0.0, 16.0);
+        }
+    }
+
+    pub fn rate(&self) -> f64 {
+        self.rate
+    }
+
+    /// Advance by a wall-clock delta, scaled by the playback rate. A no-op while paused — that
+    /// is the whole of "paused".
     ///
     /// Clamps at the duration and stops, so `ended` latches instead of the position running past
     /// the media forever.
@@ -282,7 +301,7 @@ impl Transport {
         if !self.playing || dt <= 0.0 {
             return;
         }
-        self.position = (self.position + dt).min(self.duration);
+        self.position = (self.position + dt * self.rate).min(self.duration);
         if self.position >= self.duration {
             self.playing = false;
         }
@@ -385,6 +404,10 @@ impl VideoPlayer {
 
     pub fn seek(&mut self, t: f64) {
         self.transport.seek(t);
+    }
+
+    pub fn set_rate(&mut self, rate: f64) {
+        self.transport.set_rate(rate);
     }
 
     pub fn transport(&self) -> &Transport {

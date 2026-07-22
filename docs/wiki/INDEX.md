@@ -635,6 +635,7 @@
   - L1314 · Tick 354 — AV1 ships: the shell lane and the three registries flip together
   - L1337 · Tick 355 — AVIF stills: the hero-image hole, closed in the shell lane
   - L1357 · Tick 360 — the live media-IDL channel: .muted and .volume reach the device
+  - L1379 · Tick 361 — playbackRate applies: scaled time, honest mute, and who owns the clock at 2x
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -853,4 +854,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-768 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+769 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

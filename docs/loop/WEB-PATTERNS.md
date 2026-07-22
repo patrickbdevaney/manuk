@@ -3133,3 +3133,15 @@ loaded-media entry. **(4)** Gain applies to DELIVERED samples only — the silen
 (mute/pause/exhaustion writes zeros) is upstream of gain, or a "quiet leak" ships.
 **The trap:** a stored-but-silent property reads back correctly forever (`v.muted === true`) while
 doing nothing — only asserting the host-side drain catches it ("got []").
+
+## playbackRate — scaled time without the chipmunk (tick 361)
+
+**The class of the web this unlocks:** the speed control on every video/podcast player (1.25-2x is
+how a large share of lecture/podcast content is actually consumed). **(1)** Rate lives on the
+transport clock and scales the WALL path only; a device consuming at 1x must NOT govern a scaled
+transport (mastery refusal), and the snap-back on returning to 1x is correct — the audio position
+is where the sound is. **(2)** Without time-stretch, rate≠1 MUTES regardless of what else asked:
+pitch-shifted audio is the defect users hear instantly; silent scaled video is degraded-and-honest.
+The audible rung (WSOLA-class stretch) is named residue, not smuggled.
+**The trap:** applying rate by scaling the AUDIO clock's position — the device consumes real
+seconds; only the transport's wall path may scale, or sync arithmetic silently corrupts.

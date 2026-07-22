@@ -52,6 +52,8 @@ pub struct MediaSet {
     idl_muted: HashMap<NodeId, bool>,
     /// Live `.volume` IDL values 0..1 (tick 360), same arrival-order independence.
     idl_volume: HashMap<NodeId, f32>,
+    /// Live `.playbackRate` values (tick 361), same arrival-order independence.
+    idl_rate: HashMap<NodeId, f64>,
 }
 
 /// A decoded video and **the frame the page was last actually given**.
@@ -87,6 +89,7 @@ impl MediaSet {
         self.players.clear();
         self.idl_muted.clear();
         self.idl_volume.clear();
+        self.idl_rate.clear();
     }
 
     /// Has this element already been given its bytes — successfully or not?
@@ -110,6 +113,9 @@ impl MediaSet {
         let ok = player.is_some();
         if let Some(mut p) = player {
             p.play();
+            if let Some(&r) = self.idl_rate.get(&node) {
+                p.set_rate(r);
+            }
             let audio =
                 Self::decode_audio(bytes).map(|pcm| Arc::new(Mutex::new(AudioFeed::new(pcm))));
             self.players.insert(
@@ -232,6 +238,12 @@ impl MediaSet {
                     }
                 }
             }
+            "playbackRate" => {
+                self.idl_rate.insert(node, value);
+                if let Some(Some(e)) = self.players.get_mut(&node) {
+                    e.player.set_rate(value);
+                }
+            }
             _ => {}
         }
     }
@@ -313,18 +325,25 @@ impl MediaSet {
             // muted — so a device that ignores the attribute blasts audio on pages that were
             // quiet everywhere else. The feed consumes silently rather than pausing (see the
             // `AudioFeed::muted` field note), which is what keeps it a valid sync master.
+            // The playback rate (tick 361), re-applied per frame like every live property.
+            let rate = self.idl_rate.get(&node).copied().unwrap_or(1.0);
+            entry.player.set_rate(rate);
+            let rate_scaled = entry.player.transport().rate() != 1.0;
             if let Some(a) = entry.audio.as_ref() {
                 // The IDL property, once set, IS the live state (tick 360); the attribute is
                 // the default it falls back to. Both re-derived per frame so either side's
-                // change lands on the next advance.
-                let muted = match self.idl_muted.get(&node) {
-                    Some(&m) => m,
-                    None => page
-                        .dom()
-                        .element(node)
-                        .map(|e| e.attr("muted").is_some())
-                        .unwrap_or(false),
-                };
+                // change lands on the next advance. Rate != 1 mutes REGARDLESS (tick 361):
+                // there is no time-stretch yet, and pitch-shifted audio is the defect a user
+                // hears instantly — silent scaled video is degraded and honest.
+                let muted = rate_scaled
+                    || match self.idl_muted.get(&node) {
+                        Some(&m) => m,
+                        None => page
+                            .dom()
+                            .element(node)
+                            .map(|e| e.attr("muted").is_some())
+                            .unwrap_or(false),
+                    };
                 if let Ok(mut f) = a.lock() {
                     f.set_muted(muted);
                     if let Some(&g) = self.idl_volume.get(&node) {
@@ -332,7 +351,11 @@ impl MediaSet {
                     }
                 }
             }
+            // At rate != 1 the device consumes at 1x, so slaving would pin the picture to 1x —
+            // the scaled wall governs instead, and the snap-back on returning to rate 1 is
+            // CORRECT (the audio position is where the sound is).
             let clock = match (master, entry.audio.as_ref()) {
+                _ if rate_scaled => None,
                 (Some(m), Some(a)) if Arc::ptr_eq(m, a) => match a.lock() {
                     Ok(f) if f.is_playing() && !f.exhausted() => {
                         let mut c = manuk_media::AudioClock::new(f.sample_rate());
@@ -1178,6 +1201,84 @@ mod tests {
                 "a muted fill is ZEROS at any gain — a gain-scaled leak is still a leak"
             );
         }
+    }
+
+    /// # G_RATE — playbackRate scales time, and the audio mutes instead of chipmunking (t361)
+    ///
+    /// ## How each claim goes RED
+    ///
+    /// - **time scales** — drop the `dt * self.rate` scaling in `Transport::advance`: 2x plays
+    ///   at 1x and every speed control on the web is decorative.
+    /// - **the chipmunk rule** — drop `rate_scaled` from the mute derivation in `advance`: at 2x
+    ///   the device keeps playing 1x-pitched audio against a 2x picture.
+    /// - **mastery refusal** — drop the `rate_scaled => None` arm: the device (still consuming
+    ///   at 1x) governs the transport and the picture is pinned to 1x while claiming 2x.
+    #[test]
+    fn g_rate() {
+        let fonts = manuk_text::FontContext::new();
+        let mut page = manuk_page::Page::load(PAGE_HTML, "https://video.test/", &fonts, 800.0);
+        let (node, _) = page.pending_media_urls()[0].clone();
+
+        let mut set = MediaSet::new();
+        assert!(set.load(node, AV));
+        let feed = set.audio_feed(node).unwrap();
+        let dur = set.players[&node]
+            .as_ref()
+            .unwrap()
+            .player
+            .transport()
+            .duration();
+        let position = |set: &MediaSet| {
+            set.players[&node]
+                .as_ref()
+                .unwrap()
+                .player
+                .transport()
+                .position()
+        };
+
+        // ── Rate 2: the position advances at 2*dt on the wall path, and the feed mutes even
+        //    though nothing ever set .muted (the chipmunk rule).
+        set.apply_prop(node, "playbackRate", 2.0);
+        let dt = 0.2 * dur;
+        set.advance(dt, &mut page, None);
+        assert!(
+            (position(&set) - 2.0 * dt).abs() < 1e-9,
+            "rate 2 must advance the position by 2*dt — got {} want {}",
+            position(&set),
+            2.0 * dt
+        );
+        assert!(
+            feed.lock().unwrap().is_muted(),
+            "rate != 1 must MUTE — there is no time-stretch, and pitch-shifted audio is the \
+             defect a user hears instantly"
+        );
+
+        // ── At rate != 1 the device may NOT govern: consume the feed and pass it as master;
+        //    the scaled wall must win.
+        feed.lock().unwrap().seek_seconds(0.1 * dur);
+        let before = position(&set);
+        set.advance(dt, &mut page, Some(&feed));
+        assert!(
+            (position(&set) - (before + 2.0 * dt).min(dur)).abs() < 1e-9,
+            "a 1x-consuming device must not govern a 2x transport — got {} want {}",
+            position(&set),
+            (before + 2.0 * dt).min(dur)
+        );
+
+        // ── Rate back to 1: mastery restores (snap to the device position — the audio is where
+        //    the sound is) and the mute lifts.
+        set.apply_prop(node, "playbackRate", 1.0);
+        let device_pos = feed.lock().unwrap().position_seconds();
+        set.advance(0.001, &mut page, Some(&feed));
+        assert!(
+            (position(&set) - device_pos).abs() < 1e-9,
+            "rate 1 restores audio mastery — the snap to the device position is CORRECT"
+        );
+        assert!(
+            !feed.lock().unwrap().is_muted(),
+            "rate 1 lifts the chipmunk mute (nothing else asked for silence)"
+        );
     }
 
     /// **What the viewer would actually see** — the page is painted and the rendered canvas is

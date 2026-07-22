@@ -152,3 +152,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 358	e8a1da3	1784710958	2026-07-22T05:02:38-04:00	192	constitution-check	59	5	92	34	183	81	3896	6960	0	320	0	Constitution Check #11 (2026-07-22)
 359	d850ca1	1784711302	2026-07-22T05:08:22-04:00	344	capability-probe	60	6	89	34	183	81	3896	6960	0	320	0	WasmGC probe: measure-and-pin the Kotlin/Flutter-web cell (2026-07-22)
 360	79c559d	1784712487	2026-07-22T05:28:07-04:00	1185	capability	55	15	432	42	183	81	3896	6960	0	320	0	the live media-IDL channel: .muted and .volume reach the device (2026-07-22)
+361	638883a	1784713446	2026-07-22T05:44:06-04:00	959	capability	59	11	239	48	183	81	3896	6960	0	320	0	playbackRate applies: scaled time, and the honest mute instead of the chipmunk (2026-07-22)

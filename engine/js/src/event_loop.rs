@@ -2804,8 +2804,8 @@ const PRELUDE: &str = r#"
         // Live accessors (tick 360): they stick AND they reach the host. `v.muted = true` /
         // `v.volume = 0.3` are what a player's mute button and volume slider execute — the
         // attribute path never sees them. Published via __mediaProp; getters return the stored
-        // value so read-back semantics are unchanged. playbackRate is carried on the channel but
-        // not yet applied host-side (its transport/mastery interplay is its own tick).
+        // value so read-back semantics are unchanged. playbackRate applies host-side since tick
+        // 361 (scaled wall clock; audio mutes honestly at rate != 1 — no time-stretch yet).
         (function () {
           var live = { volume: 1, muted: false, playbackRate: 1 };
           var defineLive = function (name, coerce) {

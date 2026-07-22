@@ -15836,3 +15836,38 @@ through the mute-silence contract at any value.
 TICK SHAPE: capability (the live media-IDL channel — mute buttons and volume sliders on real players now do what they say at the device boundary; [host-native pattern: the proven publish-channel shape, one more lane]). GATES +1 (G_IDL_FEED; plus idl-muted/idl-vol claims in g_mse_join — all IN the wall); constellation row 72 residue narrowed to playbackRate-application + mixing + non-AAC.
 CONSTELLATION: media / audio output device → live .muted/.volume landed (G_IDL_FEED).
 WIKI: docs/wiki/media-pipeline.md — Tick 360 live media-IDL channel (accessor publish, IDL-beats-attribute, gain at the device boundary, RED ledger).
+
+## Tick 361 — playbackRate applies: scaled time, and the honest mute instead of the chipmunk (2026-07-22)
+
+The surface-audit #9 row's first rung, completing what t360's channel already carries: `v.playbackRate
+= 2` reaches the host and is dropped. Podcast/lecture 1.5-2x is a real daily-driver class; Ladybird
+judged it alpha-worthy (they borrowed Chromium's WSOLA time-stretch). We cannot time-stretch audio yet,
+and the row's rule is explicit: WITHOUT time-stretch, rate≠1 must MUTE honestly, never chipmunk —
+pitch-shifted playback is a defect users hear instantly; silent 2x video with a named residue is
+degraded and honest.
+
+HYPOTHESIS: (a) Transport gains `rate` (clamped positive; advance scales dt*rate — the wall path);
+(b) MediaSet stores idl_rate and applies per frame; (c) TWO mastery/mute consequences, both
+load-bearing: at rate≠1 the device feed keeps consuming at 1x so it must NOT govern (slaving would
+pin the picture to 1x — the wall*rate governs instead), and the feed must mute regardless of IDL/attr
+state (the chipmunk rule); rate back to 1 restores mastery and the snap-back to the audio position is
+CORRECT (audio is where the sound is). Gate G_RATE (shell suite): position advances at 2*dt under
+rate 2; the feed mutes at rate≠1 even when IDL-unmuted; rate 1 restores mastery (snap to device
+position) and unmutes.
+RESULT — LANDED. engine/media playback.rs: Transport::{rate, set_rate (finite, clamp 0..16), advance
+scales dt*rate}; VideoPlayer::set_rate. shell: idl_rate map (cleared on navigation, applied at load
+for props-before-bytes and re-applied per frame), apply_prop playbackRate arm, advance derives
+rate_scaled → (1) mastery refusal (`_ if rate_scaled => None` in the clock match), (2) chipmunk mute
+OR-ed into the muted derivation. event_loop comment updated (applied since 361).
+
+RED-PROVEN three ways (watched fail, restored byte-for-byte, cmp-verified): (1) dt*rate dropped →
+"rate 2 must advance by 2*dt — got 0.02 want 0.04"; (2) chipmunk rule dropped → feed unmuted at 2x;
+(3) mastery refusal dropped → "a 1x-consuming device must not govern a 2x transport — got 0.01 want
+0.08".
+
+NO REGRESSION: manuk-media all-features green (Transport change rode under av_sync/playback_clock);
+manuk-shell 68/68 (+1) + teardown TWICE EXIT 0; headless lane clean; fmt clean.
+
+TICK SHAPE: capability (playbackRate — the speed control on every player now scales real time, with the honest-mute rule instead of the chipmunk defect; [host-native pattern: one field on the clock the engine owns + two policy consequences in the driver]). GATES +1 (G_RATE, shell suite = IN the wall); constellation row playbackRate missing→partial (rung 2 = WSOLA time-stretch named).
+CONSTELLATION: media / playbackRate → partial (G_RATE; audible rung remains).
+WIKI: docs/wiki/media-pipeline.md — Tick 361 playbackRate (scaled wall, mastery refusal, chipmunk rule).
