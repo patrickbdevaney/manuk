@@ -16495,3 +16495,20 @@ LAST_AUDIT_TICK 376→386, LAST_WALL_AUDIT 366→386 (canonical header); next du
 TICK SHAPE: self-audit (governance checkpoint; deliverable = the two findings + counters). GATES +0. [no-pattern]
 CONSTELLATION: none.
 WIKI: none — logs are docs/loop/WALL-AUDIT.md + this entry.
+
+## Tick 387 — surface audit #12: one Baseline-crosser, one map-ahead-of-the-web validation (2026-07-22)
+
+CADENCE OBLIGATION (377+10). Searched: web.dev June-2026 platform roundup + Baseline digests,
+Chrome 151 beta notes (151 stable rolled mid-July; 152 due 2026-08-25). FINDINGS (SURFACE-AUDIT.md
+Audit #12): field-sizing ADDED as a tick-sized row (Baseline June 2026 — Firefox 152 completed the
+trio; `field-sizing: content` must override our textarea cols-hint seam in the Stylo post-pass);
+the month's roundup lists promise-returning scrolls — which t378 landed BEFORE the roundup named
+it, the map's first ahead-of-the-web validation; shape-outside rect()/xywh() noted honestly as
+needing the absent shape-outside organ first (not a standalone add). Four single-engine WATCHES
+(text-fit, gap decorations, focusgroup, aria-actions — the last two flagged component-#2-relevant
+on a second engine signal), four named exclusions (BFCache-WebSocket, notification actions,
+border-area clip, Direct-Sockets/WebRTC). LAST_SURFACE_AUDIT 377→387; next due 397.
+
+TICK SHAPE: surface-audit (map maintenance; Audit #12 + 1 row + watches/exclusions). GATES +0. [no-pattern]
+CONSTELLATION: +1 row (doc/field-sizing, missing).
+WIKI: none.

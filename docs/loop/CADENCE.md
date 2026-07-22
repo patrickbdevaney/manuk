@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **179** | ticks 1–386 |
-| median tick cycle | **19m** | 178 intervals |
+| ticks landed | **180** | ticks 1–387 |
+| median tick cycle | **19m** | 179 intervals |
 | median, last 10 | **15m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.66** | 271.1h elapsed |
-| median verify wall | **60s** | 118 ticks |
+| **ticks per hour** | **0.66** | 271.2h elapsed |
+| median verify wall | **60s** | 119 ticks |
 | wall trend | 39s → 56s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**98 of 179 ticks** (55%) moved a
+**98 of 180 ticks** (54%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -276,5 +276,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **384** | 2026-07-22 11:52 | 26m | capability | 56s | +174/−46 | 183 | 81 | 56.0% · | replaced elements compute `inline`: the convenience mutation unwound (2026-07-22) |
 | **385** | 2026-07-22 12:06 | 14m | capability | 55s | +148/−34 | 183 | 81 | 56.0% · | MISSING BOX <br>: the break that ends a line still owns a box (2026-07-22) |
 | **386** | 2026-07-22 12:10 | 4m | self-audit | 56s | +69/−35 | 183 | 81 | 56.0% · | self-audit + wall audit: clean, and the wall held while coverage grew (2026-07-22) |
+| **387** | 2026-07-22 12:14 | 4m | surface-audit | 57s | +105/−34 | 183 | 81 | 56.0% · | surface audit #12: one Baseline-crosser, one map-ahead-of-the-web validation (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

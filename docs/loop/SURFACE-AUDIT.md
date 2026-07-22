@@ -483,3 +483,55 @@ Two platform behaviors crossing into Baseline territory, one enrichment of an ex
 * The WebMCP row gains the declarative/imperative split note (above). No stale-pessimistic finds
   this window — the map has been re-probed heavily for 26 ticks and its error rate is currently
   additions-from-outside, not phantom ❌s.
+
+## Audit #12 — tick 387 (2026-07-22)
+
+### Sources (searched, not recalled)
+
+* [web.dev — New to the web platform, June 2026](https://web.dev/blog/web-platform-06-2026) ·
+  [web.dev Baseline digests (May/June 2026)](https://web.dev/series/baseline-newly-available)
+* [Chrome 151 beta notes](https://developer.chrome.com/blog/chrome-151-beta) — Chrome 151 stable
+  rolled out mid-July; Chrome 152 stable expected 2026-08-25.
+
+### The external frame
+
+One Baseline-crosser worth a row, one map validation, several named watches/exclusions:
+
+* **`field-sizing` CSS property** — Baseline Newly available as of June 2026 (Firefox 152 completed
+  the trio; Chrome 123+, Safari 26.2+). `field-sizing: content` lets form controls (textarea above
+  all) size to their content instead of `cols`/fixed UA dimensions. We hand textareas a cols-derived
+  width in the Stylo post-pass — exactly the seam this property must override. Bounded: parse the
+  property, and when `content`, skip the UA fixed-size hint and let intrinsic sizing run. ADDED.
+* **Programmatic scroll Promises** — shipped Chrome 150, on this month's platform roundup. LANDED
+  here at t378 BEFORE the roundup listed it — the audit's map-ahead-of-the-web moment; validates
+  the t377 add. No action.
+* **`rect()`/`xywh()` in `shape-outside`** — Baseline; but we do not implement `shape-outside` at
+  all (float exclusion geometry). That is the honest gap — the functions are the small half. Noted
+  on the css residue pile, not tick-sized as a standalone add; needs the shape-outside organ first.
+
+### WATCHES (single-engine, not Baseline — re-check next audit)
+
+* `text-fit` (Chrome 150 only) — auto font scaling to container; large layout surface.
+* CSS gap decorations (Chrome 149 only) — painted rules in grid/flex gaps.
+* `focusgroup` attribute (Chrome 150 only) — declarative arrow-key navigation; NOTE: agent-surface
+  relevant (component #2) the moment a second engine signals.
+* `aria-actions` (Chrome 151 only) — secondary actions on composite widgets; same component-#2 note.
+
+### EXCLUDED (considered, with reasons)
+
+* WebSocket-in-BFCache (Chrome 149) — we have the MPA lifecycle pair but no BFCache freeze model;
+  out until a BFCache row exists at all.
+* Notification action buttons — OS notification integration; shell scope, not rendering parity.
+* `background-clip: border-area` — Safari-only.
+* Direct Sockets permission split / SCTP-in-SDP WebRTC — no Isolated Web Apps, no WebRTC in v1.
+
+### ADDED
+
+* **doc / field-sizing** — `missing`: `field-sizing: content` (Baseline June 2026) must let a
+  textarea/input size from content, overriding the UA cols-hint seam in the Stylo post-pass.
+  Tick-sized.
+
+### CORRECTED
+
+* None stale-pessimistic this window; the t378 scroll-promise landing pre-empted the platform
+  roundup — additions-from-outside remains the map's only active error mode.
