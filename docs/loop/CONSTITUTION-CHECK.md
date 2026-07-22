@@ -663,3 +663,55 @@ re-run warm to 57-70s per the standing recipe).
 **PART VI / VII correction.** None.
 
 **Next check due: tick 414.**
+
+---
+
+## Check #18 — tick 415
+
+**Horizon:** Phase 0 — the FULL daily-driver checklist ("runs almost every website"), the v1 north
+star of CONSTITUTION.MD **Part VII**. **Gate:** the FIDELITY-SCORING-REDESIGN.md certificate (≥0.75
+structural/placement fidelity on ≥95% of the corpus + ≥0.70 per top-20 category), NOT a WPT
+percentage. Authoritative work list: PHASE0-BOUNDED-REMAINDER.md.
+
+**Gate or scoreboard?** Gate. Window 407-414 was one coherent vein — re-probe a near-done rendering
+feature for the ONE dropped, silent-fail variant, RED-prove it, gate it, land it atomically: **407**
+surface audit #12, **408** scroll-snap horizontal (real carousels report full x-geometry + x-axis
+snap gated), **409** `content: attr()` resolves in the shipping Stylo generated-content path, **410**
+map honesty (recorded the 408/409 flips before they rot), **411** list ordinals follow the HTML
+ordinal-value algorithm (reversed + value-continuation, not the sibling index), **412**
+text-transform capitalize titlecases the first LETTER past leading punctuation/digits, **413**
+white-space pre-wrap PRESERVES spaces (it had shared pre-line's collapse path), **414** text-align
+start/end resolve against direction (the RTL web was left-aligning its body text). Zero WPT-chasing,
+zero encoding tail; each tick moved component #1 (rendering the representative real internet) with a
+RED edit reverted byte-for-byte.
+
+**Is the loop still pointed at the frontier?** Mostly — with an honest caveat I am recording rather
+than smoothing over. The vein is atomic and RED-proven, which is exactly why it beats the L-sized
+subsystems that cannot land in one tick (media playback JOIN, contenteditable, software WebGL —
+PHASE0-BOUNDED-REMAINDER Tier 1). But two of the eight (t412 capitalize edge, arguably t411's value
+edge) sit near the *cosmetic* boundary Part VI warns against, where "one fix flips ~nothing a user
+feels." The steer for the next window: keep mining the bounded-gap vein, but apply VII.1's TEST hard
+— each tick must fix a **visibly-broken site class**, not a pedantic conformance edge. The immediate
+next lever (text-indent — unimplemented: only a code comment references it) qualifies squarely: it
+drives both first-line indentation AND the ubiquitous image-replacement idiom
+(`text-indent:-9999px`/`100%` on logos + icon buttons), where unhandled = duplicate text bleeding
+over the background image site-wide. The higher marquee frontier remains the Tier-1 JARRING
+subsystems (YouTube-plays media join first), which need a decompose-before-starting context, not an
+atomic tick.
+
+**Is the agentic surface (component #2) being served?** Held. The driving seams
+(dispatch_click/key/composition, set_active/focus) are untouched and un-rotted; this window was
+component-#1 rendering correctness, and every fix lands page-observable (getComputedStyle arms added
+where relevant, e.g. t414's text-align). No semantic-model exposure lagged.
+
+**Any invariant bent?** No. Bar 0 held — every landed tick additive and RED-proven, dom/css/layout
+unit suites green (t413 86/86, t414 39/39 + 86/86), no crash/regression. I2 intact — no dependency
+forked; the fixes are in our own cascade/layout/paint code against the specs' own algorithms
+(HTML ordinal-value, CSS Text titlecasing, CSS logical-to-physical resolution). I3 served (query
+surface kept in lockstep). THE RATCHET honored — nothing traded; the wall's cold 511s reading is
+harness contention (observer-owned), re-runs warm, mark not retuned.
+
+**PART VI / VII correction.** None. The four-component v1 scope is intact; PHASE0-BOUNDED-REMAINDER.md
+remains the work list and the fidelity certificate remains the exit.
+
+**Next check due: tick 423.**

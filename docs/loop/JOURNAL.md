@@ -17108,3 +17108,24 @@ pure-MinimalCascade fallback parses start/end but does not resolve them (not the
 TICK SHAPE: capability (logical text-align resolution against direction; RTL alignment; +1 gate). GATES +1.
 CONSTELLATION: RTL alignment deepened (direction was carried to paint; now text-align honours it).
 WIKI: css-cascade.md — "text-align: start/end are LOGICAL — resolve them against direction, or the RTL web left-aligns".
+
+## Tick 415 — cadence: self-audit + Constitution Check #18 (2026-07-22)
+
+Both cadence gates fell due at this tick: self-audit (last 405, every 10 → 415) and the
+constitution re-read (last 406, every 8 → 414). Clearing them is the tick.
+
+SELF-AUDIT: clean on every browser-capability axis (ledger 49 defects each naming its closing
+mechanism, cluster registry 392, pattern ledger 430 rows moving with the engine, journal
+gap-free, pre-commit hooks wired, receipt written). The ONE flag is the verify wall at 511s vs
+the 300s target — and that is the HARNESS wall, observer-owned (cold-relink/feature-thrash
+contention that re-runs warm to ~60s per the standing recipe). Not a browser regression; noted,
+not touched (scripts/ + wall are observer territory).
+
+CONSTITUTION CHECK #18 written to docs/loop/CONSTITUTION-CHECK.md — window 407-414, the
+bounded-gap CSS-correctness vein. Gate (not scoreboard); honest steer recorded on keeping each
+bounded-gap tick genuinely JARRING (a visibly-broken site class) rather than drifting into the
+cosmetic tail Part VI warns against.
+
+TICK SHAPE: governance (self-audit + constitution check; no engine change). GATES +0. [no-pattern]
+CONSTELLATION: none.
+WIKI: none — governance tick; the mechanisms audited are already captured.
