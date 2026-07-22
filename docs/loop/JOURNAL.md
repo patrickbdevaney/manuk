@@ -16662,3 +16662,28 @@ illustrations; [pattern: inline vectors are a serialization problem when an img-
 already vendored — and the assert must be on pixels reaching the display list]). GATES
 G_FIRST_PAINT +1 test (IN the wall). CONSTELLATION: +1 row (doc/inline SVG rendering, partial).
 WIKI: docs/loop/WEB-PATTERNS.md entry; build spec remains docs/wiki/box-layout.md (t393).
+
+## Tick 395 — the none→block family is path-misattribution: tree drift wearing style drift's face (2026-07-22)
+
+Probed the t392 ledger's surviving none→block family (okta 59 instances, quiet-reproducible).
+Evidence chain (all quiet, all on the cached snapshot): the hiding rule is a plain top-level
+class selector; it applies in a minimal inline fixture; applies via the real linked sheet;
+applies on the FULL page at the oracle's own 1200px viewport (probe div with the class stays
+unpainted, uncla ssed control paints). The cascade is RIGHT end-to-end — the oracle's 316
+display diffs on okta (Chrome author-values vs "our" UA defaults, with only ONE missing box)
+are PATH-PAIRING artifacts: same-tag sibling indices shift when one tree gains/loses a single
+node, div-vs-div mispairs pass silently, and each engine truthfully reports a different
+element. Tree drift, booked as style drift.
+
+CONSEQUENCE: (a) the display-diff families in the ledger are UPPER BOUNDS until selector-path
+keying (FIDELITY-SCORING-REDESIGN.md item a — tag[.class-sig]:nth-child) lands — that item is
+RE-PRICED from "unlocks unmeasurable React sites" to "removes a phantom-divergence class
+polluting the current ledger"; (b) the t384/385/389/391 fixes stand (their families were
+missing-box/computed-value classes, which pairing artifacts cannot mint). Mechanism recorded in
+docs/wiki/conformance-and-oracles.md.
+
+TICK SHAPE: probe (a ledger family traced to the instrument, third instrument-honesty find of
+the arc — t383 starved fetches, t392 discard-coverage price, t395 path pairing; [pattern:
+same-tag index paths are fragile to single-node tree drift — pair by content signature, not
+position alone]). GATES +0. CONSTELLATION: cross/real-world-QUIRKS row current.
+WIKI: docs/wiki/conformance-and-oracles.md — same-tag index paths misattribute tree drift.

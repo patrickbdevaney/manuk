@@ -661,3 +661,26 @@ for the reference for hundreds of ticks before the tick-380 crawl showed the sam
 our own side. Residue (named): per-site jarring counts still vary run-to-run with live-network
 weather even when styled (apnews overlap 0↔22 across two healthy runs); full determinism needs
 subresource snapshotting — CSS cached beside the HTML — which is the next instrument rung.
+
+## Same-tag index paths misattribute TREE drift as STYLE drift (tick 395)
+
+The t392 ledger's surviving `none→block` family (okta 59 / nasa 38 / cnn 25) probed to its
+mechanism — and it is the INSTRUMENT again, one layer deeper than t383. The evidence chain on
+okta.com (all quiet-box, all against the cached snapshot): the hiding rule
+(`.cmp-cards-item__date-bottom{display:none}`, plain class, top-level in clientlib-site) applies
+in a minimal inline fixture, applies via the real linked sheet, and applies ON THE FULL PAGE at
+the oracle's own 1200px viewport — a probe div carrying the class stays unpainted while an
+uncla ssed control paints. The engine's cascade is right end-to-end; yet the oracle reports 316
+display divergences (Chrome author-values vs "our" UA-defaults) with only ONE missing box.
+
+The mechanism: the diff keys elements by `tag[same-tag-sibling-index]` chained to the root. One
+inserted or removed node early in `<body>` (a consent banner one engine's scripts create, a
+wrapper the other's parser nests differently) shifts EVERY later same-tag index at that level —
+and div-vs-div mispairs pass silently, each engine truthfully reporting a DIFFERENT element.
+Style diffs produced this way are phantoms; only tag mismatches surface as tree drift.
+
+The fix is already specified: FIDELITY-SCORING-REDESIGN.md's selector-path keying
+(`tag[.class-sig]:nth-child(n)`) — the class signature makes a mispaired div fail the KEY match
+instead of minting a phantom style diff. This probe converts that item from "unlocks unmeasurable
+React sites" to "removes a phantom-divergence class the current ledger is polluted by": the
+display-diff families in CLUSTERS.md should be read as UPPER BOUNDS until it lands.
