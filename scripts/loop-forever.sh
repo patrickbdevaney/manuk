@@ -80,16 +80,25 @@ export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${XDG_RUN
 # MemoryHigh throttles allocation before the hard MemoryMax kill. If systemd --user is unavailable, fall
 # back to a direct (uncontained) launch so the loop never fully stalls — better uncontained than stopped.
 launch_agent() {
+  # ── MODEL SCHEDULE (observer, user directive 2026-07-22): run the grind agent on Fable 5 until
+  # 2026-07-22 19:00 America/New_York, then revert to Opus 4.8. Computed PER LAUNCH so the flip
+  # happens on the first launch after the deadline with no restart. MANUK_AGENT_MODEL still
+  # overrides both. An invocation already running at 19:00 finishes on its launch model.
+  local _flip _default_model
+  _flip=$(TZ=America/New_York date -d '2026-07-22 19:00' +%s 2>/dev/null || echo 0)
+  if [ "$(date +%s)" -lt "$_flip" ]; then _default_model=claude-fable-5; else _default_model=claude-opus-4-8; fi
+  AGENT_MODEL="${MANUK_AGENT_MODEL:-$_default_model}"
+  say "agent model for this launch: $AGENT_MODEL"
   systemctl --user reset-failed "${AGENT_SCOPE}.scope" 2>/dev/null || true   # clear any lingering scope name
   if systemd-run --user --scope --quiet \
         --setenv=CARGO_BUILD_JOBS=8 --setenv=WPT_DIR="$HOME/wpt" \
         -p MemoryMax=24G -p MemorySwapMax=4G -p MemoryHigh=20G -p OOMPolicy=kill \
-        "$CLAUDE" --model "${MANUK_AGENT_MODEL:-claude-opus-4-8}" --dangerously-skip-permissions --permission-mode bypassPermissions -p "$PROMPT" >>"$LOG" 2>&1
+        "$CLAUDE" --model "$AGENT_MODEL" --dangerously-skip-permissions --permission-mode bypassPermissions -p "$PROMPT" >>"$LOG" 2>&1
   then return 0; fi
   # Fallback: systemd-run failed — launch directly with just the CARGO cap (still reduces build memory).
   say "⚠ systemd-run unavailable — launching agent UNCONTAINED (CARGO_BUILD_JOBS cap only)"
   CARGO_BUILD_JOBS=8 WPT_DIR="$HOME/wpt" \
-    "$CLAUDE" --model "${MANUK_AGENT_MODEL:-claude-opus-4-8}" --dangerously-skip-permissions --permission-mode bypassPermissions -p "$PROMPT" >>"$LOG" 2>&1 || true
+    "$CLAUDE" --model "$AGENT_MODEL" --dangerously-skip-permissions --permission-mode bypassPermissions -p "$PROMPT" >>"$LOG" 2>&1 || true
 }
 
 PROMPT='Continue the autonomous Manuk tick loop NOW — you are a headless grind agent, there is no user to hand back to. Read STATUS.md, docs/loop/JOURNAL.md, docs/loop/CONSTITUTION-CHECK.md and CONSTITUTION.MD first (ground truth on disk). Then run as many ticks as you can this invocation: run scripts/lever-board.sh FIRST and OBEY its PHASE MANDATE -- and RE-RUN scripts/lever-board.sh at the START OF EVERY TICK (not once per session): the observer steers the lever-board MID-INVOCATION, so a plan made at session start goes stale; obey the CURRENT board each tick — this phase builds DAILY-DRIVER CAPABILITY, not raw WPT-flip count. html/dom is reasonably done (~93%); do NOT grind html/dom or dom for +N flips. Work the board CO-#1 priorities toward the FULL "runs almost every website" Phase-0 checklist: (A) MEDIA/YouTube — build the MediaSource/SourceBuffer JS surface, then BORROW symphonia (demux+AAC) + cpal (audio out) + libvpx or rav1d (VP9/AV1); steer YouTube to VP9+AAC via isTypeSupported; do NOT hand-write codecs and do NOT pull in ffmpeg (LGPL + huge C attack surface + build cost). (B) OAUTH LOGIN — the OAuth2 redirect flow end-to-end, interactive cross-origin iframe RE-RENDER, popup+postMessage, third-party/cross-site cookies, and FedCM navigator.credentials; assure with a real-provider round-trip gate. (C) canvas fillText — wire the EXISTING engine/text swash glyph-raster to the 2D context (one fix unlocks Google Docs/Sheets text rendering + chart labels + terminals). (D) PROBE the ~35 constellation unknowns (cheap measure-and-pin probes like hydration). Do NOT grind the CSS-layout tail — it is in diminishing returns. Gate it with a falsifiable check (for media, a sample stream buffers and plays — not a WPT count), capture the mechanism in docs/wiki, and land it via ./scripts/tick.sh. Touch .git/manuk-working at the top of every command so the watchdogs see you working. SCOPE — CRITICAL: the loop HARNESS (this service, scripts/tick.sh, scripts/verify.sh, scripts/ramdisk.sh, scripts/wpt-sweep.sh, the watchdog, cgroups) is DONE and OWNED BY THE OBSERVER. Do NOT edit, 'fix', or optimize ANY scripts/ or harness file — not even if the wall is slow or something seems broken. If a harness problem blocks you, write one line in docs/loop/JOURNAL.md and CONTINUE with browser work; the observer handles all infrastructure. Every tick must be PURE BROWSER CAPABILITY per CONSTITUTION.MD PART VII / docs/loop/V1-SCOPE.md (rendering parity vs the real internet + the agentic surface). ATOMICITY: start each tick from a clean tree — if leftover WIP from a crashed tick will not cleanly complete, `git checkout -- .` back to the last commit and redo the tick fresh; never build on top of inconsistent partial state. Honor THE RATCHET absolutely: a Bar 0 crash or any regression is never traded for a capability — revert instead. Do not stop; keep landing ticks until this process is killed or the budget is spent.'
