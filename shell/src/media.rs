@@ -228,24 +228,55 @@ impl MediaSet {
         manuk_media::decode_track(track, bytes).ok()
     }
 
-    /// Advance every player by a wall-clock delta and push the current picture into the page.
+    /// Advance every player and push the current picture into the page.
     ///
     /// Returns whether any element's picture actually **changed**, because that is what decides
     /// whether to repaint. A video at 30fps has a new frame every 33ms while a compositor runs at
     /// 60 — pushing and repainting unconditionally would burn a full paint on every other frame to
     /// draw a picture identical to the one already on screen.
     ///
-    /// The `None` audio clock is the honest state of the tree: `cpal` is unbound, nothing plays
-    /// sound, so there is no device clock to be master and the wall clock is correctly the fallback
-    /// [`VideoPlayer::tick`] selects. When audio output lands, the clock is threaded in here and
-    /// nothing else in this file moves.
-    pub fn advance(&mut self, dt: f64, page: &mut manuk_page::Page) -> bool {
+    /// ## `master` is the feed the DEVICE is consuming, and only that feed may own time
+    ///
+    /// MEDIA.md's A/V-sync rule is audio-is-master: when the output stream is live, the device's
+    /// crystal decides what "now" is and the video snaps to it ([`Transport::sync_to_audio`],
+    /// tick 250) — advancing the transport by the wall clock beside a running device is two clocks
+    /// that visibly part company on any long play. But mastery follows the *device*, not the mere
+    /// existence of a feed, and identity is checked by `Arc::ptr_eq` (the same discipline
+    /// G_AUDIO_JOIN enforces on the grow cycle) because slaving to a feed the device is NOT
+    /// pulling from freezes the picture on its motionless cursor. Two hand-backs to the wall
+    /// clock, both load-bearing:
+    ///
+    /// - **No device** (`master: None` — headless box, no sound hardware, no audio track): the
+    ///   wall clock is the honest fallback and behaviour is exactly what it was before the device
+    ///   existed.
+    /// - **An exhausted or paused master**: an audio track shorter than its video would otherwise
+    ///   pin the transport to the end of the sound and freeze the tail of the picture forever.
+    ///   When the master stops moving, the wall resumes from wherever the snap left the position.
+    ///
+    /// [`Transport::sync_to_audio`]: manuk_media::Transport::sync_to_audio
+    pub fn advance(
+        &mut self,
+        dt: f64,
+        page: &mut manuk_page::Page,
+        master: Option<&Arc<Mutex<AudioFeed>>>,
+    ) -> bool {
         let mut changed = false;
         for (&node, slot) in self.players.iter_mut() {
             let Some(entry) = slot.as_mut() else {
                 continue; // a known-failed decode; never retried
             };
-            entry.player.tick(dt, None);
+            let clock = match (master, entry.audio.as_ref()) {
+                (Some(m), Some(a)) if Arc::ptr_eq(m, a) => match a.lock() {
+                    Ok(f) if f.is_playing() && !f.exhausted() => {
+                        let mut c = manuk_media::AudioClock::new(f.sample_rate());
+                        c.seek(f.position_seconds());
+                        Some(c)
+                    }
+                    _ => None, // paused/exhausted/poisoned master → the wall clock resumes
+                },
+                _ => None,
+            };
+            entry.player.tick(dt, clock.as_ref());
             let Some(frame) = entry.player.frame() else {
                 continue;
             };
@@ -337,7 +368,7 @@ mod tests {
 
         // ── First advance: a picture reaches the SCREEN, not merely the player.
         assert!(
-            set.advance(0.0, &mut page),
+            set.advance(0.0, &mut page, None),
             "the first advance publishes a frame"
         );
         let first = painted(&page);
@@ -350,7 +381,7 @@ mod tests {
 
         // ── An unchanged picture is not republished: no repaint is owed.
         assert!(
-            !set.advance(0.0, &mut page),
+            !set.advance(0.0, &mut page, None),
             "advancing by zero holds the same frame and must NOT report a repaint — otherwise \
              the compositor burns a full paint per frame drawing an identical picture"
         );
@@ -358,7 +389,7 @@ mod tests {
         // ── Playing on shows a DIFFERENT picture. Half the fixture's ~0.1s crosses a frame
         //    boundary, so this must both report a change and paint different pixels.
         assert!(
-            set.advance(0.05, &mut page),
+            set.advance(0.05, &mut page, None),
             "advancing across a frame boundary must report a new picture"
         );
         let later = painted(&page);
@@ -380,7 +411,7 @@ mod tests {
              again every frame, a busy-loop that reads from outside as a slow network"
         );
         assert!(
-            !broken.advance(1.0, &mut page),
+            !broken.advance(1.0, &mut page, None),
             "a failed entry publishes nothing and is never retried"
         );
     }
@@ -501,7 +532,7 @@ mod tests {
         let mut set = MediaSet::new();
         assert!(set.load_mse(*node, bytes), "the appended fMP4 must decode");
         assert!(
-            set.advance(0.0, &mut page),
+            set.advance(0.0, &mut page, None),
             "the first advance publishes a frame"
         );
         let first = painted(&page);
@@ -512,7 +543,7 @@ mod tests {
 
         // ── A re-publish (the stream GREW) must not restart playback.
         assert!(
-            set.advance(0.06, &mut page),
+            set.advance(0.06, &mut page, None),
             "playing forward crosses a frame boundary"
         );
         let later = painted(&page);
@@ -522,7 +553,7 @@ mod tests {
             "the re-published stream re-decodes"
         );
         assert!(
-            set.advance(0.0, &mut page),
+            set.advance(0.0, &mut page, None),
             "after a reload the current frame is re-published (the image map may be stale)"
         );
         assert_eq!(
@@ -597,6 +628,115 @@ mod tests {
         let mut silent = MediaSet::new();
         assert!(!silent.load(node, b"not a movie"), "garbage still fails");
         assert!(silent.audio_feed(node).is_none());
+    }
+
+    /// # G_AV_MASTER — the device clock owns time, and only the device's own feed may be master
+    ///
+    /// The engine gate (`av_sync`, tick 250) proves `Transport::sync_to_audio` snaps; G_AUDIO_PUMP
+    /// (tick 350) proves the feed's cursor is sample-exact. This proves the JOIN: `MediaSet::advance`
+    /// actually routes the device-bound feed's position into the transport — the wire that was
+    /// `None` for a tick, leaving the picture on the wall clock while the device ran on its own
+    /// crystal (the lip-sync class, invisible in any short test, guaranteed on a long play).
+    ///
+    /// ## How each claim goes RED (each was run, not assumed)
+    ///
+    /// - **audio is master** — pass `None` for the clock inside `advance` (the pre-tick-351 wire):
+    ///   the transport follows the wall delta and the snap assertion fails. This is the silent
+    ///   two-clocks state: every other media gate stays green.
+    /// - **the wall's lie is ignored while mastered** — same edit; a huge `dt` beside an unmoved
+    ///   device would run the picture ahead of the sound.
+    /// - **identity, not availability** — drop the `Arc::ptr_eq` guard and slave to any feed
+    ///   handed in: the imposter (same PCM, wrong Arc — a feed the device is NOT consuming)
+    ///   governs the transport, and on a real page a second video's motionless feed freezes the
+    ///   first one's picture.
+    /// - **an exhausted master hands back to the wall** — drop the `exhausted()` check: audio
+    ///   shorter than its video pins the position to the end of the sound and the tail of the
+    ///   picture freezes forever.
+    #[test]
+    fn g_av_master() {
+        let fonts = manuk_text::FontContext::new();
+        let mut page = manuk_page::Page::load(PAGE_HTML, "https://video.test/", &fonts, 800.0);
+        let (node, _) = page.pending_media_urls()[0].clone();
+
+        let mut set = MediaSet::new();
+        assert!(set.load(node, AV), "the A/V fixture must decode");
+        let feed = set.audio_feed(node).expect("the fixture carries audio");
+
+        // Timings scaled to what the fixture actually holds, so no assertion rides on a guess.
+        let video_dur = set.players[&node]
+            .as_ref()
+            .unwrap()
+            .player
+            .transport()
+            .duration();
+        let movie = manuk_media::demux(AV).unwrap();
+        let pcm = manuk_media::decode_track(movie.audio().unwrap(), AV).unwrap();
+        let audio_dur = (pcm.samples.len() / pcm.channels as usize) as f64 / pcm.sample_rate as f64;
+        let dur = video_dur.min(audio_dur);
+        assert!(
+            dur > 0.01,
+            "the fixture must hold a real timeline, got {dur}s"
+        );
+
+        // ── The device consumed real time; the transport SNAPS to it and the wall delta — tiny
+        //    or absurd — is ignored while the master governs.
+        feed.lock().unwrap().seek_seconds(0.4 * dur);
+        let ta = feed.lock().unwrap().position_seconds();
+        assert!(ta > 0.0);
+        let position = |set: &MediaSet| {
+            set.players[&node]
+                .as_ref()
+                .unwrap()
+                .player
+                .transport()
+                .position()
+        };
+        set.advance(0.001, &mut page, Some(&feed));
+        assert!(
+            (position(&set) - ta).abs() < 1e-9,
+            "audio is master: the transport must land exactly on the device position {ta}, got {}",
+            position(&set)
+        );
+        set.advance(500.0, &mut page, Some(&feed));
+        assert!(
+            (position(&set) - ta).abs() < 1e-9,
+            "a wall-clock lie beside an unmoved device must be IGNORED — the picture ran ahead \
+             of the sound by {}s",
+            position(&set) - ta
+        );
+
+        // ── A feed the device is NOT consuming may not govern, however plausible its numbers.
+        let imposter = Arc::new(Mutex::new(crate::audio::AudioFeed::new(pcm.clone())));
+        imposter.lock().unwrap().seek_seconds(0.8 * dur);
+        let dt = 0.05 * dur;
+        set.advance(dt, &mut page, Some(&imposter));
+        assert!(
+            (position(&set) - (ta + dt)).abs() < 1e-6,
+            "a non-device feed must NOT be master — the wall clock governs (want {}, got {})",
+            ta + dt,
+            position(&set)
+        );
+
+        // ── The master ran dry (audio shorter than video): the wall clock RESUMES, the tail of
+        //    the picture keeps moving.
+        {
+            let mut f = feed.lock().unwrap();
+            let cursor_now = (f.position_seconds() * f.sample_rate() as f64).round() as usize
+                * f.channels() as usize;
+            let mut short = pcm.clone();
+            short.samples.truncate(cursor_now);
+            f.replace_pcm(short);
+            assert!(f.exhausted(), "the truncated master must read as exhausted");
+        }
+        let before = position(&set);
+        set.advance(dt, &mut page, Some(&feed));
+        assert!(
+            (position(&set) - (before + dt)).abs() < 1e-6,
+            "an exhausted master hands time back to the wall — a frozen tail means the video \
+             pinned itself to the end of a shorter audio track (want {}, got {})",
+            before + dt,
+            position(&set)
+        );
     }
 
     /// **What the viewer would actually see** — the page is painted and the rendered canvas is

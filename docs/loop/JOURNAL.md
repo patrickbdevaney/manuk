@@ -15506,3 +15506,41 @@ Constitution Check #10 carried this tick (due 342+8) — logged in CONSTITUTION-
 TICK SHAPE: capability (audio output device — the silent-video organ; sound reaches the device boundary sample-exact, device itself best-effort per headless honesty; [BORROW pattern: cpal, pump/device split keeps the gate hardware-free]). GATES +2 (G_AUDIO_PUMP, G_AUDIO_JOIN, shell suite = IN the wall); constellation row 72 missing→gated.
 CONSTELLATION: media / audio output device → gated (G_AUDIO_PUMP, G_AUDIO_JOIN).
 WIKI: docs/wiki/media-pipeline.md — Tick 350 audio OUTPUT (pump/device split, three contracts, feature-lane discipline, residue).
+
+## Tick 351 — A/V master-slave sync: the device clock drives the picture (2026-07-22)
+
+CO-#1 order (2) MEDIA, the item constellation row 72 names first in STILL MISSING: "A/V master-slave
+sync (Transport still wall-clock; feed.position_seconds() is the master clock to slave to)". Every
+piece already exists — Transport::sync_to_audio SNAPS (t250), VideoPlayer::tick takes Option<&AudioClock>,
+AudioFeed::position_seconds() is the real device cursor (t350) — but MediaSet::advance passes None
+unconditionally, so on a box with sound the video runs on the wall clock while the device runs on its own
+crystal, and they visibly part company on any long play (the lip-sync class).
+
+HYPOTHESIS: thread the DEVICE-BOUND feed into MediaSet::advance as master, with two honesty rules:
+(1) only the feed the device actually consumes may be master — a non-bound feed's cursor never moves,
+and slaving to it FREEZES the video (Arc::ptr_eq against the bound feed, same identity discipline as
+G_AUDIO_JOIN); (2) an exhausted or paused feed hands the clock BACK to the wall — audio shorter than
+video must not freeze the tail, and a headless box (no device, cursor never moves) must keep today's
+wall-clock behaviour byte-for-byte. Gate G_AV_SYNC in the shell suite (IN the verify wall): with a
+consumed feed as master, a wildly wrong wall delta is IGNORED and the transport lands exactly on the
+audio position; an imposter feed (right PCM, wrong Arc) does NOT govern; an exhausted master hands back
+to the wall and the tail still advances.
+RESULT — LANDED. shell/src/media.rs: `MediaSet::advance(dt, page, master: Option<&Arc<Mutex<AudioFeed>>>)`
+builds a per-frame AudioClock (`new(rate)` + `seek(position_seconds())` — exact, cursor is frame-integral)
+for the entry whose feed IS the device's by Arc::ptr_eq, else wall clock. shell/src/audio.rs: `AudioOut`
+retains its feed clone + `feed()` accessor (mastery follows the device). shell/src/gui.rs: advance_media
+threads `audio_out.feed()` through as master.
+
+RED-PROVEN three ways (each edit run, watched fail, cp-snapshot restored byte-for-byte, cmp-verified):
+(1) pass None inside advance (the pre-351 wire) → "audio is master" FAILS (transport followed the wall,
+got 0.001 vs device 0.0371) — the silent two-clocks state, every other media gate green; (2) drop the
+Arc::ptr_eq guard → the imposter feed governs (got 0.0743 = imposter's cursor); (3) drop the exhausted()
+check → the tail freezes at the audio's end (got 0.0371 frozen vs want +dt).
+
+NO REGRESSION: full manuk-shell 63/63 (+1) + g_teardown 2/2, run TWICE, EXIT 0 both. Headless
+--no-default-features check compiles clean (target/headless lane). fmt clean. Timings in the gate are
+scaled to the fixture's own measured durations — no assertion rides on a guess.
+
+TICK SHAPE: capability (A/V master-slave sync — the device crystal owns time and the picture snaps to it; the lip-sync class closed at the join; [host-native pattern: wire the clock the engine already had to the feed the shell already had]). GATES +1 (G_AV_MASTER, shell suite = IN the verify wall); constellation row 72 note updated (sync closed; volume/muted + mixing + non-AAC remain).
+CONSTELLATION: media / audio output device → sync closed (G_AV_MASTER).
+WIKI: docs/wiki/media-pipeline.md — Tick 351 A/V master-slave sync (mastery-follows-the-device, two wall hand-backs, RED ledger).

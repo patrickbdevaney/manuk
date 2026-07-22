@@ -1219,7 +1219,44 @@ established.
 
 ### Residue, honestly
 
-A/V sync is still wall-clock: `AudioFeed::position_seconds()` is the master clock the sync rule
-says video must slave to, and `MediaSet::advance` still passes `None` — the hand-off point is
-documented there. No volume/`muted` plumbing into the feed; one output stream binds the FIRST
-audio-carrying element (mixing is a mixer's job); non-AAC audio still refused by name.
+~~A/V sync is still wall-clock~~ — closed by tick 351 (below). No volume/`muted` plumbing into
+the feed; one output stream binds the FIRST audio-carrying element (mixing is a mixer's job);
+non-AAC audio still refused by name.
+
+## Tick 351 — A/V master-slave sync: the device clock owns time
+
+The wire the tick-350 residue named: `MediaSet::advance` passed `None` for the audio clock, so on
+a box with sound the picture ran on the wall clock while the device ran on its own crystal — two
+clocks that visibly part company on any long play (the lip-sync class; invisible in every short
+test, guaranteed at scale). Every piece already existed: `Transport::sync_to_audio` SNAPS (t250),
+`VideoPlayer::tick(dt, Option<&AudioClock>)` routes to it, `AudioFeed::position_seconds()` is the
+sample-exact device cursor (t350). Tick 351 is the join plus its two honesty rules.
+
+### Mastery follows the DEVICE, not the existence of a feed
+
+`gui::advance_media` hands `MediaSet::advance` the feed the output stream is actually consuming
+(`AudioOut::feed()`, captured at open). Inside `advance`, an entry is slaved **only** when its
+own feed is that one by `Arc::ptr_eq` — the same identity discipline `G_AUDIO_JOIN` pins on the
+grow cycle, and for the same reason read in the other direction: a feed the device is NOT pulling
+from has a motionless cursor, and a motionless master would freeze the picture on frame N
+forever. The slave clock is built per frame: `AudioClock::new(rate)` + `seek(position_seconds())`
+— exact, since the cursor is frame-integral.
+
+### Two hand-backs to the wall, both load-bearing
+
+- **No device** (`master: None`): headless box, no sound hardware, no audio track — the wall
+  clock is the honest fallback and behaviour is byte-for-byte what it was before the device
+  existed. This is why the gate runs headless without a special case.
+- **Exhausted or paused master**: an audio track shorter than its video would otherwise pin the
+  transport to the end of the sound and freeze the picture's tail. When the master stops moving,
+  `tick` gets `None` and the wall resumes from wherever the snap left the position.
+
+### G_AV_MASTER (shell suite = IN the verify wall) — each claim RED-proven by edit
+
+1. **audio is master, the wall's lie ignored** — with the device-bound feed consumed to T, an
+   absurd wall delta lands the transport exactly on T. RED: pass `None` inside `advance` (the
+   pre-351 wire) — every OTHER media gate stays green, which is the point.
+2. **identity, not availability** — an imposter feed (same PCM, wrong Arc) does not govern. RED:
+   drop the `Arc::ptr_eq` guard.
+3. **exhaustion hands back** — truncate the master's PCM at its cursor; the tail still advances
+   by dt. RED: drop the `exhausted()` check — the position pins to the audio's end.

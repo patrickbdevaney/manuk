@@ -1451,8 +1451,8 @@ impl App {
     /// Push the current frame of every playing video into the page, and repaint only if the
     /// picture actually changed. Called once per frame from the redraw path.
     ///
-    /// The delta is wall-clock because nothing plays audio yet, so there is no device clock to be
-    /// master — `shell::media` documents the hand-off point for when `cpal` lands.
+    /// When the output device is bound, its feed is the A/V-sync master clock and the wall-clock
+    /// delta is only the fallback — `MediaSet::advance` documents the mastery rules (tick 351).
     fn advance_media(&mut self) {
         // The MSE join (tick 349): streams the page's players appended since the last frame.
         // Publish-driven — an empty drain is a `Vec::new()` — and it must run BEFORE the
@@ -1485,10 +1485,13 @@ impl App {
         let now = std::time::Instant::now();
         let dt = now.duration_since(self.media_last_tick).as_secs_f64();
         self.media_last_tick = now;
+        // The A/V-sync master (tick 351): the feed the device is actually consuming. `None`
+        // when no device bound — the wall clock stays the honest fallback.
+        let master = self.audio_out.as_ref().map(|o| o.feed().clone());
         let Some(page) = self.page.as_mut() else {
             return;
         };
-        if self.media.advance(dt, page) {
+        if self.media.advance(dt, page, master.as_ref()) {
             self.needs_paint = true;
         }
     }

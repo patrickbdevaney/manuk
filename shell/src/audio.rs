@@ -132,6 +132,11 @@ impl AudioFeed {
 #[cfg(feature = "gui")]
 pub struct AudioOut {
     _stream: cpal::Stream,
+    /// The exact feed the device callback pulls from. Exposed so the A/V-sync rule can name its
+    /// master by **identity** — `MediaSet::advance` slaves a transport only to the feed the
+    /// device is really consuming (`Arc::ptr_eq`), because any other feed's cursor never moves
+    /// and a motionless master freezes the picture.
+    feed: std::sync::Arc<std::sync::Mutex<AudioFeed>>,
 }
 
 #[cfg(feature = "gui")]
@@ -158,10 +163,11 @@ impl AudioOut {
             sample_rate,
             buffer_size: cpal::BufferSize::Default,
         };
+        let cb_feed = feed.clone();
         let stream = device
             .build_output_stream(
                 &config,
-                move |out: &mut [f32], _| match feed.lock() {
+                move |out: &mut [f32], _| match cb_feed.lock() {
                     Ok(mut f) => {
                         f.fill(out);
                     }
@@ -174,7 +180,15 @@ impl AudioOut {
             .map_err(|e| tracing::debug!("audio output unavailable: {e}"))
             .ok()?;
         stream.play().ok()?;
-        Some(Self { _stream: stream })
+        Some(Self {
+            _stream: stream,
+            feed,
+        })
+    }
+
+    /// The feed this device is bound to — the master clock for A/V sync.
+    pub fn feed(&self) -> &std::sync::Arc<std::sync::Mutex<AudioFeed>> {
+        &self.feed
     }
 }
 
