@@ -228,4 +228,8 @@ const PINNED: &[&str] = &[
     // tick 309 — window.navigation (Navigation API): navigate() fires an interceptable navigate event
     // and intercept({handler}) runs client-side routing over the shared History/Location plumbing.
     "navigationapi:yes",
+    // tick 344 — `:muted` media pseudo-class in the querySelector engine: `video:muted` selects the
+    // muted <video> and not the loud one. querySelector-only (the servo Stylo build has no Muted
+    // NonTSPseudoClass variant, so it cannot cascade — deferred with the same fence as `:has()`).
+    "mediapseudo:yes",
 ];

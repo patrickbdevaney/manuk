@@ -119,6 +119,18 @@ The statically-answerable set must come from the DOM: `:checked`, `:disabled`/`:
 `:focus`) correctly answer `false` for a static layout — and **`:visited` must answer `false`
 deliberately: it is the web's oldest privacy leak.**
 
+### `:muted` is querySelector-only, and that is a *build* fence (tick 344)
+
+`:muted` selects a muted `<video>`/`<audio>`. Our own `querySelectorAll` engine (`engine/css`, `Pseudo::Muted`)
+matches it off the `muted` **content attribute** — the same attribute-vs-live-property approximation `:checked`
+makes against `.checked`. But the CSS *cascade* cannot: the **servo** build of Stylo has no `Muted` variant in
+`NonTSPseudoClass` (nor `Playing`/`Paused`/`Seeking` — they are gecko-only, verified in
+`stylo-0.19.0/servo/selector_parser.rs`), so `video:muted { … }` **fails to parse and the whole rule is
+discarded**, exactly like `:has()` above. So JS that finds muted players (`querySelectorAll('video:muted')`)
+works; a stylesheet that styles them does not, until Stylo is vendored or the media state is plumbed into a
+gecko-style state flag. The dynamic media pseudo-classes (`:playing`/`:paused`/`:seeking`) need live playback
+state reachable from the DOM node and are deferred with the same note.
+
 ## Stylo's COMPUTED values are not its RESOLVED values — border-width and outline-width are traps
 
 - Stylo computes **`border-width` at `medium` (3px) even when `border-style: none`** — it zeroes

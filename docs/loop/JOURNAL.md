@@ -15238,3 +15238,40 @@ corpus Phase-0 exit-bar report instead of being discarded at merge; no website-c
 [no-pattern]). GATES +0; tests +1.
 CONSTELLATION: no row — the measuring instrument, not a rendered construct.
 WIKI: docs/wiki/conformance-and-oracles.md (corpus roll-up / Phase-0 exit-bar paragraph).
+
+## Tick 344 — `:muted` media pseudo-class in the querySelector engine (styling player state) (2026-07-21)
+
+CO-#1 / daily-driver capability (constellation media class, 57% working): the tick-264 pivot named the ONLY
+two remaining media rows as "audio output device" and "media pseudo-classes". This lands the querySelector
+half of the second. A RED probe already sat in the tree — `g_probe_capabilities.rs` asks
+`querySelectorAll('video:muted')` to return exactly the muted `<video id=vidmuted>` and NOT `<video
+id=vidloud>` — and reported `mediapseudo:no` because the hand-rolled selector engine did not know `:muted`.
+
+THE FIX: a `Pseudo::Muted` in `engine/css/src/lib.rs` (the OWN querySelector engine, not Stylo) — enum
+variant + a match arm `matches!(el.name, "video"|"audio") && el.attr("muted").is_some()` + a `"muted"` parse
+arm, mirroring `:checked` exactly (attribute-derived state, not the live `.muted` IDL property — the same
+honest limitation `:checked` carries against `.checked`). `"mediapseudo:yes"` moves into the probe's PINNED
+list so its loss is now a regression.
+
+SCOPE — deliberately querySelector-only, and this is a fence not a shortcut: the *servo* Stylo build's
+`NonTSPseudoClass` has NO `Muted`/`Playing`/`Paused`/`Seeking` variant (they are gecko-only — verified in
+stylo-0.19.0/servo/selector_parser.rs), so `video:muted { … }` cannot cascade without vendoring Stylo. That
+is the identical constraint the code already documents for `:has()`. CSS-cascade styling of player state +
+the dynamic pseudo-classes (:playing/:paused/:seeking, which need live playback state reachable from the DOM
+node) are left for a Stylo-vendoring or state-plumbing tick; CONSTELLATION marks the row `partial`, not
+`works`, to keep that honest.
+
+RED-PROVEN (cp-snapshot restored + re-verified GREEN): neutering the `"muted"` parse arm (so `:muted` never
+constructs) made `measured_capabilities_do_not_regress` FAIL — the probe reports `mediapseudo:no` and the
+PINNED assertion on `mediapseudo:yes` panics. Restored byte-for-byte; probe GREEN again.
+
+NO REGRESSION: additive enum variant + one match arm + one parse arm in the querySelector path; no existing
+pseudo touched. manuk-css checks clean, manuk-page probe gate GREEN (0.40s). cargo fmt did not void the edits
+(both lines re-verified present after fmt).
+
+TICK SHAPE: capability (media pseudo-class matching; a new selector the querySelector engine honors;
+[host-native pattern: extend the engine we own]). GATES +0 (reuses G_PROBE_CAPABILITIES); the census cell
+media/"media pseudo-classes" flips missing→partial.
+CONSTELLATION: media / media pseudo-classes → partial (G_PROBE_CAPABILITIES).
+WIKI: docs/wiki/css-cascade.md — `:muted` querySelector-only fence (servo Stylo lacks the gecko-only Muted
+NonTSPseudoClass variant, same as `:has()`).

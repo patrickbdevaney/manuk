@@ -1124,6 +1124,12 @@ enum Pseudo {
     Disabled,
     Enabled,
     Required,
+    /// `:muted` — a media element (`<video>`/`<audio>`) that is muted. We match the `muted` content
+    /// attribute (initial mute state); the live `.muted` IDL property is not tracked here, exactly as
+    /// [`Pseudo::Checked`] matches the `checked` attribute and not the runtime property. querySelector
+    /// only: the *servo* Stylo build has no `Muted` variant in `NonTSPseudoClass` (it is gecko-only),
+    /// so `video:muted { … }` cannot cascade without vendoring Stylo — the same fence as `:has()`.
+    Muted,
     Link,
     /// `:not(<compound>)` — a single inner compound (no combinators).
     Not(Box<Compound>),
@@ -1300,6 +1306,9 @@ fn pseudo_matches(p: &Pseudo, dom: &Dom, node: NodeId) -> bool {
             ) && el.attr("disabled").is_none()
         }
         Pseudo::Required => el.attr("required").is_some(),
+        Pseudo::Muted => {
+            matches!(el.name.as_str(), "video" | "audio") && el.attr("muted").is_some()
+        }
         Pseudo::Link => {
             matches!(el.name.as_str(), "a" | "area" | "link") && el.attr("href").is_some()
         }
@@ -2514,6 +2523,7 @@ fn parse_pseudo(name: &str, arg: Option<&str>) -> Option<Pseudo> {
         "disabled" => Pseudo::Disabled,
         "enabled" => Pseudo::Enabled,
         "required" => Pseudo::Required,
+        "muted" => Pseudo::Muted,
         "link" | "any-link" => Pseudo::Link,
         // Pseudo-ELEMENTS. `::before`/`::after` are legal with one colon too (CSS2 syntax), and
         // plenty of real sheets still write them that way.

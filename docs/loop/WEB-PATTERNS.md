@@ -2958,3 +2958,19 @@ release — a state only ever added leaves every control the pointer ever touche
 feeding `:active` only at the engine level (matcher + state) with no shell input is a "dead-end wire" — it
 reads as present at the cascade layer and never lights on a real press. The capability is the full path:
 matcher ↔ DOM state ↔ shell pointer feed.
+
+## `:muted` querySelector matching — selecting media elements by mute state (tick 344)
+
+**The class of the web this unlocks:** player-UI scripts that enumerate media by state — `document.querySelectorAll('video:muted')` to find the muted players, style a mute badge, or drive a
+"mute all"/"unmute all" control. It joins the state-derived structural pseudo-classes (`:checked`,
+`:disabled`, `:required`) the hand-rolled querySelector engine already matches on content attributes.
+
+**(1)** `:muted` matches a `<video>`/`<audio>` carrying the `muted` content attribute — the INITIAL mute
+state, exactly as `:checked` matches the `checked` attribute and not the live `.checked` IDL property. It
+is the honest, attribute-derived half; the runtime `.muted` property is not tracked here. **(2)** It is a
+new `Pseudo::Muted` in the engine we OWN (the querySelector selector engine), not Stylo — one enum variant,
+one match arm, one parse arm, mirroring `:checked`. **The fence (not a shortcut):** the *servo* Stylo build
+has no `Muted`/`Playing`/`Paused`/`Seeking` variant in `NonTSPseudoClass` (they are gecko-only), so
+`video:muted { … }` cannot CASCADE without vendoring Stylo — the identical constraint `:has()` carries.
+CSS-cascade styling of player state and the dynamic media pseudo-classes are a Stylo-vendoring tick; the
+constellation row stays `partial`, not `works`, to keep that honest.
