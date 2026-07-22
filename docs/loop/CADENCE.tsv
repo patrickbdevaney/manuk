@@ -188,3 +188,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 394	2fbe6a3	1784744810	2026-07-22T14:26:50-04:00	1023	capability	56	10	181	37	183	81	3896	6960	0	320	31	inline SVG paints: the spec's paint half landed same-day (2026-07-22)
 395	c873bfa	1784745577	2026-07-22T14:39:37-04:00	767	probe	56	6	83	33	183	81	3896	6960	0	320	31	the none→block family is path-misattribution: tree drift wearing style drift's face (2026-07-22)
 396	3b53360	1784745767	2026-07-22T14:42:47-04:00	190	self-audit	58	4	51	34	183	81	3896	6960	0	320	31	self-audit: clean through the instrument arc (2026-07-22)
+397	61675a9	1784745962	2026-07-22T14:46:02-04:00	195	surface-audit	62	5	86	34	183	81	3896	6960	0	320	31	surface audit #13: a quiet platform week, one row enrichment (2026-07-22)

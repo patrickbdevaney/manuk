@@ -16703,3 +16703,18 @@ RED-proven. LAST_AUDIT_TICK 386→396; next due 406 (with the wall audit).
 TICK SHAPE: self-audit (governance checkpoint). GATES +0. [no-pattern]
 CONSTELLATION: none.
 WIKI: none.
+
+## Tick 397 — surface audit #13: a quiet platform week, one row enrichment (2026-07-22)
+
+CADENCE OBLIGATION (387+10). Searched Firefox 153 notes (released this week), web.dev roundups,
+release calendars (no Safari stable since 26; Chrome 152 due Aug 25). A quiet standards week:
+getAllRecords() ENRICHES the t329 IndexedDB-indexes row (bounded method-pair, not yet Baseline);
+Error.stackTraceLimit flagged as a one-line mozjs probe WATCH; WebRTC cert inspection and HDR
+playback EXCLUDED with reasons (no RTC stack; no compositor color management in v1). No rows
+added — audit #12 already consumed the month's Baseline-crossers and t388 landed one of them.
+No stale-pessimistic finds. LAST_SURFACE_AUDIT 387→397; next due 407.
+
+TICK SHAPE: surface-audit (map maintenance; Audit #13 + 1 enrichment + watches/exclusions).
+GATES +0. [no-pattern]
+CONSTELLATION: IndexedDB-indexes row enriched (getAllRecords note in the audit log).
+WIKI: none.

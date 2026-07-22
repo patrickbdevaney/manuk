@@ -535,3 +535,39 @@ One Baseline-crosser worth a row, one map validation, several named watches/excl
 
 * None stale-pessimistic this window; the t378 scroll-promise landing pre-empted the platform
   roundup — additions-from-outside remains the map's only active error mode.
+
+## Audit #13 — tick 397 (2026-07-22)
+
+### Sources (searched, not recalled)
+
+* [Firefox 153 release notes](https://www.firefox.com/en-US/firefox/153.0/releasenotes/) (2026-07-21,
+  the week's engine release) · [web.dev June-2026 roundup](https://web.dev/blog/web-platform-06-2026)
+  (re-checked; #12 covered it). No Safari stable since 26 (May); Chrome 152 due 2026-08-25.
+
+### The external frame
+
+A quiet platform week (Firefox 153 is mostly product surface: PDF merge, HDR video on Windows).
+The standards-track items, mapped:
+
+* **`IDBObjectStore.getAllRecords()` / `IDBIndex.getAllRecords()`** (Firefox 153 beta; Chrome
+  shipped earlier) — batch record retrieval (key+primaryKey+value in one call, directional).
+  ENRICHES the existing IndexedDB-indexes row (t329-gated): a bounded method-pair on a built
+  organ, tick-sized when the row is next touched. Not yet Baseline (Safari absent).
+* **`Error.stackTraceLimit`** (Firefox 153 beta) — engine-level (SpiderMonkey exposes it);
+  worth a one-line probe next JS tick, likely already answered by mozjs. WATCH.
+* **`RTCDtlsTransport.getRemoteCertificates()`** — WebRTC is out of v1 scope (no RTC stack).
+  EXCLUDED with reason, consistent with audit #12's Direct-Sockets exclusion.
+* **HDR video playback** — media output device tier; our audio-out is gated-on-PCM and video is
+  frame-decode; HDR tone-mapping is named OUT for v1 (no compositor color management).
+
+### ADDED
+
+* None — the week's Baseline-crossers were consumed by #12 (field-sizing, landed t388).
+
+### CORRECTED
+
+* None stale-pessimistic. The t395 path-pairing find is recorded on the instrument side
+  (conformance-and-oracles.md), not the map: constellation rows key by capability, and the
+  display-diff UPPER-BOUND caveat lives with the ledger it qualifies.
+
+LAST_SURFACE_AUDIT 387→397; next due 407.
