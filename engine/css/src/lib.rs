@@ -3127,15 +3127,17 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
         }
     }
 
-    // Replaced elements: an <img>/<canvas>/<video> is an atomic inline-block box sized by
-    // its presentational width/height attributes (author CSS width/height still overrides,
-    // as those are applied after UA defaults). Natural (intrinsic) sizing from the decoded
-    // bitmap is layered on in the image pipeline.
+    // Replaced elements: an <img>/<canvas>/<video> is an ATOMIC INLINE box sized by its
+    // presentational width/height attributes (author CSS width/height still overrides, as
+    // those are applied after UA defaults). Computed display stays `inline` — the spec's and
+    // Chrome's value (tick 384; this used to force `inline-block`, and 81 corpus sites showed
+    // the divergence on <img> alone). Layout treats an inline replaced box atomically, which
+    // is the behavior the old mutation was standing in for. Natural (intrinsic) sizing from
+    // the decoded bitmap is layered on in the image pipeline.
     if matches!(
         tag,
         "img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe"
     ) {
-        s.display = Display::InlineBlock;
         // A presentational hint may only fill a genuinely ABSENT width. `width: stretch` and the
         // intrinsic keywords compute to `Dim::Auto`, so they look absent — and `<canvas width="40">`
         // would beat the author's `width: stretch` and keep hugging its 40px. The flags tell "no

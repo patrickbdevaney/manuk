@@ -786,9 +786,10 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
         tag,
         "img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe"
     ) {
-        if s.display == crate::Display::Inline {
-            s.display = crate::Display::InlineBlock;
-        }
+        // Computed display stays `inline` — the spec's and Chrome's value for a replaced element
+        // (the tick-380 oracle: 81 sites diverged on `<img>`, 80 on `<svg>`, because this used to
+        // force `inline-block`). Layout lays an inline replaced box out ATOMICALLY — sized as a
+        // block, flowed like a word — which is what the old mutation was standing in for.
         // A presentational hint is the LOWEST-priority source, so it may only fill a genuinely
         // absent width. `width: stretch` and the intrinsic keywords both compute to `Dim::Auto`,
         // which made them look absent — so `<canvas width="40">` beat the author's `width: stretch`

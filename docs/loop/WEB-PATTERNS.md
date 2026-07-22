@@ -3271,3 +3271,15 @@ the same way. `Page::failed_stylesheet_fetches()` + discard-on-starved is the sy
 **The trap:** a divergence count that MOVES between identical runs is not a measurement yet —
 before acting on any ledger family, re-run one affected site on a quiet box and see if the
 family survives.
+
+## Computed values are an observable surface — don't encode layout policy in them (tick 384)
+
+**The class of the web this unlocks:** every page an author or framework feature-detects with
+`getComputedStyle(el).display` on replaced elements, and the whole corpus-diff signal for them
+(81/80 sites on img/svg). A cascade that mutates computed values to steer its own layout is
+lying to every OTHER consumer of those values.
+**(1)** The spec's computed value and the layout treatment are separate contracts: `<img>` is
+`inline` AND atomic. Encode atomicity where it is consumed (the layout routing), not where it is
+reported (the style map).
+**The trap:** the mutation is invisible until something diffs you against a real browser — this
+one lived through ~380 ticks and two cascades.

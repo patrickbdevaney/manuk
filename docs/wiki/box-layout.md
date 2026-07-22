@@ -986,3 +986,21 @@ as an open defect while it worked.
 
 Gated with **Chrome-measured constants** rather than our own output, because a gate built from your
 own numbers is a screenshot of today, not a regression test.
+
+## Replaced elements compute `inline` — atomicity is layout's job, not the cascade's (tick 384)
+
+The computed display of `<img>`/`<canvas>`/`<video>`/`<svg>`/`<object>`/`<embed>`/`<iframe>` is
+`inline` (spec + Chrome). Both cascades used to force it to `inline-block` so the box would take
+the atomic-inline layout path — a convenience mutation that leaked into every observable surface:
+getComputedStyle, the oracle (81 corpus sites diverged on `<img>` alone, 80 on `<svg>`), and any
+author check like `getComputedStyle(img).display === 'inline'`.
+
+The contract now: the cascade REPORTS `inline`; layout's `is_atomic_inline_replaced` routes a
+replaced inline through the same atomic path as `inline-block` (sized as a block, flowed like a
+word, never recursed into as text) at THREE seams — the inline collector (else an `<img>` produces
+NO box: it has no text children), block-in-inline blockification (an `<svg>` HAS element children
+and must never be split by them), and `inline_contains_block`'s recursion (a replaced inline child
+cannot blockify its ancestor). §10.4 ratio adjustment keeps its own narrower replaced list.
+Claimed in manuk-layout `an_inline_replaced_element_is_atomic_but_computes_inline` (RED-proven:
+severing the collector seam produces a boxless img). E2E: apnews 541→495 divergences, the
+inline-block family to zero, jarring counts unchanged.

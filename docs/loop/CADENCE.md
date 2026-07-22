@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **176** | ticks 1–383 |
-| median tick cycle | **19m** | 175 intervals |
-| median, last 10 | **11m** | 10 intervals |
+| ticks landed | **177** | ticks 1–384 |
+| median tick cycle | **19m** | 176 intervals |
+| median, last 10 | **15m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.65** | 270.4h elapsed |
-| median verify wall | **60s** | 115 ticks |
-| wall trend | 39s → 60s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.65** | 270.8h elapsed |
+| median verify wall | **60s** | 116 ticks |
+| wall trend | 39s → 56s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**96 of 176 ticks** (55%) moved a
+**97 of 177 ticks** (55%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **96** capability ticks, median cycle **19m**
+* **97** capability ticks, median cycle **19m**
 * median diff per tick: **+230 / −34** lines across 8 files
 
 ## Every tick
@@ -273,5 +273,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **381** | 2026-07-22 10:49 | 15m | capability | 60s | +116/−41 | 183 | 81 | 56.0% · | the netlify panic: multi-byte at-rule names must never crash the engine (2026-07-22) |
 | **382** | 2026-07-22 10:52 | 3m | constitution-check | 55s | +94/−34 | 183 | 81 | 56.0% · | Constitution Check #14: the gate's instrument is in service (2026-07-22) |
 | **383** | 2026-07-22 11:25 | 33m | capability | 61s | +148/−37 | 183 | 81 | 56.0% · | the instrument lied under load: starved sheets are now counted and discarded (2026-07-22) |
+| **384** | 2026-07-22 11:52 | 26m | capability | 56s | +174/−46 | 183 | 81 | 56.0% · | replaced elements compute `inline`: the convenience mutation unwound (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

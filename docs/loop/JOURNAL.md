@@ -16433,3 +16433,27 @@ and any ledger family must survive a quiet re-run before it earns a fix]). GATES
 +1 claim (dead sheet countable = IN the wall); oracle discard rides the instrument.
 CONSTELLATION: cross/real-world-QUIRKS row enriched (trio re-attributed).
 WIKI: docs/wiki/conformance-and-oracles.md — oracle health check on both sides (tick 383).
+
+## Tick 384 — replaced elements compute `inline`: the convenience mutation unwound (2026-07-22)
+
+The ledger family that SURVIVED t383's quiet re-run: display inline→inline-block on <img> (81
+sites) / <svg> (80) — our two cascades force-mutated replaced elements' computed display to
+inline-block to get atomic layout, leaking layout policy into every observable surface
+(getComputedStyle, the oracle, author feature-detects).
+
+BUILT: the mutation removed from BOTH cascades (stylo_engine post-pass + apply_ua_defaults —
+the two-cascades trap honored: changed together); layout gains is_atomic_inline_replaced
+(the cascade's 7-tag replaced set, wider than §10.4's on purpose) routing replaced inlines
+through the atomic path at three seams: the inline collector (else an img has no text children
+and produces NO box), block-in-inline blockification (svg HAS element children and must never
+split), inline_contains_block recursion (a replaced inline child can't blockify its ancestor).
+RED-proven: collector seam severed → "an inline <img> must still produce a box" fails; restored
+→ 81/81 manuk-layout + 27 manuk-css green. E2E: apnews 541→495 divergences, the inline-block
+family 33→0, jarring counts UNCHANGED (overlap 22 / reorder 31 / dead 1 — same boxes, honest
+computed values). Workspace release-builds clean; only display-NAME mappings elsewhere.
+
+TICK SHAPE: capability (computed-value parity on every replaced element; [pattern: don't encode
+layout policy in computed values — atomicity belongs where it's consumed, not where it's
+reported]). GATES manuk-layout +1 test (an_inline_replaced_element_is_atomic_but_computes_inline
+= IN the wall via T·crate tests). CONSTELLATION: none — computed-value correctness, no new row.
+WIKI: docs/wiki/box-layout.md — replaced elements compute inline (tick 384).

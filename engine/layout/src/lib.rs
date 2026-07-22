@@ -864,7 +864,11 @@ fn is_block_level(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
         // differs from the spec only in where the *inline's own* background paints (spec: on each
         // split fragment; here: behind the blockified box) — invisible unless a block-containing
         // inline is itself styled, which is vanishingly rare.
-        if matches!(styles.get(&node).map(|s| s.display), Some(Display::Inline)) {
+        // A replaced inline (`<svg>` above all — it HAS element children) is atomic: nothing
+        // inside it can split it, so it never blockifies.
+        if matches!(styles.get(&node).map(|s| s.display), Some(Display::Inline))
+            && !is_atomic_inline_replaced(dom, styles, node)
+        {
             return inline_contains_block(dom, styles, node);
         }
     }
@@ -888,7 +892,11 @@ fn inline_contains_block(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
         ) {
             return true;
         }
-        if d == Display::Inline && inline_contains_block(dom, styles, k) {
+        // A replaced inline child is atomic — its subtree cannot blockify the ancestor.
+        if d == Display::Inline
+            && !is_atomic_inline_replaced(dom, styles, k)
+            && inline_contains_block(dom, styles, k)
+        {
             return true;
         }
     }
@@ -1330,6 +1338,23 @@ fn is_out_of_flow_positioned(s: &ComputedStyle) -> bool {
 /// axes are tied together by the ratio of the thing being displayed.
 fn is_replaced_element(tag: Option<&str>) -> bool {
     matches!(tag, Some("img" | "canvas" | "video" | "svg"))
+}
+
+/// Is `node` a **replaced element at `display: inline`** — an ATOMIC inline box?
+///
+/// The computed display of `<img>` (and every replaced element) is `inline`, per spec and per
+/// Chrome — but it does not participate in an inline formatting context as text does: it is
+/// sized as a block and flowed like a word, exactly like an `inline-block` (tick 384; the
+/// cascade used to force `inline-block` computed values to get this behavior, and the corpus
+/// oracle showed 81 sites diverging on `<img>`'s computed display alone). The tag list is the
+/// cascade's replaced-element set, wider than `is_replaced_element` on purpose: `iframe` /
+/// `object` / `embed` don't take §10.4 ratio adjustment but are just as atomic in a line.
+fn is_atomic_inline_replaced(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
+    matches!(styles.get(&node).map(|s| s.display), Some(Display::Inline))
+        && matches!(
+            dom.tag_name(node),
+            Some("img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe")
+        )
 }
 
 fn establishes_bfc(s: &ComputedStyle) -> bool {
@@ -4081,7 +4106,9 @@ impl Ctx<'_> {
                 }
                 // An `inline-block` (or inline-flex/grid) is an *atomic* inline box: lay it
                 // out as a block right here and flow it like a word, rather than recursing
-                // into its children as inline text.
+                // into its children as inline text. A REPLACED element at `display: inline`
+                // (`<img>` — the computed value Chrome and the spec give it) is exactly as
+                // atomic; it must never fall through to the text recursion below.
                 if matches!(
                     disp,
                     Some(
@@ -4091,7 +4118,8 @@ impl Ctx<'_> {
                             | Display::InlineFlex
                             | Display::InlineGrid
                     )
-                ) {
+                ) || is_atomic_inline_replaced(self.dom, self.styles, node)
+                {
                     let s = self.style_of(node);
                     let ml = s.margin.left.resolve(cw, 0.0);
                     let mr = s.margin.right.resolve(cw, 0.0);
@@ -5198,6 +5226,47 @@ mod tests {
              same y as the abs box (y={})",
             a.y,
             d.y
+        );
+    }
+
+    /// **A replaced element's computed display is `inline` — and it still gets its atomic box.**
+    ///
+    /// The spec's and Chrome's computed value for `<img>` is `inline`; the tick-380 corpus oracle
+    /// showed 81 sites diverging because the cascade force-mutated it to `inline-block` to get
+    /// atomic layout. The contract now: the COMPUTED value stays `inline` (what
+    /// getComputedStyle and the oracle report), and layout routes the box through the atomic
+    /// inline path anyway — sized as a block, flowed like a word, never recursed into as text.
+    /// RED without `is_atomic_inline_replaced` in the collector: the img falls into the text
+    /// recursion, has no text children, and produces NO BOX at all.
+    #[test]
+    fn an_inline_replaced_element_is_atomic_but_computes_inline() {
+        let dom = manuk_html::parse(r#"<p>before <img width="40" height="30"> after</p>"#);
+        let styles = MinimalCascade.cascade(&dom, &[]);
+        let img = dom
+            .descendants(dom.root())
+            .find(|&n| dom.tag_name(n) == Some("img"))
+            .expect("img in the tree");
+        assert_eq!(
+            styles.get(&img).map(|s| s.display),
+            Some(Display::Inline),
+            "computed display of <img> is `inline` (spec + Chrome), not a layout-convenience value"
+        );
+        let fonts = FontContext::new();
+        let root = layout_document(&dom, &styles, &fonts, 800.0);
+        let r = *root
+            .node_rects(&dom)
+            .get(&img)
+            .expect("an inline <img> must still produce a box (the atomic path)");
+        assert!(
+            (r.width - 40.0).abs() < 1.0 && (r.height - 30.0).abs() < 1.0,
+            "the atomic inline box must be sized by its dimension attributes, got {}x{}",
+            r.width,
+            r.height
+        );
+        assert!(
+            r.x > 0.0,
+            "the img flows IN the line after the text, not at the line start (x={})",
+            r.x
         );
     }
 
