@@ -183,10 +183,10 @@
   - L582 · Still skipped: @supports and @layer
   - L589 · One evaluator for @media and matchMedia (tick 275)
   - L617 · @supports / @layer, and answering a capability question honestly (tick 276)
-  - L640 · CSS.supports() — one question must not have two answers (tick 282)
-  - L659 · The fix is a different door to the same evaluator
-  - L680 · Two things measured and pinned
-  - L695 · Container queries (tick 379): the sized re-pass and the source supplement
+  - L650 · CSS.supports() — one question must not have two answers (tick 282)
+  - L669 · The fix is a different door to the same evaluator
+  - L690 · Two things measured and pinned
+  - L705 · Container queries (tick 379): the sized re-pass and the source supplement
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`

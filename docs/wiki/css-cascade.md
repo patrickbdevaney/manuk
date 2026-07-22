@@ -635,6 +635,16 @@ cannot express — but deleting the contents was not approximate, it was absent.
 *later* rule's brace and slices past the end. All four at-rule arms share one `block_open` that is
 `None` unless the brace falls before the rule's end.
 
+**At-rule keyword matching must be boundary-safe (tick 381).** The four arms matched their
+keywords with `rest.len() >= n && rest[..n].eq_ignore_ascii_case(…)` — a BYTE-length guard, not a
+char-boundary guard, so an at-rule named in multi-byte UTF-8 (netlify.com shipped one; found by
+the tick-380 oracle crawl) landed the slice mid-character and panicked the engine. The arms now
+share one `at_kw` closure over `str::get(..n)`: `None` on a non-boundary *is* "not this keyword",
+so exotic or hostile at-rules fall through to skip-unknown — CSS's own error recovery — instead of
+killing the process. RED proof: `multibyte_at_rule_names_never_panic` crosses every guarded prefix
+length mid-character. The other prefix slices in the file index off `find()` results, which are
+boundary-safe by construction.
+
 ---
 
 ## `CSS.supports()` — one question must not have two answers (tick 282)

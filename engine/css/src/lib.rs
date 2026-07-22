@@ -1849,14 +1849,20 @@ fn parse_rules_into(
             // `@import …;`) ends at the `;`, so a bare `rest.find('{')` would find the brace of
             // some LATER rule and slice past `end`. Anything at or after `end` is not ours.
             let block_open = rest.find('{').filter(|o| i + o < end);
-            if rest.len() >= 10 && rest[..10].eq_ignore_ascii_case("@font-face") {
+            // `get(..n)` and not `[..n]`: the byte-length guard alone let a multi-byte at-rule
+            // name (`@媒体…` — netlify.com's sheet, found by the tick-380 oracle run) land the
+            // slice mid-character and PANIC the engine. `get` returns None on a non-boundary,
+            // which is exactly "not this keyword" — the rule is skipped like any unknown at-rule.
+            let at_kw =
+                |n: usize, kw: &str| rest.get(..n).is_some_and(|p| p.eq_ignore_ascii_case(kw));
+            if at_kw(10, "@font-face") {
                 if let Some(open) = block_open {
                     let block = &src[i + open + 1..end.saturating_sub(1)];
                     if let Some(ff) = parse_font_face_block(block) {
                         font_faces.push(ff);
                     }
                 }
-            } else if rest.len() >= 9 && rest[..9].eq_ignore_ascii_case("@supports") {
+            } else if at_kw(9, "@supports") {
                 // `@supports` is the same defect as `@media` with a different at-keyword: the
                 // block was skipped, so the twelve properties recovered from this cascade were
                 // exempt from it. The condition is evaluated, never assumed — a false `@supports`
@@ -1867,7 +1873,7 @@ fn parse_rules_into(
                         parse_rules_into(body, media, rules, font_faces);
                     }
                 }
-            } else if rest.len() >= 6 && rest[..6].eq_ignore_ascii_case("@layer") {
+            } else if at_kw(6, "@layer") {
                 // `@layer name { … }` — descend. Layered rules should LOSE to unlayered ones at
                 // equal specificity, which this cascade cannot yet express, so this is knowingly
                 // approximate. It is still strictly closer than the previous behaviour, which was
@@ -1877,7 +1883,7 @@ fn parse_rules_into(
                     let body = &src[i + open + 1..end.saturating_sub(1)];
                     parse_rules_into(body, media, rules, font_faces);
                 }
-            } else if rest.len() >= 6 && rest[..6].eq_ignore_ascii_case("@media") {
+            } else if at_kw(6, "@media") {
                 if let Some(open) = block_open {
                     let prelude = rest[6..open].trim();
                     let body = &src[i + open + 1..end.saturating_sub(1)];
@@ -4853,6 +4859,28 @@ mod tests {
         let sheets = vec![Stylesheet::parse(css)];
         let map = MinimalCascade.cascade(&dom, &sheets);
         (dom, map)
+    }
+
+    /// **A real-site crash (tick 380 oracle run: netlify.com).** An at-rule whose name holds
+    /// multi-byte UTF-8 — `@media` written in CJK, an emoji custom at-rule, any hostile bytes —
+    /// hit `rest[..6]` / `rest[..9]` / `rest[..10]` prefix slices guarded only by BYTE length, so
+    /// the slice landed mid-character and panicked the whole engine. A browser must never panic
+    /// on bytes the network hands it: unknown at-rules are SKIPPED, whatever they are named.
+    /// The three strings place a slice index inside a 3-byte char (bytes 6 and 9) and a 4-byte
+    /// char (byte 10) so every guarded prefix length is crossed mid-character at least once.
+    #[test]
+    fn multibyte_at_rule_names_never_panic() {
+        for css in [
+            "@媒体查询 { .a { color: red } }", // 3-byte chars: bytes 6 and 9 mid-char
+            "@🦀🦀🦀 { }",                     // 4-byte chars: byte 10 mid-char
+            "@é;",                             // 2-byte char, statement form
+        ] {
+            let sheet = Stylesheet::parse(css);
+            assert!(
+                sheet.rules.is_empty(),
+                "unknown at-rule must be skipped, not styled"
+            );
+        }
     }
 
     #[test]

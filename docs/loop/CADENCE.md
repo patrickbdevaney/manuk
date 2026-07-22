@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **173** | ticks 1–380 |
-| median tick cycle | **19m** | 172 intervals |
-| median, last 10 | **10m** | 10 intervals |
+| ticks landed | **174** | ticks 1–381 |
+| median tick cycle | **19m** | 173 intervals |
+| median, last 10 | **15m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.64** | 269.5h elapsed |
-| median verify wall | **60s** | 112 ticks |
+| **ticks per hour** | **0.64** | 269.8h elapsed |
+| median verify wall | **60s** | 113 ticks |
 | wall trend | 39s → 57s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**94 of 173 ticks** (54%) moved a
+**95 of 174 ticks** (55%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **94** capability ticks, median cycle **19m**
-* median diff per tick: **+232 / −33** lines across 8 files
+* **95** capability ticks, median cycle **19m**
+* median diff per tick: **+232 / −34** lines across 8 files
 
 ## Every tick
 
@@ -270,5 +270,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **378** | 2026-07-22 08:19 | 15m | capability | 61s | +112/−35 | 183 | 81 | 56.0% · | promise-returning scroll methods: the truthful immediate resolve (2026-07-22) |
 | **379** | 2026-07-22 09:30 | 71m | capability | 55s | +732/−72 | 183 | 81 | 56.0% · | container queries: the sized re-pass and the @container source supplement (2026-07-22) |
 | **380** | 2026-07-22 10:34 | 63m | measurement | 57s | +469/−451 | 183 | 81 | 56.0% · | the corpus oracle runs END TO END: 265 sites, the jarring baseline, and the ledger (2026-0 |
+| **381** | 2026-07-22 10:49 | 15m | capability | 60s | +116/−41 | 183 | 81 | 56.0% · | the netlify panic: multi-byte at-rule names must never crash the engine (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -16365,3 +16365,27 @@ are the highest-yield — this one found a real-site crash, a 13× perf outlier 
 collapsed thousands of diffs into three actionable families]). GATES +0 (instrument run, off
 the wall path). CONSTELLATION: cross/real-world-QUIRKS row enriched (baseline banked).
 WIKI: none — the ledger lives in docs/loop/CLUSTERS.md (generated, do-not-hand-edit).
+
+## Tick 381 — the netlify panic: multi-byte at-rule names must never crash the engine (2026-07-22)
+
+The tick-380 oracle run's Bar-0 find, taken first because a crash outranks every visual cluster
+(the ledger's own header). netlify.com's stylesheet panicked the whole engine at
+engine/css/src/lib.rs:1852/1859/1870/1880: the at-rule keyword checks (`@font-face`/`@supports`/
+`@layer`/`@media`) sliced `rest[..6..10]` guarded only by BYTE length, so an at-rule whose name
+holds multi-byte UTF-8 landed the slice mid-character — `byte index N is not a char boundary`,
+process dead. A browser must never panic on bytes the network hands it.
+
+FIX: one `at_kw` closure using `str::get(..n)` — None on a non-boundary IS "not this keyword",
+so a hostile or exotic at-rule is skipped exactly like any unknown at-rule (CSS forward-compat
+error recovery), never a crash. RED-proven: test multibyte_at_rule_names_never_panic crosses a
+slice index mid-3-byte-char (bytes 6, 9), mid-4-byte-char (byte 10), and a 2-byte statement
+form — panicked at 1852:40 before the fix, 27/27 green after. E2E-proven: the SAME cached
+netlify snapshot that died rc=101 in the crawl now diffs end-to-end (rc=0, full cluster output).
+Other prefix-slice sites in the file audited: all index off `find()` results (char-boundary safe).
+
+TICK SHAPE: capability (crash-robustness on real-web bytes — the RATCHET's own bar: no Bar-0
+crash traded for anything; [pattern: length-guarded byte slices on network text are latent
+panics — boundary checks must be part of the match, `get(..n)`, not a separate guard]).
+GATES +0 new (covered by manuk-css unit suite = IN the wall via T·crate tests).
+CONSTELLATION: cross/real-world-QUIRKS row already records the find+fix (t380 entry).
+WIKI: docs/wiki/css-cascade.md — at-rule prefix-matching robustness note (below).

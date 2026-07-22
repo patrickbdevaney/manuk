@@ -3245,3 +3245,15 @@ re-layout, with container-gated rules held OFF on the unsized pass — unknown m
 feature-detect fallbacks stay honest.
 **The trap:** re-wrapping lifted blocks without their ENCLOSING @media/@supports/@layer preludes
 silently un-gates them.
+
+## Multi-byte at-rule names — hostile bytes vs length-guarded slices (tick 381)
+
+**The class of the web this unlocks:** any site whose CSS carries non-ASCII at-rule-shaped
+tokens — i18n custom at-rules, minifier artifacts, or plain hostile bytes (netlify.com shipped
+one and the whole engine died). Crash-robustness IS a rendering-parity feature: Chrome renders
+the page, we rendered a corpse.
+**(1)** A byte-length guard (`rest.len() >= 6 && rest[..6]`) is NOT a boundary guard: UTF-8
+slicing panics mid-character. `str::get(..n)` folds the boundary check into the keyword match —
+None means "not this keyword", which is exactly CSS's skip-unknown recovery.
+**The trap:** the pattern passes every ASCII test you'll ever write; only real-web bytes find it.
+The tick-380 oracle crawl is what surfaced it — measurement finds what unit tests cannot.
