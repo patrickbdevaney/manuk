@@ -152,4 +152,14 @@ fn a_dead_subresource_is_never_swallowed() {
          unstyled and nobody knows why.\n  captured:\n  {}",
         cap.dump()
     );
+    // And the failure must be COUNTABLE, not only logged: a measurement (the differential oracle)
+    // has to be able to ask "did I actually style this page?" and refuse to score a UA-fallback
+    // layout as the engine's own. Tick 383: crawl-load fetch starvation booked hundreds of phantom
+    // divergences per site precisely because nothing machine-readable said the sheet never came.
+    assert_eq!(
+        page.failed_stylesheet_fetches(),
+        1,
+        "G_SILENT_FAIL: the dead stylesheet must be counted (got {})",
+        page.failed_stylesheet_fetches()
+    );
 }

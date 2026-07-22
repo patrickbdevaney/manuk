@@ -16404,3 +16404,32 @@ CHECK 374→382; next due 390.
 TICK SHAPE: constitution-check (governance checkpoint; deliverable = Check #14 + counter). GATES +0. [no-pattern]
 CONSTELLATION: none.
 WIKI: none.
+
+## Tick 383 — the instrument lied under load: starved sheets are now counted and discarded (2026-07-22)
+
+The ledger's top probe (Check #14's own steer: "probe for one shared cause before three fixes").
+The author-style-not-applied trio (none→block 49 sites / flex→block 43 / block→inline 39) traced
+to apnews.com's 291 none→block instances: nav submenus a plain `.MainNavigationItemItem-items
+{display:none}` rule hides. The sheet fetches fine; the rule is top-level; no `[data-item-click]`
+ancestor exists in the snapshot. On a QUIET re-run the family is ZERO — under 6-job crawl load
+our per-resource fetch timeout starves author sheets, the page renders UA-default, and the diff
+books network weather as engine drift (same snapshot, two runs: 1268 vs 541 divergences,
+reorder 255→31, overlap 0→22 — it moves BOTH ways).
+
+BUILT (the honesty seam, both halves): Page::failed_stylesheet_fetches() — render-blocking
+sheets requested and never arrived, later success removes (engine/page); the oracle DISCARDS any
+site with a non-zero count — the mirror of oracle_is_healthy, which guarded only the REFERENCE
+engine for ~300 ticks. Counted, labelled, never scored; the crawl driver already records the
+missing result file as DISCARDED. RED-proven: insert severed → G_SILENT_FAIL "must be counted
+(got 0)"; restored → green. E2E: apnews on a quiet box scores normally (541 divs, styled);
+a starved run now refuses to score at all. Ledger consequence: the trio families are DEMOTED
+from engine-defect to instrument-artifact pending a re-crawl; the img/svg inline→inline-block
+family SURVIVES the quiet re-run (real, still ranked). Residue named in the wiki: healthy-run
+jarring counts still vary with live network; subresource snapshotting is the next rung.
+
+TICK SHAPE: capability (instrument honesty — the Phase-0 exit gate can no longer charge network
+weather to the engine; [pattern: a differential instrument needs a health check on BOTH sides —
+and any ledger family must survive a quiet re-run before it earns a fix]). GATES G_SILENT_FAIL
++1 claim (dead sheet countable = IN the wall); oracle discard rides the instrument.
+CONSTELLATION: cross/real-world-QUIRKS row enriched (trio re-attributed).
+WIKI: docs/wiki/conformance-and-oracles.md — oracle health check on both sides (tick 383).

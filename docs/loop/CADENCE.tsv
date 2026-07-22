@@ -174,3 +174,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 380	bd17e17	1784730851	2026-07-22T10:34:11-04:00	3809	measurement	57	6	469	451	183	81	3896	6960	0	320	31	the corpus oracle runs END TO END: 265 sites, the jarring baseline, and the ledger (2026-07-22)
 381	d4b5f39	1784731777	2026-07-22T10:49:37-04:00	926	capability	60	8	116	41	183	81	3896	6960	0	320	31	the netlify panic: multi-byte at-rule names must never crash the engine (2026-07-22)
 382	424299d	1784731967	2026-07-22T10:52:47-04:00	190	constitution-check	55	5	94	34	183	81	3896	6960	0	320	31	Constitution Check #14: the gate's instrument is in service (2026-07-22)
+383	c487139	1784733945	2026-07-22T11:25:45-04:00	1978	capability	61	11	148	37	183	81	3896	6960	0	320	31	the instrument lied under load: starved sheets are now counted and discarded (2026-07-22)

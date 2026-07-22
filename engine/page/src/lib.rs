@@ -1015,6 +1015,11 @@ pub struct Page {
     /// `<style>`, and silently lost every `<link>`ed stylesheet on the page. A re-cascade that
     /// quietly strips the site's CSS is worse than no re-cascade.
     external_css: HashMap<String, String>,
+    /// Render-blocking external stylesheets that were requested and NEVER arrived. A page styled by
+    /// UA defaults because its author sheet timed out is not this engine's layout, and anything
+    /// measuring the engine (the differential oracle above all) must be able to ask. A URL is
+    /// removed if a later fetch round does deliver it — this set holds what is failed NOW.
+    failed_css: std::collections::HashSet<String>,
     /// Mask/background URLs already fetched for this navigation. Same discipline as `external_css`
     /// and `images`: `fetch_and_apply_masks` and `fetch_and_apply_background_images` run once for
     /// `finish_loading` and AGAIN after every round of dynamic scripts, and each call was re-fetching
@@ -3710,6 +3715,7 @@ impl Page {
             images: inline_images,
             scroll_offsets: std::collections::HashMap::new(),
             external_css: HashMap::new(),
+            failed_css: std::collections::HashSet::new(),
             fetched_urls: std::collections::HashSet::new(),
             image_attempts: std::collections::HashSet::new(),
             image_by_url: std::collections::HashMap::new(),
@@ -5314,6 +5320,14 @@ impl Page {
         damage
     }
 
+    /// How many render-blocking external stylesheets were requested and never arrived. Non-zero
+    /// means the current layout is (partly) UA-default fallback, NOT this engine's rendering of the
+    /// author's page — a measurement that diffs it against a fully-styled reference is charging
+    /// network weather to the engine's account. The differential oracle discards such runs.
+    pub fn failed_stylesheet_fetches(&self) -> usize {
+        self.failed_css.len()
+    }
+
     /// Fetch this page's external render-blocking stylesheets (via `manuk-net`) and
     /// apply them ([`apply_stylesheets`](Self::apply_stylesheets)). Returns how many
     /// external sheets were successfully fetched. Failed fetches are skipped (the page
@@ -5355,13 +5369,17 @@ impl Page {
             match text {
                 Some(t) => {
                     tracing::info!(bytes = t.len(), %url, "stylesheet applied");
+                    self.failed_css.remove(&url);
                     external.insert(url, t);
                 }
                 // A stylesheet that fails to arrive is not a cosmetic loss — it is the difference
-                // between a site's desktop layout and its mobile one. Say so.
+                // between a site's desktop layout and its mobile one. Say so — and COUNT it, so a
+                // measurement can refuse to score a page we never actually styled (tick 383: the
+                // oracle crawl booked exactly this as 100s of phantom engine divergences per site).
                 None => {
                     tracing::warn!(%url, "STYLESHEET FAILED — the page will render unstyled or \
-                                              in its fallback layout")
+                                              in its fallback layout");
+                    self.failed_css.insert(url);
                 }
             }
         }

@@ -1575,6 +1575,20 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
             p
         });
         let manuk_ms = t_manuk.elapsed().as_millis();
+        // **Never diff a page we never styled** — the mirror of `oracle_is_healthy`. Under crawl
+        // load our per-resource fetch timeouts starve author sheets, the page renders UA-default,
+        // and every submenu Chrome hides becomes a phantom engine divergence (tick 383: apnews
+        // booked 291 `none→block` this way; ZERO on a quiet re-run). A discarded site is counted,
+        // labelled, and never scored — same honesty rule the Chrome side has always had.
+        let starved = page.failed_stylesheet_fetches();
+        if starved > 0 {
+            eprintln!(
+                "  {short}: DISCARDED — {starved} author stylesheet(s) never arrived \
+                 (starved engine fetch; the layout is UA fallback, not ours)"
+            );
+            skipped += 1;
+            continue;
+        }
         let rects = page.root_box.node_rects(page.dom());
         let styles = page.styles_map();
         let dom = page.dom();

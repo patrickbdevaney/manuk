@@ -637,3 +637,27 @@ inline script must be blocked by `script-src 'self'` — **cannot be run from an
 because a working implementation prevents the probe from executing at all. Absence of the result is
 indistinguishable from the probe never running. It needs an external-script harness and a real
 response header, so the cell stays `unknown` rather than taking a verdict this harness cannot earn.
+
+## The oracle must know whether the engine actually styled the page (tick 383)
+
+The one-snapshot rule pins the DOCUMENT, not its SUBRESOURCES. Under crawl load (6 jobs +
+Chromium), the engine's per-resource fetch timeout starves author stylesheets, the page renders
+UA-default, and the diff dutifully books the difference as engine drift: apnews.com carried 291
+`display none→block` divergences in the tick-380 crawl (dropdown submenus the author's sheet
+hides) and ZERO on a quiet re-run — the whole "author-style-not-applied" ledger family
+(none→block 49 sites / flex→block 43 / block→inline 39) was substantially this artifact. Same
+snapshot, two runs: 1268 vs 541 total divergences.
+
+The seam, in two halves:
+- **engine** — `Page::failed_stylesheet_fetches()`: render-blocking sheets requested and never
+  arrived (a later round's success removes the URL — the set holds what is failed NOW). Claimed
+  in G_SILENT_FAIL: a dead sheet must be countable, not only logged.
+- **instrument** — the oracle DISCARDS a site when the count is non-zero, mirror of
+  `oracle_is_healthy` on the Chrome side: counted, labelled, never scored. The crawl driver
+  already records a skipped site as DISCARDED (a missing result file is itself the signal).
+
+The general rule: **a differential instrument needs a health check on BOTH engines.** We had one
+for the reference for hundreds of ticks before the tick-380 crawl showed the same failure mode on
+our own side. Residue (named): per-site jarring counts still vary run-to-run with live-network
+weather even when styled (apnews overlap 0↔22 across two healthy runs); full determinism needs
+subresource snapshotting — CSS cached beside the HTML — which is the next instrument rung.

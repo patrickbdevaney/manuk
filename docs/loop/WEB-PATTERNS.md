@@ -3257,3 +3257,17 @@ slicing panics mid-character. `str::get(..n)` folds the boundary check into the 
 None means "not this keyword", which is exactly CSS's skip-unknown recovery.
 **The trap:** the pattern passes every ASCII test you'll ever write; only real-web bytes find it.
 The tick-380 oracle crawl is what surfaced it — measurement finds what unit tests cannot.
+
+## A differential instrument needs a health check on BOTH sides (tick 383)
+
+**The class of the web this unlocks:** none directly — it stops the exit instrument LYING about
+the classes we already handle. The tick-380 ledger's "author-style-not-applied" trio (49/43/39
+sites) largely evaporated on quiet re-runs: crawl-load fetch starvation had rendered pages
+UA-default and charged the difference to the engine.
+**(1)** The one-snapshot rule must extend to everything that styles the page — pinning the HTML
+while the CSS rides live network weather pins nothing.
+**(2)** `oracle_is_healthy` guarded the reference engine only; the measured engine can degrade
+the same way. `Page::failed_stylesheet_fetches()` + discard-on-starved is the symmetric guard.
+**The trap:** a divergence count that MOVES between identical runs is not a measurement yet —
+before acting on any ledger family, re-run one affected site on a quiet box and see if the
+family survives.
