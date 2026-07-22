@@ -197,6 +197,19 @@ collisions cluster (flex/flow items, list rows, stacked cards) and it keeps the 
 `MAX_GROUP` skip the pairwise scan and the skipped-group count is surfaced so a bounded scan is never read
 as a clean page. Cross-subtree occlusion belongs to the (not-yet-wired) hittability invariant, not here.
 
+`oracle::jarring_reading_order` adds the third Layer-2 invariant — **reading order preserved.** A float, an
+abspos, or a mis-placed grid item that escapes its slot makes a later element render *before* an earlier one;
+the content jumps out of sequence even when nothing overlaps and every box is well-shaped, so SHAPE and
+overlap both miss it. It counts pairs of **siblings** whose reading order (top-to-bottom, then left-to-right)
+**Chrome and Manuk disagree about** — Chrome reads A-before-B while Manuk reads B-before-A, each with a clear
+margin. Chrome is the reference for the *intended* order: a normal-flow engine lays siblings out in DOM order,
+so a disagreement is Manuk pulling one out of place, never a legitimately reordered design (a site that
+reorders is reflected in Chrome too and the pair agrees). Both orders must be **definite** (past `tol` on the
+deciding axis); a pair too close to call in either engine is skipped, so tolerance jitter never manufactures
+an inversion. Same bound and skipped-group accounting as `jarring_overlap`, and surfaced per site (`⚠ N
+reorder`) and as `reorder` in the `--emit` meta. Two of the five Layer-2 invariants remain unwired —
+hittability (reuse the occlusion-aware hit-test) and post-load stability (a CLS-equivalent).
+
 ## Gates must run the SHIPPING configuration
 
 The parity harness **defaulted to the simple cascade while the shell shipped Stylo** — so parity, fidelity

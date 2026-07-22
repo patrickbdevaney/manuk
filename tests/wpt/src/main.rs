@@ -1660,6 +1660,10 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
         // And sibling overlap — the #1 "broken page" perception (text on text, control under banner),
         // which SHAPE also cannot see. `ov_skip` reports sibling groups too large to scan pairwise.
         let (overlap, ov_skip, ov_ex) = manuk_wpt::oracle::jarring_overlap(&chrome, &manuk, tol);
+        // And reading-order inversion — a float/abspos/grid item we alone pull out of sequence, which
+        // SHAPE and overlap both miss (the boxes can be well-shaped and disjoint yet read swapped).
+        let (rinv, rinv_skip, rinv_ex) =
+            manuk_wpt::oracle::jarring_reading_order(&chrome, &manuk, tol);
         let mut jflag = String::new();
         if hover > 0 {
             jflag.push_str(&format!(
@@ -1673,8 +1677,17 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
                 ov_ex.first().map(String::as_str).unwrap_or("")
             ));
         }
-        if ov_skip > 0 {
-            jflag.push_str(&format!("  [{ov_skip} group(s) too large to scan]"));
+        if rinv > 0 {
+            jflag.push_str(&format!(
+                "  ⚠ {rinv} reorder (e.g. {})",
+                rinv_ex.first().map(String::as_str).unwrap_or("")
+            ));
+        }
+        if ov_skip + rinv_skip > 0 {
+            jflag.push_str(&format!(
+                "  [{} group(s) too large to scan]",
+                ov_skip.max(rinv_skip)
+            ));
         }
         eprintln!(
             "  {short}: {} divergence(s) over {} probed{jflag}",
@@ -1689,13 +1702,14 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
             let _ = std::fs::create_dir_all(dir);
             let mut out = String::new();
             out.push_str(&format!(
-                "{{\"kind\":\"meta\",\"site\":\"{short}\",\"class\":\"{}\",\"status\":\"ok\",\"probed\":{},\"manuk_ms\":{},\"chrome_ms\":{},\"h_overflow\":{},\"overlap\":{}}}\n",
+                "{{\"kind\":\"meta\",\"site\":\"{short}\",\"class\":\"{}\",\"status\":\"ok\",\"probed\":{},\"manuk_ms\":{},\"chrome_ms\":{},\"h_overflow\":{},\"overlap\":{},\"reorder\":{}}}\n",
                 flag(args, "--class").unwrap_or("?"),
                 chrome.len(),
                 manuk_ms,
                 chrome_ms,
                 hover,
-                overlap
+                overlap,
+                rinv
             ));
             for d in &divs {
                 out.push_str(&format!(

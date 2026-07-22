@@ -15083,3 +15083,45 @@ TICK SHAPE: infrastructure (the fidelity instrument — Part 21; the Phase-0 exi
 single most-perceived layout failure; no website-capability change, [no-pattern]). GATES +0; tests +1.
 CONSTELLATION: no row — the measuring instrument, not a rendered construct.
 WIKI: docs/wiki/conformance-and-oracles.md (Layer-2 overlap paragraph).
+
+## Tick 340 — Layer-2 jarring invariant: reading-order inversion, content out of sequence (2026-07-21)
+
+CO-#1 (observer tick 328 STEP-2 (1)(d) / FIDELITY-SCORING-REDESIGN.md §1): fidelity-instrument rebuild,
+jarring invariants. Ticks 335/338/339 landed Layer-1 SHAPE + h-overflow + sibling-overlap; this adds the
+THIRD of the five invariants the redesign names — "reading order preserved" (screen order matches the order
+a user reads in).
+
+WHY SHAPE + OVERLAP + H-OVERFLOW MISS IT: a float, an abspos, or a mis-placed grid item that escapes its slot
+makes a later element render BEFORE an earlier one. Nothing overlaps, every box can be perfectly shaped
+relative to its parent, and nothing spills the viewport — yet the content is out of sequence, which a user
+reads as a broken page. Neither absolute position, nor collision, nor overflow sees a swapped pair.
+
+THE INVARIANT: `oracle::jarring_reading_order(chrome, manuk, tol)` counts pairs of SIBLINGS (same parent
+path) whose reading order Chrome and Manuk DISAGREE about — Chrome reads A-before-B while Manuk reads
+B-before-A, each with a clear margin. Reading order = top-to-bottom (a row above reads first), then
+left-to-right within a row. Chrome is the reference for the INTENDED order (a normal-flow engine lays
+siblings out in DOM order), so a disagreement is Manuk pulling one out of place, never a legitimately
+reordered design — a site that reorders is reflected in Chrome too and the pair AGREES. Both orders must be
+DEFINITE (past tol on the deciding axis); a pair too close to call in either engine is skipped, so tolerance
+jitter never manufactures an inversion. Same sibling-scoping, MAX_GROUP (128) bound and surfaced
+skipped-group count as jarring_overlap. Wired LIVE into run_oracle_cmd (per-site ⚠ N reorder + `reorder` in
+the --emit meta).
+
+RED-PROVEN (cp-snapshot restored + re-verified GREEN): relaxing the `co != mo` disagreement check to count
+whenever both orders are merely definite made `jarring_reading_order_blames_only_orders_chrome_disagrees_with`
+FAIL — count 2 vs 1, because an AGREEING pair (both engines read p[0] before p[1], a real order) now counts.
+The `co != mo` check is what distinguishes an inversion from a page that simply HAS an order. (Found in
+passing that all-under-one-parent fixtures compare cross-tag pairs — correct behaviour, since they ARE
+siblings under body — so the test isolates each pair under its own wrapper path.)
+
+NO REGRESSION: additive pub fn + one live call site; the meta emit gains a `reorder` field (extra JSON key);
+the eprintln appends only when >0; the skipped-group note now takes `ov_skip.max(rinv_skip)` (identical
+grouping, so the max is exact). manuk-wpt builds clean release (only pre-existing bench.rs/scroll_y warnings),
+5 oracle tests + 10 existing wpt lib tests green. RED edit reverted byte-for-byte. fmt clean.
+
+TICK SHAPE: infrastructure (the fidelity instrument — Part 21; the Phase-0 exit measure now sees content
+rendered out of sequence, the 3rd of 5 jarring invariants; no website-capability change, [no-pattern]).
+GATES +0; tests +1. Two Layer-2 invariants remain unwired: hittability (reuse the occlusion-aware hit-test)
+and post-load stability (a CLS-equivalent).
+CONSTELLATION: no row — the measuring instrument, not a rendered construct.
+WIKI: docs/wiki/conformance-and-oracles.md (Layer-2 reading-order paragraph).

@@ -410,6 +410,91 @@ pub fn jarring_overlap(
     (count, skipped, examples)
 }
 
+/// **Jarring invariant — reading-order inversion (Layer 2 of FIDELITY-SCORING-REDESIGN.md).**
+///
+/// The redesign names "reading order preserved" a Phase-0 bar: screen order must match the order a
+/// user reads in (top-to-bottom, then left-to-right). A float, an abspos, or a mis-placed grid item
+/// that escapes its slot makes a later element render *before* an earlier one — the content jumps out
+/// of sequence even when nothing overlaps and nothing shapes wrong. SHAPE cannot see it (both boxes
+/// can be individually well-shaped) and overlap cannot see it (two disjoint boxes can still read out
+/// of order).
+///
+/// It counts pairs of **siblings** (same parent path) whose reading order **Chrome and Manuk disagree
+/// about**: Chrome reads A-before-B while Manuk reads B-before-A, each with a clear margin. Chrome is
+/// the reference for the intended order — a normal-flow engine lays siblings out in DOM order, so a
+/// disagreement is Manuk pulling one out of place, never a legitimately reordered design (if the site
+/// itself reorders, Chrome reflects it and the pair agrees). Both orders must be **definite** (past
+/// `tol` on the deciding axis); a pair too close to call in either engine is skipped, so tolerance
+/// jitter never manufactures an inversion.
+///
+/// Same bound and skipped-group accounting as [`jarring_overlap`]: groups above `MAX_GROUP` skip the
+/// O(n²) scan and the skipped count is surfaced so a bounded scan is never read as a clean page.
+pub fn jarring_reading_order(
+    chrome: &HashMap<String, Seen>,
+    manuk: &HashMap<String, Seen>,
+    tol: i64,
+) -> (usize, usize, Vec<String>) {
+    const MAX_GROUP: usize = 128;
+    let mut groups: BTreeMap<&str, Vec<&String>> = BTreeMap::new();
+    for id in manuk.keys() {
+        if !chrome.contains_key(id) {
+            continue;
+        }
+        if let Some(cut) = id.rfind('/') {
+            groups.entry(&id[..cut]).or_default().push(id);
+        }
+    }
+    // Reading order of `a` vs `b`: -1 = a first, 1 = b first, 0 = too close to call. Vertical wins
+    // (a row above reads first); within a row, leftmost reads first. `rect` is [x, y, w, h].
+    let order = |a: &[i64; 4], b: &[i64; 4], t: i64| -> i8 {
+        if a[1] + t < b[1] {
+            return -1;
+        }
+        if b[1] + t < a[1] {
+            return 1;
+        }
+        if a[0] + t < b[0] {
+            return -1;
+        }
+        if b[0] + t < a[0] {
+            return 1;
+        }
+        0
+    };
+
+    let (mut count, mut skipped) = (0usize, 0usize);
+    let mut examples: Vec<String> = Vec::new();
+    for (_, ids) in groups {
+        if ids.len() < 2 {
+            continue;
+        }
+        if ids.len() > MAX_GROUP {
+            skipped += 1;
+            continue;
+        }
+        for i in 0..ids.len() {
+            for j in (i + 1)..ids.len() {
+                let co = order(&chrome[ids[i]].rect, &chrome[ids[j]].rect, tol);
+                let mo = order(&manuk[ids[i]].rect, &manuk[ids[j]].rect, tol);
+                // Both engines must be sure, and they must disagree — that is an inversion we caused.
+                if co != 0 && mo != 0 && co != mo {
+                    count += 1;
+                    if examples.len() < 3 {
+                        let (lo, hi) = if ids[i] <= ids[j] {
+                            (ids[i], ids[j])
+                        } else {
+                            (ids[j], ids[i])
+                        };
+                        examples.push(format!("{lo} ⇄ {hi}"));
+                    }
+                }
+            }
+        }
+    }
+    examples.sort();
+    (count, skipped, examples)
+}
+
 /// The report a tick actually reads.
 pub fn report(clusters: &[Cluster], sites: usize, skipped: usize) {
     println!("\n=== DIFFERENTIAL ORACLE — root causes, ranked by sites explained ===\n");
@@ -567,6 +652,82 @@ mod tests {
         assert_eq!(
             examples,
             vec!["body[0]/div[0] × body[0]/div[1]".to_string()]
+        );
+    }
+
+    /// **The reading-order-inversion jarring invariant, and its RED proof.** Pair A: Chrome reads
+    /// `div[0]` before `div[1]` (stacked, y 0 then 100); Manuk renders them swapped (y 100 then 0), so
+    /// a user reads them out of sequence — our bug. Pair B: both engines agree on the order (a design
+    /// Chrome reflects too) and must not count. Pair C: a pair too close to call (within tol on both
+    /// axes) in Manuk is skipped, so jitter never manufactures an inversion. A pair in another parent
+    /// is never compared.
+    ///
+    /// Dropping the `co != mo` disagreement check (counting whenever both orders are definite) makes
+    /// the AGREEING pair B count too — count becomes 2, and this assertion fails. That check is what
+    /// distinguishes an inversion from a page that simply has an order.
+    #[test]
+    fn jarring_reading_order_blames_only_orders_chrome_disagrees_with() {
+        let tol = 4;
+        let mut chrome: HashMap<String, Seen> = HashMap::new();
+        let mut manuk: HashMap<String, Seen> = HashMap::new();
+        // Each pair sits under its OWN parent so only intended pairs are compared (siblings share a
+        // parent path — mixing tags under one parent would compare across pairs, which is correct but
+        // not what this fixture isolates). Parent wrappers need not be in the map; grouping is by key.
+        // Pair A (our bug): Chrome reads div[0] then div[1] (y 0, 100); Manuk swaps them (y 100, 0).
+        chrome.insert(
+            "body[0]/section[0]/div[0]".into(),
+            seen("div", [0, 0, 100, 40]),
+        );
+        chrome.insert(
+            "body[0]/section[0]/div[1]".into(),
+            seen("div", [0, 100, 100, 40]),
+        );
+        manuk.insert(
+            "body[0]/section[0]/div[0]".into(),
+            seen("div", [0, 100, 100, 40]),
+        );
+        manuk.insert(
+            "body[0]/section[0]/div[1]".into(),
+            seen("div", [0, 0, 100, 40]),
+        );
+        // Pair B (order agrees): both engines read p[0] before p[1] — a real order, not our bug.
+        chrome.insert("body[0]/section[1]/p[0]".into(), seen("p", [0, 0, 100, 20]));
+        chrome.insert(
+            "body[0]/section[1]/p[1]".into(),
+            seen("p", [0, 40, 100, 20]),
+        );
+        manuk.insert("body[0]/section[1]/p[0]".into(), seen("p", [0, 0, 100, 20]));
+        manuk.insert(
+            "body[0]/section[1]/p[1]".into(),
+            seen("p", [0, 40, 100, 20]),
+        );
+        // Pair C (too close to call in Manuk): Chrome orders them, Manuk stacks them at the same spot.
+        chrome.insert(
+            "body[0]/section[2]/span[0]".into(),
+            seen("span", [0, 0, 50, 10]),
+        );
+        chrome.insert(
+            "body[0]/section[2]/span[1]".into(),
+            seen("span", [60, 0, 50, 10]),
+        );
+        manuk.insert(
+            "body[0]/section[2]/span[0]".into(),
+            seen("span", [0, 0, 50, 10]),
+        );
+        manuk.insert(
+            "body[0]/section[2]/span[1]".into(),
+            seen("span", [1, 1, 50, 10]),
+        );
+
+        let (count, skipped, examples) = jarring_reading_order(&chrome, &manuk, tol);
+        assert_eq!(skipped, 0);
+        assert_eq!(
+            count, 1,
+            "only the pair Chrome and Manuk order differently is ours"
+        );
+        assert_eq!(
+            examples,
+            vec!["body[0]/section[0]/div[0] ⇄ body[0]/section[0]/div[1]".to_string()]
         );
     }
 
