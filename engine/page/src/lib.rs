@@ -198,9 +198,11 @@ fn media_type_rejected(mime: &str) -> bool {
         return true;
     }
     // Codecs with no decoder behind the `VideoDecoder`/audio traits. `openh264` is Constrained
-    // Baseline H.264, `symphonia` is AAC — anything else in a `codecs=` parameter is a certain no.
+    // Baseline H.264, `symphonia` is AAC, `re_rav1d` is AV1 (tick 354 — `av01` left OFF this list
+    // the same tick the shell lane gained the decoder) — anything else in a `codecs=` parameter
+    // is a certain no.
     [
-        "vp8", "vp9", "vp09", "av01", "theora", "vorbis", "opus", "hev1", "hvc1",
+        "vp8", "vp9", "vp09", "theora", "vorbis", "opus", "hev1", "hvc1",
     ]
     .iter()
     .any(|c| t.contains(c))

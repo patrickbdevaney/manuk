@@ -480,6 +480,9 @@ mod tests {
     try {{
       R.push('its:' + MediaSource.isTypeSupported(TYPE));
       R.push('vp9:' + MediaSource.isTypeSupported('video/webm; codecs="vp9"'));
+      R.push('mse-av1:' + MediaSource.isTypeSupported('video/mp4; codecs="av01.0.00M.08"'));
+      R.push('cpt-av1:' + (document.getElementById('v').canPlayType('video/mp4; codecs="av01.0.00M.08"') === 'probably'));
+      R.push('cpt-webm:' + (document.getElementById('v').canPlayType('video/webm; codecs="av01.0.00M.08"') === ''));
       var v = document.getElementById('v');
       var ms = new MediaSource();
       ms.addEventListener('sourceopen', function () {{
@@ -508,6 +511,16 @@ mod tests {
         for claim in [
             "its:true",
             "vp9:false",
+            // The tick-354 registry flip rides here — one JS test per binary (see G_AV1_DRIVE's
+            // doc). RED: revert the av01 arm in mse_js canDecode (av1:false) or re-add av01 to
+            // canPlayType's refuse-list (cpt-av1:false).
+            // `mse-av1`, not `av1` — an `av1:true` claim is VACUOUS: `contains` finds it
+            // inside the `cpt-av1:true` record entry, so the MSE arm could be deleted and the
+            // gate stayed green (caught live at t354 by a tripwire print; the claim label must
+            // never be a substring of another record entry).
+            "mse-av1:true",
+            "cpt-av1:true",
+            "cpt-webm:true",
             "open:true",
             "appended:true",
             "buffered:true",
@@ -842,6 +855,64 @@ mod tests {
                  by exactly that interval"
             );
         }
+    }
+
+    /// # G_AV1_DRIVE — AV1 plays end-to-end, and every registry tells the same truth (tick 354)
+    ///
+    /// t353 built the decoder; this proves the SHELL ships it and that the three honesty
+    /// registries flipped in the same tick: a claim of "plays" and the ability to play must land
+    /// together (the t349 rule) — a registry ahead of the organ steers players into a hang, a
+    /// registry behind it hides a capability that works. The JS-side registry claims (mse
+    /// isTypeSupported + canPlayType) ride in `g_mse_join`'s page: ONE JS test per binary — two
+    /// mozjs contexts in one test process abort on thread-local teardown (t262 rule,
+    /// re-confirmed live this tick).
+    ///
+    /// ## How each claim goes RED
+    ///
+    /// - **the picture** — drop `av1` from the shell's manuk-media features: `decoder_for` falls
+    ///   through to H264's refusal, `load` returns false, and nothing paints.
+    /// - **the `<source type>` fetch** — put `av01` back in `media_type_rejected`'s certain-no
+    ///   list: the page skips the source and the request never happens.
+    #[test]
+    fn g_av1_drive() {
+        const AV1: &[u8] = include_bytes!("../../engine/media/tests/data/four-colors-av1.mp4");
+        let fonts = manuk_text::FontContext::new();
+        let mut page = manuk_page::Page::load(PAGE_HTML, "https://video.test/", &fonts, 800.0);
+        let (node, _) = page.pending_media_urls()[0].clone();
+
+        // ── The picture: the AV1 stream decodes in the shell lane and reaches the screen.
+        let blank = painted(&page);
+        let mut set = MediaSet::new();
+        assert!(
+            set.load(node, AV1),
+            "the AV1 fixture must decode — a false here is the shell lane missing the `av1` \
+             feature while the registries claim it plays"
+        );
+        assert!(
+            set.advance(0.0, &mut page, None),
+            "the first advance publishes a frame"
+        );
+        assert_ne!(
+            blank,
+            painted(&page),
+            "a decoded AV1 frame must change what is PAINTED"
+        );
+
+        // ── The `<source type>` gate: an av01 source is attempted, not certainly-refused.
+        const SRC: &str = r#"<!doctype html><html><body>
+            <video id="v" width="160" height="120">
+              <source src="clip.mp4" type='video/mp4; codecs="av01.0.00M.08"'>
+            </video>
+          </body></html>"#;
+        let page2 = manuk_page::Page::load(SRC, "https://video.test/", &fonts, 800.0);
+        assert!(
+            page2
+                .pending_media_urls()
+                .iter()
+                .any(|(_, u)| u.ends_with("clip.mp4")),
+            "a <source type=av01> must be REQUESTED — av01 on the certain-no list skips a \
+             stream that genuinely plays"
+        );
     }
 
     /// **What the viewer would actually see** — the page is painted and the rendered canvas is

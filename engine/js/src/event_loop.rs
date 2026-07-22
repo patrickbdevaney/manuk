@@ -2896,7 +2896,9 @@ const PRELUDE: &str = r#"
           var t = type.toLowerCase().replace(/\s+/g, '');
           // Anything we can name and cannot decode is refused UP FRONT, before the container is
           // even considered — an mp4 carrying HEVC is still an mp4.
-          if (/vp8|vp9|vp09|av01|hev1|hvc1|theora|vorbis|opus|mp3|flac|ac-3/.test(t)) { return ''; }
+          // av01 left OFF this refuse-list since tick 354: re_rav1d rides the shell lane, so
+          // AV1-in-MP4 genuinely plays and refusing it became the lie in the other direction.
+          if (/vp8|vp9|vp09|hev1|hvc1|theora|vorbis|opus|mp3|flac|ac-3/.test(t)) { return ''; }
           if (/webm|ogg|matroska|x-flv/.test(t)) { return ''; }
           if (!/^(video|audio)\/mp4/.test(t)) { return ''; }
           if (t.indexOf('codecs=') === -1) { return 'maybe'; }

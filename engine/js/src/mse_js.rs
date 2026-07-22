@@ -61,8 +61,9 @@ pub const MSE_JS: &str = r#"
     // push required. MP4 only — `manuk_media::demux` opens (f)MP4, `H264Decoder` decodes
     // Baseline-profile H.264 (`avc1.42……` — the profile byte is the pair after "avc1.", 0x42;
     // High/Main are refused exactly as `video::can_decode` refuses them), and the AAC path
-    // (`mp4a.40.*`) demuxes+decodes to PCM (G_MEDIA_AAC). WebM/VP9/AV1 stay false — no demuxer,
-    // no decoder, and a YES here without one steers a player onto a path that hangs (module doc).
+    // (`mp4a.40.*`) demuxes+decodes to PCM (G_MEDIA_AAC), and AV1-in-MP4 (`av01.*`) decodes via
+    // re_rav1d in the shell lane (tick 354). WebM/VP9 stay false — no demuxer, no decoder, and a
+    // YES here without one steers a player onto a path that hangs (module doc).
     var m = /^(video|audio)\/mp4($|;codecs=)/.exec(want);
     if (!m) { return false; }
     var q = want.indexOf('codecs=');
@@ -73,6 +74,7 @@ pub const MSE_JS: &str = r#"
       if (c === '') { return false; }
       if (/^avc1\.42[0-9a-f]{4}$/.test(c)) { continue; }   // H.264 Baseline only
       if (/^mp4a\.40(\.\d+)?$/.test(c)) { continue; }       // AAC
+      if (/^av01\./.test(c)) { continue; }                  // AV1 (re_rav1d, tick 354)
       return false;
     }
     return true;

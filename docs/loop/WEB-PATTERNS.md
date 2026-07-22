@@ -3082,3 +3082,21 @@ copied count) does NOT corrupt the sample stream — full chunks are equal, it o
 the tail — so the byte-exact assertion alone was a green that could not go red for that bug; the
 exact-landing assertion (`cursor == len` after drain) is what makes it falsifiable. Run the RED
 edit and WATCH it fail before trusting any green.
+
+## AV1 playback — organ and registries land together (ticks 353-354)
+
+**The class of the web this unlocks:** AV1-in-MP4 `<video>` — the codec the open web is migrating
+to (YouTube serves it first where supported; AVIF stills ride the same decoder next). Decoded in
+memory-safe Rust: `re_rav1d` through its safe `dav1d` module, no C, no nasm, behind the
+`VideoDecoder` trait M5 defined for exactly this second backend.
+**(1)** The organ-then-registry order is a RULE: t353 lands the decoder gated in isolation; t354
+ships it in the shell lane and flips ALL THREE honesty registries (isTypeSupported, canPlayType,
+`<source type>` certain-no list) in the same tick. A registry ahead of the organ steers players
+into a hang; one behind it hides a working capability.
+**(2)** dav1d is a QUEUE, not a call: pictures arrive after their sample, pts must ride THROUGH
+the decoder as timestamps, and `flush()` is a seek-reset that DISCARDS pending pictures — a
+`flush` in the end-of-stream drain silently truncates every stream while looking fully decoded.
+**The traps:** (a) a claim label that is a SUBSTRING of another record entry is vacuous —
+`contains("av1:true")` was satisfied by `cpt-av1:true`, so the deleted MSE arm kept a green gate;
+tripwire-print the record and rename the label. (b) two mozjs contexts in one test binary abort
+on thread-local teardown — one JS test per binary, fold claims into the existing JS page.

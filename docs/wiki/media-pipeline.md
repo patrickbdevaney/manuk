@@ -1310,3 +1310,26 @@ carries its own sequence header) — noted in the module, kept per AV1-ISOBMFF �
 
 Fixture: `four-colors-av1.mp4` from Chromium test data (BSD-3, provenance in tests/data/README
 per the t235 steer: test DATA with attribution, CODE never).
+
+## Tick 354 — AV1 ships: the shell lane and the three registries flip together
+
+The organ (t353) reaches users only when the shell's `manuk-media` features include `av1` — and
+the moment it does, three honesty registries that said "AV1: certain no" become lies in the
+other direction. All flipped in this tick, per the t349 organ+registry rule: `mse_js`
+`canDecode` (isTypeSupported), `canPlayType`'s refuse-list, and `media_type_rejected`'s
+certain-no list (`<source type>` selection). WebM/VP9 stay refused — genuinely absent.
+
+Gates: G_AV1_DRIVE (four-colors AV1 through MediaSet CHANGES what is painted; an av01
+`<source>` is requested not skipped) + the JS registry claims folded into `g_mse_join`'s page —
+ONE JS test per shell binary (two mozjs contexts in one test process abort on thread-local
+teardown; the t262 rule re-confirmed live when a second `_sm` test was added and the suite
+aborted).
+
+**Two traps caught live, both worth keeping:**
+1. **The vacuous substring claim.** The gate asserted `record.contains("av1:true")` — which the
+   `cpt-av1:true` entry satisfies as a SUBSTRING, so deleting the MSE arm left the gate green.
+   Caught by a tripwire (force-fail with an impossible claim to print the record). Rule: a
+   record claim label must never be a substring of another record entry.
+2. **Stale-binary false-green during RED runs** was the first suspicion and was WRONG — the
+   binary rebuilt fine; the vacuous claim was the whole story. Probe the assertion before
+   blaming the toolchain.

@@ -15627,3 +15627,42 @@ Nothing enables av1 outside the gate yet, so no wall lane pays the compile.
 TICK SHAPE: capability (AV1 decode — the codec the web is moving to, in memory-safe Rust behind the trait built for it at M5; the AVIF unlock is now reachable; [BORROW pattern: re_rav1d safe module, no C, no nasm]). GATES +1 (av1_decode, required-features av1 — same lane as video_decode, observer-owned wall-wiring caveat applies); constellation row 70 partial note updated (AV1 landed; shell/MSE steering next).
 CONSTELLATION: media / video decode → AV1 landed (av1_decode).
 WIKI: docs/wiki/media-pipeline.md — Tick 353 AV1 (safe-module borrow, flush-discard archaeology, honest registry, fixture provenance).
+
+## Tick 354 — AV1 reaches the shell, and the registry starts telling the new truth (2026-07-22)
+
+CO-#1 order (2) MEDIA CODECS, the step t353 named next: the decoder exists and NOTHING ships it — the
+shell's manuk-media dep enables video+audio only, so a page's AV1 stream still refuses; and all three
+honesty registries (mse_js canDecode, canPlayType, page media_type_rejected) still say the OLD truth
+("AV1 stays false — no decoder"), which was honest at t349 and is a capability-hiding lie the moment
+the decoder rides the shell lane. The t264 pivot's AVIF note and YouTube's own codec ladder both point
+through av01.
+
+HYPOTHESIS: (a) `av1` joins video+audio in the SHELL's manuk-media features (the one lane that pays
+the 12s pure-Rust compile; js/page gate lanes still acquire nothing); (b) the three registries flip
+av01-in-MP4 to yes IN THE SAME TICK the ability ships — registry and organ land together or not at all
+(the t349 rule); (c) gate G_AV1_DRIVE in the shell suite: the four-colors AV1 fixture loads through
+MediaSet and CHANGES what is painted (the g_media_drive discipline — only painted() proves the screen),
+a <source type='...av01...'> is REQUESTED not skipped, and (under _sm) isTypeSupported says true for
+av01-mp4 / canPlayType says 'probably' — while webm/vp9 stay false, because those really are absent.
+RESULT — LANDED. shell/Cargo.toml gains av1; registries flipped: engine/js mse_js canDecode (+av01 arm),
+event_loop canPlayType (av01 off the refuse-list), engine/page media_type_rejected (av01 off the
+certain-no list). Gates: G_AV1_DRIVE (shell suite = IN the wall; AV1 fixture paints + <source type=av01>
+requested) + registry claims folded into g_mse_join's page.
+
+TWO TRAPS CAUGHT LIVE: (1) a second _sm test in the shell binary ABORTS on mozjs thread-local teardown
+— the t262 one-JS-test-per-binary rule re-confirmed against t349's "measured obsolete" note (obsolete
+for ONE test's exit path, not for TWO contexts); folded the claims into g_mse_join instead. (2) THE
+VACUOUS SUBSTRING CLAIM: record.contains("av1:true") is satisfied by the `cpt-av1:true` entry, so the
+MSE arm could be deleted and the gate stayed green — caught via tripwire (force-fail prints the record),
+fixed by renaming the label mse-av1 (a claim label must never be a substring of another entry). First
+suspicion was a stale binary and was WRONG — probe the assertion before blaming the toolchain.
+
+RED-PROVEN all four: shell lane without av1 → "fixture must decode" FAILS; av01 back on the certain-no
+list → "<source> must be REQUESTED" FAILS; mse arm deleted → mse-av1:false (post-rename); canPlayType
+refuse-list reverted → cpt-av1:false. Each restored byte-for-byte, cmp-verified.
+
+NO REGRESSION: manuk-shell 65/65 (+1) + teardown 2/2 TWICE, EXIT 0 both; headless lane clean; fmt clean.
+
+TICK SHAPE: capability (AV1 ships end-to-end — the codec the web is moving to plays in the shell, and every registry tells the same truth the tick the ability lands; [BORROW pattern rung: shell lane feature + honest-registry flip]). GATES +1 (G_AV1_DRIVE; registry claims ride g_mse_join, all IN the wall); constellation rows 70+73 updated.
+CONSTELLATION: media / video decode + MSE → av01 steering wired (G_AV1_DRIVE, g_mse_join claims).
+WIKI: docs/wiki/media-pipeline.md — Tick 354 (registry flip, the vacuous-substring-claim trap, one-JS-test rule).
