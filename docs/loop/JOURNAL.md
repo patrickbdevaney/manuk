@@ -16457,3 +16457,24 @@ layout policy in computed values — atomicity belongs where it's consumed, not 
 reported]). GATES manuk-layout +1 test (an_inline_replaced_element_is_atomic_but_computes_inline
 = IN the wall via T·crate tests). CONSTELLATION: none — computed-value correctness, no new row.
 WIKI: docs/wiki/box-layout.md — replaced elements compute inline (tick 384).
+
+## Tick 385 — MISSING BOX <br>: the break that ends a line still owns a box (2026-07-22)
+
+The next surviving ledger family (64 sites, 461 hits): Chrome gives <br> a zero-width,
+line-height-tall rect at the end of the line it terminates; our line-builder treated Break as
+pure control flow — closed the line, left a fragment only on the EMPTY-line path (<br><br>), so
+the common case (text<br>) had no geometry at all.
+
+BUILT: the non-empty Break arm pushes a zero-width, empty-text fragment at the pen position
+(line-height tall, report_h set) before close_line — no alignment/justification moves, the
+element just earns its rect. <br> ONLY: pre/pre-wrap newlines arrive as Breaks carrying their
+TEXT owner, which already has word geometry (guard asserted in-code). RED-proven: arm severed →
+"a <br> that ends a line must still have geometry" fails; restored → 82/82 manuk-layout green.
+E2E: usa.gov br rows missing→geometry near-miss ([872 52 0×24] vs Chrome [912 55 0×17] — font
+metric drift, which parent-relative SHAPE forgives; the ELEMENT exists now).
+
+TICK SHAPE: capability (every <br> is now measurable/hittable — editors and caret libraries
+read line ends off it; [pattern: an item that ENDS a line is still an element IN the line —
+closing the band and recording geometry are two responsibilities]). GATES manuk-layout +1 test
+(IN the wall via T·crate tests). CONSTELLATION: none — geometry completeness, no new row.
+WIKI: docs/wiki/box-layout.md — <br> has geometry (tick 385).

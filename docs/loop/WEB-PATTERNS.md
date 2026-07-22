@@ -3283,3 +3283,12 @@ lying to every OTHER consumer of those values.
 reported (the style map).
 **The trap:** the mutation is invisible until something diffs you against a real browser — this
 one lived through ~380 ticks and two cascades.
+
+## Control-flow items can still be elements — a Break owns a box (tick 385)
+
+**The class of the web this unlocks:** editors, caret/selection libraries, and any script doing
+`getBoundingClientRect()` on `<br>` to find line ends (64 corpus sites carry measurable brs).
+**(1)** An inline item that ENDS a line is still an element IN the line: closing the band and
+recording the element's geometry are two responsibilities, not one.
+**The trap:** the empty-line case worked (`<br><br>` opens a band attributed to the br), so
+spot-checks passed; only the corpus diff showed the common case — br after text — had no box.

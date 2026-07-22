@@ -4342,6 +4342,43 @@ impl Ctx<'_> {
                         atomic_h: 0.0,
                         valign: VerticalAlign::Baseline,
                     });
+                } else if node.map(|n| self.dom.tag_name(n)) == Some(Some("br")) {
+                    // The `<br>` that ends a NON-empty line also earns a box: a zero-width
+                    // fragment at the pen position, `line-height` tall — Chrome reports exactly
+                    // this ([x y 0×lh] at the end of the line it terminates), and the tick-380
+                    // oracle counted the missing box on 64 corpus sites. Zero width, empty text:
+                    // it moves no alignment and no justification, it only gives the element
+                    // geometry — `getBoundingClientRect` on a `<br>` is how editors and caret
+                    // libraries find line ends. `<br>` ONLY: a preserved newline in `pre` also
+                    // arrives as a Break carrying its text's owner, which already has geometry.
+                    let key = FontKey {
+                        family: FontFamily::SansSerif,
+                        bold: false,
+                        italic: false,
+                    };
+                    cur.push(LineFrag {
+                        x: pen,
+                        width: 0.0,
+                        text: String::new(),
+                        style: TextStyle {
+                            rtl: false,
+                            font_key: key,
+                            font_size: 16.0,
+                            color: Rgba::BLACK,
+                            line_height: height,
+                            decoration: Default::default(),
+                            letter_spacing: 0.0,
+                            word_spacing: 0.0,
+                            shadow: None,
+                        },
+                        ascent: 0.0,
+                        descent: 0.0,
+                        node,
+                        report_h: Some(height),
+                        atomic: None,
+                        atomic_h: 0.0,
+                        valign: VerticalAlign::Baseline,
+                    });
                 }
                 y = close_line(
                     &mut frags,
@@ -5226,6 +5263,38 @@ mod tests {
              same y as the abs box (y={})",
             a.y,
             d.y
+        );
+    }
+
+    /// **A `<br>` ending a non-empty line has geometry** — Chrome reports a zero-width,
+    /// line-height-tall box at the end of the line it terminates, and the tick-380 corpus oracle
+    /// counted our missing one on 64 sites. `getBoundingClientRect` on a `<br>` is how editors
+    /// and caret libraries find line ends; an element with no rect is an element they cannot use.
+    /// (The empty-line case — `<br><br>` — already carried a box: the band it opens.)
+    #[test]
+    fn a_br_on_a_nonempty_line_has_a_zero_width_box() {
+        let dom = manuk_html::parse("<p>one<br>two</p>");
+        let styles = MinimalCascade.cascade(&dom, &[]);
+        let br = dom
+            .descendants(dom.root())
+            .find(|&n| dom.tag_name(n) == Some("br"))
+            .expect("br in the tree");
+        let fonts = FontContext::new();
+        let root = layout_document(&dom, &styles, &fonts, 800.0);
+        let r = *root
+            .node_rects(&dom)
+            .get(&br)
+            .expect("a <br> that ends a line must still have geometry");
+        assert!(r.width < 1.0, "the br box is zero-width, got {}", r.width);
+        assert!(
+            r.height > 8.0,
+            "the br box is line-height tall, got {}",
+            r.height
+        );
+        assert!(
+            r.x > 8.0,
+            "the br sits at the END of the line, after 'one' (x={})",
+            r.x
         );
     }
 

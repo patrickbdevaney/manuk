@@ -1004,3 +1004,16 @@ cannot blockify its ancestor). §10.4 ratio adjustment keeps its own narrower re
 Claimed in manuk-layout `an_inline_replaced_element_is_atomic_but_computes_inline` (RED-proven:
 severing the collector seam produces a boxless img). E2E: apnews 541→495 divergences, the
 inline-block family to zero, jarring counts unchanged.
+
+## `<br>` has geometry — the break that ends a line still owns a box (tick 385)
+
+Chrome reports a zero-width, line-height-tall rect for `<br>` at the end of the line it
+terminates; the tick-380 oracle counted our missing one on 64 sites (461 hits). The inline
+line-builder treated a Break as pure control flow — it CLOSED the line, and only the empty-line
+case (`<br><br>`) left a fragment. Now the non-empty case pushes a zero-width, empty-text
+fragment at the pen position (line-height tall, `report_h` set) before closing: no alignment or
+justification moves, the element just earns the rect editors and caret libraries read via
+`getBoundingClientRect`. `<br>` only — a preserved newline in `pre`/`pre-wrap` also arrives as a
+Break but carries its TEXT's owner, which already has geometry from its words. Claimed in
+manuk-layout `a_br_on_a_nonempty_line_has_a_zero_width_box` (RED: sever the arm → no rect).
+E2E: usa.gov's br rows went missing→geometry-near-miss ([872 52 0×24] vs [912 55 0×17]).
