@@ -1748,6 +1748,33 @@ mod tests {
         );
     }
 
+    /// `text-indent` reaches the SHIPPING cascade: Stylo computes it and `stylo_map` consumes the
+    /// `.length` into `text_indent`. Without the map arm the field stays 0, so first-line
+    /// indentation and the image-replacement idiom (`text-indent:-9999px`) both silently no-op.
+    ///
+    /// RED, run: delete the `s.text_indent = lp_to_dim(...)` line in `stylo_map.rs`. Both the 40px
+    /// and the −9999px assertions read `Dim::Px(0.0)`.
+    #[test]
+    fn text_indent_maps_through_the_stylo_cascade() {
+        let dom = manuk_html::parse(
+            r#"<p id="a" style="text-indent:40px">x</p><p id="b" style="text-indent:-9999px">x</p>"#,
+        );
+        let sheet = Stylesheet::parse("");
+        let map = cascade_via_stylo(&dom, std::slice::from_ref(&sheet), 800.0, 600.0);
+        let id = |v: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(v))
+                .unwrap()
+        };
+        use crate::Dim;
+        assert_eq!(map[&id("a")].text_indent, Dim::Px(40.0), "40px indent maps");
+        assert_eq!(
+            map[&id("b")].text_indent,
+            Dim::Px(-9999.0),
+            "the image-replacement −9999px indent maps"
+        );
+    }
+
     /// `content: attr(name)` in a `::before`/`::after` resolves to the element's live attribute
     /// value — the whole of CSS tooltips (`[data-tip]::after`), print link URLs (`a::after{
     /// content:" ("attr(href)")"}`), breadcrumb separators and generated data labels. Before this

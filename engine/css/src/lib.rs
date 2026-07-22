@@ -704,6 +704,11 @@ pub struct ComputedStyle {
     pub italic: bool,
     pub line_height: f32,
     pub text_align: TextAlign,
+    /// `text-indent` — inline-start indent of the **first line box only** (inherited). A length or
+    /// %-of-containing-block, stored as `Dim` and resolved at layout against the container width.
+    /// The image-replacement idiom (`text-indent:-9999px` / `text-indent:100%`) rides this: a large
+    /// negative or 100% value pushes the first line off-screen so the background image shows alone.
+    pub text_indent: Dim,
     pub white_space: WhiteSpace,
     /// `text-overflow` — `ellipsis` truncates clipped single-line inline content with `…`.
     pub text_overflow: TextOverflow,
@@ -870,6 +875,7 @@ impl ComputedStyle {
             italic: false,
             line_height: 16.0 * 1.2,
             text_align: TextAlign::Left,
+            text_indent: Dim::Px(0.0),
             white_space: WhiteSpace::Normal,
             text_overflow: TextOverflow::Clip,
             scroll_snap_type: ScrollSnapAxis::None,
@@ -975,6 +981,7 @@ impl ComputedStyle {
         // two different line heights for the same inherited property.
         s.line_height_normal = parent.line_height_normal;
         s.text_align = parent.text_align;
+        s.text_indent = parent.text_indent;
         s.white_space = parent.white_space;
         s.text_transform = parent.text_transform;
         s.overflow_wrap = parent.overflow_wrap;
@@ -1038,6 +1045,7 @@ pub fn scale_style(style: &ComputedStyle, k: f32) -> ComputedStyle {
         height: dim(style.height, k),
         inset: sides_dim(style.inset, k),
         border_spacing: style.border_spacing * k,
+        text_indent: dim(style.text_indent, k),
         ..style.clone()
     }
 }
@@ -3344,6 +3352,12 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 "end" => TextAlign::End,
                 _ => TextAlign::Left,
             }
+        }
+        "text-indent" => {
+            // Length or %-of-containing-block; stored as `Dim`, resolved at layout. The `hanging`
+            // and `each_line` keywords are accepted-and-ignored (rare; the length is what indents).
+            let first = v.split_whitespace().next().unwrap_or("");
+            s.text_indent = values::parse_dim(first, s.font_size);
         }
         "white-space" => {
             s.white_space = match v {

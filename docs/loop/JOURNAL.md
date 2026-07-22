@@ -17129,3 +17129,31 @@ cosmetic tail Part VI warns against.
 TICK SHAPE: governance (self-audit + constitution check; no engine change). GATES +0. [no-pattern]
 CONSTELLATION: none.
 WIKI: none — governance tick; the mechanisms audited are already captured.
+
+## Tick 416 — text-indent: apply the first-line inline-start indent (image-replacement + prose) (2026-07-22)
+
+HYPOTHESIS (winning vein, JARRING side): `text-indent` is UNIMPLEMENTED — the string only
+appears in a code COMMENT (values.rs, describing the image-replacement recipe it half-enables via
+`font-size:0`). No `text_indent` field on ComputedStyle, no Stylo map, no layout application. So
+two whole idioms silently no-op: (1) first-line paragraph indentation (book/article typography),
+and (2) the ubiquitous image-replacement hack `text-indent:-9999px` / `text-indent:100%` on logos
+and icon buttons — where "unhandled" means the text renders at x=0 ON TOP of the background image
+instead of being pushed off-screen, i.e. duplicate text bleeding over the logo site-wide.
+
+FIX: add `text_indent: Dim` (inherited, zoom-scaled), map it from Stylo's
+`clone_text_indent().length` (the shipping path) and parse it in MinimalCascade (the layout-test +
+fallback path). In `layout_inline`, offset ONLY the first line box: the first fragment's inline-start
+x becomes the indent and the first line's available width shrinks by it; `first_line` flips false
+after the first `close_line`, so wrapped/subsequent lines are unindented. Negative indents (the
+image-replacement case) push the first line off-screen-left and widen avail so it never wraps —
+exactly the recipe. Guarded by the arithmetic identity `x + 0.0 == x` / `w - 0.0 == w`, so with the
+default indent 0 every existing line box is byte-identical (zero regression by construction).
+
+Gate: text_indent_offsets_the_first_line_only (RED: revert the layout injection → the indented
+first word sits at x≈0 and the -9999px hero text renders on-screen). Residue: `hanging`/`each_line`
+keywords not modelled; anonymous mixed block+inline runs (which already hardcode align:left) and
+form-control text pass indent 0.
+
+TICK SHAPE: capability (text-indent first-line application; +1 gate). GATES +1.
+CONSTELLATION: CSS text-indent missing→works (first-line form; image-replacement idiom).
+WIKI: text-layout.md — "text-indent shifts the FIRST line box only; negative/100% is the image-replacement hack".

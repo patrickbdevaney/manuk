@@ -333,6 +333,9 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         }
     }
     s.text_align = map_text_align(cv.clone_text_align());
+    // `text-indent`: Stylo computes the value (incl. the `hanging`/`each_line` keywords); we consume
+    // its `.length` — the inline-start indent applied to the first line box in layout.
+    s.text_indent = lp_to_dim(&cv.clone_text_indent().length);
 
     // Display.
     s.display = map_display(cv.clone_display());

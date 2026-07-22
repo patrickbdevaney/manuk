@@ -2158,7 +2158,7 @@ impl Ctx<'_> {
                 return (BoxContent::Inline(vec![]), 0.0);
             }
             let align = self.style_of(node).text_align;
-            let (frags, _atomics, h) = self.layout_inline(items, cx, cy, cw, align, floats);
+            let (frags, _atomics, h) = self.layout_inline(items, cx, cy, cw, align, 0.0, floats);
             return (BoxContent::Inline(frags), h);
         }
 
@@ -2181,7 +2181,7 @@ impl Ctx<'_> {
                 break_word: false,
             }];
             let (frags, _atomics, h) =
-                self.layout_inline(items, cx, cy, cw, TextAlign::Left, floats);
+                self.layout_inline(items, cx, cy, cw, TextAlign::Left, 0.0, floats);
             return (BoxContent::Inline(frags), h);
         }
 
@@ -2244,7 +2244,11 @@ impl Ctx<'_> {
             let items = self.collect_inline_group(&flow_kids, cw, Some(node));
             let bcs = self.style_of(node);
             let align = bcs.text_align;
-            let (mut frags, atomics, h) = self.layout_inline(items, cx, cy, cw, align, floats);
+            // `text-indent` on the block establishing this IFC applies to its first line box;
+            // percentages resolve against the container width.
+            let text_indent = bcs.text_indent.resolve(cw, 0.0);
+            let (mut frags, atomics, h) =
+                self.layout_inline(items, cx, cy, cw, align, text_indent, floats);
             // `text-overflow: ellipsis` truncates a clipped, non-wrapping single line with `…`. Only
             // fires on a box that clips (`overflow` ≠ visible) and doesn't wrap (`nowrap`/`pre`); a
             // line that fits is untouched, so nothing without a real overflow changes.
@@ -3722,7 +3726,8 @@ impl Ctx<'_> {
             return (cur_y, prev_margin); // whitespace-only: keep the pending margin
         }
         let start = cur_y + prev_margin;
-        let (frags, atomics, h) = self.layout_inline(items, cx, start, cw, TextAlign::Left, floats);
+        let (frags, atomics, h) =
+            self.layout_inline(items, cx, start, cw, TextAlign::Left, 0.0, floats);
         boxes.push(LayoutBox {
             rect: Rect {
                 x: cx,
@@ -4386,6 +4391,7 @@ impl Ctx<'_> {
         cy: f32,
         cw: f32,
         align: TextAlign,
+        text_indent: f32,
         floats: &FloatContext,
     ) -> (Vec<TextFragment>, Vec<LayoutBox>, f32) {
         let items = self.break_overwide_words(items, cw);
@@ -4414,6 +4420,11 @@ impl Ctx<'_> {
         let mut pen = 0.0f32;
         let mut line_left = cx;
         let mut line_avail = cw;
+        // `text-indent` shifts the inline-start of the FIRST line box only. `first_line` flips false
+        // after that line closes, so wrapped and subsequent lines are unindented. With `text_indent`
+        // 0 the arithmetic below is the identity (`x + 0.0`, `w - 0.0`), so every existing line box
+        // is byte-identical — the indent path is inert until an author sets it.
+        let mut first_line = true;
 
         // The "space" font metrics for an atomic (no text): use a default face at the box's
         // notional size doesn't matter — we only need the width of a normal space.
@@ -4506,6 +4517,7 @@ impl Ctx<'_> {
                     align,
                     self.fonts,
                 );
+                first_line = false;
                 pen = 0.0;
                 prev_no_wrap = false;
                 continue;
@@ -4672,7 +4684,9 @@ impl Ctx<'_> {
             if cur.is_empty() {
                 let (l, w) = open_band(&mut y, est_h);
                 line_left = l;
-                line_avail = w;
+                // The first line's usable width is reduced by the indent (a negative indent widens
+                // it, so the image-replacement line never wraps and sits off-screen).
+                line_avail = w - if first_line { text_indent } else { 0.0 };
             }
 
             // A break before this item is forbidden when both it and the previous item are
@@ -4690,13 +4704,23 @@ impl Ctx<'_> {
                     align,
                     self.fonts,
                 );
+                first_line = false;
                 let (l, w) = open_band(&mut y, est_h);
                 line_left = l;
                 line_avail = w;
                 cur.push(make_frag(0.0));
                 pen = advance;
             } else {
-                let x = if cur.is_empty() { 0.0 } else { pen + space_w };
+                let x = if cur.is_empty() {
+                    // First fragment on the line: the first line begins at the indent, later lines at 0.
+                    if first_line {
+                        text_indent
+                    } else {
+                        0.0
+                    }
+                } else {
+                    pen + space_w
+                };
                 cur.push(make_frag(x));
                 pen = x + advance;
             }
@@ -6555,6 +6579,75 @@ mod tests {
         assert!(
             first_x.unwrap() > 100.0,
             "centered text should be pushed right"
+        );
+    }
+
+    /// `text-indent` shifts the inline-start of the FIRST line box only. Two idioms ride it: prose
+    /// first-line indentation, and image replacement (`text-indent:-9999px` pushes the text
+    /// off-screen so a background image shows alone). RED, run: revert the `text_indent` injection in
+    /// `layout_inline` (first-fragment `x` back to `0.0`) — the indented first word snaps to x≈0 and
+    /// the −9999px hero text lands on-screen.
+    #[test]
+    fn text_indent_offsets_the_first_line_only() {
+        // Narrow container so the paragraph wraps: the first line is indented, the wrapped line is not.
+        let (_dom, root) = layout_html(
+            "<body><p style='text-indent:40px'>the quick brown fox jumps over the lazy dog again and again</p></body>",
+            "body{margin:0}p{margin:0}",
+            120.0,
+        );
+        let mut frags: Vec<(i32, f32)> = Vec::new();
+        root.walk(&mut |b| {
+            if let BoxContent::Inline(fs) = &b.content {
+                for f in fs {
+                    frags.push((f.line_top as i32, f.x));
+                }
+            }
+        });
+        assert!(!frags.is_empty(), "expected inline fragments");
+        let tops: std::collections::BTreeSet<i32> = frags.iter().map(|(t, _)| *t).collect();
+        assert!(
+            tops.len() > 1,
+            "text should wrap to multiple lines at width 120"
+        );
+        let min_first = |top: i32| {
+            frags
+                .iter()
+                .filter(|(t, _)| *t == top)
+                .map(|(_, x)| *x)
+                .fold(f32::INFINITY, f32::min)
+        };
+        let first_top = *tops.iter().next().unwrap();
+        let second_top = *tops.iter().nth(1).unwrap();
+        let first_x = min_first(first_top);
+        let second_x = min_first(second_top);
+        // The first line starts 40px further in than the wrapped line (offset cancels the body/p box).
+        assert!(
+            (first_x - second_x - 40.0).abs() < 2.0,
+            "first line must be indented 40px past the wrapped line: first_x={first_x}, second_x={second_x}"
+        );
+        // The wrapped line is NOT indented — it starts at the container edge.
+        assert!(
+            second_x.abs() < 2.0,
+            "the second line must not be indented, second_x={second_x}"
+        );
+
+        // Image replacement: a large negative indent pushes the first line off-screen-left.
+        let (_dom2, root2) = layout_html(
+            "<body><p style='text-indent:-9999px'>LOGOTEXT</p></body>",
+            "body{margin:0}p{margin:0}",
+            800.0,
+        );
+        let mut min_x = f32::INFINITY;
+        root2.walk(&mut |b| {
+            if let BoxContent::Inline(fs) = &b.content {
+                for f in fs {
+                    min_x = min_x.min(f.x);
+                }
+            }
+        });
+        assert!(
+            min_x < -1000.0,
+            "text-indent:-9999px must push the first line off-screen, min_x={min_x}"
         );
     }
     /// Regression (found by A/B against Chromium on Wikipedia): an **icon button** — `inline-flex`,

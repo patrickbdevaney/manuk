@@ -793,3 +793,26 @@ and `nowrap` are untouched, so the blast radius is pre-wrap only. Gated by
 `pre_wrap_preserves_spaces_while_pre_line_collapses`, RED-proven (route pre-wrap back through collapse →
 `a   b` renders `ab`). Residue: trailing-whitespace *hanging* at a wrap boundary (pre-wrap lets trailing
 spaces overflow rather than force a wrap) is not specially modelled — the run measures as a normal token.
+
+## `text-indent` shifts the FIRST line box only — and it powers image replacement (tick 416)
+
+`text-indent` was **unimplemented** — the string appeared only in a code *comment* (the
+`text-indent:-9999px; font-size:0` image-replacement recipe it half-enabled). No `text_indent` field
+on `ComputedStyle`, no Stylo map, no layout application. Two whole idioms silently no-op'd: prose
+first-line indentation, and — more jarringly — the ubiquitous **image-replacement hack**
+(`text-indent:-9999px` or `text-indent:100%` on logos and icon buttons), where "unhandled" does not
+mean "no effect" but **duplicate text rendered at x≈0 on top of the background image**.
+
+The value is an inherited length or %-of-containing-block, stored as `Dim` (so `%` resolves at layout
+against the container width) and zoom-scaled. It maps through **both** cascades: `stylo_map` consumes
+Stylo's `clone_text_indent().length` (the shipping path), and `MinimalCascade` parses it (the
+layout-test + fallback path). Application lives in `layout_inline`: a `first_line` flag starts true and
+flips false after the first `close_line`; while it is true the first fragment's inline-start `x`
+becomes the indent and the first line's available width shrinks by it. A **negative** indent both
+places the first glyph run off-screen-left *and* widens the available width, so the line never wraps
+and sits entirely off-screen — exactly the image-replacement recipe. The key safety property: with the
+default indent `0` the injected arithmetic is the IEEE identity (`x + 0.0 == x`, `w - 0.0 == w`), so
+every existing line box is **byte-identical** — the path is inert until an author sets it. Gated by
+`text_indent_offsets_the_first_line_only` (layout) + `text_indent_maps_through_the_stylo_cascade`
+(cascade). Residue: the `hanging`/`each_line` keywords are accepted-and-ignored; anonymous mixed
+block+inline runs (which already hardcode `align:left`) and form-control text pass indent 0.
