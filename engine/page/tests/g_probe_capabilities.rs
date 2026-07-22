@@ -37,6 +37,7 @@ const HTML: &str = r##"<!doctype html>
   #anchored { position: absolute; position-anchor: --a; top: anchor(bottom); }
   #attrbox { width: attr(data-w type(<length>), 50px); }
   #sda { animation-timeline: scroll(); }
+  #fs { field-sizing: content; }
 </style></head><body>
   <div id="mc"><p>alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima</p></div>
   <div id="cq-outer"><div id="cq">container query target</div></div>
@@ -48,6 +49,7 @@ const HTML: &str = r##"<!doctype html>
   <div id="sg-outer"><div id="sg"><span>a</span></div></div>
   <div id="scope-root"><div id="scoped">scoped</div></div>
   <div id="anchor-el">anchor</div><div id="anchored">anchored</div>
+  <div><textarea id="fsref" cols="40">ok</textarea><textarea id="fs" cols="40">ok</textarea></div>
   <div id="attrbox" data-w="120px">attr</div>
   <div id="sda">scroll driven</div>
   <video id="vidmuted" muted></video><video id="vidloud"></video>
@@ -114,6 +116,15 @@ const HTML: &str = r##"<!doctype html>
 
     // ── Container queries: the rule applies only if the container's inline size was resolved.
     probe('containerq', function () { return cs('cq').color.indexOf('1, 2, 3') >= 0; });
+
+    // ── field-sizing (Baseline June 2026): `content` stands the UA cols-width hint down, so the
+    // control hugs its content. Both halves measured: the REFERENCE textarea keeps its ~333px
+    // cols width (a broken textarea would fail here, not pass), the field-sized one shrinks.
+    probe('fieldsizing', function () {
+      var ref = $('fsref').getBoundingClientRect().width;
+      var fs = $('fs').getBoundingClientRect().width;
+      return ref > 300 && fs > 0 && fs < 150;
+    });
 
     // ── Media queries: `screen` must match and `print` must not. This is one probe, because a
     // stylesheet engine that matched BOTH would pass either half alone.
@@ -258,4 +269,8 @@ const PINNED: &[&str] = &[
     // build cfg-drops the at-rule) make the #cq rule apply only because #cq-outer's resolved
     // inline size (400px) crosses the (min-width: 300px) condition.
     "containerq:yes",
+    // tick 388 — field-sizing: content (Baseline June 2026): recovered from MinimalCascade BEFORE
+    // the presentational-hints pass so it can veto the UA cols-width hint; the probe measures the
+    // reference textarea keeping its cols width AND the field-sized one hugging content.
+    "fieldsizing:yes",
 ];

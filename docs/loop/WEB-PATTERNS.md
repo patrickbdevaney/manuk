@@ -3292,3 +3292,13 @@ one lived through ~380 ticks and two cascades.
 recording the element's geometry are two responsibilities, not one.
 **The trap:** the empty-line case worked (`<br><br>` opens a band attributed to the br), so
 spot-checks passed; only the corpus diff showed the common case — br after text — had no box.
+
+## Recovered properties have ORDER, not just presence (tick 388)
+
+**The class of the web this unlocks:** auto-growing comment boxes / chat inputs — every modern
+form that writes `field-sizing: content` (Baseline June 2026) instead of a JS autosize library.
+**(1)** A property recovered from a second parser is only correct if it lands before its
+CONSUMERS run: `field-sizing` vetoes a presentational hint applied mid-walk, so the generic
+after-the-walk recovery merge silently loses the race.
+**The trap:** the probe passes with the property parsed and the width still wrong — measure the
+BEHAVIOR (the box hugged), never the parse.

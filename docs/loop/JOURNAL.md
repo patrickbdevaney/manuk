@@ -16512,3 +16512,27 @@ border-area clip, Direct-Sockets/WebRTC). LAST_SURFACE_AUDIT 377→387; next due
 TICK SHAPE: surface-audit (map maintenance; Audit #12 + 1 row + watches/exclusions). GATES +0. [no-pattern]
 CONSTELLATION: +1 row (doc/field-sizing, missing).
 WIKI: none.
+
+## Tick 388 — field-sizing: content — the recovered property that must beat the hints (2026-07-22)
+
+Audit #12's row, taken while tick-sized (Baseline June 2026 — auto-growing textareas/inputs
+without a JS autosize library). Stylo 0.19 predates the property, so it rides the recovered-
+property route (MinimalCascade parses `field-sizing`; `field_sizing_content` on ComputedStyle) —
+with ONE structural difference from every prior recovered property: it is copied onto the style
+INSIDE the Stylo walk, BEFORE apply_presentational_hints, because its whole job is to veto the
+UA intrinsic-width hints (`<input size>` ~173px, `<textarea cols>` cols·8+13) that fire in that
+pass — the generic after-the-walk merge loses the race (width already Px). Both hint sites now
+stand down under field-sizing:content. @supports flips honest-yes for free (the declaration
+changes the probe style from initial).
+
+Gate: `fieldsizing` probe in G_PROBE_CAPABILITIES measures BOTH halves — the reference textarea
+KEEPS its ~333px cols width (a broken textarea fails, not passes) and the field-sized one hugs
+content (<150px). RED-proven this session: recovery wire severed → fieldsizing:no, gate fails;
+restored → green. 27+2 manuk-css green. RESIDUE (named in wiki): the MinimalCascade-only
+headless fallback keeps its fixed 180×48 textarea default (UA sizes there precede author rules,
+no post-author hint phase); the LIVE cascade is Stylo.
+
+TICK SHAPE: capability (Baseline form-control sizing; [pattern: recovered properties have ORDER,
+not just presence — a property that vetoes a hint must land before the hint pass runs]). GATES
+G_PROBE_CAPABILITIES +1 claim (fieldsizing:yes). CONSTELLATION: doc/field-sizing missing→gated.
+WIKI: docs/wiki/css-cascade.md — field-sizing: a recovered property that must beat the hints.

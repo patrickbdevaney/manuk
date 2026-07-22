@@ -179,3 +179,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 385	abfc78f	1784736390	2026-07-22T12:06:30-04:00	860	capability	55	8	148	34	183	81	3896	6960	0	320	31	MISSING BOX <br>: the break that ends a line still owns a box (2026-07-22)
 386	b086f0d	1784736615	2026-07-22T12:10:15-04:00	225	self-audit	56	5	69	35	183	81	3896	6960	0	320	31	self-audit + wall audit: clean, and the wall held while coverage grew (2026-07-22)
 387	c0ca576	1784736846	2026-07-22T12:14:06-04:00	231	surface-audit	57	6	105	34	183	81	3896	6960	0	320	31	surface audit #12: one Baseline-crosser, one map-ahead-of-the-web validation (2026-07-22)
+388	a8d3260	1784737853	2026-07-22T12:30:53-04:00	1007	capability	60	11	132	38	183	81	3896	6960	0	320	31	field-sizing: content — the recovered property that must beat the hints (2026-07-22)

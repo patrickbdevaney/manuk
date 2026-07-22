@@ -409,6 +409,11 @@ pub fn cascade_via_stylo_sized(
     let mut candidates: Vec<u32> = Vec::new();
     let mut caches = SelectorCaches::default();
 
+    // The recovered-property cascade (see the merge loop below) — computed BEFORE the Stylo walk
+    // because ONE recovered property must be visible to `apply_presentational_hints` inside the
+    // walk: `field-sizing: content` stands the UA intrinsic-width hints down, so it has to be on
+    // the style before the hint decides to fire (the other recovered properties merge after).
+    let minimal = MinimalCascade.cascade(dom, sheets);
     let mut map: StyleMap = StyleMap::new();
     // Preorder walk so a parent's ComputedValues exists before its children's cascade.
     let mut parent_cv: std::collections::HashMap<NodeId, ServoArc<ComputedValues>> =
@@ -466,6 +471,12 @@ pub fn cascade_via_stylo_sized(
                 .set_root_font_size(cv.get_font().clone_font_size().computed_size().px());
         }
         let mut cs = to_computed_style(&cv);
+        // `field-sizing` predates stylo 0.19, so it is recovered from MinimalCascade — and it must
+        // be recovered HERE, before the hints, because its whole job is to veto the UA
+        // intrinsic-width hint below.
+        if let Some(m) = minimal.get(&node) {
+            cs.field_sizing_content = m.field_sizing_content;
+        }
         apply_presentational_hints(dom, node, &mut cs);
         // `::before` / `::after` — generated content, cascaded against this element as its parent.
         use stylo::selector_parser::PseudoElement as Pe;
@@ -548,7 +559,7 @@ pub fn cascade_via_stylo_sized(
     // that one property from MinimalCascade, which parses it correctly from inline styles
     // and stylesheets alike. Targeted patch — everything else stays Stylo's. Could later be
     // narrowed to a vertical-align-only scan to avoid the second cascade.
-    let minimal = MinimalCascade.cascade(dom, sheets);
+    // (`minimal` was computed before the walk — `field-sizing` is recovered in-walk, the rest here.)
     for (node, cs) in map.iter_mut() {
         if let Some(m) = minimal.get(node) {
             cs.vertical_align = m.vertical_align;
@@ -763,7 +774,9 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
                 // `width: stretch` is a declaration that merely *looks* absent (`Dim::Auto`). Same
                 // guard as the dimension attributes below: without it a `width:stretch` text field
                 // stays 173px wide instead of filling its form row.
-                if s.width == crate::Dim::Auto && !s.width_stretch {
+                // `field-sizing: content` (Baseline June 2026) stands the UA intrinsic width
+                // down entirely: the control sizes from its content, like any other box.
+                if s.width == crate::Dim::Auto && !s.width_stretch && !s.field_sizing_content {
                     let cols = el
                         .attr("size")
                         .and_then(|v| v.trim().parse::<f32>().ok())
@@ -774,7 +787,11 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
             }
         }
     }
-    if tag == "textarea" && s.width == crate::Dim::Auto && !s.width_stretch {
+    if tag == "textarea"
+        && s.width == crate::Dim::Auto
+        && !s.width_stretch
+        && !s.field_sizing_content
+    {
         let cols = el
             .attr("cols")
             .and_then(|v| v.trim().parse::<f32>().ok())

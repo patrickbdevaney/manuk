@@ -747,3 +747,19 @@ the gate follows the capability, never the reverse.
 skipped, not guessed); supplement rules order after their sheet's own rules (a same-specificity base
 rule written *after* its `@container` override wrongly loses; overrides overwhelmingly follow their
 base); cq units (`cqw`/`cqi`…) outside `@container` blocks.
+
+## `field-sizing: content` — a recovered property that must beat the hints (tick 388)
+
+Baseline June 2026. `field-sizing: content` makes a form control size from its CONTENT — which in
+this engine means the UA intrinsic-width hints (`<input size>` ~173px, `<textarea cols>` cols·8+13)
+must stand down. Stylo 0.19 predates the property, so it rides the recovered-property route
+(MinimalCascade parses it; `field_sizing_content` on ComputedStyle) — but unlike every other
+recovered property it is copied onto the style INSIDE the Stylo walk, BEFORE
+`apply_presentational_hints`, because its whole job is to veto a hint that fires in that pass;
+the after-the-walk merge would arrive too late (the width is already Px by then). `@supports
+(field-sizing: content)` flips to yes for free via the probe-style mechanism (the declaration
+changes the probe from initial). Gate: `fieldsizing` in G_PROBE_CAPABILITIES measures BOTH halves
+— the reference textarea keeps its ~333px cols width, the field-sized one hugs content (<150px).
+RED-proven: recovery wire severed → fieldsizing:no. RESIDUE: the MinimalCascade-only (headless
+fallback) path keeps its fixed 180×48 textarea default — its UA sizes are set before author rules
+and there is no post-author hint phase there; the LIVE path is Stylo.

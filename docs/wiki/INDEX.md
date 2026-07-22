@@ -190,6 +190,7 @@
   - L669 · The fix is a different door to the same evaluator
   - L690 · Two things measured and pinned
   - L705 · Container queries (tick 379): the sized re-pass and the source supplement
+  - L751 · field-sizing: content — a recovered property that must beat the hints (tick 388)
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -867,4 +868,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-782 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+783 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

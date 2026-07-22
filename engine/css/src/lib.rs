@@ -702,6 +702,10 @@ pub struct ComputedStyle {
     pub border_radius: f32,
     /// `visibility` (inherited). `Hidden`/`Collapse` boxes still take space but are not painted.
     pub visibility: Visibility,
+    /// `field-sizing: content` (Baseline June 2026) — the form control sizes from its CONTENT,
+    /// so the UA's fixed-size presentational hints (`<textarea cols>` above all) must stand down
+    /// and let intrinsic sizing run. `false` = `fixed`, the initial value.
+    pub field_sizing_content: bool,
     /// `line-height: normal` — the value was NOT authored, so it must come from the FONT's own
     /// ascent/descent/lineGap rather than a multiple of the font size. A 1.2× guess is not what any
     /// browser does, and it makes every line box the wrong height on every page.
@@ -852,6 +856,7 @@ impl ComputedStyle {
             border_style: BorderStyle::default(),
             border_radius: 0.0,
             visibility: Visibility::Visible,
+            field_sizing_content: false,
             line_height_normal: true,
             mask_image: None,
             background_images: Vec::new(),
@@ -3699,6 +3704,11 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 "collapse" => Visibility::Collapse,
                 _ => Visibility::Visible,
             }
+        }
+        // `field-sizing` (Baseline June 2026). Stylo 0.19 predates it, so this cascade is the
+        // property's only source — same recovered-property route as `visibility` above.
+        "field-sizing" => {
+            s.field_sizing_content = v.trim().eq_ignore_ascii_case("content");
         }
         "background-image" => s.background_images = parse_background_images(v),
         "background" => {
