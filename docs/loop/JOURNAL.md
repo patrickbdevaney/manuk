@@ -17044,3 +17044,22 @@ list_ordinals_follow_reversed_and_value_continuation; RED-proven (index form →
 TICK SHAPE: capability (list ordinal correctness — reversed + value-continuation; +1 gate). GATES +1.
 CONSTELLATION: none (list rendering already gated; this is a correctness deepening).
 WIKI: box-layout.md — "List markers follow the HTML 'ordinal value' algorithm — a running counter, not a sibling index".
+
+## Tick 412 — text-transform: capitalize titlecases the first LETTER, not the first char (2026-07-22)
+
+HYPOTHESIS (winning vein): text-transform is otherwise complete (upper/lower/capitalize, Unicode
+ß→SS, Stylo-mapped, DOM-text untouched). But `apply_text_transform`'s capitalize cleared its
+at_word_start flag on EVERY non-whitespace char, so a word opening with punctuation/quote/digit
+lost its capital: `(hello)`→`(hello)`, `'twas`→`'twas`, `3d`→`3d`. The CSS Text spec titlecases
+the first typographic LETTER of each word; leading symbols are part of the word but not the
+letter, so Chrome capitalizes past them.
+
+FIX: the non-letter branch no longer clears at_word_start — leading punctuation/quotes/digits pass
+through and the flag survives until the first alphabetic char (titlecased, then cleared). Word
+boundaries stay whitespace-delimited (documented approximation). One-line semantic fix. Gated by
+capitalize_skips_leading_punctuation_and_digits; RED-proven (restore the clear → "(hello) World"
+not "(Hello) World"). manuk-layout 85/85, no regression.
+
+TICK SHAPE: capability (text-transform capitalize word-boundary correctness; +1 gate). GATES +1.
+CONSTELLATION: none (text-transform already worked; this is a correctness edge).
+WIKI: text-layout.md — "text-transform: capitalize titlecases the first LETTER of a word, not the first character".

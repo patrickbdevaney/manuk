@@ -959,7 +959,8 @@ fn is_rendered(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
 /// reads the author's string). `None` borrows the input unchanged; the casing modes allocate. Unicode
 /// casing is honoured (`ß`→`SS`, locale-independent). `Capitalize` upper-cases the first cased letter
 /// of each whitespace-delimited word and leaves the rest as authored (the common-case approximation of
-/// the spec's "first typographic letter unit").
+/// the spec's "first typographic letter unit") — leading punctuation, quotes and digits do NOT consume
+/// the word start, so `(hello)` → `(Hello)`, `'twas` → `'Twas`, `3d` → `3D`, matching Chrome.
 fn apply_text_transform(s: &str, transform: manuk_css::TextTransform) -> std::borrow::Cow<'_, str> {
     use manuk_css::TextTransform;
     match transform {
@@ -977,8 +978,11 @@ fn apply_text_transform(s: &str, transform: manuk_css::TextTransform) -> std::bo
                     out.extend(ch.to_uppercase());
                     at_word_start = false;
                 } else {
+                    // A non-letter at a word start (a quote, bracket, digit) is passed through WITHOUT
+                    // clearing the word-start flag — the first typographic LETTER is what gets
+                    // titlecased, not the first character. Clearing it here (the old behaviour) let a
+                    // single leading `"`/`(`/digit silently suppress the capital.
                     out.push(ch);
-                    at_word_start = false;
                 }
             }
             std::borrow::Cow::Owned(out)
@@ -6755,6 +6759,37 @@ mod tests {
         assert!(
             dom.text_content(n).contains("home"),
             "text-transform must NOT mutate the DOM text (JS reads the author's casing)"
+        );
+    }
+
+    /// `capitalize` titlecases the first typographic LETTER of each word — not the first character.
+    /// Leading punctuation, quotes and digits must pass through without consuming the word start, or a
+    /// single `"`/`(`/digit silently swallows the capital (Chrome capitalizes past them).
+    ///
+    /// RED, run: restore `at_word_start = false;` in the else arm. `(hello)` → `(hello)`, `'twas` →
+    /// `'twas`, `3d` → `3d` — every leading-symbol word loses its capital.
+    #[test]
+    fn capitalize_skips_leading_punctuation_and_digits() {
+        use manuk_css::TextTransform as T;
+        let cap = |s: &str| apply_text_transform(s, T::Capitalize).into_owned();
+        assert_eq!(cap("(hello) world"), "(Hello) World", "leading bracket");
+        assert_eq!(cap("'twas the night"), "'Twas The Night", "leading quote");
+        assert_eq!(
+            cap("\"quoted\" text"),
+            "\"Quoted\" Text",
+            "leading double-quote"
+        );
+        assert_eq!(
+            cap("3d printing"),
+            "3D Printing",
+            "digit before the first letter"
+        );
+        // Regression guard: the plain case still works, and mid-word letters are untouched.
+        assert_eq!(cap("hello world"), "Hello World");
+        assert_eq!(
+            cap("iPhone case"),
+            "IPhone Case",
+            "only the first letter is titlecased"
         );
     }
 

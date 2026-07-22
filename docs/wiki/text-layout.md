@@ -760,3 +760,17 @@ pre-fix code twice, on two different mechanisms independently: reverting `rect()
 ("got 25.6"), and reverting only the line-box `max` fails assertion 3 ("got 17, want 16"). The test
 opens by asserting the installed face's content area is distinguishable from its 1.6 line box —
 without that guard, a face where they coincide would make every later assertion vacuous.
+
+## `text-transform: capitalize` titlecases the first LETTER of a word, not the first character (tick 412)
+
+The capitalize pass cleared its "at word start" flag on **every** non-whitespace character, so any word
+beginning with punctuation, a quote, or a digit lost its capital: `(hello)` stayed `(hello)`, `'twas`
+stayed `'twas`, `3d` stayed `3d`. The CSS Text spec titlecases the first typographic **letter unit** of
+each word — leading symbols are part of the word but are not the letter, so Chrome capitalizes past
+them (`(Hello)`, `'Twas`, `3D`).
+
+The fix stops clearing the word-start flag in the non-letter branch: leading punctuation/quotes/digits
+pass through untouched and the flag survives until the first alphabetic char, which is titlecased and
+only then clears the flag. Word boundaries stay whitespace-delimited (the documented common-case
+approximation of UAX #29). Gated by `capitalize_skips_leading_punctuation_and_digits`, RED-proven
+(restore the flag clear → `(hello) World`, not `(Hello) World`).
