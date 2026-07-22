@@ -69,6 +69,7 @@
   - L1021 · The default object size lives in USED-size layout (tick 389)
   - L1039 · viewBox is an intrinsic ratio — and the default-size model is MEASURED, not recalled (tick 391)
   - L1052 · BUILD SPEC — inline SVG internals: borrow usvg, don't hand-write geometry (tick 393)
+  - L1084 · Paint half LANDED (tick 394)
 
 ## BUILD AND DEPENDENCIES — what is actually compiled, and what only looks like it is
 `docs/wiki/build-and-dependencies.md`
@@ -871,4 +872,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-786 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+787 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -3322,3 +3322,17 @@ measurement showed the ratio case takes available-width×ratio instead. A gate p
 recalled model is a gate that locks the wrong behavior in — measure first, pin second.
 **The trap:** the wrong pin PASSED its own test; only re-deriving the truth from the reference
 engine exposed it. Same lesson as [[gate-measured-against-a-standard-chrome-fails]].
+
+## Inline vectors ride the raster image path (tick 394)
+
+**The class of the web this unlocks:** the vector half of every modern page — inline SVG icons,
+logos, illustrations, chart glyphs — visibly painted instead of blank squares.
+**(1)** When an engine already vendors a renderer for one entry point (`<img src="*.svg">` via
+usvg/resvg), the inline case is a SERIALIZATION problem, not a rendering problem: subtree →
+markup (+ the xmlns the HTML parser dropped) → the same decode path.
+**(2)** Assert on PIXELS, not on the decode returning Some — a decoded image that never reaches
+the display list is the actual failure mode (self.images gets REPLACED every apply_images round;
+the cache-and-merge is the load-bearing half).
+**The trap:** the sync construction paths (`load`, `from_prefetched` — the SHELL's path) never
+pass through `apply_images`; hook only the fetch path and every offline/gate/shell page stays
+blank while the fetch path works.

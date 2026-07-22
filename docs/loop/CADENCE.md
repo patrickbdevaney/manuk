@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **186** | ticks 1–393 |
-| median tick cycle | **19m** | 185 intervals |
+| ticks landed | **187** | ticks 1–394 |
+| median tick cycle | **19m** | 186 intervals |
 | median, last 10 | **15m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.68** | 273.1h elapsed |
-| median verify wall | **60s** | 125 ticks |
+| **ticks per hour** | **0.68** | 273.4h elapsed |
+| median verify wall | **60s** | 126 ticks |
 | wall trend | 39s → 57s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**101 of 186 ticks** (54%) moved a
+**102 of 187 ticks** (55%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **101** capability ticks, median cycle **19m**
-* median diff per tick: **+224 / −34** lines across 8 files
+* **102** capability ticks, median cycle **19m**
+* median diff per tick: **+222 / −34** lines across 8 files
 
 ## Every tick
 
@@ -283,5 +283,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **391** | 2026-07-22 13:07 | 15m | capability | 61s | +173/−71 | 183 | 81 | 56.0% · | viewBox is an intrinsic ratio; the default-size model corrected to measured Chrome (2026-0 |
 | **392** | 2026-07-22 14:03 | 56m | measurement | 57s | +302/−515 | 183 | 81 | 56.0% · | the honest re-crawl: every fix measured, and the discard rule bites both ways (2026-07-22) |
 | **393** | 2026-07-22 14:09 | 6m | spec | 57s | +90/−33 | 183 | 81 | 56.0% · | the SVG-internals build spec: borrow usvg; and the nih.gov segfault evidence (2026-07-22) |
+| **394** | 2026-07-22 14:26 | 17m | capability | 56s | +181/−37 | 183 | 81 | 56.0% · | inline SVG paints: the spec's paint half landed same-day (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

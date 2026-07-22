@@ -16639,3 +16639,26 @@ TICK SHAPE: spec (the organ probed to its seams and re-priced from hand-write to
 [pattern: before building a geometry engine, check what the image pipeline already vendors]).
 GATES +0. CONSTELLATION: media/doc svg rows unchanged (organ named, spec linked).
 WIKI: docs/wiki/box-layout.md — inline SVG internals build spec (tick 393).
+
+## Tick 394 — inline SVG paints: the spec's paint half landed same-day (2026-07-22)
+
+The t393 spec's bounded first slice, taken immediately because both halves of the borrow were
+already in the tree: manuk_html::serialize_outer (the outerHTML serializer) and decode_svg (the
+usvg/resvg img-src path). decode_inline_svgs serializes each inline <svg> subtree (injecting
+the xmlns the HTML parser drops — usvg requires it), rasterizes through the SAME decoder, and
+caches per node (inline_svg_cache); merged into self.images AFTER apply_images (which REPLACES
+the map every round — the trap) and on BOTH sync construction paths (load, from_prefetched —
+the shell's path never passes through apply_images at all). Natural sizing deliberately NOT
+applied: the t389/391 measured replaced-sizing model owns the geometry; the raster paints into
+whatever box layout gave it.
+
+Gate: an_inline_svg_paints_its_vectors in G_FIRST_PAINT (IN the wall) asserts PIXELS — a
+solid-red viewBox rect must sample red at the box center. RED-proven: decode severed →
+rgb(255,255,255), gate fails; restored → green (2/2). RESIDUE (constellation row): child
+geometry mapping (the spec's other half), stale-raster-on-subtree-mutation, render-at-used-size.
+
+TICK SHAPE: capability (the vector half of every modern page becomes visible — icons, logos,
+illustrations; [pattern: inline vectors are a serialization problem when an img-src renderer is
+already vendored — and the assert must be on pixels reaching the display list]). GATES
+G_FIRST_PAINT +1 test (IN the wall). CONSTELLATION: +1 row (doc/inline SVG rendering, partial).
+WIKI: docs/loop/WEB-PATTERNS.md entry; build spec remains docs/wiki/box-layout.md (t393).

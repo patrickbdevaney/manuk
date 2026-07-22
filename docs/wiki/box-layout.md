@@ -1080,3 +1080,15 @@ Also recorded this tick: **nih.gov segfaulted the crawl** (rc=139, core dumped, 
 three quiet single-site runs are clean — the load-only/release-only heisenbug profile of the
 open [[calc-size-interpolate-size-segfault]] Bar-0. Evidence banked; the prescribed fix context
 is a fresh ASAN session, not mid-loop.
+
+### Paint half LANDED (tick 394)
+
+`decode_inline_svgs` (engine/page): each inline `<svg>` subtree → `serialize_outer` (+ injected
+`xmlns` — the HTML parser drops it, usvg requires it) → the SAME `decode_svg` usvg/resvg path as
+`<img src="*.svg">` → per-node `inline_svg_cache`. Two merge points, both load-bearing:
+`apply_images` REPLACES `self.images` every round (the cache re-merges after), and the sync
+construction paths (`load`, `from_prefetched` — the shell's path) never reach `apply_images` at
+all, so they rasterize explicitly. Natural sizing is deliberately NOT applied — the measured
+replaced-sizing model (t389/391) owns the box; the raster paints into it. Pixel-asserted in
+G_FIRST_PAINT (`an_inline_svg_paints_its_vectors`, RED-proven: decode severed → white center).
+Remaining from the spec: child geometry mapping, stale-raster-on-mutation, render-at-used-size.

@@ -138,3 +138,32 @@ fn first_paint_does_not_wait_for_images() {
         page.pending_image_urls().len()
     );
 }
+
+/// **Inline `<svg>` paints its vectors** (tick 394 — the paint half of the SVG-internals spec).
+///
+/// The icon/logo idiom is an inline `<svg>` subtree, no network involved. Before this, the
+/// element laid out (a correctly-sized box after t389/391) but painted NOTHING — an icon-heavy
+/// app shell rendered as blank squares. The subtree is serialized back to markup and rasterized
+/// through the SAME usvg/resvg path that decodes `<img src="*.svg">` (xmlns injected when the
+/// HTML parser dropped it). The assert is on PIXELS, not on the decode returning Some: a decoded
+/// image that never reaches the display list is the failure this gate exists to catch.
+#[test]
+fn an_inline_svg_paints_its_vectors() {
+    let fonts = FontContext::new();
+    let html = r##"<!doctype html><body style="margin:0">
+        <svg viewBox="0 0 10 10" style="width:100px;height:100px;display:block">
+          <rect x="0" y="0" width="10" height="10" fill="#ff0000"/>
+        </svg></body>"##;
+    let page = manuk_page::Page::load(html, "https://svg.test/", &fonts, 200.0);
+    let canvas = page.paint(&fonts, 200, 200);
+    let px = canvas.rgba_bytes();
+    // Sample the center of the 100×100 svg box at (50, 50).
+    let (w, x, y) = (200usize, 50usize, 50usize);
+    let i = (y * w + x) * 4;
+    let (r, g, b) = (px[i], px[i + 1], px[i + 2]);
+    assert!(
+        r > 200 && g < 60 && b < 60,
+        "G_FIRST_PAINT/svg: the inline svg's solid-red rect must paint red at its center, \
+         got rgb({r},{g},{b}) — the vector was laid out but never rasterized"
+    );
+}

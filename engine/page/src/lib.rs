@@ -1002,6 +1002,13 @@ pub struct Page {
     zoom: f32,
     /// Decoded raster images keyed by their `<img>` node, painted into each element's box.
     images: std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
+    /// Inline `<svg>` elements rasterized via the SAME usvg/resvg path that decodes `<img
+    /// src="*.svg">` (tick 394 — the paint half of the SVG-internals spec). Keyed by the svg
+    /// element's node; decoded once per node and carried across `apply_images` calls, which
+    /// REPLACE `self.images` wholesale every round. A script that mutates an svg's subtree after
+    /// first decode keeps the stale raster (named residue; re-serialize-on-mutation is the fix).
+    inline_svg_cache:
+        std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
     /// **Per-element scroll offsets** — `overflow: auto|scroll` containers, in CSS px.
     ///
     /// Before tick 67, `element.scrollTop` was not a property at all: reading it gave `undefined`, and
@@ -1293,6 +1300,10 @@ impl Page {
         // On the SYNC path there is no async runtime to fetch subframes with; a caller that needs a
         // frame's document (a gate) drives `render_iframe` directly. The async path
         // (`load_async`/`finish_loading`) is where real frames load.
+        //
+        // Inline `<svg>` needs no network either — rasterize on this path too (tick 394), so
+        // gates and shell navigations paint vectors, not only the fetch path via `apply_images`.
+        page.rasterize_inline_svgs_into_images();
         page.fire_lifecycle("load");
         page
     }
@@ -2453,12 +2464,18 @@ impl Page {
         fonts: &FontContext,
         viewport_width: f32,
     ) -> usize {
-        if images.is_empty() {
+        // Inline `<svg>` rasterization (tick 394) — BEFORE the empty-early-return, because a page
+        // whose only imagery is inline svg (an icon-heavy app shell) fetches zero network images
+        // and still must paint its vectors.
+        let new_svgs = self.decode_inline_svgs();
+        if images.is_empty() && new_svgs == 0 {
             return 0;
         }
         // Natural sizing — see `apply_natural_size`, shared with the inline-`data:` pass so an image
         // is sized the same way regardless of whether its bytes came off the network or out of its
-        // own URL.
+        // own URL. Inline svgs are deliberately NOT natural-sized: the measured replaced-sizing
+        // model (t389/391 — default object size + viewBox ratio) owns their geometry; the raster
+        // only paints into whatever box layout gave them.
         for (&node, img) in &images {
             if let Some(style) = self.styles.get_mut(&node) {
                 apply_natural_size(style, img);
@@ -2466,8 +2483,49 @@ impl Page {
         }
         let count = images.len();
         self.images = images;
+        for (n, img) in &self.inline_svg_cache {
+            self.images.entry(*n).or_insert_with(|| img.clone());
+        }
         self.relayout(fonts, viewport_width);
-        count
+        count + new_svgs
+    }
+
+    /// Rasterize every inline `<svg>` element not yet in the cache (the paint half of the
+    /// tick-393 SVG-internals spec — geometry mapping is the other half). The subtree is
+    /// serialized back to markup and decoded through the SAME usvg/resvg path as `<img
+    /// src="*.svg">`; HTML-parsed svgs usually lack the `xmlns` declaration usvg requires, so
+    /// one is injected when absent. Returns how many NEW svgs were decoded.
+    /// Decode-and-merge for the SYNC construction paths (`load`, `from_prefetched`), which never
+    /// pass through `apply_images`: inline svg needs no network, so those pages must paint their
+    /// vectors too.
+    fn rasterize_inline_svgs_into_images(&mut self) {
+        self.decode_inline_svgs();
+        for (n, img) in &self.inline_svg_cache {
+            self.images.entry(*n).or_insert_with(|| img.clone());
+        }
+    }
+
+    fn decode_inline_svgs(&mut self) -> usize {
+        let svgs: Vec<manuk_dom::NodeId> = self
+            .dom
+            .descendants(self.dom.root())
+            .filter(|&n| self.dom.tag_name(n) == Some("svg"))
+            .filter(|n| !self.inline_svg_cache.contains_key(n))
+            .collect();
+        let mut new = 0usize;
+        for node in svgs {
+            let mut markup = manuk_html::serialize_outer(&self.dom, node);
+            if !markup.contains("xmlns") {
+                if let Some(rest) = markup.strip_prefix("<svg") {
+                    markup = format!("<svg xmlns=\"http://www.w3.org/2000/svg\"{rest}");
+                }
+            }
+            if let Some(img) = decode_svg(markup.as_bytes(), "inline.svg") {
+                self.inline_svg_cache.insert(node, std::rc::Rc::new(img));
+                new += 1;
+            }
+        }
+        new
     }
 
     /// **Dynamic script loading.** Fetch and run every `<script src>` the page added to its own DOM
@@ -3530,6 +3588,10 @@ impl Page {
         // On the SYNC path there is no async runtime to fetch subframes with; a caller that needs a
         // frame's document (a gate) drives `render_iframe` directly. The async path
         // (`load_async`/`finish_loading`) is where real frames load.
+        //
+        // Inline `<svg>` needs no network either — rasterize on this path too (tick 394), so
+        // gates and shell navigations paint vectors, not only the fetch path via `apply_images`.
+        page.rasterize_inline_svgs_into_images();
         page.fire_lifecycle("load");
         page
     }
@@ -3713,6 +3775,7 @@ impl Page {
             // The inline images decoded above already have their natural size in `styles`; carrying
             // them here is what lets them PAINT as well as lay out.
             images: inline_images,
+            inline_svg_cache: std::collections::HashMap::new(),
             scroll_offsets: std::collections::HashMap::new(),
             external_css: HashMap::new(),
             failed_css: std::collections::HashSet::new(),
