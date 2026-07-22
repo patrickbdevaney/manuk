@@ -16883,3 +16883,22 @@ null from INSIDE a running inline script, exactly where the spec (and Chrome) sa
 executing element. Re-pinned to the truthful claim (element with tagName SCRIPT, never
 undefined — the original intent), per the t391 wrong-pin precedent. Not a gate retune to land
 a tick: the old claim asserted the bug this tick fixes.
+
+## Tick 405 — self-audit: the harvest arc holds up (2026-07-22)
+
+CADENCE OBLIGATION (396+10, hook blocks at 407). Ran ./scripts/self-audit.sh: CLEAN —
+"methodology and reality agree", zero ✗. Window 397-404 review: three cadence checks (surface
+#13 t397, constitution #16 t398, this audit), two instrument specs probed to build-ready
+(t399 keying spec, t400 stackTraceLimit honest-no pin), the keying BUILD (t401 — RED both
+ways, okta's 316-phantom family collapsed, baseline-reset rule in force), and the full
+named-error harvest (t402 document.location, t403 getPropertyValue totality, t404
+currentScript) — the instrument naming organs and the loop converting each into a RED-proven
+gate within one tick each. One wrong pin corrected against spec+Chrome (G_GLOBALS
+currentScript-null, the t391 precedent). Zero WPT-chasing; SINGLE_SITE_TICKS 0 (okta was the
+INSTRUMENT's e2e fixture, each fix gated by a synthetic page, not okta). Re-keyed corpus
+crawl launched in background (nice -19, off the tick path) — banks as its own tick when done.
+LAST_AUDIT_TICK 396→405; next due 415.
+
+TICK SHAPE: self-audit (governance checkpoint). GATES +0. [no-pattern]
+CONSTELLATION: none.
+WIKI: none.
