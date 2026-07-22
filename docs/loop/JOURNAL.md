@@ -14991,3 +14991,30 @@ the next cadence obligation.
 TICK SHAPE: self-audit (a cadence/governance checkpoint — no engine change, no scoreboard move by design;
 the honesty face of the loop, not the capability face). GATES +0. [no-pattern].
 WIKI: none — a cadence/governance check, it touches no rendered construct.
+
+## Tick 337 — Surface Audit #7: the map covers all of Interop 2026, and it under-counted its own wins (2026-07-21)
+
+CADENCE OBLIGATION: surface audit due every 10 ticks (LAST_SURFACE_AUDIT 326 → due at 337). Ran
+`./scripts/surface-audit.sh run` and LEFT THE FRAME — searched the live web (Interop 2026 WPT README,
+WebKit/Mozilla/web.dev launch posts; Ladybird 2026 newsletters; Baseline 2026 digests), not from memory.
+
+FINDING (outside frame): the map is COMPLETE against external ground truth. All 20 Interop 2026 focus
+areas + all 4 investigations are already on CONSTELLATION.tsv with a verdict — several rows were literally
+probed against "Interop 2026" back at t225-241, so the loop anticipated this year's list. No unmapped area
+exists.
+
+FINDING (inside frame — the discovery): `Web Locks API (navigator.locks)` was BUILT and RED-gated
+(G_WEB_LOCKS, engine/page/tests/g_web_locks.rs — named-resource mutual exclusion, ifAvailable, resolve-
+with-value) yet ENTIRELY ABSENT from the constellation. Ladybird advertised shipping it in 2026; we
+already had it and never wrote it down. ADDED as `app / gated / G_WEB_LOCKS`. This is the INVERSE of the
+usual stale-pessimism: not a `missing` cell secretly built, but a green capability the histogram never
+counted — a map that under-counts its wins is as misleading as one that over-claims.
+
+RE-RANK (noted, not acted): CSS anchor positioning is now Baseline 2026 (Firefox 147, ~91% traffic) — it
+graduated to safe-to-use, raising it within the `missing` CSS set (the pure-CSS Floating-UI replacement).
+Does NOT outrank CO-#1 (the fidelity-instrument rebuild); container queries remain the largest missing CSS
+lever. Recorded in docs/loop/SURFACE-AUDIT.md Audit #7.
+
+TICK SHAPE: surface-audit (the map-checks-the-map governance face — leaves the loop's own frame on a
+cadence; no engine change, +1 map row by design). GATES +0. [no-pattern].
+WIKI: none — a cadence/governance audit; it widens the capability MAP, not a rendered construct.

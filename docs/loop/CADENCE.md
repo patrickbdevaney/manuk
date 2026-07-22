@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **130** | ticks 1–335 |
-| median tick cycle | **21m** | 129 intervals |
-| median, last 10 | **24m** | 10 intervals |
+| ticks landed | **131** | ticks 1–336 |
+| median tick cycle | **20m** | 130 intervals |
+| median, last 10 | **21m** | 10 intervals |
 | fastest / slowest | 3m / 5.4d | |
-| **ticks per hour** | **0.50** | 257.2h elapsed |
-| median verify wall | **60s** | 69 ticks |
-| wall trend | 39s → 69s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.51** | 257.2h elapsed |
+| median verify wall | **60s** | 70 ticks |
+| wall trend | 39s → 68s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**70 of 130 ticks** (54%) moved a
+**70 of 131 ticks** (53%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **70** capability ticks, median cycle **21m**
-* median diff per tick: **+256 / −24** lines across 8 files
+* **70** capability ticks, median cycle **20m**
+* median diff per tick: **+254 / −24** lines across 8 files
 
 ## Every tick
 
@@ -227,5 +227,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **333** | 2026-07-21 21:41 | 42m | capability | 69s | +94/−34 | 182 | 81 | 56.0% · | :active is fed: the last dynamic pseudo-class matches while the pointer is held (2026-07-2 |
 | **334** | 2026-07-21 22:08 | 27m | constitution-check | 67s | +285/−68 | 182 | 81 | 56.0% · | Constitution Check #8 (the loop looks up) (2026-07-21) |
 | **335** | 2026-07-21 22:12 | 4m | infrastructure | 69s | +59/−34 | 182 | 81 | 56.0% · | SHAPE scoring: the differential oracle stops charging one offset N times (2026-07-21) |
+| **336** | 2026-07-21 22:17 | 5m | self-audit | 68s | +108/−34 | 182 | 81 | 56.0% · | Self-Audit #N: methodology and reality agree (2026-07-21) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -270,3 +270,48 @@ not `ready_pct` (retired).
 **LAST_SURFACE_AUDIT set to 326.**
 
 **Next audit due: tick 336.**
+
+## Audit #7 — tick 337 (2026-07-21)
+
+**Left the frame. Sources (read this pass, not from memory):**
+- Interop 2026 authoritative area list — `github.com/web-platform-tests/interop/blob/main/2026/README.md`
+  (20 focus areas, 15 new; + 4 investigations), cross-read against `webkit.org/blog/17818/`,
+  `hacks.mozilla.org/2026/02/launching-interop-2026/`, `web.dev/blog/interop-2026`.
+- Ladybird 2026 status — `ladybird.org/newsletter/2026-06-30/` + 2026-04/2026-01 (passed >90% of all WPT
+  subtests Oct 2025; June 2026 ~2.079M passing; shipped file downloads, about:history, **Web Locks API**;
+  WhatsApp Web reaches QR login).
+- Baseline 2026 — `web.dev/blog/web-platform-01-2026`, `web-standards.dev/news/2026/01/scope-css-baseline/`
+  (CSS anchor positioning is now Baseline Newly-available with Firefox 147; @scope is Baseline).
+
+**Reconciled against CONSTELLATION.tsv (149 rows). The headline: the OUTSIDE frame is fully covered.**
+Every one of the 20 Interop 2026 focus areas is ALREADY on the map with a verdict — container (style)
+queries [missing], anchor positioning [missing], attr()/zoom/shape()/contrast-color() [missing, one row],
+custom highlights [missing], dialogs+popovers [gated], fetch uploads+ranges [G_RANGE/uploads], IndexedDB
+[gated t329], JSPI [missing], media pseudo-classes [missing], Navigation API [gated t309], scoped custom
+element registries [missing], scroll-driven animations [missing], scroll snap [gated t266], view
+transitions [gated t308], WebRTC [missing, out of scope], WebTransport [missing, deliberate HTTP/3
+deferral]. Investigations too: JPEG XL [missing, below ROI t237], WebVTT [partial t258], a11y testing
+[a11y roles t325]. Several rows were literally probed AGAINST "Interop 2026" back at t225-241, so the map
+anticipated this list — no unmapped area exists on the outside.
+
+**ADDED (an audit that finds nothing is suspicious — and this one did not):** `Web Locks API
+(navigator.locks)` — status **gated**, `G_WEB_LOCKS`. It was BUILT (dom_bindings.rs + a RED-proven gate,
+engine/page/tests/g_web_locks.rs: named-resource mutual exclusion, ifAvailable, resolve-with-value) yet
+MISSING from the constellation entirely. Ladybird trumpeted shipping it in 2026; we already had it and had
+not written it down.
+
+**What we had been wrong about:** the usual direction, once more — stale-PESSIMISTIC — but this instance
+is the INVERSE and worth naming: not a `missing` cell that was secretly built (t326's four re-pins), but a
+whole capability that was green and RED-gated and *simply absent from the map*. The histogram counted 148
+rows when the browser had ≥149 capabilities. A map that under-counts its own wins is as misleading as one
+that over-claims; both make the ranking a confident wrong answer.
+
+**RE-RANK note (not acted on this tick):** CSS anchor positioning crossed into Baseline 2026 (Firefox 147,
+~91% traffic) — it graduated from "emerging" to "safe-to-use TODAY", which raises its priority within the
+`missing` set (it is the pure-CSS tooltip/menu/popover placement primitive that replaces Floating UI). It
+does not outrank the CO-#1 fidelity-instrument rebuild, but among capability levers it is now above the
+other `missing` CSS rows. Container queries (CO-#1 (3)) remain the largest single missing CSS lever.
+
+**LAST_SURFACE_AUDIT set to 337.**
+
+**Next audit due: tick 347.**
