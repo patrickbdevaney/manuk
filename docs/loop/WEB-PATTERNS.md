@@ -3336,3 +3336,18 @@ the cache-and-merge is the load-bearing half).
 **The trap:** the sync construction paths (`load`, `from_prefetched` — the SHELL's path) never
 pass through `apply_images`; hook only the fetch path and every offline/gate/shell page stays
 blank while the fetch path works.
+
+## document.location is the login-flow's URL read (tick 402)
+
+**The class of the web this unlocks:** identity/SSO components and legacy redirect flows —
+every SPA whose auth widget reads `document.location.search` for its callback params (okta's
+Identity components die in their async mount without it), plus every page using the legacy
+`document.location = url` redirect idiom and `document.URL`/`documentURI` reads.
+**(1)** `document.location` IS `window.location` per spec — and when the location shim is
+REPLACED wholesale on SPA navigation (`__applyUrl`), the alias must be an ACCESSOR; a copied
+reference is a first-pushState time bomb.
+**(2)** The t401 selector-path-keyed oracle converts silent phantom diffs into NAMED console
+errors — this fix is the first harvest of that pipeline: error names organ, organ gets a gate.
+**The trap:** `history_bindings::install` carries a native Location and LOOKS like the live
+surface — it is dead code nothing calls; the prelude shim is the one BOM surface. Fixing the
+dead one would have changed nothing (the two-sources-of-truth class again).

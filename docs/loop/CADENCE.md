@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **194** | ticks 1–401 |
-| median tick cycle | **18m** | 193 intervals |
+| ticks landed | **195** | ticks 1–402 |
+| median tick cycle | **18m** | 194 intervals |
 | median, last 10 | **5m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.70** | 274.4h elapsed |
-| median verify wall | **59s** | 133 ticks |
-| wall trend | 39s → 59s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.71** | 274.7h elapsed |
+| median verify wall | **59s** | 134 ticks |
+| wall trend | 39s → 58s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **183**
+* **live gates**: 27 → **184**
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**102 of 194 ticks** (53%) moved a
+**103 of 195 ticks** (53%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **102** capability ticks, median cycle **18m**
-* median diff per tick: **+216 / −34** lines across 8 files
+* **103** capability ticks, median cycle **18m**
+* median diff per tick: **+215 / −34** lines across 8 files
 
 ## Every tick
 
@@ -291,5 +291,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **399** | 2026-07-22 14:52 | 3m | spec | 59s | +87/−34 | 183 | 81 | 56.0% · | the selector-path-keying build spec: identity that survives one inserted div (2026-07-22) |
 | **400** | 2026-07-22 14:56 | 4m | probe | 58s | +87/−34 | 183 | 81 | 56.0% · | Error.stackTraceLimit probed to an honest no (2026-07-22) |
 | **401** | 2026-07-22 15:26 | 30m | instrument | 60s | +156/−54 | 183 | 81 | 56.0% · | selector-path keying lands: the two-sided symmetry change (2026-07-22) |
+| **402** | 2026-07-22 15:45 | 18m | capability | 55s | +204/−34 | 184 | 81 | 56.0% · | document.location: the alias the t401 instrument surfaced (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

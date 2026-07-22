@@ -16796,3 +16796,31 @@ pad the hex; symmetry is the contract, not an implementation detail]). GATES +0 
 side; the RED proof is the perturbation protocol, recorded here and in the wiki).
 CONSTELLATION: none — instrument-side. WIKI: docs/wiki/conformance-and-oracles.md — LANDED
 addendum under the t399 spec.
+
+## Tick 402 — document.location: the alias the t401 instrument surfaced (2026-07-22)
+
+HYPOTHESIS: the re-keyed okta run books ~128 honest MISSING boxes, and the top named cause on
+the console is `window.document.location is undefined` — okta's Identity components read
+`document.location.search` and die in their async mount, so whole subtrees never exist. The
+spec says document.location IS window.location (same Location object). Our live location is
+the WINDOW_PRELUDE shim (history_bindings::install is dead code — never called outside its own
+tests); g.location is REPLACED wholesale by __applyUrl on navigation, so the alias must be an
+ACCESSOR (get → g.location), never a copied reference. Gate: new G_DOCUMENT_LOCATION asserts
+identity (document.location === window.location surface), .search/.origin reads, and that
+assigning document.location navigates via __applyUrl. RED: sever the alias → gate fails.
+
+RESULTS: RED first (gate reproduces okta's exact TypeError with the alias absent), then the
+prelude block lands document.location (accessor onto g.location — survives __applyUrl's
+wholesale swap, proven by the same-after-push claim), assignment-navigation, and document.URL
+/ documentURI (both were ALSO absent). G_DOCUMENT_LOCATION green 10/10 claims. okta e2e: the
+two Identity unhandled rejections GONE, missing 128→117 (+11 elements exist), total scored
+divergences rose 523→795 — newly-mounted subtrees now get scored, incl. a real 73-hit
+flex→block family for the post-re-crawl ledger. history_bindings::install confirmed dead code
+(nothing calls it); the prelude shim is the one BOM surface.
+
+TICK SHAPE: capability (the document URL surface — the t401 instrument's first named-error
+harvest converted to an engine fix; [pattern: when a shim object is replaced wholesale on
+navigation, every alias to it must be an accessor — a copied reference is a first-pushState
+time bomb]). GATES +1 (G_DOCUMENT_LOCATION, IN the wall via auto-discovered page tests).
+CONSTELLATION: none — no row for BOM basics; the gate is the record.
+WIKI: docs/wiki/js-engine.md — document.location accessor alias (tick 402).

@@ -193,3 +193,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 399	cadbccd	1784746337	2026-07-22T14:52:17-04:00	190	spec	59	6	87	34	183	81	3896	6960	0	320	31	the selector-path-keying build spec: identity that survives one inserted div (2026-07-22)
 400	649244c	1784746590	2026-07-22T14:56:30-04:00	253	probe	58	7	87	34	183	81	3896	6960	0	320	31	Error.stackTraceLimit probed to an honest no (2026-07-22)
 401	4ab5b39	1784748406	2026-07-22T15:26:46-04:00	1816	instrument	60	9	156	54	183	81	3896	6960	0	320	31	selector-path keying lands: the two-sided symmetry change (2026-07-22)
+402	88d7930	1784749514	2026-07-22T15:45:14-04:00	1108	capability	55	9	204	34	184	81	3896	6960	0	320	31	document.location: the alias the t401 instrument surfaced (2026-07-22)

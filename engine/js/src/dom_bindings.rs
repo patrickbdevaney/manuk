@@ -12794,6 +12794,27 @@ const WINDOW_PRELUDE: &str = r#"
         if (typeof g.location === 'undefined' || typeof g.location.pathname === 'undefined') {
             g.location = g.__parseUrl("%URL%");
         }
+        // document.location IS window.location (the spec aliases them), and document.URL /
+        // documentURI are read-only spellings of the live href. `__applyUrl` REPLACES g.location
+        // wholesale on every SPA navigation, so these must be ACCESSORS onto g.location — a copied
+        // reference goes stale on the first pushState. Assigning document.location navigates
+        // (the legacy redirect idiom). Found by the tick-401 oracle: okta's Identity components
+        // read document.location.search in their async mount and died — whole subtrees missing.
+        if (g.document && typeof g.document.location === 'undefined') {
+            try {
+                Object.defineProperty(g.document, 'location', {
+                    get: function () { return g.location; },
+                    set: function (v) { g.__applyUrl(String(v)); },
+                    configurable: true
+                });
+                Object.defineProperty(g.document, 'URL', {
+                    get: function () { return g.location.href; }, configurable: true
+                });
+                Object.defineProperty(g.document, 'documentURI', {
+                    get: function () { return g.location.href; }, configurable: true
+                });
+            } catch (e) {}
+        }
         g.__histState = (typeof g.__histState === 'undefined') ? null : g.__histState;
         if (typeof g.history === 'undefined' || typeof g.history.pushState !== 'function') {
             var _len = 1;

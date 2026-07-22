@@ -1028,3 +1028,21 @@ Firefox-153 implementation of this V8-ism. Pinned `stacklimit:no`; it flips WITH
 that carries the capability, never by retuning the probe (the honest-answer≠fixed-answer rule).
 Code that WRITES the property (Sentry, error-reporting SDKs — the common case) works today; only
 code that depends on the cap taking effect sees longer stacks than requested.
+
+## document.location is window.location — and the alias must be an accessor (tick 402)
+
+`window.location` had been a full Location shim for hundreds of ticks; `document.location`
+— which the spec defines as the SAME object — was never aliased, and `history_bindings::
+install` (which carries a native read-only Location) turned out to be dead code: nothing
+outside its own tests calls it. The live BOM surface is the WINDOW_PRELUDE shim, period.
+
+The shape constraint: `__applyUrl` REPLACES `g.location` wholesale on every SPA navigation,
+so `document.location` must be an accessor (`get → g.location`) — a copied reference goes
+stale on the first pushState. Assignment navigates via `__applyUrl` (the legacy redirect
+idiom). `document.URL` and `document.documentURI` are read-only spellings of the live href
+and were ALSO absent. All three in one prelude block; G_DOCUMENT_LOCATION asserts identity,
+the post-pushState swap-tracking, and assignment-navigation. Found as a NAMED console error
+by the t401 re-keyed oracle (okta Identity components die reading document.location.search
+in their async mount). Post-fix: the rejection is gone, okta missing 128→117; total scored
+diffs RISE (523→795) because subtrees that never existed now mount and get scored — the
+instrument seeing more is the fix working, not a regression.
