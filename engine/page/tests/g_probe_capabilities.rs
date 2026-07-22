@@ -117,6 +117,24 @@ const HTML: &str = r##"<!doctype html>
     // ── Container queries: the rule applies only if the container's inline size was resolved.
     probe('containerq', function () { return cs('cq').color.indexOf('1, 2, 3') >= 0; });
 
+    // ── Error.stackTraceLimit (audit #13 watch): the prelude defines the PROPERTY (typeof is
+    // 'number'), but the capability is TRUNCATION — set the limit to 3 and a deep recursion's
+    // .stack must carry at most 3 frames. Measured, not assumed: defining the property without
+    // wiring it is exactly the inert-stub shape the t195 typeof-lies lesson warns about.
+    probe('stacklimit', function () {
+      try {
+        var old = Error.stackTraceLimit;
+        Error.stackTraceLimit = 3;
+        var deep = function (n) { if (n <= 0) { throw new Error('x'); } deep(n - 1); };
+        var frames = -1;
+        try { deep(20); } catch (e) {
+          frames = String(e.stack || '').split('\n').filter(function (l) { return l.length > 0; }).length;
+        }
+        Error.stackTraceLimit = old;
+        return frames >= 1 && frames <= 4;
+      } catch (_) { return false; }
+    });
+
     // ── field-sizing (Baseline June 2026): `content` stands the UA cols-width hint down, so the
     // control hugs its content. Both halves measured: the REFERENCE textarea keeps its ~333px
     // cols width (a broken textarea would fail here, not pass), the field-sized one shrinks.
@@ -269,6 +287,12 @@ const PINNED: &[&str] = &[
     // build cfg-drops the at-rule) make the #cq rule apply only because #cq-outer's resolved
     // inline size (400px) crosses the (min-width: 300px) condition.
     "containerq:yes",
+    // tick 400 — Error.stackTraceLimit: HONEST NO. The prelude defines the property (typeof
+    // 'number' — audit #13's watch), but truncation is NOT wired: our SpiderMonkey predates the
+    // Firefox-153 implementation of this V8-ism, so a limit of 3 does not cap .stack frames.
+    // Measured, pinned as no per the typeof-lies rule; flips to yes WITH a mozjs bump that
+    // carries it, never by retuning the probe.
+    "stacklimit:no",
     // tick 388 — field-sizing: content (Baseline June 2026): recovered from MinimalCascade BEFORE
     // the presentational-hints pass so it can veto the UA cols-width hint; the probe measures the
     // reference textarea keeping its cols width AND the field-sized one hugging content.

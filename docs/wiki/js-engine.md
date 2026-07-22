@@ -1017,3 +1017,14 @@ into a general quadrilateral — its corners are no longer axis-aligned. It comp
 Four `DOMPoint`s (`p1`–`p4`), `DOMQuad.fromRect({x,y,width,height})` (corners clockwise from top-left),
 `fromQuad`, `toJSON`, and `getBounds()` — the axis-aligned `DOMRect` bounding box (min/max over the four
 points), which is the useful reduction after a transform has skewed the corners. [[js-engine]]
+
+## Error.stackTraceLimit — the property is a shim, the behavior is an honest no (tick 400)
+
+Audit #13 flagged it as a one-line probe; the probe (G_PROBE_CAPABILITIES `stacklimit`) measures
+BEHAVIOR — set the limit to 3, recurse 20 deep, count `.stack` frames — because the prelude
+already defines the PROPERTY (`typeof` is `'number'`, event_loop.rs shim) and pinning typeof
+would be the t195 inert-stub lie. Measured: no truncation — our SpiderMonkey predates the
+Firefox-153 implementation of this V8-ism. Pinned `stacklimit:no`; it flips WITH a mozjs bump
+that carries the capability, never by retuning the probe (the honest-answer≠fixed-answer rule).
+Code that WRITES the property (Sentry, error-reporting SDKs — the common case) works today; only
+code that depends on the cap taking effect sees longer stacks than requested.

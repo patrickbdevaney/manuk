@@ -16752,3 +16752,19 @@ falsifiable predictions; [pattern: when a key is computed in two languages, the 
 symmetry contract — and predictions written before the run are what make the run a test]).
 GATES +0. CONSTELLATION: none — instrument-side.
 WIKI: docs/wiki/conformance-and-oracles.md — selector-path keying build spec (tick 399).
+
+## Tick 400 — Error.stackTraceLimit probed to an honest no (2026-07-22)
+
+Audit #13's watch item, taken as a measure-and-pin. The prelude defines the PROPERTY (typeof
+'number') — but per the t195 typeof-lies rule the probe measures BEHAVIOR: limit=3, recurse 20,
+count .stack frames. Measured NO truncation (our SpiderMonkey predates Firefox 153's
+implementation of this V8-ism). Pinned stacklimit:no in G_PROBE_CAPABILITIES with the flip
+condition named (a mozjs bump that carries it — never a probe retune). Error-reporting SDKs
+that WRITE the property (the common case) work today; only cap-dependent code sees longer
+stacks. The watch is answered; the map gains an honest cell instead of a plausible guess.
+
+TICK SHAPE: probe (measure-and-pin; [pattern: when a shim defines the property, probe the
+behavior — a pinned honest no is map data, a pinned typeof is a lie]). GATES
+G_PROBE_CAPABILITIES +1 pinned claim (stacklimit:no = IN the wall). CONSTELLATION: none —
+covered by the audit #13 log + this pin.
+WIKI: docs/wiki/js-engine.md — Error.stackTraceLimit honest no (tick 400).
