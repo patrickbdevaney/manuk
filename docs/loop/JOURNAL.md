@@ -16157,3 +16157,28 @@ finishing on fumes.
 TICK SHAPE: capability-probe (the frontier subsystem measured to its one dead wire + build spec; [probe pattern: read the vendored source, not the docs]). GATES +0 (containerq:no stays the honest pin until the build). [no-pattern]
 CONSTELLATION: app / container queries → note updated (parse ALIVE in stylo servo build; one seam named; build spec recorded).
 WIKI: none — the spec lives in this entry; the wiki entry comes with the build.
+
+## Tick 372 — pagereveal: the MPA lifecycle hook, with the spec's own null (2026-07-22)
+
+Surface-audit #8's unknown, probed and half-built in one tick. Cross-doc View Transitions decompose:
+the @view-transition ANIMATION is a subsystem (not claimed); the LIFECYCLE EVENTS are the bounded
+slice frameworks actually hook — `pagereveal` fires on EVERY page activation per spec, with
+`.viewTransition: null` unless an inbound transition exists. Firing it with null is NOT a stub: null
+is the spec's own value for the no-transition case, and entry-animation code (`document.addEventListener
+('pagereveal', e => ...)`)  runs correctly against it. MEASURED first: pageswap/pagereveal had zero
+occurrences in the tree.
+
+SCOPE: pagereveal lands in `__fireLoad` (our activation coincides with load in a load-then-render
+engine — the spec's "first rendering opportunity after activation"). pageswap is NAMED RESIDUE: it
+fires before navigation-away, and the shell tears pages down without a JS hook today — that pre-nav
+dispatch seam is its own tick. Claims ride g_mse_join (the in-wall JS gate): pr-fired + pr-vt-null.
+RESULT — LANDED. dom_bindings __fireLoad dispatches `pagereveal` (Event + .viewTransition=null) after
+the load dispatch — our activation coincides with load in a load-then-render engine. Claims pr-fired +
+pr-vt-null ride g_mse_join (listener registered during parse observes the activation completing the
+page's own load). RED-PROVEN: dispatch deleted → "must reach pr-fired:true — got: [no pr entries]".
+manuk-shell 70/70 + teardown EXIT 0; fmt clean. Residue named: pageswap (pre-nav seam), the MPA
+animation itself.
+
+TICK SHAPE: capability (the MPA activation hook — entry-animation code on pagereveal now runs, with the spec's own null; [host-native pattern: one dispatch at the lifecycle moment the engine already owns]). GATES claims +2 (pr-fired, pr-vt-null in g_mse_join = IN the wall); constellation cross-doc VT row unknown→partial.
+CONSTELLATION: app / cross-document View Transitions → partial (pagereveal landed; pageswap + animation residue).
+WIKI: docs/wiki/frameworks.md — pagereveal (activation hook, the spec's null, pageswap residue). [no-pattern]

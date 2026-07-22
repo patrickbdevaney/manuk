@@ -163,3 +163,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 369	d7f464e	1784718389	2026-07-22T07:06:29-04:00	852	capability	59	17	133	38	183	81	3896	6960	0	320	0	WAV through the stream seam: the effects/samples class (2026-07-22)
 370	0db4c78	1784718901	2026-07-22T07:15:01-04:00	512	capability	55	11	294	69	183	81	3896	6960	0	320	0	the mixer: two playing elements, one device, both audible (2026-07-22)
 371	c70fc79	1784719173	2026-07-22T07:19:33-04:00	272	capability-probe	57	5	67	34	183	81	3896	6960	0	320	0	container queries probed to the exact dead wire; the build is now specified (2026-07-22)
+372	e447dc5	1784720141	2026-07-22T07:35:41-04:00	968	capability	59	9	92	35	183	81	3896	6960	0	320	0	pagereveal: the MPA lifecycle hook, with the spec's own null (2026-07-22)

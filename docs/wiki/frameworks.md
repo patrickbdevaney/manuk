@@ -224,3 +224,12 @@ then read the text back. Disabling the JS dispatch yields `Clicked 0 times` — 
 stamps a JS property on the node before attaching and requires it after. A framework that re-created
 the node would produce a byte-identical DOM while discarding the server's work and every listener on
 it — indistinguishable by inspection, caught by the stamp.
+
+## pagereveal — the MPA activation hook (tick 372)
+
+`__fireLoad` now dispatches `pagereveal` after `load`, carrying `.viewTransition === null` — the
+spec's OWN value for the no-transition case (the event fires on every page activation, transition
+or not), so entry-animation code hooked on it runs correctly. Not a stub: null is what Chrome
+hands the same listener on a plain navigation. Residue: `pageswap` (fires before navigation-away)
+needs a pre-nav dispatch seam the shell lacks; the `@view-transition` MPA animation itself is a
+subsystem and is not claimed. Claims pr-fired/pr-vt-null ride g_mse_join.

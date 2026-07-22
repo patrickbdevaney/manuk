@@ -620,6 +620,12 @@ mod tests {
   <script>
     var R = {{ a: [], push: function (s) {{ this.a.push(s);
       var o = document.getElementById('out'); if (o) {{ o.textContent = this.a.join(' '); }} }} }};
+    // pagereveal (tick 372): registered DURING parse, so it observes the activation that
+    // completes this page's load — the MPA entry-animation hook.
+    addEventListener('pagereveal', function (e) {{
+      R.push('pr-fired:true');
+      R.push('pr-vt-null:' + (e.viewTransition === null));
+    }});
     var TYPE = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
     var BYTES = new Uint8Array([{bytes_js}]);
     try {{
@@ -691,6 +697,9 @@ mod tests {
             "cpt-opus:true",
             // tick 369: RIFF/WAVE decodes through the stream seam.
             "cpt-wav:true",
+            // tick 372: the MPA activation hook fires once with the spec's no-transition null.
+            "pr-fired:true",
+            "pr-vt-null:true",
             "idl-muted:true",
             "idl-vol:true",
             "open:true",

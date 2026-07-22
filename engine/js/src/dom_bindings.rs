@@ -9664,6 +9664,18 @@ const WINDOW_PRELUDE: &str = r#"
             // `<body onload>` (css-flexbox's checkLayout suite among them). Dispatch once, and only once.
             try { g.dispatchEvent(ev); } catch (e) { g.__reportError && g.__reportError(e); }
             try { document.dispatchEvent(ev); } catch (e) {}
+            // Cross-document View Transitions lifecycle (tick 372): `pagereveal` fires on
+            // EVERY page activation, with `viewTransition: null` unless an inbound cross-doc
+            // transition exists — and none does here (the MPA transition ANIMATION is a named
+            // non-claim). The null is the spec's own no-transition value, not a stub: entry
+            // animations hooked on this event run correctly against it. `pageswap` (fires
+            // before navigation-away) needs a pre-nav dispatch seam the shell lacks — residue.
+            try {
+                var pr;
+                try { pr = new Event('pagereveal'); } catch (e2) { pr = { type: 'pagereveal' }; }
+                pr.viewTransition = null;
+                g.dispatchEvent(pr);
+            } catch (e) {}
             // The document is done — NOW the virtual clock may run ahead. The delayed timers the page
             // armed during load become eligible, in due order, BEHIND the `load` they were always
             // meant to follow. (See `__timeBudget` in event_loop.rs: a clock that outruns the
