@@ -15792,3 +15792,47 @@ TICK SHAPE: capability-probe (measure-and-pin — the Kotlin/Wasm + Dart/Flutter
 measured runnable; [probe pattern: validate the fixture against Chromium BEFORE trusting a no]). GATES +1 pinned claim (wasmgc:yes in G_PROBE_CAPABILITIES); constellation row app/WebAssembly GC unknown→gated.
 CONSTELLATION: app / WebAssembly GC → gated (G_PROBE_CAPABILITIES wasmgc:yes).
 WIKI: none — the probe pattern is already the wiki'd G_PROBE_CAPABILITIES mechanism; the cross-validate-first rule is recorded in the journal + probe comment. [no-pattern]
+
+## Tick 360 — the live media-IDL channel: .muted and .volume reach the device (2026-07-22)
+
+CO-#1 order (2) MEDIA, constellation row 72's remaining named residue: "volume + live .muted IDL (no
+content attribute — needs the JS live-property channel)". Today a player's mute BUTTON does nothing:
+`v.muted = true` writes a dead data property (event_loop.rs "they just do not do anything", honest at
+t264, a lie since t350 gave us sound), and volume sliders likewise. The attribute path (t352) covers
+only markup and setAttribute — real players toggle the IDL property.
+
+HYPOTHESIS: one channel in the proven clipboard/msePublish shape carries live property writes to the
+host — `__mediaProp(nodeId, name, value)` native → thread-local → `Page::take_media_props` (coalesced
+last-per-(node,prop)) → gui drains → `MediaSet::apply_prop`. JS side: volume/muted/playbackRate become
+accessors that store AND publish. Semantics: IDL muted OVERRIDES the attribute once set (the attribute
+is the default, the property is the live state — per spec defaultMuted reflects the attribute);
+volume is a gain multiply in AudioFeed::fill (silent contract untouched: muted still zeroes
+regardless of gain). playbackRate is CARRIED by the channel but NOT applied this tick — the transport
+rate/mastery interplay is its own bounded tick (surface-audit #9 row); until then the property stays
+stored-inert exactly as today, no new claim made.
+
+GATES: the JS half rides g_mse_join (one JS test per shell binary — t354 rule): the script sets
+v.muted=true / v.volume=0.25 and the Rust half asserts take_media_props delivers both, coalesced,
+drain-once. The feed half is a new non-JS shell test G_IDL_FEED: IDL-muted beats attribute in BOTH
+directions, volume 0.25 scales delivered samples exactly (want[i]*0.25), gain never leaks through the
+muted-silence contract.
+RESULT — LANDED. Four layers, each additive: engine/js dom_bindings (__mediaProp native, arity 3,
+validated name whitelist + finite value; PENDING_MEDIA_PROPS thread-local; take_pending_media_props),
+manuk_js::take_media_props (_sm + stub), Page::take_media_props (coalesced last-per-(node,prop)),
+event_loop live accessors (volume clamp 0..1 / muted bool / playbackRate number — store AND publish),
+shell MediaSet (idl_muted/idl_volume maps keyed independently of players — props precede bytes;
+apply_prop; advance override: IDL once set beats the attribute; AudioFeed::set_gain, fill multiplies
+delivered samples only), gui drains take_media_props beside take_mse_media.
+
+RED-PROVEN three ways (each watched fail, restored byte-for-byte, cmp-verified): (1) advance reads
+only the attribute → "the IDL property, once set, is the LIVE state" FAILS (unmute dead on <video
+muted>); (2) gain multiply dropped → sample-exact 0.25 scaling FAILS; (3) the JS publish deleted →
+"v.muted = true must cross the channel — got []" (the exact pre-tick stored-but-silent state).
+
+NO REGRESSION: manuk-shell 67/67 (+1) + teardown 2/2 TWICE EXIT 0; headless lane clean; fmt clean.
+Volume coalescing asserted (0.8 then 0.25 arrives as one 0.25); drain-once asserted; gain never leaks
+through the mute-silence contract at any value.
+
+TICK SHAPE: capability (the live media-IDL channel — mute buttons and volume sliders on real players now do what they say at the device boundary; [host-native pattern: the proven publish-channel shape, one more lane]). GATES +1 (G_IDL_FEED; plus idl-muted/idl-vol claims in g_mse_join — all IN the wall); constellation row 72 residue narrowed to playbackRate-application + mixing + non-AAC.
+CONSTELLATION: media / audio output device → live .muted/.volume landed (G_IDL_FEED).
+WIKI: docs/wiki/media-pipeline.md — Tick 360 live media-IDL channel (accessor publish, IDL-beats-attribute, gain at the device boundary, RED ledger).

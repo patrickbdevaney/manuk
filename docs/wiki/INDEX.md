@@ -634,6 +634,7 @@
   - L1282 · Tick 353 — AV1 decode: re_rav1d behind the M5 trait
   - L1314 · Tick 354 — AV1 ships: the shell lane and the three registries flip together
   - L1337 · Tick 355 — AVIF stills: the hero-image hole, closed in the shell lane
+  - L1357 · Tick 360 — the live media-IDL channel: .muted and .volume reach the device
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -852,4 +853,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-767 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+768 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

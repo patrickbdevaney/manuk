@@ -1353,3 +1353,25 @@ and sniff-false, both watched fail.
 
 Honest residue: alpha (a separate aux AV1 image) renders opaque; 10/12-bit refused;
 `data:`-URL AVIF in headless page loads stays undecoded (the isolation rule cuts both ways).
+
+## Tick 360 — the live media-IDL channel: .muted and .volume reach the device
+
+`v.muted = true` / `v.volume = 0.3` are what a mute button and a volume slider actually execute —
+and they wrote a dead data property while the device played on (honest at t264, a lie since t350).
+One channel in the proven host-queue shape fixes the class: media-element volume/muted/playbackRate
+become publishing ACCESSORS (`__mediaProp(nodeId, name, value)` native → thread-local →
+`Page::take_media_props`, coalesced to the last write per (node, prop) — a dragged slider is one
+gain change, not ten → `MediaSet::apply_prop` in the gui drain).
+
+Semantics pinned by G_IDL_FEED: the IDL property, once set, IS the live state and the `muted`
+attribute is only the default (unmute buttons work on `<video muted>`); `.volume` is a
+device-boundary gain (re-clamped there: >1 clips, negative inverts phase) multiplied into
+delivered samples only — the mute/pause/exhaustion silence contract is upstream of gain and never
+scaled. Props may arrive BEFORE the bytes (players set `.muted` at construction), so overrides
+key by node independently of the player entry. `playbackRate` is carried but deliberately NOT
+applied — its transport/mastery interplay is its own tick; until then the property stays
+stored-inert exactly as before, no new claim.
+
+RED ledger: attribute-always-wins (unmute impossible), gain-multiply dropped (slider moves,
+loudness doesn't), publish deleted (`got []` — the stored-but-silent dead property, the exact
+pre-tick state).

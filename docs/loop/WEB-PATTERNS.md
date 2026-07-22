@@ -3117,3 +3117,19 @@ like any broken JPEG — never a panic on network bytes.
 **The trap:** asserting "an image decoded" without asserting the COLOR — the solid-red fixture
 turns a U/V swap (blue) or a range error (grey wash) into a hard failure instead of a plausible
 picture.
+
+## Live media-IDL properties — the write the player's buttons actually perform (tick 360)
+
+**The class of the web this unlocks:** every player UI's mute button and volume slider — they
+execute `v.muted = true` / `v.volume = 0.3` (the IDL properties), never `setAttribute`. A browser
+that honors only the attribute path renders the controls dead while looking media-complete.
+**(1)** Properties that must REACH the host become publishing accessors over a drained host queue
+(the clipboard/msePublish shape); the host coalesces to the last write per (node, prop) so a
+dragged slider is one gain change. **(2)** Precedence is the spec's: the attribute is the DEFAULT,
+the IDL property once set is the LIVE state — implementing attribute-always-wins makes unmuting a
+`<video muted>` impossible from script, which is every autoplay-then-unmute player. **(3)** Writes
+precede bytes: players set `.muted` at construction, so overrides key by node independently of the
+loaded-media entry. **(4)** Gain applies to DELIVERED samples only — the silence contract
+(mute/pause/exhaustion writes zeros) is upstream of gain, or a "quiet leak" ships.
+**The trap:** a stored-but-silent property reads back correctly forever (`v.muted === true`) while
+doing nothing — only asserting the host-side drain catches it ("got []").

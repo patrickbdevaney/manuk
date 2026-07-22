@@ -45,6 +45,13 @@ pub struct MediaSet {
     /// `None` is a decode that was tried and FAILED — see the module note on why that is recorded
     /// rather than forgotten.
     players: HashMap<NodeId, Option<Entry>>,
+    /// Live `.muted` IDL overrides (tick 360). `Some` means the page SET the property, and from
+    /// that moment the property — not the attribute — is the live state (the attribute is the
+    /// default, per the defaultMuted split). Keyed independently of `players` because a player
+    /// script routinely sets `.muted` BEFORE the media bytes arrive.
+    idl_muted: HashMap<NodeId, bool>,
+    /// Live `.volume` IDL values 0..1 (tick 360), same arrival-order independence.
+    idl_volume: HashMap<NodeId, f32>,
 }
 
 /// A decoded video and **the frame the page was last actually given**.
@@ -78,6 +85,8 @@ impl MediaSet {
     /// exists, and a stale entry would hand the *next* page's node the previous page's video.
     pub fn clear(&mut self) {
         self.players.clear();
+        self.idl_muted.clear();
+        self.idl_volume.clear();
     }
 
     /// Has this element already been given its bytes — successfully or not?
@@ -194,6 +203,39 @@ impl MediaSet {
         true
     }
 
+    /// A live media-IDL property write (tick 360): the channel end the mute button and volume
+    /// slider land on. Values are stored keyed by node (they may precede the bytes) and applied
+    /// to a live feed immediately when one exists. `playbackRate` is accepted and DROPPED here,
+    /// deliberately: its transport/mastery interplay is its own tick, and until the host applies
+    /// it the JS property stays a stored number exactly as before — no new claim.
+    pub fn apply_prop(&mut self, node: NodeId, prop: &str, value: f64) {
+        match prop {
+            "muted" => {
+                let m = value != 0.0;
+                self.idl_muted.insert(node, m);
+                if let Some(Some(e)) = self.players.get(&node) {
+                    if let Some(a) = e.audio.as_ref() {
+                        if let Ok(mut f) = a.lock() {
+                            f.set_muted(m);
+                        }
+                    }
+                }
+            }
+            "volume" => {
+                let g = value.clamp(0.0, 1.0) as f32;
+                self.idl_volume.insert(node, g);
+                if let Some(Some(e)) = self.players.get(&node) {
+                    if let Some(a) = e.audio.as_ref() {
+                        if let Ok(mut f) = a.lock() {
+                            f.set_gain(g);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// The element's audio feed, if its stream decoded one. The GUI hands this to [`AudioOut`]
     /// once; navigation clears the set and the device with it.
     ///
@@ -272,13 +314,22 @@ impl MediaSet {
             // quiet everywhere else. The feed consumes silently rather than pausing (see the
             // `AudioFeed::muted` field note), which is what keeps it a valid sync master.
             if let Some(a) = entry.audio.as_ref() {
-                let muted = page
-                    .dom()
-                    .element(node)
-                    .map(|e| e.attr("muted").is_some())
-                    .unwrap_or(false);
+                // The IDL property, once set, IS the live state (tick 360); the attribute is
+                // the default it falls back to. Both re-derived per frame so either side's
+                // change lands on the next advance.
+                let muted = match self.idl_muted.get(&node) {
+                    Some(&m) => m,
+                    None => page
+                        .dom()
+                        .element(node)
+                        .map(|e| e.attr("muted").is_some())
+                        .unwrap_or(false),
+                };
                 if let Ok(mut f) = a.lock() {
                     f.set_muted(muted);
+                    if let Some(&g) = self.idl_volume.get(&node) {
+                        f.set_gain(g);
+                    }
                 }
             }
             let clock = match (master, entry.audio.as_ref()) {
@@ -510,6 +561,14 @@ mod tests {
       R.push('mse-av1:' + MediaSource.isTypeSupported('video/mp4; codecs="av01.0.00M.08"'));
       R.push('cpt-av1:' + (document.getElementById('v').canPlayType('video/mp4; codecs="av01.0.00M.08"') === 'probably'));
       R.push('cpt-webm:' + (document.getElementById('v').canPlayType('video/webm; codecs="av01.0.00M.08"') === ''));
+      // Live media-IDL channel (tick 360): the writes a mute button / volume slider perform.
+      // Two writes to volume so the host-side coalescing (last per prop) is observable.
+      var vv = document.getElementById('v');
+      vv.muted = true;
+      vv.volume = 0.8;
+      vv.volume = 0.25;
+      R.push('idl-muted:' + (vv.muted === true));
+      R.push('idl-vol:' + (vv.volume === 0.25));
       var v = document.getElementById('v');
       var ms = new MediaSource();
       ms.addEventListener('sourceopen', function () {{
@@ -548,6 +607,8 @@ mod tests {
             "mse-av1:true",
             "cpt-av1:true",
             "cpt-webm:true",
+            "idl-muted:true",
+            "idl-vol:true",
             "open:true",
             "appended:true",
             "buffered:true",
@@ -557,6 +618,33 @@ mod tests {
                 "MSE dance must reach `{claim}` — got: {record}"
             );
         }
+
+        // ── The live media-IDL channel (tick 360): both writes crossed, volume COALESCED to
+        //    the last value, and a drain is a drain.
+        let props = page.take_media_props();
+        let video_node = manuk_css::query_selector_all(page.dom(), root, "video")[0];
+        assert!(
+            props
+                .iter()
+                .any(|(n, p, v)| *n == video_node && p == "muted" && *v == 1.0),
+            "v.muted = true must cross the channel — got {props:?}"
+        );
+        assert!(
+            props
+                .iter()
+                .any(|(n, p, v)| *n == video_node && p == "volume" && *v == 0.25),
+            "v.volume must arrive COALESCED to the last write (0.25, not 0.8) — got {props:?}"
+        );
+        assert_eq!(
+            props.len(),
+            2,
+            "exactly the two coalesced props — a slider dragged across frames must not deliver \
+             every intermediate value: {props:?}"
+        );
+        assert!(
+            page.take_media_props().is_empty(),
+            "a drain is a DRAIN — the same writes must not be redelivered every frame"
+        );
 
         // ── The stream crossed to the host, named for the right element, byte for byte.
         let streams = page.take_mse_media();
@@ -1002,6 +1090,94 @@ mod tests {
             painted(&page),
             "a decoded AVIF must change what is PAINTED — the hero-image hole, closed"
         );
+    }
+
+    /// # G_IDL_FEED — live `.muted`/`.volume` writes land on the device feed (tick 360)
+    ///
+    /// The other end of the `__mediaProp` channel: `MediaSet::apply_prop` must make the write
+    /// REAL at the device boundary, with the spec's precedence — the IDL property, once set, is
+    /// the live state and the `muted` attribute is only the default it falls back to.
+    ///
+    /// ## How each claim goes RED
+    ///
+    /// - **IDL beats the attribute** — drop the `idl_muted` lookup in `advance` (always read the
+    ///   attribute): unmuting via the player's button becomes impossible on any `<video muted>`.
+    /// - **volume scales the samples** — drop the gain multiply in `AudioFeed::fill`: the slider
+    ///   moves, the loudness does not.
+    /// - **gain never leaks through mute** — asserted by running it: a muted fill is zeros at
+    ///   ANY gain.
+    #[test]
+    fn g_idl_feed() {
+        const TWO: &str = r#"<!doctype html><html><body>
+            <video id="q" muted src="quiet.mp4"></video>
+            <video id="l" src="loud.mp4"></video>
+          </body></html>"#;
+        let fonts = manuk_text::FontContext::new();
+        let mut page = manuk_page::Page::load(TWO, "https://video.test/", &fonts, 800.0);
+        let wanted = page.pending_media_urls();
+        let node_of = |suffix: &str| {
+            wanted
+                .iter()
+                .find(|(_, u)| u.ends_with(suffix))
+                .map(|(n, _)| *n)
+                .unwrap()
+        };
+        let (attr_muted, plain) = (node_of("quiet.mp4"), node_of("loud.mp4"));
+
+        let mut set = MediaSet::new();
+        // ── A prop that arrives BEFORE the bytes (players set .muted at construction).
+        set.apply_prop(plain, "muted", 1.0);
+        assert!(set.load(attr_muted, AV) && set.load(plain, AV));
+        set.advance(0.0, &mut page, None);
+
+        let qf = set.audio_feed(attr_muted).unwrap();
+        let lf = set.audio_feed(plain).unwrap();
+        assert!(
+            lf.lock().unwrap().is_muted(),
+            "an IDL mute set BEFORE the media loaded must still land on the feed"
+        );
+
+        // ── IDL beats the attribute in the unmute direction: .muted = false on <video muted>.
+        set.apply_prop(attr_muted, "muted", 0.0);
+        set.advance(0.0, &mut page, None);
+        assert!(
+            !qf.lock().unwrap().is_muted(),
+            "the IDL property, once set, is the LIVE state — the muted attribute is only the \
+             default. A player's unmute button is dead on every <video muted> otherwise."
+        );
+
+        // ── Volume scales the delivered samples exactly; the position accounting is unchanged.
+        let movie = manuk_media::demux(AV).unwrap();
+        let want = manuk_media::decode_track(movie.audio().unwrap(), AV)
+            .unwrap()
+            .samples;
+        set.apply_prop(attr_muted, "volume", 0.25);
+        set.advance(0.0, &mut page, None);
+        {
+            let mut f = qf.lock().unwrap();
+            let mut buf = vec![f32::NAN; 512];
+            assert_eq!(f.fill(&mut buf), 512);
+            for (i, (&got, &raw)) in buf.iter().zip(want.iter()).enumerate() {
+                assert!(
+                    (got - raw * 0.25).abs() < 1e-6,
+                    "volume 0.25 must scale sample {i} exactly: got {got}, want {}",
+                    raw * 0.25
+                );
+            }
+        }
+
+        // ── Gain never leaks through the mute-silence contract.
+        set.apply_prop(attr_muted, "muted", 1.0);
+        set.advance(0.0, &mut page, None);
+        {
+            let mut f = qf.lock().unwrap();
+            let mut buf = [f32::NAN; 128];
+            assert!(f.fill(&mut buf) > 0, "muted still consumes (t352)");
+            assert!(
+                buf.iter().all(|&s| s == 0.0),
+                "a muted fill is ZEROS at any gain — a gain-scaled leak is still a leak"
+            );
+        }
     }
 
     /// **What the viewer would actually see** — the page is painted and the rendered canvas is

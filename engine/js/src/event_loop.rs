@@ -2801,8 +2801,34 @@ const PRELUDE: &str = r#"
         ro('videoWidth', 0);
         ro('videoHeight', 0);
 
-        // Writable, because scripts set them and expect them to stick. They just do not do anything.
-        el.volume = 1; el.muted = false; el.playbackRate = 1;
+        // Live accessors (tick 360): they stick AND they reach the host. `v.muted = true` /
+        // `v.volume = 0.3` are what a player's mute button and volume slider execute — the
+        // attribute path never sees them. Published via __mediaProp; getters return the stored
+        // value so read-back semantics are unchanged. playbackRate is carried on the channel but
+        // not yet applied host-side (its transport/mastery interplay is its own tick).
+        (function () {
+          var live = { volume: 1, muted: false, playbackRate: 1 };
+          var defineLive = function (name, coerce) {
+            Object.defineProperty(el, name, {
+              configurable: true,
+              get: function () { return live[name]; },
+              set: function (v) {
+                live[name] = coerce(v);
+                if (typeof __mediaProp === 'function' && el.__nodeId != null) {
+                  __mediaProp(String(el.__nodeId), name, Number(live[name]));
+                }
+              }
+            });
+          };
+          defineLive('volume', function (v) {
+            var n = Number(v); if (n !== n) { n = 1; }
+            return n < 0 ? 0 : (n > 1 ? 1 : n);
+          });
+          defineLive('muted', function (v) { return !!v; });
+          defineLive('playbackRate', function (v) {
+            var n = Number(v); return n === n ? n : 1;
+          });
+        })();
         // `currentTime` is NOT a plain data property, because it is the CLOCK the caption timeline
         // runs on. Storing the number and telling nobody is what made `cuechange` unreachable: a
         // page can only learn that the caption changed by being told, and the only thing that knows

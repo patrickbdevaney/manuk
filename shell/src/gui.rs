@@ -1469,6 +1469,14 @@ impl App {
                     self.needs_paint = true;
                 }
             }
+            // Live media-IDL writes (tick 360): the mute button / volume slider channel.
+            let props = match self.page.as_mut() {
+                Some(p) => p.take_media_props(),
+                None => Vec::new(),
+            };
+            for (node, prop, value) in props {
+                self.media.apply_prop(node, &prop, value);
+            }
         }
         if self.media.is_empty() {
             return;

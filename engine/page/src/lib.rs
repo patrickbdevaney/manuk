@@ -2143,6 +2143,29 @@ impl Page {
         Vec::new()
     }
 
+    /// Live media-IDL property writes since the last drain (tick 360): `(node, prop, value)`,
+    /// coalesced to the LAST write per (node, prop) — a slider dragged across ten frames is one
+    /// gain change, not ten. "muted" is 0/1, "volume" 0..1, "playbackRate" a rate.
+    #[cfg(feature = "spidermonkey")]
+    pub fn take_media_props(&mut self) -> Vec<(manuk_dom::NodeId, String, f64)> {
+        if self.js.is_none() {
+            return Vec::new();
+        }
+        let mut last: std::collections::HashMap<(u64, String), f64> =
+            std::collections::HashMap::new();
+        for (node, prop, value) in manuk_js::take_media_props() {
+            last.insert((node, prop), value); // oldest-first drain: the final write wins
+        }
+        last.into_iter()
+            .map(|((n, p), v)| (manuk_dom::NodeId(n), p, v))
+            .collect()
+    }
+
+    #[cfg(not(feature = "spidermonkey"))]
+    pub fn take_media_props(&mut self) -> Vec<(manuk_dom::NodeId, String, f64)> {
+        Vec::new()
+    }
+
     /// **The images this page still wants** — resolved URLs, distinct, none already resolved.
     ///
     /// Cheap: a DOM walk, no network. The point is that it can be taken on the UI thread, handed to a

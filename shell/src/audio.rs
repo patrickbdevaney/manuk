@@ -44,6 +44,10 @@ pub struct AudioFeed {
     /// copies and `seek_seconds` rounds to a frame boundary.
     cursor: usize,
     playing: bool,
+    /// Linear gain 0..1 (tick 360) — the `.volume` IDL property's landing point. Applied to
+    /// the samples actually delivered; the muted/paused/exhausted silence contract is UPSTREAM
+    /// of gain and never scaled (zeros times anything must stay written zeros).
+    gain: f32,
     /// **Mute is silent CONSUMPTION, never pause** (tick 352). A muted `fill` advances the
     /// cursor exactly as an audible one and zeros the buffer — so the device clock keeps
     /// running (the A/V mastery rule still governs while muted) and unmute is seamless and IN
@@ -63,6 +67,7 @@ impl AudioFeed {
             sample_rate: pcm.sample_rate,
             cursor: 0,
             playing: true,
+            gain: 1.0,
             muted: false,
         }
     }
@@ -81,6 +86,11 @@ impl AudioFeed {
             out.fill(0.0);
         } else {
             out[..n].copy_from_slice(&self.samples[self.cursor..self.cursor + n]);
+            if self.gain != 1.0 {
+                for s in &mut out[..n] {
+                    *s *= self.gain;
+                }
+            }
             out[n..].fill(0.0);
         }
         self.cursor += n;
@@ -93,6 +103,16 @@ impl AudioFeed {
 
     pub fn is_playing(&self) -> bool {
         self.playing
+    }
+
+    /// `.volume` — clamped to 0..1; the page-side accessor clamps too, but the device boundary
+    /// re-clamps because a gain above 1 CLIPS and a negative gain inverts phase.
+    pub fn set_gain(&mut self, gain: f32) {
+        self.gain = gain.clamp(0.0, 1.0);
+    }
+
+    pub fn gain(&self) -> f32 {
+        self.gain
     }
 
     pub fn set_muted(&mut self, muted: bool) {

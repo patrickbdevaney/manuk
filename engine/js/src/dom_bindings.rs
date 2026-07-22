@@ -2743,6 +2743,28 @@ unsafe fn mse_demux(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
 /// The FULL stream is published each time rather than a delta because a fragmented-MP4 decoder
 /// needs the init segment plus every fragment so far as one contiguous buffer; the host coalesces
 /// to the last entry per node before decoding.
+/// `__mediaProp(nodeId, name, value)` — a live media-IDL property write crossing to the host.
+///
+/// The channel row 72 named (tick 360): `v.muted = true` / `v.volume = 0.3` are what a player's
+/// mute button and volume slider actually execute, and until this they wrote a dead data property
+/// while the device played on. Same drain shape as every host queue here: JS pushes, the host
+/// takes, oldest-first so the last write per property wins.
+unsafe fn media_prop(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let node: u64 = arg_string(cx, vp, argc, 0)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    let name = arg_string(cx, vp, argc, 1).unwrap_or_default();
+    let value = arg_f64(cx, vp, argc, 2).unwrap_or(f64::NAN);
+    if node != 0
+        && value.is_finite()
+        && matches!(name.as_str(), "muted" | "volume" | "playbackRate")
+    {
+        PENDING_MEDIA_PROPS.with(|q| q.borrow_mut().push((node, name, value)));
+    }
+    *vp = UndefinedValue();
+    true
+}
+
 unsafe fn mse_publish(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let node: u64 = arg_string(cx, vp, argc, 0)
         .and_then(|s| s.parse().ok())
@@ -7651,6 +7673,14 @@ pub unsafe fn install(
         c"__msePublish".as_ptr(),
         host_fn!(mse_publish),
         2,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__mediaProp".as_ptr(),
+        host_fn!(media_prop),
+        3,
         0,
     );
     JS_DefineFunction(
@@ -13233,6 +13263,11 @@ thread_local! {
     /// drains costs one decode, not one per append.
     static PENDING_MSE_STREAMS: std::cell::RefCell<Vec<(u64, Vec<u8>)>> =
         const { std::cell::RefCell::new(Vec::new()) };
+    /// Live media-IDL property writes since the last drain: `(node_id, prop, value)` where prop is
+    /// "muted" (0/1), "volume" (0..1) or "playbackRate". The write every player's mute button and
+    /// volume slider actually performs — the attribute path (tick 352) never sees it.
+    static PENDING_MEDIA_PROPS: std::cell::RefCell<Vec<(u64, String, f64)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
     /// Text-control selection state per `<input>`/`<textarea>`: `(start, end, direction)` in UTF-16
     /// code units, `direction` 0=none 1=forward 2=backward. `setSelectionRange`/`select` write it,
     /// `selectionStart`/`selectionEnd`/`selectionDirection` read it. A form/editor reads these to know
@@ -13277,6 +13312,12 @@ pub fn take_pending_messages() -> Vec<(u64, String, String, u64)> {
 /// SourceBuffer's FULL accumulated byte-stream at that append — the host keeps the last per node.
 pub fn take_pending_mse_streams() -> Vec<(u64, Vec<u8>)> {
     PENDING_MSE_STREAMS.with(|q| std::mem::take(&mut *q.borrow_mut()))
+}
+
+/// Live media-IDL property writes since the last drain, `(node_id, prop, value)`, oldest first —
+/// the host applies them in order (the last write per property wins, as it would in the page).
+pub fn take_pending_media_props() -> Vec<(u64, String, f64)> {
+    PENDING_MEDIA_PROPS.with(|q| std::mem::take(&mut *q.borrow_mut()))
 }
 
 /// `window.open(url, ...)` — allocate a window id, record `(win_id, url)` for the host to open

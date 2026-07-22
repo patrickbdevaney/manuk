@@ -524,6 +524,18 @@ pub fn take_mse_streams() -> Vec<(u64, Vec<u8>)> {
     Vec::new()
 }
 
+/// Live media-IDL property writes since the last drain, `(node_id, prop, value)`, oldest first —
+/// "muted" (0/1), "volume" (0..1), "playbackRate". The mute-button/volume-slider channel.
+#[cfg(feature = "_sm")]
+pub fn take_media_props() -> Vec<(u64, String, f64)> {
+    dom_bindings::take_pending_media_props()
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn take_media_props() -> Vec<(u64, String, f64)> {
+    Vec::new()
+}
+
 /// Seed the OS-clipboard text the page may READ via `navigator.clipboard.readText()`/`read()`. The
 /// host sets this to the real OS-clipboard contents (including text copied in another app) so paste
 /// works. No-op without the JS feature.
