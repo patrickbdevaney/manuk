@@ -631,6 +631,14 @@ pub fn cascade_via_stylo_sized(
             cs.list_style_type = m.list_style_type;
             cs.list_style_inside = m.list_style_inside;
         }
+        // Resolve logical `text-align: start`/`end` to physical now that `direction` is final — layout
+        // only understands left/center/right/justify. Done here, per node, because direction was just
+        // recovered above; in LTR `start`→left (no change), in RTL `start`→right, which is what an
+        // unstyled Arabic/Hebrew/Persian paragraph (initial value `start`) must do. Runs even when the
+        // node had no MinimalCascade entry, so `Start`/`End` never leak to layout.
+        cs.text_align = cs
+            .text_align
+            .resolve_physical(cs.direction == crate::Direction::Rtl);
     }
 
     // CSS `opacity` forms a group: it applies to the whole SUBTREE. Fold each element's own opacity
@@ -1705,6 +1713,39 @@ mod tests {
             "(display:flex) { } @supports (display:flex)"
         ));
         assert!(!supports_condition("}"));
+    }
+
+    /// `text-align: start` (the INITIAL value) and `end` resolve to physical left/right against the
+    /// element's `direction`. The map hard-wired `end`→right and `start`→left, so an RTL paragraph —
+    /// the whole Arabic/Hebrew/Persian web — left-aligned its body text instead of right-aligning.
+    ///
+    /// RED, run: delete the `resolve_physical` line in `cascade_via_stylo_sized` (or revert
+    /// `map_text_align` to `End=>Right, _=>Left`). The `dir=rtl` default reads `Left`, not `Right`.
+    #[test]
+    fn text_align_start_and_end_resolve_against_direction() {
+        let dom = manuk_html::parse(
+            r#"<p id="l">a</p><p id="r" dir="rtl">ب</p><p id="re" dir="rtl" style="text-align:end">ب</p><p id="rl" dir="rtl" style="text-align:left">ب</p>"#,
+        );
+        let sheet = Stylesheet::parse("");
+        let map = cascade_via_stylo(&dom, std::slice::from_ref(&sheet), 800.0, 600.0);
+        let id = |v: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(v))
+                .unwrap()
+        };
+        use crate::TextAlign as A;
+        // LTR default: initial `start` → left.
+        assert_eq!(map[&id("l")].text_align, A::Left, "LTR start→left");
+        // RTL default: initial `start` → RIGHT — the fix.
+        assert_eq!(map[&id("r")].text_align, A::Right, "RTL start→right");
+        // `text-align:end` in RTL → left.
+        assert_eq!(map[&id("re")].text_align, A::Left, "RTL end→left");
+        // An explicit PHYSICAL `left` is honoured even in RTL (not logical).
+        assert_eq!(
+            map[&id("rl")].text_align,
+            A::Left,
+            "explicit physical left stays left in RTL"
+        );
     }
 
     /// `content: attr(name)` in a `::before`/`::after` resolves to the element's live attribute

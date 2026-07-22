@@ -157,6 +157,37 @@ pub enum TextAlign {
     Center,
     Right,
     Justify,
+    /// `start` (the INITIAL value) / `end` — LOGICAL alignments that resolve to left/right against the
+    /// element's `direction`. Kept distinct so the cascade can resolve them once direction is known
+    /// (the shipping path recovers direction from MinimalCascade *after* the Stylo map runs); they are
+    /// resolved to a physical value before layout ever sees them, so `start` right-aligns an RTL
+    /// paragraph — the default for the entire Arabic/Hebrew/Persian web.
+    Start,
+    End,
+}
+
+impl TextAlign {
+    /// Resolve a logical `start`/`end` to a physical `Left`/`Right` against `rtl`; physical values
+    /// (and `Justify`) pass through unchanged. `start` is left in LTR and right in RTL.
+    pub fn resolve_physical(self, rtl: bool) -> TextAlign {
+        match self {
+            TextAlign::Start => {
+                if rtl {
+                    TextAlign::Right
+                } else {
+                    TextAlign::Left
+                }
+            }
+            TextAlign::End => {
+                if rtl {
+                    TextAlign::Left
+                } else {
+                    TextAlign::Right
+                }
+            }
+            other => other,
+        }
+    }
 }
 
 /// `text-overflow` — how inline content that is clipped by its box is signalled. `clip` (the initial
@@ -3309,6 +3340,8 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 "center" => TextAlign::Center,
                 "right" => TextAlign::Right,
                 "justify" => TextAlign::Justify,
+                "start" => TextAlign::Start,
+                "end" => TextAlign::End,
                 _ => TextAlign::Left,
             }
         }

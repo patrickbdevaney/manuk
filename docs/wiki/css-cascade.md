@@ -783,3 +783,23 @@ changes the probe from initial). Gate: `fieldsizing` in G_PROBE_CAPABILITIES mea
 RED-proven: recovery wire severed → fieldsizing:no. RESIDUE: the MinimalCascade-only (headless
 fallback) path keeps its fixed 180×48 textarea default — its UA sizes are set before author rules
 and there is no post-author hint phase there; the LIVE path is Stylo.
+
+## `text-align: start`/`end` are LOGICAL — resolve them against direction, or the RTL web left-aligns (tick 414)
+
+`text-align`'s initial value is `start`, and `start`/`end` are logical: they resolve to physical left/
+right against the element's `direction` (`start` = left in LTR, **right in RTL**). `map_text_align`
+mapped Stylo's `End`→`Right` unconditionally and `Start`→`Left` via the catch-all, so an RTL paragraph
+with no explicit alignment — which is nearly every Arabic, Hebrew and Persian body paragraph — LEFT-
+aligned, and `text-align:end` in RTL aligned right (both backwards).
+
+The catch is ORDERING: `direction` is not known when `map_text_align` runs (the shipping path recovers
+direction from MinimalCascade *after* the Stylo map produces the ComputedStyle). So the map now keeps
+`start`/`end` as the logical `TextAlign::Start`/`End`, and `cascade_via_stylo_sized` resolves them per
+node — via `TextAlign::resolve_physical(rtl)` — immediately after `cs.direction` is recovered. Layout
+and `getComputedStyle` therefore still only ever see physical left/center/right/justify; the logical
+variants never leak past the cascade. LTR is unchanged (`start`→left); RTL now right-aligns by default.
+The resolution runs for every node (even those with no MinimalCascade entry). Gated by
+`text_align_start_and_end_resolve_against_direction`, RED-proven (force `rtl=false` → the `dir=rtl`
+default reads `Left`). Residue: `justify`'s last-line alignment does not yet follow direction; the
+pure-MinimalCascade fallback path parses `start`/`end` but does not resolve them (it is not the shipping
+cascade).

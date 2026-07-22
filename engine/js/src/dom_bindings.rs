@@ -615,6 +615,10 @@ fn computed_style_js(cs: &manuk_css::ComputedStyle, rect: Option<[f32; 4]>) -> S
         TextAlign::Center => "center",
         TextAlign::Right => "right",
         TextAlign::Justify => "justify",
+        // The shipping cascade resolves logical→physical before layout/here; these are the honest
+        // computed-value strings should an unresolved value ever reach getComputedStyle.
+        TextAlign::Start => "start",
+        TextAlign::End => "end",
     };
     // The computed `font-family` list, joined (its first entry is the primary).
     let family = cs.font_family.join(", ");

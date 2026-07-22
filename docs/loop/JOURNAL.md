@@ -17085,3 +17085,26 @@ trailing-whitespace hanging at a wrap boundary not specially modelled.
 TICK SHAPE: capability (pre-wrap space preservation; +1 gate). GATES +1.
 CONSTELLATION: none (white-space already worked; this is the pre-wrap correctness split).
 WIKI: text-layout.md — "white-space: pre-wrap PRESERVES spaces; pre-line COLLAPSES them — they shared one path".
+
+## Tick 414 — text-align: start/end resolve against direction — the RTL web right-aligns (2026-07-22)
+
+HYPOTHESIS (winning vein, 7th — this one MEDIUM): direction/RTL is carried to paint, but
+map_text_align mapped Stylo's logical End→Right unconditionally and Start→Left via the catch-all.
+Since text-align's INITIAL value is `start` (logical: left in LTR, RIGHT in RTL), every RTL
+paragraph with no explicit alignment — nearly the whole Arabic/Hebrew/Persian web — LEFT-aligned
+its body text, and text-align:end in RTL aligned right (both backwards).
+
+FIX: the ordering trap is that direction is unknown when map_text_align runs (recovered from
+MinimalCascade AFTER the Stylo map). So added TextAlign::Start/End (logical), map keeps them
+logical, and cascade_via_stylo_sized resolves them per node via TextAlign::resolve_physical(rtl)
+right after cs.direction is recovered — so layout and getComputedStyle only ever see physical
+left/center/right/justify; the logical variants never leak past the cascade. LTR unchanged
+(start→left). Hand parser + getComputedStyle arms added for completeness. Gated by
+text_align_start_and_end_resolve_against_direction; RED-proven (force rtl=false → dir=rtl default
+reads Left). manuk-css 39/39, manuk-layout 86/86, manuk-js builds — no regression. Residue:
+justify last-line direction and full bidi character REORDERING are separate (larger) work; the
+pure-MinimalCascade fallback parses start/end but does not resolve them (not the shipping cascade).
+
+TICK SHAPE: capability (logical text-align resolution against direction; RTL alignment; +1 gate). GATES +1.
+CONSTELLATION: RTL alignment deepened (direction was carried to paint; now text-align honours it).
+WIKI: css-cascade.md — "text-align: start/end are LOGICAL — resolve them against direction, or the RTL web left-aligns".

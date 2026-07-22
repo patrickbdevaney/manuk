@@ -204,3 +204,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 410	5250fc3	1784756995	2026-07-22T17:49:55-04:00	975	map-maintenance	59	8	160	60	187	81	3896	6960	0	323	31	map honesty: record the 408/409 flips before they rot into re-discovery (2026-07-22)
 411	61622ce	1784758339	2026-07-22T18:12:19-04:00	1344	capability	57	8	107	36	187	81	3896	6960	0	324	31	list ordinals follow reversed + value-continuation, not the sibling index (2026-07-22)
 412	8a666df	1784759802	2026-07-22T18:36:42-04:00	1463	capability	55	8	178	37	187	81	3896	6960	0	325	31	text-transform: capitalize titlecases the first LETTER, not the first char (2026-07-22)
+413	201f1dd	1784761653	2026-07-22T19:07:33-04:00	1851	capability	58	11	167	36	187	81	3896	6960	0	326	31	white-space: pre-wrap PRESERVES spaces (it shared pre-line's collapse path) (2026-07-22)

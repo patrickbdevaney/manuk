@@ -163,10 +163,17 @@ fn map_display(d: StyloDisplay) -> Display {
 
 fn map_text_align(t: StyloTextAlign) -> TextAlign {
     match t {
-        StyloTextAlign::Right | StyloTextAlign::End | StyloTextAlign::MozRight => TextAlign::Right,
+        // `start`/`end` are LOGICAL and stay logical here: direction is not yet known at map time
+        // (it is recovered from MinimalCascade after this runs), so the cascade resolves them to a
+        // physical value once it has the direction. Mapping `End` straight to `Right` — as this did —
+        // right-aligned an RTL paragraph's *end* (which is the LEFT) and left-aligned its default
+        // `start` text, so the whole Arabic/Hebrew/Persian web read left-aligned.
+        StyloTextAlign::Start => TextAlign::Start,
+        StyloTextAlign::End => TextAlign::End,
+        StyloTextAlign::Right | StyloTextAlign::MozRight => TextAlign::Right,
         StyloTextAlign::Center | StyloTextAlign::MozCenter => TextAlign::Center,
         StyloTextAlign::Justify => TextAlign::Justify,
-        // Start/Left/End-in-LTR/MozLeft → left.
+        // Left / MozLeft → left.
         _ => TextAlign::Left,
     }
 }

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **205** | ticks 1–412 |
-| median tick cycle | **18m** | 204 intervals |
-| median, last 10 | **16m** | 10 intervals |
+| ticks landed | **206** | ticks 1–413 |
+| median tick cycle | **18m** | 205 intervals |
+| median, last 10 | **19m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.73** | 277.6h elapsed |
-| median verify wall | **59s** | 144 ticks |
+| **ticks per hour** | **0.74** | 278.1h elapsed |
+| median verify wall | **59s** | 145 ticks |
 | wall trend | 39s → 57s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **187**
-* **✅ rows in the capability ledger**: 144 → **325**
+* **✅ rows in the capability ledger**: 144 → **326**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**109 of 205 ticks** (53%) moved a
+**110 of 206 ticks** (53%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **109** capability ticks, median cycle **18m**
+* **110** capability ticks, median cycle **18m**
 * median diff per tick: **+210 / −34** lines across 8 files
 
 ## Every tick
@@ -302,5 +302,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **410** | 2026-07-22 17:49 | 16m | map-maintenance | 59s | +160/−60 | 187 | 81 | 56.0% · | map honesty: record the 408/409 flips before they rot into re-discovery (2026-07-22) |
 | **411** | 2026-07-22 18:12 | 22m | capability | 57s | +107/−36 | 187 | 81 | 56.0% · | list ordinals follow reversed + value-continuation, not the sibling index (2026-07-22) |
 | **412** | 2026-07-22 18:36 | 24m | capability | 55s | +178/−37 | 187 | 81 | 56.0% · | text-transform: capitalize titlecases the first LETTER, not the first char (2026-07-22) |
+| **413** | 2026-07-22 19:07 | 31m | capability | 58s | +167/−36 | 187 | 81 | 56.0% · | white-space: pre-wrap PRESERVES spaces (it shared pre-line's collapse path) (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
