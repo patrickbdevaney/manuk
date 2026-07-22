@@ -4032,9 +4032,68 @@ impl Ctx<'_> {
                     cs.overflow_wrap,
                     manuk_css::OverflowWrap::BreakWord | manuk_css::OverflowWrap::Anywhere
                 ) || cs.word_break == manuk_css::WordBreak::BreakAll;
-                // `pre-wrap` / `pre-line` preserve newlines but still wrap long lines: break at each
-                // newline, then split the line into words as usual.
-                if matches!(cs.white_space, WhiteSpace::PreWrap | WhiteSpace::PreLine) {
+                // `pre-wrap` PRESERVES every space (unlike `pre-line`, which collapses runs): each
+                // maximal whitespace run becomes its own measured token, so N spaces stay N spaces
+                // and leading indentation survives, while a soft wrap can still fall between tokens.
+                // This is the rendering `<textarea>` (pre-wrap by UA default) and every "preformatted
+                // but still wrapping" block depend on — collapsing them, as the shared pre-line path
+                // did, silently reflows code samples and aligned text into a single-spaced blob.
+                if cs.white_space == WhiteSpace::PreWrap {
+                    for (i, line) in t.split('\n').enumerate() {
+                        if i > 0 {
+                            out.push(InlineItem::Break {
+                                height: style.line_height,
+                                node: owner,
+                            });
+                            *pending_space = false;
+                            *first = true;
+                        }
+                        let mut run = String::new();
+                        let mut run_ws = false;
+                        // Emit the run built so far, whitespace verbatim (its own token) or a word.
+                        macro_rules! flush_run {
+                            () => {
+                                if !run.is_empty() {
+                                    if run_ws {
+                                        out.push(InlineItem::Word {
+                                            text: std::mem::take(&mut run),
+                                            style,
+                                            space_before: false,
+                                            node: owner,
+                                            no_wrap: false,
+                                            break_word: false,
+                                        });
+                                        *first = false;
+                                    } else {
+                                        push_word(
+                                            out,
+                                            &mut run,
+                                            style,
+                                            pending_space,
+                                            first,
+                                            owner,
+                                            false,
+                                            break_word,
+                                        );
+                                    }
+                                }
+                            };
+                        }
+                        for ch in line.chars() {
+                            let ws = ch.is_whitespace();
+                            if !run.is_empty() && ws != run_ws {
+                                flush_run!();
+                            }
+                            run_ws = ws;
+                            run.push(ch);
+                        }
+                        flush_run!();
+                    }
+                    return;
+                }
+                // `pre-line` preserves newlines but COLLAPSES runs of spaces, and still wraps long
+                // lines: break at each newline, then split the line into words as usual.
+                if cs.white_space == WhiteSpace::PreLine {
                     for (i, line) in t.split('\n').enumerate() {
                         if i > 0 {
                             out.push(InlineItem::Break {
@@ -6759,6 +6818,44 @@ mod tests {
         assert!(
             dom.text_content(n).contains("home"),
             "text-transform must NOT mutate the DOM text (JS reads the author's casing)"
+        );
+    }
+
+    /// `white-space: pre-wrap` PRESERVES runs of spaces (and leading indentation); `pre-line`
+    /// COLLAPSES them. The two shared one code path that collapsed, so pre-wrap silently reflowed
+    /// `<textarea>` content and aligned/preformatted-but-wrapping text into a single-spaced blob.
+    ///
+    /// RED, run: fold pre-wrap back onto the pre-line collapse path. The pre-wrap render loses its
+    /// extra spaces and reads `a b`, not `a   b`.
+    fn joined_inline_text(root: &LayoutBox) -> String {
+        let mut s = String::new();
+        root.walk(&mut |b| {
+            if let BoxContent::Inline(frags) = &b.content {
+                for f in &*frags {
+                    s.push_str(&f.text);
+                }
+            }
+        });
+        s
+    }
+
+    #[test]
+    fn pre_wrap_preserves_spaces_while_pre_line_collapses() {
+        let (_d1, pw) = layout_html("<p style=\"white-space:pre-wrap\">a   b</p>", "", 400.0);
+        assert!(
+            joined_inline_text(&pw).contains("a   b"),
+            "pre-wrap must preserve the three spaces (got {:?})",
+            joined_inline_text(&pw)
+        );
+
+        let (_d2, pl) = layout_html("<p style=\"white-space:pre-line\">a   b</p>", "", 400.0);
+        // pre-line's single inter-word space is a positional GAP (`space_before`), not glyph text,
+        // so its joined fragment text is "ab": the collapsed run leaves no spaces IN the text, which
+        // is exactly the pre-wrap↔pre-line contrast — pre-wrap emits the run as measured tokens.
+        let plt = joined_inline_text(&pl);
+        assert_eq!(
+            plt, "ab",
+            "pre-line collapses the run to a gap, emitting no space glyphs (got {plt:?})"
         );
     }
 

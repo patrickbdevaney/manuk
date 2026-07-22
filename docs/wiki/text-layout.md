@@ -774,3 +774,22 @@ pass through untouched and the flag survives until the first alphabetic char, wh
 only then clears the flag. Word boundaries stay whitespace-delimited (the documented common-case
 approximation of UAX #29). Gated by `capitalize_skips_leading_punctuation_and_digits`, RED-proven
 (restore the flag clear → `(hello) World`, not `(Hello) World`).
+
+## `white-space: pre-wrap` PRESERVES spaces; `pre-line` COLLAPSES them — they shared one path (tick 413)
+
+`pre-wrap` and `pre-line` were folded onto a single branch that, within each line, split on whitespace
+into words separated by a single positional gap — i.e. it **collapsed runs of spaces**. That is right
+for `pre-line` (preserve newlines, collapse spaces, wrap) and **wrong** for `pre-wrap`, whose defining
+behaviour is that every space is significant (preserve newlines AND spaces, still wrap). So a
+`<textarea>` (pre-wrap by UA default), an aligned ASCII table, or any "preformatted but still wrapping"
+block reflowed into a single-spaced blob — the indentation and column alignment silently gone.
+
+The inline model carries a space as a boolean `space_before` gap, not glyph text, so it cannot express
+"three spaces" that way. The fix splits `pre-wrap` onto its own branch that emits each **maximal
+whitespace run as its own measured `Word` token** (`space_before: false`, since the space is now
+explicit), interleaved with the word tokens. N spaces stay N spaces, leading indentation survives, and
+a soft wrap can still fall between tokens. `pre-line` keeps the collapse loop unchanged; `pre`, `normal`
+and `nowrap` are untouched, so the blast radius is pre-wrap only. Gated by
+`pre_wrap_preserves_spaces_while_pre_line_collapses`, RED-proven (route pre-wrap back through collapse →
+`a   b` renders `ab`). Residue: trailing-whitespace *hanging* at a wrap boundary (pre-wrap lets trailing
+spaces overflow rather than force a wrap) is not specially modelled — the run measures as a normal token.

@@ -17063,3 +17063,25 @@ not "(Hello) World"). manuk-layout 85/85, no regression.
 TICK SHAPE: capability (text-transform capitalize word-boundary correctness; +1 gate). GATES +1.
 CONSTELLATION: none (text-transform already worked; this is a correctness edge).
 WIKI: text-layout.md — "text-transform: capitalize titlecases the first LETTER of a word, not the first character".
+
+## Tick 413 — white-space: pre-wrap PRESERVES spaces (it shared pre-line's collapse path) (2026-07-22)
+
+HYPOTHESIS (winning vein, 6th): white-space is otherwise complete (Normal/Pre/PreWrap/PreLine/
+NoWrap, Stylo-mapped, newlines preserved). But pre-wrap and pre-line were folded onto ONE branch
+that split each line on whitespace into words with a single positional gap — COLLAPSING runs of
+spaces. Right for pre-line; wrong for pre-wrap, whose defining behaviour is that every space is
+significant. So a <textarea> (pre-wrap by UA default), an aligned ASCII table, or any
+preformatted-but-wrapping block reflowed into a single-spaced blob — indentation/alignment gone.
+
+FIX: the inline model carries a space as a boolean space_before GAP, not glyph text, so it can't
+express "three spaces" that way. Split pre-wrap onto its own branch emitting each maximal
+whitespace run as its own measured Word token (space_before:false — the space is now explicit),
+interleaved with word tokens. N spaces stay N, leading indentation survives, soft wrap still falls
+between tokens. pre-line keeps the collapse loop; pre/normal/nowrap untouched — blast radius is
+pre-wrap only. Gated by pre_wrap_preserves_spaces_while_pre_line_collapses; RED-proven (route
+pre-wrap back through collapse → "a   b" renders "ab"). manuk-layout 86/86, no regression. Residue:
+trailing-whitespace hanging at a wrap boundary not specially modelled.
+
+TICK SHAPE: capability (pre-wrap space preservation; +1 gate). GATES +1.
+CONSTELLATION: none (white-space already worked; this is the pre-wrap correctness split).
+WIKI: text-layout.md — "white-space: pre-wrap PRESERVES spaces; pre-line COLLAPSES them — they shared one path".

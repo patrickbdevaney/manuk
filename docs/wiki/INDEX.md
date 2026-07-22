@@ -856,6 +856,7 @@
   - L728 · Measured effect
   - L744 · The synthetic fragments that were riding on line_height
   - L764 · text-transform: capitalize titlecases the first LETTER of a word, not the first character (tick 412)
+  - L778 · white-space: pre-wrap PRESERVES spaces; pre-line COLLAPSES them — they shared one path (tick 413)
 
 ## The wasm demo — running the engine inside someone else's browser
 `docs/wiki/wasm-demo.md`
@@ -883,4 +884,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-798 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+799 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
