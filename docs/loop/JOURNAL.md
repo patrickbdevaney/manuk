@@ -14926,3 +14926,44 @@ header so status-update.sh derives LAST_CONSTITUTION_CHECK). Next check due tick
 TICK SHAPE: constitution-check (the horizon/anchor face — looks UP at the vision, not the local gradient;
 no engine change, no scoreboard move by design). GATES +0.
 WIKI: none — a cadence/governance check, not a capability; it touches no rendered construct.
+
+## Tick 335 — SHAPE scoring: the differential oracle stops charging one offset N times (2026-07-21)
+
+CO-#1 (observer tick 328 STEP-2 (1)): the fidelity-instrument rebuild per FIDELITY-SCORING-REDESIGN.md
+is THE Phase-0 exit instrument and outranks any single capability tick. This lands its Layer-1 core —
+parent-relative SHAPE scoring — in the agent-editable `manuk-wpt` differential oracle (tests/wpt/src/
+oracle.rs), NOT in scripts/ (observer-owned).
+
+THE BUG THE INSTRUMENT HAD: `diff_page` compared ABSOLUTE boxes (`m.rect[i] - c.rect[i]`). One ancestor
+placed 23px too low drags its whole subtree 23px, and every descendant then reads as its OWN `geometry`
+divergence — the exact amplification behind the first sweep's `PLACE(ok) 4.5%`. microsoft.com: 23px
+median dy, ZERO elements in tolerance — a tight spread AROUND 23px, i.e. one constant offset counted once
+per element. A page shifted 23px is not jarring to a user; it scored 0%. The metric measured absolute
+document position when Phase 0's bar is "a user does not notice they left Chromium."
+
+THE FIX: score each element's box relative to the nearest ancestor present in BOTH engines
+(`oracle::common_frame`): `rel = (child.x - frame.x, child.y - frame.y, w, h)`. A purely inherited
+translation cancels (both engines measure the child against the SAME frame, so a constant offset in that
+frame drops out of the difference); only the element where the offset ORIGINATES has a wrong shape and is
+reported; the subtree below collapses from N divergences to 0. The keys already encode ancestry for free —
+they are `tag[i]/tag[i]/…` paths, so an ancestor's key is a prefix of its descendants' and walking up is
+`rfind('/')`; "present in both maps" is a plain `HashMap::get`. Width/height are translation-invariant, so
+they stay absolute.
+
+RED-PROVEN (cp-snapshot restored + re-verified GREEN): reverting `diff_page` to absolute diffing made
+`oracle::tests::shape_scoring_suppresses_inherited_offset_keeps_real_bug` FAIL at "an inherited offset is
+not an independent bug" — the two pure inheritors (`body[0]/div[0]`, `.../span[0]`) reappear as bugs. The
+fixture is a uniform +23px page shift plus ONE genuinely misshapen box (`div[1]`, 73px too high within its
+parent + 50px too wide): the shape gate reports exactly the origin (`body[0]`) and the real bug, count 2.
+A second test pins `common_frame` (nearest shared ancestor, skips an absent level, None at the root).
+
+NO REGRESSION: additive to the oracle probe (a measurement instrument, off the per-tick verify wall — the
+oracle command is not a verify.sh gate); `diff_page` signature unchanged so main.rs is untouched; the
+`missing`/`display` arms are untouched; `manuk-wpt` builds clean, 2 new tests + the 10 existing wpt lib
+tests green. RED edit reverted byte-for-byte. fmt clean.
+
+TICK SHAPE: infrastructure (the oracle is named as infrastructure by the pre-commit hook itself — Part 21;
+this multiplies every future fidelity read by making the Phase-0 exit number honest; no website-capability
+change, hence [no-pattern]). GATES +0 (a probe, not a runtime gate); tests +2.
+CONSTELLATION: no row — this is the measuring instrument, not a rendered construct.
+WIKI: docs/wiki/conformance-and-oracles.md (new "Score geometry PARENT-RELATIVE (SHAPE)" section).

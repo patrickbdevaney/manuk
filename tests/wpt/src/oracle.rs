@@ -38,6 +38,16 @@
 //!   * **First divergence** — the first element down the page where geometry breaks. Everything
 //!     below it is a consequence, not a cause; reporting the consequences as separate bugs is how
 //!     a diff becomes a firehose.
+//!
+//! ## Geometry is scored parent-relative, not absolute (SHAPE)
+//!
+//! An earlier version diffed **absolute** boxes, which charged one root cause N times: an ancestor
+//! placed 23px too low drags its whole subtree, and every descendant then reads as its own geometry
+//! bug — the exact amplification that made a 23px constant offset look like a long tail. Geometry is
+//! now scored as **SHAPE**: each element's box relative to the nearest ancestor present in both
+//! engines (`common_frame`). A purely inherited translation cancels; only the element where the
+//! offset *originates* has a wrong shape and is reported. A page uniformly shifted 23px — which a
+//! user does not perceive as broken — collapses from one divergence per element to one, total.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -144,12 +154,31 @@ pub fn diff_page(
                     });
                     continue;
                 }
-                let d = [
-                    m.rect[0] - c.rect[0],
-                    m.rect[1] - c.rect[1],
-                    m.rect[2] - c.rect[2],
-                    m.rect[3] - c.rect[3],
-                ];
+                // **SHAPE (parent-relative) scoring — the Layer-1 gate.** Absolute-position diffing
+                // charges one root cause N times: an ancestor placed 23px too low drags its entire
+                // subtree 23px, and every descendant then reads as its own "geometry" bug. But the
+                // descendants' *shape* — their box **relative to a shared ancestor frame** — is
+                // correct; only the ancestor where the offset originates has a genuinely wrong shape.
+                // Score each element against the nearest ancestor present in BOTH engines: a purely
+                // inherited translation cancels, and the divergence is reported ONCE, at its origin.
+                // A page uniformly shifted 23px (not jarring to a user) now yields ONE divergence at
+                // the shifted element, not one per element below it.
+                let d = match common_frame(id, chrome, manuk) {
+                    Some((cf, mf)) => [
+                        (c.rect[0] - cf.rect[0]) - (m.rect[0] - mf.rect[0]), // x within parent frame
+                        (c.rect[1] - cf.rect[1]) - (m.rect[1] - mf.rect[1]), // y within parent frame
+                        m.rect[2] - c.rect[2], // width is translation-invariant
+                        m.rect[3] - c.rect[3], // height is translation-invariant
+                    ],
+                    // No common ancestor (a root-level element) — nothing to subtract, so the
+                    // absolute delta *is* the shape delta. This is the offset's origin.
+                    None => [
+                        m.rect[0] - c.rect[0],
+                        m.rect[1] - c.rect[1],
+                        m.rect[2] - c.rect[2],
+                        m.rect[3] - c.rect[3],
+                    ],
+                };
                 if d.iter().any(|v| v.abs() > tol) {
                     out.push(Divergence {
                         site: site.into(),
@@ -184,6 +213,30 @@ fn display_agrees(chrome: &str, manuk: &str) -> bool {
         }
     }
     norm(chrome) == norm(manuk)
+}
+
+/// The nearest ancestor of `path` present in **both** engine maps — the reference frame for
+/// parent-relative (SHAPE) scoring. Keys are `tag[i]/tag[i]/…` from the root, so an ancestor's key
+/// is a prefix of its descendants'; dropping the last `/component` walks up one level. Returns the
+/// (chrome, manuk) boxes of the closest such ancestor, or `None` for a root-level element (no `/`),
+/// where there is nothing to subtract and the absolute position is itself the shape.
+///
+/// Requiring the frame to exist in **both** maps is what makes a purely inherited translation
+/// cancel: both engines measure the child against the *same* ancestor, so a constant offset present
+/// in that ancestor drops out of the difference.
+fn common_frame<'a>(
+    path: &str,
+    chrome: &'a HashMap<String, Seen>,
+    manuk: &'a HashMap<String, Seen>,
+) -> Option<(&'a Seen, &'a Seen)> {
+    let mut p = path;
+    while let Some(cut) = p.rfind('/') {
+        p = &p[..cut];
+        if let (Some(c), Some(m)) = (chrome.get(p), manuk.get(p)) {
+            return Some((c, m));
+        }
+    }
+    None
 }
 
 /// **Cluster the firehose into root causes**, ranked by how many distinct sites each explains.
@@ -265,4 +318,97 @@ pub fn report(clusters: &[Cluster], sites: usize, skipped: usize) {
          that breaks forty elements of a single site. This ordering is the priority ledger\n\
          (METHODOLOGY Part 4) — no judgement required.\n"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn seen(tag: &str, rect: [i64; 4]) -> Seen {
+        Seen {
+            tag: tag.into(),
+            display: "block".into(),
+            rect,
+        }
+    }
+
+    /// **The Layer-1 SHAPE gate, and its RED proof.** A page uniformly shifted 23px down: the
+    /// `<body>` is the origin (its own box is 23px wrong), every descendant merely inherits the
+    /// translation, and one genuinely misshapen box (`div[1]`, 73px too high *within its parent* and
+    /// 50px too wide) is a real bug.
+    ///
+    /// Parent-relative scoring must report exactly the origin and the real bug — NOT the pure
+    /// inheritors. Reverting `diff_page` to absolute-box diffing (`m.rect[i] - c.rect[i]`) makes the
+    /// two inheritors reappear and this assertion fail, which is what makes it a ratchet tooth.
+    #[test]
+    fn shape_scoring_suppresses_inherited_offset_keeps_real_bug() {
+        let tol = 8;
+        // Chrome — the ground truth.
+        let mut chrome: HashMap<String, Seen> = HashMap::new();
+        chrome.insert("body[0]".into(), seen("body", [0, 0, 1000, 2000]));
+        chrome.insert("body[0]/div[0]".into(), seen("div", [0, 100, 1000, 500]));
+        chrome.insert(
+            "body[0]/div[0]/span[0]".into(),
+            seen("span", [0, 150, 200, 20]),
+        );
+        chrome.insert("body[0]/div[1]".into(), seen("div", [0, 700, 1000, 300]));
+
+        // Manuk — everything shifted +23px in y (a constant page offset), EXCEPT div[1], which is a
+        // genuine shape bug: 50px too high relative to body, and 50px too wide.
+        let mut manuk: HashMap<String, Seen> = HashMap::new();
+        manuk.insert("body[0]".into(), seen("body", [0, 23, 1000, 2000]));
+        manuk.insert("body[0]/div[0]".into(), seen("div", [0, 123, 1000, 500]));
+        manuk.insert(
+            "body[0]/div[0]/span[0]".into(),
+            seen("span", [0, 173, 200, 20]),
+        );
+        // div[1]: body-relative y is 650-23=627 vs Chrome's 700 (−73px), width 1050 vs 1000 (+50px).
+        manuk.insert("body[0]/div[1]".into(), seen("div", [0, 650, 1050, 300]));
+
+        let divs = diff_page("t", &chrome, &manuk, tol);
+        let ids: std::collections::BTreeSet<&str> = divs.iter().map(|d| d.id.as_str()).collect();
+
+        // The origin (its own box is wrong: no common frame, absolute delta = shape delta = 23px).
+        assert!(
+            ids.contains("body[0]"),
+            "origin of the offset must be reported"
+        );
+        // The genuine misshapen box.
+        assert!(
+            ids.contains("body[0]/div[1]"),
+            "a box wrong relative to its parent must be reported"
+        );
+        // The pure inheritors — correct SHAPE, only inherited translation — must NOT be reported.
+        assert!(
+            !ids.contains("body[0]/div[0]"),
+            "an inherited offset is not an independent bug"
+        );
+        assert!(
+            !ids.contains("body[0]/div[0]/span[0]"),
+            "a deep inheritor is not an independent bug"
+        );
+        assert_eq!(
+            divs.len(),
+            2,
+            "exactly the origin and the real bug, nothing amplified"
+        );
+    }
+
+    /// `common_frame` walks to the nearest ancestor **present in both** maps, skipping any absent
+    /// intermediate level, and yields `None` at the root.
+    #[test]
+    fn common_frame_finds_nearest_shared_ancestor() {
+        let mut chrome: HashMap<String, Seen> = HashMap::new();
+        let mut manuk: HashMap<String, Seen> = HashMap::new();
+        chrome.insert("body[0]".into(), seen("body", [0, 0, 10, 10]));
+        manuk.insert("body[0]".into(), seen("body", [0, 5, 10, 10]));
+        // "body[0]/div[0]" is absent from both — the walk must skip it and land on "body[0]".
+        let f = common_frame("body[0]/div[0]/span[0]", &chrome, &manuk);
+        assert!(f.is_some(), "must fall back to the nearest shared ancestor");
+        assert_eq!(f.unwrap().0.rect, [0, 0, 10, 10]);
+        assert!(
+            common_frame("body[0]", &chrome, &manuk).is_none(),
+            "a root-level element has no frame to subtract"
+        );
+    }
 }

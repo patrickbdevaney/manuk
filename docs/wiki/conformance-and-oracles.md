@@ -151,6 +151,34 @@ property/selector implicated. **Then rank by how many DISTINCT SITES each cluste
 the total) means the node EXISTS, at the same SIZE, in a different place.** The real Bar 1 number was
 **92.2%**.
 
+## Score geometry PARENT-RELATIVE (SHAPE), never against the document origin (tick 335)
+
+The same amplification bites a second way, and it is subtler than tag-name ranking. The first
+category-stratified sweep read `PLACE(ok) 4.5%` against a ≥75% bar and looked like a Presto-style tail of
+hundreds of independent layout bugs. It was **one bug counted N times.** microsoft.com had a **23px median
+dy with zero elements in tolerance** — a *tight* spread *around* 23px, i.e. nearly every element off by the
+**same** amount. One ancestor placed 23px too low drags its entire subtree 23px, and absolute-position
+diffing then charges each descendant with its own `geometry` divergence. **A page shifted 23px is not
+jarring to a user; it scored 0%.** The metric measured *absolute document position* when Phase 0's bar is
+*"a user does not notice they left Chromium."*
+
+The fix is to score each element's box **relative to the nearest ancestor present in both engines**
+(`oracle::common_frame`), not to the page origin: `rel = (child.x − frame.x, child.y − frame.y, w, h)`. A
+purely inherited translation **cancels** — both engines measure the child against the *same* frame, so a
+constant offset in that frame drops out of the difference. Only the element where the offset **originates**
+has a wrong shape and is reported; the whole subtree below it collapses from N divergences to zero. The
+element keys already encode this for free: they are `tag[i]/tag[i]/…` paths from the root, so an ancestor's
+key is a prefix of its descendants' — walking up is `rfind('/')`, and the "present in both maps" test is a
+plain `HashMap::get`. Width and height are translation-invariant, so they stay absolute. **RED proof:**
+revert `diff_page` to `m.rect[i] − c.rect[i]` and the synthetic "uniform 23px shift + one genuinely
+misshapen box" fixture reports the two pure inheritors as bugs again
+(`oracle::tests::shape_scoring_suppresses_inherited_offset_keeps_real_bug`).
+
+> **Absolute-position parity is NEVER the gate — it is the layer that produced the misleading 4.5%.** SHAPE
+> is the Layer-1 gate; the jarring invariants (overlap / clipping / reading-order / hittability /
+> post-load-stability) are Layer 2; pixel diffing stays a diagnostic on a small corpus only.
+> (`docs/loop/FIDELITY-SCORING-REDESIGN.md`.)
+
 ## Gates must run the SHIPPING configuration
 
 The parity harness **defaulted to the simple cascade while the shell shipped Stylo** — so parity, fidelity
