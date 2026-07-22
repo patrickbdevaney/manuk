@@ -3229,3 +3229,19 @@ request time; the owner's application overwrites with the clamped truth, so out-
 over-report only transiently — the trade real browsers make invisible by clamping synchronously.
 **The trap:** "immediate resolve is truthful because the operation is instant" — instant for the
 OWNER is not instant for the OBSERVER when the operation crosses a request boundary.
+
+## Container queries — the rung-3 source supplement + sized re-pass (tick 379)
+
+**The class of the web this unlocks:** component-responsive layout — design-system components
+(cards, navs, sidebars) that restyle by their CONTAINER's inline size, not the viewport. The
+dominant post-2023 CSS architecture; every major design system ships @container rules, and a
+browser that drops the block wholesale renders their narrow-container variants wrong everywhere.
+**(1)** When a vendor engine cfg-drops a feature (compile-time, not a pref), rung 3 is: lift the
+blocks from raw sheet source and hand the pieces to the vendor's own PUBLIC parsers — never
+hand-parse the grammar (`ContainerCondition::parse` + `Stylesheet::from_str`, the :has()
+precedent upgraded).
+**(2)** Size-dependent style needs a re-pass: cascade → layout → re-cascade with pass-1 sizes →
+re-layout, with container-gated rules held OFF on the unsized pass — unknown must never style, so
+feature-detect fallbacks stay honest.
+**The trap:** re-wrapping lifted blocks without their ENCLOSING @media/@supports/@layer preludes
+silently un-gates them.

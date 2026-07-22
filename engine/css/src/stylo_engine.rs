@@ -47,9 +47,10 @@ use stylo::properties::{ComputedValues, PropertyDeclarationBlock};
 use stylo::queries::values::PrefersColorScheme;
 use stylo::servo_arc::Arc as ServoArc;
 use stylo::shared_lock::{SharedRwLock, SharedRwLockReadGuard, StylesheetGuards};
+use stylo::stylesheets::container_rule::ContainerCondition;
 use stylo::stylesheets::{
-    AllowImportRules, CssRule, CssRuleType, CustomMediaEvaluator, DocumentStyleSheet, Origin,
-    Stylesheet as StyloStylesheet, UrlExtraData,
+    AllowImportRules, CssRule, CssRuleType, CustomMediaEvaluator, DocumentStyleSheet, Namespaces,
+    Origin, Stylesheet as StyloStylesheet, UrlExtraData,
 };
 use stylo::stylist::Stylist;
 use stylo::values::computed::font::GenericFontFamily;
@@ -291,10 +292,30 @@ code, kbd, samp { font-family: monospace; }
 /// [`ComputedStyle`], inheriting from each element's parent. This is what gives real
 /// `var()` / `@media` / full-selector / `font-family` computation.
 pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> StyleMap {
+    cascade_via_stylo_sized(dom, sheets, vw, vh, None)
+}
+
+/// [`cascade_via_stylo`] with the previous layout pass's per-node **content-box** sizes, which
+/// is what makes `@container` rules live: conditions are evaluated per element against its
+/// nearest ancestor container (Stylo's own `ContainerCondition::matches`, driven through our
+/// `TElement::query_container_size`). Without sizes (`None` — every first pass), container-gated
+/// rules stay off: a container query answered before layout has run would be a guess, and the
+/// spec's own model is query-after-container-layout.
+pub fn cascade_via_stylo_sized(
+    dom: &Dom,
+    sheets: &[Stylesheet],
+    vw: f32,
+    vh: f32,
+    container_sizes: Option<std::collections::HashMap<NodeId, (f32, f32)>>,
+) -> StyleMap {
     // Stylo's `grid_enabled()` reads `layout.grid.enabled` (off by default under the `servo`
     // feature), which makes it drop `display:grid` at parse time. Flip it on once so grid
     // containers cascade. Idempotent + cheap; safe to call every cascade.
     stylo_static_prefs::set_pref!("layout.grid.enabled", true);
+    // Same shape for container queries: `container-type`/`container-name` are dropped at parse
+    // time unless this pref is on (the `@container` RULE parses regardless — which is how tick
+    // 371's probe saw parse alive while the property silently vanished).
+    stylo_static_prefs::set_pref!("layout.container-queries.enabled", true);
     // **The parser's verdict, read off the `Dom` it already handed us.** Everything below that used to
     // say `QuirksMode::NoQuirks` unconditionally now says `qm`. Stylo already implements the quirks
     // themselves (unitless lengths, case-insensitive id/class matching, the `<font size>` table) — this
@@ -339,7 +360,22 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
     }
 
     CASCADES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let store = ElementDataStore::new();
+    let mut store = ElementDataStore::new();
+    // The sized re-pass: install the laid-out sizes and pre-create every element's data cell,
+    // because Stylo's container lookup reads each ANCESTOR's `borrow_data()` primary style to
+    // filter by `container-type`/`container-name` — the preorder walk below fills the styles in
+    // before any descendant queries them. On the unsized pass none of this is needed (container
+    // rules are held off wholesale), so non-container pages pay nothing.
+    let cq_active = container_sizes.is_some();
+    if let Some(sizes) = container_sizes {
+        store.set_container_sizes(sizes);
+        for n in dom.flat_descendants(dom.root()) {
+            if dom.is_element(n) {
+                store.ensure(n);
+            }
+        }
+    }
+    let store = store;
     let guard = lock.read();
     let guards = StylesheetGuards::same(&guard);
 
@@ -353,7 +389,13 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
     // A measurement must never be able to break the thing it measures.
     #[cfg(not(target_arch = "wasm32"))]
     let _ti = std::time::Instant::now();
-    let index = RuleIndex::build(&stylo_sheets, &guard, stylist.device(), qm);
+    let mut index = RuleIndex::build(&stylo_sheets, &guard, stylist.device(), qm);
+    {
+        // The `@container` supplement — author sheets only (the UA sheet has none).
+        let author: Vec<&Stylesheet> = sheets.iter().collect();
+        index.add_container_supplement(&author, &lock, &url_data, &guard, stylist.device(), qm);
+    }
+    let index = index;
     #[cfg(not(target_arch = "wasm32"))]
     tracing::debug!(
         ms = _ti.elapsed().as_millis(),
@@ -409,6 +451,7 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
             node,
             &parent_cv,
             dom,
+            cq_active,
         );
         // **`rem` is root-relative.** The device carries the root font size that every `rem` in the
         // document resolves against, and it starts at the initial 16px. Unless it is updated once
@@ -449,6 +492,15 @@ pub fn cascade_via_stylo(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> 
         )
         .map(Box::new);
         map.insert(node, cs);
+        // On the sized re-pass, publish this element's ComputedValues into Stylo's own data cell:
+        // that is where `ContainerCondition::matches` reads an ancestor's `container-type`/`-name`
+        // from when a descendant's `@container` rule is evaluated (preorder ⇒ ancestors are
+        // published before any descendant asks).
+        if cq_active {
+            if let Some(mut d) = store.borrow_mut(node) {
+                d.styles.primary = Some(cv.clone());
+            }
+        }
         parent_cv.insert(node, cv);
     }
 
@@ -825,6 +877,12 @@ struct IndexedRule {
     spec: u32,
     order: usize,
     block: ServoArc<stylo::shared_lock::Locked<PropertyDeclarationBlock>>,
+    /// The `@container` condition levels this rule is nested under, outermost first — empty for
+    /// the vast majority. Unlike `@media` (device-scoped, resolved once at index build), a
+    /// container condition is **per-element**: it must be evaluated at match time against the
+    /// matching element's nearest ancestor container. Nesting levels AND together; the comma
+    /// list inside one level ORs (Stylo's own `container_condition_matches` semantics).
+    cq: Vec<ServoArc<Vec<ContainerCondition>>>,
 }
 
 impl RuleIndex {
@@ -842,9 +900,10 @@ impl RuleIndex {
             universal: Vec::new(),
         };
         let mut order = 0usize;
+        let mut cq_stack: Vec<ServoArc<Vec<ContainerCondition>>> = Vec::new();
         for sheet in sheets {
             let rules = sheet.contents.read_with(guard).rules(guard);
-            idx.add_rules(rules, guard, device, &mut order, qm);
+            idx.add_rules(rules, guard, device, &mut order, qm, &mut cq_stack);
         }
         idx
     }
@@ -856,6 +915,7 @@ impl RuleIndex {
         device: &Device,
         order: &mut usize,
         qm: QuirksMode,
+        cq_stack: &mut Vec<ServoArc<Vec<ContainerCondition>>>,
     ) {
         use selectors::parser::Component;
         for rule in rules {
@@ -886,6 +946,7 @@ impl RuleIndex {
                             spec: sel.specificity(),
                             order: *order,
                             block: sr.block.clone(),
+                            cq: cq_stack.clone(),
                         });
                         match key {
                             Some((0, v)) => self.by_id.entry(v).or_default().push(i),
@@ -917,7 +978,7 @@ impl RuleIndex {
                     // whether the rules it indexed were all the rules there were.
                     if let Some(nested) = &sr.rules {
                         let nested = nested.read_with(guard);
-                        self.add_rules(&nested.0, guard, device, order, qm);
+                        self.add_rules(&nested.0, guard, device, order, qm, cq_stack);
                     }
                 }
                 CssRule::Media(media_rule) => {
@@ -925,19 +986,25 @@ impl RuleIndex {
                     let mut custom = CustomMediaEvaluator::none();
                     if ml.evaluate(device, qm, &mut custom) {
                         let nested = media_rule.rules.read_with(guard);
-                        self.add_rules(&nested.0, guard, device, order, qm);
+                        self.add_rules(&nested.0, guard, device, order, qm, cq_stack);
                     }
                 }
                 CssRule::Supports(supports_rule) => {
                     if supports_rule.enabled {
                         let nested = supports_rule.rules.read_with(guard);
-                        self.add_rules(&nested.0, guard, device, order, qm);
+                        self.add_rules(&nested.0, guard, device, order, qm, cq_stack);
                     }
                 }
                 CssRule::LayerBlock(layer) => {
                     let nested = layer.rules.read_with(guard);
-                    self.add_rules(&nested.0, guard, device, order, qm);
+                    self.add_rules(&nested.0, guard, device, order, qm, cq_stack);
                 }
+                // `CssRule::Container` never appears here: stylo's servo build parses the
+                // `@container` at-rule only under `cfg!(feature = "gecko")` (rule_parser.rs), so
+                // the whole block is dropped as an unknown at-rule. The supplement that recovers
+                // them is `add_container_supplement` — it lifts the blocks from the sheet SOURCE,
+                // parses conditions with Stylo's own public parser, and calls back into
+                // `add_rules` with the condition stack.
                 _ => {}
             }
         }
@@ -969,6 +1036,197 @@ impl RuleIndex {
         }
         // Source order, so the `(specificity, order)` sort downstream is stable and correct.
         out.sort_unstable();
+    }
+}
+
+/// A `@container` block lifted from raw sheet source: every enclosing `@container` prelude plus
+/// its own (outermost first), the enclosing conditional at-rule preludes to re-wrap the body in
+/// (so their gates still apply), and the body source itself.
+struct CqBlock {
+    cq_preludes: Vec<String>,
+    wrappers: Vec<String>,
+    body: String,
+}
+
+/// Find every `@container` block in `src` — comment- and string-aware, tracking the prelude of
+/// each enclosing `{}` so a block nested in `@media`/`@supports`/`@layer` keeps those gates and
+/// a block nested in another `@container` stacks both conditions.
+///
+/// This scanner exists because stylo's servo build parses the `@container` AT-RULE only under
+/// `cfg!(feature = "gecko")` (rule_parser.rs) — a compile-time cfg, not a pref, so the whole
+/// block is discarded as an unknown at-rule before the cascade ever sees it. The ladder's rung 3
+/// (supplement) applies: the conditions and bodies are handed back to Stylo's own PUBLIC parsers
+/// (`ContainerCondition::parse`, `Stylesheet::from_str`) — no grammar of our own.
+///
+/// A `@container` nested inside a STYLE rule (CSS nesting with `&`) is skipped: its inner
+/// selectors are relative to the enclosing rule and would match wrongly if re-parsed standalone.
+/// Named residue, not silent — the block simply stays off, which is the pre-supplement state.
+fn extract_container_blocks(src: &str) -> Vec<CqBlock> {
+    let b = src.as_bytes();
+    let mut out = Vec::new();
+    // (prelude, body_start) for every open `{`.
+    let mut stack: Vec<(String, usize)> = Vec::new();
+    let mut seg_start = 0usize;
+    let mut i = 0usize;
+    while i < b.len() {
+        match b[i] {
+            b'/' if i + 1 < b.len() && b[i + 1] == b'*' => {
+                let mut j = i + 2;
+                while j + 1 < b.len() && !(b[j] == b'*' && b[j + 1] == b'/') {
+                    j += 1;
+                }
+                i = (j + 2).min(b.len());
+            }
+            q @ (b'"' | b'\'') => {
+                let mut j = i + 1;
+                while j < b.len() && b[j] != q {
+                    if b[j] == b'\\' {
+                        j += 1;
+                    }
+                    j += 1;
+                }
+                i = (j + 1).min(b.len());
+            }
+            b'{' => {
+                let prelude = src[seg_start..i].trim().to_string();
+                stack.push((prelude, i + 1));
+                seg_start = i + 1;
+                i += 1;
+            }
+            b'}' => {
+                if let Some((prelude, body_start)) = stack.pop() {
+                    if prelude.starts_with("@container") {
+                        let mut cq_preludes = Vec::new();
+                        let mut wrappers = Vec::new();
+                        let mut ok = true;
+                        for (p, _) in &stack {
+                            if p.starts_with("@container") {
+                                cq_preludes.push(p.clone());
+                            } else if p.starts_with("@media")
+                                || p.starts_with("@supports")
+                                || p.starts_with("@layer")
+                            {
+                                wrappers.push(p.clone());
+                            } else {
+                                ok = false; // style-rule nesting — named residue, see above
+                                break;
+                            }
+                        }
+                        if ok {
+                            cq_preludes.push(prelude);
+                            out.push(CqBlock {
+                                cq_preludes,
+                                wrappers,
+                                body: src[body_start..i].to_string(),
+                            });
+                        }
+                    }
+                }
+                seg_start = i + 1;
+                i += 1;
+            }
+            b';' => {
+                seg_start = i + 1;
+                i += 1;
+            }
+            _ => i += 1,
+        }
+    }
+    out
+}
+
+/// Parse one `@container` prelude's comma list of conditions with Stylo's OWN parser — the exact
+/// grammar (`<container-name>? <container-condition>`, cq units, `and`/`or`/`not`) the gecko
+/// build runs, reached through its public API.
+fn parse_container_conditions(
+    prelude: &str,
+    url_data: &UrlExtraData,
+    qm: QuirksMode,
+) -> Option<Vec<ContainerCondition>> {
+    let rest = prelude.strip_prefix("@container")?.trim();
+    if rest.is_empty() {
+        return None;
+    }
+    let context = stylo::parser::ParserContext::new(
+        Origin::Author,
+        url_data,
+        Some(CssRuleType::Container),
+        style_traits::ParsingMode::DEFAULT,
+        qm,
+        std::borrow::Cow::Owned(Namespaces::default()),
+        None,
+        None,
+        stylo::custom_properties::AttrTaint::default(),
+    );
+    let mut input = cssparser37::ParserInput::new(rest);
+    let mut parser = cssparser37::Parser::new(&mut input);
+    parser
+        .parse_comma_separated(|i| ContainerCondition::parse(&context, i))
+        .ok()
+        .filter(|c| !c.is_empty())
+}
+
+impl RuleIndex {
+    /// The `@container` supplement: recover the blocks stylo's servo parse discarded (see
+    /// [`extract_container_blocks`]) and index their rules with the condition stack attached.
+    /// Supplemented rules are ordered after the sheet's own — a same-specificity BASE rule
+    /// written after its `@container` override would wrongly lose to it (Chrome keeps source
+    /// order). Named residue: overrides overwhelmingly follow their base rule.
+    fn add_container_supplement(
+        &mut self,
+        sheets: &[&Stylesheet],
+        lock: &SharedRwLock,
+        url_data: &UrlExtraData,
+        guard: &SharedRwLockReadGuard<'_>,
+        device: &Device,
+        qm: QuirksMode,
+    ) {
+        let mut order = self.rules.len();
+        for sheet in sheets {
+            let src = sheet.source();
+            if !src.contains("@container") {
+                continue;
+            }
+            for block in extract_container_blocks(src) {
+                let mut levels: Vec<ServoArc<Vec<ContainerCondition>>> = Vec::new();
+                let mut all_ok = true;
+                for p in &block.cq_preludes {
+                    match parse_container_conditions(p, url_data, qm) {
+                        Some(c) => levels.push(ServoArc::new(c)),
+                        None => {
+                            all_ok = false;
+                            break;
+                        }
+                    }
+                }
+                if !all_ok {
+                    continue;
+                }
+                // Re-wrap the body in its enclosing conditional at-rules (outermost first) so
+                // their gates re-apply on the standalone parse; a nested `@container` inside
+                // this body is dropped by that parse and picked up as its own deeper block.
+                let mut text = block.body;
+                for w in block.wrappers.iter().rev() {
+                    text = format!("{w} {{ {text} }}");
+                }
+                let parsed = StyloStylesheet::from_str(
+                    &text,
+                    url_data.clone(),
+                    Origin::Author,
+                    ServoArc::new(lock.wrap(MediaList::empty())),
+                    lock.clone(),
+                    None,
+                    None,
+                    qm,
+                    AllowImportRules::Yes,
+                );
+                // `IndexedRule` owns its selector clone and refcounts its declaration block, so
+                // the temporary stylesheet itself does not need to be kept alive.
+                let mut cq_stack = levels;
+                let rules = parsed.contents.read_with(guard).rules(guard);
+                self.add_rules(rules, guard, device, &mut order, qm, &mut cq_stack);
+            }
+        }
     }
 }
 
@@ -1185,6 +1443,7 @@ fn cascade_one_element(
     node: NodeId,
     parent_cv: &std::collections::HashMap<NodeId, ServoArc<ComputedValues>>,
     dom: &Dom,
+    cq_active: bool,
 ) -> ServoArc<ComputedValues> {
     // Only the rules this element could possibly match — see `RuleIndex`. Everything below is
     // unchanged: each candidate is still fully matched by `matches_selector`, and winners are still
@@ -1210,6 +1469,26 @@ fn cascade_one_element(
     for &i in candidates.iter() {
         let r = &index.rules[i as usize];
         if matches_selector(&r.sel, 0, None, el, &mut ctx) {
+            // A rule nested under `@container` applies only if EVERY nesting level has a matching
+            // condition (comma list within a level = OR — Stylo's `container_condition_matches`
+            // semantics). On the unsized first pass (`!cq_active`) they are held off wholesale:
+            // no layout has run, so the honest answer to "is the container ≥ 400px?" is unknown,
+            // and unknown must never style (`to_bool(false)` — the same call Stylo makes).
+            if !r.cq.is_empty() {
+                if !cq_active {
+                    continue;
+                }
+                let mut cq_flags = stylo::computed_value_flags::ComputedValueFlags::empty();
+                let all_levels = r.cq.iter().all(|level| {
+                    level.iter().any(|cond| {
+                        cond.matches(stylist, *el, None, &mut cq_flags)
+                            .to_bool(false)
+                    })
+                });
+                if !all_levels {
+                    continue;
+                }
+            }
             winners.push((r.spec, r.order, r.block.clone()));
         }
     }
@@ -1290,6 +1569,12 @@ pub fn supports_condition(condition: &str) -> bool {
     if condition.is_empty() || condition.contains('{') || condition.contains('}') {
         return false;
     }
+    // The same pref set the cascade flips (see `cascade_via_stylo_sized`) — `@supports` must
+    // answer from the SAME parser configuration the cascade styles with, or the answer here and
+    // the behaviour there disagree depending on which ran first (a global pref set only on the
+    // cascade path made this function's verdict order-dependent).
+    stylo_static_prefs::set_pref!("layout.grid.enabled", true);
+    stylo_static_prefs::set_pref!("layout.container-queries.enabled", true);
 
     // `CSS.supports(cond)` takes a <supports-condition>, but every browser also accepts a bare
     // declaration (`CSS.supports('display: flex')`). Wrap only when the caller did not, and leave
@@ -1346,9 +1631,13 @@ mod tests {
         assert!(supports_condition("(display: flex)"));
         assert!(supports_condition("position: sticky"));
         assert!(supports_condition("color: red"));
+        // Container queries LANDED (tick 379: sized cascade re-pass + the @container supplement),
+        // so the honest answer FLIPPED — the old `assert!(!...)` here was the honest "no" of an
+        // engine without them, and keeping it now would be the inverse lie. This is the documented
+        // moment from the honest-answer rule: the gate follows the capability, never the reverse.
+        assert!(supports_condition("container-type: inline-size"));
         // Real properties this engine does not implement — the ones whose false "yes" made pages
         // discard a working fallback.
-        assert!(!supports_condition("container-type: inline-size"));
         assert!(!supports_condition("view-transition-name: foo"));
         // Nonsense.
         assert!(!supports_condition("notaproperty: 1"));
@@ -1509,6 +1798,70 @@ mod tests {
             wide[&bx].width,
             crate::Dim::Px(900.0),
             "@media(min-width:1000) applies at 1200px"
+        );
+    }
+
+    /// `@container`: a container-gated rule applies only on the SIZED re-pass, and only when the
+    /// nearest ancestor container's laid-out inline size crosses the condition. The unsized pass
+    /// (every first cascade — no layout has run) must hold container rules off entirely: an
+    /// engine that guessed would style feature-detecting fallback pages wrong both ways.
+    #[test]
+    fn container_query_applies_by_container_size() {
+        // <body><div id=outer><div id=inner></div></div></body>
+        let mut dom = Dom::new();
+        let body = dom.create_element("body");
+        let outer = dom.create_element("div");
+        dom.set_attr(outer, "id", "outer");
+        let inner = dom.create_element("div");
+        dom.set_attr(inner, "id", "inner");
+        dom.append_child(dom.root(), body);
+        dom.append_child(body, outer);
+        dom.append_child(outer, inner);
+
+        let sheet = Stylesheet::parse(
+            "#outer { container-type: inline-size; } \
+             #inner { width: 50px; } \
+             @container (min-width: 400px) { #inner { width: 300px; } }",
+        );
+
+        // Unsized pass: the @container rule is held off — base width only.
+        let first = cascade_via_stylo(&dom, std::slice::from_ref(&sheet), 800.0, 600.0);
+        assert_eq!(
+            first[&inner].width,
+            crate::Dim::Px(50.0),
+            "@container held off on the unsized pass"
+        );
+
+        // Sized re-pass, container content-box 500px: min-width:400 crosses → rule applies.
+        let mut sizes = std::collections::HashMap::new();
+        sizes.insert(outer, (500.0, 40.0));
+        let wide = cascade_via_stylo_sized(
+            &dom,
+            std::slice::from_ref(&sheet),
+            800.0,
+            600.0,
+            Some(sizes),
+        );
+        assert_eq!(
+            wide[&inner].width,
+            crate::Dim::Px(300.0),
+            "@container(min-width:400) applies when the container is 500px"
+        );
+
+        // Sized re-pass, container 300px: condition fails → base rule stays.
+        let mut sizes = std::collections::HashMap::new();
+        sizes.insert(outer, (300.0, 40.0));
+        let narrow = cascade_via_stylo_sized(
+            &dom,
+            std::slice::from_ref(&sheet),
+            800.0,
+            600.0,
+            Some(sizes),
+        );
+        assert_eq!(
+            narrow[&inner].width,
+            crate::Dim::Px(50.0),
+            "@container(min-width:400) does not apply when the container is 300px"
         );
     }
 }

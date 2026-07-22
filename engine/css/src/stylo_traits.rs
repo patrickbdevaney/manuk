@@ -473,7 +473,30 @@ impl<'a> TElement for StyloElement<'a> {
         &self,
         _display: &stylo::values::computed::Display,
     ) -> euclid::default::Size2D<Option<Au>> {
-        euclid::default::Size2D::new(None, None)
+        // Answered from the PREVIOUS layout pass's content-box sizes (installed only on the
+        // sized re-pass — see `ElementDataStore::set_container_sizes`). Stylo only calls this
+        // on an element it has already validated as a container, but the AXES offered must
+        // still honour `container-type`: an `inline-size` container answers width only, so a
+        // height query against it stays unknown (and its rule off) exactly as in Chrome.
+        let Some((w, h)) = self.store.container_size(self.node) else {
+            return euclid::default::Size2D::new(None, None);
+        };
+        let ct = match self.store.borrow(self.node) {
+            Some(data) => match data.styles.get_primary() {
+                Some(style) => style.get_box().clone_container_type(),
+                None => return euclid::default::Size2D::new(None, None),
+            },
+            None => return euclid::default::Size2D::new(None, None),
+        };
+        use stylo::values::computed::ContainerType;
+        if ct.intersects(ContainerType::SIZE) {
+            euclid::default::Size2D::new(Some(Au::from_f32_px(w)), Some(Au::from_f32_px(h)))
+        } else if ct.intersects(ContainerType::INLINE_SIZE) {
+            // Horizontal writing modes only in this engine: inline axis == width.
+            euclid::default::Size2D::new(Some(Au::from_f32_px(w)), None)
+        } else {
+            euclid::default::Size2D::new(None, None)
+        }
     }
 
     fn has_selector_flags(&self, _flags: ElementSelectorFlags) -> bool {

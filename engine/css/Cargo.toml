@@ -11,7 +11,7 @@ default = []
 # Stylo (Servo/Firefox production CSS engine) is the reuse target per CLAUDE.md.
 # It is heavy to build, so it is opt-in. The default build uses the minimal
 # from-scratch cascade so the workspace compiles and runs without it.
-stylo = ["dep:stylo", "dep:url", "dep:euclid", "dep:selectors", "dep:stylo_dom", "dep:app_units", "dep:stylo_static_prefs"]
+stylo = ["dep:stylo", "dep:url", "dep:euclid", "dep:selectors", "dep:stylo_dom", "dep:app_units", "dep:stylo_static_prefs", "dep:stylo_traits", "dep:cssparser37"]
 
 [dependencies]
 manuk-dom.workspace = true
@@ -34,6 +34,14 @@ app_units = { version = "0.7", optional = true }
 # Lets us flip Stylo's `layout.grid.enabled` pref on (it defaults off under the `servo`
 # feature, which drops `display:grid` at parse time). Same 0.19 version as stylo.
 stylo_static_prefs = { version = "0.19", optional = true }
+# The `@container` supplement (stylo's servo build parses the at-rule only under its `gecko`
+# feature — a cfg, not a pref, so rung 3 of the ladder applies): we lift the blocks from the
+# sheet source ourselves and hand them to Stylo's own PUBLIC `ContainerCondition::parse` +
+# `Stylesheet::from_str`. That needs `ParsingMode` (style_traits, published as stylo_traits)
+# and stylo's cssparser generation (0.37 — the workspace `cssparser` is 0.34, a different
+# type universe used by the fallback cascade's own value parser).
+stylo_traits = { version = "0.19", optional = true }
+cssparser37 = { package = "cssparser", version = "0.37", optional = true }
 
 [dev-dependencies]
 # N4 tests parse real HTML (declarative shadow DOM) to build the tree they scope over.

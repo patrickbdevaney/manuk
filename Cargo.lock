@@ -3212,6 +3212,7 @@ version = "0.1.0"
 dependencies = [
  "app_units",
  "cssparser 0.34.0",
+ "cssparser 0.37.0",
  "euclid",
  "manuk-dom",
  "manuk-html",
@@ -3220,6 +3221,7 @@ dependencies = [
  "stylo",
  "stylo_dom",
  "stylo_static_prefs",
+ "stylo_traits",
  "tracing",
  "url",
 ]

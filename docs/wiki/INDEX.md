@@ -186,6 +186,7 @@
   - L640 · CSS.supports() — one question must not have two answers (tick 282)
   - L659 · The fix is a different door to the same evaluator
   - L680 · Two things measured and pinned
+  - L695 · Container queries (tick 379): the sized re-pass and the source supplement
 
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
@@ -863,4 +864,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-778 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+779 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

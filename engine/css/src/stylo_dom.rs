@@ -41,13 +41,33 @@ use stylo::data::{ElementDataMut, ElementDataRef, ElementDataWrapper};
 #[derive(Default)]
 pub struct ElementDataStore {
     data: HashMap<NodeId, ElementDataWrapper>,
+    /// Laid-out **content-box** size (w, h) in px per node, from the PREVIOUS layout pass —
+    /// what `TElement::query_container_size` answers `@container` conditions from. Empty on
+    /// the first cascade (no layout has run), so container-gated rules stay off until the
+    /// sized re-pass; a half-answered container query would lie (see JOURNAL tick 371).
+    container_sizes: HashMap<NodeId, (f32, f32)>,
 }
 
 impl ElementDataStore {
     pub fn new() -> Self {
-        ElementDataStore {
-            data: HashMap::new(),
-        }
+        ElementDataStore::default()
+    }
+
+    /// Install the per-node laid-out content-box sizes the sized cascade re-pass queries
+    /// `@container` conditions against.
+    pub fn set_container_sizes(&mut self, sizes: HashMap<NodeId, (f32, f32)>) {
+        self.container_sizes = sizes;
+    }
+
+    /// The laid-out content-box size of `node`, if the previous layout measured one.
+    pub fn container_size(&self, node: NodeId) -> Option<(f32, f32)> {
+        self.container_sizes.get(&node).copied()
+    }
+
+    /// Whether any laid-out sizes were installed — i.e. this is the sized re-pass, where
+    /// `@container` conditions can be answered rather than held unknown.
+    pub fn has_container_sizes(&self) -> bool {
+        !self.container_sizes.is_empty()
     }
 
     /// Ensure `node` has an `ElementData` cell (idempotent) — Stylo's `ensure_data`.

@@ -70,6 +70,111 @@ fn cascade_styles(dom: &Dom, sheets: &[Stylesheet], viewport_width: f32) -> Styl
     }
 }
 
+/// The `@container` re-pass: if any sheet uses container queries, re-cascade against the
+/// content-box sizes the pass-1 layout just measured (which is the spec's own model — a
+/// container's descendants are styled from the container's laid-out size). Returns whether
+/// `styles` was replaced, in which case the caller re-runs layout (and whatever else it
+/// re-derives from styles) so the container-gated rules take geometric effect.
+///
+/// One re-pass per frame, not a fixpoint loop: a container-gated rule can change the
+/// container's own size, and browsers converge on exactly this one-re-pass behaviour rather
+/// than iterate. Pages without `@container` return immediately — they pay one substring scan.
+#[cfg(feature = "stylo")]
+fn container_query_recascade(
+    dom: &Dom,
+    sheets: &[Stylesheet],
+    viewport_width: f32,
+    styles: &mut StyleMap,
+    root_box: &LayoutBox,
+) -> bool {
+    if !sheets.iter().any(|s| s.source().contains("@container")) {
+        return false;
+    }
+    let mut sizes: std::collections::HashMap<NodeId, (f32, f32)> = std::collections::HashMap::new();
+    collect_content_sizes(root_box, styles, viewport_width, &mut sizes);
+    let (_, vh) = manuk_css::values::viewport_size();
+    let recascaded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        manuk_css::stylo_engine::cascade_via_stylo_sized(
+            dom,
+            sheets,
+            viewport_width,
+            vh,
+            Some(sizes),
+        )
+    }));
+    match recascaded {
+        Ok(new_styles) => {
+            *styles = new_styles;
+            true
+        }
+        Err(_) => {
+            tracing::warn!("@container re-pass panicked; keeping the pass-1 styles");
+            false
+        }
+    }
+}
+
+#[cfg(not(feature = "stylo"))]
+fn container_query_recascade(
+    _dom: &Dom,
+    _sheets: &[Stylesheet],
+    _viewport_width: f32,
+    _styles: &mut StyleMap,
+    _root_box: &LayoutBox,
+) -> bool {
+    false
+}
+
+/// Per-node **content-box** sizes from a laid-out fragment tree — what `@container` conditions
+/// are answered against. `LayoutBox.rect` is the border box; the style's border widths and
+/// padding (resolved against the containing block's content width, carried down the walk) are
+/// subtracted per CSS 2.1 §8.
+#[cfg(feature = "stylo")]
+fn collect_content_sizes(
+    b: &LayoutBox,
+    styles: &StyleMap,
+    containing_width: f32,
+    out: &mut std::collections::HashMap<NodeId, (f32, f32)>,
+) {
+    let mut content_w = b.rect.width;
+    if let Some(n) = b.node {
+        if let Some(s) = styles.get(&n) {
+            let pl = s.padding.left.resolve(containing_width, 0.0);
+            let pr = s.padding.right.resolve(containing_width, 0.0);
+            // Vertical padding percentages also resolve against the containing block's WIDTH.
+            let pt = s.padding.top.resolve(containing_width, 0.0);
+            let pb = s.padding.bottom.resolve(containing_width, 0.0);
+            content_w =
+                (b.rect.width - s.border_width.left - s.border_width.right - pl - pr).max(0.0);
+            let content_h =
+                (b.rect.height - s.border_width.top - s.border_width.bottom - pt - pb).max(0.0);
+            out.insert(n, (content_w, content_h));
+        }
+    }
+    if let BoxContent::Block(kids) = &b.content {
+        for k in kids {
+            collect_content_sizes(k, styles, content_w, out);
+        }
+    }
+}
+
+/// Cascade + layout with the `@container` re-pass folded in — the one join every restyle path
+/// shares, so a page using container queries gets them on EVERY route to a new box tree, not
+/// just first load.
+fn restyle_and_layout(
+    dom: &Dom,
+    sheets: &[Stylesheet],
+    fonts: &FontContext,
+    viewport_width: f32,
+) -> (StyleMap, LayoutBox) {
+    let mut styles = cascade_styles(dom, sheets, viewport_width);
+    let mut root_box = layout_document(dom, &styles, fonts, viewport_width);
+    if container_query_recascade(dom, sheets, viewport_width, &mut styles, &root_box) {
+        root_box = layout_document(dom, &styles, fonts, viewport_width);
+    }
+    (styles, root_box)
+}
+
 /// A hyperlink discovered in the page, with its href resolved to an absolute URL.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Link {
@@ -812,8 +917,8 @@ unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
     // The same cascade the surrounding batch relayout uses, so a forced reflow and the post-script
     // pass can never disagree about the same tree.
     let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(dom);
-    c.styles = cascade_styles(dom, &sheets, c.viewport_width);
-    let root_box = layout_document(dom, &c.styles, fonts, c.viewport_width);
+    let root_box;
+    (c.styles, root_box) = restyle_and_layout(dom, &sheets, fonts, c.viewport_width);
     c.rects = root_box
         .node_rects(dom)
         .into_iter()
@@ -1603,8 +1708,8 @@ impl Page {
         if ran > 0 {
             tracing::debug!(scripts = ran, "executed deferred page scripts");
             let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
-            self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
-            self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            (self.styles, self.root_box) =
+                restyle_and_layout(&self.dom, &sheets, fonts, viewport_width);
             self.reapply_scroll_offsets();
             self.content_height = self.root_box.rect.height;
         }
@@ -3517,6 +3622,14 @@ impl Page {
         // does not run the async subresource pass.
         let inline_images = decode_inline_images(&dom, &mut styles);
         let mut root_box = layout_document(&dom, &styles, fonts, viewport_width);
+        // The `@container` re-pass, BEFORE `rects`/JS see any styles: the probe scripts below run
+        // against the map handed to `load_document`, so a re-pass after them would leave
+        // `getComputedStyle` answering from the unsized pass. The re-cascade replaces the style
+        // map wholesale, so the inline-image natural sizes annotated above are re-applied.
+        if container_query_recascade(&dom, &sheets, viewport_width, &mut styles, &root_box) {
+            let _ = decode_inline_images(&dom, &mut styles);
+            root_box = layout_document(&dom, &styles, fonts, viewport_width);
+        }
 
         let rects: std::collections::HashMap<manuk_dom::NodeId, [f32; 4]> = root_box
             .node_rects(&dom)
@@ -3551,8 +3664,8 @@ impl Page {
                     if n > 0 {
                         tracing::debug!(scripts = n, "executed page scripts");
                         let sheets2: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&dom);
-                        styles = cascade_styles(&dom, &sheets2, viewport_width);
-                        root_box = layout_document(&dom, &styles, fonts, viewport_width);
+                        (styles, root_box) =
+                            restyle_and_layout(&dom, &sheets2, fonts, viewport_width);
                     }
                     Some(ctx)
                 }
@@ -3860,8 +3973,8 @@ impl Page {
         let root = self.dom.root();
         if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
             let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
-            self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
-            self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            (self.styles, self.root_box) =
+                restyle_and_layout(&self.dom, &sheets, fonts, viewport_width);
             self.reapply_scroll_offsets();
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
@@ -3959,8 +4072,8 @@ impl Page {
         let root = self.dom.root();
         if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
             let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
-            self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
-            self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            (self.styles, self.root_box) =
+                restyle_and_layout(&self.dom, &sheets, fonts, viewport_width);
             self.reapply_scroll_offsets();
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
@@ -4276,8 +4389,8 @@ impl Page {
         let root = self.dom.root();
         if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
             let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
-            self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
-            self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            (self.styles, self.root_box) =
+                restyle_and_layout(&self.dom, &sheets, fonts, viewport_width);
             self.reapply_scroll_offsets();
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
@@ -4318,8 +4431,8 @@ impl Page {
         let root = self.dom.root();
         if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
             let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
-            self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
-            self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            (self.styles, self.root_box) =
+                restyle_and_layout(&self.dom, &sheets, fonts, viewport_width);
             self.reapply_scroll_offsets();
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
@@ -4427,8 +4540,8 @@ impl Page {
         let root = self.dom.root();
         if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
             let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
-            self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
-            self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            (self.styles, self.root_box) =
+                restyle_and_layout(&self.dom, &sheets, fonts, viewport_width);
             self.reapply_scroll_offsets();
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
@@ -4475,8 +4588,8 @@ impl Page {
         let root = self.dom.root();
         if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
             let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
-            self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
-            self.root_box = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            (self.styles, self.root_box) =
+                restyle_and_layout(&self.dom, &sheets, fonts, viewport_width);
             self.reapply_scroll_offsets();
             self.content_height = self.root_box.content_bottom();
             self.dom.clear_all_dirty();
@@ -4620,6 +4733,15 @@ impl Page {
             })
             .collect();
         self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
+        // `@container` conditions answer from the previous pass's geometry — same one-frame
+        // model as `relayout_incremental`; the caller's next layout uses the sized styles.
+        container_query_recascade(
+            &self.dom,
+            &sheets,
+            viewport_width,
+            &mut self.styles,
+            &self.root_box,
+        );
         self.last_cascade = None; // the fingerprint no longer describes this tree
     }
 
@@ -4669,6 +4791,13 @@ impl Page {
                 })
                 .collect();
             self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
+            container_query_recascade(
+                &self.dom,
+                &sheets,
+                viewport_width,
+                &mut self.styles,
+                &self.root_box,
+            );
             self.last_cascade = None; // the fingerprint no longer describes this tree
         }
         let scaled;
@@ -4708,7 +4837,17 @@ impl Page {
         }
 
         let sheets: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&self.dom);
-        let new_styles = cascade_styles(&self.dom, &sheets, viewport_width);
+        let mut new_styles = cascade_styles(&self.dom, &sheets, viewport_width);
+        // `@container` conditions answer from the PREVIOUS pass's geometry (`self.root_box`) —
+        // the spec's own one-frame model; the damage classification below then decides whether
+        // the sized styles warrant a relayout exactly as for any other style delta.
+        container_query_recascade(
+            &self.dom,
+            &sheets,
+            viewport_width,
+            &mut new_styles,
+            &self.root_box,
+        );
 
         // A structural mutation adds/removes boxes → reflow at minimum.
         let mut damage = if self.dom.structure_changed() {
@@ -5143,7 +5282,17 @@ impl Page {
                     .map(|css| Stylesheet::parse(&wrap_media(css, m))),
             })
             .collect();
-        let new_styles = cascade_styles(&self.dom, &sheets, viewport_width);
+        let mut new_styles = cascade_styles(&self.dom, &sheets, viewport_width);
+        // External sheets are the main `@container` carrier. Conditions answer from the
+        // pre-external geometry here (the only layout that exists yet) — the previous-pass
+        // model, one cascade generation behind until the next restyle re-evaluates them.
+        container_query_recascade(
+            &self.dom,
+            &sheets,
+            viewport_width,
+            &mut new_styles,
+            &self.root_box,
+        );
         // Classify the change vs the pre-external styling (usually Reflow — external
         // rules add geometry).
         let mut damage = RestyleDamage::None;

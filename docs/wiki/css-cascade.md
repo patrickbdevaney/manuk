@@ -688,5 +688,52 @@ configuration the browser never runs in.
 
 **The limit of the proxy.** `CSS.supports` now mirrors what Stylo will *parse*, which stands in for
 what the engine will *honour*. A property Stylo parses but layout ignores would still report true.
-`container-type` is not that case today — Stylo declines it — but that is where the next gap of this
-shape would appear.
+(`container-type` was the named watch item here while Stylo declined it; since tick 379 it parses
+AND is honoured — see the container-queries section below — so the next gap of this shape has no
+current example.)
+
+## Container queries (tick 379): the sized re-pass and the source supplement
+
+`@container` landed in two pieces, and the second was not the one tick 371's spec named.
+
+**The re-pass.** A container condition is answered from the container's *laid-out* size, so the
+cascade cannot know it on a first pass — the spec's own model is query-after-container-layout.
+`restyle_and_layout` (engine/page) is the one join every restyle path now shares: cascade → layout →
+if any sheet's source mentions `@container`, re-cascade with the pass-1 **content-box** sizes
+(border and padding subtracted per CSS 2.1 §8, padding percentages against the containing block's
+width) → re-layout. One re-pass per frame, never a fixpoint loop — a container-gated rule can change
+the container's own size, and browsers converge on exactly this behaviour. On the unsized pass every
+container-gated rule is held **off** wholesale: unknown must never style, which is also what keeps
+feature-detecting fallback pages honest. Paths that restyle without a fresh layout
+(`relayout_incremental`, external-CSS arrival) answer from the *previous* pass's geometry — the same
+one-generation-behind model, corrected at the next restyle.
+
+**The supplement.** Tick 371 measured "@container parses in stylo's servo build" and was wrong one
+level deeper: the `ContainerRule` *type* ships, but rule_parser.rs guards the at-rule arm with
+`cfg!(feature = "gecko")` — a compile-time cfg, not a pref, so the whole block is discarded as an
+unknown at-rule before the cascade sees it. Vendoring stylo for one cfg is rung 4 cost; rung 3 is
+`extract_container_blocks`: a comment/string-aware brace scanner lifts each `@container` block from
+the raw sheet source, hands the prelude to **Stylo's own public** `ContainerCondition::parse` (full
+grammar — names, cq units, and/or/not) and the body to `Stylesheet::from_str`, re-wrapped in any
+enclosing `@media`/`@supports`/`@layer` preludes so their gates still apply. Nested `@container`
+stacks conditions (levels AND, comma lists OR, unknown → off — Stylo's `container_condition_matches`
+semantics, replicated over the per-rule condition stack in `RuleIndex`). Condition evaluation is
+per-element at match time — `ContainerCondition::matches` walks `traversal_parent()` reading each
+ancestor's `ElementData` primary style for `container-type`/`-name`, which is why the sized re-pass
+also *publishes* every element's ComputedValues into the data store as the preorder walk computes
+them, and answers the final size question through our `TElement::query_container_size`
+(container-type axis-filtered: an `inline-size` container answers width only).
+
+**Two prefs and a flipped answer.** `layout.container-queries.enabled` gates the `container-type`
+property at parse time (rung 1, same as grid); it is now set on both the cascade path and
+`supports_condition`, because a global pref set on only one of them made `@supports` order-dependent.
+And the pinned `@supports (container-type: inline-size) == false` — the honest "no" of an engine
+without container queries — flipped to `true` *with* the capability, per the honest-answer rule:
+the gate follows the capability, never the reverse.
+
+**Named residue.** `style()`/`scroll-state()` queries (machinery in place, sizes are the precedent);
+`::before`/`::after` rules inside `@container` (the pseudo cascade path skips the supplement);
+`@container` nested inside a *style rule* (`&`-relative selectors would mis-match standalone —
+skipped, not guessed); supplement rules order after their sheet's own rules (a same-specificity base
+rule written *after* its `@container` override wrongly loses; overrides overwhelmingly follow their
+base); cq units (`cqw`/`cqi`…) outside `@container` blocks.

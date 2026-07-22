@@ -16300,3 +16300,38 @@ manuk-shell 70/70 + teardown EXIT 0; fmt clean.
 TICK SHAPE: capability (promise-returning scrolls + the synchronous-scrollY contract restored — awaits and next-line reads both tell the truth; [pattern: the gate falsified the tick's own premise and the fix went one layer deeper]). GATES claims +1 (scrollp in g_mse_join = IN the wall); constellation row missing→gated.
 CONSTELLATION: app / promise-returning scroll methods → gated.
 WIKI: docs/wiki/frameworks.md — scroll promise + synchronous scrollY note (below).
+
+## Tick 379 — container queries: the sized re-pass and the @container source supplement (2026-07-22)
+
+The STEP-2 CO-#1 item (3), built to t371's spec — and t371's premise was WRONG one level deeper:
+stylo 0.19's servo build ships the ContainerRule TYPE but rule_parser.rs guards the at-rule arm
+with `cfg!(feature = "gecko")`, a compile-time cfg (rung-4 vendor cost to flip), so the block is
+discarded as an unknown at-rule before the cascade ever sees it. Rung 3 instead:
+extract_container_blocks lifts @container blocks from the raw sheet source (comment/string-aware
+brace scanner) and hands the prelude to Stylo's own PUBLIC ContainerCondition::parse + the body to
+Stylesheet::from_str, re-wrapped in enclosing @media/@supports/@layer preludes so their gates still
+apply. Nested @container stacks conditions (levels AND, commas OR, unknown→off).
+
+HYPOTHESIS: (a) the dead seam — TElement::query_container_size (stylo_traits.rs:472) answered from
+a per-node laid-out CONTENT-BOX size map, container-type axis-filtered (inline-size answers width
+only); (b) the re-pass — restyle_and_layout in engine/page: cascade → layout → if any sheet
+mentions @container, re-cascade with pass-1 sizes → re-layout; unsized pass holds container-gated
+rules OFF wholesale (unknown must never style — the feature-detect fallback stays honest); (c) pref
+layout.container-queries.enabled flipped (rung 1) on BOTH the cascade path and supports_condition;
+the pinned `@supports (container-type) == false` honest-no flips to yes WITH the capability. Gate:
+containerq probe in G_PROBE_CAPABILITIES — the #cq rule applies only because #cq-outer's resolved
+inline size (400px) crosses (min-width: 300px). RED = sever the size wire.
+RESULT — LANDED. containerq GREEN; RED-proven this session (query_container_size forced to
+(None,None) → probe fails measured_capabilities_do_not_regress; restored → green). Recovered from a
+crashed prior session: code+wiki+constellation were complete on disk, journal entry and landing were
+not; one new-warning cleanup (dead content_h init). RESIDUE (named in the wiki + constellation):
+style()/scroll-state() queries; ::before/::after inside @container (pseudo path skips the
+supplement); style-rule-nested @container (&-relative) skipped not guessed; supplement rules order
+after sheet rules (same-specificity base-after-override edge); cq units outside @container.
+
+TICK SHAPE: capability (component-responsive layout — the biggest CSS shift in a decade now
+applies; [rung-3 supplement pattern: lift source blocks, parse with the vendor's own public
+parsers, evaluate per-element at match time — the :has() precedent, upgraded]). GATES claims +1
+(containerq:yes in G_PROBE_CAPABILITIES = IN the wall); constellation doc row missing→gated.
+CONSTELLATION: doc / container queries → gated (G_PROBE_CAPABILITIES).
+WIKI: docs/wiki/css-cascade.md — container queries section (re-pass model, supplement, residue).

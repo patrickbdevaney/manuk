@@ -253,4 +253,9 @@ const PINNED: &[&str] = &[
     // right value through the whole pipeline. The Kotlin/Wasm + Dart/Flutter-web module class.
     // SpiderMonkey ships it on; the probe measured it rather than assuming it.
     "wasmgc:yes",
+    // tick 379 — container queries: the sized cascade re-pass (layout feeds content-box sizes back
+    // through TElement::query_container_size) + the @container source supplement (stylo's servo
+    // build cfg-drops the at-rule) make the #cq rule apply only because #cq-outer's resolved
+    // inline size (400px) crosses the (min-width: 300px) condition.
+    "containerq:yes",
 ];
