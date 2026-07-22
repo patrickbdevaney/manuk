@@ -596,3 +596,34 @@ crash fix preceded all capability work in the prior window and nothing regressed
 **PART VI / VII correction.** None.
 
 **Next check due: tick 398.**
+
+---
+
+## Check #16 — tick 398
+
+**Horizon:** Phase 0 — the FULL daily-driver checklist, CONSTITUTION.MD **Part VII**. **Gate:** the
+FIDELITY-SCORING-REDESIGN.md certificate, NOT a WPT percentage.
+
+**Gate or scoreboard?** Gate. Window 391-397: **391** the svg default-size model corrected against
+MEASURED Chrome (our own t389 pin was wrong — the gate refused to lock a recalled model in),
+**392** the honest re-crawl (all four jarring invariants moved down; the discard rule priced its
+own coverage cost), **393/394** the SVG-internals spec and its paint half landed same-day (inline
+vectors visible — a borrow, not a build), **395** the none→block family traced to path-pairing
+(tree drift wearing style drift's face), **396/397** self-audit clean + a quiet surface week.
+
+**Is the loop still pointed at the frontier?** Yes — and the frontier has CHANGED SHAPE: three
+consecutive instrument-honesty finds (starved fetches t383, coverage price t392, path pairing
+t395) make **selector-path keying** (redesign item a) the highest-leverage single item on the
+board — it un-pollutes every display-diff family at once. Engine-side, the ledger's real residue
+stands: SVG child geometry (spec ready), hydration-depth JS, the 13× perf outliers.
+
+**Is the agentic surface (component #2) being served?** Held — t394's visible icons are also
+hittable-target food; no regressions.
+
+**Any invariant bent?** No. t391 is the RATCHET working on ourselves (a wrong pin corrected the
+tick after it landed, evidence first); the nih.gov segfault is banked with evidence and routed to
+its prescribed ASAN context, not chased or traded.
+
+**PART VI / VII correction.** None.
+
+**Next check due: tick 406.**

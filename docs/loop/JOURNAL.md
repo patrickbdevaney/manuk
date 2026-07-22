@@ -16718,3 +16718,17 @@ TICK SHAPE: surface-audit (map maintenance; Audit #13 + 1 enrichment + watches/e
 GATES +0. [no-pattern]
 CONSTELLATION: IndexedDB-indexes row enriched (getAllRecords note in the audit log).
 WIKI: none.
+
+## Tick 398 — Constitution Check #16: the frontier changed shape (2026-07-22)
+
+CADENCE OBLIGATION (390+8). Re-read CONSTITUTION.MD; wrote Check #16. Window 391-397 verdict:
+GATE-pointed. The arc's three instrument-honesty finds (t383/392/395) make selector-path keying
+the highest-leverage item on the board — it un-pollutes every display-diff ledger family at
+once; engine residue stands (SVG child geometry with spec ready, hydration depth, 13× perf
+outliers). t391 was the ratchet working on ourselves: a wrong pin corrected against measured
+Chrome the tick after it landed. No invariant bent. LAST_CONSTITUTION_CHECK 390→398; next due
+406 (a triple: constitution + self-audit + wall audit).
+
+TICK SHAPE: constitution-check (governance checkpoint). GATES +0. [no-pattern]
+CONSTELLATION: none.
+WIKI: none.
