@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **170** | ticks 1–377 |
-| median tick cycle | **19m** | 169 intervals |
-| median, last 10 | **6m** | 10 intervals |
+| ticks landed | **171** | ticks 1–378 |
+| median tick cycle | **19m** | 170 intervals |
+| median, last 10 | **7m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.63** | 267.0h elapsed |
-| median verify wall | **60s** | 109 ticks |
+| **ticks per hour** | **0.64** | 267.3h elapsed |
+| median verify wall | **60s** | 110 ticks |
 | wall trend | 39s → 61s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**92 of 170 ticks** (54%) moved a
+**93 of 171 ticks** (54%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **92** capability ticks, median cycle **19m**
-* median diff per tick: **+232 / −32** lines across 8 files
+* **93** capability ticks, median cycle **19m**
+* median diff per tick: **+231 / −32** lines across 8 files
 
 ## Every tick
 
@@ -267,5 +267,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **375** | 2026-07-22 07:58 | 6m | capability | 58s | +160/−50 | 183 | 81 | 56.0% · | the mixer resamples: mismatched-rate audio joins the mix audibly (2026-07-22) |
 | **376** | 2026-07-22 08:01 | 3m | self-audit | 61s | +49/−34 | 183 | 81 | 56.0% · | self-audit: clean at the end of a 25-tick window (2026-07-22) |
 | **377** | 2026-07-22 08:04 | 3m | surface-audit | 62s | +91/−35 | 183 | 81 | 56.0% · | surface audit #11: two Baseline-crossers, one WebMCP enrichment (2026-07-22) |
+| **378** | 2026-07-22 08:19 | 15m | capability | 61s | +112/−35 | 183 | 81 | 56.0% · | promise-returning scroll methods: the truthful immediate resolve (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

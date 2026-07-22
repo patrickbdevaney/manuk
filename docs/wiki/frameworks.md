@@ -235,3 +235,14 @@ hands the same listener on a plain navigation. `pageswap` landed one tick later 
 outgoing document's last moment alive before every navigation. Same honest null. The
 `@view-transition` MPA animation itself is a subsystem and is not claimed. Claims
 pr-/ps-fired/vt-null all ride g_mse_join.
+
+## Promise-returning scrolls + the synchronous scrollY contract (tick 378)
+
+`scrollTo/scroll/scrollBy` return `Promise.resolve()` — truthful because our scrolls are instant.
+The tick's real find: the gate falsified the premise first (`scrollp:false`) — under the
+request-model, `scrollY` lagged until the host drained, so the awaited continuation read stale
+state, and so did any next-line read (a silent divergence carried since the scroll request model
+landed). `__scrollTo` now optimistically updates the page-visible position (`scrollTo(0,40);
+scrollY===40` holds synchronously, as in a real browser); the host's application overwrites with
+the clamped truth, so out-of-range requests over-report only transiently. A future smooth-scroll
+threads its settle notification through the same promise.

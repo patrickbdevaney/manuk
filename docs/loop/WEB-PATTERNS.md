@@ -3216,3 +3216,16 @@ cursor advances at the SOURCE's rate — it is also the sync master's clock, and
 device rate is a pitch shift that corrupts mastery arithmetic too. **(3)** Constant-in →
 constant-out is the wobble gate: interpolation reading wrong neighbours invents modulation a
 spectrum would show but a length check never will.
+
+## Scroll promises + the synchronous read-back contract (tick 378)
+
+**The class of the web this unlocks:** post-scroll code — `await scrollTo(...)` (the
+Baseline-crossing 2026 idiom replacing settle-timers) AND the far older `scrollTo(0,40);
+if (scrollY === 40)` next-line read that a request-model viewport silently broke.
+**(1)** A promise that resolves before the effect is applied is a LIE with a .then on it — the
+gate's awaited continuation caught the tick's own premise (scrollp:false) before it shipped.
+**(2)** Request-model state needs an optimistic local echo: update the page-visible position at
+request time; the owner's application overwrites with the clamped truth, so out-of-range requests
+over-report only transiently — the trade real browsers make invisible by clamping synchronously.
+**The trap:** "immediate resolve is truthful because the operation is instant" — instant for the
+OWNER is not instant for the OBSERVER when the operation crosses a request boundary.

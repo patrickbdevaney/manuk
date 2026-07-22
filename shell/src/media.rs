@@ -626,6 +626,15 @@ mod tests {
       R.push('pr-fired:true');
       R.push('pr-vt-null:' + (e.viewTransition === null));
     }});
+    // Promise-returning scrolls (tick 378): the awaited continuation must observe the
+    // APPLIED scroll — a bare undefined return is awaitable too, which is why the claim
+    // asserts the .then chain runs with scrollY moved.
+    (function () {{
+      var p = scrollTo(0, 40);
+      if (p && typeof p.then === 'function') {{
+        p.then(function () {{ R.push('scrollp:' + (scrollY === 40)); scrollTo(0, 0); }});
+      }} else {{ R.push('scrollp:no-promise'); }}
+    }})();
     addEventListener('pageswap', function (e) {{
       R.push('ps-fired:true');
       R.push('ps-vt-null:' + (e.viewTransition === null));
@@ -704,6 +713,8 @@ mod tests {
             // tick 372: the MPA activation hook fires once with the spec's no-transition null.
             "pr-fired:true",
             "pr-vt-null:true",
+            // tick 378: scrollTo returns a Promise whose continuation sees the applied scroll.
+            "scrollp:true",
             "idl-muted:true",
             "idl-vol:true",
             "open:true",

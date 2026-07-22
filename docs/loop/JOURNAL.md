@@ -16273,3 +16273,30 @@ LAST_SURFACE_AUDIT 367→377; next due 387.
 TICK SHAPE: surface-audit (map maintenance; Audit #11 + 1 row + 1 enrichment). GATES +0. [no-pattern]
 CONSTELLATION: +1 row (promise-returning scrolls), WebMCP row enriched.
 WIKI: none.
+
+## Tick 378 — promise-returning scroll methods: the truthful immediate resolve (2026-07-22)
+
+The row audit #11 added yesterday-tick, taken while tick-sized. Baseline-crossing 2026 behavior:
+scrollTo/scrollBy/scroll (and eventually scrollIntoView) resolve a Promise when the scroll completes,
+so code `await`s them instead of settle-timers. OURS ARE INSTANT — the host applies the offset
+synchronously, there is no smooth-scroll animation to wait for — so `Promise.resolve()` returned
+AFTER the scroll request is the TRUTHFUL value, not a stub: by the time the promise resolves the
+scroll genuinely has completed. If smooth scrolling ever lands, this same promise is where the
+settle notification threads.
+
+Claims ride g_mse_join: `await scrollTo(...)` resolves and scrollY reads the new value inside the
+awaited continuation. RED = return undefined again (await yields undefined — soft, which is exactly
+why the claim asserts the .then chain runs with the scroll APPLIED).
+RESULT — LANDED, with a deeper find than planned. The promise itself was two lines — but the gate
+caught that the "truthful immediate resolve" premise was WRONG under our request model: the awaited
+continuation ran before the host applied the scroll, so scrollY read stale (scrollp:false on the
+first run — the gate did its job against my own design). The real fix: __scrollTo optimistically
+updates the page-visible SCROLL position, restoring the real-browser synchronous contract
+(`scrollTo(0,40); scrollY===40` on the next line) that our request model had silently broken all
+along; the host's application overwrites with the clamped truth. RED-proven both halves: promise
+removed → scrollp:no-promise; optimistic update removed → scrollp:false (the stale-read state).
+manuk-shell 70/70 + teardown EXIT 0; fmt clean.
+
+TICK SHAPE: capability (promise-returning scrolls + the synchronous-scrollY contract restored — awaits and next-line reads both tell the truth; [pattern: the gate falsified the tick's own premise and the fix went one layer deeper]). GATES claims +1 (scrollp in g_mse_join = IN the wall); constellation row missing→gated.
+CONSTELLATION: app / promise-returning scroll methods → gated.
+WIKI: docs/wiki/frameworks.md — scroll promise + synchronous scrollY note (below).

@@ -6858,6 +6858,12 @@ unsafe fn host_scroll_to(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bo
     let x = arg_f64(cx, vp, argc, 0).unwrap_or(0.0) as f32;
     let y = arg_f64(cx, vp, argc, 1).unwrap_or(0.0) as f32;
     PENDING_SCROLLS.with(|q| q.borrow_mut().push((x, y)));
+    // Optimistic position update (tick 378): in a real browser an INSTANT programmatic scroll
+    // moves scrollY synchronously — `scrollTo(0,40); scrollY === 40` holds on the next line.
+    // Our request model made scrollY lag until the host drained, which broke that (and the
+    // promise-returning contract's awaited continuation). The host's application overwrites
+    // with the CLAMPED truth, so an out-of-range request over-reports only transiently.
+    SCROLL.with(|c| c.set((x.max(0.0), y.max(0.0))));
     *vp = UndefinedValue();
     true
 }
@@ -11372,11 +11378,17 @@ const WINDOW_PRELUDE: &str = r#"
         Object.defineProperty(g, 'scrollY', { get: function () { return readScroll()[1]; }, configurable: true });
         Object.defineProperty(g, 'pageXOffset', { get: function () { return readScroll()[0]; }, configurable: true });
         Object.defineProperty(g, 'pageYOffset', { get: function () { return readScroll()[1]; }, configurable: true });
+        // Promise-returning (tick 378, Baseline-crossing 2026): resolves when the scroll
+        // completes. Ours completes SYNCHRONOUSLY (the host applies the offset, no smooth
+        // animation exists), so resolving after the request is the TRUTHFUL value, not a stub —
+        // by resolution time the scroll has genuinely happened. A future smooth-scroll threads
+        // its settle notification through this same promise.
         g.scrollTo = function (a, b) {
             var x, y;
             if (a && typeof a === 'object') { x = a.left || 0; y = a.top || 0; }
             else { x = a || 0; y = b || 0; }
             g.__scrollTo(Number(x) || 0, Number(y) || 0);
+            return Promise.resolve();
         };
         g.scroll = g.scrollTo;
         g.scrollBy = function (a, b) {
@@ -11385,6 +11397,7 @@ const WINDOW_PRELUDE: &str = r#"
             if (a && typeof a === 'object') { dx = a.left || 0; dy = a.top || 0; }
             else { dx = a || 0; dy = b || 0; }
             g.__scrollTo(cur[0] + (Number(dx) || 0), cur[1] + (Number(dy) || 0));
+            return Promise.resolve();
         };
 
         // ---- URL / URLSearchParams / Headers / FormData / structuredClone --------------------
