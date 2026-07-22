@@ -2930,7 +2930,7 @@ const PRELUDE: &str = r#"
           // Raw audio streams (t363/364): mp3 and flac decode outright; an Ogg is 'probably'
           // only when it NAMES vorbis — a bare audio/ogg may be Opus, so the container being
           // readable earns exactly 'maybe' and no more.
-          if (/^audio\/(mpeg|mp3|flac|x-flac)($|;)/.test(t)) { return 'probably'; }
+          if (/^audio\/(mpeg|mp3|flac|x-flac|wav|x-wav|wave)($|;)/.test(t)) { return 'probably'; }
           if (/^audio\/ogg/.test(t)) {
             if (t.indexOf('codecs=') === -1) { return 'maybe'; }
             return /vorbis/.test(t) ? 'probably' : '';

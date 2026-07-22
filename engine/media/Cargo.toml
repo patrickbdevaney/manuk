@@ -53,7 +53,7 @@ re_mp4 = "0.4"
 # + flac/vorbis/ogg (tick 364): the same stream seam, three more features. NO opus — symphonia
 # 0.6 has no Opus decoder, and the registry answers accordingly (codecs="opus" is '', bare
 # audio/ogg is 'maybe').
-symphonia = { version = "0.6", default-features = false, features = ["aac", "mp3", "mpa", "flac", "vorbis", "ogg"], optional = true }
+symphonia = { version = "0.6", default-features = false, features = ["aac", "mp3", "mpa", "flac", "vorbis", "ogg", "wav", "pcm"], optional = true }
 
 # H.264 decode (M5). Cisco's OpenH264, BSD-2, via idiomatic bindings.
 #

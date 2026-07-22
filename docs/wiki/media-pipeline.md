@@ -1453,3 +1453,10 @@ load claims in G_MP3_DRIVE + four cpt claims in g_mse_join.
 
 RED ledger: flac canPlayType arm reverted (cpt-flac:false), sniff narrowed to mpeg (FLAC load
 dies while the suite stays green — the silent-vanish class again).
+
+### Tick 369 — WAV rung
+
+Same seam, two more symphonia features (wav+pcm). The sniff nuance worth keeping: RIFF alone is
+NOT audio — AVI and WebP are RIFF too — so the 12-byte check requires the WAVE form type, and the
+gate asserts an AVI-shaped RIFF does NOT route to the audio probe. canPlayType audio/wav|x-wav|
+wave → 'probably'. RED: wav arm reverted → cpt-wav:false.

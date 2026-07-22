@@ -16070,3 +16070,23 @@ NO REGRESSION: manuk-media all-features green; G_AVIF_PAINT (opaque path) green;
 TICK SHAPE: capability (AVIF alpha — transparent heroes/logos let the page show through; [host-native pattern: same decoder, the Y-plane-is-the-mask insight, one compositing pass]). GATES +1 (avif_alpha, required-features lane); constellation AVIF row residue narrowed to bit-depth + headless data:-URLs.
 CONSTELLATION: doc / images: AVIF → alpha composited (avif_alpha).
 WIKI: docs/wiki/media-pipeline.md — Tick 368 alpha (Y-plane-is-the-mask, straight-alpha contract, the fixture trap).
+
+## Tick 369 — WAV through the stream seam: the effects/samples class (2026-07-22)
+
+The last cheap rung of the t362-364 stream-seam family. audio/wav is the web's effects-and-samples
+format (notification sounds, audio previews, generated TTS output); symphonia's wav+pcm features are
+one Cargo line, the sniff is RIFF....WAVE, and the seam routes everything else unchanged.
+
+HYPOTHESIS: features on → the probe opens RIFF/WAVE; sniff_audio_stream learns the 12-byte RIFF-WAVE
+signature (RIFF alone is not enough — RIFF is also AVI); canPlayType audio/wav|x-wav → 'probably';
+gate claims ride stream_audio_formats (decode a Chromium wav fixture to its own shape) + a cpt-wav
+claim in g_mse_join.
+RESULT — LANDED. symphonia += wav,pcm; sniff_audio_stream learns RIFF+WAVE (form-type checked — RIFF
+alone is also AVI/WebP and must not route to the audio probe; the negative asserted); canPlayType
+audio/wav|x-wav|wave → 'probably'; claims: WAV decodes to its own shape (mono 44.1k, on the clock) in
+stream_audio_formats + cpt-wav in g_mse_join. RED-proven: wav arm reverted → cpt-wav:false. manuk-shell
+69/69 + teardown EXIT 0; media all-features green; fmt clean.
+
+TICK SHAPE: capability (audio/wav — the effects/samples class through the stream seam; the RIFF-form-type routing nuance gated both directions; [BORROW pattern: two features, six-line sniff]). GATES claims extended (stream_audio_formats + cpt-wav, shell = IN the wall); constellation row 71 tail now Opus+AC-3 only.
+CONSTELLATION: media / audio decode → WAV joined.
+WIKI: docs/wiki/media-pipeline.md — Tick 369 WAV rung (RIFF-form-type nuance).

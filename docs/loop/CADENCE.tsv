@@ -160,3 +160,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 366	94cb658	1784716954	2026-07-22T06:42:34-04:00	212	governance	58	6	109	36	183	81	3896	6960	0	320	0	governance triple: self-audit #clean, wall-audit #5, Constitution Check #12 (2026-07-22)
 367	a54c0e7	1784717164	2026-07-22T06:46:04-04:00	210	surface-audit	59	6	93	34	183	81	3896	6960	0	320	0	surface audit #10: WebMCP's clock is running and the map never listed it (2026-07-22)
 368	a5d8b58	1784717537	2026-07-22T06:52:17-04:00	373	capability	54	13	215	46	183	81	3896	6960	0	320	0	AVIF alpha composites: the transparent hero stops rendering opaque (2026-07-22)
+369	d7f464e	1784718389	2026-07-22T07:06:29-04:00	852	capability	59	17	133	38	183	81	3896	6960	0	320	0	WAV through the stream seam: the effects/samples class (2026-07-22)

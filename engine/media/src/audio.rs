@@ -245,6 +245,10 @@ pub fn sniff_audio_stream(bytes: &[u8]) -> bool {
     if sniff_mpeg_audio(bytes) {
         return true;
     }
+    if bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE" {
+        // RIFF alone is not enough — RIFF is also AVI/WebP-RIFF; the WAVE form type decides.
+        return true;
+    }
     bytes.len() >= 4 && matches!(&bytes[..4], b"fLaC" | b"OggS")
 }
 

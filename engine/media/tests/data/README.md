@@ -63,3 +63,6 @@ All three are from the Chromium `media/test/data` corpus, which is BSD-licensed 
   the `alpha-mask-*` fixtures ARE masks (monochrome primaries, alpha_item=None) — a gate on one
   of those can never see compositing. The alpha gate asserts the A channel actually VARIES and
   the color plane survives compositing.
+
+- `sfx_s16le.wav` — RIFF/WAVE, 16-bit PCM mono 44.1k, from `chromium/media/test/data/` (Chromium,
+  BSD-3, same provenance rule). The stream-seam WAV rung's fixture.

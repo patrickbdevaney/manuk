@@ -622,6 +622,7 @@ mod tests {
       R.push('cpt-oggv:' + (document.getElementById('v').canPlayType('audio/ogg; codecs="vorbis"') === 'probably'));
       R.push('cpt-oggb:' + (document.getElementById('v').canPlayType('audio/ogg') === 'maybe'));
       R.push('cpt-opus:' + (document.getElementById('v').canPlayType('audio/ogg; codecs="opus"') === ''));
+      R.push('cpt-wav:' + (document.getElementById('v').canPlayType('audio/wav') === 'probably'));
       // Live media-IDL channel (tick 360): the writes a mute button / volume slider perform.
       // Two writes to volume so the host-side coalescing (last per prop) is observable.
       var vv = document.getElementById('v');
@@ -677,6 +678,8 @@ mod tests {
             "cpt-oggv:true",
             "cpt-oggb:true",
             "cpt-opus:true",
+            // tick 369: RIFF/WAVE decodes through the stream seam.
+            "cpt-wav:true",
             "idl-muted:true",
             "idl-vol:true",
             "open:true",

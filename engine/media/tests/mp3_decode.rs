@@ -13,6 +13,7 @@ const ID3: &[u8] = include_bytes!("data/id3_png_test.mp3");
 const FLAC: &[u8] = include_bytes!("data/bear.flac");
 const VORBIS: &[u8] = include_bytes!("data/sfx.ogg");
 const OPUS: &[u8] = include_bytes!("data/bear-opus.ogg");
+const WAV: &[u8] = include_bytes!("data/sfx_s16le.wav");
 
 #[test]
 fn mp3_decode() {
@@ -56,7 +57,14 @@ fn stream_audio_formats() {
         sniff_audio_stream(OPUS),
         "Opus-in-Ogg SNIFFS yes — the probe is the authority, the sniff only routes"
     );
-    assert!(!sniff_audio_stream(b"RIFFxxxxWAVE"));
+    assert!(
+        sniff_audio_stream(b"RIFFxxxxWAVE"),
+        "RIFF with the WAVE form type must sniff (tick 369)"
+    );
+    assert!(
+        !sniff_audio_stream(b"RIFFxxxxAVI LIST"),
+        "RIFF alone is NOT audio — an AVI must not route to the audio probe"
+    );
 
     let flac = decode_audio_stream(FLAC).expect("raw FLAC must decode");
     assert!(
@@ -73,6 +81,17 @@ fn stream_audio_formats() {
         vorbis.channels,
         vorbis.sample_rate
     );
+
+    // ── WAV (tick 369): 16-bit PCM mono 44.1k decodes to its own shape.
+    let wav = decode_audio_stream(WAV).expect("RIFF/WAVE PCM must decode");
+    assert!(
+        wav.duration_seconds() > 0.2 && wav.sample_rate == 44100 && wav.channels == 1,
+        "the mono 44.1k WAV fixture must decode to its own shape ({}s {}ch {}Hz)",
+        wav.duration_seconds(),
+        wav.channels,
+        wav.sample_rate
+    );
+    assert!(wav.samples.iter().any(|&s| s != wav.samples[0]));
 
     // ── Opus: symphonia has no decoder — a NAMED error, never a panic, never a wrong sound.
     assert!(

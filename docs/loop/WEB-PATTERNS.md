@@ -3186,3 +3186,10 @@ path that fires on everything fades the web.
 **The trap:** fixtures lie by NAME — Blink's `alpha-mask-*` files ARE masks (alpha_item=None), so a
 gate on one can never observe compositing. Probe the fixture's actual structure (10 lines of
 avif-parse) before debugging the code it "proves" broken.
+
+## WAV — the RIFF form-type routing nuance (tick 369)
+
+**The class of the web this unlocks:** audio/wav — notification sounds, previews, TTS output.
+**The one insight:** RIFF alone is NOT an audio signature (AVI and WebP are RIFF too); routing on
+4 bytes sends video containers into an audio probe. Check the form type at offset 8 and assert the
+NEGATIVE (an AVI-shaped RIFF must not route) alongside the positive.
