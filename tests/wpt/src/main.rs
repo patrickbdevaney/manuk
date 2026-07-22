@@ -1657,18 +1657,29 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
         // perceived failure of content spilling off-screen. Reported alongside the divergence count.
         let (hover, hover_ex) =
             manuk_wpt::oracle::jarring_h_overflow(&chrome, &manuk, vw as i64, tol);
+        // And sibling overlap — the #1 "broken page" perception (text on text, control under banner),
+        // which SHAPE also cannot see. `ov_skip` reports sibling groups too large to scan pairwise.
+        let (overlap, ov_skip, ov_ex) = manuk_wpt::oracle::jarring_overlap(&chrome, &manuk, tol);
+        let mut jflag = String::new();
+        if hover > 0 {
+            jflag.push_str(&format!(
+                "  ⚠ {hover} h-overflow (e.g. {})",
+                hover_ex.first().map(String::as_str).unwrap_or("")
+            ));
+        }
+        if overlap > 0 {
+            jflag.push_str(&format!(
+                "  ⚠ {overlap} overlap (e.g. {})",
+                ov_ex.first().map(String::as_str).unwrap_or("")
+            ));
+        }
+        if ov_skip > 0 {
+            jflag.push_str(&format!("  [{ov_skip} group(s) too large to scan]"));
+        }
         eprintln!(
-            "  {short}: {} divergence(s) over {} probed{}",
+            "  {short}: {} divergence(s) over {} probed{jflag}",
             divs.len(),
             chrome.len(),
-            if hover > 0 {
-                format!(
-                    "  ⚠ {hover} h-overflow (e.g. {})",
-                    hover_ex.first().map(String::as_str).unwrap_or("")
-                )
-            } else {
-                String::new()
-            }
         );
 
         // **Emit, don't accumulate.** At 265 sites, holding the whole crawl in one process means one
@@ -1678,12 +1689,13 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
             let _ = std::fs::create_dir_all(dir);
             let mut out = String::new();
             out.push_str(&format!(
-                "{{\"kind\":\"meta\",\"site\":\"{short}\",\"class\":\"{}\",\"status\":\"ok\",\"probed\":{},\"manuk_ms\":{},\"chrome_ms\":{},\"h_overflow\":{}}}\n",
+                "{{\"kind\":\"meta\",\"site\":\"{short}\",\"class\":\"{}\",\"status\":\"ok\",\"probed\":{},\"manuk_ms\":{},\"chrome_ms\":{},\"h_overflow\":{},\"overlap\":{}}}\n",
                 flag(args, "--class").unwrap_or("?"),
                 chrome.len(),
                 manuk_ms,
                 chrome_ms,
-                hover
+                hover,
+                overlap
             ));
             for d in &divs {
                 out.push_str(&format!(

@@ -341,6 +341,75 @@ pub fn jarring_h_overflow(
     (count, examples)
 }
 
+/// **Jarring invariant — sibling overlap (Layer 2 of FIDELITY-SCORING-REDESIGN.md).**
+///
+/// The redesign names overlap the *#1* "broken page" perception: text on text, a control under a
+/// banner. SHAPE cannot see it — two boxes can each be shaped correctly relative to their parent and
+/// still land on top of each other if a gap/height is wrong. This counts pairs of **siblings** (same
+/// parent path) that Chrome renders **disjoint** but Manuk renders **overlapping** in both axes by
+/// more than `tol` — attributing the collision to us, never to a design that legitimately stacks
+/// (Chrome overlaps them too). Scoped to siblings on purpose: it is where perceived collisions cluster
+/// (flex/flow items, list rows, stacked cards) and it keeps the cost bounded — cross-subtree occlusion
+/// is the hittability invariant's job (occlusion-aware hit-test), not this one.
+///
+/// Groups larger than `MAX_GROUP` siblings skip the O(n²) pairwise scan; the count of skipped groups
+/// is returned so a bounded scan is never mistaken for a clean page. Keys are `tag[i]/…` paths, so the
+/// parent is the prefix before the last `/`.
+pub fn jarring_overlap(
+    chrome: &HashMap<String, Seen>,
+    manuk: &HashMap<String, Seen>,
+    tol: i64,
+) -> (usize, usize, Vec<String>) {
+    const MAX_GROUP: usize = 128;
+    // Both engines must render the element, and it must have a parent (a `/` in the key).
+    let mut groups: BTreeMap<&str, Vec<&String>> = BTreeMap::new();
+    for id in manuk.keys() {
+        if !chrome.contains_key(id) {
+            continue;
+        }
+        if let Some(cut) = id.rfind('/') {
+            groups.entry(&id[..cut]).or_default().push(id);
+        }
+    }
+    // Overlap extent along one axis: how far the two intervals [p, p+len) intersect (≤0 = disjoint).
+    let ov = |p0: i64, l0: i64, p1: i64, l1: i64| (p0 + l0).min(p1 + l1) - p0.max(p1);
+    let overlaps = |a: &[i64; 4], b: &[i64; 4], t: i64| {
+        ov(a[0], a[2], b[0], b[2]) > t && ov(a[1], a[3], b[1], b[3]) > t
+    };
+
+    let (mut count, mut skipped) = (0usize, 0usize);
+    let mut examples: Vec<String> = Vec::new();
+    for (_, ids) in groups {
+        if ids.len() < 2 {
+            continue;
+        }
+        if ids.len() > MAX_GROUP {
+            skipped += 1;
+            continue;
+        }
+        for i in 0..ids.len() {
+            for j in (i + 1)..ids.len() {
+                let (ma, mb) = (&manuk[ids[i]].rect, &manuk[ids[j]].rect);
+                let (ca, cb) = (&chrome[ids[i]].rect, &chrome[ids[j]].rect);
+                // OUR fault only: they collide for us but Chrome keeps them apart.
+                if overlaps(ma, mb, tol) && !overlaps(ca, cb, tol) {
+                    count += 1;
+                    if examples.len() < 3 {
+                        let (lo, hi) = if ids[i] <= ids[j] {
+                            (ids[i], ids[j])
+                        } else {
+                            (ids[j], ids[i])
+                        };
+                        examples.push(format!("{lo} × {hi}"));
+                    }
+                }
+            }
+        }
+    }
+    examples.sort();
+    (count, skipped, examples)
+}
+
 /// The report a tick actually reads.
 pub fn report(clusters: &[Cluster], sites: usize, skipped: usize) {
     println!("\n=== DIFFERENTIAL ORACLE — root causes, ranked by sites explained ===\n");
@@ -466,6 +535,38 @@ mod tests {
         assert!(
             examples[0].starts_with("body[0]/div[0]"),
             "the example names the offending element, got {examples:?}"
+        );
+    }
+
+    /// **The sibling-overlap jarring invariant, and its RED proof.** Two siblings Chrome keeps
+    /// disjoint (stacked 0–40 and 40–80) collide in Manuk (both at 0–60); a second sibling pair
+    /// overlaps in BOTH engines (a deliberate stack) and must not count; a pair in a different parent
+    /// never collides. Only the first pair is our bug.
+    ///
+    /// Dropping the `&& !overlaps(ca, cb, tol)` guard makes the both-engines-overlap pair count too,
+    /// and this assertion fails — the guard is what keeps a legitimate stack from being blamed on us.
+    #[test]
+    fn jarring_overlap_blames_only_collisions_chrome_keeps_apart() {
+        let tol = 4;
+        let mut chrome: HashMap<String, Seen> = HashMap::new();
+        let mut manuk: HashMap<String, Seen> = HashMap::new();
+        // Pair A (our bug): Chrome stacks them (y 0–40, 40–80); Manuk overlaps (both y 0–60, x 0–100).
+        chrome.insert("body[0]/div[0]".into(), seen("div", [0, 0, 100, 40]));
+        chrome.insert("body[0]/div[1]".into(), seen("div", [0, 40, 100, 40]));
+        manuk.insert("body[0]/div[0]".into(), seen("div", [0, 0, 100, 60]));
+        manuk.insert("body[0]/div[1]".into(), seen("div", [0, 0, 100, 60]));
+        // Pair B (intentional stack): overlaps in BOTH engines — not our bug.
+        chrome.insert("body[0]/span[0]".into(), seen("span", [0, 0, 50, 50]));
+        chrome.insert("body[0]/span[1]".into(), seen("span", [10, 10, 50, 50]));
+        manuk.insert("body[0]/span[0]".into(), seen("span", [0, 0, 50, 50]));
+        manuk.insert("body[0]/span[1]".into(), seen("span", [10, 10, 50, 50]));
+
+        let (count, skipped, examples) = jarring_overlap(&chrome, &manuk, tol);
+        assert_eq!(skipped, 0);
+        assert_eq!(count, 1, "only the collision Chrome keeps disjoint is ours");
+        assert_eq!(
+            examples,
+            vec!["body[0]/div[0] × body[0]/div[1]".to_string()]
         );
     }
 

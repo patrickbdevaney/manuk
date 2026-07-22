@@ -15049,3 +15049,37 @@ TICK SHAPE: infrastructure (the fidelity instrument — Part 21; makes the Phase
 failure mode it was blind to; no website-capability change, hence [no-pattern]). GATES +0; tests +1.
 CONSTELLATION: no row — the measuring instrument, not a rendered construct.
 WIKI: docs/wiki/conformance-and-oracles.md (Layer-2 jarring-invariants paragraph).
+
+## Tick 339 — Layer-2 jarring invariant: sibling overlap, the #1 broken-page perception (2026-07-21)
+
+CO-#1 (observer tick 328 STEP-2 (1)(d)): fidelity-instrument rebuild, jarring invariants. Ticks 335/338
+landed Layer-1 SHAPE + h-overflow; this adds the invariant FIDELITY-SCORING-REDESIGN.md §1 names FIRST —
+overlap ("text on text, control under banner — the #1 broken-page perception").
+
+WHY SHAPE + H-OVERFLOW MISS IT: two boxes can each be shaped correctly relative to their parent and still
+land on top of each other if a gap or a sibling's height is wrong; neither absolute position nor viewport
+overflow sees a collision.
+
+THE INVARIANT: `oracle::jarring_overlap(chrome, manuk, tol)` counts pairs of SIBLINGS (same parent path —
+the key prefix before the last '/') that Chrome renders DISJOINT but Manuk renders OVERLAPPING in both
+axes past tol. The "Chrome keeps them apart" guard attributes the collision to us, never to a design that
+legitimately stacks. Sibling-scoped on purpose: that is where perceived collisions cluster (flex/flow
+items, list rows, stacked cards) and it bounds the O(n²) — groups above MAX_GROUP (128) skip the pairwise
+scan and the skipped-group COUNT is surfaced (no silent cap: a bounded scan must never read as a clean
+page). Cross-subtree occlusion is the future hittability invariant's job. Wired LIVE into run_oracle_cmd
+(per-site ⚠ N overlap + `overlap` in the --emit meta).
+
+RED-PROVEN (cp-snapshot restored + re-verified GREEN): dropping the `&& !overlaps(ca, cb, tol)` guard made
+`jarring_overlap_blames_only_collisions_chrome_keeps_apart` FAIL — count 6 vs 1, because a both-engines
+overlapping pair (a deliberate stack) and the cross-population div×span pairs all get blamed on us. Found
+and fixed a TEST bug in passing: the example string depended on HashMap sibling-iteration order, so the
+pair is now formatted lo×hi (deterministic) — the guard test still pins the real behaviour.
+
+NO REGRESSION: additive pub fn + one live call site; the meta emit gains an `overlap` field (extra JSON
+key); the eprintln appends only when >0. manuk-wpt builds clean release, 4 oracle tests + 10 existing wpt
+lib tests green. RED edit reverted byte-for-byte. fmt clean.
+
+TICK SHAPE: infrastructure (the fidelity instrument — Part 21; the Phase-0 exit measure now sees the
+single most-perceived layout failure; no website-capability change, [no-pattern]). GATES +0; tests +1.
+CONSTELLATION: no row — the measuring instrument, not a rendered construct.
+WIKI: docs/wiki/conformance-and-oracles.md (Layer-2 overlap paragraph).

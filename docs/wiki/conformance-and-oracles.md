@@ -186,8 +186,16 @@ perception. `oracle::jarring_h_overflow` counts elements whose right edge passes
 Chrome keeps the *same* element inside — the guard that requires "Chrome fits" is load-bearing: without it,
 a site that legitimately scrolls sideways (right edge 2000 in both engines) is blamed on us. It reports per
 site in the oracle run and as `h_overflow` in the `--emit` meta line. This is the first of the Layer-2 set;
-the others (overlap, reading-order inversion, unhittable targets, post-load shift) are not yet wired, and
-the instrument does not claim Layer 2 is complete until they are.
+the reading-order, unhittable-target, and post-load-shift invariants are not yet wired, and the instrument
+does not claim Layer 2 is complete until they are.
+
+`oracle::jarring_overlap` adds the *#1* "broken page" perception — text on text, a control under a banner.
+It counts pairs of **siblings** (same parent path) that Chrome renders disjoint but Manuk renders
+overlapping in both axes past `tol`; the "Chrome keeps them apart" guard is load-bearing (without it a
+design that legitimately stacks is blamed on us). Scoped to siblings on purpose — that is where perceived
+collisions cluster (flex/flow items, list rows, stacked cards) and it keeps the O(n²) bounded; groups above
+`MAX_GROUP` skip the pairwise scan and the skipped-group count is surfaced so a bounded scan is never read
+as a clean page. Cross-subtree occlusion belongs to the (not-yet-wired) hittability invariant, not here.
 
 ## Gates must run the SHIPPING configuration
 
