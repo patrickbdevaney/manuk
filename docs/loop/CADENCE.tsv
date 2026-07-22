@@ -201,3 +201,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 407	5e4bcc4	1784754339	2026-07-22T17:05:39-04:00	2514	surface-audit	70	11	479	221	187	81	3896	6960	0	321	31	surface audit #14: the vendors re-ranked three of our missing rows (2026-07-22)
 408	eff146f	1784755622	2026-07-22T17:27:02-04:00	1283	capability	56	9	169	72	187	81	3896	6960	0	322	31	the horizontal carousel snaps, on the axis t266 never covered (2026-07-22)
 409	aed4706	1784756020	2026-07-22T17:33:40-04:00	398	capability	60	5	62	35	187	81	3896	6960	0	322	31	content: attr() draws the datum, not an empty box (2026-07-22)
+410	5250fc3	1784756995	2026-07-22T17:49:55-04:00	975	map-maintenance	59	8	160	60	187	81	3896	6960	0	323	31	map honesty: record the 408/409 flips before they rot into re-discovery (2026-07-22)

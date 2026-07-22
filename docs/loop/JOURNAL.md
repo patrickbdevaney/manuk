@@ -17022,3 +17022,25 @@ a forward move the ratchet welcomes.
 TICK SHAPE: map-maintenance (record two capability flips; no engine change). GATES +0. [no-pattern]
 CONSTELLATION: scroll-snap horizontal residue closed; CSS attr() missing→partial (content form).
 WIKI: none — the mechanisms are already captured (interaction-surface.md t408, css-cascade.md t409); this tick only trues the map.
+
+## Tick 411 — list ordinals follow reversed + value-continuation, not the sibling index (2026-07-22)
+
+HYPOTHESIS (winning vein again — re-probe a near-done area for a bounded silent-fail gap): list
+markers are otherwise complete (bullet/decimal/alpha/roman, Stylo-mapped, start/value/inside).
+But `list_marker` computed each ordinal as `start + (preceding <li> count)` — the sibling index.
+That silently mis-numbers the two cases the HTML "ordinal value" algorithm exists for: `<ol
+reversed>` was ignored ENTIRELY (a countdown/ranking numbered 1,2,3 UPWARD), and `<li value>`
+was a one-item override when the spec says a value CONTINUES the running counter for every item
+after it (`<li>x<li value=7>y<li>z` = 1,7,8 not 1,7,3). Any resumed or renumbered list mis-counted
+from the first value onward.
+
+FIX: replaced the per-item index with one left-to-right pass maintaining a counter — starts at
+`start` (or the item count when reversed has no start), each `value` resets it, the marked item
+takes it, steps by ±1 (−1 reversed). One pass, one source of truth. The marker RENDERING (glyphs)
+was untouched — this is purely the counting. Gated by
+list_ordinals_follow_reversed_and_value_continuation; RED-proven (index form → reversed reads
+"1. 2. 3.", value list reads "1. 7. 3."). Full manuk-layout suite 84/84, no regression.
+
+TICK SHAPE: capability (list ordinal correctness — reversed + value-continuation; +1 gate). GATES +1.
+CONSTELLATION: none (list rendering already gated; this is a correctness deepening).
+WIKI: box-layout.md — "List markers follow the HTML 'ordinal value' algorithm — a running counter, not a sibling index".

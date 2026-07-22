@@ -1092,3 +1092,23 @@ all, so they rasterize explicitly. Natural sizing is deliberately NOT applied �
 replaced-sizing model (t389/391) owns the box; the raster paints into it. Pixel-asserted in
 G_FIRST_PAINT (`an_inline_svg_paints_its_vectors`, RED-proven: decode severed → white center).
 Remaining from the spec: child geometry mapping, stale-raster-on-mutation, render-at-used-size.
+
+## List markers follow the HTML "ordinal value" algorithm — a running counter, not a sibling index (tick 411)
+
+`list_marker` built each `<li>`'s number from `start + (count of preceding <li> siblings)`, with an
+item's own `value` attribute as a local override. That is right only for a plain forward list. It is
+silently wrong for the two cases the HTML "ordinal value" algorithm exists to handle:
+
+- **`<ol reversed>`** — ignored entirely. A countdown, a ranking, a "top 10 in reverse" numbered
+  `1. 2. 3.` **upward** instead of `N … 1` downward.
+- **`<li value="7">` continuation** — a `value` reset the counter for *that item only*. The spec says
+  it resets the running counter for **every item after it too**: `<li>x</li><li value=7>y</li><li>z</li>`
+  is `1, 7, 8`, not `1, 7, 3`. Any resumed or manually-renumbered list mis-counted from the first
+  `value` onward.
+
+The fix replaces the per-item index with a single left-to-right pass over the list items maintaining a
+`counter`: it starts at `start` (or, for `reversed` with no `start`, the item count), each `value`
+resets it, the marked item takes the counter, and it steps by `±1` (`-1` when `reversed`) between
+items. One pass, one source for "what number is this item". Gated by
+`list_ordinals_follow_reversed_and_value_continuation`, RED-proven (revert to the index form →
+reversed reads `1. 2. 3.` and the value list reads `1. 7. 3.`).

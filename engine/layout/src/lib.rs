@@ -2511,8 +2511,9 @@ impl Ctx<'_> {
     /// (the default) hangs it in the padding to the left of the content edge, which is why `<ul>`
     /// carries 40px of left padding in the UA sheet; `inside` puts it at the content edge.
     ///
-    /// The ordinal counts the item's list-item siblings, honouring `<ol start>` and an item's own
-    /// `value` attribute.
+    /// The ordinal follows the HTML "ordinal value" algorithm — a running counter over the list
+    /// items honouring `<ol start>`, `<ol reversed>`, and an item's own `value` (which continues
+    /// the count for every item after it, not just itself).
     fn list_marker(
         &self,
         node: NodeId,
@@ -2526,30 +2527,49 @@ impl Ctx<'_> {
         }
         let parent = self.dom.parent(node);
         let ordered = parent.and_then(|p| self.dom.tag_name(p)) == Some("ol");
-        // The ordinal: `value` on this item wins; otherwise `start` on the list plus the count of
-        // preceding list items.
-        let ordinal = self
-            .dom
-            .element(node)
-            .and_then(|e| e.attr("value"))
-            .and_then(|v| v.trim().parse::<i64>().ok())
-            .unwrap_or_else(|| {
-                let start = parent
-                    .and_then(|p| self.dom.element(p))
-                    .and_then(|e| e.attr("start"))
-                    .and_then(|v| v.trim().parse::<i64>().ok())
-                    .unwrap_or(1);
-                let idx = parent
-                    .map(|p| {
-                        self.dom
-                            .children(p)
-                            .take_while(|&c| c != node)
-                            .filter(|&c| self.dom.tag_name(c) == Some("li"))
-                            .count() as i64
-                    })
-                    .unwrap_or(0);
-                start + idx
-            });
+        // The ordinal follows the HTML "ordinal value" algorithm: a running counter, not this
+        // item's sibling index. Two things the index form got silently wrong — a `value` on any
+        // item CONTINUES the count (the next unmarked item is value±1, not its position), and
+        // `reversed` counts DOWN. Index-based numbering prints a resumed list restarting at its
+        // position and a ranked/countdown `<ol reversed>` going 1,2,3… upward.
+        let el_attr = |n: NodeId, name: &str| -> Option<&str> {
+            self.dom.element(n).and_then(|e| e.attr(name))
+        };
+        let parse_i64 = |v: &str| v.trim().parse::<i64>().ok();
+        let reversed = parent.is_some_and(|p| el_attr(p, "reversed").is_some());
+        let li_count = parent
+            .map(|p| {
+                self.dom
+                    .children(p)
+                    .filter(|&c| self.dom.tag_name(c) == Some("li"))
+                    .count() as i64
+            })
+            .unwrap_or(0);
+        // No `start`: forward lists begin at 1, reversed lists at the item count (so the first
+        // item is N and the last is 1).
+        let start = parent
+            .and_then(|p| el_attr(p, "start"))
+            .and_then(parse_i64)
+            .unwrap_or(if reversed { li_count } else { 1 });
+        let step = if reversed { -1 } else { 1 };
+        let mut counter = start;
+        let mut ordinal = start;
+        if let Some(p) = parent {
+            for c in self.dom.children(p) {
+                if self.dom.tag_name(c) != Some("li") {
+                    continue;
+                }
+                // A `value` resets the running counter for this item and everything after it.
+                if let Some(v) = el_attr(c, "value").and_then(parse_i64) {
+                    counter = v;
+                }
+                if c == node {
+                    ordinal = counter;
+                    break;
+                }
+                counter += step;
+            }
+        }
         // An `<li>` inside an `<ol>` numbers itself even when `list-style-type` is still the
         // inherited default (`disc`) — that default only means "the UA picks for this list kind".
         let ty = match (s.list_style_type, ordered) {
@@ -6592,6 +6612,41 @@ mod tests {
                 "3.".to_string()
             ],
             "two bullets and an <ol start=3> numbering from 3"
+        );
+    }
+
+    /// The HTML "ordinal value" algorithm: `<ol reversed>` counts DOWN, and an `<li value>`
+    /// continues the count for every following item. Index-based numbering (the pre-fix form) got
+    /// both wrong — a resumed list restarted at each item's position and a countdown ran upward.
+    ///
+    /// RED, run: revert `list_marker` to `start + preceding-<li>-count`. The reversed list reads
+    /// `1. 2. 3.` and the value-continued list reads `1. 7. 3.` — the exact mis-numbering the
+    /// running counter removes.
+    #[test]
+    fn list_ordinals_follow_reversed_and_value_continuation() {
+        let html = "<ol reversed><li id=\"r1\">a</li><li id=\"r2\">b</li><li id=\"r3\">c</li></ol>\
+                    <ol start=\"1\"><li id=\"v1\">x</li><li id=\"v2\" value=\"7\">y</li><li id=\"v3\">z</li></ol>";
+        let css = "ol{list-style-type:decimal}";
+        let (_dom, root) = layout_html(html, css, 400.0);
+        let mut markers: Vec<String> = Vec::new();
+        root.walk(&mut |b| {
+            if let Some(m) = &b.marker {
+                markers.push(m.text.clone());
+            }
+        });
+        assert_eq!(
+            markers,
+            vec![
+                // reversed: N, N-1, … 1
+                "3.".to_string(),
+                "2.".to_string(),
+                "1.".to_string(),
+                // value=7 on the 2nd item continues to 8 on the 3rd, not back to 3
+                "1.".to_string(),
+                "7.".to_string(),
+                "8.".to_string(),
+            ],
+            "reversed counts down; a value continues the running counter"
         );
     }
 

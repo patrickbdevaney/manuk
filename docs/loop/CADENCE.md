@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **202** | ticks 1–409 |
-| median tick cycle | **18m** | 201 intervals |
-| median, last 10 | **14m** | 10 intervals |
+| ticks landed | **203** | ticks 1–410 |
+| median tick cycle | **18m** | 202 intervals |
+| median, last 10 | **16m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.73** | 276.5h elapsed |
-| median verify wall | **59s** | 141 ticks |
-| wall trend | 39s → 60s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.73** | 276.8h elapsed |
+| median verify wall | **59s** | 142 ticks |
+| wall trend | 39s → 59s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **187**
-* **✅ rows in the capability ledger**: 144 → **322**
+* **✅ rows in the capability ledger**: 144 → **323**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**107 of 202 ticks** (53%) moved a
+**107 of 203 ticks** (53%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **107** capability ticks, median cycle **18m**
-* median diff per tick: **+214 / −34** lines across 8 files
+* median diff per tick: **+213 / −34** lines across 8 files
 
 ## Every tick
 
@@ -299,5 +299,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **407** | 2026-07-22 17:05 | 42m | surface-audit | 70s | +479/−221 | 187 | 81 | 56.0% · | surface audit #14: the vendors re-ranked three of our missing rows (2026-07-22) |
 | **408** | 2026-07-22 17:27 | 21m | capability | 56s | +169/−72 | 187 | 81 | 56.0% · | the horizontal carousel snaps, on the axis t266 never covered (2026-07-22) |
 | **409** | 2026-07-22 17:33 | 7m | capability | 60s | +62/−35 | 187 | 81 | 56.0% · | content: attr() draws the datum, not an empty box (2026-07-22) |
+| **410** | 2026-07-22 17:49 | 16m | map-maintenance | 59s | +160/−60 | 187 | 81 | 56.0% · | map honesty: record the 408/409 flips before they rot into re-discovery (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
