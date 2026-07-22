@@ -16125,3 +16125,35 @@ set generalization); headless lane clean; fmt clean.
 TICK SHAPE: capability (the mixer — a page with a video and a second sound is fully audible; mastery generalizes to the set; [host-native pattern: pure mix fn behind the t350 pump/device split]). GATES +1 (G_MIX, shell suite = IN the wall); constellation row 72 rungs now: resampler, WSOLA, Opus/AC-3, High-profile.
 CONSTELLATION: media / audio output device → mixer landed (G_MIX).
 WIKI: docs/wiki/media-pipeline.md — Tick 370 mixer (sum+clamp, mismatch-skip, set-mastery, the too-quiet-fixture RED hole).
+
+## Tick 371 — container queries probed to the exact dead wire; the build is now specified (2026-07-22)
+
+CO-#1 order (3), the named non-media frontier. Probed the whole path rather than assuming the shape
+(the two-cascades trap memory says @-rules died in MinimalCascade; the LIVE cascade is
+cascade_via_stylo — so the question is what STYLO's servo build does):
+
+MEASURED: (1) stylo 0.19 crates.io SHIPS ContainerRule in the servo build — @container PARSES; no
+vendoring, no fork, no parse_has()-style fence. (2) Condition evaluation is fully implemented in
+stylo (ContainerCondition::matches → Context::for_container_query_evaluation → ContainerSizeQuery)
+and bottoms out at ONE embedder seam: `TElement::query_container_size(&display) ->
+Size2D<Option<Au>>`. (3) OUR impl (engine/css/src/stylo_traits.rs:472) returns `(None, None)`
+unconditionally — the exact dead wire, and why G_PROBE_CAPABILITIES honestly reports containerq:no.
+
+THE BUILD, SPECIFIED (one to two ticks, fresh context): (a) thread a per-node laid-out size map
+(NodeId → content-box w/h from the PREVIOUS layout pass) into the Stylo element wrapper;
+query_container_size answers from it (px→Au). (b) The two-pass loop in engine/page where
+cascade_via_stylo + layout already run: cascade → layout → IF the sheet set contains @container
+rules, re-cascade with the size map → re-layout (one re-pass per frame, which is effectively what
+browsers converge to). (c) Gate: the existing containerq probe flips green (a @container
+(min-width) rule styles a child only when the container's resolved inline-size crosses it) + a
+WPT css-contain/container-queries sample. RISK NAMED: a wrong size map mis-renders pages that
+today feature-detect @container and fall back correctly — do not land (a) without (b); a half-built
+container query LIES (the fidelity-instrument lesson, same class).
+
+NOT BUILT THIS TICK, deliberately: the seam touches the hottest path (cascade↔layout loop) and the
+atomicity rule says a fresh context takes it with this spec in hand rather than a 20-tick-old one
+finishing on fumes.
+
+TICK SHAPE: capability-probe (the frontier subsystem measured to its one dead wire + build spec; [probe pattern: read the vendored source, not the docs]). GATES +0 (containerq:no stays the honest pin until the build). [no-pattern]
+CONSTELLATION: app / container queries → note updated (parse ALIVE in stylo servo build; one seam named; build spec recorded).
+WIKI: none — the spec lives in this entry; the wiki entry comes with the build.
