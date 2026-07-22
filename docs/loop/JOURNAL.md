@@ -15975,3 +15975,24 @@ lane clean; fmt clean. Fixtures from Chromium test data with provenance (README)
 TICK SHAPE: capability (FLAC + Ogg/Vorbis play end-to-end — the remaining free rungs of the stream seam, with the bare-Ogg 'maybe' honesty nuance; Opus stays a named wall; [BORROW pattern: three symphonia features, zero new decode code]). GATES +1 engine (stream_audio_formats) + extended G_MP3_DRIVE/g_mse_join claims (shell = IN the wall); constellation row 71 tail closed to Opus+AC-3.
 CONSTELLATION: media / audio decode → FLAC+Vorbis joined; Opus named-refused (stream_audio_formats, G_MP3_DRIVE).
 WIKI: docs/wiki/media-pipeline.md — Tick 364 (seam features, bare-Ogg 'maybe', sniff-routes-probe-decides).
+
+## Tick 365 — re-probe: the WebVTT row's STILL-MISSING list was three ticks stale (2026-07-22)
+
+CO-#1 (E) cheap re-probe, the stale-pessimistic rule (process rule 2: re-probe stale unknowns before
+building them — the checklist goes stale FROM OUR OWN LANDED TICKS). Constellation row 75 (WebVTT)
+still carried the t258 assessment: "<track src> is not FETCHED, so the parser has no page-side
+consumer; cue settings are inert so nothing POSITIONS a caption; the UA paints no cue itself." Every
+clause was obsoleted within three ticks of being written: t259 landed the fetch→__parseVtt→VTTCue
+join WITH the placement half (line/position/size/align threaded, 'auto' vs 0 distinction kept),
+t261 drew the cues ("six ticks of correct captions, finally drawn", the caption_map bridge). The
+row was never updated.
+
+MEASURED NOW: g_track_src runs GREEN (the t259 gate — fetch, parse via the REAL parser, cues with
+placement, readyState/error protocol, `default` honoured); caption_map is the shell bridge the
+media driver documents. Pinning the row to what the receipts say; no build needed. A map row left
+pessimistic is a future wasted build tick — this is the fourth such catch this loop (CSP, select
+actuation, sticky, :focus...) and the reason the rule exists.
+
+TICK SHAPE: capability-probe (measure-and-pin; the deliverable is the corrected row + the receipt). GATES +0 (existing g_track_src re-confirmed green). [no-pattern]
+CONSTELLATION: media / WebVTT → partial→gated note corrected (fetch join t259, drawn t261, g_track_src).
+WIKI: none — the mechanism is already wiki'd at its landing ticks.
