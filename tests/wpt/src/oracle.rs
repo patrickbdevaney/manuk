@@ -495,6 +495,56 @@ pub fn jarring_reading_order(
     (count, skipped, examples)
 }
 
+/// The interactive tags a user is expected to be able to click, tab to, or type into. A control
+/// among these that renders with no clickable area is a *dead control* — the hittability failure the
+/// redesign names ("a button you cannot click is a dead page"). Tag-only because the box dump carries
+/// no attributes; `[role=button]`-style ARIA controls are invisible to it and left for a later pass.
+const INTERACTIVE_TAGS: &[&str] = &[
+    "a", "button", "input", "select", "textarea", "summary", "details", "label",
+];
+
+/// **Jarring invariant — collapsed interactive target (Layer 2 of FIDELITY-SCORING-REDESIGN.md).**
+///
+/// The redesign names "interactive targets hittable" a Phase-0 bar. Hittability fails two ways: a
+/// control **collapses** so it has no clickable area, or a control is **covered** by something painted
+/// over it (a button under a banner). This checks the first — the box-dump-computable half. The
+/// occlusion-cover half needs paint order / opacity, which the geometry snapshot does not carry, and
+/// is left for a later pass (partially surfaced already by [`jarring_overlap`]); this function does
+/// not claim to be the whole invariant.
+///
+/// It counts elements with an interactive tag that Chrome renders with a real clickable box (both axes
+/// ≥ `min_hit`) but Manuk **collapses** (either axis < `min_hit`) — a control the user cannot click.
+/// The "Chrome gives it area" guard is load-bearing: a control the *site* itself collapses (hidden in
+/// both engines) is not our bug, exactly as the overlap guard forgives a deliberate stack. It is
+/// **offset-invariant** — a page shifted 23px collapses nothing — so it never re-charges the constant
+/// offset SHAPE already forgives. Fully-collapsed (0×0) controls never reach here: the probe drops
+/// them, so they surface as a *missing* divergence instead; this catches the single-axis collapse
+/// (a zero-height button from a collapsed flex/grid track) that keeps a box but kills the target.
+pub fn jarring_collapsed_target(
+    chrome: &HashMap<String, Seen>,
+    manuk: &HashMap<String, Seen>,
+    min_hit: i64,
+) -> (usize, Vec<String>) {
+    let hittable = |r: &[i64; 4]| r[2] >= min_hit && r[3] >= min_hit;
+    let mut count = 0usize;
+    let mut examples: Vec<String> = Vec::new();
+    for (id, m) in manuk {
+        if !INTERACTIVE_TAGS.contains(&m.tag.as_str()) {
+            continue;
+        }
+        let Some(c) = chrome.get(id) else { continue };
+        // Chrome gives it a clickable box; we collapse it. That collapse is ours.
+        if hittable(&c.rect) && !hittable(&m.rect) {
+            count += 1;
+            if examples.len() < 3 {
+                examples.push(format!("{id} ({}×{})", m.rect[2], m.rect[3]));
+            }
+        }
+    }
+    examples.sort();
+    (count, examples)
+}
+
 /// The report a tick actually reads.
 pub fn report(clusters: &[Cluster], sites: usize, skipped: usize) {
     println!("\n=== DIFFERENTIAL ORACLE — root causes, ranked by sites explained ===\n");
@@ -729,6 +779,36 @@ mod tests {
             examples,
             vec!["body[0]/section[0]/div[0] ⇄ body[0]/section[0]/div[1]".to_string()]
         );
+    }
+
+    /// **The collapsed-target jarring invariant, and its RED proof.** A `<button>` Chrome renders
+    /// 100×30 (hittable) collapses to 100×0 in Manuk — a dead control, our bug. A `<button>` collapsed
+    /// in BOTH engines (the site hides it) must not count. A `<div>` collapsed by us is not a control,
+    /// so it is ignored. A `<button>` hittable in both is fine.
+    ///
+    /// Dropping the `hittable(&c.rect)` guard makes the both-engines-collapsed button count too — the
+    /// guard is what keeps a control the SITE collapses from being blamed on us.
+    #[test]
+    fn jarring_collapsed_target_blames_only_controls_chrome_gives_area() {
+        let min_hit = 2;
+        let mut chrome: HashMap<String, Seen> = HashMap::new();
+        let mut manuk: HashMap<String, Seen> = HashMap::new();
+        // Our bug: Chrome gives the button a box (100×30); Manuk collapses its height to 0.
+        chrome.insert("body[0]/button[0]".into(), seen("button", [0, 0, 100, 30]));
+        manuk.insert("body[0]/button[0]".into(), seen("button", [0, 0, 100, 0]));
+        // Site-hidden: collapsed in BOTH engines — not our bug.
+        chrome.insert("body[0]/button[1]".into(), seen("button", [0, 0, 100, 0]));
+        manuk.insert("body[0]/button[1]".into(), seen("button", [0, 0, 100, 0]));
+        // Not a control: a collapsed div is ignored.
+        chrome.insert("body[0]/div[0]".into(), seen("div", [0, 0, 100, 30]));
+        manuk.insert("body[0]/div[0]".into(), seen("div", [0, 0, 100, 0]));
+        // A control hittable in both is fine.
+        chrome.insert("body[0]/a[0]".into(), seen("a", [0, 0, 50, 20]));
+        manuk.insert("body[0]/a[0]".into(), seen("a", [0, 0, 50, 20]));
+
+        let (count, examples) = jarring_collapsed_target(&chrome, &manuk, min_hit);
+        assert_eq!(count, 1, "only the control we alone collapse is ours");
+        assert_eq!(examples, vec!["body[0]/button[0] (100×0)".to_string()]);
     }
 
     /// `common_frame` walks to the nearest ancestor **present in both** maps, skipping any absent

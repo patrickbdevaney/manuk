@@ -15125,3 +15125,46 @@ GATES +0; tests +1. Two Layer-2 invariants remain unwired: hittability (reuse th
 and post-load stability (a CLS-equivalent).
 CONSTELLATION: no row — the measuring instrument, not a rendered construct.
 WIKI: docs/wiki/conformance-and-oracles.md (Layer-2 reading-order paragraph).
+
+## Tick 341 — Layer-2 jarring invariant: collapsed interactive target, the dead-control half of hittability (2026-07-21)
+
+CO-#1 (observer tick 328 STEP-2 (1)(d) / FIDELITY-SCORING-REDESIGN.md §1): fidelity-instrument rebuild,
+jarring invariants. Ticks 335/338/339/340 landed SHAPE + h-overflow + sibling-overlap + reading-order; this
+adds the box-dump-computable half of the FOURTH invariant the redesign names — "interactive targets
+hittable" ("a button you cannot click is a dead page").
+
+WHY A NEW INVARIANT, AND WHY ONLY HALF: hittability fails two ways — a control COLLAPSES so it has no
+clickable area, or a control is COVERED by something painted over it (a button under a banner). The box dump
+carries rect + tag + display but NO paint order / opacity, so the occlusion-cover half is not computable from
+it (partially surfaced already by jarring_overlap, left for a later pass). The collapse half IS computable and
+is a real, highly-perceived dead-control failure, so this tick lands it and the doc/name are explicit that it
+is not the whole invariant (function is `jarring_collapsed_target`, not `unhittable`).
+
+THE INVARIANT: `oracle::jarring_collapsed_target(chrome, manuk, min_hit)` counts elements with an interactive
+tag (a/button/input/select/textarea/summary/details/label) that Chrome renders with a real clickable box
+(both axes >= min_hit=2) but Manuk COLLAPSES (either axis below it). The "Chrome gives it area" guard is
+load-bearing exactly like the overlap guard: a control the SITE itself collapses (hidden in both engines) is
+not our bug. It is OFFSET-INVARIANT — a page shifted 23px collapses nothing — so it never re-charges the
+constant offset SHAPE already forgives (unlike an absolute-viewport-position test, which would false-RED a
+control that a benign page offset nudges past the fold; deliberately avoided). Fully-collapsed (0×0) controls
+never reach it — the probe drops both-zero-area elements, so they surface as a *missing* divergence — this
+catches the single-axis collapse (a zero-height button from a collapsed flex/grid track) that keeps a box but
+kills the target. Wired LIVE into run_oracle_cmd (per-site ⚠ N dead-target + `dead_target` in the --emit
+meta).
+
+RED-PROVEN (cp-snapshot restored + re-verified GREEN): dropping the `hittable(&c.rect)` guard (counting
+whenever Manuk collapses, regardless of Chrome) made `jarring_collapsed_target_blames_only_controls_chrome_
+gives_area` FAIL — a button collapsed in BOTH engines (a control the site hides) then counts. The guard is
+what attributes the collapse to us, never to the site.
+
+NO REGRESSION: additive pub fn + INTERACTIVE_TAGS const + one live call site; the meta emit gains a
+`dead_target` field (extra JSON key); the eprintln appends only when >0. manuk-wpt builds clean release (only
+the pre-existing scroll_y unused-assignment warning), 6 oracle tests + 10 existing wpt lib tests green. RED
+edit reverted byte-for-byte. fmt clean.
+
+TICK SHAPE: infrastructure (the fidelity instrument — Part 21; the Phase-0 exit measure now sees dead
+interactive controls, the collapse half of the 4th of 5 jarring invariants; no website-capability change,
+[no-pattern]). GATES +0; tests +1. Remaining unwired: the occlusion-cover half of hittability (needs paint
+order) and post-load stability (a CLS-equivalent, needs a second post-settle snapshot).
+CONSTELLATION: no row — the measuring instrument, not a rendered construct.
+WIKI: docs/wiki/conformance-and-oracles.md (Layer-2 collapsed-target paragraph).

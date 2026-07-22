@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **134** | ticks 1–339 |
-| median tick cycle | **20m** | 133 intervals |
-| median, last 10 | **20m** | 10 intervals |
+| ticks landed | **135** | ticks 1–340 |
+| median tick cycle | **20m** | 134 intervals |
+| median, last 10 | **16m** | 10 intervals |
 | fastest / slowest | 3m / 5.4d | |
-| **ticks per hour** | **0.52** | 257.9h elapsed |
-| median verify wall | **60s** | 73 ticks |
-| wall trend | 39s → 66s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.52** | 258.1h elapsed |
+| median verify wall | **60s** | 74 ticks |
+| wall trend | 39s → 68s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**70 of 134 ticks** (52%) moved a
+**70 of 135 ticks** (52%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **70** capability ticks, median cycle **20m**
-* median diff per tick: **+252 / −26** lines across 8 files
+* median diff per tick: **+251 / −27** lines across 8 files
 
 ## Every tick
 
@@ -231,5 +231,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **337** | 2026-07-21 22:28 | 10m | surface-audit | 65s | +196/−65 | 182 | 81 | 56.0% · | Surface Audit #7: the map covers all of Interop 2026, and it under-counted its own wins (2 |
 | **338** | 2026-07-21 22:37 | 10m | infrastructure | 66s | +230/−74 | 182 | 81 | 56.0% · | Layer-2 jarring invariant: horizontal overflow the oracle can now see (2026-07-21) |
 | **339** | 2026-07-21 22:57 | 20m | infrastructure | 68s | +296/−65 | 182 | 81 | 56.0% · | Layer-2 jarring invariant: sibling overlap, the #1 broken-page perception (2026-07-21) |
+| **340** | 2026-07-21 23:09 | 12m | infrastructure | 68s | +214/−64 | 182 | 81 | 56.0% · | Layer-2 jarring invariant: reading-order inversion, content out of sequence (2026-07-21) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

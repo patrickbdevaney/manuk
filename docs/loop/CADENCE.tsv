@@ -133,3 +133,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 337	dc258fb	1784687282	2026-07-21T22:28:02-04:00	620	surface-audit	65	8	196	65	182	81	3896	6960	0	320	0	Surface Audit #7: the map covers all of Interop 2026, and it under-counted its own wins (2026-07-21)
 338	6f60c03	1784687852	2026-07-21T22:37:32-04:00	570	infrastructure	66	8	230	74	182	81	3896	6960	0	320	0	Layer-2 jarring invariant: horizontal overflow the oracle can now see (2026-07-21)
 339	806908f	1784689039	2026-07-21T22:57:19-04:00	1187	infrastructure	68	8	296	65	182	81	3896	6960	0	320	0	Layer-2 jarring invariant: sibling overlap, the #1 broken-page perception (2026-07-21)
+340	2344e58	1784689744	2026-07-21T23:09:04-04:00	705	infrastructure	68	8	214	64	182	81	3896	6960	0	320	0	Layer-2 jarring invariant: reading-order inversion, content out of sequence (2026-07-21)

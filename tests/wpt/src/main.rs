@@ -1664,6 +1664,9 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
         // SHAPE and overlap both miss (the boxes can be well-shaped and disjoint yet read swapped).
         let (rinv, rinv_skip, rinv_ex) =
             manuk_wpt::oracle::jarring_reading_order(&chrome, &manuk, tol);
+        // And collapsed interactive targets — a control we alone strip of its clickable area (a dead
+        // button), the geometry half of hittability. `min_hit` is the smallest axis a real target has.
+        let (dead, dead_ex) = manuk_wpt::oracle::jarring_collapsed_target(&chrome, &manuk, 2);
         let mut jflag = String::new();
         if hover > 0 {
             jflag.push_str(&format!(
@@ -1681,6 +1684,12 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
             jflag.push_str(&format!(
                 "  ⚠ {rinv} reorder (e.g. {})",
                 rinv_ex.first().map(String::as_str).unwrap_or("")
+            ));
+        }
+        if dead > 0 {
+            jflag.push_str(&format!(
+                "  ⚠ {dead} dead-target (e.g. {})",
+                dead_ex.first().map(String::as_str).unwrap_or("")
             ));
         }
         if ov_skip + rinv_skip > 0 {
@@ -1702,14 +1711,15 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
             let _ = std::fs::create_dir_all(dir);
             let mut out = String::new();
             out.push_str(&format!(
-                "{{\"kind\":\"meta\",\"site\":\"{short}\",\"class\":\"{}\",\"status\":\"ok\",\"probed\":{},\"manuk_ms\":{},\"chrome_ms\":{},\"h_overflow\":{},\"overlap\":{},\"reorder\":{}}}\n",
+                "{{\"kind\":\"meta\",\"site\":\"{short}\",\"class\":\"{}\",\"status\":\"ok\",\"probed\":{},\"manuk_ms\":{},\"chrome_ms\":{},\"h_overflow\":{},\"overlap\":{},\"reorder\":{},\"dead_target\":{}}}\n",
                 flag(args, "--class").unwrap_or("?"),
                 chrome.len(),
                 manuk_ms,
                 chrome_ms,
                 hover,
                 overlap,
-                rinv
+                rinv,
+                dead
             ));
             for d in &divs {
                 out.push_str(&format!(

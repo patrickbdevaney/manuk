@@ -207,8 +207,24 @@ so a disagreement is Manuk pulling one out of place, never a legitimately reorde
 reorders is reflected in Chrome too and the pair agrees). Both orders must be **definite** (past `tol` on the
 deciding axis); a pair too close to call in either engine is skipped, so tolerance jitter never manufactures
 an inversion. Same bound and skipped-group accounting as `jarring_overlap`, and surfaced per site (`⚠ N
-reorder`) and as `reorder` in the `--emit` meta. Two of the five Layer-2 invariants remain unwired —
-hittability (reuse the occlusion-aware hit-test) and post-load stability (a CLS-equivalent).
+reorder`) and as `reorder` in the `--emit` meta.
+
+`oracle::jarring_collapsed_target` takes the fourth Layer-2 invariant — **interactive targets hittable** —
+in its box-dump-computable half. Hittability fails two ways: a control *collapses* so it has no clickable
+area, or a control is *covered* by something painted over it (a button under a banner). This counts the
+first: an element with an interactive tag (`a`/`button`/`input`/`select`/`textarea`/`summary`/`details`/
+`label`) that Chrome renders with a real clickable box (both axes ≥ `min_hit`) but Manuk collapses (either
+axis below it) — a dead control. It is **offset-invariant** (a page shifted 23px collapses nothing, so it
+never re-charges the constant offset SHAPE forgives), and the "Chrome gives it area" guard is load-bearing
+exactly like the overlap guard — a control the *site* itself collapses is hidden in both engines and is not
+our bug. Fully-collapsed (0×0) controls never reach it: the probe drops them, so they surface as a *missing*
+divergence; this catches the single-axis collapse (a zero-height button from a collapsed flex/grid track)
+that keeps a box but kills the target. Surfaced per site (`⚠ N dead-target`) and as `dead_target` in the
+`--emit` meta. **The occlusion-cover half of hittability** (a control under a banner) needs paint order /
+opacity, which the geometry snapshot does not carry; it is partially surfaced already by `jarring_overlap`
+and left for a later pass — this function does not claim to be the whole invariant. Of the five Layer-2
+invariants, only **post-load stability** (a CLS-equivalent, needing a second post-settle snapshot) is now
+entirely unwired.
 
 ## Gates must run the SHIPPING configuration
 
