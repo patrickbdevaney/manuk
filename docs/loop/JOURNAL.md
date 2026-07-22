@@ -15205,3 +15205,36 @@ tests +1.
 CONSTELLATION: no row — the measuring instrument, not a rendered construct.
 WIKI: docs/wiki/conformance-and-oracles.md (root-cause clustering already documented; band is an internal
 signature refinement — WIKI: none, no new user-facing surface).
+
+## Tick 343 — Corpus jarring tally: the invariants become the Phase-0 exit bar, not per-site noise (2026-07-21)
+
+CO-#1 (observer tick 328 STEP-2 / FIDELITY-SCORING-REDESIGN.md §2 Layer 2): the fidelity instrument computes
+four Layer-2 jarring invariants per site (overlap t339, h-overflow t338, reorder t340, dead-target t341) and
+emits each into the result file's meta line — but `run_oracle_merge`, the command that produces the
+CORPUS-WIDE report, parsed only status/manuk_ms/chrome_ms and DISCARDED all four. So the invariants that
+CERTIFY Phase 0 were measured every crawl and thrown away at merge time; the sweep never surfaced "N sites
+look broken."
+
+THE FIX: `oracle::tally_jarring(per_site) -> [(sites_affected, total); 4]` rolls the per-site rows into the
+corpus tally, and run_oracle_merge prints a "JARRING INVARIANTS (Phase-0 exit bar)" section — per invariant,
+how many of the diffed sites exhibit it (+ %) and the raw instance count. SITES-AFFECTED leads on purpose:
+the redesign gates on the fraction of the corpus that is NOT jarring, so one site with 40 overlaps must not
+outweigh 40 sites with one each (that is the exact site-vs-instance amplification the whole redesign exists to
+kill). Result files predating an invariant read 0 for it — correct, they measured before it existed.
+
+RED-PROVEN (cp-snapshot restored + re-verified GREEN): dropping the `row[k] > 0` guard on the sites-affected
+increment (counting every site regardless of its value) made `tally_jarring_counts_sites_affected_not_just_
+instances` FAIL — a clean site (all-zero row) then falsely counts as affected (overlap reads 3 sites vs the
+true 2). That guard is what makes "fraction of the corpus that is jarring" an honest number.
+
+NO REGRESSION: a new pub fn + pub const JARRING_LABELS in the lib (testable seam), and in the binary a
+per-site Vec accumulated in the existing meta arm + one report section after SLOW. The four `num(line, …)`
+reads reuse the existing parser; no existing meta field changed. manuk-wpt builds clean release (only the
+pre-existing scroll_y warning), 8 oracle + 10 existing wpt lib tests green. RED edit reverted byte-for-byte.
+fmt clean.
+
+TICK SHAPE: infrastructure (the fidelity instrument — Part 21; the Layer-2 invariants now roll up into the
+corpus Phase-0 exit-bar report instead of being discarded at merge; no website-capability change,
+[no-pattern]). GATES +0; tests +1.
+CONSTELLATION: no row — the measuring instrument, not a rendered construct.
+WIKI: docs/wiki/conformance-and-oracles.md (corpus roll-up / Phase-0 exit-bar paragraph).

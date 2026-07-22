@@ -226,6 +226,16 @@ and left for a later pass — this function does not claim to be the whole invar
 invariants, only **post-load stability** (a CLS-equivalent, needing a second post-settle snapshot) is now
 entirely unwired.
 
+**The corpus roll-up — where the invariants become the exit bar.** The per-site invariant counts are emitted
+into each result file's meta line (`overlap` / `h_overflow` / `reorder` / `dead_target`), but a per-site
+count certifies nothing about the corpus. `oracle::tally_jarring` rolls a slice of per-site rows into
+`(sites_affected, total)` per invariant, and `oracle-merge` prints it as the **JARRING INVARIANTS (Phase-0
+exit bar)** section: for each invariant, how many of the diffed sites exhibit it (with a percentage) and the
+raw instance count. Sites-affected leads deliberately — the redesign gates on the *fraction of the corpus
+that is not jarring*, so one site with 40 overlaps must not outweigh 40 sites with one each. Result files
+that predate an invariant read 0 for it, which is correct. This is the number a Phase-0 exit claim is made
+against; before it, the invariants were computed every crawl and discarded at merge time.
+
 ## Gates must run the SHIPPING configuration
 
 The parity harness **defaulted to the simple cascade while the shell shipped Stylo** — so parity, fidelity

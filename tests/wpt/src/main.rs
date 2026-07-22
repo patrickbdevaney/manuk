@@ -1842,6 +1842,9 @@ fn run_oracle_merge(args: &[String]) {
         BTreeMap::new();
     let (mut ok, mut hang, mut fail, mut discard) = (0usize, 0usize, 0usize, 0usize);
     let mut slow: Vec<(i64, i64, String)> = Vec::new();
+    // Per-site jarring-invariant counts [overlap, h_overflow, reorder, dead_target], rolled up into
+    // the Phase-0 exit-bar tally (FIDELITY-SCORING-REDESIGN.md §2 Layer 2) after the crawl.
+    let mut jarring_rows: Vec<[i64; 4]> = Vec::new();
 
     let Ok(entries) = std::fs::read_dir(dir) else {
         eprintln!("no crawl results in {dir}");
@@ -1866,6 +1869,15 @@ fn run_oracle_merge(args: &[String]) {
                         if c > 0 && m > c * 3 && m > 3000 {
                             slow.push((m, c, field(line, "site")));
                         }
+                        // The Layer-2 jarring invariants — the actual Phase-0 exit bar. Emitted per
+                        // site; rolled up across the corpus below (older result files without these
+                        // fields read 0, which is correct — they predate the invariant).
+                        jarring_rows.push([
+                            num(line, "overlap"),
+                            num(line, "h_overflow"),
+                            num(line, "reorder"),
+                            num(line, "dead_target"),
+                        ]);
                     }
                     "HANG" => hang += 1,
                     "DISCARDED" => discard += 1,
@@ -1930,6 +1942,40 @@ fn run_oracle_merge(args: &[String]) {
                 m / c.max(&1)
             );
         }
+    }
+
+    // **The Phase-0 exit bar.** The jarring invariants certify Phase 0 (FIDELITY-SCORING-REDESIGN.md
+    // §2 Layer 2): a page can be 30px offset everywhere and still pass all of them. Reported as
+    // sites-affected out of the diffed corpus — the honest "what fraction of the web looks broken"
+    // number — with the raw instance count alongside. Computed per site, discarded until now.
+    if ok > 0 {
+        let agg = manuk_wpt::oracle::tally_jarring(&jarring_rows);
+        println!(
+            "\n──── JARRING INVARIANTS (Phase-0 exit bar — sites affected of {ok} diffed) ────\n"
+        );
+        let notes = [
+            "text on text / control under a banner",
+            "content spilled off-screen",
+            "content out of reading sequence",
+            "a control collapsed to no clickable area",
+        ];
+        for (i, (sites, total)) in agg.iter().enumerate() {
+            let label = manuk_wpt::oracle::JARRING_LABELS[i];
+            let flag = if *sites == 0 {
+                "\x1b[32m✓\x1b[0m"
+            } else {
+                "\x1b[33m⚠\x1b[0m"
+            };
+            let pct = 100.0 * *sites as f64 / ok as f64;
+            println!(
+                "  {flag} {label:<12} {sites:>4} sites ({pct:>4.1}%)   {total:>5} total   — {}",
+                notes[i]
+            );
+        }
+        println!(
+            "\n  A jarring-free page need not be pixel-identical; these are the failures a user actually\n  \
+             perceives as broken. Phase-0 exit wants these near zero across the corpus."
+        );
     }
 
     let mut ranked: Vec<_> = acc.into_iter().collect();

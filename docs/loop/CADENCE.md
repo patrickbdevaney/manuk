@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **136** | ticks 1–341 |
-| median tick cycle | **20m** | 135 intervals |
+| ticks landed | **137** | ticks 1–342 |
+| median tick cycle | **20m** | 136 intervals |
 | median, last 10 | **12m** | 10 intervals |
 | fastest / slowest | 3m / 5.4d | |
-| **ticks per hour** | **0.52** | 258.3h elapsed |
-| median verify wall | **60s** | 75 ticks |
-| wall trend | 39s → 68s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.53** | 258.5h elapsed |
+| median verify wall | **60s** | 76 ticks |
+| wall trend | 39s → 70s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**70 of 136 ticks** (51%) moved a
+**70 of 137 ticks** (51%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **70** capability ticks, median cycle **20m**
-* median diff per tick: **+248 / −28** lines across 8 files
+* median diff per tick: **+246 / −28** lines across 8 files
 
 ## Every tick
 
@@ -233,5 +233,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **339** | 2026-07-21 22:57 | 20m | infrastructure | 68s | +296/−65 | 182 | 81 | 56.0% · | Layer-2 jarring invariant: sibling overlap, the #1 broken-page perception (2026-07-21) |
 | **340** | 2026-07-21 23:09 | 12m | infrastructure | 68s | +214/−64 | 182 | 81 | 56.0% · | Layer-2 jarring invariant: reading-order inversion, content out of sequence (2026-07-21) |
 | **341** | 2026-07-21 23:21 | 12m | infrastructure | 80s | +195/−40 | 182 | 81 | 56.0% · | Layer-2 jarring invariant: collapsed interactive target, the dead-control half of hittabil |
+| **342** | 2026-07-21 23:35 | 14m | infrastructure | 70s | +204/−61 | 182 | 81 | 56.0% · | Root-cause clustering: band geometry by offset magnitude (near-miss vs page-collapse) (202 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

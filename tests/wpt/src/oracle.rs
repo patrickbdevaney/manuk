@@ -570,6 +570,32 @@ pub fn jarring_collapsed_target(
     (count, examples)
 }
 
+/// The four jarring invariants a per-site oracle run emits, in fixed order for aggregation.
+/// Mirrors the `--emit` meta fields `overlap` / `h_overflow` / `reorder` / `dead_target`.
+pub const JARRING_LABELS: [&str; 4] = ["overlap", "h-overflow", "reorder", "dead-target"];
+
+/// **Aggregate the per-site jarring-invariant counts into the corpus Phase-0 tally.**
+///
+/// The invariants are computed and emitted per site, but the number that certifies Phase 0 is
+/// corpus-wide: *how many sites* exhibit each jarring failure, and how many instances in total. This
+/// rolls a slice of per-site `[overlap, h_overflow, reorder, dead_target]` rows into
+/// `(sites_affected, total)` per invariant — sites-affected first because the redesign gates on the
+/// fraction of the corpus that is *not* jarring, not on the raw instance count (one site with 40
+/// overlaps must not outweigh 40 sites with one each). A site contributes to `sites_affected` for an
+/// invariant only when its count for that invariant is > 0.
+pub fn tally_jarring(per_site: &[[i64; 4]]) -> [(usize, i64); 4] {
+    let mut agg = [(0usize, 0i64); 4];
+    for row in per_site {
+        for (k, slot) in agg.iter_mut().enumerate() {
+            if row[k] > 0 {
+                slot.0 += 1;
+                slot.1 += row[k];
+            }
+        }
+    }
+    agg
+}
+
 /// The report a tick actually reads.
 pub fn report(clusters: &[Cluster], sites: usize, skipped: usize) {
     println!("\n=== DIFFERENTIAL ORACLE — root causes, ranked by sites explained ===\n");
@@ -652,6 +678,33 @@ mod tests {
             "the 1400px collapse lands in the 1024px band, got {:?}",
             clusters[1].signature
         );
+    }
+
+    /// **The corpus jarring tally, and its RED proof.** Three sites: site A has 2 overlaps + 1
+    /// reorder, site B has 3 overlaps, site C is clean. The tally must report overlap as (2 sites, 5
+    /// total) and reorder as (1 site, 1 total) — sites-affected counts only the sites with a nonzero
+    /// count, so one busy site does not masquerade as many.
+    ///
+    /// Dropping the `row[k] > 0` guard on the sites-affected increment (counting every site) makes
+    /// overlap read (3 sites, 5) — the clean site C then falsely counts as affected, and this fails.
+    /// That guard is what makes "fraction of the corpus that is jarring" an honest number.
+    #[test]
+    fn tally_jarring_counts_sites_affected_not_just_instances() {
+        // rows are [overlap, h_overflow, reorder, dead_target].
+        let per_site = [
+            [2, 0, 1, 0], // site A
+            [3, 0, 0, 0], // site B
+            [0, 0, 0, 0], // site C — clean
+        ];
+        let agg = tally_jarring(&per_site);
+        assert_eq!(
+            agg[0],
+            (2, 5),
+            "overlap: 2 sites affected, 5 instances total"
+        );
+        assert_eq!(agg[1], (0, 0), "no h-overflow anywhere");
+        assert_eq!(agg[2], (1, 1), "reorder: 1 site, 1 instance");
+        assert_eq!(agg[3], (0, 0), "no dead targets");
     }
 
     /// **The Layer-1 SHAPE gate, and its RED proof.** A page uniformly shifted 23px down: the
