@@ -16768,3 +16768,31 @@ behavior — a pinned honest no is map data, a pinned typeof is a lie]). GATES
 G_PROBE_CAPABILITIES +1 pinned claim (stacklimit:no = IN the wall). CONSTELLATION: none —
 covered by the audit #13 log + this pin.
 WIKI: docs/wiki/js-engine.md — Error.stackTraceLimit honest no (tick 400).
+
+## Tick 401 — selector-path keying lands: the two-sided symmetry change (2026-07-22)
+
+HYPOTHESIS (from the t399 spec, predictions written before the run): replacing the
+tag[same-tag-index] key with tag.SIG:nth-child(N) — N over ALL element siblings, SIG =
+fnv1a-32 over the ASCII-lowercased sorted deduped class list — on BOTH sides (chrome.rs
+pathOf, main.rs path_of, byte-identical contract) will (a) collapse okta's 316 phantom
+display diffs to near the ONE genuine missing box t395 measured, (b) make the mispairing
+class book honestly as missing+extra (tree drift), (c) raise MISSING where trees genuinely
+drift — an honest rise, not to be tuned away. RED protocol: perturb ONE side's sig (extra
+token in the hash) → every classed element on a fixture goes missing; restore → align.
+Baseline-reset rule: re-keyed numbers are NOT comparable to the t392 ledger; no trend splicing.
+
+RESULTS: symmetry GREEN on a hostile fixture (case/tabs/dupes/Tailwind-slash classes: 0
+divergences over 9 probed); RED one-sided perturb → exactly the 5 classed elements missing,
+classless still pair; restore → 0. okta e2e: the 316-hit phantom display family → 0–35 across
+two quiet runs (run-variance of our own render), MISSING rose ~1→128 = honest tree drift (our
+JS visibly fails to mount components: stubScriptElement null, location.search undefined —
+named, actionable engine bugs the phantom mass was hiding). Doc-comment format references
+updated (chrome.rs, oracle.rs). The full re-keyed corpus re-crawl banks as its own tick — the
+baseline-reset rule means no pre-401 ledger number is comparable.
+
+TICK SHAPE: instrument (the board's CO-#1: identity that survives one inserted div; [pattern:
+when a key is computed in two languages, hash the SAME code units — UTF-16 both sides — and
+pad the hex; symmetry is the contract, not an implementation detail]). GATES +0 (instrument-
+side; the RED proof is the perturbation protocol, recorded here and in the wiki).
+CONSTELLATION: none — instrument-side. WIKI: docs/wiki/conformance-and-oracles.md — LANDED
+addendum under the t399 spec.

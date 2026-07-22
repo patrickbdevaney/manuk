@@ -715,3 +715,21 @@ Build order (one tick): (1) fnv1a-32 in the JS probe + sig in `pathOf`; (2) the 
 element on a fixture page must go missing; restore → align; (4) e2e okta: display diffs must
 drop by roughly the phantom mass; (5) re-crawl banks the re-keyed baseline as the NEW ratchet
 line (old numbers are not comparable — say so in the journal, do not splice trends).
+
+### LANDED (tick 401) — the keying is live, and the predictions held
+
+Both sides now compute `tag.SIG:nth-child(N)` (chrome.rs `sigOf`/`pathOf`, main.rs
+`sig_of`/`path_of`). Contract details fixed at build time: N is 1-based over ALL element
+siblings; SIG hashes the ASCII-lowercased sorted deduped class list joined with `.`, and the
+hash runs over UTF-16 CODE UNITS on both sides (JS `charCodeAt` ↔ Rust `encode_utf16`) —
+hashing UTF-8 bytes on the Rust side would silently skew every non-ASCII class name. The hex
+is zero-padded to 8 on both sides. Hashing also keeps Tailwind's `/` out of the path, so
+`rfind('/')` parent-walks (common_frame, jarring siblings) stay format-agnostic.
+
+Evidence: (RED) a one-sided sig perturbation books exactly the 5 classed elements of a 9-element
+fixture as missing — classless and empty-class elements still pair; restore → 0 divergences.
+(e2e) okta's 316-hit phantom display family collapsed to 0–35 across two quiet runs (residue is
+run-variance in our own render, not pairing), while MISSING rose to ~128 — the honest tree-drift
+booking (our JS demonstrably fails to mount components there: named errors on the console).
+Baseline-reset rule is IN FORCE: no ledger number from before tick 401 is comparable to one
+after; re-crawl and re-rank before steering off any display-diff family.

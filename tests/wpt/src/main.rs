@@ -1592,17 +1592,41 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
         let rects = page.root_box.node_rects(page.dom());
         let styles = page.styles_map();
         let dom = page.dom();
-        // The SAME path Chromium's probe computes — index among same-tag preceding element siblings,
-        // chained to the root. Both engines are looking at the same snapshot, so the same walk must
-        // produce the same names; if it does not, that is a TREE divergence, which is itself a real
-        // and important finding rather than noise to be suppressed.
-        // Mirrors Chromium's `pathOf` EXACTLY, including the part that is easy to get wrong: an
-        // element whose parent is not an element (i.e. `<html>`) contributes NO component, because
-        // `e.parentElement` is null there and the JS loop never runs for it. Emitting `html[0]` on
-        // our side shifts every single key by one level, and the first run did exactly that — the
-        // oracle dutifully reported `<html>` and `<body>` as MISSING BOXES on every site, with total
-        // confidence. Two engines agreeing on a naming scheme is a precondition for the diff meaning
-        // anything at all.
+        // The SAME path Chromium's probe computes — selector-path keying (tick 399 spec):
+        // `tag.SIG:nth-child(N)`, N 1-based over ALL element siblings, SIG = fnv1a-32 over the
+        // ASCII-lowercased SORTED deduped class list joined with '.'; classless elements emit
+        // `tag:nth-child(N)`. The class signature is the identity change that matters: a
+        // positional counterpart with a different class list now FAILS the key lookup and books
+        // as missing+extra (tree drift, which it is) instead of minting a phantom style diff
+        // between two unrelated elements (tick 395: okta's 316 "display diffs" were exactly this).
+        // This mirrors the JS `sigOf`/`pathOf` in chrome.rs BYTE-IDENTICALLY — the hash runs over
+        // UTF-16 code units (encode_utf16) because that is what charCodeAt yields. And it keeps
+        // the part that is easy to get wrong: an element whose parent is not an element (i.e.
+        // `<html>`) contributes NO component, because `e.parentElement` is null there and the JS
+        // loop never runs for it. Emitting a root component on our side once shifted every key by
+        // one level and reported `<html>` MISSING on every site, with total confidence. Two
+        // engines agreeing on a naming scheme is a precondition for the diff meaning anything.
+        let sig_of = |n: manuk_dom::NodeId| -> String {
+            let Some(cls) = dom.element(n).and_then(|e| e.attr("class")) else {
+                return String::new();
+            };
+            let mut toks: Vec<String> = cls
+                .split_ascii_whitespace()
+                .map(|t| t.to_ascii_lowercase())
+                .collect();
+            if toks.is_empty() {
+                return String::new();
+            }
+            toks.sort();
+            toks.dedup();
+            let joined = toks.join(".");
+            let mut h: u32 = 0x811c9dc5;
+            for u in joined.encode_utf16() {
+                h ^= u32::from(u);
+                h = h.wrapping_mul(0x0100_0193);
+            }
+            format!(".{h:08x}")
+        };
         let path_of = |n: manuk_dom::NodeId| -> Option<String> {
             let mut parts: Vec<String> = Vec::new();
             let mut cur = n;
@@ -1612,16 +1636,16 @@ fn run_oracle_cmd(args: &[String], fonts: &FontContext) {
                     break;
                 }
                 let tag = dom.tag_name(cur)?;
-                let mut i = 0usize;
+                let mut i = 1usize;
                 for sib in dom.children(parent) {
                     if sib == cur {
                         break;
                     }
-                    if dom.is_element(sib) && dom.tag_name(sib) == Some(tag) {
+                    if dom.is_element(sib) {
                         i += 1;
                     }
                 }
-                parts.push(format!("{tag}[{i}]"));
+                parts.push(format!("{tag}{}:nth-child({i})", sig_of(cur)));
                 cur = parent;
             }
             parts.reverse();

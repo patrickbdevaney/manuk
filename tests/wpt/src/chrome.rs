@@ -74,19 +74,49 @@ pub fn oracle_probe(
     // does not put ids on things. Across 265 sites the oracle was about to be very nearly blind —
     // and, worse, it would have reported "no divergences" with complete confidence.
     //
-    // A path (`div[0]/main[0]/p[3]`) is computable identically by both engines from the same
+    // A path (`div.a1b2c3d4:nth-child(1)/main:nth-child(2)/p:nth-child(4)`) is computable
+    // identically by both engines from the same
     // snapshot, and it names EVERY element rather than the handful an author chose to label. The
     // 6,000-element cap is a bound on probe cost, not on ambition, and it is reported so a truncated
     // page can never masquerade as a complete one.
     let probe = r#"<script>
 (function(){
   var out = {};
+  // Selector-path keying (tick 399 spec): `tag.SIG:nth-child(N)`. N counts ALL element
+  // siblings (1-based); SIG is fnv1a-32 over the ASCII-lowercased, SORTED, deduped class
+  // list joined with '.'. Sorted so framework class-shuffling keeps identity; hashed so a
+  // 40-class Tailwind string cannot bloat the key (or smuggle a '/' into the path). An
+  // element whose class list differs from its positional counterpart FAILS the lookup and
+  // books as tree drift — instead of minting a phantom style diff between two strangers.
+  // This function and Rust's `sig_of`/`path_of` (main.rs) are a byte-identical contract:
+  // fnv over UTF-16 code units there too (encode_utf16), same whitespace split, same sort.
+  function fnv(str){
+    var h = 0x811c9dc5;
+    for (var i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return h >>> 0;
+  }
+  function sigOf(e){
+    var cls = e.getAttribute('class');
+    if (!cls) return '';
+    var toks = cls.split(/[ \t\n\f\r]+/), a = [];
+    for (var i = 0; i < toks.length; i++) {
+      if (toks[i]) a.push(toks[i].replace(/[A-Z]/g, function(c){ return c.toLowerCase(); }));
+    }
+    if (!a.length) return '';
+    a.sort();
+    var u = [];
+    for (var j = 0; j < a.length; j++) { if (j === 0 || a[j] !== a[j-1]) u.push(a[j]); }
+    return '.' + ('0000000' + fnv(u.join('.')).toString(16)).slice(-8);
+  }
   function pathOf(e){
     var p = [];
     while (e && e.nodeType === 1 && e.parentElement) {
-      var i = 0, s = e;
-      while ((s = s.previousElementSibling)) { if (s.tagName === e.tagName) i++; }
-      p.unshift(e.tagName.toLowerCase() + '[' + i + ']');
+      var i = 1, s = e;
+      while ((s = s.previousElementSibling)) i++;
+      p.unshift(e.tagName.toLowerCase() + sigOf(e) + ':nth-child(' + i + ')');
       e = e.parentElement;
     }
     return p.join('/');

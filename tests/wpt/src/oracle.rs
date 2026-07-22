@@ -216,7 +216,7 @@ fn display_agrees(chrome: &str, manuk: &str) -> bool {
 }
 
 /// The nearest ancestor of `path` present in **both** engine maps — the reference frame for
-/// parent-relative (SHAPE) scoring. Keys are `tag[i]/tag[i]/…` from the root, so an ancestor's key
+/// parent-relative (SHAPE) scoring. Keys are `tag.SIG:nth-child(n)/…` from the root, so an ancestor's key
 /// is a prefix of its descendants'; dropping the last `/component` walks up one level. Returns the
 /// (chrome, manuk) boxes of the closest such ancestor, or `None` for a root-level element (no `/`),
 /// where there is nothing to subtract and the absolute position is itself the shape.
@@ -378,7 +378,7 @@ pub fn jarring_h_overflow(
 /// is the hittability invariant's job (occlusion-aware hit-test), not this one.
 ///
 /// Groups larger than `MAX_GROUP` siblings skip the O(n²) pairwise scan; the count of skipped groups
-/// is returned so a bounded scan is never mistaken for a clean page. Keys are `tag[i]/…` paths, so the
+/// is returned so a bounded scan is never mistaken for a clean page. Keys are `tag.SIG:nth-child(n)/…` paths, so the
 /// parent is the prefix before the last `/`.
 pub fn jarring_overlap(
     chrome: &HashMap<String, Seen>,
