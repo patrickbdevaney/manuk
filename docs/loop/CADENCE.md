@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **165** | ticks 1–372 |
-| median tick cycle | **19m** | 164 intervals |
+| ticks landed | **166** | ticks 1–373 |
+| median tick cycle | **19m** | 165 intervals |
 | median, last 10 | **7m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.62** | 266.5h elapsed |
-| median verify wall | **60s** | 104 ticks |
+| **ticks per hour** | **0.62** | 266.8h elapsed |
+| median verify wall | **60s** | 105 ticks |
 | wall trend | 39s → 57s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**90 of 165 ticks** (55%) moved a
+**91 of 166 ticks** (55%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **90** capability ticks, median cycle **19m**
+* **91** capability ticks, median cycle **19m**
 * median diff per tick: **+234 / −30** lines across 8 files
 
 ## Every tick
@@ -262,5 +262,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **370** | 2026-07-22 07:15 | 9m | capability | 55s | +294/−69 | 183 | 81 | 56.0% · | the mixer: two playing elements, one device, both audible (2026-07-22) |
 | **371** | 2026-07-22 07:19 | 5m | capability-probe | 57s | +67/−34 | 183 | 81 | 56.0% · | container queries probed to the exact dead wire; the build is now specified (2026-07-22) |
 | **372** | 2026-07-22 07:35 | 16m | capability | 59s | +92/−35 | 183 | 81 | 56.0% · | pagereveal: the MPA lifecycle hook, with the spec's own null (2026-07-22) |
+| **373** | 2026-07-22 07:49 | 14m | capability | 56s | +105/−37 | 183 | 81 | 56.0% · | pageswap: the outgoing half of the MPA lifecycle (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

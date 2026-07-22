@@ -3191,6 +3191,30 @@ impl Page {
         self.drain_element_scrolls();
     }
 
+    /// Fire `pageswap` on the OUTGOING document — the MPA companion to `pagereveal` (t372/373).
+    /// Called by the host at the one moment it is true: navigation is committed and this page is
+    /// about to be replaced. `.viewTransition` is null (the spec's no-transition value — no
+    /// cross-document transition animation exists here, a named non-claim).
+    #[cfg(feature = "spidermonkey")]
+    pub fn fire_pageswap(&mut self) {
+        let Some(ctx) = &self.js else { return };
+        let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+            .root_box
+            .node_rects(&self.dom)
+            .into_iter()
+            .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+            .collect();
+        let js = "(function(){ try { var e; try { e = new Event('pageswap'); } \
+                  catch(_) { e = { type: 'pageswap' }; } e.viewTransition = null; \
+                  dispatchEvent(e); } catch(_) {} })()";
+        if let Err(e) = manuk_js::eval_in_page(ctx, &mut self.dom, js, &rects, &self.styles) {
+            tracing::debug!("pageswap: {e}");
+        }
+    }
+
+    #[cfg(not(feature = "spidermonkey"))]
+    pub fn fire_pageswap(&mut self) {}
+
     /// **Fire the document lifecycle: `DOMContentLoaded`, then `load`.**
     ///
     /// Neither event was EVER dispatched by this engine — grep found zero occurrences. A site whose

@@ -230,6 +230,8 @@ it — indistinguishable by inspection, caught by the stamp.
 `__fireLoad` now dispatches `pagereveal` after `load`, carrying `.viewTransition === null` — the
 spec's OWN value for the no-transition case (the event fires on every page activation, transition
 or not), so entry-animation code hooked on it runs correctly. Not a stub: null is what Chrome
-hands the same listener on a plain navigation. Residue: `pageswap` (fires before navigation-away)
-needs a pre-nav dispatch seam the shell lacks; the `@view-transition` MPA animation itself is a
-subsystem and is not claimed. Claims pr-fired/pr-vt-null ride g_mse_join.
+hands the same listener on a plain navigation. `pageswap` landed one tick later (t373): `Page::fire_pageswap` — a dispatch through the existing
+`eval_in_page` plumbing, no new PageContext surface — called at the shell's `stash_current`, the
+outgoing document's last moment alive before every navigation. Same honest null. The
+`@view-transition` MPA animation itself is a subsystem and is not claimed. Claims
+pr-/ps-fired/vt-null all ride g_mse_join.

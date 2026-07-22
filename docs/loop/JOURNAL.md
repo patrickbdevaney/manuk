@@ -16182,3 +16182,26 @@ animation itself.
 TICK SHAPE: capability (the MPA activation hook — entry-animation code on pagereveal now runs, with the spec's own null; [host-native pattern: one dispatch at the lifecycle moment the engine already owns]). GATES claims +2 (pr-fired, pr-vt-null in g_mse_join = IN the wall); constellation cross-doc VT row unknown→partial.
 CONSTELLATION: app / cross-document View Transitions → partial (pagereveal landed; pageswap + animation residue).
 WIKI: docs/wiki/frameworks.md — pagereveal (activation hook, the spec's null, pageswap residue). [no-pattern]
+
+## Tick 373 — pageswap: the outgoing half of the MPA lifecycle (2026-07-22)
+
+The t372 residue. `pageswap` fires on the OUTGOING document before a navigation replaces it — the
+hook exit-animation and state-flush code listens on (paired with pagereveal, same spec, same honest
+null: .viewTransition is null when no cross-doc transition exists, which is every navigation here).
+The seam the shell lacked is small: the outgoing page is still alive at stash_current(), the moment
+before every navigation stashes it.
+
+HYPOTHESIS: Page::fire_pageswap (a dispatch through the existing eval_in_page plumbing — no new
+PageContext method) + one call at the top of stash_current. Claims ride g_mse_join: a pageswap
+listener registered during parse, fire_pageswap called host-side, ps-fired + ps-vt-null asserted
+from the record. RED = delete the shell call site's dispatch (the event never fires and every exit
+hook is dead — the pre-tick state).
+RESULT — LANDED. Page::fire_pageswap (dispatch via the existing eval_in_page plumbing — no new
+PageContext surface) + one call at the top of the shell's stash_current (the outgoing document's
+last moment alive, on EVERY navigation path that stashes). Claims ps-fired + ps-vt-null in g_mse_join.
+RED-PROVEN: dispatch deleted from the eval snippet → the claim fails with the record showing no ps
+entries (the pre-tick dead-exit-hook state). manuk-shell 70/70 + teardown EXIT 0; fmt clean.
+
+TICK SHAPE: capability (pageswap — exit-animation and state-flush hooks on the outgoing page now run; the MPA lifecycle PAIR is complete with the spec's own nulls; [host-native pattern: eval_in_page dispatch at the lifecycle moment the shell owns]). GATES claims +2 (ps-fired, ps-vt-null in g_mse_join = IN the wall); constellation cross-doc VT residue narrowed to the animation subsystem.
+CONSTELLATION: app / cross-document View Transitions → pageswap landed (lifecycle pair complete).
+WIKI: docs/wiki/frameworks.md — pageswap addendum (eval_in_page dispatch, stash_current seam).

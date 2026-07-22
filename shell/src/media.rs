@@ -626,6 +626,10 @@ mod tests {
       R.push('pr-fired:true');
       R.push('pr-vt-null:' + (e.viewTransition === null));
     }});
+    addEventListener('pageswap', function (e) {{
+      R.push('ps-fired:true');
+      R.push('ps-vt-null:' + (e.viewTransition === null));
+    }});
     var TYPE = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
     var BYTES = new Uint8Array([{bytes_js}]);
     try {{
@@ -737,6 +741,15 @@ mod tests {
         assert!(
             page.take_media_props().is_empty(),
             "a drain is a DRAIN — the same writes must not be redelivered every frame"
+        );
+
+        // ── pageswap (tick 373): the host fires it on the outgoing page; the listener
+        //    registered during parse records it. RED: delete the dispatch in fire_pageswap.
+        page.fire_pageswap();
+        let record2 = page.dom().text_content(out);
+        assert!(
+            record2.contains("ps-fired:true") && record2.contains("ps-vt-null:true"),
+            "pageswap must reach the page with the spec's null — got: {record2}"
         );
 
         // ── The stream crossed to the host, named for the right element, byte for byte.

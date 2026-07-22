@@ -3293,6 +3293,11 @@ impl App {
     /// for the blank/home page. Called before every navigation so the page we leave can be
     /// restored instantly on Back/Forward.
     fn stash_current(&mut self) {
+        // The outgoing page's last breath (tick 373): `pageswap` fires while the document is
+        // still alive — exit animations and state-flush hooks listen on it.
+        if let Some(p) = self.page.as_mut() {
+            p.fire_pageswap();
+        }
         let Some(page) = self.page.take() else { return };
         let url = self.url.clone();
         if url.is_empty() || url == "about:blank" {
