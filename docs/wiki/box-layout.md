@@ -1017,3 +1017,21 @@ justification moves, the element just earns the rect editors and caret libraries
 Break but carries its TEXT's owner, which already has geometry from its words. Claimed in
 manuk-layout `a_br_on_a_nonempty_line_has_a_zero_width_box` (RED: sever the arm → no rect).
 E2E: usa.gov's br rows went missing→geometry-near-miss ([872 52 0×24] vs [912 55 0×17]).
+
+## The default object size lives in USED-size layout (tick 389)
+
+CSS-Images §4.4: a replaced element with no intrinsic dimensions and no ratio-derivable size is
+**300×150** — it neither fills its container nor collapses. The icon idiom `<svg viewBox="0 0 24
+24">` (no width/height anywhere, sizing left to CSS that may never target it) rendered **784×0**
+here: the `Dim::Auto` width fell through to the block fill arm and the height was the (empty)
+content height — full-width, invisible, and every icon-only `<button>` collapsed to a dead
+target with it (the tick-380 oracle's missing-svg + dead-target families). The fix sits AFTER
+author width resolution and the definite-height×ratio derivation (both must win — the tick-153
+lesson: never in `apply_ua_defaults`, where it beat author CSS and regressed css-sizing) and
+covers `svg | canvas | video | iframe | object | embed`; `<img>` is deliberately excluded — a
+sourceless image has no default object size in any browser. The height half fires only when the
+WIDTH half did (a `used_default_object_size` flag), so ratio-derived heights are untouched.
+Claimed in manuk-layout `an_unsized_svg_gets_the_default_object_size` (was RED at 784×0).
+RESIDUE (named): `viewBox` does not yet feed an intrinsic ratio (an `<svg width="48" viewBox>`
+derives height only from dimension-attr hints today); SVG internals (path/g) still have no boxes
+of their own — that is the svg-geometry organ, not this fix.

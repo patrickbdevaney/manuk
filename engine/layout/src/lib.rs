@@ -1812,6 +1812,29 @@ impl Ctx<'_> {
                 }
             }
         }
+        // **The default object size (CSS-Images §4.4), in USED-size layout.** A replaced element
+        // with no intrinsic dimensions, no ratio-derivable size and `auto` width does not fill its
+        // container and does not collapse — it is 300×150. The icon idiom `<svg viewBox="0 0 24
+        // 24">` (no width/height anywhere) rendered 784×0 here: full container width, zero height,
+        // invisible — and every icon-only `<button>` collapsed with it (the tick-380 oracle's
+        // dead-target and missing-svg families). `<img>` is deliberately NOT in the list: a
+        // sourceless/broken image has no default object size in any browser. Applied here and not
+        // in the UA defaults because an AUTHOR width must win and a definite-height-plus-ratio
+        // derivation must win — both already resolved above (the tick-153 lesson).
+        let mut used_default_object_size = false;
+        if s.width == Dim::Auto
+            && !s.width_stretch
+            && s.width_keyword.is_none()
+            && taffy_known.is_none()
+            && matches!(
+                self.dom.tag_name(node),
+                Some("svg" | "canvas" | "video" | "iframe" | "object" | "embed")
+            )
+            && !matches!((s.aspect_ratio, s.height), (Some(r), Dim::Px(_)) if r > 0.0)
+        {
+            width = 300.0;
+            used_default_object_size = true;
+        }
         // `box-sizing:border-box` — the specified width is the border box, so the content
         // width is that minus padding + border. (`auto` already resolves to content width.)
         let bs_extra_w = if s.box_sizing == BoxSizing::BorderBox {
@@ -1976,6 +1999,11 @@ impl Ctx<'_> {
             }
             _ => own_definite_h.unwrap_or(content_height),
         };
+        // The other half of the default object size: a defaulted 300-wide replaced box with no
+        // definite height and no ratio is 150 tall — not its (empty) content height.
+        if used_default_object_size && own_definite_h.is_none() && s.aspect_ratio.is_none() {
+            content_height = 150.0;
+        }
         // Parent↔child BOTTOM margin collapse (CSS2 §8.3.1): an auto-height block with no bottom
         // border/padding, `overflow:visible`, not a BFC, collapses its bottom margin with its last
         // in-flow block child's. `layout_children` returned a height that INCLUDES that trailing
@@ -5263,6 +5291,36 @@ mod tests {
              same y as the abs box (y={})",
             a.y,
             d.y
+        );
+    }
+
+    /// **An unsized `<svg>` gets the CSS default object size, shaped by its `viewBox` ratio.**
+    ///
+    /// The icon idiom is `<svg viewBox="0 0 24 24">` — no width/height attributes, sizing left to
+    /// CSS or to the default. CSS-Images §4.4: a replaced element with no intrinsic dimensions
+    /// resolves against the DEFAULT OBJECT SIZE (300×150); with an intrinsic RATIO (from viewBox)
+    /// the height follows the width through the ratio. Chrome renders exactly 300×150 for the
+    /// unsized case. We rendered **0×0** — which is why the tick-380 oracle counted missing/zero
+    /// svg boxes on 71+ sites and every icon-only `<button>` collapsed to a dead target.
+    #[test]
+    fn an_unsized_svg_gets_the_default_object_size() {
+        let dom = manuk_html::parse(r#"<div><svg viewBox="0 0 24 24"></svg></div>"#);
+        let styles = MinimalCascade.cascade(&dom, &[]);
+        let svg = dom
+            .descendants(dom.root())
+            .find(|&n| dom.tag_name(n) == Some("svg"))
+            .expect("svg in the tree");
+        let fonts = FontContext::new();
+        let root = layout_document(&dom, &styles, &fonts, 800.0);
+        let r = *root
+            .node_rects(&dom)
+            .get(&svg)
+            .expect("an unsized svg must produce a box");
+        assert!(
+            (r.width - 300.0).abs() < 1.0 && (r.height - 150.0).abs() < 1.0,
+            "unsized svg takes the 300x150 default object size (Chrome parity), got {}x{}",
+            r.width,
+            r.height
         );
     }
 

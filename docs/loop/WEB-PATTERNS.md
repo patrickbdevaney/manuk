@@ -3302,3 +3302,13 @@ CONSUMERS run: `field-sizing` vetoes a presentational hint applied mid-walk, so 
 after-the-walk recovery merge silently loses the race.
 **The trap:** the probe passes with the property parsed and the width still wrong — measure the
 BEHAVIOR (the box hugged), never the parse.
+
+## Auto on a replaced element is never "fill" and never "zero" (tick 389)
+
+**The class of the web this unlocks:** unsized inline SVG — the icon/logo idiom — and unsized
+canvas/video/iframe embeds; plus every icon-only button those were collapsing into dead targets.
+**(1)** The replaced-sizing fallback chain is: author size → ratio-derived size → DEFAULT OBJECT
+SIZE (300×150) — and the last rung must live in used-size layout, after the first two resolved,
+never in UA defaults where it outranks author CSS.
+**The trap:** the failure is invisible twice over — a 0-height box paints nothing to screenshot,
+and a full-width box looks "laid out" in a box dump. Only the reference diff named it.

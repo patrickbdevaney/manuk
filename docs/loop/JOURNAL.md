@@ -16536,3 +16536,28 @@ TICK SHAPE: capability (Baseline form-control sizing; [pattern: recovered proper
 not just presence — a property that vetoes a hint must land before the hint pass runs]). GATES
 G_PROBE_CAPABILITIES +1 claim (fieldsizing:yes). CONSTELLATION: doc/field-sizing missing→gated.
 WIKI: docs/wiki/css-cascade.md — field-sizing: a recovered property that must beat the hints.
+
+## Tick 389 — the default object size: unsized replaced elements are 300×150, not 784×0 (2026-07-22)
+
+Probed the ledger's missing-box family per the t383 rule (survive a quiet re-run before earning
+a fix): washingtonpost's missing divs SURVIVE (643→655 quiet — real) but are predominantly
+JS-tree divergence (Chrome probed 2251 elements vs 967 static divs — hydration depth, a named
+subsystem, not tick-sized). The bounded organ inside the family: unsized replaced elements.
+`<svg viewBox="0 0 24 24">` (the icon idiom) measured **784×0** — Auto width fell to the block
+FILL arm, height to empty content — invisible, full-width, and every icon-only <button>
+collapsed to a dead target with it.
+
+BUILT: the default object size (CSS-Images §4.4) in USED-size layout — after author width and
+definite-height×ratio both had their chance (the t153 lesson: in apply_ua_defaults it beats
+author CSS and regresses css-sizing). 300×150 for svg|canvas|video|iframe|object|embed; img
+deliberately excluded (a sourceless image has no default size in any browser); the height half
+gated on the width half having fired. Test an_unsized_svg_gets_the_default_object_size was RED
+at 784×0 before the fix; 83/83 manuk-layout green after; wall green; apnews e2e unchanged (its
+icons are CSS-sized — no false movement). RESIDUE named in wiki: viewBox→intrinsic-ratio wiring;
+SVG internal geometry (path/g boxes) stays the svg organ.
+
+TICK SHAPE: capability (unsized embeds/icons render at spec size; icon buttons regain hit area;
+[pattern: replaced-sizing fallback chain — author → ratio → default object size — with the last
+rung in used-size layout only]). GATES manuk-layout +1 test (IN the wall via T·crate tests).
+CONSTELLATION: none — sizing correctness on existing rows.
+WIKI: docs/wiki/box-layout.md — the default object size lives in used-size layout (tick 389).
