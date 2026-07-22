@@ -560,3 +560,39 @@ ever wrote.
 is now historical, closed by t380.
 
 **Next check due: tick 390.**
+
+---
+
+## Check #15 — tick 390
+
+**Horizon:** Phase 0 — the FULL daily-driver checklist, CONSTITUTION.MD **Part VII**. **Gate:** the
+FIDELITY-SCORING-REDESIGN.md certificate, NOT a WPT percentage.
+
+**Gate or scoreboard?** Gate — and for the first time the LEDGER, not intuition, chose every
+capability tick. Window 383-389: **383** the instrument-honesty seam (starved sheets counted +
+discarded — the trio families demoted to artifact before anyone built "fixes" for them), **384**
+replaced elements compute `inline` (81/80-site family, unwound a two-cascade convenience mutation),
+**385** `<br>` geometry (64-site family), **386** self-audit + wall audit #6 (clean; wall 57s while
+coverage grew), **387** surface audit #12 (field-sizing added; t378's scroll promises validated
+AHEAD of the platform roundup), **388** field-sizing:content (the recovered property that must beat
+the hints), **389** the default object size in used-size layout (784×0 → 300×150; icon buttons
+regain hit area). Every engine tick RED-proven; two families REFUSED as artifacts before fixing —
+the instrument's honesty rules cut both ways, which is exactly VII.1's TEST.
+
+**Is the loop still pointed at the frontier?** Yes — and the frontier is now explicitly the
+ledger's residue: JS-tree divergence on hydrating sites (washingtonpost's missing-div mass — a
+named subsystem), SVG internal geometry, the 13× perf outlier class (wix/atlassian), viewBox
+intrinsic ratio. A re-crawl after this window's fixes will re-rank honestly (starved runs now
+self-discard).
+
+**Is the agentic surface (component #2) being served?** Held — t385/389 are directly agent-food
+(br line-ends measurable; icon buttons hittable); focusgroup/aria-actions flagged in audit #12 as
+component-#2 watches.
+
+**Any invariant bent?** No. The t384 change honored the two-cascades rule (both mutated together);
+t389 honored the t153 lesson (used-size layout, never UA defaults); no mark touched; the netlify
+crash fix preceded all capability work in the prior window and nothing regressed it.
+
+**PART VI / VII correction.** None.
+
+**Next check due: tick 398.**

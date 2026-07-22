@@ -16561,3 +16561,16 @@ TICK SHAPE: capability (unsized embeds/icons render at spec size; icon buttons r
 rung in used-size layout only]). GATES manuk-layout +1 test (IN the wall via T·crate tests).
 CONSTELLATION: none — sizing correctness on existing rows.
 WIKI: docs/wiki/box-layout.md — the default object size lives in used-size layout (tick 389).
+
+## Tick 390 — Constitution Check #15: the ledger chose every tick (2026-07-22)
+
+CADENCE OBLIGATION (382+8). Re-read CONSTITUTION.MD; wrote Check #15. Window 383-389 verdict:
+GATE-pointed; for the first time the corpus ledger (not intuition) selected every capability
+tick, and its honesty rules cut both ways — two families were REFUSED as instrument artifacts
+before anyone built fixes for them. Frontier now explicitly the ledger's residue: hydration-
+depth JS-tree divergence, SVG internal geometry, the 13× perf outliers, viewBox ratio. No
+invariant bent. LAST_CONSTITUTION_CHECK 382→390; next due 398.
+
+TICK SHAPE: constitution-check (governance checkpoint). GATES +0. [no-pattern]
+CONSTELLATION: none.
+WIKI: none.
