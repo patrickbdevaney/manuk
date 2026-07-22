@@ -105,6 +105,54 @@ impl MediaSet {
         ok
     }
 
+    /// Decode an **MSE stream** for one element — the join's landing point, and deliberately not
+    /// [`MediaSet::load`], because an MSE stream breaks both of `load`'s assumptions:
+    ///
+    /// - **The stream GROWS.** `appendBuffer` keeps arriving, so this is called again with a
+    ///   longer buffer for an element that already has a working player. Rebuilding the player
+    ///   from scratch would restart the video on every append — a player-visible bug — so the
+    ///   transport position and play/pause state carry over to the new, longer timeline.
+    /// - **A failed decode is RETRIED, not remembered.** An init-segment-only buffer (tracks
+    ///   defined, zero samples) is the NORMAL first state of every MSE session, not a broken
+    ///   file; the "known failure, never retried" discipline that stops the progressive path's
+    ///   fetch-decode-fail storm would here permanently kill every stream at its first append.
+    ///   No storm is possible in exchange: this path is publish-driven (the page appends, the
+    ///   host drains), never poll-driven.
+    pub fn load_mse(&mut self, node: NodeId, bytes: &[u8]) -> bool {
+        let resume = match self.players.get(&node) {
+            Some(Some(e)) => Some((
+                e.player.transport().position(),
+                e.player.transport().is_playing(),
+            )),
+            _ => None,
+        };
+        let Some(mut p) = Self::decode(bytes) else {
+            self.players.insert(node, None);
+            return false;
+        };
+        match resume {
+            Some((pos, playing)) => {
+                p.seek(pos);
+                if playing {
+                    p.play();
+                } else {
+                    p.pause();
+                }
+            }
+            None => p.play(), // same autoplay rationale as `load`
+        }
+        // `published: None` so the current frame is re-pushed even if its presentation time
+        // matches — the page's image map may never have seen this player's pixels.
+        self.players.insert(
+            node,
+            Some(Entry {
+                player: p,
+                published: None,
+            }),
+        );
+        true
+    }
+
     fn decode(bytes: &[u8]) -> Option<VideoPlayer> {
         let movie = demux(bytes).ok()?;
         let track = movie.tracks.iter().find(|t| t.kind == TrackKind::Video)?;
@@ -265,6 +313,166 @@ mod tests {
         assert!(
             !broken.advance(1.0, &mut page),
             "a failed entry publishes nothing and is never retried"
+        );
+    }
+
+    /// # G_MSE_JOIN — the bytes a player APPENDS reach the screen (tick 349)
+    ///
+    /// The other half of `g_media_drive`, for the adaptive-streaming class. There the page *names
+    /// a URL* and the host fetches it; here the element's src is a `blob:` URL that no fetch can
+    /// serve — the only copy of the media is what `appendBuffer` accumulated inside the page, and
+    /// this gate proves that copy crosses to the decoder and paints, end to end:
+    ///
+    ///   `isTypeSupported` says yes honestly → `addSourceBuffer` → `appendBuffer(real fMP4)` →
+    ///   `__msePublish` → `Page::take_mse_media` → `MediaSet::load_mse` → pixels change.
+    ///
+    /// ## How each claim goes RED (each was run, not assumed)
+    ///
+    /// - **`its:true` / `open:true`** — revert the built-in `canDecode` matcher in `mse_js.rs`:
+    ///   `isTypeSupported` answers false and `addSourceBuffer` throws `NotSupportedError`, which
+    ///   is today's shipped behaviour and exactly what keeps every adaptive player on its
+    ///   fallback. The registry claim and the join land together or not at all.
+    /// - **`one stream`** — delete the `__msePublish` call in `SourceBuffer.__demux`: every piece
+    ///   still reports green from inside the page (`buffered` grows, `updateend` fires) and
+    ///   `take_mse_media` is empty forever — the exact silent dead-player this gate exists for.
+    /// - **byte fidelity** — the stream crosses the JS↔Rust boundary as a one-char-per-byte
+    ///   string; a lossy decode anywhere replaces high bytes and the demux downstream rejects a
+    ///   stream that was valid when appended (G_MEDIA_SEGMENT_FETCH's hazard, at the *other*
+    ///   boundary). Compared byte-for-byte against the fixture.
+    /// - **the picture changes** — same discipline as `g_media_drive`: only `painted()` says a
+    ///   frame reached the *screen*.
+    /// - **an init-only prefix is retried, not remembered dead** — `load_mse` with a truncated
+    ///   buffer then the full one: the progressive path's "known failure, never retried" rule
+    ///   would kill every real MSE session at its first append.
+    #[cfg(feature = "_sm")]
+    #[test]
+    fn g_mse_join() {
+        let bytes_js: String = AV
+            .iter()
+            .map(|b| b.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        let html = format!(
+            r##"<!doctype html><html><body>
+  <video id="v" width="160" height="120"></video>
+  <div id="out">-</div>
+  <script>
+    var R = {{ a: [], push: function (s) {{ this.a.push(s);
+      var o = document.getElementById('out'); if (o) {{ o.textContent = this.a.join(' '); }} }} }};
+    var TYPE = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
+    var BYTES = new Uint8Array([{bytes_js}]);
+    try {{
+      R.push('its:' + MediaSource.isTypeSupported(TYPE));
+      R.push('vp9:' + MediaSource.isTypeSupported('video/webm; codecs="vp9"'));
+      var v = document.getElementById('v');
+      var ms = new MediaSource();
+      ms.addEventListener('sourceopen', function () {{
+        try {{
+          var sb = ms.addSourceBuffer(TYPE);
+          R.push('open:true');
+          sb.addEventListener('updateend', function () {{
+            R.push('appended:true buffered:' + (sb.buffered.length > 0));
+          }});
+          sb.appendBuffer(BYTES.buffer);
+        }} catch (e) {{ R.push('THREW-open:' + e.name); }}
+      }});
+      v.src = URL.createObjectURL(ms);
+    }} catch (e) {{ R.push('THREW:' + e); }}
+  </script>
+</body></html>"##
+        );
+
+        let fonts = manuk_text::FontContext::new();
+        let mut page = manuk_page::Page::load(&html, "https://stream.test/", &fonts, 800.0);
+
+        // ── The page-side dance settled during load (the event loop drains to quiescence).
+        let root = page.dom().root();
+        let out = manuk_css::query_selector_all(page.dom(), root, "#out")[0];
+        let record = page.dom().text_content(out);
+        for claim in [
+            "its:true",
+            "vp9:false",
+            "open:true",
+            "appended:true",
+            "buffered:true",
+        ] {
+            assert!(
+                record.contains(claim),
+                "MSE dance must reach `{claim}` — got: {record}"
+            );
+        }
+
+        // ── The stream crossed to the host, named for the right element, byte for byte.
+        let streams = page.take_mse_media();
+        assert_eq!(
+            streams.len(),
+            1,
+            "exactly one MSE stream must be published — none is the silent dead player \
+             (delete __msePublish in mse_js.rs to see this), more is a coalescing bug"
+        );
+        let video_node = manuk_css::query_selector_all(page.dom(), root, "video")[0];
+        let (node, bytes) = &streams[0];
+        assert_eq!(
+            *node, video_node,
+            "the stream must name the attached <video>"
+        );
+        assert_eq!(
+            bytes.as_slice(),
+            AV,
+            "the appended stream must survive the JS boundary byte-for-byte — a lossy decode \
+             replaces high bytes and downstream demux rejects a valid stream"
+        );
+        assert!(
+            page.take_mse_media().is_empty(),
+            "a drain is a DRAIN — the same stream must not be redelivered every frame"
+        );
+
+        // ── The stream decodes and the picture reaches the SCREEN.
+        let blank = painted(&page);
+        let mut set = MediaSet::new();
+        assert!(set.load_mse(*node, bytes), "the appended fMP4 must decode");
+        assert!(
+            set.advance(0.0, &mut page),
+            "the first advance publishes a frame"
+        );
+        let first = painted(&page);
+        assert_ne!(
+            blank, first,
+            "a decoded MSE frame must change what is painted"
+        );
+
+        // ── A re-publish (the stream GREW) must not restart playback.
+        assert!(
+            set.advance(0.06, &mut page),
+            "playing forward crosses a frame boundary"
+        );
+        let later = painted(&page);
+        assert_ne!(first, later, "playing forward paints a different picture");
+        assert!(
+            set.load_mse(*node, bytes),
+            "the re-published stream re-decodes"
+        );
+        assert!(
+            set.advance(0.0, &mut page),
+            "after a reload the current frame is re-published (the image map may be stale)"
+        );
+        assert_eq!(
+            painted(&page),
+            later,
+            "a reload must RESUME at the previous position — repainting the FIRST frame here \
+             means every appendBuffer restarts the video from zero"
+        );
+
+        // ── An undecodable prefix (the init segment alone) is retried when the stream grows.
+        let probe = manuk_dom::NodeId(999_999);
+        assert!(
+            !set.load_mse(probe, &AV[..64]),
+            "an init-only prefix cannot decode yet"
+        );
+        assert!(
+            set.load_mse(probe, AV),
+            "the grown stream MUST be retried — remembering the prefix as dead kills every \
+             real MSE session at its first append"
         );
     }
 

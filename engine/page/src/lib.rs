@@ -2093,6 +2093,38 @@ impl Page {
         );
     }
 
+    /// **The MSE byte-streams the page's players have appended since the last drain** — the
+    /// playback JOIN (tick 349), coalesced to the newest stream per element.
+    ///
+    /// An MSE-attached `<video>` is invisible to the fetch-side media path: its `src` is a `blob:`
+    /// URL naming a `MediaSource`, so [`Page::pending_media_urls`]' bytes can never arrive — the
+    /// only copy of the media is what `appendBuffer` accumulated inside the page. The JS side
+    /// publishes that stream (full, not a delta — an fMP4 decoder needs the init segment plus
+    /// every fragment as one buffer) on each settled append that carries a video track; this
+    /// drains it for the host to decode and drive exactly like a fetched progressive movie.
+    ///
+    /// Coalescing here is what keeps a burst of appends cheap: ten appends between two host
+    /// visits become ONE decode of the newest stream, not ten decodes of ten prefixes.
+    #[cfg(feature = "spidermonkey")]
+    pub fn take_mse_media(&mut self) -> Vec<(manuk_dom::NodeId, Vec<u8>)> {
+        if self.js.is_none() {
+            return Vec::new();
+        }
+        let mut newest: std::collections::HashMap<u64, Vec<u8>> = std::collections::HashMap::new();
+        for (node, bytes) in manuk_js::take_mse_streams() {
+            newest.insert(node, bytes); // oldest-first drain, so the last write per node wins
+        }
+        newest
+            .into_iter()
+            .map(|(n, b)| (manuk_dom::NodeId(n), b))
+            .collect()
+    }
+
+    #[cfg(not(feature = "spidermonkey"))]
+    pub fn take_mse_media(&mut self) -> Vec<(manuk_dom::NodeId, Vec<u8>)> {
+        Vec::new()
+    }
+
     /// **The images this page still wants** — resolved URLs, distinct, none already resolved.
     ///
     /// Cheap: a DOM walk, no network. The point is that it can be taken on the UI thread, handed to a

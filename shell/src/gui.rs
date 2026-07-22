@@ -1438,6 +1438,22 @@ impl App {
     /// The delta is wall-clock because nothing plays audio yet, so there is no device clock to be
     /// master — `shell::media` documents the hand-off point for when `cpal` lands.
     fn advance_media(&mut self) {
+        // The MSE join (tick 349): streams the page's players appended since the last frame.
+        // Publish-driven — an empty drain is a `Vec::new()` — and it must run BEFORE the
+        // `is_empty` early-out below, because the first stream of a page with no progressive
+        // media is exactly the case where `self.media` is still empty.
+        #[cfg(feature = "_sm")]
+        {
+            let streams = match self.page.as_mut() {
+                Some(p) => p.take_mse_media(),
+                None => Vec::new(),
+            };
+            for (node, bytes) in streams {
+                if self.media.load_mse(node, &bytes) {
+                    self.needs_paint = true;
+                }
+            }
+        }
         if self.media.is_empty() {
             return;
         }

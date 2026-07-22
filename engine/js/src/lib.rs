@@ -510,6 +510,20 @@ pub fn take_clipboard_writes() -> Vec<String> {
     Vec::new()
 }
 
+/// MSE byte-streams the page published since the last drain, `(node_id, full stream)`, oldest
+/// first — one entry per settled `appendBuffer` that demuxed a video track. The host keeps the
+/// last per node and decodes it exactly like a fetched progressive movie. Empty without the JS
+/// feature (an MSE stream only ever exists inside a scripted page).
+#[cfg(feature = "_sm")]
+pub fn take_mse_streams() -> Vec<(u64, Vec<u8>)> {
+    dom_bindings::take_pending_mse_streams()
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn take_mse_streams() -> Vec<(u64, Vec<u8>)> {
+    Vec::new()
+}
+
 /// Seed the OS-clipboard text the page may READ via `navigator.clipboard.readText()`/`read()`. The
 /// host sets this to the real OS-clipboard contents (including text copied in another app) so paste
 /// works. No-op without the JS feature.

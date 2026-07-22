@@ -57,7 +57,25 @@ pub const MSE_JS: &str = r#"
     for (var i = 0; i < g.__mseCodecs.length; i++) {
       if (String(g.__mseCodecs[i]).toLowerCase().replace(/\s+/g, '') === want) { return true; }
     }
-    return false;
+    // ── The built-in truth (tick 349): what the tree GENUINELY plays end-to-end, no registry
+    // push required. MP4 only — `manuk_media::demux` opens (f)MP4, `H264Decoder` decodes
+    // Baseline-profile H.264 (`avc1.42……` — the profile byte is the pair after "avc1.", 0x42;
+    // High/Main are refused exactly as `video::can_decode` refuses them), and the AAC path
+    // (`mp4a.40.*`) demuxes+decodes to PCM (G_MEDIA_AAC). WebM/VP9/AV1 stay false — no demuxer,
+    // no decoder, and a YES here without one steers a player onto a path that hangs (module doc).
+    var m = /^(video|audio)\/mp4($|;codecs=)/.exec(want);
+    if (!m) { return false; }
+    var q = want.indexOf('codecs=');
+    if (q < 0) { return true; } // bare container: we can open MP4, per isTypeSupported's contract
+    var list = want.slice(q + 7).replace(/^"|"$/g, '').split(',');
+    for (var j = 0; j < list.length; j++) {
+      var c = list[j];
+      if (c === '') { return false; }
+      if (/^avc1\.42[0-9a-f]{4}$/.test(c)) { continue; }   // H.264 Baseline only
+      if (/^mp4a\.40(\.\d+)?$/.test(c)) { continue; }       // AAC
+      return false;
+    }
+    return true;
   };
 
   var fail = function (msg, name) { return new g.DOMException(msg, name); };
@@ -235,6 +253,21 @@ pub const MSE_JS: &str = r#"
     // that over a known duration would truncate the timeline the player is seeking within.
     var ms = this.__parent;
     if (ms && info.duration > 0 && !(ms.__duration > 0)) { ms.__duration = info.duration; }
+    // ── The playback JOIN (tick 349). This SourceBuffer's accumulated stream is the ONLY copy of
+    // the media — the element's src is a blob: URL no fetch can serve — so every settled append
+    // that demuxed a video track hands the FULL stream to the host, which decodes it and drives
+    // frames into the page exactly as it does for a progressive <video src>. Video-track buffers
+    // only: an audio-only SourceBuffer has no frames for the host's video drive, and publishing
+    // it would overwrite the video stream under the same node.
+    if (typeof g.__msePublish === 'function' && ms && ms.__element && ms.__element.__nodeId != null) {
+      var hasVideo = false;
+      for (var v = 0; v < (info.tracks || []).length; v++) {
+        if (info.tracks[v].kind === 'video') { hasVideo = true; break; }
+      }
+      if (hasVideo && this.__bin.length > 0) {
+        g.__msePublish(String(ms.__element.__nodeId), this.__bin);
+      }
+    }
   };
 
   SourceBuffer.prototype.abort = function () {

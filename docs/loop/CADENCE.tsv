@@ -140,4 +140,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 345	f01ebfc	1784695617	2026-07-22T00:46:57-04:00	2508	capability	66	9	310	43	182	81	3896	6960	0	320	0	HTTP conditional revalidation (ETag/Last-Modified → 304 → reuse body) (2026-07-22)
 346	3c9dcf8	1784697406	2026-07-22T01:16:46-04:00	1789	capability	66	13	378	36	183	81	3896	6960	0	320	0	drag-and-drop EDITOR half: dispatch_drag source→target reorder handoff (2026-07-22)
 347	39ba9a6	1784698940	2026-07-22T01:42:20-04:00	1534	capability	68	11	218	40	183	81	3896	6960	0	320	0	HTTP `Expires` header as a freshness source (2026-07-22)
-348	0696259	1784700481	2026-07-22T02:08:01-04:00	1541	capability	65	9	141	36	183	81	3896	6960	0	320	0	HTTP `Age` header reduces remaining cache freshness (2026-07-22)
+348	b02ea40	1784703090	2026-07-22T02:51:30-04:00	4150	capability	67	14	521	36	183	81	3896	6960	0	320	0	HTTP `Age` header reduces remaining cache freshness (2026-07-22)

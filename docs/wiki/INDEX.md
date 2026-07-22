@@ -615,6 +615,12 @@
   - L1089 · RED probes: three, all fired
   - L1102 · Note: the bridge assertion does NOT live in the shell gate
   - L1111 · Residue
+  - L1119 · Tick 349 — the MSE playback JOIN: appended bytes reach the decoder
+  - L1127 · The channel
+  - L1139 · load_mse is deliberately not load
+  - L1148 · The registry now tells the truth (and only the truth)
+  - L1156 · G_MSE_JOIN (shell suite — which IS in the verify wall, unlike the older media gates)
+  - L1170 · Residue, honestly
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -833,4 +839,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-748 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+754 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

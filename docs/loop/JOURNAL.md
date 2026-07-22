@@ -15410,3 +15410,53 @@ pass. Full manuk-net 97 passed / 0 failed / 5 network-ignored (+1). fmt clean. m
 
 TICK SHAPE: capability (HTTP Age-header freshness accounting; a real cache-correctness behavior for CDN-served responses; [host-native pattern: extend the net cache we own]). GATES +1 crate test; constellation row 85 note extended (gated by t345).
 WIKI: docs/wiki/networking.md — Age header (RFC 7234 4.2.3 remaining-freshness = lifetime - Age).
+
+## Tick 349 — MSE playback join: appended bytes reach the decoder, and the registry tells the truth (2026-07-22)
+
+CO-#1 (observer tick-328 orders, item 2: MEDIA PLAYBACK JOIN). Today an MSE-attached `<video>` is a
+dead player END-TO-END despite every piece existing: `appendBuffer` accumulates bytes in JS
+(`__bin`), `__mseDemux` demuxes them for `buffered`, the shell's `MediaSet` can decode+drive
+Baseline H.264 — but the appended bytes NEVER cross from the SourceBuffer to the host decoder
+(the element's src is `blob:`, which `fetch_media_bytes` cannot serve), and `__mseCodecs` is empty
+so `addSourceBuffer` throws NotSupportedError before a player even gets that far.
+
+HYPOTHESIS: a publish channel (mse_js `__msePublish(nodeId, bin)` → dom_bindings thread-local →
+`Page::take_mse_media()` → shell `MediaSet::load_mse`) plus an honest built-in `canDecode`
+(H.264 Baseline `avc1.42*` + AAC `mp4a.40.*` in MP4 — exactly what manuk-media genuinely
+demuxes+decodes, VP9/webm stays false) makes the full MSE dance play a real fragmented MP4:
+sourceopen → addSourceBuffer → appendBuffer → a decoded frame reaches the page's image map.
+`load_mse` preserves position/playing across re-decodes (a stream GROWS; restart-on-append is a
+player-visible bug), and retries what a progressive load would remember as failed (an init-only
+append is the NORMAL first state of a stream, not a broken file).
+
+ALSO MEASURED (fidelity instrument, CO-#1 item 1 residue): the 5th jarring invariant (post-load
+stability) is NOT tick-sized as architected — headless Chromium under `--dump-dom` never fires
+rAF/frames, so `layout-shift` PerformanceObserver entries are structurally unavailable (probed: a
+deliberately-shifting fixture reports cls:0 and a double-rAF callback never runs), and our own
+side collapses virtual time to Infinity at `load`, so "after load" is not a separable window
+without lifecycle surgery. A guard reading "Chrome is always stable" would false-blame us on every
+legit image-load shift — the half-built-instrument-LIES trap. Logged as unwired, deliberately.
+
+RESULT — LANDED. The join is 4 layers, each additive: mse_js `__demux` publishes the full stream
+on every settled video-track append (`__msePublish`, one-char-per-byte) → dom_bindings
+thread-local queue (clipboard-channel shape) + `take_pending_mse_streams` → `manuk_js::
+take_mse_streams` (_sm + stub) → `Page::take_mse_media` (coalesces to newest per node) →
+`gui::advance_media` drains BEFORE its is_empty early-out → `MediaSet::load_mse` (position/state
+resume across re-decodes; init-only prefix retried). `canDecode` built-in matcher: MP4 +
+avc1.42xxxx (Baseline) + mp4a.40.* only; VP9/webm stay false; `__mseCodecs` push-registry
+untouched.
+
+RED-PROVEN twice (cp-snapshot restored byte-for-byte, cmp-verified, gate re-GREEN): (1) deleting
+the `__msePublish` call → FAIL "exactly one MSE stream must be published" (the silent dead
+player); (2) reverting the canDecode matcher → FAIL `its:true`, got `its:false ...
+THREW-open:NotSupportedError` (the previously-shipped behaviour, proving registry+join land
+together).
+
+NO REGRESSION: full manuk-shell suite 60/60 + g_teardown 2/2, EXIT 0 twice (the wiki's historical
+"JS test in the shell binary SIGSEGVs at exit" is measured obsolete post-G_CLEAN_EXIT — noted in
+the wiki). g_mse / g_media_buffered / g_media_segment_fetch all green. fmt clean on all three
+crates.
+
+TICK SHAPE: capability (MSE playback join — the appended-bytes class of the web (adaptive players) can now decode and paint; isTypeSupported honestly steers to Baseline+AAC MP4; [host-native pattern: publish channel in the engine we own, decode in the shell driver that already drives progressive]). GATES +1 (G_MSE_JOIN, in the shell suite = IN the verify wall); constellation row 73 partial→gated.
+CONSTELLATION: media / MSE → gated (G_MSE, G_MEDIA_BUFFERED, G_MSE_JOIN).
+WIKI: docs/wiki/media-pipeline.md — the MSE playback JOIN (channel, load_mse's two inverted assumptions, honest registry, residue).

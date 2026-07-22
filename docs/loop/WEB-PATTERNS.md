@@ -3044,3 +3044,23 @@ lifetime is stale on arrival — which then composes with revalidation: kept and
 iff it carried a validator, dropped otherwise. **The trap:** treating the cache as a private cache that
 starts every object's clock at zero — behind a CDN the clock started upstream, and `Age` is the only
 thing that tells you by how much.
+
+## MSE playback join — the bytes a player APPENDS are the movie (tick 349)
+
+**The class of the web this unlocks:** adaptive streaming — YouTube's player and every player library
+(hls.js, dash.js, shaka, video.js: Twitch, Vimeo, news-site video, course platforms). None of them set
+`<video src>` to a media file; they construct a `MediaSource`, set `src` to a `blob:` object URL, and
+push segments through `appendBuffer` in an `updateend` loop. For that entire class the network path a
+browser normally decodes from **does not exist** — the only copy of the media is the byte-stream the
+page accumulated in JS, so a browser that cannot lift it back OUT of the page shows a dead player with
+every individual piece working. **(1)** Publish the SourceBuffer's FULL stream on each settled append
+that demuxed a video track — an fMP4 decoder needs the init segment plus every fragment as one buffer,
+and coalescing to the newest stream per element on the host side makes a burst of appends cost one
+decode. **(2)** A re-decode must RESUME (carry transport position + play/pause into the longer
+timeline): players append every few seconds, and restart-on-append is a video that never gets past its
+own opening. **(3)** An init-only buffer that cannot decode yet is the NORMAL first state of every MSE
+session — retry it when the stream grows; the progressive path's "failed once, never retry" discipline
+here kills every session at its first append. **The trap:** `isTypeSupported` steering. Advertise only
+what genuinely plays end-to-end (here: MP4 + Baseline H.264 + AAC; VP9/webm stay false) — a `true` not
+backed by a decoder steers the player OFF its working fallback and onto a `buffered` range whose media
+never decodes, turning a degraded-but-working player into a hung one.

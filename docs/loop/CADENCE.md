@@ -15,9 +15,9 @@
 | median tick cycle | **20m** | 141 intervals |
 | median, last 10 | **23m** | 10 intervals |
 | fastest / slowest | 3m / 5.4d | |
-| **ticks per hour** | **0.54** | 261.1h elapsed |
+| **ticks per hour** | **0.54** | 261.8h elapsed |
 | median verify wall | **65s** | 81 ticks |
-| wall trend | 39s → 66s — getting slower ⚠️ | first 3 vs last 3 |
+| wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **75** capability ticks, median cycle **20m**
-* median diff per tick: **+246 / −29** lines across 8 files
+* median diff per tick: **+248 / −29** lines across 8 files
 
 ## Every tick
 
@@ -238,6 +238,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **345** | 2026-07-22 00:46 | 42m | capability | 66s | +310/−43 | 182 | 81 | 56.0% · | HTTP conditional revalidation (ETag/Last-Modified → 304 → reuse body) (2026-07-22) |
 | **346** | 2026-07-22 01:16 | 30m | capability | 66s | +378/−36 | 183 | 81 | 56.0% · | drag-and-drop EDITOR half: dispatch_drag source→target reorder handoff (2026-07-22) |
 | **347** | 2026-07-22 01:42 | 26m | capability | 68s | +218/−40 | 183 | 81 | 56.0% · | HTTP `Expires` header as a freshness source (2026-07-22) |
-| **348** | 2026-07-22 02:08 | 26m | capability | 65s | +141/−36 | 183 | 81 | 56.0% · | HTTP `Age` header reduces remaining cache freshness (2026-07-22) |
+| **348** | 2026-07-22 02:51 | 69m | capability | 67s | +521/−36 | 183 | 81 | 56.0% · | HTTP `Age` header reduces remaining cache freshness (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

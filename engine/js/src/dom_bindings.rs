@@ -2732,6 +2732,30 @@ unsafe fn mse_demux(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     true
 }
 
+/// `__msePublish(nodeId, bytes)` — hand a SourceBuffer's accumulated byte-stream to the host.
+///
+/// The MSE playback JOIN (tick 349). An MSE-attached element's `src` is a `blob:` URL, so the
+/// fetch-side media path (`pending_media_urls` → `fetch_media_bytes`) can never serve it — the
+/// only copy of the media is the bytes `appendBuffer` accumulated inside the page. This is the
+/// channel that carries them out. Same one-char-per-byte string convention as [`mse_demux`], same
+/// drain shape as the clipboard/postMessage queues: JS pushes, the host takes.
+///
+/// The FULL stream is published each time rather than a delta because a fragmented-MP4 decoder
+/// needs the init segment plus every fragment so far as one contiguous buffer; the host coalesces
+/// to the last entry per node before decoding.
+unsafe fn mse_publish(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let node: u64 = arg_string(cx, vp, argc, 0)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    let s = arg_string(cx, vp, argc, 1).unwrap_or_default();
+    let bytes: Vec<u8> = s.chars().map(|c| (c as u32 & 0xff) as u8).collect();
+    if node != 0 && !bytes.is_empty() {
+        PENDING_MSE_STREAMS.with(|q| q.borrow_mut().push((node, bytes)));
+    }
+    *vp = UndefinedValue();
+    true
+}
+
 /// `__parseVtt(text)` → the cues of a WebVTT file, as JSON.
 ///
 /// The join the caption track has been missing since tick 255. The parser (`manuk_media::vtt`) and
@@ -7619,6 +7643,14 @@ pub unsafe fn install(
         c"__mseDemux".as_ptr(),
         host_fn!(mse_demux),
         1,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
+        c"__msePublish".as_ptr(),
+        host_fn!(mse_publish),
+        2,
         0,
     );
     JS_DefineFunction(
@@ -13193,6 +13225,14 @@ thread_local! {
     /// `read()` pull from here, so a page can paste what the user copied in another application.
     static HOST_CLIPBOARD: std::cell::RefCell<String> =
         const { std::cell::RefCell::new(String::new()) };
+    /// MSE byte-streams published since the last drain: `(node_id, full accumulated bytes)`.
+    /// `__msePublish` pushes one entry per settled `appendBuffer` whose SourceBuffer demuxed a
+    /// video track — the FULL stream each time, not a delta, because an fMP4 decoder needs the
+    /// init segment and every fragment to that point (`FrameTimeline::decode` takes the whole
+    /// buffer). The host keeps only the last entry per node, so a burst of appends between two
+    /// drains costs one decode, not one per append.
+    static PENDING_MSE_STREAMS: std::cell::RefCell<Vec<(u64, Vec<u8>)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
     /// Text-control selection state per `<input>`/`<textarea>`: `(start, end, direction)` in UTF-16
     /// code units, `direction` 0=none 1=forward 2=backward. `setSelectionRange`/`select` write it,
     /// `selectionStart`/`selectionEnd`/`selectionDirection` read it. A form/editor reads these to know
@@ -13231,6 +13271,12 @@ pub fn set_host_clipboard(text: String) {
 /// `postMessage` sends since the last drain, each `(target_win, json, origin, source_win)`.
 pub fn take_pending_messages() -> Vec<(u64, String, String, u64)> {
     PENDING_MESSAGES.with(|q| std::mem::take(&mut *q.borrow_mut()))
+}
+
+/// MSE streams published since the last drain, `(node_id, bytes)`, oldest first. Each entry is the
+/// SourceBuffer's FULL accumulated byte-stream at that append — the host keeps the last per node.
+pub fn take_pending_mse_streams() -> Vec<(u64, Vec<u8>)> {
+    PENDING_MSE_STREAMS.with(|q| std::mem::take(&mut *q.borrow_mut()))
 }
 
 /// `window.open(url, ...)` — allocate a window id, record `(win_id, url)` for the host to open

@@ -1115,3 +1115,62 @@ wall) with it. The shell gate stays pure Rust; the JS crossing is gated in
 autoplay and the absent audio device are unchanged from tick 263. `readyState` jumps straight to
 HAVE_ENOUGH_DATA rather than climbing through HAVE_METADATA as bytes arrive, which is honest for a
 whole-file fetch and becomes wrong the moment ranged fetching lands.
+
+## Tick 349 — the MSE playback JOIN: appended bytes reach the decoder
+
+The adaptive-streaming class had every piece and no path between them: `appendBuffer` accumulated
+real bytes (`__bin`), `__mseDemux` populated `buffered` from them, the shell's `MediaSet` could
+decode+drive Baseline H.264 — and an MSE-attached `<video>` stayed a dead player forever, because
+its `src` is a `blob:` URL that `pending_media_urls`→`fetch_media_bytes` can never serve. The only
+copy of the media lives *inside the page*.
+
+### The channel
+
+`SourceBuffer.__demux` (each settled append that demuxed a **video** track) →
+`__msePublish(nodeId, __bin)` [one-char-per-byte, same convention as `__mseDemux`] →
+`dom_bindings::PENDING_MSE_STREAMS` (thread-local queue, clipboard/postMessage shape) →
+`manuk_js::take_mse_streams()` → `Page::take_mse_media()` (coalesces to the NEWEST stream per
+node — ten appends between host visits = one decode, not ten) → `gui::advance_media` drains →
+`MediaSet::load_mse`.
+
+The FULL stream is published each time, never a delta: an fMP4 decoder needs the init segment plus
+every fragment as one contiguous buffer (`FrameTimeline::decode` takes the whole thing).
+
+### `load_mse` is deliberately not `load`
+
+Two of `load`'s assumptions invert for MSE. (1) The stream GROWS — a re-publish must not restart
+playback, so transport position + play/pause state carry across the re-decode (seek into the new,
+longer timeline). (2) A failed decode is RETRIED, not remembered — an init-segment-only buffer is
+the NORMAL first state of every MSE session; the progressive path's "known failure, never
+re-requested" rule would kill every real session at its first append. No fetch-storm is possible
+in exchange: this path is publish-driven, never poll-driven.
+
+### The registry now tells the truth (and only the truth)
+
+`canDecode` (feeding both `isTypeSupported` and `addSourceBuffer`) gained a built-in matcher for
+exactly what the tree genuinely plays end-to-end: MP4 container, `avc1.42xxxx` (Baseline only —
+the profile byte, same refusal as `video::can_decode`) and `mp4a.40.*` (AAC). WebM/VP9/AV1 stay
+`false` — no demuxer, no decoder, and a YES without one steers a player onto a path that hangs.
+The `__mseCodecs` push-registry is untouched (gates use it).
+
+### G_MSE_JOIN (shell suite — which IS in the verify wall, unlike the older media gates)
+
+Drives the full dance in a real scripted page against the real `bear-av-baseline_frag.mp4`:
+`isTypeSupported:true` → `addSourceBuffer` → `appendBuffer` → publish → byte-for-byte fidelity
+across the JS boundary → decode → `painted()` changes → re-publish resumes (frame equals the
+pre-reload frame, not frame 0) → init-only prefix fails then retries. RED-proven both directions:
+deleting the `__msePublish` call fails at "exactly one stream" (the silent dead player); reverting
+the `canDecode` matcher fails at `its:true` with `THREW-open:NotSupportedError` (today's shipped
+behaviour). Restored byte-for-byte after each probe.
+
+**The old note "a JS-evaluating assertion in the shell unit binary would SIGSEGV at exit" no
+longer holds** — measured twice this tick: full suite, exit 0, no signal. The clean-exit work
+(`G_CLEAN_EXIT`, process-wide `JS_ShutDown` discipline) landed since that note was written.
+
+### Residue, honestly
+
+ABR quality switching (no `SourceBuffer.remove`-driven eviction pressure, no bandwidth estimate),
+High/Main-profile H.264 (the codec ladder's M5+ rung: cros-codecs/VAAPI or the ffmpeg-next
+feature-gate), audio OUTPUT (decoded PCM exists, `cpal` unbound — gate on PCM, never on a sound
+card), and background-tab drains (the harvest rides `advance_media`, which only the foreground
+redraw path calls).
