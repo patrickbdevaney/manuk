@@ -1812,28 +1812,31 @@ impl Ctx<'_> {
                 }
             }
         }
-        // **The default object size (CSS-Images §4.4), in USED-size layout.** A replaced element
-        // with no intrinsic dimensions, no ratio-derivable size and `auto` width does not fill its
-        // container and does not collapse — it is 300×150. The icon idiom `<svg viewBox="0 0 24
-        // 24">` (no width/height anywhere) rendered 784×0 here: full container width, zero height,
-        // invisible — and every icon-only `<button>` collapsed with it (the tick-380 oracle's
-        // dead-target and missing-svg families). `<img>` is deliberately NOT in the list: a
-        // sourceless/broken image has no default object size in any browser. Applied here and not
-        // in the UA defaults because an AUTHOR width must win and a definite-height-plus-ratio
-        // derivation must win — both already resolved above (the tick-153 lesson).
-        let mut used_default_object_size = false;
+        // **The default object size (CSS-Images §4.4), in USED-size layout — Chrome-measured
+        // (tick 389/391).** The model, measured over headless Chrome rather than recalled:
+        //   · no intrinsic ratio, auto width  → 300 wide (and 150 tall below): `<svg>`, `<canvas>`,
+        //     `<video>`, `<iframe>` all measure 300×150 unsized.
+        //   · intrinsic ratio (svg `viewBox`), auto width → the AVAILABLE width, height follows
+        //     the ratio (CSS2 §10.3.2 last resort): `<svg viewBox="0 0 24 24">` in a 400px block
+        //     measures 400×400 — which is what the plain fill arm above already produced, so the
+        //     ratio case needs NO width override here.
+        // Before tick 389 the no-ratio case rendered 784×0 — full container width, zero height,
+        // invisible — and every icon-only `<button>` collapsed with it. `<img>` is deliberately
+        // NOT in the list: a sourceless image has no default object size in any browser. Applied
+        // here and not in UA defaults because an AUTHOR width must win and a definite-height-plus-
+        // ratio derivation must win — both already resolved above (the tick-153 lesson).
+        let default_object_tag = matches!(
+            self.dom.tag_name(node),
+            Some("svg" | "canvas" | "video" | "iframe" | "object" | "embed")
+        );
         if s.width == Dim::Auto
             && !s.width_stretch
             && s.width_keyword.is_none()
             && taffy_known.is_none()
-            && matches!(
-                self.dom.tag_name(node),
-                Some("svg" | "canvas" | "video" | "iframe" | "object" | "embed")
-            )
-            && !matches!((s.aspect_ratio, s.height), (Some(r), Dim::Px(_)) if r > 0.0)
+            && default_object_tag
+            && s.aspect_ratio.is_none()
         {
             width = 300.0;
-            used_default_object_size = true;
         }
         // `box-sizing:border-box` — the specified width is the border box, so the content
         // width is that minus padding + border. (`auto` already resolves to content width.)
@@ -1999,9 +2002,11 @@ impl Ctx<'_> {
             }
             _ => own_definite_h.unwrap_or(content_height),
         };
-        // The other half of the default object size: a defaulted 300-wide replaced box with no
-        // definite height and no ratio is 150 tall — not its (empty) content height.
-        if used_default_object_size && own_definite_h.is_none() && s.aspect_ratio.is_none() {
+        // The other half of the default object size: a replaced box with no definite height and
+        // no ratio is 150 tall — not its (empty) content height. This fires for the defaulted
+        // 300-wide case AND for an authored width (Chrome-measured: `<svg style="width:200px">`
+        // with no viewBox is 200×150, not 200×0).
+        if default_object_tag && own_definite_h.is_none() && s.aspect_ratio.is_none() {
             content_height = 150.0;
         }
         // Parent↔child BOTTOM margin collapse (CSS2 §8.3.1): an auto-height block with no bottom
@@ -5304,24 +5309,45 @@ mod tests {
     /// svg boxes on 71+ sites and every icon-only `<button>` collapsed to a dead target.
     #[test]
     fn an_unsized_svg_gets_the_default_object_size() {
-        let dom = manuk_html::parse(r#"<div><svg viewBox="0 0 24 24"></svg></div>"#);
-        let styles = MinimalCascade.cascade(&dom, &[]);
-        let svg = dom
-            .descendants(dom.root())
-            .find(|&n| dom.tag_name(n) == Some("svg"))
-            .expect("svg in the tree");
-        let fonts = FontContext::new();
-        let root = layout_document(&dom, &styles, &fonts, 800.0);
-        let r = *root
-            .node_rects(&dom)
-            .get(&svg)
-            .expect("an unsized svg must produce a box");
-        assert!(
-            (r.width - 300.0).abs() < 1.0 && (r.height - 150.0).abs() < 1.0,
-            "unsized svg takes the 300x150 default object size (Chrome parity), got {}x{}",
-            r.width,
-            r.height
-        );
+        // Three cases, each MEASURED over headless Chrome (tick 391), not recalled:
+        //   no viewBox, no size        → 300×150 (the default object size)
+        //   no viewBox, width:200px    → 200×150 (default object HEIGHT stands alone)
+        //   viewBox 1:1 in a 400px box → 400×400 (auto width fills, height follows the ratio)
+        let cases: [(&str, &str, f32, f32); 3] = [
+            ("<div><svg></svg></div>", "no-viewbox", 300.0, 150.0),
+            (
+                r#"<div><svg style="width:200px"></svg></div>"#,
+                "authored-width",
+                200.0,
+                150.0,
+            ),
+            (
+                r#"<div style="width:400px"><svg viewBox="0 0 24 24"></svg></div>"#,
+                "viewbox-ratio",
+                400.0,
+                400.0,
+            ),
+        ];
+        for (html, name, ew, eh) in cases {
+            let dom = manuk_html::parse(html);
+            let styles = MinimalCascade.cascade(&dom, &[]);
+            let svg = dom
+                .descendants(dom.root())
+                .find(|&n| dom.tag_name(n) == Some("svg"))
+                .expect("svg in the tree");
+            let fonts = FontContext::new();
+            let root = layout_document(&dom, &styles, &fonts, 800.0);
+            let r = *root
+                .node_rects(&dom)
+                .get(&svg)
+                .expect("an unsized svg must produce a box");
+            assert!(
+                (r.width - ew).abs() < 1.0 && (r.height - eh).abs() < 1.0,
+                "{name}: expected {ew}x{eh} (measured Chrome), got {}x{}",
+                r.width,
+                r.height
+            );
+        }
     }
 
     /// **A `<br>` ending a non-empty line has geometry** — Chrome reports a zero-width,

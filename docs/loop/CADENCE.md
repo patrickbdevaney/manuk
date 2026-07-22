@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **183** | ticks 1–390 |
-| median tick cycle | **19m** | 182 intervals |
+| ticks landed | **184** | ticks 1–391 |
+| median tick cycle | **19m** | 183 intervals |
 | median, last 10 | **15m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.67** | 271.8h elapsed |
-| median verify wall | **60s** | 122 ticks |
+| **ticks per hour** | **0.67** | 272.1h elapsed |
+| median verify wall | **60s** | 123 ticks |
 | wall trend | 39s → 58s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**100 of 183 ticks** (55%) moved a
+**101 of 184 ticks** (55%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **100** capability ticks, median cycle **19m**
-* median diff per tick: **+226 / −34** lines across 8 files
+* **101** capability ticks, median cycle **19m**
+* median diff per tick: **+224 / −34** lines across 8 files
 
 ## Every tick
 
@@ -280,5 +280,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **388** | 2026-07-22 12:30 | 17m | capability | 60s | +132/−38 | 183 | 81 | 56.0% · | field-sizing: content — the recovered property that must beat the hints (2026-07-22) |
 | **389** | 2026-07-22 12:50 | 19m | capability | 57s | +147/−34 | 183 | 81 | 56.0% · | the default object size: unsized replaced elements are 300×150, not 784×0 (2026-07-22) |
 | **390** | 2026-07-22 12:53 | 3m | constitution-check | 58s | +84/−34 | 183 | 81 | 56.0% · | Constitution Check #15: the ledger chose every tick (2026-07-22) |
+| **391** | 2026-07-22 13:07 | 15m | capability | 61s | +173/−71 | 183 | 81 | 56.0% · | viewBox is an intrinsic ratio; the default-size model corrected to measured Chrome (2026-0 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

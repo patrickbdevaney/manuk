@@ -1035,3 +1035,16 @@ Claimed in manuk-layout `an_unsized_svg_gets_the_default_object_size` (was RED a
 RESIDUE (named): `viewBox` does not yet feed an intrinsic ratio (an `<svg width="48" viewBox>`
 derives height only from dimension-attr hints today); SVG internals (path/g) still have no boxes
 of their own — that is the svg-geometry organ, not this fix.
+
+## viewBox is an intrinsic ratio — and the default-size model is MEASURED, not recalled (tick 391)
+
+Tick 389's model held one wrong pin: it gave a `viewBox`-only svg the 300×150 default. Headless
+Chrome, measured directly (`--dump-dom` + getBoundingClientRect → title), says otherwise:
+`<svg viewBox="0 0 24 24">` in a 400px block is **400×400** — with an intrinsic RATIO present,
+auto width takes the AVAILABLE width (CSS2 §10.3.2's last-resort rule, which is what the plain
+fill arm already computes) and the height follows the ratio (§10.6.2). The full measured model:
+no ratio + auto width → 300×150; no ratio + authored width → width×150 (the default object
+HEIGHT stands alone); ratio → available-width × ratio. `viewBox` now feeds `aspect_ratio` in
+BOTH cascades' hint passes (svg only, empty-slot only — dimension attributes and the decode
+pipeline still outrank it). The t389 test was corrected to the measured truth and RED-proven
+(viewBox hint severed → the ratio case falls back to 300×150 and fails).

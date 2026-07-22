@@ -3312,3 +3312,13 @@ SIZE (300×150) — and the last rung must live in used-size layout, after the f
 never in UA defaults where it outranks author CSS.
 **The trap:** the failure is invisible twice over — a 0-height box paints nothing to screenshot,
 and a full-width box looks "laid out" in a box dump. Only the reference diff named it.
+
+## Measure the reference before pinning a model (tick 391, reaffirming t264's rule)
+
+**The class of the web this unlocks:** every viewBox-only inline svg — logos, illustrations,
+icon sprites — now shaped by their ratio instead of a fixed 300×150 guess.
+**(1)** t389 pinned "default object size" from the spec's headline number; one headless-Chrome
+measurement showed the ratio case takes available-width×ratio instead. A gate pinned to a
+recalled model is a gate that locks the wrong behavior in — measure first, pin second.
+**The trap:** the wrong pin PASSED its own test; only re-deriving the truth from the reference
+engine exposed it. Same lesson as [[gate-measured-against-a-standard-chrome-fails]].

@@ -3166,6 +3166,20 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
         // squashed, and the pre-load box that `width`/`height` exist to reserve is the wrong shape.
         // `auto` in the spec's value means a real intrinsic ratio still wins, which is why this only
         // fills an empty slot — the decode pipeline overwrites it (`Page::apply_images`).
+        // `viewBox` gives an `<svg>` an intrinsic RATIO with no dimension attributes at all (SVG2;
+        // the icon idiom). Twin of the block in `stylo_engine::apply_presentational_hints`.
+        if tag == "svg" && s.aspect_ratio.is_none() {
+            if let Some(vb) = el.attr("viewBox").or_else(|| el.attr("viewbox")) {
+                let n: Vec<f32> = vb
+                    .split(|c: char| c == ',' || c.is_ascii_whitespace())
+                    .filter(|t| !t.is_empty())
+                    .filter_map(|t| t.parse().ok())
+                    .collect();
+                if n.len() == 4 && n[2] > 0.0 && n[3] > 0.0 {
+                    s.aspect_ratio = Some(n[2] / n[3]);
+                }
+            }
+        }
         if s.aspect_ratio.is_none() && !matches!(tag, "iframe" | "embed" | "object") {
             if let (Some(w), Some(h)) = (
                 el.attr("width").and_then(parse_dimension_attr),

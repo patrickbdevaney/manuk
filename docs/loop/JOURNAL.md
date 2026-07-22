@@ -16574,3 +16574,24 @@ invariant bent. LAST_CONSTITUTION_CHECK 382→390; next due 398.
 TICK SHAPE: constitution-check (governance checkpoint). GATES +0. [no-pattern]
 CONSTELLATION: none.
 WIKI: none.
+
+## Tick 391 — viewBox is an intrinsic ratio; the default-size model corrected to measured Chrome (2026-07-22)
+
+t389's residue taken — and its model corrected in the same stroke. Measured headless Chrome
+directly (getBoundingClientRect → title → --dump-dom) instead of recalling the spec: a
+viewBox-only svg is NOT 300×150 — with an intrinsic ratio, auto width takes the AVAILABLE width
+and height follows the ratio (400px block → 400×400). Full measured model now encoded: no ratio
+→ 300×150; authored width + no ratio → width×150 (default object HEIGHT stands alone — svg
+style=width:200px is 200×150, was 200×0); ratio → available-width×ratio.
+
+BUILT: viewBox → aspect_ratio in BOTH cascades' hint passes (svg only, empty-slot only —
+dimension attrs and the decode pipeline outrank it); layout's default-width rung narrowed to
+the no-ratio case (the fill arm already computes Chrome's ratio-case width); the default-height
+rung widened to any ratio-less replaced box without definite height. The t389 test REWRITTEN to
+the three measured cases and RED-proven (viewBox hint severed → ratio case falls to 300×150,
+fails). 83/83 layout + 27 css green.
+
+TICK SHAPE: capability (viewBox-only svgs — logos, illustrations — shaped by their ratio;
+[pattern: measure the reference before pinning a model — the wrong pin passed its own test]).
+GATES manuk-layout test rewritten 1→3 measured cases (IN the wall). CONSTELLATION: none.
+WIKI: docs/wiki/box-layout.md — viewBox is an intrinsic ratio; the model is measured.

@@ -835,6 +835,22 @@ fn apply_presentational_hints(dom: &Dom, node: NodeId, s: &mut crate::ComputedSt
                 }
             }
         }
+        // `viewBox` gives an `<svg>` an intrinsic RATIO (SVG2) even with no dimension attributes
+        // at all — the icon/logo idiom. Measured Chrome (tick 391): `<svg viewBox="0 0 24 24">`
+        // in a 400px block is 400×400 — auto width fills the containing block, height follows the
+        // ratio. Layout consumes the ratio; this hint only surfaces it.
+        if tag == "svg" && s.aspect_ratio.is_none() {
+            if let Some(vb) = el.attr("viewBox").or_else(|| el.attr("viewbox")) {
+                let n: Vec<f32> = vb
+                    .split(|c: char| c == ',' || c.is_ascii_whitespace())
+                    .filter(|t| !t.is_empty())
+                    .filter_map(|t| t.parse().ok())
+                    .collect();
+                if n.len() == 4 && n[2] > 0.0 && n[3] > 0.0 {
+                    s.aspect_ratio = Some(n[2] / n[3]);
+                }
+            }
+        }
         // **An unsized `<iframe>` is 300x150.** That is the spec's default, and it is not arbitrary
         // trivia: an iframe has no intrinsic size to fall back on, so with no default it collapses to
         // nothing and the embed is invisible *before* any question of content arises. `iframe` was not
