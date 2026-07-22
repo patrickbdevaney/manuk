@@ -3100,3 +3100,20 @@ the decoder as timestamps, and `flush()` is a seek-reset that DISCARDS pending p
 `contains("av1:true")` was satisfied by `cpt-av1:true`, so the deleted MSE arm kept a green gate;
 tripwire-print the record and rename the label. (b) two mozjs contexts in one test binary abort
 on thread-local teardown — one JS test per binary, fold claims into the existing JS page.
+
+## AVIF hero images — decode in the lane that owns the decoder (tick 355)
+
+**The class of the web this unlocks:** AVIF stills — modern CDNs (and every image-heavy site
+behind them) serve AVIF FIRST, so a browser without the decoder shows a hole where the page's
+largest picture belongs. **(1)** The container is not the codec: `avif-parse` walks HEIF to the
+primary item's OBUs, the same rav1d that plays `<video>` turns them into pixels — an image format
+landed for the cost of a JOIN. **(2)** The isolation rule decides the architecture: the decode
+CANNOT live beside `image::load_from_memory` in manuk-page (every gate binary links it), so the
+page returns undecodable bytes RAW and the shell decodes and merges into the same
+`apply_images_by_url` map. "Honestly undecodable to this crate, decodable to the browser" — the
+raw channel keeps both true. **(3)** Refusals are graceful by construction: 10-bit on the 8-bit
+build, malformed containers, truncated OBUs are all an `Err` that leaves the image un-rendered
+like any broken JPEG — never a panic on network bytes.
+**The trap:** asserting "an image decoded" without asserting the COLOR — the solid-red fixture
+turns a U/V swap (blue) or a range error (grey wash) into a hard failure instead of a plausible
+picture.

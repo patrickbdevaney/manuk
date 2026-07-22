@@ -52,6 +52,17 @@ pub fn can_decode(track: &Track) -> bool {
             .is_some_and(|c| c.starts_with("av01."))
 }
 
+/// One dav1d instance, configured the way every consumer here wants it — see the settings
+/// note in [`Av1Decoder::new`]'s history: `max_frame_delay(1)` makes a sent sample's picture
+/// drainable in the same call, `strict_std_compliance(false)` prioritises frames over errors.
+pub(crate) fn new_decoder() -> Result<dav1d::Decoder, VideoError> {
+    let mut settings = dav1d::Settings::new();
+    settings.set_max_frame_delay(1);
+    settings.set_strict_std_compliance(false);
+    dav1d::Decoder::with_settings(&settings)
+        .map_err(|e| VideoError::Failed(format!("dav1d open: {e}")))
+}
+
 pub struct Av1Decoder {
     inner: dav1d::Decoder,
     /// Decoded, converted, not yet handed out — see the module note on samples that surface
@@ -74,11 +85,7 @@ impl Av1Decoder {
         // `decode_sample` call (the low-latency shape a browser and the MSE grow cycle want,
         // and what rerun's decoder sets), `strict_std_compliance(false)` prioritises delivering
         // frames over spec-lawyering errors.
-        let mut settings = dav1d::Settings::new();
-        settings.set_max_frame_delay(1);
-        settings.set_strict_std_compliance(false);
-        let mut inner = dav1d::Decoder::with_settings(&settings)
-            .map_err(|e| VideoError::Failed(format!("dav1d open: {e}")))?;
+        let mut inner = new_decoder()?;
         // The out-of-band sequence header — see the module note. The 4 fixed bytes are
         // marker/version/profile/level+flags (AV1-ISOBMFF §2.3); OBUs follow.
         if let Some(cfg) = track.codec_config.as_ref() {
@@ -148,7 +155,7 @@ impl VideoDecoder for Av1Decoder {
 /// BT.601 limited-range, the web-video default when a stream says nothing else; the four-colors
 /// gate asserts the quadrants land on their names, which catches a swapped U/V or a scrambled
 /// plane read — the two mistakes a "right size, wrong picture" conversion actually makes.
-fn frame_from(pic: &dav1d::Picture) -> Result<Frame, VideoError> {
+pub(crate) fn frame_from(pic: &dav1d::Picture) -> Result<Frame, VideoError> {
     if pic.bit_depth() != 8 {
         return Err(VideoError::Unsupported(format!(
             "{}-bit AV1 (8-bit build)",

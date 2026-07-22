@@ -318,6 +318,33 @@ impl MediaSet {
     }
 }
 
+/// Decode the image formats the PAGE cannot (tick 355) — today: AVIF, which rides the same
+/// rav1d the `<video>` path uses and therefore must live in the shell lane, not in the page
+/// crate every gate binary links. Bytes that fail here simply stay un-rendered, exactly as an
+/// undecodable JPEG would; a 10-bit AVIF on the `bitdepth_8` build is an `Err` inside
+/// `decode_avif`, never a panic.
+pub fn decode_raw_images(
+    raws: Vec<(String, Vec<u8>)>,
+) -> std::collections::HashMap<String, manuk_paint::DecodedImage> {
+    let mut out = std::collections::HashMap::new();
+    for (url, bytes) in raws {
+        if !manuk_media::sniff_avif(&bytes) {
+            continue;
+        }
+        if let Ok(f) = manuk_media::decode_avif(&bytes) {
+            out.insert(
+                url,
+                manuk_paint::DecodedImage {
+                    width: f.width,
+                    height: f.height,
+                    rgba: f.rgba,
+                },
+            );
+        }
+    }
+    out
+}
+
 /// # G_MEDIA_DRIVE — the frame reaches the screen
 ///
 /// The end of the arc tick 262 left one link short. This drives a **real** fixture through a
@@ -912,6 +939,68 @@ mod tests {
                 .any(|(_, u)| u.ends_with("clip.mp4")),
             "a <source type=av01> must be REQUESTED — av01 on the certain-no list skips a \
              stream that genuinely plays"
+        );
+    }
+
+    /// # G_AVIF_PAINT — an AVIF hero image decodes in the shell lane and reaches the page
+    ///
+    /// The blank-hero-image class: modern CDNs serve AVIF FIRST, so a browser without the
+    /// decoder shows a hole where the page's largest picture belongs. The color fixture is
+    /// solid red, so the assert is on the PIXELS — a channel swap or a range error paints the
+    /// wrong color, not a slightly different one.
+    ///
+    /// ## How each claim goes RED
+    ///
+    /// - **the decode** — drop the `insert` in `decode_raw_images`: every AVIF fetch quietly
+    ///   vanishes, exactly the silent-drop this gate exists to catch.
+    /// - **the sniff** — make `sniff_avif` answer false: same silent vanish, one layer down.
+    /// - **the graceful 10-bit no** — asserted by running it: the `bitdepth_8` build must
+    ///   answer a 10-bit stream with an empty map, never a panic and never a wrong picture.
+    #[test]
+    fn g_avif_paint() {
+        const RED8: &[u8] =
+            include_bytes!("../../engine/media/tests/data/red-full-range-420-8bpc.avif");
+        const RED10: &[u8] =
+            include_bytes!("../../engine/media/tests/data/red-full-range-420-10bpc.avif");
+
+        // ── The 8-bit still decodes to RED pixels.
+        let decoded =
+            decode_raw_images(vec![("https://video.test/hero.avif".into(), RED8.to_vec())]);
+        let img = decoded
+            .get("https://video.test/hero.avif")
+            .expect("an 8bpc AVIF must decode in the shell lane");
+        assert!(img.width > 0 && img.height > 0);
+        let center = ((img.height / 2) * img.width + img.width / 2) as usize * 4;
+        let px = &img.rgba[center..center + 4];
+        assert!(
+            px[0] > 200 && px[1] < 80 && px[2] < 80,
+            "the solid-red fixture must decode RED — got {px:?} (a U/V swap paints blue, a \
+             range error washes it grey)"
+        );
+
+        // ── The 10-bit still is a graceful no on the bitdepth_8 build: empty, not a panic.
+        assert!(
+            decode_raw_images(vec![("x".into(), RED10.to_vec())]).is_empty(),
+            "a 10-bit AVIF must be REFUSED by the 8-bit build — a wrong picture or a panic \
+             are both worse than a hole"
+        );
+
+        // ── Non-AVIF raw bytes are skipped by the sniff, not fed to the container parser.
+        assert!(decode_raw_images(vec![("y".into(), b"GIF89a not avif".to_vec())]).is_empty());
+
+        // ── The join: the decoded map reaches a real page and CHANGES what is painted.
+        const HTML: &str = r#"<!doctype html><html><body>
+            <img src="hero.avif" width="64" height="64">
+          </body></html>"#;
+        let fonts = manuk_text::FontContext::new();
+        let mut page = manuk_page::Page::load(HTML, "https://video.test/", &fonts, 800.0);
+        let blank = painted(&page);
+        let filled = page.apply_images_by_url(decoded, &fonts, 800.0);
+        assert!(filled > 0, "the <img> must bind the decoded AVIF by URL");
+        assert_ne!(
+            blank,
+            painted(&page),
+            "a decoded AVIF must change what is PAINTED — the hero-image hole, closed"
         );
     }
 

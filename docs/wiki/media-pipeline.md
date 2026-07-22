@@ -1333,3 +1333,23 @@ aborted).
 2. **Stale-binary false-green during RED runs** was the first suspicion and was WRONG — the
    binary rebuilt fine; the vacuous claim was the whole story. Probe the assertion before
    blaming the toolchain.
+
+## Tick 355 — AVIF stills: the hero-image hole, closed in the shell lane
+
+An AVIF is an AV1 keyframe in a HEIF box; both halves borrowed (`avif-parse` 1.4 walks the
+container, the t353 `re_rav1d` instance decodes). The design point is WHERE it lives: the
+obvious home — next to `image::load_from_memory` in manuk-page — is exactly forbidden, because
+every gate binary links manuk-page and the decoder-isolation rule keeps rav1d out of them. So
+the seam is `fetch_image_urls_with_raw` (bytes the page cannot decode come back RAW instead of
+dropped) and the SHELL decodes (`decode_raw_images`: sniff ftyp-avif/avis → `decode_avif` →
+`DecodedImage`), merging into the same map `apply_images_by_url` already takes — off the UI
+thread, in the fetch task.
+
+G_AVIF_PAINT (shell suite = IN the wall): the solid-red Blink 8bpc fixture decodes RED pixels
+(a U/V swap paints blue, a range error washes grey) AND changes what a real page paints; the
+10bpc twin is refused gracefully by the `bitdepth_8` build (empty map — never a panic, never a
+wrong picture); non-AVIF bytes are sniff-skipped. RED-proven: insert-drop (the silent vanish)
+and sniff-false, both watched fail.
+
+Honest residue: alpha (a separate aux AV1 image) renders opaque; 10/12-bit refused;
+`data:`-URL AVIF in headless page loads stays undecoded (the isolation rule cuts both ways).

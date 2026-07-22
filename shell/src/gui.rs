@@ -1598,7 +1598,11 @@ impl App {
         let tab = self.tab_id;
         let proxy = self.proxy.clone();
         self.rt.spawn(async move {
-            let images = manuk_page::fetch_image_urls(urls).await;
+            // Two decoders, one map: the page decodes what `image` reads; the raw remainder is
+            // the shell-lane formats (AVIF over rav1d — tick 355), decoded HERE, off the UI
+            // thread, and merged before the event lands.
+            let (mut images, raws) = manuk_page::fetch_image_urls_with_raw(urls).await;
+            images.extend(crate::media::decode_raw_images(raws));
             if !images.is_empty() {
                 let _ = proxy.send_event(NavEvent::ImagesReady { gen, tab, images });
             }

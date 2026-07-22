@@ -15666,3 +15666,39 @@ NO REGRESSION: manuk-shell 65/65 (+1) + teardown 2/2 TWICE, EXIT 0 both; headles
 TICK SHAPE: capability (AV1 ships end-to-end — the codec the web is moving to plays in the shell, and every registry tells the same truth the tick the ability lands; [BORROW pattern rung: shell lane feature + honest-registry flip]). GATES +1 (G_AV1_DRIVE; registry claims ride g_mse_join, all IN the wall); constellation rows 70+73 updated.
 CONSTELLATION: media / video decode + MSE → av01 steering wired (G_AV1_DRIVE, g_mse_join claims).
 WIKI: docs/wiki/media-pipeline.md — Tick 354 (registry flip, the vacuous-substring-claim trap, one-JS-test rule).
+
+## Tick 355 — AVIF stills: the blank-hero-image class, riding the AV1 decoder (2026-07-22)
+
+CO-#1 board pivot item 5, the unlock t353 named: "AVIF (modern sites serve it FIRST — a missing decoder
+is a blank hero image)". An AVIF is an AV1 keyframe in a HEIF box; the decoder landed at t353, so what
+remains is the container (BORROW avif-parse 1.3.2 — Mozilla-lineage parser, MPL-2.0 like Stylo, MSRV
+1.68 fits the 1.88 toolchain; 2.x needs 1.90 and is refused) and the JOIN — with the same isolation
+constraint as every decoder: rav1d must NOT ride into the ~25 page-gate binaries, so the AVIF decode
+lives in manuk-media behind an `avif` feature and the SHELL does the decoding, not manuk-page.
+
+HYPOTHESIS: (a) manuk-media `avif` feature = avif-parse + the t353 dav1d path (primary-item OBUs →
+decoder → RGBA via the same frame_from); (b) fetch_image_urls grows a raw-bytes sibling — bytes the
+`image` crate cannot decode come back raw instead of being dropped, so the shell can decode AVIF and
+merge into apply_images_by_url's map (the DecodedImage seam already exists); (c) gate in the shell
+suite: a red 8bpc Blink fixture paints RED pixels into a real page (color asserted, not just changed);
+a 10bpc AVIF refuses gracefully (None, never a panic — bitdepth_8 build). Alpha-plane AVIF is a named
+honest residue (separate aux image; opaque v1).
+RESULT — LANDED. engine/media: `avif` feature (avif-parse 1.4, MPL-2.0, MSRV 1.69 — 2.x refused on
+MSRV 1.90 vs toolchain 1.88), src/avif.rs (sniff_avif ftyp-brand check + decode_avif: container walk →
+the t353 dav1d path → RGBA; av1.rs refactored to share new_decoder()/frame_from). engine/page:
+fetch_image_urls_with_raw — undecodable bytes returned raw, not dropped (the seam the isolation rule
+demands; old fn delegates). shell: `avif` feature, decode_raw_images (sniff → decode → DecodedImage),
+gui fetch task merges before ImagesReady lands (off the UI thread).
+
+RED-PROVEN: (1) insert-drop in decode_raw_images → "an 8bpc AVIF must decode" FAILS (the silent
+vanish); (2) sniff_avif forced false → same, one layer down. The 10bpc graceful-no and non-AVIF skip
+are asserted by running them (Err/empty, never a panic). Color asserted on PIXELS: solid-red fixture,
+center px R>200 G<80 B<80 — a U/V swap paints blue and fails loudly.
+
+NO REGRESSION: manuk-shell 66/66 (+1) + teardown 2/2 TWICE EXIT 0; manuk-media all-features suite
+green; headless lane clean; cargo-tree isolation preserved (rav1d absent from page-gate binaries —
+the avif feature is shell-only). fmt clean.
+
+TICK SHAPE: capability (AVIF stills — the blank-hero-image class closes; modern CDNs' first-choice image format renders; [BORROW pattern: avif-parse container walk over the t353 decoder, one join, zero new pixels code]). GATES +1 (G_AVIF_PAINT, shell suite = IN the wall); constellation row 'doc/images: AVIF' missing→gated.
+CONSTELLATION: doc / images: AVIF → gated (G_AVIF_PAINT).
+WIKI: docs/wiki/media-pipeline.md — Tick 355 AVIF (raw-bytes seam, isolation-decides-architecture, color-assert discipline).

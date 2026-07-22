@@ -66,6 +66,13 @@ pub mod av1;
 #[cfg(feature = "av1")]
 pub use av1::Av1Decoder;
 
+/// AVIF stills (tick 355) — the HEIF walk over the same AV1 decoder. Shell-lane only, same
+/// isolation reason as every decoder feature.
+#[cfg(feature = "avif")]
+pub mod avif;
+#[cfg(feature = "avif")]
+pub use avif::{decode_avif, sniff_avif};
+
 /// WebVTT captions (M7). **Not feature-gated**: a caption file is text, so this needs no decoder,
 /// no C toolchain and no dependency — which is exactly why it is reachable while the `<video>`
 /// element wiring is not.

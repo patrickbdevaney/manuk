@@ -244,12 +244,27 @@ async fn fetch_images(
 pub async fn fetch_image_urls(
     urls: Vec<String>,
 ) -> std::collections::HashMap<String, manuk_paint::DecodedImage> {
+    fetch_image_urls_with_raw(urls).await.0
+}
+
+/// [`fetch_image_urls`], plus the bytes this crate could NOT decode, returned raw instead of
+/// dropped (tick 355). The decoder-isolation rule is why this seam exists: formats whose decoder
+/// must not link into the gate binaries (AVIF rides rav1d) are decoded by the SHELL, which merges
+/// its results into the same map before [`Page::apply_images_by_url`]. To this crate an AVIF is
+/// honestly undecodable; to the browser it is not — the raw channel is how both stay true.
+pub async fn fetch_image_urls_with_raw(
+    urls: Vec<String>,
+) -> (
+    std::collections::HashMap<String, manuk_paint::DecodedImage>,
+    Vec<(String, Vec<u8>)>,
+) {
     let fetched = futures_util::future::join_all(
         urls.into_iter()
             .map(|url| async move { (url.clone(), fetch_image_bytes(&url).await, url) }),
     )
     .await;
     let mut out = std::collections::HashMap::new();
+    let mut raw = Vec::new();
     for (key, bytes, url) in fetched {
         let Some(bytes) = bytes else { continue };
         let decoded = match image::load_from_memory(&bytes) {
@@ -264,13 +279,14 @@ pub async fn fetch_image_urls(
             }
             Err(_) => decode_svg(&bytes, &url),
         };
-        if let Some(img) = decoded {
-            if img.width > 0 && img.height > 0 {
+        match decoded {
+            Some(img) if img.width > 0 && img.height > 0 => {
                 out.insert(key, img);
             }
+            _ => raw.push((key, bytes.to_vec())),
         }
     }
-    out
+    (out, raw)
 }
 
 async fn fetch_images_except(

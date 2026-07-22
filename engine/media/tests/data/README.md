@@ -40,3 +40,9 @@ All three are from the Chromium `media/test/data` corpus, which is BSD-licensed 
   (Chromium, BSD-3 — provenance per the tick-235 observer steer: Chromium test DATA may be copied
   in with attribution; Chromium CODE never). The quadrant colors make a channel swap or a
   scrambled plane read visibly assertable, which is what the av1_decode gate keys on.
+
+- `red-full-range-420-8bpc.avif` / `red-full-range-420-10bpc.avif` — a solid red AVIF still in
+  8-bit (decodes) and 10-bit (refused by the `bitdepth_8` build — the graceful-no fixture), from
+  `chromium/third_party/blink/web_tests/images/resources/avif/` (Chromium, BSD-3 — test DATA
+  with attribution per the tick-235 steer). Solid red makes a channel swap or range error a
+  color assert, not a guess.

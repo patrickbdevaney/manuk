@@ -44,7 +44,7 @@ manuk-agent.workspace = true
 # rather than naming a media type, so the ~25 gate binaries that link it never compile openh264's
 # C — the isolation tick 236 established. The shell is a single binary and the one place a real
 # decode has to happen, so it is the correct and only place to pay that cost.
-manuk-media = { workspace = true, features = ["video", "audio", "av1"] }
+manuk-media = { workspace = true, features = ["video", "audio", "av1", "avif"] }
 
 anyhow.workspace = true
 tracing.workspace = true
