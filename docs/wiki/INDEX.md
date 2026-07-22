@@ -638,6 +638,7 @@
   - L1379 · Tick 361 — playbackRate applies: scaled time, honest mute, and who owns the clock at 2x
   - L1397 · Tick 362 — MP3 stream decode: the podcast organ (join pending)
   - L1413 · Tick 363 — the MP3 join: <audio> plays, audio-only entries exist
+  - L1428 · Tick 364 — FLAC + Ogg/Vorbis through the seam; Opus refused honestly
 
 ## NETWORKING — how real sites actually load
 `docs/wiki/networking.md`
@@ -856,4 +857,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-771 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+772 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

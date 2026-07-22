@@ -3159,3 +3159,17 @@ join+registry, never registry first: canPlayType said '' until the shell could a
 stream, then flipped in the same tick as the join.
 **The trap:** metadata tags (ID3v2 with an embedded PNG) sit BEFORE the sync word — a prober that
 treats tag bytes as sync kills the stream; assert the tagged fixture decodes.
+
+## FLAC + Ogg/Vorbis — free rungs of an existing seam; Opus as a named wall (tick 364)
+
+**The class of the web this unlocks:** lossless audio (`audio/flac` — music archives, audiophile
+players) and legacy Ogg/Vorbis (`audio/ogg` — game wikis, older podcast archives, Wikipedia media).
+**(1)** A well-placed seam makes codecs near-free: three symphonia features and a two-brand sniff
+widen, zero new decode code. **(2)** The sniff ROUTES, the probe DECIDES: Opus-in-Ogg sniffs yes
+and then refuses downstream as a named error — a sniff that tried to be the authority would need
+codec knowledge it cannot have. **(3)** The bare-container 'maybe': `audio/ogg` without codecs may
+be Vorbis (plays) or Opus (refused), so the honest canPlayType answer is exactly 'maybe' — 
+'probably' only when vorbis is NAMED. **(4)** Only a CERTAIN no belongs on a source-selection
+reject list; Ogg left it the tick the seam could read it.
+**The trap:** the silent-vanish class again — narrowing a sniff makes a whole format's loads die
+while every suite stays green; only a load-this-exact-fixture gate claim catches it.

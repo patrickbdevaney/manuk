@@ -52,3 +52,8 @@ All three are from the Chromium `media/test/data` corpus, which is BSD-licensed 
   parsed as sync, and the picture must not be mistaken for audio). Both from
   `chromium/media/test/data/` (Chromium, BSD-3 — test DATA with attribution per the tick-235
   steer). The 10s duration makes the frame-count claim falsifiable against the clock.
+
+- `bear.flac` (raw FLAC), `sfx.ogg` (Ogg/Vorbis mono 44.1k) and `bear-opus.ogg` (Ogg/OPUS — the
+  honest-refusal fixture: symphonia has no Opus decoder, so this must fail as a NAMED error, never
+  a panic and never a wrong sound), all from `chromium/media/test/data/` (Chromium, BSD-3 — test
+  DATA with attribution per the tick-235 steer).

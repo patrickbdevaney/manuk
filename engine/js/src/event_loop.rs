@@ -2922,12 +2922,20 @@ const PRELUDE: &str = r#"
           var t = type.toLowerCase().replace(/\s+/g, '');
           // Anything we can name and cannot decode is refused UP FRONT, before the container is
           // even considered — an mp4 carrying HEVC is still an mp4.
-          // av01 left OFF this refuse-list since tick 354, mp3 since tick 363: both genuinely
-          // play in the shell lane, and refusing them became the lie in the other direction.
-          if (/vp8|vp9|vp09|hev1|hvc1|theora|vorbis|opus|flac|ac-3/.test(t)) { return ''; }
-          if (/webm|ogg|matroska|x-flv/.test(t)) { return ''; }
-          // Raw MPEG audio (tick 363): <audio src="x.mp3"> decodes and plays end-to-end.
-          if (/^audio\/(mpeg|mp3)($|;)/.test(t)) { return 'probably'; }
+          // av01 left OFF this refuse-list since tick 354, mp3 t363, flac/vorbis t364: they
+          // genuinely play in the shell lane, and refusing them became the lie in reverse.
+          // Opus stays: symphonia has no Opus decoder, so codecs="opus" is an honest no.
+          if (/vp8|vp9|vp09|hev1|hvc1|theora|opus|ac-3/.test(t)) { return ''; }
+          if (/webm|matroska|x-flv/.test(t)) { return ''; }
+          // Raw audio streams (t363/364): mp3 and flac decode outright; an Ogg is 'probably'
+          // only when it NAMES vorbis — a bare audio/ogg may be Opus, so the container being
+          // readable earns exactly 'maybe' and no more.
+          if (/^audio\/(mpeg|mp3|flac|x-flac)($|;)/.test(t)) { return 'probably'; }
+          if (/^audio\/ogg/.test(t)) {
+            if (t.indexOf('codecs=') === -1) { return 'maybe'; }
+            return /vorbis/.test(t) ? 'probably' : '';
+          }
+          if (/ogg/.test(t)) { return ''; }
           if (!/^(video|audio)\/mp4/.test(t)) { return ''; }
           if (t.indexOf('codecs=') === -1) { return 'maybe'; }
           // `avc1.42xxxx` is Constrained Baseline — the ONLY profile openh264 decodes here. The

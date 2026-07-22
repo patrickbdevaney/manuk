@@ -193,19 +193,19 @@ fn extract_tag_attr(tag: &str, name: &str) -> Option<String> {
 /// crate, the isolation tick 236 established and [`Page::set_video_frame`] documents.
 fn media_type_rejected(mime: &str) -> bool {
     let t = mime.to_ascii_lowercase();
-    // Containers with no demuxer: `re_mp4` reads ISO-BMFF and nothing else.
-    if t.contains("webm") || t.contains("ogg") || t.contains("matroska") || t.contains("x-flv") {
+    // Containers with no demuxer: `re_mp4` reads ISO-BMFF; the symphonia stream seam reads
+    // MPEG-audio/FLAC/Ogg (t362-364), so Ogg left this list — only a CERTAIN no is acted on,
+    // and an Ogg naming opus is one (no decoder).
+    if t.contains("webm") || t.contains("matroska") || t.contains("x-flv") {
         return true;
     }
     // Codecs with no decoder behind the `VideoDecoder`/audio traits. `openh264` is Constrained
     // Baseline H.264, `symphonia` is AAC, `re_rav1d` is AV1 (tick 354 — `av01` left OFF this list
     // the same tick the shell lane gained the decoder) — anything else in a `codecs=` parameter
     // is a certain no.
-    [
-        "vp8", "vp9", "vp09", "theora", "vorbis", "opus", "hev1", "hvc1",
-    ]
-    .iter()
-    .any(|c| t.contains(c))
+    ["vp8", "vp9", "vp09", "theora", "opus", "hev1", "hvc1"]
+        .iter()
+        .any(|c| t.contains(c))
 }
 
 /// Resolve `href` against `base` to an absolute URL string (falling back to `href`).

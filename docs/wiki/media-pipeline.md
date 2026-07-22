@@ -1424,3 +1424,18 @@ container claim.
 
 RED ledger: stream fallback deleted (the silent-podcast state — MP4 demux fails, recorded dead,
 suite green), canPlayType arm deleted (cpt-mpeg:false).
+
+## Tick 364 — FLAC + Ogg/Vorbis through the seam; Opus refused honestly
+
+Three symphonia features (flac/vorbis/ogg), zero new decode code — the t362 probe seam routes
+them. `sniff_audio_stream` widens the shell fallback (fLaC / OggS; the sniff only routes, the
+probe is the authority — which is why Opus-in-Ogg SNIFFS yes and then refuses downstream as a
+named error). Registry nuance worth keeping: a bare `audio/ogg` answers exactly **'maybe'** —
+the container is readable but an Ogg can hold Opus, which has no decoder here; `codecs="vorbis"`
+earns 'probably', `codecs="opus"` stays ''. Ogg left `media_type_rejected`'s certain-no list
+(only a CERTAIN no is acted on); webm/matroska remain. Gates: stream_audio_formats (engine —
+FLAC/Vorbis decode to their own shape on the clock, Opus is a named Err) + FLAC/Vorbis/Opus
+load claims in G_MP3_DRIVE + four cpt claims in g_mse_join.
+
+RED ledger: flac canPlayType arm reverted (cpt-flac:false), sniff narrowed to mpeg (FLAC load
+dies while the suite stays green — the silent-vanish class again).

@@ -15939,3 +15939,39 @@ prior media gates (drive/mse/av-master/muted/idl/rate/av1/avif) green through th
 TICK SHAPE: capability (the podcast class plays end-to-end — <audio src=mp3> fetch→decode→device with live controls, and canPlayType tells the new truth the same tick; [host-native pattern: Option on the entry the shell owns + the organ-then-registry rule]). GATES +1 (G_MP3_DRIVE + cpt-mpeg claim, shell suite = IN the wall); constellation row 71 join closed.
 CONSTELLATION: media / audio decode → MP3 joined (G_MP3_DRIVE).
 WIKI: docs/wiki/media-pipeline.md — Tick 363 MP3 join (audio-only entries, feed-as-playhead, registry flip).
+
+## Tick 364 — FLAC + Ogg/Vorbis through the stream seam; Opus refused honestly (2026-07-22)
+
+CO-#1 order (2) MEDIA remainder, row 71's tail: "Opus/Vorbis/FLAC/AC-3 still refused by name — the
+stream seam serves them when their features turn on." The t362 seam makes this the cheapest codec
+tick on the board: symphonia gains flac+vorbis+ogg (no new decode path — the probe routes), the sniff
+learns fLaC and OggS, and the registries flip audio/flac + audio/ogg;codecs=vorbis in the same tick.
+Opus stays REFUSED BY NAME (symphonia 0.6 has no Opus decoder): a bare audio/ogg answers 'maybe'
+(the container is readable, the codec unknown — an Ogg can be Vorbis or Opus), codecs="opus" answers
+'', and the fixture set includes bear-opus.ogg to assert the refusal is graceful (Err, never a panic,
+never a wrong sound).
+
+HYPOTHESIS: decode_audio_stream handles both new shapes untouched; MediaSet::load's fallback needs
+only the widened sniff; media_type_rejected drops vorbis + the ogg-container line (an <source
+type=audio/ogg> must be ATTEMPTED — the certain-no rule: only a certain no is acted on, and Ogg is
+no longer certainly-no); canPlayType flips per above. Gate: extend the stream gate (flac + vorbis
+decode to real ~seconds on the clock; opus is a named Err) + G_MP3_DRIVE-style shell claims fold
+into existing gates (cpt-flac/cpt-ogg claims in g_mse_join).
+RESULT — LANDED. engine/media: symphonia += flac,vorbis,ogg; sniff_audio_stream (fLaC/OggS over the
+mpeg sniff); gate stream_audio_formats (FLAC + mono-44.1k Vorbis decode to their own shape on the
+clock; Ogg/OPUS is a NAMED Err — no decoder, and garbage would be strictly worse). shell: load's
+fallback widens to sniff_audio_stream (audio-only entries carry all three formats; Opus refusal is
+remembered). Registries: canPlayType audio/flac|x-flac → 'probably', audio/ogg codecs=vorbis →
+'probably' / bare → 'maybe' (may be Opus) / codecs=opus → ''; vorbis+flac out of the refuse regex,
+ogg out of the container-refuse and out of media_type_rejected (certain-no rule); opus/theora stay.
+
+RED-PROVEN: (1) flac canPlayType arm reverted → cpt-flac:false in g_mse_join; (2) sniff narrowed to
+mpeg-only → "raw FLAC loads as an audio-only entry" FAILS (the silent-vanish class). Both restored
+byte-for-byte, cmp-verified.
+
+NO REGRESSION: manuk-shell 69/69 + teardown TWICE EXIT 0; manuk-media all-features green; headless
+lane clean; fmt clean. Fixtures from Chromium test data with provenance (README).
+
+TICK SHAPE: capability (FLAC + Ogg/Vorbis play end-to-end — the remaining free rungs of the stream seam, with the bare-Ogg 'maybe' honesty nuance; Opus stays a named wall; [BORROW pattern: three symphonia features, zero new decode code]). GATES +1 engine (stream_audio_formats) + extended G_MP3_DRIVE/g_mse_join claims (shell = IN the wall); constellation row 71 tail closed to Opus+AC-3.
+CONSTELLATION: media / audio decode → FLAC+Vorbis joined; Opus named-refused (stream_audio_formats, G_MP3_DRIVE).
+WIKI: docs/wiki/media-pipeline.md — Tick 364 (seam features, bare-Ogg 'maybe', sniff-routes-probe-decides).

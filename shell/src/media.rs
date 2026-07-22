@@ -129,9 +129,10 @@ impl MediaSet {
             );
             return true;
         }
-        // Not an MP4 with video — a raw AUDIO stream? (tick 363: `<audio src="x.mp3">`.) The
-        // sniff keeps the probe off every genuinely-broken fetch.
-        if manuk_media::sniff_mpeg_audio(bytes) {
+        // Not an MP4 with video — a raw AUDIO stream? (tick 363 MP3; tick 364 FLAC/Ogg.) The
+        // sniff keeps the probe off every genuinely-broken fetch; the probe (not the sniff) is
+        // the authority on whether the codec inside actually decodes.
+        if manuk_media::sniff_audio_stream(bytes) {
             if let Ok(pcm) = manuk_media::decode_audio_stream(bytes) {
                 self.players.insert(
                     node,
@@ -617,6 +618,10 @@ mod tests {
       R.push('cpt-av1:' + (document.getElementById('v').canPlayType('video/mp4; codecs="av01.0.00M.08"') === 'probably'));
       R.push('cpt-webm:' + (document.getElementById('v').canPlayType('video/webm; codecs="av01.0.00M.08"') === ''));
       R.push('cpt-mpeg:' + (document.getElementById('v').canPlayType('audio/mpeg') === 'probably'));
+      R.push('cpt-flac:' + (document.getElementById('v').canPlayType('audio/flac') === 'probably'));
+      R.push('cpt-oggv:' + (document.getElementById('v').canPlayType('audio/ogg; codecs="vorbis"') === 'probably'));
+      R.push('cpt-oggb:' + (document.getElementById('v').canPlayType('audio/ogg') === 'maybe'));
+      R.push('cpt-opus:' + (document.getElementById('v').canPlayType('audio/ogg; codecs="opus"') === ''));
       // Live media-IDL channel (tick 360): the writes a mute button / volume slider perform.
       // Two writes to volume so the host-side coalescing (last per prop) is observable.
       var vv = document.getElementById('v');
@@ -666,6 +671,12 @@ mod tests {
             // tick 363: raw MPEG audio plays end-to-end, so canPlayType says so. RED: put mp3
             // back in the refuse regex / delete the audio-mpeg arm.
             "cpt-mpeg:true",
+            // tick 364: flac/vorbis play; a bare Ogg is exactly 'maybe' (may be Opus); named
+            // opus is an honest no. RED: revert the canPlayType audio arms.
+            "cpt-flac:true",
+            "cpt-oggv:true",
+            "cpt-oggb:true",
+            "cpt-opus:true",
             "idl-muted:true",
             "idl-vol:true",
             "open:true",
@@ -1396,6 +1407,27 @@ mod tests {
         assert!(
             feed.lock().unwrap().is_muted(),
             "the chipmunk rule covers audio-only entries: rate != 1 with no time-stretch mutes"
+        );
+
+        // ── The same fallback carries FLAC and Ogg/Vorbis (t364); Ogg/OPUS refuses gracefully
+        //    (recorded dead, no panic — symphonia has no Opus decoder).
+        const FLAC: &[u8] = include_bytes!("../../engine/media/tests/data/bear.flac");
+        const VORBIS: &[u8] = include_bytes!("../../engine/media/tests/data/sfx.ogg");
+        const OPUS: &[u8] = include_bytes!("../../engine/media/tests/data/bear-opus.ogg");
+        let (f, v, o) = (NodeId(9001), NodeId(9002), NodeId(9003));
+        assert!(set.load(f, FLAC), "raw FLAC loads as an audio-only entry");
+        assert!(
+            set.load(v, VORBIS),
+            "Ogg/Vorbis loads as an audio-only entry"
+        );
+        assert!(set.audio_feed(f).is_some() && set.audio_feed(v).is_some());
+        assert!(
+            !set.load(o, OPUS),
+            "Ogg/OPUS must refuse — no decoder; a garbage decode would be strictly worse"
+        );
+        assert!(
+            set.has(o),
+            "the Opus refusal is REMEMBERED, never re-fetched"
         );
     }
 

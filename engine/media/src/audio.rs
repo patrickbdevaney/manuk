@@ -238,6 +238,16 @@ pub fn sniff_mpeg_audio(bytes: &[u8]) -> bool {
     bytes.len() >= 2 && bytes[0] == 0xFF && (bytes[1] & 0xE0) == 0xE0
 }
 
+/// Any raw audio stream this crate's probe can plausibly open (tick 364): MPEG audio, FLAC
+/// (`fLaC`), or an Ogg container (`OggS` — Vorbis decodes; Opus is a named refusal downstream,
+/// which is exactly why the sniff says yes: the probe is the authority, the sniff only routes).
+pub fn sniff_audio_stream(bytes: &[u8]) -> bool {
+    if sniff_mpeg_audio(bytes) {
+        return true;
+    }
+    bytes.len() >= 4 && matches!(&bytes[..4], b"fLaC" | b"OggS")
+}
+
 /// Append a decoded buffer to the interleaved output, converting to `f32`.
 ///
 /// `GenericAudioBufferRef` is an enum over every sample format symphonia can produce, so the

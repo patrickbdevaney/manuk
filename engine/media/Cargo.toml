@@ -50,7 +50,10 @@ re_mp4 = "0.4"
 # `default-features = false` and the decoder stays out of its link.
 # + mp3/mpa (tick 362): the RAW MPEG-audio stream reader + MP3 codec — `<audio src="x.mp3">` is a
 # stream, not an MP4 track, so it needs symphonia's format probe, not re_mp4. MIT; patents expired.
-symphonia = { version = "0.6", default-features = false, features = ["aac", "mp3", "mpa"], optional = true }
+# + flac/vorbis/ogg (tick 364): the same stream seam, three more features. NO opus — symphonia
+# 0.6 has no Opus decoder, and the registry answers accordingly (codecs="opus" is '', bare
+# audio/ogg is 'maybe').
+symphonia = { version = "0.6", default-features = false, features = ["aac", "mp3", "mpa", "flac", "vorbis", "ogg"], optional = true }
 
 # H.264 decode (M5). Cisco's OpenH264, BSD-2, via idiomatic bindings.
 #

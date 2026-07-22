@@ -6,10 +6,13 @@
 //! passes any "it produced samples" check and fails the clock. The ID3-tagged variant proves the
 //! metadata tag is SKIPPED (probed past), not parsed as sync and not mistaken for audio.
 
-use manuk_media::{decode_audio_stream, sniff_mpeg_audio};
+use manuk_media::{decode_audio_stream, sniff_audio_stream, sniff_mpeg_audio};
 
 const CBR: &[u8] = include_bytes!("data/bear-audio-10s-CBR-no-TOC.mp3");
 const ID3: &[u8] = include_bytes!("data/id3_png_test.mp3");
+const FLAC: &[u8] = include_bytes!("data/bear.flac");
+const VORBIS: &[u8] = include_bytes!("data/sfx.ogg");
+const OPUS: &[u8] = include_bytes!("data/bear-opus.ogg");
 
 #[test]
 fn mp3_decode() {
@@ -42,4 +45,38 @@ fn mp3_decode() {
 
     // ── Garbage is a named refusal, never a panic.
     assert!(decode_audio_stream(b"not audio at all").is_err());
+}
+
+/// FLAC + Ogg/Vorbis through the same seam (tick 364); Ogg/OPUS is the honest refusal.
+#[test]
+fn stream_audio_formats() {
+    assert!(sniff_audio_stream(FLAC), "fLaC must sniff");
+    assert!(sniff_audio_stream(VORBIS), "OggS must sniff");
+    assert!(
+        sniff_audio_stream(OPUS),
+        "Opus-in-Ogg SNIFFS yes — the probe is the authority, the sniff only routes"
+    );
+    assert!(!sniff_audio_stream(b"RIFFxxxxWAVE"));
+
+    let flac = decode_audio_stream(FLAC).expect("raw FLAC must decode");
+    assert!(
+        flac.duration_seconds() > 0.5 && flac.samples.iter().any(|&s| s != flac.samples[0]),
+        "FLAC decodes real, non-uniform audio ({}s)",
+        flac.duration_seconds()
+    );
+
+    let vorbis = decode_audio_stream(VORBIS).expect("Ogg/Vorbis must decode");
+    assert!(
+        vorbis.duration_seconds() > 0.2 && vorbis.sample_rate == 44100 && vorbis.channels == 1,
+        "the mono 44.1k Vorbis fixture must decode to its own shape ({}s {}ch {}Hz)",
+        vorbis.duration_seconds(),
+        vorbis.channels,
+        vorbis.sample_rate
+    );
+
+    // ── Opus: symphonia has no decoder — a NAMED error, never a panic, never a wrong sound.
+    assert!(
+        decode_audio_stream(OPUS).is_err(),
+        "Ogg/OPUS must refuse (no decoder) — decoding it to garbage would be strictly worse"
+    );
 }
