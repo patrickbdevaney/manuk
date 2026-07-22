@@ -406,3 +406,41 @@ row by row against our map:
   (MSE join → audio → sync → muted → AV1 → AVIF) off the board's named list, zero phantom-❌ hunts.
   The map's error rate this window: two UNLISTED rows found by looking at another engine's changelog —
   the outside-frame mechanism doing exactly its job; neither is a phantom, both are additions.
+
+## Audit #10 — tick 367 (2026-07-22)
+
+### Sources (searched, not recalled)
+
+* [WebMCP browser-support status, June 2026](https://dev.to/ai-agent-economy/webmcp-in-2026-which-browsers-support-navigatormodelcontext-complete-compatibility-status-1oe4) ·
+  [W3C WebMCP Draft CG Report (Feb 2026) + Chrome 149 origin trial](https://www.buildmvpfast.com/blog/webmcp-browser-standard-ai-agents-2026)
+* [Ladybird July activity (319 PRs, 47 contributors)](https://piunikaweb.com/2026/07/06/ladybird-browser-downloads-history-sandboxing/) — the
+  July newsletter itself is not yet indexed; June's frame (Audit #9) stands.
+
+### The external frame, late July 2026
+
+**WebMCP crossed from spec-thread to shipping surface**: W3C Draft CG Report published Feb 2026;
+Chrome 146 Canary behind a flag two weeks later; **public origin trial in Chrome 149 as of June
+2026**. Google/Microsoft/Mozilla/Apple are all in the CG; only Chrome ships. This is the exact API
+CONSTITUTION.MD **H2 scope item 2** names: *"Native WebMCP client — implement `navigator.modelContext`
+as the first independent, non-Chrome implementation... converts the largest structural threat into
+Manuk's native tongue."* The threat/opportunity clock the constitution described is now RUNNING.
+
+### ADDED
+
+* **agentic / navigator.modelContext (WebMCP)** — `missing`, previously UNLISTED (the map had NO row
+  for the constitution's own named H2 marquee). Chrome 149 origin trial defines the test surface.
+  **Scope note, stated to prevent drift:** this is an H2 item; Part VII defers H2 *productization* —
+  but VII component #2 makes the agentic surface v1's differentiator and I3 forbids letting it lag.
+  The BOUNDED v1-compatible slice is the page-facing API surface (registerTool/unregister +
+  tool-manifest plumbing into the existing agent seams), with I6 taint discipline from day one
+  (page-declared tools are adversarial input). The full client productization stays H2. Decision
+  belongs to the board/observer — the row exists so the clock is on the map.
+
+### CORRECTED / what we had been wrong about
+
+* Ladybird velocity check (319 PRs/47 contributors in July) keeps the calibration honest: their
+  alpha-chase list (Audit #9) remains the closest mirror, and nothing in it contradicts the current
+  board ordering. No correction to existing rows this window — the t365 WebVTT fix was the last
+  stale-pessimistic catch, and this audit's yield is the OPPOSITE failure mode again: a marquee
+  item the map never listed. Both audits #9 and #10 found their value OUTSIDE the constellation's
+  frame, which is the mechanism working as designed.

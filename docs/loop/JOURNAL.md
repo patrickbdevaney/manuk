@@ -16015,3 +16015,22 @@ TICK).
 TICK SHAPE: governance (three checkpoints, one tick; the deliverables are the three canonical entries + counters). GATES +0. [no-pattern]
 CONSTELLATION: none (governance tick).
 WIKI: none — entries live in their canonical homes.
+
+## Tick 367 — surface audit #10: WebMCP's clock is running and the map never listed it (2026-07-22)
+
+CADENCE OBLIGATION: surface audit due (357+10). Searched, not recalled: WebMCP/navigator.modelContext
+status + Ladybird July velocity.
+
+FINDING (full entry in SURFACE-AUDIT.md Audit #10): WebMCP crossed from spec-thread to shipping
+surface — W3C Draft CG Report Feb 2026, Chrome 149 PUBLIC ORIGIN TRIAL June 2026. This is the exact
+API CONSTITUTION.MD H2 item 2 names as Manuk's first-independent-implementation marquee ("converts the
+largest structural threat into Manuk's native tongue") — and the constellation had NO row for it. Row
+added (missing; bounded v1-compatible slice named = page-facing API surface into existing agent seams
+with I6 taint from day one; full productization stays H2; decision flagged to the board/observer).
+Ladybird July velocity (319 PRs/47 contributors) keeps the calibration honest; no existing-row
+corrections — both #9 and #10 yielded OUTSIDE the constellation's frame, the mechanism working as
+designed. LAST_SURFACE_AUDIT 357→367; next due 377.
+
+TICK SHAPE: surface-audit (map-maintenance; the deliverable is Audit #10 + the WebMCP row). GATES +0. [no-pattern]
+CONSTELLATION: +1 row (agentic/navigator.modelContext missing — the H2 clock, on the map).
+WIKI: none — audit lives in SURFACE-AUDIT.md.
