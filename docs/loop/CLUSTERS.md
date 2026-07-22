@@ -5,555 +5,357 @@
          # HANGS outranks every visual divergence here (Part 24.3) — those live in STATUS.md's Bar 0.
          #
          # id            sites  classes  hits  root cause
-C01ca            187       15 26373  geometry: <div>
-C990e            165       15  8758  geometry: <a>
-C7eb9            162       15   162  geometry: <body>
-Ca725            149       15  7544  geometry: <span>
-C3b3b            145       14  2483  geometry: <p>
-C4190            135       14  6272  geometry: <li>
-C9cb6            126       14   993  geometry: <ul>
-Cba0c            120       15   280  geometry: <footer>
-C93b0            111       15  5977  geometry: <path>
-C4f8b            111       15  1088  geometry: <h2>
-C849a            109       15   112  geometry: <main>
-C7985            100       15   868  geometry: <button>
-C913e            100       15   654  geometry: <section>
-C30ac            100       15   213  geometry: <nav>
-C164e             93       14  1407  geometry: <h3>
-Ccf33             81       14  1135  display: inline → inline-block   (<img>)
-Cebf2             80       14   185  geometry: <header>
-C28a2             80       13  1108  display: inline → inline-block   (<svg>)
-Cc4e6             76       14  1178  geometry: <img>
-C5b7c             75       15    96  geometry: <h1>
-C5c37             74       14   253  geometry: <input>
-C0165             71       15   760  geometry: <svg>
-C7a60             65       15   809  geometry: <g>
-C3fe2             64       14   461  MISSING BOX: <br>  (Chrome renders it, we render nothing)
-Ccd7f             61       15  2113  MISSING BOX: <path>  (Chrome renders it, we render nothing)
-C3833             58       15 11795  MISSING BOX: <div>  (Chrome renders it, we render nothing)
-C2763             53       13    77  geometry: <form>
-C7460             49       13   636  display: none → block   (<div>)
-Ca555             43       12  3575  display: flex → block   (<div>)
-C5b10             39       13  1860  display: block → inline   (<span>)
-C37c1             39       12  1403  display: block → inline   (<a>)
-Ceebd             39       10   433  geometry: <article>
-C0a9e             38       13  3643  MISSING BOX: <span>  (Chrome renders it, we render nothing)
-Cfd9b             37       14  2842  MISSING BOX: <a>  (Chrome renders it, we render nothing)
-C4bbd             36       12   781  geometry: <circle>
-Cd6e3             33       13   196  geometry: <rect>
-C0a88             32       11   828  MISSING BOX: <svg>  (Chrome renders it, we render nothing)
-C4a64             32       11   167  display: block → inline-block   (<button>)
-C6697             30       12   931  MISSING BOX: <img>  (Chrome renders it, we render nothing)
-C19cb             30       12    75  geometry: <hr>
-C61c2             29       13   326  MISSING BOX: <button>  (Chrome renders it, we render nothing)
-C7e5d             29       12   750  display: block → inline-block   (<img>)
-C0a5d             29       11   168  geometry: <h4>
-C6489             28       10  1116  display: flex → inline   (<a>)
-C56a1             27       10   131  display: flex → block   (<ul>)
-Cc2a6             27        9   405  display: grid → block   (<div>)
-Cb6be             26       12   922  MISSING BOX: <p>  (Chrome renders it, we render nothing)
-C0a91             26       11    67  geometry: <label>
-Ccc74             26       10   184  geometry: <strong>
-Cb5c4             26        9  1024  display: block → inline-block   (<svg>)
-C4a1d             26        8   392  geometry: <picture>
-Ce54d             25       10   291  geometry: <figure>
-Cb9fc             25       10   274  display: flex → inline-block   (<button>)
-Cd3ff             24       10  1400  MISSING BOX: <li>  (Chrome renders it, we render nothing)
-C1583             23       11    32  geometry: <aside>
-C061a             21       12    36  MISSING BOX: <input>  (Chrome renders it, we render nothing)
-C09a5             21        8   234  MISSING BOX: <ul>  (Chrome renders it, we render nothing)
-Cf7d6             20       11    94  geometry: <i>
-C4351             20        9   349  display: none → inline   (<span>)
-C9af8             20        7   452  display: flex → inline   (<span>)
-C12c3             19       12   180  display: inline-block → inline   (<a>)
-Ceaa6             18       10   698  display: inline → none   (<source>)
-Cf26b             18        8    26  display: flex → block   (<nav>)
-C0936             18        7   175  geometry: <code>
-Ce466             17       11   147  display: inline-block → inline   (<span>)
-C3b77             17        6   270  display: flex → block   (<li>)
-C60f0             16       10   124  MISSING BOX: <rect>  (Chrome renders it, we render nothing)
-C9010             16        9   284  MISSING BOX: <h2>  (Chrome renders it, we render nothing)
-Cb623             16        9    52  geometry: <em>
-C2d36             16        8   305  geometry: <use>
-C526d             16        8   122  display: none → inline-block   (<button>)
-C500e             16        7    21  MISSING BOX: <iframe>  (Chrome renders it, we render nothing)
-C457a             15        9   103  MISSING BOX: <circle>  (Chrome renders it, we render nothing)
-Ccf02             15        9    76  display: none → inline   (<a>)
-Cf179             15        8   121  geometry: <br>
-C77e9             15        8    51  MISSING BOX: <nav>  (Chrome renders it, we render nothing)
-C5351             15        7   298  MISSING BOX: <g>  (Chrome renders it, we render nothing)
-Cb400             15        4    84  geometry: <pre>
-C0d7d             14        8   386  MISSING BOX: <h3>  (Chrome renders it, we render nothing)
-C04ae             14        8    79  display: block → none   (<div>)
-C3403             14        7   172  display: inline-flex → inline   (<a>)
-C994e             14        6    46  geometry: <video>
-Cd79c             13        8   160  display: none → block   (<li>)
-Cf0f9             13        8    26  geometry: <b>
-C538b             13        8    13  MISSING BOX: <h1>  (Chrome renders it, we render nothing)
-Cc1ff             13        6   246  MISSING BOX: <section>  (Chrome renders it, we render nothing)
-C5b1a             13        6    22  display: block → inline-block   (<input>)
-Cc197             12        8    92  display: inline-block → block   (<div>)
-Cac8c             12        8    26  display: block → inline   (<label>)
-C98ed             12        7    21  display: flex → block   (<header>)
-Cf3f6             12        6   302  geometry: <time>
-C19c8             12        6    37  geometry: <blockquote>
-Ce674             11        8   277  MISSING BOX: <picture>  (Chrome renders it, we render nothing)
-C74de             11        8    95  geometry: <small>
-C937b             11        7   150  display: block → flex   (<div>)
-Cf4e0             11        7    21  geometry: <ol>
-Cf7a0             10        7    64  geometry: <h5>
-C0501             10        7    42  display: flex → block   (<section>)
-C3bf9             10        7    26  MISSING BOX: <header>  (Chrome renders it, we render nothing)
-C10e0             10        6    48  display: grid → block   (<ul>)
-Ca981             10        6    13  geometry: <select>
-C1c0b             10        6    10  MISSING BOX: <footer>  (Chrome renders it, we render nothing)
-C5131              9        7    94  display: inline-block → block   (<li>)
-Cc767              9        7    65  MISSING BOX: <strong>  (Chrome renders it, we render nothing)
-C9ba0              9        7     9  MISSING BOX: <form>  (Chrome renders it, we render nothing)
-C1369              9        6   334  geometry: <td>
-C27ef              9        6   182  geometry: <tr>
-C528a              9        6   126  display: none → block   (<ul>)
-C48cb              9        6    25  display: none → block   (<p>)
-Cc31b              9        6    16  geometry: <table>
-C8007              9        6    14  geometry: <tbody>
-C70b6              8        8   103  display: flow-root → inline   (<span>)
-Cebaf              8        6    42  geometry: <h6>
-C5bb3              8        6    26  geometry: <line>
-C81c6              8        6    21  display: inline-flex → inline-block   (<button>)
-C1b6a              8        6    18  display: none → block   (<nav>)
-C9c57              8        5   105  display: inline → block   (<a>)
-Ce059              8        5    49  geometry: <figcaption>
-C5255              8        5     8  geometry: <iframe>
-Cbf84              7        6    18  MISSING BOX: <line>  (Chrome renders it, we render nothing)
-Ce64a              7        6    12  display: flex → block   (<form>)
-Cdb0b              7        5   180  MISSING BOX: <use>  (Chrome renders it, we render nothing)
-C1d1f              7        5    41  display: inline → inline-block   (<video>)
-C0361              7        5    33  display: inline → flex   (<a>)
-C4133              7        4    33  display: none → inline-block   (<svg>)
-C5317              7        4    22  display: block → flex   (<ul>)
-Cfbb9              7        3     7  MISSING BOX: <main>  (Chrome renders it, we render nothing)
-Ce785              6        6    75  geometry: <ellipse>
-C8fc9              6        6    28  geometry: <dt>
-C06a6              6        5    96  display: inline-flex → inline   (<span>)
-C201b              6        5    77  display: inline-block → inline   (<i>)
-C9bed              6        5    34  display: none → inline-block   (<input>)
-C4faa              6        4    62  display: inline → block   (<span>)
-Ca6fd              6        4    39  geometry: <polygon>
-Cb4cb              6        4    28  geometry: <sup>
-C3ce2              6        4    19  display: inline → block   (<svg>)
-C22df              6        4    15  display: inline → none   (<span>)
-C744a              6        3    58  MISSING BOX: <figcaption>  (Chrome renders it, we render nothing)
-C7899              5        5   153  MISSING BOX: <source>  (Chrome renders it, we render nothing)
-C19e8              5        5    53  display: block → grid   (<div>)
-C26d9              5        5    25  geometry: <dd>
-C5f21              5        5    10  geometry: <dl>
-C49d0              5        5     6  MISSING BOX: <label>  (Chrome renders it, we render nothing)
-C0163              5        4    43  MISSING BOX: <i>  (Chrome renders it, we render nothing)
-C77a5              5        4    32  display: block → inline-block   (<video>)
-C3840              5        4    20  display: grid → inline   (<a>)
-Ce3f3              5        4    16  MISSING BOX: <ol>  (Chrome renders it, we render nothing)
-Cc510              5        3   179  display: block → inline   (<picture>)
-Cd820              5        3   107  display: flex → block   (<article>)
-Cbab2              5        3    69  display: flex → block   (<p>)
-Cab46              5        3    20  display: inline-block → block   (<button>)
-C8fbb              5        2    18  MISSING BOX: <video>  (Chrome renders it, we render nothing)
-C0b50              4        4    62  MISSING BOX: <hr>  (Chrome renders it, we render nothing)
-Cbee9              4        4    53  display: block → inline   (<i>)
+C01ca            111       15 14002  geometry: <div>
+C990e             97       15  4964  geometry: <a>
+C7eb9             93       15    93  geometry: <body>
+Ca725             84       15  3732  geometry: <span>
+C3b3b             79       14  1210  geometry: <p>
+C9cb6             70       14   539  geometry: <ul>
+C4190             70       13  3066  geometry: <li>
+Cba0c             67       14    69  geometry: <footer>
+Cc4e6             67       13   977  geometry: <img>
+C93b0             61       15  2432  geometry: <path>
+C4f8b             61       14   415  geometry: <h2>
+C849a             59       14    60  geometry: <main>
+C30ac             57       15   119  geometry: <nav>
+C7985             56       13   470  geometry: <button>
+C913e             52       14   322  geometry: <section>
+C0165             49       15   704  geometry: <svg>
+C5c37             47       12   127  geometry: <input>
+C164e             46       12   485  geometry: <h3>
+Cebf2             42       12   105  geometry: <header>
+C5b7c             40       14    45  geometry: <h1>
+C7a60             37       14   293  geometry: <g>
+Ccd7f             34       14  1658  MISSING BOX: <path>  (Chrome renders it, we render nothing)
+C3833             32       14  7544  MISSING BOX: <div>  (Chrome renders it, we render nothing)
+Cf179             29       14   164  geometry: <br>
+C2763             28       11    38  geometry: <form>
+Cfd9b             22       10  1415  MISSING BOX: <a>  (Chrome renders it, we render nothing)
+C4bbd             21       10   158  geometry: <circle>
+C6697             20       11   554  MISSING BOX: <img>  (Chrome renders it, we render nothing)
+C0a9e             19       11  2052  MISSING BOX: <span>  (Chrome renders it, we render nothing)
+C61c2             19       10   229  MISSING BOX: <button>  (Chrome renders it, we render nothing)
+Ccc74             19        8   138  geometry: <strong>
+Cd6e3             18       12    57  geometry: <rect>
+C0a88             18        8   419  MISSING BOX: <svg>  (Chrome renders it, we render nothing)
+Ceebd             18        6   104  geometry: <article>
+C7460             17       10   148  display: none → block   (<div>)
+Cb6be             15        9   587  MISSING BOX: <p>  (Chrome renders it, we render nothing)
+Cd3ff             14        8   625  MISSING BOX: <li>  (Chrome renders it, we render nothing)
+C0a91             14        8    33  geometry: <label>
+C0a5d             14        7    53  geometry: <h4>
+C19cb             13       10    21  geometry: <hr>
+Ce54d             13        6   101  geometry: <figure>
+C0936             13        5   108  geometry: <code>
+C09a5             12        8   103  MISSING BOX: <ul>  (Chrome renders it, we render nothing)
+Cf7d6             12        7    54  geometry: <i>
+C061a             11        9    12  MISSING BOX: <input>  (Chrome renders it, we render nothing)
+C1583             11        7    15  geometry: <aside>
+C4a1d             11        6    54  geometry: <picture>
+Ceaa6             10        9   757  display: inline → none   (<source>)
+C77e9             10        8    38  MISSING BOX: <nav>  (Chrome renders it, we render nothing)
+C994e             10        5    66  geometry: <video>
+C60f0              9        8   100  MISSING BOX: <rect>  (Chrome renders it, we render nothing)
+C37c1              9        7   267  display: block → inline   (<a>)
+C5b10              9        7   213  display: block → inline   (<span>)
+C538b              9        7     9  MISSING BOX: <h1>  (Chrome renders it, we render nothing)
+C4a64              9        6    25  display: block → inline-block   (<button>)
+C500e              8        8     9  MISSING BOX: <iframe>  (Chrome renders it, we render nothing)
+Ca555              8        7   389  display: flex → block   (<div>)
+C937b              8        6   473  display: block → flex   (<div>)
+Cc1ff              8        6   182  MISSING BOX: <section>  (Chrome renders it, we render nothing)
+C9010              8        6   110  MISSING BOX: <h2>  (Chrome renders it, we render nothing)
+C2d36              8        5   348  geometry: <use>
+C04ae              8        5    44  display: block → none   (<div>)
+Cb623              8        5    38  geometry: <em>
+Ca981              8        5    11  geometry: <select>
+Cb400              8        3    38  geometry: <pre>
+C457a              7        7    28  MISSING BOX: <circle>  (Chrome renders it, we render nothing)
+C0d7d              7        6   220  MISSING BOX: <h3>  (Chrome renders it, we render nothing)
+Ccbf9              7        6    81  display: block → inline   (<img>)
+C3bf9              7        6    13  MISSING BOX: <header>  (Chrome renders it, we render nothing)
+C1369              7        5   209  geometry: <td>
+C27ef              7        5   144  geometry: <tr>
+Cf0f9              7        5    24  geometry: <b>
+Cc31b              7        5    13  geometry: <table>
+C8007              7        5    11  geometry: <tbody>
+C5351              7        3   237  MISSING BOX: <g>  (Chrome renders it, we render nothing)
+C4351              6        6    31  display: none → inline   (<span>)
+C6489              6        5   117  display: flex → inline   (<a>)
+Cc2a6              6        5    98  display: grid → block   (<div>)
+Cb9fc              6        5    63  display: flex → inline-block   (<button>)
+Cf7a0              6        5    29  geometry: <h5>
+C56a1              6        5    26  display: flex → block   (<ul>)
+C12c3              6        5    22  display: inline-block → inline   (<a>)
+C1c0b              6        5     6  MISSING BOX: <footer>  (Chrome renders it, we render nothing)
+Ce373              6        4   217  display: inline → block   (<img>)
+Cc767              6        4    57  MISSING BOX: <strong>  (Chrome renders it, we render nothing)
+Cdb0b              6        4    20  MISSING BOX: <use>  (Chrome renders it, we render nothing)
+C8fbb              6        4    19  MISSING BOX: <video>  (Chrome renders it, we render nothing)
+C9ba0              6        4     6  MISSING BOX: <form>  (Chrome renders it, we render nothing)
+Cfbb9              5        5     5  MISSING BOX: <main>  (Chrome renders it, we render nothing)
+Ce674              5        4   246  MISSING BOX: <picture>  (Chrome renders it, we render nothing)
+C9c57              5        4    82  display: inline → block   (<a>)
+C0361              5        4    54  display: inline → flex   (<a>)
+C74de              5        4    33  geometry: <small>
+C14f0              5        4    29  display: inline-block → flex   (<button>)
+Ce059              5        4    11  geometry: <figcaption>
+Cf26b              5        4     6  display: flex → block   (<nav>)
+C3fe2              5        3    73  MISSING BOX: <br>  (Chrome renders it, we render nothing)
+C19c8              5        2    22  geometry: <blockquote>
+C4faa              4        4   200  display: inline → block   (<span>)
+Ce670              4        4   108  display: block → inline   (<svg>)
+C70b6              4        4    90  display: flow-root → inline   (<span>)
+Ce785              4        4    73  geometry: <ellipse>
+C3b77              4        4    55  display: flex → block   (<li>)
 Cc2e6              4        4    34  geometry: <center>
-Cf8cb              4        4    11  display: flex → block   (<footer>)
-Ce5d0              4        4     7  display: none → flex   (<div>)
-C4041              4        4     6  geometry: <fieldset>
-Cdb98              4        3    54  display: block → none   (<ul>)
-C9ed7              4        3    40  display: inline-flex → block   (<div>)
-Cd3a6              4        3    25  display: none → inline-block   (<img>)
-C1d74              4        3     7  display: flex → inline   (<label>)
-C4069              4        3     5  MISSING BOX: <image>  (Chrome renders it, we render nothing)
-C9486              4        2    91  MISSING BOX: <figure>  (Chrome renders it, we render nothing)
-Cef3d              4        2    87  MISSING BOX: <time>  (Chrome renders it, we render nothing)
-C497c              4        2    28  MISSING BOX: <article>  (Chrome renders it, we render nothing)
-Ca3bd              4        2    17  geometry: <dialog>
-C0e55              4        2    17  geometry: <th>
-C6855              4        2    12  geometry: <canvas>
-C14f0              4        2    10  display: inline-block → flex   (<button>)
-C373d              4        2     5  display: table-header-group → table-row-group   (<thead>)
-Cc0b5              4        2     4  display: block → flex   (<nav>)
-C2ca8              3        3    45  display: inline → block   (<p>)
-C6fd1              3        3    42  display: inline → block   (<li>)
-C27ef              3        3    37  display: block → inline   (<text>)
-C433a              3        3    33  display: grid → block   (<li>)
-C03a8              3        3    18  MISSING BOX: <polygon>  (Chrome renders it, we render nothing)
-Cc848              3        3    17  MISSING BOX: <em>  (Chrome renders it, we render nothing)
-Cf438              3        3    15  geometry: <cite>
-C917c              3        3    14  display: grid → block   (<header>)
-Ce0a2              3        3    11  MISSING BOX: <h4>  (Chrome renders it, we render nothing)
-C6c10              3        3    10  display: inline → block   (<h2>)
-Cc659              3        3    10  geometry: <polyline>
-Cc188              3        3     9  display: inline-block → block   (<p>)
-Cecd3              3        3     8  display: none → inline   (<label>)
-C4bef              3        3     7  MISSING BOX: <h5>  (Chrome renders it, we render nothing)
-C1042              3        3     6  MISSING BOX: <polyline>  (Chrome renders it, we render nothing)
-Ce6fc              3        3     6  display: grid → block   (<nav>)
-Cbdec              3        3     6  display: none → block   (<a>)
-C6b68              3        3     5  display: none → block   (<section>)
-C4298              3        3     4  display: block → inline-block   (<select>)
-C74ca              3        3     4  display: flex → block   (<h2>)
-C736a              3        3     3  display: block → flex   (<body>)
-C6a2a              3        3     3  display: flex → block   (<aside>)
-C8d86              3        3     3  display: flex → none   (<div>)
-C0b8d              3        3     3  geometry: <search>
-C2de0              3        2   158  display: table → block   (<div>)
-C18d9              3        2    38  display: block → inline-block   (<div>)
-C51f1              3        2    19  display: flex → block   (<a>)
-C37cf              3        2    16  display: inline → inline-block   (<i>)
-Ccea8              3        2    15  geometry: <abbr>
-C29ad              3        2    14  display: none → block   (<hr>)
-Ce373              3        2    13  display: inline → block   (<img>)
-C84fb              3        2     9  display: block → flex   (<section>)
-Cf417              3        2     9  display: inline → inline-block   (<a>)
-C13ae              3        2     9  display: none → block   (<h3>)
-C867a              3        2     6  display: grid → block   (<section>)
-Cf03c              3        2     5  display: inline → none   (<a>)
-Cbd46              3        2     5  geometry: <kbd>
-Cf534              3        2     3  display: flex → block   (<body>)
-Cc398              3        2     3  display: inline-block → block   (<input>)
-C2654              2        2   716  display: block → none   (<source>)
-C0cc3              2        2   107  geometry: <tspan>
-Ce2eb              2        2    37  display: grid → block   (<article>)
-Cfd29              2        2    34  display: block → inline   (<time>)
-Cc6a3              2        2    32  display: none → table-cell   (<td>)
-Cfa96              2        2    27  display: block → none   (<a>)
-C73b7              2        2    20  display: inline → block   (<div>)
-C7a40              2        2    19  display: flex → block   (<figure>)
-Cd518              2        2    17  geometry: <bdi>
+Cebaf              4        4    12  geometry: <h6>
+C4bef              4        4    11  MISSING BOX: <h5>  (Chrome renders it, we render nothing)
+Ce466              4        4     7  display: inline-block → inline   (<span>)
+Cd79c              4        4     6  display: none → block   (<li>)
+C5255              4        4     4  geometry: <iframe>
+Cf4e0              4        3    23  geometry: <ol>
+Cb4cb              4        3    23  geometry: <sup>
+C5317              4        3    14  display: block → flex   (<ul>)
+Cab46              4        3    13  display: inline-block → block   (<button>)
+C22df              4        3     7  display: inline → none   (<span>)
+Ce64a              4        3     5  display: flex → block   (<form>)
+Cf3f6              4        2    21  geometry: <time>
+C0b50              3        3    48  MISSING BOX: <hr>  (Chrome renders it, we render nothing)
+C19e8              3        3    29  display: block → grid   (<div>)
+C6f22              3        3    18  display: inline-block → inline   (<button>)
+C528a              3        3    11  display: none → block   (<ul>)
+C0163              3        3     8  MISSING BOX: <i>  (Chrome renders it, we render nothing)
+Cac8c              3        3     8  display: block → inline   (<label>)
+C1697              3        3     7  display: inline-block → none   (<button>)
+Ca6fd              3        3     7  geometry: <polygon>
+Ccf02              3        3     6  display: none → inline   (<a>)
+C5b1a              3        3     5  display: block → inline-block   (<input>)
+C526d              3        3     5  display: none → inline-block   (<button>)
+C4069              3        3     4  MISSING BOX: <image>  (Chrome renders it, we render nothing)
+C49d0              3        3     4  MISSING BOX: <label>  (Chrome renders it, we render nothing)
+C744a              3        2    43  MISSING BOX: <figcaption>  (Chrome renders it, we render nothing)
+C18d9              3        2    36  display: block → inline-block   (<div>)
+Cdb98              3        2    31  display: block → none   (<ul>)
+C3ce2              3        2    16  display: inline → block   (<svg>)
+C5bb3              3        2    13  geometry: <line>
+C6855              3        2    10  geometry: <canvas>
+C84fb              3        2     8  display: block → flex   (<section>)
+Cbb6e              2        2   209  display: inline → block   (<picture>)
+C7899              2        2   145  MISSING BOX: <source>  (Chrome renders it, we render nothing)
+Cf417              2        2    87  display: inline → inline-block   (<a>)
+C9e33              2        2    85  display: flow-root → inline   (<a>)
+Cebb0              2        2    28  display: inline-block → inline-flex   (<button>)
+C9bed              2        2    27  display: none → inline-block   (<input>)
+Cef3d              2        2    26  MISSING BOX: <time>  (Chrome renders it, we render nothing)
+Cf03c              2        2    24  display: inline → none   (<a>)
+C3403              2        2    24  display: inline-flex → inline   (<a>)
+C5ae6              2        2    23  display: none → inline   (<img>)
+C497c              2        2    20  MISSING BOX: <article>  (Chrome renders it, we render nothing)
 C77ef              2        2    16  display: none → block   (<span>)
+C3840              2        2    15  display: grid → inline   (<a>)
+C6fd1              2        2    15  display: inline → block   (<li>)
+C201b              2        2    14  display: inline-block → inline   (<i>)
+Cf438              2        2    13  geometry: <cite>
+Ce3f3              2        2    12  MISSING BOX: <ol>  (Chrome renders it, we render nothing)
 C16c4              2        2    10  MISSING BOX: <h6>  (Chrome renders it, we render nothing)
-C301c              2        2    10  display: block → inline   (<details>)
-C1137              2        2     8  display: none → flex   (<button>)
-C1697              2        2     6  display: inline-block → none   (<button>)
-C185b              2        2     5  display: block → flex   (<a>)
+C48cb              2        2    10  display: none → block   (<p>)
+C811c              2        2     8  display: block → flex   (<p>)
+Cbab2              2        2     7  display: flex → block   (<p>)
+Ce0a2              2        2     6  MISSING BOX: <h4>  (Chrome renders it, we render nothing)
+C3c6a              2        2     6  display: inline → inline-block   (<span>)
+C237f              2        2     5  display: block → flex   (<header>)
 C45af              2        2     5  display: block → none   (<hr>)
-C85d9              2        2     4  display: flex → block   (<h3>)
-Ce445              2        2     4  display: flex → inline-block   (<img>)
-Ce7a5              2        2     4  display: table-cell → block   (<div>)
-C1d5b              2        2     3  MISSING BOX: <blockquote>  (Chrome renders it, we render nothing)
-C10d0              2        2     3  display: block → grid   (<section>)
+Cbdec              2        2     5  display: none → block   (<a>)
+Ce5d0              2        2     5  display: none → flex   (<div>)
+Ccea8              2        2     5  geometry: <abbr>
+C26d9              2        2     5  geometry: <dd>
+C5f21              2        2     5  geometry: <dl>
+C8fc9              2        2     5  geometry: <dt>
+C0501              2        2     4  display: flex → block   (<section>)
+C4041              2        2     4  geometry: <fieldset>
+Cc659              2        2     4  geometry: <polyline>
 C26e5              2        2     3  display: block → inline-block   (<a>)
-C099c              2        2     3  display: inline-block → none   (<a>)
-C964a              2        2     3  display: none → block   (<header>)
-C1fca              2        2     3  display: none → inline   (<i>)
-C8408              2        2     2  MISSING BOX: <ellipse>  (Chrome renders it, we render nothing)
-Cb921              2        2     2  display: block → inline   (<legend>)
-C427a              2        2     2  display: block → inline-block   (<textarea>)
-C5447              2        2     2  display: block → none   (<svg>)
-Cc0cd              2        2     2  display: flex → block   (<main>)
+Cc848              2        2     2  MISSING BOX: <em>  (Chrome renders it, we render nothing)
+Cbf84              2        2     2  MISSING BOX: <line>  (Chrome renders it, we render nothing)
+C84ca              2        2     2  MISSING BOX: <search>  (Chrome renders it, we render nothing)
+C185b              2        2     2  display: block → flex   (<a>)
 C51cf              2        2     2  display: flex → inline-flex   (<div>)
-C4c6b              2        2     2  display: none → block   (<body>)
+C5352              2        2     2  display: flex → inline-flex   (<span>)
+C8d86              2        2     2  display: flex → none   (<div>)
 Cbd67              2        2     2  display: none → block   (<button>)
-C35bc              2        2     2  display: none → flex   (<a>)
-C3fdf              2        2     2  display: none → table-cell   (<th>)
-Cb033              2        1    27  display: grid → inline   (<span>)
+Cbd46              2        2     2  geometry: <kbd>
+C37cf              2        1    14  display: inline → inline-block   (<i>)
 C0279              2        1     9  display: flex → none   (<button>)
-Cc422              2        1     7  display: inline-block → inline   (<label>)
+C0e55              2        1     7  geometry: <th>
 C3359              2        1     6  display: inline → none   (<svg>)
-Cce36              2        1     2  MISSING BOX: <dialog>  (Chrome renders it, we render nothing)
-C5352              2        1     2  display: flex → inline-flex   (<span>)
+C13ae              2        1     3  display: none → block   (<h3>)
+Cc0b5              2        1     2  display: block → flex   (<nav>)
+C373d              2        1     2  display: table-header-group → table-row-group   (<thead>)
+C0b8d              2        1     2  geometry: <search>
 C1eae              1        1   407  display: inline-block → inline   (<rt-text>)
 C03e9              1        1   150  display: inline-block → inline   (<score-icon-audience>)
 C01e2              1        1   150  display: inline-block → inline   (<score-icon-critics>)
 Cf605              1        1   150  geometry: <media-info-tile>
 C202d              1        1   150  geometry: <score-pairs-deprecated>
-C09d3              1        1   150  geometry: <watchlist-button>
+C09d3              1        1   149  geometry: <watchlist-button>
 C68c7              1        1    90  MISSING BOX: <wow-image>  (Chrome renders it, we render nothing)
-Cdd61              1        1    78  display: flex → inline   (<i>)
-Ca421              1        1    73  display: table-row → inline   (<a>)
-C9aa3              1        1    66  geometry: <poster-tile>
-Cff35              1        1    51  geometry: <gu-island>
-C58cb              1        1    48  display: grid → inline-block   (<button>)
-Cda98              1        1    48  geometry: <drb-shot-like>
+C9486              1        1    72  MISSING BOX: <figure>  (Chrome renders it, we render nothing)
+Cf8b9              1        1    68  display: inline → inline-block   (<strong>)
+C9aa3              1        1    56  geometry: <poster-tile>
+Cc510              1        1    49  display: block → inline   (<picture>)
 Ccdd1              1        1    42  display: flex → inline-block   (<div>)
+C838a              1        1    41  display: inline-block → block   (<span>)
 Cacf8              1        1    40  display: block → inline   (<score-icon-critics>)
-C4f8f              1        1    36  display: inline-block → inline   (<time>)
 C04a8              1        1    34  display: block → inline   (<rt-text>)
-C9468              1        1    28  display: flex → inline   (<picture>)
-C29f7              1        1    27  MISSING BOX: <iron-iconset-svg>  (Chrome renders it, we render nothing)
+C5e3f              1        1    28  display: inline-block → none   (<span>)
 C1e65              1        1    26  display: block → none   (<span>)
 Ce42f              1        1    25  MISSING BOX: <u>  (Chrome renders it, we render nothing)
-C9e33              1        1    25  display: flow-root → inline   (<a>)
-C2b6a              1        1    25  geometry: <store-layout-column>
-C4e3c              1        1    24  geometry: <drb-thumbnail>
-C6d63              1        1    24  geometry: <store-media>
-C53ff              1        1    23  MISSING BOX: <text>  (Chrome renders it, we render nothing)
-C5b44              1        1    21  display: inline-grid → block   (<div>)
-Cfbdd              1        1    21  geometry: <bsp-custom-headline>
-C27de              1        1    20  display: block → flex   (<span>)
+C9ed7              1        1    25  display: inline-flex → block   (<div>)
 C431a              1        1    19  display: block → inline   (<rt-icon>)
-Cf609              1        1    18  display: block → inline   (<small>)
-Cb677              1        1    16  geometry: <drb-avatar>
-C6eb0              1        1    15  display: block → none   (<h3>)
-C311c              1        1    14  display: flex → grid   (<li>)
-Ce00f              1        1    14  display: inline → block   (<i>)
-C52c6              1        1    14  display: inline-flex → inline   (<rt-img>)
-C78ac              1        1    14  geometry: <play-button>
-Cddf1              1        1    14  geometry: <store-button>
-Caf5c              1        1    14  geometry: <store-text-block>
-C6a73              1        1    13  display: inline-flex → inline   (<rh-cta>)
-Ca3d0              1        1    12  display: block → inline   (<bsp-custom-headline>)
-C2ccf              1        1    12  display: inline → block   (<h3>)
-C89b6              1        1    12  geometry: <store-icon>
-C3ef3              1        1    12  geometry: <store-secondary-nav-item>
-Cefcb              1        1    11  MISSING BOX: <cite>  (Chrome renders it, we render nothing)
+C5131              1        1    14  display: inline-block → block   (<li>)
+Cdc2e              1        1    14  display: inline-block → inline   (<svg>)
+C3773              1        1    14  display: none → inline   (<svg>)
+Cfa96              1        1    12  display: block → none   (<a>)
+C85d9              1        1    12  display: flex → block   (<h3>)
+C07f9              1        1    12  display: inline → block   (<strong>)
 Cce60              1        1    11  MISSING BOX: <wix-video>  (Chrome renders it, we render nothing)
-Cee93              1        1    11  MISSING BOX: <wp-ad>  (Chrome renders it, we render nothing)
-C3384              1        1    11  display: block → inline-block   (<span>)
-C3012              1        1    11  display: inline → block   (<h4>)
 C287e              1        1    11  geometry: <q>
-C96b6              1        1    11  geometry: <store-card-feature>
 C3fc3              1        1    10  display: inline → block   (<time>)
-Cf82a              1        1    10  geometry: <foreignobject>
-Cb1a1              1        1    10  geometry: <store-heading-block>
+C301c              1        1     9  display: block → inline   (<details>)
 Cabd7              1        1     9  display: block → inline   (<editorial-spotlight-tile>)
-C8145              1        1     9  display: block → inline   (<gpt-ad>)
+C51f1              1        1     9  display: flex → block   (<a>)
 Cb586              1        1     9  display: flex → block   (<summary>)
 C1707              1        1     9  display: flex → inline-flex   (<i>)
 Caf24              1        1     9  display: flow-root → inline   (<h2>)
-C07ca              1        1     9  display: inline-block → inline   (<b>)
 Cbeaa              1        1     9  display: list-item → inline   (<li>)
-C3e24              1        1     9  display: none → block   (<ol>)
 C1efb              1        1     8  display: none → inline   (<ad-unit>)
-C6b2d              1        1     8  display: table-row → block   (<div>)
 C2ccc              1        1     8  geometry: <tiles-carousel-responsive-deprecated>
-C3460              1        1     7  MISSING BOX: <b>  (Chrome renders it, we render nothing)
-C811c              1        1     7  display: block → flex   (<p>)
-Cddba              1        1     7  display: block → none   (<img>)
-C42cd              1        1     7  display: flex → inline   (<icon>)
-Cd4a4              1        1     7  display: flex → none   (<wp-ad-wrapper>)
-Cbb6e              1        1     7  display: inline → block   (<picture>)
-C3c6a              1        1     7  display: inline → inline-block   (<span>)
+Cf9e2              1        1     7  display: list-item → inline-block   (<li>)
+C1137              1        1     7  display: none → flex   (<button>)
 Ca9f2              1        1     7  geometry: <font>
-Ceb01              1        1     7  geometry: <media-subnav>
 C5102              1        1     6  MISSING BOX: <canvas>  (Chrome renders it, we render nothing)
+Cbee9              1        1     6  display: block → inline   (<i>)
 Cd845              1        1     6  display: block → none   (<p>)
-C4917              1        1     6  display: flex → none   (<h2>)
 Cee75              1        1     6  display: flow-root → flex   (<div>)
 C7781              1        1     6  display: inline → block   (<h5>)
-C47fc              1        1     6  geometry: <media-button>
-C282f              1        1     6  geometry: <store-button-group>
-Cf411              1        1     6  geometry: <store-carousel-item>
 C7a4e              1        1     6  geometry: <tab>
-C6271              1        1     6  geometry: <uhf-dropdown-column>
-Cb6ce              1        1     6  geometry: <uhf-footer-nav-group>
 Cbaa8              1        1     5  MISSING BOX: <ad-unit>  (Chrome renders it, we render nothing)
 C7990              1        1     5  display: block → inline   (<rt-badge>)
+Ce2eb              1        1     5  display: grid → block   (<article>)
 C6206              1        1     5  display: inline-block → inline   (<rt-header-nav-item>)
+Cecd3              1        1     5  display: none → inline   (<label>)
 C9e80              1        1     5  display: none → inline   (<nav-dropdown>)
-Cb799              1        1     5  geometry: <textpath>
+C1d5b              1        1     4  MISSING BOX: <blockquote>  (Chrome renders it, we render nothing)
 Ca605              1        1     4  MISSING BOX: <pre>  (Chrome renders it, we render nothing)
-Cb561              1        1     4  MISSING BOX: <wp-ad-wrapper>  (Chrome renders it, we render nothing)
-C4eb6              1        1     4  MISSING BOX: <yt-icon-button>  (Chrome renders it, we render nothing)
-Cac65              1        1     4  display: block → inline   (<icon>)
-C8791              1        1     4  display: block → inline   (<q>)
-C4d20              1        1     4  display: flex → block   (<span>)
+Cc197              1        1     4  display: inline-block → block   (<div>)
+Cc188              1        1     4  display: inline-block → block   (<p>)
 Cbf7c              1        1     4  display: inline-block → inline   (<input>)
-C760e              1        1     4  display: inline-block → inline   (<number-flow-react>)
+Cc422              1        1     4  display: inline-block → inline   (<label>)
 C2e56              1        1     4  display: list-item → inline   (<div>)
-Cf9e2              1        1     4  display: list-item → inline-block   (<li>)
-C3ad1              1        1     4  display: none → grid   (<li>)
-Cee11              1        1     4  display: none → inline-block   (<span>)
-C4d2a              1        1     4  geometry: <store-card-banner>
-C36c7              1        1     4  geometry: <store-carousel-indicator>
-C7b5b              1        1     4  geometry: <store-featured>
-C1d1a              1        1     4  geometry: <store-hero-featured-slider-item>
-C6331              1        1     4  geometry: <store-link>
+Cc959              1        1     4  geometry: <details>
 C9bc9              1        1     4  geometry: <text-list>
-C2f21              1        1     3  display: -webkit-box → block   (<div>)
-C547b              1        1     3  display: block → flex   (<h3>)
+C27ef              1        1     3  display: block → inline   (<text>)
 C8fb5              1        1     3  display: block → inline-block   (<section>)
 Cd801              1        1     3  display: block → none   (<button>)
-C7501              1        1     3  display: flex → inline   (<bsp-scroll-shade>)
-Cdcb7              1        1     3  display: flex → inline   (<media-captions-menu-button>)
-Cc46e              1        1     3  display: flex → inline   (<media-play-button>)
 C206d              1        1     3  display: flex → inline-block   (<a>)
+C867a              1        1     3  display: grid → block   (<section>)
+C2ca8              1        1     3  display: inline → block   (<p>)
+Ccf33              1        1     3  display: inline → inline-block   (<img>)
 Cce64              1        1     3  display: inline → none   (<small>)
-C9b79              1        1     3  display: inline-block → inline   (<media-controller>)
-Cb34d              1        1     3  display: list-item → grid   (<li>)
+Cc871              1        1     3  display: inline-flex → block   (<li>)
 C6a09              1        1     3  display: none → block   (<ad-unit>)
-Cd46d              1        1     3  display: none → block   (<h2>)
-C5201              1        1     3  display: none → inline   (<bsp-timestamp>)
 C4c27              1        1     3  display: none → inline   (<overlay-base>)
-C0c1f              1        1     3  display: none → inline   (<picture>)
 Cdd1e              1        1     3  display: none → inline-block   (<li>)
-C66c2              1        1     3  geometry: <mark>
 C5de5              1        1     3  geometry: <rt-header-nav-item-dropdown>
-C3c7e              1        1     3  geometry: <store-badge>
-Cb8d3              1        1     3  geometry: <store-carousel>
-C85cb              1        1     3  geometry: <store-tag>
-C12c2              1        1     3  geometry: <wp-ad>
 C2a2c              1        1     2  MISSING BOX: <audio>  (Chrome renders it, we render nothing)
-C7924              1        1     2  MISSING BOX: <caption>  (Chrome renders it, we render nothing)
-C75b6              1        1     2  MISSING BOX: <dom-if>  (Chrome renders it, we render nothing)
 C0154              1        1     2  MISSING BOX: <scroll-detector>  (Chrome renders it, we render nothing)
 Cc2c2              1        1     2  MISSING BOX: <sup>  (Chrome renders it, we render nothing)
-C8fd3              1        1     2  MISSING BOX: <tp-yt-paper-tooltip>  (Chrome renders it, we render nothing)
-Ccde3              1        1     2  MISSING BOX: <yt-draggable>  (Chrome renders it, we render nothing)
-Cb115              1        1     2  MISSING BOX: <yt-icon>  (Chrome renders it, we render nothing)
-Cc00e              1        1     2  MISSING BOX: <yt-interaction>  (Chrome renders it, we render nothing)
-C1309              1        1     2  MISSING BOX: <ytd-logo>  (Chrome renders it, we render nothing)
-C21f9              1        1     2  MISSING BOX: <ytd-lottie-player>  (Chrome renders it, we render nothing)
-Cf1e0              1        1     2  MISSING BOX: <ytd-topbar-logo-renderer>  (Chrome renders it, we render nothing)
-Ce25c              1        1     2  MISSING BOX: <ytd-yoodle-renderer>  (Chrome renders it, we render nothing)
-Cee7d              1        1     2  display: block → inline   (<bsp-jw-player>)
-C27cc              1        1     2  display: block → inline   (<c4d-button-group-item>)
-Cf19b              1        1     2  display: block → inline   (<strong>)
+Cdd59              1        1     2  display: block → flex   (<blockquote>)
+C3a44              1        1     2  display: block → inline   (<br>)
 C869b              1        1     2  display: flex → block   (<menu>)
-C2e91              1        1     2  display: flex → inline   (<code>)
-C8d0a              1        1     2  display: flex → inline   (<media-captions-menu>)
-C4aea              1        1     2  display: flex → inline   (<media-control-bar>)
-C8542              1        1     2  display: flex → inline-block   (<input>)
-C597f              1        1     2  display: flex → inline-flex   (<a>)
+C9af8              1        1     2  display: flex → inline   (<span>)
 C9b4c              1        1     2  display: grid → inline-block   (<section>)
+C819d              1        1     2  display: inline → block   (<cite>)
 Cf221              1        1     2  display: inline → inline-flex   (<a>)
 Cedfb              1        1     2  display: inline-block → inline   (<kbd>)
 Cdd8b              1        1     2  display: inline-block → inline   (<social-media-icons>)
-Cc849              1        1     2  display: none → block   (<article>)
-Cfc89              1        1     2  display: none → block   (<svg>)
 Cad9a              1        1     2  display: none → flex   (<ul>)
 C3b30              1        1     2  display: none → inline   (<rt-button>)
-C2991              1        1     2  display: table-cell → block   (<ul>)
-C2e51              1        1     2  display: table-footer-group → table-row-group   (<tfoot>)
-Cc44e              1        1     2  geometry: <c4d-link-list>
+Ce7a5              1        1     2  display: table-cell → block   (<div>)
+Cd518              1        1     2  geometry: <bdi>
 Ce9e8              1        1     2  geometry: <clg-button>
-Cc959              1        1     2  geometry: <details>
-C5513              1        1     2  geometry: <rh-navigation-secondary-dropdown>
-C36bd              1        1     2  geometry: <rh-navigation-secondary-menu>
-C69b2              1        1     2  geometry: <store-banner-featured>
-C8e8e              1        1     2  geometry: <store-container>
-Ca78a              1        1     2  geometry: <store-hero-featured-slider>
-C237f              1        1     2  geometry: <store-layout>
-C6ff9              1        1     2  geometry: <store-secondary-nav>
-C122b              1        1     2  geometry: <store-tab-panel>
-C1cf2              1        1     2  geometry: <store-ui-shell>
-Ce2df              1        1     2  geometry: <summary>
+Ca3bd              1        1     2  geometry: <dialog>
 Cc4a2              1        1     2  geometry: <u>
-Cac08              1        1     2  geometry: <wp-ad-wrapper>
 C9e19              1        1     1  MISSING BOX: <amzn-challenge-error>  (Chrome renders it, we render nothing)
 C2b35              1        1     1  MISSING BOX: <aria-avatar>  (Chrome renders it, we render nothing)
 C4b16              1        1     1  MISSING BOX: <aside>  (Chrome renders it, we render nothing)
 C7c84              1        1     1  MISSING BOX: <cursor-placer>  (Chrome renders it, we render nothing)
 Cea7d              1        1     1  MISSING BOX: <detect-window-resize>  (Chrome renders it, we render nothing)
-C6c5d              1        1     1  MISSING BOX: <fbs-ad>  (Chrome renders it, we render nothing)
-C985a              1        1     1  MISSING BOX: <fieldset>  (Chrome renders it, we render nothing)
-C53e4              1        1     1  MISSING BOX: <iron-media-query>  (Chrome renders it, we render nothing)
+Cce36              1        1     1  MISSING BOX: <dialog>  (Chrome renders it, we render nothing)
+C8408              1        1     1  MISSING BOX: <ellipse>  (Chrome renders it, we render nothing)
 Cc5ff              1        1     1  MISSING BOX: <mobile-app-cta>  (Chrome renders it, we render nothing)
 C62b9              1        1     1  MISSING BOX: <nav-hat>  (Chrome renders it, we render nothing)
-C84ca              1        1     1  MISSING BOX: <search>  (Chrome renders it, we render nothing)
-C9d6c              1        1     1  MISSING BOX: <textarea>  (Chrome renders it, we render nothing)
-C4588              1        1     1  MISSING BOX: <tp-yt-app-drawer>  (Chrome renders it, we render nothing)
+C1042              1        1     1  MISSING BOX: <polyline>  (Chrome renders it, we render nothing)
 C4315              1        1     1  MISSING BOX: <ufc-follow-author-widget>  (Chrome renders it, we render nothing)
 C92d9              1        1     1  MISSING BOX: <visibility-watcher>  (Chrome renders it, we render nothing)
-C8f71              1        1     1  MISSING BOX: <yt-ephemeral-actions>  (Chrome renders it, we render nothing)
-C7788              1        1     1  MISSING BOX: <yt-formatted-string>  (Chrome renders it, we render nothing)
-Ce4c9              1        1     1  MISSING BOX: <yt-popover>  (Chrome renders it, we render nothing)
-Ced71              1        1     1  MISSING BOX: <yt-searchbox>  (Chrome renders it, we render nothing)
-Cb683              1        1     1  MISSING BOX: <yt-tooltip>  (Chrome renders it, we render nothing)
-C102d              1        1     1  MISSING BOX: <ytd-masthead>  (Chrome renders it, we render nothing)
-Cd4ae              1        1     1  MISSING BOX: <ytd-mini-guide-renderer>  (Chrome renders it, we render nothing)
-Cd826              1        1     1  MISSING BOX: <ytd-miniplayer>  (Chrome renders it, we render nothing)
-C4bb3              1        1     1  MISSING BOX: <ytd-page-manager>  (Chrome renders it, we render nothing)
-C5c9e              1        1     1  MISSING BOX: <ytd-permission-role-bottom-bar-renderer>  (Chrome renders it, we render nothing)
-C2d68              1        1     1  MISSING BOX: <ytd-popup-container>  (Chrome renders it, we render nothing)
-C54fa              1        1     1  display: block → flex   (<dl>)
+C78ca              1        1     1  display: block → flex   (<button>)
 C2cf9              1        1     1  display: block → flex   (<footer>)
 Ce474              1        1     1  display: block → flex   (<form>)
-C237f              1        1     1  display: block → flex   (<header>)
 Cf6e7              1        1     1  display: block → inline   (<ads-home-page-editorial-spotlight-manager>)
-C51d1              1        1     1  display: block → inline   (<bsp-header>)
-Cc99c              1        1     1  display: block → inline   (<bsp-list-loadmore>)
-C2d7d              1        1     1  display: block → inline   (<bsp-search-overlay>)
-C5681              1        1     1  display: block → inline   (<c4d-masthead-container>)
-Cdd91              1        1     1  display: block → inline   (<c4d-video-player-container-v7>)
 C91c5              1        1     1  display: block → inline   (<div>)
-C2f15              1        1     1  display: block → inline   (<donation-form-edit-donation>)
 C272f              1        1     1  display: block → inline   (<hgroup>)
-Cfd7f              1        1     1  display: block → inline   (<mdn-user-menu>)
+Cb921              1        1     1  display: block → inline   (<legend>)
 C78b0              1        1     1  display: block → inline   (<nav-dropdowns>)
 Cfd5c              1        1     1  display: block → inline   (<notification-alert>)
 Ca5d7              1        1     1  display: block → inline   (<path>)
-C3e8e              1        1     1  display: block → inline   (<qbsearch-input>)
-C6295              1        1     1  display: block → inline   (<react-partial>)
 Cf41e              1        1     1  display: block → inline   (<rt-header-nav>)
 C8776              1        1     1  display: block → inline   (<rt-header>)
 C8b03              1        1     1  display: block → inline   (<search-results-nav>)
-C2868              1        1     1  display: block → inline   (<search>)
-C7f05              1        1     1  display: block → inline   (<uhf-header>)
-C193f              1        1     1  display: block → inline   (<ytd-app>)
+Ca661              1        1     1  display: block → inline   (<video>)
 Cd450              1        1     1  display: block → inline-block   (<body>)
-Ce854              1        1     1  display: block → inline-block   (<canvas>)
 C867f              1        1     1  display: block → inline-block   (<footer>)
-C623f              1        1     1  display: block → none   (<form>)
-Cc4f9              1        1     1  display: block → none   (<input>)
+C592b              1        1     1  display: block → inline-block   (<ol>)
+C4298              1        1     1  display: block → inline-block   (<select>)
+C5447              1        1     1  display: block → none   (<svg>)
 C0484              1        1     1  display: block → table   (<div>)
-Cdffc              1        1     1  display: flex → block   (<fieldset>)
-C7edc              1        1     1  display: flex → block   (<figcaption>)
+Cd820              1        1     1  display: flex → block   (<article>)
+Cf8cb              1        1     1  display: flex → block   (<footer>)
+Cb3ce              1        1     1  display: flex → block   (<input>)
 C66ef              1        1     1  display: flex → block   (<ol>)
-C6b47              1        1     1  display: flex → inline   (<bsp-header-leaderboard>)
-C3837              1        1     1  display: flex → inline   (<bsp-nav>)
-C208d              1        1     1  display: flex → inline   (<gpt-ad>)
-C2617              1        1     1  display: flex → inline   (<media-fullscreen-button>)
-Cf93b              1        1     1  display: flex → inline   (<media-mute-button>)
-C0ac5              1        1     1  display: flex → inline   (<media-time-display>)
+C00f8              1        1     1  display: flex → inline   (<svg>)
 Cb4b8              1        1     1  display: flex → inline   (<user-prefs>)
 C22c9              1        1     1  display: flex → inline-block   (<header>)
-C0b33              1        1     1  display: flex → inline-block   (<li>)
-Cd64c              1        1     1  display: flex → inline-block   (<svg>)
-C71fe              1        1     1  display: flex → inline-flex   (<button>)
-C3fc3              1        1     1  display: flow-root → inline   (<div>)
-Cbbe7              1        1     1  display: flow-root → inline-block   (<a>)
-C5295              1        1     1  display: grid → block   (<aside>)
-C765e              1        1     1  display: grid → block   (<footer>)
-Cb9d7              1        1     1  display: grid → block   (<form>)
+Cf280              1        1     1  display: flex → inline-block   (<select>)
+C79b9              1        1     1  display: grid → block   (<body>)
 C22d2              1        1     1  display: grid → block   (<menu>)
 Cc7d4              1        1     1  display: grid → inline-block   (<div>)
 C92d7              1        1     1  display: grid → none   (<div>)
-C0471              1        1     1  display: grid → none   (<li>)
 C52ee              1        1     1  display: inline → block   (<label>)
-C60b6              1        1     1  display: inline → block   (<select>)
 Cd1b0              1        1     1  display: inline → flex   (<span>)
-C8d26              1        1     1  display: inline → inline-block   (<button>)
-C30a2              1        1     1  display: inline → inline-block   (<iframe>)
-Cd599              1        1     1  display: inline → none   (<picture>)
-C9f37              1        1     1  display: inline-block → block   (<a>)
+C28a2              1        1     1  display: inline → inline-block   (<svg>)
 Cedc5              1        1     1  display: inline-block → block   (<h1>)
-C7cd9              1        1     1  display: inline-block → block   (<strong>)
+Cc398              1        1     1  display: inline-block → block   (<input>)
 Cfafe              1        1     1  display: inline-block → flex   (<input>)
-C6f22              1        1     1  display: inline-block → inline   (<button>)
 C47ca              1        1     1  display: inline-block → inline   (<rt-badge>)
 C144d              1        1     1  display: inline-block → inline   (<rt-button>)
 Cdd74              1        1     1  display: inline-block → inline   (<rt-icon>)
 C6a51              1        1     1  display: inline-block → inline   (<rt-link>)
-Ca89f              1        1     1  display: inline-block → inline   (<youtube-video>)
-Cebb0              1        1     1  display: inline-block → inline-flex   (<button>)
+C099c              1        1     1  display: inline-block → none   (<a>)
 C03ac              1        1     1  display: inline-block → none   (<li>)
-Cf93b              1        1     1  display: inline-flex → block   (<ul>)
-Cbc4f              1        1     1  display: inline-flex → inline   (<code>)
-C4177              1        1     1  display: inline-flex → inline   (<icon>)
-C1b4f              1        1     1  display: inline-grid → inline   (<c4d-button-group>)
-C32ff              1        1     1  display: inline-table → table   (<div>)
-Cf1c1              1        1     1  display: none → block   (<ciu-button>)
-Cc167              1        1     1  display: none → block   (<figcaption>)
-Cfc40              1        1     1  display: none → block   (<footer>)
-C0453              1        1     1  display: none → block   (<h4>)
+C81c6              1        1     1  display: inline-flex → inline-block   (<button>)
+C964a              1        1     1  display: none → block   (<header>)
+C29ad              1        1     1  display: none → block   (<hr>)
+Cf83f              1        1     1  display: none → block   (<iframe>)
+C1b6a              1        1     1  display: none → block   (<nav>)
 C241c              1        1     1  display: none → block   (<video>)
-C2719              1        1     1  display: none → contents   (<div>)
+C35bc              1        1     1  display: none → flex   (<a>)
+C96dd              1        1     1  display: none → flex   (<form>)
 Cf261              1        1     1  display: none → inline   (<action-icon>)
-C3067              1        1     1  display: none → inline   (<audio>)
 Cc9dc              1        1     1  display: none → inline   (<back-to-top>)
-C5292              1        1     1  display: none → inline   (<c4d-table-of-contents>)
-C7774              1        1     1  display: none → inline   (<gpt-ad>)
-Cc5d4              1        1     1  display: none → inline   (<icon>)
 C2dbf              1        1     1  display: none → inline   (<iframe-container>)
 C5457              1        1     1  display: none → inline   (<lang-picker-options>)
 Cad5e              1        1     1  display: none → inline   (<li>)
-C1255              1        1     1  display: none → inline   (<media-control-bar>)
 C7bb0              1        1     1  display: none → inline   (<mobile-android-banner>)
 C6736              1        1     1  display: none → inline   (<mobile-app-desktop-footer>)
 C66e9              1        1     1  display: none → inline   (<mobile-header-nav>)
@@ -561,17 +363,12 @@ Cd5a5              1        1     1  display: none → inline   (<rt-icon>)
 C312a              1        1     1  display: none → inline   (<search-results>)
 C53f8              1        1     1  display: none → inline   (<toast-notification>)
 Cf3b2              1        1     1  display: none → inline   (<toggle-details>)
-C14c2              1        1     1  display: none → inline-block   (<a>)
 C7b35              1        1     1  display: none → inline-flex   (<button>)
-Cd7e8              1        1     1  display: table-cell → inline   (<span>)
+C2de0              1        1     1  display: table → block   (<div>)
 C4daf              1        1     1  geometry: <address>
 C8ce9              1        1     1  geometry: <adev-home>
 C803f              1        1     1  geometry: <adev-main>
 C4668              1        1     1  geometry: <adev-root>
-Cddd5              1        1     1  geometry: <bsp-list-trending>
-Cc869              1        1     1  geometry: <c4d-video-cta-container>
-C82cf              1        1     1  geometry: <cookie-consent-link>
-Cd4d1              1        1     1  geometry: <desktop-subnav>
 C5d1c              1        1     1  geometry: <devsite-a11y-announce>
 C21c9              1        1     1  geometry: <devsite-actions>
 C35db              1        1     1  geometry: <devsite-content>
@@ -586,49 +383,17 @@ C1e05              1        1     1  geometry: <devsite-sitemask>
 Cffe5              1        1     1  geometry: <devsite-snackbar>
 C2d04              1        1     1  geometry: <devsite-tabs>
 C7087              1        1     1  geometry: <docs-text-field>
-Cc242              1        1     1  geometry: <drb-infinite-scroll>
-C78d9              1        1     1  geometry: <drb-toggle-tabs>
 C7197              1        1     1  geometry: <editorial-spotlight>
-C527c              1        1     1  geometry: <hgf-c360nav>
-C92c8              1        1     1  geometry: <hgroup>
-C9360              1        1     1  geometry: <ia-dropdown-search-bar>
-Ce3a0              1        1     1  geometry: <ia-topnav>
+Cdc2e              1        1     1  geometry: <fbs-ad>
 Cc734              1        1     1  geometry: <lang-picker>
 C1f76              1        1     1  geometry: <legend>
 C4e69              1        1     1  geometry: <length>
-C761d              1        1     1  geometry: <login-button>
+C5d01              1        1     1  geometry: <lite-youtube>
 Ce845              1        1     1  geometry: <map>
-C800e              1        1     1  geometry: <mdn-color-theme>
-Ca9ba              1        1     1  geometry: <mdn-homepage-search>
-C02bd              1        1     1  geometry: <mdn-language-switcher>
-Cf42f              1        1     1  geometry: <mdn-placement-hp-main>
-C6ce1              1        1     1  geometry: <media-menu>
-C8578              1        1     1  geometry: <noindex>
+Cdbb2              1        1     1  geometry: <n-tabs>
 C0e9e              1        1     1  geometry: <observable-made-by>
-Ca086              1        1     1  geometry: <option>
-C0e2d              1        1     1  geometry: <primary-nav>
-Cbe40              1        1     1  geometry: <react-app>
-C1732              1        1     1  geometry: <react-partial>
-C1f5b              1        1     1  geometry: <rh-navigation-secondary>
 Cf0e3              1        1     1  geometry: <rt-icon>
 Cd14b              1        1     1  geometry: <search-results-controls>
 C1aca              1        1     1  geometry: <shreddit-app>
-Cf1aa              1        1     1  geometry: <source>
 C8ec2              1        1     1  geometry: <spotlight-explore-more-link>
-Cc9c8              1        1     1  geometry: <store-announcement>
-C7183              1        1     1  geometry: <store-carousel-card-grid>
-Ca048              1        1     1  geometry: <store-logo-footer>
-C0f32              1        1     1  geometry: <store-tab>
-Cd23d              1        1     1  geometry: <store-tabs>
 C22bf              1        1     1  geometry: <temporary-display>
-C5897              1        1     1  geometry: <textarea>
-C7e8b              1        1     1  geometry: <tool-tip>
-C2cb6              1        1     1  geometry: <uhf-actions>
-C5c00              1        1     1  geometry: <uhf-brand>
-Ca170              1        1     1  geometry: <uhf-contextual-nav>
-C25ce              1        1     1  geometry: <uhf-dropdown-footer>
-C3a3c              1        1     1  geometry: <uhf-footer-menu>
-C76cc              1        1     1  geometry: <uhf-footer>
-Ca078              1        1     1  geometry: <uhf-global-nav>
-C9e4a              1        1     1  geometry: <uhf-mecontrol>
-C66e5              1        1     1  geometry: <uhf-promo-banner>

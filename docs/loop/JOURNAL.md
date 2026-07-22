@@ -16595,3 +16595,24 @@ TICK SHAPE: capability (viewBox-only svgs — logos, illustrations — shaped by
 [pattern: measure the reference before pinning a model — the wrong pin passed its own test]).
 GATES manuk-layout test rewritten 1→3 measured cases (IN the wall). CONSTELLATION: none.
 WIKI: docs/wiki/box-layout.md — viewBox is an intrinsic ratio; the model is measured.
+
+## Tick 392 — the honest re-crawl: every fix measured, and the discard rule bites both ways (2026-07-22)
+
+Re-ran the full 265-site crawl (same baseline conditions, fresh results dir) with the week's
+fixes AND the t383 starved-run discard live. THE MOVEMENT (t380 → t392, share of scored sites):
+overlap 45.2%→43.7%, h-overflow 33.5%→30.3%, reorder 71.6%→63.0%, dead-target 47.2%→**32.8%**
+(the t389/391 icon-button/default-size fixes, visible at corpus scale). LEDGER (627→392
+clusters): the img/svg inline→inline-block families (81/80 sites) are GONE; MISSING BOX <br>
+collapsed 64→5 sites (residual is geometry drift, which SHAPE forgives). CAVEAT stated plainly:
+the denominators differ — 119 scored vs 197, because the discard rule now refuses starved
+engine-runs and under 6-job crawl contention that is 128 sites (was 55 discards). The honesty
+rule cut our coverage nearly in half rather than let phantom divergences back in — which is the
+correct trade, and it prices the next instrument rung precisely: SUBRESOURCE SNAPSHOTS (CSS
+cached beside the HTML) would restore coverage without re-admitting the lie. NEW BAR-0: nih.gov
+SEGFAULTS the engine (rc=139, no unwind — possibly the known calc-size release-only SIGSEGV,
+[[calc-size-interpolate-size-segfault]]). A crash outranks every cluster: next tick.
+
+TICK SHAPE: measurement (the exit instrument re-ranked the frontier and priced its own next
+rung; [pattern: an honesty rule that costs coverage is still cheaper than a lying number — and
+the coverage price names the next build]). GATES +0 (off-wall crawl). CONSTELLATION: cross/
+real-world-QUIRKS row current. WIKI: none — the ledger is generated (CLUSTERS.md).
