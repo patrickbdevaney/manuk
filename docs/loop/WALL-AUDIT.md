@@ -117,3 +117,19 @@ cargo-nextest change in verify.sh, which is out of agent scope. The wall is alre
 the lever that matters (disk headroom so run 1 doesn't relink) is infrastructure the observer owns.
 Ticks 344/345/346 added +2 crate tests (manuk-net) + 1 page gate (g_drag_reorder, not in the curated
 _launch wall) — negligible wall cost, all under the warm floor. Wall stays lean; nothing cut.
+
+## Audit #5 — tick 366 (wall 59s warm)
+
+FINDING: the warm wall IMPROVED against Audit #4 (66s → 59s) while the window 347-365 added ~10 shell
+suite tests (the whole media arc: G_MSE_JOIN, G_AUDIO_PUMP/JOIN, G_AV_MASTER, G_MUTED_OUT, G_IDL_FEED,
+G_RATE, G_AV1_DRIVE, G_AVIF_PAINT, G_MP3_DRIVE) plus 3 engine media gates in the required-features
+lane (outside the wall). Breakdown: T 21s (crate tests — where the new suite rides; +0 net vs the
+pre-arc shape because the fixtures are small and decode in ms), P 13s (parity), B 10s (build), G6 8s,
+G1 3s, F 2s. The bistable first-run cost (~490-540s after a Cargo.lock/feature change: re_rav1d,
+avif-parse, symphonia features all landed this window) remains the documented cold-relink shape —
+run 2 is always warm; marks were never retuned.
+
+NO TRIM: same conclusion as #4 — the four rigor-preserving levers all live in scripts/ (observer-owned;
+nextest/runtime-sharing named there already). Agent-side additions stayed under the warm floor by
+construction: decode gates use small fixtures, the shell suite shares one binary, one JS test per
+binary (the t354 rule) keeps mozjs startups at one. Wall stays lean; nothing cut; coverage grew.

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **158** | ticks 1–365 |
-| median tick cycle | **20m** | 157 intervals |
+| ticks landed | **159** | ticks 1–366 |
+| median tick cycle | **20m** | 158 intervals |
 | median, last 10 | **11m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.59** | 265.6h elapsed |
-| median verify wall | **61s** | 97 ticks |
+| **ticks per hour** | **0.59** | 265.7h elapsed |
+| median verify wall | **60s** | 98 ticks |
 | wall trend | 39s → 58s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**86 of 158 ticks** (54%) moved a
+**86 of 159 ticks** (54%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **86** capability ticks, median cycle **20m**
-* median diff per tick: **+244 / −30** lines across 8 files
+* median diff per tick: **+242 / −30** lines across 8 files
 
 ## Every tick
 
@@ -255,5 +255,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **363** | 2026-07-22 06:18 | 16m | capability | 58s | +242/−62 | 183 | 81 | 56.0% · | the MP3 join: <audio> plays, and canPlayType stops refusing it (2026-07-22) |
 | **364** | 2026-07-22 06:35 | 17m | capability | 59s | +255/−55 | 183 | 81 | 56.0% · | FLAC + Ogg/Vorbis through the stream seam; Opus refused honestly (2026-07-22) |
 | **365** | 2026-07-22 06:39 | 4m | capability-probe | 56s | +56/−34 | 183 | 81 | 56.0% · | re-probe: the WebVTT row's STILL-MISSING list was three ticks stale (2026-07-22) |
+| **366** | 2026-07-22 06:42 | 4m | governance | 58s | +109/−36 | 183 | 81 | 56.0% · | governance triple: self-audit #clean, wall-audit #5, Constitution Check #12 (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

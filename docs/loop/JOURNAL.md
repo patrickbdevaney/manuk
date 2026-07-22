@@ -15996,3 +15996,22 @@ actuation, sticky, :focus...) and the reason the rule exists.
 TICK SHAPE: capability-probe (measure-and-pin; the deliverable is the corrected row + the receipt). GATES +0 (existing g_track_src re-confirmed green). [no-pattern]
 CONSTELLATION: media / WebVTT → partial→gated note corrected (fetch join t259, drawn t261, g_track_src).
 WIKI: none — the mechanism is already wiki'd at its landing ticks.
+
+## Tick 366 — governance triple: self-audit #clean, wall-audit #5, Constitution Check #12 (2026-07-22)
+
+THREE cadence obligations due at once (self-audit 356+10, wall-audit 346+20, constitution 358+8), all
+run, all logged in their canonical homes.
+
+SELF-AUDIT: clean — "methodology and reality agree", zero ✗ (49-defect ledger, falsifiable-gate
+declarations, cluster cross-check, generated STATUS, receipted hook, journal continuity all verified
+from artifacts). WALL-AUDIT #5 (WALL-AUDIT.md): warm wall IMPROVED 66→59s across a window that added
+~10 shell gates — the whole media arc rides inside T=21s; no rigor-preserving trim available
+agent-side; nothing cut. CONSTITUTION CHECK #12 (CONSTITUTION-CHECK.md): gate-not-scoreboard verdict
+for 359-365; invariants unbent; the honesty registry's 'maybe'/named-refusal discipline called out as
+I7 at its best. Counters: LAST_AUDIT_TICK 356→366, LAST_WALL_AUDIT 346→366,
+LAST_CONSTITUTION_CHECK 358→366. Next due: self 376, wall 386, constitution 374, surface 367 (NEXT
+TICK).
+
+TICK SHAPE: governance (three checkpoints, one tick; the deliverables are the three canonical entries + counters). GATES +0. [no-pattern]
+CONSTELLATION: none (governance tick).
+WIKI: none — entries live in their canonical homes.

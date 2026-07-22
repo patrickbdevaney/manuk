@@ -445,3 +445,40 @@ re-run to warm 62-68s receipts, marks not retuned.
 "the representative real internet plays" (DRM/EME permanent wall per I7; WebRTC out per Part IV).
 
 **Next check due: tick 366.**
+
+## Check #12 — tick 366
+
+**Horizon:** Phase 0 — the FULL daily-driver checklist, CONSTITUTION.MD **Part VII**. **Gate:** the
+FIDELITY-SCORING-REDESIGN.md certificate, NOT a WPT percentage. Authoritative work list:
+PHASE0-BOUNDED-REMAINDER.md.
+
+**Gate or scoreboard?** Gate. Window 359-365: **359** WasmGC measured working and pinned (the
+Kotlin/Flutter-web class — probe bytes cross-validated against Chromium before trusting any no),
+**360** the live media-IDL channel (mute buttons/volume sliders reach the device; IDL-beats-attribute),
+**361** playbackRate (scaled wall, mastery refused at rate≠1, the chipmunk rule), **362/363** MP3
+organ→join (the podcast class end-to-end; canPlayType flips with the join, never before), **364**
+FLAC+Ogg/Vorbis through the same seam (Opus stays a named wall — no decoder, honest ''），**365**
+the WebVTT row's three-tick-stale STILL-MISSING list corrected with receipts. VII.1's TEST held every
+tick — media/audio classes of the real internet, or map honesty.
+
+**Is the loop still pointed at the frontier?** Yes. The audio/codec vein is now mined to its honest
+walls (Opus/AC-3 named refusals; WSOLA time-stretch and High-profile H.264 are the two named rungs
+left; ABR is downstream of both). The board's CO-#1 order (3) container queries (Stylo-side) is the
+adjacent non-media frontier and the natural next subsystem.
+
+**Is the agentic surface (component #2) being served?** Held. Every media property landed
+page-observable (feeds queryable, cues in the track model, registry answers truthful) — the semantic
+model the agent reads stays in lockstep per I3; driving seams untouched, no rot.
+
+**Any invariant bent?** No. **I2:** avif-parse and three symphonia features adopted unpatched behind
+the existing fences; cargo-tree isolation re-verified each tick (no gate binary acquired a decoder).
+**I7:** the honesty registry did its best work this window — bare audio/ogg answers exactly 'maybe'
+(may be Opus), codecs=opus '', 10-bit AVIF a graceful no, rate≠1 mutes rather than chipmunks.
+**Process rule 3:** every landed tick RED-proven; the t364 silent-vanish RED (sniff narrowed → FLAC
+dies, suite green) is the class the rule exists for. THE RATCHET: wall marks never retuned through
+five cold-relink cycles; Audit #5 measured the warm wall IMPROVED (66→59s) while coverage grew.
+
+**PART VI / VII correction.** None. Four-component v1 scope intact; media claims scoped to what
+provably plays.
+
+**Next check due: tick 374.**
