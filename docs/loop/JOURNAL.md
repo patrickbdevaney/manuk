@@ -16616,3 +16616,26 @@ TICK SHAPE: measurement (the exit instrument re-ranked the frontier and priced i
 rung; [pattern: an honesty rule that costs coverage is still cheaper than a lying number — and
 the coverage price names the next build]). GATES +0 (off-wall crawl). CONSTELLATION: cross/
 real-world-QUIRKS row current. WIKI: none — the ledger is generated (CLUSTERS.md).
+
+## Tick 393 — the SVG-internals build spec: borrow usvg; and the nih.gov segfault evidence (2026-07-22)
+
+The t392 ledger's top actionable family (MISSING BOX path/g/circle — 34 sites, 1,658 hits)
+probed to its build spec per the t371 precedent (spec now, subsystem build in a fresh context).
+THE FIND that re-prices the organ: resvg/usvg is ALREADY a dependency (img-src svg decode), and
+usvg::Tree resolves viewBox + transform attributes + per-node absolute bounding boxes in its
+normal parse — so SVG child geometry AND visible vector paint are one BORROW, not a hand-written
+path/bezier/transform engine. Spec recorded in docs/wiki/box-layout.md: serialize inline svg
+subtree → usvg parse → id/document-order node mapping → scaled abs_bounding_box rects (hittable,
+measurable) + resvg pixmap into the display list (VISIBLE icons/logos). Gates specified as
+Chrome-measured fixtures (the t391 method), one RED per mechanism. Residue named: foreignObject,
+use, CSS-styled presentation attributes.
+
+BAR-0 EVIDENCE BANKED: nih.gov segfaulted the t392 crawl (rc=139, "dumped core", no unwind);
+three quiet single-site re-runs clean — the load-only profile of the open calc-size SIGSEGV.
+Fix context per its own memory: fresh ASAN session. Not traded, not forgotten, not chased
+mid-loop.
+
+TICK SHAPE: spec (the organ probed to its seams and re-priced from hand-write to borrow;
+[pattern: before building a geometry engine, check what the image pipeline already vendors]).
+GATES +0. CONSTELLATION: media/doc svg rows unchanged (organ named, spec linked).
+WIKI: docs/wiki/box-layout.md — inline SVG internals build spec (tick 393).

@@ -184,3 +184,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 390	03999d2	1784739183	2026-07-22T12:53:03-04:00	178	constitution-check	58	5	84	34	183	81	3896	6960	0	320	31	Constitution Check #15: the ledger chose every tick (2026-07-22)
 391	4e85adc	1784740071	2026-07-22T13:07:51-04:00	888	capability	61	10	173	71	183	81	3896	6960	0	320	31	viewBox is an intrinsic ratio; the default-size model corrected to measured Chrome (2026-07-22)
 392	d4b31b6	1784743435	2026-07-22T14:03:55-04:00	3364	measurement	57	5	302	515	183	81	3896	6960	0	320	31	the honest re-crawl: every fix measured, and the discard rule bites both ways (2026-07-22)
+393	6afa049	1784743787	2026-07-22T14:09:47-04:00	352	spec	57	6	90	33	183	81	3896	6960	0	320	31	the SVG-internals build spec: borrow usvg; and the nih.gov segfault evidence (2026-07-22)

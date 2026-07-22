@@ -1048,3 +1048,35 @@ HEIGHT stands alone); ratio → available-width × ratio. `viewBox` now feeds `a
 BOTH cascades' hint passes (svg only, empty-slot only — dimension attributes and the decode
 pipeline still outrank it). The t389 test was corrected to the measured truth and RED-proven
 (viewBox hint severed → the ratio case falls back to 300×150 and fails).
+
+## BUILD SPEC — inline SVG internals: borrow usvg, don't hand-write geometry (tick 393)
+
+The ledger's top actionable family after the t392 re-crawl: MISSING BOX `<path>` (34 sites,
+1,658 hits) + `<g>`/`<circle>`/`<rect>` — Chrome gives every SVG child its own box (path data →
+fill bounds → viewBox/transform-mapped rect); we lay the `<svg>` out atomically and its subtree
+has no geometry at all. Writing a path parser + bezier-extrema + transform stack by hand is the
+wrong rung: **resvg/usvg is ALREADY in the tree** (engine/page uses it to decode `<img
+src="*.svg">`), and `usvg::Tree` resolves viewBox, `transform` attributes and per-node absolute
+bounding boxes as part of its normal parse.
+
+The build (a fresh-context subsystem, per the t371 container-queries precedent):
+1. **Serialize** an inline `<svg>` element's DOM subtree back to SVG text (the DOM already holds
+   it verbatim; namespace quirks are the known trap — [[namespace-null-xhtml-conflation]]).
+2. **Parse with usvg** once per svg element per layout; scale factor = used box / viewBox.
+3. **Geometry:** map usvg nodes back to DOM children (usvg preserves `id`; fall back to
+   document-order pairing of shape nodes) and emit each `abs_bounding_box()` scaled into the used
+   box as that child's rect — path/g/circle/rect/line all covered by ONE mechanism, hittable and
+   measurable.
+4. **Paint:** hand the resvg-rendered pixmap to the display list at the used size — inline SVGs
+   (icons, logos, charts) become VISIBLE, not just measurable. This is the visible half and
+   likely the larger parity win.
+5. **Gates:** child-rect fixtures measured over headless Chrome (the t391 method — never
+   recalled), one RED per mechanism (unmapped id, transform, viewBox scale); paint gate asserts
+   non-background pixels inside the svg box for a solid-fill fixture.
+Residue to name at build time: `<foreignObject>` (HTML-in-SVG), `<use>` cross-references,
+CSS-styled SVG presentation attributes (usvg reads attributes, not our cascade).
+
+Also recorded this tick: **nih.gov segfaulted the crawl** (rc=139, core dumped, no unwind) but
+three quiet single-site runs are clean — the load-only/release-only heisenbug profile of the
+open [[calc-size-interpolate-size-segfault]] Bar-0. Evidence banked; the prescribed fix context
+is a fresh ASAN session, not mid-loop.
