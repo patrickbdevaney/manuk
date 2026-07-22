@@ -128,3 +128,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 331	63a2601	1784681969	2026-07-21T20:59:29-04:00	3599	capability-assurance	68	10	439	4	181	81	3896	6960	0	320	0	cookie flags are enforced ACROSS the JS↔wire boundary (2026-07-21)
 333	ad9f265	1784684475	2026-07-21T21:41:15-04:00	2506	capability	69	5	94	34	182	81	3896	6960	0	320	0	:active is fed: the last dynamic pseudo-class matches while the pointer is held (2026-07-21)
 334	b619183	1784686084	2026-07-21T22:08:04-04:00	1609	constitution-check	67	7	285	68	182	81	3896	6960	0	320	0	Constitution Check #8 (the loop looks up) (2026-07-21)
+335	16377b0	1784686349	2026-07-21T22:12:29-04:00	265	infrastructure	69	4	59	34	182	81	3896	6960	0	320	0	SHAPE scoring: the differential oracle stops charging one offset N times (2026-07-21)

@@ -14967,3 +14967,27 @@ this multiplies every future fidelity read by making the Phase-0 exit number hon
 change, hence [no-pattern]). GATES +0 (a probe, not a runtime gate); tests +2.
 CONSTELLATION: no row — this is the measuring instrument, not a rendered construct.
 WIKI: docs/wiki/conformance-and-oracles.md (new "Score geometry PARENT-RELATIVE (SHAPE)" section).
+
+## Tick 336 — Self-Audit #N: methodology and reality agree (2026-07-21)
+
+CADENCE OBLIGATION: self-audit due every 10 ticks (LAST_AUDIT_TICK 325 → due at 335; tick.sh preflight
+uses `-ge 10`, so it came due the moment tick 335 landed). Ran `./scripts/self-audit.sh` — the honesty
+check that greps the filesystem/git/corpus for the ARTIFACTS each methodology prescription would have
+produced, not a memory quiz.
+
+FINDING: clean — "SELF-AUDIT: methodology and reality agree." Every Tier-0/Part-21 item verified present:
+verify wall 67s ≤ 300s target; the SPA miner's finding is captured in a gate (G2 scenario 14), not just
+files in tests/spa/; every G_* gate declares how to break it (RED-provable, not decorative); the
+process-defect ledger holds 49 entries each naming the closing MECHANISM; tick-shape claims are
+cross-checked against the 640-cluster registry; STATUS.md is generated not hand-narrated; the pre-commit
+hook is wired + executable; journal entries present for the last 5 ticks; the pattern ledger (424 rows)
+moves with the engine; a duplicate-work audit has been journaled. Zero prescribed-but-not-executed items.
+
+Cleared the cadence by setting LAST_AUDIT_TICK: 336 in STATUS.md (the hook's own instructed mechanism —
+self-audit.sh is check-only and status-update.sh passes the field through). Next self-audit due tick 346.
+Note for the next tick: the SURFACE audit (LAST_SURFACE_AUDIT 326) comes due at 337's preflight — it is
+the next cadence obligation.
+
+TICK SHAPE: self-audit (a cadence/governance checkpoint — no engine change, no scoreboard move by design;
+the honesty face of the loop, not the capability face). GATES +0. [no-pattern].
+WIKI: none — a cadence/governance check, it touches no rendered construct.
