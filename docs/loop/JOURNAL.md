@@ -14905,3 +14905,24 @@ site — goes from permanently-dead to live, fed end-to-end through the shell). 
 CONSTELLATION: no dedicated row (like :hover/:focus, an untracked cascade capability).
 
 WIKI: docs/wiki/interaction-surface.md (:active section).
+
+## Tick 334 — Constitution Check #8 (the loop looks up) (2026-07-21)
+
+CADENCE OBLIGATION: constitution re-read due every 8 ticks (LAST_CONSTITUTION_CHECK 326 → due 334).
+Re-read CONSTITUTION.MD Part VII (the v1 four-component north star) and applied VII.1's TEST to the
+three ticks since the last check.
+
+FINDING: no drift. 331 (cookie cross-layer enforcement), 332 (IME composition), 333 (:active fed
+end-to-end) are all pure Part-VII v1 work — component #1 daily-driver rendering parity + component #2
+agentic surface — with zero WPT-chasing, zero encoding tail, zero work justified only by a deferred
+species. The frontier remains the bounded Phase-0 remainder (Tier-1-first), fidelity-instrument rebuild
+ranked as THE exit gate. Bar 0 held throughout; RATCHET honored (the 267-277s wall refusals on tick 333
+were pure box contention at load 3-4, re-banked green at 66s on a quiet box per the standing recipe, mark
+NOT retuned — full detail in Check #8).
+
+Logged as Check #8 — tick 334 in docs/loop/CONSTITUTION-CHECK.md (canonical `## Check #N — tick M`
+header so status-update.sh derives LAST_CONSTITUTION_CHECK). Next check due tick 342.
+
+TICK SHAPE: constitution-check (the horizon/anchor face — looks UP at the vision, not the local gradient;
+no engine change, no scoreboard move by design). GATES +0.
+WIKI: none — a cadence/governance check, not a capability; it touches no rendered construct.

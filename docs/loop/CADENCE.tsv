@@ -126,4 +126,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 329	c9ad67d	1784677138	2026-07-21T19:38:58-04:00	1313	capability	66	9	618	30	178	81	3896	6960	0	320	0	IndexedDB indexes: createIndex / store.index() / IDBKeyRange, persisted (2026-07-21)
 330	5cc1d1a	1784678370	2026-07-21T19:59:30-04:00	1232	capability	70	8	260	4	179	81	3896	6960	0	320	0	Fullscreen API: element.requestFullscreen() as a real DOM state machine (2026-07-21)
 331	63a2601	1784681969	2026-07-21T20:59:29-04:00	3599	capability-assurance	68	10	439	4	181	81	3896	6960	0	320	0	cookie flags are enforced ACROSS the JS↔wire boundary (2026-07-21)
-333	0919d6a	1784684306	2026-07-21T21:38:26-04:00	2337	capability	66	12	382	37	182	81	3896	6960	0	320	0	:active is fed: the last dynamic pseudo-class matches while the pointer is held (2026-07-21)
+333	ad9f265	1784684475	2026-07-21T21:41:15-04:00	2506	capability	69	5	94	34	182	81	3896	6960	0	320	0	:active is fed: the last dynamic pseudo-class matches while the pointer is held (2026-07-21)

@@ -282,3 +282,41 @@ to 189s by the observer (agent did not retune its own gate).
 constellation priority rows; ready_pct retired; fidelity certificate is the exit.
 
 **Next check due: tick 334.**
+
+## Check #8 — tick 334
+
+**Horizon:** Phase 0 — the FULL daily-driver checklist ("runs almost every website"), the v1 north star
+of CONSTITUTION.MD **Part VII** (re-read this check). **Gate:** the FIDELITY-SCORING-REDESIGN.md
+certificate (≥0.75 structural/placement fidelity on ≥95% of the corpus + ≥0.70 per top-20 category), NOT
+a WPT percentage and NOT the retired `ready_pct`. Authoritative work list: PHASE0-BOUNDED-REMAINDER.md.
+
+**Gate or scoreboard?** Gate. The three ticks since the last check are pure Part-VII v1 work, and every
+one applied VII.1's TEST ("does this move one of the four components toward shippable?") in the
+affirmative: **331** cookie-attribute cross-layer enforcement (component #1 login correctness + #3
+good-enough security), **332** IME composition (components #1 rendering parity + #2 agentic surface —
+CJK/accented text entry was impossible, now the commit burst drives a real editor), **333** `:active`
+fed end-to-end (component #1 — the last dynamic pseudo-class, press feedback on essentially every
+interactive site, was dead; now live through the shell). Zero WPT-chasing, zero encoding tail, zero
+work justified only by a deferred species — VII.1 held.
+
+**Is the loop still pointed at the frontier?** Yes. The frontier remains the bounded Phase-0 remainder,
+Tier-1-first, with the fidelity-instrument rebuild ranked above any single capability tick as THE exit
+gate. This session took bounded Tier-1/Tier-2 daily-driver items (IME is Tier-1 #4; `:active` closes the
+dynamic-pseudo-class set alongside the already-fed `:hover`/`:focus`) rather than opening an L subsystem
+(media join, contenteditable) that cannot land atomically in one tick — correct per the atomicity rule.
+
+**Is the agentic surface (component #2) being served?** Yes, directly. `Page::dispatch_composition` and
+`Page::set_active` are both native driving-surface entry points an agent (and the shell) calls — the same
+seam `dispatch_click`/`dispatch_key`/`set_focus` established. The a11y/DOM tree stays first-class.
+
+**Any invariant bent?** No. Bar 0 held — every landed tick is additive and RED-proven (the RED edit
+reverted byte-for-byte each time), dom+css unit suites green, no crash/regression. I2 intact — no
+dependency forked (`:active` mirrors the existing `:hover` plumbing; IME is a dispatch shim). The RATCHET
+is honored — nothing traded; the wall came in green at 66-70s (the 267-277s refusals were pure box
+contention at load 3-4, re-banked honestly on a quiet box per the standing wall recipe, mark NOT
+retuned).
+
+**PART VI / VII correction.** None. PHASE0-BOUNDED-REMAINDER.md remains the work list; the fidelity
+certificate remains the exit; Part VII's four-component v1 scope is intact and unbent.
+
+**Next check due: tick 342.**
