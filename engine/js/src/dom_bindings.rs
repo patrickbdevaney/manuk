@@ -122,6 +122,12 @@ thread_local! {
     /// a billion, or every "am I at the bottom?" check on the web breaks.
     static PENDING_ELEM_SCROLLS: std::cell::RefCell<Vec<(NodeId, f32, f32)>> =
         const { std::cell::RefCell::new(Vec::new()) };
+    /// Per-container scroll-snap candidates, published by the host: `(xs, ys)` content-space snap
+    /// offsets clamped to the scrollable range, one list per axis. Empty axis = that axis does not
+    /// snap. A `scrollLeft`/`scrollTop` write lands on the nearest candidate at assignment time, so
+    /// `el.scrollLeft = 130; el.scrollLeft` reads the snapped `100` on the same line — as in Chrome.
+    static SNAP_CANDIDATES: std::cell::RefCell<std::collections::HashMap<NodeId, (Vec<f32>, Vec<f32>)>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
     /// The focused element, and focus requests the page made.
     static ACTIVE_ELEMENT: std::cell::Cell<Option<NodeId>> = const { std::cell::Cell::new(None) };
     static PENDING_FOCUS: std::cell::RefCell<Vec<Option<NodeId>>> = const { std::cell::RefCell::new(Vec::new()) };
@@ -423,6 +429,12 @@ fn force_reflow_if_stale() {
 /// because a script can *change* it mid-round (by assigning `scrollTop`) and must read its own write.
 pub fn set_scroll_geometry(g: std::collections::HashMap<NodeId, [f32; 6]>) {
     SCROLL_GEOM.with(|c| *c.borrow_mut() = g);
+}
+
+/// Publish the per-container scroll-snap candidates for one re-entry — see [`SNAP_CANDIDATES`]. Owned
+/// by the host (only it has the layout tree); the `scrollLeft`/`scrollTop` setters snap against them.
+pub fn set_snap_candidates(c: std::collections::HashMap<NodeId, (Vec<f32>, Vec<f32>)>) {
+    SNAP_CANDIDATES.with(|s| *s.borrow_mut() = c);
 }
 
 thread_local! {
@@ -3042,11 +3054,33 @@ unsafe fn el_set_scroll_axis(
     } else {
         ((g[3] - g[5]).max(0.0), g[0])
     };
-    let v = if want.is_finite() {
+    let clamped = if want.is_finite() {
         want.clamp(0.0, max)
     } else {
         0.0
     };
+    // Snap AFTER clamping, never before: a snap point past the scrollable range is unreachable, and
+    // snapping first would pick it and then clamp back off-alignment — the last-slide-unreachable bug.
+    // The host already snapped the layout tree; this snaps the MIRROR so the same-line read agrees
+    // with Chrome. Empty candidate list (or none for this node) leaves the clamped value untouched —
+    // a container that declares snapping but has no aligned child still scrolls freely.
+    let v = SNAP_CANDIDATES.with(|s| {
+        let map = s.borrow();
+        let Some((xs, ys)) = map.get(&node) else {
+            return clamped;
+        };
+        let cands: &[f32] = if vertical { ys } else { xs };
+        cands
+            .iter()
+            .copied()
+            .min_by(|a, b| {
+                (a - clamped)
+                    .abs()
+                    .partial_cmp(&(b - clamped).abs())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .unwrap_or(clamped)
+    });
     let (left, top) = if vertical { (other, v) } else { (v, other) };
 
     // Update the mirror the getter reads, so `el.scrollTop = x; el.scrollTop` is x on the same line —

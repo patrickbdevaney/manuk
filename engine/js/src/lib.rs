@@ -286,6 +286,23 @@ pub fn set_scroll_geometry(g: std::collections::HashMap<manuk_dom::NodeId, [f32;
 #[cfg(not(feature = "_sm"))]
 pub fn set_scroll_geometry(_g: std::collections::HashMap<manuk_dom::NodeId, [f32; 6]>) {}
 
+/// Publish per-container scroll-snap candidates for the coming script round: `(xs, ys)` content-space
+/// snap offsets, already clamped to the scrollable range, one list per axis (empty when the container
+/// does not snap that axis).
+///
+/// The host owns the layout tree, so the host computes these; the JS `scrollLeft`/`scrollTop` setters
+/// consume them to snap the mirror value at assignment time — measured Chrome lands the snap
+/// SYNCHRONOUSLY (`el.scrollLeft = 130; el.scrollLeft` reads `100` on the same line). Recomputing snap
+/// points inside the bindings (which hold no layout tree) would be the two-sources-of-truth trap.
+#[cfg(feature = "_sm")]
+pub fn set_snap_candidates(c: std::collections::HashMap<manuk_dom::NodeId, (Vec<f32>, Vec<f32>)>) {
+    dom_bindings::set_snap_candidates(c);
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn set_snap_candidates(_c: std::collections::HashMap<manuk_dom::NodeId, (Vec<f32>, Vec<f32>)>) {
+}
+
 /// A host callback that lays the document out synchronously — see [`set_reflow_hook`].
 #[cfg(feature = "_sm")]
 pub type ReflowFn = dom_bindings::ReflowFn;

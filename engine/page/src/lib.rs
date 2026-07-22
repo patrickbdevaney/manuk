@@ -1185,6 +1185,99 @@ fn scroll_geometry_of(
     m
 }
 
+/// Per-container snap-point candidates, in content-space, clamped to the scrollable range —
+/// `(xs, ys)` per snap container, with an axis's list left EMPTY when the container does not
+/// snap that axis (`scroll-snap-type: x` says nothing about y).
+///
+/// This is the ONE collection of snap candidates. `Page::snap_scroll` (the engine chokepoint)
+/// and the JS `scrollLeft`/`scrollTop` setters (via `manuk_js::set_snap_candidates`) both
+/// consume it — measured Chrome snaps SYNCHRONOUSLY (`el.scrollLeft = 130; el.scrollLeft`
+/// reads `100` on the same line, tick 408), so the JS-side mirror must know the snap points at
+/// assignment time; recomputing them in the bindings would be the two-sources-of-truth trap.
+fn snap_candidates_of(
+    root_box: &manuk_layout::LayoutBox,
+    styles: &StyleMap,
+    offsets: &std::collections::HashMap<manuk_dom::NodeId, (f32, f32)>,
+) -> std::collections::HashMap<manuk_dom::NodeId, (Vec<f32>, Vec<f32>)> {
+    use manuk_css::Overflow;
+    let geom = scroll_geometry_of(root_box, styles, offsets);
+    let mut m = std::collections::HashMap::new();
+    for (node, st) in styles.iter() {
+        let axis = st.scroll_snap_type;
+        if axis == manuk_css::ScrollSnapAxis::None {
+            continue;
+        }
+        if !matches!(
+            st.overflow,
+            Overflow::Auto | Overflow::Scroll | Overflow::Hidden
+        ) {
+            continue;
+        }
+        let Some(container) = root_box.find(*node) else {
+            continue;
+        };
+        let Some(g) = geom.get(node) else { continue };
+        let max = ((g[3] - g[5]).max(0.0), (g[2] - g[4]).max(0.0));
+        let cur = offsets.get(node).copied().unwrap_or((0.0, 0.0));
+        let (xs, ys) = snap_candidates_for(container, *node, styles, cur, max);
+        m.insert(
+            *node,
+            (
+                if axis.snaps_x() { xs } else { Vec::new() },
+                if axis.snaps_y() { ys } else { Vec::new() },
+            ),
+        );
+    }
+    m
+}
+
+/// The snap offsets `container`'s aligned descendants ask for, on both axes, clamped to `max`.
+/// Walks the CONTAINER's own subtree, not the whole page: a snap point is a descendant of the
+/// scroller, and collecting them document-wide would let one carousel snap to another's slide.
+fn snap_candidates_for(
+    container: &manuk_layout::LayoutBox,
+    node: manuk_dom::NodeId,
+    styles: &StyleMap,
+    cur: (f32, f32),
+    max: (f32, f32),
+) -> (Vec<f32>, Vec<f32>) {
+    let (cw, ch) = (container.rect.width, container.rect.height);
+    let origin = (container.rect.x, container.rect.y);
+    let mut xs: Vec<f32> = Vec::new();
+    let mut ys: Vec<f32> = Vec::new();
+    let mut candidates: Vec<(manuk_dom::NodeId, manuk_layout::Rect)> = Vec::new();
+    container.walk(&mut |b: &manuk_layout::LayoutBox| {
+        if let Some(n) = b.node {
+            if n != node {
+                candidates.push((n, b.rect));
+            }
+        }
+    });
+    for (kid, krect) in candidates {
+        let Some(ks) = styles.get(&kid) else {
+            continue;
+        };
+        let align = ks.scroll_snap_align;
+        if align == manuk_css::ScrollSnapAlign::None {
+            continue;
+        }
+        // The children's rects are in the CURRENT (already-scrolled) tree; adding the live offset
+        // recovers the content-space position each snap point actually sits at.
+        let (kx, ky) = (krect.x - origin.0 + cur.0, krect.y - origin.1 + cur.1);
+        let (kw, kh) = (krect.width, krect.height);
+        // The offset that puts this child where the alignment asks inside the snapport.
+        let (sx, sy) = match align {
+            manuk_css::ScrollSnapAlign::Start => (kx, ky),
+            manuk_css::ScrollSnapAlign::Center => (kx - (cw - kw) / 2.0, ky - (ch - kh) / 2.0),
+            manuk_css::ScrollSnapAlign::End => (kx - (cw - kw), ky - (ch - kh)),
+            manuk_css::ScrollSnapAlign::None => continue,
+        };
+        xs.push(sx.clamp(0.0, max.0));
+        ys.push(sy.clamp(0.0, max.1));
+    }
+    (xs, ys)
+}
+
 /// Point `CSS.supports()` at the real feature-query evaluator.
 ///
 /// Without the `stylo` feature there is no evaluator, and the answer is a flat `false`. That is the
@@ -1707,6 +1800,7 @@ impl Page {
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
         manuk_js::set_scroll_geometry(self.scroll_geometry_map());
+        manuk_js::set_snap_candidates(self.snap_candidates_map());
         // Before the scripts run, not after: a script that draws an image on its first tick must find
         // the pixels already there, or the draw silently no-ops and the canvas stays blank.
         self.publish_image_sources();
@@ -1997,49 +2091,17 @@ impl Page {
         let Some(container) = self.root_box.find(node) else {
             return at;
         };
-        let (cw, ch) = (container.rect.width, container.rect.height);
-        // The children's rects are in the CURRENT (already-scrolled) tree, so their positions are
-        // relative to where the container is scrolled to now. Adding the live offset recovers the
-        // content-space position each snap point actually sits at.
+        // The current (already-scrolled) offset, so the shared collector can recover each snap
+        // point's content-space position. ONE collector — `snap_candidates_for` — feeds both this
+        // engine chokepoint and the JS-side mirror (via `snap_candidates_of` →
+        // `manuk_js::set_snap_candidates`); building the candidate list a second time here is exactly
+        // the two-sources-of-truth trap that drift comes from.
         let cur = self
             .scroll_offsets
             .get(&node)
             .copied()
             .unwrap_or((0.0, 0.0));
-        let origin = (container.rect.x, container.rect.y);
-
-        let mut xs: Vec<f32> = Vec::new();
-        let mut ys: Vec<f32> = Vec::new();
-        // Walk the CONTAINER's own subtree, not the whole page: a snap point is a descendant of the
-        // scroller, and collecting them document-wide would let one carousel snap to another's slide.
-        let mut candidates: Vec<(manuk_dom::NodeId, manuk_layout::Rect)> = Vec::new();
-        container.walk(&mut |b: &manuk_layout::LayoutBox| {
-            if let Some(n) = b.node {
-                if n != node {
-                    candidates.push((n, b.rect));
-                }
-            }
-        });
-        for (kid, krect) in candidates {
-            let Some(ks) = self.styles.get(&kid) else {
-                continue;
-            };
-            let align = ks.scroll_snap_align;
-            if align == manuk_css::ScrollSnapAlign::None {
-                continue;
-            }
-            let (kx, ky) = (krect.x - origin.0 + cur.0, krect.y - origin.1 + cur.1);
-            let (kw, kh) = (krect.width, krect.height);
-            // The offset that puts this child where the alignment asks inside the snapport.
-            let (sx, sy) = match align {
-                manuk_css::ScrollSnapAlign::Start => (kx, ky),
-                manuk_css::ScrollSnapAlign::Center => (kx - (cw - kw) / 2.0, ky - (ch - kh) / 2.0),
-                manuk_css::ScrollSnapAlign::End => (kx - (cw - kw), ky - (ch - kh)),
-                manuk_css::ScrollSnapAlign::None => continue,
-            };
-            xs.push(sx.clamp(0.0, max.0));
-            ys.push(sy.clamp(0.0, max.1));
-        }
+        let (xs, ys) = snap_candidates_for(container, node, &self.styles, cur, max);
 
         let nearest = |cands: &[f32], v: f32| -> f32 {
             cands
@@ -2093,6 +2155,12 @@ impl Page {
     /// Every `overflow: auto|scroll|hidden` container's scroll geometry — what the DOM must report.
     fn scroll_geometry_map(&self) -> std::collections::HashMap<manuk_dom::NodeId, [f32; 6]> {
         scroll_geometry_of(&self.root_box, &self.styles, &self.scroll_offsets)
+    }
+
+    fn snap_candidates_map(
+        &self,
+    ) -> std::collections::HashMap<manuk_dom::NodeId, (Vec<f32>, Vec<f32>)> {
+        snap_candidates_of(&self.root_box, &self.styles, &self.scroll_offsets)
     }
 
     /// Apply the `element.scrollTop = n` assignments a script just made, and **tell the page it
@@ -3353,6 +3421,7 @@ impl Page {
             &self.styles,
             &self.scroll_offsets,
         ));
+        manuk_js::set_snap_candidates(self.snap_candidates_map());
         self.publish_image_sources();
         let _ = manuk_js::eval_in_page(ctx, &mut self.dom, src, &rects, &self.styles);
         self.drain_canvases();
@@ -3710,6 +3779,11 @@ impl Page {
             None
         } else {
             manuk_js::set_scroll_geometry(scroll_geometry_of(
+                &root_box,
+                &styles,
+                &std::collections::HashMap::new(),
+            ));
+            manuk_js::set_snap_candidates(snap_candidates_of(
                 &root_box,
                 &styles,
                 &std::collections::HashMap::new(),

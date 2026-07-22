@@ -16939,3 +16939,31 @@ TICK SHAPE: surface-audit (map maintenance; Audit #14 + 1 row added + re-ranks/e
 GATES +0. [no-pattern]
 CONSTELLATION: +1 row (cpuPerformance, unknown); 4 rows re-ranked by Interop 2026 signal.
 WIKI: none.
+
+## Tick 408 — the horizontal carousel snaps, on the axis t266 never covered (2026-07-22)
+
+HYPOTHESIS (surface audit #14 raised the price): Interop 2026 named scroll snap a focus area,
+and the t266 residue said horizontal carousels "do not yet scroll at all, let alone snap"
+(max_x=0 for an inline-block row). Re-probe found the residue STALE-PESSIMISTIC — the standing
+rule's Nth instance: both modern carousel shapes (`white-space:nowrap` + inline-blocks, and
+`display:flex` + `overflow-x:auto`) now report full horizontal geometry (scrollWidth 500 /
+clientWidth 200) and accept `scrollLeft`. Replaced-sizing + inline-block extent work since t266
+closed the geometry gap as a side effect; nothing was ever pinned, so the map kept lying.
+
+But the SNAP was genuinely absent on the JS side. `Page::snap_scroll` already snapped BOTH axes
+in the layout tree, yet the `scrollLeft` setter only clamped — so `el.scrollLeft = 130;
+el.scrollLeft` read `130`, not the snapped `100`. Chrome snaps SYNCHRONOUSLY (same-line read),
+so the JS mirror must snap at assignment time. Wired it: `snap_candidates_for` is now the ONE
+collector (host `snap_scroll` consumes it too — killed its duplicate inline walk, the
+two-sources-of-truth trap its own doc comment warned against); `snap_candidates_of` publishes
+the per-container `(xs, ys)` map to the bindings via new `manuk_js::set_snap_candidates`,
+pushed alongside scroll geometry at all three script-round sites (deferred, eval_for_test,
+inline load). The setter snaps `clamped` against the candidates before writing SCROLL_GEOM.
+Snap AFTER clamp, never before (last-slide-reachable). G_SCROLL_SNAP_HORIZONTAL: RED-proven
+(without the wiring the mirror reads 130). No regression: g_scroll_snap, g_scroll,
+g_hscroll_carousel/nowrap, g_scroll_anchor all green; the shared collector is idempotent.
+
+TICK SHAPE: capability (JS-side scroll-snap mirror + one-collector refactor; +1 gate). GATES +1
+(G_SCROLL_SNAP_HORIZONTAL).
+CONSTELLATION: scroll snap horizontal partial→works (Interop 2026 r87 residue closed).
+WIKI: interaction-surface.md — "Scroll snap lands on BOTH sides of the scroll contract".

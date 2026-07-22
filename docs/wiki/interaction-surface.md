@@ -272,6 +272,38 @@ Non-scroll-containers fall back to their own box for `clientHeight`/`scrollHeigh
 a `clientHeight`, and returning zero for every ordinary element would be a far bigger regression than the bug
 being fixed.
 
+## Scroll snap lands on BOTH sides of the scroll contract — including the synchronous mirror read
+
+`scroll-snap-type` + `scroll-snap-align` is the whole of "the carousel stops ON a slide": every paged feed,
+image gallery, story tray, mobile card row and product carousel is a scroll container plus these two
+properties. Without them a flick lands wherever momentum stopped — two half-slides on screen, neither
+readable — and the page looks broken in a way no capability count can see, because the container "works".
+
+The subtle part is **where** the snap has to happen. Measured Chrome snaps **synchronously**: `el.scrollLeft
+= 130; el.scrollLeft` reads back the snapped `100` on the *same line*. So it is not enough for the host to
+snap the layout tree when it drains the pending scrolls — the **JS-side mirror** the getter reads must also
+carry the snapped value at assignment time. The `scrollLeft`/`scrollTop` setter snaps `clamped` against the
+container's published candidates before it writes `SCROLL_GEOM`, so the same-line read agrees with Chrome.
+
+**Snap AFTER clamping, never before.** A snap point past the scrollable range is unreachable; snapping first
+would pick it and then clamp back to an unaligned position — the container refuses to reach its own last
+slide, the classic carousel bug. This holds identically in the host (`Page::snap_scroll`) and in the mirror.
+
+**One candidate collector, two consumers.** `snap_candidates_for` walks a container's own subtree (never the
+whole page — else one carousel snaps to another's slide), reads each aligned child's `scroll-snap-align`, and
+returns the content-space offsets clamped to the range. `Page::snap_scroll` calls it for the layout tree;
+`snap_candidates_of` collects it for every snapping container and `Page` publishes the map to the bindings
+(`manuk_js::set_snap_candidates`) alongside the scroll geometry, before every script round. Recomputing the
+points a second time inside the bindings — which hold no layout tree — would be the two-sources-of-truth
+trap, and the two would drift the first time either walk changed.
+
+**Both axes, both carousel shapes.** The x axis was stale-pessimistic since t266, which recorded "an
+inline-block row yields no horizontal scroll range (max_x = 0)". Later replaced-sizing and inline-block extent
+work closed that geometry gap as a side effect, but nothing re-pinned it, so the map kept saying "broken".
+`G_SCROLL_SNAP_HORIZONTAL` pins it: both `white-space:nowrap` + inline-blocks and `display:flex` +
+`overflow-x:auto` report truthful `scrollWidth`/`clientWidth`, clamp `scrollLeft` to the range, and land an
+`x mandatory` scroll on the nearest snap point.
+
 ## `document.elementFromPoint(x, y)` bridges the layout-rect snapshot, not a second hit-tester
 
 A genuinely missing DOM API (`css-transforms` alone: 84 `is not a function` failures; also drag-and-drop,

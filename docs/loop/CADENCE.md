@@ -13,11 +13,11 @@
 |---|---|---|
 | ticks landed | **200** | ticks 1–407 |
 | median tick cycle | **18m** | 199 intervals |
-| median, last 10 | **5m** | 10 intervals |
+| median, last 10 | **9m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.72** | 275.4h elapsed |
+| **ticks per hour** | **0.72** | 276.0h elapsed |
 | median verify wall | **59s** | 139 ticks |
-| wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
+| wall trend | 39s → 64s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -27,8 +27,8 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **186**
-* **✅ rows in the capability ledger**: 144 → **320**
+* **live gates**: 27 → **187**
+* **✅ rows in the capability ledger**: 144 → **321**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
 **105 of 200 ticks** (52%) moved a
@@ -296,6 +296,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **404** | 2026-07-22 16:14 | 16m | capability | 60s | +205/−46 | 186 | 81 | 56.0% · | document.currentScript: the executing script element, not a hardcoded null (2026-07-22) |
 | **405** | 2026-07-22 16:18 | 4m | self-audit | 61s | +54/−34 | 186 | 81 | 56.0% · | self-audit: the harvest arc holds up (2026-07-22) |
 | **406** | 2026-07-22 16:23 | 6m | constitution-check | 64s | +109/−35 | 186 | 81 | 56.0% · | Constitution Check #17: I5 cashed its cheque (2026-07-22) |
-| **407** | 2026-07-22 16:28 | 5m | surface-audit | 63s | +96/−34 | 186 | 81 | 56.0% · | surface audit #14: the vendors re-ranked three of our missing rows (2026-07-22) |
+| **407** | 2026-07-22 17:05 | 42m | surface-audit | 70s | +479/−221 | 187 | 81 | 56.0% · | surface audit #14: the vendors re-ranked three of our missing rows (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
