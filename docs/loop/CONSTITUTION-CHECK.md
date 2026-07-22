@@ -516,3 +516,47 @@ of its own gates this window (the too-quiet clamp fixture t370, the mask-fixture
 **PART VI / VII correction.** None.
 
 **Next check due: tick 382.**
+
+---
+
+## Check #14 — tick 382
+
+**Horizon:** Phase 0 — the FULL daily-driver checklist, CONSTITUTION.MD **Part VII**. **Gate:** the
+FIDELITY-SCORING-REDESIGN.md certificate, NOT a WPT percentage.
+
+**Gate or scoreboard?** Gate — and this window put the gate's own INSTRUMENT into service. Window
+375-381: **375** the mixer resampler (cross-rate audio audible), **376** self-audit clean, **377**
+surface audit #11 (promise-scroll row + the WebMCP declarative/imperative split), **378** promise
+scrolls — where the gate FALSIFIED the tick's own premise and the fix went a layer deeper (the
+synchronous scrollY contract our request model had silently broken), **379** container queries
+LANDED (the rung-3 source supplement + sized re-pass — the biggest CSS shift in a decade now
+applies), **380** THE CORPUS ORACLE RAN END-TO-END FOR THE FIRST TIME, **381** its Bar-0 find
+(the netlify char-boundary panic) fixed ratchet-first.
+
+**A constitutional milestone.** Check #1 (tick 86) recorded "the differential oracle (I5) has
+never finished a crawl" and steered "land one clean differential-oracle crawl" as the gate's
+second condition. Tick 380 closed that, ~295 ticks later: 265 sites, 197 diffed, the jarring
+baseline banked (overlap 45.2% / h-overflow 33.5% / reorder 71.6% / dead-target 47.2% — the
+honest distance to the ≥95%-clean exit bar), a 627-cluster ledger, and 31 sites slow on OUR
+clock. The Phase-0 gate is no longer aspirational prose; it is a number that can move.
+
+**Is the loop still pointed at the frontier?** Yes, and the ledger now DEFINES it: (1) the
+author-style-not-applied trio (none→block 49 sites / flex→block 43 / block→inline 39 — probe for
+one shared cause before three fixes), (2) img/svg computed-display UA divergence (81/80 sites),
+(3) MISSING BOX br/path/div, (4) the 13× perf outlier class (wix, atlassian). These outrank any
+unmeasured hunch.
+
+**Is the agentic surface (component #2) being served?** Held (t378's truthful promises are agent
+food — awaits that resolve when the effect is real); no new component-#2 rows this window, WebMCP
+clock still flagged to the board.
+
+**Any invariant bent?** No. The measurement kept its own honesty rules (55 degraded-oracle
+discards never scored as ours; 12 process timeouts attributed to NOBODY); the crash was fixed
+before any capability work, per THE RATCHET; no mark retuned. Lesson re-banked by t380/381
+together: measurement finds what unit tests cannot — the panic had survived every ASCII test we
+ever wrote.
+
+**PART VI / VII correction.** None — but Check #1's "I5 has never finished a crawl" parenthetical
+is now historical, closed by t380.
+
+**Next check due: tick 390.**

@@ -16389,3 +16389,18 @@ panics — boundary checks must be part of the match, `get(..n)`, not a separate
 GATES +0 new (covered by manuk-css unit suite = IN the wall via T·crate tests).
 CONSTELLATION: cross/real-world-QUIRKS row already records the find+fix (t380 entry).
 WIKI: docs/wiki/css-cascade.md — at-rule prefix-matching robustness note (below).
+
+## Tick 382 — Constitution Check #14: the gate's instrument is in service (2026-07-22)
+
+CADENCE OBLIGATION (374+8). Re-read CONSTITUTION.MD; wrote Check #14 (CONSTITUTION-CHECK.md).
+Window 375-381 verdict: GATE-pointed throughout. The headline: Check #1's steer item — "land one
+clean differential-oracle crawl (I5)" — closed at t380 after ~295 ticks; the Phase-0 exit gate is
+now a measured number (jarring baseline banked), not prose. The ledger defines the frontier next:
+author-style-not-applied trio (probe for one shared cause first), img/svg computed-display
+divergence, MISSING BOX br/path/div, the 13× perf outliers. No invariant bent: discards/timeouts
+kept off our account, the netlify crash fixed ratchet-first, no mark touched. LAST_CONSTITUTION_
+CHECK 374→382; next due 390.
+
+TICK SHAPE: constitution-check (governance checkpoint; deliverable = Check #14 + counter). GATES +0. [no-pattern]
+CONSTELLATION: none.
+WIKI: none.
