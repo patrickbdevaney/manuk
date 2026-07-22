@@ -16244,3 +16244,17 @@ consumption (the pitch shift) → caught. manuk-shell 70/70 + teardown TWICE EXI
 TICK SHAPE: capability (cross-rate audio mixes audibly — a 48k notification beside a 44.1k video both play; [policy-arithmetic pattern: linear resampler in the mix loop, quality rung named]). GATES G_MIX rewritten (+2 claims, shell = IN the wall); constellation row 72 residue: WSOLA, downmix, Opus/AC-3, High-profile.
 CONSTELLATION: media / audio output device → resampler landed (G_MIX).
 WIKI: docs/wiki/media-pipeline.md — Tick 375 resampler (linear, source-rate cursor contract).
+
+## Tick 376 — self-audit: clean at the end of a 25-tick window (2026-07-22)
+
+CADENCE OBLIGATION (366+10). Ran ./scripts/self-audit.sh: CLEAN — "methodology and reality agree",
+zero ✗. Window 367-375 review: two surface-audit yields OUTSIDE the map's frame (WebMCP clock,
+container-queries spec), five bounded organs (alpha, WAV, mixer, MPA pair, resampler), two of our own
+gate holes caught by process rule 3 and closed in-tick, one correct ratchet refusal (cold receipt),
+zero WPT-chasing, SINGLE_SITE_TICKS 0. The artifacts verified are the same set as #366 plus the
+window's additions (G_MIX rewrite recorded, claims ledger current). LAST_AUDIT_TICK 366→376; next
+due 386 (with the wall audit).
+
+TICK SHAPE: self-audit (governance checkpoint; deliverable = the finding + counter). GATES +0. [no-pattern]
+CONSTELLATION: none.
+WIKI: none.
