@@ -168,3 +168,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 374	466735e	1784721153	2026-07-22T07:52:33-04:00	171	constitution-check	58	5	81	34	183	81	3896	6960	0	320	0	Constitution Check #13 (2026-07-22)
 375	8de6960	1784721508	2026-07-22T07:58:28-04:00	355	capability	58	9	160	50	183	81	3896	6960	0	320	0	the mixer resamples: mismatched-rate audio joins the mix audibly (2026-07-22)
 376	aaa7030	1784721670	2026-07-22T08:01:10-04:00	162	self-audit	61	4	49	34	183	81	3896	6960	0	320	0	self-audit: clean at the end of a 25-tick window (2026-07-22)
+377	7c06921	1784721862	2026-07-22T08:04:22-04:00	192	surface-audit	62	6	91	35	183	81	3896	6960	0	320	0	surface audit #11: two Baseline-crossers, one WebMCP enrichment (2026-07-22)

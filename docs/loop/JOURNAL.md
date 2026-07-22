@@ -16258,3 +16258,18 @@ due 386 (with the wall audit).
 TICK SHAPE: self-audit (governance checkpoint; deliverable = the finding + counter). GATES +0. [no-pattern]
 CONSTELLATION: none.
 WIKI: none.
+
+## Tick 377 — surface audit #11: two Baseline-crossers, one WebMCP enrichment (2026-07-22)
+
+CADENCE OBLIGATION (367+10). Searched: web.dev June-2026 platform roundup, Edge 150 notes, Chrome
+151 schedule. FINDINGS (SURFACE-AUDIT.md Audit #11): promise-returning scroll methods added as a
+tick-sized row (ours return undefined; since our scrolls are instant, an immediately-resolved
+Promise is truthful — not a stub); Web App Origin Migration considered-and-excluded (no install
+state to migrate); the WebMCP row enriched with the Declarative/Imperative API split (the
+declarative half — annotations read off the DOM we already own — is the most bounded slice yet
+named). No stale-pessimistic finds; the map's current error mode is additions-from-outside.
+LAST_SURFACE_AUDIT 367→377; next due 387.
+
+TICK SHAPE: surface-audit (map maintenance; Audit #11 + 1 row + 1 enrichment). GATES +0. [no-pattern]
+CONSTELLATION: +1 row (promise-returning scrolls), WebMCP row enriched.
+WIKI: none.

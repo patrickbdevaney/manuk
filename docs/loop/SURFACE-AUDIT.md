@@ -444,3 +444,42 @@ Manuk's native tongue."* The threat/opportunity clock the constitution described
   stale-pessimistic catch, and this audit's yield is the OPPOSITE failure mode again: a marquee
   item the map never listed. Both audits #9 and #10 found their value OUTSIDE the constellation's
   frame, which is the mechanism working as designed.
+
+## Audit #11 — tick 377 (2026-07-22)
+
+### Sources (searched, not recalled)
+
+* [web.dev — New to the web platform, June 2026](https://web.dev/blog/web-platform-06-2026) ·
+  [Edge 150 release notes](https://learn.microsoft.com/en-us/microsoft-edge/web-platform/release-notes/150)
+* Chrome 151 stable (2026-07-28 upcoming); MV2 extension removal this month; Firefox moving to a
+  two-week cadence in September.
+
+### The external frame
+
+Two platform behaviors crossing into Baseline territory, one enrichment of an existing row:
+
+* **Promise-returning `scrollBy`/`scrollTo`** — programmatic scrolls now resolve a Promise when the
+  scroll completes (kills the settle-timer/scroll-event-polling idiom). Our scroll methods return
+  undefined; code `await`ing them gets `undefined` (awaitable, resolves immediately) — NOT a throw,
+  so the failure mode is soft (post-scroll code runs before settling). Low-severity, bounded.
+* **Web App Origin Migration** — PWA install-state trust migration; we hold no install state.
+  OUT for v1 (no row; recorded here as considered-and-excluded).
+* **WebMCP detail** (enriches the t367 row): the surface is TWO APIs — a **Declarative API** (HTML
+  forms + standard elements annotated as tools) and an **Imperative API** (JS `registerTool`). The
+  declarative half is an even more bounded v1-compatible slice than the imperative one: it reads
+  ANNOTATIONS off the DOM we already own, no new JS surface — worth naming in the row for whenever
+  the board takes the item.
+
+### ADDED
+
+* **app / promise-returning scroll methods** — `missing` (soft): `scrollTo/scrollBy/scrollIntoView`
+  should return a Promise resolving on scroll completion. Ours return undefined (awaitable but
+  immediate). One-line-ish once smooth-scroll settling exists; till then an immediate resolved
+  Promise is spec-adjacent-honest (our scrolls ARE instant — there is no animation to wait for, so
+  resolving now is truthful, not a stub). Genuinely tick-sized.
+
+### CORRECTED
+
+* The WebMCP row gains the declarative/imperative split note (above). No stale-pessimistic finds
+  this window — the map has been re-probed heavily for 26 ticks and its error rate is currently
+  additions-from-outside, not phantom ❌s.
