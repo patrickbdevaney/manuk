@@ -8193,6 +8193,90 @@ impl PageContext {
         Ok(proceed)
     }
 
+    /// Dispatch the **IME composition sequence that commits `data`** into the focused control —
+    /// `compositionstart`, `compositionupdate`, `beforeinput`, `input`, `compositionend`, in that
+    /// order — the way an input method editor (Pinyin, Kana, autocorrect, dead keys) delivers text.
+    /// Returns `false` iff a handler called `preventDefault()` on the `beforeinput` (an editor that
+    /// vetoes the insertion). CJK/accented text is untypeable without this: those users compose
+    /// romanised/phonetic input in an IME buffer and commit a character, and a page that only ever
+    /// saw `keydown`/`input` for ASCII never learns the committed text arrived.
+    ///
+    /// **The whole sequence, in order, and it is not ceremony.** A rich editor (Gmail compose,
+    /// Notion, a CJK search box) branches on `event.isComposing` to *suppress* its per-keystroke
+    /// autocomplete/submit while a composition is open, then acts on `compositionend`. Firing a bare
+    /// `input` would make the editor treat half-composed phonetic text as a finished word; skipping
+    /// `compositionend` would leave it believing a composition is still open forever. `beforeinput`
+    /// carries `inputType: 'insertCompositionText'` — the value an undo stack and an
+    /// `beforeinput`-cancelling validator both key on to tell a composition commit from a paste or a
+    /// keystroke — and it is the ONLY cancelable step, so an editor that vetoes the insert does it
+    /// there; `input` is post-facto and not cancelable, exactly as the spec has it.
+    ///
+    /// The committed text is written through the control's `value` **setter** (not the attribute
+    /// directly) between `beforeinput` and `input`, so it takes the same path a keystroke does and a
+    /// controlled component reading `e.target.value` in its `input` handler sees the composed text.
+    /// If `beforeinput` was cancelled the value is left untouched — the veto means "do not insert".
+    pub fn dispatch_composition(
+        &self,
+        runtime: &mut Runtime,
+        dom: &mut Dom,
+        node: NodeId,
+        data: &str,
+        layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    ) -> Result<bool, String> {
+        set_view_maps(layout, styles);
+        set_current_dom(dom as *mut Dom);
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        unsafe {
+            let _ = new_reflector(raw_cx, dom as *mut Dom, node);
+        }
+        // `isComposing:true` on the two InputEvents is what tells the page a composition is in
+        // flight; `compositionend` carries `isComposing:false` because by the time it fires the
+        // composition has ENDED. `input` is `cancelable:false` per the UI Events spec. The value is
+        // committed via the `value` setter (`target.value = ...`) between beforeinput and input so a
+        // controlled component's `input` handler reads the composed text; a cancelled beforeinput
+        // leaves it untouched.
+        let script = format!(
+            "(function(){{\
+               var nid={nid};var data={data};\
+               var target=(globalThis.__nodes && __nodes[nid])||null;\
+               function d(t,p){{p.type=t;return __dispatchEvent(nid,p);}}\
+               d('compositionstart',{{data:'',bubbles:true,cancelable:true}});\
+               d('compositionupdate',{{data:data,bubbles:true,cancelable:true}});\
+               var ok=d('beforeinput',{{inputType:'insertCompositionText',data:data,isComposing:true,bubbles:true,cancelable:true}});\
+               if(ok!==false && target){{try{{target.value=(target.value||'')+data;}}catch(e){{}}}}\
+               d('input',{{inputType:'insertCompositionText',data:data,isComposing:true,bubbles:true,cancelable:false}});\
+               d('compositionend',{{data:data,isComposing:false,bubbles:true,cancelable:true}});\
+               return ok;\
+             }})()",
+            nid = node.0,
+            data = js_string_literal(data),
+        );
+        rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
+        let opts = CompileOptionsWrapper::new(
+            runtime.cx_no_gc(),
+            c"dispatch_composition.js".to_owned(),
+            1,
+        );
+        let proceed = match evaluate_script(
+            runtime.cx(),
+            global.handle(),
+            &script,
+            rval.handle_mut(),
+            opts,
+        ) {
+            Ok(()) => {
+                let v = rval.get();
+                !v.is_boolean() || v.to_boolean()
+            }
+            Err(()) => true,
+        };
+        crate::event_loop::run_deferred(runtime, global.handle())?;
+        Ok(proceed)
+    }
+
     /// Dispatch one **mouse** event carrying the fields a handler actually branches on: `detail`
     /// (the click count), `button`/`buttons`, and the coordinate pairs. Returns `false` iff a
     /// handler called `preventDefault()`.

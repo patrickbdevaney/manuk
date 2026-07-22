@@ -2022,3 +2022,42 @@ shape) proving three cross-layer facts:
 RED: flipping the `document.cookie` predicate in `engine/net/src/lib.rs` (`|c| !c.http_only` → `|_| true`)
 leaks the `HttpOnly` cookie into `document.cookie` and fails property 1. The jar logic was untouched —
 this tick added only the cross-layer assertion the jar's unit tests structurally cannot make.
+
+## IME composition — CJK / accented text arrives as a burst, not a keystroke (G_IME_COMPOSITION)
+
+`CompositionEvent` existed as a constructible interface (tick with `g_event_constructors`) but nothing
+ever *dispatched* the sequence, so CJK, hanja, kana, dead-key accents and mobile autocorrect had no way
+into a text field: those users compose phonetic/romanised input in an IME buffer and **commit a
+character**, and there is no per-glyph `keydown` for the committed text. A page that only ever saw
+`keydown`/`input` for ASCII never learned the composed text arrived.
+
+`Page::dispatch_composition(node, data, …)` is the headless entry point for the commit burst. It fires,
+in order, across the JS↔engine boundary:
+
+1. `compositionstart` (data `''`)
+2. `compositionupdate` (data = the composing text)
+3. `beforeinput` — `inputType: 'insertCompositionText'`, `isComposing: true`, **cancelable**
+4. *(the value is committed through the control's `.value` **setter** here — same path a keystroke takes)*
+5. `input` — `inputType: 'insertCompositionText'`, `isComposing: true`, **not** cancelable
+6. `compositionend` — `isComposing: false` (the composition has ended)
+
+Three properties are load-bearing and are what `G_IME_COMPOSITION` pins:
+
+- **`isComposing` gates the editor.** A rich editor (Gmail compose, Notion, a CJK search box) does
+  `if (e.isComposing) return;` to suppress its per-keystroke autocomplete/submit while a composition is
+  open, then acts on `compositionend`. `isComposing` is `true` on the two `InputEvent`s and `false` on
+  `compositionend`.
+- **The value commits BEFORE `input`.** Through the setter, between `beforeinput` and `input`, so a
+  controlled component reading `e.target.value` in its `input` handler sees the composed text (the same
+  contract `dispatch_input` honours for ASCII).
+- **`beforeinput` is the veto point.** It is the only cancelable step; an editor that `preventDefault()`s
+  it (read-only-while-composing, a maxlength guard) blocks the insert — `dispatch_composition` returns
+  `false` and the value is left untouched. The rest of the burst still fires (the composition still
+  starts and ends).
+
+RED: setting `isComposing:false` on the `input` dispatch leaks a "not composing" signal to the editor
+guard and fails the `input:…:ic=true:tv=你好` assertion; moving the `.value = …` commit after the `input`
+dispatch makes the controlled-component read see the stale value. Honest limit: this models the **commit
+burst** for one composed segment, not the stream of intermediate `compositionupdate` steps a live IME
+emits per keystroke, and it appends to the value rather than inserting at a caret — the GUI/shell owns
+the winit IME feed and caret geometry.

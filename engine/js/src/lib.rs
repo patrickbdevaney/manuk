@@ -1097,6 +1097,36 @@ pub fn dispatch_drop(
     Ok(true)
 }
 
+/// Dispatch the IME composition-commit sequence (`compositionstart`/`compositionupdate`/
+/// `beforeinput`/`input`/`compositionend`) that commits `data` into `node`. Returns `false` iff a
+/// handler `preventDefault()`-ed the `beforeinput`. See [`PageContext::dispatch_composition`].
+#[cfg(feature = "_sm")]
+pub fn dispatch_composition(
+    ctx: &PageContext,
+    dom: &mut manuk_dom::Dom,
+    node: manuk_dom::NodeId,
+    data: &str,
+    layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<bool, JsError> {
+    with_runtime(|rt| {
+        ctx.dispatch_composition(rt, dom, node, data, layout, styles)
+            .map_err(|message| JsError { message })
+    })
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn dispatch_composition(
+    _ctx: &PageContext,
+    _dom: &mut manuk_dom::Dom,
+    _node: manuk_dom::NodeId,
+    _data: &str,
+    _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<bool, JsError> {
+    Ok(true)
+}
+
 /// Dispatch one mouse event carrying `detail` (the click count) and `button`. Returns `false` iff a
 /// handler called `preventDefault()`. See [`PageContext::dispatch_mouse`].
 #[cfg(feature = "_sm")]

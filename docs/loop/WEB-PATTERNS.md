@@ -2918,3 +2918,25 @@ observes the real `Cookie:` header. **(3)** RED-prove through the boundary, not 
 `document.cookie` read predicate (`|c| !c.http_only`), not a `cookies.rs` internal — that is the layer
 the property actually crosses. **(4)** Re-probe before building: "flags unmeasured" / "dead code, 0
 callers" were both stale by ~170 ticks; the enforcement was built and wired.
+
+## IME composition — CJK/accented text enters as a committed burst, not a keystroke (tick 332)
+
+**The class of the web this unlocks:** every rich text field for a CJK/hanja/kana/accented-Latin user,
+plus mobile autocorrect. These users type phonetic/romanised input into an IME buffer and **commit** a
+character — there is no per-glyph `keydown` for the committed text. A browser that only synthesised
+`keydown`/`input` for ASCII left a third of the planet unable to type into Gmail compose, a search box,
+a comment field.
+
+**(1)** The commit is a fixed ordered BURST, not one event: `compositionstart` → `compositionupdate` →
+`beforeinput` → `input` → `compositionend`. A rich editor keys on all of it — it suppresses its
+per-keystroke autocomplete/submit while `isComposing` is true and acts on `compositionend`. Firing a
+bare `input` makes it treat half-composed phonetic text as a finished word; skipping `compositionend`
+leaves it believing a composition is open forever. **(2)** `isComposing` is the guard: `true` on the two
+`InputEvent`s, `false` on `compositionend` (the composition has ended). The `if (e.isComposing) return;`
+idiom depends on it. **(3)** The value commits through the `.value` **setter, between `beforeinput` and
+`input`**, so a controlled component reading `e.target.value` in its `input` handler sees the composed
+text — the same contract ASCII keystrokes honour. **(4)** `beforeinput` is the ONLY cancelable step and
+carries `inputType: 'insertCompositionText'`: it is the veto point (read-only-while-composing, a
+maxlength guard) and the tag an undo stack uses to tell a composition commit from a paste. **The trap:**
+modelling only the `input` event reads as "text entry works" from the outside while every IME editor
+mis-fires; the burst and the `isComposing`/`inputType` fields are the capability, not decoration.

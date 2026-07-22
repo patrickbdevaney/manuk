@@ -125,4 +125,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 328	f40949b	1784675825	2026-07-21T19:17:05-04:00	1163	capability	67	8	350	12	177	81	3896	6960	0	320	0	window.getSelection() is a real, persistent, directional Selection (2026-07-21)
 329	c9ad67d	1784677138	2026-07-21T19:38:58-04:00	1313	capability	66	9	618	30	178	81	3896	6960	0	320	0	IndexedDB indexes: createIndex / store.index() / IDBKeyRange, persisted (2026-07-21)
 330	5cc1d1a	1784678370	2026-07-21T19:59:30-04:00	1232	capability	70	8	260	4	179	81	3896	6960	0	320	0	Fullscreen API: element.requestFullscreen() as a real DOM state machine (2026-07-21)
-331	cac4322	1784680231	2026-07-21T20:30:31-04:00	1861	capability-assurance	68	7	304	5	180	81	3896	6960	0	320	0	cookie flags are enforced ACROSS the JS↔wire boundary (2026-07-21)
+331	63a2601	1784681969	2026-07-21T20:59:29-04:00	3599	capability-assurance	68	10	439	4	181	81	3896	6960	0	320	0	cookie flags are enforced ACROSS the JS↔wire boundary (2026-07-21)

@@ -2895,6 +2895,56 @@ impl Page {
         }
     }
 
+    /// Dispatch the **IME composition-commit sequence** that commits `data` into `node` —
+    /// `compositionstart`, `compositionupdate`, `beforeinput` (`inputType: insertCompositionText`),
+    /// `input`, `compositionend`. This is how CJK and accented text actually arrives: the user
+    /// composes phonetic/romanised input in an IME buffer and commits a character; there is no
+    /// per-character `keydown` for the committed glyph. Returns `true` unless a handler
+    /// `preventDefault()`-ed the `beforeinput` (an editor vetoing the insert). See
+    /// [`manuk_js::PageContext::dispatch_composition`] for why the whole ordered sequence and the
+    /// `isComposing` flag matter to a rich editor.
+    pub fn dispatch_composition(
+        &mut self,
+        node: manuk_dom::NodeId,
+        data: &str,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
+        #[cfg(feature = "spidermonkey")]
+        {
+            let Some(ctx) = &self.js else {
+                return true;
+            };
+            let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+                .root_box
+                .node_rects(&self.dom)
+                .into_iter()
+                .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+                .collect();
+            let proceed = match manuk_js::dispatch_composition(
+                ctx,
+                &mut self.dom,
+                node,
+                data,
+                &rects,
+                &self.styles,
+            ) {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::warn!("composition dispatch: {e}");
+                    return true;
+                }
+            };
+            self.relayout(fonts, viewport_width);
+            proceed
+        }
+        #[cfg(not(feature = "spidermonkey"))]
+        {
+            let _ = (node, data, fonts, viewport_width);
+            true
+        }
+    }
+
     /// Fire the **commit** events when a field loses focus: `change` (only if `value_changed` — the
     /// field's value differs from when it gained focus, which is exactly when the spec fires it) then
     /// `blur`. `change` is what a form runs its validation on ("email invalid" the moment you leave

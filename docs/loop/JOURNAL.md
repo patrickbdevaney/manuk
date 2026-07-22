@@ -14826,3 +14826,47 @@ TICK SHAPE: capability-assurance (instrument fidelity + the login-security prope
 (g_cookie_attributes). CONSTELLATION: cookies partial→gated.
 
 WIKI: docs/wiki/interaction-surface.md (Cookie attribute enforcement section)
+
+## Tick 332 — IME composition: CJK/accented text arrives as a burst, not a keystroke (2026-07-21)
+
+SELECTED: re-ran lever-board (STEP-2 frontier: fidelity instrument [subsystem, parked t331] / media
+playback join [L] / container queries [Stylo M]). Worked the PHASE0-BOUNDED-REMAINDER Tier-1 JARRING
+list top-down for the cleanest BOUNDED capability item. #1/#2 (media join, codec breadth) are L
+subsystems; #3 contenteditable is L; #4 **IME / composition events** is M and the constellation row
+(app / "IME / composition events" = missing, "CompositionEvent is an inert stub") is a genuine gap —
+re-probed and confirmed still absent: the `CompositionEvent` INTERFACE is constructible
+(g_event_constructors) but nothing ever DISPATCHED the sequence. CJK/hanja/kana/dead-key/mobile-autocorrect
+users compose in an IME buffer and COMMIT — there is no per-glyph keydown — so text never entered a field.
+
+WHAT LANDED (engine/js dispatch_composition + engine/page Page::dispatch_composition + new gate
+engine/page/tests/g_ime_composition.rs): a headless entry point for the IME COMMIT BURST, modeled on
+the existing dispatch_drop multi-event pattern. Fires, in order across the JS boundary:
+compositionstart -> compositionupdate -> beforeinput(inputType=insertCompositionText, isComposing=true,
+CANCELABLE) -> [value committed through the .value SETTER] -> input(insertCompositionText, isComposing=true,
+not cancelable) -> compositionend(isComposing=false). Three load-bearing properties gated: (1) isComposing
+true on the two InputEvents / false on compositionend — the `if(e.isComposing)return;` guard every rich
+editor uses to suppress per-keystroke autocomplete while a composition is open; (2) the value commits
+BETWEEN beforeinput and input via the setter, so a controlled component reading e.target.value in its
+input handler sees the composed text (same contract dispatch_input honours for ASCII); (3) beforeinput is
+the only cancelable step — an editor that preventDefault()s it (read-only-while-composing / maxlength)
+blocks the insert, dispatch_composition returns false, value untouched, rest of the burst still fires.
+
+RED-PROVEN (cp-snapshot of dom_bindings.rs, restored byte-for-byte): setting isComposing:false on the
+`input` dispatch made the gate FAIL at the `input:...:ic=true:tv=你好` assertion (0.31s). Restored -> GREEN
+(0.30s, post-fmt re-verified). Both the normal field ("你好" commits) and a beforeinput-vetoing field
+("안녕" blocked) live in ONE Page::load — a second load in the same binary SIGSEGVs the per-process
+PageContext (g_mouse_actuation harness note).
+
+NO REGRESSION: additive — a new pub method + wrapper + gate; no existing behavior changed (RED edit
+reverted). cargo check + fmt clean.
+
+HONEST LIMIT: this is the COMMIT burst for one composed segment, not the stream of intermediate
+compositionupdate steps a live IME emits per keystroke, and it appends to .value rather than inserting at
+a caret — the GUI/shell owns the winit IME feed + caret geometry. ⚠ Like the other interaction gates, this
+page test is not in verify.sh's ~19-gate launch set (observer-owned wall; GATE-COVERAGE.md) — green here,
+not watched by the wall.
+
+TICK SHAPE: capability (a site class — CJK/accented text entry — goes from impossible to working). GATES
++1 (g_ime_composition). CONSTELLATION: IME/composition events missing->gated.
+
+WIKI: docs/wiki/interaction-surface.md (IME composition section).
