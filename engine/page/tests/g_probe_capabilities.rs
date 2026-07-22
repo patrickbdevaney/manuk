@@ -85,6 +85,23 @@ const HTML: &str = r##"<!doctype html>
       return inst.exports.add(3, 4) === 7;
     });
 
+    // ── WasmGC (final spec): a struct type + struct.new/struct.get, instantiated and CALLED.
+    // Kotlin/Wasm and Dart/Flutter-web compile to exactly this class of module. The bytes were
+    // validated against real Chromium (wasmgc:42) before this probe landed, so `no` here is a
+    // measured engine absence, never a malformed fixture.
+    probe('wasmgc', function () {
+      if (typeof WebAssembly !== 'object' || !WebAssembly.Module) { return false; }
+      var b = new Uint8Array([
+        0,97,115,109, 1,0,0,0,
+        1,9,2, 0x5f,1,0x7f,0, 0x60,0,1,0x7f,
+        3,2,1,1,
+        7,6,1,2,109,107,0,0,
+        10,13,1, 11,0, 0x41,42, 0xfb,0,0, 0xfb,2,0,0, 0x0b
+      ]);
+      var inst = new WebAssembly.Instance(new WebAssembly.Module(b), {});
+      return inst.exports.mk() === 42;
+    });
+
     // ── Multicol: three columns in a 300px box with a 10px gap means a column box near 93px.
     // Measured by where the text actually is, not by whether the property parsed.
     probe('multicol', function () {
@@ -232,4 +249,8 @@ const PINNED: &[&str] = &[
     // muted <video> and not the loud one. querySelector-only (the servo Stylo build has no Muted
     // NonTSPseudoClass variant, so it cannot cascade — deferred with the same fence as `:has()`).
     "mediapseudo:yes",
+    // tick 359 — WasmGC (final spec): struct type instantiates, struct.new/struct.get return the
+    // right value through the whole pipeline. The Kotlin/Wasm + Dart/Flutter-web module class.
+    // SpiderMonkey ships it on; the probe measured it rather than assuming it.
+    "wasmgc:yes",
 ];

@@ -15759,3 +15759,36 @@ exposure (frames/images land in page-queryable state). No Part VI/VII correction
 TICK SHAPE: constitution-check (governance checkpoint; the deliverable is Check #11 + the counter). GATES +0. [no-pattern]
 CONSTELLATION: none (governance tick).
 WIKI: none — the check lives in CONSTITUTION-CHECK.md.
+
+## Tick 359 — WasmGC probe: measure-and-pin the Kotlin/Flutter-web cell (2026-07-22)
+
+CO-#1 (E) cheap constellation probe, the row surface-audit #9 added yesterday as `unknown` with
+"likely ALREADY WORKS — re-probe first" (the stale-pessimistic rule). WasmGC is what Kotlin/Wasm and
+Dart/Flutter-web compile to; a browser that instantiates the module class runs that app class.
+
+METHOD: extend G_PROBE_CAPABILITIES with a `wasmgc` probe — a hand-assembled FINAL-spec GC module
+((type (struct (field i32))) + struct.new/struct.get returning 42), instantiated and CALLED, not
+feature-detected. The bytes were cross-validated against real Chromium headless FIRST (wasmgc:42) so
+a "no" from our engine is a measured absence, never a malformed-fixture artifact — the probe-harness
+honesty rule (a probe that cannot distinguish "engine lacks it" from "my bytes are wrong" measures
+nothing). Node 20 was rejected as a validator: its experimental GC predates the final opcode numbering.
+
+OUTCOME: pin whatever the probe says — yes → PINNED list + constellation gated; no → constellation
+`missing` with this gate as the receipt (measured absence beats unexamined unknown either way).
+RESULT — MEASURED WORKING, PINNED. Our SpiderMonkey instantiates the final-spec GC module and
+`struct.new`/`struct.get` return 42 through the whole pipeline: `wasmgc:yes`. Pinned in
+G_PROBE_CAPABILITIES' PINNED list (losing it is now a regression, not a scope change); constellation
+row unknown→gated. The stale-pessimistic rule pays again: the row was added `unknown` at t357 and
+measured working two ticks later for the cost of one probe.
+
+RED-PROVEN: corrupting the module (struct.get field index 9, invalid) flips the probe to `wasmgc:no`
+and the PINNED assert fails with the full record; restored byte-for-byte, gate re-green.
+
+NO REGRESSION: G_PROBE_CAPABILITIES green (all prior pins intact — full record in the RED run shows
+wasm/mediaq/matchmedia/cjkbreak/scrollsnap/viewtransitions/navigationapi/sanitizer/quirksflag/
+mediapseudo all still yes).
+
+TICK SHAPE: capability-probe (measure-and-pin — the Kotlin/Wasm + Dart/Flutter-web module class is
+measured runnable; [probe pattern: validate the fixture against Chromium BEFORE trusting a no]). GATES +1 pinned claim (wasmgc:yes in G_PROBE_CAPABILITIES); constellation row app/WebAssembly GC unknown→gated.
+CONSTELLATION: app / WebAssembly GC → gated (G_PROBE_CAPABILITIES wasmgc:yes).
+WIKI: none — the probe pattern is already the wiki'd G_PROBE_CAPABILITIES mechanism; the cross-validate-first rule is recorded in the journal + probe comment. [no-pattern]

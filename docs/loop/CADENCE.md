@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **151** | ticks 1–358 |
-| median tick cycle | **20m** | 150 intervals |
-| median, last 10 | **22m** | 10 intervals |
+| ticks landed | **152** | ticks 1–359 |
+| median tick cycle | **20m** | 151 intervals |
+| median, last 10 | **13m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.57** | 264.0h elapsed |
-| median verify wall | **65s** | 90 ticks |
-| wall trend | 39s → 59s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.57** | 264.1h elapsed |
+| median verify wall | **65s** | 91 ticks |
+| wall trend | 39s → 60s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**81 of 151 ticks** (54%) moved a
+**81 of 152 ticks** (53%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **81** capability ticks, median cycle **20m**
-* median diff per tick: **+245 / −29** lines across 8 files
+* median diff per tick: **+240 / −29** lines across 8 files
 
 ## Every tick
 
@@ -248,5 +248,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **356** | 2026-07-22 04:55 | 4m | self-audit | 55s | +59/−34 | 183 | 81 | 56.0% · | self-audit #10-cadence checkpoint (2026-07-22) |
 | **357** | 2026-07-22 04:59 | 4m | surface-audit | 60s | +101/−34 | 183 | 81 | 56.0% · | surface audit #9: the map leaves its own frame (2026-07-22) |
 | **358** | 2026-07-22 05:02 | 3m | constitution-check | 59s | +92/−34 | 183 | 81 | 56.0% · | Constitution Check #11 (2026-07-22) |
+| **359** | 2026-07-22 05:08 | 6m | capability-probe | 60s | +89/−34 | 183 | 81 | 56.0% · | WasmGC probe: measure-and-pin the Kotlin/Flutter-web cell (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
