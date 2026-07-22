@@ -49,7 +49,10 @@ use std::ops::Range;
 #[cfg(feature = "audio")]
 pub mod audio;
 #[cfg(feature = "audio")]
-pub use audio::{can_decode as can_decode_audio, decode_track, DecodeError, Pcm};
+pub use audio::{
+    can_decode as can_decode_audio, decode_audio_stream, decode_track, sniff_mpeg_audio,
+    DecodeError, Pcm,
+};
 
 #[cfg(feature = "video")]
 pub mod video;

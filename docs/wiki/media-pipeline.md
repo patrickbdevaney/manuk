@@ -1393,3 +1393,21 @@ The two consequences are the tick's substance, both gated in G_RATE:
 
 RED ledger: scaling dropped (2x plays at 1x), chipmunk rule dropped (1x-pitch audio under a 2x
 picture), mastery refusal dropped (the device pins a 2x transport to 1x).
+
+## Tick 362 — MP3 stream decode: the podcast organ (join pending)
+
+`<audio src="episode.mp3">` is a RAW STREAM — no MP4 container, no `Track`, so the re_mp4 path
+can never reach it. `decode_audio_stream` (engine/media/src/audio.rs) is the stream seam:
+symphonia's probe finds the format (mp3+mpa features added — MIT, patents expired), its packet
+loop replaces the sample table, the damaged-packet rule matches `decode_track` (drop the frame,
+keep the stream). `sniff_mpeg_audio` (ID3v2 tag or MPEG sync word) is the fetcher's cheap
+routing question. The same probe seam serves FLAC/Ogg when their features turn on.
+
+Gate `mp3_decode` asserts the CLOCK, not activity: the 10-second Chromium fixture must decode to
+~10s of frames (RED: truncating at 40 packets → 1.07s, caught), the ID3v2-with-embedded-PNG
+fixture is probed PAST (the tag must never parse as sync), garbage is a named refusal.
+
+AV1-style decomposition applies: this is the ORGAN; the shell join (audio-only MediaSet entries —
+today's entries are video-shaped) + the `canPlayType('audio/mpeg')` registry flip land together
+in the next tick. Until then the registry keeps refusing mp3 — the honest direction while the
+shell cannot route it.

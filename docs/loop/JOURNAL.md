@@ -15871,3 +15871,40 @@ manuk-shell 68/68 (+1) + teardown TWICE EXIT 0; headless lane clean; fmt clean.
 TICK SHAPE: capability (playbackRate — the speed control on every player now scales real time, with the honest-mute rule instead of the chipmunk defect; [host-native pattern: one field on the clock the engine owns + two policy consequences in the driver]). GATES +1 (G_RATE, shell suite = IN the wall); constellation row playbackRate missing→partial (rung 2 = WSOLA time-stretch named).
 CONSTELLATION: media / playbackRate → partial (G_RATE; audible rung remains).
 WIKI: docs/wiki/media-pipeline.md — Tick 361 playbackRate (scaled wall, mastery refusal, chipmunk rule).
+
+## Tick 362 — MP3 stream decode: the podcast class's organ (2026-07-22)
+
+CO-#1 order (2) MEDIA remainder, row 71's named refusal ("NO MP3/Opus/Vorbis/FLAC — refused by name").
+MP3 on the web is overwhelmingly a RAW STREAM (`<audio src="episode.mp3">` — podcasts, sample buttons,
+legacy audio everywhere), not MP3-in-MP4 — so the existing Track path (re_mp4 demux) can never reach
+it; the organ needed is a stream-level decode: bytes → probe → PCM. Same decomposition as AV1
+(t353 organ → t354 join+registry): THIS tick lands `decode_audio_stream` behind the existing `audio`
+feature (symphonia grows mp3+mpa — MIT, patents expired 2017), gated on the Chromium bear-audio
+fixture; the audio-only MediaSet entry + <audio> fetch join + canPlayType('audio/mpeg') registry flip
+is the NEXT tick, and no registry lies in between (canPlayType still refuses mp3 — refusing a
+capability the shell cannot yet route is the honest direction of error).
+
+HYPOTHESIS: symphonia's probe opens the raw MPEG-audio stream (TOC'd and TOC-less CBR both — the
+fixture set has each), decode yields sample counts consistent with the 10s duration, and the sniff
+(ID3 tag or MPEG sync word) routes bytes cheaply. Gate mp3_decode (required-features audio):
+duration ≈ 10s ± tolerance, non-uniform PCM, ID3-tagged variant also decodes (the tag must be
+skipped, not parsed as sync).
+RESULT — LANDED. engine/media: symphonia gains mp3+mpa (audio feature, shell-lane only via existing
+fences); audio.rs decode_audio_stream (probe → default audio track → packet loop → interleaved PCM;
+bitstream rate/channels win over headers exactly as decode_track) + sniff_mpeg_audio (ID3v2 or MPEG
+sync). Gate mp3_decode (required-features audio): 10s fixture decodes to ~10s ON THE CLOCK, ID3v2
+tag probed past, non-uniform PCM, garbage refused by name. Fixtures from Chromium test data with
+provenance (README).
+
+RED-PROVEN: truncating the packet loop at 40 packets → "a 10s file must decode to ~10s, got 1.07s"
+— the drop-packets bug that passes every produced-samples check fails the clock. Restored
+byte-for-byte, cmp-verified.
+
+NO REGRESSION: manuk-media all-features suite green; manuk-shell 68/68 + teardown EXIT 0; the js/page
+lanes build manuk-media default-features=false so no gate binary acquired the codec. fmt clean.
+Registry NOT flipped (canPlayType still refuses mp3) — the organ-then-join rule; the shell join +
+flip is the named next tick.
+
+TICK SHAPE: capability (MP3 stream decode — the podcast class's organ, behind the stream seam that will serve FLAC/Ogg too; [BORROW pattern: symphonia probe, two features, zero new codec code]). GATES +1 (mp3_decode, required-features lane — same wall caveat as audio_decode); constellation row 71 updated (organ landed, join+registry named next).
+CONSTELLATION: media / audio decode → MP3 organ landed (mp3_decode).
+WIKI: docs/wiki/media-pipeline.md — Tick 362 MP3 stream decode (stream seam, clock-not-activity gate, organ-then-join).

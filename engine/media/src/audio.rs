@@ -159,6 +159,85 @@ pub fn decode_track(track: &Track, buffer: &[u8]) -> Result<Pcm, DecodeError> {
     })
 }
 
+/// Decode a RAW audio stream — `<audio src="episode.mp3">` (tick 362), where there is no MP4
+/// container and therefore no [`Track`]: the bytes ARE the stream. symphonia's probe finds the
+/// format (MPEG audio today; the same seam serves FLAC/Ogg when their features turn on), its
+/// packet loop replaces re_mp4's sample table, and the damaged-packet rule matches
+/// [`decode_track`]: drop the frame, keep the stream, fail only if NOTHING decodes.
+pub fn decode_audio_stream(bytes: &[u8]) -> Result<Pcm, DecodeError> {
+    use symphonia::core::codecs::CodecParameters;
+    use symphonia::core::formats::probe::Hint;
+    use symphonia::core::formats::{FormatOptions, TrackType};
+    use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
+    use symphonia::core::meta::MetadataOptions;
+
+    let mss = MediaSourceStream::new(
+        Box::new(std::io::Cursor::new(bytes.to_vec())),
+        MediaSourceStreamOptions::default(),
+    );
+    let mut reader = symphonia::default::get_probe()
+        .probe(
+            &Hint::new(),
+            mss,
+            FormatOptions::default(),
+            MetadataOptions::default(),
+        )
+        .map_err(|e| DecodeError::Unsupported(format!("unprobeable stream: {e}")))?;
+
+    let track = reader
+        .default_track(TrackType::Audio)
+        .ok_or_else(|| DecodeError::Unsupported("no audio track in stream".into()))?;
+    let track_id = track.id;
+    let params = match &track.codec_params {
+        Some(CodecParameters::Audio(p)) => p.clone(),
+        _ => return Err(DecodeError::MissingConfig),
+    };
+    let mut decoder = symphonia::default::get_codecs()
+        .make_audio_decoder(&params, &AudioDecoderOptions::default())
+        .map_err(|e| DecodeError::Failed(e.to_string()))?;
+
+    let mut out: Vec<f32> = Vec::new();
+    let mut channels = 0u16;
+    let mut rate = 0u32;
+    let mut decoded = 0usize;
+    loop {
+        let packet = match reader.next_packet() {
+            Ok(Some(p)) => p,
+            Ok(None) => break,
+            Err(_) => break, // a truncated tail is a stream that ends, not a failure of what played
+        };
+        if packet.track_id != track_id {
+            continue;
+        }
+        let Ok(buf) = decoder.decode(&packet) else {
+            continue; // the damaged-packet rule — see the doc
+        };
+        decoded += 1;
+        rate = buf.spec().rate();
+        channels = buf.spec().channels().count() as u16;
+        interleave(&buf, &mut out);
+    }
+    if decoded == 0 {
+        return Err(DecodeError::Failed(
+            "no packet in the stream could be decoded".into(),
+        ));
+    }
+    Ok(Pcm {
+        samples: out,
+        channels,
+        sample_rate: rate,
+    })
+}
+
+/// Is this an MPEG-audio stream at all? An ID3v2 tag or a raw MPEG sync word — the cheap routing
+/// question a fetcher asks before paying for a full probe.
+pub fn sniff_mpeg_audio(bytes: &[u8]) -> bool {
+    if bytes.len() >= 3 && &bytes[..3] == b"ID3" {
+        return true;
+    }
+    bytes.len() >= 2 && bytes[0] == 0xFF && (bytes[1] & 0xE0) == 0xE0
+}
+
 /// Append a decoded buffer to the interleaved output, converting to `f32`.
 ///
 /// `GenericAudioBufferRef` is an enum over every sample format symphonia can produce, so the
