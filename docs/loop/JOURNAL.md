@@ -14786,3 +14786,43 @@ wip/tick330-fullscreen; lands via `./scripts/tick.sh .git/tick330-ready.msg` onc
 the audit cadences (or as part of the 325-330 batch land). See [[session-329-indexeddb-indexes-parked]].
 
 WIKI: docs/wiki/interaction-surface.md (Fullscreen API section)
+
+## Tick 331 — cookie flags are enforced ACROSS the JS↔wire boundary (2026-07-21)
+
+SELECTED: after landing the 326-330 batch, re-ran the board (STEP 2 frontier: fidelity instrument /
+media / container queries). The #1 item — the FIDELITY INSTRUMENT REBUILD selector-path keying — turns
+out to be a multi-part SUBSYSTEM, not a bounded tick: the `fidelity` subcommand fetches the URL
+INDEPENDENTLY per engine (Manuk renders fetched HTML; Chrome fetches the live URL via
+capture_boxes_all_ids/capture_url_screenshot), so a positional selector-path only aligns on a SHARED
+snapshot — which is exactly why oracle_probe (already path-keyed) feeds ONE snapshot to both. Selector-
+path keying in the fidelity gate therefore needs shared-snapshot capture + cross-engine path matching
+first; a rushed half-build produces a LYING instrument, worse than none (the design's own thesis). So I
+took the cleanest bounded Tier-1 item instead and RE-PROBED it per process rule 2.
+
+RE-PROBE (the board/roadmap ran stale-pessimistic AGAIN): constellation cell `cookies (SameSite/Secure/
+HttpOnly)` = partial "cookie jar exists; flags unmeasured", and PHASE0-BOUNDED-REMAINDER #8 lists cookie
+enforcement as UNKNOWN. Both STALE. engine/net/src/cookies.rs + storage.rs enforce EVERY flag (Secure,
+HttpOnly, SameSite Strict/Lax/None, __Host-/__Secure- prefixes, "leave secure alone") AND it is already
+wired to the live path: lib.rs:1266 excludes http_only from the JS-facing document.cookie header,
+lib.rs:1308 uses partition-aware cookie_header_subresource for SameSite. 16+11 Rust unit tests. The
+"dead code, 0 callers" claim from the tick-159 DIVERSIFY steer is doubly stale.
+
+WHAT LANDED (engine/page/tests/g_cookie_attributes.rs — a NEW integration gate, ZERO engine change): the
+one property unit tests can't prove — that the flags hold ACROSS LAYERS (JS document.cookie shim ↔
+network Cookie header ↔ jar). Against a real TcpListener (g_oauth_redirect pattern), G_COOKIE_ATTRIBUTES
+asserts three cross-layer facts: (1) an HttpOnly cookie set via Set-Cookie is HIDDEN from document.cookie
+— THE session-theft XSS mitigation; (2) …yet STILL rides the Cookie: header of a same-origin fetch (hidden
+from script, not from the origin — a jar that dropped it would silently log the user out); (3) a __Host-
+write via document.cookie without Secure/host-only/Path=/ is REJECTED, not silently stored.
+
+RED-PROVEN (cp-snapshot, restored): flipping the document.cookie predicate in engine/net/src/lib.rs
+(|c| !c.http_only → |_c| true) leaked `ho=secret` into `document.cookie = "ho=secret; plain=visible;
+jsset=1"` and the gate FAILED at the hiding assertion (line 178). Restored → GREEN (0.27s), no diff.
+
+NO REGRESSION: additive — a new test file only; no engine code touched (the RED-proof edit was reverted
+byte-for-byte). fmt clean.
+
+TICK SHAPE: capability-assurance (instrument fidelity + the login-security property). GATES +1
+(g_cookie_attributes). CONSTELLATION: cookies partial→gated.
+
+WIKI: docs/wiki/interaction-surface.md (Cookie attribute enforcement section)

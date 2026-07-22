@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **126** | ticks 1–330 |
-| median tick cycle | **20m** | 125 intervals |
-| median, last 10 | **26m** | 10 intervals |
+| ticks landed | **127** | ticks 1–331 |
+| median tick cycle | **20m** | 126 intervals |
+| median, last 10 | **31m** | 10 intervals |
 | fastest / slowest | 3m / 5.4d | |
-| **ticks per hour** | **0.49** | 254.9h elapsed |
-| median verify wall | **58s** | 65 ticks |
-| wall trend | 39s → 67s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.49** | 255.5h elapsed |
+| median verify wall | **58s** | 66 ticks |
+| wall trend | 39s → 68s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **179**
+* **live gates**: 27 → **180**
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**69 of 126 ticks** (55%) moved a
+**69 of 127 ticks** (54%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **69** capability ticks, median cycle **20m**
-* median diff per tick: **+256 / −23** lines across 8 files
+* median diff per tick: **+259 / −23** lines across 8 files
 
 ## Every tick
 
@@ -223,5 +223,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **328** | 2026-07-21 19:17 | 19m | capability | 67s | +350/−12 | 177 | 81 | 56.0% · | window.getSelection() is a real, persistent, directional Selection (2026-07-21) |
 | **329** | 2026-07-21 19:38 | 22m | capability | 66s | +618/−30 | 178 | 81 | 56.0% · | IndexedDB indexes: createIndex / store.index() / IDBKeyRange, persisted (2026-07-21) |
 | **330** | 2026-07-21 19:59 | 21m | capability | 70s | +260/−4 | 179 | 81 | 56.0% · | Fullscreen API: element.requestFullscreen() as a real DOM state machine (2026-07-21) |
+| **331** | 2026-07-21 20:30 | 31m | capability-assurance | 68s | +304/−5 | 180 | 81 | 56.0% · | cookie flags are enforced ACROSS the JS↔wire boundary (2026-07-21) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

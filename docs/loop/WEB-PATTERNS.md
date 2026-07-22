@@ -2901,3 +2901,20 @@ the promise are the whole page-observable contract, and all are truthful. The pl
 enters its fullscreen view off this state; only the window is unchanged, which no page can observe here.
 Model the DOM state machine completely and honestly, document the window/`:fullscreen`-CSS limits, and
 dispatch to a shell hook when one exists.
+
+## Cookie attribute enforcement — prove flags ACROSS layers, not in the jar (tick 331)
+
+`SameSite`/`Secure`/`HttpOnly` enforcement lives in `engine/net/src/cookies.rs`+`storage.rs` and had
+full unit coverage — but a unit test on the jar cannot prove the property that protects a login: that
+the flag holds across the JS `document.cookie` shim, the network `Cookie:` header, and the jar all at
+once. A wiring bug leaks an `HttpOnly` session cookie to script while every jar unit test stays green.
+
+**(1)** The daily-driver-critical cookie facts are cross-layer: `HttpOnly` must be **hidden from
+`document.cookie`** (XSS session-theft mitigation) yet **still ride the wire** (hidden from script, not
+from the origin — dropping it logs the user out). **(2)** Gate it as an INTEGRATION test against a real
+`TcpListener` (the `g_oauth_redirect` shape): serve `Set-Cookie` headers, load over the net so they
+cross the boundary, run the page's script to read `document.cookie`, then pump a `fetch` so the server
+observes the real `Cookie:` header. **(3)** RED-prove through the boundary, not the jar: flip the
+`document.cookie` read predicate (`|c| !c.http_only`), not a `cookies.rs` internal — that is the layer
+the property actually crosses. **(4)** Re-probe before building: "flags unmeasured" / "dead code, 0
+callers" were both stale by ~170 ticks; the enforcement was built and wired.

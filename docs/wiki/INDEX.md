@@ -450,6 +450,7 @@
   - L1971 · Fullscreen API — element.requestFullscreen() as a DOM state machine (tick 330)
   - L1978 · What is modelled, and why that is the honest whole
   - L1988 · Why this is NOT the canvas-stub shape
+  - L2001 · Cookie attribute enforcement — the flags hold across the JS↔wire boundary (tick 331)
 
 ## JS ENGINE — SpiderMonkey/mozjs integration realities
 `docs/wiki/js-engine.md`
@@ -824,4 +825,4 @@
   - L124 · Rank mechanisms by FLIP RATE, not failing-subtest count — CSS layout is a multi-assertion slog
 
 ---
-739 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+740 sections across 20 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

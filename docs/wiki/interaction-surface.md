@@ -1997,3 +1997,28 @@ the shell wires a `__requestFullscreen` host hook, `requestFullscreen` dispatche
 hook the DOM state IS the API. **Honest limit written down, not discovered:** no window resize, and
 `:fullscreen` CSS matching is a separate cascade concern this does not claim. Installed on `__elProto`
 beside `animate`/`setPointerCapture`; `G_FULLSCREEN` RED-proves by disabling the install guard.
+
+## Cookie attribute enforcement — the flags hold across the JS↔wire boundary (tick 331)
+
+The cookie jar (`engine/net/src/cookies.rs` + `storage.rs`) enforced every attribute — `Secure`,
+`HttpOnly`, `SameSite` Strict/Lax/None, the `__Host-`/`__Secure-` prefixes, "leave secure cookies
+alone" — and was already wired to the live network path. What was missing was a gate proving the
+property that actually protects a login: that the flags agree **across layers**. A unit test on the jar
+passes while a wiring bug leaks an `HttpOnly` session cookie to a `<script>` an ad network injected —
+the exact composition failure that turns "we enforce HttpOnly" into a false claim.
+
+`G_COOKIE_ATTRIBUTES` is an integration gate against a real `TcpListener` (the `g_oauth_redirect`
+shape) proving three cross-layer facts:
+
+1. **`HttpOnly` hides from `document.cookie`.** A cookie the server marks `HttpOnly` is invisible to
+   script — the single most important XSS mitigation against session theft. Read back through the JS
+   shim (`manuk_net::document_cookie`, which filters `!c.http_only`).
+2. **…but `HttpOnly` still travels on the wire.** The same cookie rides the `Cookie:` header of a
+   subsequent same-origin `fetch`. It hides from *script*, not from the *origin*; a jar that dropped it
+   entirely would log the user out on the next request while looking "more secure."
+3. **`__Host-` prefix rejection.** A `document.cookie` write of a `__Host-`-prefixed cookie without the
+   prefix's contract (Secure + host-only + `Path=/`) is rejected, not silently stored.
+
+RED: flipping the `document.cookie` predicate in `engine/net/src/lib.rs` (`|c| !c.http_only` → `|_| true`)
+leaks the `HttpOnly` cookie into `document.cookie` and fails property 1. The jar logic was untouched —
+this tick added only the cross-layer assertion the jar's unit tests structurally cannot make.
