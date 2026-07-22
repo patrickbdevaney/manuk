@@ -16921,3 +16921,21 @@ ADDENDUM (tick 406 is a governance PAIR): the hook demanded the wall audit at th
 / G6 21% / B 16%), NO TRIM — the three t402-404 gates cost ~0 marginal wall (one test per
 binary, parallel launch); variance is the off-path crawl's box load, and the wall lands warm
 through it. Audit #7 recorded in docs/loop/WALL-AUDIT.md; LAST_WALL_AUDIT 386→406.
+
+## Tick 407 — surface audit #14: the vendors re-ranked three of our missing rows (2026-07-22)
+
+CADENCE OBLIGATION (397+10). Same-day as #13, so the honest delta is RANKING, not discovery:
+re-read Interop 2026's 19 focus areas against the map — the four vendors NAME three rows we
+already carry as missing (CSS anchor positioning r95, shape()/attr() type() r96, scoped
+custom element registries r92) and one landed row's residue (scroll snap r87 — the horizontal
+scroll-range gap). That is a usage-weight signal the histogram cannot produce; anchor
+positioning becomes the natural next CSS arc after the re-keyed ledger banks. Navigation API
+precommitHandler enriches t309. ADDED: navigator.cpuPerformance (Chrome 152) as unknown.
+EXCLUDED: WebRTC focus area, Manifest V2 sunset (out of v1 scope, consistent with #12/#13).
+No stale-pessimistic finds (the harvest gates are hours old). LAST_SURFACE_AUDIT 397→407;
+next due 417.
+
+TICK SHAPE: surface-audit (map maintenance; Audit #14 + 1 row added + re-ranks/exclusions).
+GATES +0. [no-pattern]
+CONSTELLATION: +1 row (cpuPerformance, unknown); 4 rows re-ranked by Interop 2026 signal.
+WIKI: none.

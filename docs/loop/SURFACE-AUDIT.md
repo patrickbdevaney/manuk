@@ -571,3 +571,45 @@ The standards-track items, mapped:
   display-diff UPPER-BOUND caveat lives with the ledger it qualifies.
 
 LAST_SURFACE_AUDIT 387→397; next due 407.
+
+## Audit #14 — tick 407 (2026-07-22)
+
+Same-day as #13 (cadence is tick-based and the harvest arc burned ten ticks in one day); the
+honest delta is therefore RANKING, not discovery. Sources: [Interop 2026 announcement/README]
+(https://github.com/web-platform-tests/interop/blob/main/2026/README.md ·
+https://webkit.org/blog/17818/announcing-interop-2026/ ·
+https://web.dev/blog/interop-2026) — re-read against the map; [Chrome 152 tracking]
+(https://portableapps.com/news/2026-07-06--google-chrome-portable-152-dev-released ·
+browsercalendar) — stable due 2026-08-25, last 4-week-cadence release.
+
+### The external frame
+
+Interop 2026 (19 focus areas) NAMES three rows our map already carries as `missing` — the four
+vendors declaring them the year's interop priorities is a usage-weight signal the histogram
+cannot produce:
+
+* **CSS anchor positioning** (row 95, missing, t230 probe) — RE-RANKED UP: Interop focus +
+  popover/tooltip class (matches our dialog/top-layer work). The natural next CSS capability
+  arc after the ledger re-ranks.
+* **shape() / attr() type()** (row 96, missing, t230 probe) — Interop focus; bounded parse+
+  paint work, Stylo-side (the live cascade rule applies).
+* **Scoped custom element registries** (row 92, missing, t225 probe) — Interop focus
+  (CustomElementRegistry() constructor); enterprise app-shell food.
+* **Navigation API precommitHandler** (t309 row) — ENRICHES the landed Navigation API;
+  bounded method-option when the row is next touched.
+* **CSS scroll snap** (row 87) — Interop focus; we are GATED already, and the named residue
+  (horizontal scroll range = 0 in layout) is exactly what the focus-area tests would catch.
+  The residue's priority rises with the vendor signal.
+
+### ADDED
+
+* `navigator.cpuPerformance` (CPU Performance API, Chrome 152 default-on) → constellation row,
+  `unknown` — Chrome-only, not Baseline, low v1 weight; pinned so the map is not surprised.
+
+### EXCLUDED (with reason)
+
+* WebRTC focus area — out of v1 scope (no RTC stack), consistent with #12/#13.
+* Manifest V2 sunset — extensions out of v1 scope.
+
+No stale-pessimistic finds this pass (the t402-404 gates are hours old). LAST_SURFACE_AUDIT
+397→407; next due 417.

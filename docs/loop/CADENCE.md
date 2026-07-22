@@ -11,13 +11,13 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **199** | ticks 1–406 |
-| median tick cycle | **18m** | 198 intervals |
+| ticks landed | **200** | ticks 1–407 |
+| median tick cycle | **18m** | 199 intervals |
 | median, last 10 | **5m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.72** | 275.3h elapsed |
-| median verify wall | **59s** | 138 ticks |
-| wall trend | 39s → 61s — getting slower ⚠️ | first 3 vs last 3 |
+| **ticks per hour** | **0.72** | 275.4h elapsed |
+| median verify wall | **59s** | 139 ticks |
+| wall trend | 39s → 63s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
 it, and a wall that grows taxes every future tick, so it is tracked separately from the whole.
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **320**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**105 of 199 ticks** (53%) moved a
+**105 of 200 ticks** (52%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -296,5 +296,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **404** | 2026-07-22 16:14 | 16m | capability | 60s | +205/−46 | 186 | 81 | 56.0% · | document.currentScript: the executing script element, not a hardcoded null (2026-07-22) |
 | **405** | 2026-07-22 16:18 | 4m | self-audit | 61s | +54/−34 | 186 | 81 | 56.0% · | self-audit: the harvest arc holds up (2026-07-22) |
 | **406** | 2026-07-22 16:23 | 6m | constitution-check | 64s | +109/−35 | 186 | 81 | 56.0% · | Constitution Check #17: I5 cashed its cheque (2026-07-22) |
+| **407** | 2026-07-22 16:28 | 5m | surface-audit | 63s | +96/−34 | 186 | 81 | 56.0% · | surface audit #14: the vendors re-ranked three of our missing rows (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
