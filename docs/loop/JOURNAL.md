@@ -15744,3 +15744,18 @@ Audit #8's "remainder is subsystems + thin tail" claim HELD through the whole 34
 TICK SHAPE: surface-audit (map-maintenance checkpoint; the deliverable is the audit entry + 2 added rows). GATES +0. [no-pattern]
 CONSTELLATION: +2 rows (media/playbackRate missing; app/WebAssembly GC unknown).
 WIKI: none — audit lives in SURFACE-AUDIT.md.
+
+## Tick 358 — Constitution Check #11 (2026-07-22)
+
+CADENCE OBLIGATION: constitution re-read due every 8 ticks (LAST_CONSTITUTION_CHECK 350 → due 358).
+Re-read CONSTITUTION.MD in full (Parts I-VII); wrote Check #11 in docs/loop/CONSTITUTION-CHECK.md.
+
+VERDICT: Gate, not scoreboard. Window 351-357 closed the A/V organ chain (sync → muted → AV1 → AVIF)
+plus both audits; VII.1's TEST held every tick. Invariants unbent: I2 borrows (re_rav1d, avif-parse)
+adopted unpatched and feature-fenced; I7 walls stated (VP9 refused by name, 10-bit graceful, alpha
+opaque-and-says-so); ratchet marks not retuned through two cold-wall cycles. I3 held by lockstep
+exposure (frames/images land in page-queryable state). No Part VI/VII correction needed.
+
+TICK SHAPE: constitution-check (governance checkpoint; the deliverable is Check #11 + the counter). GATES +0. [no-pattern]
+CONSTELLATION: none (governance tick).
+WIKI: none — the check lives in CONSTITUTION-CHECK.md.

@@ -403,3 +403,45 @@ nothing, including ours.
 "the representative real internet plays" (DRM/EME remains a stated permanent wall per I7).
 
 **Next check due: tick 358.**
+
+## Check #11 — tick 358
+
+**Horizon:** Phase 0 — the FULL daily-driver checklist ("runs almost every website"), the v1 north star
+of CONSTITUTION.MD **Part VII**. **Gate:** the FIDELITY-SCORING-REDESIGN.md certificate (≥0.75
+structural/placement fidelity on ≥95% of the corpus + ≥0.70 per top-20 category), NOT a WPT percentage.
+Authoritative work list: PHASE0-BOUNDED-REMAINDER.md.
+
+**Gate or scoreboard?** Gate. The window since Check #10 (351–357) drove the board's CO-#1 order (2)
+codec ladder to its end and closed the A/V organ chain: **351** A/V master-slave sync (the device
+crystal owns time), **352** muted plumbing (the autoplay-muted class is quiet here as everywhere),
+**353** AV1 decode (re_rav1d behind the M5 trait), **354** AV1 ships + all three honesty registries
+flip in the same tick, **355** AVIF stills (the blank-hero-image class). Cadence held mechanically:
+**356** self-audit (clean), **357** surface audit (2 unlisted rows added from the outside frame).
+Zero WPT-chasing, zero html/dom flips; VII.1's TEST held every tick — each moved component #1
+(media/image classes of the real internet) or governance.
+
+**Is the loop still pointed at the frontier?** Yes. The marquee "YOUTUBE PLAYS" path now lacks: codec
+breadth beyond av01+Baseline (High-profile H.264; VP9 constitutionally on the floor), ABR, and the
+live .muted/.volume IDL channel — all named in constellation rows, none over-claimed. Container
+queries (CO-#1 order 3, Stylo-side) and the playbackRate row (surface-audit #9) are the adjacent
+bounded frontier.
+
+**Is the agentic surface (component #2) being served?** Held, not advanced this window — the driving
+seams are untouched and every media organ lands page-queryable state (frames in the page's image map,
+feeds observable). The semantic model rode along; no regression, no rot (I3 requires lockstep
+exposure, and set_video_frame/apply_images_by_url are exactly that exposure).
+
+**Any invariant bent?** No. **I2** (sanctioned deps, never patched): three BORROWS this window —
+re_rav1d 0.1.3 (pure Rust, no nasm, safe module), avif-parse 1.4 (MPL-2.0, same family as Stylo) —
+adopted unpatched, feature-fenced so no gate lane acquires a decoder; the cargo-tree isolation was
+re-verified. **I7** (honest walls): VP9/webm stay refused by name; 10-bit AVIF refuses gracefully;
+alpha renders opaque and says so. **Process rule 3** enforced against ourselves twice: the t354
+vacuous-substring claim (contains("av1:true") satisfied by cpt-av1:true — tripwire-caught, label
+renamed) and t353's flush-discard archaeology probed one variable at a time after a two-variable fix.
+THE RATCHET: nothing traded; the t353/354 cold walls (536s/545s from lockfile/feature rebuilds) were
+re-run to warm 62-68s receipts, marks not retuned.
+
+**PART VI / VII correction.** None. The four-component v1 scope is intact; media work stays scoped to
+"the representative real internet plays" (DRM/EME permanent wall per I7; WebRTC out per Part IV).
+
+**Next check due: tick 366.**
