@@ -1388,8 +1388,20 @@ fn cascade_pseudo(
         Content::Items(items) => {
             let mut out = String::new();
             for it in items.items.iter() {
-                if let ContentItem::String(sv) = it {
-                    out.push_str(sv);
+                match it {
+                    ContentItem::String(sv) => out.push_str(sv),
+                    // `content: attr(name)` — the element's attribute value, or the EMPTY string
+                    // when the attribute is absent (CSS2.1). Pushing nothing on a miss is exactly
+                    // that: `a::after{content:" ("attr(href)")"}` still renders the parentheses,
+                    // and `[data-x]::before{content:attr(data-x)}` draws the datum. Namespace is
+                    // ignored — attributes are keyed by qualified (already-lowercased for HTML)
+                    // name here, and a namespaced `attr()` in `content` is vanishingly rare.
+                    ContentItem::Attr(a) => {
+                        if let Some(v) = el.attr(&a.attribute) {
+                            out.push_str(v);
+                        }
+                    }
+                    _ => {}
                 }
             }
             out
@@ -1693,6 +1705,39 @@ mod tests {
             "(display:flex) { } @supports (display:flex)"
         ));
         assert!(!supports_condition("}"));
+    }
+
+    /// `content: attr(name)` in a `::before`/`::after` resolves to the element's live attribute
+    /// value — the whole of CSS tooltips (`[data-tip]::after`), print link URLs (`a::after{
+    /// content:" ("attr(href)")"}`), breadcrumb separators and generated data labels. Before this
+    /// the extraction loop kept only `String` items and dropped `Attr`, so every such pseudo drew
+    /// an EMPTY box — present in the tree, invisible on the page.
+    ///
+    /// RED, run: revert the `ContentItem::Attr` arm. `after` reads `" ()"` (parentheses, no href)
+    /// and `before` reads `""` — both assertions fail, which is exactly the silent blank the fix
+    /// removes. A missing attribute yields the empty string, never a dropped pseudo (CSS2.1).
+    #[test]
+    fn content_attr_resolves_the_elements_attribute() {
+        let dom = manuk_html::parse(r#"<a href="/x" data-tip="hi">link</a>"#);
+        let sheet = Stylesheet::parse(
+            r#"a::after{content:" ("attr(href)")"} a::before{content:attr(data-tip)}"#,
+        );
+        let map = cascade_via_stylo(&dom, std::slice::from_ref(&sheet), 800.0, 600.0);
+        let a = dom
+            .descendants(dom.root())
+            .find(|&n| dom.tag_name(n) == Some("a"))
+            .unwrap();
+        let s = &map[&a];
+        assert_eq!(
+            s.after.as_ref().and_then(|p| p.content.as_deref()),
+            Some(" (/x)"),
+            "content:attr(href) with surrounding strings must resolve the href"
+        );
+        assert_eq!(
+            s.before.as_ref().and_then(|p| p.content.as_deref()),
+            Some("hi"),
+            "content:attr(data-tip) must resolve the data attribute"
+        );
     }
     use crate::Rgba;
 

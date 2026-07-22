@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **200** | ticks 1–407 |
-| median tick cycle | **18m** | 199 intervals |
-| median, last 10 | **9m** | 10 intervals |
+| ticks landed | **201** | ticks 1–408 |
+| median tick cycle | **18m** | 200 intervals |
+| median, last 10 | **14m** | 10 intervals |
 | fastest / slowest | 82s / 5.4d | |
-| **ticks per hour** | **0.72** | 276.0h elapsed |
-| median verify wall | **59s** | 139 ticks |
+| **ticks per hour** | **0.72** | 276.4h elapsed |
+| median verify wall | **59s** | 140 ticks |
 | wall trend | 39s → 64s — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -28,10 +28,10 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
 * **live gates**: 27 → **187**
-* **✅ rows in the capability ledger**: 144 → **321**
+* **✅ rows in the capability ledger**: 144 → **322**
 * **Bar 0 — oracle hangs**: 31 of 265 sites
 
-**105 of 200 ticks** (52%) moved a
+**106 of 201 ticks** (53%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **105** capability ticks, median cycle **18m**
+* **106** capability ticks, median cycle **18m**
 * median diff per tick: **+214 / −34** lines across 8 files
 
 ## Every tick
@@ -297,5 +297,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **405** | 2026-07-22 16:18 | 4m | self-audit | 61s | +54/−34 | 186 | 81 | 56.0% · | self-audit: the harvest arc holds up (2026-07-22) |
 | **406** | 2026-07-22 16:23 | 6m | constitution-check | 64s | +109/−35 | 186 | 81 | 56.0% · | Constitution Check #17: I5 cashed its cheque (2026-07-22) |
 | **407** | 2026-07-22 17:05 | 42m | surface-audit | 70s | +479/−221 | 187 | 81 | 56.0% · | surface audit #14: the vendors re-ranked three of our missing rows (2026-07-22) |
+| **408** | 2026-07-22 17:27 | 21m | capability | 56s | +169/−72 | 187 | 81 | 56.0% · | the horizontal carousel snaps, on the axis t266 never covered (2026-07-22) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

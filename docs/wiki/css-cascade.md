@@ -182,6 +182,26 @@ pseudo-element applied to the element itself.** **Dropping** selectors whose pse
 is the correct failure mode — *a rule that does nothing is strictly better than a rule that styles the
 wrong box.*
 
+## `content: attr(name)` drew an EMPTY box until the extraction loop stopped keeping only strings
+
+Generated content (`::before`/`::after`) is assembled in `cascade_pseudo` by walking Stylo's computed
+`Content::Items` and concatenating them into the pseudo's text. The loop kept **only** `ContentItem::String`
+and silently dropped every other item — including `ContentItem::Attr`, the `attr(name)` function. So
+`a::after{content:" ("attr(href)")"}` produced `" ()"`, `[data-tip]::after{content:attr(data-tip)}` produced
+`""`, and the pseudo box was generated but **blank**: present in the tree, invisible on the page. That is the
+worst failure class — content nobody can see — and `attr()` in generated content is not a corner: print
+stylesheets expand links with it (`a::after{content:" ("attr(href)")"}`), CSS-only tooltips read
+`attr(data-tooltip)`, breadcrumbs and data tables label cells from their attributes.
+
+The fix resolves `ContentItem::Attr(a)` against the **live element** via `StyloElement::attr(&a.attribute)` —
+the same accessor the attribute-selector matcher already uses, so there is one source for "what does this
+element's attribute say". A missing attribute pushes the **empty string**, never a dropped pseudo (CSS2.1):
+`content:attr(missing)` still generates its (empty) box, matching Chrome. Namespace is ignored — attributes
+are keyed by qualified, HTML-lowercased name here, and a namespaced `attr()` in `content` is vanishingly rare.
+This is the CSS2.1 string form only; the Level-5 typed/fallback `attr(data-n number, 0)` is not in this
+Stylo's `Attr` shape and stays an honest gap. Gated by `content_attr_resolves_the_elements_attribute`, proven
+RED (revert the arm → `after` reads `" ()"`).
+
 ## The `display` divergence number is ~25% representational NOISE
 
 Of a 27% `display` disagreement against Chrome (**33,825 nodes**), **4,299 are replaced elements where

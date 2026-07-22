@@ -151,7 +151,7 @@ impl<'a> StyloElement<'a> {
         self.dom.tag_name(self.node).unwrap_or("")
     }
 
-    fn attr(&self, name: &str) -> Option<&'a str> {
+    pub(crate) fn attr(&self, name: &str) -> Option<&'a str> {
         self.dom.element(self.node).and_then(|e| e.attr(name))
     }
 

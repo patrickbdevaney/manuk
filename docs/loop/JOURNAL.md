@@ -16967,3 +16967,32 @@ TICK SHAPE: capability (JS-side scroll-snap mirror + one-collector refactor; +1 
 (G_SCROLL_SNAP_HORIZONTAL).
 CONSTELLATION: scroll snap horizontal partial→works (Interop 2026 r87 residue closed).
 WIKI: interaction-surface.md — "Scroll snap lands on BOTH sides of the scroll contract".
+
+## Tick 409 — content: attr() draws the datum, not an empty box (2026-07-22)
+
+HYPOTHESIS (board doc-class hole "CSS attr()/zoom/shape()"): re-probe before building. Found
+generated content (::before/::after) already works with string literals in the SHIPPING Stylo
+path (cascade_pseudo, stylo_engine.rs) — but the content-item extraction loop kept ONLY
+ContentItem::String and silently dropped ContentItem::Attr. So `content: attr(name)` produced
+an EMPTY string: `a::after{content:" ("attr(href)")"}` rendered `" ()"`, and
+`[data-tip]::after{content:attr(data-tip)}` rendered `""`. The pseudo box was generated but
+BLANK — present in the tree, invisible on the page (the worst failure class, content nobody
+can see). attr() in content is not a corner: print stylesheets expand links with it, CSS-only
+tooltips read attr(data-tooltip), breadcrumbs/data-tables label from attributes.
+
+FIX (Stylo path only — NOT MinimalCascade, per the two-cascades rule): resolve
+ContentItem::Attr(a) against the live element via StyloElement::attr(&a.attribute) — the same
+accessor the attribute-selector matcher uses, one source of truth for "what does this attribute
+say". Made that accessor pub(crate). A missing attribute pushes the empty string, never a
+dropped pseudo (CSS2.1) — content:attr(missing) still generates its empty box, matching Chrome.
+Namespace ignored (attrs keyed by qualified HTML-lowercased name; namespaced attr() in content
+is vanishingly rare). CSS2.1 string form only; Level-5 typed/fallback attr(x number, 0) is not
+in this Stylo's Attr shape and stays an honest gap. Gated by
+content_attr_resolves_the_elements_attribute; RED-proven (revert the arm → after reads " ()").
+All 38 manuk-css stylo tests green, no regression.
+
+TICK SHAPE: capability (Stylo generated-content attr() resolution; +1 gate). GATES +1.
+CONSTELLATION: doc-class "CSS attr()" partial→works for the content() form (attr-in-arbitrary-
+properties, the Level-5 form, remains out).
+WIKI: css-cascade.md — "content: attr(name) drew an EMPTY box until the extraction loop stopped
+keeping only strings".
