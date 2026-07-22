@@ -165,3 +165,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 371	c70fc79	1784719173	2026-07-22T07:19:33-04:00	272	capability-probe	57	5	67	34	183	81	3896	6960	0	320	0	container queries probed to the exact dead wire; the build is now specified (2026-07-22)
 372	e447dc5	1784720141	2026-07-22T07:35:41-04:00	968	capability	59	9	92	35	183	81	3896	6960	0	320	0	pagereveal: the MPA lifecycle hook, with the spec's own null (2026-07-22)
 373	9e7e672	1784720982	2026-07-22T07:49:42-04:00	841	capability	56	9	105	37	183	81	3896	6960	0	320	0	pageswap: the outgoing half of the MPA lifecycle (2026-07-22)
+374	466735e	1784721153	2026-07-22T07:52:33-04:00	171	constitution-check	58	5	81	34	183	81	3896	6960	0	320	0	Constitution Check #13 (2026-07-22)

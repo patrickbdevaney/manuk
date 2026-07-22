@@ -482,3 +482,37 @@ five cold-relink cycles; Audit #5 measured the warm wall IMPROVED (66→59s) whi
 provably plays.
 
 **Next check due: tick 374.**
+
+## Check #13 — tick 374
+
+**Horizon:** Phase 0 — the FULL daily-driver checklist, CONSTITUTION.MD **Part VII**. **Gate:** the
+FIDELITY-SCORING-REDESIGN.md certificate, NOT a WPT percentage.
+
+**Gate or scoreboard?** Gate. Window 367-373: **367** surface audit #10 put the WebMCP clock on the
+map (Chrome 149 origin trial — the H2 marquee the constellation never listed), **368** AVIF alpha
+(Y-plane-is-the-mask; the fixture-lies-by-name trap), **369** WAV (RIFF form-type routing, negative
+asserted), **370** the mixer (sum+clamp, mismatch-skip, set-mastery; a gate hole closed in-tick when
+the clamp claim could not fire on a too-quiet fixture), **371** container queries probed to the ONE
+dead seam (query_container_size) with the build spec recorded and the build deliberately deferred to
+a fresh context per atomicity, **372/373** the MPA lifecycle pair (pagereveal + pageswap, the spec's
+own nulls, no animation over-claim). VII.1's TEST held every tick.
+
+**Is the loop still pointed at the frontier?** Yes. The media/audio vein is mined to its honest walls
+(Opus/AC-3 named refusals, WSOLA and resampler and High-profile named rungs, ABR downstream). The
+specified container-queries build is the next subsystem, spec in JOURNAL t371; the WebMCP scope
+question is flagged to the board/observer rather than self-decided — exactly where an H2-vs-v1 call
+belongs.
+
+**Is the agentic surface (component #2) being served?** Held; and audit #10's WebMCP row is the first
+explicit component-#2 FRONTIER item on the map since the driving seams landed — the clock is visible
+now, which is what I3's never-let-it-rot demands.
+
+**Any invariant bent?** No. I2 borrows unpatched and fenced throughout; I7's honest-null discipline
+(viewTransition:null is the spec's own value, stated in-code both times); process rule 3 caught two
+of its own gates this window (the too-quiet clamp fixture t370, the mask-fixture-with-no-alpha t368)
+— both holes closed in-tick and recorded. THE RATCHET refused one landing on a cold 478s receipt
+(t372) and the refusal was CORRECT — warm re-verify re-banked and landed; the mark was never touched.
+
+**PART VI / VII correction.** None.
+
+**Next check due: tick 382.**

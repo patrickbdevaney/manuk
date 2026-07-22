@@ -16205,3 +16205,15 @@ entries (the pre-tick dead-exit-hook state). manuk-shell 70/70 + teardown EXIT 0
 TICK SHAPE: capability (pageswap — exit-animation and state-flush hooks on the outgoing page now run; the MPA lifecycle PAIR is complete with the spec's own nulls; [host-native pattern: eval_in_page dispatch at the lifecycle moment the shell owns]). GATES claims +2 (ps-fired, ps-vt-null in g_mse_join = IN the wall); constellation cross-doc VT residue narrowed to the animation subsystem.
 CONSTELLATION: app / cross-document View Transitions → pageswap landed (lifecycle pair complete).
 WIKI: docs/wiki/frameworks.md — pageswap addendum (eval_in_page dispatch, stash_current seam).
+
+## Tick 374 — Constitution Check #13 (2026-07-22)
+
+CADENCE OBLIGATION (366+8). Re-read the governing frame; wrote Check #13. Verdict: gate, not
+scoreboard — window 367-373 was map-honesty (WebMCP clock, container-queries spec) + bounded organs
+(alpha, WAV, mixer, MPA lifecycle pair), every tick RED-proven, two gate holes caught by our own
+process rule and closed in-tick. Ratchet correctly refused one cold-receipt landing; mark untouched.
+Counters: LAST_CONSTITUTION_CHECK 366→374; next due 382 (self-audit 376, surface 377 first).
+
+TICK SHAPE: constitution-check (governance; the deliverable is Check #13 + the counter). GATES +0. [no-pattern]
+CONSTELLATION: none.
+WIKI: none — the check lives in CONSTITUTION-CHECK.md.
