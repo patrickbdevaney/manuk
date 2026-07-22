@@ -16478,3 +16478,20 @@ read line ends off it; [pattern: an item that ENDS a line is still an element IN
 closing the band and recording geometry are two responsibilities]). GATES manuk-layout +1 test
 (IN the wall via T·crate tests). CONSTELLATION: none — geometry completeness, no new row.
 WIKI: docs/wiki/box-layout.md — <br> has geometry (tick 385).
+
+## Tick 386 — self-audit + wall audit: clean, and the wall held while coverage grew (2026-07-22)
+
+DOUBLE CADENCE OBLIGATION (self-audit 376+10; wall audit 366+20). self-audit.sh: CLEAN —
+"methodology and reality agree", zero ✗ (cluster registry now 627 entries IS the ledger; journal
+gapless; pattern ledger 424 rows and moving). Window 377-385 review: one surface audit (t377),
+two cadence checks (#14 t382), the container-queries subsystem landed (t379), the FIRST complete
+corpus-oracle run (t380) whose ledger then DROVE every capability tick after it — a crash fix
+(t381), an instrument-honesty seam (t383), two computed-value/geometry parity fixes (t384/385),
+each RED-proven, zero WPT-chasing, SINGLE_SITE_TICKS 0. WALL AUDIT #6 (WALL-AUDIT.md): warm wall
+57s (was 59s at #5) while the window added claims to five gate binaries and two crate tests —
+all riding existing processes; NO TRIM (admissible levers are observer-owned, named). Counters:
+LAST_AUDIT_TICK 376→386, LAST_WALL_AUDIT 366→386 (canonical header); next due 396/406.
+
+TICK SHAPE: self-audit (governance checkpoint; deliverable = the two findings + counters). GATES +0. [no-pattern]
+CONSTELLATION: none.
+WIKI: none — logs are docs/loop/WALL-AUDIT.md + this entry.

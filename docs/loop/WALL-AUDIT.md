@@ -133,3 +133,19 @@ NO TRIM: same conclusion as #4 — the four rigor-preserving levers all live in 
 nextest/runtime-sharing named there already). Agent-side additions stayed under the warm floor by
 construction: decode gates use small fixtures, the shell suite shares one binary, one JS test per
 binary (the t354 rule) keeps mozjs startups at one. Wall stays lean; nothing cut; coverage grew.
+
+## Audit #6 — tick 386 (wall 57s warm)
+
+FINDING: warm wall held (59s → 57s vs Audit #5) across a window (367-385) that ADDED coverage:
+G_MIX rewrite + resampler claims (t375), scrollp in g_mse_join (t378), the containerq probe in
+G_PROBE_CAPABILITIES (t379), the countable-dead-stylesheet claim in G_SILENT_FAIL (t383), and two
+manuk-layout tests (t384 atomic inline replaced, t385 br geometry) — all riding EXISTING binaries,
+zero new runtimes stood up. Breakdown: T 20s (crate tests, 35%), P 14s (parity, 25%), G6 6s, G1 4s,
+F 2s, B 1s (warm). The cold-first-run shape after an engine change (~380-560s this window) remains
+the documented relink cost — run 2 is always warm; marks never retuned. Off-wall additions: the
+corpus oracle run (t380) is correctly OUTSIDE the per-tick wall (its 60-90min lives in the crawl
+driver), and the oracle's new starved-fetch discard adds nothing to wall time.
+
+NO TRIM: the admissible levers (nextest, runtime-sharing, section parallelism) all live in
+scripts/ — observer-owned, already named in prior audits. Agent-side discipline held: claims ride
+existing binaries, one JS test per binary, small fixtures. Wall stays lean; coverage grew again.
