@@ -80,14 +80,10 @@ export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${XDG_RUN
 # MemoryHigh throttles allocation before the hard MemoryMax kill. If systemd --user is unavailable, fall
 # back to a direct (uncontained) launch so the loop never fully stalls — better uncontained than stopped.
 launch_agent() {
-  # ── MODEL SCHEDULE (observer, user directive 2026-07-22): run the grind agent on Fable 5 until
-  # 2026-07-22 19:00 America/New_York, then revert to Opus 4.8. Computed PER LAUNCH so the flip
-  # happens on the first launch after the deadline with no restart. MANUK_AGENT_MODEL still
-  # overrides both. An invocation already running at 19:00 finishes on its launch model.
-  local _flip _default_model
-  _flip=$(TZ=America/New_York date -d '2026-07-22 19:00' +%s 2>/dev/null || echo 0)
-  if [ "$(date +%s)" -lt "$_flip" ]; then _default_model=claude-fable-5; else _default_model=claude-opus-4-8; fi
-  AGENT_MODEL="${MANUK_AGENT_MODEL:-$_default_model}"
+  # ── MODEL (observer, user directive 2026-07-22 16:45 ET): back to Opus 4.8 unconditionally —
+  # the temporary Fable-5 window (schedule removed) is over early by user request.
+  # MANUK_AGENT_MODEL still overrides.
+  AGENT_MODEL="${MANUK_AGENT_MODEL:-claude-opus-4-8}"
   say "agent model for this launch: $AGENT_MODEL"
   systemctl --user reset-failed "${AGENT_SCOPE}.scope" 2>/dev/null || true   # clear any lingering scope name
   if systemd-run --user --scope --quiet \
